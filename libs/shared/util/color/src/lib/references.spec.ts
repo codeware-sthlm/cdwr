@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_RECIPE, buildThemeTokens } from './build-theme-tokens';
-import { brokenReferences } from './references';
+import { brokenReferences, resolveToken } from './references';
 
 describe('brokenReferences', () => {
   const { light, dark } = buildThemeTokens(DEFAULT_RECIPE);
@@ -62,5 +62,36 @@ describe('brokenReferences', () => {
   it('is meant to run on the merged map for dark', () => {
     expect(brokenReferences(dark).length).toBeGreaterThan(0);
     expect(brokenReferences({ ...light, ...dark })).toEqual([]);
+  });
+});
+
+describe('resolveToken', () => {
+  const tokens = {
+    '--background': 'oklch(1 0 0)',
+    '--core-background-body': 'var(--background)',
+    '--body': 'var(--core-background-body)',
+    '--loop': 'var(--knot)',
+    '--knot': 'var(--loop)',
+    '--nowhere': 'var(--missing)'
+  };
+
+  it('reads a value that is already one', () => {
+    expect(resolveToken(tokens, '--background')).toBe('oklch(1 0 0)');
+  });
+
+  it('follows a chain of aliases to the colour at the end', () => {
+    expect(resolveToken(tokens, '--body')).toBe('oklch(1 0 0)');
+  });
+
+  it('gives up on a cycle rather than looping', () => {
+    expect(resolveToken(tokens, '--loop')).toBeNull();
+  });
+
+  it('gives up on an alias that lands nowhere', () => {
+    expect(resolveToken(tokens, '--nowhere')).toBeNull();
+  });
+
+  it('has nothing to say about a token it does not hold', () => {
+    expect(resolveToken(tokens, '--absent')).toBeNull();
   });
 });

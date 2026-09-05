@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { contrastRatio, parseColor, relativeLuminance } from './oklch';
+import {
+  contrastRatio,
+  formatOklch,
+  oklchToRgb,
+  parseColor,
+  relativeLuminance,
+  rgbToOklch
+} from './oklch';
 
 const color = (value: string) => {
   const parsed = parseColor(value);
@@ -89,5 +96,68 @@ describe('contrastRatio', () => {
       contrastRatio(color('oklch(1 0 0)'), dark)
     );
     expect(contrastRatio(faint, dark)).toBeCloseTo(3, 0);
+  });
+});
+
+describe('oklchToRgb', () => {
+  it('lands on the sRGB primaries', () => {
+    expect(oklchToRgb(color('#ff0000'))).toEqual({ r: 255, g: 0, b: 0, a: 1 });
+    expect(oklchToRgb(color('#00ff00'))).toEqual({ r: 0, g: 255, b: 0, a: 1 });
+    expect(oklchToRgb(color('#0000ff'))).toEqual({ r: 0, g: 0, b: 255, a: 1 });
+  });
+
+  it('carries alpha through untouched', () => {
+    expect(oklchToRgb(color('oklch(1 0 0 / 10%)')).a).toBeCloseTo(0.1, 10);
+  });
+
+  // A palette entry may sit outside sRGB, and a picker has nowhere to put it
+  it('clamps a wide-gamut colour into the gamut', () => {
+    const { r, g, b } = oklchToRgb({ l: 0.7, c: 0.4, h: 150, alpha: 1 });
+
+    for (const channel of [r, g, b]) {
+      expect(channel).toBeGreaterThanOrEqual(0);
+      expect(channel).toBeLessThanOrEqual(255);
+    }
+  });
+});
+
+describe('rgbToOklch', () => {
+  it('round-trips an in-gamut colour', () => {
+    const original = color('#588bae');
+    const back = rgbToOklch(oklchToRgb(original));
+
+    expect(back.l).toBeCloseTo(original.l, 3);
+    expect(back.c).toBeCloseTo(original.c, 3);
+    expect(back.h).toBeCloseTo(original.h, 1);
+  });
+
+  it('keeps the alpha it was given rather than the one it derives', () => {
+    expect(rgbToOklch({ r: 255, g: 255, b: 255, a: 0.25 }).alpha).toBe(0.25);
+  });
+});
+
+describe('formatOklch', () => {
+  it('writes three components at full opacity', () => {
+    expect(formatOklch({ l: 0.704, c: 0.14, h: 182.503, alpha: 1 })).toBe(
+      'oklch(0.704 0.14 182.503)'
+    );
+  });
+
+  it('adds the alpha part only below full opacity', () => {
+    expect(formatOklch({ l: 1, c: 0, h: 0, alpha: 0.1 })).toBe(
+      'oklch(1 0 0 / 10%)'
+    );
+  });
+
+  it('drops the false precision of a trailing zero', () => {
+    expect(formatOklch({ l: 0.5, c: 0, h: 0, alpha: 1 })).toBe(
+      'oklch(0.5 0 0)'
+    );
+  });
+
+  it('writes what parseColor reads back', () => {
+    const original = { l: 0.704, c: 0.14, h: 182.503, alpha: 0.5 };
+
+    expect(parseColor(formatOklch(original))).toEqual(original);
   });
 });

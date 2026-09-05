@@ -1,5 +1,6 @@
 import type { ThemeTokens } from './build-theme-tokens';
 import { contrastRatio, parseColor } from './oklch';
+import { resolveToken } from './references';
 
 /** WCAG 2 minimums. Large text is 18.66px bold or 24px regular. */
 export const WCAG_AA_NORMAL = 4.5;
@@ -119,32 +120,6 @@ export const THEME_CONTRAST_PAIRS: Array<ContrastPair> = [
     minimum: WCAG_AA_LARGE
   }
 ];
-
-/**
- * Follow `var(--x)` until a token holds a real colour.
- *
- * The core and prose layers are aliases by design, so almost every pair worth
- * checking points at another token rather than a value. A cycle or a dead end
- * resolves to `null` rather than looping.
- */
-function resolveToken(
-  tokens: ThemeTokens,
-  name: string,
-  seen = new Set<string>()
-): string | null {
-  if (seen.has(name)) {
-    return null;
-  }
-  seen.add(name);
-
-  const value = tokens[name];
-  if (!value) {
-    return null;
-  }
-
-  const alias = /^var\(\s*(--[\w-]+)\s*\)$/.exec(value.trim());
-  return alias ? resolveToken(tokens, alias[1], seen) : value;
-}
 
 /**
  * Check one scheme of a theme against the pairs above.
