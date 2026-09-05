@@ -1,6 +1,7 @@
 'use client';
 
 import { isValidTokenValue } from '@codeware/shared/theme';
+import { ColorField } from '@codeware/shared/ui/color-picker';
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { Input } from '@codeware/shared/ui/shadcn/components/input';
 import {
@@ -8,10 +9,10 @@ import {
   TabsList,
   TabsTrigger
 } from '@codeware/shared/ui/shadcn/components/tabs';
-import type { ThemeTokens } from '@codeware/shared/util/color';
+import { type ThemeTokens, resolveToken } from '@codeware/shared/util/color';
 import { cn } from '@codeware/shared/util/ui';
 import { RotateCcwIcon, TriangleAlertIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 export type ThemeOverrides = { light: ThemeTokens; dark: ThemeTokens };
 
@@ -94,6 +95,18 @@ export function OverridePanel({
 
   const setToken = (name: string, value: string) =>
     onChange(applyTokenEdit(overrides, generated, scheme, name, value));
+
+  // What the browser will see, so a picker opening on `var(--primary)` follows
+  // it to a colour. Dark holds only what it changes, so it is read over light —
+  // reading the dark map alone would lose every token it inherits.
+  const cascaded = useMemo(() => {
+    const merged = (of: 'light' | 'dark') => ({
+      ...generated[of],
+      ...overrides[of]
+    });
+    const light = merged('light');
+    return scheme === 'dark' ? { ...light, ...merged('dark') } : light;
+  }, [generated, overrides, scheme]);
 
   const overriddenCount = Object.keys(overrides[scheme]).length;
 
@@ -223,9 +236,12 @@ export function OverridePanel({
                       invalid && 'border-destructive'
                     )}
                   />
-                  <span
-                    className="border-border size-8 shrink-0 rounded border"
-                    style={{ background: value }}
+                  <ColorField
+                    value={value}
+                    resolved={resolveToken(cascaded, name) ?? undefined}
+                    onChange={(picked) => setToken(name, picked)}
+                    label={name}
+                    className="shrink-0"
                   />
                 </div>
               </div>

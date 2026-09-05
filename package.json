@@ -81,6 +81,7 @@
     "prism-react-renderer": "^2.4.1",
     "radix-ui": "^1.4.3",
     "react": "^19.0.0",
+    "react-colorful": "^5.8.1",
     "react-dom": "^19.0.0",
     "react-easy-crop": "^6.0.2",
     "react-hook-form": "^7.69.0",
