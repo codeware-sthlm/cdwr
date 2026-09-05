@@ -70,3 +70,33 @@ export function brokenReferences(tokens: ThemeTokens): Array<BrokenReference> {
 
   return broken;
 }
+
+/**
+ * Follow `var(--x)` until a token holds a real colour.
+ *
+ * The core and prose layers are aliases by design, so almost every token worth
+ * reading a colour off points at another token rather than a value. A cycle or
+ * a dead end resolves to `null` rather than looping.
+ *
+ * @param tokens - The map the browser will see; for dark, that is dark over light
+ * @param name - The token to read
+ * @returns The value at the end of the chain, or `null`
+ */
+export function resolveToken(
+  tokens: ThemeTokens,
+  name: string,
+  seen = new Set<string>()
+): string | null {
+  if (seen.has(name)) {
+    return null;
+  }
+  seen.add(name);
+
+  const value = tokens[name];
+  if (!value) {
+    return null;
+  }
+
+  const alias = /^var\(\s*(--[\w-]+)\s*\)$/.exec(value.trim());
+  return alias ? resolveToken(tokens, alias[1], seen) : value;
+}

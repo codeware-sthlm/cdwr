@@ -163,3 +163,68 @@ export function contrastRatio(foreground: Oklch, background: Oklch): number {
 
   return (lighter + 0.05) / (darker + 0.05);
 }
+
+/** sRGB with 0–255 channels and 0–1 alpha, the shape a colour picker speaks. */
+export type Rgba = {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+};
+
+/** Inverse of {@link srgbToLinear}, channel value 0–1. */
+function linearToSrgb(channel: number): number {
+  return channel <= 0.0031308
+    ? channel * 12.92
+    : 1.055 * channel ** (1 / 2.4) - 0.055;
+}
+
+/**
+ * Oklch → sRGB, for handing a token value to a picker.
+ *
+ * Clamped to the gamut, so a wide-gamut palette entry comes back as the colour
+ * a screen can actually show. That makes the round trip lossy: a caller must
+ * write back only what the author picked, never what seeding returned.
+ */
+export function oklchToRgb(color: Oklch): Rgba {
+  const linear = oklchToLinearRgb(color);
+  const channel = (value: number) =>
+    Math.round(Math.min(1, Math.max(0, linearToSrgb(value))) * 255);
+
+  return {
+    r: channel(linear.r),
+    g: channel(linear.g),
+    b: channel(linear.b),
+    a: color.alpha
+  };
+}
+
+/** sRGB → Oklch, the inverse of {@link oklchToRgb}. */
+export function rgbToOklch({ r, g, b, a }: Rgba): Oklch {
+  return {
+    ...linearRgbToOklch({
+      r: srgbToLinear(r / 255),
+      g: srgbToLinear(g / 255),
+      b: srgbToLinear(b / 255)
+    }),
+    alpha: a
+  };
+}
+
+/** Trailing zeros read as false precision on a value nobody typed. */
+const round = (value: number, decimals: number): string =>
+  String(Number(value.toFixed(decimals)));
+
+/**
+ * Write a colour the way the palette writes one.
+ *
+ * The alpha part is left off at full opacity — every opaque token in the
+ * committed themes is three components, and adding `/ 100%` to all of them
+ * would make a picked value look unlike its neighbours.
+ */
+export function formatOklch({ l, c, h, alpha }: Oklch): string {
+  const coords = `${round(l, 4)} ${round(c, 4)} ${round(h, 3)}`;
+  return alpha >= 1
+    ? `oklch(${coords})`
+    : `oklch(${coords} / ${round(alpha * 100, 2)}%)`;
+}
