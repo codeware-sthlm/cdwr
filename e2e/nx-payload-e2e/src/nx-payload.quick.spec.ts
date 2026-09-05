@@ -81,9 +81,18 @@ describe('Test plugin by starting with an empty workspace (limited test suite)',
     beforeAll(async () => {
       // `silenceError` because pnpm 10+ exits non-zero when a dependency's
       // build script is blocked - `ensurePnpmApproveBuilds` below recovers.
-      await runNxCommandAsync(
+      //
+      // But silencing it also swallowed the generator's own failure: when the
+      // app was not created, every later assertion reported a symptom
+      // ('Cannot find project') and nothing said why. Keep the tolerance,
+      // print the output.
+      const generated = await runNxCommandAsync(
         `g @cdwr/nx-payload:app ${appName} --directory ${appDirectory}`,
         { silenceError: true }
+      );
+      logDebug(
+        'Application generator output',
+        `${generated.stdout}\n${generated.stderr}`
       );
       await ensurePnpmApproveBuilds(packageManager);
       ensureTs6TsconfigCompat();

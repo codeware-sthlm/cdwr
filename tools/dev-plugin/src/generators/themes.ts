@@ -7,12 +7,13 @@
  * renamed in one place and not the other is otherwise a silent no-op: the
  * generator simply stops finding the folder it was guarding.
  *
- * Import it with an explicit `.js` extension. `dev-plugin` has no
- * `"type": "module"` while the workspace is ESM, so an extensionless relative
- * import is resolved by one loader and required by another — Nx then dies with
- * "Unexpected status of a module that is imported again after being required",
- * which names neither the file nor the import. Every other generator here is a
- * single self-contained file, which is why nothing had hit it before.
+ * Import it with an explicit `.js` extension, pointing at this `.ts` source.
+ * `dev-plugin` is `"type": "module"`, and ESM requires the extension — an
+ * extensionless relative import is resolved by one loader and required by
+ * another, which made Nx die with "Unexpected status of a module that is
+ * imported again after being required", naming neither the file nor the
+ * import. Every other generator here is a single self-contained file, which is
+ * why nothing had hit it before.
  *
  * Deliberately not imported from `@codeware/shared/theme`. The registry there
  * (`site-themes.ts`) is *generated from this one*, so reading it back would be a

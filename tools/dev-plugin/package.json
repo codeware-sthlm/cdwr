@@ -1,6 +1,7 @@
 {
   "name": "dev-plugin",
   "version": "0.0.1",
+  "type": "module",
   "private": true,
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
