@@ -20,8 +20,10 @@ function Card({
   /**
    * Whether the card is the target of a click, and says so on hover.
    *
-   * Both `hover` and `group-hover` fire it: some of these cards are wrapped in
-   * a link that carries the `group`, and `group-hover` is inert without one.
+   * Pointer and keyboard, on the card and on a wrapper: some of these cards
+   * sit inside a link that carries the `group` and takes the focus itself, so
+   * the card's own `focus-within` never matches. The `group-*` rules are inert
+   * without such an ancestor.
    */
   interactive?: boolean;
 }) {
@@ -34,7 +36,7 @@ function Card({
       className={cn(
         'group/card bg-card text-card-foreground ring-foreground/10 flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl py-(--card-spacing) text-sm ring-1 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl',
         'data-[variant=bordered]:border-border data-[variant=bordered]:border data-[variant=bordered]:shadow-xs data-[variant=bordered]:ring-0',
-        'data-[interactive]:hover:border-core-interactive data-[interactive]:focus-within:border-core-interactive data-[interactive]:group-hover:border-core-interactive data-[interactive]:transition-[border-color,box-shadow] data-[interactive]:duration-150 data-[interactive]:group-hover:shadow-md data-[interactive]:focus-within:shadow-md data-[interactive]:hover:shadow-md',
+        'data-[interactive]:hover:border-core-interactive data-[interactive]:focus-within:border-core-interactive data-[interactive]:group-hover:border-core-interactive data-[interactive]:group-focus-within:border-core-interactive data-[interactive]:transition-[border-color,box-shadow] data-[interactive]:duration-150 data-[interactive]:group-focus-within:shadow-md data-[interactive]:group-hover:shadow-md data-[interactive]:focus-within:shadow-md data-[interactive]:hover:shadow-md',
         className
       )}
       {...props}
