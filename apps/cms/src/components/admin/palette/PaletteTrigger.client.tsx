@@ -34,9 +34,8 @@ export function PaletteTrigger() {
        * blew past on medium viewports. */}
       <Button
         onClick={openPalette}
-        variant="ghost"
+        variant="toolbar"
         size="sm"
-        className="border-border bg-background text-muted-foreground hover:text-foreground h-7 gap-1.5 rounded-full border px-2.5 text-xs font-medium"
         title={t('palette:openPalette')}
         aria-label={t('palette:dialogTitle')}
       >
