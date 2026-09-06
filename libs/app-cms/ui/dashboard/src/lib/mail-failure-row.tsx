@@ -60,10 +60,7 @@ export function MailFailureRow({
             {reasonLabel}
           </Badge>
         ) : (
-          <Badge
-            variant="outline"
-            className="border-(--warning-subtle)/30 text-(--warning-subtle)"
-          >
+          <Badge variant="warning">
             <ExclamationTriangleIcon />
             {reasonLabel}
           </Badge>
