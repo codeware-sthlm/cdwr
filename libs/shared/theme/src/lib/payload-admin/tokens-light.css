@@ -1,16 +1,16 @@
 :root {
   /* === Codeware yale-blue brand === */
-  --brand-50: #eef5fb;
-  --brand-100: #d6e8f4;
-  --brand-200: #b3d1e9;
-  --brand-300: #85aed1;
-  --brand-400: #588bae;
-  --brand-500: #2f6ba1;
-  --brand-600: #0e4d92;
-  --brand-700: #0d3f76;
-  --brand-800: #0c325e;
-  --brand-900: #0a2347;
-  --brand-950: #081830;
+  --brand-50: oklch(0.9666 0.011 243.652);
+  --brand-100: oklch(0.9212 0.0252 236.841);
+  --brand-200: oklch(0.8464 0.0465 242.325);
+  --brand-300: oklch(0.7337 0.0676 244.661);
+  --brand-400: oklch(0.6148 0.0764 239.668);
+  --brand-500: oklch(0.5142 0.106 248.534);
+  --brand-600: oklch(0.4235 0.1287 254.984);
+  --brand-700: oklch(0.3687 0.1071 254.562);
+  --brand-800: oklch(0.3177 0.0889 254.918);
+  --brand-900: oklch(0.2599 0.0741 258.029);
+  --brand-950: oklch(0.2104 0.0525 258.271);
 
   /* === shadcn zinc tokens === */
   --radius: 0.625rem;

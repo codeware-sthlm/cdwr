@@ -1,5 +1,6 @@
 import { type TailwindColor, tailwind } from '@codeware/shared/util/tailwind';
 
+import { type CodewareFamily, codewareColors } from './codeware-colors';
 import { type ShadcnNeutralFamily, shadcnNeutrals } from './shadcn-neutrals';
 
 type FamilyOf<T> = T extends `${infer Family}-${string}` ? Family : never;
@@ -16,8 +17,8 @@ type FamilyOf<T> = T extends `${infer Family}-${string}` ? Family : never;
  */
 export type TailwindFamily = FamilyOf<TailwindColor>;
 
-/** A colour family carrying a 50–950 ramp, from either source. */
-export type ColorFamily = TailwindFamily | ShadcnNeutralFamily;
+/** A colour family carrying a 50–950 ramp, from any source. */
+export type ColorFamily = TailwindFamily | ShadcnNeutralFamily | CodewareFamily;
 
 /** The steps every family defines. */
 export const COLOR_SHADES = [
@@ -65,50 +66,54 @@ export const COLOR_FAMILIES: ReadonlyArray<ColorFamily> = [
   ...tailwind.names.filter(
     (name): name is TailwindFamily => name !== 'white' && name !== 'black'
   ),
-  ...(Object.keys(shadcnNeutrals) as Array<ShadcnNeutralFamily>)
+  ...(Object.keys(shadcnNeutrals) as Array<ShadcnNeutralFamily>),
+  ...(Object.keys(codewareColors) as Array<CodewareFamily>)
 ];
 
 const colorFamilies: ReadonlySet<string> = new Set(COLOR_FAMILIES);
 
-/** Whether a stored value names a family either source ships. */
+/** Whether a stored value names a family any source ships. */
 export const isColorFamily = (value: unknown): value is ColorFamily =>
   typeof value === 'string' && colorFamilies.has(value);
 
-/** Any colour either source can name, `white` and `black` included. */
+/** Any colour any source can name, `white` and `black` included. */
 export type PaletteColor =
   | TailwindColor
-  | `${ShadcnNeutralFamily}-${ColorShade}`;
+  | `${ShadcnNeutralFamily}-${ColorShade}`
+  | `${CodewareFamily}-${ColorShade}`;
 
-const shadcnNeutralColors: Record<string, string> = Object.fromEntries(
-  Object.entries(shadcnNeutrals).flatMap(([family, ramp]) =>
+/** Every step of every family Tailwind does not ship, flattened to one lookup. */
+const localColors: Record<string, string> = Object.fromEntries(
+  [
+    ...Object.entries(shadcnNeutrals),
+    ...Object.entries(codewareColors)
+  ].flatMap(([family, ramp]) =>
     Object.entries(ramp).map(([step, value]) => [`${family}-${step}`, value])
   )
 );
 
 /** Own properties only: `'toString' in obj` is true, and it is not a colour. */
-const shadcnNeutralColor = (name: string): string | undefined =>
-  Object.hasOwn(shadcnNeutralColors, name)
-    ? shadcnNeutralColors[name]
-    : undefined;
+const localColor = (name: string): string | undefined =>
+  Object.hasOwn(localColors, name) ? localColors[name] : undefined;
 
 /**
  * Resolve a palette entry from whichever source owns its family.
  *
- * The one place that knows there are two, so nothing downstream has to ask.
+ * The one place that knows there is more than one, so nothing downstream asks.
  */
 export const paletteColor = (name: PaletteColor): string =>
-  shadcnNeutralColor(name) ?? tailwind.color(name as TailwindColor);
+  localColor(name) ?? tailwind.color(name as TailwindColor);
 
 /**
  * How a palette entry is written into a compiled theme file.
  *
  * `var(--color-…)` is what a reviewer wants to read, because it says which step
  * was chosen where a literal only says which colour came out. Tailwind declares
- * those variables for its own families only, so an alias to one of shadcn's
- * neutrals would resolve to nothing — those fall back to the literal.
+ * those variables for its own families only, so an alias to a family we ship
+ * ourselves would resolve to nothing — those fall back to the literal.
  */
 export const paletteAlias = (name: PaletteColor): string =>
-  shadcnNeutralColor(name) ?? `var(--color-${name})`;
+  localColor(name) ?? `var(--color-${name})`;
 
 /**
  * Resolve one palette step to its literal value.

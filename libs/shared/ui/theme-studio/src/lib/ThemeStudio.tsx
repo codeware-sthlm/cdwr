@@ -34,6 +34,7 @@ import {
   brokenReferences,
   buildThemeTokens,
   checkContrast,
+  codewareColors,
   fontsForSlot,
   randomRecipe,
   shade,
@@ -55,8 +56,12 @@ import { previewCss, previewScope } from './preview-css';
 import { ThemePreview } from './ThemePreview';
 import { tokenIssues } from './token-issues';
 
-/** Offered as brand colours — the neutrals are a base choice, not a brand one. */
-const BRAND_FAMILIES = [
+/** Ours, read off the palette so this cannot drift out of step with it. */
+const CODEWARE_FAMILIES = Object.keys(
+  codewareColors
+) as ReadonlyArray<ColorFamily>;
+
+const TAILWIND_HUES = [
   'red',
   'orange',
   'amber',
@@ -73,9 +78,44 @@ const BRAND_FAMILIES = [
   'purple',
   'fuchsia',
   'pink',
-  'rose',
-  ...NEUTRAL_FAMILIES
+  'rose'
 ] as const satisfies ReadonlyArray<ColorFamily>;
+
+/**
+ * Offered as brand colours, captioned rather than ruled.
+ *
+ * A swatch carries only its colour, so without the captions an author has to
+ * hover across the row to find anything by name — and at the 500 step the
+ * Codeware blue is hard to tell from `blue`, `sky` and `indigo` by eye.
+ */
+const BRAND_FAMILY_GROUPS = [
+  { label: 'Tailwind', families: TAILWIND_HUES },
+  { label: 'Codeware', families: CODEWARE_FAMILIES },
+  { label: 'Neutral', families: NEUTRAL_FAMILIES }
+] as const;
+
+/**
+ * Offered as base colours.
+ *
+ * Ours are here as well as under brand: the Codeware tenant site paints its
+ * surfaces and body text from them, and a theme that cannot name them as its
+ * base cannot reproduce that. A chromatic base tints every surface and border,
+ * which the contrast report below will say plainly if it goes too far.
+ */
+const BASE_FAMILY_GROUPS = [
+  { label: 'Neutral', families: NEUTRAL_FAMILIES },
+  { label: 'Codeware', families: CODEWARE_FAMILIES }
+] as const;
+
+/**
+ * Every family the brand picker offers, which is what it is measured against.
+ *
+ * `theme-studio.spec.ts` guards this against `COLOR_FAMILIES`: a family added
+ * to the palette and not here is nameable by the parser and unreachable by the
+ * author — which has already happened twice.
+ */
+export const BRAND_FAMILIES: ReadonlyArray<ColorFamily> =
+  BRAND_FAMILY_GROUPS.flatMap((group) => [...group.families]);
 
 const SURFACE_OPTIONS = [
   { label: 'Layered', value: 'layered' },
@@ -127,8 +167,12 @@ const RADIUS_OPTIONS = [
 /** Link shades outside this range are either invisible or lost against body text. */
 const LINK_SHADES: Array<ColorShade> = ['400', '500', '600', '700', '800'];
 
+/** `yale-blue` reads as a slug; an author should see a name. */
 const titleCase = (value: string) =>
-  value.charAt(0).toUpperCase() + value.slice(1);
+  value
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 
 /**
  * Where Radix should portal to.
@@ -232,6 +276,48 @@ type ThemeStudioProps = {
 };
 
 const NO_OVERRIDES: ThemeOverrides = { light: {}, dark: {} };
+
+/**
+ * Swatches under a caption naming what they are.
+ *
+ * The caption is the separation: a rule between groups read as clutter, and a
+ * name is what an author picking a family actually needs, since the swatch
+ * itself says nothing until hovered.
+ */
+function SwatchGroups({
+  groups,
+  selected,
+  onSelect
+}: {
+  groups: ReadonlyArray<{
+    label: string;
+    families: ReadonlyArray<ColorFamily>;
+  }>;
+  selected: ColorFamily;
+  onSelect: (family: ColorFamily) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      {groups.map(({ label, families }) => (
+        <div key={label} className="space-y-1">
+          <p className="text-muted-foreground/70 text-[10px] tracking-wide uppercase">
+            {label}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {families.map((family) => (
+              <Swatch
+                key={family}
+                family={family}
+                selected={selected === family}
+                onSelect={() => onSelect(family)}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function Swatch({
   family,
@@ -508,16 +594,11 @@ export function ThemeStudio({
                     <p className="text-muted-foreground text-[11px]">
                       Every surface, border and neutral text.
                     </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {NEUTRAL_FAMILIES.map((family) => (
-                        <Swatch
-                          key={family}
-                          family={family}
-                          selected={recipe.baseFamily === family}
-                          onSelect={() => update({ baseFamily: family })}
-                        />
-                      ))}
-                    </div>
+                    <SwatchGroups
+                      groups={BASE_FAMILY_GROUPS}
+                      selected={recipe.baseFamily}
+                      onSelect={(family) => update({ baseFamily: family })}
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -526,16 +607,11 @@ export function ThemeStudio({
                       Primary buttons, focus rings, links, active navigation and
                       the chart series.
                     </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {BRAND_FAMILIES.map((family) => (
-                        <Swatch
-                          key={family}
-                          family={family}
-                          selected={recipe.brandFamily === family}
-                          onSelect={() => update({ brandFamily: family })}
-                        />
-                      ))}
-                    </div>
+                    <SwatchGroups
+                      groups={BRAND_FAMILY_GROUPS}
+                      selected={recipe.brandFamily}
+                      onSelect={(family) => update({ brandFamily: family })}
+                    />
                   </div>
 
                   <div className="space-y-2">

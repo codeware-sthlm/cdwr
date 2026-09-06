@@ -1,5 +1,3 @@
-import { tailwind } from '@codeware/shared/util/tailwind';
-
 import {
   DEFAULT_RECIPE,
   type ThemeRecipe,
@@ -7,19 +5,18 @@ import {
 } from './build-theme-tokens';
 import { contrastFailures } from './contrast';
 import { fontsForSlot } from './fonts';
-import {
-  type ColorShade,
-  NEUTRAL_FAMILIES,
-  type TailwindFamily
-} from './palette';
+import { COLOR_FAMILIES, type ColorShade, NEUTRAL_FAMILIES } from './palette';
 
-/** A brand wants a hue; the neutrals are what the base is for. */
-const BRAND_CANDIDATES = tailwind.names.filter(
-  (name): name is TailwindFamily =>
-    name !== 'white' &&
-    name !== 'black' &&
-    !(NEUTRAL_FAMILIES as ReadonlyArray<string>).includes(name)
-);
+/**
+ * A brand wants a hue; the neutrals are what the base is for.
+ *
+ * From `COLOR_FAMILIES` rather than `tailwind.names`, so a family we ship
+ * ourselves is reachable here too — filtering the Tailwind list left one
+ * half-present: nameable by the parser, unrollable by the button.
+ */
+const NEUTRALS: ReadonlySet<string> = new Set(NEUTRAL_FAMILIES);
+
+const BRAND_CANDIDATES = COLOR_FAMILIES.filter((name) => !NEUTRALS.has(name));
 
 const RADII = ['0', '0.35rem', '0.625rem', '1rem'];
 

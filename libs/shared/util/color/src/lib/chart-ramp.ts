@@ -49,8 +49,9 @@ const hueDistance = (a: number, b: number): number => {
  * would be silently clipped to something other than what the maths said.
  * Every family here is a value the palette already ships.
  *
- * Chart one is the brand itself, and the rest are spaced around the wheel so a
- * series stays distinguishable. A neutral brand keeps the default series
+ * Chart one is the brand itself — returned directly, since a brand from
+ * outside Tailwind is not in the set the others are chosen from — and the rest
+ * are spaced around the wheel so a series stays distinguishable. A neutral brand keeps the default series
  * instead of five greys — tested against the neutral list rather than a chroma
  * threshold, since `slate` and `gray` carry enough of a tint to pass one.
  *
@@ -67,9 +68,16 @@ export function chartFamilies(brandFamily: ColorFamily): Array<ColorFamily> {
     return DEFAULT_CHART_FAMILIES;
   }
 
-  const taken = new Set<ColorFamily>();
+  // Chart one is the brand itself rather than whatever sits nearest its hue.
+  // For a Tailwind brand those are the same family; for one we ship ourselves
+  // the search cannot reach it, and the series would open on a lookalike.
+  const taken = new Set<ColorFamily>([brandFamily]);
 
   return HUE_OFFSETS.map((offset) => {
+    if (offset === 0) {
+      return brandFamily;
+    }
+
     const target = (anchor.h + offset) % 360;
     const nearest = CHROMATIC_FAMILIES.filter(
       (family) => !taken.has(family)
