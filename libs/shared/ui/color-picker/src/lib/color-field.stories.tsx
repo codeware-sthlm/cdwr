@@ -46,9 +46,9 @@ export const Translucent: StoryObj = {
 /**
  * A token that points at another one.
  *
- * The swatch paints the written value and the picker opens on the resolved
- * one — without `resolved` there would be nothing to seed it from, since a
- * `var()` has no colour of its own.
+ * Both the swatch and the picker follow `resolved` — without it there would be
+ * nothing to show or to seed from, since a `var()` has no colour of its own,
+ * and it would resolve against whatever host the field sits in.
  */
 export const Aliased: StoryObj = {
   name: 'An aliased token',
