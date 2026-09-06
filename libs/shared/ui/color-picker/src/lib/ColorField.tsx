@@ -35,6 +35,13 @@ type Props = {
   onChange: (value: string) => void;
   /** Names the swatch for a screen reader, e.g. the token it edits */
   label?: string;
+  /**
+   * Where to portal the popover to.
+   *
+   * Radix defaults to `document.body`, which lands beside a host that is
+   * itself portalled into a fixed overlay, and paints underneath it.
+   */
+  container?: HTMLElement | null;
   className?: string;
 };
 
@@ -56,6 +63,7 @@ export function ColorField({
   resolved,
   onChange,
   label,
+  container,
   className
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -113,8 +121,14 @@ export function ColorField({
         </button>
       </PopoverTrigger>
 
-      {/* Portals to `body`, out of any `twp` scope the host set up */}
-      <PopoverContent className="twp w-auto space-y-3 p-3" align="end">
+      {/* No `twp`: the scoped preflight compiles to `:is(…) *` at (0,2,1),
+          which out-specifies react-colorful's own `.react-colorful` rules
+          whatever the source order, and it brings its own styles anyway */}
+      <PopoverContent
+        container={container}
+        className="w-auto space-y-3 p-3"
+        align="end"
+      >
         <RgbaColorPicker
           color={current}
           // Only on an interaction. Seeding clamps to the sRGB gamut, so

@@ -742,6 +742,7 @@ export function ThemeStudio({
                         </SheetHeader>
                         <OverridePanel
                           generated={generated}
+                          container={root}
                           overrides={overrides}
                           issues={issues}
                           onChange={setOverrides}
