@@ -22,6 +22,9 @@ export const Demo: StoryObj = {
       <Badge variant="outline">Outline</Badge>
       <Badge variant="ghost">Ghost</Badge>
       <Badge variant="link">Link</Badge>
+      <Badge variant="success">Success</Badge>
+      <Badge variant="warning">Warning</Badge>
+      <Badge variant="brand">Brand</Badge>
     </div>
   )
 };

@@ -49,10 +49,7 @@ export function DomainStatusBadge({
 }: DomainStatusBadgeProps) {
   if (status === 'active') {
     return (
-      <Badge
-        variant="outline"
-        className="border-(--success-subtle)/30 text-(--success-subtle)"
-      >
+      <Badge variant="success">
         <CheckCircleIcon />
         {labels.active}
       </Badge>

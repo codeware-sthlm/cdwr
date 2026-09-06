@@ -20,7 +20,18 @@ const badgeVariants = cva(
           'border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground',
         ghost:
           'hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50',
-        link: 'text-primary underline-offset-4 hover:underline'
+        link: 'text-primary underline-offset-4 hover:underline',
+        // `--success-subtle` and `--warning-subtle` exist in the theme template
+        // for exactly this. Outlined rather than tinted like `destructive`,
+        // which is what the call sites these replace already were.
+        success:
+          'border-(--success-subtle)/30 text-(--success-subtle) [a]:hover:bg-(--success-subtle)/10',
+        warning:
+          'border-(--warning-subtle)/30 text-(--warning-subtle) [a]:hover:bg-(--warning-subtle)/10',
+        // A status pill that reads as the brand. One style for every value —
+        // the label carries the meaning, not the colour.
+        brand:
+          'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200 [a]:hover:bg-brand-100 dark:[a]:hover:bg-brand-900'
       }
     },
     defaultVariants: {
