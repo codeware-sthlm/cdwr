@@ -34,7 +34,7 @@ function Card({
       className={cn(
         'group/card bg-card text-card-foreground ring-foreground/10 flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl py-(--card-spacing) text-sm ring-1 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl',
         'data-[variant=bordered]:border-border data-[variant=bordered]:border data-[variant=bordered]:shadow-xs data-[variant=bordered]:ring-0',
-        'data-[interactive]:hover:border-core-interactive data-[interactive]:focus-within:border-core-interactive data-[interactive]:group-hover:border-core-interactive data-[interactive]:transition-[border-color,box-shadow] data-[interactive]:duration-150 data-[interactive]:group-hover:shadow-md data-[interactive]:hover:shadow-md',
+        'data-[interactive]:hover:border-core-interactive data-[interactive]:focus-within:border-core-interactive data-[interactive]:group-hover:border-core-interactive data-[interactive]:transition-[border-color,box-shadow] data-[interactive]:duration-150 data-[interactive]:group-hover:shadow-md data-[interactive]:focus-within:shadow-md data-[interactive]:hover:shadow-md',
         className
       )}
       {...props}
