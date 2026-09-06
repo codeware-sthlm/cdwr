@@ -107,9 +107,18 @@ export const SpotlightDark = a11yStory(Demo, 'spotlight', 'dark');
 export const CodewareLight = a11yStory(Demo, 'codeware', 'light');
 export const CodewareDark = a11yStory(Demo, 'codeware', 'dark');
 export const BorderedShadcnLight = a11yStory(Bordered, 'shadcn', 'light');
+export const BorderedShadcnDark = a11yStory(Bordered, 'shadcn', 'dark');
 export const BorderedPayloadAdminLight = a11yStory(
   Bordered,
   'payload-admin',
   'light'
 );
+export const BorderedPayloadAdminDark = a11yStory(
+  Bordered,
+  'payload-admin',
+  'dark'
+);
 export const BorderedSpotlightLight = a11yStory(Bordered, 'spotlight', 'light');
+export const BorderedSpotlightDark = a11yStory(Bordered, 'spotlight', 'dark');
+export const BorderedCodewareLight = a11yStory(Bordered, 'codeware', 'light');
+export const BorderedCodewareDark = a11yStory(Bordered, 'codeware', 'dark');
