@@ -44,7 +44,7 @@ export function CollectionCard({
   linkComponent: LinkComp = 'a'
 }: CollectionCardProps) {
   return (
-    <Card className="border-border hover:border-brand-400 focus-within:border-brand-400 relative h-full gap-3 border py-4 shadow-xs ring-0 transition-[border-color,box-shadow] duration-150 hover:shadow-md">
+    <Card variant="bordered" interactive className="relative h-full gap-3 py-4">
       <CardHeader className="flex flex-row items-center gap-3">
         <div className="bg-accent flex size-10 shrink-0 items-center justify-center rounded-lg">
           <Icon className="size-5 text-(--link)" aria-hidden />

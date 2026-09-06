@@ -146,7 +146,7 @@ export function HomeTab({
       {/* Activity + Drafts row */}
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.55fr_1fr]">
         {/* Recent activity */}
-        <Card className="border-border gap-0 border py-0 shadow-xs ring-0">
+        <Card variant="bordered" className="gap-0 py-0">
           <CardHeader className="border-border border-b py-3 [.border-b]:pb-3">
             <CardTitle className="text-sm font-semibold">
               {t('dashboard:recentActivity')}
@@ -191,7 +191,7 @@ export function HomeTab({
         </Card>
 
         {/* Continue editing */}
-        <Card className="border-border gap-0 border py-0 shadow-xs ring-0">
+        <Card variant="bordered" className="gap-0 py-0">
           <CardHeader className="border-border border-b py-3 [.border-b]:pb-3">
             <CardTitle className="text-sm font-semibold">
               {t('dashboard:continueEditing')}
