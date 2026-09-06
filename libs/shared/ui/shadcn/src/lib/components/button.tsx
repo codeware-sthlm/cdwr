@@ -23,7 +23,7 @@ const buttonVariants = cva(
         // cva emits `size` after `variant`, so a `rounded-full` here would lose
         // to whichever size the call site picked.
         toolbar:
-          'border-border bg-background text-muted-foreground hover:text-foreground',
+          'border-border bg-background text-muted-foreground hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
         // A call to action that should read as the brand rather than as the
         // primary. Not interchangeable: every committed theme runs a neutral
         // primary, so `default` here is a near-black button.
