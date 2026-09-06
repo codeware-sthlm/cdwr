@@ -66,7 +66,7 @@ export function DomainStatusBadge({
   }
 
   return (
-    <Badge variant="outline" className="text-muted-foreground">
+    <Badge variant="muted">
       <ClockIcon />
       {status === 'pending' ? (detail ?? labels.pending) : labels.notRequested}
     </Badge>
