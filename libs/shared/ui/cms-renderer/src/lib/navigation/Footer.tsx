@@ -7,6 +7,7 @@ import { cn } from '@codeware/shared/util/ui';
 import { ContainerInner, ContainerOuter } from '../layout/Container';
 import { usePayload } from '../providers/PayloadProvider';
 import { SocialLinks } from '../social/SocialLinks';
+import { isActivePath } from '../utils/active-path';
 import { handleAsRoute } from '../utils/internal-link';
 import { TenantIcon } from '../utils/TenantIcon';
 
@@ -19,7 +20,11 @@ function NavLink({
   newTab: boolean;
   children: React.ReactNode;
 }) {
-  const { navigate } = usePayload();
+  const { getCurrentPath, navigate } = usePayload();
+
+  // The same rule the header navigation uses, so a page the visitor is already
+  // on reads the same whichever navigation they look at
+  const isActive = isActivePath(getCurrentPath(), href);
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!handleAsRoute(e)) return;
@@ -30,8 +35,14 @@ function NavLink({
     <a
       href={href}
       onClick={handleClick}
+      aria-current={isActive ? 'page' : undefined}
       // Underline gives the hover a second signal beyond the colour shift
-      className="hover:text-core-nav-link-hover transition hover:underline hover:underline-offset-4"
+      className={cn(
+        'transition hover:underline hover:underline-offset-4',
+        isActive
+          ? 'text-core-nav-link-active'
+          : 'hover:text-core-nav-link-hover'
+      )}
     >
       {children}
     </a>
