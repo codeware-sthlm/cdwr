@@ -59,6 +59,8 @@ type OverridePanelProps = {
    * on the recipe alone carries no other mark at all.
    */
   issues?: TokenIssues;
+  /** Where the colour popovers portal to, when the studio is itself portalled */
+  container?: HTMLElement | null;
   onChange: (overrides: ThemeOverrides) => void;
 };
 
@@ -77,6 +79,7 @@ export function OverridePanel({
   generated,
   overrides,
   issues,
+  container,
   onChange
 }: OverridePanelProps) {
   const [scheme, setScheme] = useState<'light' | 'dark'>('light');
@@ -241,6 +244,7 @@ export function OverridePanel({
                     resolved={resolveToken(cascaded, name) ?? undefined}
                     onChange={(picked) => setToken(name, picked)}
                     label={name}
+                    container={container}
                     className="shrink-0"
                   />
                 </div>
