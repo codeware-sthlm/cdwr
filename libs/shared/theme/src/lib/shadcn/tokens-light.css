@@ -75,6 +75,7 @@
     Courier New, monospace;
   --core-header: var(--foreground);
   --core-headline: var(--foreground);
+  --core-interactive: var(--brand-400);
   --core-link: var(--primary);
   --core-navbar: var(--background);
   --core-navbar-border: var(--border);

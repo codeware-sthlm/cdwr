@@ -83,6 +83,7 @@
     Courier New, monospace;
   --core-header: var(--foreground);
   --core-headline: var(--foreground);
+  --core-interactive: var(--brand-400);
   --core-link: var(--brand-600);
   --core-surface-invert: var(--eerie-black);
   --core-navbar: var(--background);

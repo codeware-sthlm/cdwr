@@ -78,6 +78,7 @@
     Courier New, monospace;
   --core-header: var(--foreground);
   --core-headline: var(--foreground);
+  --core-interactive: var(--brand-400);
   --core-link: var(--primary);
   --core-navbar: var(--background);
   --core-navbar-border: var(--border);
@@ -189,6 +190,7 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono,
     Courier New, monospace;
   --core-header: var(--color-zinc-900);
+  --core-interactive: var(--brand-400);
   --core-link: var(--color-teal-700);
   --core-navbar: theme('colors.white / 0.9');
   --core-navbar-border: theme('colors.zinc.900 / 0.05');
@@ -446,6 +448,7 @@
   --core-content-border: var(--color-zinc-100);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Inter Variable, Inter, sans-serif;
+  --core-interactive: var(--brand-400);
   --core-link: var(--brand-700);
   --core-surface-invert: var(--color-zinc-900);
 }
@@ -612,6 +615,7 @@
     Courier New, monospace;
   --core-header: var(--foreground);
   --core-headline: var(--foreground);
+  --core-interactive: var(--brand-400);
   --core-link: var(--brand-600);
   --core-surface-invert: var(--eerie-black);
   --core-navbar: var(--background);
