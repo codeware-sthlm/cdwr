@@ -62,6 +62,42 @@ export const SmallSize: StoryObj = {
   )
 };
 
+/**
+ * What the Payload admin renders.
+ *
+ * Payload's own card is bordered, so the admin matches its chrome rather than
+ * shadcn's ring-first default. Hover the second one: `interactive` marks a card
+ * that is itself the click target, and takes its colour from
+ * `--core-interactive` so each theme decides how loud that is.
+ */
+export const Bordered: StoryObj = {
+  render: () => (
+    <div className="flex flex-col gap-4">
+      <Card variant="bordered" className="w-96">
+        <CardHeader>
+          <CardTitle>Bordered</CardTitle>
+          <CardDescription>Border and shadow, no ring.</CardDescription>
+        </CardHeader>
+        <CardContent>Static — nothing to click.</CardContent>
+      </Card>
+
+      <Card variant="bordered" interactive className="w-96">
+        <CardHeader>
+          <CardTitle>Bordered and interactive</CardTitle>
+          <CardDescription>
+            The border and shadow answer on hover and on focus within.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" size="sm">
+            Tab to me
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+};
+
 export const ShadcnLight = a11yStory(Demo, 'shadcn', 'light');
 export const ShadcnDark = a11yStory(Demo, 'shadcn', 'dark');
 export const PayloadAdminLight = a11yStory(Demo, 'payload-admin', 'light');
@@ -70,3 +106,10 @@ export const SpotlightLight = a11yStory(Demo, 'spotlight', 'light');
 export const SpotlightDark = a11yStory(Demo, 'spotlight', 'dark');
 export const CodewareLight = a11yStory(Demo, 'codeware', 'light');
 export const CodewareDark = a11yStory(Demo, 'codeware', 'dark');
+export const BorderedShadcnLight = a11yStory(Bordered, 'shadcn', 'light');
+export const BorderedPayloadAdminLight = a11yStory(
+  Bordered,
+  'payload-admin',
+  'light'
+);
+export const BorderedSpotlightLight = a11yStory(Bordered, 'spotlight', 'light');

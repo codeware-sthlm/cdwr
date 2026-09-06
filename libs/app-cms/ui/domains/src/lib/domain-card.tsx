@@ -151,7 +151,7 @@ export function DomainCard({
   const settled = active && !check?.issues?.length;
 
   return (
-    <Card className="border-border gap-0 border py-0 shadow-xs ring-0">
+    <Card variant="bordered" className="gap-0 py-0">
       <CardContent className="flex flex-col gap-3 px-4 py-3.5">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
           <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">

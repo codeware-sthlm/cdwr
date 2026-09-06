@@ -30,7 +30,7 @@ export function TaskCard({
         className
       )}
     >
-      <Card className="border-border group-hover:border-brand-400 h-full gap-0 border py-0 shadow-xs ring-0 transition-[border-color,box-shadow] duration-150 group-hover:shadow-md">
+      <Card variant="bordered" interactive className="h-full gap-0 py-0">
         <CardContent className="flex h-full items-center gap-3.5 p-4.5">
           <div className="bg-brand-600 flex size-11 shrink-0 items-center justify-center rounded-xl">
             <Icon className="size-5 text-white" aria-hidden />

@@ -33,7 +33,7 @@ export function RestartCard({
   }
 
   return (
-    <Card className="border-border gap-0 border py-0 shadow-xs ring-0">
+    <Card variant="bordered" className="gap-0 py-0">
       <CardContent className="flex flex-col gap-2.5 px-4 py-3.5">
         <p className="text-muted-foreground">{hint}</p>
         {apps.map((app) => (

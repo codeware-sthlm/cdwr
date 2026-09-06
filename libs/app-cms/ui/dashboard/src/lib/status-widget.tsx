@@ -63,11 +63,9 @@ export function StatusWidget({
 
   const body = (
     <Card
-      className={cn(
-        'border-border h-full gap-0 border py-0 shadow-xs ring-0',
-        interactive &&
-          'group-hover:border-brand-400 transition-[border-color,box-shadow] duration-150 group-hover:shadow-md'
-      )}
+      variant="bordered"
+      interactive={interactive}
+      className="h-full gap-0 py-0"
     >
       <CardContent className="flex h-full items-center gap-3.5 p-4.5">
         <div

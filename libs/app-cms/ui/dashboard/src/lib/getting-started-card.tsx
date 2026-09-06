@@ -49,7 +49,7 @@ export function GettingStartedCard({
   className
 }: GettingStartedCardProps) {
   return (
-    <Card className={cn('border-border gap-4 shadow-xs ring-0', className)}>
+    <Card variant="bordered" className={cn('gap-4', className)}>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{subtitle}</CardDescription>
