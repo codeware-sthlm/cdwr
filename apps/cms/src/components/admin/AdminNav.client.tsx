@@ -432,19 +432,24 @@ function AdminNavContent({
         <SidebarFooter className="gap-3 p-3.5">
           <SidebarSeparator className="mx-0" />
           <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-            <Link
-              href="/admin/account"
-              title={t('nav:accountSettings')}
-              className="group/account hover:bg-sidebar-accent focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-2 rounded-lg transition-colors group-data-[collapsible=icon]:flex-none focus-visible:ring-2 focus-visible:outline-none"
+            {/* The same button every nav item uses, so the account page
+                highlights when it is the one you are on. Hand-rolled, it
+                answered on hover and never on active. */}
+            <SidebarMenuButton
+              asChild
+              size="lg"
+              isActive={isActive('/admin/account')}
+              tooltip={t('nav:accountSettings')}
+              className="min-w-0 flex-1 group-data-[collapsible=icon]:flex-none"
             >
-              <InitialAvatar initial={userInitial} />
-              <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                <p className="text-foreground group-hover/account:text-brand-500 truncate text-xs font-medium transition-colors">
-                  {userName}
-                </p>
-                <p className="text-muted-foreground text-xs">{userRole}</p>
-              </div>
-            </Link>
+              <Link href="/admin/account">
+                <InitialAvatar initial={userInitial} />
+                <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                  <p className="truncate text-xs font-medium">{userName}</p>
+                  <p className="text-muted-foreground text-xs">{userRole}</p>
+                </div>
+              </Link>
+            </SidebarMenuButton>
             <Button
               onClick={async () => {
                 // Payload's logOut skips the request entirely when the client
