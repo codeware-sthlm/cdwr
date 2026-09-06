@@ -199,7 +199,7 @@ export const BASE_CHART_SHADES: Array<ColorShade> = [
 /**
  * The core and prose layers, light.
  *
- * Taken from the committed themes, where 38 of these 40 tokens are
+ * Taken from the committed themes, where 39 of these 41 tokens are
  * byte-identical between `shadcn` and `codeware` — they are plumbing from the
  * renderer's vocabulary onto the shadcn one, not a design surface. The two that
  * do vary, `--core-link` and `--core-surface-invert`, come from the recipe and
@@ -218,6 +218,11 @@ export const ALIAS_LIGHT: Record<string, TokenSource> = {
   '--core-action-btn-shadow': { value: 'transparent' },
   '--core-header': { value: 'var(--foreground)' },
   '--core-headline': { value: 'var(--foreground)' },
+  // The hover affordance on an interactive surface — a card border, a pill.
+  // Its own token rather than `--core-link` because that one is read as text
+  // and has to clear 4.5:1; a border does not, and wants the softer step.
+  // Light-only: the brand ramp is defined once and dark inherits it.
+  '--core-interactive': { value: 'var(--brand-400)' },
   '--core-navbar': { value: 'var(--background)' },
   '--core-navbar-border': { value: 'var(--border)' },
   '--core-navbar-shadow': { value: 'transparent' },

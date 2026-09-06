@@ -90,6 +90,7 @@
   --core-content-border: var(--color-zinc-100);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Inter Variable, Inter, sans-serif;
+  --core-interactive: var(--brand-400);
   --core-link: var(--brand-700);
   --core-surface-invert: var(--color-zinc-900);
 }

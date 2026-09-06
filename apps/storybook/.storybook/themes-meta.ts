@@ -81,6 +81,7 @@ export const CORE_TOKENS = [
   '--core-content-border',
   '--core-header',
   '--core-headline',
+  '--core-interactive',
   '--core-link',
   '--core-navbar',
   '--core-navbar-border',
