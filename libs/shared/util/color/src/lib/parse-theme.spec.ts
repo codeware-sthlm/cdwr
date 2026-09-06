@@ -129,7 +129,7 @@ describe('parseTheme', () => {
     it.each([
       ['shadcn', 3, 0],
       ['codeware', 8, 6],
-      ['payload-admin', 20, 2],
+      ['payload-admin', 7, 2],
       ['spotlight', 92, 0]
     ])('explains %s with %i overrides', (theme, overrides, passthrough) => {
       const parsed = parseTheme(committed(theme));
@@ -143,7 +143,8 @@ describe('parseTheme', () => {
     it.each([
       ['shadcn', { baseFamily: 'neutral', brandFamily: 'zinc' }],
       ['codeware', { baseFamily: 'zinc', brandFamily: 'blue' }],
-      ['spotlight', { baseFamily: 'zinc', brandFamily: 'teal' }]
+      ['spotlight', { baseFamily: 'zinc', brandFamily: 'teal' }],
+      ['payload-admin', { baseFamily: 'zinc', brandFamily: 'yale-blue' }]
     ])('recovers the families of %s', (theme, expected) => {
       const { recipe: parsed } = parseTheme(committed(theme));
 
@@ -151,20 +152,22 @@ describe('parseTheme', () => {
       expect(parsed.brandFamily).toBe(expected.brandFamily);
     });
 
-    // Its ramp is a bespoke Codeware blue, not a step of anything Tailwind
-    // ships. Naming the nearest family would label it `slate` and still
-    // override all eleven steps, so the ramp is reported as what it is
-    it('refuses to name a family for a hand-cut ramp', () => {
+    // Its ramp is a bespoke Codeware blue that no palette ships, so it is one
+    // we ship ourselves — `yale-blue`. Before it had a name the parser fell back to
+    // `neutral` and reported all eleven steps as overrides, which showed a
+    // brand swatch that was a lie and a brand control that did nothing
+    it('names the hand-cut ramp rather than overriding it', () => {
       const { recipe: parsed, overrides } = parseTheme(
         committed('payload-admin')
       );
 
-      expect(parsed.brandFamily).toBe(DEFAULT_RECIPE.brandFamily);
+      expect(parsed.brandFamily).toBe('yale-blue');
+      expect(parsed.brandFamily).not.toBe(DEFAULT_RECIPE.brandFamily);
       expect(
         Object.keys(overrides.light).filter((token) =>
           token.startsWith('--brand-')
         )
-      ).toHaveLength(11);
+      ).toHaveLength(0);
     });
 
     // `--core-link: var(--brand-600)` is an exact match where following the

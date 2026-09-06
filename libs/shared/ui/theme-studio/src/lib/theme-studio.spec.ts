@@ -1,8 +1,9 @@
-import { DEFAULT_RECIPE } from '@codeware/shared/util/color';
+import { COLOR_FAMILIES, DEFAULT_RECIPE } from '@codeware/shared/util/color';
 import { describe, expect, it } from 'vitest';
 
 // `?raw` rather than reading the file: under jsdom `import.meta.url` is not a
 // file URL, and the module graph resolves this the same way in any environment
+import { BRAND_FAMILIES } from './ThemeStudio';
 import source from './ThemeStudio.tsx?raw';
 
 /**
@@ -67,5 +68,21 @@ describe('ThemeStudio', () => {
 
   it('never lists the registry unfiltered', () => {
     expect(source).not.toMatch(/FONT_FAMILIES\b/);
+  });
+});
+
+/**
+ * The same failure the file's own comment describes, one level out: a family
+ * the palette gains and this list does not is nameable by the parser and
+ * unreachable by the author. It has already happened twice — `BRAND_CANDIDATES`
+ * in `random-recipe` and this list both derived from Tailwind alone.
+ */
+describe('offers every family the palette carries', () => {
+  it('leaves no family unreachable', () => {
+    const missing = COLOR_FAMILIES.filter(
+      (family) => !(BRAND_FAMILIES as ReadonlyArray<string>).includes(family)
+    );
+
+    expect(missing).toEqual([]);
   });
 });

@@ -19,6 +19,13 @@ describe('chartFamilies', () => {
     expect(chartFamilies('rose')[0]).toBe('rose');
   });
 
+  // The series is chosen from Tailwind's families, which a brand of ours is
+  // not in — searching by hue would open the series on a lookalike
+  it('starts on a brand the series cannot reach', () => {
+    expect(chartFamilies('yale-blue')[0]).toBe('yale-blue');
+    expect(chartFamilies('space-cadet')[0]).toBe('space-cadet');
+  });
+
   it('returns five distinct families', () => {
     for (const brand of ['teal', 'blue', 'amber', 'violet'] as const) {
       const families = chartFamilies(brand);
