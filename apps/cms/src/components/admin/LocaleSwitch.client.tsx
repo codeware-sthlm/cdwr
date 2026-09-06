@@ -71,10 +71,9 @@ export function LocaleSwitch() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="ghost"
+            variant="toolbar"
             size="sm"
             title={t('nav:contentLocaleAria')}
-            className="border-border bg-background text-muted-foreground hover:text-foreground h-7 gap-1.5 rounded-full border px-2.5 text-xs font-medium"
           >
             <GlobeAltIcon className="size-3.5" aria-hidden />
             {/* Collapses to just the code on narrow viewports, like the

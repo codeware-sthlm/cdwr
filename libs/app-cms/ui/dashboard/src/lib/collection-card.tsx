@@ -68,11 +68,7 @@ export function CollectionCard({
       <CardFooter className="justify-between py-3">
         <span className="text-muted-foreground text-xs">{countLabel}</span>
         {createHref && (
-          <Button
-            asChild
-            size="sm"
-            className="bg-brand-600 hover:bg-brand-700 relative z-10 text-white"
-          >
+          <Button asChild variant="brand" size="sm" className="relative z-10">
             <LinkComp href={createHref}>
               <PlusIcon aria-hidden />
               {newLabel}

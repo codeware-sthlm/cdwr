@@ -22,6 +22,14 @@ export const Demo: StoryObj = {
         <Button variant="link">Link</Button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        <Button variant="toolbar" size="sm">
+          Toolbar
+        </Button>
+        <Button variant="brand" size="sm">
+          Brand
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
         <Button size="xs">Extra small</Button>
         <Button size="sm">Small</Button>
         <Button size="default">Default</Button>
