@@ -26,6 +26,9 @@ const badgeVariants = cva(
         // which is what the call sites these replace already were.
         success:
           'border-(--success-subtle)/30 text-(--success-subtle) [a]:hover:bg-(--success-subtle)/10',
+        // The fourth status alongside success, warning and destructive: a state
+        // with nothing to report. `outline` says the shape, not the tone.
+        muted: 'border-border text-muted-foreground [a]:hover:bg-muted',
         warning:
           'border-(--warning-subtle)/30 text-(--warning-subtle) [a]:hover:bg-(--warning-subtle)/10',
         // A status pill that reads as the brand. One style for every value —
