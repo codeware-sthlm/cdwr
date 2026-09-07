@@ -65,7 +65,9 @@ export type TranslationKey =
   | 'form.submitSuccess'
   | 'form.submitFailed'
   | 'form.submitFailedDescription'
+  | 'navigation.footer'
   | 'navigation.menu'
+  | 'navigation.primary'
   | 'navigation.title'
   | 'notFound.description'
   | 'notFound.goHome'
@@ -226,7 +228,9 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Form submitted successfully',
     'form.submitFailed': 'Form submission failed',
     'form.submitFailedDescription': 'Please try again.',
+    'navigation.footer': 'Footer',
     'navigation.menu': 'Menu',
+    'navigation.primary': 'Main',
     'navigation.title': 'Navigation',
     'notFound.description':
       'Sorry, we could not find the page you were looking for.',
@@ -406,7 +410,9 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Formuläret skickades in',
     'form.submitFailed': 'Formuläret kunde inte skickas in',
     'form.submitFailedDescription': 'Försök igen.',
+    'navigation.footer': 'Sidfot',
     'navigation.menu': 'Meny',
+    'navigation.primary': 'Huvudmeny',
     'navigation.title': 'Navigation',
     'notFound.description': 'Tyvärr kunde vi inte hitta sidan du letade efter.',
     'notFound.goHome': 'Gå tillbaka till startsidan',
