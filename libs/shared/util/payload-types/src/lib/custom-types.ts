@@ -209,6 +209,15 @@ export type TenantRuntimeConfig = {
    * locks the site to that scheme and hides the switch.
    */
   colorScheme: SiteSettingsGeneral['colorScheme'];
+  /**
+   * How the header and its controls are drawn.
+   *
+   * One decision for three components — the navigation, the theme select and
+   * the colour scheme switch — because a flat navigation carrying outlined
+   * toggles is the one combination nobody wants, and separate settings invite
+   * exactly that.
+   */
+  chrome: SiteSettingsGeneral['chrome'];
 };
 
 /**

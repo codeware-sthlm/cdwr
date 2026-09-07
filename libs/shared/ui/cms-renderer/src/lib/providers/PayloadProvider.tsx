@@ -200,6 +200,14 @@ export type PayloadValue = {
   lockedColorScheme: 'light' | 'dark' | null;
 
   /**
+   * How the header and its controls are drawn.
+   *
+   * Read from context rather than passed down, so the navigation and both
+   * toggles cannot disagree about it.
+   */
+  chrome: 'flat' | 'outlined';
+
+  /**
    * Themes the site may render, each as the value its `data-theme` attribute
    * takes plus the name to show for it.
    *

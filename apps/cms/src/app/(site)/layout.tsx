@@ -116,6 +116,7 @@ export default async function RootLayout({
           locale={runtime.tenantConfig?.locale ?? 'en'}
           payloadUrl={env.APP_MODE.serverURL}
           signupPolicy={signupPolicy}
+          chrome={runtime.tenantConfig?.chrome ?? 'outlined'}
           colorScheme={runtime.tenantConfig?.colorScheme ?? 'system'}
           theme={theme}
           themes={themeChoices}

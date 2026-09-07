@@ -1062,7 +1062,8 @@ export const seed = async (
                 // spotlight is what tenants rendered before the setting existed
                 themes: ['spotlight', 'codeware'],
                 defaultTheme: 'spotlight',
-                colorScheme: 'system'
+                colorScheme: 'system',
+                chrome: 'outlined'
               },
               tenant: tenant.id
             },
