@@ -18,6 +18,7 @@ const richTextBlocks: Record<BlockSlug, boolean> = {
   media: true,
   'social-media': true,
   spacing: true,
+  testimonial: false,
   // Unsupported blocks
   callout: false,
   content: false,
@@ -44,6 +45,7 @@ const inlineBlocks: Record<BlockSlug, boolean> = {
   'reusable-content': true,
   'social-media': true,
   spacing: true,
+  testimonial: false,
   // Unsupported blocks
   callout: false,
   content: false,

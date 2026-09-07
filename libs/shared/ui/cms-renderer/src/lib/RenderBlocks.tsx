@@ -26,6 +26,7 @@ import { RichText } from './blocks/RichText';
 import { ShowcaseBlock } from './blocks/ShowcaseBlock';
 import { SocialMediaBlock } from './blocks/SocialMediaBlock';
 import { SpacingBlock } from './blocks/SpacingBlock';
+import { TestimonialBlock } from './blocks/TestimonialBlock';
 import { ToursBlock } from './blocks/ToursBlock';
 import { VideoBlock } from './blocks/VideoBlock';
 import { ColumnSizeProvider } from './providers/ColumnSizeProvider';
@@ -162,6 +163,7 @@ const blocksMap: Record<
   showcase: ShowcaseBlock,
   'social-media': SocialMediaBlock,
   spacing: SpacingBlock,
+  testimonial: TestimonialBlock,
   tours: ToursBlock,
   video: VideoBlock
 };

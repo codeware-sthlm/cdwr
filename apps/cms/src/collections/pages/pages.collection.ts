@@ -31,6 +31,7 @@ const blocks: Record<BlockSlug, boolean> = {
   showcase: true,
   'social-media': true,
   spacing: true,
+  testimonial: true,
   tours: true,
   // Unsupported blocks
   video: false
