@@ -56,7 +56,7 @@ export function MobileNavigation({
                 {t(locale, 'navigation.title')}
               </h2>
             </div>
-            <nav className="mt-6">
+            <nav aria-label={t(locale, 'navigation.menu')} className="mt-6">
               <ul className="text-core-nav-link -my-2">
                 {navigationTree.map(({ key, label, url }) => {
                   const isActive = isActivePath(pathname, url);

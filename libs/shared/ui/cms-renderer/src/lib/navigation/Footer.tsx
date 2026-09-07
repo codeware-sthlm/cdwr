@@ -1,5 +1,6 @@
 'use client';
 
+import { t } from '@codeware/shared/util/i18n';
 import type { FooterData } from '@codeware/shared/util/payload-api';
 import { formatReleaseName } from '@codeware/shared/util/pure';
 import { cn } from '@codeware/shared/util/ui';
@@ -186,7 +187,7 @@ function StandardFooter({ footer }: { footer: FooterData }) {
  * bar — for content-heavy sites that can carry the extra height.
  */
 function ExpandedFooter({ footer }: { footer: FooterData }) {
-  const { iconConfig } = usePayload();
+  const { iconConfig, locale } = usePayload();
   const { appName, contact, copyright, links, showVersion, tagline } = footer;
 
   return (
@@ -218,6 +219,7 @@ function ExpandedFooter({ footer }: { footer: FooterData }) {
                   enough to fill it, otherwise the few links drift apart */}
               {links.length > 0 && (
                 <nav
+                  aria-label={t(locale, 'navigation.footer')}
                   className={cn(
                     'text-core-nav-link gap-x-8 text-center text-sm font-medium md:text-left',
                     links.length >= 4 ? 'columns-1 sm:columns-2' : 'columns-1'

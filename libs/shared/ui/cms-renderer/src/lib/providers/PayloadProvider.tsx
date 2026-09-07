@@ -268,10 +268,15 @@ const Context = createContext<PayloadValue | null>(null);
  * @see https://ui.shadcn.com/docs/components/sonner
  */
 export function PayloadProvider({ children, value }: PayloadProviderProps) {
+  // The toaster is a singleton, so only the outermost provider brings one.
+  // Nesting to override part of the value is legitimate; two toast regions
+  // are not — they land as duplicate landmarks with the same name.
+  const nested = use(Context) !== null;
+
   return (
     <Context.Provider value={value}>
       {children}
-      <Toaster theme={value.resolvedColorScheme ?? 'system'} />
+      {!nested && <Toaster theme={value.resolvedColorScheme ?? 'system'} />}
     </Context.Provider>
   );
 }

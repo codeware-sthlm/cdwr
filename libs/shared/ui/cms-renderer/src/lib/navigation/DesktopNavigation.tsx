@@ -1,5 +1,6 @@
 'use client';
 
+import { t } from '@codeware/shared/util/i18n';
 import type { NavigationItem } from '@codeware/shared/util/payload-api';
 import { cn } from '@codeware/shared/util/ui';
 import { forwardRef } from 'react';
@@ -53,14 +54,16 @@ export const DesktopNavigation = forwardRef<
     navigationTree: NavigationItem[];
   }
 >(function DesktopNavigation({ navigationTree, ...props }, ref) {
-  const { chrome } = usePayload();
+  const { chrome, locale } = usePayload();
 
   if (navigationTree.length === 0) {
     return null;
   }
 
   return (
-    <nav ref={ref} {...props}>
+    // Named because the footer carries a navigation landmark too, and two
+    // unnamed ones are indistinguishable to a screen reader
+    <nav ref={ref} aria-label={t(locale, 'navigation.primary')} {...props}>
       <ul className={navChrome({ chrome })}>
         {navigationTree.map(({ key, label, url }) => (
           <NavItem key={key} href={url}>
