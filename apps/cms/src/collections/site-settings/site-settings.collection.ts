@@ -297,6 +297,28 @@ const siteSettings: CollectionConfig = {
               required: true
             },
             {
+              name: 'chrome',
+              type: 'select',
+              label: { en: 'Header style', sv: 'Sidhuvudets stil' },
+              admin: {
+                description: {
+                  en: 'Whether the menu and the buttons beside it sit in their own frames, or blend into the page.',
+                  sv: 'Om menyn och knapparna bredvid den har egna ramar, eller smälter in i sidan.'
+                }
+              },
+              enumName: enumName('site_settings_chrome'),
+              options: [
+                {
+                  label: { en: 'Framed', sv: 'Inramad' },
+                  value: 'outlined'
+                },
+                { label: { en: 'Blended', sv: 'Avskalad' }, value: 'flat' }
+              ],
+              hasMany: false,
+              defaultValue: 'outlined',
+              required: true
+            },
+            {
               name: 'defaultLocale',
               type: 'select',
               options: [

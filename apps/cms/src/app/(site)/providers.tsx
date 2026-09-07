@@ -22,6 +22,8 @@ type ProvidersProps = {
   children: React.ReactNode;
   /** Light/dark policy from site settings, not the current state */
   colorScheme: SiteSettingsGeneral['colorScheme'];
+  /** How the header and its controls are drawn */
+  chrome: PayloadValue['chrome'];
 } & Pick<
   PayloadValue,
   | 'appInfo'
@@ -40,6 +42,7 @@ type ProvidersProps = {
 export function Providers({
   children,
   appInfo,
+  chrome,
   colorScheme,
   iconConfig,
   locale,
@@ -180,6 +183,7 @@ function PayloadProviderInner({
             };
           }
         },
+        chrome,
         colorScheme: (colorScheme as 'light' | 'dark' | 'system') ?? 'system',
         lockedColorScheme:
           colorSchemePolicy === 'system' ? null : colorSchemePolicy,

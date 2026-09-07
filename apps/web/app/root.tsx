@@ -265,6 +265,9 @@ export default function App() {
   // Provide app opinionated context to Payload components
   const context: PayloadValue = {
     appInfo: loaderData.appInfo,
+    // The tenant's own chrome, falling back to what every site rendered
+    // before the setting existed
+    chrome: loaderData.tenantConfig?.chrome ?? 'outlined',
     getCurrentPath: () => loaderData.requestInfo.path,
     iconConfig: loaderData.tenantConfig?.icon ?? null,
     navigate: (path, newTab) => {

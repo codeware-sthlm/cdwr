@@ -51,6 +51,7 @@ export function buildTenantConfig({
     defaultTheme: themes.includes(settings.defaultTheme)
       ? settings.defaultTheme
       : themes[0],
-    colorScheme: settings.colorScheme
+    colorScheme: settings.colorScheme,
+    chrome: settings.chrome
   };
 }

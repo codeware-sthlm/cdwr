@@ -1873,6 +1873,10 @@ export interface SiteSettingsGeneral {
    */
   colorScheme: 'system' | 'light' | 'dark';
   /**
+   * How the header and its controls are drawn. Outlined separates them with borders; flat leans on the surface instead.
+   */
+  chrome: 'outlined' | 'flat';
+  /**
    * The default locale for the client. Must be one of the supported locales for the workspace.
    */
   defaultLocale: 'en' | 'sv';
@@ -2827,6 +2831,7 @@ export interface SiteSettingsGeneralSelect<T extends boolean = true> {
   customThemes?: T;
   defaultTheme?: T;
   colorScheme?: T;
+  chrome?: T;
   defaultLocale?: T;
 }
 /**

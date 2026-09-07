@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react';
 
 import { usePayload } from '../providers/PayloadProvider';
 
+import { controlChrome } from './chrome';
+
 /**
  * Render the icon with color transitions for the current color scheme.
  */
@@ -38,7 +40,7 @@ function getColorSchemeIcon(
  * Renders nothing when the site locks its color scheme.
  */
 export function ColorSchemeSwitch() {
-  const { colorScheme, lockedColorScheme, setColorScheme, locale } =
+  const { chrome, colorScheme, lockedColorScheme, setColorScheme, locale } =
     usePayload();
   const [mounted, setMounted] = useState(false);
 
@@ -82,7 +84,7 @@ export function ColorSchemeSwitch() {
     <button
       type="button"
       onClick={() => setColorScheme(nextColorScheme)}
-      className="group bg-core-action-btn-background shadow-core-action-btn-shadow ring-core-action-btn-border hover:ring-core-action-btn-border-hover rounded-full px-3 py-2 shadow-lg ring-1 backdrop-blur transition"
+      className={controlChrome({ chrome })}
       aria-label={t(locale, 'colorScheme.switchTo', {
         colorScheme: getColorSchemeLabel(nextColorScheme)
       })}

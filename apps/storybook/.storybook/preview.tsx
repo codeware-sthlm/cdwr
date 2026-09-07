@@ -18,6 +18,10 @@ const CLASS_DARK_THEMES = new Set(
 const withPayload: Decorator = (Story, context) => {
   const colorScheme =
     (context.globals['colorScheme'] as 'light' | 'dark') ?? 'light';
+  // Flat is defined by what it removes, so it wants checking on a pale theme
+  // as much as a dark one — hence a toolbar switch rather than a fixed value
+  const chrome =
+    (context.globals['chrome'] as 'flat' | 'outlined') ?? 'outlined';
   const theme = (context.globals['theme'] as SbTheme) ?? STORYBOOK_THEMES[0];
 
   return (
@@ -57,6 +61,7 @@ const withPayload: Decorator = (Story, context) => {
             ? { privacyUrl: '/privacy', termsUrl: null, retentionDays: 365 }
             : (context.parameters['signupPolicy'] as SignupPolicy | null),
         setColorScheme: () => undefined,
+        chrome,
         colorScheme,
         // Stories never lock the scheme — the Appearance toolbar drives it
         lockedColorScheme: null,
@@ -139,6 +144,19 @@ const preview: Preview = {
           { value: 'payload-admin', title: 'Payload Admin' },
           { value: 'spotlight', title: 'Spotlight' },
           { value: 'codeware', title: 'Codeware' }
+        ],
+        dynamicTitle: true
+      }
+    },
+    chrome: {
+      description: 'How the header and its controls are drawn',
+      defaultValue: 'outlined',
+      toolbar: {
+        title: 'Chrome',
+        icon: 'component',
+        items: [
+          { value: 'outlined', title: 'Outlined' },
+          { value: 'flat', title: 'Flat' }
         ],
         dynamicTitle: true
       }

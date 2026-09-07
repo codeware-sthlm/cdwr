@@ -11,6 +11,7 @@ import {
 import { ChevronDownIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 import { usePayload } from '../providers/PayloadProvider';
+import { mobileNavChrome } from '../theme/chrome';
 import { isActivePath } from '../utils/active-path';
 import { handleAsRoute } from '../utils/internal-link';
 
@@ -20,7 +21,7 @@ export function MobileNavigation({
 }: React.ComponentPropsWithoutRef<typeof Popover> & {
   navigationTree: NavigationItem[];
 }) {
-  const { getCurrentPath, navigate, locale } = usePayload();
+  const { chrome, getCurrentPath, navigate, locale } = usePayload();
   const pathname = getCurrentPath();
 
   if (navigationTree.length === 0) {
@@ -29,7 +30,7 @@ export function MobileNavigation({
 
   return (
     <Popover {...props}>
-      <PopoverButton className="group bg-core-navbar text-core-nav-link shadow-core-action-btn-shadow ring-core-action-btn-border hover:ring-core-action-btn-border-hover flex h-full items-center rounded-full object-contain px-4 py-2 text-sm font-medium shadow-lg ring-1 backdrop-blur">
+      <PopoverButton className={mobileNavChrome({ chrome })}>
         {t(locale, 'navigation.menu')}
         <ChevronDownIcon className="stroke-core-nav-link/80 group-hover:stroke-core-nav-link ml-2 size-3" />
       </PopoverButton>

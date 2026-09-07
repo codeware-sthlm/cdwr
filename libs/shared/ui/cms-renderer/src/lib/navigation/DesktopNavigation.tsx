@@ -5,6 +5,7 @@ import { cn } from '@codeware/shared/util/ui';
 import { forwardRef } from 'react';
 
 import { usePayload } from '../providers/PayloadProvider';
+import { navChrome } from '../theme/chrome';
 import { isActivePath } from '../utils/active-path';
 import { handleAsRoute } from '../utils/internal-link';
 
@@ -52,13 +53,15 @@ export const DesktopNavigation = forwardRef<
     navigationTree: NavigationItem[];
   }
 >(function DesktopNavigation({ navigationTree, ...props }, ref) {
+  const { chrome } = usePayload();
+
   if (navigationTree.length === 0) {
     return null;
   }
 
   return (
     <nav ref={ref} {...props}>
-      <ul className="text-core-nav-link bg-core-navbar shadow-core-navbar-shadow ring-core-navbar-border flex h-full rounded-full px-3 text-sm font-medium shadow-lg ring-1 backdrop-blur">
+      <ul className={navChrome({ chrome })}>
         {navigationTree.map(({ key, label, url }) => (
           <NavItem key={key} href={url}>
             {label}
