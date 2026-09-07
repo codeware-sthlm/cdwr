@@ -132,6 +132,7 @@ export interface Config {
     code: CodeBlock;
     content: ContentBlock;
     'feature-cards': FeatureCardsBlock;
+    'feature-section': FeatureSectionBlock;
     'file-area': FileAreaBlock;
     form: FormBlock;
     hero: HeroBlock;
@@ -1491,6 +1492,62 @@ export interface ToursBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FeatureSectionBlock".
+ */
+export interface FeatureSectionBlock {
+  /**
+   * Small uppercase label shown above the heading
+   */
+  eyebrow?: string | null;
+  heading: string;
+  /**
+   * Short paragraph below the heading
+   */
+  intro?: string | null;
+  enableLink?: boolean | null;
+  link?: FeatureSectionLink;
+  /**
+   * The image that carries the claim above it.
+   */
+  media?: (number | null) | Media;
+  /**
+   * Shown as one divided row beneath the visual. Two to four reads best.
+   */
+  subFeatures?:
+    | {
+        title: string;
+        body: string;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'feature-section';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FeatureSectionLink".
+ */
+export interface FeatureSectionLink {
+  type?: ('reference' | 'custom') | null;
+  newTab?: boolean | null;
+  reference?:
+    | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'posts';
+        value: number | Post;
+      } | null);
+  /**
+   * Add protocol (http:// or https://) if the link is external
+   */
+  url?: string | null;
+  label: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "VideoBlock".
  */
 export interface VideoBlock {
@@ -1516,7 +1573,7 @@ export interface CustomTheme {
    */
   name: string;
   /**
-   * The four decisions the tokens below are generated from.
+   * The decisions the tokens below are generated from.
    */
   recipe?:
     | {
@@ -1745,7 +1802,7 @@ export interface SiteSettingsGeneral {
   /**
    * Themes this site may use. Select more than one to give visitors a theme selector.
    */
-  themes?: ('shadcn' | 'spotlight' | 'codeware')[] | null;
+  themes?: ('shadcn' | 'spotlight' | 'spotlight-fork' | 'codeware')[] | null;
   /**
    * Your own themes, offered alongside the ones above. Create them under Custom themes.
    */

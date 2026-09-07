@@ -24,6 +24,7 @@ const blocks: Record<BlockSlug, boolean> = {
   // Unsupported blocks
   callout: false,
   'feature-cards': false,
+  'feature-section': false,
   hero: false,
   'pill-list': false,
   posts: false,

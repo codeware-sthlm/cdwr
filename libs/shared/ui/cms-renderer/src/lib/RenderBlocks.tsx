@@ -14,6 +14,7 @@ import { CalloutBlock } from './blocks/CalloutBlock';
 import { CardBlock } from './blocks/CardBlock';
 import { CodeBlock } from './blocks/CodeBlock';
 import { FeatureCardsBlock } from './blocks/FeatureCardsBlock';
+import { FeatureSectionBlock } from './blocks/FeatureSectionBlock';
 import { FileAreaBlock } from './blocks/FileAreaBlock';
 import { FormBlock } from './blocks/FormBlock';
 import { HeroBlock } from './blocks/HeroBlock';
@@ -149,6 +150,7 @@ const blocksMap: Record<
   code: CodeBlock,
   content: ContentBlock,
   'feature-cards': FeatureCardsBlock,
+  'feature-section': FeatureSectionBlock,
   'file-area': FileAreaBlock,
   form: FormBlock,
   hero: HeroBlock,

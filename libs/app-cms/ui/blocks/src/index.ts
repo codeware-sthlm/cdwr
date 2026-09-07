@@ -4,6 +4,7 @@ export { cardBlock } from './lib/card/card.block';
 export { codeBlock } from './lib/code/code.block';
 export { contentBlock } from './lib/content/content.block';
 export { featureCardsBlock } from './lib/feature-cards/feature-cards.block';
+export { featureSectionBlock } from './lib/feature-section/feature-section.block';
 export { fileAreaBlock } from './lib/file-area/file-area.block';
 export { formBlock } from './lib/form/form.block';
 export { heroBlock } from './lib/hero/hero.block';

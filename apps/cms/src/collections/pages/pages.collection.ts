@@ -19,6 +19,7 @@ const blocks: Record<BlockSlug, boolean> = {
   code: true,
   content: true,
   'feature-cards': true,
+  'feature-section': true,
   'file-area': true,
   form: true,
   hero: true,

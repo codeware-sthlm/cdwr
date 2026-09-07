@@ -31,6 +31,7 @@ const blocks: Record<BlockSlug, boolean> = {
   callout: false,
   content: false,
   'feature-cards': false,
+  'feature-section': false,
   'file-area': false,
   form: false,
   hero: false,
