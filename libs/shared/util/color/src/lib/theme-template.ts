@@ -212,6 +212,9 @@ export const ALIAS_LIGHT: Record<string, TokenSource> = {
   '--core-action-btn-foreground': { value: 'var(--muted-foreground)' },
   '--core-action-btn-foreground-hover': { value: 'var(--foreground)' },
   '--core-action-btn-background': { value: 'var(--background)' },
+  // The flat chrome's only means of showing itself: no ring, no shadow,
+  // so a fill equal to the page leaves nothing on screen
+  '--core-action-btn-track': { value: 'var(--muted)' },
   '--core-action-btn-border': { value: 'var(--border)' },
   '--core-action-btn-border-hover': { value: 'var(--border)' },
   '--core-action-btn-icon-fill': { value: 'var(--muted)' },

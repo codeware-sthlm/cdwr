@@ -16,6 +16,7 @@
   --core-action-btn-foreground: var(--color-zinc-600);
   --core-action-btn-foreground-hover: var(--color-teal-700);
   --core-action-btn-background: theme('colors.white / 0.9');
+  --core-action-btn-track: var(--color-zinc-100);
   --core-action-btn-border: theme('colors.zinc.900 / 0.05');
   --core-action-btn-border-hover: theme('colors.zinc.900 / 0.1');
   --core-action-btn-icon-fill: var(--color-zinc-100);

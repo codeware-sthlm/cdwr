@@ -108,6 +108,24 @@ export const THEME_CONTRAST_PAIRS: Array<ContrastPair> = [
     minimum: WCAG_AA_NORMAL
   },
   {
+    foreground: '--core-action-btn-foreground',
+    background: '--core-action-btn-background',
+    usage: 'Header control labels and icons',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
+    foreground: '--core-action-btn-foreground-hover',
+    background: '--core-action-btn-background',
+    usage: 'Header control, hovered or selected',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
+    foreground: '--core-action-btn-foreground',
+    background: '--core-action-btn-track',
+    usage: 'Unselected segment in a flat header control',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
     foreground: '--sidebar-foreground',
     background: '--sidebar',
     usage: 'Sidebar text',

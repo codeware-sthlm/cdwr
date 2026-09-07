@@ -95,6 +95,7 @@
     --core-action-btn-foreground-hover
   );
   --color-core-action-btn-background: var(--core-action-btn-background);
+  --color-core-action-btn-track: var(--core-action-btn-track);
   --color-core-action-btn-border: var(--core-action-btn-border);
   --color-core-action-btn-border-hover: var(--core-action-btn-border-hover);
   --color-core-action-btn-icon-fill: var(--core-action-btn-icon-fill);

@@ -130,7 +130,7 @@ describe('parseTheme', () => {
       ['shadcn', 3, 0],
       ['codeware', 8, 6],
       ['payload-admin', 7, 2],
-      ['spotlight', 92, 0]
+      ['spotlight', 93, 0]
     ])('explains %s with %i overrides', (theme, overrides, passthrough) => {
       const parsed = parseTheme(committed(theme));
       const count = (block: { light: object; dark: object }) =>

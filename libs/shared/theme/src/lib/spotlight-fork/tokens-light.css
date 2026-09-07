@@ -53,6 +53,7 @@
   --core-action-btn-foreground: var(--muted-foreground);
   --core-action-btn-foreground-hover: var(--color-teal-700);
   --core-action-btn-background: oklch(1 0 0 / 90%);
+  --core-action-btn-track: var(--color-zinc-100);
   --core-action-btn-border: oklch(0.21 0.006 285.885 / 5%);
   --core-action-btn-border-hover: oklch(0.21 0.006 285.885 / 10%);
   --core-action-btn-icon-fill: var(--muted);
