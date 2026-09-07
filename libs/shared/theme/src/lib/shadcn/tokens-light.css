@@ -58,6 +58,7 @@
   --core-action-btn-foreground: var(--muted-foreground);
   --core-action-btn-foreground-hover: var(--foreground);
   --core-action-btn-background: var(--background);
+  --core-action-btn-track: var(--muted);
   --core-action-btn-border: var(--border);
   --core-action-btn-border-hover: var(--border);
   --core-action-btn-icon-fill: var(--muted);

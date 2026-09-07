@@ -2,8 +2,12 @@ import type { NavigationItem } from '@codeware/shared/util/payload-api';
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { PayloadProvider, usePayload } from '../providers/PayloadProvider';
-import type { Chrome } from '../theme/chrome';
+import {
+  PayloadProvider,
+  type PayloadValue,
+  usePayload
+} from '../providers/PayloadProvider';
+import { type Chrome, segmentLimit } from '../theme/chrome';
 import { ColorSchemeSwitch } from '../theme/ColorSchemeSwitch';
 import { ThemeSelect } from '../theme/ThemeSelect';
 
@@ -36,6 +40,20 @@ const navigationTree: Array<NavigationItem> = [
   { collection: 'pages', key: 'devlog', label: 'Devlog', url: '/devlog' }
 ];
 
+/**
+ * Cut the toolbar's theme list to `count`, keeping the selected one first.
+ *
+ * The decorator offers every theme Storybook knows about, which is more than a
+ * segmented control will take — so without this the flat expression would only
+ * ever show its fallback here.
+ */
+function trimThemes(value: PayloadValue, count: number) {
+  const selected = value.themes.filter(({ value: v }) => v === value.theme);
+  const rest = value.themes.filter(({ value: v }) => v !== value.theme);
+
+  return [...selected, ...rest].slice(0, count);
+}
+
 /** The header as `RenderLayout` composes it: navigation left, controls right. */
 function Header({ label }: { label?: string }) {
   return (
@@ -43,9 +61,9 @@ function Header({ label }: { label?: string }) {
       <DesktopNavigation
         navigationTree={navigationTree}
         className="max-md:hidden"
-        // Two headers on one screen means two navigation landmarks, which a
-        // page never has under the same name. Only the stories need this, so
-        // an absent label leaves the component's own name in place.
+        // Several headers on one screen means several navigation landmarks,
+        // which a page never has under the same name. Only the stories need
+        // this, so an absent label leaves the component's own name in place.
         {...(label ? { 'aria-label': label } : {})}
       />
       <MobileNavigation navigationTree={navigationTree} className="md:hidden" />
@@ -58,10 +76,19 @@ function Header({ label }: { label?: string }) {
 }
 
 /**
- * Force one expression regardless of the toolbar, so both can sit on screen at
- * once. Everything else in the context is kept as the decorator built it.
+ * Force one expression regardless of the toolbar, so several can sit on screen
+ * at once. Everything else in the context is kept as the decorator built it.
  */
-function AtChrome({ chrome, label }: { chrome: Chrome; label: string }) {
+function AtChrome({
+  chrome,
+  label,
+  themeCount = segmentLimit
+}: {
+  chrome: Chrome;
+  label: string;
+  /** How many themes the tenant offers, which is what picks the flat control */
+  themeCount?: number;
+}) {
   const value = usePayload();
 
   return (
@@ -69,7 +96,9 @@ function AtChrome({ chrome, label }: { chrome: Chrome; label: string }) {
       <p className="text-muted-foreground text-xs tracking-[0.12em] uppercase">
         {label}
       </p>
-      <PayloadProvider value={{ ...value, chrome }}>
+      <PayloadProvider
+        value={{ ...value, chrome, themes: trimThemes(value, themeCount) }}
+      >
         <Header label={label} />
       </PayloadProvider>
     </div>
@@ -82,11 +111,13 @@ export const Default: StoryObj = {
 };
 
 /**
- * Both expressions at once, which is the only way to judge the difference.
+ * Every expression at once, which is the only way to judge the difference.
  *
- * `flat` is defined by what it removes — it drops the ring and the shadow and
- * leans on the surface token alone — so the case that decides whether it holds
- * up is a pale ground, not a dark one.
+ * They differ in form, not only in trim: `outlined` is round, ringed and
+ * lifted, and keeps each control's options behind an icon; `flat` is square,
+ * filled, and shows them inline. The third row is that same flat expression
+ * with more themes than a toolbar will hold — it falls back to a menu, but a
+ * square one, so the variant survives its own fallback.
  */
 export const BothExpressions: StoryObj = {
   name: 'Framed vs blended',
@@ -94,6 +125,11 @@ export const BothExpressions: StoryObj = {
     <div className="flex flex-col gap-10">
       <AtChrome chrome="outlined" label="Framed" />
       <AtChrome chrome="flat" label="Blended" />
+      <AtChrome
+        chrome="flat"
+        label="Blended, past the segment limit"
+        themeCount={segmentLimit + 2}
+      />
     </div>
   )
 };

@@ -1,41 +1,34 @@
 'use client';
 
+import {
+  ToggleGroup,
+  ToggleGroupItem
+} from '@codeware/shared/ui/shadcn/components/toggle-group';
 import { t } from '@codeware/shared/util/i18n';
-import { cn } from '@codeware/shared/util/ui';
 import { MonitorIcon, MoonStarIcon, SunIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { usePayload } from '../providers/PayloadProvider';
 
-import { controlChrome } from './chrome';
+import { controlChrome, controlIcon, segment, segmentTrack } from './chrome';
+
+type ColorScheme = 'light' | 'dark' | 'system';
+
+/** The three schemes in the order the cycle already walked them. */
+const colorSchemes: Array<ColorScheme> = ['light', 'dark', 'system'];
+
+const icons = {
+  light: SunIcon,
+  dark: MoonStarIcon,
+  system: MonitorIcon
+};
 
 /**
- * Render the icon with color transitions for the current color scheme.
- */
-function getColorSchemeIcon(
-  colorScheme: 'light' | 'dark' | 'system' | undefined
-): React.ReactElement {
-  let Icon;
-  if (colorScheme === 'system') {
-    Icon = MonitorIcon;
-  } else if (colorScheme === 'dark') {
-    Icon = MoonStarIcon;
-  } else {
-    Icon = SunIcon;
-  }
-
-  return (
-    <Icon
-      className={cn(
-        'stroke-core-action-btn-foreground fill-core-action-btn-icon-fill group-hover:stroke-core-action-btn-foreground-hover size-6 stroke-[1.5] transition'
-      )}
-    />
-  );
-}
-
-/**
- * Color scheme switch that cycles through light, dark, and system.
- * Uses PayloadProvider for color scheme state and updates.
+ * Color scheme switch, following the site's chrome.
+ *
+ * `outlined` cycles light → dark → system from one icon. `flat` shows all
+ * three as segments, so every scheme is one click away rather than up to
+ * three — a different control, which is the point of the variant.
  *
  * Renders nothing when the site locks its color scheme.
  */
@@ -59,26 +52,58 @@ export function ColorSchemeSwitch() {
     return null;
   }
 
+  const getColorSchemeLabel = (colorScheme: ColorScheme): string => {
+    if (colorScheme === 'system') return t(locale, 'colorScheme.system');
+    if (colorScheme === 'dark') return t(locale, 'colorScheme.dark');
+    return t(locale, 'colorScheme.light');
+  };
+
+  const currentColorScheme = colorScheme ?? 'light';
+
+  if (chrome === 'flat') {
+    return (
+      <ToggleGroup
+        type="single"
+        value={currentColorScheme}
+        // Radix clears the value when the active item is pressed again, and
+        // there is no "no scheme" to fall back to
+        onValueChange={(next) => next && setColorScheme(next as ColorScheme)}
+        spacing={0}
+        size="sm"
+        aria-label={t(locale, 'colorScheme.switchTo', {
+          colorScheme: getColorSchemeLabel(currentColorScheme)
+        })}
+        className={segmentTrack()}
+      >
+        {colorSchemes.map((value) => {
+          const Icon = icons[value];
+          const label = getColorSchemeLabel(value);
+
+          return (
+            <ToggleGroupItem
+              key={value}
+              value={value}
+              aria-label={label}
+              title={label}
+              className={segment()}
+            >
+              <Icon className="size-4 stroke-[1.5]" />
+            </ToggleGroupItem>
+          );
+        })}
+      </ToggleGroup>
+    );
+  }
+
   // Cycle through: light -> dark -> system -> light
-  const getNextColorScheme = (
-    current: 'light' | 'dark' | 'system' | undefined
-  ): 'light' | 'dark' | 'system' => {
+  const getNextColorScheme = (current: ColorScheme): ColorScheme => {
     if (current === 'light') return 'dark';
     if (current === 'dark') return 'system';
     return 'light';
   };
 
-  const currentColorScheme = colorScheme ?? 'light';
   const nextColorScheme = getNextColorScheme(currentColorScheme);
-  const icon = getColorSchemeIcon(currentColorScheme);
-
-  const getColorSchemeLabel = (
-    colorScheme: 'light' | 'dark' | 'system'
-  ): string => {
-    if (colorScheme === 'system') return t(locale, 'colorScheme.system');
-    if (colorScheme === 'dark') return t(locale, 'colorScheme.dark');
-    return t(locale, 'colorScheme.light');
-  };
+  const Icon = icons[currentColorScheme];
 
   return (
     <button
@@ -93,7 +118,7 @@ export function ColorSchemeSwitch() {
         next: getColorSchemeLabel(nextColorScheme)
       })}
     >
-      {icon}
+      <Icon className={controlIcon({ chrome })} />
       <span className="sr-only capitalize">
         {getColorSchemeLabel(currentColorScheme)}
       </span>

@@ -61,6 +61,7 @@
   --core-action-btn-foreground: var(--muted-foreground);
   --core-action-btn-foreground-hover: var(--foreground);
   --core-action-btn-background: var(--background);
+  --core-action-btn-track: var(--muted);
   --core-action-btn-border: var(--border);
   --core-action-btn-border-hover: var(--border);
   --core-action-btn-icon-fill: var(--muted);
@@ -173,6 +174,7 @@
   --core-action-btn-foreground: var(--color-zinc-600);
   --core-action-btn-foreground-hover: var(--color-teal-700);
   --core-action-btn-background: theme('colors.white / 0.9');
+  --core-action-btn-track: var(--color-zinc-100);
   --core-action-btn-border: theme('colors.zinc.900 / 0.05');
   --core-action-btn-border-hover: theme('colors.zinc.900 / 0.1');
   --core-action-btn-icon-fill: var(--color-zinc-100);
@@ -273,6 +275,7 @@
   --core-action-btn-foreground: var(--color-zinc-400);
   --core-action-btn-foreground-hover: var(--color-teal-400);
   --core-action-btn-background: theme('colors.zinc.800 / 0.9');
+  --core-action-btn-track: var(--color-zinc-900);
   --core-action-btn-border: theme('colors.white / 0.1');
   --core-action-btn-border-hover: theme('colors.white / 0.2');
   --core-action-btn-icon-fill: var(--color-zinc-700);
@@ -411,6 +414,7 @@
   --core-action-btn-foreground: var(--muted-foreground);
   --core-action-btn-foreground-hover: var(--color-teal-700);
   --core-action-btn-background: oklch(1 0 0 / 90%);
+  --core-action-btn-track: var(--color-zinc-100);
   --core-action-btn-border: oklch(0.21 0.006 285.885 / 5%);
   --core-action-btn-border-hover: oklch(0.21 0.006 285.885 / 10%);
   --core-action-btn-icon-fill: var(--muted);
@@ -495,6 +499,7 @@
   --core-surface-invert: var(--color-zinc-700);
   --core-action-btn-foreground-hover: var(--color-teal-400);
   --core-action-btn-background: oklch(0.274 0.006 286.033 / 90%);
+  --core-action-btn-track: var(--color-zinc-900);
   --core-action-btn-border: oklch(1 0 0 / 10%);
   --core-action-btn-border-hover: oklch(1 0 0 / 20%);
   --core-action-btn-icon-fill: var(--color-zinc-700);
@@ -598,6 +603,7 @@
   --core-action-btn-foreground: var(--muted-foreground);
   --core-action-btn-foreground-hover: var(--foreground);
   --core-action-btn-background: var(--background);
+  --core-action-btn-track: var(--muted);
   --core-action-btn-border: var(--border);
   --core-action-btn-border-hover: var(--border);
   --core-action-btn-icon-fill: var(--muted);

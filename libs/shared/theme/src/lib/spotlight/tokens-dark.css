@@ -3,6 +3,7 @@
   --core-action-btn-foreground: var(--color-zinc-400);
   --core-action-btn-foreground-hover: var(--color-teal-400);
   --core-action-btn-background: theme('colors.zinc.800 / 0.9');
+  --core-action-btn-track: var(--color-zinc-900);
   --core-action-btn-border: theme('colors.white / 0.1');
   --core-action-btn-border-hover: theme('colors.white / 0.2');
   --core-action-btn-icon-fill: var(--color-zinc-700);

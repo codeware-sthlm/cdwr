@@ -72,6 +72,7 @@ export const CORE_TOKENS = [
   '--core-action-btn-foreground',
   '--core-action-btn-foreground-hover',
   '--core-action-btn-background',
+  '--core-action-btn-track',
   '--core-action-btn-border',
   '--core-action-btn-border-hover',
   '--core-action-btn-icon-fill',

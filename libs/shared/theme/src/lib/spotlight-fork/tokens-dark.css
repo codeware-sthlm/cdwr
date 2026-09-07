@@ -41,6 +41,7 @@
   --core-surface-invert: var(--color-zinc-700);
   --core-action-btn-foreground-hover: var(--color-teal-400);
   --core-action-btn-background: oklch(0.274 0.006 286.033 / 90%);
+  --core-action-btn-track: var(--color-zinc-900);
   --core-action-btn-border: oklch(1 0 0 / 10%);
   --core-action-btn-border-hover: oklch(1 0 0 / 20%);
   --core-action-btn-icon-fill: var(--color-zinc-700);
