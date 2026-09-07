@@ -62,6 +62,7 @@ export function Providers({
     >
       <PayloadProviderInner
         appInfo={appInfo}
+        chrome={chrome}
         colorScheme={colorScheme}
         iconConfig={iconConfig}
         locale={locale}
@@ -79,6 +80,7 @@ export function Providers({
 function PayloadProviderInner({
   children,
   appInfo,
+  chrome,
   colorScheme: colorSchemePolicy,
   iconConfig,
   locale,
