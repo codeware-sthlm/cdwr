@@ -68,32 +68,50 @@ export const FeatureSectionBlock: React.FC<FeatureSectionBlockProps> = ({
         // bordered object, and these are subordinate to it
         <div
           className={cn(
-            'border-border mt-8 grid grid-cols-1 gap-y-7 border-t pt-7 sm:gap-y-0',
+            'border-border mt-8 grid grid-cols-1 gap-y-7 border-t pt-7',
             {
-              'sm:grid-cols-2': points.length === 2,
-              'sm:grid-cols-3': points.length === 3,
-              'sm:grid-cols-2 lg:grid-cols-4': points.length >= 4
+              'sm:grid-cols-2 sm:gap-y-0': points.length === 2,
+              'sm:grid-cols-3 sm:gap-y-0': points.length === 3,
+              // Four wrap to two columns before they cramp, so the rows only
+              // close up once `lg` puts them back on one line
+              'sm:grid-cols-2 lg:grid-cols-4 lg:gap-y-0': points.length >= 4
             }
           )}
         >
-          {points.map((point, index) => (
-            <div
-              key={point.id ?? index}
-              className={cn(
-                // The divider belongs between items, so the first in each row
-                // never draws one — which is why the rule follows the count
-                'sm:px-7 sm:first:pl-0 sm:last:pr-0',
-                index > 0 && 'border-border/60 sm:border-l'
-              )}
-            >
-              <p className="text-foreground text-sm font-semibold">
-                {point.title}
-              </p>
-              <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
-                {point.body}
-              </p>
-            </div>
-          ))}
+          {points.map((point, index) => {
+            // The divider belongs *between* items, so whichever item opens a
+            // row never draws one. Only the four-point layout wraps, and it
+            // wraps at `sm` and unwraps at `lg` — so which items open a row
+            // differs by breakpoint, and a single index rule gets one wrong.
+            const wraps = points.length >= 4;
+            const opensRow = wraps ? index % 2 === 0 : index === 0;
+            const closesRow = wraps
+              ? index % 2 === 1
+              : index === points.length - 1;
+
+            return (
+              <div
+                key={point.id ?? index}
+                className={cn(
+                  'sm:px-7',
+                  opensRow ? 'sm:pl-0' : 'border-border/60 sm:border-l',
+                  closesRow && 'sm:pr-0',
+                  // One row again: every item but the first opens nothing
+                  wraps && [
+                    index === 0 ? 'lg:pl-0' : 'lg:border-l lg:pl-7',
+                    index === points.length - 1 ? 'lg:pr-0' : 'lg:pr-7'
+                  ]
+                )}
+              >
+                <p className="text-foreground text-sm font-semibold">
+                  {point.title}
+                </p>
+                <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
+                  {point.body}
+                </p>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>
