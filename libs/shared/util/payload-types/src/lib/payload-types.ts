@@ -144,6 +144,7 @@ export interface Config {
     showcase: ShowcaseBlock;
     'social-media': SocialMediaBlock;
     spacing: SpacingBlock;
+    testimonial: TestimonialBlock;
     tours: ToursBlock;
     video: VideoBlock;
   };
@@ -372,6 +373,7 @@ export interface Page {
     | CodeBlock
     | ContentBlock
     | FeatureCardsBlock
+    | FeatureSectionBlock
     | FileAreaBlock
     | FormBlock
     | HeroBlock
@@ -1300,6 +1302,62 @@ export interface FeatureCardsBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FeatureSectionBlock".
+ */
+export interface FeatureSectionBlock {
+  /**
+   * Small uppercase label shown above the heading
+   */
+  eyebrow?: string | null;
+  heading: string;
+  /**
+   * Short paragraph below the heading
+   */
+  intro?: string | null;
+  enableLink?: boolean | null;
+  link?: FeatureSectionLink;
+  /**
+   * The image that carries the claim above it.
+   */
+  media?: (number | null) | Media;
+  /**
+   * Shown as one divided row beneath the visual. Two to four reads best.
+   */
+  subFeatures?:
+    | {
+        title: string;
+        body: string;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'feature-section';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FeatureSectionLink".
+ */
+export interface FeatureSectionLink {
+  type?: ('reference' | 'custom') | null;
+  newTab?: boolean | null;
+  reference?:
+    | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'posts';
+        value: number | Post;
+      } | null);
+  /**
+   * Add protocol (http:// or https://) if the link is external
+   */
+  url?: string | null;
+  label: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "HeroBlock".
  */
 export interface HeroBlock {
@@ -1492,43 +1550,33 @@ export interface ToursBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "FeatureSectionBlock".
+ * via the `definition` "TestimonialBlock".
  */
-export interface FeatureSectionBlock {
+export interface TestimonialBlock {
   /**
-   * Small uppercase label shown above the heading
+   * In their words, not yours. One or two sentences carries further than a paragraph.
    */
-  eyebrow?: string | null;
-  heading: string;
+  quote: string;
+  author: {
+    name: string;
+    role?: string | null;
+    avatar?: (number | null) | Media;
+  };
   /**
-   * Short paragraph below the heading
+   * Shown beside the quote. Leave empty when the name is enough.
    */
-  intro?: string | null;
+  logo?: (number | null) | Media;
   enableLink?: boolean | null;
-  link?: FeatureSectionLink;
-  /**
-   * The image that carries the claim above it.
-   */
-  media?: (number | null) | Media;
-  /**
-   * Shown as one divided row beneath the visual. Two to four reads best.
-   */
-  subFeatures?:
-    | {
-        title: string;
-        body: string;
-        id?: string | null;
-      }[]
-    | null;
+  link?: TestimonialLink;
   id?: string | null;
   blockName?: string | null;
-  blockType: 'feature-section';
+  blockType: 'testimonial';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "FeatureSectionLink".
+ * via the `definition` "TestimonialLink".
  */
-export interface FeatureSectionLink {
+export interface TestimonialLink {
   type?: ('reference' | 'custom') | null;
   newTab?: boolean | null;
   reference?:

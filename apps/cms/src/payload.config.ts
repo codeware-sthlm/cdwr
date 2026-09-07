@@ -22,6 +22,7 @@ import {
   showcaseBlock,
   socialMediaBlock,
   spacingBlock,
+  testimonialBlock,
   toursBlock,
   videoBlock
 } from '@codeware/app-cms/ui/blocks';
@@ -166,6 +167,7 @@ export default buildConfig({
     showcaseBlock,
     socialMediaBlock,
     spacingBlock,
+    testimonialBlock,
     toursBlock,
     videoBlock
   ],
