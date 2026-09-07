@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "BlockMetaSync",
+  "title": "Sync the block metadata the gallery reads",
+  "description": "Evaluates every registered Payload block and writes its labels, fields and host collections to a plain data module in shared/util/payload-utils. Throws when a host collection no longer declares its blocks, so a moved shape fails the sync rather than reporting every block as unavailable.",
+  "type": "object",
+  "properties": {},
+  "required": []
+}

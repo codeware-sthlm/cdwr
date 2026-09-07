@@ -177,61 +177,61 @@
         "feat": {
           "semverBump": "minor",
           "changelog": {
-            "title": "✨ Features"
+            "title": "\u2728 Features"
           }
         },
         "fix": {
           "semverBump": "patch",
           "changelog": {
-            "title": "🐞 Bug Fixes"
+            "title": "\ud83d\udc1e Bug Fixes"
           }
         },
         "perf": {
           "semverBump": "patch",
           "changelog": {
-            "title": "⚡️ Performance Improvements"
+            "title": "\u26a1\ufe0f Performance Improvements"
           }
         },
         "revert": {
           "semverBump": "patch",
           "changelog": {
-            "title": "🔙 Revert Code Changes"
+            "title": "\ud83d\udd19 Revert Code Changes"
           }
         },
         "docs": {
           "semverBump": "patch",
           "changelog": {
-            "title": "📄 Documentation"
+            "title": "\ud83d\udcc4 Documentation"
           }
         },
         "chore": {
           "semverBump": "patch",
           "changelog": {
-            "title": "⚙️ Miscellaneous Chores"
+            "title": "\u2699\ufe0f Miscellaneous Chores"
           }
         },
         "refactor": {
           "semverBump": "patch",
           "changelog": {
-            "title": "🧹 Code Refactoring"
+            "title": "\ud83e\uddf9 Code Refactoring"
           }
         },
         "style": {
           "semverBump": "patch",
           "changelog": {
-            "title": "🎨 Code Style"
+            "title": "\ud83c\udfa8 Code Style"
           }
         },
         "test": {
           "semverBump": "none",
           "changelog": {
-            "title": "✅ Tests"
+            "title": "\u2705 Tests"
           }
         },
         "ci": {
           "semverBump": "none",
           "changelog": {
-            "title": "🤖 Continuous Integration"
+            "title": "\ud83e\udd16 Continuous Integration"
           }
         },
         "deps": {
@@ -320,6 +320,7 @@
   ],
   "sync": {
     "globalGenerators": [
+      "dev-plugin:block-meta-sync",
       "dev-plugin:externalize-deps-sync",
       "dev-plugin:theme-sync",
       "dev-plugin:web-package-sync"

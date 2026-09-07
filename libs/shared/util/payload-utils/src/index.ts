@@ -1,3 +1,9 @@
+export {
+  BLOCK_META,
+  type BlockFieldMeta,
+  type BlockHost,
+  type BlockMeta
+} from './lib/block-meta';
 export { type BlocksData } from './lib/blocks-data';
 export {
   type DocData,

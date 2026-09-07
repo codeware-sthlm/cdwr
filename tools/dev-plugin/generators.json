@@ -1,19 +1,24 @@
 {
   "generators": {
+    "block-meta-sync": {
+      "factory": "./src/generators/block-meta-sync/block-meta-sync",
+      "schema": "./src/generators/block-meta-sync/schema.json",
+      "description": "Regenerate the block metadata the block gallery reads from the registered Payload blocks"
+    },
     "externalize-deps-sync": {
       "factory": "./src/generators/externalize-deps-sync/externalize-deps-sync",
       "schema": "./src/generators/externalize-deps-sync/schema.json",
       "description": "Guard private manifests for internal libs importing un-bundleable deps"
     },
-    "theme-write": {
-      "factory": "./src/generators/theme-write/theme-write",
-      "schema": "./src/generators/theme-write/schema.json",
-      "description": "Replace a built-in theme's colours with a theme studio export, leaving everything else in its folder untouched"
-    },
     "theme-sync": {
       "factory": "./src/generators/theme-sync/theme-sync",
       "schema": "./src/generators/theme-sync/schema.json",
       "description": "Regenerate every stylesheet and registry derived from the committed themes, and fail if a theme is short of the token contract"
+    },
+    "theme-write": {
+      "factory": "./src/generators/theme-write/theme-write",
+      "schema": "./src/generators/theme-write/schema.json",
+      "description": "Replace a built-in theme's colours with a theme studio export, leaving everything else in its folder untouched"
     },
     "web-package-sync": {
       "factory": "./src/generators/web-package-sync/web-package-sync",
