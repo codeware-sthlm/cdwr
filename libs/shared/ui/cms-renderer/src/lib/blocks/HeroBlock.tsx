@@ -5,6 +5,8 @@ import { usePayload } from '../providers/PayloadProvider';
 import { resolveLinkGroup } from '../utils/resolve-link-group';
 import { TenantIcon } from '../utils/TenantIcon';
 
+import { ImageBlock } from './ImageBlock';
+
 /**
  * Hero block — page opener with badge, headline, lede and up to two CTA buttons.
  */
@@ -12,7 +14,8 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
   badge,
   heading,
   lede,
-  actions
+  actions,
+  media
 }) => {
   const { navigate, iconConfig } = usePayload();
 
@@ -47,6 +50,11 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
               </Button>
             );
           })}
+        </div>
+      )}
+      {media && (
+        <div className="mt-12">
+          <ImageBlock media={media} hideCaption />
         </div>
       )}
     </section>

@@ -5,8 +5,8 @@ import type { Block } from 'payload';
 /**
  * Hero block — the opening section of a landing page.
  *
- * An optional badge, a large headline, an introduction paragraph and up to two
- * call-to-action buttons. The brand mark inside the badge is rendered
+ * An optional badge, a large headline, an introduction paragraph, up to two
+ * call-to-action buttons and an optional visual beneath them. The brand mark inside the badge is rendered
  * automatically by the component when a tenant icon is available.
  */
 export const heroBlock: Block = {
@@ -48,6 +48,19 @@ export const heroBlock: Block = {
       },
       localized: true,
       required: true
+    },
+    {
+      name: 'media',
+      type: 'upload',
+      relationTo: 'media',
+      filterOptions: { mimeType: { contains: 'image' } },
+      label: { en: 'Visual', sv: 'Bild' },
+      admin: {
+        description: {
+          en: 'Shown below the actions. What makes the claim above checkable rather than asserted.',
+          sv: 'Visas under knapparna. Det som gör påståendet ovanför kontrollerbart i stället för påstått.'
+        }
+      }
     },
     {
       name: 'actions',
