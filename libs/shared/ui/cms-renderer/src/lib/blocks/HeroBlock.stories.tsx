@@ -1,3 +1,4 @@
+import type { Media } from '@codeware/shared/util/payload-types';
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -37,6 +38,22 @@ const args: Story['args'] = {
       emphasis: 'secondary'
     }
   ]
+};
+
+const media = {
+  id: 1,
+  alt: 'Placeholder image',
+  url: 'https://placehold.co/1200x675/png',
+  width: 1200,
+  height: 675,
+  sizes: {},
+  updatedAt: '2024-01-01T00:00:00.000Z',
+  createdAt: '2024-01-01T00:00:00.000Z'
+} as unknown as Media;
+
+/** The visual is what makes the claim above it checkable. */
+export const WithVisual: Story = {
+  args: { ...args, media }
 };
 
 export const Default: Story = {

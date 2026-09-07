@@ -319,89 +319,106 @@ export interface CalloutBlock {
   showMark?: boolean | null;
   heading: string;
   body?: string | null;
+  /**
+   * Optional. Sits beside the text and turns the band into a two-column section.
+   */
+  image?: (number | null) | Media;
   link: CalloutLink;
   id?: string | null;
   blockName?: string | null;
   blockType: 'callout';
 }
 /**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "CalloutLink".
- */
-export interface CalloutLink {
-  type?: ('reference' | 'custom') | null;
-  newTab?: boolean | null;
-  reference?:
-    | ({
-        relationTo: 'pages';
-        value: number | Page;
-      } | null)
-    | ({
-        relationTo: 'posts';
-        value: number | Post;
-      } | null);
-  /**
-   * Add protocol (http:// or https://) if the link is external
-   */
-  url?: string | null;
-  label: string;
-}
-/**
- * Pages are the foundation of the system and are used to build your website. Work with drafts and publish when ready.
+ * Upload media files to the system and use them on your website. Images are converted to webp format for better performance.
  *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "pages".
+ * via the `definition` "media".
  */
-export interface Page {
+export interface Media {
   id: number;
   tenant?: (number | null) | Tenant;
+  filenameWithoutPrefix?: string | null;
   /**
-   * The name of the page used for navigation links.
+   * Alternative text for SEO and accessibility.
    */
-  name: string;
+  alt: string;
   /**
-   * A pre-designed header on top of the page. Provide for a consistent look and feel or customize everything in layout builder.
+   * Caption to display below an image or video.
    */
-  header?: string | null;
+  caption?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  tags?: (number | Tag)[] | null;
+  prefix?: string | null;
   /**
-   * Build your page by adding the content you need. E.g. choose "Content" to create one or more columns. Then use the text editor and add more blocks if needed in each column.
+   * Allow external access to the file without authentication. For example, this is required for file areas and document images.
    */
-  layout: (
-    | AboutBlock
-    | CalloutBlock
-    | CardBlock
-    | CodeBlock
-    | ContentBlock
-    | FeatureCardsBlock
-    | FeatureSectionBlock
-    | FileAreaBlock
-    | FormBlock
-    | HeroBlock
-    | ImageBlock
-    | MediaBlock
-    | PillListBlock
-    | PostsBlock
-    | ReusableContentBlock
-    | ShowcaseBlock
-    | SocialMediaBlock
-    | SpacingBlock
-    | ToursBlock
-  )[];
-  meta?: {
-    title?: string | null;
-    /**
-     * Maximum upload file size: 12MB. Recommended file size for images is <500KB.
-     */
-    image?: (number | null) | Media;
-    description?: string | null;
-  };
-  /**
-   * Used for url paths. Will be automatically generated from name if left empty.
-   */
-  slug?: string | null;
+  external?: boolean | null;
   updatedAt: string;
   createdAt: string;
-  _status?: ('draft' | 'published') | null;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+  sizes?: {
+    thumbnail?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+    small?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+    medium?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+    large?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+    meta?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+  };
 }
 /**
  * A workspace is like an organization or group of users and is often called a "tenant". You must be a member to see its content.
@@ -541,36 +558,47 @@ export interface User {
   collection: 'users';
 }
 /**
- * Posts are standalone pages such as articles or blog posts. Work with drafts and publish when ready.
+ * Pages are the foundation of the system and are used to build your website. Work with drafts and publish when ready.
  *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "posts".
+ * via the `definition` "pages".
  */
-export interface Post {
+export interface Page {
   id: number;
   tenant?: (number | null) | Tenant;
   /**
-   * The title of the post and name used in navigation.
+   * The name of the page used for navigation links.
    */
-  title: string;
-  heroImage?: (number | null) | Media;
-  content: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  };
-  relatedPosts?: (number | Post)[] | null;
-  categories?: (number | Category)[] | null;
+  name: string;
+  /**
+   * A pre-designed header on top of the page. Provide for a consistent look and feel or customize everything in layout builder.
+   */
+  header?: string | null;
+  /**
+   * Build your page by adding the content you need. E.g. choose "Content" to create one or more columns. Then use the text editor and add more blocks if needed in each column.
+   */
+  layout: (
+    | AboutBlock
+    | CalloutBlock
+    | CardBlock
+    | CodeBlock
+    | ContentBlock
+    | FeatureCardsBlock
+    | FeatureSectionBlock
+    | FileAreaBlock
+    | FormBlock
+    | HeroBlock
+    | ImageBlock
+    | MediaBlock
+    | PillListBlock
+    | PostsBlock
+    | ReusableContentBlock
+    | ShowcaseBlock
+    | SocialMediaBlock
+    | SpacingBlock
+    | TestimonialBlock
+    | ToursBlock
+  )[];
   meta?: {
     title?: string | null;
     /**
@@ -580,166 +608,12 @@ export interface Post {
     description?: string | null;
   };
   /**
-   * The authors of the post.
-   */
-  authors?: (number | User)[] | null;
-  /**
-   * Used for url paths. Will be automatically generated from title if left empty.
+   * Used for url paths. Will be automatically generated from name if left empty.
    */
   slug?: string | null;
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
-}
-/**
- * Upload media files to the system and use them on your website. Images are converted to webp format for better performance.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media".
- */
-export interface Media {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  filenameWithoutPrefix?: string | null;
-  /**
-   * Alternative text for SEO and accessibility.
-   */
-  alt: string;
-  /**
-   * Caption to display below an image or video.
-   */
-  caption?: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
-  tags?: (number | Tag)[] | null;
-  prefix?: string | null;
-  /**
-   * Allow external access to the file without authentication. For example, this is required for file areas and document images.
-   */
-  external?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
-  url?: string | null;
-  thumbnailURL?: string | null;
-  filename?: string | null;
-  mimeType?: string | null;
-  filesize?: number | null;
-  width?: number | null;
-  height?: number | null;
-  focalX?: number | null;
-  focalY?: number | null;
-  sizes?: {
-    thumbnail?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-    };
-    small?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-    };
-    medium?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-    };
-    large?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-    };
-    meta?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-    };
-  };
-}
-/**
- * Labels are used to organize photos and files so they are easy to find and select.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "tags".
- */
-export interface Tag {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  /**
-   * Select an icon and color that represent the tag.
-   */
-  brand?: {
-    icon?: string | null;
-    color?: string | null;
-  };
-  relations?: {
-    relatedMedia?: {
-      docs?: (number | Media)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-  };
-  /**
-   * Used for url paths. Will be automatically generated from name if left empty.
-   */
-  slug?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * Categories makes it possible to group blog posts by topic for better overview.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  /**
-   * The name of the category.
-   */
-  name: string;
-  relations?: {
-    relatedPosts?: {
-      docs?: (number | Post)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-  };
-  /**
-   * Used for url paths. Will be automatically generated from name if left empty.
-   */
-  slug?: string | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -795,6 +669,84 @@ export interface CardBlockLink {
   url?: string | null;
   navTrigger?: ('card' | 'link') | null;
   label?: string | null;
+}
+/**
+ * Posts are standalone pages such as articles or blog posts. Work with drafts and publish when ready.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "posts".
+ */
+export interface Post {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * The title of the post and name used in navigation.
+   */
+  title: string;
+  heroImage?: (number | null) | Media;
+  content: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  relatedPosts?: (number | Post)[] | null;
+  categories?: (number | Category)[] | null;
+  meta?: {
+    title?: string | null;
+    /**
+     * Maximum upload file size: 12MB. Recommended file size for images is <500KB.
+     */
+    image?: (number | null) | Media;
+    description?: string | null;
+  };
+  /**
+   * The authors of the post.
+   */
+  authors?: (number | User)[] | null;
+  /**
+   * Used for url paths. Will be automatically generated from title if left empty.
+   */
+  slug?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * Categories makes it possible to group blog posts by topic for better overview.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * The name of the category.
+   */
+  name: string;
+  relations?: {
+    relatedPosts?: {
+      docs?: (number | Post)[];
+      hasNextPage?: boolean;
+      totalDocs?: number;
+    };
+  };
+  /**
+   * Used for url paths. Will be automatically generated from name if left empty.
+   */
+  slug?: string | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1209,6 +1161,37 @@ export interface FileAreaBlock {
   blockType: 'file-area';
 }
 /**
+ * Labels are used to organize photos and files so they are easy to find and select.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "tags".
+ */
+export interface Tag {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Select an icon and color that represent the tag.
+   */
+  brand?: {
+    icon?: string | null;
+    color?: string | null;
+  };
+  relations?: {
+    relatedMedia?: {
+      docs?: (number | Media)[];
+      hasNextPage?: boolean;
+      totalDocs?: number;
+    };
+  };
+  /**
+   * Used for url paths. Will be automatically generated from name if left empty.
+   */
+  slug?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "SocialMediaBlock".
  */
@@ -1370,6 +1353,10 @@ export interface HeroBlock {
    * The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why).
    */
   lede: string;
+  /**
+   * Shown below the actions. What makes the claim above checkable rather than asserted.
+   */
+  media?: (number | null) | Media;
   actions?:
     | {
         link: HeroActionLink;
@@ -1535,21 +1522,6 @@ export interface ShowcaseItemLink {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ToursBlock".
- */
-export interface ToursBlock {
-  title: string;
-  description?: string | null;
-  /**
-   * Maximum number of tours to display
-   */
-  limit: number;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'tours';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "TestimonialBlock".
  */
 export interface TestimonialBlock {
@@ -1577,6 +1549,43 @@ export interface TestimonialBlock {
  * via the `definition` "TestimonialLink".
  */
 export interface TestimonialLink {
+  type?: ('reference' | 'custom') | null;
+  newTab?: boolean | null;
+  reference?:
+    | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'posts';
+        value: number | Post;
+      } | null);
+  /**
+   * Add protocol (http:// or https://) if the link is external
+   */
+  url?: string | null;
+  label: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ToursBlock".
+ */
+export interface ToursBlock {
+  title: string;
+  description?: string | null;
+  /**
+   * Maximum number of tours to display
+   */
+  limit: number;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'tours';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CalloutLink".
+ */
+export interface CalloutLink {
   type?: ('reference' | 'custom') | null;
   newTab?: boolean | null;
   reference?:
