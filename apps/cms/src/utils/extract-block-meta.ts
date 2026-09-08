@@ -18,14 +18,22 @@ import pages from '../collections/pages/pages.collection';
 import reusableContent from '../collections/reusable-content/reusable-content.collection';
 
 /**
- * The collections whose layout field names the blocks it offers.
+ * Every surface that offers blocks and names them readably.
  *
- * Only these two express it as a `blocks` field. `posts` and `tours` gate
- * their blocks inside a Lexical editor config instead, which is opaque from
- * here and deliberately not guessed at — the gallery lives on a page, so
- * `pages` is the surface that decides whether a block is reachable at all.
+ * The two collections name theirs on a layout field. The `content` block does
+ * the same on the nested field inside each of its columns, which is how an
+ * editor reaches a code sample or an image from inside prose — leaving it out
+ * reported `code` as available on pages without saying that you get there
+ * through a content block.
+ *
+ * `posts` and `tours` stay absent: they gate their blocks inside a Lexical
+ * editor config, which is opaque from here and not worth guessing at.
  */
-const hosts = { pages, 'reusable-content': reusableContent };
+const hosts = {
+  pages,
+  'reusable-content': reusableContent,
+  content: blocks.contentBlock
+};
 
 type Host = keyof typeof hosts;
 
