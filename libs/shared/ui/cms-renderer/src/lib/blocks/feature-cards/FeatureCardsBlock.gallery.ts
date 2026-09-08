@@ -12,8 +12,8 @@ export const featureCardsGallery: BlockGalleryDoc<FeatureCardsBlockProps> = {
     sv: 'Tre eller fyra påståenden med samma tyngd, var och en med en ikon och en mening.'
   },
   whenToUse: {
-    en: 'When the things are genuinely parallel — same weight, same shape, no order between them. The grid says these are peers and a reader believes it. Five is where it breaks: the row wraps and the last two read as an afterthought.',
-    sv: 'När sakerna verkligen är jämbördiga — samma tyngd, samma form, ingen inbördes ordning. Rutnätet säger att de hör ihop som likar, och läsaren tror på det. Vid fem slutar det fungera: raden bryts och de två sista uppfattas som eftertankar.'
+    en: 'When the things are genuinely parallel — same weight, same shape, no order between them. It brings its own heading, so it states the claim and the cards support it; a bare grid following someone else\u2019s claim is the card block instead. Five is where it breaks: the row wraps and the last two read as an afterthought.',
+    sv: 'När sakerna verkligen är jämbördiga — samma tyngd, samma form, ingen inbördes ordning. Blocket har en egen rubrik och gör alltså sitt eget påstående som korten stöttar; ett rutnät som följer på någon annans påstående är i stället blocket card. Vid fem slutar det fungera: raden bryts och de två sista uppfattas som eftertankar.'
   },
   example: {
     blockType: 'feature-cards',

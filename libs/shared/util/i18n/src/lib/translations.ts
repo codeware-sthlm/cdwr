@@ -69,6 +69,7 @@ export type TranslationKey =
   | 'gallery.allBlocks'
   | 'gallery.availableIn'
   | 'gallery.fieldsNote'
+  | 'gallery.nameInAdmin'
   | 'gallery.live'
   | 'gallery.liveNote'
   | 'gallery.example'
@@ -253,6 +254,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.availableIn': 'Available in',
     'gallery.fieldsNote':
       'Generated from the block definition, so this table cannot drift from the fields the admin actually shows.',
+    'gallery.nameInAdmin': 'Name in the admin',
     'gallery.live': 'Live · drawn by the production renderer',
     'gallery.liveNote':
       'Follows the theme above — no CSS was written for this page.',
@@ -459,6 +461,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.availableIn': 'Tillgängligt i',
     'gallery.fieldsNote':
       'Genereras från blockets definition, så tabellen kan inte glida ifrån de fält som administrationen faktiskt visar.',
+    'gallery.nameInAdmin': 'Namn i administrationen',
     'gallery.live': 'Live · ritat av samma renderare som sidorna',
     'gallery.liveNote':
       'Följer temat ovan — ingen CSS är skriven för den här sidan.',

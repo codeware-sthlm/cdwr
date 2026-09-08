@@ -153,17 +153,12 @@ export function BlockGalleryEntry({
         </div>
       </div>
 
-      <header className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+      {/* Aligned to the top rather than the baseline: the summary varies in
+          length from block to block, and an end-aligned column made the
+          metadata jump vertically as the visitor stepped through */}
+      <header className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-2xl">
-          {/* The registered label rides along whenever the heading is not it,
-              so a name written for a reader never costs an editor the name
-              they have to find in the admin */}
-          <p className="font-mono text-xs">
-            <span className="text-core-link">{meta.slug}</span>
-            {name && (
-              <span className="text-muted-foreground"> · {meta.label}</span>
-            )}
-          </p>
+          <code className="text-core-link font-mono text-xs">{meta.slug}</code>
           <h3 className="text-core-headline mt-2.5 text-3xl font-semibold tracking-tight">
             {name ?? meta.label}
           </h3>
@@ -174,21 +169,37 @@ export function BlockGalleryEntry({
           )}
         </div>
 
-        {meta.availableIn.length > 0 && (
-          <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-            <span className={label}>{t(locale, 'gallery.availableIn')}</span>
-            <div className="flex flex-wrap gap-1.5">
-              {meta.availableIn.map((host) => (
-                <span
-                  key={host}
-                  className="border-border text-muted-foreground rounded-md border px-2 py-1 font-mono text-[11px]"
-                >
-                  {host}
-                </span>
-              ))}
+        <dl className="flex shrink-0 flex-col gap-4 sm:items-end sm:text-right">
+          {/* The block's registered label — its name wherever the admin offers
+              it, which for several blocks is more than one place: the layout
+              builder, and inside a content block's rich text or inline blocks.
+              Naming a single surface here was wrong for exactly those. Shown
+              only when the heading is not already the label, so a name written
+              for a reader never costs an editor the one they search for */}
+          {name && (
+            <div className="flex flex-col gap-1.5">
+              <dt className={label}>{t(locale, 'gallery.nameInAdmin')}</dt>
+              <dd className="text-muted-foreground text-[13px]">
+                {meta.label}
+              </dd>
             </div>
-          </div>
-        )}
+          )}
+          {meta.availableIn.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <dt className={label}>{t(locale, 'gallery.availableIn')}</dt>
+              <dd className="flex flex-wrap gap-1.5 sm:justify-end">
+                {meta.availableIn.map((host) => (
+                  <span
+                    key={host}
+                    className="border-border text-muted-foreground rounded-md border px-2 py-1 font-mono text-[11px]"
+                  >
+                    {host}
+                  </span>
+                ))}
+              </dd>
+            </div>
+          )}
+        </dl>
       </header>
 
       {/* The example leads, and is framed so it reads as the site's own

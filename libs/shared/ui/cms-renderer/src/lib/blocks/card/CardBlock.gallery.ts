@@ -4,16 +4,16 @@ import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const cardGallery: BlockGalleryDoc<CardBlockProps> = {
   name: {
-    en: 'Things that lead somewhere',
-    sv: 'Poster som leder vidare'
+    en: 'Support for the claim above it',
+    sv: 'Stöd för påståendet ovanför'
   },
   summary: {
-    en: 'A grid of items, each one a door.',
-    sv: 'Ett rutnät med poster där var och en är en ingång.'
+    en: 'A grid of cards with no heading of its own, usually linked.',
+    sv: 'Ett rutnät med kort utan egen rubrik, oftast länkade.'
   },
   whenToUse: {
-    en: 'When every item leads somewhere — a service, a section, a document. The whole card is the target, so an item with nowhere to go leaves a card that looks clickable and is not.',
-    sv: 'När varje post leder någonstans — en tjänst, en sektion, ett dokument. Hela kortet är klickytan, så en post utan mål ger ett kort som ser klickbart ut men inte är det.'
+    en: 'After a block that has already made the claim: the cards carry the detail and usually link on. Having no heading of its own is what separates it from feature-cards, which states its own claim and lets its cards support that. The whole card is the target, so a card with nowhere to go looks clickable and is not.',
+    sv: 'Efter ett block som redan gjort påståendet: korten bär detaljerna och länkar oftast vidare. Att det saknar egen rubrik är det som skiljer det från feature-cards, som gör sitt eget påstående och låter korten stötta just det. Hela kortet är klickytan, så ett kort utan mål ser klickbart ut men är det inte.'
   },
   example: {
     blockType: 'card',
