@@ -1,6 +1,6 @@
 import type { FeatureSectionBlock as FeatureSectionBlockProps } from '@codeware/shared/util/payload-types';
 
-import type { BlockGalleryDoc } from './gallery-doc';
+import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const featureSectionGallery: BlockGalleryDoc<FeatureSectionBlockProps> =
   {

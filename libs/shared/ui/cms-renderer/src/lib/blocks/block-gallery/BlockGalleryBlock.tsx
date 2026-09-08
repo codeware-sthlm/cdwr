@@ -12,11 +12,11 @@ import {
 import { cn } from '@codeware/shared/util/ui';
 import { useState } from 'react';
 
-import { usePayload } from '../providers/PayloadProvider';
+import { usePayload } from '../../providers/PayloadProvider';
+import { type BlockGalleryDoc, localized } from '../gallery-doc';
+import { galleryDocs } from '../gallery-docs';
 
 import { BlockGalleryEntry, type RenderExample } from './BlockGalleryEntry';
-import { type BlockGalleryDoc, localized } from './gallery-doc';
-import { galleryDocs } from './gallery-docs';
 
 /**
  * Blocks that are plumbing rather than a design choice.

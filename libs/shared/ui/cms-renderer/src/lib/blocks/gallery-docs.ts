@@ -1,8 +1,8 @@
 import type { BlockSlug } from '@codeware/shared/util/payload-types';
 
-import { featureSectionGallery } from './FeatureSectionBlock.gallery';
+import { featureSectionGallery } from './feature-section/FeatureSectionBlock.gallery';
 import type { BlockExample, BlockGalleryDoc } from './gallery-doc';
-import { testimonialGallery } from './TestimonialBlock.gallery';
+import { testimonialGallery } from './testimonial/TestimonialBlock.gallery';
 
 /**
  * What the gallery says about each block.

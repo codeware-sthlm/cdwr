@@ -8,13 +8,12 @@ import type {
 import { cn } from '@codeware/shared/util/ui';
 import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 
-import { usePayload } from '../providers/PayloadProvider';
-
+import { usePayload } from '../../providers/PayloadProvider';
 import {
   type BlockExample,
   type BlockGalleryDoc,
   localized
-} from './gallery-doc';
+} from '../gallery-doc';
 
 /**
  * Draws a list of blocks.

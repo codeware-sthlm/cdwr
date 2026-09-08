@@ -1,8 +1,8 @@
 export { AppAbout, type AppInfo } from './lib/about/AppAbout';
 
 export { RichText } from './lib/blocks/RichText';
-export { PostsBlock } from './lib/blocks/PostsBlock';
-export { ToursBlock } from './lib/blocks/ToursBlock';
+export { PostsBlock } from './lib/blocks/posts/PostsBlock';
+export { ToursBlock } from './lib/blocks/tours/ToursBlock';
 export { RenderBlocks } from './lib/RenderBlocks';
 export { type BlocksData } from '@codeware/shared/util/payload-utils';
 

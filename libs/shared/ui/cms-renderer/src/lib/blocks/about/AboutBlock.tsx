@@ -1,7 +1,7 @@
 import type { AboutBlock as AboutBlockProps } from '@codeware/shared/util/payload-types';
 
-import { AppAbout } from '../about/AppAbout';
-import { usePayload } from '../providers/PayloadProvider';
+import { AppAbout } from '../../about/AppAbout';
+import { usePayload } from '../../providers/PayloadProvider';
 
 /**
  * About block — renders the running app's deployment details via the shared

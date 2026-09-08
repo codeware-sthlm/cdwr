@@ -1,7 +1,7 @@
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { RenderBlocks } from '../RenderBlocks';
+import { RenderBlocks } from '../../RenderBlocks';
 
 import { BlockGalleryBlock } from './BlockGalleryBlock';
 

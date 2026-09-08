@@ -8,8 +8,8 @@ import type {
 import { getExcerpt } from '@codeware/shared/util/payload-utils';
 import { ChevronRightIcon } from 'lucide-react';
 
-import { usePayload } from '../providers/PayloadProvider';
-import { handleAsRoute } from '../utils/internal-link';
+import { usePayload } from '../../providers/PayloadProvider';
+import { handleAsRoute } from '../../utils/internal-link';
 
 type Props = PostsBlockProps & {
   /**

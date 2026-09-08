@@ -13,9 +13,9 @@ import { type TailwindColor, tailwind } from '@codeware/shared/util/tailwind';
 import { cn } from '@codeware/shared/util/ui';
 import { ExternalLinkIcon, LinkIcon } from 'lucide-react';
 
-import { useColumnSize } from '../providers/ColumnSizeProvider';
-import { usePayload } from '../providers/PayloadProvider';
-import { resolveCardBlockLink } from '../utils/resolve-card-block-link';
+import { useColumnSize } from '../../providers/ColumnSizeProvider';
+import { usePayload } from '../../providers/PayloadProvider';
+import { resolveCardBlockLink } from '../../utils/resolve-card-block-link';
 
 /**
  * Render Payload card block cards in a responsive grid,

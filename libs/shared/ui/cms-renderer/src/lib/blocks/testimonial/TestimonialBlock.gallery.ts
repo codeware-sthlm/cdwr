@@ -1,6 +1,6 @@
 import type { TestimonialBlock as TestimonialBlockProps } from '@codeware/shared/util/payload-types';
 
-import type { BlockGalleryDoc } from './gallery-doc';
+import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const testimonialGallery: BlockGalleryDoc<TestimonialBlockProps> = {
   name: {

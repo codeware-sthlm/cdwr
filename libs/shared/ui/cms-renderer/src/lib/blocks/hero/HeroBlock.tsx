@@ -1,11 +1,10 @@
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import type { HeroBlock as HeroBlockProps } from '@codeware/shared/util/payload-types';
 
-import { usePayload } from '../providers/PayloadProvider';
-import { resolveLinkGroup } from '../utils/resolve-link-group';
-import { TenantIcon } from '../utils/TenantIcon';
-
-import { ImageBlock } from './ImageBlock';
+import { usePayload } from '../../providers/PayloadProvider';
+import { resolveLinkGroup } from '../../utils/resolve-link-group';
+import { TenantIcon } from '../../utils/TenantIcon';
+import { ImageBlock } from '../image/ImageBlock';
 
 /**
  * Hero block — page opener with badge, headline, lede and up to two CTA buttons.

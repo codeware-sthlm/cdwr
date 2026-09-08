@@ -2,10 +2,9 @@ import type { FeatureSectionBlock as FeatureSectionBlockProps } from '@codeware/
 import { cn } from '@codeware/shared/util/ui';
 import { ArrowRightIcon } from '@heroicons/react/24/outline';
 
-import { usePayload } from '../providers/PayloadProvider';
-import { resolveLinkGroup } from '../utils/resolve-link-group';
-
-import { ImageBlock } from './ImageBlock';
+import { usePayload } from '../../providers/PayloadProvider';
+import { resolveLinkGroup } from '../../utils/resolve-link-group';
+import { ImageBlock } from '../image/ImageBlock';
 
 /**
  * Feature section — a header, one visual, and a row of supporting points.

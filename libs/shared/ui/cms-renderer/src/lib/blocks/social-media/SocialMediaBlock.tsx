@@ -2,7 +2,7 @@
 
 import type { SocialMediaBlock as SocialMediaBlockProps } from '@codeware/shared/util/payload-types';
 
-import { SocialLinks } from '../social/SocialLinks';
+import { SocialLinks } from '../../social/SocialLinks';
 
 /**
  * Render social media links in a flex layout.

@@ -2,11 +2,10 @@ import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import type { CalloutBlock as CalloutBlockProps } from '@codeware/shared/util/payload-types';
 import { cn } from '@codeware/shared/util/ui';
 
-import { usePayload } from '../providers/PayloadProvider';
-import { resolveLinkGroup } from '../utils/resolve-link-group';
-import { TenantIcon } from '../utils/TenantIcon';
-
-import { ImageBlock } from './ImageBlock';
+import { usePayload } from '../../providers/PayloadProvider';
+import { resolveLinkGroup } from '../../utils/resolve-link-group';
+import { TenantIcon } from '../../utils/TenantIcon';
+import { ImageBlock } from '../image/ImageBlock';
 
 /**
  * Callout block — compact centered CTA band ("mini hero").
