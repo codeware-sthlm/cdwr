@@ -76,6 +76,7 @@ export type TranslationKey =
   | 'gallery.fields'
   | 'gallery.next'
   | 'gallery.noExample'
+  | 'gallery.notOffered'
   | 'gallery.previous'
   | 'gallery.whenToUse'
   | 'gallery.contentBlocks'
@@ -262,6 +263,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.fields': 'What an editor fills in',
     'gallery.next': 'Next block',
     'gallery.noExample': 'No example written yet.',
+    'gallery.notOffered':
+      'Registered and drawn, but no page offers it to an editor.',
     'gallery.previous': 'Previous block',
     'gallery.whenToUse': 'When to reach for it',
     'gallery.contentBlocks': 'Content blocks',
@@ -469,6 +472,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.fields': 'Vad en redaktör fyller i',
     'gallery.next': 'Nästa block',
     'gallery.noExample': 'Inget exempel skrivet ännu.',
+    'gallery.notOffered':
+      'Registrerat och ritas upp, men ingen sida erbjuder det till en redaktör.',
     'gallery.previous': 'Föregående block',
     'gallery.whenToUse': 'När det passar',
     'gallery.contentBlocks': 'Innehållsblock',

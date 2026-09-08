@@ -55,6 +55,9 @@ function BlockCard({ meta, doc, onOpen }: Entry & { onOpen: () => void }) {
         <p className="text-foreground text-base font-semibold tracking-tight">
           {doc?.name ? localized(doc.name, locale) : meta.label}
         </p>
+        {/* Two ways to be outside the grid, and they are not the same news:
+            nobody has written it up, or nothing offers it to an editor. One
+            message for both left `video` looking merely neglected */}
         <p
           className={cn(
             'text-muted-foreground text-sm leading-relaxed',
@@ -63,7 +66,12 @@ function BlockCard({ meta, doc, onOpen }: Entry & { onOpen: () => void }) {
         >
           {doc
             ? localized(doc.summary, locale)
-            : t(locale, 'gallery.undocumented')}
+            : t(
+                locale,
+                meta.availableIn.length === 0
+                  ? 'gallery.notOffered'
+                  : 'gallery.undocumented'
+              )}
         </p>
       </button>
     </li>
