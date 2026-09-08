@@ -6,15 +6,15 @@ export const featureSectionGallery: BlockGalleryDoc<FeatureSectionBlockProps> =
   {
     name: {
       en: 'A claim with its evidence',
-      sv: 'Ett påstående med sina belägg'
+      sv: 'Ett påstående och beläggen för det'
     },
     summary: {
       en: 'One claim, one visual, and the supporting points beneath it.',
-      sv: 'Ett påstående, en bild och de stödjande punkterna under.'
+      sv: 'Ett påstående, en bild och de stödjande punkterna nedanför.'
     },
     whenToUse: {
       en: 'The workhorse of a long marketing page, repeated down it. Use it when a single claim deserves a visual that makes it checkable, with two to four points that qualify it rather than compete with it.',
-      sv: 'Arbetshästen på en lång säljsida, upprepad nedåt. Använd den när ett enskilt påstående förtjänar en bild som gör det kontrollerbart, med två till fyra punkter som preciserar det i stället för att konkurrera med det.'
+      sv: 'Det block som gör grovjobbet på en lång säljsida, upprepat hela vägen ner. Använd det när ett enskilt påstående förtjänar en bild som gör det möjligt att se att det stämmer, med två till fyra punkter som preciserar påståendet snarare än konkurrerar med det.'
     },
     example: {
       blockType: 'feature-section',

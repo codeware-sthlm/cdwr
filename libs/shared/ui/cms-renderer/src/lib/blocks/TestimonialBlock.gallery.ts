@@ -5,15 +5,15 @@ import type { BlockGalleryDoc } from './gallery-doc';
 export const testimonialGallery: BlockGalleryDoc<TestimonialBlockProps> = {
   name: {
     en: "Someone else's words",
-    sv: 'Någon annans ord'
+    sv: 'Ett citat utifrån'
   },
   summary: {
     en: 'A quote from outside the site, with attribution.',
-    sv: 'Ett citat utifrån, med angiven källa.'
+    sv: 'Ett externt citat, med angiven källa.'
   },
   whenToUse: {
     en: 'When a claim you have already made needs corroboration from someone who is not you. It reads as evidence set into the page rather than another thing being sold, which is why it is a surface with a rule and not a card.',
-    sv: 'När ett påstående du redan gjort behöver bekräftas av någon annan än dig själv. Det läses som ett belägg infogat i sidan snarare än ännu något som säljs in, vilket är skälet till att det är en yta med en linje och inte ett kort.'
+    sv: 'När ett påstående du redan gjort behöver bekräftas av någon annan än dig själv. Det uppfattas som ett belägg, infogat i sidan snarare än ännu en sak som säljs in, vilket är skälet till att det är en avgränsad yta och inte ett kort.'
   },
   example: {
     blockType: 'testimonial',
