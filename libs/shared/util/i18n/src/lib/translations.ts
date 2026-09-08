@@ -66,6 +66,14 @@ export type TranslationKey =
   | 'form.submitSuccess'
   | 'form.submitFailed'
   | 'form.submitFailedDescription'
+  | 'gallery.contentBlocks'
+  | 'gallery.documented'
+  | 'gallery.pending'
+  | 'gallery.pendingNote'
+  | 'gallery.registered'
+  | 'gallery.structural'
+  | 'gallery.structuralNote'
+  | 'gallery.undocumented'
   | 'navigation.footer'
   | 'navigation.menu'
   | 'navigation.primary'
@@ -230,6 +238,16 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Form submitted successfully',
     'form.submitFailed': 'Form submission failed',
     'form.submitFailedDescription': 'Please try again.',
+    'gallery.contentBlocks': 'Content blocks',
+    'gallery.documented': 'Documented',
+    'gallery.pending': 'Registered, not yet in the grid',
+    'gallery.pendingNote':
+      'A block reaches this row the day it is merged — unwritten, or with nowhere on a page to place it. That is the point of building the gallery from the registry rather than by hand: it cannot quietly fall behind the library.',
+    'gallery.registered': 'Registered',
+    'gallery.structural': 'Structural',
+    'gallery.structuralNote':
+      'Listed for completeness, not a design choice an editor makes.',
+    'gallery.undocumented': 'Registered, but not written up yet.',
     'navigation.footer': 'Footer',
     'navigation.menu': 'Menu',
     'navigation.primary': 'Main',
@@ -413,6 +431,16 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Formuläret skickades in',
     'form.submitFailed': 'Formuläret kunde inte skickas in',
     'form.submitFailedDescription': 'Försök igen.',
+    'gallery.contentBlocks': 'Innehållsblock',
+    'gallery.documented': 'Beskrivna',
+    'gallery.pending': 'Registrerade, ännu inte i rutnätet',
+    'gallery.pendingNote':
+      'Ett block hamnar här samma dag det slås samman — obeskrivet, eller utan plats på en sida. Det är poängen med att bygga galleriet från registret i stället för för hand: det kan inte i tysthet halka efter biblioteket.',
+    'gallery.registered': 'Registrerade',
+    'gallery.structural': 'Strukturella',
+    'gallery.structuralNote':
+      'Listade för fullständighetens skull, inte ett designval en redaktör gör.',
+    'gallery.undocumented': 'Ännu inte beskrivet.',
     'navigation.footer': 'Sidfot',
     'navigation.menu': 'Meny',
     'navigation.primary': 'Huvudmeny',

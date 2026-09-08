@@ -127,6 +127,7 @@ export interface Config {
   };
   blocks: {
     about: AboutBlock;
+    'block-gallery': BlockGalleryBlock;
     callout: CalloutBlock;
     card: CardBlock;
     code: CodeBlock;
@@ -310,6 +311,28 @@ export interface AboutBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'about';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockGalleryBlock".
+ */
+export interface BlockGalleryBlock {
+  /**
+   * Small uppercase label shown above the heading
+   */
+  eyebrow?: string | null;
+  heading: string;
+  /**
+   * Short paragraph below the heading
+   */
+  intro?: string | null;
+  /**
+   * The index lists everything registered. The browser shows one block with its fields and an example, and steps to the next.
+   */
+  mode: 'index' | 'browser';
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'block-gallery';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -578,6 +601,7 @@ export interface Page {
    * Build your page by adding the content you need. E.g. choose "Content" to create one or more columns. Then use the text editor and add more blocks if needed in each column.
    */
   layout: (
+    | BlockGalleryBlock
     | AboutBlock
     | CalloutBlock
     | CardBlock

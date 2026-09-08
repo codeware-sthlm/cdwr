@@ -53,6 +53,42 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       }
     ]
   },
+  'block-gallery': {
+    slug: 'block-gallery',
+    label: 'Block gallery',
+    availableIn: ['pages'],
+    fields: [
+      {
+        name: 'eyebrow',
+        type: 'text',
+        localized: true,
+        label: 'Eyebrow',
+        description: 'Small uppercase label shown above the heading'
+      },
+      {
+        name: 'heading',
+        type: 'text',
+        required: true,
+        localized: true,
+        label: 'Heading'
+      },
+      {
+        name: 'intro',
+        type: 'textarea',
+        localized: true,
+        label: 'Intro',
+        description: 'Short paragraph below the heading'
+      },
+      {
+        name: 'mode',
+        type: 'select',
+        required: true,
+        label: 'Mode',
+        description:
+          'The index lists everything registered. The browser shows one block with its fields and an example, and steps to the next.'
+      }
+    ]
+  },
   callout: {
     slug: 'callout',
     label: 'Callout',

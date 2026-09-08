@@ -17,6 +17,7 @@ import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
  */
 // Using a record to make sure all blocks are included and not forgotten
 const blocks: Record<BlockSlug, boolean> = {
+  'block-gallery': false,
   about: false,
   card: true,
   code: true,

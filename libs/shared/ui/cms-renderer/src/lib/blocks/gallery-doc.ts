@@ -47,3 +47,14 @@ export type BlockGalleryDoc<TExample = unknown> = {
  * about it.
  */
 export type BlockExample = NonNullable<Page['layout']>[number];
+
+/**
+ * Pick the text for the locale the site is rendering in.
+ *
+ * `PayloadValue.locale` is a plain string — a tenant may be configured with a
+ * locale the platform has no translations for — so it is narrowed here rather
+ * than asserted at each call site, falling back the way `t()` does.
+ */
+export function localized(text: LocalizedText, locale: string): string {
+  return locale in text ? text[locale as SupportedLocale] : text.en;
+}
