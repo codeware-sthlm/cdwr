@@ -3,6 +3,10 @@ import type { TestimonialBlock as TestimonialBlockProps } from '@codeware/shared
 import type { BlockGalleryDoc } from './gallery-doc';
 
 export const testimonialGallery: BlockGalleryDoc<TestimonialBlockProps> = {
+  name: {
+    en: "Someone else's words",
+    sv: 'Någon annans ord'
+  },
   summary: {
     en: 'A quote from outside the site, with attribution.',
     sv: 'Ett citat utifrån, med angiven källa.'
