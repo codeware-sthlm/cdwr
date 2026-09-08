@@ -10,6 +10,7 @@ import { cn } from '@codeware/shared/util/ui';
 import { useRef } from 'react';
 
 import { AboutBlock } from './blocks/AboutBlock';
+import { BlockGalleryBlock } from './blocks/BlockGalleryBlock';
 import { CalloutBlock } from './blocks/CalloutBlock';
 import { CardBlock } from './blocks/CardBlock';
 import { CodeBlock } from './blocks/CodeBlock';
@@ -146,6 +147,7 @@ const blocksMap: Record<
   React.JSXElementConstructor<any>
 > = {
   about: AboutBlock,
+  'block-gallery': BlockGalleryBlock,
   callout: CalloutBlock,
   card: CardBlock,
   code: CodeBlock,

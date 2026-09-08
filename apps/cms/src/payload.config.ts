@@ -5,6 +5,7 @@ import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { seed } from '@codeware/app-cms/feature/seed';
 import {
   aboutBlock,
+  blockGalleryBlock,
   calloutBlock,
   cardBlock,
   codeBlock,
@@ -150,6 +151,7 @@ export default buildConfig({
   // https://payloadcms.com/docs/fields/blocks#block-references
   blocks: [
     aboutBlock,
+    blockGalleryBlock,
     calloutBlock,
     cardBlock,
     codeBlock,
