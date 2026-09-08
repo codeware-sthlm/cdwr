@@ -4,6 +4,7 @@ import { aboutGallery } from './about/AboutBlock.gallery';
 import { calloutGallery } from './callout/CalloutBlock.gallery';
 import { cardGallery } from './card/CardBlock.gallery';
 import { codeGallery } from './code/CodeBlock.gallery';
+import { contentGallery } from './content/ContentBlock.gallery';
 import { featureCardsGallery } from './feature-cards/FeatureCardsBlock.gallery';
 import { featureSectionGallery } from './feature-section/FeatureSectionBlock.gallery';
 import { fileAreaGallery } from './file-area/FileAreaBlock.gallery';
@@ -12,6 +13,7 @@ import type { AnyBlockGalleryDoc } from './gallery-doc';
 import { heroGallery } from './hero/HeroBlock.gallery';
 import { pillListGallery } from './pill-list/PillListBlock.gallery';
 import { postsGallery } from './posts/PostsBlock.gallery';
+import { reusableContentGallery } from './reusable-content/ReusableContentBlock.gallery';
 import { showcaseGallery } from './showcase/ShowcaseBlock.gallery';
 import { socialMediaGallery } from './social-media/SocialMediaBlock.gallery';
 import { spacingGallery } from './spacing/SpacingBlock.gallery';
@@ -35,6 +37,7 @@ export const galleryDocs: Partial<Record<BlockSlug, AnyBlockGalleryDoc>> = {
   callout: calloutGallery,
   card: cardGallery,
   code: codeGallery,
+  content: contentGallery,
   'feature-cards': featureCardsGallery,
   'file-area': fileAreaGallery,
   form: formGallery,
@@ -42,6 +45,7 @@ export const galleryDocs: Partial<Record<BlockSlug, AnyBlockGalleryDoc>> = {
   hero: heroGallery,
   'pill-list': pillListGallery,
   posts: postsGallery,
+  'reusable-content': reusableContentGallery,
   showcase: showcaseGallery,
   'social-media': socialMediaGallery,
   spacing: spacingGallery,
