@@ -3,6 +3,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { FileAreaBlock } from './FileAreaBlock';
+import { fileAreaGallery } from './FileAreaBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/FileAreaBlock',
@@ -13,67 +14,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const makeMedia = (
-  id: number,
-  name: string,
-  mimeType: string,
-  filesize: number,
-  url: string
-): Media =>
-  ({
-    id,
-    alt: name,
-    filenameWithoutPrefix: name,
-    filename: name,
-    filesize,
-    mimeType,
-    url,
-    updatedAt: '2024-06-01T00:00:00.000Z',
-    createdAt: '2024-06-01T00:00:00.000Z'
-  }) as unknown as Media;
-
-const files: NonNullable<Story['args']>['files'] = [
-  {
-    id: '1',
-    media: makeMedia(
-      1,
-      'project-brief.pdf',
-      'application/pdf',
-      204800,
-      '/uploads/project-brief.pdf'
-    )
-  },
-  {
-    id: '2',
-    media: makeMedia(
-      2,
-      'design-tokens.csv',
-      'text/csv',
-      8192,
-      '/uploads/design-tokens.csv'
-    )
-  },
-  {
-    id: '3',
-    media: makeMedia(
-      3,
-      'demo-recording.mp4',
-      'video/mp4',
-      10485760,
-      '/uploads/demo-recording.mp4'
-    )
-  },
-  {
-    id: '4',
-    media: makeMedia(
-      4,
-      'architecture.md',
-      'text/markdown',
-      4096,
-      '/uploads/architecture.md'
-    )
-  }
-];
+// The same instance the gallery renders, so the two cannot drift
+const files = fileAreaGallery.example.files ?? [];
 
 export const Default: Story = {
   args: { blockType: 'file-area', files }

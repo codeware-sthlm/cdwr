@@ -13,7 +13,7 @@ import { cn } from '@codeware/shared/util/ui';
 import { useState } from 'react';
 
 import { usePayload } from '../../providers/PayloadProvider';
-import { type BlockGalleryDoc, localized } from '../gallery-doc';
+import { type AnyBlockGalleryDoc, localized } from '../gallery-doc';
 import { galleryDocs } from '../gallery-docs';
 
 import { BlockGalleryEntry, type RenderExample } from './BlockGalleryEntry';
@@ -37,7 +37,7 @@ const self: BlockSlug = 'block-gallery';
 
 type Entry = {
   meta: BlockMeta;
-  doc?: BlockGalleryDoc;
+  doc?: AnyBlockGalleryDoc;
 };
 
 /** One card: the slug an editor sees in the layout builder, then the name. */
