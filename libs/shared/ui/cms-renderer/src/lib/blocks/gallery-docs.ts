@@ -1,7 +1,13 @@
 import type { BlockSlug } from '@codeware/shared/util/payload-types';
 
+import { calloutGallery } from './callout/CalloutBlock.gallery';
+import { cardGallery } from './card/CardBlock.gallery';
+import { featureCardsGallery } from './feature-cards/FeatureCardsBlock.gallery';
 import { featureSectionGallery } from './feature-section/FeatureSectionBlock.gallery';
 import type { BlockExample, BlockGalleryDoc } from './gallery-doc';
+import { heroGallery } from './hero/HeroBlock.gallery';
+import { pillListGallery } from './pill-list/PillListBlock.gallery';
+import { showcaseGallery } from './showcase/ShowcaseBlock.gallery';
 import { testimonialGallery } from './testimonial/TestimonialBlock.gallery';
 
 /**
@@ -19,6 +25,12 @@ import { testimonialGallery } from './testimonial/TestimonialBlock.gallery';
 export const galleryDocs: Partial<
   Record<BlockSlug, BlockGalleryDoc<BlockExample>>
 > = {
+  callout: calloutGallery,
+  card: cardGallery,
+  'feature-cards': featureCardsGallery,
   'feature-section': featureSectionGallery,
+  hero: heroGallery,
+  'pill-list': pillListGallery,
+  showcase: showcaseGallery,
   testimonial: testimonialGallery
 };

@@ -3,6 +3,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { HeroBlock } from './HeroBlock';
+import { heroGallery } from './HeroBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/HeroBlock',
@@ -13,32 +14,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const args: Story['args'] = {
-  blockType: 'hero',
-  badge: 'Codeware',
-  heading: 'Build with the best.',
-  lede: 'We design and engineer digital products that help ambitious companies move faster and scale smarter.',
-  actions: [
-    {
-      link: {
-        type: 'custom',
-        url: '/contact',
-        label: 'Get in touch',
-        newTab: false
-      },
-      emphasis: 'primary'
-    },
-    {
-      link: {
-        type: 'custom',
-        url: '/work',
-        label: 'See our work',
-        newTab: false
-      },
-      emphasis: 'secondary'
-    }
-  ]
-};
+// The same instance the gallery renders, so the two cannot drift
+const args: Story['args'] = heroGallery.example;
 
 const media = {
   id: 1,
