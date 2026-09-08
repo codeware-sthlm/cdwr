@@ -2,6 +2,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { SocialMediaBlock } from './SocialMediaBlock';
+import { socialMediaGallery } from './SocialMediaBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/SocialMediaBlock',
@@ -12,16 +13,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const social: NonNullable<Story['args']>['social'] = [
-  { id: '1', platform: 'github', url: 'https://github.com/codeware-sthlm' },
-  {
-    id: '2',
-    platform: 'linkedin',
-    url: 'https://linkedin.com/company/codeware'
-  },
-  { id: '3', platform: 'x', url: 'https://x.com/codeware' },
-  { id: '4', platform: 'email', email: 'hello@codeware.se' }
-];
+// The same instance the gallery renders, so the two cannot drift
+const social = socialMediaGallery.example.social;
 
 export const Horizontal: Story = {
   args: { blockType: 'social-media', direction: 'horizontal', social }

@@ -2,6 +2,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { SpacingBlock } from './SpacingBlock';
+import { spacingGallery } from './SpacingBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/SpacingBlock',
@@ -41,7 +42,8 @@ export const Loose: Story = wrapWithContent({
 });
 
 export const WithDivider: Story = {
-  args: { blockType: 'spacing', size: 'regular', divider: true }
+  // The same instance the gallery renders, so the two cannot drift
+  args: spacingGallery.example
 };
 
 export const WithCustomColor: Story = {

@@ -1,13 +1,17 @@
 import type { BlockSlug } from '@codeware/shared/util/payload-types';
 
+import { aboutGallery } from './about/AboutBlock.gallery';
 import { calloutGallery } from './callout/CalloutBlock.gallery';
 import { cardGallery } from './card/CardBlock.gallery';
+import { codeGallery } from './code/CodeBlock.gallery';
 import { featureCardsGallery } from './feature-cards/FeatureCardsBlock.gallery';
 import { featureSectionGallery } from './feature-section/FeatureSectionBlock.gallery';
 import type { BlockExample, BlockGalleryDoc } from './gallery-doc';
 import { heroGallery } from './hero/HeroBlock.gallery';
 import { pillListGallery } from './pill-list/PillListBlock.gallery';
 import { showcaseGallery } from './showcase/ShowcaseBlock.gallery';
+import { socialMediaGallery } from './social-media/SocialMediaBlock.gallery';
+import { spacingGallery } from './spacing/SpacingBlock.gallery';
 import { testimonialGallery } from './testimonial/TestimonialBlock.gallery';
 
 /**
@@ -25,12 +29,16 @@ import { testimonialGallery } from './testimonial/TestimonialBlock.gallery';
 export const galleryDocs: Partial<
   Record<BlockSlug, BlockGalleryDoc<BlockExample>>
 > = {
+  about: aboutGallery,
   callout: calloutGallery,
   card: cardGallery,
+  code: codeGallery,
   'feature-cards': featureCardsGallery,
   'feature-section': featureSectionGallery,
   hero: heroGallery,
   'pill-list': pillListGallery,
   showcase: showcaseGallery,
+  'social-media': socialMediaGallery,
+  spacing: spacingGallery,
   testimonial: testimonialGallery
 };
