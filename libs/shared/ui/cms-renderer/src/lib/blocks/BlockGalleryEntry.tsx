@@ -51,19 +51,27 @@ function FieldRow({ field, depth }: { field: BlockFieldMeta; depth: number }) {
   return (
     <>
       <div
+        style={
+          { '--field-indent': `${depth * 0.875}rem` } as React.CSSProperties
+        }
         className={cn(
-          'border-border/70 grid gap-x-4 gap-y-0.5 border-b px-4 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)]',
+          'border-border/70 grid gap-x-4 gap-y-0.5 border-b px-4 last:border-b-0',
+          // Two columns from `sm`, where the name is indented and every
+          // description keeps one left edge. Below that the pair stacks and
+          // there is no column to align to, so the whole row moves instead —
+          // indenting the name alone left its description flush with the
+          // level above it
+          'pl-[calc(1rem+var(--field-indent))] sm:grid-cols-[9rem_minmax(0,1fr)] sm:pl-4',
           nested ? 'py-1.5' : 'py-2.5'
         )}
       >
         <code
           className={cn(
-            'font-mono',
+            'font-mono sm:pl-[var(--field-indent)]',
             nested
               ? 'text-muted-foreground text-[11px]'
               : 'text-core-link text-xs'
           )}
-          style={{ paddingLeft: nested ? `${depth * 0.875}rem` : undefined }}
         >
           {field.name}
           {field.required && (
@@ -111,6 +119,7 @@ export function BlockGalleryEntry({
   position: { index: number; total: number };
 }) {
   const { locale } = usePayload();
+  const name = doc?.name && localized(doc.name, locale);
 
   return (
     <article>
@@ -147,9 +156,17 @@ export function BlockGalleryEntry({
 
       <header className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-2xl">
-          <code className="text-core-link font-mono text-xs">{meta.slug}</code>
+          {/* The registered label rides along whenever the heading is not it,
+              so a name written for a reader never costs an editor the name
+              they have to find in the admin */}
+          <p className="font-mono text-xs">
+            <span className="text-core-link">{meta.slug}</span>
+            {name && (
+              <span className="text-muted-foreground"> · {meta.label}</span>
+            )}
+          </p>
           <h3 className="text-core-headline mt-2.5 text-3xl font-semibold tracking-tight">
-            {meta.label}
+            {name ?? meta.label}
           </h3>
           {doc && (
             <p className="text-muted-foreground mt-3 text-base leading-relaxed">

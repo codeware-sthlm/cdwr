@@ -53,7 +53,7 @@ function BlockCard({ meta, doc, onOpen }: Entry & { onOpen: () => void }) {
       >
         <code className="text-core-link font-mono text-xs">{meta.slug}</code>
         <p className="text-foreground text-base font-semibold tracking-tight">
-          {meta.label}
+          {doc?.name ? localized(doc.name, locale) : meta.label}
         </p>
         <p
           className={cn(

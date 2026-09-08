@@ -33,6 +33,16 @@ export type BlockExample = NonNullable<Page['layout']>[number];
  * so the gallery cannot drift from what Chromatic has been reviewing.
  */
 export type BlockGalleryDoc<TExample = BlockExample> = {
+  /**
+   * What to call the block, when its registered label is not worth reading.
+   *
+   * `labels.singular` is almost always the slug with a capital and a space —
+   * `feature-section` becomes "Feature section" — so a heading built from it
+   * restates the slug beside it and earns nothing. Optional: a block whose
+   * label already says something ("Callout") does not need a second name, and
+   * the admin's own wording is the honest default.
+   */
+  name?: LocalizedText;
   /** One line for the gallery card. What the block is, not what it is good at */
   summary: LocalizedText;
   /**

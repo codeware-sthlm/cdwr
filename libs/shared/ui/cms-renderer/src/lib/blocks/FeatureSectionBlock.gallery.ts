@@ -4,6 +4,10 @@ import type { BlockGalleryDoc } from './gallery-doc';
 
 export const featureSectionGallery: BlockGalleryDoc<FeatureSectionBlockProps> =
   {
+    name: {
+      en: 'A claim with its evidence',
+      sv: 'Ett påstående med sina belägg'
+    },
     summary: {
       en: 'One claim, one visual, and the supporting points beneath it.',
       sv: 'Ett påstående, en bild och de stödjande punkterna under.'
