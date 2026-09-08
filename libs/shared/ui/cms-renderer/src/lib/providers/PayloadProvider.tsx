@@ -87,6 +87,22 @@ export type PayloadValue = {
   getCurrentPath: () => string;
 
   /**
+   * Provide a reader for one query string parameter.
+   *
+   * Separate from `getCurrentPath`, which returns the path alone. Used to
+   * arrive at a particular entry — `/blocks?block=hero` — without giving the
+   * gallery a route of its own.
+   *
+   * Example implementations:
+   * - Next.js: `useSearchParams().get(name)`
+   * - Remix: `new URLSearchParams(useLocation().search).get(name)`
+   *
+   * @param name - The parameter to read
+   * @returns Its value, or `null` when absent
+   */
+  getSearchParam: (name: string) => string | null;
+
+  /**
    * Provide a navigate function based on your framework.
    * It's used to navigate to a path or URL.
    *

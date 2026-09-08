@@ -12,7 +12,7 @@ import type {
   FormSubmission,
   SiteSettingsGeneral
 } from '@codeware/shared/util/payload-types';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import { useTheme } from 'next-themes';
 
@@ -91,6 +91,7 @@ function PayloadProviderInner({
 }: ProvidersProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const {
     theme: colorScheme,
     resolvedTheme: resolvedColorScheme,
@@ -102,6 +103,7 @@ function PayloadProviderInner({
       value={{
         appInfo,
         getCurrentPath: () => pathname,
+        getSearchParam: (name) => searchParams.get(name),
         iconConfig,
         locale,
         navigate: (path, newTab) => {

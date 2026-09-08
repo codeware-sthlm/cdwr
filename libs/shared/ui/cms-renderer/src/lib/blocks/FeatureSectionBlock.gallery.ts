@@ -12,10 +12,6 @@ export const featureSectionGallery: BlockGalleryDoc<FeatureSectionBlockProps> =
       en: 'The workhorse of a long marketing page, repeated down it. Use it when a single claim deserves a visual that makes it checkable, with two to four points that qualify it rather than compete with it.',
       sv: 'Arbetshästen på en lång säljsida, upprepad nedåt. Använd den när ett enskilt påstående förtjänar en bild som gör det kontrollerbart, med två till fyra punkter som preciserar det i stället för att konkurrera med det.'
     },
-    insteadReachFor: {
-      en: 'Reach for showcase when the items are peers and none of them is the claim, and for feature-cards when there is no visual to carry it.',
-      sv: 'Välj showcase när posterna är jämbördiga och ingen av dem är påståendet, och feature-cards när det inte finns någon bild att bära det.'
-    },
     example: {
       blockType: 'feature-section',
       eyebrow: 'Per-tenant theming',
