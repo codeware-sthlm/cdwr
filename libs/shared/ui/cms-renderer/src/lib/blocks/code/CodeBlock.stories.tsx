@@ -2,6 +2,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { CodeBlock } from './CodeBlock';
+import { codeGallery } from './CodeBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/CodeBlock',
@@ -83,11 +84,8 @@ S3_REGION=eu-north-1`
   }
 };
 
-const a11yArgs: Story['args'] = {
-  blockType: 'code',
-  language: 'ts',
-  code: 'const x: string = "hello";'
-};
+// The same instance the gallery renders, so the two cannot drift
+const a11yArgs: Story['args'] = codeGallery.example;
 
 export const ShadcnLight = a11yStory({ args: a11yArgs }, 'shadcn', 'light');
 export const ShadcnDark = a11yStory({ args: a11yArgs }, 'shadcn', 'dark');
