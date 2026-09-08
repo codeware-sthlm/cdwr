@@ -104,10 +104,15 @@ export const FeatureSectionBlock: React.FC<FeatureSectionBlockProps> = ({
                   ]
                 )}
               >
+                {/* A size step as well as weight and ink: at one size the two
+                    lines read as a single grey paragraph. Deliberately not
+                    brand — `--core-link` is already the eyebrow above, and
+                    `--core-interactive` is a border token that never has to
+                    clear 4.5:1 as text */}
                 <p className="text-foreground text-sm font-semibold">
                   {point.title}
                 </p>
-                <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
+                <p className="text-muted-foreground mt-1.5 text-[13px] leading-relaxed">
                   {point.body}
                 </p>
               </div>
