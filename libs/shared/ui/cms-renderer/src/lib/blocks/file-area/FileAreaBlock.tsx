@@ -1,7 +1,7 @@
 import { FileArea } from '@codeware/shared/ui/file-area';
 import type { FileAreaBlock as FileAreaBlockProps } from '@codeware/shared/util/payload-types';
 
-import { usePayload } from '../providers/PayloadProvider';
+import { usePayload } from '../../providers/PayloadProvider';
 
 type Props = FileAreaBlockProps;
 

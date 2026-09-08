@@ -2,9 +2,8 @@ import { Video } from '@codeware/shared/ui/video';
 import type { VideoBlock as VideoBlockProps } from '@codeware/shared/util/payload-types';
 import React from 'react';
 
-import { usePayload } from '../providers/PayloadProvider';
-
-import { RichText } from './RichText';
+import { usePayload } from '../../providers/PayloadProvider';
+import { RichText } from '../RichText';
 
 type Props = VideoBlockProps;
 

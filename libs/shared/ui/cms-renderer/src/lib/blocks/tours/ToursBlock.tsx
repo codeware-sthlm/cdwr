@@ -16,15 +16,14 @@ import type {
 import { cn } from '@codeware/shared/util/ui';
 import { CalendarIcon, ClockIcon } from 'lucide-react';
 
-import { usePayload } from '../providers/PayloadProvider';
-import { handleAsRoute } from '../utils/internal-link';
+import { usePayload } from '../../providers/PayloadProvider';
+import { handleAsRoute } from '../../utils/internal-link';
 import {
   formatPrice,
   formatTourDate,
   resolveTourHero
-} from '../utils/tour-format';
-
-import { ImageBlock } from './ImageBlock';
+} from '../../utils/tour-format';
+import { ImageBlock } from '../image/ImageBlock';
 
 type Props = ToursBlockProps & {
   /**

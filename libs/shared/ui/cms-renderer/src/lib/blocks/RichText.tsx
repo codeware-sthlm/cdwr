@@ -21,13 +21,13 @@ import {
   RichText as RichTextWithoutBlocks
 } from '@payloadcms/richtext-lexical/react';
 
-import { CardBlock } from './CardBlock';
-import { CodeBlock } from './CodeBlock';
-import { FormBlock } from './FormBlock';
-import { ImageBlock } from './ImageBlock';
-import { MediaBlock } from './MediaBlock';
-import { SocialMediaBlock } from './SocialMediaBlock';
-import { SpacingBlock } from './SpacingBlock';
+import { CardBlock } from './card/CardBlock';
+import { CodeBlock } from './code/CodeBlock';
+import { FormBlock } from './form/FormBlock';
+import { ImageBlock } from './image/ImageBlock';
+import { MediaBlock } from './media/MediaBlock';
+import { SocialMediaBlock } from './social-media/SocialMediaBlock';
+import { SpacingBlock } from './spacing/SpacingBlock';
 
 type NodeTypes =
   | DefaultNodeTypes

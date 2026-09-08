@@ -1,7 +1,7 @@
 import { Code } from '@codeware/shared/ui/code';
 import type { CodeBlock as CodeBlockProps } from '@codeware/shared/util/payload-types';
 
-import { usePayload } from '../providers/PayloadProvider';
+import { usePayload } from '../../providers/PayloadProvider';
 
 type Props = CodeBlockProps;
 

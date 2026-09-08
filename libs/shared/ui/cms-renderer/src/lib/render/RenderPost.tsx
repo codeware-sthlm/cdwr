@@ -2,7 +2,7 @@
 
 import type { Post } from '@codeware/shared/util/payload-types';
 
-import { ImageBlock } from '../blocks/ImageBlock';
+import { ImageBlock } from '../blocks/image/ImageBlock';
 import { RichText } from '../blocks/RichText';
 import { Container } from '../layout/Container';
 import { usePayload } from '../providers/PayloadProvider';

@@ -2,8 +2,8 @@ import type { ShowcaseBlock as ShowcaseBlockProps } from '@codeware/shared/util/
 import { cn } from '@codeware/shared/util/ui';
 import { ArrowRightIcon } from 'lucide-react';
 
-import { usePayload } from '../providers/PayloadProvider';
-import { resolveLinkGroup } from '../utils/resolve-link-group';
+import { usePayload } from '../../providers/PayloadProvider';
+import { resolveLinkGroup } from '../../utils/resolve-link-group';
 
 /**
  * Showcase block — section header with optional "all work" link, followed by

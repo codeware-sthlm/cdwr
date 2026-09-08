@@ -5,9 +5,8 @@ import type {
 } from '@codeware/shared/util/payload-types';
 import React from 'react';
 
-import { usePayload } from '../providers/PayloadProvider';
-
-import { RichText } from './RichText';
+import { usePayload } from '../../providers/PayloadProvider';
+import { RichText } from '../RichText';
 
 type Props = {
   /**

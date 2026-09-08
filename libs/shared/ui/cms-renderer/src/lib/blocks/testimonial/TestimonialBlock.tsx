@@ -1,10 +1,9 @@
 import type { TestimonialBlock as TestimonialBlockProps } from '@codeware/shared/util/payload-types';
 import { ArrowRightIcon } from '@heroicons/react/24/outline';
 
-import { usePayload } from '../providers/PayloadProvider';
-import { resolveLinkGroup } from '../utils/resolve-link-group';
-
-import { ImageBlock } from './ImageBlock';
+import { usePayload } from '../../providers/PayloadProvider';
+import { resolveLinkGroup } from '../../utils/resolve-link-group';
+import { ImageBlock } from '../image/ImageBlock';
 
 /**
  * Testimonial — the one block where the claim comes from outside the site.

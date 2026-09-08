@@ -24,18 +24,17 @@ import { useCallback, useState } from 'react';
 import { FieldErrors, type RegisterOptions, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { Button } from '../form-items/Button';
-import { Checkbox } from '../form-items/Checkbox';
-import { countryOptions } from '../form-items/country-options';
-import { Input } from '../form-items/Input';
-import { Radio } from '../form-items/Radio';
-import { Select } from '../form-items/Select';
-import { Textarea } from '../form-items/Textarea';
-import { ColSpan } from '../layout/ColSpan';
-import { Grid } from '../layout/Grid';
-import { usePayload } from '../providers/PayloadProvider';
-
-import { RichText } from './RichText';
+import { Button } from '../../form-items/Button';
+import { Checkbox } from '../../form-items/Checkbox';
+import { countryOptions } from '../../form-items/country-options';
+import { Input } from '../../form-items/Input';
+import { Radio } from '../../form-items/Radio';
+import { Select } from '../../form-items/Select';
+import { Textarea } from '../../form-items/Textarea';
+import { ColSpan } from '../../layout/ColSpan';
+import { Grid } from '../../layout/Grid';
+import { usePayload } from '../../providers/PayloadProvider';
+import { RichText } from '../RichText';
 
 // Assume form has the proper type but validate it before render anyway
 type Props = FormBlockProps & {

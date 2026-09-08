@@ -20,7 +20,7 @@ import type { Tour } from '@codeware/shared/util/payload-types';
 import { CheckIcon, ListOrderedIcon, MinusIcon } from 'lucide-react';
 import { useState } from 'react';
 
-import { ImageBlock } from '../blocks/ImageBlock';
+import { ImageBlock } from '../blocks/image/ImageBlock';
 import { RichText } from '../blocks/RichText';
 import { Container } from '../layout/Container';
 import { usePayload } from '../providers/PayloadProvider';
