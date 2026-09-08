@@ -32,7 +32,7 @@ export type BlockExample = NonNullable<Page['layout']>[number];
  * The example is the same object the block's story renders, imported by both,
  * so the gallery cannot drift from what Chromatic has been reviewing.
  */
-export type BlockGalleryDoc<TExample = BlockExample> = {
+type BlockGalleryProse = {
   /**
    * What to call the block, when its registered label is not worth reading.
    *
@@ -53,9 +53,34 @@ export type BlockGalleryDoc<TExample = BlockExample> = {
    * as hard to write honestly twenty-one times, and thin when forced.
    */
   whenToUse: LocalizedText;
-  /** A real instance, rendered through the same renderer a page uses */
+};
+
+/** A documented block with a real instance to draw. */
+export type BlockGalleryDoc<TExample = BlockExample> = BlockGalleryProse & {
+  /** Rendered through the same renderer a page uses */
   example: TExample;
 };
+
+/**
+ * A documented block that cannot have an example, and says why.
+ *
+ * A listing block draws its documents from the page it sits on and renders
+ * nothing at all without them; a form points at a document that has to exist
+ * first. An empty frame reads as a bug, so these state the reason in their own
+ * words rather than falling back to "not written yet", which would be untrue.
+ */
+export type BlockGalleryDocWithoutExample = BlockGalleryProse & {
+  exampleUnavailable: LocalizedText;
+};
+
+/** Either shape, as the gallery receives it. */
+export type AnyBlockGalleryDoc =
+  | BlockGalleryDoc
+  | BlockGalleryDocWithoutExample;
+
+/** Whether this entry has something to draw. */
+export const hasExample = (doc: AnyBlockGalleryDoc): doc is BlockGalleryDoc =>
+  'example' in doc;
 
 /**
  * Pick the text for the locale the site is rendering in.

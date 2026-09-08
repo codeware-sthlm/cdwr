@@ -10,8 +10,9 @@ import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import {
+  type AnyBlockGalleryDoc,
   type BlockExample,
-  type BlockGalleryDoc,
+  hasExample,
   localized
 } from '../gallery-doc';
 
@@ -111,7 +112,7 @@ export function BlockGalleryEntry({
   position
 }: {
   meta: BlockMeta;
-  doc?: BlockGalleryDoc;
+  doc?: AnyBlockGalleryDoc;
   render?: RenderExample;
   onBack: () => void;
   onStep: (delta: number) => void;
@@ -214,11 +215,15 @@ export function BlockGalleryEntry({
           </span>
         </div>
         <div className="border-border bg-core-background-content rounded-b-xl border border-t-0 px-6 py-10 sm:px-10 sm:py-12">
-          {doc?.example && RenderExample ? (
+          {doc && hasExample(doc) && RenderExample ? (
             <RenderExample blocks={[doc.example]} />
           ) : (
+            // Three states, not two: an example, a stated reason there can be
+            // none, and nobody having written one yet
             <p className="text-muted-foreground text-sm italic">
-              {t(locale, 'gallery.noExample')}
+              {doc && !hasExample(doc)
+                ? localized(doc.exampleUnavailable, locale)
+                : t(locale, 'gallery.noExample')}
             </p>
           )}
         </div>
