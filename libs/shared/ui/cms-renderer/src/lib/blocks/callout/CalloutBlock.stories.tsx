@@ -3,6 +3,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { CalloutBlock } from './CalloutBlock';
+import { calloutGallery } from './CalloutBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/CalloutBlock',
@@ -13,18 +14,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const args: Story['args'] = {
-  blockType: 'callout',
-  showMark: true,
-  heading: 'Ready to build something great?',
-  body: 'Let us know what you are working on and we will figure out how to help.',
-  link: {
-    type: 'custom',
-    url: '/contact',
-    label: 'Get in touch',
-    newTab: false
-  }
-};
+// The same instance the gallery renders, so the two cannot drift
+const args: Story['args'] = calloutGallery.example;
 
 const image = {
   id: 1,

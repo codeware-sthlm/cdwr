@@ -2,6 +2,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { CardBlock } from './CardBlock';
+import { cardGallery } from './CardBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/CardBlock',
@@ -12,50 +13,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const cards: NonNullable<Story['args']>['cards'] = [
-  {
-    brand: { icon: 'CodeBracketIcon', color: undefined },
-    title: 'Engineering',
-    description: 'Type-safe APIs and clean architecture.',
-    content: 'Full-stack development with modern tooling and proven patterns.',
-    enableLink: true,
-    link: {
-      type: 'custom',
-      url: '/services/engineering',
-      label: 'Learn more',
-      newTab: false,
-      navTrigger: 'link'
-    }
-  },
-  {
-    brand: { icon: 'CpuChipIcon', color: undefined },
-    title: 'Platform',
-    description: 'Cloud-native deployments that just work.',
-    content: 'CI/CD pipelines and infrastructure as code.',
-    enableLink: true,
-    link: {
-      type: 'custom',
-      url: '/services/platform',
-      label: 'Learn more',
-      newTab: false,
-      navTrigger: 'link'
-    }
-  },
-  {
-    brand: { icon: 'SparklesIcon', color: undefined },
-    title: 'Design Systems',
-    description: 'Component libraries built to scale.',
-    content: 'Accessible interfaces and coherent design tokens.',
-    enableLink: true,
-    link: {
-      type: 'custom',
-      url: '/services/design',
-      label: 'Learn more',
-      newTab: false,
-      navTrigger: 'link'
-    }
-  }
-];
+// The same instance the gallery renders, so the two cannot drift
+// `cards` is optional on the block, so the type allows absence even
+// though the example always has them
+const cards = cardGallery.example.cards ?? [];
 
 export const ClickableCards: Story = {
   name: 'Clickable cards (card-level link)',

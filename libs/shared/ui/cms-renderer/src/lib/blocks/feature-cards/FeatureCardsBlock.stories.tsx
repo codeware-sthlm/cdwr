@@ -2,6 +2,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { FeatureCardsBlock } from './FeatureCardsBlock';
+import { featureCardsGallery } from './FeatureCardsBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/FeatureCardsBlock',
@@ -12,34 +13,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const args: Story['args'] = {
-  blockType: 'feature-cards',
-  eyebrow: 'Capabilities',
-  heading: 'What we do',
-  intro:
-    'From product strategy to production-grade systems — we handle the full stack.',
-  columns: 'auto',
-  items: [
-    {
-      brand: { icon: 'CodeBracketIcon', color: undefined },
-      title: 'Engineering',
-      description:
-        'Full-stack development with modern tooling, type-safe APIs and clean architecture.'
-    },
-    {
-      brand: { icon: 'CpuChipIcon', color: undefined },
-      title: 'Platform',
-      description:
-        'CI/CD, infrastructure as code and cloud-native deployments that just work.'
-    },
-    {
-      brand: { icon: 'SparklesIcon', color: undefined },
-      title: 'Design',
-      description:
-        'Component libraries, design systems and accessible interfaces built to scale.'
-    }
-  ]
-};
+// The same instance the gallery renders, so the two cannot drift
+const args: Story['args'] = featureCardsGallery.example;
 
 export const Default: Story = {
   args
