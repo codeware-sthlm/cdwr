@@ -8,8 +8,8 @@ export const calloutGallery: BlockGalleryDoc<CalloutBlockProps> = {
     sv: 'En uppmaning infälld i sidan'
   },
   summary: {
-    en: 'A short band with one heading, one sentence and one button.',
-    sv: 'Ett kort band med en rubrik, en mening och en knapp.'
+    en: 'Compact and centred: one heading, one sentence, one button.',
+    sv: 'Kompakt och centrerad: en rubrik, en mening och en knapp.'
   },
   whenToUse: {
     en: 'Partway down a page, when the reader has seen enough to act but the page has not finished. One action only: a band with two buttons asks the reader to choose rather than to move.',

@@ -121,10 +121,16 @@ export const BlockGalleryBlock: React.FC<
 > = ({ eyebrow, heading, intro, mode, render }) => {
   const { getSearchParam, locale } = usePayload();
 
+  // Sorted by the name actually shown, not the registered label — an
+  // editorial name meant the cards read in one order and the stepper walked
+  // them in another
+  const shownAs = ({ meta, doc }: Entry) =>
+    doc?.name ? localized(doc.name, locale) : meta.label;
+
   const entries: Array<Entry> = Object.values(BLOCK_META)
     .filter(({ slug }) => slug !== self)
     .map((meta) => ({ meta, doc: galleryDocs[meta.slug] }))
-    .sort((a, b) => a.meta.label.localeCompare(b.meta.label));
+    .sort((a, b) => shownAs(a).localeCompare(shownAs(b), locale));
 
   // A block an editor can reach for on a page, and that someone has explained
   const design = entries.filter(
