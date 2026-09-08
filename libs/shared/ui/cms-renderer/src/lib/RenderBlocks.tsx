@@ -129,6 +129,11 @@ function resolveBlockProps(
     case 'reusable-content':
       return { blocksData };
 
+    // The gallery draws its examples with the renderer rather than reaching
+    // into `blocksMap`, which would import this module and close a cycle
+    case 'block-gallery':
+      return { render: RenderBlocks };
+
     // Listing blocks: resolve pre-fetched collection data by block id
     case 'posts':
       return { posts: (block.id && blocksData?.posts?.[block.id]) ?? [] };

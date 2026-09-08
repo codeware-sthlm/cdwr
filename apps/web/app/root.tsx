@@ -151,6 +151,7 @@ export async function loader({ context, request }: TypedLoaderFunctionArgs) {
       requestInfo: {
         hints: getHints(request),
         path: new URL(request.url).pathname,
+        search: new URL(request.url).search,
         userPrefs: {
           locale: context.tenantConfig?.locale ?? 'en',
           colorScheme
@@ -269,6 +270,8 @@ export default function App() {
     // before the setting existed
     chrome: loaderData.tenantConfig?.chrome ?? 'outlined',
     getCurrentPath: () => loaderData.requestInfo.path,
+    getSearchParam: (name) =>
+      new URLSearchParams(loaderData.requestInfo.search).get(name),
     iconConfig: loaderData.tenantConfig?.icon ?? null,
     navigate: (path, newTab) => {
       const isExternal = path.startsWith('http');

@@ -1,6 +1,8 @@
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+import { RenderBlocks } from '../RenderBlocks';
+
 import { BlockGalleryBlock } from './BlockGalleryBlock';
 
 /**
@@ -21,6 +23,9 @@ type Story = StoryObj<typeof meta>;
 const args: Story['args'] = {
   blockType: 'block-gallery',
   mode: 'index',
+  // `RenderBlocks` supplies this through `resolveBlockProps` on a real page.
+  // Without it here, opening a card from the index shows no example at all
+  render: RenderBlocks,
   eyebrow: 'Blocks',
   heading: 'Every block, drawn by the renderer that serves it',
   intro:
@@ -29,6 +34,11 @@ const args: Story['args'] = {
 
 export const Default: Story = {
   args
+};
+
+/** The view a `?block=` link arrives at, and where a card click lands. */
+export const Browser: Story = {
+  args: { ...args, mode: 'browser' }
 };
 
 export const ShadcnLight = a11yStory({ args }, 'shadcn', 'light');

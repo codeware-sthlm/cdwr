@@ -66,6 +66,17 @@ export type TranslationKey =
   | 'form.submitSuccess'
   | 'form.submitFailed'
   | 'form.submitFailedDescription'
+  | 'gallery.allBlocks'
+  | 'gallery.availableIn'
+  | 'gallery.fieldsNote'
+  | 'gallery.live'
+  | 'gallery.liveNote'
+  | 'gallery.example'
+  | 'gallery.fields'
+  | 'gallery.next'
+  | 'gallery.noExample'
+  | 'gallery.previous'
+  | 'gallery.whenToUse'
   | 'gallery.contentBlocks'
   | 'gallery.documented'
   | 'gallery.pending'
@@ -238,6 +249,19 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Form submitted successfully',
     'form.submitFailed': 'Form submission failed',
     'form.submitFailedDescription': 'Please try again.',
+    'gallery.allBlocks': 'All blocks',
+    'gallery.availableIn': 'Available in',
+    'gallery.fieldsNote':
+      'Generated from the block definition, so this table cannot drift from the fields the admin actually shows.',
+    'gallery.live': 'Live · drawn by the production renderer',
+    'gallery.liveNote':
+      'Follows the theme above — no CSS was written for this page.',
+    'gallery.example': 'Example',
+    'gallery.fields': 'What an editor fills in',
+    'gallery.next': 'Next block',
+    'gallery.noExample': 'No example written yet.',
+    'gallery.previous': 'Previous block',
+    'gallery.whenToUse': 'When to reach for it',
     'gallery.contentBlocks': 'Content blocks',
     'gallery.documented': 'Documented',
     'gallery.pending': 'Registered, not yet in the grid',
@@ -431,6 +455,19 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Formuläret skickades in',
     'form.submitFailed': 'Formuläret kunde inte skickas in',
     'form.submitFailedDescription': 'Försök igen.',
+    'gallery.allBlocks': 'Alla block',
+    'gallery.availableIn': 'Tillgängligt i',
+    'gallery.fieldsNote':
+      'Genereras från blockets definition, så tabellen kan inte glida ifrån de fält som administrationen faktiskt visar.',
+    'gallery.live': 'Live · ritat av samma renderare som sidorna',
+    'gallery.liveNote':
+      'Följer temat ovan — ingen CSS är skriven för den här sidan.',
+    'gallery.example': 'Exempel',
+    'gallery.fields': 'Vad en redaktör fyller i',
+    'gallery.next': 'Nästa block',
+    'gallery.noExample': 'Inget exempel skrivet ännu.',
+    'gallery.previous': 'Föregående block',
+    'gallery.whenToUse': 'När det passar',
     'gallery.contentBlocks': 'Innehållsblock',
     'gallery.documented': 'Beskrivna',
     'gallery.pending': 'Registrerade, ännu inte i rutnätet',

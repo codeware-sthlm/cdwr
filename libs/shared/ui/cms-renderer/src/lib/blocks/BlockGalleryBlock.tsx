@@ -10,9 +10,11 @@ import {
   type BlockMeta
 } from '@codeware/shared/util/payload-utils';
 import { cn } from '@codeware/shared/util/ui';
+import { useState } from 'react';
 
 import { usePayload } from '../providers/PayloadProvider';
 
+import { BlockGalleryEntry, type RenderExample } from './BlockGalleryEntry';
 import { type BlockGalleryDoc, localized } from './gallery-doc';
 import { galleryDocs } from './gallery-docs';
 
@@ -39,25 +41,31 @@ type Entry = {
 };
 
 /** One card: the slug an editor sees in the layout builder, then the name. */
-function BlockCard({ meta, doc }: Entry) {
+function BlockCard({ meta, doc, onOpen }: Entry & { onOpen: () => void }) {
   const { locale } = usePayload();
 
   return (
-    <li className="border-border bg-card/50 flex flex-col gap-2.5 rounded-xl border p-5">
-      <code className="text-core-link font-mono text-xs">{meta.slug}</code>
-      <p className="text-foreground text-base font-semibold tracking-tight">
-        {meta.label}
-      </p>
-      <p
-        className={cn(
-          'text-muted-foreground text-sm leading-relaxed',
-          !doc && 'italic'
-        )}
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="border-border bg-card/50 hover:border-core-interactive flex h-full w-full flex-col gap-2.5 rounded-xl border p-5 text-left transition-colors"
       >
-        {doc
-          ? localized(doc.summary, locale)
-          : t(locale, 'gallery.undocumented')}
-      </p>
+        <code className="text-core-link font-mono text-xs">{meta.slug}</code>
+        <p className="text-foreground text-base font-semibold tracking-tight">
+          {meta.label}
+        </p>
+        <p
+          className={cn(
+            'text-muted-foreground text-sm leading-relaxed',
+            !doc && 'italic'
+          )}
+        >
+          {doc
+            ? localized(doc.summary, locale)
+            : t(locale, 'gallery.undocumented')}
+        </p>
+      </button>
     </li>
   );
 }
@@ -65,11 +73,13 @@ function BlockCard({ meta, doc }: Entry) {
 function Section({
   title,
   note,
-  entries
+  entries,
+  onOpen
 }: {
   title: string;
   note?: string;
   entries: Array<Entry>;
+  onOpen: (slug: BlockSlug) => void;
 }) {
   if (entries.length === 0) {
     return null;
@@ -87,7 +97,11 @@ function Section({
       )}
       <ul className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {entries.map((entry) => (
-          <BlockCard key={entry.meta.slug} {...entry} />
+          <BlockCard
+            key={entry.meta.slug}
+            {...entry}
+            onOpen={() => onOpen(entry.meta.slug)}
+          />
         ))}
       </ul>
     </section>
@@ -102,12 +116,10 @@ function Section({
  * write-up lands in its own section rather than going missing, which is what
  * stops the gallery quietly falling behind the library.
  */
-export const BlockGalleryBlock: React.FC<BlockGalleryBlockProps> = ({
-  eyebrow,
-  heading,
-  intro
-}) => {
-  const { locale } = usePayload();
+export const BlockGalleryBlock: React.FC<
+  BlockGalleryBlockProps & { render?: RenderExample }
+> = ({ eyebrow, heading, intro, mode, render }) => {
+  const { getSearchParam, locale } = usePayload();
 
   const entries: Array<Entry> = Object.values(BLOCK_META)
     .filter(({ slug }) => slug !== self)
@@ -128,6 +140,47 @@ export const BlockGalleryBlock: React.FC<BlockGalleryBlockProps> = ({
   );
 
   const documented = entries.length - entries.filter(({ doc }) => !doc).length;
+
+  // `?block=hero` arrives at one entry without giving the gallery a route.
+  // Read once, as the opening view — the stepper deliberately does not write
+  // back, since twenty-one history entries is worse than a link that points
+  // at where the visitor started.
+  const requested = getSearchParam('block');
+  const [selected, setSelected] = useState<BlockSlug | null>(() => {
+    const match = entries.find(({ meta }) => meta.slug === requested);
+    if (match) return match.meta.slug;
+    if (mode !== 'browser') return null;
+    // The first block with something to show, not simply the first block —
+    // opening on an undocumented one makes the view look broken
+    const opening = entries.find(({ doc }) => doc) ?? entries[0];
+    return opening?.meta.slug ?? null;
+  });
+
+  const current = entries.findIndex(({ meta }) => meta.slug === selected);
+
+  if (current >= 0) {
+    const entry = entries[current];
+
+    return (
+      <section>
+        <BlockGalleryEntry
+          meta={entry.meta}
+          doc={entry.doc}
+          render={render}
+          onBack={() => setSelected(null)}
+          // Wraps rather than disabling at the ends: a stepper that stops is a
+          // dead control two clicks into a gallery meant to be flicked through
+          onStep={(delta) =>
+            setSelected(
+              entries[(current + delta + entries.length) % entries.length].meta
+                .slug
+            )
+          }
+          position={{ index: current, total: entries.length }}
+        />
+      </section>
+    );
+  }
 
   return (
     <section>
@@ -175,16 +228,22 @@ export const BlockGalleryBlock: React.FC<BlockGalleryBlockProps> = ({
         </dl>
       </div>
 
-      <Section title={t(locale, 'gallery.contentBlocks')} entries={design} />
+      <Section
+        title={t(locale, 'gallery.contentBlocks')}
+        entries={design}
+        onOpen={setSelected}
+      />
       <Section
         title={t(locale, 'gallery.structural')}
         note={t(locale, 'gallery.structuralNote')}
         entries={plumbing}
+        onOpen={setSelected}
       />
       <Section
         title={t(locale, 'gallery.pending')}
         note={t(locale, 'gallery.pendingNote')}
         entries={pending}
+        onOpen={setSelected}
       />
     </section>
   );

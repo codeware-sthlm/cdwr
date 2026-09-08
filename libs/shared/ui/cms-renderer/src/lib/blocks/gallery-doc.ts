@@ -11,6 +11,17 @@ import type { Page } from '@codeware/shared/util/payload-types';
 export type LocalizedText = Record<SupportedLocale, string>;
 
 /**
+ * A block instance as the renderer receives it.
+ *
+ * Exactly what `RenderBlocks` accepts, so an example cannot be documented in a
+ * shape the gallery could not draw. A block absent from every layout — `video`
+ * today — is therefore outside this union: it can be listed and described, but
+ * it has nowhere to be rendered from, which is the same thing the admin says
+ * about it.
+ */
+export type BlockExample = NonNullable<Page['layout']>[number];
+
+/**
  * What to say about one block, and one real instance of it.
  *
  * Source, not content. A block is designed for a purpose and that purpose is
@@ -21,32 +32,20 @@ export type LocalizedText = Record<SupportedLocale, string>;
  * The example is the same object the block's story renders, imported by both,
  * so the gallery cannot drift from what Chromatic has been reviewing.
  */
-export type BlockGalleryDoc<TExample = unknown> = {
+export type BlockGalleryDoc<TExample = BlockExample> = {
   /** One line for the gallery card. What the block is, not what it is good at */
   summary: LocalizedText;
-  /** The situation it answers, specific enough that the next line can disagree */
-  whenToUse: LocalizedText;
   /**
-   * The neighbouring block and the case that belongs to it.
+   * What the block is for and where it belongs on a page.
    *
-   * The line that makes a gallery useful rather than decorative, and the one
-   * worth the most thought. Absent only where a block has no near neighbour.
+   * One paragraph carrying purpose and placement. An earlier draft had a
+   * second field naming the neighbouring block to reach for instead — dropped
+   * as hard to write honestly twenty-one times, and thin when forced.
    */
-  insteadReachFor?: LocalizedText;
+  whenToUse: LocalizedText;
   /** A real instance, rendered through the same renderer a page uses */
   example: TExample;
 };
-
-/**
- * A block instance as the renderer receives it.
- *
- * Exactly what `RenderBlocks` accepts, so an example cannot be documented in a
- * shape the gallery could not draw. A block absent from every layout — `video`
- * today — is therefore outside this union: it can be listed and described, but
- * it has nowhere to be rendered from, which is the same thing the admin says
- * about it.
- */
-export type BlockExample = NonNullable<Page['layout']>[number];
 
 /**
  * Pick the text for the locale the site is rendering in.
