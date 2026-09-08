@@ -2,6 +2,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { TestimonialBlock } from './TestimonialBlock';
+import { testimonialGallery } from './TestimonialBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/TestimonialBlock',
@@ -12,22 +13,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const args: Story['args'] = {
-  blockType: 'testimonial',
-  quote:
-    'The reporting we used to assemble by hand every quarter now generates itself, and it kept working after the person who built it moved on.',
-  author: {
-    name: 'A. Nilsson',
-    role: 'Head of Finance Systems'
-  },
-  enableLink: true,
-  link: {
-    type: 'custom',
-    label: 'Read the story',
-    url: '/work',
-    newTab: false
-  }
-};
+// The same instance the gallery renders, so the two cannot drift
+const args: Story['args'] = testimonialGallery.example;
 
 export const Default: Story = {
   args

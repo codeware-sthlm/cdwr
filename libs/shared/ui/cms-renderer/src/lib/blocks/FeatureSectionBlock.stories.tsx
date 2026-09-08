@@ -3,6 +3,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { FeatureSectionBlock } from './FeatureSectionBlock';
+import { featureSectionGallery } from './FeatureSectionBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/FeatureSectionBlock',
@@ -13,34 +14,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const args: Story['args'] = {
-  blockType: 'feature-section',
-  eyebrow: 'Per-tenant theming',
-  heading: 'Change the theme. Nothing reloads.',
-  intro:
-    'A tenant picks its palette, its colour scheme, and whether visitors may switch at all. Authored in the admin, not in a stylesheet.',
-  enableLink: true,
-  link: {
-    type: 'custom',
-    label: 'Explore theming',
-    url: '/blocks?block=hero',
-    newTab: false
-  },
-  subFeatures: [
-    {
-      title: 'Selected in settings',
-      body: 'A tenant with one theme gets no switcher. Several, and the control appears on its own.'
-    },
-    {
-      title: 'Light, dark, or fixed',
-      body: 'A site can be restricted to one scheme when the brand demands it.'
-    },
-    {
-      title: 'Resolved on the server',
-      body: 'The choice arrives with the HTML, so nothing flashes the wrong colour on first paint.'
-    }
-  ]
-};
+// The same instance the gallery renders, so the two cannot drift
+const args: Story['args'] = featureSectionGallery.example;
 
 export const Default: Story = {
   args
