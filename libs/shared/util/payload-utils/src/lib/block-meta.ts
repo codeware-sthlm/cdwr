@@ -22,7 +22,7 @@ export type BlockFieldMeta = {
  * `posts` and `tours` are absent on purpose: they gate their blocks inside a
  * Lexical editor config, which cannot be read from the block definitions.
  */
-export type BlockHost = 'pages' | 'reusable-content';
+export type BlockHost = 'pages' | 'reusable-content' | 'content';
 
 export type BlockMeta = {
   slug: BlockSlug;
@@ -160,7 +160,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   card: {
     slug: 'card',
     label: 'Card',
-    availableIn: ['pages', 'reusable-content'],
+    availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'cards',
@@ -210,7 +210,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   code: {
     slug: 'code',
     label: 'Code',
-    availableIn: ['pages', 'reusable-content'],
+    availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'language',
@@ -448,7 +448,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   form: {
     slug: 'form',
     label: 'Forms',
-    availableIn: ['pages', 'reusable-content'],
+    availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'form',
@@ -524,7 +524,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   image: {
     slug: 'image',
     label: 'Image',
-    availableIn: ['pages', 'reusable-content'],
+    availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'media',
@@ -538,7 +538,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   media: {
     slug: 'media',
     label: 'Media',
-    availableIn: ['pages', 'reusable-content'],
+    availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'media',
@@ -631,7 +631,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   'reusable-content': {
     slug: 'reusable-content',
     label: 'Reusable Content',
-    availableIn: ['pages'],
+    availableIn: ['pages', 'content'],
     fields: [
       {
         name: 'reusableContent',
@@ -757,7 +757,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   'social-media': {
     slug: 'social-media',
     label: 'Social Media',
-    availableIn: ['pages', 'reusable-content'],
+    availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'social',
@@ -812,7 +812,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   spacing: {
     slug: 'spacing',
     label: 'Empty Spacing',
-    availableIn: ['pages', 'reusable-content'],
+    availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'size',
@@ -847,7 +847,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         localized: true,
         label: 'Quote',
         description:
-          'In their words, not yours. One or two sentences carries further than a paragraph.'
+          'In their words, not yours. One or two sentences carry further than a paragraph.'
       },
       {
         name: 'author',
