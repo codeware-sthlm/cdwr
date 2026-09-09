@@ -11,6 +11,8 @@ import { fileAreaGallery } from './file-area/FileAreaBlock.gallery';
 import { formGallery } from './form/FormBlock.gallery';
 import type { AnyBlockGalleryDoc } from './gallery-doc';
 import { heroGallery } from './hero/HeroBlock.gallery';
+import { imageGallery } from './image/ImageBlock.gallery';
+import { mediaGallery } from './media/MediaBlock.gallery';
 import { pillListGallery } from './pill-list/PillListBlock.gallery';
 import { postsGallery } from './posts/PostsBlock.gallery';
 import { reusableContentGallery } from './reusable-content/ReusableContentBlock.gallery';
@@ -43,6 +45,8 @@ export const galleryDocs: Partial<Record<BlockSlug, AnyBlockGalleryDoc>> = {
   form: formGallery,
   'feature-section': featureSectionGallery,
   hero: heroGallery,
+  image: imageGallery,
+  media: mediaGallery,
   'pill-list': pillListGallery,
   posts: postsGallery,
   'reusable-content': reusableContentGallery,
