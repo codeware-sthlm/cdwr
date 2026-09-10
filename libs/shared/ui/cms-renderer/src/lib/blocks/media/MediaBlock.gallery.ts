@@ -1,7 +1,7 @@
 import type { MediaBlock as MediaBlockProps } from '@codeware/shared/util/payload-types';
 
 import type { BlockGalleryDoc } from '../gallery-doc';
-import { galleryMedia } from '../gallery-media';
+import { showcaseMedia } from '../gallery-media';
 
 export const mediaGallery: BlockGalleryDoc<MediaBlockProps> = {
   name: {
@@ -18,11 +18,11 @@ export const mediaGallery: BlockGalleryDoc<MediaBlockProps> = {
   },
   example: {
     blockType: 'media',
-    media: galleryMedia(
-      'abstract-image-2.jpg',
-      'An abstract composition in muted colour',
-      800,
-      533
+    media: showcaseMedia(
+      'media.jpg',
+      'Backlit woven steel mesh, moire rippling across the weave',
+      1264,
+      848
     )
   }
 };

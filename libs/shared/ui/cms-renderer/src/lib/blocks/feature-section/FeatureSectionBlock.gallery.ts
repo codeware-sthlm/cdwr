@@ -1,6 +1,7 @@
 import type { FeatureSectionBlock as FeatureSectionBlockProps } from '@codeware/shared/util/payload-types';
 
 import type { BlockGalleryDoc } from '../gallery-doc';
+import { showcaseMedia } from '../gallery-media';
 
 export const featureSectionGallery: BlockGalleryDoc<FeatureSectionBlockProps> =
   {
@@ -18,6 +19,12 @@ export const featureSectionGallery: BlockGalleryDoc<FeatureSectionBlockProps> =
     },
     example: {
       blockType: 'feature-section',
+      media: showcaseMedia(
+        'feature-section.jpg',
+        'A receding row of edge-lit acrylic panels',
+        1376,
+        768
+      ),
       eyebrow: 'Per-tenant theming',
       heading: 'Change the theme. Nothing reloads.',
       intro:

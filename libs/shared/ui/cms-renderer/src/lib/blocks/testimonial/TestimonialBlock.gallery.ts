@@ -1,6 +1,7 @@
 import type { TestimonialBlock as TestimonialBlockProps } from '@codeware/shared/util/payload-types';
 
 import type { BlockGalleryDoc } from '../gallery-doc';
+import { showcaseMedia } from '../gallery-media';
 
 export const testimonialGallery: BlockGalleryDoc<TestimonialBlockProps> = {
   name: {
@@ -21,7 +22,13 @@ export const testimonialGallery: BlockGalleryDoc<TestimonialBlockProps> = {
       'The reporting we used to assemble by hand every quarter now generates itself, and it kept working after the person who built it moved on.',
     author: {
       name: 'A. Nilsson',
-      role: 'Head of Finance Systems'
+      role: 'Head of Finance Systems',
+      avatar: showcaseMedia(
+        'testimonial-portrait.jpg',
+        'A fresnel lens seen face-on',
+        1024,
+        1024
+      )
     },
     enableLink: true,
     link: {
