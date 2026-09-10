@@ -1,6 +1,7 @@
 import type { HeroBlock as HeroBlockProps } from '@codeware/shared/util/payload-types';
 
 import type { BlockGalleryDoc } from '../gallery-doc';
+import { showcaseMedia } from '../gallery-media';
 
 export const heroGallery: BlockGalleryDoc<HeroBlockProps> = {
   name: {
@@ -17,6 +18,12 @@ export const heroGallery: BlockGalleryDoc<HeroBlockProps> = {
   },
   example: {
     blockType: 'hero',
+    media: showcaseMedia(
+      'hero.jpg',
+      'A bundle of fibre-optic strands fanning out, each tip lit',
+      1376,
+      768
+    ),
     badge: 'Codeware',
     heading: 'Build with the best.',
     lede: 'We design and engineer digital products that help ambitious companies move faster and scale smarter.',

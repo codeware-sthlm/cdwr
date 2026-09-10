@@ -1,6 +1,7 @@
 import type { CalloutBlock as CalloutBlockProps } from '@codeware/shared/util/payload-types';
 
 import type { BlockGalleryDoc } from '../gallery-doc';
+import { showcaseMedia } from '../gallery-media';
 
 export const calloutGallery: BlockGalleryDoc<CalloutBlockProps> = {
   name: {
@@ -17,6 +18,12 @@ export const calloutGallery: BlockGalleryDoc<CalloutBlockProps> = {
   },
   example: {
     blockType: 'callout',
+    image: showcaseMedia(
+      'callout.jpg',
+      'A cluster of acrylic rods, each glowing at its cut top',
+      1264,
+      848
+    ),
     showMark: true,
     heading: 'Ready to build something great?',
     body: 'Let us know what you are working on and we will figure out how to help.',
