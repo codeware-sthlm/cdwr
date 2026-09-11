@@ -264,9 +264,16 @@ export function BlockGalleryEntry({
             // Three states, not two: an example, a stated reason there can be
             // none, and nobody having written one yet
             <p className="text-muted-foreground text-sm italic">
+              {/* A block no host offers has no example for the same reason
+                  the index gives, not for want of someone writing one */}
               {doc && !hasExample(doc)
                 ? localized(doc.exampleUnavailable, locale)
-                : t(locale, 'gallery.noExample')}
+                : t(
+                    locale,
+                    meta.availableIn.length === 0
+                      ? 'gallery.notOffered'
+                      : 'gallery.noExample'
+                  )}
             </p>
           )}
         </div>
