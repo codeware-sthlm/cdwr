@@ -9,6 +9,7 @@ export type TranslationKey =
   | 'colorScheme.currentClickFor'
   | 'colorScheme.dark'
   | 'colorScheme.light'
+  | 'colorScheme.select'
   | 'colorScheme.switchTo'
   | 'colorScheme.system'
   | 'error.contactAdmin'
@@ -168,6 +169,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'colorScheme.currentClickFor': 'Current: {{current}}, click for {{next}}',
     'colorScheme.dark': 'dark',
     'colorScheme.light': 'light',
+    'colorScheme.select': 'Select appearance',
     'colorScheme.switchTo': 'Switch to {{colorScheme}} appearance',
     'colorScheme.system': 'system preference',
     'error.contactAdmin':
@@ -350,6 +352,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
       'Nuvarande: {{current}}, klicka för {{next}}',
     'colorScheme.dark': 'mörkt',
     'colorScheme.light': 'ljust',
+    'colorScheme.select': 'Välj utseende',
     'colorScheme.switchTo': 'Byt till {{colorScheme}} utseende',
     'colorScheme.system': 'systeminställning',
     'error.contactAdmin': 'Kontakta administratören om problemet kvarstår.',

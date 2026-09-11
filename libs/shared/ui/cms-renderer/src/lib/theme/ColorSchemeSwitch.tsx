@@ -70,9 +70,9 @@ export function ColorSchemeSwitch() {
         onValueChange={(next) => next && setColorScheme(next as ColorScheme)}
         spacing={0}
         size="sm"
-        aria-label={t(locale, 'colorScheme.switchTo', {
-          colorScheme: getColorSchemeLabel(currentColorScheme)
-        })}
+        // Names the choice, not an action: every scheme is in the group and
+        // the selected one is announced by its own segment
+        aria-label={t(locale, 'colorScheme.select')}
         className={segmentTrack()}
       >
         {colorSchemes.map((value) => {
