@@ -22,6 +22,10 @@ export const TestimonialBlock: React.FC<TestimonialBlockProps> = ({
   const { navigate } = usePayload();
 
   const resolvedLink = enableLink && link ? resolveLinkGroup(link) : null;
+  // An id alone is an unpopulated relation, which ImageBlock renders as nothing
+  const avatar =
+    author?.avatar && typeof author.avatar === 'object' ? author.avatar : null;
+  const shownLogo = logo && typeof logo === 'object' ? logo : null;
 
   if (!quote) return null;
 
@@ -34,9 +38,9 @@ export const TestimonialBlock: React.FC<TestimonialBlockProps> = ({
           </blockquote>
 
           <figcaption className="flex items-center gap-3">
-            {author?.avatar && (
+            {avatar && (
               <div className="size-9 shrink-0 overflow-hidden rounded-full">
-                <ImageBlock media={author.avatar} hideCaption />
+                <ImageBlock media={avatar} hideCaption />
               </div>
             )}
             <div className="flex min-w-0 flex-col">
@@ -52,11 +56,11 @@ export const TestimonialBlock: React.FC<TestimonialBlockProps> = ({
           </figcaption>
         </div>
 
-        {(logo || resolvedLink) && (
+        {(shownLogo || resolvedLink) && (
           <div className="flex shrink-0 flex-row items-center justify-between gap-4 sm:flex-col sm:items-end sm:justify-start">
-            {logo && (
+            {shownLogo && (
               <div className="max-w-28">
-                <ImageBlock media={logo} hideCaption />
+                <ImageBlock media={shownLogo} hideCaption />
               </div>
             )}
             {resolvedLink && (

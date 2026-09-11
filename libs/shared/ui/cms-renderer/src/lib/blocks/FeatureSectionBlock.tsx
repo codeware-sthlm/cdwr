@@ -57,7 +57,8 @@ export const FeatureSectionBlock: React.FC<FeatureSectionBlockProps> = ({
         )}
       </div>
 
-      {media && (
+      {/* An id alone is an unpopulated relation, which renders as nothing */}
+      {media && typeof media === 'object' && (
         <div className="mt-9">
           <ImageBlock media={media} hideCaption />
         </div>
