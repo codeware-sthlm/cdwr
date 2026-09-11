@@ -89,9 +89,13 @@ export const hasExample = (doc: AnyBlockGalleryDoc): doc is BlockGalleryDoc =>
  * locale the platform has no translations for — so it is narrowed here rather
  * than asserted at each call site, falling back the way `t()` does.
  */
-export function localized(text: LocalizedText, locale: string): string {
+export function localized(
+  text: LocalizedText | Record<string, string>,
+  locale: string
+): string {
   // Own keys only: `in` would also answer for `toString` and friends
-  return Object.hasOwn(text, locale)
-    ? text[locale as SupportedLocale]
-    : text.en;
+  const written = text as Record<string, string>;
+  return Object.hasOwn(written, locale)
+    ? written[locale]
+    : (written['en'] ?? '');
 }

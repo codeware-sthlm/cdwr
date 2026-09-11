@@ -53,7 +53,9 @@ function BlockCard({ meta, doc, onOpen }: Entry & { onOpen: () => void }) {
       >
         <code className="text-core-link font-mono text-xs">{meta.slug}</code>
         <p className="text-foreground text-base font-semibold tracking-tight">
-          {doc?.name ? localized(doc.name, locale) : meta.label}
+          {doc?.name
+            ? localized(doc.name, locale)
+            : localized(meta.label, locale)}
         </p>
         {/* Two ways to be outside the grid, and they are not the same news:
             nobody has written it up, or nothing offers it to an editor. One
@@ -133,7 +135,7 @@ export const BlockGalleryBlock: React.FC<
   // editorial name meant the cards read in one order and the stepper walked
   // them in another
   const shownAs = ({ meta, doc }: Entry) =>
-    doc?.name ? localized(doc.name, locale) : meta.label;
+    doc?.name ? localized(doc.name, locale) : localized(meta.label, locale);
 
   const entries: Array<Entry> = Object.values(BLOCK_META)
     .filter(({ slug }) => slug !== self)

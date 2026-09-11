@@ -59,17 +59,22 @@ function render({ hosts, meta }: Extracted): string {
 
 import type { BlockSlug } from '@codeware/shared/util/payload-types';
 
+/** What a definition says, per locale. \`en\` is always written. */
+export type LocalizedText = Record<string, string>;
+
 /** One field an editor fills in, as the admin presents it. */
 export type BlockFieldMeta = {
   name: string;
   type: string;
   required?: boolean;
+  /** Shown only when a sibling field says so, so \`required\` applies then */
+  conditional?: boolean;
   localized?: boolean;
-  label?: string;
-  description?: string;
+  label?: LocalizedText;
+  description?: LocalizedText;
   /** For a blocks field: the slugs it accepts */
   blocks?: Array<string>;
-  /** Nested one level, for a group or an array */
+  /** For a group or an array, the fields inside it */
   fields?: Array<BlockFieldMeta>;
 };
 
@@ -83,7 +88,7 @@ export type BlockHost = ${hosts.map((host) => `'${host}'`).join(' | ')};
 
 export type BlockMeta = {
   slug: BlockSlug;
-  label: string;
+  label: LocalizedText;
   /** Empty means registered and rendered, but not offered anywhere */
   availableIn: Array<BlockHost>;
   fields: Array<BlockFieldMeta>;
