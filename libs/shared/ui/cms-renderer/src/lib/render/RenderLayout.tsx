@@ -173,7 +173,6 @@ export function RenderLayout({
                   <DesktopNavigation
                     ref={desktopNav}
                     navigationTree={navigationTree}
-                    aria-label="Main"
                     className={cn(
                       'pointer-events-auto hidden md:block',
                       !fits && 'md:invisible md:absolute'
