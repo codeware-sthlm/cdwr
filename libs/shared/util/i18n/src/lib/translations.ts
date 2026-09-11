@@ -66,18 +66,21 @@ export type TranslationKey =
   | 'form.submitSuccess'
   | 'form.submitFailed'
   | 'form.submitFailedDescription'
+  | 'gallery.accepts'
   | 'gallery.allBlocks'
   | 'gallery.availableIn'
   | 'gallery.fieldsNote'
   | 'gallery.nameInAdmin'
   | 'gallery.live'
   | 'gallery.liveNote'
+  | 'gallery.localized'
   | 'gallery.example'
   | 'gallery.fields'
   | 'gallery.next'
   | 'gallery.noExample'
   | 'gallery.notOffered'
   | 'gallery.previous'
+  | 'gallery.required'
   | 'gallery.whenToUse'
   | 'gallery.contentBlocks'
   | 'gallery.documented'
@@ -251,6 +254,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Form submitted successfully',
     'form.submitFailed': 'Form submission failed',
     'form.submitFailedDescription': 'Please try again.',
+    'gallery.accepts': 'Accepts',
     'gallery.allBlocks': 'All blocks',
     'gallery.availableIn': 'Available in',
     'gallery.fieldsNote':
@@ -266,6 +270,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.notOffered':
       'Registered and drawn, but no page offers it to an editor.',
     'gallery.previous': 'Previous block',
+    'gallery.required': 'required',
+    'gallery.localized': 'Translated per language',
     'gallery.whenToUse': 'When to reach for it',
     'gallery.contentBlocks': 'Content blocks',
     'gallery.documented': 'Documented',
@@ -460,6 +466,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Formuläret skickades in',
     'form.submitFailed': 'Formuläret kunde inte skickas in',
     'form.submitFailedDescription': 'Försök igen.',
+    'gallery.accepts': 'Kan innehålla',
     'gallery.allBlocks': 'Alla block',
     'gallery.availableIn': 'Tillgängligt i',
     'gallery.fieldsNote':
@@ -475,6 +482,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.notOffered':
       'Registrerat och ritas upp, men ingen sida erbjuder det till en redaktör.',
     'gallery.previous': 'Föregående block',
+    'gallery.required': 'obligatoriskt',
+    'gallery.localized': 'Översätts per språk',
     'gallery.whenToUse': 'När det passar',
     'gallery.contentBlocks': 'Innehållsblock',
     'gallery.documented': 'Beskrivna',
