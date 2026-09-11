@@ -144,6 +144,12 @@ export const THEME_CONTRAST_PAIRS: Array<ContrastPair> = [
     minimum: WCAG_AA_NORMAL
   },
   {
+    foreground: '--core-nav-link',
+    background: '--core-action-btn-background',
+    usage: 'Menu button in a flat header, hovered',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
     foreground: '--sidebar-foreground',
     background: '--sidebar',
     usage: 'Sidebar text',
