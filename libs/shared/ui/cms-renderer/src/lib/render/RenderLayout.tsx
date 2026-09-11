@@ -159,7 +159,7 @@ export function RenderLayout({
                     at every other width */}
                 <div
                   className={cn(
-                    'flex flex-1 justify-end',
+                    'flex flex-1 items-center justify-end',
                     fits && 'md:justify-center'
                   )}
                 >
@@ -186,7 +186,7 @@ export function RenderLayout({
                     left that button stranded away from these icons */}
                 <div
                   className={cn(
-                    'flex items-end justify-end',
+                    'flex items-center justify-end',
                     fits && 'md:flex-1'
                   )}
                 >
