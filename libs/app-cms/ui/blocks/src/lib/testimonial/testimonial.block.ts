@@ -12,8 +12,9 @@ const isLinkEnabled: Condition<TypeWithID, TestimonialBlock> = (
  *
  * Everything around it is a claim made by the site about itself; this is the
  * one block where the claim comes from outside. That is the whole value, so
- * the quote is the only required field: an unattributed quote is worth less
- * than no quote, but a missing logo costs nothing.
+ * the quote and the name behind it are the only required fields: an
+ * unattributed quote is worth less than no quote, but a missing logo costs
+ * nothing.
  */
 export const testimonialBlock: Block = {
   slug: 'testimonial',
@@ -29,7 +30,7 @@ export const testimonialBlock: Block = {
       label: { en: 'Quote', sv: 'Citat' },
       admin: {
         description: {
-          en: 'In their words, not yours. One or two sentences carries further than a paragraph.',
+          en: 'In their words, not yours. One or two sentences carry further than a paragraph.',
           sv: 'Med deras ord, inte dina. En eller två meningar bär längre än ett stycke.'
         }
       },
