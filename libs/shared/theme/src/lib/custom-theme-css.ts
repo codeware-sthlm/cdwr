@@ -111,6 +111,18 @@ export function themeDeclarations(tokens: Record<string, unknown>): string {
 }
 
 /**
+ * Tokens introduced after authored themes were first saved.
+ *
+ * A stored theme is emitted as saved, so one authored before a token existed
+ * leaves it undefined. Each fills in only where the stored map lacks it, with
+ * the value the theme template gives new themes.
+ */
+const BACKFILL_LIGHT: Record<string, string> = {
+  // Flat chrome has no ring or shadow; without a track it has no surface
+  '--core-action-btn-track': 'var(--muted)'
+};
+
+/**
  * Serialise tenant-authored themes into a stylesheet the site layout injects.
  *
  * Token names and values come from the database, so nothing is escaped on the
@@ -129,14 +141,23 @@ export function customThemeCss(themes: Array<CustomThemeInput>): string {
   return themes
     .filter(({ slug }) => isValidThemeSlug(slug))
     .flatMap(({ slug, tokensLight, tokensDark }) => {
-      const light = themeDeclarations(tokensLight ?? {});
+      const stored = themeDeclarations(tokensLight ?? {});
       const dark = themeDeclarations(tokensDark ?? {});
 
       // A theme with no light tokens has no base to cascade from, so a dark
       // block on its own would leave the light scheme unthemed
-      if (!light) {
+      if (!stored) {
         return [];
       }
+
+      const missing = themeDeclarations(
+        Object.fromEntries(
+          Object.entries(BACKFILL_LIGHT).filter(
+            ([name]) => !(name in (tokensLight ?? {}))
+          )
+        )
+      );
+      const light = missing ? `${stored};${missing}` : stored;
 
       const blocks = [`[data-theme='${slug}']{${light}}`];
       if (dark) {
