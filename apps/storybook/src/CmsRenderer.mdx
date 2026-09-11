@@ -27,6 +27,7 @@ import { PayloadProvider } from '@codeware/shared/ui/cms-renderer';
 export default function Layout({ children }) {
   const { theme, resolvedTheme, setTheme } = useTheme(); // e.g. next-themes
   const pathname = usePathname(); // e.g. next/navigation
+  const searchParams = useSearchParams(); // e.g. next/navigation
   const router = useRouter();
 
   return (
@@ -41,6 +42,7 @@ export default function Layout({ children }) {
         },
         payloadUrl: process.env.NEXT_PUBLIC_PAYLOAD_URL,
         getCurrentPath: () => pathname,
+        getSearchParam: (name) => searchParams.get(name),
         navigate: (path, newTab) => {
           if (newTab) window.open(path, '_blank');
           else router.push(path);
@@ -76,6 +78,7 @@ export default function Layout({ children }) {
 | `appInfo`        | Yes      | Running app's build metadata (name, version, sha, env, build time)       |
 | `payloadUrl`     | Yes      | Base URL of the Payload CMS instance — used for media image src          |
 | `getCurrentPath` | Yes      | Returns the current URL path for active route detection in navigation    |
+| `getSearchParam` | Yes      | Reads one query parameter — how the block gallery opens at `?block=`     |
 | `navigate`       | Yes      | Navigates to a local path or external URL                                |
 | `setTheme`       | Yes      | Called by `ThemeSwitch` to change light/dark/system                      |
 | `theme`          | Yes      | Current theme setting (`'light'`, `'dark'`, `'system'`)                  |
