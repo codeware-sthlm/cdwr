@@ -7,6 +7,9 @@ import {
   isValidTokenValue
 } from './custom-theme-css';
 
+/** What every block ends with while its stored map predates the track. */
+const TRACK = ';--core-action-btn-track:var(--muted)';
+
 const theme = (
   overrides: Partial<Parameters<typeof customThemeCss>[0][0]>
 ) => ({
@@ -19,7 +22,7 @@ const theme = (
 describe('customThemeCss', () => {
   it('scopes light tokens to the theme attribute', () => {
     expect(customThemeCss([theme({})])).toBe(
-      "[data-theme='ocean']{--background:oklch(1 0 0)}"
+      `[data-theme='ocean']{--background:oklch(1 0 0)${TRACK}}`
     );
   });
 
@@ -29,7 +32,7 @@ describe('customThemeCss', () => {
     expect(
       customThemeCss([theme({ tokensDark: { '--background': '#000' } })])
     ).toBe(
-      "[data-theme='ocean']{--background:oklch(1 0 0)}\n" +
+      `[data-theme='ocean']{--background:oklch(1 0 0)${TRACK}}\n` +
         "[data-theme='ocean'].dark{--background:#000}"
     );
   });
@@ -40,6 +43,27 @@ describe('customThemeCss', () => {
         theme({ tokensLight: {}, tokensDark: { '--background': '#000' } })
       ])
     ).toBe('');
+  });
+
+  it('fills in a token an older theme was saved without', () => {
+    expect(customThemeCss([theme({})])).toContain(
+      '--core-action-btn-track:var(--muted)'
+    );
+  });
+
+  it('keeps a stored value over the fill-in', () => {
+    expect(
+      customThemeCss([
+        theme({
+          tokensLight: {
+            '--background': '#fff',
+            '--core-action-btn-track': '#eee'
+          }
+        })
+      ])
+    ).toBe(
+      "[data-theme='ocean']{--background:#fff;--core-action-btn-track:#eee}"
+    );
   });
 
   it('joins several themes', () => {
@@ -116,7 +140,7 @@ describe('customThemeCss', () => {
             tokensLight: { '--background': '#fff', '--x': 'red;}body{}' }
           })
         ])
-      ).toBe("[data-theme='ocean']{--background:#fff}");
+      ).toBe(`[data-theme='ocean']{--background:#fff${TRACK}}`);
     });
 
     it('drops a slug that would break out of the selector', () => {
