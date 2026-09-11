@@ -6,7 +6,12 @@ import type {
   BlockMeta
 } from '@codeware/shared/util/payload-utils';
 import { cn } from '@codeware/shared/util/ui';
-import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import {
+  ArrowLeftIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  LanguagesIcon
+} from 'lucide-react';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import {
@@ -46,7 +51,9 @@ const label =
  * rather than like a second first-level field.
  */
 function FieldRow({ field, depth }: { field: BlockFieldMeta; depth: number }) {
+  const { locale } = usePayload();
   const nested = depth > 0;
+  const translated = t(locale, 'gallery.localized');
 
   return (
     <>
@@ -74,20 +81,47 @@ function FieldRow({ field, depth }: { field: BlockFieldMeta; depth: number }) {
           )}
         >
           {field.name}
+          {/* The star is the familiar mark; the word is what a screen reader
+              gets, since the star alone is decoration */}
           {field.required && (
-            <span className="text-muted-foreground ml-0.5" aria-hidden>
-              *
+            <>
+              <span className="text-muted-foreground ml-0.5" aria-hidden>
+                *
+              </span>
+              <span className="sr-only">
+                {` ${t(locale, 'gallery.required')}`}
+              </span>
+            </>
+          )}
+          {field.localized && (
+            <span title={translated}>
+              <LanguagesIcon
+                className="text-muted-foreground ml-1 inline size-3 align-[-2px]"
+                aria-hidden
+              />
+              <span className="sr-only">{` ${translated}`}</span>
             </span>
           )}
         </code>
-        <span
+        <div
           className={cn(
             'text-muted-foreground leading-relaxed',
             nested ? 'text-xs' : 'text-[13px]'
           )}
         >
           {field.description ?? field.label ?? field.type}
-        </span>
+          {/* A blocks field is only described by what it holds */}
+          {field.blocks && field.blocks.length > 0 && (
+            <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs">
+              <span>{t(locale, 'gallery.accepts')}</span>
+              {field.blocks.map((slug) => (
+                <code key={slug} className="text-core-link font-mono">
+                  {slug}
+                </code>
+              ))}
+            </p>
+          )}
+        </div>
       </div>
       {field.fields?.map((child) => (
         <FieldRow key={child.name} field={child} depth={depth + 1} />
