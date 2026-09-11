@@ -1,3 +1,4 @@
+import type { Media } from '@codeware/shared/util/payload-types';
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -64,6 +65,22 @@ export const FourPoints: Story = {
   }
 };
 
+const media = {
+  id: 1,
+  alt: 'Placeholder image',
+  url: 'https://placehold.co/1376x768/png',
+  width: 1376,
+  height: 768,
+  sizes: {},
+  updatedAt: '2024-01-01T00:00:00.000Z',
+  createdAt: '2024-01-01T00:00:00.000Z'
+} as unknown as Media;
+
+/** The visual sits between the claim and the points that back it. */
+export const WithMedia: Story = {
+  args: { ...args, media }
+};
+
 /** The header alone still stands as a section. */
 export const HeaderOnly: Story = {
   args: { ...args, enableLink: false, subFeatures: [] }
@@ -77,3 +94,13 @@ export const SpotlightLight = a11yStory({ args }, 'spotlight', 'light');
 export const SpotlightDark = a11yStory({ args }, 'spotlight', 'dark');
 export const CodewareLight = a11yStory({ args }, 'codeware', 'light');
 export const CodewareDark = a11yStory({ args }, 'codeware', 'dark');
+export const CodewareLightWithMedia = a11yStory(
+  { args: { ...args, media } },
+  'codeware',
+  'light'
+);
+export const CodewareDarkWithMedia = a11yStory(
+  { args: { ...args, media } },
+  'codeware',
+  'dark'
+);
