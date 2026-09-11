@@ -3,6 +3,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { ImageBlock } from './ImageBlock';
+import { imageGallery } from './ImageBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/ImageBlock',
@@ -25,7 +26,7 @@ const caption = {
           {
             type: 'text',
             version: 1,
-            text: 'A placeholder image used to illustrate the block layout and caption rendering.'
+            text: 'A caption, set beneath the image from its rich-text field.'
           }
         ],
         direction: 'ltr' as const,
@@ -39,16 +40,8 @@ const caption = {
   }
 };
 
-const media = {
-  id: 1,
-  alt: 'Placeholder image',
-  url: 'https://placehold.co/1200x675/png',
-  width: 1200,
-  height: 675,
-  sizes: {},
-  updatedAt: '2024-01-01T00:00:00.000Z',
-  createdAt: '2024-01-01T00:00:00.000Z'
-} as unknown as Media;
+// The gallery's instance, so the story and the gallery cannot drift apart
+const media = imageGallery.example.media as Media;
 
 export const WithCaption: Story = {
   name: 'With caption',
