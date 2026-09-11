@@ -73,13 +73,17 @@ export const navChrome = cva(
 
 /** The mobile navigation trigger, which follows the toggles. */
 export const mobileNavChrome = cva(
-  'group text-core-nav-link flex h-full items-center object-contain px-4 py-2 text-sm font-medium backdrop-blur transition',
+  'group text-core-nav-link flex items-center text-sm font-medium backdrop-blur transition',
   {
     variants: {
       chrome: {
-        flat: 'bg-core-action-btn-track hover:bg-core-action-btn-background rounded-md',
+        // Heights stated rather than left to the padding: this carries a text
+        // label where its neighbours carry icons, so `py-2` alone put it 4px
+        // taller than the segments in flat and 4px shorter than the pills in
+        // outlined. Both match their own siblings now
+        flat: 'bg-core-action-btn-track hover:bg-core-action-btn-background h-8 rounded-md px-3',
         outlined:
-          'bg-core-navbar shadow-core-action-btn-shadow ring-core-action-btn-border hover:ring-core-action-btn-border-hover rounded-full shadow-lg ring-1'
+          'bg-core-navbar shadow-core-action-btn-shadow ring-core-action-btn-border hover:ring-core-action-btn-border-hover h-10 rounded-full px-4 shadow-lg ring-1'
       }
     },
     defaultVariants: { chrome: 'outlined' }
