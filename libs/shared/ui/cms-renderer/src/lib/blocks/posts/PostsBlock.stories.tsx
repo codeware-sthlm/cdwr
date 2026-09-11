@@ -3,6 +3,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { PostsBlock } from './PostsBlock';
+import { postsGallery } from './PostsBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/PostsBlock',
@@ -12,6 +13,16 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+// The instance the gallery draws, so what a visitor sees there is covered here
+const galleryPosts = Object.values(
+  postsGallery.exampleData?.posts ?? {}
+).flat();
+
+export const GalleryExample: Story = {
+  name: 'Gallery example',
+  args: { ...postsGallery.example, posts: galleryPosts }
+};
 
 const makePost = (
   id: number,

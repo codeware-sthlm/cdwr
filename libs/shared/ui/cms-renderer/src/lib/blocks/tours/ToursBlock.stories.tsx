@@ -3,6 +3,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { ToursBlock } from './ToursBlock';
+import { toursGallery } from './ToursBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/ToursBlock',
@@ -12,6 +13,16 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+// The instance the gallery draws, so what a visitor sees there is covered here
+const galleryTours = Object.values(
+  toursGallery.exampleData?.tours ?? {}
+).flat();
+
+export const GalleryExample: Story = {
+  name: 'Gallery example',
+  args: { ...toursGallery.example, tours: galleryTours }
+};
 
 /** Shared library image, as `heroImage` resolves it at depth 2 */
 const hero = (alt: string): Tour['heroImage'] => ({

@@ -43,12 +43,21 @@ type Props = FormBlockProps & {
    * Lets a host close the surface the form sits in (a sheet, a dialog).
    */
   onSuccess?: () => void;
+  /**
+   * Draw the form with its submit button held shut.
+   *
+   * The gallery shows a real form document that belongs to no tenant, so a
+   * submission would post to a form that does not exist. A disabled button
+   * says that before the click rather than after it.
+   */
+  disabled?: boolean;
 };
 
 /**
  * Render Payload form block data, with the configured form fields.
  */
 export const FormBlock: React.FC<Props> = ({
+  disabled,
   enableIntro,
   form: formFromProps,
   introContent,
@@ -92,6 +101,12 @@ export const FormBlock: React.FC<Props> = ({
   // Submit handler
   const onSubmit = useCallback(
     (formValue: FieldValues) => {
+      // Disabling the button leaves Enter in a text field, which would post a
+      // gallery example to a form that belongs to nobody
+      if (disabled) {
+        return;
+      }
+
       const invokeSubmit = async () => {
         setIsLoading(true);
         try {
@@ -176,7 +191,16 @@ export const FormBlock: React.FC<Props> = ({
 
       invokeSubmit();
     },
-    [confirmationType, form, formId, navigate, onSuccess, redirect, submitForm]
+    [
+      confirmationType,
+      disabled,
+      form,
+      formId,
+      navigate,
+      onSuccess,
+      redirect,
+      submitForm
+    ]
   );
 
   const onError = (errors: FieldErrors) => {
@@ -322,7 +346,12 @@ export const FormBlock: React.FC<Props> = ({
             })}
           </Grid>
 
-          <Button type="submit" isLoading={isLoading} className="mt-4">
+          <Button
+            type="submit"
+            isLoading={isLoading}
+            disabled={disabled}
+            className="mt-4"
+          >
             {submitButtonLabel}
           </Button>
         </form>
