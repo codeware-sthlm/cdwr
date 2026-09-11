@@ -1,5 +1,6 @@
 import type { SupportedLocale } from '@codeware/shared/util/i18n';
 import type { Page } from '@codeware/shared/util/payload-types';
+import type { BlocksData } from '@codeware/shared/util/payload-utils';
 
 /**
  * A string the gallery shows a visitor, in every locale the platform serves.
@@ -59,28 +60,16 @@ type BlockGalleryProse = {
 export type BlockGalleryDoc<TExample = BlockExample> = BlockGalleryProse & {
   /** Rendered through the same renderer a page uses */
   example: TExample;
+  /**
+   * What the page would have handed a listing block.
+   *
+   * `posts` and `tours` carry a heading and a count; the documents behind them
+   * are fetched for the page as it is served. The gallery has no such page, so
+   * it brings its own — otherwise the block draws nothing and the entry has to
+   * describe itself instead of showing itself.
+   */
+  exampleData?: BlocksData;
 };
-
-/**
- * A documented block that cannot have an example, and says why.
- *
- * A listing block draws its documents from the page it sits on and renders
- * nothing at all without them; a form points at a document that has to exist
- * first. An empty frame reads as a bug, so these state the reason in their own
- * words rather than falling back to "not written yet", which would be untrue.
- */
-export type BlockGalleryDocWithoutExample = BlockGalleryProse & {
-  exampleUnavailable: LocalizedText;
-};
-
-/** Either shape, as the gallery receives it. */
-export type AnyBlockGalleryDoc =
-  | BlockGalleryDoc
-  | BlockGalleryDocWithoutExample;
-
-/** Whether this entry has something to draw. */
-export const hasExample = (doc: AnyBlockGalleryDoc): doc is BlockGalleryDoc =>
-  'example' in doc;
 
 /**
  * Pick the text for the locale the site is rendering in.

@@ -3,7 +3,8 @@
 import { t } from '@codeware/shared/util/i18n';
 import type {
   BlockFieldMeta,
-  BlockMeta
+  BlockMeta,
+  BlocksData
 } from '@codeware/shared/util/payload-utils';
 import { cn } from '@codeware/shared/util/ui';
 import {
@@ -15,9 +16,8 @@ import {
 
 import { usePayload } from '../../providers/PayloadProvider';
 import {
-  type AnyBlockGalleryDoc,
   type BlockExample,
-  hasExample,
+  type BlockGalleryDoc,
   localized
 } from '../gallery-doc';
 
@@ -27,7 +27,11 @@ import {
  * Supplied by `RenderBlocks` through `resolveBlockProps`, never imported —
  * that module imports this one, and reaching back would close the cycle.
  */
-export type RenderExample = React.FC<{ blocks: Array<BlockExample> }>;
+export type RenderExample = React.FC<{
+  blocks: Array<BlockExample>;
+  blocksData?: BlocksData;
+  preview?: boolean;
+}>;
 
 /**
  * The small uppercase labels above each region.
@@ -155,7 +159,7 @@ export function BlockGalleryEntry({
   position
 }: {
   meta: BlockMeta;
-  doc?: AnyBlockGalleryDoc;
+  doc?: BlockGalleryDoc;
   render?: RenderExample;
   onBack: () => void;
   onStep: (delta: number) => void;
@@ -258,22 +262,22 @@ export function BlockGalleryEntry({
           </span>
         </div>
         <div className="border-border bg-core-background-content rounded-b-xl border border-t-0 px-6 py-10 sm:px-10 sm:py-12">
-          {doc && hasExample(doc) && RenderExample ? (
-            <RenderExample blocks={[doc.example]} />
+          {doc && RenderExample ? (
+            <RenderExample
+              blocks={[doc.example]}
+              blocksData={doc.exampleData}
+              preview
+            />
           ) : (
-            // Three states, not two: an example, a stated reason there can be
-            // none, and nobody having written one yet
+            // Only two states left: a block draws, or nobody has written it up
+            // — and one that no page offers says that instead
             <p className="text-muted-foreground text-sm italic">
-              {/* A block no host offers has no example for the same reason
-                  the index gives, not for want of someone writing one */}
-              {doc && !hasExample(doc)
-                ? localized(doc.exampleUnavailable, locale)
-                : t(
-                    locale,
-                    meta.availableIn.length === 0
-                      ? 'gallery.notOffered'
-                      : 'gallery.noExample'
-                  )}
+              {t(
+                locale,
+                meta.availableIn.length === 0
+                  ? 'gallery.notOffered'
+                  : 'gallery.undocumented'
+              )}
             </p>
           )}
         </div>

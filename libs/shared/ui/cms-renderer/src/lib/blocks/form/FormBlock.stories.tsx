@@ -3,6 +3,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { FormBlock } from './FormBlock';
+import { formGallery } from './FormBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/FormBlock',
@@ -12,6 +13,13 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+// The instance the gallery draws: a real form with its submit button held
+// shut, since nothing stands behind it to receive a submission
+export const GalleryExample: Story = {
+  name: 'Gallery example',
+  args: { ...formGallery.example, disabled: true }
+};
 
 const timestamps = {
   updatedAt: '2024-01-01T00:00:00.000Z',

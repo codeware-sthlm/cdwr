@@ -9,7 +9,7 @@ import { featureCardsGallery } from './feature-cards/FeatureCardsBlock.gallery';
 import { featureSectionGallery } from './feature-section/FeatureSectionBlock.gallery';
 import { fileAreaGallery } from './file-area/FileAreaBlock.gallery';
 import { formGallery } from './form/FormBlock.gallery';
-import type { AnyBlockGalleryDoc } from './gallery-doc';
+import type { BlockGalleryDoc } from './gallery-doc';
 import { heroGallery } from './hero/HeroBlock.gallery';
 import { imageGallery } from './image/ImageBlock.gallery';
 import { mediaGallery } from './media/MediaBlock.gallery';
@@ -34,7 +34,7 @@ import { toursGallery } from './tours/ToursBlock.gallery';
  * The keys are still checked, so a typo cannot invent a block. What exists
  * comes from `BLOCK_META`, which is generated from the Payload registry.
  */
-export const galleryDocs: Partial<Record<BlockSlug, AnyBlockGalleryDoc>> = {
+export const galleryDocs: Partial<Record<BlockSlug, BlockGalleryDoc>> = {
   about: aboutGallery,
   callout: calloutGallery,
   card: cardGallery,

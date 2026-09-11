@@ -32,9 +32,13 @@ import { ToursBlock } from './blocks/tours/ToursBlock';
 import { VideoBlock } from './blocks/video/VideoBlock';
 import { ColumnSizeProvider } from './providers/ColumnSizeProvider';
 
-type ContentBlockWithData = ContentBlockProps & { blocksData?: BlocksData };
+type ContentBlockWithData = ContentBlockProps & {
+  blocksData?: BlocksData;
+  preview?: boolean;
+};
 type ReusableContentBlockWithData = ReusableContentBlockProps & {
   blocksData?: BlocksData;
+  preview?: boolean;
 };
 
 /**
@@ -48,7 +52,8 @@ type ReusableContentBlockWithData = ReusableContentBlockProps & {
  */
 export const ContentBlock: React.FC<ContentBlockWithData> = ({
   columns,
-  blocksData
+  blocksData,
+  preview
 }) => {
   return (
     <div className="grid w-full grid-cols-12 gap-x-4 gap-y-8 overflow-hidden md:gap-x-8 lg:gap-x-16">
@@ -71,6 +76,7 @@ export const ContentBlock: React.FC<ContentBlockWithData> = ({
                   className={cn({ 'mt-8': !!richText })}
                   blocks={blocks}
                   blocksData={blocksData}
+                  preview={preview}
                 />
               )}
             </div>
@@ -87,7 +93,8 @@ export const ContentBlock: React.FC<ContentBlockWithData> = ({
 export const ReusableContentBlock: React.FC<ReusableContentBlockWithData> = ({
   reusableContent,
   refId,
-  blocksData
+  blocksData,
+  preview
 }) => {
   if (reusableContent && typeof reusableContent === 'object') {
     return (
@@ -95,6 +102,7 @@ export const ReusableContentBlock: React.FC<ReusableContentBlockWithData> = ({
         blocks={reusableContent.layout}
         refId={refId}
         blocksData={blocksData}
+        preview={preview}
       />
     );
   }
@@ -121,13 +129,20 @@ export const ReusableContentBlock: React.FC<ReusableContentBlockWithData> = ({
  */
 function resolveBlockProps(
   block: NonNullable<Page['layout']>[number],
-  blocksData: BlocksData | undefined
+  blocksData: BlocksData | undefined,
+  preview: boolean | undefined
 ): Record<string, unknown> {
   switch (block.blockType) {
     // Container blocks: thread blocksData through so nested listing blocks receive their data
     case 'content':
     case 'reusable-content':
-      return { blocksData };
+      return { blocksData, preview };
+
+    // Drawn as an example, where the form document belongs to nobody: the
+    // fields are real, and submitting would post to a form that does not
+    // exist, so the button says so by being disabled rather than by failing
+    case 'form':
+      return preview ? { disabled: true } : {};
 
     // The gallery draws its examples with the renderer rather than reaching
     // into `blocksMap`, which would import this module and close a cycle
@@ -180,6 +195,13 @@ type Props = {
   blocksData?: BlocksData;
   refId?: string | null | undefined;
   className?: string;
+  /**
+   * Drawn as an example rather than as the page itself.
+   *
+   * The block gallery renders real blocks with data nobody owns, so anything
+   * that would reach for a document that is not there is told to stand still.
+   */
+  preview?: boolean;
 };
 
 /**
@@ -191,6 +213,7 @@ export const RenderBlocks: React.FC<Props> = ({
   blocks,
   blocksData,
   className,
+  preview,
   refId
 }) => {
   const docRef = useRef<HTMLDivElement>(null);
@@ -209,7 +232,7 @@ export const RenderBlocks: React.FC<Props> = ({
             (index > 0 && blocks[index - 1].blockType === 'spacing');
 
           if (Block) {
-            const extraProps = resolveBlockProps(block, blocksData);
+            const extraProps = resolveBlockProps(block, blocksData, preview);
 
             return (
               <div
