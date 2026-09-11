@@ -1,4 +1,3 @@
-import type { Media } from '@codeware/shared/util/payload-types';
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
