@@ -227,6 +227,8 @@ export async function down({
   ALTER TABLE "payload"."_pages_v_blocks_hero" DROP CONSTRAINT "_pages_v_blocks_hero_media_id_media_id_fk";
   
   ALTER TABLE "payload"."site_settings_general_themes" ALTER COLUMN "value" SET DATA TYPE text;
+  DELETE FROM "payload"."site_settings_general_themes" AS "fork" WHERE "fork"."value" = 'spotlight-fork' AND EXISTS (SELECT 1 FROM "payload"."site_settings_general_themes" AS "kept" WHERE "kept"."parent_id" = "fork"."parent_id" AND "kept"."value" = 'spotlight');
+  UPDATE "payload"."site_settings_general_themes" SET "value" = 'spotlight' WHERE "value" = 'spotlight-fork';
   DROP TYPE "payload"."enum_site_settings_themes";
   CREATE TYPE "payload"."enum_site_settings_themes" AS ENUM('shadcn', 'spotlight', 'codeware');
   ALTER TABLE "payload"."site_settings_general_themes" ALTER COLUMN "value" SET DATA TYPE "payload"."enum_site_settings_themes" USING "value"::"payload"."enum_site_settings_themes";
