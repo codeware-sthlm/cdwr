@@ -13,6 +13,7 @@ const settings = (
 ) => ({
   appName: 'Acme',
   colorScheme: 'system' as const,
+  chrome: 'outlined' as const,
   customThemeIds: [],
   defaultTheme: 'spotlight',
   defaultLocale: 'en' as const,
