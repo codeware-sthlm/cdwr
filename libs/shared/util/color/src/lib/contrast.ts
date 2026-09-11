@@ -108,6 +108,12 @@ export const THEME_CONTRAST_PAIRS: Array<ContrastPair> = [
     minimum: WCAG_AA_NORMAL
   },
   {
+    foreground: '--core-nav-link',
+    background: '--core-background-content',
+    usage: 'Navigation links in a flat header, which has no bar',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
     foreground: '--core-action-btn-foreground',
     background: '--core-action-btn-background',
     usage: 'Header control labels and icons',
@@ -123,6 +129,18 @@ export const THEME_CONTRAST_PAIRS: Array<ContrastPair> = [
     foreground: '--core-action-btn-foreground',
     background: '--core-action-btn-track',
     usage: 'Unselected segment in a flat header control',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
+    foreground: '--core-action-btn-foreground-hover',
+    background: '--core-action-btn-track',
+    usage: 'Hovered segment in a flat header control',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
+    foreground: '--core-nav-link',
+    background: '--core-action-btn-track',
+    usage: 'Menu button in a flat header',
     minimum: WCAG_AA_NORMAL
   },
   {
