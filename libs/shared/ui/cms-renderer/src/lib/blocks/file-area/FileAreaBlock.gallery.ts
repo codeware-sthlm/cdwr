@@ -4,6 +4,7 @@ import type {
 } from '@codeware/shared/util/payload-types';
 
 import type { BlockGalleryDoc } from '../gallery-doc';
+import { showcaseFile } from '../gallery-media';
 
 const makeMedia = (
   id: number,
@@ -24,6 +25,9 @@ const makeMedia = (
     createdAt: '2024-06-01T00:00:00.000Z'
   }) as unknown as Media;
 
+// Real files in the showcase bucket: the rows offer a preview and a download,
+// and a relative `/uploads/…` url resolved against a site that has no such
+// upload, so every one of them answered with a 404
 const files: NonNullable<FileAreaBlockProps['files']> = [
   {
     id: '1',
@@ -31,8 +35,8 @@ const files: NonNullable<FileAreaBlockProps['files']> = [
       1,
       'project-brief.pdf',
       'application/pdf',
-      204800,
-      '/uploads/project-brief.pdf'
+      16872,
+      showcaseFile('project-brief.pdf')
     )
   },
   {
@@ -41,28 +45,18 @@ const files: NonNullable<FileAreaBlockProps['files']> = [
       2,
       'design-tokens.csv',
       'text/csv',
-      8192,
-      '/uploads/design-tokens.csv'
+      471,
+      showcaseFile('design-tokens.csv')
     )
   },
   {
     id: '3',
     media: makeMedia(
       3,
-      'demo-recording.mp4',
-      'video/mp4',
-      10485760,
-      '/uploads/demo-recording.mp4'
-    )
-  },
-  {
-    id: '4',
-    media: makeMedia(
-      4,
       'architecture.md',
       'text/markdown',
-      4096,
-      '/uploads/architecture.md'
+      594,
+      showcaseFile('architecture.md')
     )
   }
 ];
