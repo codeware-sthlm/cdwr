@@ -54,6 +54,8 @@ function FieldRow({ field, depth }: { field: BlockFieldMeta; depth: number }) {
   const { locale } = usePayload();
   const nested = depth > 0;
   const translated = t(locale, 'gallery.localized');
+  const inLocale = (text?: Record<string, string>) =>
+    text && localized(text, locale);
 
   return (
     <>
@@ -109,7 +111,14 @@ function FieldRow({ field, depth }: { field: BlockFieldMeta; depth: number }) {
             nested ? 'text-xs' : 'text-[13px]'
           )}
         >
-          {field.description ?? field.label ?? field.type}
+          {inLocale(field.description) ?? inLocale(field.label) ?? field.type}
+          {/* Payload shows it only when a sibling says so, which is what makes
+              its required star conditional rather than a promise */}
+          {field.conditional && (
+            <p className="mt-1 text-xs italic">
+              {t(locale, 'gallery.conditional')}
+            </p>
+          )}
           {/* A blocks field is only described by what it holds */}
           {field.blocks && field.blocks.length > 0 && (
             <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs">
@@ -195,7 +204,7 @@ export function BlockGalleryEntry({
         <div className="max-w-2xl">
           <code className="text-core-link font-mono text-xs">{meta.slug}</code>
           <h3 className="text-core-headline mt-2.5 text-3xl font-semibold tracking-tight">
-            {name ?? meta.label}
+            {name ?? localized(meta.label, locale)}
           </h3>
           {doc && (
             <p className="text-muted-foreground mt-3 text-base leading-relaxed">
@@ -215,7 +224,7 @@ export function BlockGalleryEntry({
             <div className="flex flex-col gap-1.5">
               <dt className={label}>{t(locale, 'gallery.nameInAdmin')}</dt>
               <dd className="text-muted-foreground text-[13px]">
-                {meta.label}
+                {localized(meta.label, locale)}
               </dd>
             </div>
           )}

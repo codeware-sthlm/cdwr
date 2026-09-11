@@ -46,7 +46,7 @@ type AnyField = {
   required?: boolean;
   localized?: boolean;
   label?: PayloadLabel;
-  admin?: { description?: PayloadLabel };
+  admin?: { description?: PayloadLabel; condition?: unknown };
   fields?: Array<AnyField>;
   tabs?: Array<{ fields: Array<AnyField> }>;
   blockReferences?: Array<string>;
@@ -67,28 +67,38 @@ type PayloadBlock = {
  */
 const presentational = new Set(['row', 'collapsible', 'tabs', 'ui']);
 
-function label(value: PayloadLabel): string | null {
+/**
+ * A label as the gallery needs it: what the definition says, per locale.
+ *
+ * Reducing it to English here is what left a Swedish site reading its own
+ * field table in English. A definition that gives one string for every locale
+ * becomes `{ en }`, so the renderer has a single shape to select from.
+ */
+function label(value: PayloadLabel): Record<string, string> | null {
   if (!value) return null;
-  if (typeof value === 'string') return value;
-  return value['en'] ?? Object.values(value)[0] ?? null;
+  if (typeof value === 'string') return { en: value };
+
+  const written = Object.entries(value).filter(([, text]) => text);
+  return written.length ? Object.fromEntries(written) : null;
 }
 
 /**
- * Describe the fields of one block, one level of nesting deep.
+ * Describe the fields of one block, all the way down.
  *
- * Deeper than that and the table stops being readable; the gallery is a
- * signpost, not a schema dump.
+ * It stopped one level deep to keep the table short, which left a group inside
+ * an array — `hero.actions.link`, `card.cards.brand` — stated by name with
+ * nothing under it. A named container an editor cannot see into says less than
+ * the fields it holds.
  */
 function describeFields(
-  fields: Array<AnyField>,
-  depth = 0
+  fields: Array<AnyField>
 ): Array<Record<string, unknown>> {
   return fields.flatMap((field) => {
     if (presentational.has(field.type) || !field.name) {
       const children = field.tabs
         ? field.tabs.flatMap((tab) => tab.fields)
         : (field.fields ?? []);
-      return describeFields(children, depth);
+      return describeFields(children);
     }
 
     const described: Record<string, unknown> = {
@@ -97,6 +107,9 @@ function describeFields(
     };
 
     if (field.required) described['required'] = true;
+    // Payload shows it only when a sibling says so, so `required` alone would
+    // star both halves of a link group where an editor fills in one
+    if (field.admin?.condition) described['conditional'] = true;
     if (field.localized) described['localized'] = true;
 
     const fieldLabel = label(field.label);
@@ -109,8 +122,8 @@ function describeFields(
       described['blocks'] = [...field.blockReferences].sort();
     }
 
-    if (depth === 0 && field.fields?.length) {
-      const children = describeFields(field.fields, depth + 1);
+    if (field.fields?.length) {
+      const children = describeFields(field.fields);
       if (children.length) described['fields'] = children;
     }
 
@@ -163,7 +176,7 @@ const meta = Object.fromEntries(
       block.slug,
       {
         slug: block.slug,
-        label: label(block.labels?.singular) ?? block.slug,
+        label: label(block.labels?.singular) ?? { en: block.slug },
         availableIn: availability
           .filter(([, slugs]) => slugs.includes(block.slug))
           .map(([host]) => host),

@@ -2,17 +2,22 @@
 
 import type { BlockSlug } from '@codeware/shared/util/payload-types';
 
+/** What a definition says, per locale. `en` is always written. */
+export type LocalizedText = Record<string, string>;
+
 /** One field an editor fills in, as the admin presents it. */
 export type BlockFieldMeta = {
   name: string;
   type: string;
   required?: boolean;
+  /** Shown only when a sibling field says so, so `required` applies then */
+  conditional?: boolean;
   localized?: boolean;
-  label?: string;
-  description?: string;
+  label?: LocalizedText;
+  description?: LocalizedText;
   /** For a blocks field: the slugs it accepts */
   blocks?: Array<string>;
-  /** Nested one level, for a group or an array */
+  /** For a group or an array, the fields inside it */
   fields?: Array<BlockFieldMeta>;
 };
 
@@ -26,7 +31,7 @@ export type BlockHost = 'pages' | 'reusable-content' | 'content';
 
 export type BlockMeta = {
   slug: BlockSlug;
-  label: string;
+  label: LocalizedText;
   /** Empty means registered and rendered, but not offered anywhere */
   availableIn: Array<BlockHost>;
   fields: Array<BlockFieldMeta>;
@@ -42,82 +47,131 @@ export type BlockMeta = {
 export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   about: {
     slug: 'about',
-    label: 'About',
+    label: {
+      en: 'About',
+      sv: 'Om'
+    },
     availableIn: ['pages'],
     fields: [
       {
         name: 'heading',
         type: 'text',
-        label: 'Heading',
-        description: 'Optional heading shown above the deployment details.'
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        },
+        description: {
+          en: 'Optional heading shown above the deployment details.',
+          sv: 'Valfri rubrik som visas ovanför distributionsdetaljerna.'
+        }
       }
     ]
   },
   'block-gallery': {
     slug: 'block-gallery',
-    label: 'Block gallery',
+    label: {
+      en: 'Block gallery',
+      sv: 'Blockgalleri'
+    },
     availableIn: ['pages'],
     fields: [
       {
         name: 'eyebrow',
         type: 'text',
         localized: true,
-        label: 'Eyebrow',
-        description: 'Small uppercase label shown above the heading'
+        label: {
+          en: 'Eyebrow',
+          sv: 'Överrubrik'
+        },
+        description: {
+          en: 'Small uppercase label shown above the heading',
+          sv: 'Liten versal etikett som visas ovanför rubriken'
+        }
       },
       {
         name: 'heading',
         type: 'text',
         required: true,
         localized: true,
-        label: 'Heading'
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
       },
       {
         name: 'intro',
         type: 'textarea',
         localized: true,
-        label: 'Intro',
-        description: 'Short paragraph below the heading'
+        label: {
+          en: 'Intro',
+          sv: 'Ingress'
+        },
+        description: {
+          en: 'Short paragraph below the heading',
+          sv: 'Kort stycke under rubriken'
+        }
       },
       {
         name: 'mode',
         type: 'select',
         required: true,
-        label: 'Mode',
-        description:
-          'The index lists everything registered. The browser shows one block with its fields and an example, and steps to the next.'
+        label: {
+          en: 'Mode',
+          sv: 'Läge'
+        },
+        description: {
+          en: 'The index lists everything registered. The browser shows one block with its fields and an example, and steps to the next.',
+          sv: 'Indexet listar allt som är registrerat. Bläddraren visar ett block med dess fält och ett exempel, och stegar vidare till nästa.'
+        }
       }
     ]
   },
   callout: {
     slug: 'callout',
-    label: 'Callout',
+    label: {
+      en: 'Callout',
+      sv: 'Callout'
+    },
     availableIn: ['pages'],
     fields: [
       {
         name: 'showMark',
         type: 'checkbox',
-        label: 'Show brand mark'
+        label: {
+          en: 'Show brand mark',
+          sv: 'Visa varumärke'
+        }
       },
       {
         name: 'heading',
         type: 'text',
         required: true,
         localized: true,
-        label: 'Heading'
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
       },
       {
         name: 'body',
         type: 'textarea',
         localized: true,
-        label: 'Body'
+        label: {
+          en: 'Body',
+          sv: 'Text'
+        }
       },
       {
         name: 'image',
         type: 'upload',
-        label: 'Image',
-        description:
-          'Optional. Sits beside the text and turns the band into a two-column section.'
+        label: {
+          en: 'Image',
+          sv: 'Bild'
+        },
+        description: {
+          en: 'Optional. Sits beside the text and turns the band into a two-column section.',
+          sv: 'Valfri. Placeras bredvid texten och gör bandet tvåspaltigt.'
+        }
       },
       {
         name: 'link',
@@ -130,28 +184,44 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           {
             name: 'newTab',
             type: 'checkbox',
-            label: 'Open in new tab'
+            label: {
+              en: 'Open in new tab',
+              sv: 'Öppna i ny flik'
+            }
           },
           {
             name: 'reference',
             type: 'relationship',
             required: true,
-            label: 'Document to link to'
+            conditional: true,
+            label: {
+              en: 'Document to link to',
+              sv: 'Dokument att länka till'
+            }
           },
           {
             name: 'url',
             type: 'text',
             required: true,
-            label: 'Custom URL',
-            description:
-              'Add protocol (http:// or https://) if the link is external'
+            conditional: true,
+            label: {
+              en: 'Custom URL',
+              sv: 'Anpassad URL'
+            },
+            description: {
+              en: 'Add protocol (http:// or https://) if the link is external',
+              sv: 'Lägg till protokoll (http:// eller https://) om länken är extern'
+            }
           },
           {
             name: 'label',
             type: 'text',
             required: true,
             localized: true,
-            label: 'Label'
+            label: {
+              en: 'Label',
+              sv: 'Etikett'
+            }
           }
         ]
       }
@@ -159,7 +229,10 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   card: {
     slug: 'card',
-    label: 'Card',
+    label: {
+      en: 'Card',
+      sv: 'Kort'
+    },
     availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
@@ -169,39 +242,139 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           {
             name: 'brand',
             type: 'group',
-            label: 'Branding',
-            description: 'Select an icon and color that represent the card'
+            label: {
+              en: 'Branding',
+              sv: 'Märkning'
+            },
+            description: {
+              en: 'Select an icon and color that represent the card',
+              sv: 'Välj en ikon och färg som representerar kortet'
+            },
+            fields: [
+              {
+                name: 'icon',
+                type: 'text',
+                label: {
+                  en: 'Icon',
+                  sv: 'Ikon'
+                }
+              },
+              {
+                name: 'color',
+                type: 'text',
+                label: {
+                  en: 'Color',
+                  sv: 'Färg'
+                }
+              }
+            ]
           },
           {
             name: 'title',
             type: 'text',
             required: true,
             localized: true,
-            label: 'Title'
+            label: {
+              en: 'Title',
+              sv: 'Titel'
+            }
           },
           {
             name: 'description',
             type: 'text',
             localized: true,
-            label: 'Description',
-            description: 'A text that will complement the title'
+            label: {
+              en: 'Description',
+              sv: 'Beskrivning'
+            },
+            description: {
+              en: 'A text that will complement the title',
+              sv: 'En text som ska komplettera titeln'
+            }
           },
           {
             name: 'content',
             type: 'textarea',
             required: true,
             localized: true,
-            label: 'Main content'
+            label: {
+              en: 'Main content',
+              sv: 'Huvudinnehåll'
+            }
           },
           {
             name: 'enableLink',
             type: 'checkbox',
-            label: 'Card link',
-            description: 'Let the card link to a page or external URL'
+            label: {
+              en: 'Card link',
+              sv: 'Länk på kortet'
+            },
+            description: {
+              en: 'Let the card link to a page or external URL',
+              sv: 'Låt kortet länka till en sida eller en extern URL'
+            }
           },
           {
             name: 'link',
-            type: 'group'
+            type: 'group',
+            conditional: true,
+            fields: [
+              {
+                name: 'type',
+                type: 'radio'
+              },
+              {
+                name: 'newTab',
+                type: 'checkbox',
+                label: {
+                  en: 'Open in new tab',
+                  sv: 'Öppna i ny flik'
+                }
+              },
+              {
+                name: 'reference',
+                type: 'relationship',
+                required: true,
+                conditional: true,
+                label: {
+                  en: 'Document to link to',
+                  sv: 'Dokument att länka till'
+                }
+              },
+              {
+                name: 'url',
+                type: 'text',
+                required: true,
+                conditional: true,
+                label: {
+                  en: 'Custom URL',
+                  sv: 'Anpassad URL'
+                },
+                description: {
+                  en: 'Add protocol (http:// or https://) if the link is external',
+                  sv: 'Lägg till protokoll (http:// eller https://) om länken är extern'
+                }
+              },
+              {
+                name: 'navTrigger',
+                type: 'radio',
+                label: {
+                  en: 'Navigation trigger',
+                  sv: 'Navigering aktiveras'
+                }
+              },
+              {
+                name: 'label',
+                type: 'text',
+                required: true,
+                conditional: true,
+                localized: true,
+                label: {
+                  en: 'Link label',
+                  sv: 'Länk text'
+                }
+              }
+            ]
           }
         ]
       }
@@ -209,14 +382,20 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   code: {
     slug: 'code',
-    label: 'Code',
+    label: {
+      en: 'Code',
+      sv: 'Kod'
+    },
     availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'language',
         type: 'select',
         required: true,
-        label: 'Language'
+        label: {
+          en: 'Language',
+          sv: 'Språk'
+        }
       },
       {
         name: 'code',
@@ -227,7 +406,10 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   content: {
     slug: 'content',
-    label: 'Content',
+    label: {
+      en: 'Content',
+      sv: 'Innehåll'
+    },
     availableIn: ['pages', 'reusable-content'],
     fields: [
       {
@@ -237,7 +419,10 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           {
             name: 'size',
             type: 'select',
-            label: 'Width'
+            label: {
+              en: 'Width',
+              sv: 'Bredd'
+            }
           },
           {
             name: 'richText',
@@ -264,60 +449,117 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   'feature-cards': {
     slug: 'feature-cards',
-    label: 'Feature cards',
+    label: {
+      en: 'Feature cards',
+      sv: 'Funktionskort'
+    },
     availableIn: ['pages'],
     fields: [
       {
         name: 'eyebrow',
         type: 'text',
         localized: true,
-        label: 'Eyebrow',
-        description: 'Small uppercase label shown above the heading'
+        label: {
+          en: 'Eyebrow',
+          sv: 'Överrubrik'
+        },
+        description: {
+          en: 'Small uppercase label shown above the heading',
+          sv: 'Liten versal etikett som visas ovanför rubriken'
+        }
       },
       {
         name: 'heading',
         type: 'text',
         required: true,
         localized: true,
-        label: 'Heading'
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
       },
       {
         name: 'intro',
         type: 'textarea',
         localized: true,
-        label: 'Intro',
-        description: 'Short paragraph below the heading'
+        label: {
+          en: 'Intro',
+          sv: 'Ingress'
+        },
+        description: {
+          en: 'Short paragraph below the heading',
+          sv: 'Kort stycke under rubriken'
+        }
       },
       {
         name: 'columns',
         type: 'select',
-        label: 'Columns',
-        description: 'Desktop column count. Auto fits to the number of items.'
+        label: {
+          en: 'Columns',
+          sv: 'Kolumner'
+        },
+        description: {
+          en: 'Desktop column count. Auto fits to the number of items.',
+          sv: 'Antal kolumner på desktop. Auto anpassar efter antal objekt.'
+        }
       },
       {
         name: 'items',
         type: 'array',
-        label: 'Cards',
+        label: {
+          en: 'Cards',
+          sv: 'Kort'
+        },
         fields: [
           {
             name: 'brand',
             type: 'group',
-            label: 'Branding',
-            description: 'Icon and color for this item'
+            label: {
+              en: 'Branding',
+              sv: 'Märkning'
+            },
+            description: {
+              en: 'Icon and color for this item',
+              sv: 'Ikon och färg för objektet'
+            },
+            fields: [
+              {
+                name: 'icon',
+                type: 'text',
+                label: {
+                  en: 'Icon',
+                  sv: 'Ikon'
+                }
+              },
+              {
+                name: 'color',
+                type: 'text',
+                label: {
+                  en: 'Color',
+                  sv: 'Färg'
+                }
+              }
+            ]
           },
           {
             name: 'title',
             type: 'text',
             required: true,
             localized: true,
-            label: 'Title'
+            label: {
+              en: 'Title',
+              sv: 'Titel'
+            }
           },
           {
             name: 'description',
             type: 'textarea',
             required: true,
             localized: true,
-            label: 'Description'
+            label: {
+              en: 'Description',
+              sv: 'Beskrivning'
+            }
           }
         ]
       }
@@ -325,38 +567,60 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   'feature-section': {
     slug: 'feature-section',
-    label: 'Feature section',
+    label: {
+      en: 'Feature section',
+      sv: 'Funktionssektion'
+    },
     availableIn: ['pages'],
     fields: [
       {
         name: 'eyebrow',
         type: 'text',
         localized: true,
-        label: 'Eyebrow',
-        description: 'Small uppercase label shown above the heading'
+        label: {
+          en: 'Eyebrow',
+          sv: 'Överrubrik'
+        },
+        description: {
+          en: 'Small uppercase label shown above the heading',
+          sv: 'Liten versal etikett som visas ovanför rubriken'
+        }
       },
       {
         name: 'heading',
         type: 'text',
         required: true,
         localized: true,
-        label: 'Heading'
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
       },
       {
         name: 'intro',
         type: 'textarea',
         localized: true,
-        label: 'Intro',
-        description: 'Short paragraph below the heading'
+        label: {
+          en: 'Intro',
+          sv: 'Ingress'
+        },
+        description: {
+          en: 'Short paragraph below the heading',
+          sv: 'Kort stycke under rubriken'
+        }
       },
       {
         name: 'enableLink',
         type: 'checkbox',
-        label: 'Show a link below the intro'
+        label: {
+          en: 'Show a link below the intro',
+          sv: 'Visa en länk under ingressen'
+        }
       },
       {
         name: 'link',
         type: 'group',
+        conditional: true,
         fields: [
           {
             name: 'type',
@@ -365,57 +629,90 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           {
             name: 'newTab',
             type: 'checkbox',
-            label: 'Open in new tab'
+            label: {
+              en: 'Open in new tab',
+              sv: 'Öppna i ny flik'
+            }
           },
           {
             name: 'reference',
             type: 'relationship',
             required: true,
-            label: 'Document to link to'
+            conditional: true,
+            label: {
+              en: 'Document to link to',
+              sv: 'Dokument att länka till'
+            }
           },
           {
             name: 'url',
             type: 'text',
             required: true,
-            label: 'Custom URL',
-            description:
-              'Add protocol (http:// or https://) if the link is external'
+            conditional: true,
+            label: {
+              en: 'Custom URL',
+              sv: 'Anpassad URL'
+            },
+            description: {
+              en: 'Add protocol (http:// or https://) if the link is external',
+              sv: 'Lägg till protokoll (http:// eller https://) om länken är extern'
+            }
           },
           {
             name: 'label',
             type: 'text',
             required: true,
             localized: true,
-            label: 'Label'
+            label: {
+              en: 'Label',
+              sv: 'Etikett'
+            }
           }
         ]
       },
       {
         name: 'media',
         type: 'upload',
-        label: 'Visual',
-        description: 'The image that carries the claim above it.'
+        label: {
+          en: 'Visual',
+          sv: 'Bild'
+        },
+        description: {
+          en: 'The image that carries the claim above it.',
+          sv: 'Bilden som bär påståendet ovanför.'
+        }
       },
       {
         name: 'subFeatures',
         type: 'array',
-        label: 'Supporting points',
-        description:
-          'Shown as one divided row beneath the visual. Two to four reads best.',
+        label: {
+          en: 'Supporting points',
+          sv: 'Stödpunkter'
+        },
+        description: {
+          en: 'Shown as one divided row beneath the visual. Two to four reads best.',
+          sv: 'Visas som en delad rad under bilden. Två till fyra fungerar bäst.'
+        },
         fields: [
           {
             name: 'title',
             type: 'text',
             required: true,
             localized: true,
-            label: 'Title'
+            label: {
+              en: 'Title',
+              sv: 'Titel'
+            }
           },
           {
             name: 'body',
             type: 'textarea',
             required: true,
             localized: true,
-            label: 'Body'
+            label: {
+              en: 'Body',
+              sv: 'Text'
+            }
           }
         ]
       }
@@ -423,15 +720,23 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   'file-area': {
     slug: 'file-area',
-    label: 'File Area',
+    label: {
+      en: 'File Area',
+      sv: 'Filyta'
+    },
     availableIn: ['pages', 'reusable-content'],
     fields: [
       {
         name: 'tags',
         type: 'relationship',
-        label: 'Tags',
-        description:
-          'Select tags that represent the files to show in the file area.'
+        label: {
+          en: 'Tags',
+          sv: 'Etiketter'
+        },
+        description: {
+          en: 'Select tags that represent the files to show in the file area.',
+          sv: 'Välj etiketter som representerar de filer som ska visas i filområdet.'
+        }
       },
       {
         name: 'files',
@@ -447,7 +752,10 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   form: {
     slug: 'form',
-    label: 'Forms',
+    label: {
+      en: 'Forms',
+      sv: 'Formulär'
+    },
     availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
@@ -458,64 +766,146 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       {
         name: 'enableIntro',
         type: 'checkbox',
-        label: 'Add an introduction to the form'
+        label: {
+          en: 'Add an introduction to the form',
+          sv: 'Lägg till en introduktion till formuläret'
+        }
       },
       {
         name: 'introContent',
         type: 'richText',
-        label: 'Introduction'
+        conditional: true,
+        label: {
+          en: 'Introduction',
+          sv: 'Introduktion'
+        }
       }
     ]
   },
   hero: {
     slug: 'hero',
-    label: 'Hero',
+    label: {
+      en: 'Hero',
+      sv: 'Hero'
+    },
     availableIn: ['pages'],
     fields: [
       {
         name: 'badge',
         type: 'text',
         localized: true,
-        label: 'Badge',
-        description:
-          'Optional pill above the headline. The tenant logo is shown automatically when available.'
+        label: {
+          en: 'Badge',
+          sv: 'Etikett'
+        },
+        description: {
+          en: 'Optional pill above the headline. The tenant logo is shown automatically when available.',
+          sv: 'Valfri etikett ovanför rubriken. Arbetsgruppens logotyp visas automatiskt när den är tillgänglig.'
+        }
       },
       {
         name: 'heading',
         type: 'text',
         required: true,
         localized: true,
-        label: 'Headline'
+        label: {
+          en: 'Headline',
+          sv: 'Rubrik'
+        }
       },
       {
         name: 'lede',
         type: 'textarea',
         required: true,
         localized: true,
-        label: 'Introduction',
-        description:
-          'The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why).'
+        label: {
+          en: 'Introduction',
+          sv: 'Introduktion'
+        },
+        description: {
+          en: 'The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why).',
+          sv: 'Den del som fångar läsaren och förmedlar den mest väsentliga informationen (ofta svar på vem, vad, när, var, varför).'
+        }
       },
       {
         name: 'media',
         type: 'upload',
-        label: 'Visual',
-        description:
-          'Shown below the actions. What makes the claim above checkable rather than asserted.'
+        label: {
+          en: 'Visual',
+          sv: 'Bild'
+        },
+        description: {
+          en: 'Shown below the actions. What makes the claim above checkable rather than asserted.',
+          sv: 'Visas under knapparna. Det som gör påståendet ovanför kontrollerbart i stället för påstått.'
+        }
       },
       {
         name: 'actions',
         type: 'array',
-        label: 'Actions',
+        label: {
+          en: 'Actions',
+          sv: 'Åtgärder'
+        },
         fields: [
           {
             name: 'link',
-            type: 'group'
+            type: 'group',
+            fields: [
+              {
+                name: 'type',
+                type: 'radio'
+              },
+              {
+                name: 'newTab',
+                type: 'checkbox',
+                label: {
+                  en: 'Open in new tab',
+                  sv: 'Öppna i ny flik'
+                }
+              },
+              {
+                name: 'reference',
+                type: 'relationship',
+                required: true,
+                conditional: true,
+                label: {
+                  en: 'Document to link to',
+                  sv: 'Dokument att länka till'
+                }
+              },
+              {
+                name: 'url',
+                type: 'text',
+                required: true,
+                conditional: true,
+                label: {
+                  en: 'Custom URL',
+                  sv: 'Anpassad URL'
+                },
+                description: {
+                  en: 'Add protocol (http:// or https://) if the link is external',
+                  sv: 'Lägg till protokoll (http:// eller https://) om länken är extern'
+                }
+              },
+              {
+                name: 'label',
+                type: 'text',
+                required: true,
+                localized: true,
+                label: {
+                  en: 'Label',
+                  sv: 'Etikett'
+                }
+              }
+            ]
           },
           {
             name: 'emphasis',
             type: 'select',
-            label: 'Emphasis'
+            label: {
+              en: 'Emphasis',
+              sv: 'Betoning'
+            }
           }
         ]
       }
@@ -523,21 +913,33 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   image: {
     slug: 'image',
-    label: 'Image',
+    label: {
+      en: 'Image',
+      sv: 'Bild'
+    },
     availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'media',
         type: 'upload',
         required: true,
-        label: 'Image',
-        description: 'Select an image.'
+        label: {
+          en: 'Image',
+          sv: 'Bild'
+        },
+        description: {
+          en: 'Select an image.',
+          sv: 'Välj en bild.'
+        }
       }
     ]
   },
   media: {
     slug: 'media',
-    label: 'Media',
+    label: {
+      en: 'Media',
+      sv: 'Media'
+    },
     availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
@@ -549,53 +951,92 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   'pill-list': {
     slug: 'pill-list',
-    label: 'Pill list',
+    label: {
+      en: 'Pill list',
+      sv: 'Etikettlista'
+    },
     availableIn: ['pages'],
     fields: [
       {
         name: 'eyebrow',
         type: 'text',
         localized: true,
-        label: 'Eyebrow',
-        description: 'Small uppercase label shown above the heading'
+        label: {
+          en: 'Eyebrow',
+          sv: 'Överrubrik'
+        },
+        description: {
+          en: 'Small uppercase label shown above the heading',
+          sv: 'Liten versal etikett som visas ovanför rubriken'
+        }
       },
       {
         name: 'heading',
         type: 'text',
         required: true,
         localized: true,
-        label: 'Heading'
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
       },
       {
         name: 'intro',
         type: 'textarea',
         localized: true,
-        label: 'Intro',
-        description: 'Short paragraph below the heading'
+        label: {
+          en: 'Intro',
+          sv: 'Ingress'
+        },
+        description: {
+          en: 'Short paragraph below the heading',
+          sv: 'Kort stycke under rubriken'
+        }
       },
       {
         name: 'surface',
         type: 'select',
-        label: 'Surface',
-        description: 'Background treatment'
+        label: {
+          en: 'Surface',
+          sv: 'Yta'
+        },
+        description: {
+          en: 'Background treatment',
+          sv: 'Bakgrund'
+        }
       },
       {
         name: 'items',
         type: 'array',
-        label: 'Pills',
+        label: {
+          en: 'Pills',
+          sv: 'Etiketter'
+        },
         fields: [
           {
             name: 'label',
             type: 'text',
             required: true,
-            label: 'Label',
-            description: 'e.g. "my-package"'
+            label: {
+              en: 'Label',
+              sv: 'Etikett'
+            },
+            description: {
+              en: 'e.g. "my-package"',
+              sv: 't.ex. "mitt-paket"'
+            }
           },
           {
             name: 'url',
             type: 'text',
-            label: 'URL',
-            description: 'Optional external link'
+            label: {
+              en: 'URL',
+              sv: 'URL'
+            },
+            description: {
+              en: 'Optional external link',
+              sv: 'Valfri extern länk'
+            }
           }
         ]
       }
@@ -603,7 +1044,10 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   posts: {
     slug: 'posts',
-    label: 'Posts Listing',
+    label: {
+      en: 'Posts Listing',
+      sv: 'Inlägglista'
+    },
     availableIn: ['pages'],
     fields: [
       {
@@ -611,26 +1055,41 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         type: 'text',
         required: true,
         localized: true,
-        label: 'Title'
+        label: {
+          en: 'Title',
+          sv: 'Titel'
+        }
       },
       {
         name: 'description',
         type: 'textarea',
         localized: true,
-        label: 'Description'
+        label: {
+          en: 'Description',
+          sv: 'Beskrivning'
+        }
       },
       {
         name: 'limit',
         type: 'number',
         required: true,
-        label: 'Max posts',
-        description: 'Maximum number of posts to display'
+        label: {
+          en: 'Max posts',
+          sv: 'Max inlägg'
+        },
+        description: {
+          en: 'Maximum number of posts to display',
+          sv: 'Maximalt antal inlägg att visa'
+        }
       }
     ]
   },
   'reusable-content': {
     slug: 'reusable-content',
-    label: 'Reusable Content',
+    label: {
+      en: 'Reusable Content',
+      sv: 'Delat Innehåll'
+    },
     availableIn: ['pages', 'content'],
     fields: [
       {
@@ -641,46 +1100,73 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       {
         name: 'refId',
         type: 'text',
-        label: 'Reference',
-        description:
-          'Optional reference that can be used to identify this block with CSS or JavaScript.'
+        label: {
+          en: 'Reference',
+          sv: 'Referens'
+        },
+        description: {
+          en: 'Optional reference that can be used to identify this block with CSS or JavaScript.',
+          sv: 'Valfri referens som kan användas för att identifiera blocket med CSS eller JavaScript.'
+        }
       }
     ]
   },
   showcase: {
     slug: 'showcase',
-    label: 'Showcase',
+    label: {
+      en: 'Showcase',
+      sv: 'Showcase'
+    },
     availableIn: ['pages'],
     fields: [
       {
         name: 'eyebrow',
         type: 'text',
         localized: true,
-        label: 'Eyebrow',
-        description: 'Small uppercase label shown above the heading'
+        label: {
+          en: 'Eyebrow',
+          sv: 'Överrubrik'
+        },
+        description: {
+          en: 'Small uppercase label shown above the heading',
+          sv: 'Liten versal etikett som visas ovanför rubriken'
+        }
       },
       {
         name: 'heading',
         type: 'text',
         required: true,
         localized: true,
-        label: 'Heading'
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
       },
       {
         name: 'intro',
         type: 'textarea',
         localized: true,
-        label: 'Intro',
-        description: 'Short paragraph below the heading'
+        label: {
+          en: 'Intro',
+          sv: 'Ingress'
+        },
+        description: {
+          en: 'Short paragraph below the heading',
+          sv: 'Kort stycke under rubriken'
+        }
       },
       {
         name: 'enableHeaderLink',
         type: 'checkbox',
-        label: 'Show link in the header'
+        label: {
+          en: 'Show link in the header',
+          sv: 'Visa länk i rubriken'
+        }
       },
       {
         name: 'link',
         type: 'group',
+        conditional: true,
         fields: [
           {
             name: 'type',
@@ -689,66 +1175,151 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           {
             name: 'newTab',
             type: 'checkbox',
-            label: 'Open in new tab'
+            label: {
+              en: 'Open in new tab',
+              sv: 'Öppna i ny flik'
+            }
           },
           {
             name: 'reference',
             type: 'relationship',
             required: true,
-            label: 'Document to link to'
+            conditional: true,
+            label: {
+              en: 'Document to link to',
+              sv: 'Dokument att länka till'
+            }
           },
           {
             name: 'url',
             type: 'text',
             required: true,
-            label: 'Custom URL',
-            description:
-              'Add protocol (http:// or https://) if the link is external'
+            conditional: true,
+            label: {
+              en: 'Custom URL',
+              sv: 'Anpassad URL'
+            },
+            description: {
+              en: 'Add protocol (http:// or https://) if the link is external',
+              sv: 'Lägg till protokoll (http:// eller https://) om länken är extern'
+            }
           },
           {
             name: 'label',
             type: 'text',
             required: true,
             localized: true,
-            label: 'Label'
+            label: {
+              en: 'Label',
+              sv: 'Etikett'
+            }
           }
         ]
       },
       {
         name: 'items',
         type: 'array',
-        label: 'Items',
+        label: {
+          en: 'Items',
+          sv: 'Objekt'
+        },
         fields: [
           {
             name: 'tag',
             type: 'text',
             localized: true,
-            label: 'Tag',
-            description: 'Small badge, e.g. "Platform"'
+            label: {
+              en: 'Tag',
+              sv: 'Etikett'
+            },
+            description: {
+              en: 'Small badge, e.g. "Platform"',
+              sv: 'Liten etikett, t.ex. "Plattform"'
+            }
           },
           {
             name: 'title',
             type: 'text',
             required: true,
             localized: true,
-            label: 'Title'
+            label: {
+              en: 'Title',
+              sv: 'Titel'
+            }
           },
           {
             name: 'description',
             type: 'textarea',
             required: true,
             localized: true,
-            label: 'Description'
+            label: {
+              en: 'Description',
+              sv: 'Beskrivning'
+            }
           },
           {
             name: 'meta',
             type: 'text',
-            label: 'Meta',
-            description: 'Monospace line, e.g. "Nx · Payload · Postgres"'
+            label: {
+              en: 'Meta',
+              sv: 'Meta'
+            },
+            description: {
+              en: 'Monospace line, e.g. "Nx · Payload · Postgres"',
+              sv: 'Monospace-rad, t.ex. "Nx · Payload · Postgres"'
+            }
           },
           {
             name: 'link',
-            type: 'group'
+            type: 'group',
+            fields: [
+              {
+                name: 'type',
+                type: 'radio'
+              },
+              {
+                name: 'newTab',
+                type: 'checkbox',
+                label: {
+                  en: 'Open in new tab',
+                  sv: 'Öppna i ny flik'
+                }
+              },
+              {
+                name: 'reference',
+                type: 'relationship',
+                required: true,
+                conditional: true,
+                label: {
+                  en: 'Document to link to',
+                  sv: 'Dokument att länka till'
+                }
+              },
+              {
+                name: 'url',
+                type: 'text',
+                required: true,
+                conditional: true,
+                label: {
+                  en: 'Custom URL',
+                  sv: 'Anpassad URL'
+                },
+                description: {
+                  en: 'Add protocol (http:// or https://) if the link is external',
+                  sv: 'Lägg till protokoll (http:// eller https://) om länken är extern'
+                }
+              },
+              {
+                name: 'label',
+                type: 'text',
+                required: true,
+                localized: true,
+                label: {
+                  en: 'Label',
+                  sv: 'Etikett'
+                }
+              }
+            ]
           }
         ]
       }
@@ -756,88 +1327,147 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   'social-media': {
     slug: 'social-media',
-    label: 'Social Media',
+    label: {
+      en: 'Social Media',
+      sv: 'Sociala Media'
+    },
     availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'social',
         type: 'array',
-        label: 'Social Media Links',
+        label: {
+          en: 'Social Media Links',
+          sv: 'Länkar till sociala medier'
+        },
         fields: [
           {
             name: 'platform',
             type: 'select',
             required: true,
-            label: 'Platform'
+            label: {
+              en: 'Platform',
+              sv: 'Plattform'
+            }
           },
           {
             name: 'email',
             type: 'email',
             required: true,
-            label: 'Email'
+            conditional: true,
+            label: {
+              en: 'Email',
+              sv: 'E-post'
+            }
           },
           {
             name: 'phone',
             type: 'text',
             required: true,
-            label: 'Phone'
+            conditional: true,
+            label: {
+              en: 'Phone',
+              sv: 'Telefon'
+            }
           },
           {
             name: 'url',
             type: 'text',
             required: true,
-            label: 'URL'
+            conditional: true,
+            label: {
+              en: 'URL',
+              sv: 'URL'
+            }
           },
           {
             name: 'withLabel',
             type: 'checkbox',
-            label: 'With label'
+            label: {
+              en: 'With label',
+              sv: 'Med text'
+            }
           },
           {
             name: 'label',
             type: 'text',
-            label: 'Icon label',
-            description: 'Short text to display next to the icon'
+            conditional: true,
+            label: {
+              en: 'Icon label',
+              sv: 'Ikon text'
+            },
+            description: {
+              en: 'Short text to display next to the icon',
+              sv: 'Kort text som visas bredvid ikonen'
+            }
           }
         ]
       },
       {
         name: 'direction',
         type: 'radio',
-        label: 'Direction',
-        description: 'How the social media links are displayed'
+        conditional: true,
+        label: {
+          en: 'Direction',
+          sv: 'Riktning'
+        },
+        description: {
+          en: 'How the social media links are displayed',
+          sv: 'Hur länkarna ska visas'
+        }
       }
     ]
   },
   spacing: {
     slug: 'spacing',
-    label: 'Empty Spacing',
+    label: {
+      en: 'Empty Spacing',
+      sv: 'Tomrum'
+    },
     availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
         name: 'size',
         type: 'select',
         required: true,
-        label: 'Size',
-        description:
-          'Regular spacing size matches the default spacing between blocks'
+        label: {
+          en: 'Size',
+          sv: 'Storlek'
+        },
+        description: {
+          en: 'Regular spacing size matches the default spacing between blocks',
+          sv: '"Regular" matchar det normala avståndet som finns mellan block'
+        }
       },
       {
         name: 'divider',
         type: 'checkbox',
-        label: 'Horizontal divider'
+        label: {
+          en: 'Horizontal divider',
+          sv: 'Horisontell linje'
+        }
       },
       {
         name: 'color',
         type: 'text',
-        label: 'Color',
-        description: 'Override divider theme color'
+        conditional: true,
+        label: {
+          en: 'Color',
+          sv: 'Färg'
+        },
+        description: {
+          en: 'Override divider theme color',
+          sv: 'Sätt en annan färg än temats för divider'
+        }
       }
     ]
   },
   testimonial: {
     slug: 'testimonial',
-    label: 'Testimonial',
+    label: {
+      en: 'Testimonial',
+      sv: 'Omdöme'
+    },
     availableIn: ['pages'],
     fields: [
       {
@@ -845,49 +1475,75 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         type: 'textarea',
         required: true,
         localized: true,
-        label: 'Quote',
-        description:
-          'In their words, not yours. One or two sentences carry further than a paragraph.'
+        label: {
+          en: 'Quote',
+          sv: 'Citat'
+        },
+        description: {
+          en: 'In their words, not yours. One or two sentences carry further than a paragraph.',
+          sv: 'Med deras ord, inte dina. En eller två meningar bär längre än ett stycke.'
+        }
       },
       {
         name: 'author',
         type: 'group',
-        label: 'Attribution',
+        label: {
+          en: 'Attribution',
+          sv: 'Källa'
+        },
         fields: [
           {
             name: 'name',
             type: 'text',
             required: true,
-            label: 'Name'
+            label: {
+              en: 'Name',
+              sv: 'Namn'
+            }
           },
           {
             name: 'role',
             type: 'text',
             localized: true,
-            label: 'Role and company'
+            label: {
+              en: 'Role and company',
+              sv: 'Roll och företag'
+            }
           },
           {
             name: 'avatar',
             type: 'upload',
-            label: 'Portrait'
+            label: {
+              en: 'Portrait',
+              sv: 'Porträtt'
+            }
           }
         ]
       },
       {
         name: 'logo',
         type: 'upload',
-        label: 'Company mark',
-        description:
-          'Shown beside the quote. Leave empty when the name is enough.'
+        label: {
+          en: 'Company mark',
+          sv: 'Företagsmärke'
+        },
+        description: {
+          en: 'Shown beside the quote. Leave empty when the name is enough.',
+          sv: 'Visas bredvid citatet. Lämna tomt när namnet räcker.'
+        }
       },
       {
         name: 'enableLink',
         type: 'checkbox',
-        label: 'Link to the longer story'
+        label: {
+          en: 'Link to the longer story',
+          sv: 'Länka till hela berättelsen'
+        }
       },
       {
         name: 'link',
         type: 'group',
+        conditional: true,
         fields: [
           {
             name: 'type',
@@ -896,28 +1552,44 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           {
             name: 'newTab',
             type: 'checkbox',
-            label: 'Open in new tab'
+            label: {
+              en: 'Open in new tab',
+              sv: 'Öppna i ny flik'
+            }
           },
           {
             name: 'reference',
             type: 'relationship',
             required: true,
-            label: 'Document to link to'
+            conditional: true,
+            label: {
+              en: 'Document to link to',
+              sv: 'Dokument att länka till'
+            }
           },
           {
             name: 'url',
             type: 'text',
             required: true,
-            label: 'Custom URL',
-            description:
-              'Add protocol (http:// or https://) if the link is external'
+            conditional: true,
+            label: {
+              en: 'Custom URL',
+              sv: 'Anpassad URL'
+            },
+            description: {
+              en: 'Add protocol (http:// or https://) if the link is external',
+              sv: 'Lägg till protokoll (http:// eller https://) om länken är extern'
+            }
           },
           {
             name: 'label',
             type: 'text',
             required: true,
             localized: true,
-            label: 'Label'
+            label: {
+              en: 'Label',
+              sv: 'Etikett'
+            }
           }
         ]
       }
@@ -925,7 +1597,10 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
   },
   tours: {
     slug: 'tours',
-    label: 'Tour Listing',
+    label: {
+      en: 'Tour Listing',
+      sv: 'Reslista'
+    },
     availableIn: ['pages'],
     fields: [
       {
@@ -933,33 +1608,51 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         type: 'text',
         required: true,
         localized: true,
-        label: 'Title'
+        label: {
+          en: 'Title',
+          sv: 'Titel'
+        }
       },
       {
         name: 'description',
         type: 'textarea',
         localized: true,
-        label: 'Description'
+        label: {
+          en: 'Description',
+          sv: 'Beskrivning'
+        }
       },
       {
         name: 'limit',
         type: 'number',
         required: true,
-        label: 'Max tours',
-        description: 'Maximum number of tours to display'
+        label: {
+          en: 'Max tours',
+          sv: 'Max resor'
+        },
+        description: {
+          en: 'Maximum number of tours to display',
+          sv: 'Maximalt antal resor att visa'
+        }
       }
     ]
   },
   video: {
     slug: 'video',
-    label: 'Video',
+    label: {
+      en: 'Video',
+      sv: 'Video'
+    },
     availableIn: [],
     fields: [
       {
         name: 'media',
         type: 'upload',
         required: true,
-        description: 'Select a video.'
+        description: {
+          en: 'Select a video.',
+          sv: 'Välj en video.'
+        }
       }
     ]
   }

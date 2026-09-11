@@ -68,6 +68,7 @@ export type TranslationKey =
   | 'form.submitFailedDescription'
   | 'gallery.accepts'
   | 'gallery.allBlocks'
+  | 'gallery.conditional'
   | 'gallery.availableIn'
   | 'gallery.fieldsNote'
   | 'gallery.nameInAdmin'
@@ -256,6 +257,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitFailedDescription': 'Please try again.',
     'gallery.accepts': 'Accepts',
     'gallery.allBlocks': 'All blocks',
+    'gallery.conditional': 'Shown depending on another choice',
     'gallery.availableIn': 'Available in',
     'gallery.fieldsNote':
       'Generated from the block definition, so this table cannot drift from the fields the admin actually shows.',
@@ -468,6 +470,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitFailedDescription': 'Försök igen.',
     'gallery.accepts': 'Kan innehålla',
     'gallery.allBlocks': 'Alla block',
+    'gallery.conditional': 'Visas beroende på ett annat val',
     'gallery.availableIn': 'Tillgängligt i',
     'gallery.fieldsNote':
       'Genereras från blockets definition, så tabellen kan inte glida ifrån de fält som administrationen faktiskt visar.',
