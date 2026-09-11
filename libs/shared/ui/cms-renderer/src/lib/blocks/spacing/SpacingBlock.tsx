@@ -8,7 +8,10 @@ type Props = SpacingBlockProps;
 /**
  * Render an empty space with optional divider.
  *
- * A regular spacing without a divider should match the default margin beween blocks in RenderBlocks.
+ * `RenderBlocks` leaves no margin around a spacing block, so the gap is this
+ * block's own margin on both sides. `regular` without a divider matches the
+ * gap between any two blocks (`mt-16 md:mt-24`), with `tight` at half of it
+ * and `loose` at one and a half — placing one should never shrink the gap.
  */
 export const SpacingBlock: React.FC<Props> = ({ color, divider, size }) => {
   return (
@@ -16,9 +19,9 @@ export const SpacingBlock: React.FC<Props> = ({ color, divider, size }) => {
       orientation="horizontal"
       className={cn('', {
         'bg-transparent': !divider,
-        'my-2': size === 'tight',
-        'my-4': size === 'regular', // Match mt-8
-        'my-6': size === 'loose'
+        'my-4 md:my-6': size === 'tight',
+        'my-8 md:my-12': size === 'regular',
+        'my-12 md:my-18': size === 'loose'
       })}
       style={{
         backgroundColor: divider ? tailwind.colorMaybe(color) : undefined
