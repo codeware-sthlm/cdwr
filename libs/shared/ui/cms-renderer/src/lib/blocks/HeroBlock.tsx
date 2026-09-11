@@ -52,7 +52,8 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
           })}
         </div>
       )}
-      {media && (
+      {/* An id alone is an unpopulated relation, which renders as nothing */}
+      {media && typeof media === 'object' && (
         <div className="mt-12">
           <ImageBlock media={media} hideCaption />
         </div>

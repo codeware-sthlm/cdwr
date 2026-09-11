@@ -21,6 +21,8 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
 }) => {
   const { navigate, iconConfig } = usePayload();
   const resolved = resolveLinkGroup(link);
+  // An id alone is an unpopulated relation, which ImageBlock renders as nothing
+  const shownImage = image && typeof image === 'object' ? image : null;
 
   return (
     <section
@@ -28,7 +30,7 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
         'flex',
         // An image turns the band from a centred call into a two-column one,
         // so the text stops competing with it for the middle
-        image
+        shownImage
           ? 'flex-col items-start gap-9 text-left sm:flex-row sm:items-center sm:gap-12'
           : 'flex-col items-center text-center'
       )}
@@ -36,7 +38,7 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
       <div
         className={cn(
           'flex min-w-0 flex-col',
-          image ? 'flex-1 items-start' : 'w-full items-center'
+          shownImage ? 'flex-1 items-start' : 'w-full items-center'
         )}
       >
         {showMark && iconConfig && (
@@ -60,9 +62,9 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
           </div>
         )}
       </div>
-      {image && (
+      {shownImage && (
         <div className="w-full sm:max-w-sm">
-          <ImageBlock media={image} hideCaption />
+          <ImageBlock media={shownImage} hideCaption />
         </div>
       )}
     </section>
