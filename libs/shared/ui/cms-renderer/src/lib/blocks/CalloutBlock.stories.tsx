@@ -1,3 +1,4 @@
+import type { Media } from '@codeware/shared/util/payload-types';
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -25,9 +26,27 @@ const args: Story['args'] = {
   }
 };
 
+const image = {
+  id: 1,
+  alt: 'Placeholder image',
+  url: 'https://placehold.co/1200x800/png',
+  width: 1200,
+  height: 800,
+  sizes: {},
+  updatedAt: '2024-01-01T00:00:00.000Z',
+  createdAt: '2024-01-01T00:00:00.000Z'
+} as unknown as Media;
+
 export const Default: Story = {
   globals: { theme: 'codeware' },
   args
+};
+
+/** An image turns the centred band into two columns. */
+export const WithImage: Story = {
+  name: 'With image',
+  globals: { theme: 'codeware' },
+  args: { ...args, image }
 };
 
 // A11y matrix — explicit export const declarations are required so the
@@ -41,3 +60,13 @@ export const SpotlightLight = a11yStory({ args }, 'spotlight', 'light');
 export const SpotlightDark = a11yStory({ args }, 'spotlight', 'dark');
 export const CodewareLight = a11yStory({ args }, 'codeware', 'light');
 export const CodewareDark = a11yStory({ args }, 'codeware', 'dark');
+export const CodewareLightWithImage = a11yStory(
+  { args: { ...args, image } },
+  'codeware',
+  'light'
+);
+export const CodewareDarkWithImage = a11yStory(
+  { args: { ...args, image } },
+  'codeware',
+  'dark'
+);
