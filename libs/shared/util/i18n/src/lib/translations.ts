@@ -78,7 +78,6 @@ export type TranslationKey =
   | 'gallery.example'
   | 'gallery.fields'
   | 'gallery.next'
-  | 'gallery.noExample'
   | 'gallery.notOffered'
   | 'gallery.previous'
   | 'gallery.required'
@@ -268,23 +267,22 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.example': 'Example',
     'gallery.fields': 'What an editor fills in',
     'gallery.next': 'Next block',
-    'gallery.noExample': 'No example written yet.',
     'gallery.notOffered':
-      'Registered and drawn, but no page offers it to an editor.',
+      'Built and working, but not offered when a page is put together.',
     'gallery.previous': 'Previous block',
     'gallery.required': 'required',
     'gallery.localized': 'Translated per language',
     'gallery.whenToUse': 'When to reach for it',
     'gallery.contentBlocks': 'Content blocks',
     'gallery.documented': 'Documented',
-    'gallery.pending': 'Registered, not yet in the grid',
+    'gallery.pending': 'Not in the grid above',
     'gallery.pendingNote':
-      'A block reaches this row the day it is merged — unwritten, or with nowhere on a page to place it. That is the point of building the gallery from the registry rather than by hand: it cannot quietly fall behind the library.',
+      'A block turns up here the day it is built — either nobody has written about it yet, or nothing offers it when a page is put together. This list is read from the code itself, so the gallery cannot quietly fall behind what the platform can do.',
     'gallery.registered': 'Registered',
     'gallery.structural': 'Structural',
     'gallery.structuralNote':
       'Listed for completeness, not a design choice an editor makes.',
-    'gallery.undocumented': 'Registered, but not written up yet.',
+    'gallery.undocumented': 'Nobody has written about this one yet.',
     'navigation.footer': 'Footer',
     'navigation.menu': 'Menu',
     'navigation.primary': 'Main',
@@ -481,23 +479,22 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.example': 'Exempel',
     'gallery.fields': 'Vad en redaktör fyller i',
     'gallery.next': 'Nästa block',
-    'gallery.noExample': 'Inget exempel skrivet ännu.',
     'gallery.notOffered':
-      'Registrerat och ritas upp, men ingen sida erbjuder det till en redaktör.',
+      'Byggt och fungerar, men erbjuds inte när en sida sätts ihop.',
     'gallery.previous': 'Föregående block',
     'gallery.required': 'obligatoriskt',
     'gallery.localized': 'Översätts per språk',
     'gallery.whenToUse': 'När det passar',
     'gallery.contentBlocks': 'Innehållsblock',
     'gallery.documented': 'Beskrivna',
-    'gallery.pending': 'Registrerade, ännu inte i rutnätet',
+    'gallery.pending': 'Inte med i rutnätet ovan',
     'gallery.pendingNote':
-      'Ett block hamnar här samma dag det slås samman — obeskrivet, eller utan plats på en sida. Det är poängen med att bygga galleriet från registret i stället för för hand: det kan inte i tysthet halka efter biblioteket.',
+      'Ett block dyker upp här samma dag det byggs — antingen har ingen skrivit om det ännu, eller så erbjuds det inte när en sida sätts ihop. Listan läses från koden själv, så galleriet kan inte i tysthet halka efter vad plattformen kan.',
     'gallery.registered': 'Registrerade',
     'gallery.structural': 'Strukturella',
     'gallery.structuralNote':
       'Listade för fullständighetens skull, inte ett designval en redaktör gör.',
-    'gallery.undocumented': 'Ännu inte beskrivet.',
+    'gallery.undocumented': 'Ingen har skrivit om det här ännu.',
     'navigation.footer': 'Sidfot',
     'navigation.menu': 'Meny',
     'navigation.primary': 'Huvudmeny',
