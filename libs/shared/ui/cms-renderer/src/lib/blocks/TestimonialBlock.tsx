@@ -39,7 +39,9 @@ export const TestimonialBlock: React.FC<TestimonialBlockProps> = ({
 
           <figcaption className="flex items-center gap-3">
             {avatar && (
-              <div className="size-9 shrink-0 overflow-hidden rounded-full">
+              // Filled and cropped, so a portrait that is not square still
+              // covers the circle instead of spilling past it or leaving a gap
+              <div className="size-9 shrink-0 overflow-hidden rounded-full [&_img]:size-full [&_img]:object-cover">
                 <ImageBlock media={avatar} hideCaption />
               </div>
             )}
