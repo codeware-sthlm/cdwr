@@ -160,15 +160,27 @@ export const BlockGalleryBlock: React.FC<
   // back, since twenty-one history entries is worse than a link that points
   // at where the visitor started.
   const requested = getSearchParam('block');
-  const [selected, setSelected] = useState<BlockSlug | null>(() => {
+  const opening = (): BlockSlug | null => {
     const match = entries.find(({ meta }) => meta.slug === requested);
     if (match) return match.meta.slug;
     if (mode !== 'browser') return null;
     // The first block with something to show, not simply the first block —
     // opening on an undocumented one makes the view look broken
-    const opening = entries.find(({ doc }) => doc) ?? entries[0];
-    return opening?.meta.slug ?? null;
-  });
+    const first = entries.find(({ doc }) => doc) ?? entries[0];
+    return first?.meta.slug ?? null;
+  };
+  const [selected, setSelected] = useState(opening);
+
+  // `RenderBlocks` keys by position, so a navigation that leaves the gallery
+  // at the same index keeps this instance and its selection. Open again
+  // whenever what it was asked to open changes — a link to another `?block=`
+  // on the same page included
+  const openedFor = `${mode}:${requested ?? ''}`;
+  const [lastOpenedFor, setLastOpenedFor] = useState(openedFor);
+  if (lastOpenedFor !== openedFor) {
+    setLastOpenedFor(openedFor);
+    setSelected(opening());
+  }
 
   const current = entries.findIndex(({ meta }) => meta.slug === selected);
 
