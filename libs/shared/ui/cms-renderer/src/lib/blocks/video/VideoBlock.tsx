@@ -25,11 +25,7 @@ export const VideoBlock: React.FC<Props> = ({ media }) => {
 
   return (
     <>
-      <Video
-        alt={alt}
-        src={src}
-        onClick={() => console.log('Video clicked:', src)}
-      />
+      <Video alt={alt} src={src} />
       {caption && (
         <div className="mt-2">
           <RichText data={caption} />
