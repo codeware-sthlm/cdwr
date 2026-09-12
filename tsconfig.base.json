@@ -159,6 +159,9 @@
       "@codeware/shared/util/payload-types": [
         "./libs/shared/util/payload-types/src/index.ts"
       ],
+      "@codeware/shared/util/human-check": [
+        "./libs/shared/util/human-check/src/index.ts"
+      ],
       "@codeware/shared/util/i18n": ["./libs/shared/util/i18n/src/index.ts"],
       "@codeware/shared/util/payload-utils": [
         "./libs/shared/util/payload-utils/src/index.ts"
