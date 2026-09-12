@@ -81,6 +81,8 @@ export type TranslationKey =
   | 'gallery.notOffered'
   | 'gallery.previous'
   | 'gallery.required'
+  | 'gallery.scaleFit'
+  | 'gallery.scaleFull'
   | 'gallery.whenToUse'
   | 'gallery.contentBlocks'
   | 'gallery.documented'
@@ -271,6 +273,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
       'Built and working, but not offered when a page is put together.',
     'gallery.previous': 'Previous block',
     'gallery.required': 'required',
+    'gallery.scaleFit': 'Fit to screen',
+    'gallery.scaleFull': 'Full size',
     'gallery.localized': 'Translated per language',
     'gallery.whenToUse': 'When to reach for it',
     'gallery.contentBlocks': 'Content blocks',
@@ -483,6 +487,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
       'Byggt och fungerar, men erbjuds inte när en sida sätts ihop.',
     'gallery.previous': 'Föregående block',
     'gallery.required': 'obligatoriskt',
+    'gallery.scaleFit': 'Anpassa till skärmen',
+    'gallery.scaleFull': 'Full storlek',
     'gallery.localized': 'Översätts per språk',
     'gallery.whenToUse': 'När det passar',
     'gallery.contentBlocks': 'Innehållsblock',
