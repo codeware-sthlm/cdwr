@@ -1,8 +1,9 @@
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+import { showcaseMedia } from '../gallery-media';
+
 import { MediaBlock } from './MediaBlock';
-import { mediaGallery } from './MediaBlock.gallery';
 
 const meta = {
   title: 'cms-renderer/MediaBlock',
@@ -13,8 +14,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// The same instance the gallery renders, so the two cannot drift
-const args: Story['args'] = mediaGallery.example;
+// Its own fixture: the block is retired, so no layout can hold one and the
+// gallery has no example to share
+const args: Story['args'] = {
+  blockType: 'media',
+  media: showcaseMedia(
+    'media.jpg',
+    'Backlit woven steel mesh, moire rippling across the weave',
+    1264,
+    848
+  )
+};
 
 export const Default: Story = {
   args

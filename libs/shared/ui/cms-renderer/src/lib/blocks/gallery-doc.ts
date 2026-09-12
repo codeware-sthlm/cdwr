@@ -56,20 +56,38 @@ type BlockGalleryProse = {
   whenToUse: LocalizedText;
 };
 
-/** A documented block with a real instance to draw. */
-export type BlockGalleryDoc<TExample = BlockExample> = BlockGalleryProse & {
-  /** Rendered through the same renderer a page uses */
-  example: TExample;
-  /**
-   * What the page would have handed a listing block.
-   *
-   * `posts` and `tours` carry a heading and a count; the documents behind them
-   * are fetched for the page as it is served. The gallery has no such page, so
-   * it brings its own — otherwise the block draws nothing and the entry has to
-   * describe itself instead of showing itself.
-   */
-  exampleData?: BlocksData;
-};
+/** A documented block, with the instance the gallery draws for it. */
+export type BlockGalleryDoc<TExample extends BlockExample = BlockExample> =
+  BlockGalleryProse & {
+    /** Rendered through the same renderer a page uses */
+    example: TExample;
+    /**
+     * What the page would have handed a listing block.
+     *
+     * `posts` and `tours` carry a heading and a count; the documents behind them
+     * are fetched for the page as it is served. The gallery has no such page, so
+     * it brings its own — otherwise the block draws nothing and the entry has to
+     * describe itself instead of showing itself.
+     */
+    exampleData?: BlocksData;
+  };
+
+/**
+ * A block no layout can hold any more.
+ *
+ * A retired block is still drawn for the pages carrying it and still worth
+ * describing, but no collection offers it, so there is nowhere to put the
+ * fresh instance an example would need. `media` is the one today, replaced by
+ * `image` and `video`.
+ */
+export type RetiredBlockDoc = BlockGalleryProse & { retired: true };
+
+/** Either shape, as the gallery receives it. */
+export type AnyBlockGalleryDoc = BlockGalleryDoc | RetiredBlockDoc;
+
+/** Whether this entry has something to draw. */
+export const hasExample = (doc: AnyBlockGalleryDoc): doc is BlockGalleryDoc =>
+  'example' in doc;
 
 /**
  * Pick the text for the locale the site is rendering in.

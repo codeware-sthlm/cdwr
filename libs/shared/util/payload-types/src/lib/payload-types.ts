@@ -613,7 +613,6 @@ export interface Page {
     | FormBlock
     | HeroBlock
     | ImageBlock
-    | MediaBlock
     | PillListBlock
     | PostsBlock
     | ReusableContentBlock
@@ -819,7 +818,6 @@ export interface ContentBlock {
               | CodeBlock
               | FormBlock
               | ImageBlock
-              | MediaBlock
               | ReusableContentBlock
               | SocialMediaBlock
               | SpacingBlock
@@ -1116,16 +1114,6 @@ export interface ImageBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "MediaBlock".
- */
-export interface MediaBlock {
-  media: number | Media;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'media';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ReusableContentBlock".
  */
 export interface ReusableContentBlock {
@@ -1158,7 +1146,6 @@ export interface ReusableContent {
     | FileAreaBlock
     | FormBlock
     | ImageBlock
-    | MediaBlock
     | SocialMediaBlock
     | SpacingBlock
   )[];
@@ -1550,7 +1537,7 @@ export interface ShowcaseItemLink {
  */
 export interface TestimonialBlock {
   /**
-   * In their words, not yours. One or two sentences carries further than a paragraph.
+   * In their words, not yours. One or two sentences carry further than a paragraph.
    */
   quote: string;
   author: {
@@ -1626,6 +1613,16 @@ export interface CalloutLink {
    */
   url?: string | null;
   label: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "MediaBlock".
+ */
+export interface MediaBlock {
+  media: number | Media;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'media';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1897,7 +1894,7 @@ export interface SiteSettingsGeneral {
    */
   colorScheme: 'system' | 'light' | 'dark';
   /**
-   * How the header and its controls are drawn. Outlined separates them with borders; flat leans on the surface instead.
+   * Whether the menu and the buttons beside it sit in their own frames, or blend into the page.
    */
   chrome: 'outlined' | 'flat';
   /**
