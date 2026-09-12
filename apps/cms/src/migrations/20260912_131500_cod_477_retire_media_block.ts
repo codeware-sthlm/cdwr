@@ -36,7 +36,10 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
   -- collection is covered too. Named by column rather than by table: these
   -- four are what Payload writes an editor state into, which keeps the rename
   -- away from the jsonb holding themes, jobs, preferences and captions
-  CREATE FUNCTION pg_temp.rename_media_block(node jsonb) RETURNS jsonb AS $fn$
+  --
+  -- Replaced rather than created: a temp function lives as long as the
+  -- connection, so applying this twice on one would fail on the second
+  CREATE OR REPLACE FUNCTION pg_temp.rename_media_block(node jsonb) RETURNS jsonb AS $fn$
     SELECT CASE jsonb_typeof(node)
       WHEN 'object' THEN coalesce(
         (
