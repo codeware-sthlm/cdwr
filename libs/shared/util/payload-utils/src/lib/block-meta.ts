@@ -1635,24 +1635,5 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       }
     ]
-  },
-  video: {
-    slug: 'video',
-    label: {
-      en: 'Video',
-      sv: 'Video'
-    },
-    availableIn: [],
-    fields: [
-      {
-        name: 'media',
-        type: 'upload',
-        required: true,
-        description: {
-          en: 'Select a video.',
-          sv: 'Välj en video.'
-        }
-      }
-    ]
   }
 };

@@ -147,7 +147,6 @@ export interface Config {
     spacing: SpacingBlock;
     testimonial: TestimonialBlock;
     tours: ToursBlock;
-    video: VideoBlock;
   };
   collections: {
     categories: Category;
@@ -366,7 +365,7 @@ export interface Media {
    */
   alt: string;
   /**
-   * Caption to display below an image or video.
+   * Caption to display below an image.
    */
   caption?: {
     root: {
@@ -1623,19 +1622,6 @@ export interface MediaBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'media';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "VideoBlock".
- */
-export interface VideoBlock {
-  /**
-   * Select a video.
-   */
-  media: number | Media;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'video';
 }
 /**
  * Your own themes. Select them in Site Settings to make them available on the site.

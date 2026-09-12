@@ -1,8 +1,0 @@
-{
-  "name": "shared-ui-video",
-  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/shared/ui/video/src",
-  "projectType": "library",
-  "tags": ["scope:shared", "type:ui"],
-  "targets": {}
-}

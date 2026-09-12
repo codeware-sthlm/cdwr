@@ -59,7 +59,7 @@ function BlockCard({ meta, doc, onOpen }: Entry & { onOpen: () => void }) {
         </p>
         {/* Two ways to be outside the grid, and they are not the same news:
             nobody has written it up, or nothing offers it to an editor. One
-            message for both left `video` looking merely neglected */}
+            message for both makes an unoffered block look merely neglected */}
         <p
           className={cn(
             'text-muted-foreground text-sm leading-relaxed',

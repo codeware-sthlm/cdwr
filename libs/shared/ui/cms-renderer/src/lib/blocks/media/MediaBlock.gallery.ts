@@ -7,16 +7,16 @@ import type { RetiredBlockDoc } from '../gallery-doc';
  */
 export const mediaGallery: RetiredBlockDoc = {
   name: {
-    en: 'Whatever the upload turned out to be',
-    sv: 'Vad uppladdningen än visade sig vara'
+    en: 'An uploaded picture, from before there was an image block',
+    sv: 'En uppladdad bild, från tiden före bildblocket'
   },
   summary: {
-    en: 'An image or a video, drawn according to what was uploaded. Retired: the image and video blocks replace it.',
-    sv: 'En bild eller en video, som ritas upp efter vad som laddats upp. Utgått: bild- och videoblocken ersätter det.'
+    en: 'A picture with an optional caption. Retired: the image block replaces it.',
+    sv: 'En bild med valfri bildtext. Utgått: bildblocket ersätter det.'
   },
   whenToUse: {
-    en: 'Nothing new should reach for it. It reads the file type and picks a treatment, which the image and video blocks now each do properly, with a caption where a caption belongs. Pages already carrying one keep drawing it, which is why it is still here and still described.',
-    sv: 'Inget nytt ska använda det. Det läser filtypen och väljer en hantering, vilket bild- och videoblocken numera gör var för sig och ordentligt, med bildtext där en bildtext hör hemma. Sidor som redan har ett ritar upp det som förut, och därför finns det kvar och beskrivs här.'
+    en: 'Nothing new should reach for it. It was written to look at the uploaded file and choose a treatment, but the only thing it ever accepted was a picture — which the image block now does properly, with the caption where a caption belongs. Pages already carrying one keep drawing it, which is why it is still here and still described.',
+    sv: 'Inget nytt ska använda det. Blocket skrevs för att titta på den uppladdade filen och välja hantering, men det enda det någonsin tog emot var en bild — och det gör bildblocket numera ordentligt, med bildtexten där en bildtext hör hemma. Sidor som redan innehåller ett sådant block ritar upp det som förut, och därför finns blocket kvar och beskrivs här.'
   },
   retired: true
 };

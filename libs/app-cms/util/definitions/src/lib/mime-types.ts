@@ -12,8 +12,6 @@ const mimeTypesMap = {
   pdf: ['application/pdf'],
   // Plain text files
   text: ['text/plain'],
-  // All video types
-  video: ['video/*'],
   // Word documents (.doc, .docx)
   word: [
     'application/msword',
