@@ -1,0 +1,18 @@
+{
+  "name": "media-tools",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/media-tools",
+  "projectType": "library",
+  "tags": ["scope:tools"],
+  "targets": {
+    "generate-images": {
+      "metadata": {
+        "description": "Generate showcase imagery with Replicate (spends credit)"
+      },
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --tsconfig tools/tsconfig.tools.json tools/media-tools/lib/generate-images.ts"
+      }
+    }
+  }
+}

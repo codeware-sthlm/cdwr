@@ -15,6 +15,7 @@ import { fetchAppTenantsMain } from './infisical/lib/fetch-app-tenants.js';
 import { fetchDataMain } from './infisical/lib/fetch-data.js';
 import { rotateSignatureSecretMain } from './infisical/lib/rotate-signature-secret.js';
 import { rotateTenantKeyMain } from './infisical/lib/rotate-tenant-key.js';
+import { generateShowcaseImages } from './media-tools/lib/generate-images.js';
 
 interface Tool {
   name: string;
@@ -47,6 +48,11 @@ const tools: Tool[] = [
     name: 'drop-db',
     description: 'Drop databases from Fly Postgres cluster',
     action: dropDatabase
+  },
+  {
+    name: 'generate-images',
+    description: 'Generate showcase imagery with Replicate (spends credit)',
+    action: generateShowcaseImages
   },
   {
     name: 'restart-app',
