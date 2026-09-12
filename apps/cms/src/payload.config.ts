@@ -230,7 +230,9 @@ export default buildConfig({
     typeof buildConfig
   >[0]['loggingLevels'],
   secret: env.PAYLOAD_SECRET_KEY,
-  upload: { safeFileNames: true },
+  // 25 MB covers an image, a document and a short audio file, and stops an
+  // upload large enough to exhaust a 1 GB machine from being attempted at all
+  upload: { safeFileNames: true, limits: { fileSize: 25 * 1024 * 1024 } },
   // i18n support
   i18n: {
     fallbackLanguage: 'en',
