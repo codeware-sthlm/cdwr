@@ -22,7 +22,9 @@ const blocks: Record<BlockSlug, boolean> = {
   card: true,
   code: true,
   image: true,
-  media: true,
+  // Retired: `image` and `video` replace it. Blocks already placed keep
+  // rendering — this only stops the admin offering it for new content
+  media: false,
   'social-media': true,
   spacing: true,
   testimonial: false,

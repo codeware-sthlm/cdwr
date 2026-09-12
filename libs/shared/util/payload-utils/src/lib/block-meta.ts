@@ -437,7 +437,6 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
               'code',
               'form',
               'image',
-              'media',
               'reusable-content',
               'social-media',
               'spacing'
@@ -940,7 +939,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       en: 'Media',
       sv: 'Media'
     },
-    availableIn: ['pages', 'reusable-content', 'content'],
+    availableIn: [],
     fields: [
       {
         name: 'media',
