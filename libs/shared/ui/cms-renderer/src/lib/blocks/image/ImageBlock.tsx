@@ -64,13 +64,18 @@ export const ImageBlock: React.FC<Props> = ({ hideCaption, media }) => {
 
   return (
     <>
-      <Image
-        sizes={responsiveSizes}
-        src={src}
-        alt={alt}
-        height={media.height ?? undefined}
-        width={media.width ?? undefined}
-      />
+      {/* Rounded here rather than at each call site: every block that draws a
+          picture wants the same corner, and the cards that already clip their
+          own see nothing change */}
+      <div className="[&_img]:rounded-xl">
+        <Image
+          sizes={responsiveSizes}
+          src={src}
+          alt={alt}
+          height={media.height ?? undefined}
+          width={media.width ?? undefined}
+        />
+      </div>
       {!hideCaption && caption && (
         <div className="mt-2">
           <RichText data={caption} />

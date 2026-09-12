@@ -55,7 +55,7 @@ export const MediaBlock: React.FC<Props> = ({ media }) => {
     : `${payloadUrl}${media.url ?? ''}`;
 
   return (
-    <div>
+    <div className="[&_img]:rounded-xl [&_video]:rounded-xl">
       {isImage && (
         <Image
           sizes={sizes}
