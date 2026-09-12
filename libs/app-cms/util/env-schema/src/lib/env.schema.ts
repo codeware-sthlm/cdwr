@@ -7,6 +7,7 @@ import { SeedStrategySchema } from './seed-strategy.schema';
 import { SendGridSchema } from './sendgrid.schema';
 import { SentrySchema } from './sentry.schema';
 import { SmtpSchema } from './smtp.schema';
+import { TurnstileSchema } from './turnstile.schema';
 
 type AppModeCommon = {
   /** Fully qualified URL to the cms app */
@@ -154,6 +155,8 @@ export const EnvSchema = withEnvVars(
     // Sentry is optional
     .merge(SentrySchema.partial())
     .merge(SmtpSchema.partial())
+    // Turnstile is optional — a site without it still has the honeypot
+    .merge(TurnstileSchema.partial())
     // SIGNATURE_SECRET is required for non-tenant deployments (CMS host)
     .refine(
       (data) => {
@@ -217,6 +220,8 @@ export const EnvSchema = withEnvVars(
     SIGNATURE_SECRET,
     SIGNATURE_SECRET_PREVIOUS,
     TENANT_ID,
+    TURNSTILE_SECRET_KEY,
+    TURNSTILE_SITE_KEY,
     ...env
   }) => ({
     ...env,
@@ -315,6 +320,20 @@ export const EnvSchema = withEnvVars(
             dsn: SENTRY_DSN,
             org: SENTRY_ORG,
             release: SENTRY_RELEASE
+          }
+        : undefined,
+    /**
+     * Turnstile, when both halves of the pair are configured.
+     *
+     * Both or neither: a site key with no secret renders a widget nothing
+     * checks, and a secret with no site key rejects every submission because
+     * no token was ever collected.
+     */
+    HUMAN_CHECK:
+      TURNSTILE_SITE_KEY && TURNSTILE_SECRET_KEY
+        ? {
+            siteKey: TURNSTILE_SITE_KEY,
+            secretKey: TURNSTILE_SECRET_KEY
           }
         : undefined
   })
