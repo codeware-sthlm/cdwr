@@ -68,6 +68,7 @@ export type TranslationKey =
   | 'form.submitFailedDescription'
   | 'gallery.accepts'
   | 'gallery.allBlocks'
+  | 'gallery.close'
   | 'gallery.conditional'
   | 'gallery.availableIn'
   | 'gallery.fieldsNote'
@@ -81,8 +82,7 @@ export type TranslationKey =
   | 'gallery.notOffered'
   | 'gallery.previous'
   | 'gallery.required'
-  | 'gallery.scaleFit'
-  | 'gallery.scaleFull'
+  | 'gallery.expand'
   | 'gallery.whenToUse'
   | 'gallery.contentBlocks'
   | 'gallery.documented'
@@ -258,12 +258,13 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitFailedDescription': 'Please try again.',
     'gallery.accepts': 'Accepts',
     'gallery.allBlocks': 'All blocks',
+    'gallery.close': 'Close full screen',
     'gallery.conditional': 'Shown depending on another choice',
     'gallery.availableIn': 'Available in',
     'gallery.fieldsNote':
       'Generated from the block definition, so this table cannot drift from the fields the admin actually shows.',
     'gallery.nameInAdmin': 'Name in the admin',
-    'gallery.live': 'Live · drawn by the production renderer',
+    'gallery.live': 'Live',
     'gallery.liveNote':
       'Follows the theme above — no CSS was written for this page.',
     'gallery.example': 'Example',
@@ -272,8 +273,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.notOffered': 'Not offered when a page is put together.',
     'gallery.previous': 'Previous block',
     'gallery.required': 'required',
-    'gallery.scaleFit': 'Fit to screen',
-    'gallery.scaleFull': 'Full size',
+    'gallery.expand': 'Full screen',
     'gallery.localized': 'Translated per language',
     'gallery.whenToUse': 'When to reach for it',
     'gallery.contentBlocks': 'Content blocks',
@@ -471,12 +471,13 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitFailedDescription': 'Försök igen.',
     'gallery.accepts': 'Kan innehålla',
     'gallery.allBlocks': 'Alla block',
+    'gallery.close': 'Stäng helskärm',
     'gallery.conditional': 'Visas beroende på ett annat val',
     'gallery.availableIn': 'Tillgängligt i',
     'gallery.fieldsNote':
       'Genereras från blockets definition, så tabellen kan inte glida ifrån de fält som administrationen faktiskt visar.',
     'gallery.nameInAdmin': 'Namn i administrationen',
-    'gallery.live': 'Live · ritat av samma renderare som sidorna',
+    'gallery.live': 'Live',
     'gallery.liveNote':
       'Följer temat ovan — ingen CSS är skriven för den här sidan.',
     'gallery.example': 'Exempel',
@@ -485,8 +486,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.notOffered': 'Erbjuds inte när en sida sätts ihop.',
     'gallery.previous': 'Föregående block',
     'gallery.required': 'obligatoriskt',
-    'gallery.scaleFit': 'Anpassa till skärmen',
-    'gallery.scaleFull': 'Full storlek',
+    'gallery.expand': 'Helskärm',
     'gallery.localized': 'Översätts per språk',
     'gallery.whenToUse': 'När det passar',
     'gallery.contentBlocks': 'Innehållsblock',
