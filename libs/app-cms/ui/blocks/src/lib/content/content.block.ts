@@ -16,7 +16,9 @@ const richTextBlocks: Record<BlockSlug, boolean> = {
   code: true,
   form: true,
   image: true,
-  media: true,
+  // Retired: `image` and `video` replace it. Blocks already placed keep
+  // rendering — this only stops the admin offering it for new content
+  media: false,
   'social-media': true,
   spacing: true,
   testimonial: false,
@@ -43,7 +45,9 @@ const inlineBlocks: Record<BlockSlug, boolean> = {
   code: true,
   form: true,
   image: true,
-  media: true,
+  // Retired: `image` and `video` replace it. Blocks already placed keep
+  // rendering — this only stops the admin offering it for new content
+  media: false,
   'reusable-content': true,
   'social-media': true,
   spacing: true,

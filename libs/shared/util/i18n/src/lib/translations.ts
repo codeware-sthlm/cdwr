@@ -269,8 +269,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.example': 'Example',
     'gallery.fields': 'What an editor fills in',
     'gallery.next': 'Next block',
-    'gallery.notOffered':
-      'Built and working, but not offered when a page is put together.',
+    'gallery.notOffered': 'Not offered when a page is put together.',
     'gallery.previous': 'Previous block',
     'gallery.required': 'required',
     'gallery.scaleFit': 'Fit to screen',
@@ -483,8 +482,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.example': 'Exempel',
     'gallery.fields': 'Vad en redaktör fyller i',
     'gallery.next': 'Nästa block',
-    'gallery.notOffered':
-      'Byggt och fungerar, men erbjuds inte när en sida sätts ihop.',
+    'gallery.notOffered': 'Erbjuds inte när en sida sätts ihop.',
     'gallery.previous': 'Föregående block',
     'gallery.required': 'obligatoriskt',
     'gallery.scaleFit': 'Anpassa till skärmen',
