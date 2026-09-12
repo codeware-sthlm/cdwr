@@ -25,7 +25,7 @@ const blocks: Record<BlockSlug, boolean> = {
   form: true,
   hero: true,
   image: true,
-  // Retired: `image` and `video` replace it. Blocks already placed keep
+  // Retired: `image` replaces it. Blocks already placed keep
   // rendering — this only stops the admin offering it for new content
   media: false,
   'pill-list': true,
@@ -35,9 +35,7 @@ const blocks: Record<BlockSlug, boolean> = {
   'social-media': true,
   spacing: true,
   testimonial: true,
-  tours: true,
-  // Unsupported blocks
-  video: false
+  tours: true
 };
 
 /**

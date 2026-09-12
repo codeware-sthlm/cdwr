@@ -65,7 +65,7 @@ describe('extract-block-meta', () => {
   });
 
   it('reports a block that no host offers as available nowhere', () => {
-    expect(extracted.meta['video'].availableIn).toEqual([]);
+    expect(extracted.meta['media'].availableIn).toEqual([]);
   });
 
   it('lifts admin layout containers out of the field shape', () => {

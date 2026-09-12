@@ -5,7 +5,7 @@ import type { Block } from 'payload';
  *
  * Note! Currently only images are supported.
  *
- * @deprecated This block is replaced with `imageBlock` and `videoBlock` and will be removed in the near future.
+ * @deprecated This block is replaced with `imageBlock` and will be removed in the near future.
  */
 export const mediaBlock: Block = {
   slug: 'media',

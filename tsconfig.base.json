@@ -135,7 +135,6 @@
       "@codeware/shared/ui/theme-studio": [
         "./libs/shared/ui/theme-studio/src/index.ts"
       ],
-      "@codeware/shared/ui/video": ["./libs/shared/ui/video/src/index.ts"],
       "@codeware/shared/util/github": [
         "./libs/shared/util/github/src/index.ts"
       ],

@@ -1,5 +1,4 @@
 import { Image, type Size } from '@codeware/shared/ui/image';
-import { Video } from '@codeware/shared/ui/video';
 import type { MediaBlock as MediaBlockProps } from '@codeware/shared/util/payload-types';
 import React from 'react';
 
@@ -9,7 +8,7 @@ import { RichText } from '../RichText';
 type Props = MediaBlockProps;
 
 /**
- * @deprecated Replaced by `ImageBlock` and `VideoBlock`.
+ * @deprecated Replaced by `ImageBlock`.
  */
 export const MediaBlock: React.FC<Props> = ({ media }) => {
   const { payloadUrl } = usePayload();
@@ -17,10 +16,8 @@ export const MediaBlock: React.FC<Props> = ({ media }) => {
   const caption = media && typeof media === 'object' ? media.caption : '';
   const isImage =
     typeof media === 'object' && media?.mimeType?.includes('image');
-  const isVideo =
-    typeof media === 'object' && media?.mimeType?.includes('video');
 
-  if (!isImage && !isVideo) {
+  if (!isImage) {
     return null;
   }
 
@@ -55,17 +52,14 @@ export const MediaBlock: React.FC<Props> = ({ media }) => {
     : `${payloadUrl}${media.url ?? ''}`;
 
   return (
-    <div className="[&_img]:rounded-xl [&_video]:rounded-xl">
-      {isImage && (
-        <Image
-          sizes={sizes}
-          src={src}
-          alt={alt}
-          height={media.height ?? undefined}
-          width={media.width ?? undefined}
-        />
-      )}
-      {isVideo && <Video alt={alt} src={src} />}
+    <div className="[&_img]:rounded-xl">
+      <Image
+        sizes={sizes}
+        src={src}
+        alt={alt}
+        height={media.height ?? undefined}
+        width={media.width ?? undefined}
+      />
       {caption && (
         <div className="mt-2">
           <RichText data={caption} />

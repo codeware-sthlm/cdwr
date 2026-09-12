@@ -23,7 +23,6 @@ All libraries under `libs/shared/ui/` use the path alias `@codeware/shared/ui/<l
 | [icon-picker](#icon-picker)   | `@codeware/shared/ui/icon-picker`              | Lucide icon search + picker                                                |
 | [image](#image)               | `@codeware/shared/ui/image`                    | Responsive image component with fallback                                   |
 | [file-area](#file-area)       | `@codeware/shared/ui/file-area`                | Drag-and-drop + file listing UI                                            |
-| [video](#video)               | `@codeware/shared/ui/video`                    | Embedded video player                                                      |
 
 ---
 
@@ -144,14 +143,4 @@ Drag-and-drop file area plus a file listing UI. Used in Payload CMS field UI and
 ```ts
 import { FileArea } from '@codeware/shared/ui/file-area';
 import type { FileItem } from '@codeware/shared/ui/file-area';
-```
-
----
-
-## video
-
-Embedded video player component. Wraps a `<video>` element with controls and a poster image. Used in cms-renderer's `VideoBlock`.
-
-```ts
-import { Video } from '@codeware/shared/ui/video';
 ```

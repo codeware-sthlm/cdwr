@@ -16,7 +16,7 @@ const richTextBlocks: Record<BlockSlug, boolean> = {
   code: true,
   form: true,
   image: true,
-  // Retired: `image` and `video` replace it. Blocks already placed keep
+  // Retired: `image` replaces it. Blocks already placed keep
   // rendering — this only stops the admin offering it for new content
   media: false,
   'social-media': true,
@@ -33,8 +33,7 @@ const richTextBlocks: Record<BlockSlug, boolean> = {
   posts: false,
   'reusable-content': false,
   showcase: false,
-  tours: false,
-  video: false
+  tours: false
 };
 
 /** Define which blocks are available within the content block itself. */
@@ -45,7 +44,7 @@ const inlineBlocks: Record<BlockSlug, boolean> = {
   code: true,
   form: true,
   image: true,
-  // Retired: `image` and `video` replace it. Blocks already placed keep
+  // Retired: `image` replaces it. Blocks already placed keep
   // rendering — this only stops the admin offering it for new content
   media: false,
   'reusable-content': true,
@@ -62,8 +61,7 @@ const inlineBlocks: Record<BlockSlug, boolean> = {
   'pill-list': false,
   posts: false,
   showcase: false,
-  tours: false,
-  video: false
+  tours: false
 };
 
 /**

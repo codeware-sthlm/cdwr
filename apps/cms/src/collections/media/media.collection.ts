@@ -23,8 +23,8 @@ import { imageUploadConfig } from './image-upload';
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 
-const isImageOrVideo: Condition<TypeWithID, Media> = (_, siblingData) =>
-  !!siblingData.mimeType && siblingData.mimeType.match(/image|video/) !== null;
+const isImage: Condition<TypeWithID, Media> = (_, siblingData) =>
+  !!siblingData.mimeType && siblingData.mimeType.startsWith('image');
 
 const filenameWithoutTenantPrefix: FieldHook<Media> = ({ siblingData }) => {
   const { filename, prefix } = siblingData ?? {};
@@ -165,10 +165,10 @@ const media: CollectionConfig = {
       type: 'richText',
       localized: true,
       admin: {
-        condition: isImageOrVideo,
+        condition: isImage,
         description: {
-          en: 'Caption to display below an image or video.',
-          sv: 'Text som visas under en bild eller video.'
+          en: 'Caption to display below an image.',
+          sv: 'Text som visas under en bild.'
         }
       }
     },

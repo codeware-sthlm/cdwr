@@ -24,8 +24,7 @@ import {
   socialMediaBlock,
   spacingBlock,
   testimonialBlock,
-  toursBlock,
-  videoBlock
+  toursBlock
 } from '@codeware/app-cms/ui/blocks';
 import { defaultLexical } from '@codeware/app-cms/ui/fields';
 import { getEmailAdapter } from '@codeware/app-cms/util/email';
@@ -170,8 +169,7 @@ export default buildConfig({
     socialMediaBlock,
     spacingBlock,
     testimonialBlock,
-    toursBlock,
-    videoBlock
+    toursBlock
   ],
   collections,
   cors:

@@ -29,7 +29,6 @@ import { SocialMediaBlock } from './blocks/social-media/SocialMediaBlock';
 import { SpacingBlock } from './blocks/spacing/SpacingBlock';
 import { TestimonialBlock } from './blocks/testimonial/TestimonialBlock';
 import { ToursBlock } from './blocks/tours/ToursBlock';
-import { VideoBlock } from './blocks/video/VideoBlock';
 import { ColumnSizeProvider } from './providers/ColumnSizeProvider';
 
 type ContentBlockWithData = ContentBlockProps & {
@@ -186,8 +185,7 @@ const blocksMap: Record<
   'social-media': SocialMediaBlock,
   spacing: SpacingBlock,
   testimonial: TestimonialBlock,
-  tours: ToursBlock,
-  video: VideoBlock
+  tours: ToursBlock
 };
 
 type Props = {

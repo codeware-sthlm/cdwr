@@ -15,10 +15,10 @@ export type LocalizedText = Record<SupportedLocale, string>;
  * A block instance as the renderer receives it.
  *
  * Exactly what `RenderBlocks` accepts, so an example cannot be documented in a
- * shape the gallery could not draw. A block absent from every layout — `video`
- * today — is therefore outside this union: it can be listed and described, but
- * it has nowhere to be rendered from, which is the same thing the admin says
- * about it.
+ * shape the gallery could not draw. A block absent from every layout is
+ * therefore outside this union: it can be listed and described, but it has
+ * nowhere to be rendered from, which is the same thing the admin says about
+ * it.
  */
 export type BlockExample = NonNullable<Page['layout']>[number];
 
@@ -78,7 +78,7 @@ export type BlockGalleryDoc<TExample extends BlockExample = BlockExample> =
  * A retired block is still drawn for the pages carrying it and still worth
  * describing, but no collection offers it, so there is nowhere to put the
  * fresh instance an example would need. `media` is the one today, replaced by
- * `image` and `video`.
+ * `image`.
  */
 export type RetiredBlockDoc = BlockGalleryProse & { retired: true };
 
