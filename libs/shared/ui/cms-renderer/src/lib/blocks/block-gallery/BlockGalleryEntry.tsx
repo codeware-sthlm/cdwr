@@ -33,8 +33,9 @@ import { useState } from 'react';
 import { usePayload } from '../../providers/PayloadProvider';
 import { segment, segmentTrack } from '../../theme/chrome';
 import {
+  type AnyBlockGalleryDoc,
   type BlockExample,
-  type BlockGalleryDoc,
+  hasExample,
   localized
 } from '../gallery-doc';
 
@@ -279,7 +280,7 @@ export function BlockGalleryEntry({
   position
 }: {
   meta: BlockMeta;
-  doc?: BlockGalleryDoc;
+  doc?: AnyBlockGalleryDoc;
   render?: RenderExample;
   onBack: () => void;
   onStep: (delta: number) => void;
@@ -289,9 +290,12 @@ export function BlockGalleryEntry({
   const [expanded, setExpanded] = useState(false);
   const name = doc?.name && localized(doc.name, locale);
 
+  // Nothing is drawn for a block nobody has written up, or one no page offers
+  const drawn = Boolean(doc && hasExample(doc) && RenderExample);
+
   // Drawn once and shown twice: framed on the page, and again at full size
   const preview =
-    doc && RenderExample ? (
+    doc && hasExample(doc) && RenderExample ? (
       <RenderExample
         blocks={[doc.example]}
         blocksData={doc.exampleData}
@@ -384,13 +388,35 @@ export function BlockGalleryEntry({
           surface rather than as another paragraph about the block. Ringed and
           lifted, with a live dot: sharing the page's own border left the one
           thing being demonstrated looking like more prose about it */}
-      <section className="ring-core-link/25 mt-9 overflow-hidden rounded-xl shadow-lg ring-1">
-        <div className="border-core-link/20 bg-core-link/10 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
-          <LiveTag />
-          <span className="flex items-center gap-2">
-            <span className="text-muted-foreground mr-1 hidden text-xs sm:inline">
-              {t(locale, 'gallery.liveNote')}
+      <section
+        className={cn(
+          'mt-9 overflow-hidden rounded-xl shadow-lg ring-1',
+          // The live colours are a claim about what is below them, so a frame
+          // carrying a sentence instead of a block does not wear them
+          drawn ? 'ring-core-link/25' : 'ring-border'
+        )}
+      >
+        <div
+          className={cn(
+            'flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5',
+            drawn
+              ? 'border-core-link/20 bg-core-link/10'
+              : 'border-border bg-card/60'
+          )}
+        >
+          {drawn ? (
+            <LiveTag />
+          ) : (
+            <span className="text-muted-foreground font-mono text-[11px] tracking-[0.12em] uppercase">
+              {t(locale, 'gallery.example')}
             </span>
+          )}
+          <span className="flex items-center gap-2">
+            {drawn && (
+              <span className="text-muted-foreground mr-1 hidden text-xs sm:inline">
+                {t(locale, 'gallery.liveNote')}
+              </span>
+            )}
             {/* Stepping sits here as well as at the top: flicking through the
                 library from the thing being looked at should not cost a scroll
                 back to the heading */}
@@ -400,20 +426,27 @@ export function BlockGalleryEntry({
             />
             {/* A block is drawn for a page, not for a panel inside one, so the
                 frame shows it smaller and hands over the whole viewport when
-                asked */}
-            <button
-              type="button"
-              onClick={() => setExpanded(true)}
-              className="border-core-link/30 text-core-link hover:bg-core-link/10 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors"
-            >
-              {t(locale, 'gallery.expand')}
-            </button>
+                asked. Nothing to hand over when nothing is drawn */}
+            {drawn && (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                className="border-core-link/30 text-core-link hover:bg-core-link/10 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors"
+              >
+                {t(locale, 'gallery.expand')}
+              </button>
+            )}
           </span>
         </div>
         {/* `zoom` rather than a transform: it shrinks the drawing and the space
             it takes, so the frame closes around the block instead of holding
             room for a size it is not being shown at */}
-        <div className="bg-core-background-content px-6 py-10 [zoom:0.7] sm:px-10 sm:py-12 sm:[zoom:0.78] xl:[zoom:0.86]">
+        <div
+          className={cn(
+            'bg-core-background-content px-6 py-10 sm:px-10 sm:py-12',
+            drawn && '[zoom:0.7] sm:[zoom:0.78] xl:[zoom:0.86]'
+          )}
+        >
           {preview}
         </div>
       </section>
