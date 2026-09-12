@@ -145,12 +145,19 @@ nx reset-db cms
 nx seed cms
 ```
 
-### Interactive CLI Tools (Fly.io / Infisical management)
+### Interactive CLI Tools (database / Fly.io / Infisical / media)
 
 ```sh
 pnpm cdwr
-# Options: drop-db, restart-app, app-info, patch-config, infisical-tenants, infisical-data, infisical-analysis, rotate-tenant-key
+# Database: backup-db, restore-db, test-migration, sync-storage, drop-db
+# Fly.io:   restart-app, app-info, patch-config
+# Infisical: infisical-tenants, infisical-data, infisical-analysis, rotate-tenant-key, rotate-signature-secret
+# Media:    generate-images
 ```
+
+`generate-images` is the only tool here that **spends money** — it bills Replicate per
+image. It writes to a gitignored `.showcase-images/` and never uploads: the gallery's
+examples end up in Chromatic snapshots, so replacing one is a deliberate visual review.
 
 ### Release Packages
 
