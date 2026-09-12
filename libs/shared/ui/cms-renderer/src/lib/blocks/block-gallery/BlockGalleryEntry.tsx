@@ -13,6 +13,7 @@ import {
   ChevronRightIcon,
   LanguagesIcon
 } from 'lucide-react';
+import { useState } from 'react';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import {
@@ -166,6 +167,7 @@ export function BlockGalleryEntry({
   position: { index: number; total: number };
 }) {
   const { locale } = usePayload();
+  const [fullSize, setFullSize] = useState(false);
   const name = doc?.name && localized(doc.name, locale);
 
   return (
@@ -251,17 +253,44 @@ export function BlockGalleryEntry({
       </header>
 
       {/* The example leads, and is framed so it reads as the site's own
-          surface rather than as another paragraph about the block */}
-      <section className="mt-9">
-        <div className="border-border bg-card/60 flex flex-wrap items-center justify-between gap-2 rounded-t-xl border px-4 py-2.5">
-          <span className="text-core-link font-mono text-[11px] tracking-[0.12em] uppercase">
+          surface rather than as another paragraph about the block. Ringed and
+          lifted, with a live dot: sharing the page's own border left the one
+          thing being demonstrated looking like more prose about it */}
+      <section className="ring-core-link/25 mt-9 overflow-hidden rounded-xl shadow-lg ring-1">
+        <div className="border-core-link/20 bg-core-link/10 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
+          <span className="text-core-link flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase">
+            <span className="relative flex size-2" aria-hidden>
+              <span className="bg-core-link absolute inline-flex size-full animate-ping rounded-full opacity-60" />
+              <span className="bg-core-link relative inline-flex size-2 rounded-full" />
+            </span>
             {t(locale, 'gallery.live')}
           </span>
-          <span className="text-muted-foreground text-xs">
-            {t(locale, 'gallery.liveNote')}
+          <span className="flex items-center gap-3">
+            <span className="text-muted-foreground text-xs">
+              {t(locale, 'gallery.liveNote')}
+            </span>
+            {/* A block is drawn for a page, not for a panel inside one. Shown
+                at the size it will have, a single block can outrun a laptop
+                screen — so it opens scaled down, with its true size a click
+                away */}
+            <button
+              type="button"
+              onClick={() => setFullSize((shown) => !shown)}
+              className="border-core-link/30 text-core-link hover:bg-core-link/10 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors"
+            >
+              {t(locale, fullSize ? 'gallery.scaleFit' : 'gallery.scaleFull')}
+            </button>
           </span>
         </div>
-        <div className="border-border bg-core-background-content rounded-b-xl border border-t-0 px-6 py-10 sm:px-10 sm:py-12">
+        <div
+          className={cn(
+            'bg-core-background-content px-6 py-10 sm:px-10 sm:py-12',
+            // `zoom` rather than a transform: it shrinks the drawing and the
+            // space it takes, so the frame closes around the block instead of
+            // keeping room for the size it is not being shown at
+            !fullSize && '[zoom:0.7] sm:[zoom:0.78] xl:[zoom:0.86]'
+          )}
+        >
           {doc && RenderExample ? (
             <RenderExample
               blocks={[doc.example]}
