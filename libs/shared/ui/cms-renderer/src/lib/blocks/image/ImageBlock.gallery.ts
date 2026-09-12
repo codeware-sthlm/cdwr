@@ -3,6 +3,35 @@ import type { ImageBlock as ImageBlockProps } from '@codeware/shared/util/payloa
 import type { BlockGalleryDoc } from '../gallery-doc';
 import { showcaseMedia } from '../gallery-media';
 
+/** The caption is half of what this block is for, so the example carries one */
+const caption = {
+  root: {
+    type: 'root',
+    version: 1,
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    children: [
+      {
+        type: 'paragraph',
+        version: 1,
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        children: [
+          {
+            type: 'text',
+            version: 1,
+            text: 'Dichroic film, folded once: the same sheet reads a different colour at every angle.'
+          }
+        ]
+      }
+    ]
+  }
+  // The editor state is typed by the configured Lexical features, which a
+  // fixture cannot satisfy without importing the editor itself
+} as unknown as never;
+
 export const imageGallery: BlockGalleryDoc<ImageBlockProps> = {
   name: {
     en: 'A figure, with something to say about it',
@@ -18,11 +47,14 @@ export const imageGallery: BlockGalleryDoc<ImageBlockProps> = {
   },
   example: {
     blockType: 'image',
-    media: showcaseMedia(
-      'image.jpg',
-      'A sheet of dichroic film, each fold a different colour',
-      1264,
-      848
-    )
+    media: {
+      ...showcaseMedia(
+        'image.jpg',
+        'A sheet of dichroic film, each fold a different colour',
+        1264,
+        848
+      ),
+      caption
+    }
   }
 };
