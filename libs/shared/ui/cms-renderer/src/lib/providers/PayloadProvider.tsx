@@ -90,7 +90,7 @@ export type PayloadValue = {
    * Provide a reader for one query string parameter.
    *
    * Separate from `getCurrentPath`, which returns the path alone. Used to
-   * arrive at a particular entry — `/blocks?block=hero` — without giving the
+   * arrive at a particular entry — `?block=hero` — without giving the
    * gallery a route of its own.
    *
    * Example implementations:

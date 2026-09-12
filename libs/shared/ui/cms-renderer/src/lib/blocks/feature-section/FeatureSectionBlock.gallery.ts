@@ -33,7 +33,7 @@ export const featureSectionGallery: BlockGalleryDoc<FeatureSectionBlockProps> =
       link: {
         type: 'custom',
         label: 'Explore theming',
-        url: '/blocks?block=hero',
+        url: '?block=hero',
         newTab: false
       },
       subFeatures: [
