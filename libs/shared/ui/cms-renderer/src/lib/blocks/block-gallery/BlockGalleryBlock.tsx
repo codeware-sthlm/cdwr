@@ -151,8 +151,12 @@ export const BlockGalleryBlock: React.FC<
     ({ meta, doc }) => doc && structural.has(meta.slug)
   );
   // Both halves of "not in the grid": no write-up, or nowhere to place it
+  // Structural blocks have a row of their own, so a documented one offered
+  // only by `reusable-content` or `content` belongs there rather than in both
   const pending = entries.filter(
-    ({ meta, doc }) => !doc || !meta.availableIn.includes('pages')
+    ({ meta, doc }) =>
+      !doc ||
+      (!structural.has(meta.slug) && !meta.availableIn.includes('pages'))
   );
 
   const documented = entries.length - entries.filter(({ doc }) => !doc).length;
