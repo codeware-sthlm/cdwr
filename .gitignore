@@ -92,3 +92,6 @@ out
 .nx/self-healing
 
 .nx/migrate-runs
+
+# Generated showcase imagery, reviewed by hand before upload
+.showcase-images/
