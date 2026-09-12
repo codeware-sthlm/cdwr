@@ -55,6 +55,7 @@ import * as migration_20260901_100313_cod_460_theme_recipe from './20260901_1003
 import * as migration_20260907_201713_cod_476_showcase_blocks from './20260907_201713_cod_476_showcase_blocks';
 import * as migration_20260907_202817_cod_476_site_chrome from './20260907_202817_cod_476_site_chrome';
 import * as migration_20260908_074058_cod_477_block_gallery from './20260908_074058_cod_477_block_gallery';
+import * as migration_20260912_131500_cod_477_retire_media_block from './20260912_131500_cod_477_retire_media_block';
 
 export const migrations = [
   {
@@ -341,5 +342,10 @@ export const migrations = [
     up: migration_20260908_074058_cod_477_block_gallery.up,
     down: migration_20260908_074058_cod_477_block_gallery.down,
     name: '20260908_074058_cod_477_block_gallery'
+  },
+  {
+    up: migration_20260912_131500_cod_477_retire_media_block.up,
+    down: migration_20260912_131500_cod_477_retire_media_block.down,
+    name: '20260912_131500_cod_477_retire_media_block'
   }
 ];
