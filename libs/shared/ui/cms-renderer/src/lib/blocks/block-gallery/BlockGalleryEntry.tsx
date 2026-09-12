@@ -1,5 +1,17 @@
 'use client';
 
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@codeware/shared/ui/shadcn/components/dialog';
+import {
+  ToggleGroup,
+  ToggleGroupItem
+} from '@codeware/shared/ui/shadcn/components/toggle-group';
 import { t } from '@codeware/shared/util/i18n';
 import type {
   BlockFieldMeta,
@@ -11,11 +23,15 @@ import {
   ArrowLeftIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  LanguagesIcon
+  LanguagesIcon,
+  MoonStarIcon,
+  SunIcon,
+  XIcon
 } from 'lucide-react';
 import { useState } from 'react';
 
 import { usePayload } from '../../providers/PayloadProvider';
+import { segment, segmentTrack } from '../../theme/chrome';
 import {
   type BlockExample,
   type BlockGalleryDoc,
@@ -45,6 +61,109 @@ export type RenderExample = React.FC<{
  */
 const label =
   'text-foreground font-mono text-[11px] font-semibold tracking-[0.14em] uppercase';
+
+/**
+ * The mark that says this is the block itself, not a picture of it.
+ *
+ * Written once and worn by both frames: the panel on the page and the one that
+ * takes the whole window are the same claim, so they say it the same way.
+ */
+function LiveTag() {
+  const { locale } = usePayload();
+
+  return (
+    <span className="text-core-link flex shrink-0 items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase">
+      <span className="relative flex size-2" aria-hidden>
+        <span className="bg-core-link absolute inline-flex size-full animate-ping rounded-full opacity-60" />
+        <span className="bg-core-link relative inline-flex size-2 rounded-full" />
+      </span>
+      {t(locale, 'gallery.live')}
+    </span>
+  );
+}
+
+/**
+ * Light or dark, for trying a block in both.
+ *
+ * Two segments rather than the site's own switch: `system` is a preference
+ * already answered by the page around it, and the third option costs room the
+ * block would rather have. Square whatever the site's chrome is — this belongs
+ * to the gallery's frame, not to the site being previewed. Nothing to show on
+ * a site that fixes its scheme.
+ */
+function SchemeSwitch() {
+  const { locale, lockedColorScheme, resolvedColorScheme, setColorScheme } =
+    usePayload();
+
+  if (lockedColorScheme !== null) {
+    return null;
+  }
+
+  return (
+    <ToggleGroup
+      type="single"
+      value={resolvedColorScheme ?? 'light'}
+      // Radix clears the value when the active item is pressed again, and
+      // there is no "no scheme" to fall back to
+      onValueChange={(next) => next && setColorScheme(next as 'light' | 'dark')}
+      spacing={0}
+      size="sm"
+      aria-label={t(locale, 'colorScheme.select')}
+      className={segmentTrack()}
+    >
+      {(
+        [
+          { value: 'light', Icon: SunIcon },
+          { value: 'dark', Icon: MoonStarIcon }
+        ] as const
+      ).map(({ value, Icon }) => {
+        const label = t(locale, `colorScheme.${value}`);
+
+        return (
+          <ToggleGroupItem
+            key={value}
+            value={value}
+            aria-label={label}
+            title={label}
+            className={segment()}
+          >
+            <Icon className="size-4 stroke-[1.5]" />
+          </ToggleGroupItem>
+        );
+      })}
+    </ToggleGroup>
+  );
+}
+
+/** Step to the block before or after this one. */
+function StepButtons({
+  onStep,
+  className
+}: {
+  onStep: (delta: number) => void;
+  className: string;
+}) {
+  const { locale } = usePayload();
+
+  return (
+    <>
+      {[
+        { delta: -1, Icon: ChevronLeftIcon, key: 'gallery.previous' },
+        { delta: 1, Icon: ChevronRightIcon, key: 'gallery.next' }
+      ].map(({ delta, Icon, key }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onStep(delta)}
+          aria-label={t(locale, key as 'gallery.next')}
+          className={className}
+        >
+          <Icon className="size-4" />
+        </button>
+      ))}
+    </>
+  );
+}
 
 /**
  * One row of the field table.
@@ -167,8 +286,27 @@ export function BlockGalleryEntry({
   position: { index: number; total: number };
 }) {
   const { locale } = usePayload();
-  const [fullSize, setFullSize] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const name = doc?.name && localized(doc.name, locale);
+
+  // Drawn once and shown twice: framed on the page, and again at full size
+  const preview =
+    doc && RenderExample ? (
+      <RenderExample
+        blocks={[doc.example]}
+        blocksData={doc.exampleData}
+        preview
+      />
+    ) : (
+      <p className="text-muted-foreground text-sm italic">
+        {t(
+          locale,
+          meta.availableIn.length === 0
+            ? 'gallery.notOffered'
+            : 'gallery.undocumented'
+        )}
+      </p>
+    );
 
   return (
     <article>
@@ -186,20 +324,10 @@ export function BlockGalleryEntry({
           <span className="text-muted-foreground font-mono text-xs tabular-nums">
             {position.index + 1} / {position.total}
           </span>
-          {[
-            { delta: -1, Icon: ChevronLeftIcon, key: 'gallery.previous' },
-            { delta: 1, Icon: ChevronRightIcon, key: 'gallery.next' }
-          ].map(({ delta, Icon, key }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => onStep(delta)}
-              aria-label={t(locale, key as 'gallery.next')}
-              className="border-border text-foreground hover:border-core-interactive rounded-lg border p-1.5 transition-colors"
-            >
-              <Icon className="size-4" />
-            </button>
-          ))}
+          <StepButtons
+            onStep={onStep}
+            className="border-border text-foreground hover:border-core-interactive rounded-lg border p-1.5 transition-colors"
+          />
         </div>
       </div>
 
@@ -258,59 +386,87 @@ export function BlockGalleryEntry({
           thing being demonstrated looking like more prose about it */}
       <section className="ring-core-link/25 mt-9 overflow-hidden rounded-xl shadow-lg ring-1">
         <div className="border-core-link/20 bg-core-link/10 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
-          <span className="text-core-link flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase">
-            <span className="relative flex size-2" aria-hidden>
-              <span className="bg-core-link absolute inline-flex size-full animate-ping rounded-full opacity-60" />
-              <span className="bg-core-link relative inline-flex size-2 rounded-full" />
-            </span>
-            {t(locale, 'gallery.live')}
-          </span>
-          <span className="flex items-center gap-3">
-            <span className="text-muted-foreground text-xs">
+          <LiveTag />
+          <span className="flex items-center gap-2">
+            <span className="text-muted-foreground mr-1 hidden text-xs sm:inline">
               {t(locale, 'gallery.liveNote')}
             </span>
-            {/* A block is drawn for a page, not for a panel inside one. Shown
-                at the size it will have, a single block can outrun a laptop
-                screen — so it opens scaled down, with its true size a click
-                away */}
+            {/* Stepping sits here as well as at the top: flicking through the
+                library from the thing being looked at should not cost a scroll
+                back to the heading */}
+            <StepButtons
+              onStep={onStep}
+              className="border-core-link/30 text-core-link hover:bg-core-link/10 rounded-md border p-1 transition-colors"
+            />
+            {/* A block is drawn for a page, not for a panel inside one, so the
+                frame shows it smaller and hands over the whole viewport when
+                asked */}
             <button
               type="button"
-              onClick={() => setFullSize((shown) => !shown)}
+              onClick={() => setExpanded(true)}
               className="border-core-link/30 text-core-link hover:bg-core-link/10 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors"
             >
-              {t(locale, fullSize ? 'gallery.scaleFit' : 'gallery.scaleFull')}
+              {t(locale, 'gallery.expand')}
             </button>
           </span>
         </div>
-        <div
-          className={cn(
-            'bg-core-background-content px-6 py-10 sm:px-10 sm:py-12',
-            // `zoom` rather than a transform: it shrinks the drawing and the
-            // space it takes, so the frame closes around the block instead of
-            // keeping room for the size it is not being shown at
-            !fullSize && '[zoom:0.7] sm:[zoom:0.78] xl:[zoom:0.86]'
-          )}
-        >
-          {doc && RenderExample ? (
-            <RenderExample
-              blocks={[doc.example]}
-              blocksData={doc.exampleData}
-              preview
-            />
-          ) : (
-            // Only two states left: a block draws, or nobody has written it up
-            // — and one that no page offers says that instead
-            <p className="text-muted-foreground text-sm italic">
-              {t(
-                locale,
-                meta.availableIn.length === 0
-                  ? 'gallery.notOffered'
-                  : 'gallery.undocumented'
-              )}
-            </p>
-          )}
+        {/* `zoom` rather than a transform: it shrinks the drawing and the space
+            it takes, so the frame closes around the block instead of holding
+            room for a size it is not being shown at */}
+        <div className="bg-core-background-content px-6 py-10 [zoom:0.7] sm:px-10 sm:py-12 sm:[zoom:0.78] xl:[zoom:0.86]">
+          {preview}
         </div>
       </section>
+
+      {/* Full width, no scaling, and the stepper carried in: the reason to
+          open it is to see the block at the size a visitor would */}
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        {/* The dialog's own close sits at the top corner, which is above the
+            middle of a bar carrying two lines — so it closes from the row, in
+            line with the controls beside it */}
+        <DialogContent
+          showCloseButton={false}
+          className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 rounded-none p-0 sm:max-w-none"
+        >
+          {/* The same tinted bar as the framed example, for the same reason:
+              what is below it is the block itself, drawn by the renderer that
+              serves a page */}
+          <DialogHeader className="border-core-link/20 bg-core-link/10 flex-row flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-3">
+              <LiveTag />
+              <div className="min-w-0">
+                <DialogTitle className="truncate text-sm font-medium">
+                  {name ?? localized(meta.label, locale)}
+                </DialogTitle>
+                <DialogDescription className="text-muted-foreground truncate text-xs">
+                  {doc
+                    ? localized(doc.summary, locale)
+                    : t(locale, 'gallery.liveNote')}
+                </DialogDescription>
+              </div>
+            </div>
+            <span className="flex shrink-0 items-center gap-3">
+              <SchemeSwitch />
+              <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                {position.index + 1} / {position.total}
+              </span>
+              <StepButtons
+                onStep={onStep}
+                className="border-core-link/30 text-core-link hover:bg-core-link/10 rounded-md border p-1 transition-colors"
+              />
+              <DialogClose
+                aria-label={t(locale, 'gallery.close')}
+                className="border-core-link/30 text-core-link hover:bg-core-link/10 rounded-md border p-1 transition-colors"
+              >
+                <XIcon className="size-4" />
+              </DialogClose>
+            </span>
+          </DialogHeader>
+          <div className="bg-core-background-content flex-1 overflow-auto px-6 py-10 sm:px-10 sm:py-12">
+            {preview}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="mt-11 grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div>
