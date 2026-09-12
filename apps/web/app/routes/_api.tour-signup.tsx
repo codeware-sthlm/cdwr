@@ -1,10 +1,17 @@
+import {
+  clientIp,
+  rateLimit,
+  verifyHuman
+} from '@codeware/shared/util/human-check';
 import { post } from '@codeware/shared/util/payload-api';
 import { json } from '@remix-run/node';
 
+import env from '../../env-resolver/env';
 import { getPayloadRequestOptions } from '../utils/get-payload-request-options';
 import type { TypedActionFunctionArgs } from '../utils/types';
 
 type Body = {
+  humanCheck?: { token?: unknown; honeypot?: unknown; drawnAt?: unknown };
   tour?: number;
   name?: string;
   email?: string;
@@ -37,7 +44,36 @@ export async function action({ context, request }: TypedActionFunctionArgs) {
     return json({ message: 'Invalid tour signup body' }, { status: 400 });
   }
 
-  const { acceptedTerms, ...signup } = body;
+  const { acceptedTerms, humanCheck, ...signup } = body;
+
+  const ip = clientIp(request.headers);
+
+  // Counted before anything expensive happens
+  const allowance = rateLimit(`tour-signup:${ip ?? 'unknown'}`);
+
+  if (!allowance.ok) {
+    return json(
+      { message: 'Too many submissions' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(allowance.retryAfterSeconds) }
+      }
+    );
+  }
+
+  const check = await verifyHuman(humanCheck ?? {}, {
+    secretKey: env.TURNSTILE_SECRET_KEY,
+    ip
+  });
+
+  if (!check.ok) {
+    // Logged with its reason, answered without one
+    console.warn(`Tour signup refused: ${check.reason}`);
+    return json(
+      { message: 'Could not accept this submission' },
+      { status: 400 }
+    );
+  }
 
   const requestOptions = getPayloadRequestOptions(
     'POST',

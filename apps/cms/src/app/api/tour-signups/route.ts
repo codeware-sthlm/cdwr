@@ -1,9 +1,16 @@
 import { createTourSignup } from '@codeware/app-cms/data-access';
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
+import {
+  clientIp,
+  rateLimit,
+  verifyHuman
+} from '@codeware/shared/util/human-check';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { payloadRuntime } from '../../../security/payload-runtime';
 
 type Body = {
+  humanCheck?: { token?: unknown; honeypot?: unknown; drawnAt?: unknown };
   tour?: unknown;
   name?: unknown;
   email?: unknown;
@@ -20,6 +27,7 @@ const asString = (value: unknown): string =>
  *
  * This route:
  * - Receives the customer's details from the site
+ * - Refuses anything that cannot show a person filled the form in
  * - Authenticates with Payload using server-side credentials (api key)
  * - Creates the signup, whose status the server decides from capacity
  * - Returns only that status, never the signup itself
@@ -46,6 +54,41 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    const ip = clientIp(request.headers);
+
+    // Counted before anything expensive happens: a flood costs a map lookup
+    // rather than a round trip and a row
+    const allowance = rateLimit(`tour-signup:${ip ?? 'unknown'}`);
+
+    if (!allowance.ok) {
+      return NextResponse.json(
+        { error: 'Too many signups', message: 'Too many signups' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(allowance.retryAfterSeconds) }
+        }
+      );
+    }
+
+    const env = getEnv(false);
+    const check = await verifyHuman(body.humanCheck ?? {}, {
+      secretKey: env?.HUMAN_CHECK?.secretKey,
+      ip
+    });
+
+    if (!check.ok) {
+      // Logged with its reason, answered without one
+      console.warn(`Tour signup refused: ${check.reason}`);
+
+      return NextResponse.json(
+        {
+          error: 'Could not accept this signup',
+          message: 'Could not accept this signup'
+        },
         { status: 400 }
       );
     }
