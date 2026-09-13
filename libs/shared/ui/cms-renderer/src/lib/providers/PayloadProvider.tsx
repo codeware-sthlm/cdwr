@@ -9,8 +9,31 @@ import { type ReactNode, createContext, use } from 'react';
 
 import type { AppInfo } from '../about/AppAbout';
 
+/**
+ * What the browser sends so the server can tell a person from a script.
+ *
+ * Collected by the renderer and passed straight through to the host's own
+ * route, which is where it is checked — see `@codeware/shared/util/human-check`.
+ */
+export type HumanCheckProof = {
+  /** Turnstile's token, empty where the site draws no widget */
+  token: string;
+  /** A field no person can see, so anything in it came from a script */
+  honeypot: string;
+  /**
+   * Milliseconds between the form being drawn and sent, measured in the
+   * browser from a monotonic clock.
+   *
+   * A duration rather than a timestamp on purpose: comparing a browser's
+   * wall clock against the server's refuses anyone whose clock runs fast,
+   * and the visitor cannot tell why.
+   */
+  elapsedMs: number;
+};
+
 type FormSubmitData = {
   form: FormSubmission['form'];
+  humanCheck: HumanCheckProof;
 } & {
   submissionData: Array<
     Pick<
@@ -43,6 +66,7 @@ export type TourSignupData = {
    * itself — a client-sent timestamp would be worth nothing as a record.
    */
   acceptedTerms?: boolean;
+  humanCheck: HumanCheckProof;
 };
 
 export type TourSignupResponse =
@@ -197,6 +221,19 @@ export type PayloadValue = {
    * the app renders no tour signup form at all.
    */
   signupPolicy?: SignupPolicy | null;
+
+  /**
+   * The public key the human-check widget is drawn with.
+   *
+   * Omit it and a form still carries the hidden field and the time it took to
+   * fill in, which the host's route checks either way. The secret that
+   * verifies a token never leaves the server, so it is not here.
+   *
+   * Flat while it is one value. A second setting — another verifier, a
+   * per-tenant fill time — would make an object worth the indirection, and
+   * widening it then is a smaller change than guessing at it now.
+   */
+  humanCheckSiteKey?: string | null;
 
   /**
    * Provide the current color scheme state.

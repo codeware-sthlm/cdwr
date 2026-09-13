@@ -9,12 +9,13 @@ import {
 } from '@codeware/shared/ui/shadcn/components/form';
 import { t } from '@codeware/shared/util/i18n';
 import type { Tour } from '@codeware/shared/util/payload-types';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { Checkbox } from '../form-items/Checkbox';
 import { Input } from '../form-items/Input';
+import { useHumanCheck } from '../human-check/use-human-check';
 import { ColSpan } from '../layout/ColSpan';
 import { Grid } from '../layout/Grid';
 import { usePayload } from '../providers/PayloadProvider';
@@ -56,6 +57,11 @@ export type TourSignupFormProps = {
 export function TourSignupForm({ tour, onSuccess }: TourSignupFormProps) {
   const { locale, signupPolicy, submitTourSignup } = usePayload();
   const [isLoading, setIsLoading] = useState(false);
+  // Set the moment a signup starts, not on the next render — `handleSubmit`
+  // validates asynchronously, so two quick presses of Enter can both arrive
+  // before `isLoading` has re-rendered
+  const submitting = useRef(false);
+  const humanCheck = useHumanCheck();
 
   const form = useForm<Values>({
     defaultValues: {
@@ -80,48 +86,68 @@ export function TourSignupForm({ tour, onSuccess }: TourSignupFormProps) {
 
   const onSubmit = useCallback(
     (values: Values) => {
+      // Enter in a text field submits whatever the button's state says. That
+      // would send a proof the widget has not finished making, or a second
+      // signup while the first is in flight — a replayed token, or without a
+      // key a duplicate signup and a duplicate email
+      if (submitting.current || !humanCheck.solved) {
+        return;
+      }
+
+      submitting.current = true;
+
       const invokeSubmit = async () => {
         setIsLoading(true);
 
-        const response = await submitTourSignup({
-          tour: tour.id,
-          name: values.name,
-          email: values.email,
-          phone: values.phone || undefined,
-          people: Number(values.people),
-          acceptedTerms: termsUrl ? values.acceptedTerms : undefined
-        });
+        // Cleared however the attempt ends, or a signup that threw would leave
+        // the form refusing every attempt after it
+        try {
+          const response = await submitTourSignup({
+            tour: tour.id,
+            name: values.name,
+            email: values.email,
+            phone: values.phone || undefined,
+            people: Number(values.people),
+            acceptedTerms: termsUrl ? values.acceptedTerms : undefined,
+            humanCheck: humanCheck.proof()
+          });
 
-        setIsLoading(false);
+          // The token has been spent now, whatever the answer was
+          humanCheck.reset();
 
-        if (!response.success) {
-          // A refusal carries a reason worth reading — the tour closed while
-          // the form was open, say. Only an unexplained failure is worth
-          // answering with "try again", which is what the generic line says.
-          toast.error(response.data.error || t(locale, 'tourSignup.failed'));
-          return;
+          setIsLoading(false);
+
+          if (!response.success) {
+            // A refusal carries a reason worth reading — the tour closed while
+            // the form was open, say. Only an unexplained failure is worth
+            // answering with "try again", which is what the generic line says.
+            toast.error(response.data.error || t(locale, 'tourSignup.failed'));
+            return;
+          }
+
+          const { data } = response;
+
+          form.reset();
+          onSuccess?.();
+
+          // The server decides; a customer who asked for a seat may well have
+          // been queued behind someone who submitted a moment earlier
+          toast.success(
+            t(
+              locale,
+              data.status === 'waiting'
+                ? 'tourSignup.successWaiting'
+                : 'tourSignup.successBooked'
+            )
+          );
+        } finally {
+          submitting.current = false;
         }
-
-        const { data } = response;
-
-        form.reset();
-        onSuccess?.();
-
-        // The server decides; a customer who asked for a seat may well have
-        // been queued behind someone who submitted a moment earlier
-        toast.success(
-          t(
-            locale,
-            data.status === 'waiting'
-              ? 'tourSignup.successWaiting'
-              : 'tourSignup.successBooked'
-          )
-        );
       };
 
       void invokeSubmit();
     },
-    [form, locale, onSuccess, submitTourSignup, termsUrl, tour.id]
+    [form, humanCheck, locale, onSuccess, submitTourSignup, termsUrl, tour.id]
   );
 
   if (tour.signupsClosed) {
@@ -267,8 +293,14 @@ export function TourSignupForm({ tour, onSuccess }: TourSignupFormProps) {
               </ColSpan>
             )}
 
+            <ColSpan>{humanCheck.fields}</ColSpan>
+
             <ColSpan>
-              <Button type="submit" disabled={isLoading} className="w-full">
+              <Button
+                type="submit"
+                disabled={isLoading || !humanCheck.solved}
+                className="w-full"
+              >
                 {isLoading
                   ? t(locale, 'tourSignup.submitting')
                   : full

@@ -20,7 +20,7 @@ import type {
   Form as FormType
 } from '@codeware/shared/util/payload-types';
 import type { FieldValues } from '@payloadcms/plugin-form-builder/types';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { FieldErrors, type RegisterOptions, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -31,6 +31,7 @@ import { Input } from '../../form-items/Input';
 import { Radio } from '../../form-items/Radio';
 import { Select } from '../../form-items/Select';
 import { Textarea } from '../../form-items/Textarea';
+import { useHumanCheck } from '../../human-check/use-human-check';
 import { ColSpan } from '../../layout/ColSpan';
 import { Grid } from '../../layout/Grid';
 import { usePayload } from '../../providers/PayloadProvider';
@@ -86,8 +87,16 @@ export const FormBlock: React.FC<Props> = ({
   // Payload context
   const { navigate, submitForm, locale } = usePayload();
 
+  const humanCheck = useHumanCheck({ disabled });
+
   // Control loading state and open confirmation dialog
   const [isLoading, setIsLoading] = useState(false);
+
+  // Set the moment a submission starts, not on the next render. `handleSubmit`
+  // validates asynchronously, so two quick presses of Enter can both reach the
+  // callback before `isLoading` has re-rendered — only a ref sees the first in
+  // time to turn the second away
+  const submitting = useRef(false);
   const [openConfirmationDialog, setOpenConfirmationDialog] = useState(false);
 
   const {
@@ -101,11 +110,16 @@ export const FormBlock: React.FC<Props> = ({
   // Submit handler
   const onSubmit = useCallback(
     (formValue: FieldValues) => {
-      // Disabling the button leaves Enter in a text field, which would post a
-      // gallery example to a form that belongs to nobody
-      if (disabled) {
+      // Disabling the button leaves Enter in a text field. That would post a
+      // gallery example to a form that belongs to nobody, send a proof the
+      // widget has not finished making, or send a second copy while the first
+      // is still in flight — replaying its single-use token, or, without a
+      // key, duplicating the submission and the email it sends
+      if (disabled || submitting.current || !humanCheck.solved) {
         return;
       }
+
+      submitting.current = true;
 
       const invokeSubmit = async () => {
         setIsLoading(true);
@@ -121,8 +135,13 @@ export const FormBlock: React.FC<Props> = ({
           // Invoke provider callback
           const { success } = await submitForm({
             form: formId,
+            humanCheck: humanCheck.proof(),
             submissionData
           });
+
+          // The token has been spent now, whatever the answer was. A second
+          // attempt needs a fresh one or the server refuses it as a replay
+          humanCheck.reset();
 
           setIsLoading(false);
 
@@ -186,6 +205,8 @@ export const FormBlock: React.FC<Props> = ({
           toast.error(t(locale, 'form.submitFailed'), {
             description: t(locale, 'form.submitFailedDescription')
           });
+        } finally {
+          submitting.current = false;
         }
       };
 
@@ -196,6 +217,7 @@ export const FormBlock: React.FC<Props> = ({
       disabled,
       form,
       formId,
+      humanCheck,
       navigate,
       onSuccess,
       redirect,
@@ -346,10 +368,14 @@ export const FormBlock: React.FC<Props> = ({
             })}
           </Grid>
 
+          {humanCheck.fields}
+
+          {/* Held shut until a drawn widget has been solved, so a click cannot
+              post into a refusal the visitor would read as the form failing */}
           <Button
             type="submit"
             isLoading={isLoading}
-            disabled={disabled}
+            disabled={disabled || !humanCheck.solved}
             className="mt-4"
           >
             {submitButtonLabel}
