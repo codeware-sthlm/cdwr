@@ -115,6 +115,16 @@ const tenants: CollectionConfig = {
       required: true
     },
     deploymentField,
+    {
+      name: 'infisicalPanel',
+      type: 'ui',
+      admin: {
+        components: {
+          Field:
+            '@codeware/apps/cms/components/admin/provisioning/InfisicalField'
+        }
+      }
+    },
     domainsField(),
     {
       name: 'domainsPanel',
