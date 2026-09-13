@@ -11,7 +11,7 @@ export {
   type AppDeploymentDetails,
   type AppDetails
 } from './lib/app-deployment-details.schema';
-export { getAppName } from './lib/get-app-name';
+export { getAppName } from '@codeware/shared/util/pure';
 export {
   type AppChangelogRange,
   generateAppChangelogs

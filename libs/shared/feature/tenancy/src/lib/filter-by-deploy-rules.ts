@@ -1,41 +1,8 @@
 import * as core from '@actions/core';
+import { matchesDeployRule, parseDeployRule } from '@codeware/shared/util/pure';
 
 import type { DeployRules } from './deploy-rules.schema';
 import type { AppTenantsMap } from './fetch-app-tenants';
-
-/**
- * Parse a rule string into an array of values.
- *
- * @param rule - Rule string ('*' for wildcard, or comma-separated values like 'demo,acme')
- * @returns Null for wildcard ('*'), or array of specific values
- */
-function parseRule(rule: string): string[] | null {
-  const trimmed = rule.trim();
-
-  if (trimmed === '*') {
-    return null; // null indicates wildcard (all)
-  }
-
-  return trimmed
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean);
-}
-
-/**
- * Check if a value matches a rule.
- *
- * @param value - Value to check (e.g., app name or tenant ID)
- * @param rule - Parsed rule (null = wildcard, [...] = specific values)
- * @returns True if value matches the rule
- */
-function matchesRule(value: string, rule: string[] | null): boolean {
-  if (rule === null) {
-    return true; // Wildcard matches everything
-  }
-
-  return rule.includes(value);
-}
 
 /**
  * Filter app-tenant relationships based on deployment rules.
@@ -52,8 +19,8 @@ export function filterByDeployRules(
   appTenants: AppTenantsMap,
   rules: DeployRules
 ): AppTenantsMap {
-  const parsedAppRule = parseRule(rules.apps);
-  const parsedTenantRule = parseRule(rules.tenants);
+  const parsedAppRule = parseDeployRule(rules.apps);
+  const parsedTenantRule = parseDeployRule(rules.tenants);
 
   core.info('[filter-by-deploy-rules] Applying deployment rules...');
   core.info(
@@ -67,7 +34,7 @@ export function filterByDeployRules(
 
   for (const [appName, tenantDetails] of Object.entries(appTenants)) {
     // Check if app matches app rule
-    if (!matchesRule(appName, parsedAppRule)) {
+    if (!matchesDeployRule(appName, parsedAppRule)) {
       core.info(`  [${appName}] Filtered out by apps rule`);
       continue;
     }
@@ -82,7 +49,7 @@ export function filterByDeployRules(
     } else {
       // Specific tenants: filter the list
       const filteredTenants = tenantDetails.filter((detail) =>
-        matchesRule(detail.tenant, parsedTenantRule)
+        matchesDeployRule(detail.tenant, parsedTenantRule)
       );
 
       filtered[appName] = filteredTenants;
