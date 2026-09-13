@@ -45,6 +45,26 @@ describe('rateLimit', () => {
     });
   });
 
+  it('stays bounded when a flood rotates addresses, keeping the busiest', () => {
+    let clock = START;
+    const config = { limit: 1, windowMs: 60 * 60 * 1000, now: () => clock };
+
+    // More distinct callers than the table holds, all inside the window, so
+    // nothing can be dropped for being stale
+    for (let i = 0; i < 10_200; i++) {
+      clock = START + i;
+      rateLimit(`caller-${i}`, config);
+    }
+
+    clock = START + 20_000;
+
+    // The earliest caller was evicted to make room, which costs them only a
+    // fresh allowance they were not using
+    expect(rateLimit('caller-0', config)).toEqual({ ok: true });
+    // The most recent one is still counted — whoever is flooding stays known
+    expect(rateLimit('caller-10199', config)).toMatchObject({ ok: false });
+  });
+
   it('lets the caller back in once the window has passed', () => {
     let clock = START;
     const config = { limit: 1, windowMs: 60_000, now: () => clock };

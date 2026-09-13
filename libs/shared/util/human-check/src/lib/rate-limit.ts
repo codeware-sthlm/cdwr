@@ -13,14 +13,18 @@ const DEFAULT_LIMIT = 5;
 const DEFAULT_WINDOW_MS = 10 * 60 * 1000;
 
 /**
- * Keys are addresses, so the table is swept rather than left to grow with
- * every visitor the machine ever saw.
+ * How many callers are tracked at once.
+ *
+ * Keys are addresses, and addresses can be rotated, so the table has to be
+ * bounded rather than merely tidied — otherwise a flood from many addresses is
+ * a way to spend this machine's memory.
  */
 const MAX_KEYS = 10_000;
 
 const hits = new Map<string, Array<number>>();
 
-const sweep = (cutoff: number) => {
+/** Drop what has fallen out of the window, then the least recently seen. */
+const prune = (cutoff: number) => {
   for (const [key, times] of hits) {
     const live = times.filter((time) => time > cutoff);
     if (live.length) {
@@ -28,6 +32,23 @@ const sweep = (cutoff: number) => {
     } else {
       hits.delete(key);
     }
+  }
+
+  if (hits.size <= MAX_KEYS) {
+    return;
+  }
+
+  // Still full, so every caller is inside the window and something has to go.
+  // The quietest are dropped first: whoever is flooding is by definition the
+  // most recently seen, so they stay counted while a visitor who posted once
+  // some minutes ago is forgotten — which costs them nothing but a fresh
+  // allowance they were not using
+  const byAge = [...hits.entries()].sort(
+    ([, a], [, b]) => (a.at(-1) ?? 0) - (b.at(-1) ?? 0)
+  );
+
+  for (const [key] of byAge.slice(0, hits.size - MAX_KEYS)) {
+    hits.delete(key);
   }
 };
 
@@ -57,8 +78,8 @@ export function rateLimit(
   const moment = now();
   const cutoff = moment - windowMs;
 
-  if (hits.size > MAX_KEYS) {
-    sweep(cutoff);
+  if (hits.size >= MAX_KEYS) {
+    prune(cutoff);
   }
 
   const recent = (hits.get(key) ?? []).filter((time) => time > cutoff);
