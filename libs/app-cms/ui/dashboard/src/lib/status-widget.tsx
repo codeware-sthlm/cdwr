@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@codeware/shared/ui/shadcn/components/card';
 import { cn } from '@codeware/shared/util/ui';
 import { ArrowRightIcon } from '@heroicons/react/24/outline';
+import type { ReactNode } from 'react';
 
 import type { IconComponent } from './types';
 
@@ -15,7 +16,7 @@ export type StatusWidgetProps = {
   /** The headline value, e.g. "8 domains" */
   metric: string;
   /** One line naming the worst finding, e.g. "2 pending" */
-  detail: string;
+  detail: ReactNode;
   /** Opens the detail sheet; omit for a widget with nothing more to show */
   onOpen?: () => void;
   /** Accessible name for the open affordance, e.g. "Show all domains" */

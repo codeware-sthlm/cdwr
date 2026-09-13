@@ -51,6 +51,12 @@
       ],
       "@codeware/app-cms/ui/domains/*": ["./libs/app-cms/ui/domains/src/lib/*"],
       "@codeware/app-cms/ui/fields": ["./libs/app-cms/ui/fields/src/index.ts"],
+      "@codeware/app-cms/ui/provisioning": [
+        "./libs/app-cms/ui/provisioning/src/index.ts"
+      ],
+      "@codeware/app-cms/ui/provisioning/*": [
+        "./libs/app-cms/ui/provisioning/src/lib/*"
+      ],
       "@codeware/app-cms/ui/fields/*": ["./libs/app-cms/ui/fields/src/lib/*"],
       "@codeware/app-cms/ui/lexical": [
         "./libs/app-cms/ui/lexical/src/index.ts"

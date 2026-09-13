@@ -55,6 +55,7 @@ import { platformDomainCertificateEndpoint } from './endpoints/platform-domain-c
 import { platformMachineRestartEndpoint } from './endpoints/platform-machine-restart';
 import { tenantConfigEndpoint } from './endpoints/tenant-config';
 import { tenantDomainCertificateEndpoint } from './endpoints/tenant-domain-certificate';
+import { tenantInfisicalStatusEndpoint } from './endpoints/tenant-infisical-status';
 import { tenantMachineRestartEndpoint } from './endpoints/tenant-machine-restart';
 import { tourSignupsAnonymizeEndpoint } from './endpoints/tour-signups-anonymize';
 import { tourSignupsExportEndpoint } from './endpoints/tour-signups-export';
@@ -205,6 +206,7 @@ export default buildConfig({
     platformMachineRestartEndpoint,
     tenantConfigEndpoint,
     tenantDomainCertificateEndpoint,
+    tenantInfisicalStatusEndpoint,
     tenantMachineRestartEndpoint,
     tourSignupsAnonymizeEndpoint,
     tourSignupsExportEndpoint,
