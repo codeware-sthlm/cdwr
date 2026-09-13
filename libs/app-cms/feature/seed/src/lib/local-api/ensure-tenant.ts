@@ -3,7 +3,7 @@ import type { Payload, TypedLocale } from 'payload';
 
 export type TenantData = Pick<
   Tenant,
-  'name' | 'description' | 'apiKey' | 'slug' | 'supportedLocales'
+  'name' | 'description' | 'apiKey' | 'slug' | 'supportedLocales' | 'deployment'
 > & { slug: string }; // Ensure slug is required for tenant lookup and creation
 
 /**
@@ -22,7 +22,8 @@ export async function ensureTenant(
   options: { locale: TypedLocale; transactionID: string | number | undefined }
 ): Promise<Tenant | number> {
   const { locale, transactionID } = options;
-  const { apiKey, description, name, slug, supportedLocales } = data;
+  const { apiKey, deployment, description, name, slug, supportedLocales } =
+    data;
 
   // Check if the tenant exists with the given slug
   const tenants = await payload.find({
@@ -47,6 +48,7 @@ export async function ensureTenant(
     data: {
       enableAPIKey: true,
       apiKey,
+      deployment,
       description,
       name,
       slug,

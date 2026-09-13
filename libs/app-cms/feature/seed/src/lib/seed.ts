@@ -185,6 +185,7 @@ export const seed = async (
           payload,
           {
             apiKey: tenant.apiKey,
+            deployment: tenant.deployment,
             description: tenant.description,
             name: tenant.name,
             slug: tenant.slug,

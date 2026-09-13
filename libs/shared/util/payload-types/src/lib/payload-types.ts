@@ -466,6 +466,10 @@ export interface Tenant {
    */
   supportedLocales: ('en' | 'sv')[];
   /**
+   * The name this workspace is deployed under: its folder in Infisical and the end of its Fly app names, so "demo" deploys as "cdwr-cms-demo". Lowercase letters, digits and hyphens. It cannot be changed once saved, because a new name would leave the old apps and settings behind.
+   */
+  deployment?: string | null;
+  /**
    * Domains this workspace is reachable on, in addition to its .fly.dev address — which keeps working and stays useful for support. Add the domain here first, then create the DNS records shown after saving.
    */
   domains?:
@@ -3013,6 +3017,7 @@ export interface TenantsSelect<T extends boolean = true> {
   name?: T;
   description?: T;
   supportedLocales?: T;
+  deployment?: T;
   domains?:
     | T
     | {

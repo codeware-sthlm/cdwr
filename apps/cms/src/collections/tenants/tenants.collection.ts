@@ -11,6 +11,7 @@ import { hasNoAdminRoles } from '@codeware/app-cms/util/misc';
 import type { CollectionConfig } from 'payload';
 
 import { restrictToTenantInTenantMode } from './access/restrict-to-tenant-in-tenant-mode';
+import { deploymentField } from './fields/deployment.field';
 import { enforceApiKeyHook } from './hooks/enforce-api-key.hook';
 import { populateIconHook } from './hooks/populate-icon.hook';
 
@@ -113,6 +114,7 @@ const tenants: CollectionConfig = {
       hasMany: true,
       required: true
     },
+    deploymentField,
     domainsField(),
     {
       name: 'domainsPanel',

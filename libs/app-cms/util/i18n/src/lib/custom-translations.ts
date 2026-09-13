@@ -275,6 +275,10 @@ const customTranslationsSchema = z.object({
     bookingDeadlineAfterDeparture: z.string(),
     bookingNeedsDeparture: z.string(),
     defaultThemeNotSelected: z.string(),
+    deploymentCharacters: z.string(),
+    deploymentHyphens: z.string(),
+    deploymentReserved: z.string(),
+    deploymentTooLong: z.string(),
     domainDuplicate: z.string(),
     domainMalformed: z.string(),
     domainNoPathOrPort: z.string(),
@@ -611,6 +615,14 @@ You can assign multiple tags to a file.`,
         'A tour can only be booked once it has a departure date. Use "Register interest" while the date is unconfirmed.',
       defaultThemeNotSelected:
         '"{{theme}}" is not one of the selected themes ({{themes}}).',
+      deploymentCharacters:
+        '"{{name}}" can only use lowercase letters, digits and hyphens.',
+      deploymentHyphens:
+        '"{{name}}" cannot start or end with a hyphen, or have two in a row.',
+      deploymentReserved:
+        '"{{name}}" would clash with the names preview deployments are given. Choose a name that does not start with "pr-" and a number.',
+      deploymentTooLong:
+        '"{{name}}" is too long. Use at most {{max}} characters.',
       domainDuplicate: '"{{hostname}}" is listed more than once.',
       domainMalformed: '"{{hostname}}" is not a valid domain name.',
       domainNoPathOrPort:
@@ -956,6 +968,14 @@ Du kan tilldela flera etiketter till en fil.`,
         'En resa kan bara bokas när den har ett avresedatum. Använd "Intresseanmälan" så länge datumet inte är fastställt.',
       defaultThemeNotSelected:
         '"{{theme}}" är inte ett av de valda temana ({{themes}}).',
+      deploymentCharacters:
+        '"{{name}}" får bara innehålla små bokstäver, siffror och bindestreck.',
+      deploymentHyphens:
+        '"{{name}}" får inte börja eller sluta med bindestreck, och får inte ha två bindestreck i rad.',
+      deploymentReserved:
+        '"{{name}}" krockar med de namn som förhandsversioner får. Välj ett namn som inte börjar med "pr-" följt av en siffra.',
+      deploymentTooLong:
+        '"{{name}}" är för långt. Använd högst {{max}} tecken.',
       domainDuplicate: '"{{hostname}}" förekommer flera gånger.',
       domainMalformed: '"{{hostname}}" är inte ett giltigt domännamn.',
       domainNoPathOrPort:

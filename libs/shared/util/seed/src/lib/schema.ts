@@ -196,6 +196,8 @@ export const SeedDataSchema = z.object({
     z.object({
       name: z.string(),
       slug: z.string(),
+      /** The Infisical folder and Fly app suffix, when the tenant is deployed */
+      deployment: z.string().optional(),
       description: z.string(),
       /** Seed data locale */
       locale: z.enum(['en', 'sv']),
