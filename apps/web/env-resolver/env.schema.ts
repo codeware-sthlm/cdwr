@@ -52,6 +52,22 @@ export const EnvSchema = z.object({
   SENTRY_RELEASE: z
     .string({ description: 'Release identifier `name@version+sha`' })
     .optional(),
+  // How many submissions one address may send to a public endpoint in ten
+  // minutes. This app's own limiter is the one that counts for its visitors:
+  // the cms leaves a signed forward alone, since only this side sees the
+  // visitor's real address
+  HUMAN_CHECK_RATE_LIMIT: z.coerce
+    .number({ description: 'Submissions allowed per address, per endpoint' })
+    .int()
+    .positive()
+    .default(60),
+
+  // Only the public half. This app forwards submissions to the cms, which
+  // holds the secret and checks the token — so set this whenever the cms it
+  // talks to has a pair, and leave it unset when it does not
+  TURNSTILE_SITE_KEY: z
+    .string({ description: 'Public key the widget is rendered with' })
+    .optional(),
   SIGNATURE_SECRET: z
     .string({ description: 'Secret key for API request signatures' })
     .min(1, {

@@ -27,6 +27,7 @@ type ProvidersProps = {
 } & Pick<
   PayloadValue,
   | 'appInfo'
+  | 'humanCheckSiteKey'
   | 'iconConfig'
   | 'locale'
   | 'payloadUrl'
@@ -44,6 +45,7 @@ export function Providers({
   appInfo,
   chrome,
   colorScheme,
+  humanCheckSiteKey,
   iconConfig,
   locale,
   payloadUrl,
@@ -64,6 +66,7 @@ export function Providers({
         appInfo={appInfo}
         chrome={chrome}
         colorScheme={colorScheme}
+        humanCheckSiteKey={humanCheckSiteKey}
         iconConfig={iconConfig}
         locale={locale}
         payloadUrl={payloadUrl}
@@ -82,6 +85,7 @@ function PayloadProviderInner({
   appInfo,
   chrome,
   colorScheme: colorSchemePolicy,
+  humanCheckSiteKey,
   iconConfig,
   locale,
   payloadUrl,
@@ -104,6 +108,7 @@ function PayloadProviderInner({
         appInfo,
         getCurrentPath: () => pathname,
         getSearchParam: (name) => searchParams.get(name),
+        humanCheckSiteKey,
         iconConfig,
         locale,
         navigate: (path, newTab) => {

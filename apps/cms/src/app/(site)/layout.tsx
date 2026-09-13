@@ -113,6 +113,7 @@ export default async function RootLayout({
         <Providers
           appInfo={getAppInfo(env)}
           iconConfig={runtime.tenantConfig?.icon ?? null}
+          humanCheckSiteKey={env.HUMAN_CHECK?.siteKey ?? null}
           locale={runtime.tenantConfig?.locale ?? 'en'}
           payloadUrl={env.APP_MODE.serverURL}
           signupPolicy={signupPolicy}

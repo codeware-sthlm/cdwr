@@ -31,6 +31,8 @@ export async function invokeRequest<Target extends 'tenant-config'>(
   | {
       error: string;
       status: number;
+      /** What the answer said about waiting, when it said anything */
+      retryAfter?: string;
     }
 >;
 
@@ -48,6 +50,8 @@ export async function invokeRequest<
   | {
       error: string;
       status: number;
+      /** What the answer said about waiting, when it said anything */
+      retryAfter?: string;
     }
 >;
 export async function invokeRequest<Target extends RestApiTarget>(
@@ -62,6 +66,8 @@ export async function invokeRequest<Target extends RestApiTarget>(
   | {
       error: string;
       status: number;
+      /** What the answer said about waiting, when it said anything */
+      retryAfter?: string;
     }
 > {
   const {
@@ -102,7 +108,14 @@ export async function invokeRequest<Target extends RestApiTarget>(
     method === 'POST' ? JSON.stringify(options.body) : undefined;
 
   if (debug) {
-    console.log(`[PAYLOAD REQUEST] ${requestUrl}`, requestInit);
+    // Named, not printed: the body carries whatever a visitor typed and the
+    // headers carry the credentials this request is made with. Debug logging
+    // is for seeing that a request went out, not for reading its contents
+    console.log(`[PAYLOAD REQUEST] ${method} ${requestUrl}`, {
+      ...requestInit,
+      body: requestInit.body ? '[redacted]' : undefined,
+      headers: Object.keys(requestInit.headers ?? {})
+    });
   }
 
   const response = await fetch(requestUrl, requestInit);
@@ -121,7 +134,10 @@ export async function invokeRequest<Target extends RestApiTarget>(
   if (!response.ok) {
     return {
       error: response.statusText,
-      status: response.status
+      status: response.status,
+      // Carried so a caller forwarding this on can keep the answer intact —
+      // a refused rate that arrives as a plain failure tells nobody to wait
+      retryAfter: response.headers.get('retry-after') ?? undefined
     };
   }
 

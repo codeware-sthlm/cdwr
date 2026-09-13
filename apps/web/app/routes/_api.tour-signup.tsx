@@ -1,10 +1,17 @@
+import {
+  type HumanCheckFields,
+  clientIp,
+  rateLimit
+} from '@codeware/shared/util/human-check';
 import { post } from '@codeware/shared/util/payload-api';
 import { json } from '@remix-run/node';
 
+import env from '../../env-resolver/env';
 import { getPayloadRequestOptions } from '../utils/get-payload-request-options';
 import type { TypedActionFunctionArgs } from '../utils/types';
 
 type Body = {
+  humanCheck?: HumanCheckFields;
   tour?: number;
   name?: string;
   email?: string;
@@ -37,7 +44,25 @@ export async function action({ context, request }: TypedActionFunctionArgs) {
     return json({ message: 'Invalid tour signup body' }, { status: 400 });
   }
 
-  const { acceptedTerms, ...signup } = body;
+  const { acceptedTerms, humanCheck, ...signup } = body;
+
+  // Counted here as well, so a flood is refused before it costs a second hop.
+  // The proof itself is checked by the cms route this forwards to — spending
+  // the Turnstile token here would make that check refuse a replay
+  const allowance = rateLimit(
+    `tour-signup:${clientIp(request.headers) ?? 'unknown'}`,
+    { limit: env.HUMAN_CHECK_RATE_LIMIT }
+  );
+
+  if (!allowance.ok) {
+    return json(
+      { message: 'Too many submissions' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(allowance.retryAfterSeconds) }
+      }
+    );
+  }
 
   const requestOptions = getPayloadRequestOptions(
     'POST',
@@ -45,6 +70,8 @@ export async function action({ context, request }: TypedActionFunctionArgs) {
     request.headers,
     {
       ...signup,
+      humanCheck,
+      acceptedTerms,
       // Timed here rather than from anything the browser sent — a record of
       // acceptance is only worth keeping if a server wrote it
       termsAcceptedAt: acceptedTerms ? new Date().toISOString() : null
@@ -71,10 +98,17 @@ export async function action({ context, request }: TypedActionFunctionArgs) {
       status: doc.status
     });
   } catch (e) {
-    const error = e as Error;
+    const error = e as Error & { status?: number; retryAfter?: string };
+
+    // A refused rate upstream stays a refused rate here, retry hint and all
+    const status = error.status === 429 ? 429 : 400;
+
     return json(
       { success: false, message: error?.message ?? 'Unknown error' },
-      { status: 400 }
+      {
+        status,
+        headers: error.retryAfter ? { 'Retry-After': error.retryAfter } : {}
+      }
     );
   }
 }
