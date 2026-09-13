@@ -2,6 +2,8 @@ import { adoptableDomains } from '@codeware/app-cms/feature/domains';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import type { Payload } from 'payload';
 
+import { isSchemaNotReady } from './schema-not-ready';
+
 /**
  * Serve the host cms on its own custom domain.
  *
@@ -81,6 +83,13 @@ export const adoptPlatformDomains = async (payload: Payload): Promise<void> => {
 
     payload.logger.info(`[platform-domains] Accepting ${origins.join(', ')}`);
   } catch (error) {
+    if (isSchemaNotReady(error)) {
+      payload.logger.warn(
+        '[platform-domains] Skipped, the database schema is not ready'
+      );
+      return;
+    }
+
     // A settings lookup failing must not stop the app from booting — without
     // this it still serves on its Fly url, which is how support reaches it
     payload.logger.error(

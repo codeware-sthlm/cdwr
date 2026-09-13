@@ -4,6 +4,8 @@ import type { Payload } from 'payload';
 
 import { resolveScopedTenant } from '../security/resolve-scoped-tenant';
 
+import { isSchemaNotReady } from './schema-not-ready';
+
 /**
  * Serve this deployment's workspace on its own custom domain.
  *
@@ -84,6 +86,13 @@ export const adoptTenantDomains = async (payload: Payload): Promise<void> => {
 
     payload.logger.info(`[domains] Accepting ${origins.join(', ')}`);
   } catch (error) {
+    if (isSchemaNotReady(error)) {
+      payload.logger.warn(
+        '[domains] Skipped, the database schema is not ready'
+      );
+      return;
+    }
+
     // A workspace lookup failing must not stop the app from booting — without
     // this it still serves on its Fly url, which is how support reaches it
     payload.logger.error(
