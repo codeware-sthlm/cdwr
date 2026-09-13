@@ -6,6 +6,8 @@
  * All other authenticated users are denied regardless of their tenant role.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import { Tenant } from '@codeware/shared/util/payload-types';
 import type { APIResponse, Page } from '@playwright/test';
 
@@ -132,6 +134,43 @@ test.describe('Tenants — delete [T-04]', () => {
     await loginAs(page, 'systemUser');
     const res = await page.request.delete(`/api/tenants/${tenantId}`);
     expect(res.status()).toBe(200);
+  });
+});
+
+/**
+ * A workspace authenticates by its API key, so creating one without a key
+ * must still leave it with one that works.
+ */
+test.describe('Tenants — API key on create', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('a workspace created without a key gets one that authenticates', async ({
+    page,
+    playwright,
+    baseURL
+  }) => {
+    await loginAs(page, 'systemUser');
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { apiKey: _omitted, ...data } = newTenant('create');
+    const created = await page.request.post('/api/tenants', { data });
+    expect(created.status(), await created.text()).toBe(201);
+
+    const { doc } = (await created.json()) as { doc: Tenant };
+    expect(doc.apiKey).toMatch(/^[0-9a-f-]{36}$/);
+
+    // Tenant-scoped reads answer a key Payload recognises and refuse one it
+    // does not, so a 200 proves the key was stored with the index it is found
+    // by. A context without the system user's cookie, so only the key counts
+    const anonymous = await playwright.request.newContext({ baseURL });
+    const readWith = (apiKey: string) =>
+      anonymous.get('/api/tags?limit=1&depth=0', {
+        headers: { Authorization: `tenants API-Key ${apiKey}` }
+      });
+
+    expect((await readWith(doc.apiKey as string)).status()).toBe(200);
+    expect((await readWith(randomUUID())).status()).toBe(403);
+    await anonymous.dispose();
   });
 });
 
