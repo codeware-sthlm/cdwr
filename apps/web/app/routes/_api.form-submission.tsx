@@ -1,8 +1,4 @@
-import {
-  clientIp,
-  rateLimit,
-  verifyHuman
-} from '@codeware/shared/util/human-check';
+import { guardHeaders, guardSubmit } from '@codeware/shared/util/human-check';
 import { post } from '@codeware/shared/util/payload-api';
 import type { FormSubmission } from '@codeware/shared/util/payload-types';
 import { json } from '@remix-run/node';
@@ -35,32 +31,17 @@ export async function action({ context, request }: TypedActionFunctionArgs) {
     return json({ message: 'Invalid form submission body' }, { status: 400 });
   }
 
-  const ip = clientIp(request.headers);
-
-  // Counted before anything expensive happens
-  const allowance = rateLimit(`form:${ip ?? 'unknown'}`);
-
-  if (!allowance.ok) {
-    return json(
-      { message: 'Too many submissions' },
-      {
-        status: 429,
-        headers: { 'Retry-After': String(allowance.retryAfterSeconds) }
-      }
-    );
-  }
-
-  const check = await verifyHuman(humanCheck ?? {}, {
-    secretKey: env.TURNSTILE_SECRET_KEY,
-    ip
+  const guard = await guardSubmit({
+    fields: humanCheck ?? {},
+    headers: request.headers,
+    scope: 'form-submission',
+    secretKey: env.TURNSTILE_SECRET_KEY
   });
 
-  if (!check.ok) {
-    // Logged with its reason, answered without one
-    console.warn(`Form submission refused: ${check.reason}`);
+  if (!guard.ok) {
     return json(
-      { message: 'Could not accept this submission' },
-      { status: 400 }
+      { message: guard.message },
+      { status: guard.status, headers: guardHeaders(guard) }
     );
   }
 

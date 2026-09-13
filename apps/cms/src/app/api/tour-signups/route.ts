@@ -1,10 +1,6 @@
 import { createTourSignup } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import {
-  clientIp,
-  rateLimit,
-  verifyHuman
-} from '@codeware/shared/util/human-check';
+import { guardHeaders, guardSubmit } from '@codeware/shared/util/human-check';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { payloadRuntime } from '../../../security/payload-runtime';
@@ -58,38 +54,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ip = clientIp(request.headers);
-
-    // Counted before anything expensive happens: a flood costs a map lookup
-    // rather than a round trip and a row
-    const allowance = rateLimit(`tour-signup:${ip ?? 'unknown'}`);
-
-    if (!allowance.ok) {
-      return NextResponse.json(
-        { error: 'Too many signups', message: 'Too many signups' },
-        {
-          status: 429,
-          headers: { 'Retry-After': String(allowance.retryAfterSeconds) }
-        }
-      );
-    }
-
     const env = getEnv(false);
-    const check = await verifyHuman(body.humanCheck ?? {}, {
-      secretKey: env?.HUMAN_CHECK?.secretKey,
-      ip
+    const guard = await guardSubmit({
+      fields: body.humanCheck ?? {},
+      headers: request.headers,
+      scope: 'tour-signup',
+      secretKey: env?.HUMAN_CHECK?.secretKey
     });
 
-    if (!check.ok) {
-      // Logged with its reason, answered without one
-      console.warn(`Tour signup refused: ${check.reason}`);
-
+    if (!guard.ok) {
       return NextResponse.json(
-        {
-          error: 'Could not accept this signup',
-          message: 'Could not accept this signup'
-        },
-        { status: 400 }
+        { error: guard.message, message: guard.message },
+        { status: guard.status, headers: guardHeaders(guard) }
       );
     }
 

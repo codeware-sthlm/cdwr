@@ -1,10 +1,6 @@
 import { createFormSubmission } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import {
-  clientIp,
-  rateLimit,
-  verifyHuman
-} from '@codeware/shared/util/human-check';
+import { guardHeaders, guardSubmit } from '@codeware/shared/util/human-check';
 import type { FormSubmission } from '@codeware/shared/util/payload-types';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -42,36 +38,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ip = clientIp(request.headers);
-
-    // Counted before anything expensive happens, so a flood costs this machine
-    // a map lookup rather than a round trip to Cloudflare and a write
-    const allowance = rateLimit(`form:${ip ?? 'unknown'}`);
-
-    if (!allowance.ok) {
-      return NextResponse.json(
-        { error: 'Too many submissions' },
-        {
-          status: 429,
-          headers: { 'Retry-After': String(allowance.retryAfterSeconds) }
-        }
-      );
-    }
-
     const env = getEnv(false);
-    const check = await verifyHuman(humanCheck ?? {}, {
-      secretKey: env?.HUMAN_CHECK?.secretKey,
-      ip
+    const guard = await guardSubmit({
+      fields: humanCheck ?? {},
+      headers: request.headers,
+      scope: 'form-submission',
+      secretKey: env?.HUMAN_CHECK?.secretKey
     });
 
-    if (!check.ok) {
-      // Logged with its reason, answered without one: a script should not be
-      // told which gate closed on it
-      console.warn(`Form submission refused: ${check.reason}`);
-
+    if (!guard.ok) {
       return NextResponse.json(
-        { error: 'Could not accept this submission' },
-        { status: 400 }
+        { error: guard.message },
+        { status: guard.status, headers: guardHeaders(guard) }
       );
     }
 

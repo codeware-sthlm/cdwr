@@ -1,8 +1,4 @@
-import {
-  clientIp,
-  rateLimit,
-  verifyHuman
-} from '@codeware/shared/util/human-check';
+import { guardHeaders, guardSubmit } from '@codeware/shared/util/human-check';
 import { post } from '@codeware/shared/util/payload-api';
 import { json } from '@remix-run/node';
 
@@ -46,32 +42,17 @@ export async function action({ context, request }: TypedActionFunctionArgs) {
 
   const { acceptedTerms, humanCheck, ...signup } = body;
 
-  const ip = clientIp(request.headers);
-
-  // Counted before anything expensive happens
-  const allowance = rateLimit(`tour-signup:${ip ?? 'unknown'}`);
-
-  if (!allowance.ok) {
-    return json(
-      { message: 'Too many submissions' },
-      {
-        status: 429,
-        headers: { 'Retry-After': String(allowance.retryAfterSeconds) }
-      }
-    );
-  }
-
-  const check = await verifyHuman(humanCheck ?? {}, {
-    secretKey: env.TURNSTILE_SECRET_KEY,
-    ip
+  const guard = await guardSubmit({
+    fields: humanCheck ?? {},
+    headers: request.headers,
+    scope: 'tour-signup',
+    secretKey: env.TURNSTILE_SECRET_KEY
   });
 
-  if (!check.ok) {
-    // Logged with its reason, answered without one
-    console.warn(`Tour signup refused: ${check.reason}`);
+  if (!guard.ok) {
     return json(
-      { message: 'Could not accept this submission' },
-      { status: 400 }
+      { message: guard.message },
+      { status: guard.status, headers: guardHeaders(guard) }
     );
   }
 

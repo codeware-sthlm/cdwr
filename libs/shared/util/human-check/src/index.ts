@@ -1,5 +1,11 @@
 export { clientIp } from './lib/client-ip';
 export {
+  type GuardOptions,
+  type GuardResult,
+  guardHeaders,
+  guardSubmit
+} from './lib/guard-submit';
+export {
   type RateLimitConfig,
   type RateLimitResult,
   rateLimit,
