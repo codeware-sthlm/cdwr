@@ -344,6 +344,23 @@ export default buildConfig({
       );
     }
 
+    // What guards the public submit endpoints, said out loud at boot: the
+    // difference between three gates and two is invisible from the page
+    if (env.HUMAN_CHECK) {
+      payload.logger.info(
+        'Form submissions are checked by Turnstile, a hidden field and the clock'
+      );
+    } else {
+      payload.logger.info(
+        'Form submissions are checked by a hidden field and the clock — no Turnstile key is configured'
+      );
+    }
+    if (env.HUMAN_CHECK_MISSING) {
+      payload.logger.warn(
+        `[human-check] Only one Turnstile key is set — ${env.HUMAN_CHECK_MISSING} is missing, so the pair is ignored and no widget is drawn`
+      );
+    }
+
     payload.logger.info('Payload is ready');
     if (
       env.APP_MODE.type === 'host' ||
