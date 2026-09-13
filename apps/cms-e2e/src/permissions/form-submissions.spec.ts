@@ -17,6 +17,7 @@
 
 import { expect, test } from '../fixtures';
 import { createForm } from '../helpers/create-form';
+import { humanProof } from '../helpers/human-proof';
 import { loginAs } from '../helpers/login';
 
 /** Tenant API keys from seed data (always present in the e2e environment) */
@@ -48,6 +49,7 @@ test.describe('Form submissions — tenant scope', () => {
       const submissionRes = await page.request.post('/api/form-submissions', {
         data: {
           form: form.id,
+          humanCheck: humanProof(),
           submissionData: [{ field: 'email', value: 'moon@example.com' }]
         }
       });
