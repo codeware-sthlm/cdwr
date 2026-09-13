@@ -658,6 +658,8 @@ export const seedData = (remoteDataUrl: string | undefined) => {
       {
         name: 'Star Wars',
         slug: tenantSlug.starWars,
+        // The tenant the `demo` deployment serves in preview
+        deployment: 'demo',
         description: 'Star Wars inspired tenant.',
         locale: 'en',
         supportedLocales: ['en', 'sv'],

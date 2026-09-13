@@ -637,6 +637,8 @@ export const seedData = (remoteDataUrl: string | undefined) => {
       {
         name: 'Moon',
         slug: tenantSlug.moon,
+        // Matches `TENANT_ID=moon`, which development runs tenant mode as
+        deployment: 'moon',
         description:
           'A moon is a natural satellite that orbits a planet or other celestial body larger than itself.',
         locale: 'en',

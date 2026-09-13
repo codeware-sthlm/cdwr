@@ -7,6 +7,7 @@
  */
 
 import { Tenant } from '@codeware/shared/util/payload-types';
+import type { APIResponse, Page } from '@playwright/test';
 
 import { expect, test } from '../fixtures';
 import { loginAs } from '../helpers/login';
@@ -131,5 +132,95 @@ test.describe('Tenants — delete [T-04]', () => {
     await loginAs(page, 'systemUser');
     const res = await page.request.delete(`/api/tenants/${tenantId}`);
     expect(res.status()).toBe(200);
+  });
+});
+
+/**
+ * The deployment name is a workspace's Infisical folder and Fly app suffix.
+ * Renaming it would strand the old apps and their settings, so it is writable
+ * while empty and fixed once set — for the API as well as the form.
+ */
+test.describe('Tenants — deployment name', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  /** Lowercase and short, so a valid deployment name by construction */
+  const uniqueName = () =>
+    `e2e-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+  const createTenant = async (page: Page, data: Partial<Tenant> = {}) =>
+    page.request.post('/api/tenants', {
+      data: { ...newTenant('create'), ...data }
+    });
+
+  // Read from the write's own response: in tenant mode a workspace other than
+  // the deployment's own cannot be fetched, but its update still answers
+  const docOf = async (res: APIResponse) => {
+    expect(res.status(), await res.text()).toBeLessThan(300);
+    return ((await res.json()) as { doc: Tenant }).doc;
+  };
+
+  test('can be given once to a workspace that has none, then stays put', async ({
+    page
+  }) => {
+    await loginAs(page, 'systemUser');
+
+    const { id } = await docOf(await createTenant(page));
+
+    const name = uniqueName();
+    const first = await docOf(
+      await page.request.patch(`/api/tenants/${id}`, {
+        data: { deployment: name }
+      })
+    );
+    expect(first.deployment).toBe(name);
+
+    // Accepted, with the original kept — a denied field is dropped, not refused
+    const second = await docOf(
+      await page.request.patch(`/api/tenants/${id}`, {
+        data: { deployment: uniqueName() }
+      })
+    );
+    expect(second.deployment).toBe(name);
+  });
+
+  test('set when the workspace is created, it cannot be changed either', async ({
+    page
+  }) => {
+    await loginAs(page, 'systemUser');
+
+    const name = uniqueName();
+    const { id } = await docOf(await createTenant(page, { deployment: name }));
+
+    const updated = await docOf(
+      await page.request.patch(`/api/tenants/${id}`, {
+        data: { deployment: uniqueName() }
+      })
+    );
+
+    expect(updated.deployment).toBe(name);
+  });
+
+  test('refuses a name that cannot be part of a Fly app name', async ({
+    page
+  }) => {
+    await loginAs(page, 'systemUser');
+
+    const res = await createTenant(page, { deployment: 'Demo_Site' });
+
+    expect(res.status()).toBe(400);
+  });
+
+  test('refuses a name another workspace is already deployed under', async ({
+    page
+  }) => {
+    await loginAs(page, 'systemUser');
+
+    const name = uniqueName();
+    const first = await createTenant(page, { deployment: name });
+    expect(first.status(), await first.text()).toBe(201);
+
+    const second = await createTenant(page, { deployment: name });
+
+    expect(second.status()).toBe(400);
   });
 });
