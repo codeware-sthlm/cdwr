@@ -16,6 +16,7 @@ import type { FormSubmission } from '@codeware/shared/util/payload-types';
 
 import { expect, test } from '../fixtures';
 import { createForm } from '../helpers/create-form';
+import { humanProof } from '../helpers/human-proof';
 import { loginAs } from '../helpers/login';
 
 /** Tenant API keys from seed data (always present in the e2e environment) */
@@ -47,6 +48,7 @@ test.describe('Form submission admin endpoints', () => {
       const submissionRes = await page.request.post('/api/form-submissions', {
         data: {
           form: formId,
+          humanCheck: humanProof(),
           submissionData: [
             { field: 'email', value: 'moon@example.com' },
             // Anyone can post this through a public form; the export must not
