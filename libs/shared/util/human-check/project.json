@@ -1,0 +1,8 @@
+{
+  "name": "shared-util-human-check",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/util/human-check/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:util", "domain:human-check"],
+  "targets": {}
+}

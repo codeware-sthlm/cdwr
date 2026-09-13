@@ -11,6 +11,8 @@ import env from '../../env-resolver/env';
 export type ClientEnv = {
   PAYLOAD_URL: string;
   TENANT_ID: string;
+  /** Public half of the Turnstile pair; the secret stays on the server */
+  TURNSTILE_SITE_KEY?: string;
 };
 
 /**
@@ -20,5 +22,10 @@ export type ClientEnv = {
  */
 export const getClientEnv = (): ClientEnv => ({
   PAYLOAD_URL: env.PAYLOAD_URL,
-  TENANT_ID: env.TENANT_ID
+  TENANT_ID: env.TENANT_ID,
+  // Both or neither. A site key sent without its secret would draw a widget
+  // the route never checks, which reads as protection and is not
+  TURNSTILE_SITE_KEY: env.TURNSTILE_SECRET_KEY
+    ? env.TURNSTILE_SITE_KEY
+    : undefined
 });

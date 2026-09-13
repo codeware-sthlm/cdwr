@@ -31,6 +31,7 @@ import { Input } from '../../form-items/Input';
 import { Radio } from '../../form-items/Radio';
 import { Select } from '../../form-items/Select';
 import { Textarea } from '../../form-items/Textarea';
+import { useHumanCheck } from '../../human-check/use-human-check';
 import { ColSpan } from '../../layout/ColSpan';
 import { Grid } from '../../layout/Grid';
 import { usePayload } from '../../providers/PayloadProvider';
@@ -86,6 +87,8 @@ export const FormBlock: React.FC<Props> = ({
   // Payload context
   const { navigate, submitForm, locale } = usePayload();
 
+  const humanCheck = useHumanCheck({ disabled });
+
   // Control loading state and open confirmation dialog
   const [isLoading, setIsLoading] = useState(false);
   const [openConfirmationDialog, setOpenConfirmationDialog] = useState(false);
@@ -121,6 +124,7 @@ export const FormBlock: React.FC<Props> = ({
           // Invoke provider callback
           const { success } = await submitForm({
             form: formId,
+            humanCheck: humanCheck.proof(),
             submissionData
           });
 
@@ -196,6 +200,7 @@ export const FormBlock: React.FC<Props> = ({
       disabled,
       form,
       formId,
+      humanCheck,
       navigate,
       onSuccess,
       redirect,
@@ -346,10 +351,14 @@ export const FormBlock: React.FC<Props> = ({
             })}
           </Grid>
 
+          {humanCheck.fields}
+
+          {/* Held shut until a drawn widget has been solved, so a click cannot
+              post into a refusal the visitor would read as the form failing */}
           <Button
             type="submit"
             isLoading={isLoading}
-            disabled={disabled}
+            disabled={disabled || !humanCheck.solved}
             className="mt-4"
           >
             {submitButtonLabel}

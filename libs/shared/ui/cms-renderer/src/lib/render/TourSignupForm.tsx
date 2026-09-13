@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 
 import { Checkbox } from '../form-items/Checkbox';
 import { Input } from '../form-items/Input';
+import { useHumanCheck } from '../human-check/use-human-check';
 import { ColSpan } from '../layout/ColSpan';
 import { Grid } from '../layout/Grid';
 import { usePayload } from '../providers/PayloadProvider';
@@ -56,6 +57,7 @@ export type TourSignupFormProps = {
 export function TourSignupForm({ tour, onSuccess }: TourSignupFormProps) {
   const { locale, signupPolicy, submitTourSignup } = usePayload();
   const [isLoading, setIsLoading] = useState(false);
+  const humanCheck = useHumanCheck();
 
   const form = useForm<Values>({
     defaultValues: {
@@ -89,7 +91,8 @@ export function TourSignupForm({ tour, onSuccess }: TourSignupFormProps) {
           email: values.email,
           phone: values.phone || undefined,
           people: Number(values.people),
-          acceptedTerms: termsUrl ? values.acceptedTerms : undefined
+          acceptedTerms: termsUrl ? values.acceptedTerms : undefined,
+          humanCheck: humanCheck.proof()
         });
 
         setIsLoading(false);
@@ -121,7 +124,7 @@ export function TourSignupForm({ tour, onSuccess }: TourSignupFormProps) {
 
       void invokeSubmit();
     },
-    [form, locale, onSuccess, submitTourSignup, termsUrl, tour.id]
+    [form, humanCheck, locale, onSuccess, submitTourSignup, termsUrl, tour.id]
   );
 
   if (tour.signupsClosed) {
@@ -267,8 +270,14 @@ export function TourSignupForm({ tour, onSuccess }: TourSignupFormProps) {
               </ColSpan>
             )}
 
+            <ColSpan>{humanCheck.fields}</ColSpan>
+
             <ColSpan>
-              <Button type="submit" disabled={isLoading} className="w-full">
+              <Button
+                type="submit"
+                disabled={isLoading || !humanCheck.solved}
+                className="w-full"
+              >
                 {isLoading
                   ? t(locale, 'tourSignup.submitting')
                   : full

@@ -1,7 +1,9 @@
+import { guardHeaders, guardSubmit } from '@codeware/shared/util/human-check';
 import { post } from '@codeware/shared/util/payload-api';
 import type { FormSubmission } from '@codeware/shared/util/payload-types';
 import { json } from '@remix-run/node';
 
+import env from '../../env-resolver/env';
 import { getPayloadRequestOptions } from '../utils/get-payload-request-options';
 import type { TypedActionFunctionArgs } from '../utils/types';
 
@@ -19,11 +21,28 @@ export async function action({ context, request }: TypedActionFunctionArgs) {
     );
   }
 
-  // Get the body from the request
-  const body = (await request.json()) as FormSubmission;
+  // Get the body from the request. The proof of a person is pulled out here —
+  // it belongs to this request, not to the stored submission
+  const { humanCheck, ...body } = (await request.json()) as FormSubmission & {
+    humanCheck?: { token?: unknown; honeypot?: unknown; drawnAt?: unknown };
+  };
 
   if (!body?.form || !(body?.submissionData ?? []).length) {
     return json({ message: 'Invalid form submission body' }, { status: 400 });
+  }
+
+  const guard = await guardSubmit({
+    fields: humanCheck ?? {},
+    headers: request.headers,
+    scope: 'form-submission',
+    secretKey: env.TURNSTILE_SECRET_KEY
+  });
+
+  if (!guard.ok) {
+    return json(
+      { message: guard.message },
+      { status: guard.status, headers: guardHeaders(guard) }
+    );
   }
 
   // Create request options with authentication

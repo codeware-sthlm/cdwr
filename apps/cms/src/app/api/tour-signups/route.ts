@@ -1,9 +1,12 @@
 import { createTourSignup } from '@codeware/app-cms/data-access';
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
+import { guardHeaders, guardSubmit } from '@codeware/shared/util/human-check';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { payloadRuntime } from '../../../security/payload-runtime';
 
 type Body = {
+  humanCheck?: { token?: unknown; honeypot?: unknown; drawnAt?: unknown };
   tour?: unknown;
   name?: unknown;
   email?: unknown;
@@ -20,6 +23,7 @@ const asString = (value: unknown): string =>
  *
  * This route:
  * - Receives the customer's details from the site
+ * - Refuses anything that cannot show a person filled the form in
  * - Authenticates with Payload using server-side credentials (api key)
  * - Creates the signup, whose status the server decides from capacity
  * - Returns only that status, never the signup itself
@@ -47,6 +51,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
+      );
+    }
+
+    const env = getEnv(false);
+    const guard = await guardSubmit({
+      fields: body.humanCheck ?? {},
+      headers: request.headers,
+      scope: 'tour-signup',
+      secretKey: env?.HUMAN_CHECK?.secretKey
+    });
+
+    if (!guard.ok) {
+      return NextResponse.json(
+        { error: guard.message, message: guard.message },
+        { status: guard.status, headers: guardHeaders(guard) }
       );
     }
 

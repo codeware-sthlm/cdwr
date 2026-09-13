@@ -52,6 +52,14 @@ export const EnvSchema = z.object({
   SENTRY_RELEASE: z
     .string({ description: 'Release identifier `name@version+sha`' })
     .optional(),
+  // Turnstile, when the deployment has a key pair. Without it a form still
+  // carries the hidden field and the time it took to fill in
+  TURNSTILE_SITE_KEY: z
+    .string({ description: 'Public key the widget is rendered with' })
+    .optional(),
+  TURNSTILE_SECRET_KEY: z
+    .string({ description: 'Secret the submitted token is verified against' })
+    .optional(),
   SIGNATURE_SECRET: z
     .string({ description: 'Secret key for API request signatures' })
     .min(1, {

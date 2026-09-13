@@ -295,6 +295,9 @@ export default function App() {
         { method: 'POST', action: COLOR_SCHEME_ACTION }
       ),
     signupPolicy: loaderData.signupPolicy,
+    humanCheck: loaderData.env.TURNSTILE_SITE_KEY
+      ? { siteKey: loaderData.env.TURNSTILE_SITE_KEY }
+      : null,
     submitForm: async (formData) => {
       try {
         // Send to server-side action to use secure API key authentication
