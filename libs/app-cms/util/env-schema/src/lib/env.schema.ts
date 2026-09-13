@@ -335,6 +335,21 @@ export const EnvSchema = withEnvVars(
             siteKey: TURNSTILE_SITE_KEY,
             secretKey: TURNSTILE_SECRET_KEY
           }
+        : undefined,
+    /**
+     * The half that is missing, when only one was configured.
+     *
+     * A lone key is ignored rather than half-used, and the boot log says so —
+     * a typo in a secret name would otherwise leave a widget on the page that
+     * nothing verifies, which is worse than no widget at all. Refusing to
+     * start was the other option, and it turns a typo into an outage.
+     */
+    HUMAN_CHECK_MISSING: TURNSTILE_SITE_KEY
+      ? TURNSTILE_SECRET_KEY
+        ? undefined
+        : 'TURNSTILE_SECRET_KEY'
+      : TURNSTILE_SECRET_KEY
+        ? 'TURNSTILE_SITE_KEY'
         : undefined
   })
 );

@@ -23,5 +23,9 @@ export type ClientEnv = {
 export const getClientEnv = (): ClientEnv => ({
   PAYLOAD_URL: env.PAYLOAD_URL,
   TENANT_ID: env.TENANT_ID,
-  TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY
+  // Both or neither. A site key sent without its secret would draw a widget
+  // the route never checks, which reads as protection and is not
+  TURNSTILE_SITE_KEY: env.TURNSTILE_SECRET_KEY
+    ? env.TURNSTILE_SITE_KEY
+    : undefined
 });
