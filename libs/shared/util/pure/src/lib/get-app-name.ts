@@ -1,8 +1,6 @@
-import type { Environment } from './environment.schema';
-
 type Options = {
   /** Deployment environment */
-  environment: Environment;
+  environment: 'preview' | 'production';
 
   /** Fly config app name */
   configAppName: string;

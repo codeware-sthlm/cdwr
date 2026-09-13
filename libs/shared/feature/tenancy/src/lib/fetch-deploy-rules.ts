@@ -1,7 +1,8 @@
 import * as core from '@actions/core';
 import { withInfisical } from '@codeware/shared/feature/infisical';
+import { readDeployRules } from '@codeware/shared/util/pure';
 
-import { type DeployRules, DeployRulesSchema } from './deploy-rules.schema';
+import type { DeployRules } from './deploy-rules.schema';
 import type { InfisicalConfig } from './infisical-config';
 
 /**
@@ -70,37 +71,12 @@ export async function fetchDeployRules({
       );
     }
 
-    // Check metadata first
-    const metadata = deployRulesSecret.secretMetadata;
-    const appsRules = metadata.find((m) => m.key === 'apps');
-    const tenantsRules = metadata.find((m) => m.key === 'tenants');
+    const { rules, source } = readDeployRules(deployRulesSecret);
 
-    if (appsRules && tenantsRules) {
-      const rules = DeployRulesSchema.parse({
-        apps: appsRules.value,
-        tenants: tenantsRules.value
-      });
-
-      core.info(
-        `[fetch-deploy-rules] Found rules in metadata: apps=${rules.apps}, tenants=${rules.tenants}`
-      );
-      return rules;
-    }
-
-    // Fallback: try to parse secret value as JSON
-    try {
-      const parsed = JSON.parse(deployRulesSecret.secretValue);
-      const rules = DeployRulesSchema.parse(parsed);
-
-      core.info(
-        `[fetch-deploy-rules] Found rules in value: apps=${rules.apps}, tenants=${rules.tenants}`
-      );
-      return rules;
-    } catch (parseError) {
-      throw new Error(
-        `DEPLOY_RULES format is invalid. Must have metadata with 'apps' and 'tenants' keys, or be valid JSON. Error: ${parseError instanceof Error ? parseError.message : String(parseError)}`
-      );
-    }
+    core.info(
+      `[fetch-deploy-rules] Found rules in ${source}: apps=${rules.apps}, tenants=${rules.tenants}`
+    );
+    return rules;
   } catch (error) {
     // Re-throw our own errors
     if (error instanceof Error && error.message.includes('DEPLOY_RULES')) {
