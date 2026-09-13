@@ -43,6 +43,13 @@ export type HumanCheckConfig = {
    * takes several seconds, and a script takes none.
    */
   minFillMs?: number;
+  /**
+   * How long to wait for Cloudflare before giving up.
+   *
+   * A hung verifier must not hold the route open: enough held requests is a
+   * way to exhaust the workers answering everyone else.
+   */
+  timeoutMs?: number;
   /** Injected by tests, and by nothing else */
   fetchImpl?: typeof fetch;
   now?: () => number;
@@ -52,6 +59,8 @@ const TURNSTILE_VERIFY_URL =
   'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 const DEFAULT_MIN_FILL_MS = 3000;
+
+const DEFAULT_TIMEOUT_MS = 5000;
 
 type TurnstileResponse = {
   success?: boolean;
@@ -86,6 +95,7 @@ export async function verifyHuman(
     secretKey,
     ip,
     minFillMs = DEFAULT_MIN_FILL_MS,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
     fetchImpl = fetch,
     now = Date.now
   } = config;
@@ -123,7 +133,10 @@ export async function verifyHuman(
     const response = await fetchImpl(TURNSTILE_VERIFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body
+      body,
+      // A verifier that hangs is answered the same way as one that refuses to
+      // talk at all, rather than by waiting for the platform's own timeout
+      signal: AbortSignal.timeout(timeoutMs)
     });
 
     if (!response.ok) {

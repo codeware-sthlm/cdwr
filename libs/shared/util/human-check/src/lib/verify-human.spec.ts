@@ -59,6 +59,8 @@ describe('verifyHuman', () => {
     expect(result).toEqual({ ok: true });
 
     const [, request] = vi.mocked(fetchImpl).mock.calls[0];
+    // Bounded, so a verifier that hangs cannot hold the route open
+    expect(request?.signal).toBeInstanceOf(AbortSignal);
     const sent = new URLSearchParams(String(request?.body));
     expect(Object.fromEntries(sent)).toEqual({
       secret: 'the-secret',
