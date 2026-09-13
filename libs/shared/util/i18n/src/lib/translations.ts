@@ -66,6 +66,7 @@ export type TranslationKey =
   | 'form.submitSuccess'
   | 'form.submitFailed'
   | 'form.submitFailedDescription'
+  | 'humanCheck.unavailable'
   | 'gallery.accepts'
   | 'gallery.allBlocks'
   | 'gallery.close'
@@ -256,6 +257,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Form submitted successfully',
     'form.submitFailed': 'Form submission failed',
     'form.submitFailedDescription': 'Please try again.',
+    'humanCheck.unavailable':
+      'The spam check could not load, so this form cannot be sent. A content blocker is the usual cause — allow challenges.cloudflare.com, or try another browser.',
     'gallery.accepts': 'Accepts',
     'gallery.allBlocks': 'All blocks',
     'gallery.close': 'Close full screen',
@@ -469,6 +472,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Formuläret skickades in',
     'form.submitFailed': 'Formuläret kunde inte skickas in',
     'form.submitFailedDescription': 'Försök igen.',
+    'humanCheck.unavailable':
+      'Skräppostskyddet kunde inte laddas, så formuläret går inte att skicka. Orsaken är oftast en innehållsblockerare – tillåt challenges.cloudflare.com eller prova en annan webbläsare.',
     'gallery.accepts': 'Kan innehålla',
     'gallery.allBlocks': 'Alla block',
     'gallery.close': 'Stäng helskärm',
