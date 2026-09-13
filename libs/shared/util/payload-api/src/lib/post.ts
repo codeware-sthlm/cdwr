@@ -24,7 +24,13 @@ export const post = async <T extends CollectionSlug>(
   });
 
   if ('error' in response) {
-    throw new Error(`Error posting to '${collection}': ${response.error}`);
+    // Carried on the error so a route forwarding this on can answer with what
+    // actually happened — a refused rate flattened into a generic failure
+    // tells the caller neither that it was refused nor when to try again
+    throw Object.assign(
+      new Error(`Error posting to '${collection}': ${response.error}`),
+      { status: response.status, retryAfter: response.retryAfter }
+    );
   }
 
   // TODO: Check the response type when a document is not created for a POST request
