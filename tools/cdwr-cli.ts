@@ -13,6 +13,7 @@ import { restartApp } from './fly-tools/lib/restart-app.js';
 import { analysisMain } from './infisical/lib/analysis.js';
 import { fetchAppTenantsMain } from './infisical/lib/fetch-app-tenants.js';
 import { fetchDataMain } from './infisical/lib/fetch-data.js';
+import { provisionTenantMain } from './infisical/lib/provision-tenant.js';
 import { rotateSignatureSecretMain } from './infisical/lib/rotate-signature-secret.js';
 import { rotateTenantKeyMain } from './infisical/lib/rotate-tenant-key.js';
 import { generateShowcaseImages } from './media-tools/lib/generate-images.js';
@@ -83,6 +84,11 @@ const tools: Tool[] = [
     name: 'infisical-analysis',
     description: 'Analyze Infisical configuration and secrets',
     action: analysisMain
+  },
+  {
+    name: 'provision-tenant',
+    description: "Set up a tenant's Infisical folders and API key from Payload",
+    action: provisionTenantMain
   },
   {
     name: 'rotate-tenant-key',

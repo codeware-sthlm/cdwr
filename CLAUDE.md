@@ -151,7 +151,7 @@ nx seed cms
 pnpm cdwr
 # Database: backup-db, restore-db, test-migration, sync-storage, drop-db
 # Fly.io:   restart-app, app-info, patch-config
-# Infisical: infisical-tenants, infisical-data, infisical-analysis, rotate-tenant-key, rotate-signature-secret
+# Infisical: infisical-tenants, infisical-data, infisical-analysis, provision-tenant, rotate-tenant-key, rotate-signature-secret
 # Media:    generate-images
 ```
 
