@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@homebridge/node-pty-prebuilt-multiarch": "0.13.1",
+    "@homebridge/node-pty-prebuilt-multiarch": "0.14.1",
     "chalk": "^4.1.0",
     "docker-cli-js": "^2.10.0",
     "kill-port": "^2.0.1",
