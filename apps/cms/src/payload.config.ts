@@ -233,8 +233,14 @@ export default buildConfig({
   >[0]['loggingLevels'],
   secret: env.PAYLOAD_SECRET_KEY,
   // 25 MB covers an image, a document and a short audio file, and stops an
-  // upload large enough to exhaust a 1 GB machine from being attempted at all
-  upload: { safeFileNames: true, limits: { fileSize: 25 * 1024 * 1024 } },
+  // upload large enough to exhaust a 1 GB machine from being attempted at all.
+  // Aborted rather than cut off: without it a larger file is stored truncated
+  // and the upload still reports success
+  upload: {
+    abortOnLimit: true,
+    safeFileNames: true,
+    limits: { fileSize: 25 * 1024 * 1024 }
+  },
   // i18n support
   i18n: {
     fallbackLanguage: 'en',
