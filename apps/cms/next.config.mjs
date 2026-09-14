@@ -68,6 +68,11 @@ const nextConfig = {
   reactCompiler: false,
 
   experimental: {
+    // The proxy runs on every route, api included, so Next buffers each body
+    // and cuts it off at this size. It has to clear Payload's 25 MB upload
+    // limit, or a larger upload arrives broken and fails with a 500 instead of
+    // being refused with a 413
+    proxyClientMaxBodySize: '30mb',
     // Enable server-side source maps for better error tracking
     serverSourceMaps: true
   }
