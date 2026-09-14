@@ -25,12 +25,12 @@
   },
   "type": "module",
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
-    "dotenv": "^16.4.7",
-    "dotenv-expand": "^11.0.7",
-    "is-ci": "^3.0.1"
+    "dotenv": "^17.0.0",
+    "dotenv-expand": "^13.0.0",
+    "is-ci": "^4.0.0"
   },
   "exports": {
     ".": {

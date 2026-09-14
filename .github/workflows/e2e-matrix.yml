@@ -79,7 +79,7 @@ jobs:
           echo "run_status=$run_status" >> "$GITHUB_OUTPUT"
           echo "reason=$reason" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.gate.outputs.run_status == 'true'
         with:
           fetch-depth: 0
@@ -90,9 +90,9 @@ jobs:
 
       - name: Setup Node.js
         if: steps.gate.outputs.run_status == 'true'
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -139,19 +139,19 @@ jobs:
 
     name: Cache install (${{ matrix.os }}, node v${{ matrix.node }})
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Install pnpm package manager
         uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         id: cache-modules
         with:
           lookup-only: true
@@ -163,7 +163,7 @@ jobs:
 
       - name: Cache Playwright browsers
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         id: cache-playwright
         with:
           path: ~/.cache/ms-playwright
@@ -220,19 +220,19 @@ jobs:
 
     name: E2E ${{ matrix.os }}/${{ matrix.pm }}/${{ matrix.node }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Install pnpm package manager
         uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         id: cache-modules
         with:
           path: "**/node_modules"
@@ -286,7 +286,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: results-${{ matrix.os }}-${{ matrix.pm }}-${{ matrix.node }}
           path: results-${{ matrix.os }}-${{ matrix.pm }}-${{ matrix.node }}.json
@@ -299,7 +299,7 @@ jobs:
     steps:
       - name: Download all workflow run artifacts
         if: needs.e2e.result != 'skipped'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           pattern: results-*
@@ -367,7 +367,7 @@ jobs:
           fi
 
       - name: Upload summary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-test-summary
           path: summary.md
