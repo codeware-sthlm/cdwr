@@ -1,7 +1,6 @@
 import { randomUUID } from 'crypto';
 
-import { loadEnv } from '@codeware/app-cms/feature/env-loader';
-import { getPayload } from 'payload';
+import { getScriptPayload, runScript } from './script-payload';
 
 /**
  * Rotate a tenant's Payload API key using the local-api.
@@ -38,34 +37,7 @@ async function rotate() {
     process.exit(1);
   }
 
-  // Set before loading: preview databases are created by `fly postgres attach`
-  // and never reach Infisical, so the env would not validate without this.
-  process.env['DATABASE_URL'] = databaseUrl;
-
-  const env = await loadEnv();
-
-  if (!env) {
-    console.error('Environment variables could not be loaded, abort');
-    process.exit(1);
-  }
-
-  // `loadEnv` injects the Infisical values over `process.env`, so anything the
-  // caller set has just been overwritten. Re-apply what this script depends on
-  // before the config reads it:
-  // - the deployment's own DATABASE_URL host is not reachable from here
-  // - a rotation must never seed or push schema to the target database
-  process.env['DATABASE_URL'] = databaseUrl;
-  process.env['SEED_SOURCE'] = 'off';
-  process.env['DISABLE_DB_PUSH'] = 'true';
-
-  console.log(`[DB] Using schema '${env.DATABASE_SCHEMA}'`);
-
-  // Imported after `loadEnv` - the config reads `getEnv()` at module scope and
-  // throws when the environment has not been hydrated yet. Unlike the other
-  // scripts here this one runs outside Nx, so nothing pre-loads `.env.local`.
-  const { default: config } = await import('../payload.config');
-
-  const payload = await getPayload({ config });
+  const payload = await getScriptPayload(databaseUrl);
 
   // The key is hashed in the DB index and cannot be matched with a where
   // clause, so resolve it the same way access control does - read them all and
@@ -112,20 +84,4 @@ async function rotate() {
   process.exit(0);
 }
 
-// Nothing here may end quietly. The caller can only tell success from failure
-// by the markers on stdout, so a swallowed error or an event loop that simply
-// runs dry would look like "no result" with an exit code of 0.
-rotate()
-  .then(() => {
-    console.error('Error: rotation ended without reporting a result');
-    process.exit(1);
-  })
-  .catch((error) => {
-    console.error(`Error: ${error instanceof Error ? error.stack : error}`);
-    process.exit(1);
-  });
-
-process.on('beforeExit', (code) => {
-  console.error(`Error: rotation exited early (code ${code})`);
-  process.exit(code || 1);
-});
+runScript('rotation', rotate);
