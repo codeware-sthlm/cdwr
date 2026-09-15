@@ -254,6 +254,7 @@ export interface Config {
   jobs: {
     tasks: {
       'anonymize-tour-signups': TaskAnonymizeTourSignups;
+      'delete-expired-form-submissions': TaskDeleteExpiredFormSubmissions;
       inline: {
         input: unknown;
         output: unknown;
@@ -2009,7 +2010,7 @@ export interface SiteSettingsTourSignups {
   retentionDays?: number | null;
 }
 /**
- * Where form notification emails go when a form does not name its own recipient.
+ * Where form notification emails go when a form does not name its own recipient, and how long submissions are kept.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "SiteSettingsForms".
@@ -2024,6 +2025,10 @@ export interface SiteSettingsForms {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Submissions older than this are deleted every night. Leave empty to keep them until they are deleted by hand. This is also the period the privacy page states.
+   */
+  retentionDays?: number | null;
 }
 /**
  * Shared images provided by the platform, free for any workspace to use. Upload your own photos under Media when you need a specific place.
@@ -2365,7 +2370,10 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'anonymize-tour-signups';
+        taskSlug:
+          | 'inline'
+          | 'anonymize-tour-signups'
+          | 'delete-expired-form-submissions';
         taskID: string;
         input?:
           | {
@@ -2398,7 +2406,9 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'anonymize-tour-signups') | null;
+  taskSlug?:
+    | ('inline' | 'anonymize-tour-signups' | 'delete-expired-form-submissions')
+    | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
@@ -2909,6 +2919,7 @@ export interface SiteSettingsFormsSelect<T extends boolean = true> {
         email?: T;
         id?: T;
       };
+  retentionDays?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -3475,6 +3486,14 @@ export interface CollectionsWidget {
  * via the `definition` "TaskAnonymize-tour-signups".
  */
 export interface TaskAnonymizeTourSignups {
+  input?: unknown;
+  output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskDelete-expired-form-submissions".
+ */
+export interface TaskDeleteExpiredFormSubmissions {
   input?: unknown;
   output?: unknown;
 }

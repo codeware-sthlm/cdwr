@@ -61,6 +61,7 @@ import { tourSignupsAnonymizeEndpoint } from './endpoints/tour-signups-anonymize
 import { tourSignupsExportEndpoint } from './endpoints/tour-signups-export';
 import { tourSignupsReorderEndpoint } from './endpoints/tour-signups-reorder';
 import { anonymizeTourSignupsTask } from './jobs/anonymize-tour-signups.task';
+import { deleteExpiredFormSubmissionsTask } from './jobs/delete-expired-form-submissions.task';
 import { queryStatsLogger } from './perf/query-stats';
 import { userOnlyAccess } from './security/user-only-access';
 import { userOrApiKeyAccess } from './security/user-or-api-key-access';
@@ -213,7 +214,7 @@ export default buildConfig({
     tourSignupsReorderEndpoint
   ],
   jobs: {
-    tasks: [anonymizeTourSignupsTask],
+    tasks: [anonymizeTourSignupsTask, deleteExpiredFormSubmissionsTask],
     // Scheduling only queues the job; something has to run the queue. Both are
     // skipped during build, where no long-running process exists to hold a cron
     autoRun:
