@@ -1,3 +1,11 @@
+/* Imports come first. An @import after any other rule is invalid CSS, and
+   Vite drops it without a warning: apps/web and Storybook shipped no webfaces
+   at all while Next's pipeline let the same file through */
+/* Self-hosted webfaces */
+@import './fonts.css';
+/* Custom utilities — available to all themes, used where needed */
+@import './utilities.css';
+
 /* Dark mode variant — supports both [data-theme=dark] attribute and .dark class strategies */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
 
@@ -138,13 +146,6 @@
     monospace
   );
 }
-
-/* Self-hosted webfaces — imported here so every consumer of this file gets
-   them exactly once, the same reason the base layer lives here */
-@import './fonts.css';
-
-/* Custom utilities — available to all themes, used where needed */
-@import './utilities.css';
 
 /* Base layer */
 @layer base {
