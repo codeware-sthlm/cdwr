@@ -55,7 +55,7 @@ export default async function RootLayout({
 
   // Theme is resolved server-side so the first paint is already correct.
   // A tenant without theme settings falls back to what sites rendered before
-  // the setting existed (getSiteSettings normalises that).
+  // the setting existed (getGeneralSiteSettings normalises that).
   const themes = runtime.tenantConfig?.themes ?? [FALLBACK_THEME];
   const defaultTheme = runtime.tenantConfig?.defaultTheme ?? FALLBACK_THEME;
   const theme = resolveTheme(

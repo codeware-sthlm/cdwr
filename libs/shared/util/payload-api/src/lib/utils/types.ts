@@ -31,6 +31,12 @@ export type FooterData = {
   links: Array<FooterLink>;
 
   /**
+   * Links to the privacy and terms pages, shown beside the copyright whatever
+   * the link source. Only published pages are included.
+   */
+  legalLinks: Array<FooterLink>;
+
+  /**
    * Whether to display the running release of the app.
    */
   showVersion: boolean;

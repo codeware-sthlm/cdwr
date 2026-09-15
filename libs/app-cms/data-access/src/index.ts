@@ -18,6 +18,7 @@ export { getCollectionCounts } from './lib/collections/get-collection-counts';
 export { getCountableSlugs } from './lib/collections/get-countable-slugs';
 
 export { createFormSubmission } from './lib/collections/create-form-submission';
+export { deleteFormSubmissions } from './lib/collections/delete-form-submissions';
 export { getForm } from './lib/collections/get-form';
 export { getFormSubmissions } from './lib/collections/get-form-submissions';
 export { getForms } from './lib/collections/get-forms';
@@ -47,8 +48,9 @@ export { getPreference } from './lib/collections/get-preference';
 export { getSignupPolicy } from './lib/collections/get-signup-policy';
 export {
   FALLBACK_THEME,
-  getSiteSettings
-} from './lib/collections/get-site-settings';
+  getGeneralSiteSettings
+} from './lib/collections/get-general-site-settings';
+export { getSiteSettingsForAllTenants } from './lib/collections/get-site-settings-for-all-tenants';
 export { getSiteSettingsForTenant } from './lib/collections/get-site-settings-for-tenant';
 export { getTenant } from './lib/collections/get-tenant';
 

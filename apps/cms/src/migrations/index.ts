@@ -57,6 +57,8 @@ import * as migration_20260907_202817_cod_476_site_chrome from './20260907_20281
 import * as migration_20260908_074058_cod_477_block_gallery from './20260908_074058_cod_477_block_gallery';
 import * as migration_20260912_131500_cod_477_retire_media_block from './20260912_131500_cod_477_retire_media_block';
 import * as migration_20260913_201538_cod_485_tenant_deployment from './20260913_201538_cod_485_tenant_deployment';
+import * as migration_20260915_065027_cod_484_form_submission_retention from './20260915_065027_cod_484_form_submission_retention';
+import * as migration_20260915_213755_cod_484_legal_pages_site_wide from './20260915_213755_cod_484_legal_pages_site_wide';
 
 export const migrations = [
   {
@@ -353,5 +355,15 @@ export const migrations = [
     up: migration_20260913_201538_cod_485_tenant_deployment.up,
     down: migration_20260913_201538_cod_485_tenant_deployment.down,
     name: '20260913_201538_cod_485_tenant_deployment'
+  },
+  {
+    up: migration_20260915_065027_cod_484_form_submission_retention.up,
+    down: migration_20260915_065027_cod_484_form_submission_retention.down,
+    name: '20260915_065027_cod_484_form_submission_retention'
+  },
+  {
+    up: migration_20260915_213755_cod_484_legal_pages_site_wide.up,
+    down: migration_20260915_213755_cod_484_legal_pages_site_wide.down,
+    name: '20260915_213755_cod_484_legal_pages_site_wide'
   }
 ];

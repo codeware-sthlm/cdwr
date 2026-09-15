@@ -1,7 +1,7 @@
 import {
   buildTenantConfig,
   getCustomThemes,
-  getSiteSettings
+  getGeneralSiteSettings
 } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { isTenant } from '@codeware/app-cms/util/misc';
@@ -62,7 +62,7 @@ export const tenantConfigEndpoint: Endpoint = {
     runtime.tenantConfig = null;
 
     // Fetch tenant config for the authenticated tenant user
-    const settings = await getSiteSettings(runtime);
+    const settings = await getGeneralSiteSettings(runtime);
 
     if (!settings) {
       return Response.json(

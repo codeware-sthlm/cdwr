@@ -72,6 +72,10 @@ const complete: FooterData = {
   appName: 'Codeware Sthlm AB',
   contact,
   copyright: '© {year} Codeware Sthlm AB. All rights reserved.',
+  legalLinks: [
+    { key: 'legal-privacy', label: 'Privacy', newTab: false, url: '/privacy' },
+    { key: 'legal-terms', label: 'Terms', newTab: false, url: '/terms' }
+  ],
   links,
   showVersion: true,
   tagline: 'We build digital products that outlive their launch date.',

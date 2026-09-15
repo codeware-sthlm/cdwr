@@ -6,10 +6,12 @@ import type {
 
 import {
   FALLBACK_THEME,
-  type getSiteSettings
-} from './collections/get-site-settings';
+  type getGeneralSiteSettings
+} from './collections/get-general-site-settings';
 
-type SiteSettings = NonNullable<Awaited<ReturnType<typeof getSiteSettings>>>;
+type SiteSettings = NonNullable<
+  Awaited<ReturnType<typeof getGeneralSiteSettings>>
+>;
 
 /**
  * Assemble the runtime config a tenant site renders from.
@@ -19,7 +21,7 @@ type SiteSettings = NonNullable<Awaited<ReturnType<typeof getSiteSettings>>>;
  * external client renders differently from the site it mirrors — so they build
  * it here rather than each on their own.
  *
- * @param settings - Site settings, already normalised by `getSiteSettings`
+ * @param settings - Site settings, already normalised by `getGeneralSiteSettings`
  * @param customThemes - The tenant's authored themes, if any
  * @param tenant - The authenticated tenant
  */
@@ -34,7 +36,7 @@ export function buildTenantConfig({
 }): TenantRuntimeConfig {
   // Settings saved before these fields existed read back empty, and a stale
   // default may name a theme since deselected. Resolved here rather than in
-  // `getSiteSettings` because a site may offer only authored themes, and that
+  // `getGeneralSiteSettings` because a site may offer only authored themes, and that
   // list is not visible from the settings document alone.
   const offered = [...settings.themes, ...customThemes.map(({ slug }) => slug)];
   const themes = offered.length ? offered : [FALLBACK_THEME];

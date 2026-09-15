@@ -68,17 +68,9 @@ function resolveLockedColorScheme(
   return policy === 'light' || policy === 'dark' ? policy : null;
 }
 
+// Inter is self-hosted through the shared theme's fonts.css, so no visitor's
+// address reaches Google on page load
 export const links: LinksFunction = () => [
-  { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-  {
-    rel: 'preconnect',
-    href: 'https://fonts.gstatic.com',
-    crossOrigin: 'anonymous'
-  },
-  {
-    rel: 'stylesheet',
-    href: 'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap'
-  },
   { rel: 'stylesheet', href: stylesheet }
 ];
 

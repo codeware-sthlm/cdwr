@@ -37,11 +37,14 @@ export const initSentry = (): void => {
 
     integrations: [
       // Send console.log, console.warn and console.error calls as logs
-      Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] })
-    ],
-
-    // Include personally identifiable information (request headers, IP addresses)
-    sendDefaultPii: true
+      Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
+      // A report keeps the page, the error and the browser, but not what the
+      // visitor sent or their cookies. With `sendDefaultPii` left off it carries
+      // no IP address either.
+      Sentry.requestDataIntegration({
+        include: { cookies: false, data: false }
+      })
+    ]
   });
 
   console.log(

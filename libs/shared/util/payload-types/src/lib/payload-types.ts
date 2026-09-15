@@ -254,6 +254,7 @@ export interface Config {
   jobs: {
     tasks: {
       'anonymize-tour-signups': TaskAnonymizeTourSignups;
+      'delete-expired-form-submissions': TaskDeleteExpiredFormSubmissions;
       inline: {
         input: unknown;
         output: unknown;
@@ -1838,6 +1839,7 @@ export interface SiteSetting {
   tenant?: (number | null) | Tenant;
   general: SiteSettingsGeneral;
   footer?: SiteSettingsFooter;
+  legal?: SiteSettingsLegal;
   tourSignups?: SiteSettingsTourSignups;
   forms?: SiteSettingsForms;
   updatedAt: string;
@@ -1980,6 +1982,22 @@ export interface SiteSettingsFooter {
   showVersion?: boolean | null;
 }
 /**
+ * The privacy and terms pages, linked from the footer on every page and from the tour signup form and its emails.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "SiteSettingsLegal".
+ */
+export interface SiteSettingsLegal {
+  /**
+   * Linked from the footer, the tour signup form and the confirmation email. No page yet? Create a starter one below.
+   */
+  privacyPage?: (number | null) | Page;
+  /**
+   * Linked from the footer. When set, customers must accept these terms before they can sign up for a tour.
+   */
+  termsPage?: (number | null) | Page;
+}
+/**
  * What customers are told when they sign up for a tour, and how long their details are kept.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1996,20 +2014,12 @@ export interface SiteSettingsTourSignups {
       }[]
     | null;
   /**
-   * Linked from the signup form and the confirmation email. No page yet? Create a starter one below.
-   */
-  privacyPage?: (number | null) | Page;
-  /**
-   * When set, customers must accept these terms before they can sign up.
-   */
-  termsPage?: (number | null) | Page;
-  /**
    * Names, emails and phone numbers are cleared this long after the tour departs. Party sizes and statuses are kept. This number is also what customers are told on the signup form.
    */
   retentionDays?: number | null;
 }
 /**
- * Where form notification emails go when a form does not name its own recipient.
+ * Where form notification emails go when a form does not name its own recipient, and how long submissions are kept.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "SiteSettingsForms".
@@ -2024,6 +2034,10 @@ export interface SiteSettingsForms {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Submissions older than this are deleted every night. Leave empty to keep them until they are deleted by hand. This is also the period the privacy page states.
+   */
+  retentionDays?: number | null;
 }
 /**
  * Shared images provided by the platform, free for any workspace to use. Upload your own photos under Media when you need a specific place.
@@ -2365,7 +2379,10 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'anonymize-tour-signups';
+        taskSlug:
+          | 'inline'
+          | 'anonymize-tour-signups'
+          | 'delete-expired-form-submissions';
         taskID: string;
         input?:
           | {
@@ -2398,7 +2415,9 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'anonymize-tour-signups') | null;
+  taskSlug?:
+    | ('inline' | 'anonymize-tour-signups' | 'delete-expired-form-submissions')
+    | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
@@ -2819,6 +2838,7 @@ export interface SiteSettingsSelect<T extends boolean = true> {
   tenant?: T;
   general?: T | SiteSettingsGeneralSelect<T>;
   footer?: T | SiteSettingsFooterSelect<T>;
+  legal?: T | SiteSettingsLegalSelect<T>;
   tourSignups?: T | SiteSettingsTourSignupsSelect<T>;
   forms?: T | SiteSettingsFormsSelect<T>;
   updatedAt?: T;
@@ -2885,6 +2905,14 @@ export interface SiteSettingsFooterSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "SiteSettingsLegal_select".
+ */
+export interface SiteSettingsLegalSelect<T extends boolean = true> {
+  privacyPage?: T;
+  termsPage?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "SiteSettingsTourSignups_select".
  */
 export interface SiteSettingsTourSignupsSelect<T extends boolean = true> {
@@ -2894,8 +2922,6 @@ export interface SiteSettingsTourSignupsSelect<T extends boolean = true> {
         email?: T;
         id?: T;
       };
-  privacyPage?: T;
-  termsPage?: T;
   retentionDays?: T;
 }
 /**
@@ -2909,6 +2935,7 @@ export interface SiteSettingsFormsSelect<T extends boolean = true> {
         email?: T;
         id?: T;
       };
+  retentionDays?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -3475,6 +3502,14 @@ export interface CollectionsWidget {
  * via the `definition` "TaskAnonymize-tour-signups".
  */
 export interface TaskAnonymizeTourSignups {
+  input?: unknown;
+  output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskDelete-expired-form-submissions".
+ */
+export interface TaskDeleteExpiredFormSubmissions {
   input?: unknown;
   output?: unknown;
 }
