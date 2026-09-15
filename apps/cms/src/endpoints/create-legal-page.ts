@@ -1,3 +1,4 @@
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import {
   type LegalTemplateKind,
   convertMarkdownToLexical,
@@ -26,8 +27,9 @@ const isKind = (value: unknown): value is LegalTemplateKind =>
  * A guide asked to write a privacy policy from an empty editor will either
  * skip it or paste something from a search result, and this is exactly the
  * text that matters when something goes wrong. So the platform supplies a
- * draft that describes what it actually does with a signup — filled in with
- * the workspace's own name, contact address and retention period.
+ * draft that describes what it actually does with a visitor's details — filled
+ * in with the workspace's own name, contact address and retention periods, and
+ * without sections about services this deployment does not use.
  *
  * Created **unpublished**, and the draft opens by saying it must be reviewed.
  * The relationship in Site Settings is filled in by the client rather than
@@ -77,6 +79,16 @@ export const createLegalPageEndpoint: Endpoint = {
       });
 
       const settings = docs[0];
+
+      // A workspace with no tours takes no signups, so the notice leaves them out
+      const tours = await payload.count({
+        collection: 'tours',
+        where: tenantWhere ?? {},
+        overrideAccess: false,
+        user,
+        req
+      });
+      const { EMAIL, HUMAN_CHECK, SENTRY } = getEnv();
       // `all` is a read-time locale and cannot be written to; the draft is
       // created in English then, and the editor translates from there
       const locale = req.locale === 'sv' ? 'sv' : 'en';
@@ -84,8 +96,14 @@ export const createLegalPageEndpoint: Endpoint = {
       const { markdown, title } = renderLegalTemplate(body.kind, locale, {
         tenantName: settings?.general?.appName ?? '',
         contactEmail: user.email,
-        retentionDays:
-          settings?.tourSignups?.retentionDays ?? FALLBACK_RETENTION_DAYS
+        tourSignups: tours.totalDocs > 0,
+        tourRetentionDays:
+          settings?.tourSignups?.retentionDays ?? FALLBACK_RETENTION_DAYS,
+        formsRetentionDays: settings?.forms?.retentionDays ?? null,
+        humanCheck: Boolean(HUMAN_CHECK),
+        sendgrid: Boolean(EMAIL && 'sendgrid' in EMAIL),
+        errorMonitoring: Boolean(SENTRY),
+        errorMonitoringEu: Boolean(SENTRY?.dsn.includes('.de.sentry.io'))
       });
 
       const page = await payload.create({
