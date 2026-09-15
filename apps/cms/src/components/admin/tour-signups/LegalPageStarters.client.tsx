@@ -14,8 +14,8 @@ import { usePayloadSdk } from '../utils/use-payload-sdk';
 type Kind = 'privacy' | 'terms';
 
 const paths: Record<Kind, string> = {
-  privacy: 'tourSignups.privacyPage',
-  terms: 'tourSignups.termsPage'
+  privacy: 'legal.privacyPage',
+  terms: 'legal.termsPage'
 };
 
 /**

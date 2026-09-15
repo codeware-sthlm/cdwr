@@ -1,4 +1,3 @@
-import { filterByTenantScope } from '@codeware/app-cms/util/filters';
 import type { Tab } from 'payload';
 
 /** Kept in step with the copy the signup form shows the customer */
@@ -47,43 +46,6 @@ export const tourSignupsTab: Tab = {
           required: true
         }
       ]
-    },
-    {
-      name: 'privacyPage',
-      type: 'relationship',
-      relationTo: 'pages',
-      label: { en: 'Privacy page', sv: 'Integritetssida' },
-      filterOptions: ({ req }) => filterByTenantScope(req, 'pages'),
-      admin: {
-        description: {
-          en: 'Linked from the signup form and the confirmation email. No page yet? Create a starter one below.',
-          sv: 'Länkas från anmälningsformuläret och bekräftelsemejlet. Saknar du sida? Skapa ett utkast nedan.'
-        }
-      }
-    },
-    {
-      name: 'termsPage',
-      type: 'relationship',
-      relationTo: 'pages',
-      label: { en: 'Terms page', sv: 'Villkorssida' },
-      filterOptions: ({ req }) => filterByTenantScope(req, 'pages'),
-      admin: {
-        description: {
-          en: 'When set, customers must accept these terms before they can sign up.',
-          sv: 'När den är vald måste kunder godkänna villkoren innan de kan anmäla sig.'
-        }
-      }
-    },
-    {
-      // Sits under the two relationships it fills in
-      name: 'legalPageStarters',
-      type: 'ui',
-      admin: {
-        components: {
-          Field:
-            '@codeware/apps/cms/components/admin/tour-signups/LegalPageStarters.client'
-        }
-      }
     },
     {
       name: 'retentionDays',

@@ -51,6 +51,35 @@ const resolveLink = (item: SiteSettingsFooterLink): FooterLink | null => {
 };
 
 /**
+ * Resolve a privacy or terms page into a footer link.
+ *
+ * Returns `null` for a page that is not populated or never published, so a
+ * draft starter page is not linked from every page of the site.
+ */
+const resolveLegalLink = (key: string, value: unknown): FooterLink | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const page = value as {
+    name?: string | null;
+    slug?: string | null;
+    _status?: string | null;
+  };
+
+  if (!page.slug || page._status === 'draft') {
+    return null;
+  }
+
+  return {
+    key,
+    label: page.name || page.slug,
+    newTab: false,
+    url: `/${page.slug}`
+  };
+};
+
+/**
  * Resolve the footer from site settings data.
  *
  * Links are resolved to plain paths and the copyright to its final text, so
@@ -69,7 +98,7 @@ export const resolveFooter = (
     return null;
   }
 
-  const { footer, general } = siteSettings;
+  const { footer, general, legal } = siteSettings;
 
   // Footer is opt-out, so settings saved before the footer existed keep one
   if (footer?.enabled === false) {
@@ -88,6 +117,11 @@ export const resolveFooter = (
             url
           }));
 
+  const legalLinks = [
+    resolveLegalLink('legal-privacy', legal?.privacyPage),
+    resolveLegalLink('legal-terms', legal?.termsPage)
+  ].flatMap((link) => link ?? []);
+
   // Copyright is opt-out and falls back to the application name
   const copyright =
     footer?.showCopyright === false
@@ -98,6 +132,7 @@ export const resolveFooter = (
     appName: general.appName,
     contact: footer?.contact ?? [],
     copyright,
+    legalLinks,
     links,
     showVersion: footer?.showVersion ?? false,
     tagline: footer?.tagline ?? null,

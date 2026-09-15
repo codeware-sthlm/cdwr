@@ -32,11 +32,11 @@ const toPath = (value: unknown): string | null => {
 export function resolveSignupPolicy(
   siteSettings: SiteSetting | null | undefined
 ): SignupPolicy {
-  const config = siteSettings?.tourSignups;
+  const legal = siteSettings?.legal;
 
   return {
-    privacyUrl: toPath(config?.privacyPage),
-    termsUrl: toPath(config?.termsPage),
-    retentionDays: config?.retentionDays ?? null
+    privacyUrl: toPath(legal?.privacyPage),
+    termsUrl: toPath(legal?.termsPage),
+    retentionDays: siteSettings?.tourSignups?.retentionDays ?? null
   };
 }

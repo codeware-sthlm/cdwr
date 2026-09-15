@@ -41,6 +41,7 @@ describe('resolveFooter', () => {
         { key: 'nav-1', label: 'About', newTab: false, url: '/about' },
         { key: 'nav-2', label: 'News', newTab: false, url: '/posts/news' }
       ],
+      legalLinks: [],
       showVersion: false,
       tagline: null,
       variant: 'standard'
@@ -165,5 +166,54 @@ describe('resolveFooter', () => {
       showVersion: true,
       tagline: 'We build things'
     });
+  });
+
+  it('links published privacy and terms pages whatever the link source', () => {
+    const footer = resolveFooter(
+      {
+        ...makeSettings({ linkSource: 'none' }),
+        legal: {
+          privacyPage: {
+            id: 1,
+            name: 'Privacy',
+            slug: 'privacy',
+            _status: 'published'
+          },
+          termsPage: {
+            id: 2,
+            name: 'Terms',
+            slug: 'terms',
+            _status: 'published'
+          }
+        }
+      } as unknown as SiteSetting,
+      navigationTree
+    );
+
+    expect(footer?.links).toEqual([]);
+    expect(footer?.legalLinks).toEqual([
+      {
+        key: 'legal-privacy',
+        label: 'Privacy',
+        newTab: false,
+        url: '/privacy'
+      },
+      { key: 'legal-terms', label: 'Terms', newTab: false, url: '/terms' }
+    ]);
+  });
+
+  it('leaves out legal pages that are not populated or not published', () => {
+    const footer = resolveFooter(
+      {
+        ...makeSettings(),
+        legal: {
+          privacyPage: 1,
+          termsPage: { id: 2, name: 'Terms', slug: 'terms', _status: 'draft' }
+        }
+      } as unknown as SiteSetting,
+      navigationTree
+    );
+
+    expect(footer?.legalLinks).toEqual([]);
   });
 });
