@@ -3,7 +3,7 @@ import type { SanitizedConfig } from 'payload';
 
 import { buildTenantConfig } from './build-tenant-config';
 import { getCustomThemes } from './collections/get-custom-themes';
-import { getSiteSettings } from './collections/get-site-settings';
+import { getGeneralSiteSettings } from './collections/get-general-site-settings';
 import { getAuthenticatedPayload } from './get-authenticated-payload';
 import type { PayloadRuntime } from './payload-runtime.types';
 
@@ -17,7 +17,10 @@ export async function getPayloadRuntime(
   payloadConfig: SanitizedConfig
 ): Promise<PayloadRuntime> {
   const payload = await getAuthenticatedPayload(payloadConfig);
-  const siteSettings = await getSiteSettings({ payload, tenantConfig: null });
+  const siteSettings = await getGeneralSiteSettings({
+    payload,
+    tenantConfig: null
+  });
 
   // If we don't have a tenant user or site settings, we can't provide tenant-specific config
   if (!isTenant(payload.authenticatedUser)) {

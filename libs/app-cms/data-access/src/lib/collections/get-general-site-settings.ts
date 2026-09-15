@@ -33,7 +33,7 @@ type Response = {
 };
 
 /**
- * Fetch site settings (shallow).
+ * Fetch the General tab of the caller's own site settings, resolved for rendering.
  *
  * **Kept at depth 0** so relationship fields (landingPage, etc.) are returned as
  * IDs and are not subject to the authenticated user's collection-level access.
@@ -48,7 +48,7 @@ type Response = {
  * @param runtime - Authenticated Payload runtime instance
  * @returns Site settings or null
  */
-export async function getSiteSettings(
+export async function getGeneralSiteSettings(
   runtime: PayloadRuntime,
   options: Pick<QuerySingleOptions, 'locale'> = {}
 ): Promise<Response | null> {

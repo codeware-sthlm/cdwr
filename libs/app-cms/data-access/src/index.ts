@@ -48,8 +48,8 @@ export { getPreference } from './lib/collections/get-preference';
 export { getSignupPolicy } from './lib/collections/get-signup-policy';
 export {
   FALLBACK_THEME,
-  getSiteSettings
-} from './lib/collections/get-site-settings';
+  getGeneralSiteSettings
+} from './lib/collections/get-general-site-settings';
 export { getSiteSettingsForAllTenants } from './lib/collections/get-site-settings-for-all-tenants';
 export { getSiteSettingsForTenant } from './lib/collections/get-site-settings-for-tenant';
 export { getTenant } from './lib/collections/get-tenant';

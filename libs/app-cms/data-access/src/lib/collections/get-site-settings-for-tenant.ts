@@ -7,9 +7,9 @@ import type { PayloadRuntime } from '../payload-runtime.types';
 import type { QuerySingleOptions } from './types';
 
 /**
- * Fetch the site settings for an explicit tenant.
+ * Fetch the full site settings document for an explicit tenant.
  *
- * {@link getSiteSettings} scopes by the caller's own identity — it queries
+ * {@link getGeneralSiteSettings} scopes by the caller's own identity — it queries
  * with no `where` at all, relying on access control to naturally return only
  * the tenant that identity can see. That fits a tenant-scoped API key or a
  * logged-in tenant user, where identity *is* the tenant, but not an admin
