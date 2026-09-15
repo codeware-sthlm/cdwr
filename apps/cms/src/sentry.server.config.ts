@@ -31,9 +31,12 @@ Sentry.init({
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/#logs-
   enableLogs: true,
 
-  // Include personally identifiable information (request headers, IP addresses)
-  // Useful for debugging but consider privacy implications
-  sendDefaultPii: true
+  // A report keeps the page, the error and the browser, but not what the
+  // visitor sent or their cookies. With `sendDefaultPii` left off it carries
+  // no IP address either.
+  integrations: [
+    Sentry.requestDataIntegration({ include: { cookies: false, data: false } })
+  ]
 });
 
 if (enabled) {
