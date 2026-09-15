@@ -29,10 +29,6 @@ Sentry.init({
   // Percentage of transactions sent to Sentry (0.0 to 1.0)
   tracesSampleRate: getSentrySampleRate(env.DEPLOY_ENV),
 
-  // Session Replay sample rates
-  replaysSessionSampleRate: getSentrySampleRate(env.DEPLOY_ENV),
-  replaysOnErrorSampleRate: 1.0, // Capture 100% of sessions with errors
-
   // Filter out all errors from bot crawlers
   // Bots often trigger false positives due to:
   // - Stale HTML referencing old chunks after deployments
@@ -58,15 +54,10 @@ Sentry.init({
     Sentry.browserTracingIntegration(),
 
     // send console.log, console.warn, and console.error calls as logs to Sentry
-    Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
+    Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] })
 
-    // Configure Session Replay integration
-    Sentry.replayIntegration({
-      // Don't mask user text (adjust based on privacy requirements)
-      maskAllText: false,
-      // Don't block media elements from recordings
-      blockAllMedia: false
-    })
+    // No Session Replay: it records what is on screen and keeps state in the
+    // visitor's browser, which would need consent on every public site
   ]
 });
 
