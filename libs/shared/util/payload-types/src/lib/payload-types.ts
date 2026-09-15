@@ -1839,6 +1839,7 @@ export interface SiteSetting {
   tenant?: (number | null) | Tenant;
   general: SiteSettingsGeneral;
   footer?: SiteSettingsFooter;
+  legal?: SiteSettingsLegal;
   tourSignups?: SiteSettingsTourSignups;
   forms?: SiteSettingsForms;
   updatedAt: string;
@@ -1981,6 +1982,22 @@ export interface SiteSettingsFooter {
   showVersion?: boolean | null;
 }
 /**
+ * The privacy and terms pages, linked from the footer on every page and from the tour signup form and its emails.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "SiteSettingsLegal".
+ */
+export interface SiteSettingsLegal {
+  /**
+   * Linked from the footer, the tour signup form and the confirmation email. No page yet? Create a starter one below.
+   */
+  privacyPage?: (number | null) | Page;
+  /**
+   * Linked from the footer. When set, customers must accept these terms before they can sign up for a tour.
+   */
+  termsPage?: (number | null) | Page;
+}
+/**
  * What customers are told when they sign up for a tour, and how long their details are kept.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1996,14 +2013,6 @@ export interface SiteSettingsTourSignups {
         id?: string | null;
       }[]
     | null;
-  /**
-   * Linked from the signup form and the confirmation email. No page yet? Create a starter one below.
-   */
-  privacyPage?: (number | null) | Page;
-  /**
-   * When set, customers must accept these terms before they can sign up.
-   */
-  termsPage?: (number | null) | Page;
   /**
    * Names, emails and phone numbers are cleared this long after the tour departs. Party sizes and statuses are kept. This number is also what customers are told on the signup form.
    */
@@ -2829,6 +2838,7 @@ export interface SiteSettingsSelect<T extends boolean = true> {
   tenant?: T;
   general?: T | SiteSettingsGeneralSelect<T>;
   footer?: T | SiteSettingsFooterSelect<T>;
+  legal?: T | SiteSettingsLegalSelect<T>;
   tourSignups?: T | SiteSettingsTourSignupsSelect<T>;
   forms?: T | SiteSettingsFormsSelect<T>;
   updatedAt?: T;
@@ -2895,6 +2905,14 @@ export interface SiteSettingsFooterSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "SiteSettingsLegal_select".
+ */
+export interface SiteSettingsLegalSelect<T extends boolean = true> {
+  privacyPage?: T;
+  termsPage?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "SiteSettingsTourSignups_select".
  */
 export interface SiteSettingsTourSignupsSelect<T extends boolean = true> {
@@ -2904,8 +2922,6 @@ export interface SiteSettingsTourSignupsSelect<T extends boolean = true> {
         email?: T;
         id?: T;
       };
-  privacyPage?: T;
-  termsPage?: T;
   retentionDays?: T;
 }
 /**

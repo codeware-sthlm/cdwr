@@ -3,8 +3,21 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveSignupPolicy } from './resolve-signup-policy';
 
-const settings = (tourSignups: unknown) =>
-  ({ tourSignups }) as unknown as SiteSetting;
+type Config = {
+  privacyPage?: unknown;
+  termsPage?: unknown;
+  retentionDays?: unknown;
+};
+
+/** The pages live under `legal`, the retention under `tourSignups` */
+const settings = (config: Config | undefined) =>
+  ({
+    legal: config && {
+      privacyPage: config.privacyPage,
+      termsPage: config.termsPage
+    },
+    tourSignups: config && { retentionDays: config.retentionDays }
+  }) as unknown as SiteSetting;
 
 describe('resolveSignupPolicy', () => {
   it('resolves both pages to paths', () => {

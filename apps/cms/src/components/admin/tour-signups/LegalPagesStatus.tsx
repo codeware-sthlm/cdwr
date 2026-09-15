@@ -66,8 +66,8 @@ export const LegalPagesStatus: React.FC<Props> = async ({
     depth: 1
   });
 
-  const privacy = describe(settings?.tourSignups?.privacyPage);
-  const terms = describe(settings?.tourSignups?.termsPage);
+  const privacy = describe(settings?.legal?.privacyPage);
+  const terms = describe(settings?.legal?.termsPage);
 
   const adminRoute = payload.config.routes?.admin ?? '/admin';
   // Site settings is one document per workspace, so the useful link is that

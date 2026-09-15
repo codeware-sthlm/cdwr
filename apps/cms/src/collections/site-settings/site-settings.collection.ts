@@ -20,6 +20,7 @@ import { invalidateIconMap } from '../tenants/hooks/populate-icon.hook';
 import { sanitizeSvgHook } from './hooks/sanitize-svg.hook';
 import { footerTab } from './tabs/footer.tab';
 import { formsTab } from './tabs/forms.tab';
+import { legalTab } from './tabs/legal.tab';
 import { tourSignupsTab } from './tabs/tour-signups.tab';
 
 const themeOptions = SITE_THEMES.map((value) => ({
@@ -352,6 +353,7 @@ const siteSettings: CollectionConfig = {
           ]
         },
         footerTab,
+        legalTab,
         tourSignupsTab,
         formsTab
       ]

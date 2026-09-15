@@ -71,8 +71,25 @@ function LinkRow({ links }: { links: FooterData['links'] }) {
   );
 }
 
+/** Privacy and terms, beside the copyright on every variant. */
+function LegalLinks({ links }: { links: FooterData['legalLinks'] }) {
+  if (!links.length) {
+    return null;
+  }
+
+  return (
+    <span className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+      {links.map(({ key, label, newTab, url }) => (
+        <NavLink key={key} href={url} newTab={newTab}>
+          {label}
+        </NavLink>
+      ))}
+    </span>
+  );
+}
+
 /**
- * Copyright and release line.
+ * Copyright, legal links and release line.
  *
  * Secondary to the content above it. Kept at full muted color — dimming it
  * further fails the contrast check at this size.
@@ -81,17 +98,19 @@ function SecondaryLine({
   className,
   copyright,
   layout = 'stack',
+  legalLinks,
   showVersion
 }: {
   className?: string;
   copyright: string | null;
+  legalLinks: FooterData['legalLinks'];
   /** `row` splits the two texts across the full width from `sm` and up. */
   layout?: 'row' | 'stack';
   showVersion: boolean;
 }) {
   const { appInfo } = usePayload();
 
-  if (!copyright && !showVersion) {
+  if (!copyright && !showVersion && !legalLinks.length) {
     return null;
   }
 
@@ -105,7 +124,17 @@ function SecondaryLine({
         className
       )}
     >
-      {copyright && <p>{withYear(copyright)}</p>}
+      {(copyright || legalLinks.length > 0) && (
+        <div
+          className={cn(
+            'flex flex-col items-center gap-1',
+            isRow && 'sm:flex-row sm:gap-4'
+          )}
+        >
+          {copyright && <p>{withYear(copyright)}</p>}
+          <LegalLinks links={legalLinks} />
+        </div>
+      )}
       {/* Stays right when the copyright line is turned off */}
       {showVersion && (
         <p className={cn(isRow && 'sm:ml-auto')}>
@@ -121,7 +150,8 @@ function SecondaryLine({
  * footer would outweigh the page above it.
  */
 function CompactFooter({ footer }: { footer: FooterData }) {
-  const { contact, copyright, links, showVersion, tagline } = footer;
+  const { contact, copyright, legalLinks, links, showVersion, tagline } =
+    footer;
 
   return (
     <footer className="bg-core-background-body border-core-content-border mt-12 flex-none border-t">
@@ -136,7 +166,11 @@ function CompactFooter({ footer }: { footer: FooterData }) {
               )}
               <LinkRow links={links} />
               <SocialLinks links={contact} />
-              <SecondaryLine copyright={copyright} showVersion={showVersion} />
+              <SecondaryLine
+                copyright={copyright}
+                legalLinks={legalLinks}
+                showVersion={showVersion}
+              />
             </div>
           </ContainerInner>
         </div>
@@ -147,7 +181,8 @@ function CompactFooter({ footer }: { footer: FooterData }) {
 
 /** Links and contacts share a row, with the secondary line beneath. */
 function StandardFooter({ footer }: { footer: FooterData }) {
-  const { contact, copyright, links, showVersion, tagline } = footer;
+  const { contact, copyright, legalLinks, links, showVersion, tagline } =
+    footer;
 
   return (
     <footer className="bg-core-background-body border-core-content-border mt-16 flex-none border-t">
@@ -172,6 +207,7 @@ function StandardFooter({ footer }: { footer: FooterData }) {
                 className="border-t pt-5"
                 copyright={copyright}
                 layout="row"
+                legalLinks={legalLinks}
                 showVersion={showVersion}
               />
             </div>
@@ -188,7 +224,15 @@ function StandardFooter({ footer }: { footer: FooterData }) {
  */
 function ExpandedFooter({ footer }: { footer: FooterData }) {
   const { iconConfig, locale } = usePayload();
-  const { appName, contact, copyright, links, showVersion, tagline } = footer;
+  const {
+    appName,
+    contact,
+    copyright,
+    legalLinks,
+    links,
+    showVersion,
+    tagline
+  } = footer;
 
   return (
     <footer className="bg-core-background-body border-core-content-border mt-16 flex-none border-t">
@@ -240,6 +284,7 @@ function ExpandedFooter({ footer }: { footer: FooterData }) {
               className="mt-10 border-t pt-6"
               copyright={copyright}
               layout="row"
+              legalLinks={legalLinks}
               showVersion={showVersion}
             />
           </ContainerInner>
@@ -260,12 +305,14 @@ export function Footer({ footer }: { footer: FooterData | null }) {
     return null;
   }
 
-  const { contact, copyright, links, showVersion, tagline } = footer;
+  const { contact, copyright, legalLinks, links, showVersion, tagline } =
+    footer;
 
   // Everything can be turned off, which leaves nothing but a border to render
   if (
     !tagline &&
     !links.length &&
+    !legalLinks.length &&
     !contact.length &&
     !copyright &&
     !showVersion
