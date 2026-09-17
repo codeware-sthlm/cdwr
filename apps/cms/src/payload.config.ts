@@ -429,11 +429,7 @@ export default buildConfig({
                 collection: user.collection,
                 name: user.name,
                 email,
-                tenant_slug,
-                ip_address:
-                  // Extract only the first IP address in case the request passes through multiple proxies
-                  headers?.get('X-Forwarded-For')?.split(',')[0]?.trim() ??
-                  undefined
+                tenant_slug
               }
             })
           };
