@@ -37,7 +37,11 @@ export default defineConfig({
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     cwd: workspaceRoot,
-    timeout: 120_000
+    timeout: 120_000,
+    // Without this Playwright kills the shell it started and `next dev`'s own
+    // server survives, reparented and still holding port 3000 — which the next
+    // run then reuses, gate password and all
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 }
   },
   projects: [
     {

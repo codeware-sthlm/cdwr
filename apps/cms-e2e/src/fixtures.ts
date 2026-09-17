@@ -3,6 +3,9 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { type Coverage, test as base } from '@playwright/test';
+
+import { SITE_GATE_COOKIE, siteGateCookie } from './helpers/site-gate';
+
 export * from '@playwright/test';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,7 +36,9 @@ const isAllowed = (error: ObservedError, allowed: AllowedErrors) =>
 export const test = base.extend<{
   _coverage: void;
   _errorGuard: void;
+  _siteGate: void;
   allowedErrors: AllowedErrors;
+  siteGate: 'closed' | 'open';
 }>({
   /**
    * Errors this test expects, so the guard stays quiet for them.
@@ -42,6 +47,71 @@ export const test = base.extend<{
    * narrow pattern — a broad one silences the whole file.
    */
   allowedErrors: [[], { option: true }],
+
+  /**
+   * Whether this test arrives through the site gate.
+   *
+   * `open` is what every spec wants: the suite runs with a gate password set,
+   * and a test is here to exercise the site rather than the gate. The gate's
+   * own spec declares `closed` to meet it as an outsider does.
+   */
+  siteGate: ['open', { option: true }],
+
+  /**
+   * An api context that is through the gate as well.
+   *
+   * The public submit endpoints refuse a visitor who has not passed it, so a
+   * spec posting to one is a visitor who got in — the same stance the browser
+   * context takes. A spec declaring `siteGate: 'closed'` gets neither.
+   */
+  request: async ({ baseURL, playwright, siteGate }, use) => {
+    const cookie = siteGate === 'open' ? siteGateCookie() : null;
+
+    const context = await playwright.request.newContext({
+      baseURL,
+      ...(cookie
+        ? {
+            storageState: {
+              cookies: [
+                {
+                  name: SITE_GATE_COOKIE,
+                  value: cookie,
+                  domain: 'localhost',
+                  path: '/',
+                  expires: -1,
+                  httpOnly: true,
+                  secure: false,
+                  sameSite: 'Lax' as const
+                }
+              ],
+              origins: []
+            }
+          }
+        : {})
+    });
+
+    await use(context);
+    await context.dispose();
+  },
+
+  /**
+   * Carry the gate cookie into the browser context, on top of whatever
+   * storage state the spec chose.
+   */
+  _siteGate: [
+    async ({ baseURL, context, siteGate }, use) => {
+      const cookie = siteGate === 'open' ? siteGateCookie() : null;
+
+      if (cookie && baseURL) {
+        await context.addCookies([
+          { name: SITE_GATE_COOKIE, url: baseURL, value: cookie }
+        ]);
+      }
+
+      await use();
+    },
+    { auto: true }
+  ],
 
   /**
    * Fail on anything that broke without the test having to look for it.

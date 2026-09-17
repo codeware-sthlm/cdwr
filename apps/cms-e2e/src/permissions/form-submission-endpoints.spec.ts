@@ -18,6 +18,7 @@ import { expect, test } from '../fixtures';
 import { createForm } from '../helpers/create-form';
 import { humanProof } from '../helpers/human-proof';
 import { loginAs } from '../helpers/login';
+import { newGatedContext } from '../helpers/site-gate';
 
 /** Tenant API keys from seed data (always present in the e2e environment) */
 const MOON_API_KEY = 'b9c2fb25-df77-4304-a60a-028779a2cb37';
@@ -35,7 +36,7 @@ test.describe('Form submission admin endpoints', () => {
   let submissionId: number;
 
   test.beforeAll(async ({ browser }) => {
-    const context = await browser.newContext();
+    const context = await newGatedContext(browser);
     const page = await context.newPage();
 
     try {
@@ -76,7 +77,7 @@ test.describe('Form submission admin endpoints', () => {
   test('tenant admin can mark a moon submission read [F-03]', async ({
     browser
   }) => {
-    const context = await browser.newContext();
+    const context = await newGatedContext(browser);
     const page = await context.newPage();
 
     try {
@@ -156,7 +157,7 @@ test.describe('Form submission admin endpoints', () => {
   test('a user outside the workspace cannot mark it read [F-03]', async ({
     browser
   }) => {
-    const context = await browser.newContext();
+    const context = await newGatedContext(browser);
     const page = await context.newPage();
 
     try {
@@ -179,7 +180,7 @@ test.describe('Form submission admin endpoints', () => {
   // -------------------------------------------------------------------------
 
   test('tenant admin can export a moon form [F-04]', async ({ browser }) => {
-    const context = await browser.newContext();
+    const context = await newGatedContext(browser);
     const page = await context.newPage();
 
     try {
@@ -207,7 +208,7 @@ test.describe('Form submission admin endpoints', () => {
   test('export rejects a request without a form [F-04]', async ({
     browser
   }) => {
-    const context = await browser.newContext();
+    const context = await newGatedContext(browser);
     const page = await context.newPage();
 
     try {
