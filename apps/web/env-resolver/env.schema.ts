@@ -68,6 +68,20 @@ export const EnvSchema = z.object({
   TURNSTILE_SITE_KEY: z
     .string({ description: 'Public key the widget is rendered with' })
     .optional(),
+  // Whole-site gate: present means this tenant's site asks for the password
+  // before it shows anything, absent means it is public. Per tenant and
+  // environment, since Infisical secrets already are
+  // The minimum matches the cms schema: one Infisical secret serves both apps,
+  // and a value this app accepted but the cms refused would crash-loop the cms
+  // Empty means no gate, the same as absent — an env file documenting the
+  // variable with a blank value must not stop the app from starting
+  SITE_GATE_PASSWORD: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .string({ description: 'Shared password the site asks visitors for' })
+      .min(12, { message: 'SITE_GATE_PASSWORD must be at least 12 characters' })
+      .optional()
+  ),
   SIGNATURE_SECRET: z
     .string({ description: 'Secret key for API request signatures' })
     .min(1, {
