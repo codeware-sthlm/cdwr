@@ -16,6 +16,7 @@ import { fetchDataMain } from './infisical/lib/fetch-data.js';
 import { provisionTenantMain } from './infisical/lib/provision-tenant.js';
 import { rotateSignatureSecretMain } from './infisical/lib/rotate-signature-secret.js';
 import { rotateTenantKeyMain } from './infisical/lib/rotate-tenant-key.js';
+import { siteGateMain } from './infisical/lib/site-gate.js';
 import { generateShowcaseImages } from './media-tools/lib/generate-images.js';
 
 interface Tool {
@@ -94,6 +95,11 @@ const tools: Tool[] = [
     name: 'rotate-tenant-key',
     description: "Rotate a tenant's Payload API key in Payload and Infisical",
     action: rotateTenantKeyMain
+  },
+  {
+    name: 'site-gate',
+    description: "Open or close a tenant's site behind a shared password",
+    action: siteGateMain
   },
   {
     name: 'rotate-signature-secret',
