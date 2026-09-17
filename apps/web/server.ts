@@ -19,6 +19,7 @@ import type { AppLoadContext } from './app/utils/types';
 import env from './env-resolver/env';
 import { debugHeadersMiddleware } from './middlewares/debug-headers';
 import { resolveAppLoadContextMiddleware } from './middlewares/resolve-app-load-context.js';
+import { siteGateMiddleware } from './middlewares/site-gate';
 
 // Before any request is handled
 initSentry();
@@ -38,6 +39,14 @@ const app = new Hono()
     const appInfo = getAppInfo();
     return c.json({ ...appInfo, release: formatReleaseName(appInfo) });
   })
+  // A gated site stays out of search results as well as out of sight
+  .get('/robots.txt', (c) =>
+    c.text(
+      env.SITE_GATE_PASSWORD
+        ? 'User-agent: *\nDisallow: /\n'
+        : 'User-agent: *\nAllow: /\n'
+    )
+  )
   // Serve static files from Remix client build
   .use('*', serveStatic({ root: './build/client' }))
   // Let Remix handle all requests
@@ -45,6 +54,7 @@ const app = new Hono()
     '*',
     logger(env.DEBUG ? undefined : noop),
     debugHeadersMiddleware,
+    siteGateMiddleware,
     resolveAppLoadContextMiddleware,
     remix({
       build,

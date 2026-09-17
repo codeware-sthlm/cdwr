@@ -46,32 +46,40 @@ export default async function SiteGatePage({ searchParams }: Props) {
         : null;
 
   return (
-    <div className="relative flex w-full flex-col items-center overflow-x-clip text-center">
-      {/* The platform's own mark, the way the maintenance page carries it.
-          Sized on the file's own 2709x1908 ratio: give Next a ratio the image
-          does not have and it warns about the one it has to correct. */}
-      <Image
-        src="/cdwr-cloud.png"
-        alt=""
-        width={900}
-        height={634}
-        // The largest thing on the page, so it is the LCP element whether or
-        // not it is decorative — lazy loading it only delays the paint
-        priority
-        className="pointer-events-none absolute top-1/2 left-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 mask-[radial-gradient(ellipse_at_center,black_30%,transparent_75%)] opacity-[0.06] dark:invert"
+    <div className="relative flex w-full flex-col items-center text-center">
+      {/* The platform's own mark, on a layer of its own that spans the window.
+          Clipped at the screen edge rather than at the page's text column, so
+          the cloud can be wider than the content it sits behind. Sized on the
+          file's own 2709x1908 ratio, since a ratio Next has to correct is a
+          warning. */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 flex items-center justify-center overflow-hidden"
         aria-hidden
-      />
+      >
+        <Image
+          src="/cdwr-cloud.png"
+          alt=""
+          width={900}
+          height={634}
+          // The largest thing on the page, so it is the LCP element whether or
+          // not it is decorative — lazy loading it only delays the paint
+          priority
+          className="max-w-none mask-[radial-gradient(ellipse_at_center,black_30%,transparent_75%)] opacity-[0.06] dark:invert"
+        />
+      </div>
 
-      <Lock className="relative size-8 opacity-40" aria-hidden />
-      <h1 className="relative mt-6 text-2xl font-bold">
+      <Lock className="relative z-10 size-8 opacity-40" aria-hidden />
+      <h1 className="relative z-10 mt-6 text-2xl font-bold">
         {t(locale, 'siteGate.heading')}
       </h1>
-      <p className="relative mt-4 opacity-70">{t(locale, 'siteGate.intro')}</p>
+      <p className="relative z-10 mt-4 opacity-70">
+        {t(locale, 'siteGate.intro')}
+      </p>
 
       <form
         action={SITE_GATE_SUBMIT_PATH}
         method="post"
-        className="relative mt-8 w-full max-w-md"
+        className="relative z-10 mt-8 w-full max-w-md"
       >
         <input type="hidden" name="from" value={resolveReturnPath(from)} />
         <label htmlFor="site-gate-password" className="sr-only">
@@ -100,7 +108,7 @@ export default async function SiteGatePage({ searchParams }: Props) {
       </form>
 
       {message && (
-        <p role="alert" className="relative mt-4 text-sm font-medium">
+        <p role="alert" className="relative z-10 mt-4 text-sm font-medium">
           {message}
         </p>
       )}
