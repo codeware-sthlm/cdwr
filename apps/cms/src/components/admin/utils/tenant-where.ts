@@ -55,10 +55,10 @@ export async function getTenantWhere(
  * null rather than guessing among them: showing the wrong one is worse than
  * showing nothing.
  */
-export async function getSingleTenantId(
+export function getSingleTenantIdFromHeaders(
+  headersList: Headers,
   user: TypedUser | null | undefined
-): Promise<number | null> {
-  const headersList = await headers();
+): number | null {
   const selectedTenant = getTenantFromCookie(headersList, 'number');
   if (selectedTenant) {
     return Number(selectedTenant);
@@ -70,4 +70,14 @@ export async function getSingleTenantId(
 
   const userTenantIds = getUserTenantIDs(user ?? null);
   return userTenantIds.length === 1 ? userTenantIds[0] : null;
+}
+
+/**
+ * Request-context wrapper around {@link getSingleTenantIdFromHeaders}, the
+ * same pairing as `getTenantWhere` and its headers variant.
+ */
+export async function getSingleTenantId(
+  user: TypedUser | null | undefined
+): Promise<number | null> {
+  return getSingleTenantIdFromHeaders(await headers(), user);
 }
