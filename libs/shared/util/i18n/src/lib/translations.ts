@@ -101,6 +101,12 @@ export type TranslationKey =
   | 'notFound.goHome'
   | 'notFound.title'
   | 'posts.readMore'
+  | 'siteGate.heading'
+  | 'siteGate.intro'
+  | 'siteGate.password'
+  | 'siteGate.submit'
+  | 'siteGate.tooManyAttempts'
+  | 'siteGate.wrongPassword'
   | 'social.clickToCopy'
   | 'social.copied'
   | 'social.copyFailed'
@@ -298,6 +304,13 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'notFound.goHome': 'Go back home',
     'notFound.title': 'Page not found',
     'posts.readMore': 'Read more',
+    'siteGate.heading': 'This site is not open',
+    'siteGate.intro': 'Enter the password to continue.',
+    'siteGate.password': 'Password',
+    'siteGate.submit': 'Show the site',
+    'siteGate.tooManyAttempts':
+      'Too many attempts. Wait a moment, then try again.',
+    'siteGate.wrongPassword': 'That password does not open this site.',
     'social.clickToCopy': 'Click to copy',
     'social.copied': 'Copied',
     'social.copyFailed': 'Failed to copy to clipboard',
@@ -512,6 +525,13 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'notFound.goHome': 'Gå tillbaka till startsidan',
     'notFound.title': 'Sidan hittades inte',
     'posts.readMore': 'Läs mer',
+    'siteGate.heading': 'Webbplatsen är inte öppen',
+    'siteGate.intro': 'Ange lösenordet för att fortsätta.',
+    'siteGate.password': 'Lösenord',
+    'siteGate.submit': 'Visa webbplatsen',
+    'siteGate.tooManyAttempts':
+      'För många försök. Vänta en stund och försök sedan igen.',
+    'siteGate.wrongPassword': 'Lösenordet öppnar inte den här webbplatsen.',
     'social.clickToCopy': 'Klicka för att kopiera',
     'social.copied': 'Kopierad',
     'social.copyFailed': 'Kopiering misslyckades',
