@@ -19,6 +19,7 @@ import { expect, test } from '../fixtures';
 import { createForm } from '../helpers/create-form';
 import { humanProof } from '../helpers/human-proof';
 import { loginAs } from '../helpers/login';
+import { newGatedContext } from '../helpers/site-gate';
 
 /** Tenant API keys from seed data (always present in the e2e environment) */
 const MOON_API_KEY = 'b9c2fb25-df77-4304-a60a-028779a2cb37';
@@ -35,7 +36,7 @@ test.describe('Form submissions — tenant scope', () => {
   let submissionId: number;
 
   test.beforeAll(async ({ browser }) => {
-    const context = await browser.newContext();
+    const context = await newGatedContext(browser);
     const page = await context.newPage();
 
     try {
@@ -117,7 +118,7 @@ test.describe('Form submissions — tenant scope', () => {
   test('tenant admin can delete a moon submission [F-02]', async ({
     browser
   }) => {
-    const context = await browser.newContext();
+    const context = await newGatedContext(browser);
     const page = await context.newPage();
 
     try {
