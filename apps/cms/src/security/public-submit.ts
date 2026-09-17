@@ -6,6 +6,10 @@ import {
   guardSubmit
 } from '@codeware/shared/util/human-check';
 import { verifySignature } from '@codeware/shared/util/signature';
+import {
+  SITE_GATE_COOKIE,
+  verifySiteGateToken
+} from '@codeware/shared/util/site-gate';
 import { type NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -32,6 +36,9 @@ function isForwardedByFirstParty(request: NextRequest, env: Env | undefined) {
   );
 }
 
+/** Says nothing about which gate closed, the way the human check does not */
+const REFUSED = 'Could not accept this submission';
+
 /**
  * Stand in front of a public submit endpoint.
  *
@@ -50,10 +57,30 @@ export async function refuseUnlessHuman(
   fields: HumanCheckFields | undefined
 ): Promise<NextResponse | null> {
   const env = getEnv(false);
+  const forwarded = isForwardedByFirstParty(request, env);
+  const sitePassword = env?.SITE_GATE?.password;
+
+  // A site nobody may read is a site nobody may post to. The proxy leaves
+  // `/api` alone, since external clients authenticate with a tenant key — but
+  // these two routes take writes from anyone, so the gate has to be applied
+  // here instead. A first-party forward is already through its own gate.
+  if (
+    sitePassword &&
+    !forwarded &&
+    !verifySiteGateToken(
+      request.cookies.get(SITE_GATE_COOKIE)?.value,
+      sitePassword
+    )
+  ) {
+    return NextResponse.json(
+      { error: REFUSED, message: REFUSED },
+      { status: 401 }
+    );
+  }
 
   const guard = await guardSubmit({
     fields: fields ?? {},
-    forwarded: isForwardedByFirstParty(request, env),
+    forwarded,
     headers: request.headers,
     rateLimit: { limit: env?.HUMAN_CHECK_RATE_LIMIT },
     scope,

@@ -1,7 +1,12 @@
+import {
+  SITE_GATE_COOKIE,
+  verifySiteGateToken
+} from '@codeware/shared/util/site-gate';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { FORCE_LOGOUT_PATH, SESSION_COOKIES } from './utils/force-logout';
+import { SITE_GATE_PATH, isGatedPath } from './utils/site-gate';
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -31,6 +36,35 @@ export function proxy(request: NextRequest) {
     pathname !== '/cdwr-cloud.png'
   ) {
     return NextResponse.rewrite(new URL('/maintenance', request.url));
+  }
+
+  // Whole-site gate — a tenant site that is not open to the public yet.
+  //
+  // Read from `process.env` on every request rather than once at module scope:
+  // the env loader injects the tenant's secrets at boot, which is after this
+  // module is first evaluated. No password means the site is public.
+  const gatePassword = process.env.SITE_GATE_PASSWORD;
+
+  if (gatePassword && isGatedPath(pathname)) {
+    const token = request.cookies.get(SITE_GATE_COOKIE)?.value;
+
+    if (!verifySiteGateToken(token, gatePassword)) {
+      // Anything not asking for a page — a crawler, a script — gets a refusal
+      // rather than a form, and a status it can act on
+      if (!request.headers.get('accept')?.includes('text/html')) {
+        return new NextResponse(null, {
+          status: 401,
+          headers: { 'x-robots-tag': 'noindex' }
+        });
+      }
+
+      const gate = new URL(SITE_GATE_PATH, request.url);
+      gate.searchParams.set('from', `${pathname}${request.nextUrl.search}`);
+
+      return NextResponse.rewrite(gate, {
+        headers: { 'x-robots-tag': 'noindex' }
+      });
+    }
   }
 
   // Clear Next.js draft mode when the Payload session has expired or been cleared.
