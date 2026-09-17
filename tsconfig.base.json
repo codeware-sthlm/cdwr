@@ -183,6 +183,9 @@
       "@codeware/shared/util/signature": [
         "./libs/shared/util/signature/src/index.ts"
       ],
+      "@codeware/shared/util/site-gate": [
+        "./libs/shared/util/site-gate/src/index.ts"
+      ],
       "@codeware/shared/util/tailwind": [
         "./libs/shared/util/tailwind/src/index.ts"
       ],
