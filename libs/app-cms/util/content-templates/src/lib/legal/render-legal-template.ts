@@ -8,7 +8,7 @@ export type LegalTemplateKind = 'privacy' | 'terms';
 export type LegalTemplateVars = {
   /** Workspace name, as the customer knows it */
   tenantName: string;
-  /** Address a customer writes to about their data */
+  /** Public contact address; empty renders a visible fill-in marker */
   contactEmail: string;
   /** The workspace has tours customers can sign up for */
   tourSignups: boolean;
@@ -35,6 +35,12 @@ const templates: Record<LegalTemplateKind, Record<'en' | 'sv', string>> = {
 const titles: Record<LegalTemplateKind, Record<'en' | 'sv', string>> = {
   privacy: { en: 'Privacy', sv: 'Integritet' },
   terms: { en: 'Terms', sv: 'Villkor' }
+};
+
+/** Shown instead of an address when the workspace has configured none */
+const CONTACT_FALLBACK: Record<'en' | 'sv', string> = {
+  en: '**[fill in a contact address]**',
+  sv: '**[fyll i en kontaktadress]**'
 };
 
 /** `{{#key}}…{{/key}}` keeps its body when `key` is set, `{{^key}}…{{/key}}` when it is not */
@@ -64,7 +70,10 @@ export function renderLegalTemplate(
     text = text.replace(section, () => ((mode === '#') === isSet ? body : ''));
   }
 
-  const markdown = Object.entries(vars)
+  const markdown = Object.entries({
+    ...vars,
+    contactEmail: vars.contactEmail || CONTACT_FALLBACK[lang]
+  })
     .filter(([, value]) => ['string', 'number'].includes(typeof value))
     .reduce(
       (filled, [key, value]) =>

@@ -68,6 +68,15 @@ describe('renderLegalTemplate', () => {
     expect(unset.markdown).toContain('**Fill in:** how long');
   });
 
+  it('marks a missing contact address instead of leaving a gap', () => {
+    const en = renderLegalTemplate('privacy', 'en', vars({ contactEmail: '' }));
+    const sv = renderLegalTemplate('terms', 'sv', vars({ contactEmail: '' }));
+
+    expect(en.markdown).toContain('**[fill in a contact address]**');
+    expect(en.markdown).not.toContain('{{contactEmail}}');
+    expect(sv.markdown).toContain('**[fyll i en kontaktadress]**');
+  });
+
   it('names SendGrid only when it sends the email', () => {
     expect(renderLegalTemplate('privacy', 'sv', vars()).markdown).toContain(
       'Twilio SendGrid'

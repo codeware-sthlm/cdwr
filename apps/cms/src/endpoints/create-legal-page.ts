@@ -13,10 +13,23 @@ import {
   headersWithCors
 } from 'payload';
 
-import { getTenantWhereFromHeaders } from '../components/admin/utils/tenant-where';
+import { getSingleTenantIdFromHeaders } from '../components/admin/utils/tenant-where';
 
 /** Quoted in the starter text when the workspace has not set its own */
 const FALLBACK_RETENTION_DAYS = 365;
+
+/** Sentry's EU region, read from the DSN host rather than matched anywhere in the string */
+const isEuSentryHost = (dsn: string | undefined): boolean => {
+  if (!dsn) {
+    return false;
+  }
+  try {
+    const { hostname } = new URL(dsn);
+    return hostname === 'de.sentry.io' || hostname.endsWith('.de.sentry.io');
+  } catch {
+    return false;
+  }
+};
 
 const isKind = (value: unknown): value is LegalTemplateKind =>
   value === 'privacy' || value === 'terms';
@@ -59,18 +72,20 @@ export const createLegalPageEndpoint: Endpoint = {
     }
 
     try {
-      // The workspace the editor is currently in — the same scope their own
-      // reads run under, so a page can only be created where they can see it
-      const tenantWhere = getTenantWhereFromHeaders(req.headers, user);
-      // Only a single selected workspace resolves to an id worth stamping;
-      // otherwise the multi-tenant plugin assigns it from the user's own
-      const selected = (tenantWhere as { tenant?: { equals?: unknown } })
-        ?.tenant?.equals;
-      const tenantId = Number(selected);
+      // The one workspace the editor is in. Without it the draft could quote
+      // another workspace's settings, or be created with no workspace at all
+      const tenantId = getSingleTenantIdFromHeaders(req.headers, user);
+      if (tenantId === null) {
+        return Response.json(
+          { error: 'Select a workspace before creating a legal page' },
+          { status: StatusCodes.BAD_REQUEST }
+        );
+      }
+      const tenantWhere = { tenant: { equals: tenantId } };
 
       const { docs } = await payload.find({
         collection: 'site-settings',
-        where: tenantWhere ?? {},
+        where: tenantWhere,
         depth: 0,
         limit: 1,
         overrideAccess: false,
@@ -83,19 +98,24 @@ export const createLegalPageEndpoint: Endpoint = {
       // A workspace with no tours takes no signups, so the notice leaves them out
       const tours = await payload.count({
         collection: 'tours',
-        where: tenantWhere ?? {},
+        where: tenantWhere,
         overrideAccess: false,
         user,
         req
       });
       const { EMAIL, HUMAN_CHECK, SENTRY } = getEnv();
+      const contactEmail = settings?.footer?.contact?.find(
+        (entry) => entry.platform === 'email'
+      )?.email;
       // `all` is a read-time locale and cannot be written to; the draft is
       // created in English then, and the editor translates from there
       const locale = req.locale === 'sv' ? 'sv' : 'en';
 
       const { markdown, title } = renderLegalTemplate(body.kind, locale, {
         tenantName: settings?.general?.appName ?? '',
-        contactEmail: user.email,
+        // The published page must not carry an editor's own address, so the
+        // public contact from the footer is used, or none at all
+        contactEmail: contactEmail ?? '',
         tourSignups: tours.totalDocs > 0,
         tourRetentionDays:
           settings?.tourSignups?.retentionDays ?? FALLBACK_RETENTION_DAYS,
@@ -103,7 +123,7 @@ export const createLegalPageEndpoint: Endpoint = {
         humanCheck: Boolean(HUMAN_CHECK),
         sendgrid: Boolean(EMAIL && 'sendgrid' in EMAIL),
         errorMonitoring: Boolean(SENTRY),
-        errorMonitoringEu: Boolean(SENTRY?.dsn.includes('.de.sentry.io'))
+        errorMonitoringEu: isEuSentryHost(SENTRY?.dsn)
       });
 
       const page = await payload.create({
@@ -127,9 +147,7 @@ export const createLegalPageEndpoint: Endpoint = {
           ],
           // Nothing unreviewed can reach a visitor
           _status: 'draft',
-          ...(Number.isInteger(tenantId) && tenantId > 0
-            ? { tenant: tenantId }
-            : {})
+          tenant: tenantId
         },
         depth: 0,
         draft: true,
