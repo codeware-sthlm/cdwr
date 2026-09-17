@@ -6,6 +6,7 @@ import { SeedSourceSchema } from './seed-source.schema';
 import { SeedStrategySchema } from './seed-strategy.schema';
 import { SendGridSchema } from './sendgrid.schema';
 import { SentrySchema } from './sentry.schema';
+import { SiteGateSchema } from './site-gate.schema';
 import { SmtpSchema } from './smtp.schema';
 import { TurnstileSchema } from './turnstile.schema';
 
@@ -166,6 +167,8 @@ export const EnvSchema = withEnvVars(
     .merge(SendGridSchema.partial())
     // Sentry is optional
     .merge(SentrySchema.partial())
+    // The site gate is optional — without a password the site is public
+    .merge(SiteGateSchema.partial())
     .merge(SmtpSchema.partial())
     // Turnstile is optional — a site without it still has the honeypot
     .merge(TurnstileSchema.partial())
@@ -231,6 +234,7 @@ export const EnvSchema = withEnvVars(
     SENTRY_RELEASE,
     SIGNATURE_SECRET,
     SIGNATURE_SECRET_PREVIOUS,
+    SITE_GATE_PASSWORD,
     TENANT_ID,
     TURNSTILE_SECRET_KEY,
     TURNSTILE_SITE_KEY,
@@ -362,7 +366,15 @@ export const EnvSchema = withEnvVars(
         : 'TURNSTILE_SECRET_KEY'
       : TURNSTILE_SECRET_KEY
         ? 'TURNSTILE_SITE_KEY'
-        : undefined
+        : undefined,
+    /**
+     * The whole-site gate, when this tenant and environment has a password.
+     *
+     * Undefined means the site is public. The proxy reads `process.env`
+     * directly rather than this, since it runs before the loader's shape
+     * exists — this is what the gate page and its route handler read.
+     */
+    SITE_GATE: SITE_GATE_PASSWORD ? { password: SITE_GATE_PASSWORD } : undefined
   })
 );
 
