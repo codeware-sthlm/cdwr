@@ -1,4 +1,8 @@
-import { clientIp, rateLimit } from '@codeware/shared/util/human-check';
+import {
+  clientIp,
+  isRateLimited,
+  rateLimit
+} from '@codeware/shared/util/human-check';
 import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
 import {
   SITE_GATE_COOKIE,
@@ -159,19 +163,25 @@ async function handleSubmit(c: Context, password: string) {
   const submitted =
     typeof body['password'] === 'string' ? body['password'] : '';
 
-  if (!(await matchesSiteGatePassword(submitted, password))) {
-    // Only a wrong guess costs an attempt, so an office behind one address is
-    // not throttled for knowing the password
-    const address = clientIp(c.req.raw.headers) ?? 'unknown';
-    const attempt = rateLimit(`${address}:site-gate`, {
-      limit: ATTEMPTS_PER_ADDRESS
-    });
-    const error = attempt.ok ? 'wrong' : 'throttled';
-
-    return c.redirect(
+  const attempts = `${clientIp(c.req.raw.headers) ?? 'unknown'}:site-gate`;
+  const refuse = (error: 'throttled' | 'wrong') =>
+    c.redirect(
       `${SITE_GATE_PATH}?from=${encodeURIComponent(from)}&error=${error}`,
       303
     );
+
+  // Refuse a caller who is already over the limit before deriving anything:
+  // the comparison is deliberately slow, and that cost is what a flood buys
+  if (isRateLimited(attempts, { limit: ATTEMPTS_PER_ADDRESS })) {
+    return refuse('throttled');
+  }
+
+  if (!(await matchesSiteGatePassword(submitted, password))) {
+    // Only a wrong guess costs an attempt, so an office behind one address is
+    // not throttled for knowing the password
+    const attempt = rateLimit(attempts, { limit: ATTEMPTS_PER_ADDRESS });
+
+    return refuse(attempt.ok ? 'wrong' : 'throttled');
   }
 
   setCookie(c, SITE_GATE_COOKIE, createSiteGateToken(password), {
