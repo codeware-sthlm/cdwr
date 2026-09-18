@@ -1,5 +1,9 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import { clientIp, rateLimit } from '@codeware/shared/util/human-check';
+import {
+  clientIp,
+  isRateLimited,
+  rateLimit
+} from '@codeware/shared/util/human-check';
 import {
   SITE_GATE_COOKIE,
   SITE_GATE_MAX_AGE_SECONDS,
@@ -49,6 +53,14 @@ export async function POST(request: NextRequest) {
     return redirectTo(from);
   }
 
+  const attempts = `${clientIp(request.headers) ?? 'unknown'}:site-gate`;
+
+  // Refuse a caller who is already over the limit before deriving anything:
+  // the comparison is deliberately slow, and that cost is what a flood buys
+  if (isRateLimited(attempts, { limit: ATTEMPTS_PER_ADDRESS })) {
+    return backToGate(from, 'throttled');
+  }
+
   // Only a wrong guess costs an attempt. Counting every submit would throttle
   // an office behind one address for knowing the password
   if (
@@ -57,10 +69,7 @@ export async function POST(request: NextRequest) {
       password
     ))
   ) {
-    const address = clientIp(request.headers) ?? 'unknown';
-    const attempt = rateLimit(`${address}:site-gate`, {
-      limit: ATTEMPTS_PER_ADDRESS
-    });
+    const attempt = rateLimit(attempts, { limit: ATTEMPTS_PER_ADDRESS });
 
     return backToGate(from, attempt.ok ? 'wrong' : 'throttled');
   }
