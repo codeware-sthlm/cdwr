@@ -63,6 +63,31 @@ const evictOldest = () => {
 };
 
 /**
+ * Whether this caller is already over the limit, without counting the ask.
+ *
+ * For a check that costs something to run. The site gate derives a key with
+ * scrypt before it can tell a wrong password from a right one, and paying
+ * that for a caller who is already refused is exactly the cost an attacker
+ * would like to impose. Counting stays with `rateLimit`, so a caller cannot
+ * be pushed over the limit by asking this.
+ *
+ * @param key - Who is asking, usually their address plus what they are posting to
+ */
+export function isRateLimited(
+  key: string,
+  {
+    limit = DEFAULT_LIMIT,
+    windowMs = DEFAULT_WINDOW_MS,
+    now = Date.now
+  }: RateLimitConfig = {}
+): boolean {
+  const cutoff = now() - windowMs;
+  const recent = (hits.get(key) ?? []).filter((time) => time > cutoff);
+
+  return recent.length >= limit;
+}
+
+/**
  * Count what one caller has sent lately, and say whether to take another.
  *
  * A sliding window held in this process and nowhere else. A deployment runs
