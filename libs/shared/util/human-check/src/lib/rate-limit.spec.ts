@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { rateLimit, resetRateLimits } from './rate-limit';
+import { isRateLimited, rateLimit, resetRateLimits } from './rate-limit';
 
 const START = 1_800_000_000_000;
 
@@ -84,5 +84,40 @@ describe('rateLimit', () => {
     clock = START + 60_001;
 
     expect(rateLimit('a', config)).toEqual({ ok: true });
+  });
+});
+
+describe('isRateLimited', () => {
+  beforeEach(() => {
+    resetRateLimits();
+  });
+
+  it('answers whether the caller is over the limit', () => {
+    const config = { limit: 2, windowMs: 60_000, now: () => START };
+
+    expect(isRateLimited('a', config)).toBe(false);
+    rateLimit('a', config);
+    rateLimit('a', config);
+    expect(isRateLimited('a', config)).toBe(true);
+  });
+
+  it('does not count the asking', () => {
+    // An expensive check asks this before doing its work, so asking must not
+    // be what pushes a caller over
+    const config = { limit: 1, windowMs: 60_000, now: () => START };
+
+    expect(isRateLimited('b', config)).toBe(false);
+    expect(isRateLimited('b', config)).toBe(false);
+    expect(rateLimit('b', config)).toEqual({ ok: true });
+  });
+
+  it('forgets a caller once the window has passed', () => {
+    const config = { limit: 1, windowMs: 60_000 };
+
+    rateLimit('c', { ...config, now: () => START });
+    expect(isRateLimited('c', { ...config, now: () => START })).toBe(true);
+    expect(isRateLimited('c', { ...config, now: () => START + 60_001 })).toBe(
+      false
+    );
   });
 });

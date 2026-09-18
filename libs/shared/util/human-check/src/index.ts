@@ -8,6 +8,7 @@ export {
 export {
   type RateLimitConfig,
   type RateLimitResult,
+  isRateLimited,
   rateLimit,
   resetRateLimits
 } from './lib/rate-limit';
