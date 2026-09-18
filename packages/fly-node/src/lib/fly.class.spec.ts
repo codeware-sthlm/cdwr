@@ -1239,31 +1239,39 @@ describe('Fly', () => {
       });
     });
 
-    it('should not get secrets when app does not exist', async () => {
+    it('should not blank a secret whose value is empty', async () => {
       const fly = new Fly(mockFlyConfig);
-      await fly.deploy({
-        app: mockDefs.newApp,
-        config: mockDefs.testConfig,
-        org: mockDefs.org
-      });
 
-      assertSpawn('not', ['secrets', 'list']);
-    });
-
-    it('should get app secrets when app exists', async () => {
-      const fly = new Fly(mockFlyConfig);
+      // `KEY=${{ secrets.RENAMED }}` renders as `KEY=`, and an app already
+      // running with a good value must keep it
       await fly.deploy({
         app: mockDefs.testApp,
-        config: mockDefs.testConfig
+        config: mockDefs.testConfig,
+        secrets: { [mockDefs.testSecret]: '', NEW_SECRET: 'value' }
       });
 
       assertSpawn('exact', [
         'secrets',
-        'list',
+        'set',
         '--app',
         mockDefs.testApp,
-        '--json'
+        '--stage',
+        'NEW_SECRET=value'
       ]);
+    });
+
+    it('should not list secrets when deploying', async () => {
+      const fly = new Fly(mockFlyConfig);
+
+      // The listing only ever told the deploy which secrets to skip. Nothing
+      // is skipped now, so an existing app costs one api call less
+      await fly.deploy({
+        app: mockDefs.testApp,
+        config: mockDefs.testConfig,
+        secrets: { NEW_SECRET: 'value' }
+      });
+
+      assertSpawn('not', ['secrets', 'list']);
     });
 
     it('should attach to postgres cluster when not attached to the app', async () => {
@@ -1346,8 +1354,12 @@ describe('Fly', () => {
       ]);
     });
 
-    it('should preserve existing secrets on second deployment', async () => {
+    it('should stage a changed secret as well as a new one', async () => {
       const fly = new Fly(mockFlyConfig);
+
+      // The app already holds `testSecret`. A deploy that set only what was
+      // missing would strand a rotated value in the store it came from, which
+      // is the whole of COD-426
       await fly.deploy({
         app: mockDefs.testApp,
         config: mockDefs.testConfig,
@@ -1363,6 +1375,7 @@ describe('Fly', () => {
         '--app',
         mockDefs.testApp,
         '--stage',
+        `${mockDefs.testSecret}=new-value`,
         'NEW_SECRET=value'
       ]);
     });

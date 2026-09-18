@@ -793,7 +793,6 @@ export class Fly {
     options?: DeployAppOptions
   ): Promise<{ appName: string; imageRef?: string }> {
     let appName = '';
-    let appSecrets: ListSecretForAppResponse = [];
     let deployConfig = options?.config || this.instanceConfig;
 
     // For deployment to work there must be an app involved,
@@ -879,33 +878,48 @@ export class Fly {
       appName = name;
       this.logger.info(`Application '${appName}' was created`);
     } else {
-      // Not expected to throw since the app exists
-      appSecrets = await this.fetchAppSecrets('throwOnError', { app: appName });
       this.logger.info(`Updating existing application '${appName}'`);
     }
     // Validate app name before proceeding
     NameSchema.parse(appName);
 
     // Apply secrets to app before deployment. Skipped for build-only (secrets are runtime, not build-time).
-    // Only set new secrets that don't exist.
+    //
+    // Every secret is staged, not only the ones the app is missing. A value
+    // that changed where it is kept reaches a running app no other way, and
+    // comparing names would drop exactly that case — a rotated key stays
+    // rotated only in the store it came from. Staging costs no extra restart:
+    // the deploy below is what applies them, and it replaces the machines
+    // whatever their secrets say.
     if (!options?.buildOnly && options?.secrets) {
-      const existingSecrets = new Set(appSecrets.map(({ name }) => name));
-      const newSecrets: Record<string, string> = {};
+      // An empty value is a mistake upstream, never an instruction. A workflow
+      // renders `KEY=${{ secrets.MISSING }}` as `KEY=`, and staging that would
+      // blank a live secret — turning a renamed repository secret into an
+      // outage. Clearing one is deliberate work: `fly secrets unset`.
+      const staged: Record<string, string> = {};
+      const empty: Array<string> = [];
 
       for (const [key, value] of Object.entries(options.secrets)) {
-        if (!existingSecrets.has(key)) {
-          newSecrets[key] = value;
+        if (value === '') {
+          empty.push(key);
         } else {
-          this.logger.info(
-            `Secret '${key}' already exists for '${appName}', skipping`
-          );
+          staged[key] = value;
         }
       }
 
-      const keys = Object.keys(newSecrets);
+      if (empty.length > 0) {
+        this.logger.error(
+          `Refusing to blank secrets with no value for '${appName}': ${empty.join(', ')}`
+        );
+      }
+
+      const keys = Object.keys(staged);
+
       if (keys.length > 0) {
-        this.logger.info(`Adding secrets to '${appName}': ${keys.join(', ')}`);
-        await this.setAppSecrets(newSecrets, {
+        this.logger.info(
+          `Staging secrets for '${appName}': ${keys.join(', ')}`
+        );
+        await this.setAppSecrets(staged, {
           app: appName,
           stage: true
         });
