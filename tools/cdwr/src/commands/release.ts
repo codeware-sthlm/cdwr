@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { type Plan, defineCommand } from '../cli/command';
 import { CliError, EXIT, UsageError, messageOf } from '../cli/errors';
 import { input } from '../cli/inputs';
+import { muted } from '../cli/muted';
 import { run, runStreaming } from '../services/shell';
 
 import {
@@ -71,7 +72,6 @@ export default defineCommand({
   inputs: {
     mode: input.enum(['release', 'publish'], {
       prompt: 'What parts of the release process do you want to run?',
-      default: 'release',
       initial: 'release',
       hints: MODE_HINTS
     }),
@@ -132,13 +132,15 @@ export default defineCommand({
     const preview = await ctx.ui.task(
       'Previewing the version bump',
       () =>
-        releaseVersion({
-          dryRun: true,
-          gitCommit: false,
-          gitTag: false,
-          stageChanges: false,
-          verbose: ctx.flags.verbose
-        }),
+        muted(() =>
+          releaseVersion({
+            dryRun: true,
+            gitCommit: false,
+            gitTag: false,
+            stageChanges: false,
+            verbose: ctx.flags.verbose
+          })
+        ),
       (r) =>
         hasNewVersion(r.projectsVersionData)
           ? 'Changes found'
@@ -184,7 +186,7 @@ export default defineCommand({
     if (bump) {
       const status = await ctx.ui.task(
         'Bumping versions',
-        () => releaseVersion({ dryRun: false, verbose }),
+        () => muted(() => releaseVersion({ dryRun: false, verbose })),
         () => 'Versions bumped'
       );
       const versionData = status.projectsVersionData;
@@ -199,7 +201,7 @@ export default defineCommand({
 
       try {
         await ctx.ui.task('Generating changelogs', () =>
-          releaseChangelog({ versionData, dryRun: false, verbose })
+          muted(() => releaseChangelog({ versionData, dryRun: false, verbose }))
         );
       } catch (error) {
         throw new CliError(`Generating changelogs failed: ${messageOf(error)}`);
@@ -238,12 +240,15 @@ export default defineCommand({
         )
       );
 
-      const result = await releasePublish({
-        dryRun: false,
-        verbose,
-        otp: Number(otp),
-        projects
-      });
+      const result = await muted(() =>
+        releasePublish({
+          dryRun: false,
+          verbose,
+          // nx types the code as a number but only interpolates it; a string keeps a leading zero
+          otp: otp as unknown as number,
+          projects
+        })
+      );
       const values = Object.values(result);
       stats = {
         successful: values.filter((r) => r.code === 0).length,

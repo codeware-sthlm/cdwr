@@ -70,7 +70,7 @@ describe('db test-migration', () => {
     const exit = await runCommand({
       name: 'db test-migration',
       command,
-      argv: ['--backup', backup],
+      argv: ['--backup', backup, '--no-fresh', '--no-keep'],
       root,
       env: {},
       prefs: memoryPrefs(),
@@ -106,7 +106,7 @@ describe('db test-migration', () => {
     const exit = await runCommand({
       name: 'db test-migration',
       command,
-      argv: ['--backup', backup, '--keep'],
+      argv: ['--backup', backup, '--no-fresh', '--keep'],
       root,
       env: {},
       prefs: memoryPrefs(),

@@ -189,7 +189,7 @@ export default defineCommand({
   inputs: {
     fresh: input.boolean({
       prompt: 'Create a fresh production backup first?',
-      default: false
+      initial: false
     }),
     backup: input.optional(
       input.select<string>({
@@ -205,7 +205,7 @@ export default defineCommand({
     ),
     keep: input.boolean({
       prompt: 'Keep the container running afterwards?',
-      default: false
+      initial: false
     })
   },
 

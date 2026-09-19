@@ -34,7 +34,7 @@ export default defineCommand({
     }),
     mode: input.enum(['full', 'data', 'schema'], {
       prompt: 'What to restore?',
-      default: 'full',
+      initial: 'full',
       hints: {
         full: 'schema then data',
         data: 'leaves schema untouched',

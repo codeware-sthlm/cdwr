@@ -48,7 +48,13 @@ describe('db restore', () => {
     const exit = await runCommand({
       name: 'db restore',
       command,
-      argv: ['cms-production-2026-09-19T21-05-33', '--env', 'production'],
+      argv: [
+        'cms-production-2026-09-19T21-05-33',
+        '--mode',
+        'full',
+        '--env',
+        'production'
+      ],
       root: '/repo',
       env: {},
       prefs: memoryPrefs(),

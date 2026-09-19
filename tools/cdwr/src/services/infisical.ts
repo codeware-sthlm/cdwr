@@ -137,7 +137,8 @@ export async function assertWritable(
       `Infisical will not accept writes at ${path}: ${messageOf(error)}`
     );
   } finally {
-    await deleteInfisicalSecret({ environment, path, key });
+    // The probe may never have been written; its cleanup must not hide the diagnosis
+    await deleteInfisicalSecret({ environment, path, key }).catch(() => false);
   }
 }
 

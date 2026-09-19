@@ -193,13 +193,20 @@ export function App({
     { isActive: screen === 'home' }
   );
 
-  // Run keys: only once the command has ended, or ctrl-c any time
+  // Ctrl-c leaves from anywhere, prompts included
   useInput(
     (input, key) => {
       if (key.ctrl && input === 'c') {
         runState?.prompt?.reject(new Cancelled());
-        return leave(130);
+        leave(130);
       }
+    },
+    { isActive: screen === 'run' }
+  );
+
+  // Run keys: only once the command has ended
+  useInput(
+    (input, key) => {
       if (!runState?.result) return;
       if (isEnter(input, key) || key.escape || input === 'h' || key.leftArrow) {
         if (initial && current === initial.entry && !filter)
