@@ -10,7 +10,8 @@ overrides:
   "@remix-run/server-runtime": ">=2.17.3"
   postcss: ">=8.5.14"
   "request>form-data": ">=2.5.4"
-  "@vitest/browser": ">=4.1.10"
+  # Ceiling: the provider and vitest itself must stay on the same major
+  "@vitest/browser": ">=4.1.11 <5"
   "@xhmikosr/decompress": ">=11.1.3"
   shell-quote: ">=1.8.4"
 
