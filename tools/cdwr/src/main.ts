@@ -40,8 +40,8 @@ async function main(argv: string[]): Promise<number> {
       version: workspace.version,
       groups: GROUPS,
       entries: ENTRIES,
-      initial,
-      run: (entry, rest, ui) => runEntry(entry, rest, workspace.root, true, ui)
+      root: workspace.root,
+      initial
     });
 
   if (found.kind === 'none') {

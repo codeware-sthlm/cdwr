@@ -4,6 +4,7 @@ import {
   execFile,
   spawn
 } from 'node:child_process';
+import { isMainThread, parentPort } from 'node:worker_threads';
 
 /** Children still running; killed when this process leaves, however it leaves */
 const children = new Set<ChildProcess>();
@@ -11,6 +12,10 @@ const children = new Set<ChildProcess>();
 export function track<T extends ChildProcess>(child: T): T {
   children.add(child);
   child.once('exit', () => children.delete(child));
+  // The app kills what a worker spawned when it aborts the worker
+  if (!isMainThread && child.pid) {
+    parentPort?.postMessage({ type: 'child', pid: child.pid });
+  }
   return child;
 }
 

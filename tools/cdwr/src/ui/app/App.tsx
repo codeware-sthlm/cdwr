@@ -33,6 +33,8 @@ export interface AppProps {
   run: (entry: Entry, argv: string[]) => Promise<number>;
   /** Open straight on a command, as `cdwr db backup` does */
   initial?: { entry: Entry; argv: string[] };
+  /** Stop a running command and whatever it spawned */
+  abort?: () => void;
   onExit: (code: number) => void;
 }
 
@@ -97,6 +99,7 @@ export function App({
   store,
   run,
   initial,
+  abort,
   onExit
 }: AppProps) {
   const { exit } = useApp();
@@ -198,6 +201,7 @@ export function App({
     (input, key) => {
       if (key.ctrl && input === 'c') {
         runState?.prompt?.reject(new Cancelled());
+        abort?.();
         leave(130);
       }
     },
@@ -657,7 +661,7 @@ function PromptView({ prompt }: { prompt: RunState['prompt'] & object }) {
         <TextInput
           message={prompt.message}
           mask
-          validate={prompt.validate}
+          error={prompt.error}
           onSubmit={prompt.resolve}
           onCancel={cancel}
         />
@@ -668,7 +672,7 @@ function PromptView({ prompt }: { prompt: RunState['prompt'] & object }) {
           message={prompt.message}
           placeholder={prompt.placeholder}
           initial={prompt.initial}
-          validate={prompt.validate}
+          error={prompt.error}
           onSubmit={prompt.resolve}
           onCancel={cancel}
         />
