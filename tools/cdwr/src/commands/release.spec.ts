@@ -36,7 +36,7 @@ vi.mock('../services/shell', async (importOriginal) => {
   return {
     ...actual,
     run: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
-    runAttached: vi.fn().mockResolvedValue(undefined)
+    runStreaming: vi.fn().mockResolvedValue(undefined)
   };
 });
 

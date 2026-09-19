@@ -1,5 +1,5 @@
+import { createPlainUi } from '../ui/plain';
 import { createSilentUi } from '../ui/silent';
-import { createTerminalUi } from '../ui/terminal';
 import { symbols, theme } from '../ui/theme';
 import type { Ui } from '../ui/ui';
 
@@ -84,7 +84,7 @@ export async function runCommand(options: RunOptions): Promise<number> {
   try {
     parsed = parseCommandArgs(argv, command.inputs);
   } catch (error) {
-    return fail(error, false, stdout);
+    return fail(error, false, stdout, false, options.ui);
   }
   if (parsed.globals.help) {
     stdout(renderCommandHelp(name, command));
@@ -105,7 +105,7 @@ export async function runCommand(options: RunOptions): Promise<number> {
     options.ui ??
     (flags.json
       ? createSilentUi((line) => process.stderr.write(`${line}\n`))
-      : createTerminalUi());
+      : createPlainUi(stdout));
   const ctx: Context = { root, env, prefs, ui, flags, command: name };
   const record = options.history ?? recordHistory;
   const started = Date.now();
@@ -200,7 +200,7 @@ export async function runCommand(options: RunOptions): Promise<number> {
       });
     }
     prefs.save();
-    return fail(error, flags.json, stdout, flags.verbose);
+    return fail(error, flags.json, stdout, flags.verbose, ui);
   }
 }
 
@@ -215,12 +215,23 @@ export function fail(
   error: unknown,
   json: boolean,
   stdout: (text: string) => void,
-  verbose = false
+  verbose = false,
+  ui?: Ui
 ): number {
   const known = error instanceof CliError;
   const code = known ? error.exitCode : EXIT.failed;
   const message = messageOf(error);
   const hint = known ? error.hint : undefined;
+
+  // Inside the app the pane is the only place text may go
+  if (ui && !json && ui.interactive) {
+    if (error instanceof Cancelled) ui.warn(message);
+    else ui.error(message);
+    if (hint) ui.info(hint);
+    if (!known && verbose && error instanceof Error && error.stack)
+      ui.write(error.stack);
+    return code;
+  }
 
   if (json) {
     stdout(

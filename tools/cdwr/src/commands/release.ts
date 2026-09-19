@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { type Plan, defineCommand } from '../cli/command';
 import { CliError, EXIT, UsageError, messageOf } from '../cli/errors';
 import { input } from '../cli/inputs';
-import { run, runAttached } from '../services/shell';
+import { run, runStreaming } from '../services/shell';
 
 import {
   type Mode,
@@ -222,7 +222,7 @@ export default defineCommand({
       const pm = getPackageManagerCommand();
       const [bin, ...baseArgs] = pm.exec.split(' ');
       await ctx.ui.task('Rebuilding before publish', () =>
-        runAttached(
+        runStreaming(
           bin ?? 'pnpm',
           [
             ...baseArgs,
@@ -233,6 +233,7 @@ export default defineCommand({
             '-p',
             projects.join(',')
           ],
+          (line) => ctx.ui.write(line),
           { cwd: ctx.root }
         )
       );

@@ -70,20 +70,44 @@ export function run(
   });
 }
 
-/** Run a binary with the terminal attached, for anything interactive or long */
-export function runAttached(
+/**
+ * Run a binary and hand every output line to the caller as it arrives, for
+ * long builds whose progress is worth showing. The UI owns the screen, so
+ * nothing inherits stdio.
+ */
+export function runStreaming(
   binary: string,
   args: string[],
+  onLine: (line: string) => void,
   options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, { ...options, stdio: 'inherit' });
+    const child = spawn(binary, args, {
+      ...options,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    const tail: string[] = [];
+    const feed = (chunk: Buffer) => {
+      for (const line of chunk.toString().split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        onLine(line);
+        tail.push(line);
+        if (tail.length > 20) tail.shift();
+      }
+    };
+    child.stdout?.on('data', feed);
+    child.stderr?.on('data', feed);
     child.on('error', reject);
     child.on('exit', (code, signal) => {
       if (code === 0) resolve();
       else
         reject(
-          new CommandError([binary, ...args].join(' '), '', '', code ?? signal)
+          new CommandError(
+            [binary, ...args].join(' '),
+            '',
+            tail.join('\n'),
+            code ?? signal
+          )
         );
     });
   });

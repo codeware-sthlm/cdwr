@@ -148,7 +148,7 @@ nx seed cms
 ### The cdwr CLI (database / Fly.io / tenants / Infisical / media / release)
 
 ```sh
-pnpm cdwr                         # menu; `cdwr` after `pnpm cdwr setup`
+pnpm cdwr                         # the app; `cdwr` after `pnpm cdwr setup`
 cdwr <group> <command> --help     # db, fly, tenant, infisical, signature, media, release
 cdwr db backup --env production   # flags first, prompts for the rest
 cdwr fly info --json              # machine output, never prompts

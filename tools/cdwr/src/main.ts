@@ -1,20 +1,31 @@
 import { EXIT, messageOf } from './cli/errors';
 import { renderGroupHelp, renderTopHelp } from './cli/help';
 import { loadPrefs } from './cli/prefs';
-import { lookup, nameOf, suggest } from './cli/registry';
+import { type Entry, lookup, nameOf, suggest } from './cli/registry';
 import { fail, runCommand } from './cli/run';
 import { loadWorkspace } from './cli/workspace';
 import { ENTRIES, GROUPS } from './commands';
-import { banner } from './ui/banner';
-import { MENU_LEGEND, Quit, afterCommand, pickFromMenu } from './ui/menu';
-import { createTerminalUi } from './ui/terminal';
+import { launchApp } from './ui/app/run-app';
 import { theme } from './ui/theme';
+import type { Ui } from './ui/ui';
 
 const out = (text: string) => process.stdout.write(`${text}\n`);
 
+/** Flags that mean "no prompts" or "text only", so the app stays out of the way */
+const PLAIN_FLAGS = ['--json', '--non-interactive', '--help', '-h'];
+
+const unknown = (word: string, near: string[]): number => {
+  const hint = near.length
+    ? `. Did you mean ${near.map((n) => theme.code(n)).join(', ')}?`
+    : '';
+  process.stderr.write(`Unknown command '${word}'${hint}\n`);
+  return EXIT.usage;
+};
+
 async function main(argv: string[]): Promise<number> {
   const workspace = loadWorkspace();
-  const interactive = Boolean(process.stdout.isTTY && process.stdin.isTTY);
+  const tty = Boolean(process.stdout.isTTY && process.stdin.isTTY);
+  const useApp = tty && !argv.some((a) => PLAIN_FLAGS.includes(a));
 
   if (argv[0] === '--version' || argv[0] === '-V') {
     out(workspace.version);
@@ -24,100 +35,64 @@ async function main(argv: string[]): Promise<number> {
   const found = lookup(argv, GROUPS, ENTRIES);
   const wantsHelp = argv.includes('--help') || argv.includes('-h');
 
+  const runInApp = (initial?: { entry: Entry; argv: string[] }) =>
+    launchApp({
+      version: workspace.version,
+      groups: GROUPS,
+      entries: ENTRIES,
+      initial,
+      run: (entry, rest, ui) => runEntry(entry, rest, workspace.root, true, ui)
+    });
+
   if (found.kind === 'none') {
     const word = found.rest.find((a) => !a.startsWith('-'));
-    if (word) {
-      const near = suggest(word, ENTRIES, GROUPS);
-      process.stderr.write(
-        `Unknown command '${word}'${near.length ? `. Did you mean ${near.map((n) => theme.code(n)).join(', ')}?` : ''}\n`
-      );
-      return EXIT.usage;
-    }
-    if (!interactive || wantsHelp) {
+    if (word) return unknown(word, suggest(word, ENTRIES, GROUPS));
+    if (!useApp || wantsHelp) {
       out(renderTopHelp(GROUPS, ENTRIES, workspace.version));
       return wantsHelp ? EXIT.ok : EXIT.usage;
     }
-    return runFromMenu(argv, workspace.root, workspace.version, interactive);
+    return runInApp();
   }
 
   if (found.kind === 'group') {
     const own = ENTRIES.filter((e) => e.path[0] === found.group.name);
     const word = found.rest.find((a) => !a.startsWith('-'));
     if (word) {
-      const near = suggest(word, own, []);
-      process.stderr.write(
-        `Unknown command '${found.group.name} ${word}'${near.length ? `. Did you mean ${near.map((n) => theme.code(n)).join(', ')}?` : ''}\n`
-      );
-      return EXIT.usage;
+      return unknown(`${found.group.name} ${word}`, suggest(word, own, []));
     }
-    if (!interactive || wantsHelp) {
-      out(renderGroupHelp(found.group, own));
-      return wantsHelp ? EXIT.ok : EXIT.usage;
-    }
-    return runFromMenu(
-      found.rest,
-      workspace.root,
-      workspace.version,
-      interactive,
-      found.group.name
-    );
+    out(renderGroupHelp(found.group, own));
+    return wantsHelp ? EXIT.ok : EXIT.usage;
   }
 
-  const command = await found.entry.load();
-  return runCommand({
-    name: nameOf(found.entry),
-    command,
-    argv: found.rest,
-    root: workspace.root,
-    env: process.env,
-    prefs: loadPrefs(),
-    interactive
-  });
+  if (useApp) return runInApp({ entry: found.entry, argv: found.rest });
+  return runEntry(found.entry, found.rest, workspace.root, tty);
 }
 
-async function runFromMenu(
+async function runEntry(
+  entry: Entry,
   argv: string[],
   root: string,
-  version: string,
   interactive: boolean,
-  group?: string
+  ui?: Ui
 ): Promise<number> {
-  const ui = createTerminalUi();
-  let last = group;
-  let code: number = EXIT.ok;
-  // The menu is the user's screen: it stays until they leave it
-  for (;;) {
-    console.clear();
-    out(banner(version));
-    out('');
-    out(`  ${MENU_LEGEND}`);
-    out('');
-    let entry;
-    try {
-      entry = await pickFromMenu(ui, GROUPS, ENTRIES, last);
-    } catch (error) {
-      if (error instanceof Quit) return code;
-      throw error;
-    }
-    last = entry.path[0];
-    const command = await entry.load();
-    code = await runCommand({
-      name: nameOf(entry),
-      command,
-      argv,
-      root,
-      env: process.env,
-      prefs: loadPrefs(),
-      interactive
-    });
-    out('');
-    if ((await afterCommand(ui)) === 'quit') return code;
-  }
+  const command = await entry.load();
+  return runCommand({
+    name: nameOf(entry),
+    command,
+    argv,
+    root,
+    env: process.env,
+    prefs: loadPrefs(),
+    interactive,
+    ui,
+    // Inside the app, text meant for stdout goes to the pane
+    stdout: ui ? (text) => ui.write(text) : undefined
+  });
 }
 
 main(process.argv.slice(2))
   .then((code) => {
-    process.exitCode = code;
+    process.exit(code);
   })
   .catch((error: unknown) => {
     process.exitCode = fail(
