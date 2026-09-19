@@ -1,5 +1,4 @@
 import {
-  cancel,
   confirm,
   intro,
   isCancel,
@@ -26,10 +25,7 @@ import type {
 } from './ui';
 
 const unwrap = <T>(value: T | symbol): T => {
-  if (isCancel(value)) {
-    cancel('Cancelled');
-    throw new Cancelled();
-  }
+  if (isCancel(value)) throw new Cancelled();
   return value as T;
 };
 

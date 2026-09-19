@@ -6,7 +6,7 @@ import { fail, runCommand } from './cli/run';
 import { loadWorkspace } from './cli/workspace';
 import { ENTRIES, GROUPS } from './commands';
 import { banner } from './ui/banner';
-import { MENU_LEGEND, pickFromMenu } from './ui/menu';
+import { MENU_LEGEND, Quit, afterCommand, pickFromMenu } from './ui/menu';
 import { createTerminalUi } from './ui/terminal';
 import { theme } from './ui/theme';
 
@@ -82,22 +82,37 @@ async function runFromMenu(
   interactive: boolean,
   group?: string
 ): Promise<number> {
-  console.clear();
-  out(banner(version));
-  out('');
-  out(`  ${MENU_LEGEND}`);
-  out('');
-  const entry = await pickFromMenu(createTerminalUi(), GROUPS, ENTRIES, group);
-  const command = await entry.load();
-  return runCommand({
-    name: nameOf(entry),
-    command,
-    argv,
-    root,
-    env: process.env,
-    prefs: loadPrefs(),
-    interactive
-  });
+  const ui = createTerminalUi();
+  let last = group;
+  let code: number = EXIT.ok;
+  // The menu is the user's screen: it stays until they leave it
+  for (;;) {
+    console.clear();
+    out(banner(version));
+    out('');
+    out(`  ${MENU_LEGEND}`);
+    out('');
+    let entry;
+    try {
+      entry = await pickFromMenu(ui, GROUPS, ENTRIES, last);
+    } catch (error) {
+      if (error instanceof Quit) return code;
+      throw error;
+    }
+    last = entry.path[0];
+    const command = await entry.load();
+    code = await runCommand({
+      name: nameOf(entry),
+      command,
+      argv,
+      root,
+      env: process.env,
+      prefs: loadPrefs(),
+      interactive
+    });
+    out('');
+    if ((await afterCommand(ui)) === 'quit') return code;
+  }
 }
 
 main(process.argv.slice(2))
