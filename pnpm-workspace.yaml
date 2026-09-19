@@ -22,10 +22,13 @@ overrides:
   qs: ">=6.16.0 <7"
   smol-toml: ">=1.7.1 <2"
   "@vitest/mocker": ">=4.1.11 <5"
-  # Scoped to one line each: both packages have newer majors in the tree that
+  # Scoped to one line each: these packages have newer majors in the tree that
   # an unscoped floor would drag backwards.
   yaml@1: ">=1.10.3 <2"
   minimatch@7: ">=7.4.8 <8"
+  js-yaml@3: ">=3.15.2 <4"
+  js-yaml@4: ">=4.3.2 <5"
+  undici@7: ">=7.29.0 <8"
   postcss: ">=8.5.14"
   "request>form-data": ">=2.5.4"
   # Ceiling: the provider and vitest itself must stay on the same major
