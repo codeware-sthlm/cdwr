@@ -1,0 +1,5 @@
+# High-performance: 2x CPU + 1GB RAM for high-traffic apps
+
+[[vm]]
+  size = 'shared-cpu-2x'
+  memory = '1gb'

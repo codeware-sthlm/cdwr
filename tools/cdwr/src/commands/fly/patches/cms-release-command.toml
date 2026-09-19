@@ -1,0 +1,4 @@
+# CMS: run database migrations before machines are updated
+
+[deploy]
+  release_command = "node apps/cms/migrate.mjs"

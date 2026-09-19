@@ -1,0 +1,10 @@
+# Optimize costs: Auto-suspend + minimal resources (free tier eligible)
+
+[http_service]
+  auto_stop_machines = 'suspend'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
