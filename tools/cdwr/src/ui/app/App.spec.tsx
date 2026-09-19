@@ -13,23 +13,43 @@ const ENTER = '\r';
 const tick = (ms = 10) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Poll until `check` holds, instead of a fixed delay. Ink re-renders on a
- * microtask after a keystroke or an async command step, and a busy CI
- * runner can take longer than any fixed sleep to get there - polling is
- * what stays reliable, not a bigger constant.
+ * Poll until `check` holds, instead of a fixed delay. `lastFrame()`
+ * reflects the committed render, but Ink's `useInput` re-subscribes its
+ * handler in a plain `useEffect`, which React flushes after the commit,
+ * not synchronously with it - a key sent the instant a frame looks right
+ * can still land on the previous render's handler. `waitFor` gives that
+ * effect one more tick before returning, on top of a generous timeout:
+ * Nx runs this project's typecheck, lint and test targets concurrently
+ * (locally via `run-many`, always in CI), and that alone can delay a
+ * commit by real seconds.
  */
 async function waitFor(
   check: () => boolean,
-  { timeoutMs = 2000, stepMs = 10 } = {}
+  { timeoutMs = 20000, stepMs = 10 } = {}
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    if (check()) return;
+    if (check()) {
+      await tick();
+      return;
+    }
     if (Date.now() >= deadline) {
       throw new Error(`waitFor timed out after ${timeoutMs}ms`);
     }
     await tick(stepMs);
   }
+}
+
+/**
+ * Send a key and yield at least one real event-loop turn before the next
+ * one. `useInput`'s state updates are batched and committed asynchronously
+ * by React's scheduler; two `stdin.write()` calls issued back to back can
+ * both run against the same pre-update closure, so every key here gets its
+ * own tick rather than relying on timing coincidence.
+ */
+async function press(stdin: { write: (data: string) => void }, key: string) {
+  stdin.write(key);
+  await tick();
 }
 
 const command = defineCommand({
@@ -107,45 +127,45 @@ describe('App', () => {
     expect(frame).toContain('!');
     expect(frame).toContain('Back up');
     expect(frame).toContain('read-only');
-  });
+  }, 25000);
 
   it('filters with / and runs the highlighted command on enter', async () => {
     const { stdin, lastFrame, ran } = mount();
     await waitUntilReady(lastFrame);
-    stdin.write('/');
+    await press(stdin, '/');
     await waitFor(() => (lastFrame() ?? '').includes('\u258f'));
-    stdin.write('doc');
+    for (const char of 'doc') await press(stdin, char);
     await waitFor(() => {
       const frame = lastFrame() ?? '';
       return frame.includes('doctor') && !frame.includes('backup');
     });
-    stdin.write(ENTER);
+    await press(stdin, ENTER);
     // A check that is already true would let waitFor return without a
-    // real tick, so the next ENTER could still land while filtering is
+    // real tick, so the next key could still land while filtering is
     // stale in the handler's closure - wait for the filter cursor to be
     // gone instead, which forces an actual re-render first.
     await waitFor(() => !(lastFrame() ?? '').includes('\u258f'));
-    stdin.write(ENTER);
+    await press(stdin, ENTER);
     await waitFor(() => ran.length > 0);
     await waitFor(() => (lastFrame() ?? '').includes('Done'));
     expect(ran).toEqual(['doctor']);
     expect(lastFrame()).toContain('hello there');
-  });
+  }, 90000);
 
   it('returns to the menu after a run and quits with q', async () => {
     const { stdin, lastFrame, exits } = mount();
     await waitUntilReady(lastFrame);
-    stdin.write(DOWN);
-    stdin.write(ENTER);
+    await press(stdin, DOWN);
+    await press(stdin, ENTER);
     await waitFor(() => (lastFrame() ?? '').includes('menu'));
-    stdin.write(ENTER);
+    await press(stdin, ENTER);
     // Cursor stays wherever it was (on 'drop' now); the footer's dry-run
     // hint is the reliable "we're back on the home screen" signal.
     await waitFor(() => (lastFrame() ?? '').includes('dry run'));
-    stdin.write('q');
+    await press(stdin, 'q');
     await waitFor(() => exits.length > 0);
     expect(exits).toEqual([0]);
-  });
+  }, 90000);
 
   it('opens on the initial command and leaves when it is dismissed', async () => {
     const { stdin, lastFrame, exits, ran } = mount({
@@ -154,8 +174,8 @@ describe('App', () => {
     });
     await waitFor(() => (lastFrame() ?? '').includes('Done'));
     expect(ran).toEqual(['doctor']);
-    stdin.write(ENTER);
+    await press(stdin, ENTER);
     await waitFor(() => exits.length > 0);
     expect(exits).toEqual([0]);
-  });
+  }, 25000);
 });
