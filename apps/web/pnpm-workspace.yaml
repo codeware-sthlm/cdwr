@@ -1,5 +1,24 @@
+# `apps/web` is not a pnpm workspace member, so the root `pnpm-workspace.yaml`
+# never reaches it — security floors have to be repeated here.
+# Every floor carries a ceiling: an override replaces what a parent asked for,
+# so an open-ended `>=` lets a major land without anyone choosing it.
 overrides:
-  fast-xml-parser: ">=5.7.0"
+  fast-xml-parser: ">=5.7.0 <6"
+
+  # Mirrored from the root
+  postcss: ">=8.5.23 <9"
+  "@remix-run/server-runtime": ">=2.17.5 <3"
+
+  # `apps/web` only
+  next: ">=16.3.3 <17"
+  "@remix-run/router": ">=1.23.3 <2"
+  "@babel/runtime": ">=7.26.10 <8"
+  dompurify: ">=3.4.13 <4"
+  fast-uri: ">=3.1.6 <4"
+  js-yaml: ">=4.3.2 <5"
+  lodash: ">=4.18.0 <5"
+  undici: ">=7.29.0 <8"
+  yaml: ">=1.10.3 <2"
 
 allowBuilds:
   esbuild: true
