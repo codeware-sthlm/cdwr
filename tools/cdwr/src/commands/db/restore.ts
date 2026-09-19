@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
 import { listBackups } from '../../services/backups';
-import { cmsDatabaseUrl } from '../../services/database';
-import { environmentInput } from '../../services/environment';
+import { resolveDatabaseUrl } from '../../services/database';
+import { environmentInput, previewAppInput } from '../../services/environment';
 import { run } from '../../services/shell';
 
 /** The `.sql` files a restore mode applies, in order */
@@ -41,16 +41,17 @@ export default defineCommand({
         schema: 'structure without data'
       }
     }),
-    environment: environmentInput()
+    environment: environmentInput(),
+    previewApp: previewAppInput()
   },
 
-  async plan(ctx, { backup, mode, environment }) {
+  async plan(ctx, { backup, mode, environment, previewApp }) {
     const dir = join('backups', backup);
     const files = filesFor(mode);
     const databaseUrl = await ctx.ui.task(
       `Reading DATABASE_URL for ${environment}`,
-      () => cmsDatabaseUrl(environment),
-      () => `DATABASE_URL for ${environment} read from Infisical`
+      () => resolveDatabaseUrl(environment, previewApp),
+      () => `DATABASE_URL for ${environment} resolved`
     );
     return {
       steps: files.map((file) => `Apply ${join(dir, file)} to ${environment}`),

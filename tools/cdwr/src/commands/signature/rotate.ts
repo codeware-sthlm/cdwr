@@ -1,6 +1,6 @@
 import { defineCommand } from '../../cli/command';
 import { CliError, EXIT, messageOf } from '../../cli/errors';
-import { environmentInput } from '../../services/environment';
+import { DEPLOYED, environmentInput } from '../../services/environment';
 import {
   configAppName,
   listAppNames,
@@ -60,7 +60,7 @@ export default defineCommand({
   danger: 'destructive',
   needs: ['fly', 'infisical'],
   inputs: {
-    environment: environmentInput()
+    environment: environmentInput(DEPLOYED)
   },
 
   async plan(ctx, { environment }) {

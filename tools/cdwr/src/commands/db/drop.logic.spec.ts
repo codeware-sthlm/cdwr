@@ -34,4 +34,10 @@ describe('dropStatement', () => {
       'DROP DATABASE IF EXISTS "pr-123" WITH (FORCE);'
     );
   });
+
+  it('doubles an embedded quote so it cannot close the identifier early', () => {
+    expect(dropStatement('pr"; DROP DATABASE postgres; --')).toBe(
+      'DROP DATABASE IF EXISTS "pr""; DROP DATABASE postgres; --" WITH (FORCE);'
+    );
+  });
 });

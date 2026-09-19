@@ -243,10 +243,12 @@ export default defineCommand({
           'Creating a fresh production backup',
           async () => {
             const freshPlan = await backupCommand.plan(ctx, {
-              environment: 'production'
+              environment: 'production',
+              previewApp: undefined
             });
             await backupCommand.apply(ctx, freshPlan.data, {
-              environment: 'production'
+              environment: 'production',
+              previewApp: undefined
             });
             return basename(freshPlan.data.dir);
           },

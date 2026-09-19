@@ -74,6 +74,11 @@ async function fetchPrediction(token: string, id: string): Promise<Prediction> {
   const response = await fetch(`${REPLICATE}/predictions/${id}`, {
     headers: headersFor(token)
   });
+  if (!response.ok) {
+    throw new Error(
+      `Replicate refused the poll: ${response.status} ${await response.text()}`
+    );
+  }
   return (await response.json()) as Prediction;
 }
 

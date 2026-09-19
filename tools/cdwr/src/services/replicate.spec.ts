@@ -94,11 +94,12 @@ describe('pollPrediction', () => {
       { id: 'p1', status: 'processing' },
       { id: 'p1', status: 'succeeded', output: ['https://img'] }
     ];
-    const fetchMock = vi
-      .fn()
-      .mockImplementation(() =>
-        Promise.resolve({ json: () => Promise.resolve(responses.shift()) })
-      );
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(responses.shift())
+      })
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const prediction = await pollPrediction('token', 'p1', {
@@ -108,6 +109,21 @@ describe('pollPrediction', () => {
 
     expect(prediction.status).toBe('succeeded');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws with the response body instead of returning a malformed prediction', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: () => Promise.resolve('rate limited')
+      })
+    );
+
+    await expect(
+      pollPrediction('token', 'p1', { id: 'p1', status: 'starting' })
+    ).rejects.toThrow('429');
   });
 });
 

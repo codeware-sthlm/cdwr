@@ -7,7 +7,11 @@ import {
   runCmsScript,
   withDatabase
 } from '../../services/database';
-import { environmentInput, previewAppInput } from '../../services/environment';
+import {
+  DEPLOYED,
+  environmentInput,
+  previewAppInput
+} from '../../services/environment';
 import {
   flyAppName,
   pullRequestOf,
@@ -89,7 +93,7 @@ export default defineCommand({
   danger: 'destructive',
   needs: ['fly', 'infisical'],
   inputs: {
-    environment: environmentInput(),
+    environment: environmentInput(DEPLOYED),
     previewApp: previewAppInput(),
     tenant: input.select<string>({
       prompt: 'Which tenant?',
