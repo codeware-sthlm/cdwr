@@ -6,7 +6,7 @@ import { toPoolerUrl } from '@codeware/shared/util/pure';
 
 import { sshExec } from './fly';
 import { type Environment, readSecret } from './infisical';
-import { childEnv, run, sleep } from './shell';
+import { childEnv, run, sleep, track } from './shell';
 
 /** Supabase project region, which names the session-mode pooler host */
 export const SUPABASE_REGION = 'eu-central-1';
@@ -124,10 +124,10 @@ async function withFlyProxy<T>(
       `Port ${PROXY_PORT} is in use; the tunnel must be the only thing listening there`
     );
   }
-  const proxy = spawn(
-    'flyctl',
-    ['proxy', `${PROXY_PORT}:${remotePort}`, '--app', pgApp],
-    { stdio: 'ignore' }
+  const proxy = track(
+    spawn('flyctl', ['proxy', `${PROXY_PORT}:${remotePort}`, '--app', pgApp], {
+      stdio: 'ignore'
+    })
   );
   try {
     await waitForPostgres(PROXY_PORT, proxy);

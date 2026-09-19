@@ -200,8 +200,11 @@ export async function resolveInputs<I extends Inputs>(
     } else if (fallback !== undefined) {
       value = fallback;
     } else if (!canAsk || spec.flagOnly) {
-      if (spec.kind === 'boolean') {
-        value = spec.initial ?? false;
+      // What a prompt would have started on is the sensible answer when nobody can be asked
+      if (spec.initial !== undefined) {
+        value = spec.initial;
+      } else if (spec.kind === 'boolean') {
+        value = false;
       } else if (spec.optional) {
         value = undefined;
       } else {

@@ -40,8 +40,9 @@ vi.mock('../services/shell', async (importOriginal) => {
   };
 });
 
-const run = (argv: string[]) =>
-  runCommand({
+const run = async (argv: string[]) => {
+  const ui = fakeUi([], false);
+  const exit = await runCommand({
     name: 'release',
     command,
     argv,
@@ -49,10 +50,14 @@ const run = (argv: string[]) =>
     env: {},
     prefs: memoryPrefs(),
     interactive: false,
-    ui: fakeUi([], false),
+    ui,
     history: () => undefined,
     stdout: () => undefined
   });
+  // A failed run says why, instead of an exit code alone
+  if (ui.printed.error.length) throw new Error(ui.printed.error.join(' | '));
+  return exit;
+};
 
 describe('release', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -102,7 +107,7 @@ describe('release', () => {
 
     expect(exit).toBe(0);
     expect(releasePublish).toHaveBeenCalledWith(
-      expect.objectContaining({ otp: 123456, projects: ['pkg'] })
+      expect.objectContaining({ otp: '123456', projects: ['pkg'] })
     );
   });
 });

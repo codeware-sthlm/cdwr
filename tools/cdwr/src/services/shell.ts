@@ -1,4 +1,22 @@
-import { type SpawnOptions, execFile, spawn } from 'node:child_process';
+import {
+  type ChildProcess,
+  type SpawnOptions,
+  execFile,
+  spawn
+} from 'node:child_process';
+
+/** Children still running; killed when this process leaves, however it leaves */
+const children = new Set<ChildProcess>();
+
+export function track<T extends ChildProcess>(child: T): T {
+  children.add(child);
+  child.once('exit', () => children.delete(child));
+  return child;
+}
+
+process.once('exit', () => {
+  for (const child of children) child.kill();
+});
 
 export interface Output {
   stdout: string;
@@ -38,7 +56,7 @@ export function run(
   options: RunOptions = {}
 ): Promise<Output> {
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       binary,
       args,
       {
@@ -67,6 +85,7 @@ export function run(
         resolve({ stdout, stderr });
       }
     );
+    track(child);
   });
 }
 
@@ -82,10 +101,9 @@ export function runStreaming(
   options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, {
-      ...options,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
+    const child = track(
+      spawn(binary, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] })
+    );
     const tail: string[] = [];
     const feed = (chunk: Buffer) => {
       for (const line of chunk.toString().split(/\r?\n/)) {

@@ -1,5 +1,6 @@
 import { render } from 'ink';
 
+import { unmutedWrite } from '../../cli/muted';
 import type { Entry, Group } from '../../cli/registry';
 import type { Ui } from '../ui';
 
@@ -26,6 +27,12 @@ export async function launchApp(options: LaunchOptions): Promise<number> {
   let code = 0;
 
   process.stdout.write(ALT_SCREEN_ON);
+  // Libs get muted around their calls; Ink must keep drawing regardless
+  const write = unmutedWrite();
+  const stdout = new Proxy(process.stdout, {
+    get: (target, prop, receiver) =>
+      prop === 'write' ? write : Reflect.get(target, prop, receiver)
+  });
   const instance = render(
     <App
       version={options.version}
@@ -39,6 +46,7 @@ export async function launchApp(options: LaunchOptions): Promise<number> {
       }}
     />,
     {
+      stdout,
       exitOnCtrlC: false,
       patchConsole: false,
       // The protocol query stalls until the terminal answers, and plain keys are enough here

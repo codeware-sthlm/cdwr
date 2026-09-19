@@ -54,6 +54,9 @@ const RETRY_HINT =
   'Run `cdwr tenant provision` again to finish - it only writes what is still missing.';
 
 /** Read every workspace with its deployment name and key from Payload */
+/** Rows the choices loader read, so the plan need not tunnel again */
+let lastRows: { key: string; rows: TenantRow[] } | undefined;
+
 async function listTenantRows(
   root: string,
   environment: Environment,
@@ -202,6 +205,7 @@ export default defineCommand({
         const rows = await withDatabase(databaseUrl, (url) =>
           listTenantRows(ctx.root, environment, url)
         );
+        lastRows = { key: `${environment}:${previewApp ?? ''}`, rows };
         for (const row of rows) {
           const reason = reasonSkipped(row);
           if (reason)
@@ -225,14 +229,18 @@ export default defineCommand({
 
   async plan(ctx, { environment, previewApp, workspace, apps }) {
     const databaseUrl = await resolveDatabaseUrl(environment, previewApp);
-    const rows = await ctx.ui.task(
-      'Reading workspaces from Payload',
-      () =>
-        withDatabase(databaseUrl, (url) =>
-          listTenantRows(ctx.root, environment, url)
-        ),
-      (list) => `${list.length} workspace(s) found`
-    );
+    const cacheKey = `${environment}:${previewApp ?? ''}`;
+    const rows =
+      lastRows?.key === cacheKey
+        ? lastRows.rows
+        : await ctx.ui.task(
+            'Reading workspaces from Payload',
+            () =>
+              withDatabase(databaseUrl, (url) =>
+                listTenantRows(ctx.root, environment, url)
+              ),
+            (list) => `${list.length} workspace(s) found`
+          );
     const tenant = rows.find((row) => row.deployment === workspace);
     if (!tenant?.deployment || !tenant.apiKey) {
       throw new Error(`Workspace '${workspace}' not found`);
