@@ -18,7 +18,16 @@ vi.mock('../../services/backups', () => ({
 }));
 
 vi.mock('../../services/database', () => ({
-  cmsDatabaseUrl: vi.fn(async () => 'postgres://pooler/cms')
+  resolveDatabaseUrl: vi.fn(async () => 'postgres://pooler/cms')
+}));
+
+vi.mock('../../services/fly', () => ({
+  listPreviewCmsApps: vi.fn(async () => ['cdwr-cms-pr-42']),
+  pullRequestOf: vi.fn(() => undefined)
+}));
+
+vi.mock('../../services/github', () => ({
+  currentPullRequest: vi.fn(async () => undefined)
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- signature must accept the forwarded args
@@ -92,7 +101,7 @@ describe('db restore', () => {
         '--mode',
         'data',
         '--env',
-        'preview',
+        'production',
         '--yes'
       ],
       root: '/repo',
@@ -113,5 +122,37 @@ describe('db restore', () => {
       '--file=/repo/backups/cms-production-2026-09-19T21-05-33/data.sql',
       '--no-password'
     ]);
+  });
+
+  it('resolves a preview restore against the chosen Fly app, not Infisical', async () => {
+    const { resolveDatabaseUrl } = await import('../../services/database');
+    const command = (await import('./restore')).default;
+    const exit = await runCommand({
+      name: 'db restore',
+      command,
+      argv: [
+        'cms-production-2026-09-19T21-05-33',
+        '--mode',
+        'data',
+        '--env',
+        'preview',
+        '--preview-app',
+        'cdwr-cms-pr-42',
+        '--yes'
+      ],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([], false),
+      history: () => undefined,
+      stdout: () => undefined
+    });
+
+    expect(exit).toBe(EXIT.ok);
+    expect(resolveDatabaseUrl).toHaveBeenCalledWith(
+      'preview',
+      'cdwr-cms-pr-42'
+    );
   });
 });

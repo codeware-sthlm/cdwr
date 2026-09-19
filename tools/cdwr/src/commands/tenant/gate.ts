@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { defineCommand } from '../../cli/command';
 import { messageOf } from '../../cli/errors';
 import { input } from '../../cli/inputs';
-import { environmentInput } from '../../services/environment';
+import { DEPLOYED, environmentInput } from '../../services/environment';
 import {
   fly,
   flyAppName,
@@ -60,7 +60,7 @@ export default defineCommand({
       prompt: 'Open or close the site?',
       positional: true
     }),
-    environment: environmentInput(),
+    environment: environmentInput(DEPLOYED),
     pullRequest: input.optional(
       input.select<string>({
         prompt: 'Which pull request?',

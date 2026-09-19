@@ -27,4 +27,4 @@ export function parseDatabaseList(output: string): ClusterDatabase[] {
 
 /** A `DROP DATABASE` statement for one name, quoted for psql */
 export const dropStatement = (name: string): string =>
-  `DROP DATABASE IF EXISTS "${name}" WITH (FORCE);`;
+  `DROP DATABASE IF EXISTS "${name.replace(/"/g, '""')}" WITH (FORCE);`;

@@ -3,8 +3,8 @@ import { join, relative } from 'node:path';
 
 import { defineCommand } from '../../cli/command';
 import { backupName, backupsRoot } from '../../services/backups';
-import { cmsDatabaseUrl } from '../../services/database';
-import { environmentInput } from '../../services/environment';
+import { resolveDatabaseUrl } from '../../services/database';
+import { environmentInput, previewAppInput } from '../../services/environment';
 import { run } from '../../services/shell';
 
 /**
@@ -18,14 +18,15 @@ export default defineCommand({
   danger: 'read',
   needs: ['pg_dump', 'infisical'],
   inputs: {
-    environment: environmentInput()
+    environment: environmentInput(),
+    previewApp: previewAppInput()
   },
 
-  async plan(ctx, { environment }) {
+  async plan(ctx, { environment, previewApp }) {
     const databaseUrl = await ctx.ui.task(
       `Reading DATABASE_URL for ${environment}`,
-      () => cmsDatabaseUrl(environment),
-      () => `DATABASE_URL for ${environment} read from Infisical`
+      () => resolveDatabaseUrl(environment, previewApp),
+      () => `DATABASE_URL for ${environment} resolved`
     );
     const dir = join(backupsRoot(ctx.root), backupName('cms', environment));
     return {

@@ -110,18 +110,32 @@ export function runStreaming(
       spawn(binary, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] })
     );
     const tail: string[] = [];
-    const feed = (chunk: Buffer) => {
-      for (const line of chunk.toString().split(/\r?\n/)) {
-        if (!line.trim()) continue;
-        onLine(line);
-        tail.push(line);
-        if (tail.length > 20) tail.shift();
-      }
+    const emit = (line: string) => {
+      if (!line.trim()) return;
+      onLine(line);
+      tail.push(line);
+      if (tail.length > 20) tail.shift();
     };
-    child.stdout?.on('data', feed);
-    child.stderr?.on('data', feed);
+    // A pipe chunk can split mid-line; each stream keeps its own leftover
+    // fragment and only complete lines are emitted, stdout and stderr apart
+    // so their lines are never spliced into each other's fragments.
+    const reader = () => {
+      let carry = '';
+      return (chunk: Buffer) => {
+        const lines = (carry + chunk.toString()).split(/\r?\n/);
+        carry = lines.pop() ?? '';
+        for (const line of lines) emit(line);
+      };
+    };
+    const readStdout = reader();
+    const readStderr = reader();
+    child.stdout?.on('data', readStdout);
+    child.stderr?.on('data', readStderr);
     child.on('error', reject);
     child.on('exit', (code, signal) => {
+      // Flush whatever fragment never saw a trailing newline
+      readStdout(Buffer.from('\n'));
+      readStderr(Buffer.from('\n'));
       if (code === 0) resolve();
       else
         reject(
