@@ -191,7 +191,8 @@ interface TextInputProps {
   placeholder?: string;
   initial?: string;
   mask?: boolean;
-  validate?: (value: string) => string | undefined;
+  /** Why the last answer was refused, from whoever asked */
+  error?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
 }
@@ -202,30 +203,29 @@ export function TextInput({
   placeholder,
   initial = '',
   mask,
-  validate,
+  error,
   onSubmit,
   onCancel
 }: TextInputProps) {
   const [value, setValue] = useState(initial);
   const [cursor, setCursor] = useState(initial.length);
-  const [error, setError] = useState<string>();
+  const [touched, setTouched] = useState(false);
+  // A fresh refusal shows until the next edit
+  useEffect(() => setTouched(false), [error]);
   useInput((input, key) => {
-    if (isEnter(input, key)) {
-      const problem = validate?.(value);
-      if (problem) setError(problem);
-      else onSubmit(value);
-    } else if (key.escape) onCancel();
+    if (isEnter(input, key)) onSubmit(value);
+    else if (key.escape) onCancel();
     else if (key.backspace || key.delete) {
       if (cursor === 0) return;
       setValue((v) => v.slice(0, cursor - 1) + v.slice(cursor));
       setCursor((c) => c - 1);
-      setError(undefined);
+      setTouched(true);
     } else if (key.leftArrow) setCursor((c) => Math.max(0, c - 1));
     else if (key.rightArrow) setCursor((c) => Math.min(value.length, c + 1));
     else if (input && !key.ctrl && !key.meta) {
       setValue((v) => v.slice(0, cursor) + input + v.slice(cursor));
       setCursor((c) => c + input.length);
-      setError(undefined);
+      setTouched(true);
     }
   });
   const shown = mask ? '•'.repeat(value.length) : value;
@@ -247,7 +247,7 @@ export function TextInput({
           </>
         )}
       </Text>
-      {error ? <Text color={colors.danger}>{error}</Text> : null}
+      {error && !touched ? <Text color={colors.danger}>{error}</Text> : null}
     </Box>
   );
 }

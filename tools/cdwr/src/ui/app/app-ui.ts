@@ -40,9 +40,9 @@ export function createAppUi(store: RunStore): Ui {
     multiselect: ({ message, choices, initial, min }) =>
       store.ask({ kind: 'multiselect', message, choices, initial, min }),
     text: ({ message, placeholder, initial, validate }) =>
-      store.ask({ kind: 'text', message, placeholder, initial, validate }),
+      store.ask({ kind: 'text', message, placeholder, initial }, validate),
     password: ({ message, validate }) =>
-      store.ask({ kind: 'password', message, validate }),
+      store.ask({ kind: 'password', message }, validate),
     confirm: ({ message, initial }) =>
       store.ask({ kind: 'confirm', message, initial })
   };

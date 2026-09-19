@@ -73,26 +73,26 @@ describe('MultiSelect', () => {
 });
 
 describe('TextInput', () => {
-  it('types, validates and submits', async () => {
+  it("types and submits, and shows the asker's refusal", async () => {
     const onSubmit = vi.fn();
-    const { stdin, lastFrame } = render(
-      <TextInput
-        message="Name?"
-        validate={(v) => (v.length < 3 ? 'Too short' : undefined)}
-        onSubmit={onSubmit}
-        onCancel={vi.fn()}
-      />
+    const { stdin, lastFrame, rerender } = render(
+      <TextInput message="Name?" onSubmit={onSubmit} onCancel={vi.fn()} />
     );
     stdin.write('ab');
     await tick();
     stdin.write(ENTER);
     await tick();
+    expect(onSubmit).toHaveBeenCalledWith('ab');
+    rerender(
+      <TextInput
+        message="Name?"
+        error="Too short"
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+    await tick();
     expect(lastFrame()).toContain('Too short');
-    stdin.write('c');
-    await tick();
-    stdin.write(ENTER);
-    await tick();
-    expect(onSubmit).toHaveBeenCalledWith('abc');
   });
 
   it('masks a password', async () => {

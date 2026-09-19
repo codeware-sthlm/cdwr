@@ -83,6 +83,7 @@ bin/cdwr.mjs      the shim `cdwr setup` links onto PATH; runs src/main.ts throug
 src/main.ts       argv → registry → runtime, inside the app on a terminal
 src/cli/          runtime: command contract, inputs, args, resolve, run, help, completion, prefs, history, preflight
 src/ui/           theme, banner, the Ink app (`app/`), plain and silent UIs
+src/ui/app/       the app runs each command in a worker thread (`worker.ts`, `bridge.ts`) so the screen never freezes
 src/services/     shared I/O
 src/commands/     one file per command, grouped
 ```
