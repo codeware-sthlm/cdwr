@@ -10,6 +10,9 @@ overrides:
   tar: '>=7.5.11'
   fast-xml-parser: '>=5.7.0'
   '@remix-run/server-runtime': '>=2.17.5 <3'
+  react-router: '>=6.30.6 <7'
+  react-router-dom: '>=6.30.6 <7'
+  '@remix-run/router': '>=1.23.4 <2'
   postcss: '>=8.5.14'
   request>form-data: '>=2.5.4'
   '@vitest/browser': '>=4.1.11 <5'
@@ -240,14 +243,14 @@ importers:
         specifier: ^7.69.0
         version: 7.88.0(react@19.3.0)
       react-router-dom:
-        specifier: 6.30.6
+        specifier: '>=6.30.6 <7'
         version: 6.30.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       remix-hono:
         specifier: ^0.0.16
         version: 0.0.16(typescript@6.0.3)(zod@3.25.76)
       remix-utils:
         specifier: ^8.4.0
-        version: 8.8.0(@standard-schema/spec@1.1.0)(react@19.3.0)(zod@3.25.76)
+        version: 8.8.0(@standard-schema/spec@1.1.0)(react-router@6.30.6(react@19.3.0))(react@19.3.0)(zod@3.25.76)
       replace-in-file:
         specifier: ^7.2.0
         version: 7.2.0
@@ -5754,14 +5757,6 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
-
-  '@remix-run/router@1.23.0':
-    resolution: {integrity: sha512-O3rHJzAQKamUz1fvE0Qaw0xSFqsA/yafi2iqeE0pvdFtCO1viYx8QL6f3Ln/aCCTLxs68SLf0KPM9eSeM8yBnA==}
-    engines: {node: '>=14.0.0'}
-
-  '@remix-run/router@1.23.3':
-    resolution: {integrity: sha512-4An71tdz9X8+3sI4Qqqd2LWd9vS39J7sqd9EU4Scw7TJE/qB10Flv/UuqbPVgfQV9XoK8Np6jNquZitnZq5i+Q==}
-    engines: {node: '>=14.0.0'}
 
   '@remix-run/router@1.23.4':
     resolution: {integrity: sha512-q7j5geK7xs3UJSdm9/iytUNclBnLmYx1EnSeCFXHPeutdqgIMeFeHtUZgS3EhlKxdBEAu8OwtJCwmLrEzpSs7Q==}
@@ -14164,25 +14159,12 @@ packages:
       '@types/react':
         optional: true
 
-  react-router-dom@6.30.0:
-    resolution: {integrity: sha512-x30B78HV5tFk8ex0ITwzC9TTZMua4jGyA9IUlH1JLQYQTFyxr/ZxwOJq7evg1JX1qGVUcvhsmQSKdPncQrjTgA==}
-    engines: {node: '>=14.0.0'}
-    peerDependencies:
-      react: ^19.0.0
-      react-dom: ^19.0.0
-
   react-router-dom@6.30.6:
     resolution: {integrity: sha512-0RHKZz7wwffvkU+2MFVT2NnjK44ssLEV+m0CAJaS2Ksmorrwj7WxH00jO0SOCW26/tINUnJHToXblDs33I38YQ==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
-
-  react-router@6.30.0:
-    resolution: {integrity: sha512-D3X8FyH9nBcTSHGdEKurK7r8OYE1kKFn3d/CF+CoxbSHkxU7o37+Uh7eAHRXr6k2tSExXYO++07PeXJtA/dEhQ==}
-    engines: {node: '>=14.0.0'}
-    peerDependencies:
-      react: ^19.0.0
 
   react-router@6.30.6:
     resolution: {integrity: sha512-5HfK7k5im7LTOB0EqCQmfvy4C13G92Ssj1VTmouTK3AJvyjKTnFuCV0vcMAD/JS+JC4DvDIBRrlAeJIFjh5VWg==}
@@ -14347,7 +14329,7 @@ packages:
       intl-parse-accept-language: ^1.0.0
       is-ip: ^5.0.1
       react: ^19.0.0
-      react-router: ^7.0.0
+      react-router: '>=6.30.6 <7'
       zod: ^3.22.4
     peerDependenciesMeta:
       '@edgefirst-dev/batcher':
@@ -22741,7 +22723,7 @@ snapshots:
       '@npmcli/package-json': 4.0.1
       '@remix-run/node': 2.17.3(typescript@6.0.3)
       '@remix-run/react': 2.17.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
-      '@remix-run/router': 1.23.0
+      '@remix-run/router': 1.23.4
       '@remix-run/server-runtime': 2.17.5(typescript@6.0.3)
       '@types/mdx': 2.0.14
       '@vanilla-extract/integration': 6.5.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(less@4.8.1(supports-color@7.2.0))(lightningcss@1.32.0)(sass-embedded@1.104.1)(sass@1.104.1)(supports-color@7.2.0)(terser@5.51.2)
@@ -22830,19 +22812,15 @@ snapshots:
 
   '@remix-run/react@2.17.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)':
     dependencies:
-      '@remix-run/router': 1.23.0
+      '@remix-run/router': 1.23.4
       '@remix-run/server-runtime': 2.17.5(typescript@6.0.3)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
-      react-router: 6.30.0(react@19.3.0)
-      react-router-dom: 6.30.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react-router: 6.30.6(react@19.3.0)
+      react-router-dom: 6.30.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       turbo-stream: 2.4.1
     optionalDependencies:
       typescript: 6.0.3
-
-  '@remix-run/router@1.23.0': {}
-
-  '@remix-run/router@1.23.3': {}
 
   '@remix-run/router@1.23.4': {}
 
@@ -22862,7 +22840,7 @@ snapshots:
 
   '@remix-run/server-runtime@2.17.5(typescript@6.0.3)':
     dependencies:
-      '@remix-run/router': 1.23.3
+      '@remix-run/router': 1.23.4
       '@types/cookie': 0.6.0
       '@web3-storage/multipart-parser': 1.0.0
       cookie: 0.7.2
@@ -22876,9 +22854,9 @@ snapshots:
     dependencies:
       '@remix-run/node': 2.17.3(typescript@6.0.3)
       '@remix-run/react': 2.17.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
-      '@remix-run/router': 1.23.0
+      '@remix-run/router': 1.23.4
       react: 19.3.0
-      react-router-dom: 6.30.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react-router-dom: 6.30.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     optionalDependencies:
       typescript: 6.0.3
     transitivePeerDependencies:
@@ -32994,24 +32972,12 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.0.0
 
-  react-router-dom@6.30.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
-    dependencies:
-      '@remix-run/router': 1.23.0
-      react: 19.3.0
-      react-dom: 19.3.0(react@19.3.0)
-      react-router: 6.30.0(react@19.3.0)
-
   react-router-dom@6.30.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
       '@remix-run/router': 1.23.4
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       react-router: 6.30.6(react@19.3.0)
-
-  react-router@6.30.0(react@19.3.0):
-    dependencies:
-      '@remix-run/router': 1.23.0
-      react: 19.3.0
 
   react-router@6.30.6(react@19.3.0):
     dependencies:
@@ -33232,12 +33198,13 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  remix-utils@8.8.0(@standard-schema/spec@1.1.0)(react@19.3.0)(zod@3.25.76):
+  remix-utils@8.8.0(@standard-schema/spec@1.1.0)(react-router@6.30.6(react@19.3.0))(react@19.3.0)(zod@3.25.76):
     dependencies:
       type-fest: 4.41.0
     optionalDependencies:
       '@standard-schema/spec': 1.1.0
       react: 19.3.0
+      react-router: 6.30.6(react@19.3.0)
       zod: 3.25.76
 
   remove-trailing-separator@1.1.0: {}
