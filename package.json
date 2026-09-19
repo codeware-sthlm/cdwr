@@ -176,7 +176,7 @@
     "@types/yargs": "^17.0.33",
     "@vitejs/plugin-react": "^4.2.0",
     "@vitejs/plugin-react-swc": "^4.3.0",
-    "@vitest/browser-playwright": "4.1.6",
+    "@vitest/browser-playwright": "4.1.11",
     "@vitest/coverage-v8": "^4.1.6",
     "@vitest/ui": "^4.1.6",
     "babel-jest": "30.3.0",
