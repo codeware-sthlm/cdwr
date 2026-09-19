@@ -201,7 +201,7 @@ export async function resolveInputs<I extends Inputs>(
       value = fallback;
     } else if (!canAsk || spec.flagOnly) {
       if (spec.kind === 'boolean') {
-        value = false;
+        value = spec.initial ?? false;
       } else if (spec.optional) {
         value = undefined;
       } else {
