@@ -10,7 +10,14 @@ let saved: typeof process.stdout.write | undefined;
 export async function muted<T>(work: () => Promise<T>): Promise<T> {
   if (depth++ === 0) {
     saved = process.stdout.write.bind(process.stdout);
-    process.stdout.write = (() => true) as typeof process.stdout.write;
+    // Swallow the data but still honour a callback, which stream barriers rely on
+    process.stdout.write = ((...args: unknown[]) => {
+      const done = args.find((a) => typeof a === 'function') as
+        | (() => void)
+        | undefined;
+      done?.();
+      return true;
+    }) as typeof process.stdout.write;
   }
   try {
     return await work();
@@ -22,8 +29,6 @@ export async function muted<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-/** The writer as it was before any muting, for output that must always land */
-export const unmutedWrite = (): ((chunk: string) => boolean) => {
-  const write = saved ?? process.stdout.write.bind(process.stdout);
-  return (chunk) => write(chunk);
-};
+/** The writer as it was before any muting, with every argument passed on */
+export const unmutedWrite = (): typeof process.stdout.write =>
+  saved ?? process.stdout.write.bind(process.stdout);
