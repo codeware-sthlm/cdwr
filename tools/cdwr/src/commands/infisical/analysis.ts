@@ -1,14 +1,13 @@
-import {
-  type InfisicalConfig,
-  fetchAppTenants,
-  fetchDeployRules,
-  filterByDeployRules
-} from '@codeware/shared/feature/tenancy';
-
 import { defineCommand, readOnly } from '../../cli/command';
 import { input } from '../../cli/inputs';
 import { DEPLOYED } from '../../services/environment';
 import { maskValues, readSecrets } from '../../services/infisical';
+import {
+  appTenants,
+  deployRules,
+  filterByDeployRules,
+  tenancyConfig
+} from '../../services/tenancy';
 import { theme } from '../../ui/theme';
 
 import { APPS, type EnvironmentAnalysis, summarize } from './analysis.logic';
@@ -26,18 +25,12 @@ export default defineCommand({
   async plan(ctx) {
     const results: EnvironmentAnalysis[] = [];
     for (const environment of DEPLOYED) {
-      const config: InfisicalConfig = {
-        environment,
-        site: 'eu',
-        clientId: ctx.env['INFISICAL_CLIENT_ID'] ?? '',
-        clientSecret: ctx.env['INFISICAL_CLIENT_SECRET'] ?? '',
-        projectId: ctx.env['INFISICAL_PROJECT_ID'] ?? ''
-      };
+      const config = tenancyConfig(ctx.env, environment);
       const analysis = await ctx.ui.task(
         `Analyzing ${environment}`,
         async () => {
-          const rules = await fetchDeployRules(config);
-          const allTenants = await fetchAppTenants(config, [...APPS]);
+          const rules = await deployRules(config);
+          const allTenants = await appTenants(config, [...APPS]);
           const tenants = filterByDeployRules(allTenants, rules);
           const secrets: Record<string, Record<string, string>> = {};
           for (const app of APPS) {

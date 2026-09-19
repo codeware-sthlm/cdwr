@@ -1,15 +1,14 @@
-import { fetchAppTenants } from '@codeware/shared/feature/tenancy';
-
 import { defineCommand, readOnly } from '../../cli/command';
 import { environmentInput } from '../../services/environment';
+import { readTenantDeployments } from '../../services/infisical';
 
-/** Apps checked for tenant deployments */
-const APPS = ['web', 'cms'];
+/** Apps a tenant can be deployed with */
+const APPS = ['cms', 'web'];
 
 export default defineCommand({
   summary: 'Which tenants each app deploys for',
   description:
-    'Discovers tenant-app relationships from the /tenants folder structure in Infisical.',
+    'Read from the /tenants/<id>/apps/<app> folders in Infisical, which is what the deployment reads too.',
   danger: 'read',
   needs: ['infisical'],
   inputs: {
@@ -17,35 +16,32 @@ export default defineCommand({
   },
 
   async plan(ctx, { environment }) {
-    const appTenants = await ctx.ui.task(
+    const deployments = await ctx.ui.task(
       `Reading tenant deployments for ${environment}`,
-      () =>
-        fetchAppTenants(
-          {
-            environment,
-            site: 'eu',
-            clientId: ctx.env['INFISICAL_CLIENT_ID'] ?? '',
-            clientSecret: ctx.env['INFISICAL_CLIENT_SECRET'] ?? '',
-            projectId: ctx.env['INFISICAL_PROJECT_ID'] ?? ''
-          },
-          APPS
-        ),
-      (result) => `${Object.values(result).flat().length} tenant deployment(s)`
+      () => readTenantDeployments(environment),
+      (d) => `${d.size} tenant(s) in ${environment}`
     );
-    return readOnly(appTenants);
+    const byApp: Record<string, string[]> = Object.fromEntries(
+      APPS.map((app) => [app, []])
+    );
+    for (const [tenant, apps] of deployments) {
+      for (const { app } of apps) (byApp[app] ??= []).push(tenant);
+    }
+    for (const tenants of Object.values(byApp)) tenants.sort();
+    return readOnly(byApp);
   },
 
-  async apply(ctx, appTenants) {
+  async apply(ctx, byApp) {
     ctx.ui.table(
       ['app', 'tenants'],
-      Object.entries(appTenants).map(([app, tenants]) => [
+      Object.entries(byApp).map(([app, tenants]) => [
         app,
-        tenants.length ? tenants.map((t) => t.tenant).join(', ') : '—'
+        tenants.length ? tenants.join(', ') : '—'
       ])
     );
     return {
-      summary: `${Object.keys(appTenants).length} app(s) checked`,
-      json: appTenants
+      summary: `${Object.keys(byApp).length} app(s) checked`,
+      json: byApp
     };
   }
 });

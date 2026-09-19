@@ -1,7 +1,0 @@
-{
-  "name": "shared-util-release",
-  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/shared/util/release/src",
-  "projectType": "library",
-  "tags": ["scope:shared", "type:util"]
-}

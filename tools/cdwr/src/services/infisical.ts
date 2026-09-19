@@ -4,22 +4,33 @@ import {
   type Environment,
   type Folder,
   type Secret,
-  deleteInfisicalSecret,
-  setInfisicalSecret,
-  withInfisical
+  deleteInfisicalSecret as deleteSecret,
+  withInfisical as readInfisical,
+  setInfisicalSecret as setSecret
 } from '@codeware/shared/feature/infisical';
 
 import { messageOf } from '../cli/errors';
+import { muted } from '../cli/muted';
 
 export type { Environment, Folder, Secret };
-export { deleteInfisicalSecret, setInfisicalSecret };
+
+// The lib narrates every call to stdout; commands print through the UI
+export const setInfisicalSecret = (
+  ...args: Parameters<typeof setSecret>
+): ReturnType<typeof setSecret> => muted(() => setSecret(...args));
+
+export const deleteInfisicalSecret = (
+  ...args: Parameters<typeof deleteSecret>
+): ReturnType<typeof deleteSecret> => muted(() => deleteSecret(...args));
 
 /** Secrets at one path as a record */
 export async function readSecrets(
   environment: Environment,
   path: string
 ): Promise<Record<string, string>> {
-  const secrets = await withInfisical({ environment, filter: { path } });
+  const secrets = await muted(() =>
+    readInfisical({ environment, filter: { path } })
+  );
   return Object.fromEntries(
     (secrets ?? []).map(({ secretKey, secretValue }) => [
       secretKey,
@@ -48,11 +59,13 @@ export async function readFolders(
   environment: Environment,
   path: string
 ): Promise<Array<{ path: string; secrets: Secret[] }>> {
-  const folders = await withInfisical({
-    environment,
-    filter: { path, recurse: true },
-    groupByFolder: true
-  });
+  const folders = await muted(() =>
+    readInfisical({
+      environment,
+      filter: { path, recurse: true },
+      groupByFolder: true
+    })
+  );
   return (folders ?? []).map((folder) => ({
     path: folder.path,
     secrets: folder.secrets
