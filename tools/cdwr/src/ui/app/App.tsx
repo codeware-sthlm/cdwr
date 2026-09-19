@@ -486,6 +486,16 @@ const linesOf = (entry: LogEntry): number => {
   }
 };
 
+/** Re-render every second while a command runs, so the clock and spinner move */
+const useTicking = (running: boolean) => {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+};
+
 function RunPane({
   state,
   height,
@@ -505,10 +515,20 @@ function RunPane({
     budget -= linesOf(entry);
     shown.unshift(entry);
   }
-  const took = ((Date.now() - state.startedAt) / 1000).toFixed(1);
+  const running = !state.result && !state.prompt;
+  useTicking(running);
+  const took = ((Date.now() - state.startedAt) / 1000).toFixed(running ? 0 : 1);
   return (
     <Box flexDirection="column" width={width}>
-      <Text bold>{state.title}</Text>
+      <Text bold>
+        {state.title}
+        {running ? (
+          <Text dimColor>
+            {'  '}
+            <Spinner /> {took}s
+          </Text>
+        ) : null}
+      </Text>
       {state.answered.map((a, i) => (
         <Text key={i} dimColor>
           {a.message} <Text color={colors.accent}>{a.shown}</Text>

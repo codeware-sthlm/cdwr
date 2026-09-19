@@ -212,12 +212,21 @@ export default defineCommand({
       .map(({ flyApp }) => flyApp);
 
     try {
-      for (const flyApp of live) await startMachines(flyApp);
-      await setSecretsTogether(
-        live,
-        { [GATE_KEY]: value as string },
-        (app, phase) =>
-          ctx.ui.info(`${phase === 'stage' ? 'Staging' : 'Closing'} ${app}`)
+      for (const flyApp of live) {
+        await ctx.ui.task(`Waking ${flyApp}`, () => startMachines(flyApp));
+      }
+      await ctx.ui.task(
+        `Closing ${live.join(', ')}`,
+        () =>
+          setSecretsTogether(
+            live,
+            { [GATE_KEY]: value as string },
+            (app, phase) =>
+              ctx.ui.info(
+                `${phase === 'stage' ? 'Staged on' : 'Applied on'} ${app}`
+              )
+          ),
+        () => `Closed ${live.join(', ')}`
       );
     } catch (error) {
       ctx.ui.note(
