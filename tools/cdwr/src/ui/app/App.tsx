@@ -523,9 +523,9 @@ function RunPane({
       <Text bold>
         {state.title}
         {running ? (
-          <Text dimColor>
+          <Text color={colors.brand}>
             {'  '}
-            <Spinner /> {took}s
+            <Spinner /> working {took}s
           </Text>
         ) : null}
       </Text>
