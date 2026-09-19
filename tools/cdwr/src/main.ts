@@ -42,6 +42,14 @@ async function main(argv: string[]): Promise<number> {
 
   if (found.kind === 'group') {
     const own = ENTRIES.filter((e) => e.path[0] === found.group.name);
+    const word = found.rest.find((a) => !a.startsWith('-'));
+    if (word) {
+      const near = suggest(word, own, []);
+      process.stderr.write(
+        `Unknown command '${found.group.name} ${word}'${near.length ? `. Did you mean ${near.map((n) => theme.code(n)).join(', ')}?` : ''}\n`
+      );
+      return EXIT.usage;
+    }
     if (!interactive || wantsHelp) {
       out(renderGroupHelp(found.group, own));
       return wantsHelp ? EXIT.ok : EXIT.usage;

@@ -149,9 +149,6 @@
       "@codeware/shared/util/nx-deploy": [
         "./libs/shared/util/nx-deploy/src/index.ts"
       ],
-      "@codeware/shared/util/release": [
-        "./libs/shared/util/release/src/index.ts"
-      ],
       "@codeware/shared/util/testing": [
         "./libs/shared/util/testing/src/index.ts"
       ],

@@ -1,5 +1,3 @@
-import { fetchAppTenants } from '@codeware/shared/feature/tenancy';
-
 import { EXIT } from '../../cli/errors';
 import { memoryPrefs } from '../../cli/prefs';
 import { runCommand } from '../../cli/run';
@@ -9,11 +7,19 @@ import command from './tenants';
 
 vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
-vi.mock('@codeware/shared/feature/tenancy', () => ({
-  fetchAppTenants: vi.fn().mockResolvedValue({
-    web: [{ tenant: 'acme' }],
-    cms: []
-  })
+vi.mock('../../services/infisical', () => ({
+  readTenantDeployments: vi.fn().mockResolvedValue(
+    new Map([
+      [
+        'acme',
+        [
+          { app: 'web', secrets: {} },
+          { app: 'cms', secrets: {} }
+        ]
+      ],
+      ['_default', [{ app: 'cms', secrets: {} }]]
+    ])
+  )
 }));
 
 describe('infisical tenants', () => {
@@ -23,11 +29,11 @@ describe('infisical tenants', () => {
     const exit = await runCommand({
       name: 'infisical tenants',
       command,
-      argv: ['--env', 'preview'],
+      argv: ['--env', 'preview', '--json'],
       root: '/repo',
-      env: { INFISICAL_CLIENT_ID: 'id' },
+      env: {},
       prefs: memoryPrefs(),
-      interactive: true,
+      interactive: false,
       ui,
       history: () => undefined,
       stdout: (t) => stdout.push(t)
@@ -35,10 +41,9 @@ describe('infisical tenants', () => {
 
     expect(exit).toBe(EXIT.ok);
     expect(ui.asked).toEqual([]);
-    expect(fetchAppTenants).toHaveBeenCalledWith(
-      expect.objectContaining({ environment: 'preview', site: 'eu' }),
-      ['web', 'cms']
-    );
-    expect(ui.printed.outro[0]).toContain('2 app(s) checked');
+    expect(JSON.parse(stdout[0] ?? '').result).toEqual({
+      cms: ['_default', 'acme'],
+      web: ['acme']
+    });
   });
 });
