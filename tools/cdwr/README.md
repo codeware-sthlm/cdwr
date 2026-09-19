@@ -3,7 +3,7 @@
 The Codeware developer CLI: deployments, databases, tenants, secrets, media and releases.
 
 ```sh
-cdwr                      # menu
+cdwr                      # the app
 cdwr db backup --env production
 cdwr fly info --json
 cdwr tenant gate close --env preview --tenant demo --generate
@@ -18,6 +18,14 @@ pnpm cdwr doctor          # what is missing: binaries, credentials, PATH
 ```
 
 Credentials live in `tools/cdwr/.env` (copy `.env.example`). `pnpm cdwr` works without the setup.
+
+## The app
+
+On a terminal, `cdwr` opens a full-screen app: commands on the left, the selected command's card on
+the right, and the run itself in the same pane: prompts, plan, log, result. `cdwr db backup` opens
+the app straight on that command. Keys: `↑↓` move, `⏎` run, `d` dry run, `/` filter, `?` keys,
+`esc` back, `q` quit. Without a terminal, or with `--json` or `--non-interactive`, nothing is drawn
+and nothing is asked.
 
 ## Every command
 
@@ -72,9 +80,9 @@ pnpm nx typecheck cdwr
 
 ```
 bin/cdwr.mjs      the shim `cdwr setup` links onto PATH; runs src/main.ts through tsx
-src/main.ts       argv → registry → runtime, or the menu
+src/main.ts       argv → registry → runtime, inside the app on a terminal
 src/cli/          runtime: command contract, inputs, args, resolve, run, help, completion, prefs, history, preflight
-src/ui/           theme, banner, terminal and silent UIs, menu
+src/ui/           theme, banner, the Ink app (`app/`), plain and silent UIs
 src/services/     shared I/O
 src/commands/     one file per command, grouped
 ```

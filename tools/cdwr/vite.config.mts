@@ -10,7 +10,7 @@ export default defineConfig({
     watch: false,
     globals: true,
     environment: 'node',
-    include: ['src/**/*.spec.ts'],
+    include: ['src/**/*.spec.{ts,tsx}'],
     reporters: ['default'],
     coverage: {
       reportsDirectory: '../../coverage/tools/cdwr',
