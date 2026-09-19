@@ -143,6 +143,16 @@ describe('resolveInputs', () => {
       expect(values).toEqual({ count: 2, force: false, app: undefined });
     });
 
+    it('falls back to a boolean prompt initial value', async () => {
+      const { ctx } = context([], { interactive: false });
+      const values = await resolveInputs(
+        ctx,
+        { defer: input.boolean({ prompt: 'Defer?', initial: true }) },
+        {}
+      );
+      expect(values).toEqual({ defer: true });
+    });
+
     it('names the missing flag', async () => {
       const { ctx } = context([], { interactive: false });
       await expect(resolveInputs(ctx, inputs, {})).rejects.toThrow(

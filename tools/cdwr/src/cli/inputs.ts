@@ -57,7 +57,7 @@ export interface InputSpec<T = unknown> {
   trustFlag?: boolean;
   /** Minimum picks for a multiselect */
   min?: number;
-  /** What the prompt starts on; a remembered value takes precedence */
+  /** What the prompt starts on; a remembered value takes precedence. A boolean falls back to it when nothing can be asked */
   initial?: T;
   /** Marks inputs wrapped by `input.optional` */
   optional?: boolean;
