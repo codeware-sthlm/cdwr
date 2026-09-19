@@ -1,0 +1,5 @@
+# Next 16 baseline memory: 1x CPU + 1GB RAM (apply on top of a resource profile)
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1024mb'
