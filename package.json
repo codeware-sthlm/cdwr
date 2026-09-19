@@ -85,7 +85,7 @@
     "react-dom": "^19.0.0",
     "react-easy-crop": "^6.0.2",
     "react-hook-form": "^7.69.0",
-    "react-router-dom": "6.30.3",
+    "react-router-dom": "6.30.6",
     "remix-hono": "^0.0.16",
     "remix-utils": "^8.4.0",
     "replace-in-file": "^7.2.0",
