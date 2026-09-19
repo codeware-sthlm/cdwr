@@ -1,0 +1,15 @@
+{
+  "name": "cdwr",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/cdwr/src",
+  "projectType": "application",
+  "tags": ["scope:tools"],
+  "targets": {
+    "typecheck": {
+      "metadata": {
+        "description": "Type-check the cdwr CLI and its tests"
+      },
+      "command": "tsc -p tools/cdwr/tsconfig.lib.json --noEmit && tsc -p tools/cdwr/tsconfig.spec.json --noEmit"
+    }
+  }
+}

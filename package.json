@@ -7,7 +7,7 @@
     "cai": "czg ai",
     "c": "czg",
     "commit": "czg",
-    "cdwr": "tsx --tsconfig tools/tsconfig.tools.json tools/cdwr-cli.ts"
+    "cdwr": "node tools/cdwr/bin/cdwr.mjs"
   },
   "private": true,
   "type": "module",
