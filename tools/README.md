@@ -1,29 +1,12 @@
-# cdwr Tools
+# Tools
 
-Interactive CLIs for managing deployments, databases and workspace configuration.
+| Directory       | What it is                                                                  |
+| --------------- | --------------------------------------------------------------------------- |
+| `cdwr/`         | The Codeware developer CLI. See [cdwr/README.md](cdwr/README.md).           |
+| `dev-plugin/`   | Workspace Nx plugin: sync generators for themes, block metadata, manifests. |
+| `ai-migrations` | Prompts for AI-assisted migrations.                                         |
+| `payload-proxy` | Nginx compose to simulate multi-tenancy locally (`nx payload-proxy:up`).    |
 
-## Quick Start
-
-Run the interactive tool selector and pick from the menu:
-
-```bash
-pnpm cdwr
-```
-
-Individual tools are also exposed as Nx targets on the `db-tools`, `fly-tools` and `infisical`
-projects — run `nx show project <name> --web` to browse them.
-
-## Requirements
-
-- Node.js >= 22
-- Fly CLI (`flyctl`) installed and authenticated for the Fly tools
-- Database access credentials for the database tools
-
-## Development
-
-All tools follow a dual-mode pattern and can be imported as library functions:
-
-```typescript
-import { restartApp } from './tools/fly-tools/lib/restart-app.js';
-await restartApp({ app: 'my-app' });
+```sh
+pnpm cdwr            # or `cdwr` after `pnpm cdwr setup`
 ```

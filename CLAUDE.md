@@ -145,17 +145,22 @@ nx reset-db cms
 nx seed cms
 ```
 
-### Interactive CLI Tools (database / Fly.io / Infisical / media)
+### The cdwr CLI (database / Fly.io / tenants / Infisical / media / release)
 
 ```sh
-pnpm cdwr
-# Database: backup-db, restore-db, test-migration, sync-storage, drop-db
-# Fly.io:   restart-app, app-info, patch-config
-# Infisical: infisical-tenants, infisical-data, infisical-analysis, provision-tenant, rotate-tenant-key, rotate-signature-secret
-# Media:    generate-images
+pnpm cdwr                         # the app; `cdwr` after `pnpm cdwr setup`
+cdwr <group> <command> --help     # db, fly, tenant, infisical, signature, media, release
+cdwr db backup --env production   # flags first, prompts for the rest
+cdwr fly info --json              # machine output, never prompts
+cdwr tenant gate close --dry-run  # the plan, nothing applied
 ```
 
-`generate-images` is the only tool here that **spends money** — it bills Replicate per
+`tools/cdwr` holds it; see [tools/cdwr/README.md](tools/cdwr/README.md) for the command
+contract. Every command takes `--dry-run`, `--yes`, `--json` and `--non-interactive`. Danger
+levels decide confirmations: destructive commands make you type the target's name on
+production. Credentials go in `tools/cdwr/.env`; `cdwr doctor` says what is missing.
+
+`media generate-images` is the only command that **spends money** — it bills Replicate per
 image. It writes to a gitignored `.showcase-images/` and never uploads: the gallery's
 examples end up in Chromatic snapshots, so replacing one is a deliberate visual review.
 
@@ -163,7 +168,7 @@ examples end up in Chromatic snapshots, so replacing one is a deliberate visual 
 
 ```sh
 # Interactive release process (generates changelog, bumps versions, creates GitHub releases)
-nx release-cli
+cdwr release        # or `nx release-cli`, an alias
 ```
 
 ### Commits
@@ -286,4 +291,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint/test/build on PRs using Nx
 
 ### Release Process
 
-Published packages use a hybrid `nx release` model (`nx.json` → `release.groups`): a **fixed** group for the Nx-plugin suite (`nx-payload` + `create-nx-payload`) and an **independent** group for `nx-ai` and `fly-node`. The `nx release-cli` target runs an interactive CLI (`libs/shared/util/release`) that calls `nx release` — which bumps versions, generates changelogs, and tags releases. GitHub Actions then publish tagged packages to npm.
+Published packages use a hybrid `nx release` model (`nx.json` → `release.groups`): a **fixed** group for the Nx-plugin suite (`nx-payload` + `create-nx-payload`) and an **independent** group for `nx-ai` and `fly-node`. `cdwr release` (alias `nx release-cli`) is an interactive command in `tools/cdwr` that calls `nx release` — which bumps versions, generates changelogs, and tags releases. GitHub Actions then publish tagged packages to npm.

@@ -3,7 +3,9 @@
   "$schema": "node_modules/nx/schemas/project-schema.json",
   "tags": ["scope:codeware", "type:workspace"],
   "targets": {
-    "lint": { "executor": "nx:noop" },
+    "lint": {
+      "executor": "nx:noop"
+    },
     "local-registry": {
       "metadata": {
         "description": "Start a local Verdaccio registry"
@@ -29,9 +31,9 @@
     },
     "release-cli": {
       "metadata": {
-        "description": "Run Nx release CLI to create new releases or publish pending releases"
+        "description": "Alias of `cdwr release`: version, changelog, tag and publish the npm packages"
       },
-      "command": "pnpm tsx --tsconfig tsconfig.base.json ./libs/shared/util/release/src/lib/run-release.ts"
+      "command": "pnpm cdwr release"
     },
     "payload-proxy": {
       "executor": "nx:run-commands",
