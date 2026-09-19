@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { type Need, defineCommand, readOnly } from '../cli/command';
@@ -21,7 +21,17 @@ interface Report {
   envFile: 'current' | 'legacy' | 'missing';
   onPath: boolean;
   node: string;
+  /** Tool versions the workspace pins, read from its manifests */
+  versions: { nx: string; pnpm: string; nodeWanted: string };
 }
+
+const readJson = (file: string): Record<string, unknown> => {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+};
 
 export default defineCommand({
   summary: 'Check binaries, credentials and the shell setup',
@@ -39,7 +49,24 @@ export default defineCommand({
           ? 'legacy'
           : 'missing',
       onPath: onPath('cdwr', ctx.env),
-      node: process.version
+      node: process.version,
+      versions: {
+        nx: String(
+          readJson(join(ctx.root, 'node_modules/nx/package.json'))['version'] ??
+            'not installed'
+        ),
+        pnpm:
+          String(
+            readJson(join(ctx.root, 'package.json'))['packageManager'] ?? ''
+          ).replace(/^pnpm@/, '') || 'unpinned',
+        nodeWanted: String(
+          (
+            readJson(join(ctx.root, 'package.json'))['engines'] as
+              | { node?: string }
+              | undefined
+          )?.node ?? ''
+        )
+      }
     };
     return readOnly(report);
   },
@@ -50,7 +77,19 @@ export default defineCommand({
       c.need,
       c.ok ? theme.muted(c.detail) : theme.warn(c.detail)
     ]);
-    rows.push([symbols.ok, 'node', theme.muted(report.node)]);
+    rows.push([
+      symbols.ok,
+      'node',
+      theme.muted(
+        `${report.node}${report.versions.nodeWanted ? `  (wants ${report.versions.nodeWanted})` : ''}`
+      )
+    ]);
+    rows.push([symbols.ok, 'pnpm', theme.muted(report.versions.pnpm)]);
+    rows.push([
+      report.versions.nx === 'not installed' ? symbols.fail : symbols.ok,
+      'nx',
+      theme.muted(report.versions.nx)
+    ]);
     rows.push(
       report.envFile === 'current'
         ? [symbols.ok, 'env file', theme.muted(ENV_FILE)]
