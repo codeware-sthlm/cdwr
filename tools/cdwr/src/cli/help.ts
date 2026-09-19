@@ -29,7 +29,9 @@ const dangerLine = (danger: Danger, confirm = confirmFor(danger)): string => {
     case 'mutate':
       return confirm === 'always'
         ? theme.warn('Changes things; confirms unless --yes.')
-        : theme.warn('Changes things; confirms on production unless --yes.');
+        : confirm === 'never'
+          ? theme.warn('Changes things locally; never confirms.')
+          : theme.warn('Changes things; confirms on production unless --yes.');
     case 'destructive':
       return theme.danger(
         'Destructive; confirms unless --yes, and asks you to type the name on production.'
