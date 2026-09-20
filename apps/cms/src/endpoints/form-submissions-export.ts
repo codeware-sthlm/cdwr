@@ -3,13 +3,13 @@ import {
   getForms,
   mapToRuntime
 } from '@codeware/app-cms/data-access';
-import { canEdit } from '@codeware/app-cms/util/misc';
 import { resolveSubmissionFields } from '@codeware/shared/util/payload-utils';
 import { CSV_BOM, csvRow, toFileSlug } from '@codeware/shared/util/pure';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import type { Endpoint, PayloadRequest } from 'payload';
 
 import { getTenantWhereFromHeaders } from '../components/admin/utils/tenant-where';
+import { mayEditActiveTenant } from '../security/may-edit-active-tenant';
 
 /**
  * Cap on exported rows. A form with more replies than this is refused rather
@@ -34,7 +34,7 @@ export const formSubmissionsExportEndpoint: Endpoint = {
   path: '/form-submissions-export',
   method: 'get',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!canEdit(req.user)) {
+    if (!(await mayEditActiveTenant(req))) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

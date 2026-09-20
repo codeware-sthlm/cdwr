@@ -2,7 +2,6 @@ import {
   getFormSubmissions,
   mapToRuntime
 } from '@codeware/app-cms/data-access';
-import { canEdit } from '@codeware/app-cms/util/misc';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import {
   type Endpoint,
@@ -12,6 +11,7 @@ import {
 } from 'payload';
 
 import { getTenantWhereFromHeaders } from '../components/admin/utils/tenant-where';
+import { mayEditActiveTenant } from '../security/may-edit-active-tenant';
 
 /** Upper bound on a single call, matching the list view's page size cap */
 const MAX_IDS = 100;
@@ -54,7 +54,7 @@ export const formSubmissionsReadEndpoint: Endpoint = {
   path: '/form-submissions-read',
   method: 'post',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!canEdit(req.user)) {
+    if (!(await mayEditActiveTenant(req))) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

@@ -3,10 +3,11 @@ import {
   getTours,
   mapToRuntime
 } from '@codeware/app-cms/data-access';
-import { canEdit } from '@codeware/app-cms/util/misc';
 import { CSV_BOM, csvRow, toFileSlug } from '@codeware/shared/util/pure';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import type { Endpoint, PayloadRequest } from 'payload';
+
+import { mayEditActiveTenant } from '../security/may-edit-active-tenant';
 
 /**
  * Cap on exported rows. A tour with more signups than this is refused rather
@@ -42,7 +43,7 @@ export const tourSignupsExportEndpoint: Endpoint = {
   path: '/tour-signups-export',
   method: 'get',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!canEdit(req.user)) {
+    if (!(await mayEditActiveTenant(req))) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

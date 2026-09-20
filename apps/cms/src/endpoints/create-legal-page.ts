@@ -4,7 +4,6 @@ import {
   convertMarkdownToLexical,
   renderLegalTemplate
 } from '@codeware/app-cms/util/content-templates';
-import { canEdit } from '@codeware/app-cms/util/misc';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import {
   type Endpoint,
@@ -14,6 +13,7 @@ import {
 } from 'payload';
 
 import { getSingleTenantIdFromHeaders } from '../components/admin/utils/tenant-where';
+import { mayEditActiveTenant } from '../security/may-edit-active-tenant';
 
 /** Quoted in the starter text when the workspace has not set its own */
 const FALLBACK_RETENTION_DAYS = 365;
@@ -54,7 +54,7 @@ export const createLegalPageEndpoint: Endpoint = {
   handler: async (req: PayloadRequest): Promise<Response> => {
     const { payload, user } = req;
 
-    if (!canEdit(user)) {
+    if (!(await mayEditActiveTenant(req))) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

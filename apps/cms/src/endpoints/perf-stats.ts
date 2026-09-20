@@ -1,5 +1,4 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import { canEdit } from '@codeware/app-cms/util/misc';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import { type Endpoint, type PayloadRequest, headersWithCors } from 'payload';
 
@@ -8,6 +7,7 @@ import {
   resetQueryStats,
   setCollecting
 } from '../perf/query-stats';
+import { mayEditActiveTenant } from '../security/may-edit-active-tenant';
 
 const escapeHtml = (value: string) =>
   value.replace(
@@ -95,7 +95,7 @@ export const perfStatsEndpoint: Endpoint = {
     }
 
     // Admin-session users only; API key clients have no business reading this
-    if (!canEdit(req.user)) {
+    if (!(await mayEditActiveTenant(req))) {
       return fail(StatusCodes.FORBIDDEN);
     }
 

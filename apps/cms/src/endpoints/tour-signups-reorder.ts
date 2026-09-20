@@ -1,5 +1,4 @@
 import { getTourSignups, mapToRuntime } from '@codeware/app-cms/data-access';
-import { canEdit } from '@codeware/app-cms/util/misc';
 import { SKIP_QUEUE_RENUMBER } from '@codeware/app-cms/util/tour-signups';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import {
@@ -8,6 +7,8 @@ import {
   addDataAndFileToRequest,
   headersWithCors
 } from 'payload';
+
+import { mayEditActiveTenant } from '../security/may-edit-active-tenant';
 
 /** Upper bound on a single reorder, matching the panel's own load cap */
 const MAX_IDS = 500;
@@ -40,7 +41,7 @@ export const tourSignupsReorderEndpoint: Endpoint = {
   path: '/tour-signups-reorder',
   method: 'post',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!canEdit(req.user)) {
+    if (!(await mayEditActiveTenant(req))) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }
