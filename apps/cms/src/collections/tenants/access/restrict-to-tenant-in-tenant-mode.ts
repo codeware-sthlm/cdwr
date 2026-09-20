@@ -1,5 +1,5 @@
 import { getTenantContext } from '@codeware/app-cms/data-access';
-import { canEdit, isTenant } from '@codeware/app-cms/util/misc';
+import { canEdit, canEditIn, isTenant } from '@codeware/app-cms/util/misc';
 import type { User } from '@codeware/shared/util/payload-types';
 import type { Access } from 'payload';
 
@@ -25,31 +25,32 @@ export const restrictToTenantInTenantMode: Access<User> = async ({
     return false;
   }
 
-  // A reader is refused with a constraint that matches nothing instead. The
-  // multi-tenant plugin fetches tenants while *rendering* the admin layout
+  // Check if we're in tenant mode, restricting to a single tenant
+  const tenantContext = await getTenantContext();
+  const tenant = tenantContext
+    ? await findTenantByApiKey(payload, tenantContext.tenantApiKey)
+    : null;
+
+  // Editor *of the tenant being served*. `canEdit` alone is workspace-agnostic,
+  // so someone who edits workspace B but only reads the deployed workspace A
+  // would be handed A's tenant document — and with it A's api key.
+  const mayEditHere = tenant ? canEditIn(user, tenant.id) : canEdit(user);
+
+  // Refused with a constraint that matches nothing rather than a flat `false`.
+  // The multi-tenant plugin fetches tenants while *rendering* the admin layout
   // (`getTenantOptions`), before Payload evaluates `access.admin`, so a flat
   // refusal makes that find throw and a reader who types /admin meets a 500.
   // An empty result denies just as completely and lets the panel give its own
   // "not allowed" answer.
-  if (!canEdit(user)) {
+  if (!mayEditHere) {
     return { id: { equals: 0 } };
   }
 
-  // Check if we're in tenant mode, restricting to a single tenant
-  const tenantContext = await getTenantContext();
-
-  if (tenantContext) {
-    // Fetch tenant ID from API key
-    const tenant = await findTenantByApiKey(
-      payload,
-      tenantContext.tenantApiKey
-    );
-    // Restrict to this tenant only
-    return {
-      id: { equals: tenant?.id }
-    };
+  // Restrict to this tenant only
+  if (tenant) {
+    return { id: { equals: tenant.id } };
   }
 
-  // Authenticated, allow access
+  // Host mode: the multi-tenant plugin scopes by the selected tenant
   return true;
 };
