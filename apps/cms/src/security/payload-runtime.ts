@@ -1,4 +1,7 @@
-import { getPayloadRuntime } from '@codeware/app-cms/data-access';
+import {
+  type AuthenticatedPayloadOptions,
+  getPayloadRuntime
+} from '@codeware/app-cms/data-access';
 
 import configPromise from '../payload.config';
 
@@ -11,7 +14,9 @@ import configPromise from '../payload.config';
  *
  * @returns The Payload instance with authenticated user property and tenant config if available.
  */
-export const payloadRuntime = async () => {
+export const payloadRuntime = async (
+  options: AuthenticatedPayloadOptions = {}
+) => {
   const payloadConfig = await configPromise;
-  return getPayloadRuntime(payloadConfig);
+  return getPayloadRuntime(payloadConfig, options);
 };

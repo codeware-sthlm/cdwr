@@ -17,7 +17,7 @@ export default async function Post({ params }: Props) {
   const slugString = slug.join('/');
 
   const { isEnabled: draft } = await draftMode();
-  const runtime = await payloadRuntime();
+  const runtime = await payloadRuntime({ asVisitor: true });
   const post = await getPost(runtime, slugString, { draft });
 
   if (!post) {

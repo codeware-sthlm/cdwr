@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Container } from '../layout/Container';
 import { DesktopNavigation } from '../navigation/DesktopNavigation';
 import { Footer } from '../navigation/Footer';
+import type { MemberSessionData } from '../navigation/MemberSession';
 import { MobileNavigation } from '../navigation/MobileNavigation';
 import { usePayload } from '../providers/PayloadProvider';
 import { ColorSchemeSwitch } from '../theme/ColorSchemeSwitch';
@@ -30,6 +31,11 @@ type RenderLayoutProps = {
    * The app is responsible for fetching this data.
    */
   navigationTree: NavigationItem[];
+  /**
+   * Sign in / sign out slot for the footer, when the tenant has members-only
+   * content. The app is responsible for resolving it.
+   */
+  session?: MemberSessionData;
 };
 
 /**
@@ -64,7 +70,8 @@ type RenderLayoutProps = {
 export function RenderLayout({
   children,
   footer,
-  navigationTree
+  navigationTree,
+  session
 }: RenderLayoutProps) {
   const { navigate, iconConfig } = usePayload();
 
@@ -205,7 +212,7 @@ export function RenderLayout({
         </header>
 
         <main className="flex-auto">{children}</main>
-        <Footer footer={footer} />
+        <Footer footer={footer} session={session} />
       </div>
     </div>
   );

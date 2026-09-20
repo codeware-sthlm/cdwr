@@ -10,7 +10,7 @@ import { LandingPagePreview } from './landing-page-preview.client';
 
 export default async function SiteIndexPage() {
   const { isEnabled: draft } = await draftMode();
-  const runtime = await payloadRuntime();
+  const runtime = await payloadRuntime({ asVisitor: true });
 
   // getPageData, not getPage — listing blocks (posts, tours) query a
   // collection dynamically and need their data resolved alongside the page
