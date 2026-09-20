@@ -1,4 +1,4 @@
-import { slugField } from '@codeware/app-cms/ui/fields';
+import { slugField, visibilityField } from '@codeware/app-cms/ui/fields';
 import { seoTab } from '@codeware/app-cms/ui/tabs';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
 import { BlockSlug } from '@codeware/shared/util/payload-types';
@@ -53,7 +53,7 @@ const pages: CollectionConfig<'pages'> = {
     }
   },
   access: {
-    read: userOrApiKeyAccess(true),
+    read: userOrApiKeyAccess({ hasStatus: true, hasVisibility: true }),
     readVersions: userOnlyAccess({ tenantPath: 'version.tenant' }),
     create: userOnlyAccess(),
     update: userOnlyAccess(),
@@ -122,7 +122,8 @@ const pages: CollectionConfig<'pages'> = {
         seoTab()
       ]
     },
-    slugField({ sourceField: 'name' })
+    slugField({ sourceField: 'name' }),
+    visibilityField()
   ],
   versions: {
     drafts: {

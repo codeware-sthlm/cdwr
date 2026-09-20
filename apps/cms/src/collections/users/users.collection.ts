@@ -1,11 +1,12 @@
 import {
-  adminUserAccess,
+  editorUserAccess,
   systemUserAccess,
   systemUserOrTenantAdminAccess
 } from '@codeware/app-cms/util/access';
 import { enumName } from '@codeware/app-cms/util/db';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
 import {
+  canEdit,
   getId,
   getUserTenantIDs,
   hasNoAdminRoles,
@@ -66,9 +67,13 @@ const users: CollectionConfig<'users'> = {
     plural: { en: 'Users', sv: 'Användare' }
   },
   access: {
+    // The admin panel is for managing a site, which is a separate thing from
+    // reading one. A user whose every membership is `reader` authenticates
+    // through the same login but must never reach the panel.
+    admin: ({ req: { user } }) => canEdit(user),
     // Read and unlock fall back to "any authenticated identity", which includes
     // tenant api keys — and those the multi-tenant plugin never scopes
-    read: adminUserAccess,
+    read: editorUserAccess,
     unlock: systemUserOrTenantAdminAccess,
     create: systemUserOrTenantAdminAccess,
     update: adminAccessToAllDocTenants('allowSelf'),

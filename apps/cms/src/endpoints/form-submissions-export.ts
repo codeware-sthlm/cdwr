@@ -3,7 +3,7 @@ import {
   getForms,
   mapToRuntime
 } from '@codeware/app-cms/data-access';
-import { isUser } from '@codeware/app-cms/util/misc';
+import { canEdit } from '@codeware/app-cms/util/misc';
 import { resolveSubmissionFields } from '@codeware/shared/util/payload-utils';
 import { CSV_BOM, csvRow, toFileSlug } from '@codeware/shared/util/pure';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
@@ -34,7 +34,7 @@ export const formSubmissionsExportEndpoint: Endpoint = {
   path: '/form-submissions-export',
   method: 'get',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!isUser(req.user)) {
+    if (!canEdit(req.user)) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

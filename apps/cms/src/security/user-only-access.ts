@@ -1,6 +1,12 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { systemUserOrTenantAdminAccess } from '@codeware/app-cms/util/access';
-import { isUser } from '@codeware/app-cms/util/misc';
+import {
+  canEdit,
+  canEditIn,
+  editorTenantRoles,
+  getUserTenantIDs,
+  hasRole
+} from '@codeware/app-cms/util/misc';
 import type { Access, Where } from 'payload';
 
 import { resolveScopedTenant } from './resolve-scoped-tenant';
@@ -28,15 +34,17 @@ type Options = {
  * Access control for tenant-enabled collections, for everything but client
  * reads — create, update, delete and version history.
  *
- * **Admin users only.** Tenant API key clients are read-only: the multi-tenant
+ * **Editor users only.** Tenant API key clients are read-only: the multi-tenant
  * plugin only constrains identities from the admin users collection, so an api
  * key that passes this control would reach every tenant's documents, not just
- * its own.
+ * its own. Users holding only a `reader` role are refused for the same reason
+ * they exist — they may read gated site content, never change it.
  *
- * In tenant mode the result is scoped to the active tenant, the same way
- * `userOrApiKeyAccess` scopes reads, so a user with several memberships cannot
- * write outside the running deployment. In host mode the multi-tenant plugin
- * applies its own membership constraint.
+ * In tenant mode the result is scoped to the active tenant and the user must
+ * be an editor *of that tenant*, so a user with several memberships cannot
+ * write outside the running deployment or into a workspace they only read. In
+ * host mode the constraint is the set of tenants the user may edit; the
+ * multi-tenant plugin adds its own membership constraint but ignores the role.
  *
  * **Note:** Payload ignores a query constraint on create. The tenant a new
  * document lands in is governed by the tenant field's own access control.
@@ -50,8 +58,10 @@ export const userOnlyAccess =
       req: { payload, user }
     } = args;
 
-    // Admin users only, which also rules out unauthenticated requests
-    if (!isUser(user)) {
+    // Editor users only, which also rules out unauthenticated requests and
+    // tenant api keys. A `reader` is an ordinary user with site access only,
+    // so membership alone must never reach a write.
+    if (!canEdit(user)) {
       return false;
     }
 
@@ -80,7 +90,19 @@ export const userOnlyAccess =
         return false;
       }
 
+      // Editor of *this* tenant, not merely an editor somewhere: a user who
+      // reads tenant A and edits tenant B must not write to A.
+      if (!canEditIn(user, tenant.id)) {
+        return false;
+      }
+
       constraints.push({ [tenantPath]: { equals: tenant.id } });
+    } else if (!hasRole(user, 'system-user')) {
+      // Host mode. The multi-tenant plugin adds a membership constraint, but it
+      // never looks at the role, so constrain to the tenants this user may edit.
+      constraints.push({
+        [tenantPath]: { in: getUserTenantIDs(user, editorTenantRoles) }
+      });
     }
 
     if (!constraints.length) {

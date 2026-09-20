@@ -10,4 +10,10 @@ export { sectionHeaderFields } from './lib/section-header/section-header.field';
 export { slugField } from './lib/slug/slug.field';
 export { socialLinksField } from './lib/social-links/social-links.field';
 export { tagsSelectField } from './lib/tags-select/tags-select.field';
+export {
+  visibilityField,
+  visibilityMembers,
+  visibilityName,
+  visibilityPublic
+} from './lib/visibility/visibility.field';
 export { virtualComposeField } from './lib/virtual-compose/virtual-compose.field';

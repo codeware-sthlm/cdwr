@@ -18,13 +18,14 @@ export const tenantsArrayField = (): Field => {
         label: { en: 'Role', sv: 'Roll' },
         enumName: enumName('tenant_user_role'),
         options: [
+          { label: { en: 'Reader', sv: 'Läsare' }, value: 'reader' },
           { label: { en: 'User', sv: 'Användare' }, value: 'user' },
           { label: { en: 'Admin', sv: 'Administratör' }, value: 'admin' }
         ],
         admin: {
           description: {
-            en: 'Admins have access to manage the users in the workspace.',
-            sv: 'Administratörer har behörighet att hantera användare i arbetsytan.'
+            en: 'Readers sign in on the website to reach members-only content, on top of everything the public can see. They never reach the admin. Admins have access to manage the users in the workspace.',
+            sv: 'Läsare loggar in på webbplatsen för att nå innehåll som bara är till för medlemmar, utöver allt som är publikt. De når aldrig adminpanelen. Administratörer har behörighet att hantera användare i arbetsytan.'
           }
         },
         required: true,

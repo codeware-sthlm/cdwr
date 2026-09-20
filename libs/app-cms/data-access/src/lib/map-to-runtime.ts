@@ -31,6 +31,10 @@ export const mapToRuntime = (
   // wrong user. The view shadows the property while delegating everything else.
   const payload: AuthenticatedPayload = Object.create(maybeRuntime);
   payload.authenticatedUser = user ?? null;
+  // No tenant is being served on this path; callers that need one go through
+  // `getPayloadRuntime`
+  payload.tenant = null;
+  payload.asVisitor = false;
 
   return { payload, tenantConfig: null };
 };

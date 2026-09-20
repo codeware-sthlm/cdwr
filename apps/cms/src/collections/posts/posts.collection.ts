@@ -1,4 +1,8 @@
-import { mediaUploadField, slugField } from '@codeware/app-cms/ui/fields';
+import {
+  mediaUploadField,
+  slugField,
+  visibilityField
+} from '@codeware/app-cms/ui/fields';
 import { multiTenantLinkFeature } from '@codeware/app-cms/ui/lexical';
 import { seoTab } from '@codeware/app-cms/ui/tabs';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
@@ -58,7 +62,7 @@ const posts: CollectionConfig<'posts'> = {
     }
   },
   access: {
-    read: userOrApiKeyAccess(true),
+    read: userOrApiKeyAccess({ hasStatus: true, hasVisibility: true }),
     readVersions: userOnlyAccess({ tenantPath: 'version.tenant' }),
     create: userOnlyAccess(),
     update: userOnlyAccess(),
@@ -159,7 +163,8 @@ const posts: CollectionConfig<'posts'> = {
         position: 'sidebar'
       }
     },
-    slugField({ sourceField: 'title' })
+    slugField({ sourceField: 'title' }),
+    visibilityField()
   ],
   versions: {
     drafts: {

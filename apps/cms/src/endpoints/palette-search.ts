@@ -4,7 +4,7 @@ import {
   getTours,
   mapToRuntime
 } from '@codeware/app-cms/data-access';
-import { isUser } from '@codeware/app-cms/util/misc';
+import { canEdit } from '@codeware/app-cms/util/misc';
 import type {
   PaletteSearchResponse,
   PaletteSearchResultItem
@@ -84,7 +84,7 @@ export const paletteSearchEndpoint: Endpoint = {
   path: '/palette-search',
   method: 'get',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!isUser(req.user)) {
+    if (!canEdit(req.user)) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

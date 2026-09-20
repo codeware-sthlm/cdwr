@@ -51,6 +51,8 @@ export async function ensurePost(
       slug,
       tenant,
       title,
+      // Seeded content is demo content; nothing here is member-restricted
+      visibility: 'public',
       _status: 'published'
     },
     context: { seedAction: true },

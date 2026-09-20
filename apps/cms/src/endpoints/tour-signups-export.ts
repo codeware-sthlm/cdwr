@@ -3,7 +3,7 @@ import {
   getTours,
   mapToRuntime
 } from '@codeware/app-cms/data-access';
-import { isUser } from '@codeware/app-cms/util/misc';
+import { canEdit } from '@codeware/app-cms/util/misc';
 import { CSV_BOM, csvRow, toFileSlug } from '@codeware/shared/util/pure';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import type { Endpoint, PayloadRequest } from 'payload';
@@ -42,7 +42,7 @@ export const tourSignupsExportEndpoint: Endpoint = {
   path: '/tour-signups-export',
   method: 'get',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!isUser(req.user)) {
+    if (!canEdit(req.user)) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

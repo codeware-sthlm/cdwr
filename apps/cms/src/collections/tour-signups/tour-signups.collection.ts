@@ -1,7 +1,7 @@
 import { enumName } from '@codeware/app-cms/util/db';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
 import { filterByTenantScope } from '@codeware/app-cms/util/filters';
-import { ensureTenantFromApiKey, isUser } from '@codeware/app-cms/util/misc';
+import { canEdit, ensureTenantFromApiKey } from '@codeware/app-cms/util/misc';
 import {
   assignCapacityStatus,
   guardStatusChange,
@@ -17,7 +17,7 @@ import type { CollectionConfig, FieldAccess } from 'payload';
 import { userOnlyAccess } from '../../security/user-only-access';
 
 /** Anything a customer must never see, even indirectly */
-const adminUserOnly: FieldAccess = ({ req: { user } }) => isUser(user);
+const adminUserOnly: FieldAccess = ({ req: { user } }) => canEdit(user);
 
 /**
  * Tour signups collection

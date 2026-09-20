@@ -21,7 +21,9 @@ type DraftQuery = {
  *   already, and bypassing would leak other tenants' content in the admin UI.
  * - `where` — in draft mode an explicit tenant constraint is added to
  *   preserve tenant isolation, since `overrideAccess` also bypasses the
- *   tenant filter from the access control function.
+ *   tenant filter from the access control function. Outside draft mode a
+ *   site render is narrowed to published documents, which is what keeps an
+ *   editor's own site free of their drafts.
  */
 export function resolveDraftQuery(
   runtime: PayloadRuntime,
@@ -39,9 +41,31 @@ export function resolveDraftQuery(
       ? { tenant: { equals: tenantConfig.tenant.id } }
       : undefined;
 
-  const scopedWhere: Where | undefined = tenantWhere
-    ? { and: [...(where ? [where] : []), tenantWhere] }
-    : where;
+  // The public site shows published content whoever is looking. Access control
+  // exempts editors from the status filter so the admin can show drafts, which
+  // would otherwise mean an editor browsing their own site saw unpublished
+  // work the moment they signed in. A query constraint narrows, never widens,
+  // so this cannot loosen anything access control decided.
+  const publishedWhere: Where | undefined =
+    payload.asVisitor && !draft
+      ? {
+          or: [
+            { _status: { equals: 'published' } },
+            { _status: { exists: false } }
+          ]
+        }
+      : undefined;
+
+  const constraints = [where, tenantWhere, publishedWhere].filter(
+    (constraint): constraint is Where => Boolean(constraint)
+  );
+
+  const scopedWhere: Where | undefined =
+    constraints.length === 0
+      ? undefined
+      : constraints.length === 1
+        ? constraints[0]
+        : { and: constraints };
 
   return { overrideAccess, where: scopedWhere };
 }

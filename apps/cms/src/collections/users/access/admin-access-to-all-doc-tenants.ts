@@ -1,8 +1,8 @@
 import {
+  canEdit,
   getId,
   getUserTenantIDs,
-  hasRole,
-  isUser
+  hasRole
 } from '@codeware/app-cms/util/misc';
 import type { User } from '@codeware/shared/util/payload-types';
 import type { Access } from 'payload';
@@ -18,7 +18,7 @@ import type { Access } from 'payload';
 export const adminAccessToAllDocTenants =
   (selfRule?: 'allowSelf' | 'denySelf'): Access<User> =>
   ({ data, id, req: { user } }) => {
-    if (!isUser(user)) {
+    if (!canEdit(user)) {
       return false;
     }
 
