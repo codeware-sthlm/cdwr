@@ -4,7 +4,10 @@ import nx from '@nx/eslint-plugin';
 // the base `next` config.
 import nextCoreWebVitals from 'eslint-config-next/core-web-vitals';
 
-import baseConfig, { flyNodeApiOnly } from '../../eslint.config.mjs';
+import baseConfig, {
+  flyNodeApiOnly,
+  noIsUserGuard
+} from '../../eslint.config.mjs';
 
 // The base config and the Next flat config both register the `import` plugin;
 // strip it from the Next config to avoid a flat-config "plugin redefined" error.
@@ -25,6 +28,11 @@ const config = [
   ...nx.configs['flat/react-typescript'],
   ...removeDuplicateImportPlugin(nextCoreWebVitals),
   ...flyNodeApiOnly,
+  ...noIsUserGuard([
+    'src/endpoints/**/*.ts',
+    'src/app/api/**/*.ts',
+    'src/collections/**/access/**/*.ts'
+  ]),
   {
     ignores: [
       '.next/**/*',

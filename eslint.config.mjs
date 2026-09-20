@@ -1,6 +1,8 @@
 import nx from '@nx/eslint-plugin';
 import importPlugin from 'eslint-plugin-import';
 
+import { codewareRules } from './tools/eslint-rules/index.js';
+
 /**
  * Restricts fly-node to its api half.
  *
@@ -26,6 +28,29 @@ export const flyNodeApiOnly = [
           ]
         }
       ]
+    }
+  }
+];
+
+/**
+ * Forbids `isUser` as an authorization guard on the paths given.
+ *
+ * Spread into the config of every project with a surface where identity decides
+ * what may be done — `isUser` is true for a reader, so guarding with it grants
+ * a reader editor access, and it fails open.
+ *
+ * Takes its globs because a project-level config only sees **project-relative**
+ * paths, the same constraint `flyNodeApiOnly` documents above.
+ *
+ * @param {Array<string>} files - Project-relative globs to guard.
+ */
+export const noIsUserGuard = (files) => [
+  {
+    files,
+    ignores: ['**/*.spec.ts'],
+    plugins: { codeware: codewareRules },
+    rules: {
+      'codeware/no-is-user-guard': 'error'
     }
   }
 ];
