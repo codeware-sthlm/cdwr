@@ -37,3 +37,36 @@ export const usersAuthConfig = (config: SanitizedConfig) => {
 
   return users.auth;
 };
+
+/**
+ * Whether a form post came from this site.
+ *
+ * Both routes act on a session: logout expires the `payload-token` cookie,
+ * which is the *same* cookie the admin panel uses, so a third-party page that
+ * could post here would sign an editor out of the admin. Login is the mirror —
+ * an attacker could sign a visitor into an account of their choosing.
+ *
+ * `Sec-Fetch-Site` is sent by every browser that can make this request, and a
+ * page cannot forge it. `Origin` is checked too for anything older.
+ */
+export const isSameOriginPost = (request: Request): boolean => {
+  const site = request.headers.get('sec-fetch-site');
+
+  if (site) {
+    return site === 'same-origin';
+  }
+
+  const origin = request.headers.get('origin');
+
+  if (!origin) {
+    // A cross-site form post always carries one; its absence is same-origin
+    // navigation or a non-browser caller, neither of which is the attack
+    return true;
+  }
+
+  try {
+    return new URL(origin).host === request.headers.get('host');
+  } catch {
+    return false;
+  }
+};

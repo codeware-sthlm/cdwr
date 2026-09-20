@@ -13,6 +13,7 @@ import { payloadRuntime } from '../../../security/payload-runtime';
 import {
   MEMBER_LOGIN_PATH,
   type MemberLoginError,
+  isSameOriginPost,
   usersAuthConfig
 } from '../../../utils/member-login';
 
@@ -44,14 +45,23 @@ const backToLogin = (from: string, error: MemberLoginError) =>
  * and flags match the ones the rest of the system already issues.
  */
 export async function POST(request: NextRequest) {
+  if (!isSameOriginPost(request)) {
+    return new NextResponse(null, { status: 403 });
+  }
+
   const form = await request.formData();
   const from = resolveReturnPath(String(form.get('from') ?? '/'));
 
-  const attempts = `${clientIp(request.headers) ?? 'unknown'}:member-login`;
+  // Only throttle when the caller can actually be told apart. Falling back to
+  // a literal puts every visitor in one bucket, so ten mistyped passwords
+  // anywhere would lock out the whole site — and Payload already locks an
+  // individual account after five failures.
+  const address = clientIp(request.headers);
+  const attempts = address ? `${address}:member-login` : null;
 
   // Refuse a caller already over the limit before hashing anything: the
   // comparison is deliberately slow, and that cost is what a flood buys
-  if (isRateLimited(attempts, { limit: ATTEMPTS_PER_ADDRESS })) {
+  if (attempts && isRateLimited(attempts, { limit: ATTEMPTS_PER_ADDRESS })) {
     return backToLogin(from, 'throttled');
   }
 
@@ -65,7 +75,9 @@ export async function POST(request: NextRequest) {
   // Only a failure costs an attempt, so a shared address is not throttled for
   // signing in successfully
   if (!session) {
-    const attempt = rateLimit(attempts, { limit: ATTEMPTS_PER_ADDRESS });
+    const attempt = attempts
+      ? rateLimit(attempts, { limit: ATTEMPTS_PER_ADDRESS })
+      : { ok: true };
 
     return backToLogin(from, attempt.ok ? 'failed' : 'throttled');
   }

@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { generateExpiredPayloadCookie } from 'payload/shared';
 
 import configPromise from '../../../payload.config';
-import { usersAuthConfig } from '../../../utils/member-login';
+import { isSameOriginPost, usersAuthConfig } from '../../../utils/member-login';
 
 /**
  * Sign a visitor out of this site.
@@ -17,7 +17,11 @@ import { usersAuthConfig } from '../../../utils/member-login';
  * 404. Signing *in* is the opposite: it only ever widens access, so that side
  * does return the visitor to where they were.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
+  if (!isSameOriginPost(request)) {
+    return new NextResponse(null, { status: 403 });
+  }
+
   const config = await configPromise;
 
   const response = new NextResponse(null, {
