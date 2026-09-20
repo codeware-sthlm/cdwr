@@ -4,7 +4,6 @@ import {
   getTours,
   mapToRuntime
 } from '@codeware/app-cms/data-access';
-import { canEdit } from '@codeware/app-cms/util/misc';
 import type {
   PaletteSearchResponse,
   PaletteSearchResultItem
@@ -18,6 +17,7 @@ import {
 } from 'payload';
 
 import { getTenantWhereFromHeaders } from '../components/admin/utils/tenant-where';
+import { mayEditActiveTenant } from '../security/may-edit-active-tenant';
 
 /** Matches returned per collection */
 const RESULT_LIMIT = 5;
@@ -84,7 +84,7 @@ export const paletteSearchEndpoint: Endpoint = {
   path: '/palette-search',
   method: 'get',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!canEdit(req.user)) {
+    if (!(await mayEditActiveTenant(req))) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

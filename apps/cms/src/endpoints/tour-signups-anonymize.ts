@@ -1,5 +1,4 @@
 import { getTours, mapToRuntime } from '@codeware/app-cms/data-access';
-import { canEdit } from '@codeware/app-cms/util/misc';
 import { anonymizeTourSignups } from '@codeware/app-cms/util/tour-signups';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import {
@@ -8,6 +7,8 @@ import {
   addDataAndFileToRequest,
   headersWithCors
 } from 'payload';
+
+import { mayEditActiveTenant } from '../security/may-edit-active-tenant';
 
 /**
  * Clear the passenger data on one tour, on request.
@@ -24,7 +25,7 @@ export const tourSignupsAnonymizeEndpoint: Endpoint = {
   path: '/tour-signups-anonymize',
   method: 'post',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!canEdit(req.user)) {
+    if (!(await mayEditActiveTenant(req))) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }
