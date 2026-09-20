@@ -1,6 +1,13 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { contentVisibilityWhere } from '@codeware/app-cms/util/access';
-import { canEdit, getUserTenantIDs, isUser } from '@codeware/app-cms/util/misc';
+import {
+  canEdit,
+  canEditIn,
+  editorTenantRoles,
+  getUserTenantIDs,
+  hasRole,
+  isUser
+} from '@codeware/app-cms/util/misc';
 import { verifySignature } from '@codeware/shared/util/signature';
 import type { Access, Where } from 'payload';
 
@@ -99,18 +106,29 @@ export const userOrApiKeyAccess =
       // belong to and to published documents, the same way an api key client is
       // treated. Without this they would inherit the unrestricted admin view,
       // drafts included.
-      if (!canEdit(user)) {
+      const activeTenant =
+        APP_MODE.type === 'tenant' ? await resolveScopedTenant(payload) : null;
+
+      if (APP_MODE.type === 'tenant' && !activeTenant) {
+        // If we can't resolve a tenant, deny access to be safe (shouldn't happen in tenant mode)
+        payload.logger.warn(
+          '[userOrApiKeyAccess] Could not resolve tenant for tenant-mode user, denying access'
+        );
+        return false;
+      }
+
+      // Editor *of the tenant being served*, not merely an editor somewhere.
+      // A user who edits workspace B and only reads workspace A must not get
+      // A's drafts and gated content, which the unrestricted branch grants.
+      const mayEditHere = activeTenant
+        ? canEditIn(user, activeTenant.id)
+        : canEdit(user);
+
+      if (!mayEditHere) {
         let tenantIds = getUserTenantIDs(user);
 
-        if (APP_MODE.type === 'tenant') {
-          const tenant = await resolveScopedTenant(payload);
-          if (!tenant) {
-            payload.logger.warn(
-              '[userOrApiKeyAccess] Could not resolve tenant for tenant-mode reader, denying access'
-            );
-            return false;
-          }
-          tenantIds = tenantIds.filter((id) => id === tenant.id);
+        if (activeTenant) {
+          tenantIds = tenantIds.filter((id) => id === activeTenant.id);
         }
 
         if (!tenantIds.length) {
@@ -141,23 +159,20 @@ export const userOrApiKeyAccess =
           : { and: readerConstraints };
       }
 
-      if (APP_MODE.type === 'tenant') {
-        const tenant = await resolveScopedTenant(payload);
-
-        // Ensure the authenticated user docs are also scoped to the resolved tenant.
-        // No restrictions on draft/published status - the admin UI should be able to read all docs in the active tenant.
-        if (tenant) {
-          return { tenant: { equals: tenant.id } };
-        }
-
-        // If we can't resolve a tenant, deny access to be safe (shouldn't happen in tenant mode)
-        payload.logger.warn(
-          '[userOrApiKeyAccess] Could not resolve tenant for tenant-mode user, denying access'
-        );
-        return false;
+      // Ensure the authenticated user docs are also scoped to the resolved tenant.
+      // No restrictions on draft/published status - the admin UI should be able to read all docs in the active tenant.
+      if (activeTenant) {
+        return { tenant: { equals: activeTenant.id } };
       }
 
-      return true;
+      // Host mode. The multi-tenant plugin scopes by the selected tenant, but
+      // by membership rather than role, so a workspace this user only reads
+      // would come with the unrestricted view attached.
+      if (hasRole(user, 'system-user')) {
+        return true;
+      }
+
+      return { tenant: { in: getUserTenantIDs(user, editorTenantRoles) } };
     }
 
     // The identity is the tenant itself, so its slug attributes any error raised

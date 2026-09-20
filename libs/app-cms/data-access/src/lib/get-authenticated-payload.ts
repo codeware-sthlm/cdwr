@@ -6,6 +6,27 @@ import { type SanitizedConfig, getPayload } from 'payload';
 import { getTenantContext } from './get-tenant-context';
 import { AuthenticatedPayload } from './payload-runtime.types';
 
+/**
+ * A request-scoped view of the shared Payload instance.
+ *
+ * `getPayload` hands back a process-wide singleton, so writing the identity
+ * onto it lets one request read another's — and now that the identity can be a
+ * signed-in *member*, a concurrent anonymous request would be served their
+ * gated content. It also collides within a single request: on `/login` the
+ * layout resolves with `asVisitor` and the page without it.
+ *
+ * The prototype-linked view shadows the three properties while delegating
+ * everything else, the same way `mapToRuntime` does.
+ */
+const asRuntime = (
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  identity: {
+    authenticatedUser: AuthenticatedPayload['authenticatedUser'];
+    tenant: Tenant | null;
+    asVisitor: boolean;
+  }
+): AuthenticatedPayload => Object.assign(Object.create(payload), identity);
+
 export type AuthenticatedPayloadOptions = {
   /**
    * Authenticate as the signed-in visitor when they are a member of this
@@ -85,7 +106,7 @@ export async function getAuthenticatedPayload(
           isUser(sessionUser) &&
           getUserTenantIDs(sessionUser).includes(tenant.id)
         ) {
-          return Object.assign(payload, {
+          return asRuntime(payload, {
             authenticatedUser: sessionUser,
             tenant,
             asVisitor
@@ -93,7 +114,7 @@ export async function getAuthenticatedPayload(
         }
       }
 
-      return Object.assign(payload, {
+      return asRuntime(payload, {
         authenticatedUser: tenantResult.user,
         tenant,
         asVisitor
@@ -103,7 +124,7 @@ export async function getAuthenticatedPayload(
 
   // Fallback to admin session (host mode or unauthenticated)
   const authResult = await payload.auth({ headers: headersList });
-  return Object.assign(payload, {
+  return asRuntime(payload, {
     authenticatedUser: authResult.user,
     tenant: null,
     asVisitor
