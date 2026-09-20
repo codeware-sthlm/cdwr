@@ -224,7 +224,11 @@ export default buildConfig({
     deleteJobOnComplete: true
   },
   plugins: getPlugins(env, {
-    access: { read: userOrApiKeyAccess(), write: userOnlyAccess() }
+    access: {
+      read: userOrApiKeyAccess(),
+      readEditorsOnly: userOrApiKeyAccess({ editorsOnly: true }),
+      write: userOnlyAccess()
+    }
   }),
   // A refused signup is an answer, not a fault: log the message and skip the
   // stack. The key is `SignupRefusedError`'s own name, so every other
