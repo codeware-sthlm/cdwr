@@ -96,6 +96,15 @@ export const seedData = (remoteDataUrl: string | undefined) => {
     ),
     pages: [
       {
+        name: 'Moon Members',
+        header: 'For members of the Moon workspace',
+        layoutContent:
+          '## Members only 🔒\nThis page is restricted to signed-in members of the Moon workspace. The public site must never render it, and a member of another workspace must not see it either.\n',
+        slug: 'moon-members',
+        tenant: { lookupApiKey: tenants.moon.apiKey },
+        visibility: 'members' as const
+      },
+      {
         name: 'Red Giants',
         header: 'Massive Stars in Their Late Stage',
         layoutContent:
@@ -966,6 +975,17 @@ export const seedData = (remoteDataUrl: string | undefined) => {
             lookupApiKey: tenants.moon.apiKey,
             role: 'admin'
           }
+        ]
+      },
+      {
+        name: 'Luna Moon',
+        description: 'Reads members-only content on Moon, no admin access',
+        email: 'luna@local.dev',
+        password: '',
+        role: 'user',
+        locale: 'en',
+        tenants: [
+          { lookupApiKey: tenants.moon.apiKey, role: 'reader' as const }
         ]
       },
       {
