@@ -1,5 +1,5 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import { isUser } from '@codeware/app-cms/util/misc';
+import { canEdit } from '@codeware/app-cms/util/misc';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import { type Endpoint, type PayloadRequest, headersWithCors } from 'payload';
 
@@ -95,7 +95,7 @@ export const perfStatsEndpoint: Endpoint = {
     }
 
     // Admin-session users only; API key clients have no business reading this
-    if (!isUser(req.user)) {
+    if (!canEdit(req.user)) {
       return fail(StatusCodes.FORBIDDEN);
     }
 

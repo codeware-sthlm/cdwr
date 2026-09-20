@@ -1,5 +1,5 @@
 import { getTenantContext } from '@codeware/app-cms/data-access';
-import { isUser } from '@codeware/app-cms/util/misc';
+import { canEdit, isTenant } from '@codeware/app-cms/util/misc';
 import type { User } from '@codeware/shared/util/payload-types';
 import type { Access } from 'payload';
 
@@ -15,9 +15,24 @@ export const restrictToTenantInTenantMode: Access<User> = async ({
   data,
   req: { payload, user }
 }) => {
-  // Must be authenticated
-  if (!isUser(user)) {
+  // This collection carries every tenant's api key, so it is closed to anyone
+  // who is not an editor. The *shape* of the refusal differs by identity, and
+  // both shapes matter:
+  //
+  // An api key or an anonymous caller is refused outright — 403 is the right
+  // answer to an api request, and neither ever renders the admin panel.
+  if (!user || isTenant(user)) {
     return false;
+  }
+
+  // A reader is refused with a constraint that matches nothing instead. The
+  // multi-tenant plugin fetches tenants while *rendering* the admin layout
+  // (`getTenantOptions`), before Payload evaluates `access.admin`, so a flat
+  // refusal makes that find throw and a reader who types /admin meets a 500.
+  // An empty result denies just as completely and lets the panel give its own
+  // "not allowed" answer.
+  if (!canEdit(user)) {
+    return { id: { equals: 0 } };
   }
 
   // Check if we're in tenant mode, restricting to a single tenant

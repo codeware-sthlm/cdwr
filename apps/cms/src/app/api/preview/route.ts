@@ -1,4 +1,4 @@
-import { isUser } from '@codeware/app-cms/util/misc';
+import { canEdit } from '@codeware/app-cms/util/misc';
 import { draftMode } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { NextRequest } from 'next/server';
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     const payload = await getPayload({ config: await config });
     const { user } = await payload.auth({ headers: request.headers });
 
-    if (!isUser(user)) {
+    if (!canEdit(user)) {
       return new Response('Unauthorized', { status: 401 });
     }
   } catch {

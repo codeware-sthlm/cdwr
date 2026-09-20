@@ -60,6 +60,8 @@ import * as migration_20260913_201538_cod_485_tenant_deployment from './20260913
 import * as migration_20260915_065027_cod_484_form_submission_retention from './20260915_065027_cod_484_form_submission_retention';
 import * as migration_20260915_213755_cod_484_legal_pages_site_wide from './20260915_213755_cod_484_legal_pages_site_wide';
 import * as migration_20260917_060500_cod_484_backfill_submission_tenant from './20260917_060500_cod_484_backfill_submission_tenant';
+import * as migration_20260920_071500_cod_451_reader_role from './20260920_071500_cod_451_reader_role';
+import * as migration_20260920_082000_cod_451_content_visibility from './20260920_082000_cod_451_content_visibility';
 
 export const migrations = [
   {
@@ -371,5 +373,15 @@ export const migrations = [
     up: migration_20260917_060500_cod_484_backfill_submission_tenant.up,
     down: migration_20260917_060500_cod_484_backfill_submission_tenant.down,
     name: '20260917_060500_cod_484_backfill_submission_tenant'
+  },
+  {
+    up: migration_20260920_071500_cod_451_reader_role.up,
+    down: migration_20260920_071500_cod_451_reader_role.down,
+    name: '20260920_071500_cod_451_reader_role'
+  },
+  {
+    up: migration_20260920_082000_cod_451_content_visibility.up,
+    down: migration_20260920_082000_cod_451_content_visibility.down,
+    name: '20260920_082000_cod_451_content_visibility'
   }
 ];

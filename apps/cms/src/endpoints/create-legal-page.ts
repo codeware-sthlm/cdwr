@@ -4,7 +4,7 @@ import {
   convertMarkdownToLexical,
   renderLegalTemplate
 } from '@codeware/app-cms/util/content-templates';
-import { isUser } from '@codeware/app-cms/util/misc';
+import { canEdit } from '@codeware/app-cms/util/misc';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import {
   type Endpoint,
@@ -54,7 +54,7 @@ export const createLegalPageEndpoint: Endpoint = {
   handler: async (req: PayloadRequest): Promise<Response> => {
     const { payload, user } = req;
 
-    if (!isUser(user)) {
+    if (!canEdit(user)) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

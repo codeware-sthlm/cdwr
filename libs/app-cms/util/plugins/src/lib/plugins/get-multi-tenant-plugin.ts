@@ -2,7 +2,11 @@ import {
   globalCollectionSlugs,
   tenantCollectionSlugs
 } from '@codeware/app-cms/util/definitions';
-import { getUserTenantIDs, hasRole } from '@codeware/app-cms/util/misc';
+import {
+  editorTenantRoles,
+  getUserTenantIDs,
+  hasRole
+} from '@codeware/app-cms/util/misc';
 import type { Config } from '@codeware/shared/util/payload-types';
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant';
 
@@ -36,17 +40,20 @@ export const getMultiTenantPlugin = () =>
       // System users are unrestricted.
       // `siblingData.tenant` holds the incoming tenant ID (number) for top-level
       // fields; `value` does not exist in Payload's FieldAccessArgs.
+      //
+      // Membership alone is not enough: a `reader` belongs to the tenant but may
+      // not write to it, so only editor roles count here.
       access: {
         create: ({ req: { user }, siblingData }) => {
           if (!user) return false;
           if (hasRole(user, 'system-user')) return true;
-          const userTenantIds = getUserTenantIDs(user);
+          const userTenantIds = getUserTenantIDs(user, editorTenantRoles);
           return userTenantIds.includes(siblingData?.['tenant'] as number);
         },
         update: ({ req: { user }, siblingData }) => {
           if (!user) return false;
           if (hasRole(user, 'system-user')) return true;
-          const userTenantIds = getUserTenantIDs(user);
+          const userTenantIds = getUserTenantIDs(user, editorTenantRoles);
           return userTenantIds.includes(siblingData?.['tenant'] as number);
         }
       }

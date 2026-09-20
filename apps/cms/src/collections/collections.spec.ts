@@ -111,6 +111,22 @@ describe('collections', () => {
       expect(mismatched).toEqual([]);
     });
 
+    it('filters members-only content wherever it can exist', () => {
+      // The public site renders as the tenant api key, which is a member of no
+      // workspace. A collection carrying `visibility` but not passing
+      // `hasVisibility` to its read helper serves restricted documents to
+      // anyone — it fails open, and silently
+      const unfiltered = collections
+        .filter(
+          ({ source }) =>
+            source.includes('visibilityField()') &&
+            !source.includes('hasVisibility: true')
+        )
+        .map(({ slug }) => slug);
+
+      expect(unfiltered).toEqual([]);
+    });
+
     it('leaves no operation on the Payload default', () => {
       // Payload defaults an unset operation to "any authenticated user", which
       // for a tenant api key means every tenant's documents (COD-425)

@@ -483,7 +483,8 @@ export const seed = async (
               layout,
               name: page.name,
               slug: page.slug,
-              tenant: entity.id
+              tenant: entity.id,
+              visibility: page.visibility
             },
             { locale: entity.locale, transactionID }
           );

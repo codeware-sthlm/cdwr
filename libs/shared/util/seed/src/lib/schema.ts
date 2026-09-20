@@ -11,7 +11,7 @@ const TagLookupSchema = z.object({
 // TODO: import roles
 const TenantLookupSchema = z.object({
   lookupApiKey: z.string(),
-  role: z.enum(['admin', 'user'])
+  role: z.enum(['admin', 'user', 'reader'])
 });
 
 const UserLookupSchema = z.object({
@@ -109,7 +109,8 @@ export const SeedDataSchema = z.object({
         .string({ description: 'Layout column content as markdown' })
         .optional(),
       slug: z.string(),
-      tenant: TenantLookupSchema.pick({ lookupApiKey: true })
+      tenant: TenantLookupSchema.pick({ lookupApiKey: true }),
+      visibility: z.enum(['public', 'members']).optional()
     })
   ),
   posts: z.array(

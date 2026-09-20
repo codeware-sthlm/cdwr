@@ -16,9 +16,9 @@ export type TenantsArrayField =
   | {
       tenant: number | Tenant;
       /**
-       * Admins have access to manage the users in the workspace.
+       * Readers can only read restricted content on the site, never the admin. Admins have access to manage the users in the workspace.
        */
-      role: 'user' | 'admin';
+      role: 'reader' | 'user' | 'admin';
       id?: string | null;
     }[]
   | null;
@@ -638,6 +638,10 @@ export interface Page {
    * Used for url paths. Will be automatically generated from name if left empty.
    */
   slug?: string | null;
+  /**
+   * Members only hides this from the public site. Only signed-in members of this workspace can read it.
+   */
+  visibility: 'public' | 'members';
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
@@ -744,6 +748,10 @@ export interface Post {
    * Used for url paths. Will be automatically generated from title if left empty.
    */
   slug?: string | null;
+  /**
+   * Members only hides this from the public site. Only signed-in members of this workspace can read it.
+   */
+  visibility: 'public' | 'members';
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
@@ -2729,6 +2737,7 @@ export interface PagesSelect<T extends boolean = true> {
         description?: T;
       };
   slug?: T;
+  visibility?: T;
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
@@ -2815,6 +2824,7 @@ export interface PostsSelect<T extends boolean = true> {
       };
   authors?: T;
   slug?: T;
+  visibility?: T;
   updatedAt?: T;
   createdAt?: T;
   _status?: T;

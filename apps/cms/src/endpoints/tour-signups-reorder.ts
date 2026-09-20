@@ -1,5 +1,5 @@
 import { getTourSignups, mapToRuntime } from '@codeware/app-cms/data-access';
-import { isUser } from '@codeware/app-cms/util/misc';
+import { canEdit } from '@codeware/app-cms/util/misc';
 import { SKIP_QUEUE_RENUMBER } from '@codeware/app-cms/util/tour-signups';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import {
@@ -40,7 +40,7 @@ export const tourSignupsReorderEndpoint: Endpoint = {
   path: '/tour-signups-reorder',
   method: 'post',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    if (!isUser(req.user)) {
+    if (!canEdit(req.user)) {
       return Response.json(
         { error: getReasonPhrase(StatusCodes.FORBIDDEN) },
         { status: StatusCodes.FORBIDDEN }

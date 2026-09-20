@@ -107,7 +107,8 @@ describe('resolveDraftQuery', () => {
         makeRuntime(tenantIdentity, 42),
         true
       );
-      expect(where).toEqual({ and: [{ tenant: { equals: 42 } }] });
+      // A lone constraint is no longer wrapped in a one-element `and`
+      expect(where).toEqual({ tenant: { equals: 42 } });
     });
 
     it('does not add a tenant constraint in draft mode without a tenant config', () => {
