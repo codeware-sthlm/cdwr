@@ -327,10 +327,31 @@ function ExpandedFooter({
 }
 
 /**
+ * The member slot on its own, for a tenant that has no footer configured.
+ *
+ * Nothing but the session line, so it reads as a thin bar rather than an
+ * empty footer the tenant did not ask for.
+ */
+function MemberOnlyFooter({ session }: { session: MemberSessionData }) {
+  return (
+    <footer className="bg-core-background-body border-core-content-border mt-12 flex-none border-t">
+      <ContainerOuter>
+        <div className="py-6">
+          <ContainerInner>
+            <MemberSession className="justify-center" session={session} />
+          </ContainerInner>
+        </div>
+      </ContainerOuter>
+    </footer>
+  );
+}
+
+/**
  * Site footer, configured per tenant in the CMS site settings.
  *
  * Renders nothing when the footer is disabled (`footer` is `null`) or when
- * every part of it is turned off.
+ * every part of it is turned off — unless a member is signed in, who needs
+ * somewhere to sign out from either way.
  */
 export function Footer({
   footer,
@@ -343,8 +364,11 @@ export function Footer({
    */
   session?: MemberSessionData;
 }) {
+  // A disabled footer still owes a signed-in member the way out. Sign-out is
+  // not the tenant's to turn off — the alternative is a session the visitor
+  // cannot end from the site that started it
   if (!footer) {
-    return null;
+    return session ? <MemberOnlyFooter session={session} /> : null;
   }
 
   const { contact, copyright, legalLinks, links, showVersion, tagline } =

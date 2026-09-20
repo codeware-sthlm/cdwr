@@ -208,6 +208,18 @@ export const MemberSlotOnly: Story = {
   }
 };
 
+/**
+ * The footer turned off altogether, with a member signed in. Sign-out is not
+ * the tenant's to disable, so the slot renders on its own thin bar.
+ */
+export const FooterDisabledWithMember: Story = {
+  name: 'Footer disabled (signed-in member)',
+  args: {
+    footer: null,
+    session: WithSignedInMember.args.session
+  }
+};
+
 /** Everything stacks and centers below the `sm` breakpoint. */
 export const MobileStandard: Story = {
   name: 'Mobile (standard)',
