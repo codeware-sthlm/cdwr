@@ -38,6 +38,16 @@ type Options = {
    * does not have.
    */
   hasVisibility?: boolean;
+
+  /**
+   * Set for collections a reader must not see at all, whatever workspace they
+   * belong to — records *about people* rather than site content.
+   *
+   * A reader exists to read a site. Form submissions are the case that forced
+   * this: the same helper guards them, and a tenant-scoped read would hand a
+   * reader everyone else's submitted details.
+   */
+  editorsOnly?: boolean;
 };
 
 /**
@@ -86,8 +96,11 @@ export const userOrApiKeyAccess =
   (options: boolean | Options = false): Access =>
   async (args) => {
     // `true` is still accepted for the common draft-enabled case
-    const { hasStatus = false, hasVisibility = false } =
-      typeof options === 'boolean' ? { hasStatus: options } : options;
+    const {
+      editorsOnly = false,
+      hasStatus = false,
+      hasVisibility = false
+    } = typeof options === 'boolean' ? { hasStatus: options } : options;
 
     const {
       req: { headers, payload, user }
@@ -125,6 +138,10 @@ export const userOrApiKeyAccess =
         : canEdit(user);
 
       if (!mayEditHere) {
+        if (editorsOnly) {
+          return false;
+        }
+
         let tenantIds = getUserTenantIDs(user);
 
         if (activeTenant) {

@@ -25,6 +25,7 @@ type Options = {
   access: {
     /** Client read access — admin users and tenant api keys */
     read: Access;
+    readEditorsOnly: Access;
     /** Write access — admin users only */
     write: Access;
   };
@@ -76,7 +77,9 @@ export const getFormsPlugin = ({ access }: Options) => {
       // so submissions stay immutable without depending on how it merges.
       access: {
         create: submissionCreateAccess,
-        read: access.read,
+        // Submitted details are personal data, so readers are excluded here
+        // even though they may read the form itself to fill it in
+        read: access.readEditorsOnly,
         update: () => false,
         delete: access.write
       },
