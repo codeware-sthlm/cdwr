@@ -25,7 +25,10 @@ export const TEST_USERS = {
   multiUser: { email: 'iss@local.dev', password: 'dev' },
 
   /** Star-only tenant admin. Represents "no moon access" in cross-tenant tests. */
-  otherAdmin: { email: 'antares@local.dev', password: 'dev' }
+  otherAdmin: { email: 'antares@local.dev', password: 'dev' },
+
+  /** Moon reader. Reads members-only content on the site, never the admin. */
+  reader: { email: 'luna@local.dev', password: 'dev' }
 } as const satisfies Record<string, { email: string; password: string }>;
 
 export type TestUser = keyof typeof TEST_USERS;
