@@ -9,7 +9,13 @@
 # Nx
 .nx
 migrations.json
-tools
+# `tools/*` rather than `tools`, so the exception below can re-include a child:
+# excluding the directory itself would take its whole subtree with it.
+tools/*
+# The root eslint config imports these, and `@nx/eslint/plugin` reads that
+# config while building the project graph — which every nx command does,
+# `nx build cms` included. Without them the image build fails resolving them.
+!tools/eslint-rules
 *.log
 
 # Build artifacts
