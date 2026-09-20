@@ -17,7 +17,7 @@ export default async function Page({ params }: Props) {
   const slugString = slug.join('/');
 
   const { isEnabled: draft } = await draftMode();
-  const runtime = await payloadRuntime();
+  const runtime = await payloadRuntime({ asVisitor: true });
   const data = await getPageData(runtime, slugString, { draft });
 
   if (!data) {

@@ -12,6 +12,8 @@ import { isActivePath } from '../utils/active-path';
 import { handleAsRoute } from '../utils/internal-link';
 import { TenantIcon } from '../utils/TenantIcon';
 
+import { MemberSession, type MemberSessionData } from './MemberSession';
+
 function NavLink({
   href,
   newTab,
@@ -149,7 +151,13 @@ function SecondaryLine({
  * Everything on one centered stack — for sites with few pages, where a full
  * footer would outweigh the page above it.
  */
-function CompactFooter({ footer }: { footer: FooterData }) {
+function CompactFooter({
+  footer,
+  session
+}: {
+  footer: FooterData;
+  session?: MemberSessionData;
+}) {
   const { contact, copyright, legalLinks, links, showVersion, tagline } =
     footer;
 
@@ -166,6 +174,7 @@ function CompactFooter({ footer }: { footer: FooterData }) {
               )}
               <LinkRow links={links} />
               <SocialLinks links={contact} />
+              {session && <MemberSession session={session} />}
               <SecondaryLine
                 copyright={copyright}
                 legalLinks={legalLinks}
@@ -180,7 +189,13 @@ function CompactFooter({ footer }: { footer: FooterData }) {
 }
 
 /** Links and contacts share a row, with the secondary line beneath. */
-function StandardFooter({ footer }: { footer: FooterData }) {
+function StandardFooter({
+  footer,
+  session
+}: {
+  footer: FooterData;
+  session?: MemberSessionData;
+}) {
   const { contact, copyright, legalLinks, links, showVersion, tagline } =
     footer;
 
@@ -202,14 +217,24 @@ function StandardFooter({ footer }: { footer: FooterData }) {
                   <SocialLinks links={contact} />
                 </div>
               )}
-              {/* Separates navigation from metadata, as in the expanded variant */}
-              <SecondaryLine
-                className="border-t pt-5"
-                copyright={copyright}
-                layout="row"
-                legalLinks={legalLinks}
-                showVersion={showVersion}
-              />
+              {/* Separates navigation from metadata, as in the expanded variant.
+                  The member slot belongs below the line, not beside the page
+                  links — it is account state, and above the line it reads as
+                  one more place to go */}
+              <div className="flex flex-col gap-3 border-t pt-5">
+                {session && (
+                  <MemberSession
+                    className="justify-center sm:justify-start"
+                    session={session}
+                  />
+                )}
+                <SecondaryLine
+                  copyright={copyright}
+                  layout="row"
+                  legalLinks={legalLinks}
+                  showVersion={showVersion}
+                />
+              </div>
             </div>
           </ContainerInner>
         </div>
@@ -222,7 +247,13 @@ function StandardFooter({ footer }: { footer: FooterData }) {
  * Brand mark and tagline beside the links, with the secondary line on its own
  * bar — for content-heavy sites that can carry the extra height.
  */
-function ExpandedFooter({ footer }: { footer: FooterData }) {
+function ExpandedFooter({
+  footer,
+  session
+}: {
+  footer: FooterData;
+  session?: MemberSessionData;
+}) {
   const { iconConfig, locale } = usePayload();
   const {
     appName,
@@ -254,6 +285,7 @@ function ExpandedFooter({ footer }: { footer: FooterData }) {
                   </p>
                 )}
                 <SocialLinks links={contact} />
+                {session && <MemberSession session={session} />}
               </div>
 
               {/* Links flow down each column beside the brand. Multi-column
@@ -300,7 +332,17 @@ function ExpandedFooter({ footer }: { footer: FooterData }) {
  * Renders nothing when the footer is disabled (`footer` is `null`) or when
  * every part of it is turned off.
  */
-export function Footer({ footer }: { footer: FooterData | null }) {
+export function Footer({
+  footer,
+  session
+}: {
+  footer: FooterData | null;
+  /**
+   * Sign in / sign out slot. Omitted on a site with no members-only content,
+   * and by `apps/web`, which does not own those routes.
+   */
+  session?: MemberSessionData;
+}) {
   if (!footer) {
     return null;
   }
@@ -308,8 +350,11 @@ export function Footer({ footer }: { footer: FooterData | null }) {
   const { contact, copyright, legalLinks, links, showVersion, tagline } =
     footer;
 
-  // Everything can be turned off, which leaves nothing but a border to render
+  // Everything can be turned off, which leaves nothing but a border to render.
+  // A member slot is reason enough to keep the footer: without it a signed-in
+  // visitor would have nowhere to sign out from
   if (
+    !session &&
     !tagline &&
     !links.length &&
     !legalLinks.length &&
@@ -322,10 +367,10 @@ export function Footer({ footer }: { footer: FooterData | null }) {
 
   switch (footer.variant) {
     case 'compact':
-      return <CompactFooter footer={footer} />;
+      return <CompactFooter footer={footer} session={session} />;
     case 'expanded':
-      return <ExpandedFooter footer={footer} />;
+      return <ExpandedFooter footer={footer} session={session} />;
     default:
-      return <StandardFooter footer={footer} />;
+      return <StandardFooter footer={footer} session={session} />;
   }
 }

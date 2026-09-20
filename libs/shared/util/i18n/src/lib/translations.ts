@@ -95,6 +95,14 @@ export type TranslationKey =
   | 'gallery.undocumented'
   | 'navigation.footer'
   | 'navigation.menu'
+  | 'memberLogin.email'
+  | 'memberLogin.failed'
+  | 'memberLogin.heading'
+  | 'memberLogin.intro'
+  | 'memberLogin.password'
+  | 'memberLogin.signOut'
+  | 'memberLogin.submit'
+  | 'memberLogin.tooManyAttempts'
   | 'navigation.primary'
   | 'navigation.title'
   | 'notFound.description'
@@ -297,6 +305,16 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.undocumented': 'Nobody has written about this one yet.',
     'navigation.footer': 'Footer',
     'navigation.menu': 'Menu',
+    'memberLogin.email': 'Email',
+    'memberLogin.failed': 'Check your email and password, then try again.',
+    'memberLogin.heading': 'Sign in',
+    'memberLogin.intro':
+      'Sign in to read the parts of this site kept for members.',
+    'memberLogin.password': 'Password',
+    'memberLogin.signOut': 'Sign out',
+    'memberLogin.submit': 'Sign in',
+    'memberLogin.tooManyAttempts':
+      'Too many attempts. Wait a moment, then try again.',
     'navigation.primary': 'Main',
     'navigation.title': 'Navigation',
     'notFound.description':
@@ -519,6 +537,17 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.undocumented': 'Ingen har skrivit om det här ännu.',
     'navigation.footer': 'Sidfot',
     'navigation.menu': 'Meny',
+    'memberLogin.email': 'E-post',
+    'memberLogin.failed':
+      'Kontrollera e-postadressen och lösenordet och försök igen.',
+    'memberLogin.heading': 'Logga in',
+    'memberLogin.intro':
+      'Logga in för att läsa de delar av webbplatsen som är till för medlemmar.',
+    'memberLogin.password': 'Lösenord',
+    'memberLogin.signOut': 'Logga ut',
+    'memberLogin.submit': 'Logga in',
+    'memberLogin.tooManyAttempts':
+      'För många försök. Vänta en stund och försök igen.',
     'navigation.primary': 'Huvudmeny',
     'navigation.title': 'Navigation',
     'notFound.description': 'Tyvärr kunde vi inte hitta sidan du letade efter.',

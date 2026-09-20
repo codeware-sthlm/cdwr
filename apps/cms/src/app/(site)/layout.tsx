@@ -3,9 +3,11 @@ import {
   getFooter,
   getNavigationTree,
   getSignupPolicy,
-  getTenantContext
+  getTenantContext,
+  hasMembersContent
 } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
+import { isUser } from '@codeware/app-cms/util/misc';
 import {
   customThemeCss,
   resolveTheme,
@@ -24,6 +26,10 @@ import { redirect } from 'next/navigation';
 import './site.css';
 import { getAppInfo } from '../../app-info';
 import { payloadRuntime } from '../../security/payload-runtime';
+import {
+  MEMBER_LOGIN_PATH,
+  MEMBER_LOGOUT_SUBMIT_PATH
+} from '../../utils/member-login';
 
 import { Providers } from './providers';
 import { THEME_COOKIE } from './theme-cookie';
@@ -41,11 +47,25 @@ export default async function RootLayout({
   }
 
   // Get authenticated payload instance
-  const runtime = await payloadRuntime();
+  const runtime = await payloadRuntime({ asVisitor: true });
 
   // Fetch navigation and footer with proper access control and tenant scoping
   const navigationTree = await getNavigationTree(runtime);
   const footer = await getFooter(runtime, navigationTree);
+
+  // The sign-in slot appears only on a site that gates something — a signed-in
+  // member always needs it, so they can sign out again
+  const member = isUser(runtime.payload.authenticatedUser)
+    ? runtime.payload.authenticatedUser
+    : null;
+  const session =
+    member || (await hasMembersContent(runtime))
+      ? {
+          name: member?.name ?? null,
+          loginPath: MEMBER_LOGIN_PATH,
+          logoutPath: MEMBER_LOGOUT_SUBMIT_PATH
+        }
+      : undefined;
 
   // What a tour signup form has to disclose; the same for every tour
   const signupPolicy = await getSignupPolicy(runtime);
@@ -122,7 +142,11 @@ export default async function RootLayout({
           theme={theme}
           themes={themeChoices}
         >
-          <RenderLayout footer={footer} navigationTree={navigationTree}>
+          <RenderLayout
+            footer={footer}
+            navigationTree={navigationTree}
+            session={session}
+          >
             {children}
           </RenderLayout>
         </Providers>

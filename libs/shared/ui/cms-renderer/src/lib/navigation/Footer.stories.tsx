@@ -140,6 +140,74 @@ export const NoCopyright: Story = {
   args: { footer: { ...complete, copyright: null, tagline: null } }
 };
 
+/**
+ * A site with members-only content offers a way in. The slot only appears when
+ * the tenant has gated something, so most sites never show it.
+ */
+export const WithSignIn: Story = {
+  name: 'With sign in',
+  args: {
+    footer: complete,
+    session: {
+      name: null,
+      loginPath: '/login',
+      logoutPath: '/api/member-logout'
+    }
+  }
+};
+
+/** Signed in, the same slot carries the member's name and the way out. */
+export const WithSignedInMember: Story = {
+  name: 'With signed-in member',
+  args: {
+    footer: complete,
+    session: {
+      name: 'Anna Lindqvist',
+      loginPath: '/login',
+      logoutPath: '/api/member-logout'
+    }
+  }
+};
+
+/** Compact stacks the slot with everything else. */
+export const CompactWithMember: Story = {
+  name: 'Compact (signed-in member)',
+  args: {
+    footer: { ...complete, variant: 'compact' },
+    session: WithSignedInMember.args.session
+  }
+};
+
+/** Expanded puts it under the brand column, beside the links. */
+export const ExpandedWithMember: Story = {
+  name: 'Expanded (signed-in member)',
+  args: {
+    footer: { ...complete, variant: 'expanded' },
+    session: WithSignedInMember.args.session
+  }
+};
+
+/**
+ * Nothing configured but a member signed in — the footer still renders, or
+ * they would have nowhere to sign out from.
+ */
+export const MemberSlotOnly: Story = {
+  name: 'Member slot only',
+  args: {
+    footer: {
+      ...complete,
+      contact: [],
+      copyright: null,
+      legalLinks: [],
+      links: [],
+      showVersion: false,
+      tagline: null,
+      variant: 'compact'
+    },
+    session: WithSignedInMember.args.session
+  }
+};
+
 /** Everything stacks and centers below the `sm` breakpoint. */
 export const MobileStandard: Story = {
   name: 'Mobile (standard)',
