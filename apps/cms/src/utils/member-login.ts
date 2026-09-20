@@ -47,7 +47,13 @@ export const usersAuthConfig = (config: SanitizedConfig) => {
  * an attacker could sign a visitor into an account of their choosing.
  *
  * `Sec-Fetch-Site` is sent by every browser that can make this request, and a
- * page cannot forge it. `Origin` is checked too for anything older.
+ * page cannot forge it. `Origin` is checked too for anything older — browsers
+ * send it on every POST, same-origin ones included.
+ *
+ * With neither header this refuses. Something has to prove the post came from
+ * here, and "no evidence" is not that proof: an attacker controls what their
+ * page sends but cannot add these headers, so the only callers a refusal costs
+ * are non-browser ones, which have no session cookie to spend anyway.
  */
 export const isSameOriginPost = (request: Request): boolean => {
   const site = request.headers.get('sec-fetch-site');
@@ -59,13 +65,15 @@ export const isSameOriginPost = (request: Request): boolean => {
   const origin = request.headers.get('origin');
 
   if (!origin) {
-    // A cross-site form post always carries one; its absence is same-origin
-    // navigation or a non-browser caller, neither of which is the attack
-    return true;
+    return false;
   }
 
   try {
-    return new URL(origin).host === request.headers.get('host');
+    // The `Host` header is what the proxy forwarded, so it is the host the
+    // browser actually asked for; `request.url` can carry the internal one
+    const host = request.headers.get('host') ?? new URL(request.url).host;
+
+    return new URL(origin).host === host;
   } catch {
     return false;
   }
