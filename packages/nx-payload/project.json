@@ -10,6 +10,7 @@
       "options": {
         "assets": [
           "packages/nx-payload/*.md",
+          "packages/nx-payload/LICENSE",
           {
             "input": "./packages/nx-payload/src",
             "glob": "**/!(*.ts)",
