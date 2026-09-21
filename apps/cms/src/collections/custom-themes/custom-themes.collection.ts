@@ -8,7 +8,10 @@ import {
   isValidTokenName,
   isValidTokenValue
 } from '@codeware/shared/theme';
-import { brokenReferences } from '@codeware/shared/util/color';
+import {
+  brokenReferences,
+  contrastFailures
+} from '@codeware/shared/util/color';
 import type {
   CollectionConfig,
   PayloadRequest,
@@ -115,6 +118,23 @@ const validateTokens =
       return `These aliases lead nowhere: ${broken
         .map(({ token, reference }) => `${token} → ${reference}`)
         .join(', ')}.`;
+    }
+
+    // The checks above prove every token resolves to something; this one asks
+    // whether what it resolves to can be read. It lives here rather than only
+    // in the studio because the studio is a disabled button, and a write
+    // through the API never meets it — and "an inaccessible theme cannot be
+    // published here" is a promise the platform makes to people who are
+    // legally obliged to keep it.
+    const failures = contrastFailures(tokens);
+
+    if (failures.length) {
+      return `These fall below the contrast they need: ${failures
+        .map(
+          ({ usage, ratio, minimum }) =>
+            `${usage} at ${ratio.toFixed(2)}:1, needs ${minimum}:1`
+        )
+        .join('; ')}.`;
     }
 
     return true;

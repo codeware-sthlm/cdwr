@@ -235,10 +235,6 @@ export function ThemeLibrary({ themes }: { themes: Array<BuiltInTheme> }) {
               selectLabel={`Fork ${open.label}`}
               recipe={open.recipe}
               overrides={open.overrides}
-              // Every built-in trips the contrast report on its own `--ring`,
-              // which is shadcn's choice rather than this fork's problem.
-              // Blocking on it would mean none of them could ever be copied.
-              canSelectWithIssues
               onSelect={(result) => fork(open, result)}
               onClose={() => setOpen(null)}
             />
