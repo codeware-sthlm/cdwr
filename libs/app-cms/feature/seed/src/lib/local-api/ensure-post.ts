@@ -1,3 +1,4 @@
+import { getId } from '@codeware/app-cms/util/misc';
 import type { Post } from '@codeware/shared/util/payload-types';
 import type { Payload, TypedLocale } from 'payload';
 
@@ -24,11 +25,16 @@ export async function ensurePost(
   const { locale, transactionID } = options;
   const { authors, categories, content, createdAt, slug, tenant, title } = data;
 
-  // Check if the post exists with the given slug
+  // Scoped to the tenant, like every sibling helper: a slug is unique within
+  // a workspace, not across the platform, so an unscoped lookup hands one
+  // tenant's post back to another and the second is silently skipped
   const posts = await payload.find({
     collection: 'posts',
     where: {
-      slug: { equals: slug }
+      and: [
+        { slug: { equals: slug } },
+        tenant ? { tenant: { in: [getId(tenant)] } } : {}
+      ]
     },
     depth: 0,
     req: { transactionID },
