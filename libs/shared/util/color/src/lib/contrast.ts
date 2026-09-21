@@ -194,3 +194,55 @@ export function checkContrast(tokens: ThemeTokens): Array<ContrastResult> {
 /** The failures only — what a studio blocks a save on. */
 export const contrastFailures = (tokens: ThemeTokens): Array<ContrastResult> =>
   checkContrast(tokens).filter(({ passes }) => !passes);
+
+/** A token a contrast pair needs, holding a value the check cannot read. */
+export type UnreadableToken = {
+  token: string;
+  value: string;
+  /** The first pair that needed it, so the message can say what breaks */
+  usage: string;
+};
+
+/**
+ * Tokens that defeat the check rather than fail it.
+ *
+ * `checkContrast` skips any pair it cannot parse, so a theme written in values
+ * the parser does not understand — `hsl()`, `rgb()`, `color-mix()`,
+ * `transparent`, a named colour — comes back with no failures because nothing
+ * was measured. A guarantee that silently stops applying is worse than no
+ * guarantee, so those are reported here and refused at the point of save.
+ *
+ * An **absent** token is not reported. A custom theme overrides part of a base
+ * theme and inherits what it leaves out, so saying nothing about a token is
+ * legitimate; saying something unreadable is not. Aliases that lead nowhere are
+ * already refused by {@link brokenReferences} before this runs.
+ *
+ * @param tokens - The theme's tokens, merged the way the browser cascades them
+ * @returns One entry per distinct unreadable token, not per pair
+ */
+export function unreadableTokens(tokens: ThemeTokens): Array<UnreadableToken> {
+  const found: Array<UnreadableToken> = [];
+  const seen = new Set<string>();
+
+  for (const pair of THEME_CONTRAST_PAIRS) {
+    for (const token of [pair.foreground, pair.background]) {
+      const value = resolveToken(tokens, token);
+
+      // Absent, or an alias to something absent: inherited, not this theme's
+      if (value === null || value === '') {
+        continue;
+      }
+      if (parseColor(value)) {
+        continue;
+      }
+      if (seen.has(token)) {
+        continue;
+      }
+
+      seen.add(token);
+      found.push({ token, value, usage: pair.usage });
+    }
+  }
+
+  return found;
+}
