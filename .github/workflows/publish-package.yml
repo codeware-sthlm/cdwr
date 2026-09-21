@@ -91,7 +91,7 @@ jobs:
       # Unified checkout for all cases:
       # - tag push or release -> checks out that tag
       # - manual w/o tag -> checks out the branch chosen in the UI (or default branch)
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ steps.ctx.outputs.tag || github.ref }}
           fetch-depth: 0
@@ -131,9 +131,9 @@ jobs:
       # .npmrc regardless of whether that env var is set, and an empty token there
       # makes npm attempt (and fail) classic auth instead of falling through to
       # OIDC trusted publishing. npm already defaults to registry.npmjs.org.
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies

@@ -80,11 +80,11 @@ jobs:
       skip: ${{ steps.conditions.outputs.skip }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           cache: "pnpm"
 
@@ -113,13 +113,13 @@ jobs:
       pr-number: ${{ steps.resolve-pr.outputs.number }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           cache: "pnpm"
 
@@ -198,14 +198,14 @@ jobs:
 
       # Privileged job (secrets + write token) — keep the default ref, never
       # check out `pull_request.head.sha`
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ steps.generate-token.outputs.token }}
 
       - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           cache: "pnpm"
 
@@ -328,7 +328,7 @@ jobs:
       # when they match registered secret patterns (Fly registry URLs can trigger this).
       # Artifact files bypass secret scanning and are read by the action's Node process.
       - name: Upload images artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fly-built-images-${{ github.run_id }}
           path: ${{ steps.build.outputs.images-path }}
@@ -371,7 +371,7 @@ jobs:
           client-id: ${{ secrets.CDWR_ACTIONS_BOT_ID }}
           private-key: ${{ secrets.CDWR_ACTIONS_BOT_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           # Push release tags as the app, the ruleset's bypass actor
@@ -379,7 +379,7 @@ jobs:
 
       - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           cache: "pnpm"
 
@@ -404,7 +404,7 @@ jobs:
           echo "console-logs=${{ github.event.inputs.console-logs == 'true' && 'true' || vars.FLY_CONSOLE_LOGS }}" >> "$GITHUB_OUTPUT"
 
       - name: Download images artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: fly-built-images-${{ github.run_id }}
           path: ${{ runner.temp }}/fly-images
@@ -508,7 +508,7 @@ jobs:
 
       - name: Upload changelogs artifact
         if: steps.changelogs.outputs.changelogs-path != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fly-changelogs-${{ github.run_id }}
           path: ${{ steps.changelogs.outputs.changelogs-path }}
@@ -549,7 +549,7 @@ jobs:
       # by GitHub Actions secret scanning. Artifact files bypass secret scanning.
       - name: Upload projects artifact
         if: always() && steps.deployment.outputs.projects-path != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fly-deployed-projects-${{ github.run_id }}
           path: ${{ steps.deployment.outputs.projects-path }}
@@ -585,11 +585,11 @@ jobs:
           [[ "$PR" =~ ^[0-9]+$ ]] || PR=""
           echo "number=$PR" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           cache: "pnpm"
 
@@ -600,7 +600,7 @@ jobs:
         run: pnpm nx build pr-comment-action
 
       - name: Download projects artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: fly-deployed-projects-${{ github.run_id }}
           path: ${{ runner.temp }}/fly-projects
@@ -608,7 +608,7 @@ jobs:
 
       # Previews surface their changelog here rather than as a GitHub release
       - name: Download changelogs artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: fly-changelogs-${{ github.run_id }}
           path: ${{ runner.temp }}/fly-changelogs
@@ -647,7 +647,7 @@ jobs:
           echo "number=$PR" >> "$GITHUB_OUTPUT"
 
       - name: Download projects artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: fly-deployed-projects-${{ github.run_id }}
           path: ${{ runner.temp }}/fly-projects
@@ -701,7 +701,7 @@ jobs:
           echo "PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack notification
-        uses: slackapi/slack-github-action@v3
+        uses: slackapi/slack-github-action@v4
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
           webhook-type: incoming-webhook
@@ -720,14 +720,14 @@ jobs:
           client-id: ${{ secrets.CDWR_ACTIONS_BOT_ID }}
           private-key: ${{ secrets.CDWR_ACTIONS_BOT_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Delete release tags as the app, the ruleset's bypass actor
           token: ${{ steps.generate-token.outputs.token }}
 
       - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           cache: "pnpm"
 
