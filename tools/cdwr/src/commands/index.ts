@@ -74,6 +74,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./tenant/provision').then((m) => m.default)
   },
   {
+    path: ['tenant', 'apply-site'],
+    summary: 'Fill a tenant from a site definition in the repository',
+    danger: 'mutate',
+    load: () => import('./tenant/apply-site').then((m) => m.default)
+  },
+  {
     path: ['tenant', 'rotate-key'],
     summary: "Rotate a tenant's Payload API key everywhere",
     danger: 'destructive',
