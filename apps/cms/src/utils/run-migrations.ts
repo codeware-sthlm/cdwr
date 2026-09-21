@@ -17,6 +17,8 @@ import { type Migration, type Payload, getPayload } from 'payload';
 import { getConfig } from '../migrate.config';
 import { migrations } from '../migrations';
 
+import { describeError } from './describe-error';
+
 /** Written synchronously: `process.exit` drops whatever a pipe still buffers. */
 const report = (fd: 1 | 2, line: string) => writeSync(fd, `${line}\n`);
 
@@ -90,7 +92,11 @@ async function main() {
 
 main().catch((err) => {
   report(2, `[migrate] failed while ${step}`);
-  report(2, err instanceof Error ? (err.stack ?? err.message) : String(err));
+  // Every `cause` beneath it too: the driver's reason is what a reader needs,
+  // and it is never in the message the wrapper carries
+  for (const line of describeError(err)) {
+    report(2, line);
+  }
   finished = true;
   process.exit(1);
 });
