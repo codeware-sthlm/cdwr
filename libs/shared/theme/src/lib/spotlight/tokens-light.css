@@ -89,7 +89,7 @@
   --sidebar-accent: oklch(0.967 0.001 286.375);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.705 0.015 286.067);
+  --sidebar-ring: oklch(0.552 0.016 285.938);
 
   /* === prose tokens === */
   --body: var(--core-text);
