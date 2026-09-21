@@ -153,15 +153,23 @@ export type NavigationItemDefinition = {
 };
 
 /**
- * The form-builder form a `form` block renders.
+ * A contact form, as the platform builds one.
  *
- * Fields are left as the plugin types them; the apply hands them straight to
- * `ensureForm`.
+ * Deliberately narrow: `ensureForm` makes a single-email-field contact form and
+ * nothing else, so a definition can only state what that accepts. A richer form
+ * is a change to the platform before it is a change to this type — promising
+ * one here would produce a definition the apply cannot honour.
  */
 export type FormDefinition = {
+  /** Stable lookup key, and what a `form` block points at */
   title: string;
-  fields?: NonNullable<unknown>;
-  confirmationMessage?: string;
+  emailLabel: string;
+  emailPlaceholder: string;
+  submitLabel: string;
+  /** Shown after a successful send */
+  confirmation: string;
+  /** Subject of the notification to the workspace */
+  subject: string;
 };
 
 /** Everything a definition may say about the site's own settings. */

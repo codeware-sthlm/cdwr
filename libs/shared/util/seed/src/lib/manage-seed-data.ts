@@ -8,9 +8,6 @@
  * and it's not recommended to use this for production data.
  */
 
-import { existsSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
-
 import { withEnvVars } from '@codeware/shared/util/zod';
 
 import { SeedDataSchema } from './schema';
