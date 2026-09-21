@@ -69,22 +69,7 @@ export const manageSeedData = {
   load: <TData extends object>(
     environment: SeedEnvironment,
     options?: SeedOptions
-  ) => loadSeedData<TData>(environment, options),
-
-  /**
-   * Save seed data to environment-specific file.
-   *
-   * Nothing will be saved in run-time!
-   *
-   * @param environment - The environment to save the data for.
-   * @param data - The seed data to save.
-   * @param options - Options for the save operation
-   */
-  save: <TData extends object>(
-    environment: SeedEnvironment,
-    data: TData,
-    logger?: Logger
-  ) => saveSeedData<TData>(environment, data, logger)
+  ) => loadSeedData<TData>(environment, options)
 };
 
 // Load seed data
@@ -123,39 +108,4 @@ const loadSeedData = <TData>(
   }
 
   return data;
-};
-
-// Save seed data
-const saveSeedData = <TData>(
-  environment: SeedEnvironment,
-  data: TData,
-  logger: Logger = defaultLogger
-): void => {
-  if (environment !== 'development' && environment !== 'preview') {
-    logger.warn(`Save seed data to file is not supported in ${environment}`);
-    return;
-  }
-
-  // The path is always relative since we're using TS files which will be bundled.
-  const seedFile = resolve(__dirname, 'static-data', `seed.${environment}.ts`);
-
-  // Note! File is never found in the bundle since it's compiled to JS.
-  // It's a restriction by design to prevent saving seed data in run-time.
-  if (!existsSync(seedFile)) {
-    logger.log(`Seed data is not saved, file not found: ${seedFile}`);
-    return;
-  }
-
-  try {
-    // Create TypeScript export content
-    const tsContent = `// This file is auto-generated. Do not edit directly.
-export const seedData = ${JSON.stringify(data, null, 2)} as const;
-`;
-
-    writeFileSync(seedFile, tsContent);
-    logger.log(`Saved seed data to file: ${seedFile}`);
-  } catch (error) {
-    logger.error((error as Error).message);
-    logger.error(`Failed to save seed data to file: ${seedFile}`);
-  }
 };
