@@ -1,3 +1,4 @@
+import { getId } from '@codeware/app-cms/util/misc';
 import type { Tour } from '@codeware/shared/util/payload-types';
 import type { Payload, TypedLocale } from 'payload';
 
@@ -37,13 +38,16 @@ export async function ensureTour(
   options: { locale: TypedLocale; transactionID: string | number | undefined }
 ): Promise<Tour | number> {
   const { locale, transactionID } = options;
-  const { slug } = data;
+  const { slug, tenant } = data;
 
-  // Check if the tour exists with the given slug
+  // Scoped to the tenant, like every sibling helper — see ensure-post
   const tours = await payload.find({
     collection: 'tours',
     where: {
-      slug: { equals: slug }
+      and: [
+        { slug: { equals: slug } },
+        tenant ? { tenant: { in: [getId(tenant)] } } : {}
+      ]
     },
     depth: 0,
     req: { transactionID },
