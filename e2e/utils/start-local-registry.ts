@@ -55,7 +55,7 @@ module.exports = async () => {
   // "projects were matched for publishing but do not have the nx-release-publish
   // target specified". That group also sets `updateDependents: never`, or an app
   // depending on a package here would be pulled back in past this filter.
-  const projects = ['nx-payload', 'create-nx-payload', 'nx-ai', 'fly-node'];
+  const projects = ['nx-payload', 'create-nx-payload', 'fly-node'];
 
   await releaseVersion({
     specifier: `0.0.${Date.now()}-e2e`,

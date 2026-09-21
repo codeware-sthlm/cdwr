@@ -198,13 +198,12 @@ e2e/         # End-to-end tests
 
 ### Publishable Packages (`packages/`)
 
-Only these four are published to npm:
+Only these three are published to npm:
 
 | Package                   | Purpose                                                               |
 | ------------------------- | --------------------------------------------------------------------- |
 | `@cdwr/nx-payload`        | Nx plugin adding Payload CMS generators/executors to any Nx workspace |
 | `@cdwr/create-nx-payload` | Preset to scaffold a new Nx workspace with Payload                    |
-| `@cdwr/nx-ai`             | Nx plugin for AI-assisted workspace tasks                             |
 | `@cdwr/fly-node`          | Programmatic Node.js wrapper for the Fly CLI                          |
 
 **Internal-only building blocks also under `packages/`** (not published — consumed in this
@@ -291,4 +290,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint/test/build on PRs using Nx
 
 ### Release Process
 
-Published packages use a hybrid `nx release` model (`nx.json` → `release.groups`): a **fixed** group for the Nx-plugin suite (`nx-payload` + `create-nx-payload`) and an **independent** group for `nx-ai` and `fly-node`. `cdwr release` (alias `nx release-cli`) is an interactive command in `tools/cdwr` that calls `nx release` — which bumps versions, generates changelogs, and tags releases. GitHub Actions then publish tagged packages to npm.
+Published packages use a hybrid `nx release` model (`nx.json` → `release.groups`): a **fixed** group for the Nx-plugin suite (`nx-payload` + `create-nx-payload`) and an **independent** group for `fly-node`. `cdwr release` (alias `nx release-cli`) is an interactive command in `tools/cdwr` that calls `nx release` — which bumps versions, generates changelogs, and tags releases. GitHub Actions then publish tagged packages to npm.
