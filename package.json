@@ -100,7 +100,6 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.126.0",
     "@babel/core": "^7.14.5",
     "@babel/preset-react": "^7.14.5",
     "@chromatic-com/storybook": "^5.1.2",
