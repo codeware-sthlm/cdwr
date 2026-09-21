@@ -128,7 +128,7 @@
         }
       },
       "packages": {
-        "projects": ["nx-ai", "fly-node"],
+        "projects": ["fly-node"],
         "projectsRelationship": "independent",
         "version": {
           "groupPreVersionCommand": "pnpm nx run-many -t build"

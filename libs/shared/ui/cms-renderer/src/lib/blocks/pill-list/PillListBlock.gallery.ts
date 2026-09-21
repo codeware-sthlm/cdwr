@@ -31,10 +31,6 @@ export const pillListGallery: BlockGalleryDoc<PillListBlockProps> = {
         url: 'https://www.npmjs.com/package/@cdwr/create-nx-payload'
       },
       {
-        label: '@cdwr/nx-ai',
-        url: 'https://www.npmjs.com/package/@cdwr/nx-ai'
-      },
-      {
         label: '@cdwr/fly-node',
         url: 'https://www.npmjs.com/package/@cdwr/fly-node'
       }

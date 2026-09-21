@@ -1,9 +1,0 @@
-{
-  "executors": {
-    "analyze": {
-      "implementation": "./src/executors/analyze/analyze",
-      "schema": "./src/executors/analyze/schema.json",
-      "description": "Analyze a project using Claude AI and output structured feedback."
-    }
-  }
-}
