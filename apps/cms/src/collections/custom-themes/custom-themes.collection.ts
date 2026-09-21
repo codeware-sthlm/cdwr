@@ -10,7 +10,8 @@ import {
 } from '@codeware/shared/theme';
 import {
   brokenReferences,
-  contrastFailures
+  contrastFailures,
+  unreadableTokens
 } from '@codeware/shared/util/color';
 import type {
   CollectionConfig,
@@ -126,6 +127,19 @@ const validateTokens =
     // through the API never meets it — and "an inaccessible theme cannot be
     // published here" is a promise the platform makes to people who are
     // legally obliged to keep it.
+    // A value the check cannot read makes the pair vanish rather than fail, so
+    // a theme written in `hsl()` or `color-mix()` would pass by being
+    // unmeasurable. Refuse what cannot be verified before judging what can
+    const unreadable = unreadableTokens(tokens).filter(
+      ({ token }) => token in asTokens(value)
+    );
+
+    if (unreadable.length) {
+      return `These hold colours the contrast check cannot read, so it cannot be applied: ${unreadable
+        .map(({ token, value: held }) => `${token} (${held})`)
+        .join(', ')}. Use an oklch() or hex value.`;
+    }
+
     const failures = contrastFailures(tokens);
 
     if (failures.length) {
