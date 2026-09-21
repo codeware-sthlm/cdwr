@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+
 import { convertMarkdownToLexical } from '@codeware/app-cms/util/content-templates';
 import type {
   SeedSource,
@@ -5,7 +7,6 @@ import type {
 } from '@codeware/app-cms/util/env-schema';
 import { generateSeedIcon } from '@codeware/shared/ui/seed-icon-studio';
 import type { Page } from '@codeware/shared/util/payload-types';
-import { randPassword } from '@ngneat/falso';
 import type { Payload } from 'payload';
 
 import { loadInfisicalData } from './load-infisical-data';
@@ -241,7 +242,7 @@ export const seed = async (
               : environment === 'preview'
                 ? 'pallevante'
                 : // Production will not happen, but just in case
-                  randPassword().toString());
+                  randomBytes(24).toString('base64url'));
 
           const response = await ensureUser(
             payload,

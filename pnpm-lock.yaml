@@ -74,9 +74,6 @@ importers:
       '@infisical/sdk':
         specifier: ^4.0.6
         version: 4.0.6(@aws-sdk/client-sso-oidc@3.600.0)(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
-      '@ngneat/falso':
-        specifier: ^7.3.0
-        version: 7.4.0
       '@octokit/request-error':
         specifier: ^5.0.1
         version: 5.1.1
@@ -4038,9 +4035,6 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
-
-  '@ngneat/falso@7.4.0':
-    resolution: {integrity: sha512-7MzPP0YGNHDrohf/epmz6SVIjHGhKyHbh0bm+iZ1z/7KVW4xZi9Dx6Tl9NMPy6a4lWh/t3WXSsCGkgkuJ/eroQ==}
 
   '@noble/hashes@1.4.0':
     resolution: {integrity: sha512-V1JJ1WTRUqHHrOSh597hURcMqVKVGL/ea3kv0gSnEdsEZ0/+VyPghM1lMNGc00z7CIQorSvbKpuJkxvuHbvdbg==}
@@ -14771,9 +14765,6 @@ packages:
   secure-json-parse@4.1.0:
     resolution: {integrity: sha512-l4KnYfEyqYJxDwlNVyRfO2E4NTHfMKAWdUuA8J0yve2Dz/E/PdBepY03RvyJpssIpRFwJoCD55wA+mEDs6ByWA==}
 
-  seedrandom@3.0.5:
-    resolution: {integrity: sha512-8OwmbklUNzwezjGInmZ+2clQmExQPvomqjL7LFqOYqtmuxRgQYqOD3mHaU+MvZn5FLUeVxVfQjwLZW/n/JFuqg==}
-
   seek-bzip@2.0.0:
     resolution: {integrity: sha512-SMguiTnYrhpLdk3PwfzHeotrcwi8bNV4iemL9tx9poR/yeaMYwB9VzR1w7b57DuWpuqR8n6oZboi0hj3AxZxQg==}
     hasBin: true
@@ -20582,11 +20573,6 @@ snapshots:
 
   '@next/swc-win32-x64-msvc@16.3.5':
     optional: true
-
-  '@ngneat/falso@7.4.0':
-    dependencies:
-      seedrandom: 3.0.5
-      uuid: 8.3.2
 
   '@noble/hashes@1.4.0': {}
 
@@ -33692,8 +33678,6 @@ snapshots:
   secure-compare@3.0.1: {}
 
   secure-json-parse@4.1.0: {}
-
-  seedrandom@3.0.5: {}
 
   seek-bzip@2.0.0:
     dependencies:
