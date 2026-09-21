@@ -294,9 +294,6 @@ importers:
         specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
-      '@anthropic-ai/sdk':
-        specifier: ^0.126.0
-        version: 0.126.0(zod@3.25.76)
       '@babel/core':
         specifier: ^7.14.5
         version: 7.29.7(supports-color@7.2.0)
@@ -763,15 +760,6 @@ packages:
   '@alloc/quick-lru@5.3.0':
     resolution: {integrity: sha512-U4+70Pc5ZS9osnCBCE5Jha/ciHM+Yp+CNMNC/7HvYbNRk1Ldd+f7qO65W5qfhu/TCv+/ozljlXXe9Nj8419DMA==}
     engines: {node: '>=10'}
-
-  '@anthropic-ai/sdk@0.126.0':
-    resolution: {integrity: sha512-VhiZl6rA/8uC+MgDaOhEcAWaIZ2tPnIY885jlZqxrGrutUW2nqCtophBtlsX0tk5kChBUjV/1NVjL3y0M4OwUg==}
-    hasBin: true
-    peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
-    peerDependenciesMeta:
-      zod:
-        optional: true
 
   '@apidevtools/json-schema-ref-parser@11.9.3':
     resolution: {integrity: sha512-60vepv88RwcJtSHrD6MjIL6Ta3SOYbgfnkHb+ppAVK+o9mXprRtulx7VlRl3lN3bbvysAfCS7WMVfhUYemB0IQ==}
@@ -6754,9 +6742,6 @@ packages:
     resolution: {integrity: sha512-rUeT12bxFnplYDe815GXbq/oixEGHfRFFtcTF3YdDi/JaENIM6aSYYLJydG83UNzLXeRI5K8abYd/8Sp/QM0kA==}
     engines: {node: '>=16.0.0'}
 
-  '@stablelib/base64@1.0.1':
-    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
-
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
@@ -7457,9 +7442,6 @@ packages:
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
-
-  '@types/node@22.19.17':
-    resolution: {integrity: sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q==}
 
   '@types/node@22.20.3':
     resolution: {integrity: sha512-DZmzkmwHzXrLPAXPyKNDzlIwMMUZCVacoD25ywdy5YTKGbOx/2ld+Q38Im2zJ0vBuZP5Prd3VZutKZyXwkOS8A==}
@@ -10346,9 +10328,6 @@ packages:
   fast-safe-stringify@2.1.1:
     resolution: {integrity: sha512-W+KJc2dmILlPplD/H4K9l9LcAHAfPtP6BY84uVLXQ6Evcz9Lcg33Y2z1IVblT6xdY54PXYVHEv+0Wpq8Io6zkA==}
 
-  fast-sha256@1.3.0:
-    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
-
   fast-uri@3.1.8:
     resolution: {integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==}
 
@@ -11870,10 +11849,6 @@ packages:
   json-parse-even-better-errors@3.0.2:
     resolution: {integrity: sha512-fi0NG4bPjCHunUJffmLd0gxssIgkNmArMvis4iNah6Owg1MCJjWhEcDLmsK6iGkJq3tHwbDkTlce70/tmXN4cQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
-
-  json-schema-to-ts@3.1.1:
-    resolution: {integrity: sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g==}
-    engines: {node: '>=16'}
 
   json-schema-to-typescript@15.0.3:
     resolution: {integrity: sha512-iOKdzTUWEVM4nlxpFudFsWyUiu/Jakkga4OZPEt7CGoSEsAsUgdOZqR6pcgx2STBek9Gm4hcarJpXSzIvZ/hKA==}
@@ -15118,9 +15093,6 @@ packages:
     resolution: {integrity: sha512-WjlahMgHmCJpqzU8bIBy4qtsZdU9lRlcZE3Lvyej6t4tuOuv1vk57OW3MBrj6hXBFx/nNoC9MPMTcr5YA7NQbg==}
     engines: {node: '>=6'}
 
-  standardwebhooks@1.1.1:
-    resolution: {integrity: sha512-bCbX9ZEyFkWPsRz7Bl3NuQUJohmwGSev/yhr7vhaGPlc4AfIrspIRa6cPTBuI1ItmrTDJ4d/S2hCsfe4+vQGnQ==}
-
   state-local@1.0.7:
     resolution: {integrity: sha512-HTEHMNieakEnoe33shBYcZ7NX83ACUjCu8c40iOGEZsngj9zRnkqS9j1pqQPXwobB0ZcVTk27REb7COQ0UR59w==}
 
@@ -15662,9 +15634,6 @@ packages:
 
   truncate-utf8-bytes@1.0.2:
     resolution: {integrity: sha512-95Pu1QXQvruGEhv62XCMO3Mm90GscOCClvrIUwCM0PYOXK3kaF3l3sIHxx71ThJfcbM2O5Au6SO3AWCSEfW4mQ==}
-
-  ts-algebra@2.0.0:
-    resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
@@ -16708,13 +16677,6 @@ snapshots:
       is-fullwidth-code-point: 5.1.0
 
   '@alloc/quick-lru@5.3.0': {}
-
-  '@anthropic-ai/sdk@0.126.0(zod@3.25.76)':
-    dependencies:
-      json-schema-to-ts: 3.1.1
-      standardwebhooks: 1.1.1
-    optionalDependencies:
-      zod: 3.25.76
 
   '@apidevtools/json-schema-ref-parser@11.9.3':
     dependencies:
@@ -19789,7 +19751,7 @@ snapshots:
 
   '@jest/pattern@30.5.0':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.20.3
       jest-regex-util: 30.5.0
 
   '@jest/reporters@30.3.0(supports-color@7.2.0)':
@@ -19998,7 +19960,7 @@ snapshots:
       '@jest/schemas': 30.5.0
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 22.19.17
+      '@types/node': 22.20.3
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -23948,8 +23910,6 @@ snapshots:
       '@smithy/util-buffer-from': 3.0.0
       tslib: 2.8.1
 
-  '@stablelib/base64@1.0.1': {}
-
   '@standard-schema/spec@1.1.0': {}
 
   '@standard-schema/utils@0.3.0': {}
@@ -24666,10 +24626,6 @@ snapshots:
 
   '@types/ms@2.1.0': {}
 
-  '@types/node@22.19.17':
-    dependencies:
-      undici-types: 6.21.0
-
   '@types/node@22.20.3':
     dependencies:
       undici-types: 6.21.0
@@ -24688,7 +24644,7 @@ snapshots:
 
   '@types/pg@8.20.0':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.20.3
       pg-protocol: 1.13.0
       pg-types: 2.2.0
 
@@ -24806,7 +24762,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.20.3
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -26248,7 +26204,7 @@ snapshots:
 
   buffer-image-size@0.6.4:
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.20.3
 
   buffer@5.6.0:
     dependencies:
@@ -28171,8 +28127,6 @@ snapshots:
 
   fast-safe-stringify@2.1.1: {}
 
-  fast-sha256@1.3.0: {}
-
   fast-uri@3.1.8: {}
 
   fast-xml-builder@1.3.1:
@@ -28729,7 +28683,7 @@ snapshots:
 
   happy-dom@20.14.5:
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.20.3
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.1
       buffer-image-size: 0.6.4
@@ -29700,7 +29654,7 @@ snapshots:
     dependencies:
       '@jest/types': 30.5.1
       '@parcel/watcher': 2.6.0
-      '@types/node': 22.19.17
+      '@types/node': 22.20.3
       anymatch: 3.1.3
       fb-watchman: 2.0.2
       fdir: 6.5.0(picomatch@4.0.7)
@@ -30008,7 +29962,7 @@ snapshots:
   jest-util@30.5.1:
     dependencies:
       '@jest/types': 30.5.1
-      '@types/node': 22.19.17
+      '@types/node': 22.20.3
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
@@ -30070,7 +30024,7 @@ snapshots:
 
   jest-worker@30.5.1:
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.20.3
       '@ungap/structured-clone': 1.4.0
       jest-util: 30.5.1
       merge-stream: 2.0.0
@@ -30177,11 +30131,6 @@ snapshots:
   json-parse-even-better-errors@2.3.1: {}
 
   json-parse-even-better-errors@3.0.2: {}
-
-  json-schema-to-ts@3.1.1:
-    dependencies:
-      '@babel/runtime': 7.29.7
-      ts-algebra: 2.0.0
 
   json-schema-to-typescript@15.0.3:
     dependencies:
@@ -34182,11 +34131,6 @@ snapshots:
     dependencies:
       type-fest: 0.7.1
 
-  standardwebhooks@1.1.1:
-    dependencies:
-      '@stablelib/base64': 1.0.1
-      fast-sha256: 1.3.0
-
   state-local@1.0.7: {}
 
   statuses@1.5.0: {}
@@ -34753,8 +34697,6 @@ snapshots:
   truncate-utf8-bytes@1.0.2:
     dependencies:
       utf8-byte-length: 1.0.5
-
-  ts-algebra@2.0.0: {}
 
   ts-api-utils@2.5.0(typescript@6.0.3):
     dependencies:
