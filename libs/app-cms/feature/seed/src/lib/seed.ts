@@ -37,16 +37,7 @@ import {
   splitLabelKey,
   usedLabelsSorted
 } from './utils/platform-label-icons';
-import {
-  lookupCategory,
-  lookupPage,
-  lookupPlace,
-  lookupStockMedia,
-  lookupTag,
-  lookupTenant,
-  lookupUser,
-  tempStore
-} from './utils/temp-store';
+import { createSeedStore } from './utils/temp-store';
 
 /**
  * Seed Payload collections.
@@ -74,6 +65,10 @@ export const seed = async (
   const { environment, payload, remoteDataUrl, source, strategy } = args;
 
   // Support transactions
+  // Ids recorded as documents are created, read back when later ones
+  // reference them. Scoped to this run
+  const store = createSeedStore();
+
   let transactionID: string | number | undefined;
 
   /**
@@ -205,7 +200,7 @@ export const seed = async (
           tenantId = Number(response);
         }
         // Save tenant id with seed data to map to lookup tenants later
-        tempStore.tenant(tenant.apiKey, { ...tenant, id: tenantId });
+        store.tenant(tenant.apiKey, { ...tenant, id: tenantId });
       } catch (error) {
         // Abort when we have a problem with a tenant
         payload.logger.error(
@@ -232,7 +227,7 @@ export const seed = async (
       let userFailed = 0;
 
       for (const user of seedData.users) {
-        const tenants = lookupTenant(payload, user.tenants);
+        const tenants = store.lookupTenant(payload, user.tenants);
 
         try {
           const password =
@@ -270,7 +265,7 @@ export const seed = async (
             userId = Number(response);
           }
           // Save user id to map to lookup users later
-          tempStore.user(user.email, userId);
+          store.user(user.email, userId);
         } catch (e) {
           const error = e as Error;
           payload.logger.error(error.message);
@@ -300,7 +295,7 @@ export const seed = async (
       let categoryFailed = 0;
 
       for (const category of seedData.categories) {
-        const [entity] = lookupTenant(payload, [category.tenant]);
+        const [entity] = store.lookupTenant(payload, [category.tenant]);
 
         try {
           const response = await ensureCategory(
@@ -323,7 +318,7 @@ export const seed = async (
             categoryId = Number(response);
           }
           // Save category to map to lookup id's later
-          tempStore.category(
+          store.category(
             { apiKey: category.tenant.lookupApiKey, slug: category.slug },
             categoryId
           );
@@ -356,7 +351,7 @@ export const seed = async (
       let tagFailed = 0;
 
       for (const tag of seedData.tags) {
-        const [entity] = lookupTenant(payload, [tag.tenant]);
+        const [entity] = store.lookupTenant(payload, [tag.tenant]);
 
         try {
           const response = await ensureTag(
@@ -380,10 +375,7 @@ export const seed = async (
             tagId = Number(response);
           }
           // Save tag to map to lookup id's later
-          tempStore.tag(
-            { apiKey: tag.tenant.lookupApiKey, slug: tag.slug },
-            tagId
-          );
+          store.tag({ apiKey: tag.tenant.lookupApiKey, slug: tag.slug }, tagId);
         } catch (e) {
           const error = e as Error;
           payload.logger.error(error.message);
@@ -413,7 +405,7 @@ export const seed = async (
       let pageFailed = 0;
 
       for (const page of seedData.pages) {
-        const [entity] = lookupTenant(payload, [page.tenant]);
+        const [entity] = store.lookupTenant(payload, [page.tenant]);
 
         try {
           const layout: Page['layout'] = [];
@@ -500,7 +492,7 @@ export const seed = async (
             pageId = Number(response);
           }
           // Save page to map to lookup id's later
-          tempStore.page(
+          store.page(
             { apiKey: page.tenant.lookupApiKey, slug: page.slug },
             pageId
           );
@@ -540,14 +532,14 @@ export const seed = async (
       let mediaFailed = 0;
 
       for (const media of seedData.media) {
-        const tags = lookupTag(
+        const tags = store.lookupTag(
           payload,
           media.tags.map(({ lookupSlug }) => ({
             apiKey: media.tenant.lookupApiKey,
             slug: lookupSlug
           }))
         );
-        const [entity] = lookupTenant(payload, [media.tenant]);
+        const [entity] = store.lookupTenant(payload, [media.tenant]);
 
         try {
           const response = await ensureMedia(
@@ -573,7 +565,7 @@ export const seed = async (
             mediaId = Number(response);
           }
           // Save media to map to lookup id's later
-          tempStore.media(
+          store.media(
             { apiKey: media.tenant.lookupApiKey, slug: media.filename },
             mediaId
           );
@@ -609,15 +601,15 @@ export const seed = async (
       let postFailed = 0;
 
       for (const post of seedData.posts) {
-        const categories = lookupCategory(
+        const categories = store.lookupCategory(
           payload,
           post.categories.map(({ lookupSlug }) => ({
             apiKey: post.tenant.lookupApiKey,
             slug: lookupSlug
           }))
         );
-        const [entity] = lookupTenant(payload, [post.tenant]);
-        const authors = lookupUser(payload, post.authors);
+        const [entity] = store.lookupTenant(payload, [post.tenant]);
+        const authors = store.lookupUser(payload, post.authors);
 
         try {
           const response = await ensurePost(
@@ -764,7 +756,7 @@ export const seed = async (
             stockId = Number(response);
           }
           // Shared across tenants, so keyed by filename alone
-          tempStore.stockMedia(stock.filename, stockId);
+          store.stockMedia(stock.filename, stockId);
         } catch (e) {
           const error = e as Error;
           payload.logger.error(error.message);
@@ -793,7 +785,7 @@ export const seed = async (
       let placeFailed = 0;
 
       for (const place of seedData.places) {
-        const [entity] = lookupTenant(payload, [place.tenant]);
+        const [entity] = store.lookupTenant(payload, [place.tenant]);
         const kind = labelIds.get(labelKey('place-kind', place.kind));
 
         // A place is classified or it is not seeded
@@ -828,7 +820,7 @@ export const seed = async (
             placeId = Number(response);
           }
           // Save place to map to lookup id's later
-          tempStore.place(
+          store.place(
             { apiKey: place.tenant.lookupApiKey, slug: place.name },
             placeId
           );
@@ -864,8 +856,8 @@ export const seed = async (
       let tourFailed = 0;
 
       for (const tour of seedData.tours) {
-        const [entity] = lookupTenant(payload, [tour.tenant]);
-        const heroImage = lookupStockMedia(payload, tour.heroImage);
+        const [entity] = store.lookupTenant(payload, [tour.tenant]);
+        const heroImage = store.lookupStockMedia(payload, tour.heroImage);
 
         // A tour cannot be published without a header image
         if (!heroImage) {
@@ -896,7 +888,7 @@ export const seed = async (
               notIncluded: tour.notIncluded.map((item) => ({ item })),
               itinerary: tour.itinerary.map(({ places, ...day }) => ({
                 ...day,
-                places: lookupPlace(
+                places: store.lookupPlace(
                   payload,
                   (places ?? []).map((name) => ({
                     apiKey: tour.tenant.lookupApiKey,
@@ -950,11 +942,11 @@ export const seed = async (
       let navigationFailed = 0;
 
       for (const tenant of seedData.tenants) {
-        const [tenantEntity] = lookupTenant(payload, [
+        const [tenantEntity] = store.lookupTenant(payload, [
           { lookupApiKey: tenant.apiKey }
         ]);
         // Lookup the first 5 tenant pages excluding the home page
-        const pageIds = lookupPage(
+        const pageIds = store.lookupPage(
           payload,
           seedData.pages
             .filter(
@@ -1017,9 +1009,11 @@ export const seed = async (
       let siteSettingFailed = 0;
 
       for (const { apiKey } of seedData.tenants) {
-        const [tenant] = lookupTenant(payload, [{ lookupApiKey: apiKey }]);
+        const [tenant] = store.lookupTenant(payload, [
+          { lookupApiKey: apiKey }
+        ]);
         // Landing page is "home" page
-        const [page] = lookupPage(payload, [{ apiKey, slug: 'home' }]);
+        const [page] = store.lookupPage(payload, [{ apiKey, slug: 'home' }]);
 
         if (!page) {
           siteSettingFailed++;
