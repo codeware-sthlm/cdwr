@@ -133,12 +133,14 @@ export const PRIMARY_LIGHT: Record<
   base: {
     '--primary': { base: '900' },
     '--primary-foreground': { base: '50' },
-    // A step light enough to read as a focus ring against the surfaces, which
-    // the near-black primary does not
-    '--ring': { base: '400' },
+    // Light enough to read as a focus ring rather than as the near-black
+    // primary, dark enough to clear the 3:1 WCAG asks of a non-text control.
+    // 400 reads better against the primary but fails that bar on every neutral
+    // family — 2.32 to 2.63 against the surface
+    '--ring': { base: '500' },
     '--sidebar-primary': { base: '900' },
     '--sidebar-primary-foreground': { base: '50' },
-    '--sidebar-ring': { base: '400' }
+    '--sidebar-ring': { base: '500' }
   }
 };
 

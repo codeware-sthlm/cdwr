@@ -224,7 +224,7 @@ describe('buildThemeTokens', () => {
         );
 
         expect(zinc.light['--primary']).toBe(shade('zinc', '900'));
-        expect(zinc.light['--ring']).toBe(shade('zinc', '400'));
+        expect(zinc.light['--ring']).toBe(shade('zinc', '500'));
         expect(zinc.dark['--primary']).toBe(shade('zinc', '200'));
       });
     });
