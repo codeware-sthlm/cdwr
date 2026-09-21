@@ -7,10 +7,11 @@ This repository holds two kinds of code under two different licences.
 | `packages/nx-payload`, `packages/create-nx-payload`, `packages/fly-node` | [MIT](packages/nx-payload/LICENSE) | The three developer tools published to npm                          |
 | Everything else                                                          | [FSL-1.1-MIT](LICENSE)             | The Codeware platform — the apps, libraries and tooling that run it |
 
-Each of the three MIT packages carries its own `LICENSE` file, so what you get is
-visible wherever you land. The other packages under `packages/` are internal
-GitHub Actions that are never published, and they fall under the platform
-licence along with everything else.
+Each of the three MIT packages carries its own `LICENSE` file, and ships it in
+the published tarball, so what you get is visible wherever you land. Everything
+else under `packages/` is internal tooling that this repository's own workflows
+use and that is not published to npm; it falls under the platform licence along
+with the rest.
 
 ## The short version
 
