@@ -262,15 +262,6 @@ type ThemeStudioProps = {
   recipe?: ThemeRecipe;
   /** Hand-edited tokens to restore alongside the recipe */
   overrides?: ThemeOverrides;
-  /**
-   * Whether the confirm button stays enabled while the theme has issues.
-   *
-   * Off by default: a theme being authored here should not ship with failing
-   * contrast. On when the studio is opened on a theme that already had them —
-   * a built-in's shortcomings are not the forker's to fix before they may
-   * copy it, and the report stays on screen either way.
-   */
-  canSelectWithIssues?: boolean;
   onSelect?: (result: ThemeStudioResult) => void;
   onClose?: () => void;
 };
@@ -390,7 +381,6 @@ export function ThemeStudio({
   themeName,
   themeSlug,
   selectLabel = 'Use this theme',
-  canSelectWithIssues = false,
   recipe: initialRecipe,
   overrides: initialOverrides,
   onSelect,
@@ -1081,9 +1071,13 @@ export function ThemeStudio({
                 {onSelect && (
                   <Button
                     size="sm"
-                    disabled={failures > 0 && !canSelectWithIssues}
+                    // Every built-in clears the report, so nothing legitimate
+                    // needs an exception any more. The save is refused
+                    // server-side regardless; keeping the button live would
+                    // only trade a disabled control for a rejected write
+                    disabled={failures > 0}
                     title={
-                      failures > 0 && !canSelectWithIssues
+                      failures > 0
                         ? 'Fix the contrast issues before using this theme'
                         : undefined
                     }
