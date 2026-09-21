@@ -12,7 +12,7 @@
   <br />
   <br />
   &nbsp;
-  <a href='https://opensource.org/licenses/MIT'><img src='https://img.shields.io/badge/License-MIT-green.svg' alt='MIT'></a>
+  <a href='../../LICENSING.md'><img src='https://img.shields.io/badge/License-FSL--1.1--MIT-green.svg' alt='FSL-1.1-MIT'></a>
   <br />
   <br />
 </p>
@@ -288,12 +288,12 @@ Use this when you rather want to see the rules in the secrets list.
 Rules format examples:
 
 ```yml
-apps: '*'                  # all apps
-apps: 'web,cms'            # only web and cms apps
-tenants: '*'               # all discovered tenants
-tenants: 'demo'            # only demo tenant
-tenants: 'demo,acme'       # only demo and acme tenants
-tenants: '_default,demo'   # headless deployment + demo tenant
+apps: '*' # all apps
+apps: 'web,cms' # only web and cms apps
+tenants: '*' # all discovered tenants
+tenants: 'demo' # only demo tenant
+tenants: 'demo,acme' # only demo and acme tenants
+tenants: '_default,demo' # headless deployment + demo tenant
 ```
 
 > [!TIP]

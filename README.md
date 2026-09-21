@@ -14,7 +14,9 @@
   <br />
   <a href='https://www.npmjs.com/package/@cdwr/nx-payload'><img src='https://img.shields.io/npm/v/@cdwr/nx-payload?label=%40cdwr%2Fnx-payload' alt='@cdwr/nx-payload npm'></a>
   &nbsp;
-  <a href='https://opensource.org/licenses/MIT'><img src='https://img.shields.io/badge/License-MIT-green.svg' alt='MIT'></a>
+  <a href='./LICENSING.md'><img src='https://img.shields.io/badge/Platform-FSL--1.1--MIT-green.svg' alt='Platform: FSL-1.1-MIT'></a>
+  &nbsp;
+  <a href='./LICENSING.md'><img src='https://img.shields.io/badge/npm%20packages-MIT-green.svg' alt='npm packages: MIT'></a>
   <br />
   <br />
 </p>
