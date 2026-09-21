@@ -13,7 +13,7 @@
   <br />
   <a href='https://www.npmjs.com/package/@cdwr/nx-ai'><img src='https://img.shields.io/npm/v/@cdwr/nx-ai?label=npm%20version' alt='@cdwr/nx-ai npm'></a>
   &nbsp;
-  <a href='https://opensource.org/licenses/MIT'><img src='https://img.shields.io/badge/License-MIT-green.svg' alt='MIT'></a>
+  <a href='../../LICENSING.md'><img src='https://img.shields.io/badge/License-FSL--1.1--MIT-green.svg' alt='FSL-1.1-MIT'></a>
   <br />
   <br />
 </p>

@@ -1,7 +1,7 @@
 {
   "name": "codeware",
   "version": "0.0.2",
-  "license": "MIT",
+  "license": "LicenseRef-FSL-1.1-MIT",
   "scripts": {
     "build": "nx run-many -t build",
     "cai": "czg ai",
