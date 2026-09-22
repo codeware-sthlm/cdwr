@@ -27,8 +27,15 @@ import type {
  * definition cannot express, the platform cannot render.
  */
 
-/** Payload's own per-row bookkeeping, which a definition never states. */
-type Authored<T> = Omit<T, 'id' | 'blockName'>;
+/**
+ * Payload's own per-row bookkeeping, which a definition never states.
+ *
+ * Distributive on purpose. `Omit` over a union keeps only the keys every member
+ * shares, which quietly collapsed twelve block types into their common fields —
+ * a definition could then state a `hero` but not its `eyebrow`. The
+ * `T extends unknown` clause maps each member separately.
+ */
+type Authored<T> = T extends unknown ? Omit<T, 'id' | 'blockName'> : never;
 
 type LayoutBlock = Page['layout'][number];
 
@@ -174,9 +181,10 @@ export type FormDefinition = {
 
 /** Everything a definition may say about the site's own settings. */
 export type SiteSettingsDefinition = {
-  general?: Omit<
-    NonNullable<SiteSetting['general']>,
-    'landingPage' | 'icon'
+  // Partial: a definition states the settings it cares about and leaves the
+  // rest as the workspace has them
+  general?: Partial<
+    Omit<NonNullable<SiteSetting['general']>, 'landingPage' | 'icon'>
   > & {
     landingPage?: { lookupSlug: string };
   };
