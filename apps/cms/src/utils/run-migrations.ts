@@ -1,3 +1,6 @@
+// Must be first: installs the guard before any module that might not finish
+import './exit-guard';
+
 /**
  * Minimal non-interactive migration runner.
  *
