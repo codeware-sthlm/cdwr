@@ -70,10 +70,19 @@
         }
       },
       "options": {
-        "command": "npx concurrently -n \"RMX,HNO\" -c \"magenta,blue\" --pad-prefix \"remix vite:dev\" \"nodemon\"",
+        "command": "node ../../tools/scripts/with-secrets.mjs --path=/apps/web -- npx concurrently -n \"RMX,HNO\" -c \"magenta,blue\" --pad-prefix \"remix vite:dev\" \"nodemon\"",
         "cwd": "apps/web"
       },
       "cache": false
+    },
+    "dx:secrets": {
+      "metadata": {
+        "description": "Refresh the offline copy of the development vault, for working without a session."
+      },
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/scripts/with-secrets.mjs --path=/apps/web --refresh-offline"
+      }
     }
   }
 }

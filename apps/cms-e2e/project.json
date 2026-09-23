@@ -42,7 +42,8 @@
       "options": {
         "command": "nx re-seed cms",
         "env": {
-          "DATABASE_URL": "postgresql://postgres:postgres@localhost:5433/cms-e2e"
+          "DATABASE_URL": "postgresql://postgres:postgres@localhost:5433/cms-e2e",
+          "WITH_SECRETS_PRESERVE": "DATABASE_URL"
         }
       },
       "dependsOn": ["dx:postgres"]
