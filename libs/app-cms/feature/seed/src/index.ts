@@ -1,4 +1,5 @@
 export { applySiteDefinition } from './lib/apply-site-definition';
+export type { ExtraDocument } from './lib/find-extra-documents';
 export type {
   ApplyOptions,
   ApplyOutcome,
