@@ -103,14 +103,18 @@ export default defineCommand<
       ])
     ];
 
-    if (rows.length === 0) {
+    // A definition can name everything the tenant has and still be refused by
+    // an apply, so silence here would be the wrong answer
+    if (rows.length === 0 && report.unresolved.length === 0) {
       return {
         summary: `'${report.tenant.slug}' and the definition name the same ${present.length} document(s)`,
         json: report
       };
     }
 
-    ctx.ui.table(['drift', 'collection', 'document', 'meaning'], rows);
+    if (rows.length) {
+      ctx.ui.table(['drift', 'collection', 'document', 'meaning'], rows);
+    }
 
     if (report.unresolved.length) {
       ctx.ui.note(

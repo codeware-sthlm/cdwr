@@ -121,8 +121,9 @@ export async function findExtraDocuments(
     const { docs } = await payload.find({
       collection,
       where: { tenant: { equals: tenantId } },
-      // A definition names tens of documents, not thousands
-      limit: 1000,
+      // Payload's unbounded query. A non-zero limit still caps even with
+      // `pagination: false`, and a capped scan would under-report extras
+      limit: 0,
       depth: 0,
       pagination: false,
       req: transactionID ? { transactionID } : undefined
