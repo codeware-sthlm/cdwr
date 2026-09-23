@@ -14,6 +14,11 @@ const e2eEnv = parseEnv(
 );
 Object.assign(process.env, e2eEnv);
 
+// The dev server runs through the Infisical wrapper, which would otherwise let
+// the vault overwrite these — including DATABASE_URL, pointing the run at the
+// development database. Derived from the file so it cannot drift
+process.env['WITH_SECRETS_PRESERVE'] = Object.keys(e2eEnv).join(',');
+
 const baseURL = process.env['BASE_URL'] || 'http://localhost:3000';
 
 export default defineConfig({

@@ -9,7 +9,7 @@
     "dev": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "next dev --turbopack",
+        "command": "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=local --set=SEED_STRATEGY=delta -- next dev --turbopack",
         "cwd": "apps/cms"
       },
       "configurations": {
@@ -30,7 +30,7 @@
     "reset-db": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "npx tsx src/utils/reset-db.ts",
+        "command": "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=off -- npx tsx src/utils/reset-db.ts",
         "cwd": "apps/cms",
         "env": {
           "DISABLE_DB_PUSH": "true",
@@ -45,7 +45,7 @@
       },
       "executor": "nx:run-commands",
       "options": {
-        "command": "npx tsx src/utils/seed.ts",
+        "command": "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=local --set=SEED_STRATEGY=delta -- npx tsx src/utils/seed.ts",
         "cwd": "apps/cms",
         "env": {
           "NODE_ENV": "development"
@@ -68,7 +68,7 @@
       },
       "executor": "nx:run-commands",
       "options": {
-        "command": "npx tsx src/utils/verify-last-migration.ts",
+        "command": "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=off -- npx tsx src/utils/verify-last-migration.ts",
         "cwd": "apps/cms",
         "env": {
           "DISABLE_DB_PUSH": "true",
@@ -93,6 +93,15 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "(docker ps -q -f name=^mailpit-cms$ | grep -q . || docker run --name mailpit-cms --rm -d -p 1025:1025 -p 8025:8025 axllent/mailpit) && echo 'Mailpit inbox: http://localhost:8025 (SMTP on 1025)'"
+      }
+    },
+    "dx:secrets": {
+      "metadata": {
+        "description": "Refresh the offline copy of the development vault, for working without a session."
+      },
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/scripts/with-secrets.mjs --refresh-offline"
       }
     }
   }
