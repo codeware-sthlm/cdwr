@@ -1,3 +1,6 @@
+// Must be first: installs the guard before any module that might not finish
+import './exit-guard';
+
 import { loadEnv } from '@codeware/app-cms/feature/env-loader';
 import { getPayload } from 'payload';
 
