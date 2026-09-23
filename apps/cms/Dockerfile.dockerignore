@@ -34,5 +34,6 @@ yarn.lock
 /apps/*
 !/apps/cms
 
-# Target environment variables for local development
+# Local-only env overrides. `apps/cms/.env` is deliberately NOT excluded — the
+# in-image build reads it; the runner stage deletes it again
 .env.*

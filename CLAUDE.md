@@ -76,7 +76,7 @@ Mail sent in development goes to a local catcher — no account, nothing to expi
 nx dx:mail cms
 ```
 
-Point `apps/cms/.env.local` at it:
+Point `apps/cms/.env.local` at it (personal overrides; `.env` holds the shared defaults):
 
 ```sh
 SMTP_HOST=localhost

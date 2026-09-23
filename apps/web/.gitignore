@@ -2,7 +2,8 @@
 build
 public/build
 
-!.env.example
-.env
+# .env is committed public configuration; secrets come from Infisical
+.env.local
+.env.offline
 
 server.js

@@ -1,5 +1,6 @@
-# Could possibly contain database credentials
-.env
+# .env is committed public configuration; secrets come from Infisical
+.env.local
+.env.offline
 
 # Media folder for development
 public/media
