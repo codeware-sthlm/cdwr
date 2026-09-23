@@ -9,7 +9,7 @@ import {
   withDatabase
 } from '../../services/database';
 import {
-  DEPLOYED,
+  ENVIRONMENTS,
   environmentInput,
   previewAppInput
 } from '../../services/environment';
@@ -66,7 +66,7 @@ interface PlanData {
  */
 export default defineCommand<
   {
-    environment: ReturnType<typeof environmentInput>;
+    environment: ReturnType<typeof environmentInput<typeof ENVIRONMENTS>>;
     previewApp: ReturnType<typeof previewAppInput>;
     tenant: ReturnType<typeof input.string>;
     definition: ReturnType<typeof input.string>;
@@ -80,7 +80,7 @@ export default defineCommand<
   confirm: 'production',
   needs: ['fly', 'infisical'],
   inputs: {
-    environment: environmentInput(DEPLOYED),
+    environment: environmentInput(ENVIRONMENTS),
     previewApp: previewAppInput(),
     tenant: input.string({
       prompt: 'Which tenant slug?',
