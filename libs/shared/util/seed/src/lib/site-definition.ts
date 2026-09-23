@@ -62,6 +62,41 @@ export type PlainBlockDefinition = Authored<
   Exclude<LayoutBlock, ReferencingBlock>
 >;
 
+/** The plain blocks, named so a new one cannot slip in unclassified. */
+type PlainBlockType =
+  | 'about'
+  | 'block-gallery'
+  | 'card'
+  | 'code'
+  | 'content'
+  | 'feature-cards'
+  | 'pill-list'
+  | 'posts'
+  | 'showcase'
+  | 'social-media'
+  | 'spacing'
+  | 'tours';
+
+type UnclassifiedBlockType = Exclude<
+  LayoutBlock['blockType'],
+  PlainBlockType | ReferencingBlock['blockType']
+>;
+
+/**
+ * Fails to compile when Payload gains a layout block nobody has classified.
+ *
+ * Without it a new block that points at a document lands in
+ * `PlainBlockDefinition` by omission: its reference field keeps the generated
+ * `number | Document` type, a definition would have to state a database id, and
+ * `resolveBlockReferences` would never resolve it. That compiles and passes.
+ *
+ * Add the block to `ReferencingBlock` if it points at a document, or to
+ * `PlainBlockType` if it does not.
+ */
+export type AssertEveryBlockClassified<
+  TUnclassified extends never = UnclassifiedBlockType
+> = TUnclassified;
+
 /**
  * How a definition points at something it also defines.
  *
