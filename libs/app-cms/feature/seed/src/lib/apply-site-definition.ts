@@ -3,6 +3,7 @@ import { SiteDefinitionSchema } from '@codeware/shared/util/seed';
 import type { SiteDefinition } from '@codeware/shared/util/seed';
 import type { Payload, TypedLocale } from 'payload';
 
+import { type ExtraDocument, findExtraDocuments } from './find-extra-documents';
 import { ensureCategory } from './local-api/ensure-category';
 import { ensureForm } from './local-api/ensure-form';
 import { ensureMedia } from './local-api/ensure-media';
@@ -31,6 +32,13 @@ export type ApplyReport = {
   outcomes: Array<ApplyOutcome>;
   /** References that led nowhere. Non-empty means nothing was committed */
   unresolved: Array<UnresolvedReference>;
+  /**
+   * What the tenant holds that the definition does not name.
+   *
+   * Reported, never acted on: applying fills gaps, so this is the only way to
+   * see content drifting away from its definition.
+   */
+  extra: Array<ExtraDocument>;
 };
 
 export type ApplyOptions = {
@@ -287,6 +295,12 @@ export async function applySiteDefinition(
       );
     }
 
+    // Read inside the transaction, so documents this run just created are not
+    // reported as extra — the definition names them by construction
+    const extra = await findExtraDocuments(payload, definition, tenant.id, {
+      transactionID
+    });
+
     // A reference that led nowhere is a page shipping without its image. Refuse
     // the whole apply rather than commit a site that is quietly incomplete
     const keep = !dryRun && unresolved.length === 0;
@@ -301,7 +315,8 @@ export async function applySiteDefinition(
       tenant: { slug: tenantSlug, id: tenant.id },
       dryRun: !keep,
       outcomes,
-      unresolved
+      unresolved,
+      extra
     };
   } catch (error) {
     if (transactionID) {
