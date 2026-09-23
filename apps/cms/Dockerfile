@@ -115,6 +115,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/cms/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cms/.next/static     ./apps/cms/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cms/public           ./apps/cms/public
 
+# Next copies `.env` into the standalone output. It carries development
+# placeholders, and at runtime it would satisfy the env schema well enough for
+# the app to skip Infisical and boot against localhost, so it must not survive.
+# The build still needs it, which is why it is dropped here and not ignored
+RUN rm -f ./apps/cms/.env
+
 # Set the correct ownership
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

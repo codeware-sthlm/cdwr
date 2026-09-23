@@ -85,9 +85,17 @@ out
 # Infisical credentials (tools)
 .env.infisical
 
-# Local environment overrides (may contain secrets)
+# Personal environment overrides (may contain secrets). The shared, public
+# configuration lives in each app's committed .env
 .env.local
 *.env.local
+
+# ...except the workspace's own Nx knobs at the root, which are shared, public
+# and hold no secrets. Anchored so app-level files stay ignored
+!/.env.local
+
+# Generated offline copy of the vault (nx dx:secrets cms)
+*.env.offline
 
 .nx/self-healing
 
