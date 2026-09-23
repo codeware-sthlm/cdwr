@@ -144,6 +144,12 @@ export const SiteDefinitionSchema = z
       (definition.media ?? []).map(({ filename }) => filename)
     );
     const tagSlugs = new Set((definition.tags ?? []).map(({ slug }) => slug));
+    const categorySlugs = new Set(
+      (definition.categories ?? []).map(({ slug }) => slug)
+    );
+    const formTitles = new Set(
+      (definition.forms ?? []).map(({ title }) => title)
+    );
 
     (definition.navigation ?? []).forEach(({ reference }, index) => {
       const known = reference.relationTo === 'pages' ? pageSlugs : postSlugs;
@@ -160,6 +166,36 @@ export const SiteDefinitionSchema = z
       if (filename !== undefined && !filenames.has(filename)) {
         problem(`No media named '${filename}' in this definition`, path);
       }
+
+      const title = ref['lookupTitle'];
+      if (title !== undefined && !formTitles.has(title)) {
+        problem(`No form named '${title}' in this definition`, path);
+      }
+
+      // `lookupSlug` is worn by tags, categories and reusable content alike, so
+      // the field it sits on is what says which. Reusable content is the one a
+      // definition cannot state — it resolves against the tenant, so it is left
+      // to the apply to report
+      const slug = ref['lookupSlug'];
+      const field = path[path.length - 1];
+      if (slug !== undefined) {
+        if (field === 'tags' && !tagSlugs.has(slug)) {
+          problem(`No tag '${slug}' in this definition`, path);
+        }
+        if (field === 'categories' && !categorySlugs.has(slug)) {
+          problem(`No category '${slug}' in this definition`, path);
+        }
+      }
+    }
+
+    // A link that points at a document by id carries exactly the identity a
+    // definition is not allowed to carry — and the id may not even be this
+    // tenant's. Nothing resolves these, so they would reach the database as-is
+    for (const path of documentIdLinksIn(definition)) {
+      problem(
+        "A link cannot point at a document by id. Use type: 'custom' with a url, or state the page and link to its slug",
+        path
+      );
     }
 
     (definition.media ?? []).forEach((item, index) => {
@@ -201,6 +237,35 @@ function* forbiddenKeysIn(
       yield [[...path, key], key];
     }
     yield* forbiddenKeysIn(child, [...path, key]);
+  }
+}
+
+/**
+ * Walks for a link stated as `{ relationTo, value }` — Payload's shape for
+ * pointing at a document by id.
+ *
+ * Navigation's own references carry `relationTo` with a `lookupSlug` instead,
+ * so both keys are required before anything is reported.
+ */
+function* documentIdLinksIn(
+  value: unknown,
+  path: Array<string | number> = []
+): Generator<Array<string | number>> {
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      yield* documentIdLinksIn(item, [...path, index]);
+    }
+    return;
+  }
+  if (!value || typeof value !== 'object') {
+    return;
+  }
+  if ('relationTo' in value && 'value' in value) {
+    yield path;
+    return;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    yield* documentIdLinksIn(child, [...path, key]);
   }
 }
 

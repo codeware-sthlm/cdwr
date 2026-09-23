@@ -170,6 +170,89 @@ describe('SiteDefinitionSchema', () => {
     );
   });
 
+  it('refuses a link that points at a document by id', () => {
+    const errors = errorsOf({
+      ...minimal,
+      pages: [
+        {
+          name: 'Home',
+          slug: 'home',
+          layout: [
+            {
+              blockType: 'hero',
+              heading: 'Hi',
+              actions: [
+                {
+                  link: {
+                    type: 'reference',
+                    label: 'Go',
+                    reference: { relationTo: 'pages', value: 42 }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(errors).toContainEqual(expect.stringContaining('by id'));
+  });
+
+  it('allows a custom link, which carries no identity', () => {
+    const errors = errorsOf({
+      ...minimal,
+      pages: [
+        {
+          name: 'Home',
+          slug: 'home',
+          layout: [
+            {
+              blockType: 'hero',
+              heading: 'Hi',
+              actions: [
+                { link: { type: 'custom', url: '/blocks', label: 'Go' } }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(errors).toEqual([]);
+  });
+
+  it('refuses a form reference the definition does not state', () => {
+    const errors = errorsOf({
+      ...minimal,
+      pages: [
+        {
+          name: 'Home',
+          slug: 'home',
+          layout: [{ blockType: 'form', form: { lookupTitle: 'Nowhere' } }]
+        }
+      ]
+    });
+
+    expect(errors).toContainEqual("No form named 'Nowhere' in this definition");
+  });
+
+  it('accepts a form reference the definition states', () => {
+    const errors = errorsOf({
+      ...minimal,
+      forms: [{ title: 'Contact', confirmation: 'Thanks' }],
+      pages: [
+        {
+          name: 'Home',
+          slug: 'home',
+          layout: [{ blockType: 'form', form: { lookupTitle: 'Contact' } }]
+        }
+      ]
+    });
+
+    expect(errors).toEqual([]);
+  });
+
   it('keeps a block it does not understand, rather than refusing it', () => {
     // Block internals are Payload's to judge, inside the rolled-back
     // transaction the dry run uses. This schema only asks that it is a block

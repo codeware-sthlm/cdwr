@@ -123,7 +123,17 @@ export async function applySiteDefinition(
     return idOf(result);
   };
 
-  const transactionID = (await payload.db.beginTransaction()) ?? undefined;
+  const transactionID = await payload.db.beginTransaction();
+
+  // Everything here leans on the rollback. Without a transaction a dry run
+  // would write for real and still report itself rolled back, which is a worse
+  // outcome than refusing to run
+  if (transactionID === null || transactionID === undefined) {
+    throw new Error(
+      'The database adapter started no transaction, so a dry run could not be rolled back. Refusing to apply.'
+    );
+  }
+
   const ctx = { locale, transactionID };
 
   try {
@@ -305,11 +315,9 @@ export async function applySiteDefinition(
     // the whole apply rather than commit a site that is quietly incomplete
     const keep = !dryRun && unresolved.length === 0;
 
-    if (transactionID) {
-      await (keep
-        ? payload.db.commitTransaction(transactionID)
-        : payload.db.rollbackTransaction(transactionID));
-    }
+    await (keep
+      ? payload.db.commitTransaction(transactionID)
+      : payload.db.rollbackTransaction(transactionID));
 
     return {
       tenant: { slug: tenantSlug, id: tenant.id },
@@ -319,9 +327,7 @@ export async function applySiteDefinition(
       extra
     };
   } catch (error) {
-    if (transactionID) {
-      await payload.db.rollbackTransaction(transactionID);
-    }
+    await payload.db.rollbackTransaction(transactionID);
     throw error;
   }
 }
