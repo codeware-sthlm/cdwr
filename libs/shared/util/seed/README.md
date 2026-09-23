@@ -92,6 +92,33 @@ Payload's validation by the time you read it.
 
 `--dry-run` stops there. Without it, the same work runs again and commits.
 
+## See what has drifted
+
+An apply only fills gaps, so it says nothing about content the definition does
+not mention. `diff-site` is the other half, and it writes nothing at all:
+
+```sh
+cdwr tenant diff-site --env=development --tenant=moon --definition=…
+```
+
+```text
+drift    collection  document           meaning
+missing  pages       blocks             named by the definition, not in the tenant
+extra    pages       christmas-offer    in the tenant, not named by the definition
+
+1 missing, 24 extra, 4 in both
+```
+
+`extra` is a statement, not a proposal — nothing deletes it. It exists because
+content drifting away from its definition should be visible rather than
+discovered later.
+
+The same list rides along in the apply report as `extra`, so a plan shows it too.
+
+**Field-level drift is not detected.** A page that exists counts as present
+however far its contents have wandered, so this answers "is it there", not "is
+it the same".
+
 ## Three things it will not do
 
 **It never updates.** There is no `updated` outcome: a document that is already

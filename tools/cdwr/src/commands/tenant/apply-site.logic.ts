@@ -18,11 +18,19 @@ export type UnresolvedReference = {
   lookup: string;
 };
 
+/** A document the tenant holds that the definition does not name. */
+export type ExtraDocument = {
+  collection: string;
+  identifier: string;
+  id: number;
+};
+
 export type ApplyReport = {
   tenant: { slug: string; id: number };
   dryRun: boolean;
   outcomes: Array<AppliedOutcome>;
   unresolved: Array<UnresolvedReference>;
+  extra: Array<ExtraDocument>;
 };
 
 /** Reads the report the script printed, or says the run produced none. */
