@@ -1,3 +1,5 @@
+import { writeSync } from 'node:fs';
+
 /**
  * Fails a script that ends without finishing.
  *
@@ -24,13 +26,18 @@
  * fire. `beforeExit` fires regardless, because this module was reached.
  */
 process.on('beforeExit', () => {
-  console.error(
+  // Written synchronously: `process.exit` drops whatever a pipe still buffers,
+  // and a guard against silent failure that fails silently is worth nothing.
+  // Same reason `run-migrations.ts` reports this way
+  writeSync(
+    2,
     [
       '',
       'Error: the script ended without completing.',
       '',
       '  Nothing was reported and nothing was done — see COD-433. It is',
       '  timing-dependent, so running it again will often work.',
+      '',
       ''
     ].join('\n')
   );
