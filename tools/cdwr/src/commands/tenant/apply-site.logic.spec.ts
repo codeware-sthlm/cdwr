@@ -15,6 +15,7 @@ const report = (overrides: Partial<ApplyReport> = {}): ApplyReport => ({
   dryRun: true,
   outcomes: [],
   unresolved: [],
+  extra: [],
   ...overrides
 });
 

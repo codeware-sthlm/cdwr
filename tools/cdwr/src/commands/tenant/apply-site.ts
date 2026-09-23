@@ -31,7 +31,7 @@ import {
  * transaction that is then rolled back, so Payload validates every field and
  * relationship on the way in. What the plan shows is what the write did.
  */
-async function applyInPayload(
+export async function applyInPayload(
   root: string,
   environment: Environment,
   databaseUrl: string,
@@ -136,7 +136,7 @@ export default defineCommand<
       notes: planNotes(report),
       target: { environment, name: tenant },
       nothing: nothingToApply(report)
-        ? `'${tenant}' already matches the definition`
+        ? `'${tenant}' already has everything the definition names`
         : undefined,
       data: { environment, databaseUrl, tenant, definitionPath, report }
     };

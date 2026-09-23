@@ -80,6 +80,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./tenant/apply-site').then((m) => m.default)
   },
   {
+    path: ['tenant', 'diff-site'],
+    summary: "How a tenant's site differs from a definition",
+    danger: 'read',
+    load: () => import('./tenant/diff-site').then((m) => m.default)
+  },
+  {
     path: ['tenant', 'rotate-key'],
     summary: "Rotate a tenant's Payload API key everywhere",
     danger: 'destructive',
