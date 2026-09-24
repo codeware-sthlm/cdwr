@@ -56,9 +56,14 @@ export async function ensureNavigation(
   });
 
   if (navigations.totalDocs) {
-    const { items, id: docId } = navigations.docs[0];
+    const { items: storedItems, id: docId } = navigations.docs[0];
 
-    if (items?.length) {
+    // An item whose page was deleted keeps its row but loses its reference,
+    // and it points at nothing — so it is not navigation and is left behind
+    // rather than compared against or written back
+    const items = (storedItems ?? []).filter((item) => item.reference);
+
+    if (items.length) {
       // Add the missing items
       const missingItems = dataItems.filter(
         ({ reference }) =>
@@ -68,7 +73,7 @@ export async function ensureNavigation(
               getId(item.reference.value) === getId(reference.value)
           )
       );
-      if (missingItems.length) {
+      if (missingItems.length || items.length !== storedItems?.length) {
         // Merge current items with the new ones
         itemsToAdd = items
           .concat(missingItems)
