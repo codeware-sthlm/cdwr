@@ -126,14 +126,14 @@ export default defineCommand<
       prompt: 'Slug? Leave empty to derive it from the name',
       description: 'Overrides the slug derived from the name',
       placeholder: 'derived from the name',
-      default: ''
+      optional: true
     }),
     deployment: input.string({
       prompt: 'Deployment name? Leave empty for a workspace that stays local',
       placeholder: 'none',
       description:
         'Its Infisical folder and the end of its Fly app names. It cannot be changed later',
-      default: ''
+      optional: true
     })
   },
 
@@ -141,11 +141,12 @@ export default defineCommand<
     ctx,
     { environment, previewApp, name, locales, slug, deployment }
   ) {
+    // Both optional, so undefined when nobody could be asked
     const wanted = {
       name,
       locales,
-      slug: slug || undefined,
-      deployment: deployment || undefined
+      slug: slug?.trim() || undefined,
+      deployment: deployment?.trim() || undefined
     };
 
     // Catch it here rather than as a validation error after a tunnel has been

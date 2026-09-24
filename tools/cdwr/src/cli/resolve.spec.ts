@@ -47,6 +47,21 @@ describe('an empty answer', () => {
     ).rejects.toThrow('A value is required');
   });
 
+  it('is asked for and accepted when the input is optional', async () => {
+    // `default` would skip the prompt entirely; `optional` is the one that
+    // still asks and lets the answer be nothing
+    const { ctx, ui } = context(['']);
+
+    await expect(
+      resolveInputs(
+        ctx,
+        { x: input.string({ prompt: 'Which workspace?', optional: true }) },
+        {}
+      )
+    ).resolves.toEqual({ x: '' });
+    expect(ui.asked).toEqual(['Which workspace?']);
+  });
+
   it('is accepted when a default says the input is optional', async () => {
     await expect(
       ask(input.string({ prompt: 'Slug?', default: '' }))

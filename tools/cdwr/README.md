@@ -37,8 +37,8 @@ and nothing is asked.
 | `--non-interactive` | Never prompt; a missing input is a usage error naming the flag. |
 | `--help`            | Flags, what the command needs, and how dangerous it is.         |
 
-Flags come first; anything missing is asked for. An input is required unless it declares a
-default, and an empty answer to a required prompt is refused rather than passed along. Without a terminal (CI, an agent) nothing is
+Flags come first; anything missing is asked for. An input is required unless it is optional or
+declares a default, and an empty answer to a required prompt is refused rather than passed along. Without a terminal (CI, an agent) nothing is
 asked. Exit codes: 0 ok, 1 failed, 2 usage, 130 cancelled.
 
 Confirmation follows the command's danger level: read-only commands never ask, everything else
