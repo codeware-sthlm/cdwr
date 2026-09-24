@@ -28,11 +28,42 @@ describe('the cdwr.io definition', () => {
     expect(JSON.stringify(cdwrIo)).not.toMatch(/apiKey|lookupApiKey/);
   });
 
-  it('states the form its home page points at', () => {
+  it('states the form its start page points at', () => {
     // The reference that would otherwise publish a page with a dead form block
     const titles = (cdwrIo.forms ?? []).map(({ title }) => title);
 
     expect(titles).toContain('Contact');
+  });
+
+  it('states the routes the content plan lays out', () => {
+    // The gallery's index and entry pages are route chrome built from the
+    // block registry, so they are not authored here
+    const slugs = cdwrIo.pages.map(({ slug }) => slug);
+
+    expect(slugs).toEqual([
+      'home',
+      'blocks',
+      'studio',
+      'architecture',
+      'devlog',
+      'start'
+    ]);
+  });
+
+  it('files every post under a category it states', () => {
+    const slugs = (cdwrIo.categories ?? []).map(({ slug }) => slug);
+
+    for (const post of cdwrIo.posts ?? []) {
+      for (const { lookupSlug } of post.categories ?? []) {
+        expect(slugs).toContain(lookupSlug);
+      }
+    }
+  });
+
+  it('still carries the placeholder the testimonial is waiting on', () => {
+    // A bracket left in production is the failure this guards against; it
+    // fails loudly here first, when the real quote arrives and this is updated
+    expect(JSON.stringify(cdwrIo)).toMatch(/\[A CLIENT SENTENCE/);
   });
 
   it('navigates only to pages it states', () => {
