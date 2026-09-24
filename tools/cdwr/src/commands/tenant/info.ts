@@ -84,12 +84,13 @@ export default defineCommand<
       prompt: 'Which workspace? Leave empty for all of them',
       description: 'A slug for one workspace in full; empty for the overview',
       placeholder: 'all',
-      default: ''
+      optional: true
     })
   },
 
   async plan(ctx, { environment, previewApp, tenant }) {
-    const slug = tenant.trim() || undefined;
+    // Optional, so undefined when nobody could be asked
+    const slug = tenant?.trim() || undefined;
     const databaseUrl = await resolveDatabaseUrl(environment, previewApp);
 
     const tenants = await ctx.ui.task(
