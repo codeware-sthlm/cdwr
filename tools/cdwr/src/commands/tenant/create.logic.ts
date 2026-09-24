@@ -1,3 +1,8 @@
+import {
+  MAX_DEPLOYMENT_NAME_LENGTH,
+  deploymentNameIssue
+} from '@codeware/shared/util/pure';
+
 /**
  * Reading what the creation script reported, and checking what is typed at it.
  *
@@ -34,20 +39,28 @@ export function parseCreatedTenant(stdout: string): CreatedTenant {
 }
 
 /**
- * What a deployment name has to look like, checked before anything runs.
+ * Why a deployment name cannot be used, in words — or nothing when it can.
  *
- * It ends up in Fly app names and in an Infisical path, and it cannot be
- * changed once saved — so a bad one is worth catching at the prompt rather
- * than as a validation error after the database has been reached.
+ * The rule itself is the platform's (`deploymentNameIssue`), because the name
+ * ends up in Fly app names and an Infisical path and cannot be changed once
+ * saved. Catching it at the prompt beats a validation error after the
+ * database has been reached.
  */
 export function deploymentNameProblem(name: string): string | undefined {
-  if (!/^[a-z0-9-]+$/.test(name)) {
-    return 'Use lowercase letters, digits and hyphens only';
+  switch (deploymentNameIssue(name)) {
+    case null:
+      return undefined;
+    case 'empty':
+      return 'It cannot be empty';
+    case 'characters':
+      return 'Use lowercase letters, digits and hyphens only';
+    case 'hyphens':
+      return 'It cannot start or end with a hyphen, or contain two in a row';
+    case 'reserved':
+      return 'That name is one the deploy builds for itself';
+    case 'too-long':
+      return `At most ${MAX_DEPLOYMENT_NAME_LENGTH} characters`;
   }
-  if (name.startsWith('-') || name.endsWith('-')) {
-    return 'It cannot start or end with a hyphen';
-  }
-  return undefined;
 }
 
 /** The steps a creation plan shows, in the order they happen. */

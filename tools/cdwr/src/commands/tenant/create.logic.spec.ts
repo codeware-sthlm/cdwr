@@ -48,9 +48,18 @@ describe('deploymentNameProblem', () => {
     );
   });
 
-  it.each(['-demo', 'demo-'])('rejects %s for its hyphen', (name) => {
-    expect(deploymentNameProblem(name)).toBe(
-      'It cannot start or end with a hyphen'
+  it.each(['-demo', 'demo-', 'de--mo'])(
+    'rejects %s for its hyphens',
+    (name) => {
+      expect(deploymentNameProblem(name)).toBe(
+        'It cannot start or end with a hyphen, or contain two in a row'
+      );
+    }
+  );
+
+  it('rejects a name longer than a Fly app label leaves room for', () => {
+    expect(deploymentNameProblem('a'.repeat(41))).toMatch(
+      /^At most \d+ characters$/
     );
   });
 });
