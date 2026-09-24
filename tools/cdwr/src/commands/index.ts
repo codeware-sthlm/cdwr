@@ -68,6 +68,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./fly/patch').then((m) => m.default)
   },
   {
+    path: ['tenant', 'create'],
+    summary: 'Create an empty workspace in Payload',
+    danger: 'mutate',
+    load: () => import('./tenant/create').then((m) => m.default)
+  },
+  {
     path: ['tenant', 'provision'],
     summary: "Set up a tenant's Infisical folders and API key from Payload",
     danger: 'spends-money',
