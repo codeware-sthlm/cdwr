@@ -15,6 +15,7 @@ type TenantContext = {
  * **In development**, tenant API key is resolved from seed data via slug:
  * - First tries `X-Tenant-Host` header to resolve the slug from the host (`{slug}.localhost`).
  * - Falling back to `TENANT_ID`
+ * - Then to `PAYLOAD_API_KEY`, for a workspace the seed does not describe
  *
  * Uses React cache() for per-request memoization to avoid redundant lookups.
  *
@@ -38,13 +39,10 @@ export const getTenantContext = cache(
 
     // In development, get slug from X-Tenant-Host header or the tenant ID
     const headersList = await headers();
-    let tenantSlug = '';
-    if (headersList.has('x-tenant-host')) {
-      tenantSlug = headersList.get('x-tenant-host')?.split('.')[0] || '';
-    }
-    if (!tenantSlug) {
-      tenantSlug = APP_MODE.tenantId;
-    }
+    const hostSlug = headersList.has('x-tenant-host')
+      ? headersList.get('x-tenant-host')?.split('.')[0] || ''
+      : '';
+    const tenantSlug = hostSlug || APP_MODE.tenantId;
 
     const tenant = await resolveTenantSeedFromSlug(tenantSlug);
     if (tenant) {
@@ -54,7 +52,19 @@ export const getTenantContext = cache(
       };
     }
 
-    console.error(`Failed to resolve tenant from slug: ${tenantSlug}`);
+    // A workspace made by `cdwr tenant create` is not in the seed, so its key
+    // comes from the environment the way a deployed tenant's does. Only when
+    // the slug is this process's own: behind the proxy one process serves
+    // several hosts, and a single key cannot stand for all of them
+    if (!hostSlug && APP_MODE.apiKey) {
+      return { tenantApiKey: APP_MODE.apiKey };
+    }
+
+    console.error(
+      `No API key for '${tenantSlug}'. The development seed does not describe ` +
+        'this workspace, so set PAYLOAD_API_KEY to the key ' +
+        '`cdwr tenant create` reported for it.'
+    );
     return null;
   }
 );

@@ -6,7 +6,7 @@ import { manageSeedData } from './manage-seed-data';
  * Aimed at being used in **development** to simulate multi-tenancy.
  *
  * @param slug - The tenant slug to resolve the tenant from.
- * @returns Tenant seed data or `null` if tenant not found.
+ * @returns Tenant seed data, or `null` when the seed does not describe it.
  */
 export const resolveTenantSeedFromSlug = async (slug: string) => {
   if (!slug) {
@@ -22,11 +22,8 @@ export const resolveTenantSeedFromSlug = async (slug: string) => {
   }
 
   // Lookup tenant by matching against tenant slugs
-  const tenant = seedData.tenants.find((t) => t.slug === slug);
-  if (!tenant) {
-    console.error(`Tenant not found for slug ${slug}, verify seed data setup`);
-    return null;
-  }
-
-  return tenant;
+  // Not finding one is not an error here: the seed describes the workspaces it
+  // created and nothing else, and a caller may well have another way to
+  // resolve the tenant. Each caller says what a miss means for it
+  return seedData.tenants.find((t) => t.slug === slug) ?? null;
 };
