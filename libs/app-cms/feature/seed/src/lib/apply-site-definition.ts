@@ -1,9 +1,9 @@
 import { convertMarkdownToLexical } from '@codeware/app-cms/util/content-templates';
 import type { Page, Post, Tenant } from '@codeware/shared/util/payload-types';
-import { bundledMediaPath } from '@codeware/shared/util/seed';
 import { SiteDefinitionSchema } from '@codeware/shared/util/seed';
 import type { BundledMediaFile } from '@codeware/shared/util/seed';
 import type { SiteDefinition } from '@codeware/shared/util/seed';
+import { bundledMediaPath } from '@codeware/shared/util/seed/site-definitions';
 import type { Payload, TypedLocale } from 'payload';
 
 import { type ExtraDocument, findExtraDocuments } from './find-extra-documents';
@@ -65,6 +65,29 @@ export type ApplyOptions = {
    */
   mediaBaseUrl?: string;
 };
+
+/**
+ * The locale a workspace writes in.
+ *
+ * Kept on its site settings rather than the tenant, so a workspace with none
+ * yet falls back to English — which is what a fresh apply does before the seed
+ * creates them.
+ */
+async function tenantLocale(
+  payload: Payload,
+  tenantId: number,
+  transactionID: string | number | undefined
+): Promise<TypedLocale> {
+  const { docs } = await payload.find({
+    collection: 'site-settings',
+    where: { tenant: { in: [tenantId] } },
+    depth: 0,
+    limit: 1,
+    req: { transactionID }
+  });
+
+  return (docs[0]?.general?.defaultLocale as TypedLocale) ?? 'en';
+}
 
 /**
  * Turns the emails a post names into user ids.
@@ -133,7 +156,7 @@ export async function applySiteDefinition(
   definition: SiteDefinition,
   options: ApplyOptions
 ): Promise<ApplyReport> {
-  const { tenantSlug, dryRun = true, locale = 'en', mediaBaseUrl } = options;
+  const { tenantSlug, dryRun = true, locale, mediaBaseUrl } = options;
 
   const parsed = SiteDefinitionSchema.safeParse(definition);
   if (!parsed.success) {
@@ -191,7 +214,16 @@ export async function applySiteDefinition(
     );
   }
 
-  const ctx = { locale, transactionID };
+  // The tenant's own locale unless the caller insists. Defaulting to English
+  // wrote a Swedish workspace's localized fields under a locale its site never
+  // reads — and `cdwr tenant apply-site` passes none
+  // The workspace's own locale unless the caller insists. Defaulting to
+  // English wrote a Swedish workspace's localized fields under a locale its
+  // site never reads — and `cdwr tenant apply-site` passes none
+  const ctx = {
+    locale: locale ?? (await tenantLocale(payload, tenant.id, transactionID)),
+    transactionID
+  };
 
   try {
     for (const tag of definition.tags ?? []) {

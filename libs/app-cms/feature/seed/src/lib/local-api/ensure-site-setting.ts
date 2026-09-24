@@ -57,11 +57,19 @@ export async function ensureSiteSetting(
     // `requireResolvableRecipient` refuses to save it
     const hasFormsContent = !!forms?.notificationRecipients?.length;
 
+    // Legal pages count too: without them a definition that adds a privacy
+    // or terms page is silently ignored on an already-seeded workspace
+    const hasLegalContent =
+      !legalFromProps ||
+      ((!legalFromProps.privacyPage || !!legal?.privacyPage) &&
+        (!legalFromProps.termsPage || !!legal?.termsPage));
+
     if (
       general.appName &&
       general.landingPage &&
       hasFooterContent &&
-      hasFormsContent
+      hasFormsContent &&
+      hasLegalContent
     ) {
       return id;
     }
