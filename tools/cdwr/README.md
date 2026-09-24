@@ -37,11 +37,13 @@ and nothing is asked.
 | `--non-interactive` | Never prompt; a missing input is a usage error naming the flag. |
 | `--help`            | Flags, what the command needs, and how dangerous it is.         |
 
-Flags come first; anything missing is asked for. Without a terminal (CI, an agent) nothing is
+Flags come first; anything missing is asked for. An input is required unless it declares a
+default, and an empty answer to a required prompt is refused rather than passed along. Without a terminal (CI, an agent) nothing is
 asked. Exit codes: 0 ok, 1 failed, 2 usage, 130 cancelled.
 
-Confirmation follows the command's danger level: read-only commands never ask, mutating ones ask
-on production, destructive ones always ask and make you type the target's name on production.
+Confirmation follows the command's danger level: read-only commands never ask, everything else
+asks wherever it runs, and destructive ones also make you type the target's name on production.
+A command prints its plan before asking, so the question is about what you have just read.
 Commands that change something append to `~/.cdwr/history.jsonl`; `cdwr history` shows it.
 Remembered inputs (environment, app) live in `~/.cdwr/prefs.json`.
 

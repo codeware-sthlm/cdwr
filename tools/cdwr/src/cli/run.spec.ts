@@ -63,14 +63,22 @@ describe('runCommand', () => {
     expect(r.ui.printed.outro[0]).toContain('Did it on production');
   });
 
-  it('confirms a mutating command only on production', async () => {
-    const preview = run('mutate', ['--environment', 'preview']);
+  it('confirms a mutating command wherever it runs', async () => {
+    // It prints a plan first, and a plan reads as a question — applying one
+    // unasked in development surprised someone into writing a site
+    const preview = run('mutate', ['--environment', 'preview'], [true]);
     expect(await preview.exit).toBe(EXIT.ok);
-    expect(preview.ui.asked).toEqual([]);
+    expect(preview.ui.asked).toEqual(['Continue?']);
 
     const production = run('mutate', ['--environment', 'production'], [true]);
     expect(await production.exit).toBe(EXIT.ok);
     expect(production.ui.asked).toEqual(['Continue on production?']);
+  });
+
+  it('applies nothing when a mutating command is declined', async () => {
+    const r = run('mutate', ['--environment', 'preview'], [false]);
+    expect(await r.exit).toBe(EXIT.cancelled);
+    expect(r.applied).toEqual([]);
   });
 
   it('asks for the typed name before a destructive production change', async () => {
@@ -121,7 +129,11 @@ describe('runCommand', () => {
   });
 
   it('records history for anything that changes something', async () => {
-    const r = run('mutate', ['--environment', 'preview', '--note', 'hi']);
+    const r = run(
+      'mutate',
+      ['--environment', 'preview', '--note', 'hi'],
+      [true]
+    );
     await r.exit;
     expect(r.history).toHaveLength(1);
     expect(r.history[0]).toMatchObject({

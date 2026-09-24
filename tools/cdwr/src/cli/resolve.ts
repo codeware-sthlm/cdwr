@@ -12,7 +12,20 @@ import {
   flagOf
 } from './inputs';
 
+/**
+ * An input states it is optional by carrying a default, or by being wrapped in
+ * `input.optional`. Everything else is required, whether it arrives as a flag
+ * or as an answer.
+ */
+const isOptional = (spec: InputSpec<unknown>): boolean =>
+  Boolean(spec.optional) || spec.default !== undefined;
+
 const validate = <T>(spec: InputSpec<T>, value: unknown, flag: string): T => {
+  // An empty string used to travel on and fail somewhere further away — against
+  // a database, or as a validation error on a field nobody set
+  if (!isOptional(spec) && typeof value === 'string' && !value.trim()) {
+    throw new UsageError(`--${flag}: a value is required`);
+  }
   if (!spec.schema) return value as T;
   try {
     return spec.schema.parse(value);
@@ -29,7 +42,11 @@ const validate = <T>(spec: InputSpec<T>, value: unknown, flag: string): T => {
 const validator =
   <T>(spec: InputSpec<T>) =>
   (value: string): string | undefined => {
-    if (!spec.schema) return undefined;
+    if (!spec.schema) {
+      return isOptional(spec) || value.trim()
+        ? undefined
+        : 'A value is required';
+    }
     const result = spec.schema.safeParse(value);
     return result.success
       ? undefined

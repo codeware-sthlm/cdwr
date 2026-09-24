@@ -30,6 +30,51 @@ const context = (
   return { ctx, ui };
 };
 
+/**
+ * A prompt is the last place a bad value can be caught cheaply. An empty
+ * answer used to travel on as an empty string and fail somewhere further
+ * away — against a database, or as a validation error on a field nobody set.
+ */
+describe('an empty answer', () => {
+  const ask = (spec: Parameters<typeof resolveInputs>[1]['x']) => {
+    const { ctx } = context(['']);
+    return resolveInputs(ctx, { x: spec }, {});
+  };
+
+  it('is refused when the input has no default', async () => {
+    await expect(
+      ask(input.string({ prompt: 'Which tenant?' }))
+    ).rejects.toThrow('A value is required');
+  });
+
+  it('is accepted when a default says the input is optional', async () => {
+    await expect(
+      ask(input.string({ prompt: 'Slug?', default: '' }))
+    ).resolves.toEqual({ x: '' });
+  });
+
+  it('is refused as a flag too, before the command does any work', async () => {
+    const { ctx } = context([]);
+
+    await expect(
+      resolveInputs(
+        ctx,
+        { x: input.string({ prompt: 'Which tenant?' }) },
+        {
+          x: ''
+        }
+      )
+    ).rejects.toThrow('--x: a value is required');
+  });
+
+  it('is refused for a secret, which has no default either', async () => {
+    const { ctx } = context(['']);
+    await expect(
+      resolveInputs(ctx, { x: input.secret({ prompt: 'Token?' }) }, {})
+    ).rejects.toThrow('A value is required');
+  });
+});
+
 describe('resolveInputs', () => {
   const inputs = {
     environment: input.enum(['preview', 'production'], {
