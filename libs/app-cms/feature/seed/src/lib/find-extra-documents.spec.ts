@@ -45,11 +45,11 @@ describe('findExtraDocuments', () => {
     );
   });
 
-  it('matches media on the stem, since an upload may rename the file', async () => {
+  it('matches media the way the apply looks it up, through a rename', async () => {
     const payload = payloadWith({
       pages: [{ id: 1, slug: 'home' }],
       media: [
-        { id: 4, filename: 'logo.png' },
+        { id: 4, filename: 'moon-logo-1.png' },
         { id: 5, filename: 'unrelated.png' }
       ]
     });

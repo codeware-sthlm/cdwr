@@ -1,5 +1,8 @@
+import { convertMarkdownToLexical } from '@codeware/app-cms/util/content-templates';
 import type { Page, Post, Tenant } from '@codeware/shared/util/payload-types';
+import { bundledMediaPath } from '@codeware/shared/util/seed';
 import { SiteDefinitionSchema } from '@codeware/shared/util/seed';
+import type { BundledMediaFile } from '@codeware/shared/util/seed';
 import type { SiteDefinition } from '@codeware/shared/util/seed';
 import type { Payload, TypedLocale } from 'payload';
 
@@ -16,6 +19,7 @@ import {
   type UnresolvedReference,
   resolveBlockReferences
 } from './resolve-block-references';
+import { resolveRichText } from './resolve-rich-text';
 
 /** What became of one document. */
 export type ApplyOutcome = {
@@ -53,7 +57,59 @@ export type ApplyOptions = {
    */
   dryRun?: boolean;
   locale?: TypedLocale;
+  /**
+   * Where bundled media is served from, when it is not on disk.
+   *
+   * A deployed seed has no repository files, so it passes `SEED_DATA_URL`
+   * here and every bundled filename resolves to a URL instead.
+   */
+  mediaBaseUrl?: string;
 };
+
+/**
+ * Turns the emails a post names into user ids.
+ *
+ * Users belong to the workspace rather than to the site, so a definition never
+ * states them — these resolve against whoever is already there. An email that
+ * matches nobody is reported like any other reference that leads nowhere,
+ * rather than quietly publishing a post with no author.
+ */
+async function resolveAuthors(
+  payload: Payload,
+  authors: Array<{ lookupEmail: string }> | undefined,
+  options: {
+    transactionID: string | number | undefined;
+    unresolved: Array<UnresolvedReference>;
+  }
+): Promise<Array<number>> {
+  const { transactionID, unresolved } = options;
+  const resolved: Array<number> = [];
+
+  for (const { lookupEmail } of authors ?? []) {
+    const { docs } = await payload.find({
+      collection: 'users',
+      where: { email: { equals: lookupEmail } },
+      depth: 0,
+      limit: 1,
+      req: { transactionID }
+    });
+
+    const user = docs[0];
+
+    if (!user) {
+      unresolved.push({
+        blockType: 'post',
+        field: 'authors',
+        lookup: lookupEmail
+      });
+      continue;
+    }
+
+    resolved.push(user.id);
+  }
+
+  return resolved;
+}
 
 /**
  * Applies a site definition to a tenant that already exists.
@@ -77,7 +133,7 @@ export async function applySiteDefinition(
   definition: SiteDefinition,
   options: ApplyOptions
 ): Promise<ApplyReport> {
-  const { tenantSlug, dryRun = true, locale = 'en' } = options;
+  const { tenantSlug, dryRun = true, locale = 'en', mediaBaseUrl } = options;
 
   const parsed = SiteDefinitionSchema.safeParse(definition);
   if (!parsed.success) {
@@ -100,6 +156,7 @@ export async function applySiteDefinition(
   // rather than the seed's store, which keys everything by a tenant api key —
   // the one thing a definition never carries
   const tags = new Map<string, number>();
+  const categories = new Map<string, number>();
   const media = new Map<string, number>();
   const forms = new Map<string, number>();
   const pages = new Map<string, number>();
@@ -149,10 +206,13 @@ export async function applySiteDefinition(
     }
 
     for (const category of definition.categories ?? []) {
-      record(
-        'categories',
+      categories.set(
         category.slug,
-        await ensureCategory(payload, { ...category, tenant: tenant.id }, ctx)
+        record(
+          'categories',
+          category.slug,
+          await ensureCategory(payload, { ...category, tenant: tenant.id }, ctx)
+        )
       );
     }
 
@@ -166,9 +226,14 @@ export async function applySiteDefinition(
             payload,
             {
               alt: item.alt,
-              external: false,
+              external: item.external ?? false,
               filename: item.filename,
-              filePath: item.filePath,
+              filePath:
+                item.filePath ??
+                bundledMediaPath(
+                  item.filename as BundledMediaFile,
+                  mediaBaseUrl
+                ),
               tags: (item.tags ?? []).flatMap(({ lookupSlug }) => {
                 const id = tags.get(lookupSlug);
                 if (id === undefined) {
@@ -209,8 +274,13 @@ export async function applySiteDefinition(
     };
 
     for (const page of definition.pages) {
-      const layout = page.layout.map((block) =>
-        resolveBlockReferences(block, resolver, unresolved)
+      const layout = await Promise.all(
+        page.layout.map(async (block) =>
+          resolveRichText(
+            payload,
+            resolveBlockReferences(block, resolver, unresolved)
+          )
+        )
       );
 
       pages.set(
@@ -245,13 +315,37 @@ export async function applySiteDefinition(
           await ensurePost(
             payload,
             {
-              authors: [],
-              categories: [],
-              content: post.content as unknown as Post['content'],
-              createdAt: new Date().toISOString(),
+              authors: await resolveAuthors(payload, post.authors, {
+                transactionID,
+                unresolved
+              }),
+              categories: (post.categories ?? []).flatMap(({ lookupSlug }) => {
+                const id = categories.get(lookupSlug);
+                if (id === undefined) {
+                  unresolved.push({
+                    blockType: 'post',
+                    field: 'categories',
+                    lookup: lookupSlug
+                  });
+                  return [];
+                }
+                return [id];
+              }),
+              // Markdown, like a page's body. The cast that used to stand
+              // here put the raw string where Payload expects Lexical
+              content: (await convertMarkdownToLexical(
+                payload.config,
+                post.content
+              )) as unknown as Post['content'],
+              // A stated date keeps the listing order stable between applies
+              createdAt: post.createdAt ?? new Date().toISOString(),
+              heroImage: post.heroImage
+                ? (media.get(post.heroImage.lookupFilename) ?? null)
+                : undefined,
               slug: post.slug,
               tenant: tenant.id,
-              title: post.title
+              title: post.title,
+              visibility: post.visibility
             },
             ctx
           )
@@ -291,13 +385,46 @@ export async function applySiteDefinition(
     }
 
     if (definition.siteSettings) {
+      const { general, legal, ...rest } = definition.siteSettings;
+
+      // These name a page the same way everything else does, so they have to
+      // be resolved the same way. Spreading them through put the reference
+      // object itself into the database
+      const page = (ref: { lookupSlug: string } | undefined, field: string) => {
+        if (!ref) {
+          return undefined;
+        }
+        const id = pages.get(ref.lookupSlug);
+        if (id === undefined) {
+          unresolved.push({
+            blockType: 'site-settings',
+            field,
+            lookup: ref.lookupSlug
+          });
+          return undefined;
+        }
+        return id;
+      };
+
       record(
         'site-settings',
         tenantSlug,
         await ensureSiteSetting(
           payload,
           {
-            ...definition.siteSettings,
+            ...rest,
+            // Always present: `ensureSiteSetting` reads through it when
+            // filling in what a document is missing
+            general: {
+              ...general,
+              landingPage: page(general?.landingPage, 'landingPage')
+            },
+            ...(legal && {
+              legal: {
+                privacyPage: page(legal.privacyPage, 'privacyPage'),
+                termsPage: page(legal.termsPage, 'termsPage')
+              }
+            }),
             tenant: tenant.id
           } as unknown as Parameters<typeof ensureSiteSetting>[1],
           ctx

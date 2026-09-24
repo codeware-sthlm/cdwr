@@ -77,12 +77,19 @@ const MATCHERS = [
   })
 ];
 
-/**
- * Media is stored with its extension and may have been renamed on upload, so
- * `logo` in a definition and `logo-1.png` in the tenant are the same picture.
- * Everything else matches exactly.
- */
 const stem = (value: string) => value.replace(/\.[^.]+$/, '');
+
+/**
+ * Whether a stored file is the one a definition asked for.
+ *
+ * Uploading renames: a definition states `abstract-image-1.jpg` and the tenant
+ * ends up with `moon-abstract-image-1.jpg`. `ensureMedia` finds it again with a
+ * `contains` on the stem, so this has to ask the same question — matching
+ * exactly here would report every media file as extra while the apply reported
+ * the very same file as already there.
+ */
+const isNamedMedia = (stored: string, wanted: Set<string>) =>
+  [...wanted].some((name) => stem(stored).includes(stem(name)));
 
 /**
  * What a tenant holds that a definition does not name.
@@ -114,9 +121,7 @@ export async function findExtraDocuments(
 
   for (const { collection, field, named } of MATCHERS) {
     const isMedia = collection === 'media';
-    const wanted = new Set(
-      named(definition).map((value) => (isMedia ? stem(value) : value))
-    );
+    const wanted = new Set(named(definition));
 
     const { docs } = await payload.find({
       collection,
@@ -136,7 +141,9 @@ export async function findExtraDocuments(
         continue;
       }
 
-      if (!wanted.has(isMedia ? stem(value) : value)) {
+      const named = isMedia ? isNamedMedia(value, wanted) : wanted.has(value);
+
+      if (!named) {
         extra.push({ collection, identifier: value, id: doc.id as number });
       }
     }
