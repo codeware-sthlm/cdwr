@@ -1,5 +1,3 @@
-import { isAbsolute, resolve as resolvePath } from 'path';
-
 import { defineCommand } from '../../cli/command';
 import { CliError } from '../../cli/errors';
 import { input } from '../../cli/inputs';
@@ -14,6 +12,10 @@ import {
   previewAppInput
 } from '../../services/environment';
 import type { Environment } from '../../services/infisical';
+import {
+  definitionInput,
+  resolveDefinitionPath
+} from '../../services/site-definitions';
 
 import {
   type ApplyReport,
@@ -69,7 +71,7 @@ export default defineCommand<
     environment: ReturnType<typeof environmentInput<typeof ENVIRONMENTS>>;
     previewApp: ReturnType<typeof previewAppInput>;
     tenant: ReturnType<typeof input.string>;
-    definition: ReturnType<typeof input.string>;
+    definition: ReturnType<typeof definitionInput>;
   },
   PlanData
 >({
@@ -86,16 +88,11 @@ export default defineCommand<
       prompt: 'Which tenant slug?',
       description: 'The workspace to fill. It must already exist'
     }),
-    definition: input.string({
-      prompt: 'Path to the site definition',
-      description: 'A module exporting a SiteDefinition as its default'
-    })
+    definition: definitionInput('Which definition should fill it?')
   },
 
   async plan(ctx, { environment, previewApp, tenant, definition }) {
-    const definitionPath = isAbsolute(definition)
-      ? definition
-      : resolvePath(ctx.root, definition);
+    const definitionPath = resolveDefinitionPath(ctx.root, definition);
 
     const databaseUrl = await resolveDatabaseUrl(environment, previewApp);
 

@@ -87,8 +87,8 @@ the tag still works, looking like nothing in particular.
 cdwr tenant apply-site
 ```
 
-It asks for the environment, the tenant and the definition, or take them as
-flags:
+It asks for the environment, the tenant and the definition — the definitions in
+this directory are offered by name — or take them as flags:
 
 ```sh
 cdwr tenant apply-site \
@@ -98,8 +98,18 @@ cdwr tenant apply-site \
   --dry-run
 ```
 
-The tenant must already exist — this fills a workspace, it does not create one.
-Use `cdwr tenant provision` for that.
+The flag takes any path, so a definition kept outside this directory still
+applies; only the prompt is limited to the ones here.
+
+The tenant must already exist — this fills a workspace, it does not create one:
+
+```sh
+cdwr tenant create --env=development --name='Acme'
+```
+
+That makes the row, derives its slug and mints its API key, and stops there.
+`cdwr tenant provision` is a later step, and a different one: it sets up an
+existing workspace's Infisical folders and deploys it.
 
 ## What the report means
 
