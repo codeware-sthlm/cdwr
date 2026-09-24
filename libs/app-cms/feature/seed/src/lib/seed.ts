@@ -6,24 +6,18 @@ import type {
   SeedStrategy
 } from '@codeware/app-cms/util/env-schema';
 import { generateSeedIcon } from '@codeware/shared/ui/seed-icon-studio';
-import type { Page } from '@codeware/shared/util/payload-types';
 import type { Payload } from 'payload';
 
+import { applySiteDefinition } from './apply-site-definition';
+import { definitionFor } from './definition-for';
 import { loadInfisicalData } from './load-infisical-data';
 import { loadStaticData } from './load-static-data';
-import { customSeed } from './local-api/custom-seed';
-import { ensureCategory } from './local-api/ensure-category';
 import { ensureFaq } from './local-api/ensure-faq';
-import { ensureMedia } from './local-api/ensure-media';
-import { ensureNavigation } from './local-api/ensure-navigation';
-import { ensurePage } from './local-api/ensure-page';
 import { ensurePlace } from './local-api/ensure-place';
 import { ensurePlatformLabel } from './local-api/ensure-platform-label';
 import { ensurePlatformSettings } from './local-api/ensure-platform-settings';
-import { ensurePost } from './local-api/ensure-post';
 import { ensureSiteSetting } from './local-api/ensure-site-setting';
 import { ensureStockMedia } from './local-api/ensure-stock-media';
-import { ensureTag } from './local-api/ensure-tag';
 import { ensureTenant } from './local-api/ensure-tenant';
 import { ensureTour } from './local-api/ensure-tour';
 import { ensureUser } from './local-api/ensure-user';
@@ -287,374 +281,6 @@ export const seed = async (
           : `[SEED] >> Users up to date (count: ${userCount})`
       );
       seedError = seedError || userFailed > 0;
-    }
-
-    // CATEGORIES
-
-    if (seedData.categories.length > 0) {
-      let categoryFailed = 0;
-
-      for (const category of seedData.categories) {
-        const [entity] = store.lookupTenant(payload, [category.tenant]);
-
-        try {
-          const response = await ensureCategory(
-            payload,
-            {
-              name: category.name,
-              slug: category.slug,
-              tenant: entity.id
-            },
-            { locale: entity.locale, transactionID }
-          );
-
-          let categoryId: number;
-          if (typeof response === 'object') {
-            payload.logger.info(
-              `[SEED] Category '${category.slug}' on tenant #${entity.id} (${entity.locale})`
-            );
-            categoryId = response.id;
-          } else {
-            categoryId = Number(response);
-          }
-          // Save category to map to lookup id's later
-          store.category(
-            { apiKey: category.tenant.lookupApiKey, slug: category.slug },
-            categoryId
-          );
-        } catch (e) {
-          const error = e as Error;
-          payload.logger.error(error.message);
-          if ('data' in error) {
-            payload.logger.error(
-              `Category '${category.slug}'\n${JSON.stringify(error.data, null, 2)}`
-            );
-          }
-          categoryFailed++;
-        }
-      }
-      const { totalDocs: categoryCount } = await payload.count({
-        collection: 'categories',
-        req: { transactionID }
-      });
-      payload.logger.info(
-        categoryFailed
-          ? `[SEED] Problem occurred for ${categoryFailed}/${seedData.categories.length} categories (count: ${categoryCount})`
-          : `[SEED] >> Categories up to date (count: ${categoryCount})`
-      );
-      seedError = seedError || categoryFailed > 0;
-    }
-
-    // TAGS
-
-    if (seedData.tags.length > 0) {
-      let tagFailed = 0;
-
-      for (const tag of seedData.tags) {
-        const [entity] = store.lookupTenant(payload, [tag.tenant]);
-
-        try {
-          const response = await ensureTag(
-            payload,
-            {
-              brand: tag.brand,
-              name: tag.name,
-              slug: tag.slug,
-              tenant: entity.id
-            },
-            { locale: entity.locale, transactionID }
-          );
-
-          let tagId: number;
-          if (typeof response === 'object') {
-            payload.logger.info(
-              `[SEED] Tag '${tag.slug}' on tenant #${entity.id} (${entity.locale})`
-            );
-            tagId = response.id;
-          } else {
-            tagId = Number(response);
-          }
-          // Save tag to map to lookup id's later
-          store.tag({ apiKey: tag.tenant.lookupApiKey, slug: tag.slug }, tagId);
-        } catch (e) {
-          const error = e as Error;
-          payload.logger.error(error.message);
-          if ('data' in error) {
-            payload.logger.error(
-              `Tag '${tag.slug}'\n${JSON.stringify(error.data, null, 2)}`
-            );
-          }
-          tagFailed++;
-        }
-      }
-      const { totalDocs: tagCount } = await payload.count({
-        collection: 'tags',
-        req: { transactionID }
-      });
-      payload.logger.info(
-        tagFailed
-          ? `[SEED] Problem occurred for ${tagFailed}/${seedData.tags.length} tags (count: ${tagCount})`
-          : `[SEED] >> Tags up to date (count: ${tagCount})`
-      );
-      seedError = seedError || tagFailed > 0;
-    }
-
-    // PAGES
-
-    if (seedData.pages.length > 0) {
-      let pageFailed = 0;
-
-      for (const page of seedData.pages) {
-        const [entity] = store.lookupTenant(payload, [page.tenant]);
-
-        try {
-          const layout: Page['layout'] = [];
-
-          if (page.hero) {
-            layout.push({
-              blockType: 'hero',
-              badge: page.hero.badge,
-              heading: page.hero.heading,
-              lede: page.hero.lede,
-              actions: page.hero.actions?.map(({ link, emphasis }) => ({
-                link: {
-                  type: 'custom' as const,
-                  url: link.url,
-                  label: link.label,
-                  newTab: link.newTab ?? false
-                },
-                emphasis: emphasis ?? 'primary'
-              }))
-            });
-          }
-
-          if (page.layoutContent) {
-            layout.push({
-              blockType: 'content',
-              columns: [
-                {
-                  size: 'full',
-                  richText: await convertMarkdownToLexical(
-                    payload.config,
-                    page.layoutContent
-                  )
-                }
-              ]
-            });
-          }
-
-          if (page.featureCards) {
-            layout.push({
-              blockType: 'feature-cards',
-              eyebrow: page.featureCards.eyebrow,
-              heading: page.featureCards.heading,
-              intro: page.featureCards.intro,
-              columns: page.featureCards.columns ?? 'auto',
-              items: page.featureCards.items ?? []
-            });
-          }
-
-          if (page.callout) {
-            layout.push({
-              blockType: 'callout',
-              showMark: page.callout.showMark ?? true,
-              heading: page.callout.heading,
-              body: page.callout.body,
-              link: {
-                type: 'custom' as const,
-                url: page.callout.link.url,
-                label: page.callout.link.label,
-                newTab: page.callout.link.newTab ?? false
-              }
-            });
-          }
-
-          const response = await ensurePage(
-            payload,
-            {
-              header: page.header,
-              layout,
-              name: page.name,
-              slug: page.slug,
-              tenant: entity.id,
-              visibility: page.visibility
-            },
-            { locale: entity.locale, transactionID }
-          );
-
-          let pageId: number;
-          if (typeof response === 'object') {
-            payload.logger.info(
-              `[SEED] Page '${page.slug}' on tenant #${entity.id} (${entity.locale})`
-            );
-            pageId = response.id;
-          } else {
-            pageId = Number(response);
-          }
-          // Save page to map to lookup id's later
-          store.page(
-            { apiKey: page.tenant.lookupApiKey, slug: page.slug },
-            pageId
-          );
-        } catch (e) {
-          const error = e as Error;
-          payload.logger.error(error.message);
-          if ('data' in error) {
-            payload.logger.error(
-              `Page '${page.slug}'\n${JSON.stringify(error.data, null, 2)}`
-            );
-          }
-          pageFailed++;
-        }
-      }
-      const { totalDocs: pageCount } = await payload.count({
-        collection: 'pages',
-        req: { transactionID }
-      });
-      payload.logger.info(
-        pageFailed
-          ? `[SEED] Problem occurred for ${pageFailed}/${seedData.pages.length} pages (count: ${pageCount})`
-          : `[SEED] >> Pages up to date (count: ${pageCount})`
-      );
-      seedError = seedError || pageFailed > 0;
-    }
-
-    // !! COMMIT POINT !!
-    // Need to commit since the collections that follow require previous seed data
-    await endTransaction(seedError ? 'rollback' : 'commit');
-
-    // MEDIA
-
-    // Only seed media when no errors occurred
-    if (!seedError && seedData.media.length > 0) {
-      await ensureTransaction();
-
-      let mediaFailed = 0;
-
-      for (const media of seedData.media) {
-        const tags = store.lookupTag(
-          payload,
-          media.tags.map(({ lookupSlug }) => ({
-            apiKey: media.tenant.lookupApiKey,
-            slug: lookupSlug
-          }))
-        );
-        const [entity] = store.lookupTenant(payload, [media.tenant]);
-
-        try {
-          const response = await ensureMedia(
-            payload,
-            {
-              alt: media.alt,
-              external: media.external,
-              filename: media.filename,
-              filePath: media.filePath,
-              tags,
-              tenant: entity.id
-            },
-            { locale: entity.locale, transactionID }
-          );
-
-          let mediaId: number;
-          if (typeof response === 'object') {
-            payload.logger.info(
-              `[SEED] Media '${media.filename}' on tenant #${entity.id} (${entity.locale})`
-            );
-            mediaId = response.id;
-          } else {
-            mediaId = Number(response);
-          }
-          // Save media to map to lookup id's later
-          store.media(
-            { apiKey: media.tenant.lookupApiKey, slug: media.filename },
-            mediaId
-          );
-        } catch (e) {
-          const error = e as Error;
-          payload.logger.error(error.message);
-          if ('data' in error) {
-            payload.logger.error(
-              `Media '${media.filePath}'\n${JSON.stringify(error.data, null, 2)}`
-            );
-          }
-          mediaFailed++;
-        }
-      }
-      const { totalDocs: mediaCount } = await payload.count({
-        collection: 'media',
-        req: { transactionID }
-      });
-      payload.logger.info(
-        mediaFailed
-          ? `[SEED] Problem occurred for ${mediaFailed}/${seedData.media.length} media (count: ${mediaCount})`
-          : `[SEED] >> Media up to date (count: ${mediaCount})`
-      );
-      seedError = seedError || mediaFailed > 0;
-    }
-
-    // POSTS
-
-    // Only seed posts when no errors occurred
-    if (!seedError && seedData.posts.length > 0) {
-      await ensureTransaction();
-
-      let postFailed = 0;
-
-      for (const post of seedData.posts) {
-        const categories = store.lookupCategory(
-          payload,
-          post.categories.map(({ lookupSlug }) => ({
-            apiKey: post.tenant.lookupApiKey,
-            slug: lookupSlug
-          }))
-        );
-        const [entity] = store.lookupTenant(payload, [post.tenant]);
-        const authors = store.lookupUser(payload, post.authors);
-
-        try {
-          const response = await ensurePost(
-            payload,
-            {
-              authors,
-              categories,
-              content: await convertMarkdownToLexical(
-                payload.config,
-                post.content
-              ),
-              createdAt: post.createdAt,
-              slug: post.slug,
-              title: post.title,
-              tenant: entity.id
-            },
-            { locale: entity.locale, transactionID }
-          );
-
-          if (typeof response === 'object') {
-            payload.logger.info(
-              `[SEED] Post '${post.slug}' on tenant #${entity.id} (${entity.locale})`
-            );
-          }
-        } catch (e) {
-          const error = e as Error;
-          payload.logger.error(error.message);
-          if ('data' in error) {
-            payload.logger.error(
-              `Post '${post.slug}'\n${JSON.stringify(error.data, null, 2)}`
-            );
-          }
-          postFailed++;
-        }
-      }
-      const { totalDocs: postCount } = await payload.count({
-        collection: 'posts',
-        req: { transactionID }
-      });
-      payload.logger.info(
-        postFailed
-          ? `[SEED] Problem occurred for ${postFailed}/${seedData.posts.length} posts (count: ${postCount})`
-          : `[SEED] >> Posts up to date (count: ${postCount})`
-      );
-      seedError = seedError || postFailed > 0;
     }
 
     // PLATFORM LABELS
@@ -933,71 +559,76 @@ export const seed = async (
       seedError = seedError || tourFailed > 0;
     }
 
-    // NAVIGATION
+    // SITE CONTENT
 
-    // Create navigation for each tenant using the first 5 tenant pages excluding the home page
-    if (seedData.tenants.length > 0) {
-      await ensureTransaction();
-
-      let navigationFailed = 0;
+    // Everything a site is made of — pages, posts, media, tags, categories,
+    // forms and navigation — is stated in one definition per tenant and
+    // applied by the same code that fills a real workspace. So the seed is the
+    // apply path's continuous proof rather than a second implementation of it
+    if (!seedError) {
+      let contentFailed = 0;
 
       for (const tenant of seedData.tenants) {
-        const [tenantEntity] = store.lookupTenant(payload, [
-          { lookupApiKey: tenant.apiKey }
-        ]);
-        // Lookup the first 5 tenant pages excluding the home page
-        const pageIds = store.lookupPage(
-          payload,
-          seedData.pages
-            .filter(
-              ({ slug, tenant: { lookupApiKey } }) =>
-                lookupApiKey === tenant.apiKey && slug !== 'home'
-            )
-            .map(({ slug, tenant: { lookupApiKey } }) => ({
-              apiKey: lookupApiKey,
-              slug
-            }))
-            .slice(0, 5)
-        );
+        const definition = definitionFor(tenant.slug);
+
+        if (!definition) {
+          // Content keys off the slug while everything else keys off the api
+          // key, so a renamed tenant loses its whole site. Fail rather than
+          // leave a workspace that looks seeded and is empty
+          contentFailed++;
+          payload.logger.error(
+            `[SEED] No site definition for tenant '${tenant.slug}'. Its content was not seeded — check the slug against 'definitionFor'`
+          );
+          continue;
+        }
 
         try {
-          const { navigation, items } = await ensureNavigation(
-            payload,
-            {
-              items: pageIds.map((id) => ({
-                reference: { relationTo: 'pages', value: id }
-              })),
-              tenant: tenantEntity.id
-            },
-            { locale: tenantEntity.locale, transactionID }
-          );
+          // Its own transaction, per tenant: the apply opens one and rolls it
+          // back on any unresolved reference, so the seed must not be holding
+          // another around it
+          await endTransaction('commit');
 
-          if (typeof navigation === 'object') {
-            payload.logger.info(
-              `[SEED] Navigation with ${items.length} items for tenant '${tenant.apiKey}' created (${tenantEntity.locale})`
-            );
-          }
-        } catch (e) {
-          const error = e as Error;
-          payload.logger.error(error.message);
-          if ('data' in error) {
+          const report = await applySiteDefinition(payload, definition, {
+            tenantSlug: tenant.slug,
+            dryRun: false,
+            locale: tenant.locale,
+            // Deployed environments have no repository files; media comes from
+            // the same place the rest of the seed data does
+            mediaBaseUrl: remoteDataUrl
+          });
+
+          if (report.unresolved.length) {
+            contentFailed++;
             payload.logger.error(
-              `Navigation for tenant '${tenant.apiKey}'\n${JSON.stringify(error.data, null, 2)}`
+              `[SEED] '${tenant.slug}' has ${report.unresolved.length} reference(s) that lead nowhere, nothing was written:\n` +
+                report.unresolved
+                  .map(
+                    ({ blockType, field, lookup }) =>
+                      `  ${blockType}.${field} → '${lookup}'`
+                  )
+                  .join('\n')
             );
+            continue;
           }
-          navigationFailed++;
+
+          const created = report.outcomes.filter(
+            ({ action }) => action === 'created'
+          ).length;
+          payload.logger.info(
+            `[SEED] Site '${tenant.slug}': ${created} created, ${report.outcomes.length - created} already there`
+          );
+        } catch (e) {
+          contentFailed++;
+          payload.logger.error((e as Error).message);
         }
       }
-      const { totalDocs: navigationCount } = await payload.count({
-        collection: 'navigation',
-        req: { transactionID }
-      });
+
       payload.logger.info(
-        navigationFailed
-          ? `[SEED] Problem occurred for ${navigationFailed}/${seedData.tenants.length} navigations (count: ${navigationCount})`
-          : `[SEED] >> Navigations up to date (count: ${navigationCount})`
+        contentFailed
+          ? `[SEED] Problem occurred for ${contentFailed}/${seedData.tenants.length} sites`
+          : '[SEED] >> Sites up to date'
       );
-      seedError = seedError || navigationFailed > 0;
+      seedError = seedError || contentFailed > 0;
     }
 
     // SITE SETTINGS
@@ -1012,14 +643,28 @@ export const seed = async (
         const [tenant] = store.lookupTenant(payload, [
           { lookupApiKey: apiKey }
         ]);
-        // Landing page is "home" page
-        const [page] = store.lookupPage(payload, [{ apiKey, slug: 'home' }]);
+
+        // The definition created this page a moment ago, so it is read from the
+        // database rather than the store, which only knows what the seed itself
+        // made. Payload requires a landing page on the document
+        const { docs: homePages } = await payload.find({
+          collection: 'pages',
+          where: {
+            and: [{ slug: { equals: 'home' } }, { tenant: { in: [tenant.id] } }]
+          },
+          depth: 0,
+          limit: 1,
+          req: { transactionID }
+        });
+        const page = homePages.at(0)?.id;
 
         if (!page) {
           siteSettingFailed++;
+          payload.logger.error(
+            `[SEED] No home page for tenant '${tenant.slug}', cannot set its landing page`
+          );
           continue;
         }
-
         try {
           const response = await ensureSiteSetting(
             payload,
@@ -1133,25 +778,6 @@ export const seed = async (
           : `[SEED] >> FAQ up to date (count: ${faqCount})`
       );
       seedError = seedError || faqFailed > 0;
-    }
-
-    // CUSTOM SEED
-
-    // Only run when no errors occurred
-    if (!seedError) {
-      await ensureTransaction();
-      try {
-        await customSeed(payload, { transactionID });
-      } catch (e) {
-        const error = e as Error;
-        payload.logger.error(error.message);
-        if ('data' in error) {
-          payload.logger.error(
-            `Custom seed error\n${JSON.stringify(error.data, null, 2)}`
-          );
-        }
-        seedError = true;
-      }
     }
 
     await endTransaction(seedError ? 'rollback' : 'commit');
