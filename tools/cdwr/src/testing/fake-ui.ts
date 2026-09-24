@@ -70,7 +70,14 @@ export function fakeUi(answers: Answer[] = [], interactive = true): FakeUi {
       if (problem) throw new Error(`Invalid answer "${answer}": ${problem}`);
       return answer;
     },
-    password: async ({ message }) => next(message),
+    // Validated like `text`: the real prompts both take a validator, and a
+    // double that skips it reports a required secret as satisfied by nothing
+    password: async ({ message, validate }) => {
+      const answer = next<string>(message);
+      const problem = validate?.(answer);
+      if (problem) throw new Error(`Invalid answer "${answer}": ${problem}`);
+      return answer;
+    },
     confirm: async ({ message }) => next(message)
   };
 }

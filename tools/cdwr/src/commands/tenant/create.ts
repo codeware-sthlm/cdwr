@@ -103,7 +103,6 @@ export default defineCommand<
   description:
     'Makes the tenant row and its API key, nothing else. Fill it with `cdwr tenant apply-site`.',
   danger: 'mutate',
-  confirm: 'production',
   needs: ['fly', 'infisical'],
   inputs: {
     environment: environmentInput(ENVIRONMENTS),
@@ -124,12 +123,14 @@ export default defineCommand<
       ]
     }),
     slug: input.string({
-      prompt: 'Slug?',
+      prompt: 'Slug? Leave empty to derive it from the name',
       description: 'Overrides the slug derived from the name',
+      placeholder: 'derived from the name',
       default: ''
     }),
     deployment: input.string({
-      prompt: 'Deployment name?',
+      prompt: 'Deployment name? Leave empty for a workspace that stays local',
+      placeholder: 'none',
       description:
         'Its Infisical folder and the end of its Fly app names. It cannot be changed later',
       default: ''

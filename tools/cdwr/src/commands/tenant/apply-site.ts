@@ -79,7 +79,6 @@ export default defineCommand<
   description:
     'The plan is produced by applying the definition and rolling it back, so it is what the write actually did rather than a guess. Nothing is deleted.',
   danger: 'mutate',
-  confirm: 'production',
   needs: ['fly', 'infisical'],
   inputs: {
     environment: environmentInput(ENVIRONMENTS),

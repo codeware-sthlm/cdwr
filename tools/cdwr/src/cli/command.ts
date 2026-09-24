@@ -6,13 +6,7 @@ export type Danger = 'read' | 'mutate' | 'destructive' | 'spends-money';
 
 /** External things a command relies on, checked before anything else runs */
 export type Need =
-  | 'fly'
-  | 'psql'
-  | 'pg_dump'
-  | 'docker'
-  | 'aws'
-  | 'gh'
-  | 'infisical';
+  'fly' | 'psql' | 'pg_dump' | 'docker' | 'aws' | 'gh' | 'infisical';
 
 /** When to confirm; the default follows from the danger level */
 export type Confirm = 'never' | 'production' | 'always';
@@ -71,15 +65,14 @@ export const defineCommand = <I extends Inputs, D>(
 /** Read-only commands answer without plan output */
 export const readOnly = <D>(data: D): Plan<D> => ({ steps: [], data });
 
-/** The confirmation a command gets unless it says otherwise */
+/**
+ * The confirmation a command gets unless it says otherwise.
+ *
+ * A mutating command asks wherever it runs. It prints a plan first, and a plan
+ * reads as a question — acting on it unasked in development surprised someone
+ * into applying a site they meant to look at.
+ */
 export const confirmFor = (danger: Danger, override?: Confirm): Confirm => {
   if (override) return override;
-  switch (danger) {
-    case 'read':
-      return 'never';
-    case 'mutate':
-      return 'production';
-    default:
-      return 'always';
-  }
+  return danger === 'read' ? 'never' : 'always';
 };
