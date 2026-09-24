@@ -449,6 +449,10 @@ export async function applySiteDefinition(
             // filling in what a document is missing
             general: {
               ...general,
+              // Not null in the database and without a default, so a workspace
+              // that has no settings row yet cannot get one without this.
+              // `ctx.locale` is the tenant's own, or English when it has none
+              defaultLocale: general?.defaultLocale ?? ctx.locale,
               landingPage: page(general?.landingPage, 'landingPage')
             },
             ...(legal && {
