@@ -85,6 +85,7 @@ type PlainBlockType =
   | 'showcase'
   | 'social-media'
   | 'spacing'
+  | 'theme-studio'
   | 'tours';
 
 type UnclassifiedBlockType = Exclude<

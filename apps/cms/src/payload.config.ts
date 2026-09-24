@@ -24,6 +24,7 @@ import {
   socialMediaBlock,
   spacingBlock,
   testimonialBlock,
+  themeStudioBlock,
   toursBlock
 } from '@codeware/app-cms/ui/blocks';
 import { defaultLexical } from '@codeware/app-cms/ui/fields';
@@ -171,6 +172,7 @@ export default buildConfig({
     socialMediaBlock,
     spacingBlock,
     testimonialBlock,
+    themeStudioBlock,
     toursBlock
   ],
   collections,

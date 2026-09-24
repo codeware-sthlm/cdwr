@@ -62,6 +62,7 @@ import * as migration_20260915_213755_cod_484_legal_pages_site_wide from './2026
 import * as migration_20260917_060500_cod_484_backfill_submission_tenant from './20260917_060500_cod_484_backfill_submission_tenant';
 import * as migration_20260920_071500_cod_451_reader_role from './20260920_071500_cod_451_reader_role';
 import * as migration_20260920_082000_cod_451_content_visibility from './20260920_082000_cod_451_content_visibility';
+import * as migration_20260924_221914_cod_475_theme_studio_block from './20260924_221914_cod_475_theme_studio_block';
 
 export const migrations = [
   {
@@ -383,5 +384,10 @@ export const migrations = [
     up: migration_20260920_082000_cod_451_content_visibility.up,
     down: migration_20260920_082000_cod_451_content_visibility.down,
     name: '20260920_082000_cod_451_content_visibility'
+  },
+  {
+    up: migration_20260924_221914_cod_475_theme_studio_block.up,
+    down: migration_20260924_221914_cod_475_theme_studio_block.down,
+    name: '20260924_221914_cod_475_theme_studio_block'
   }
 ];

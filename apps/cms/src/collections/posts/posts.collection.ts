@@ -32,6 +32,7 @@ const blocks: Record<BlockSlug, boolean> = {
   'social-media': true,
   spacing: true,
   testimonial: false,
+  'theme-studio': false,
   // Unsupported blocks
   callout: false,
   content: false,

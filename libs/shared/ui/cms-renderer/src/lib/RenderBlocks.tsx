@@ -28,6 +28,7 @@ import { ShowcaseBlock } from './blocks/showcase/ShowcaseBlock';
 import { SocialMediaBlock } from './blocks/social-media/SocialMediaBlock';
 import { SpacingBlock } from './blocks/spacing/SpacingBlock';
 import { TestimonialBlock } from './blocks/testimonial/TestimonialBlock';
+import { ThemeStudioBlock } from './blocks/theme-studio/ThemeStudioBlock';
 import { ToursBlock } from './blocks/tours/ToursBlock';
 import { ColumnSizeProvider } from './providers/ColumnSizeProvider';
 
@@ -185,6 +186,7 @@ const blocksMap: Record<
   'social-media': SocialMediaBlock,
   spacing: SpacingBlock,
   testimonial: TestimonialBlock,
+  'theme-studio': ThemeStudioBlock,
   tours: ToursBlock
 };
 

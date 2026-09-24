@@ -1594,6 +1594,77 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       }
     ]
   },
+  'theme-studio': {
+    slug: 'theme-studio',
+    label: {
+      en: 'Theme studio',
+      sv: 'Temastudio'
+    },
+    availableIn: ['pages'],
+    fields: [
+      {
+        name: 'eyebrow',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Eyebrow',
+          sv: 'Överrubrik'
+        },
+        description: {
+          en: 'Small uppercase label shown above the heading',
+          sv: 'Liten versal etikett som visas ovanför rubriken'
+        }
+      },
+      {
+        name: 'heading',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
+      },
+      {
+        name: 'intro',
+        type: 'textarea',
+        localized: true,
+        label: {
+          en: 'Intro',
+          sv: 'Ingress'
+        },
+        description: {
+          en: 'Short paragraph below the heading',
+          sv: 'Kort stycke under rubriken'
+        }
+      },
+      {
+        name: 'startFrom',
+        type: 'select',
+        required: true,
+        label: {
+          en: 'Open with',
+          sv: 'Öppna med'
+        },
+        description: {
+          en: 'The platform theme the studio starts from. Its recipe is read from the committed theme, so the studio opens on the real thing.',
+          sv: 'Plattformstemat studion utgår från. Receptet läses från det incheckade temat, så studion öppnar det riktiga.'
+        }
+      },
+      {
+        name: 'note',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Note above the studio',
+          sv: 'Notis ovanför studion'
+        },
+        description: {
+          en: 'One line saying what this is. Leave the default unless it is wrong for the page.',
+          sv: 'En rad som säger vad detta är. Behåll standardtexten om den inte är fel för sidan.'
+        }
+      }
+    ]
+  },
   tours: {
     slug: 'tours',
     label: {

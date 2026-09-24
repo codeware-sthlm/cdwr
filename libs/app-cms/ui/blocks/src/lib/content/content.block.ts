@@ -22,6 +22,7 @@ const richTextBlocks: Record<BlockSlug, boolean> = {
   'social-media': true,
   spacing: true,
   testimonial: false,
+  'theme-studio': false,
   // Unsupported blocks
   callout: false,
   content: false,
@@ -51,6 +52,7 @@ const inlineBlocks: Record<BlockSlug, boolean> = {
   'social-media': true,
   spacing: true,
   testimonial: false,
+  'theme-studio': false,
   // Unsupported blocks
   callout: false,
   content: false,

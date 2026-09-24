@@ -20,6 +20,7 @@ import { showcaseGallery } from './showcase/ShowcaseBlock.gallery';
 import { socialMediaGallery } from './social-media/SocialMediaBlock.gallery';
 import { spacingGallery } from './spacing/SpacingBlock.gallery';
 import { testimonialGallery } from './testimonial/TestimonialBlock.gallery';
+import { themeStudioGallery } from './theme-studio/ThemeStudioBlock.gallery';
 import { toursGallery } from './tours/ToursBlock.gallery';
 
 /**
@@ -54,5 +55,6 @@ export const galleryDocs: Partial<Record<BlockSlug, AnyBlockGalleryDoc>> = {
   'social-media': socialMediaGallery,
   spacing: spacingGallery,
   testimonial: testimonialGallery,
+  'theme-studio': themeStudioGallery,
   tours: toursGallery
 };
