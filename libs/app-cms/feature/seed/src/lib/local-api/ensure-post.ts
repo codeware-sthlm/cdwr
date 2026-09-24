@@ -7,6 +7,9 @@ export type PostData = Pick<
   'authors' | 'categories' | 'content' | 'createdAt' | 'tenant' | 'title'
 > & {
   slug: string;
+  /** Optional, unlike on the document, so existing callers state neither */
+  heroImage?: Post['heroImage'];
+  visibility?: Post['visibility'];
 };
 
 /**
@@ -23,7 +26,17 @@ export async function ensurePost(
   options: { locale: TypedLocale; transactionID: string | number | undefined }
 ): Promise<Post | number> {
   const { locale, transactionID } = options;
-  const { authors, categories, content, createdAt, slug, tenant, title } = data;
+  const {
+    authors,
+    categories,
+    content,
+    createdAt,
+    heroImage,
+    slug,
+    tenant,
+    title,
+    visibility
+  } = data;
 
   // Scoped to the tenant, like every sibling helper: a slug is unique within
   // a workspace, not across the platform, so an unscoped lookup hands one
@@ -54,11 +67,13 @@ export async function ensurePost(
       categories,
       content,
       createdAt,
+      heroImage,
       slug,
       tenant,
       title,
-      // Seeded content is demo content; nothing here is member-restricted
-      visibility: 'public',
+      // Public unless the caller says otherwise: seeded demo content is
+      // public, but a definition may state a members-only post
+      visibility: visibility ?? 'public',
       _status: 'published'
     },
     context: { seedAction: true },

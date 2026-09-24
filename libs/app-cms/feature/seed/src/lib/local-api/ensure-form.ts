@@ -3,6 +3,8 @@ import type { Form } from '@codeware/shared/util/payload-types';
 import type { Payload, TypedLocale } from 'payload';
 
 export type FormData = Pick<Form, 'tenant'> & {
+  /** Where a submission is sent. Falls back to the workspace's generic recipient */
+  emailTo?: string;
   /** Stable lookup key — not localized, so it stays the same per tenant */
   title: string;
   /** Label on the single email field */
@@ -64,6 +66,7 @@ export async function ensureForm(
   const {
     confirmation,
     emailLabel,
+    emailTo,
     emailPlaceholder,
     subject,
     submitLabel,
@@ -108,6 +111,7 @@ export async function ensureForm(
       confirmationMessage: paragraph(confirmation),
       emails: [
         {
+          ...(emailTo ? { emailTo } : {}),
           subject,
           // The plugin expands `{{*:table}}` into every submitted field, so
           // the notification keeps working if the form ever gains one

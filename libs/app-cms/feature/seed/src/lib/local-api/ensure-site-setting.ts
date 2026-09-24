@@ -4,7 +4,7 @@ import type { Payload, TypedLocale } from 'payload';
 
 export type SiteSettingData = Pick<
   SiteSetting,
-  'footer' | 'forms' | 'general' | 'tenant'
+  'footer' | 'forms' | 'general' | 'legal' | 'tenant'
 >;
 
 /**
@@ -27,6 +27,7 @@ export async function ensureSiteSetting(
     footer: footerFromProps,
     forms: formsFromProps,
     general: generalFromProps,
+    legal: legalFromProps,
     tenant
   } = data;
 
@@ -46,7 +47,7 @@ export async function ensureSiteSetting(
   });
 
   if (siteSettings.totalDocs) {
-    const { footer, forms, general, id } = siteSettings.docs[0];
+    const { footer, forms, general, id, legal } = siteSettings.docs[0];
 
     // Footer columns have database defaults, so a footer left untouched still
     // has values — seeded content is what tells the two apart
@@ -85,6 +86,11 @@ export async function ensureSiteSetting(
             ? forms.notificationRecipients
             : formsFromProps?.notificationRecipients
         },
+        legal: {
+          ...legal,
+          privacyPage: legal?.privacyPage ?? legalFromProps?.privacyPage,
+          termsPage: legal?.termsPage ?? legalFromProps?.termsPage
+        },
         general: {
           ...general,
           appName: general.appName ?? generalFromProps.appName,
@@ -92,7 +98,10 @@ export async function ensureSiteSetting(
           landingPage: general.landingPage ?? generalFromProps.landingPage
         }
       },
-      locale
+      locale,
+      // Without this the write escapes the caller's transaction, so a dry-run
+      // apply would persist settings that the rollback cannot take back
+      req: { transactionID }
     });
 
     return id;
@@ -106,6 +115,7 @@ export async function ensureSiteSetting(
       footer: footerFromProps,
       forms: formsFromProps,
       general: generalFromProps,
+      legal: legalFromProps,
       tenant
     },
     locale,
