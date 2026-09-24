@@ -5,6 +5,7 @@ import type {
   SeedSource,
   SeedStrategy
 } from '@codeware/app-cms/util/env-schema';
+import { getId } from '@codeware/app-cms/util/misc';
 import { generateSeedIcon } from '@codeware/shared/ui/seed-icon-studio';
 import type { Payload } from 'payload';
 
@@ -20,6 +21,7 @@ import { ensureSiteSetting } from './local-api/ensure-site-setting';
 import { ensureStockMedia } from './local-api/ensure-stock-media';
 import { ensureTenant } from './local-api/ensure-tenant';
 import { ensureTour } from './local-api/ensure-tour';
+import { ensureTourSignups } from './local-api/ensure-tour-signups';
 import { ensureUser } from './local-api/ensure-user';
 import type {
   SeedData,
@@ -557,6 +559,81 @@ export const seed = async (
           : `[SEED] >> Tours up to date (count: ${tourCount})`
       );
       seedError = seedError || tourFailed > 0;
+    }
+
+    // TOUR CAPACITY AND SIGNUPS
+
+    // Demo data rather than site structure, so it stays imperative: a maximum
+    // and a signup list give the fill bar, the waiting queue and the promote
+    // button something to show in development
+    if (!seedError && seedData.tours.length > 0) {
+      await ensureTransaction();
+
+      const { docs: tourDocs } = await payload.find({
+        collection: 'tours',
+        depth: 0,
+        limit: 0,
+        pagination: false,
+        req: { transactionID }
+      });
+
+      // Resolved once; the loop runs per tour
+      const localeById = new Map<
+        number,
+        (typeof seedData.tenants)[number]['locale']
+      >();
+      for (const { apiKey } of seedData.tenants) {
+        const [entity] = store.lookupTenant(payload, [
+          { lookupApiKey: apiKey }
+        ]);
+        if (entity) {
+          localeById.set(entity.id, entity.locale);
+        }
+      }
+
+      let signupFailed = 0;
+
+      for (const tour of tourDocs) {
+        const tenantId = getId(tour.tenant);
+
+        try {
+          if (!tour.maxCustomers) {
+            await payload.update({
+              collection: 'tours',
+              id: tour.id,
+              data: { maxCustomers: 12 },
+              context: { seedAction: true },
+              // Tours carry localized required fields. Without the tenant's
+              // own locale the update lands on the default one, where those
+              // are empty — and validation refuses a tour with no title
+              locale: localeById.get(tenantId),
+              req: { transactionID }
+            });
+          }
+
+          const created = await ensureTourSignups(
+            payload,
+            { tour: tour.id, tenant: tenantId },
+            { transactionID }
+          );
+
+          if (created) {
+            payload.logger.info(
+              `[SEED] ${created} signups on tour #${tour.id} for tenant #${tenantId}`
+            );
+          }
+        } catch (e) {
+          payload.logger.error((e as Error).message);
+          signupFailed++;
+        }
+      }
+
+      payload.logger.info(
+        signupFailed
+          ? `[SEED] Problem occurred for ${signupFailed}/${tourDocs.length} tours`
+          : '[SEED] >> Tour capacity and signups up to date'
+      );
+      seedError = seedError || signupFailed > 0;
     }
 
     // SITE CONTENT

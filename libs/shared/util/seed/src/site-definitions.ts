@@ -8,6 +8,7 @@
  *
  * Only the seed and the apply scripts import from here, and both are server.
  */
+export { bundledMediaPath } from './lib/bundled-media-path';
 export { bamse } from './lib/site-definitions/bamse';
 export { cdwrIo } from './lib/site-definitions/cdwr-io';
 export { marvel } from './lib/site-definitions/marvel';

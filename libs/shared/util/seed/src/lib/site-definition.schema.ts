@@ -63,6 +63,7 @@ export const SiteDefinitionSchema = z
             filename: z.string().min(1),
             alt: z.string(),
             filePath: z.string().min(1).optional(),
+            external: z.boolean().optional(),
             tags: z.array(SlugRefSchema).optional()
           })
           // One or the other, never neither: a media entry that names no source
