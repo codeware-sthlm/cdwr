@@ -45,15 +45,41 @@ apply time.
 Ids do not exist until the apply creates the documents, so a definition names
 what it points at the way a person would:
 
-| Reference        | Written as                     | Finds            |
-| ---------------- | ------------------------------ | ---------------- |
-| Media            | `{ lookupFilename: 'a.png' }`  | a media file     |
-| Tag              | `{ lookupSlug: 'news' }`       | a tag            |
-| Form             | `{ lookupTitle: 'Contact' }`   | a form           |
-| Reusable content | `{ lookupSlug: 'footer-cta' }` | reusable content |
+| Reference        | Written as                     | Finds                |
+| ---------------- | ------------------------------ | -------------------- |
+| Media            | `{ lookupFilename: 'a.png' }`  | a media file         |
+| Tag              | `{ lookupSlug: 'news' }`       | a tag                |
+| Form             | `{ lookupTitle: 'Contact' }`   | a form               |
+| Reusable content | `{ lookupSlug: 'footer-cta' }` | reusable content     |
+| Author           | `{ lookupEmail: 'a@b.se' }`    | a user of the tenant |
 
 A reference that resolves to nothing is **reported, not silently dropped** — it
 comes back in the report's `unresolved` list, and the apply refuses to commit.
+
+## Body text is markdown
+
+Payload stores rich text as Lexical, which nobody writes by hand. A definition
+states markdown instead and the apply converts it, the same way it resolves any
+other reference:
+
+```ts
+{ blockType: 'content', columns: [{ size: 'full', richText: { markdown: '## Hello' } }] }
+{ blockType: 'form', form: { lookupTitle: 'Contact' }, enableIntro: true,
+  introContent: { markdown: 'Leave your email.' } }
+```
+
+Those are the only two places rich text exists. A post's `content` is a plain
+markdown string, because the field is called content and nothing else could be
+meant by it.
+
+## Two fields that are easy to miss
+
+**`media.external`** is access control, not a flag. A browser fetching a file
+area download carries no api key, so media that is not `external: true` is
+simply unreachable — and nothing says so at the time.
+
+**`tag.brand`** carries the colour and icon its pill is drawn with. Omit it and
+the tag still works, looking like nothing in particular.
 
 ## Apply it
 
@@ -117,7 +143,9 @@ The same list rides along in the apply report as `extra`, so a plan shows it too
 
 **Field-level drift is not detected.** A page that exists counts as present
 however far its contents have wandered, so this answers "is it there", not "is
-it the same".
+it the same". Nor does it look at navigation or site settings, which are one
+document per tenant. Transcribing a site into a definition therefore needs the
+fields read by hand — a clean diff is necessary, not sufficient.
 
 ## Three things it will not do
 
