@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { BUNDLED_MEDIA } from './bundled-media';
+
 /**
  * What TypeScript cannot check about a definition.
  *
@@ -56,12 +58,26 @@ export const SiteDefinitionSchema = z
     categories: z.array(NamedSlug).optional(),
     media: z
       .array(
-        z.object({
-          filename: z.string().min(1),
-          alt: z.string(),
-          filePath: z.string().min(1),
-          tags: z.array(SlugRefSchema).optional()
-        })
+        z
+          .object({
+            filename: z.string().min(1),
+            alt: z.string(),
+            filePath: z.string().min(1).optional(),
+            tags: z.array(SlugRefSchema).optional()
+          })
+          // One or the other, never neither: a media entry that names no source
+          // uploads nothing and leaves every block pointing at it empty
+          // Without a path the file has to be one that ships with the seed,
+          // or nothing is uploaded and every block pointing at it renders empty
+          .refine(
+            ({ filename, filePath }) =>
+              !!filePath ||
+              (BUNDLED_MEDIA as ReadonlyArray<string>).includes(filename),
+            {
+              message:
+                'needs a filePath, or a filename that ships with the seed'
+            }
+          )
       )
       .optional(),
     forms: z

@@ -1,3 +1,5 @@
+export { BUNDLED_MEDIA, bundledMediaPath } from './lib/bundled-media';
+export type { BundledMediaFile } from './lib/bundled-media';
 export { SiteDefinitionSchema } from './lib/site-definition.schema';
 export type { ValidatedSiteDefinition } from './lib/site-definition.schema';
 export type {

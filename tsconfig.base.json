@@ -177,6 +177,9 @@
         "./libs/shared/util/storybook/src/index.ts"
       ],
       "@codeware/shared/util/seed": ["./libs/shared/util/seed/src/index.ts"],
+      "@codeware/shared/util/seed/site-definitions": [
+        "./libs/shared/util/seed/src/site-definitions.ts"
+      ],
       "@codeware/shared/util/signature": [
         "./libs/shared/util/signature/src/index.ts"
       ],
