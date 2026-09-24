@@ -18,4 +18,5 @@ export { showcaseBlock } from './lib/showcase/showcase.block';
 export { socialMediaBlock } from './lib/social-media/social-media.block';
 export { spacingBlock } from './lib/spacing/spacing.block';
 export { testimonialBlock } from './lib/testimonial/testimonial.block';
+export { themeStudioBlock } from './lib/theme-studio/theme-studio.block';
 export { toursBlock } from './lib/tours/tours.block';

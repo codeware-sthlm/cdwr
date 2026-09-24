@@ -35,6 +35,7 @@ const blocks: Record<BlockSlug, boolean> = {
   'social-media': true,
   spacing: true,
   testimonial: true,
+  'theme-studio': true,
   tours: true
 };
 

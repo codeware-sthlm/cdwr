@@ -16,7 +16,7 @@ export type TenantsArrayField =
   | {
       tenant: number | Tenant;
       /**
-       * Readers can only read restricted content on the site, never the admin. Admins have access to manage the users in the workspace.
+       * Readers sign in on the website to reach members-only content, on top of everything the public can see. They never reach the admin. Admins have access to manage the users in the workspace.
        */
       role: 'reader' | 'user' | 'admin';
       id?: string | null;
@@ -146,6 +146,7 @@ export interface Config {
     'social-media': SocialMediaBlock;
     spacing: SpacingBlock;
     testimonial: TestimonialBlock;
+    'theme-studio': ThemeStudioBlock;
     tours: ToursBlock;
   };
   collections: {
@@ -200,12 +201,10 @@ export interface Config {
     places: PlacesSelect<false> | PlacesSelect<true>;
     'platform-labels': PlatformLabelsSelect<false> | PlatformLabelsSelect<true>;
     'platform-settings':
-      | PlatformSettingsSelect<false>
-      | PlatformSettingsSelect<true>;
+      PlatformSettingsSelect<false> | PlatformSettingsSelect<true>;
     posts: PostsSelect<false> | PostsSelect<true>;
     'reusable-content':
-      | ReusableContentSelect<false>
-      | ReusableContentSelect<true>;
+      ReusableContentSelect<false> | ReusableContentSelect<true>;
     'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
     'stock-media': StockMediaSelect<false> | StockMediaSelect<true>;
     tags: TagsSelect<false> | TagsSelect<true>;
@@ -215,19 +214,15 @@ export interface Config {
     users: UsersSelect<false> | UsersSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions':
-      | FormSubmissionsSelect<false>
-      | FormSubmissionsSelect<true>;
+      FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents':
-      | PayloadLockedDocumentsSelect<false>
-      | PayloadLockedDocumentsSelect<true>;
+      PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences':
-      | PayloadPreferencesSelect<false>
-      | PayloadPreferencesSelect<true>;
+      PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
     'payload-migrations':
-      | PayloadMigrationsSelect<false>
-      | PayloadMigrationsSelect<true>;
+      PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
   };
   db: {
     defaultIDType: number;
@@ -243,8 +238,7 @@ export interface Config {
   };
   globalsSelect: {
     'payload-jobs-stats':
-      | PayloadJobsStatsSelect<false>
-      | PayloadJobsStatsSelect<true>;
+      PayloadJobsStatsSelect<false> | PayloadJobsStatsSelect<true>;
   };
   locale: 'en' | 'sv';
   widgets: {
@@ -624,6 +618,7 @@ export interface Page {
     | SocialMediaBlock
     | SpacingBlock
     | TestimonialBlock
+    | ThemeStudioBlock
     | ToursBlock
   )[];
   meta?: {
@@ -639,7 +634,7 @@ export interface Page {
    */
   slug?: string | null;
   /**
-   * Members only hides this from the public site. Only signed-in members of this workspace can read it.
+   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
    */
   visibility: 'public' | 'members';
   updatedAt: string;
@@ -749,7 +744,7 @@ export interface Post {
    */
   slug?: string | null;
   /**
-   * Members only hides this from the public site. Only signed-in members of this workspace can read it.
+   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
    */
   visibility: 'public' | 'members';
   updatedAt: string;
@@ -812,13 +807,7 @@ export interface ContentBlock {
             }[];
             direction: ('ltr' | 'rtl') | null;
             format:
-              | 'left'
-              | 'start'
-              | 'center'
-              | 'right'
-              | 'end'
-              | 'justify'
-              | '';
+              'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
             indent: number;
             version: number;
           };
@@ -1093,13 +1082,7 @@ export interface Form {
             }[];
             direction: ('ltr' | 'rtl') | null;
             format:
-              | 'left'
-              | 'start'
-              | 'center'
-              | 'right'
-              | 'end'
-              | 'justify'
-              | '';
+              'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
             indent: number;
             version: number;
           };
@@ -1588,6 +1571,32 @@ export interface TestimonialLink {
    */
   url?: string | null;
   label: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ThemeStudioBlock".
+ */
+export interface ThemeStudioBlock {
+  /**
+   * Small uppercase label shown above the heading
+   */
+  eyebrow?: string | null;
+  heading?: string | null;
+  /**
+   * Short paragraph below the heading
+   */
+  intro?: string | null;
+  /**
+   * The platform theme the studio starts from. Its recipe is read from the committed theme, so the studio opens on the real thing.
+   */
+  startFrom: 'shadcn' | 'spotlight' | 'spotlight-fork' | 'codeware';
+  /**
+   * One line saying what this is. Leave the default unless it is wrong for the page.
+   */
+  note?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'theme-studio';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2313,8 +2322,7 @@ export interface FormSubmission {
     | null;
   readAt?: string | null;
   notificationStatus?:
-    | ('not-configured' | 'no-recipient' | 'sent' | 'failed')
-    | null;
+    ('not-configured' | 'no-recipient' | 'sent' | 'failed') | null;
   updatedAt: string;
   createdAt: string;
 }
