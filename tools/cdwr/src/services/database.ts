@@ -6,7 +6,7 @@ import { toPoolerUrl } from '@codeware/shared/util/pure';
 
 import { sshExec } from './fly';
 import { type Environment, readSecret } from './infisical';
-import { childEnv, run, sleep, track } from './shell';
+import { CommandError, childEnv, run, sleep, track } from './shell';
 
 /** Supabase project region, which names the session-mode pooler host */
 export const SUPABASE_REGION = 'eu-central-1';
@@ -186,12 +186,67 @@ export async function withDatabase<T>(
  * keys: inheriting the local one would read or write values the deployment
  * cannot decrypt.
  */
+/** What the cms exit guard writes when a script's event loop drained on its own */
+const GUARD_MESSAGE = 'ended without completing';
+
+/**
+ * Whether a failed run is the cms exit guard reporting a no-op.
+ *
+ * The guard fires only when the script's module graph stopped evaluating
+ * before `main` ran (COD-433): nothing was reported and nothing was written.
+ * That is the guard's contract, and it is what makes a retry safe — the same
+ * script with the same inputs simply gets another go at winning the race.
+ */
+export const isGuardedNoOp = (error: unknown): boolean =>
+  error instanceof CommandError && error.stderr.includes(GUARD_MESSAGE);
+
+/**
+ * Runs work again while it fails as a guarded no-op, a bounded number of times.
+ *
+ * Any other failure is thrown at once: a validation error, a missing tenant or
+ * a dropped tunnel means something, and repeating it would only repeat it. The
+ * race loses far more often than it wins on a busy machine — one in six was
+ * measured — so the bound is generous: twenty attempts fail together about
+ * two times in a hundred.
+ */
+export async function retryGuardedNoOp<T>(
+  work: () => Promise<T>,
+  attempts = 20
+): Promise<T> {
+  let last: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await work();
+    } catch (error) {
+      if (!isGuardedNoOp(error)) throw error;
+      last = error;
+    }
+  }
+  throw new Error(
+    `The cms script did nothing ${attempts} times in a row (COD-433). ` +
+      'Each attempt was a proven no-op, so nothing was changed — run again.',
+    { cause: last }
+  );
+}
+
 export function runCmsScript(
   root: string,
   script: string,
   environment: Environment,
   env: Record<string, string>,
   parentEnv: NodeJS.ProcessEnv = process.env
+): Promise<{ stdout: string; stderr: string }> {
+  return retryGuardedNoOp(() =>
+    runCmsScriptOnce(root, script, environment, env, parentEnv)
+  );
+}
+
+function runCmsScriptOnce(
+  root: string,
+  script: string,
+  environment: Environment,
+  env: Record<string, string>,
+  parentEnv: NodeJS.ProcessEnv
 ): Promise<{ stdout: string; stderr: string }> {
   return run('pnpm', ['exec', 'tsx', `src/utils/${script}`], {
     cwd: join(root, 'apps', 'cms'),
