@@ -1,5 +1,3 @@
-import { isAbsolute, resolve as resolvePath } from 'path';
-
 import { defineCommand, readOnly } from '../../cli/command';
 import { input } from '../../cli/inputs';
 import { resolveDatabaseUrl, withDatabase } from '../../services/database';
@@ -8,6 +6,10 @@ import {
   environmentInput,
   previewAppInput
 } from '../../services/environment';
+import {
+  definitionInput,
+  resolveDefinitionPath
+} from '../../services/site-definitions';
 import { symbols, theme } from '../../ui/theme';
 
 import { applyInPayload } from './apply-site';
@@ -30,7 +32,7 @@ export default defineCommand<
     environment: ReturnType<typeof environmentInput<typeof ENVIRONMENTS>>;
     previewApp: ReturnType<typeof previewAppInput>;
     tenant: ReturnType<typeof input.string>;
-    definition: ReturnType<typeof input.string>;
+    definition: ReturnType<typeof definitionInput>;
   },
   { report: ApplyReport }
 >({
@@ -46,16 +48,11 @@ export default defineCommand<
       prompt: 'Which tenant?',
       description: 'The workspace to compare. It must already exist'
     }),
-    definition: input.string({
-      prompt: 'Which definition?',
-      description: 'A module exporting a SiteDefinition as its default'
-    })
+    definition: definitionInput('Compare it against which definition?')
   },
 
   async plan(ctx, { environment, previewApp, tenant, definition }) {
-    const definitionPath = isAbsolute(definition)
-      ? definition
-      : resolvePath(ctx.root, definition);
+    const definitionPath = resolveDefinitionPath(ctx.root, definition);
 
     const databaseUrl = await resolveDatabaseUrl(environment, previewApp);
 
