@@ -26,6 +26,46 @@ export const LightSurface: Story = {
   args: { ...args, surface: 'light' }
 };
 
+// Near-black marks (Next.js, GitHub) take the text colour on a dark surface
+// and in dark mode; the own logo's black part follows it through currentColor
+const withLogos: Story['args'] = {
+  ...args,
+  eyebrow: 'Built on',
+  heading: 'Nothing exotic, and nothing hidden',
+  intro: undefined,
+  items: [
+    { label: 'Payload CMS', icon: 'payload' },
+    { label: 'Next.js', icon: 'nextjs' },
+    { label: 'Supabase', icon: 'supabase' },
+    { label: 'Tailwind', icon: 'tailwind' },
+    { label: 'GitHub', icon: 'github', url: 'https://github.com' },
+    {
+      label: 'Own mark',
+      logo: {
+        source: 'svg',
+        svgCode:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><circle cx="12" cy="12" r="4" fill="#E8D822"/></svg>'
+      }
+    }
+  ]
+};
+
+export const LogosDarkSurface: Story = {
+  name: 'Logos on a dark surface',
+  args: withLogos
+};
+
+export const LogosLightSurface: Story = {
+  name: 'Logos on a light surface',
+  args: { ...withLogos, surface: 'light' }
+};
+
+export const LogosCodewareDark = a11yStory(
+  { args: { ...withLogos, surface: 'light' } },
+  'codeware',
+  'dark'
+);
+
 export const ShadcnLight = a11yStory({ args }, 'shadcn', 'light');
 export const ShadcnDark = a11yStory({ args }, 'shadcn', 'dark');
 export const PayloadAdminLight = a11yStory({ args }, 'payload-admin', 'light');

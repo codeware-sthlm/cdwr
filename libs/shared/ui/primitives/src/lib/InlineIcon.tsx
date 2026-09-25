@@ -28,7 +28,9 @@ type InlineIconProps = {
 export function InlineIcon({ size, svgCode, src }: InlineIconProps) {
   if (svgCode) {
     return (
+      // The markup's own width and height would overflow the box
       <span
+        className="[&>svg]:size-full"
         style={{
           display: 'inline-flex',
           width: size,

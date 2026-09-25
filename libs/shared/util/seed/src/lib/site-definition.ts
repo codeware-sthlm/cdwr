@@ -7,6 +7,7 @@ import type {
   HeroBlock,
   ImageBlock,
   Page,
+  PillListBlock,
   Post,
   ReusableContentBlock,
   SiteSetting,
@@ -58,6 +59,7 @@ type ReferencingBlock =
   | FormBlock
   | HeroBlock
   | ImageBlock
+  | PillListBlock
   | ReusableContentBlock
   | TestimonialBlock;
 
@@ -66,8 +68,8 @@ type ReferencingBlock =
  *
  * Nothing in these blocks refers to another document, so there is nothing to
  * resolve and no reason to restate them here — `about`, `block-gallery`,
- * `card`, `code`, `feature-cards`, `pill-list`, `posts`, `showcase`,
- * `social-media`, `spacing` and `tours`.
+ * `card`, `code`, `feature-cards`, `posts`, `showcase`, `social-media`,
+ * `spacing`, `theme-studio` and `tours`.
  */
 export type PlainBlockDefinition = Authored<
   Exclude<LayoutBlock, ReferencingBlock>
@@ -80,7 +82,6 @@ type PlainBlockType =
   | 'card'
   | 'code'
   | 'feature-cards'
-  | 'pill-list'
   | 'posts'
   | 'showcase'
   | 'social-media'
@@ -199,6 +200,23 @@ export type FileAreaBlockDefinition = Omit<
   tags?: Array<TagRef> | null;
 };
 
+type Pill = NonNullable<PillListBlock['items']>[number];
+
+/**
+ * A pill's own logo is stated as SVG code only.
+ *
+ * The admin also takes an upload, but a definition would have to point at it,
+ * and a mark small enough for a pill is better as markup anyway: it can follow
+ * the text colour, which an image cannot.
+ */
+export type PillListBlockDefinition = Omit<Authored<PillListBlock>, 'items'> & {
+  items?: Array<
+    Omit<Pill, 'id' | 'logo'> & {
+      logo?: { source: 'svg'; svgCode: string } | null;
+    }
+  > | null;
+};
+
 /** Any block a definition may place on a page. */
 export type BlockDefinition =
   | PlainBlockDefinition
@@ -210,7 +228,8 @@ export type BlockDefinition =
   | ContentBlockDefinition
   | ReusableContentBlockDefinition
   | TestimonialBlockDefinition
-  | FileAreaBlockDefinition;
+  | FileAreaBlockDefinition
+  | PillListBlockDefinition;
 
 export type MediaDefinition = {
   /**

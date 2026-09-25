@@ -10,3 +10,5 @@ export * from './lib/NotFound';
 
 export * from './lib/social-icon/SocialIcon';
 export * from './lib/social-icon/social-icons';
+export * from './lib/tech-icon/TechIcon';
+export * from './lib/tech-icon/tech-icons';
