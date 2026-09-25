@@ -82,6 +82,25 @@ describe('an empty answer', () => {
     ).rejects.toThrow('--x: a value is required');
   });
 
+  it('is refused as an empty list when a multiselect needs at least one', async () => {
+    // The prompt enforces `min`; the flag used to arrive as [] and be guessed at
+    const { ctx } = context([]);
+
+    await expect(
+      resolveInputs(
+        ctx,
+        {
+          x: input.multiselect({
+            prompt: 'Which locales?',
+            min: 1,
+            choices: () => [{ value: 'en' }]
+          })
+        },
+        { x: '' }
+      )
+    ).rejects.toThrow('--x: pick at least 1, got 0');
+  });
+
   it('is refused for a secret, which has no default either', async () => {
     const { ctx } = context(['']);
     await expect(
