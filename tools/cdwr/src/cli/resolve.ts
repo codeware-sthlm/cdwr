@@ -99,6 +99,13 @@ async function fromFlag<T>(
     }
     case 'multiselect': {
       const values = splitMulti(raw as string | string[]);
+      // The prompt enforces `min`; a flag has to be held to it too, or
+      // `--locales=` arrives as an empty list and the command guesses
+      if (spec.min !== undefined && values.length < spec.min) {
+        throw new UsageError(
+          `--${flag}: pick at least ${spec.min}, got ${values.length}`
+        );
+      }
       if (spec.choices && !spec.trustFlag) {
         const choices = await loadChoices(ctx, spec, resolved, flag);
         for (const v of values) inChoices(choices, v as unknown, flag);
