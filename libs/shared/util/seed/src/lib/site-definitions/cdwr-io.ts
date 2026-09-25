@@ -100,7 +100,7 @@ export const cdwrIo: SiteDefinition = {
             {
               title: 'Pages are built from blocks',
               description:
-                'Twenty composable blocks — prose, media, code, forms, tours. Editors compose; nothing is hand-coded per site.'
+                'Composable blocks — prose, media, code, forms, tours. Editors compose; nothing is hand-coded per site.'
             },
             {
               title: 'Every change is reviewed running',
@@ -146,7 +146,7 @@ export const cdwrIo: SiteDefinition = {
           link: { type: 'custom', url: '/studio', label: 'Open the studio' },
           subFeatures: [
             {
-              title: 'Ninety tokens from one colour',
+              title: 'The whole palette from one colour',
               body: 'Surfaces, borders, charts and prose all follow from the brand colour, by a recipe you can read back.'
             },
             {
@@ -249,9 +249,9 @@ export const cdwrIo: SiteDefinition = {
                 markdown: [
                   '## What a theme is here',
                   '',
-                  'A theme is not a stylesheet somebody wrote by hand. It is four decisions — a brand colour, a base tone, a surface and a corner radius — and a recipe that turns those into the ninety values a page needs: backgrounds, borders, focus rings, prose, chart colours.',
+                  'A theme is not a stylesheet somebody wrote by hand. It is a handful of decisions — a brand colour, a base tone, a surface, a corner radius, the typefaces — and a recipe that turns those into every value a page needs: backgrounds, borders, focus rings, prose, chart colours.',
                   '',
-                  'Because the recipe is what gets saved, a theme can be reopened and changed later. It parses back to the four decisions that made it, not to a pile of numbers.',
+                  'Because the recipe is what gets saved, a theme can be reopened and changed later. It parses back to the decisions that made it, not to a pile of numbers.',
                   '',
                   '## What "cannot save" means',
                   '',
@@ -279,9 +279,9 @@ export const cdwrIo: SiteDefinition = {
           columns: '3',
           items: [
             {
-              title: 'Four decisions',
+              title: 'A handful of decisions',
               description:
-                'Brand, base, surface and radius. Everything else follows from them.'
+                'Brand, base, surface, radius and typefaces, and where links and charts take their colour. Everything else follows.'
             },
             {
               title: 'Overrides are marked',
@@ -352,7 +352,7 @@ export const cdwrIo: SiteDefinition = {
                 markdown: [
                   '## One build, many sites',
                   '',
-                  'The platform is built once, when a change is merged. That one build is then started as many times as there are sites, and each start is told which site it is. Everything that differs between two sites — the domain, the certificate, the secrets, the database — arrives at start-up rather than being baked in.',
+                  'The platform is built once, when a change is merged. That one build is then started as many times as there are sites, and each start is told which site it is. Everything that differs between two sites — the domain, the certificate, the secrets — arrives at start-up rather than being baked in. Their content lives in one shared database, kept apart by the platform itself.',
                   '',
                   'So codeware.se and cdwr.io are the same software, running twice. A third client site would be the same software running a third time, with different everything else.',
                   '',
@@ -400,7 +400,7 @@ export const cdwrIo: SiteDefinition = {
                   '',
                   '- **Payload CMS** — the editor and the content API. Open source, and the whole admin is code we can change.',
                   '- **Next.js** — serves the sites and the admin from one app.',
-                  '- **Postgres** — one database per environment, one schema per site.',
+                  '- **Postgres** — one database per environment, shared by every site in it; the platform keeps each site to its own content.',
                   '- **Fly.io** — runs each site as its own app, close to its visitors.',
                   '- **Infisical** — holds every secret, one folder per site, so nothing lives in the repository.',
                   '- **Nx** — one repository for the platform, its tools and its published packages.',
@@ -482,7 +482,7 @@ export const cdwrIo: SiteDefinition = {
                 'An Nx plugin adding Payload generators and executors to any workspace. Scaffold an app, run migrations, build for deploy.'
             },
             {
-              title: '@cdwr/create-nx-payload',
+              title: 'create-nx-payload',
               description:
                 'The preset behind the command above — a new workspace with Payload, Postgres and the deployment wiring already connected.'
             },
