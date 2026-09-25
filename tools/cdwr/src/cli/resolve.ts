@@ -206,12 +206,21 @@ export async function resolveInputs<I extends Inputs>(
   const canAsk = ctx.ui.interactive && !ctx.flags.nonInteractive;
 
   for (const [key, spec] of Object.entries(inputs)) {
+    const flag = flagOf(key, spec);
+    const given = raw[key];
     if (spec.when && !spec.when(resolved)) {
+      // Asked for but not applicable: dropping it silently would run the
+      // command without what was asked, and say nothing — `--fresh` with a
+      // production environment would quietly become a plain apply
+      if (given !== undefined) {
+        throw new UsageError(
+          `--${flag} does not apply with the other inputs given`,
+          `${spec.description ?? spec.prompt} Remove it, or change what it depends on`
+        );
+      }
       resolved[key] = undefined;
       continue;
     }
-    const flag = flagOf(key, spec);
-    const given = raw[key];
     let value: unknown;
 
     const fallback =
