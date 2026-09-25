@@ -75,18 +75,36 @@ export type ApplyOptions = {
  */
 async function tenantLocale(
   payload: Payload,
-  tenantId: number,
+  tenant: Pick<Tenant, 'id' | 'supportedLocales'>,
   transactionID: string | number | undefined
 ): Promise<TypedLocale> {
   const { docs } = await payload.find({
     collection: 'site-settings',
-    where: { tenant: { in: [tenantId] } },
+    where: { tenant: { in: [tenant.id] } },
     depth: 0,
     limit: 1,
     req: { transactionID }
   });
 
-  return (docs[0]?.general?.defaultLocale as TypedLocale) ?? 'en';
+  return workspaceLocale(
+    docs[0]?.general?.defaultLocale,
+    tenant.supportedLocales
+  );
+}
+
+/**
+ * The locale a workspace's content is written in, when the caller names none.
+ *
+ * Its settings say so once they exist. A new workspace has no settings row
+ * yet, and English is only right when the workspace supports it — a
+ * Swedish-only one would get its content and its default locale written under
+ * a language it does not offer.
+ */
+export function workspaceLocale(
+  settingsLocale: string | null | undefined,
+  supportedLocales: ReadonlyArray<string> | null | undefined
+): TypedLocale {
+  return (settingsLocale ?? supportedLocales?.[0] ?? 'en') as TypedLocale;
 }
 
 /**
@@ -214,14 +232,11 @@ export async function applySiteDefinition(
     );
   }
 
-  // The tenant's own locale unless the caller insists. Defaulting to English
-  // wrote a Swedish workspace's localized fields under a locale its site never
-  // reads — and `cdwr tenant apply-site` passes none
   // The workspace's own locale unless the caller insists. Defaulting to
   // English wrote a Swedish workspace's localized fields under a locale its
   // site never reads — and `cdwr tenant apply-site` passes none
   const ctx = {
-    locale: locale ?? (await tenantLocale(payload, tenant.id, transactionID)),
+    locale: locale ?? (await tenantLocale(payload, tenant, transactionID)),
     transactionID
   };
 
@@ -451,7 +466,8 @@ export async function applySiteDefinition(
               ...general,
               // Not null in the database and without a default, so a workspace
               // that has no settings row yet cannot get one without this.
-              // `ctx.locale` is the tenant's own, or English when it has none
+              // `ctx.locale` is the tenant's own: its settings, else the
+              // first locale it supports
               defaultLocale: general?.defaultLocale ?? ctx.locale,
               landingPage: page(general?.landingPage, 'landingPage')
             },
@@ -499,7 +515,7 @@ export async function applySiteDefinition(
 async function findTenant(
   payload: Payload,
   slug: string
-): Promise<Pick<Tenant, 'id'>> {
+): Promise<Pick<Tenant, 'id' | 'supportedLocales'>> {
   const { docs } = await payload.find({
     collection: 'tenants',
     where: { slug: { equals: slug } },
