@@ -141,7 +141,7 @@ cdwr tenant diff-site --env=development --tenant=moon --definition=…
 drift    collection  document           meaning
 missing  pages       blocks             named by the definition, not in the tenant
 extra    pages       old-landing        created by this definition, since dropped from it
-extra    pages       christmas-offer    not created by any apply — an editor wrote it
+extra    pages       christmas-offer    no apply recorded — written in the admin, or older than the record
 
 1 missing, 2 extra, 4 in both
 ```
@@ -196,9 +196,14 @@ script.
 
 What it does, inside the same transaction as the apply:
 
-- **Removes every document this definition created** — found by the `managedBy`
-  an apply stamps on what it creates. Edits made to them in the admin go with
-  them; that is the point.
+- **Removes every page, post, form and category this definition created** —
+  found by the `managedBy` an apply stamps on what it creates — and creates
+  them again. Edits made to them in the admin go with them; that is the point.
+- **Reuses media and tags** it still names, and removes only the ones it has
+  dropped. Deleting media deletes its file outside the transaction, so a dry
+  run or a failed apply could lose a file whose row comes back; dropped media is
+  therefore removed only after the apply has committed. Tags stay because
+  reused media points at them.
 - **Never removes anything else.** A document with no `managedBy` — an editor's,
   or one created before the field existed — is left, even when the definition
   names it. The plan lists each one, since it is why the tenant will not match.

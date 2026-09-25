@@ -1,5 +1,8 @@
 import { convertMarkdownToLexical } from '@codeware/app-cms/util/content-templates';
-import { managedCollectionSlugs } from '@codeware/app-cms/util/definitions';
+import {
+  type ManagedCollectionSlug,
+  managedCollectionSlugs
+} from '@codeware/app-cms/util/definitions';
 import type { Page, Post, Tenant } from '@codeware/shared/util/payload-types';
 import { SiteDefinitionSchema } from '@codeware/shared/util/seed';
 import type { BundledMediaFile } from '@codeware/shared/util/seed';
@@ -17,8 +20,10 @@ import { ensurePost } from './local-api/ensure-post';
 import { ensureSiteSetting } from './local-api/ensure-site-setting';
 import { ensureTag } from './local-api/ensure-tag';
 import {
+  FRESH_POLICY,
   type RemovedDocument,
-  removeManagedDocuments
+  droppedReusedDocuments,
+  removeRecreatedDocuments
 } from './remove-managed-documents';
 import {
   type UnresolvedReference,
@@ -280,6 +285,9 @@ export async function applySiteDefinition(
 
   const removed: Array<RemovedDocument> = [];
   let handover: LandingHandover | undefined;
+  // Media the definition dropped. Deleting media deletes its file outside the
+  // transaction, so this waits until the transaction has committed
+  let droppedMedia: Array<RemovedDocument> = [];
 
   try {
     // Before anything is ensured, so what follows creates the definition's
@@ -292,12 +300,31 @@ export async function applySiteDefinition(
         tenant.id,
         transactionID
       );
+      // Read before anything changes: what this definition created and no
+      // longer names, in the collections it reuses rather than recreates
+      const dropped = droppedReusedDocuments(
+        await findExtraDocuments(payload, definition, tenant.id, {
+          transactionID
+        })
+      );
+
       removed.push(
-        ...(await removeManagedDocuments(payload, definition, tenant.id, {
+        ...(await removeRecreatedDocuments(payload, definition, tenant.id, {
           transactionID,
           exceptPages: handover ? [handover.id] : []
         }))
       );
+
+      // Tags hold no file, so a dropped one goes inside the transaction
+      for (const tag of dropped.filter((d) => d.collection === 'tags')) {
+        await payload.delete({
+          collection: 'tags',
+          id: tag.id,
+          req: { transactionID }
+        });
+        removed.push(tag);
+      }
+      droppedMedia = dropped.filter((d) => d.collection === 'media');
     }
 
     for (const tag of definition.tags ?? []) {
@@ -575,6 +602,26 @@ export async function applySiteDefinition(
       ? payload.db.commitTransaction(transactionID)
       : payload.db.rollbackTransaction(transactionID));
 
+    // Only now: the rows are committed, so a file removed here can never be
+    // the file of a row a rollback brings back. A dry run removes nothing and
+    // reports what it would remove
+    for (const media of droppedMedia) {
+      if (!keep) {
+        removed.push(media);
+        continue;
+      }
+      try {
+        await payload.delete({ collection: 'media', id: media.id });
+        removed.push(media);
+      } catch (error) {
+        // The apply itself has committed; a file that would not go is left
+        // and said so, rather than failing a write that already happened
+        payload.logger.warn(
+          `Fresh apply left media '${media.identifier}' in place: ${String(error)}`
+        );
+      }
+    }
+
     return {
       tenant: { slug: tenantSlug, id: tenant.id },
       dryRun: !keep,
@@ -585,13 +632,16 @@ export async function applySiteDefinition(
       removed,
       // Only the collections an apply owns: navigation and site settings are
       // one per tenant, always found, and never removed
+      // Only recreated collections: a reused one is expected to be found, and
+      // navigation and site settings are one per tenant and never removed
       kept: fresh
         ? outcomes.filter(
             ({ action, collection }) =>
               action === 'existed' &&
               (managedCollectionSlugs as ReadonlyArray<string>).includes(
                 collection
-              )
+              ) &&
+              FRESH_POLICY[collection as ManagedCollectionSlug] === 'recreate'
           )
         : []
     };
