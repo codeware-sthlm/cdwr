@@ -17,6 +17,9 @@ const report = (overrides: Partial<ApplyReport> = {}): ApplyReport => ({
   outcomes: [],
   unresolved: [],
   extra: [],
+  fresh: false,
+  removed: [],
+  kept: [],
   ...overrides
 });
 
@@ -179,6 +182,74 @@ describe('extraMeaning', () => {
   it("says a document no apply created is an editor's", () => {
     expect(extraMeaning({ ...extra, owner: 'nobody' })).toBe(
       'not created by any apply — an editor wrote it'
+    );
+  });
+});
+
+describe('a fresh apply', () => {
+  const fresh = report({
+    fresh: true,
+    removed: [
+      { collection: 'pages', identifier: 'home', id: 1 },
+      { collection: 'pages', identifier: 'dropped', id: 2 },
+      { collection: 'tags', identifier: 'old-tag', id: 3 }
+    ],
+    outcomes: [
+      { collection: 'pages', identifier: 'home', action: 'created' },
+      { collection: 'pages', identifier: 'written-by-hand', action: 'existed' },
+      { collection: 'site-settings', identifier: 'moon', action: 'existed' }
+    ],
+    // As the engine reports it: owned collections only
+    kept: [
+      { collection: 'pages', identifier: 'written-by-hand', action: 'existed' }
+    ]
+  });
+
+  it('shows what it removes beside what it creates, per collection', () => {
+    expect(planSteps(fresh)).toEqual([
+      'pages: 2 to remove, 1 to create, 1 already there',
+      'site-settings: 1 already there',
+      // Only emptied, never recreated — it still has to appear in the plan
+      'tags: 1 to remove'
+    ]);
+  });
+
+  it('names each document it could not replace, and why', () => {
+    const notes = planNotes(fresh).join('\n');
+
+    expect(notes).toContain(
+      '1 document(s) the definition names were not created by it'
+    );
+    expect(notes).toContain('  pages: written-by-hand');
+  });
+
+  it('never lists the one-per-tenant documents as kept', () => {
+    expect(planNotes(fresh).join('\n')).not.toContain('site-settings: moon');
+  });
+
+  it('says nothing of kept documents on an ordinary apply', () => {
+    const notes = planNotes({ ...fresh, fresh: false, kept: [] }).join('\n');
+
+    expect(notes).not.toContain('were not created by it');
+  });
+
+  it('is never nothing to apply while it has something to remove', () => {
+    expect(
+      nothingToApply(
+        report({
+          fresh: true,
+          removed: [{ collection: 'pages', identifier: 'home', id: 1 }],
+          outcomes: [
+            { collection: 'pages', identifier: 'home', action: 'existed' }
+          ]
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('counts what it removed in the summary', () => {
+    expect(resultSummary({ ...fresh, dryRun: false }).summary).toBe(
+      "Applied to 'moon': 3 removed, 1 document(s) created"
     );
   });
 });
