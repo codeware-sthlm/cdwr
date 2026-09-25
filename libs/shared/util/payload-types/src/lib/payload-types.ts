@@ -39,6 +39,10 @@ export type NavigationArrayItems =
           };
       labelSource?: ('document' | 'custom') | null;
       customLabel?: string | null;
+      /**
+       * A button stands out from the other links, for the one action you want a visitor to take. The footer lists it as a link.
+       */
+      appearance?: ('link' | 'button') | null;
       id?: string | null;
     }[]
   | null;
@@ -2734,6 +2738,7 @@ export interface NavigationArrayItemsSelect<T extends boolean = true> {
   reference?: T;
   labelSource?: T;
   customLabel?: T;
+  appearance?: T;
   id?: T;
 }
 /**

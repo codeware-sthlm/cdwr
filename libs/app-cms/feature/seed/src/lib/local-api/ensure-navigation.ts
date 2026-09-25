@@ -5,7 +5,7 @@ import type { Payload, TypedLocale } from 'payload';
 // Refine the model to type safe the data
 type NavigationReference = Pick<
   NonNullable<Pick<Navigation, 'items'>['items']>[number],
-  'reference' | 'customLabel' | 'labelSource'
+  'reference' | 'customLabel' | 'labelSource' | 'appearance'
 >;
 export type NavigationData = NonNullable<Pick<Navigation, 'tenant'>> & {
   items: Array<NavigationReference>;
@@ -80,12 +80,21 @@ export async function ensureNavigation(
     if (missingItems.length || dangling) {
       itemsToAdd = items
         .concat(missingItems)
-        .map(({ customLabel, id, labelSource = 'document', reference }) => ({
-          id,
-          customLabel,
-          reference,
-          labelSource
-        }));
+        .map(
+          ({
+            appearance = 'link',
+            customLabel,
+            id,
+            labelSource = 'document',
+            reference
+          }) => ({
+            id,
+            appearance,
+            customLabel,
+            reference,
+            labelSource
+          })
+        );
 
       await payload.update({
         collection: 'navigation',
@@ -107,10 +116,16 @@ export async function ensureNavigation(
   // No navigation found, create one with data items
 
   itemsToAdd = dataItems.map(
-    ({ customLabel, labelSource = 'document', reference }) => ({
+    ({
+      appearance = 'link',
+      customLabel,
+      labelSource = 'document',
+      reference
+    }) => ({
       reference,
       customLabel,
-      labelSource
+      labelSource,
+      appearance
     })
   );
 

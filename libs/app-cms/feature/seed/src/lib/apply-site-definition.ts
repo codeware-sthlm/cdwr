@@ -491,27 +491,30 @@ export async function applySiteDefinition(
     }
 
     if (definition.navigation?.length) {
-      const items = definition.navigation.flatMap(({ reference, label }) => {
-        const known = reference.relationTo === 'pages' ? pages : posts;
-        const value = known.get(reference.lookupSlug);
+      const items = definition.navigation.flatMap(
+        ({ appearance, reference, label }) => {
+          const known = reference.relationTo === 'pages' ? pages : posts;
+          const value = known.get(reference.lookupSlug);
 
-        if (value === undefined) {
-          unresolved.push({
-            blockType: 'navigation',
-            field: reference.relationTo,
-            lookup: reference.lookupSlug
-          });
-          return [];
-        }
-
-        return [
-          {
-            reference: { relationTo: reference.relationTo, value },
-            labelSource: label ? ('custom' as const) : ('document' as const),
-            customLabel: label ?? null
+          if (value === undefined) {
+            unresolved.push({
+              blockType: 'navigation',
+              field: reference.relationTo,
+              lookup: reference.lookupSlug
+            });
+            return [];
           }
-        ];
-      });
+
+          return [
+            {
+              reference: { relationTo: reference.relationTo, value },
+              labelSource: label ? ('custom' as const) : ('document' as const),
+              customLabel: label ?? null,
+              appearance
+            }
+          ];
+        }
+      );
 
       const { navigation } = await ensureNavigation(
         payload,

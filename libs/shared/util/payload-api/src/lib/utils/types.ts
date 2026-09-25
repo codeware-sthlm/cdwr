@@ -114,10 +114,18 @@ export type MethodOptions<T extends RestApiMethod> = T extends 'GET'
       body: Record<string, unknown>;
     };
 
+/** How a navigation item is drawn in the header; the footer lists every item as a link. */
+export type NavigationAppearance = 'link' | 'button';
+
 /**
  * Navigation tree item.
  */
 export type NavigationItem = {
+  /**
+   * How the header draws the item.
+   */
+  appearance: NavigationAppearance;
+
   /**
    * The collection for the navigation item.
    */

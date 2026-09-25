@@ -5,8 +5,20 @@ import { resolveFooter } from './resolve-footer';
 import type { NavigationItem } from './types';
 
 const navigationTree: Array<NavigationItem> = [
-  { collection: 'pages', key: 'nav-1', label: 'About', url: '/about' },
-  { collection: 'posts', key: 'nav-2', label: 'News', url: '/posts/news' }
+  {
+    appearance: 'link',
+    collection: 'pages',
+    key: 'nav-1',
+    label: 'About',
+    url: '/about'
+  },
+  {
+    appearance: 'link',
+    collection: 'posts',
+    key: 'nav-2',
+    label: 'News',
+    url: '/posts/news'
+  }
 ];
 
 /**

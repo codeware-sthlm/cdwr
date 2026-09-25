@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { t } from '@codeware/shared/util/i18n';
 import type { NavigationItem } from '@codeware/shared/util/payload-api';
 import {
@@ -58,7 +59,7 @@ export function MobileNavigation({
             </div>
             <nav aria-label={t(locale, 'navigation.menu')} className="mt-6">
               <ul className="text-core-nav-link -my-2">
-                {navigationTree.map(({ key, label, url }) => {
+                {navigationTree.map(({ appearance, key, label, url }) => {
                   const isActive = isActivePath(pathname, url);
 
                   const handleClick = (
@@ -69,6 +70,18 @@ export function MobileNavigation({
                     close();
                     navigate(url);
                   };
+
+                  if (appearance === 'button') {
+                    return (
+                      <li key={key} className="pt-4">
+                        <Button asChild>
+                          <a href={url} onClick={handleClick}>
+                            {label}
+                          </a>
+                        </Button>
+                      </li>
+                    );
+                  }
 
                   return (
                     <li key={key}>

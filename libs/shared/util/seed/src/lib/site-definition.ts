@@ -278,6 +278,8 @@ export type PostDefinition = Pick<Post, 'title'> & {
 export type NavigationItemDefinition = {
   reference: { relationTo: 'pages' | 'posts'; lookupSlug: string };
   label?: string;
+  /** A button stands out from the links; the footer still lists it as one */
+  appearance?: 'link' | 'button';
 };
 
 /**
