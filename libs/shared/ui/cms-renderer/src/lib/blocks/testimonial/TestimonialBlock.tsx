@@ -1,7 +1,7 @@
 import type { TestimonialBlock as TestimonialBlockProps } from '@codeware/shared/util/payload-types';
-import { ArrowRightIcon } from '@heroicons/react/24/outline';
 
 import { usePayload } from '../../providers/PayloadProvider';
+import { ArrowLink } from '../../utils/ArrowLink';
 import { resolveLinkGroup } from '../../utils/resolve-link-group';
 import { ImageBlock } from '../image/ImageBlock';
 
@@ -65,14 +65,12 @@ export const TestimonialBlock: React.FC<TestimonialBlockProps> = ({
               </div>
             )}
             {resolvedLink && (
-              <button
-                type="button"
+              <ArrowLink
                 onClick={() => navigate(resolvedLink.path, resolvedLink.newTab)}
-                className="text-core-link inline-flex items-center gap-1 text-sm font-medium whitespace-nowrap hover:underline"
+                className="whitespace-nowrap"
               >
                 {resolvedLink.label}
-                <ArrowRightIcon className="size-4" />
-              </button>
+              </ArrowLink>
             )}
           </div>
         )}

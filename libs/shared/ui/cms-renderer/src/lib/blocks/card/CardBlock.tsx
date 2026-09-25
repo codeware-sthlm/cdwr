@@ -60,7 +60,7 @@ export const CardBlock: React.FC<CardBlockProps> = ({ cards }) => {
               navigate(linkDetails.url, linkDetails.newTab)
             }
             className={cn(
-              'text-card-foreground group bg-card/50 hover:bg-card overflow-hidden rounded-lg border transition-all duration-300 ease-in-out',
+              'text-card-foreground group hover:border-core-link/40 bg-card/50 hover:bg-card overflow-hidden rounded-lg border transition-all duration-300 ease-in-out',
               {
                 'cursor-pointer':
                   linkDetails && linkDetails.navTrigger === 'card'
@@ -93,7 +93,7 @@ export const CardBlock: React.FC<CardBlockProps> = ({ cards }) => {
                       icon={icon as HeroIconName}
                       color={color as TailwindColor}
                       className={cn(
-                        'size-7 transition-all duration-300 ease-in-out group-hover:scale-110',
+                        'size-7 transition-all duration-300 ease-in-out motion-safe:group-hover:scale-110',
                         {
                           'text-primary/70 dark:text-primary-foreground/80 group-hover:text-core-link':
                             !color

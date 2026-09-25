@@ -468,10 +468,12 @@ export function BlockGalleryEntry({
             <div className="flex min-w-0 items-center gap-3">
               <LiveTag />
               <div className="min-w-0">
-                <DialogTitle className="truncate text-sm font-medium">
+                {/* Wraps rather than truncates: on a phone the controls take
+                    their own row, and the name is what says where you are */}
+                <DialogTitle className="text-core-headline text-base leading-snug font-semibold tracking-tight sm:text-lg">
                   {name ?? localized(meta.label, locale)}
                 </DialogTitle>
-                <DialogDescription className="text-muted-foreground truncate text-xs">
+                <DialogDescription className="text-muted-foreground mt-0.5 line-clamp-2 text-xs sm:line-clamp-1">
                   {doc
                     ? localized(doc.summary, locale)
                     : t(locale, 'gallery.liveNote')}
