@@ -1,5 +1,7 @@
 import type { SiteDefinition } from '../site-definition';
 
+import { infisicalLogo, playwrightLogo } from './tech-logos';
+
 /**
  * `cdwr.io` — the platform showcase, as data.
  *
@@ -186,14 +188,40 @@ export const cdwrIo: SiteDefinition = {
             'The interesting decisions are in how these fit together, not in the list itself.',
           surface: 'dark',
           items: [
-            { label: 'Payload CMS', url: 'https://payloadcms.com' },
-            { label: 'Next.js', url: 'https://nextjs.org' },
-            { label: 'Postgres', url: 'https://www.postgresql.org' },
-            { label: 'Fly.io', url: 'https://fly.io' },
-            { label: 'Infisical', url: 'https://infisical.com' },
-            { label: 'Nx', url: 'https://nx.dev' },
-            { label: 'Tailwind', url: 'https://tailwindcss.com' },
-            { label: 'Playwright', url: 'https://playwright.dev' }
+            {
+              label: 'Payload CMS',
+              url: 'https://payloadcms.com',
+              icon: 'payload'
+            },
+            { label: 'Next.js', url: 'https://nextjs.org', icon: 'nextjs' },
+            {
+              label: 'Supabase',
+              url: 'https://supabase.com',
+              icon: 'supabase'
+            },
+            { label: 'Fly.io', url: 'https://fly.io', icon: 'flyio' },
+            {
+              label: 'Infisical',
+              url: 'https://infisical.com',
+              logo: { source: 'svg', svgCode: infisicalLogo }
+            },
+            { label: 'Nx', url: 'https://nx.dev', icon: 'nx' },
+            {
+              label: 'Tailwind',
+              url: 'https://tailwindcss.com',
+              icon: 'tailwind'
+            },
+            {
+              label: 'Playwright',
+              url: 'https://playwright.dev',
+              logo: { source: 'svg', svgCode: playwrightLogo }
+            },
+            { label: 'Sentry', url: 'https://sentry.io', icon: 'sentry' },
+            {
+              label: 'GitHub',
+              url: 'https://github.com/codeware-sthlm/cdwr',
+              icon: 'github'
+            }
           ]
         },
         {

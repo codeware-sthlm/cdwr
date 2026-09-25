@@ -1036,6 +1036,63 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
               en: 'Optional external link',
               sv: 'Valfri extern länk'
             }
+          },
+          {
+            name: 'icon',
+            type: 'select',
+            label: {
+              en: 'Logo',
+              sv: 'Logotyp'
+            },
+            description: {
+              en: 'A technology’s own mark, drawn in its brand colour. Leave it empty to add a logo of your own.',
+              sv: 'En tekniks eget märke, i dess egen färg. Lämna tomt för att lägga till en egen logotyp.'
+            }
+          },
+          {
+            name: 'logo',
+            type: 'group',
+            conditional: true,
+            label: {
+              en: 'Own logo',
+              sv: 'Egen logotyp'
+            },
+            fields: [
+              {
+                name: 'source',
+                type: 'select',
+                label: {
+                  en: 'Source',
+                  sv: 'Källa'
+                }
+              },
+              {
+                name: 'svgCode',
+                type: 'textarea',
+                conditional: true,
+                label: {
+                  en: 'SVG code',
+                  sv: 'SVG-kod'
+                },
+                description: {
+                  en: 'Paste the SVG markup, with a viewBox. A part filled with currentColor follows the text colour, so a dark mark stays visible on a dark background.',
+                  sv: 'Klistra in SVG-koden, med en viewBox. En del som fylls med currentColor följer textfärgen, så att ett mörkt märke syns även mot mörk bakgrund.'
+                }
+              },
+              {
+                name: 'file',
+                type: 'upload',
+                conditional: true,
+                label: {
+                  en: 'Image',
+                  sv: 'Bild'
+                },
+                description: {
+                  en: 'A square image reads best. An image keeps its colours, so pick one that shows on this surface.',
+                  sv: 'En kvadratisk bild fungerar bäst. En bild behåller sina färger, så välj en som syns mot den här ytan.'
+                }
+              }
+            ]
           }
         ]
       }

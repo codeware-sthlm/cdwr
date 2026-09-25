@@ -1434,6 +1434,51 @@ export interface PillListBlock {
          * Optional external link
          */
         url?: string | null;
+        /**
+         * A technology’s own mark, drawn in its brand colour. Leave it empty to add a logo of your own.
+         */
+        icon?:
+          | (
+              | 'cloudflare'
+              | 'docker'
+              | 'flyio'
+              | 'github'
+              | 'github-actions'
+              | 'graphql'
+              | 'linear'
+              | 'mongodb'
+              | 'netlify'
+              | 'nextjs'
+              | 'nodejs'
+              | 'nx'
+              | 'payload'
+              | 'pnpm'
+              | 'postgresql'
+              | 'react'
+              | 'redis'
+              | 'remix'
+              | 'sentry'
+              | 'storybook'
+              | 'stripe'
+              | 'supabase'
+              | 'tailwind'
+              | 'typescript'
+              | 'vercel'
+              | 'vite'
+              | 'vitest'
+            )
+          | null;
+        logo?: {
+          source?: ('svg' | 'upload') | null;
+          /**
+           * Paste the SVG markup, with a viewBox. A part filled with currentColor follows the text colour, so a dark mark stays visible on a dark background.
+           */
+          svgCode?: string | null;
+          /**
+           * A square image reads best. An image keeps its colours, so pick one that shows on this surface.
+           */
+          file?: (number | null) | Media;
+        };
         id?: string | null;
       }[]
     | null;
