@@ -1,4 +1,5 @@
 import { convertMarkdownToLexical } from '@codeware/app-cms/util/content-templates';
+import { managedCollectionSlugs } from '@codeware/app-cms/util/definitions';
 import type { Page, Post, Tenant } from '@codeware/shared/util/payload-types';
 import { SiteDefinitionSchema } from '@codeware/shared/util/seed';
 import type { BundledMediaFile } from '@codeware/shared/util/seed';
@@ -15,6 +16,10 @@ import { ensurePage } from './local-api/ensure-page';
 import { ensurePost } from './local-api/ensure-post';
 import { ensureSiteSetting } from './local-api/ensure-site-setting';
 import { ensureTag } from './local-api/ensure-tag';
+import {
+  type RemovedDocument,
+  removeManagedDocuments
+} from './remove-managed-documents';
 import {
   type UnresolvedReference,
   resolveBlockReferences
@@ -43,6 +48,19 @@ export type ApplyReport = {
    * see content drifting away from its definition.
    */
   extra: Array<ExtraDocument>;
+  /** Whether this run removed the definition's documents before applying */
+  fresh: boolean;
+  /**
+   * What a fresh run removed first. Every entry was created by this
+   * definition; nothing without its `managedBy` is ever here. Empty unless
+   * `fresh`.
+   */
+  removed: Array<RemovedDocument>;
+  /**
+   * Documents a fresh run found and could not replace: named by the
+   * definition but not created by it. Empty unless `fresh`.
+   */
+  kept: Array<ApplyOutcome>;
 };
 
 export type ApplyOptions = {
@@ -64,6 +82,15 @@ export type ApplyOptions = {
    * here and every bundled filename resolves to a URL instead.
    */
   mediaBaseUrl?: string;
+  /**
+   * Remove what this definition created before applying it, so the tenant
+   * ends up matching the definition rather than only gaining what it lacks.
+   *
+   * Development only — the caller must refuse it anywhere else. Removal is by
+   * `managedBy` alone: an editor's document is never touched, and one the
+   * definition names but did not create is left and found as `existed`.
+   */
+  fresh?: boolean;
 };
 
 /**
@@ -174,7 +201,13 @@ export async function applySiteDefinition(
   definition: SiteDefinition,
   options: ApplyOptions
 ): Promise<ApplyReport> {
-  const { tenantSlug, dryRun = true, locale, mediaBaseUrl } = options;
+  const {
+    tenantSlug,
+    dryRun = true,
+    locale,
+    mediaBaseUrl,
+    fresh = false
+  } = options;
 
   const parsed = SiteDefinitionSchema.safeParse(definition);
   if (!parsed.success) {
@@ -245,7 +278,28 @@ export async function applySiteDefinition(
   // so they take the plain context
   const owned = { ...ctx, managedBy: definition.name };
 
+  const removed: Array<RemovedDocument> = [];
+  let handover: LandingHandover | undefined;
+
   try {
+    // Before anything is ensured, so what follows creates the definition's
+    // documents again rather than finding the old ones. Inside the `try`, so a
+    // removal that fails is rolled back with everything else
+    if (fresh) {
+      handover = await setAsideLandingPage(
+        payload,
+        definition,
+        tenant.id,
+        transactionID
+      );
+      removed.push(
+        ...(await removeManagedDocuments(payload, definition, tenant.id, {
+          transactionID,
+          exceptPages: handover ? [handover.id] : []
+        }))
+      );
+    }
+
     for (const tag of definition.tags ?? []) {
       tags.set(
         tag.slug,
@@ -488,9 +542,23 @@ export async function applySiteDefinition(
             }),
             tenant: tenant.id
           } as unknown as Parameters<typeof ensureSiteSetting>[1],
-          ctx
+          { ...ctx, definitionWins: fresh }
         )
       );
+    }
+
+    // The settings now point at the new landing page, so the old one can go
+    if (handover?.replaced) {
+      await payload.delete({
+        collection: 'pages',
+        id: handover.id,
+        req: { transactionID }
+      });
+      removed.push({
+        collection: 'pages',
+        identifier: handover.slug,
+        id: handover.id
+      });
     }
 
     // Read inside the transaction, so documents this run just created are not
@@ -512,12 +580,90 @@ export async function applySiteDefinition(
       dryRun: !keep,
       outcomes,
       unresolved,
-      extra
+      extra,
+      fresh,
+      removed,
+      // Only the collections an apply owns: navigation and site settings are
+      // one per tenant, always found, and never removed
+      kept: fresh
+        ? outcomes.filter(
+            ({ action, collection }) =>
+              action === 'existed' &&
+              (managedCollectionSlugs as ReadonlyArray<string>).includes(
+                collection
+              )
+          )
+        : []
     };
   } catch (error) {
     await payload.db.rollbackTransaction(transactionID);
     throw error;
   }
+}
+
+/** The landing page a fresh apply cannot delete up front. */
+type LandingHandover = {
+  id: number;
+  /** Its slug before it was set aside, for the report */
+  slug: string;
+  /** Whether a new landing page takes over, so the old one is removed at the end */
+  replaced: boolean;
+};
+
+/**
+ * Keep the tenant's landing page out of a fresh apply's up-front removal.
+ *
+ * The settings require a landing page — the column is not null, and its
+ * foreign key sets null on delete — so the page cannot be deleted while it is
+ * the landing page. When the definition names a landing page of its own, the
+ * old one is renamed out of the way, the apply creates the new one and points
+ * the settings at it, and the old one is removed last. When the definition
+ * names none, there is nothing to hand over to, so the page is simply kept.
+ *
+ * Only a page this definition created is touched; any other landing page is
+ * not the apply's to remove.
+ */
+async function setAsideLandingPage(
+  payload: Payload,
+  definition: SiteDefinition,
+  tenantId: number,
+  transactionID: string | number | undefined
+): Promise<LandingHandover | undefined> {
+  const { docs } = await payload.find({
+    collection: 'site-settings',
+    where: { tenant: { equals: tenantId } },
+    depth: 0,
+    limit: 1,
+    req: { transactionID }
+  });
+  const landing = docs[0]?.general?.landingPage;
+  if (typeof landing !== 'number') {
+    return undefined;
+  }
+
+  const page = await payload.findByID({
+    collection: 'pages',
+    id: landing,
+    depth: 0,
+    disableErrors: true,
+    req: { transactionID }
+  });
+  if (!page || page.managedBy !== definition.name) {
+    return undefined;
+  }
+
+  const replaced = Boolean(definition.siteSettings?.general?.landingPage);
+  if (replaced) {
+    // Frees the slug for the page the apply is about to create
+    await payload.update({
+      collection: 'pages',
+      id: page.id,
+      data: { slug: `${page.slug}--replaced-by-fresh-apply` },
+      req: { transactionID }
+    });
+  }
+
+  return { id: page.id, slug: page.slug as string, replaced };
 }
 
 /** The tenant a definition is applied to. It is never created here. */
