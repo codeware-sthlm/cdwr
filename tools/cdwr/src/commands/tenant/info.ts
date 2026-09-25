@@ -70,7 +70,7 @@ export default defineCommand<
     previewApp: ReturnType<typeof previewAppInput>;
     tenant: ReturnType<typeof input.string>;
   },
-  { tenants: Array<TenantDetails> }
+  { tenants: Array<TenantDetails>; requested: string | undefined }
 >({
   summary: 'What a workspace is: details, site settings, content counts',
   description:
@@ -102,15 +102,18 @@ export default defineCommand<
       (list) => `${list.length} workspace(s)`
     );
 
-    return readOnly({ tenants });
+    return readOnly({ tenants, requested: slug });
   },
 
-  async apply(ctx, { tenants }) {
+  async apply(ctx, { tenants, requested }) {
     if (tenants.length === 0) {
       return { summary: 'No workspaces yet', json: [] };
     }
 
-    if (tenants.length === 1) {
+    // Decided by what was asked, not by how many came back: an overview of a
+    // database that happens to hold one workspace is still an overview, and
+    // must not print its key
+    if (requested) {
       const [only] = tenants;
       ctx.ui.note(detailLines(only), only.name);
       return { summary: `'${only.slug}' read`, json: only };
