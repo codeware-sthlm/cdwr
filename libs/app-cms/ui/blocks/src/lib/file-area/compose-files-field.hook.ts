@@ -9,13 +9,7 @@ export const composeFilesHook: FieldHook<
   TypeWithTenant, // collection type
   FileAreaBlock['files'], // the virtual compose field type
   FileAreaBlock // block/sibling type
-> = async ({
-  operation,
-  req: { payload },
-  data,
-  siblingData: { tags },
-  value
-}) => {
+> = async ({ operation, req, data, siblingData: { tags }, value }) => {
   if (operation !== 'read') {
     return value;
   }
@@ -29,12 +23,14 @@ export const composeFilesHook: FieldHook<
     ? { tenant: { equals: data.tenant } }
     : {};
 
-  const res = await payload.find({
+  const res = await req.payload.find({
     collection: 'media',
     select: { tenant: false },
     where: { and: [{ tags: { in: tags } }, tenantQuery] },
     depth: 0,
-    pagination: false
+    pagination: false,
+    // Inside the caller's transaction, so media added in it is found
+    req
   });
 
   if (res.totalDocs) {

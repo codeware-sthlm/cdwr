@@ -24,9 +24,11 @@ export const ensureUniqueSlug: FieldHook<CollectionType> = async ({
   data,
   global,
   originalDoc,
-  req: { payload },
+  req,
   value
 }) => {
+  const { payload } = req;
+
   // Only applicable to collections
   if (!collection) {
     payload.logger.warn(
@@ -74,6 +76,8 @@ export const ensureUniqueSlug: FieldHook<CollectionType> = async ({
 
     // Find duplicate documents for the tenant
     const matchedDocs = await payload.find({
+      // Inside the caller's transaction: a slug freed earlier in it is free
+      req,
       collection: collection.slug,
       where: {
         and: [
@@ -88,6 +92,7 @@ export const ensureUniqueSlug: FieldHook<CollectionType> = async ({
     // Throw if the slug is already taken by another document in the same tenant
     if (matchedDocs.docs.length > 0) {
       const tenant = await payload.findByID({
+        req,
         collection: 'tenants',
         id: tenantId
       });
@@ -107,6 +112,7 @@ export const ensureUniqueSlug: FieldHook<CollectionType> = async ({
   // If the collection is not tenant scoped, check if the slug is unique across the entire workspace
   else {
     const matchedDocs = await payload.find({
+      req,
       collection: collection.slug,
       where: {
         and: [

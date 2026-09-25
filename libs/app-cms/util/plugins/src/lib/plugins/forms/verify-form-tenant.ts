@@ -17,7 +17,7 @@ import { APIError, type CollectionBeforeValidateHook } from 'payload';
  */
 export const verifyFormTenant: CollectionBeforeValidateHook<
   FormSubmission
-> = async ({ data, operation, req: { payload } }) => {
+> = async ({ data, operation, req }) => {
   if (operation !== 'create' || !data) {
     return data;
   }
@@ -30,14 +30,17 @@ export const verifyFormTenant: CollectionBeforeValidateHook<
     return data;
   }
 
-  const form = await payload.findByID({
+  const form = await req.payload.findByID({
     collection: 'forms',
     id: formId,
     depth: 0,
     // The caller cannot read a form it does not own, and that is exactly the
     // case to detect — resolve it here and answer with a denial, not a 404
     overrideAccess: true,
-    disableErrors: true
+    disableErrors: true,
+    // Inside the caller's transaction: a form created in it must not read as
+    // missing and answer a legitimate submission with a 403
+    req
   });
 
   if (!form || getId(form.tenant) !== tenantId) {
