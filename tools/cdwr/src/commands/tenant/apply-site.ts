@@ -39,13 +39,15 @@ export async function applyInPayload(
   databaseUrl: string,
   tenantSlug: string,
   definitionPath: string,
-  dryRun: boolean
+  dryRun: boolean,
+  fresh = false
 ): Promise<ApplyReport> {
   const { stdout } = await runCmsScript(root, 'apply-site.ts', environment, {
     APPLY_DATABASE_URL: databaseUrl,
     APPLY_TENANT_SLUG: tenantSlug,
     APPLY_DEFINITION: definitionPath,
-    APPLY_DRY_RUN: String(dryRun)
+    APPLY_DRY_RUN: String(dryRun),
+    APPLY_FRESH: String(fresh)
   });
 
   return parseApplyReport(stdout);
@@ -56,6 +58,7 @@ interface PlanData {
   databaseUrl: string;
   tenant: string;
   definitionPath: string;
+  fresh: boolean;
   report: ApplyReport;
 }
 
@@ -72,12 +75,13 @@ export default defineCommand<
     previewApp: ReturnType<typeof previewAppInput>;
     tenant: ReturnType<typeof input.string>;
     definition: ReturnType<typeof definitionInput>;
+    fresh: ReturnType<typeof input.optional<boolean>>;
   },
   PlanData
 >({
   summary: 'Fill a tenant from a site definition in the repository',
   description:
-    'The plan is produced by applying the definition and rolling it back, so it is what the write actually did rather than a guess. Nothing is deleted.',
+    'The plan is produced by applying the definition and rolling it back, so it is what the write actually did rather than a guess. Nothing is deleted — except with --fresh, in development, which first removes what this definition created.',
   danger: 'mutate',
   needs: ['fly', 'infisical'],
   inputs: {
@@ -87,10 +91,21 @@ export default defineCommand<
       prompt: 'Which tenant slug?',
       description: 'The workspace to fill. It must already exist'
     }),
-    definition: definitionInput('Which definition should fill it?')
+    definition: definitionInput('Which definition should fill it?'),
+    // Development only: asked there, and refused as a flag anywhere else
+    fresh: input.optional(
+      input.boolean({
+        prompt:
+          'Start fresh? Removes what this definition created, then applies it again',
+        description:
+          'Remove what this definition created first, so the site matches it — including edits made to those documents in the admin'
+      }),
+      (resolved) => resolved['environment'] === 'development'
+    )
   },
 
-  async plan(ctx, { environment, previewApp, tenant, definition }) {
+  async plan(ctx, { environment, previewApp, tenant, definition, fresh }) {
+    const isFresh = fresh === true;
     const definitionPath = resolveDefinitionPath(ctx.root, definition);
 
     const databaseUrl = await resolveDatabaseUrl(environment, previewApp);
@@ -105,7 +120,8 @@ export default defineCommand<
             url,
             tenant,
             definitionPath,
-            true
+            true,
+            isFresh
           )
         ),
       (r) => `${r.outcomes.length} document(s) considered`
@@ -134,12 +150,19 @@ export default defineCommand<
       nothing: nothingToApply(report)
         ? `'${tenant}' already has everything the definition names`
         : undefined,
-      data: { environment, databaseUrl, tenant, definitionPath, report }
+      data: {
+        environment,
+        databaseUrl,
+        tenant,
+        definitionPath,
+        fresh: isFresh,
+        report
+      }
     };
   },
 
   async apply(ctx, data) {
-    const { environment, databaseUrl, tenant, definitionPath } = data;
+    const { environment, databaseUrl, tenant, definitionPath, fresh } = data;
 
     const report = await ctx.ui.task(
       `Applying to '${tenant}'`,
@@ -151,7 +174,8 @@ export default defineCommand<
             url,
             tenant,
             definitionPath,
-            false
+            false,
+            fresh
           )
         ),
       (r) => `${r.outcomes.length} document(s)`

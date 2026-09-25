@@ -48,12 +48,25 @@ export function extraMeaning(extra: ExtraDocument): string {
   }
 }
 
+/** A document a fresh apply removed first — the engine's `RemovedDocument`, restated. */
+export type RemovedDocument = {
+  collection: string;
+  identifier: string;
+  id: number;
+};
+
 export type ApplyReport = {
   tenant: { slug: string; id: number };
   dryRun: boolean;
   outcomes: Array<AppliedOutcome>;
   unresolved: Array<UnresolvedReference>;
   extra: Array<ExtraDocument>;
+  /** Whether the definition's own documents were removed before applying */
+  fresh: boolean;
+  /** What a fresh apply removed first; empty otherwise */
+  removed: Array<RemovedDocument>;
+  /** Named by the definition but not created by it, so a fresh apply left it */
+  kept: Array<AppliedOutcome>;
 };
 
 /** Reads the report the script printed, or says the run produced none. */
@@ -93,14 +106,27 @@ export function countByCollection(
 
 /** One line per collection, saying what the apply would do to it. */
 export function planSteps(report: ApplyReport): Array<string> {
-  const steps = countByCollection(report.outcomes).map(
-    ({ collection, created, existed }) => {
-      const parts: Array<string> = [];
-      if (created) parts.push(`${created} to create`);
-      if (existed) parts.push(`${existed} already there`);
-      return `${collection}: ${parts.join(', ')}`;
+  const removedBy = new Map<string, number>();
+  for (const { collection } of report.removed) {
+    removedBy.set(collection, (removedBy.get(collection) ?? 0) + 1);
+  }
+
+  const counted = countByCollection(report.outcomes);
+  // A collection the fresh apply only emptied still has to show up
+  for (const collection of removedBy.keys()) {
+    if (!counted.some((entry) => entry.collection === collection)) {
+      counted.push({ collection, created: 0, existed: 0 });
     }
-  );
+  }
+
+  const steps = counted.map(({ collection, created, existed }) => {
+    const parts: Array<string> = [];
+    const removed = removedBy.get(collection);
+    if (removed) parts.push(`${removed} to remove`);
+    if (created) parts.push(`${created} to create`);
+    if (existed) parts.push(`${existed} already there`);
+    return `${collection}: ${parts.join(', ')}`;
+  });
 
   return steps.length ? steps : ['Nothing to apply'];
 }
@@ -124,6 +150,22 @@ export function planNotes(report: ApplyReport): Array<string> {
     }
   }
 
+  // A fresh apply removes only what this definition created, so anything
+  // still found was not its to remove — an editor's, or from before
+  // `managedBy` existed. Name each one: it is why the tenant will not match
+  const { kept } = report;
+  if (kept.length) {
+    notes.push(
+      `${kept.length} document(s) the definition names were not created by it, so they are left as they are:`
+    );
+    for (const { collection, identifier } of kept) {
+      notes.push(`  ${collection}: ${identifier}`);
+    }
+    notes.push(
+      '  Delete them once, or reseed, and the next fresh apply replaces them.'
+    );
+  }
+
   notes.push(
     'The plan above was produced by applying the definition and rolling it back, so Payload has already validated every field.'
   );
@@ -133,7 +175,10 @@ export function planNotes(report: ApplyReport): Array<string> {
 
 /** True when the plan found nothing worth applying. */
 export function nothingToApply(report: ApplyReport): boolean {
-  return report.outcomes.every(({ action }) => action === 'existed');
+  return (
+    report.removed.length === 0 &&
+    report.outcomes.every(({ action }) => action === 'existed')
+  );
 }
 
 export function resultSummary(report: ApplyReport): {
@@ -147,7 +192,9 @@ export function resultSummary(report: ApplyReport): {
   return {
     summary: report.dryRun
       ? `Nothing was written to '${report.tenant.slug}'`
-      : `Applied to '${report.tenant.slug}': ${created} document(s) created`,
+      : `Applied to '${report.tenant.slug}': ${
+          report.fresh ? `${report.removed.length} removed, ` : ''
+        }${created} document(s) created`,
     details: planSteps(report)
   };
 }
