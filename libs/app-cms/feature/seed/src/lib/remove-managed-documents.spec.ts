@@ -1,7 +1,11 @@
 import type { SiteDefinition } from '@codeware/shared/util/seed';
 import type { Payload } from 'payload';
 
-import { removeManagedDocuments } from './remove-managed-documents';
+import type { ExtraDocument } from './find-extra-documents';
+import {
+  droppedReusedDocuments,
+  removeRecreatedDocuments
+} from './remove-managed-documents';
 
 type Doc = Record<string, unknown> & { id: number; managedBy?: string | null };
 
@@ -34,18 +38,19 @@ const payloadWith = (tables: Record<string, Array<Doc>>) => {
 
 const definition = { name: 'cdwr.io', pages: [] } as unknown as SiteDefinition;
 const options = { transactionID: 'tx' };
+const mine = { managedBy: 'cdwr.io' };
 
-describe('removeManagedDocuments', () => {
+describe('removeRecreatedDocuments', () => {
   it("removes only this definition's documents, never an editor's or another's", async () => {
     const { payload, deleted } = payloadWith({
       pages: [
-        { id: 1, slug: 'home', managedBy: 'cdwr.io' },
+        { id: 1, slug: 'home', ...mine },
         { id: 2, slug: 'written-by-hand', managedBy: null },
         { id: 3, slug: 'moon-page', managedBy: 'moon' }
       ]
     });
 
-    const removed = await removeManagedDocuments(
+    const removed = await removeRecreatedDocuments(
       payload,
       definition,
       7,
@@ -59,35 +64,54 @@ describe('removeManagedDocuments', () => {
   });
 
   it('removes what points at a document before the document itself', async () => {
-    const mine = { managedBy: 'cdwr.io' };
     const { payload, deleted } = payloadWith({
-      tags: [{ id: 1, slug: 't', ...mine }],
       categories: [{ id: 2, slug: 'c', ...mine }],
-      media: [{ id: 3, filename: 'm.png', ...mine }],
       forms: [{ id: 4, title: 'Contact', ...mine }],
       pages: [{ id: 5, slug: 'p', ...mine }],
       posts: [{ id: 6, slug: 'q', ...mine }]
     });
 
-    await removeManagedDocuments(payload, definition, 7, options);
+    await removeRecreatedDocuments(payload, definition, 7, options);
 
-    expect(deleted).toEqual([
-      'posts:6',
-      'pages:5',
-      'forms:4',
-      'media:3',
-      'categories:2',
-      'tags:1'
-    ]);
+    expect(deleted).toEqual(['posts:6', 'pages:5', 'forms:4', 'categories:2']);
+  });
+
+  it('never deletes media or tags, which a fresh apply reuses', async () => {
+    // Media holds a file a rollback cannot bring back, and reused media points
+    // at tags by id — so neither is removed up front
+    const { payload, deleted } = payloadWith({
+      tags: [{ id: 1, slug: 't', ...mine }],
+      media: [{ id: 3, filename: 'm.png', ...mine }]
+    });
+
+    await removeRecreatedDocuments(payload, definition, 7, options);
+
+    expect(deleted).toEqual([]);
+  });
+
+  it('leaves a page the caller is handing over', async () => {
+    const { payload, deleted } = payloadWith({
+      pages: [
+        { id: 1, slug: 'home', ...mine },
+        { id: 2, slug: 'studio', ...mine }
+      ]
+    });
+
+    await removeRecreatedDocuments(payload, definition, 7, {
+      ...options,
+      exceptPages: [1]
+    });
+
+    expect(deleted).toEqual(['pages:2']);
   });
 
   it('names each document the way the extra-document report does', async () => {
     const { payload } = payloadWith({
-      media: [{ id: 3, filename: 'hero.png', managedBy: 'cdwr.io' }],
-      forms: [{ id: 4, title: 'Contact', managedBy: 'cdwr.io' }]
+      forms: [{ id: 4, title: 'Contact', ...mine }],
+      categories: [{ id: 2, slug: 'themes', ...mine }]
     });
 
-    const removed = await removeManagedDocuments(
+    const removed = await removeRecreatedDocuments(
       payload,
       definition,
       7,
@@ -96,7 +120,37 @@ describe('removeManagedDocuments', () => {
 
     expect(removed.map(({ identifier }) => identifier)).toEqual([
       'Contact',
-      'hero.png'
+      'themes'
+    ]);
+  });
+});
+
+describe('droppedReusedDocuments', () => {
+  const extra = (
+    collection: string,
+    owner: ExtraDocument['owner']
+  ): ExtraDocument => ({
+    collection,
+    identifier: `${collection}-${owner}`,
+    id: 1,
+    managedBy: owner === 'nobody' ? null : 'x',
+    owner
+  });
+
+  it('takes only what this definition created and dropped, in reused collections', () => {
+    const dropped = droppedReusedDocuments([
+      extra('media', 'this-definition'),
+      extra('tags', 'this-definition'),
+      // Recreated collections are handled up front, not here
+      extra('pages', 'this-definition'),
+      // Never this definition's to remove
+      extra('media', 'nobody'),
+      extra('tags', 'another-definition')
+    ]);
+
+    expect(dropped.map(({ identifier }) => identifier)).toEqual([
+      'media-this-definition',
+      'tags-this-definition'
     ]);
   });
 });
