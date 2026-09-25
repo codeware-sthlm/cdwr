@@ -179,9 +179,9 @@ describe('extraMeaning', () => {
     ).toBe("created by the definition 'moon'");
   });
 
-  it("says a document no apply created is an editor's", () => {
+  it('does not claim an editor wrote what may only predate the record', () => {
     expect(extraMeaning({ ...extra, owner: 'nobody' })).toBe(
-      'not created by any apply — an editor wrote it'
+      'no apply recorded — written in the admin, or older than the record'
     );
   });
 });

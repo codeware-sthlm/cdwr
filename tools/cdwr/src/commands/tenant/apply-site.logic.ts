@@ -44,7 +44,7 @@ export function extraMeaning(extra: ExtraDocument): string {
     case 'another-definition':
       return `created by the definition '${extra.managedBy}'`;
     case 'nobody':
-      return 'not created by any apply — an editor wrote it';
+      return 'no apply recorded — written in the admin, or older than the record';
   }
 }
 
