@@ -2,7 +2,7 @@
 
 import { BUILT_IN_TOKENS, themeLabel } from '@codeware/shared/theme';
 import { ThemeStudio } from '@codeware/shared/ui/theme-studio';
-import { parseThemeTokens } from '@codeware/shared/util/color';
+import { editableTokens, parseThemeTokens } from '@codeware/shared/util/color';
 import type { ThemeStudioBlock } from '@codeware/shared/util/payload-types';
 import { useMemo } from 'react';
 
@@ -18,18 +18,24 @@ import { useMemo } from 'react';
 export default function ThemeStudioEmbed({
   startFrom
 }: Pick<ThemeStudioBlock, 'startFrom'>) {
-  // The recipe is read back from the committed theme's tokens, the way the
-  // admin opens a platform theme — so the studio starts on the real thing,
-  // not on an approximation of it. Parsed once; the tokens never change while
-  // the page is up
-  const recipe = useMemo(() => {
+  // Opened exactly as the admin opens a platform theme: the recipe read back
+  // from the committed tokens, plus what the recipe cannot express. The recipe
+  // alone would redraw the theme's own surfaces and charts from defaults, so
+  // the studio would start on something that is not the theme it names
+  const opened = useMemo(() => {
     const tokens = BUILT_IN_TOKENS[startFrom];
-    return tokens ? parseThemeTokens(tokens).recipe : undefined;
+    if (!tokens) return undefined;
+    const parsed = parseThemeTokens(tokens);
+    return { recipe: parsed.recipe, overrides: editableTokens(parsed) };
   }, [startFrom]);
 
   return (
     <ThemeStudio
-      recipe={recipe}
+      // The studio copies its opening theme into state once, on mount, so a
+      // different theme has to be a different studio
+      key={startFrom}
+      recipe={opened?.recipe}
+      overrides={opened?.overrides}
       themeName={themeLabel(startFrom)}
       themeSlug={startFrom}
       canExport={false}

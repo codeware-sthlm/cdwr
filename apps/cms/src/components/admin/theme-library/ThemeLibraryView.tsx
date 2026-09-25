@@ -5,52 +5,13 @@ import {
   brokenReferences,
   buildThemeTokens,
   checkContrast,
+  editableTokens,
   parseThemeTokens
 } from '@codeware/shared/util/color';
 import type { AdminViewServerProps } from 'payload';
 import React from 'react';
 
 import { type BuiltInTheme, ThemeLibrary } from './ThemeLibrary.client';
-
-/**
- * What the studio is handed when a built-in is opened.
- *
- * Two things happen here, and both have to happen in one place or the card and
- * the studio disagree about the theme.
- *
- * A theme's own declarations are folded in with what the recipe cannot say.
- * `parseTheme` keeps them apart because writing a committed file back wants
- * them apart; nothing else does. A saved theme is reopened from its recipe and
- * its overrides, so a declaration travelling any other way is lost the moment
- * the fork is closed — and `codeware`'s `--core-surface-invert` then points at
- * an `--eerie-black` that no longer exists.
- *
- * A value the parser could not carry is dropped rather than copied. It would
- * resolve to nothing in a runtime theme, and the collection refuses a dangling
- * alias outright — so keeping it turns a fork into a save that fails, naming a
- * token the author never wrote. Falling back to the recipe is what the card
- * promises, and this is where that promise is kept.
- */
-const editableTokens = ({
-  overrides,
-  passthrough,
-  unresolved
-}: ReturnType<typeof parseThemeTokens>) => {
-  const carried = (tokens: ThemeTokens, scheme: 'light' | 'dark') =>
-    Object.fromEntries(
-      Object.entries(tokens).filter(
-        ([token]) =>
-          !unresolved.some(
-            (entry) => entry.scheme === scheme && entry.token === token
-          )
-      )
-    );
-
-  return {
-    light: carried({ ...passthrough.light, ...overrides.light }, 'light'),
-    dark: carried({ ...passthrough.dark, ...overrides.dark }, 'dark')
-  };
-};
 
 /**
  * Fitted once per process, not per render.
