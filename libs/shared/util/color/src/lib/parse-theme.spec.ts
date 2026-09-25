@@ -142,7 +142,7 @@ describe('parseTheme', () => {
 
     it.each([
       ['shadcn', { baseFamily: 'neutral', brandFamily: 'zinc' }],
-      ['codeware', { baseFamily: 'zinc', brandFamily: 'blue' }],
+      ['codeware', { baseFamily: 'zinc', brandFamily: 'yale-blue' }],
       ['spotlight', { baseFamily: 'zinc', brandFamily: 'teal' }],
       ['payload-admin', { baseFamily: 'zinc', brandFamily: 'yale-blue' }]
     ])('recovers the families of %s', (theme, expected) => {
