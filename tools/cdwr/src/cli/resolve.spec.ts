@@ -109,6 +109,42 @@ describe('an empty answer', () => {
   });
 });
 
+describe('a flag its condition rules out', () => {
+  const inputs = {
+    environment: input.enum(['development', 'production'], {
+      prompt: 'Which environment?'
+    }),
+    fresh: input.optional(
+      input.boolean({ prompt: 'Start fresh?' }),
+      (r) => r['environment'] === 'development'
+    )
+  };
+
+  it('is refused rather than dropped, so nothing asked for is silently skipped', async () => {
+    const { ctx } = context([]);
+
+    await expect(
+      resolveInputs(ctx, inputs, { environment: 'production', fresh: true })
+    ).rejects.toThrow('--fresh does not apply with the other inputs given');
+  });
+
+  it('is taken where its condition holds', async () => {
+    const { ctx } = context([]);
+
+    await expect(
+      resolveInputs(ctx, inputs, { environment: 'development', fresh: true })
+    ).resolves.toEqual({ environment: 'development', fresh: true });
+  });
+
+  it('is simply absent when neither given nor applicable', async () => {
+    const { ctx } = context([]);
+
+    await expect(
+      resolveInputs(ctx, inputs, { environment: 'production' })
+    ).resolves.toEqual({ environment: 'production', fresh: undefined });
+  });
+});
+
 describe('resolveInputs', () => {
   const inputs = {
     environment: input.enum(['preview', 'production'], {
