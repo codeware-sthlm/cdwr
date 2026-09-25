@@ -170,15 +170,46 @@ fields read by hand — a clean diff is necessary, not sufficient.
 
 **It never updates.** There is no `updated` outcome: a document that is already
 there is left exactly as it is. Editing a definition and re-applying it will not
-change pages that exist — it only fills in what is missing. To change an existing
-page, edit it in the admin, or remove it first.
+change pages that exist — it only fills in what is missing. In development, use
+a fresh apply for that (below).
 
 **It never deletes.** A definition says what should exist, not that nothing else
-may. A page it stops mentioning stays where it is.
+may. A page it stops mentioning stays where it is — except under a fresh apply,
+and then only if this definition created it.
 
 **It never seeds or migrates.** The script forces `SEED_SOURCE=off` and
 `DISABLE_DB_PUSH=true`, so applying a definition cannot rewrite the schema of
 the database it is pointed at.
+
+## Start fresh, in development
+
+The daily loop — change the definition, apply again, look — needs the tenant to
+_match_ the definition rather than only gain what it lacks:
+
+```sh
+cdwr tenant apply-site --env=development --tenant=cdwr-io --definition=… --fresh
+```
+
+From the `cdwr` menu it is the _Start fresh?_ question, which is asked only for
+development. Anywhere else the flag is refused, by the CLI and again by the cms
+script.
+
+What it does, inside the same transaction as the apply:
+
+- **Removes every document this definition created** — found by the `managedBy`
+  an apply stamps on what it creates. Edits made to them in the admin go with
+  them; that is the point.
+- **Never removes anything else.** A document with no `managedBy` — an editor's,
+  or one created before the field existed — is left, even when the definition
+  names it. The plan lists each one, since it is why the tenant will not match.
+  Delete it once, or reseed, and the next fresh apply replaces it.
+- **Hands the landing page over.** The settings require one, so the old landing
+  page is set aside, the new one created and pointed at, and only then removed.
+- **Lets the definition win in the site settings**, for the fields it states.
+  Fields it does not state are left as they are.
+
+The plan shows each collection's removals beside its creations, so a dry run
+says exactly what would go.
 
 ## Adding a block type
 
