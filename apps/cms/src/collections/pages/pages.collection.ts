@@ -1,6 +1,9 @@
 import { slugField, visibilityField } from '@codeware/app-cms/ui/fields';
 import { seoTab } from '@codeware/app-cms/ui/tabs';
-import { adminGroups } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import { BlockSlug } from '@codeware/shared/util/payload-types';
 import { getActiveKeys } from '@codeware/shared/util/pure';
 import type { CollectionConfig } from 'payload';
@@ -65,6 +68,7 @@ const pages: CollectionConfig<'pages'> = {
     plural: { en: 'Pages', sv: 'Sidor' }
   },
   fields: [
+    managedByField(),
     {
       name: 'name',
       label: { en: 'Name', sv: 'Namn' },

@@ -3,7 +3,10 @@ import {
   iconPickerField,
   slugField
 } from '@codeware/app-cms/ui/fields';
-import { adminGroups } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import type { CollectionConfig } from 'payload';
 
 import { userOnlyAccess } from '../../security/user-only-access';
@@ -34,6 +37,7 @@ const tags: CollectionConfig = {
     plural: { en: 'Tags', sv: 'Etiketter' }
   },
   fields: [
+    managedByField(),
     {
       name: 'name',
       type: 'text',

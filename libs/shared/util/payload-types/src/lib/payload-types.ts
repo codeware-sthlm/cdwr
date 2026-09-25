@@ -354,6 +354,7 @@ export interface CalloutBlock {
 export interface Media {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   filenameWithoutPrefix?: string | null;
   /**
    * Alternative text for SEO and accessibility.
@@ -587,6 +588,7 @@ export interface User {
 export interface Page {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   /**
    * The name of the page used for navigation links.
    */
@@ -705,6 +707,7 @@ export interface CardBlockLink {
 export interface Post {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   /**
    * The title of the post and name used in navigation.
    */
@@ -760,6 +763,7 @@ export interface Post {
 export interface Category {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   /**
    * The name of the category.
    */
@@ -1091,6 +1095,7 @@ export interface Form {
         id?: string | null;
       }[]
     | null;
+  managedBy?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1175,6 +1180,7 @@ export interface FileAreaBlock {
 export interface Tag {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   name: string;
   /**
    * Select an icon and color that represent the tag.
@@ -2594,6 +2600,7 @@ export interface PayloadMigration {
  */
 export interface CategoriesSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   name?: T;
   relations?:
     | T
@@ -2636,6 +2643,7 @@ export interface FaqSelect<T extends boolean = true> {
  */
 export interface MediaSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   filenameWithoutPrefix?: T;
   alt?: T;
   caption?: T;
@@ -2734,6 +2742,7 @@ export interface NavigationArrayItemsSelect<T extends boolean = true> {
  */
 export interface PagesSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   name?: T;
   header?: T;
   layout?: T | {};
@@ -2818,6 +2827,7 @@ export interface PlatformSettingsSelect<T extends boolean = true> {
  */
 export interface PostsSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   title?: T;
   heroImage?: T;
   content?: T;
@@ -3037,6 +3047,7 @@ export interface StockMediaSelect<T extends boolean = true> {
  */
 export interface TagsSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   name?: T;
   brand?:
     | T
@@ -3383,6 +3394,7 @@ export interface FormsSelect<T extends boolean = true> {
         message?: T;
         id?: T;
       };
+  managedBy?: T;
   updatedAt?: T;
   createdAt?: T;
 }

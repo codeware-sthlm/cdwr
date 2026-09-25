@@ -60,9 +60,14 @@ const paragraph = (text: string) => ({
 export async function ensureForm(
   payload: Payload,
   data: FormData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /** Written on create only; an existing document is never claimed */
+    managedBy?: string;
+  }
 ): Promise<Form | number> {
-  const { locale, transactionID } = options;
+  const { locale, transactionID, managedBy } = options;
   const {
     confirmation,
     emailLabel,
@@ -94,6 +99,7 @@ export async function ensureForm(
   const form = await payload.create({
     collection: 'forms',
     data: {
+      ...(managedBy ? { managedBy } : {}),
       title,
       tenant,
       fields: [

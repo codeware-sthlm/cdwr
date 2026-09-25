@@ -30,7 +30,13 @@ describe('findExtraDocuments', () => {
     const extra = await findExtraDocuments(payload, definition, 7);
 
     expect(extra).toEqual([
-      { collection: 'pages', identifier: 'christmas-offer', id: 2 }
+      {
+        collection: 'pages',
+        identifier: 'christmas-offer',
+        id: 2,
+        managedBy: null,
+        owner: 'nobody'
+      }
     ]);
   });
 
@@ -57,7 +63,33 @@ describe('findExtraDocuments', () => {
     const extra = await findExtraDocuments(payload, definition, 7);
 
     expect(extra).toEqual([
-      { collection: 'media', identifier: 'unrelated.png', id: 5 }
+      {
+        collection: 'media',
+        identifier: 'unrelated.png',
+        id: 5,
+        managedBy: null,
+        owner: 'nobody'
+      }
+    ]);
+  });
+
+  it('says who put each extra there, from what the apply recorded', async () => {
+    const payload = payloadWith({
+      pages: [
+        { id: 1, slug: 'home', managedBy: 'test' },
+        { id: 2, slug: 'dropped', managedBy: 'test' },
+        { id: 3, slug: 'elsewhere', managedBy: 'other-site' },
+        { id: 4, slug: 'written-by-hand' }
+      ]
+    });
+
+    const extra = await findExtraDocuments(payload, definition, 7);
+
+    expect(extra.map(({ identifier, owner }) => [identifier, owner])).toEqual([
+      ['dropped', 'this-definition'],
+      ['elsewhere', 'another-definition'],
+      // No record is the safe answer: nothing ever removes these
+      ['written-by-hand', 'nobody']
     ]);
   });
 

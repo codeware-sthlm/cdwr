@@ -22,9 +22,14 @@ export type PageData = Pick<
 export async function ensurePage(
   payload: Payload,
   data: PageData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /** Written on create only; an existing document is never claimed */
+    managedBy?: string;
+  }
 ): Promise<Page | number> {
-  const { locale, transactionID } = options;
+  const { locale, transactionID, managedBy } = options;
   const { header, layout, name, slug, tenant, visibility } = data;
 
   // Check if the page exists with the given slug and tenant
@@ -50,6 +55,7 @@ export async function ensurePage(
   const page = await payload.create({
     collection: 'pages',
     data: {
+      ...(managedBy ? { managedBy } : {}),
       header,
       layout,
       name,

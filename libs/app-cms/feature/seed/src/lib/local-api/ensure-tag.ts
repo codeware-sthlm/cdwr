@@ -17,9 +17,14 @@ export type TagData = Pick<Tag, 'brand' | 'name' | 'slug' | 'tenant'> & {
 export async function ensureTag(
   payload: Payload,
   data: TagData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /** Written on create only; an existing document is never claimed */
+    managedBy?: string;
+  }
 ): Promise<Tag | number> {
-  const { locale, transactionID } = options;
+  const { locale, transactionID, managedBy } = options;
   const { brand, name, slug, tenant } = data;
   // Check if the tag exists with the given slug and tenant
   const tags = await payload.find({
@@ -44,6 +49,7 @@ export async function ensureTag(
   const tag = await payload.create({
     collection: 'tags',
     data: {
+      ...(managedBy ? { managedBy } : {}),
       brand,
       name,
       slug,

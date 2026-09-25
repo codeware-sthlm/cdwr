@@ -1,5 +1,8 @@
 import { slugField } from '@codeware/app-cms/ui/fields';
-import { adminGroups } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import type { CollectionConfig } from 'payload';
 
 import { userOnlyAccess } from '../../security/user-only-access';
@@ -30,6 +33,7 @@ const categories: CollectionConfig = {
     plural: { en: 'Categories', sv: 'Kategorier' }
   },
   fields: [
+    managedByField(),
     {
       name: 'name',
       type: 'text',

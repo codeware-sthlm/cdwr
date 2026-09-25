@@ -1,6 +1,18 @@
+import type { ManagedCollectionSlug } from '@codeware/app-cms/util/definitions';
 import type { Config } from '@codeware/shared/util/payload-types';
 import type { SiteDefinition } from '@codeware/shared/util/seed';
 import type { Payload } from 'payload';
+
+/**
+ * Who put an extra document there, as far as anything recorded it.
+ *
+ * - `this-definition` — an earlier apply of this definition created it, and the
+ *   definition has since dropped it. Safe to remove.
+ * - `another-definition` — some other definition's. Not this one's to touch.
+ * - `nobody` — no apply created it: an editor wrote it, or it predates the
+ *   record. Never removed by any apply.
+ */
+export type ExtraOwner = 'this-definition' | 'another-definition' | 'nobody';
 
 /** A document the tenant has that the definition does not name. */
 export type ExtraDocument = {
@@ -8,6 +20,9 @@ export type ExtraDocument = {
   /** The slug, filename or title the tenant knows it by */
   identifier: string;
   id: number;
+  /** The definition that created it, or `null` when none did */
+  managedBy: string | null;
+  owner: ExtraOwner;
 };
 
 type CollectionSlug = keyof Config['collections'];
@@ -77,6 +92,22 @@ const MATCHERS = [
   })
 ];
 
+/**
+ * Every collection that carries `managedBy` is matched here, and nothing else.
+ *
+ * A collection given the field without a matcher would never report its
+ * extras, so a fresh apply would never remove what a definition dropped there
+ * — quietly. This fails the build instead.
+ */
+type MatchedSlug = (typeof MATCHERS)[number]['collection'];
+type ExactlyTheManaged = [ManagedCollectionSlug] extends [MatchedSlug]
+  ? [MatchedSlug] extends [ManagedCollectionSlug]
+    ? true
+    : 'a matcher names a collection without managedBy'
+  : 'a collection with managedBy has no matcher';
+const everyManagedCollectionIsMatched: ExactlyTheManaged = true;
+void everyManagedCollectionIsMatched;
+
 const stem = (value: string) => value.replace(/\.[^.]+$/, '');
 
 /**
@@ -99,10 +130,10 @@ const isNamedMedia = (stored: string, wanted: Set<string>) =>
  * half of the report — not a list of things to delete, a list of things the
  * definition is not describing.
  *
- * It cannot say *why* a document is here. A page an editor wrote and a page a
- * previous apply created and the definition has since dropped look identical,
- * because nothing records which apply produced what. Until something does,
- * every entry is only ever reported.
+ * Each entry says who put it there, from the `managedBy` an apply writes on
+ * create: a page this definition created and has since dropped is removable,
+ * one an editor wrote never is. Documents created before the field existed
+ * carry none, so they read as `nobody` — the safe answer.
  *
  * @param payload - Payload instance
  * @param definition - The site, as data
@@ -144,7 +175,20 @@ export async function findExtraDocuments(
       const named = isMedia ? isNamedMedia(value, wanted) : wanted.has(value);
 
       if (!named) {
-        extra.push({ collection, identifier: value, id: doc.id as number });
+        const managedBy = doc.managedBy ?? null;
+
+        extra.push({
+          collection,
+          identifier: value,
+          id: doc.id as number,
+          managedBy,
+          owner:
+            managedBy === null
+              ? 'nobody'
+              : managedBy === definition.name
+                ? 'this-definition'
+                : 'another-definition'
+        });
       }
     }
   }

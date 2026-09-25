@@ -2,7 +2,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { tagsSelectField } from '@codeware/app-cms/ui/fields';
-import { adminGroups, getMimeTypes } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  getMimeTypes,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import { getId } from '@codeware/app-cms/util/misc';
 import { Media } from '@codeware/shared/util/payload-types';
 import type {
@@ -138,6 +142,7 @@ const media: CollectionConfig = {
     staticDir: path.resolve(dirname, '../../../public/media')
   },
   fields: [
+    managedByField(),
     {
       // Stores the filename without the tenant prefix for display in the admin UI.
       // Computed from filename + prefix on every write; never edited directly.

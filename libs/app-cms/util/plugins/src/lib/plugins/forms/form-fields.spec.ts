@@ -33,7 +33,9 @@ describe('formFields', () => {
       'notificationRecipientHint',
       'emails',
       'confirmationType',
-      'submissions'
+      'submissions',
+      // Which site definition created the form, like every document an apply owns
+      'managedBy'
     ]);
   });
 
@@ -65,6 +67,6 @@ describe('formFields', () => {
 
     expect(
       fields.map((field) => ('name' in field ? field.name : field.type))
-    ).toEqual(['title', 'submissions']);
+    ).toEqual(['title', 'submissions', 'managedBy']);
   });
 });
