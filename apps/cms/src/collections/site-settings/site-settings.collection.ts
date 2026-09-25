@@ -247,7 +247,10 @@ const siteSettings: CollectionConfig = {
                         collection: 'custom-themes',
                         depth: 0,
                         limit: 0,
-                        where: { id: { in: customIds } }
+                        where: { id: { in: customIds } },
+                        // Inside the save's transaction, so a theme created in
+                        // it is found
+                        req
                       })
                     ).docs.map(({ slug }) => slug)
                   : [];
