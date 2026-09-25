@@ -57,7 +57,7 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
           return (
             <Card
               key={i}
-              className="bg-card/50 hover:bg-card border transition-all duration-300 ease-in-out"
+              className="bg-card/50 hover:bg-card hover:border-core-link/40 border transition-colors duration-300"
             >
               <CardHeader>
                 {icon && (

@@ -1,8 +1,8 @@
 import type { FeatureSectionBlock as FeatureSectionBlockProps } from '@codeware/shared/util/payload-types';
 import { cn } from '@codeware/shared/util/ui';
-import { ArrowRightIcon } from '@heroicons/react/24/outline';
 
 import { usePayload } from '../../providers/PayloadProvider';
+import { ArrowLink } from '../../utils/ArrowLink';
 import { resolveLinkGroup } from '../../utils/resolve-link-group';
 import { ImageBlock } from '../image/ImageBlock';
 
@@ -45,14 +45,13 @@ export const FeatureSectionBlock: React.FC<FeatureSectionBlockProps> = ({
           </p>
         )}
         {resolvedLink && (
-          <button
-            type="button"
+          <ArrowLink
             onClick={() => navigate(resolvedLink.path, resolvedLink.newTab)}
-            className="border-border text-foreground hover:border-core-interactive mt-6 inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+            variant="outline"
+            className="mt-6"
           >
             {resolvedLink.label}
-            <ArrowRightIcon className="size-4" />
-          </button>
+          </ArrowLink>
         )}
       </div>
 

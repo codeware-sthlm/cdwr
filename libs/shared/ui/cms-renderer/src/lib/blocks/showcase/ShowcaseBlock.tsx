@@ -1,8 +1,8 @@
 import type { ShowcaseBlock as ShowcaseBlockProps } from '@codeware/shared/util/payload-types';
 import { cn } from '@codeware/shared/util/ui';
-import { ArrowRightIcon } from 'lucide-react';
 
 import { usePayload } from '../../providers/PayloadProvider';
+import { ArrowLink } from '../../utils/ArrowLink';
 import { resolveLinkGroup } from '../../utils/resolve-link-group';
 
 /**
@@ -39,16 +39,13 @@ export const ShowcaseBlock: React.FC<ShowcaseBlockProps> = ({
             </h2>
           )}
           {resolvedHeaderLink && (
-            <button
-              type="button"
+            <ArrowLink
               onClick={() =>
                 navigate(resolvedHeaderLink.path, resolvedHeaderLink.newTab)
               }
-              className="text-core-link inline-flex items-center gap-1 text-sm font-medium hover:underline"
             >
               {resolvedHeaderLink.label}
-              <ArrowRightIcon className="size-4" />
-            </button>
+            </ArrowLink>
           )}
         </div>
         {intro && (
@@ -89,16 +86,14 @@ export const ShowcaseBlock: React.FC<ShowcaseBlockProps> = ({
                   )}
                 </div>
                 {resolvedItemLink && (
-                  <button
-                    type="button"
+                  <ArrowLink
                     onClick={() =>
                       navigate(resolvedItemLink.path, resolvedItemLink.newTab)
                     }
-                    className="text-core-link mt-1 inline-flex shrink-0 items-center gap-1 text-sm font-medium hover:underline"
+                    className="mt-1 shrink-0"
                   >
                     {resolvedItemLink.label}
-                    <ArrowRightIcon className="size-4" />
-                  </button>
+                  </ArrowLink>
                 )}
               </div>
             </div>
