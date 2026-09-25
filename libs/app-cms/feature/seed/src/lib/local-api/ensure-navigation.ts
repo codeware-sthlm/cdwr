@@ -19,8 +19,9 @@ export type NavigationData = NonNullable<Pick<Navigation, 'tenant'>> & {
  *
  * Navigation labels is limited to the document title only.
  *
- * Navigation is updated when provided data contains new items.
- * Existing items will be kept unchanged and nothing will be removed.
+ * Navigation is updated in place when provided data contains new items.
+ * Existing items are kept unchanged; the only thing ever removed is an item
+ * whose page no longer exists, since it points at nothing.
  *
  * @param payload - Payload instance
  * @param data - Navigation data
@@ -62,43 +63,45 @@ export async function ensureNavigation(
     // and it points at nothing — so it is not navigation and is left behind
     // rather than compared against or written back
     const items = (storedItems ?? []).filter((item) => item.reference);
+    const dangling = (storedItems?.length ?? 0) - items.length;
 
-    if (items.length) {
-      // Add the missing items
-      const missingItems = dataItems.filter(
-        ({ reference }) =>
-          !items.some(
-            (item) =>
-              item.reference.relationTo === reference.relationTo &&
-              getId(item.reference.value) === getId(reference.value)
-          )
-      );
-      if (missingItems.length || items.length !== storedItems?.length) {
-        // Merge current items with the new ones
-        itemsToAdd = items
-          .concat(missingItems)
-          .map(({ customLabel, id, labelSource = 'document', reference }) => ({
-            id,
-            customLabel,
-            reference,
-            labelSource
-          }));
+    const missingItems = dataItems.filter(
+      ({ reference }) =>
+        !items.some(
+          (item) =>
+            item.reference.relationTo === reference.relationTo &&
+            getId(item.reference.value) === getId(reference.value)
+        )
+    );
 
-        await payload.update({
-          collection: 'navigation',
-          id: docId,
-          data: {
-            items: itemsToAdd
-          },
-          locale,
-          req: { transactionID }
-        });
-      }
-      return {
-        navigation: docId,
-        items: missingItems
-      };
+    // The document exists, so it is always updated in place — even when every
+    // stored item was dangling. Falling through to create would give the
+    // tenant a second navigation
+    if (missingItems.length || dangling) {
+      itemsToAdd = items
+        .concat(missingItems)
+        .map(({ customLabel, id, labelSource = 'document', reference }) => ({
+          id,
+          customLabel,
+          reference,
+          labelSource
+        }));
+
+      await payload.update({
+        collection: 'navigation',
+        id: docId,
+        data: {
+          items: itemsToAdd
+        },
+        locale,
+        req: { transactionID }
+      });
     }
+
+    return {
+      navigation: docId,
+      items: missingItems
+    };
   }
 
   // No navigation found, create one with data items
