@@ -240,6 +240,11 @@ export async function applySiteDefinition(
     transactionID
   };
 
+  // The six collections a definition owns documents in get its name on
+  // create. Navigation and site settings are one per tenant and never extra,
+  // so they take the plain context
+  const owned = { ...ctx, managedBy: definition.name };
+
   try {
     for (const tag of definition.tags ?? []) {
       tags.set(
@@ -247,7 +252,7 @@ export async function applySiteDefinition(
         record(
           'tags',
           tag.slug,
-          await ensureTag(payload, { ...tag, tenant: tenant.id }, ctx)
+          await ensureTag(payload, { ...tag, tenant: tenant.id }, owned)
         )
       );
     }
@@ -258,7 +263,11 @@ export async function applySiteDefinition(
         record(
           'categories',
           category.slug,
-          await ensureCategory(payload, { ...category, tenant: tenant.id }, ctx)
+          await ensureCategory(
+            payload,
+            { ...category, tenant: tenant.id },
+            owned
+          )
         )
       );
     }
@@ -295,7 +304,7 @@ export async function applySiteDefinition(
               }),
               tenant: tenant.id
             },
-            ctx
+            owned
           )
         )
       );
@@ -307,7 +316,7 @@ export async function applySiteDefinition(
         record(
           'forms',
           form.title,
-          await ensureForm(payload, { ...form, tenant: tenant.id }, ctx)
+          await ensureForm(payload, { ...form, tenant: tenant.id }, owned)
         )
       );
     }
@@ -347,7 +356,7 @@ export async function applySiteDefinition(
               tenant: tenant.id,
               visibility: page.visibility ?? 'public'
             },
-            ctx
+            owned
           )
         )
       );
@@ -394,7 +403,7 @@ export async function applySiteDefinition(
               title: post.title,
               visibility: post.visibility
             },
-            ctx
+            owned
           )
         )
       );

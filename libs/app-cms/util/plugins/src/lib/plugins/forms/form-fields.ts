@@ -1,3 +1,4 @@
+import { managedByField } from '@codeware/app-cms/util/definitions';
 import type { Field } from 'payload';
 
 import { messageEditor } from './message-editor';
@@ -67,7 +68,7 @@ export const formFields = ({
 }: {
   defaultFields: Field[];
 }): Field[] => {
-  const fields = [...defaultFields, submissions];
+  const fields = [...defaultFields, submissions, managedByField()];
 
   const emailsIndex = defaultFields.findIndex(
     (field) => 'name' in field && field.name === 'emails'

@@ -24,12 +24,17 @@ export type MediaData = Pick<Media, 'alt' | 'external' | 'tags' | 'tenant'> & {
 export async function ensureMedia(
   payload: Payload,
   data: MediaData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /** Written on create only; an existing document is never claimed */
+    managedBy?: string;
+  }
 ): Promise<Media | number> {
   let remoteFile: File | undefined = undefined;
   let localFile: string | undefined = undefined;
 
-  const { locale, transactionID } = options;
+  const { locale, transactionID, managedBy } = options;
   const { alt, external, filename, filePath, tags, tenant } = data;
 
   // Remote files are uploaded as buffers and local files are absolute filesystem paths
@@ -80,6 +85,7 @@ export async function ensureMedia(
   const mediaFile = await payload.create({
     collection: 'media',
     data: {
+      ...(managedBy ? { managedBy } : {}),
       alt,
       external,
       filename,

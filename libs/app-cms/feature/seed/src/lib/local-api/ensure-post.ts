@@ -23,9 +23,14 @@ export type PostData = Pick<
 export async function ensurePost(
   payload: Payload,
   data: PostData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /** Written on create only; an existing document is never claimed */
+    managedBy?: string;
+  }
 ): Promise<Post | number> {
-  const { locale, transactionID } = options;
+  const { locale, transactionID, managedBy } = options;
   const {
     authors,
     categories,
@@ -63,6 +68,7 @@ export async function ensurePost(
   const post = await payload.create({
     collection: 'posts',
     data: {
+      ...(managedBy ? { managedBy } : {}),
       authors,
       categories,
       content,

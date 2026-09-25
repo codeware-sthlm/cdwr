@@ -15,9 +15,14 @@ export type CategoryData = Pick<Category, 'name' | 'slug' | 'tenant'>;
 export async function ensureCategory(
   payload: Payload,
   data: CategoryData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /** Written on create only; an existing document is never claimed */
+    managedBy?: string;
+  }
 ): Promise<Category | number> {
-  const { locale, transactionID } = options;
+  const { locale, transactionID, managedBy } = options;
   const { name, slug, tenant } = data;
 
   // Check if the category exists with the given slug and tenant
@@ -43,6 +48,7 @@ export async function ensureCategory(
   const category = await payload.create({
     collection: 'categories',
     data: {
+      ...(managedBy ? { managedBy } : {}),
       name,
       slug,
       tenant

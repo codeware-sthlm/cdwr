@@ -11,6 +11,11 @@ export {
   globalCollectionSlugs,
   isGlobalCollectionSlug
 } from './lib/global-collections';
+export {
+  type ManagedCollectionSlug,
+  managedByField,
+  managedCollectionSlugs
+} from './lib/managed-by';
 export { type MimeTypeSlug, getMimeTypes } from './lib/mime-types';
 export {
   type PlatformCollectionSlug,
