@@ -13,7 +13,7 @@ import {
 import { symbols, theme } from '../../ui/theme';
 
 import { applyInPayload } from './apply-site';
-import type { ApplyReport } from './apply-site.logic';
+import { type ApplyReport, extraMeaning } from './apply-site.logic';
 
 /**
  * How a tenant's site stands against a definition.
@@ -92,11 +92,11 @@ export default defineCommand<
         identifier,
         'named by the definition, not in the tenant'
       ]),
-      ...extra.map(({ collection, identifier }) => [
+      ...extra.map((document) => [
         theme.muted('extra'),
-        collection,
-        identifier,
-        'in the tenant, not named by the definition'
+        document.collection,
+        document.identifier,
+        extraMeaning(document)
       ])
     ];
 
