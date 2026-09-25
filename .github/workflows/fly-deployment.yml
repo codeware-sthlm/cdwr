@@ -181,6 +181,14 @@ jobs:
       ${{ needs.pre-deploy.outputs.environment != '' &&
       needs.pre-deploy.outputs.apps != '[]' && github.event.action != 'closed'
       }}
+    # One build at a time across every branch and environment. The builder is
+    # shared, and simultaneous builds merge their identical steps and stall
+    # until they fail. `queue: max` makes the rest wait in order; the default
+    # keeps a single pending run and cancels it when another arrives
+    concurrency:
+      group: ${{ github.workflow }}-build
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     env:
       SENTRY_ORG: ${{ secrets.INF_SENTRY_ORG }}
