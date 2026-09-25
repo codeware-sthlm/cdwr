@@ -140,14 +140,23 @@ cdwr tenant diff-site --env=development --tenant=moon --definition=…
 ```text
 drift    collection  document           meaning
 missing  pages       blocks             named by the definition, not in the tenant
-extra    pages       christmas-offer    in the tenant, not named by the definition
+extra    pages       old-landing        created by this definition, since dropped from it
+extra    pages       christmas-offer    not created by any apply — an editor wrote it
 
-1 missing, 24 extra, 4 in both
+1 missing, 2 extra, 4 in both
 ```
 
-`extra` is a statement, not a proposal — nothing deletes it. It exists because
-content drifting away from its definition should be visible rather than
-discovered later.
+`extra` is a statement, not a proposal — `diff-site` deletes nothing. What it
+adds is **who put the document there**. An apply records the definition's
+`name` in a hidden `managedBy` field on everything it creates, and never on a
+document that was already there. So an extra is one of three things:
+
+- **this definition's**, dropped since — the only kind anything may remove
+- **another definition's** — not this one's business
+- **nobody's** — an editor wrote it, or it predates the record. Never removed
+
+Documents created before `managedBy` existed read as nobody's, which is the
+safe answer.
 
 The same list rides along in the apply report as `extra`, so a plan shows it too.
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type ApplyReport,
   countByCollection,
+  extraMeaning,
   nothingToApply,
   parseApplyReport,
   planNotes,
@@ -152,5 +153,32 @@ describe('resultSummary', () => {
     );
 
     expect(summary).toBe("Applied to 'moon': 1 document(s) created");
+  });
+});
+
+describe('extraMeaning', () => {
+  const extra = {
+    collection: 'pages',
+    identifier: 'dropped',
+    id: 1,
+    managedBy: null
+  } as const;
+
+  it('says a dropped page of this definition is its own', () => {
+    expect(
+      extraMeaning({ ...extra, managedBy: 'cdwr.io', owner: 'this-definition' })
+    ).toBe('created by this definition, since dropped from it');
+  });
+
+  it('names the other definition that owns it', () => {
+    expect(
+      extraMeaning({ ...extra, managedBy: 'moon', owner: 'another-definition' })
+    ).toBe("created by the definition 'moon'");
+  });
+
+  it("says a document no apply created is an editor's", () => {
+    expect(extraMeaning({ ...extra, owner: 'nobody' })).toBe(
+      'not created by any apply — an editor wrote it'
+    );
   });
 });

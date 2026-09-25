@@ -18,12 +18,35 @@ export type UnresolvedReference = {
   lookup: string;
 };
 
+/** Who put an extra document there — the engine's `ExtraOwner`, restated. */
+export type ExtraOwner = 'this-definition' | 'another-definition' | 'nobody';
+
 /** A document the tenant holds that the definition does not name. */
 export type ExtraDocument = {
   collection: string;
   identifier: string;
   id: number;
+  /** The definition that created it, or `null` when none did */
+  managedBy: string | null;
+  owner: ExtraOwner;
 };
+
+/**
+ * What an extra document means, in the words `diff-site` prints.
+ *
+ * Exhaustive by type, so an owner added to the engine's union and restated
+ * here cannot fall through to a blank column.
+ */
+export function extraMeaning(extra: ExtraDocument): string {
+  switch (extra.owner) {
+    case 'this-definition':
+      return 'created by this definition, since dropped from it';
+    case 'another-definition':
+      return `created by the definition '${extra.managedBy}'`;
+    case 'nobody':
+      return 'not created by any apply — an editor wrote it';
+  }
+}
 
 export type ApplyReport = {
   tenant: { slug: string; id: number };
