@@ -2,11 +2,19 @@ import type { Payload } from 'payload';
 
 import { ensureNavigation } from './ensure-navigation';
 
-type Item = { id?: string; reference?: { relationTo: 'pages'; value: number } };
+type Item = {
+  id?: string;
+  reference?: { relationTo: 'pages'; value: number };
+  appearance?: 'link' | 'button';
+};
 
 /** A Payload holding one tenant's navigation, recording what is written. */
 const payloadWith = (stored: Array<Item> | null) => {
-  const calls = { create: 0, update: [] as Array<Array<Item>> };
+  const calls = {
+    create: 0,
+    created: [] as Array<Item>,
+    update: [] as Array<Array<Item>>
+  };
   const payload = {
     find: async () =>
       stored === null
@@ -16,8 +24,9 @@ const payloadWith = (stored: Array<Item> | null) => {
       calls.update.push(data.items);
       return {};
     },
-    create: async () => {
+    create: async ({ data }: { data: { items: Array<Item> } }) => {
       calls.create += 1;
+      calls.created = data.items;
       return { id: 10 };
     }
   } as unknown as Payload;
@@ -55,7 +64,7 @@ describe('ensureNavigation', () => {
 
     await ensureNavigation(payload, { tenant: 1, items: [page(3)] }, options);
 
-    expect(calls).toEqual({ create: 0, update: [] });
+    expect(calls).toEqual({ create: 0, created: [], update: [] });
   });
 
   it('creates one only when the tenant has none', async () => {
@@ -64,5 +73,20 @@ describe('ensureNavigation', () => {
     await ensureNavigation(payload, { tenant: 1, items: [page(3)] }, options);
 
     expect(calls.create).toBe(1);
+  });
+
+  it('carries the appearance and defaults it to a link', async () => {
+    const { payload, calls } = payloadWith(null);
+
+    await ensureNavigation(
+      payload,
+      { tenant: 1, items: [page(3), { ...page(4), appearance: 'button' }] },
+      options
+    );
+
+    expect(calls.created.map((item) => item.appearance)).toEqual([
+      'link',
+      'button'
+    ]);
   });
 });

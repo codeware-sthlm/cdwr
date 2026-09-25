@@ -111,7 +111,8 @@ export const SiteDefinitionSchema = z
             relationTo: z.enum(['pages', 'posts']),
             lookupSlug: Slug
           }),
-          label: z.string().optional()
+          label: z.string().optional(),
+          appearance: z.enum(['link', 'button']).optional()
         })
       )
       .optional(),

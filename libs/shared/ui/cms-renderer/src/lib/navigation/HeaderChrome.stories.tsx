@@ -28,16 +28,21 @@ const meta = {
 
 export default meta;
 
+const link = (key: string, label: string): NavigationItem => ({
+  appearance: 'link',
+  collection: 'pages',
+  key,
+  label,
+  url: `/${key}`
+});
+
+// Ends in a button, so every chrome shows the call to action beside its links
 const navigationTree: Array<NavigationItem> = [
-  { collection: 'pages', key: 'blocks', label: 'Blocks', url: '/blocks' },
-  { collection: 'pages', key: 'studio', label: 'Studio', url: '/studio' },
-  {
-    collection: 'pages',
-    key: 'architecture',
-    label: 'Architecture',
-    url: '/architecture'
-  },
-  { collection: 'pages', key: 'devlog', label: 'Devlog', url: '/devlog' }
+  link('blocks', 'Blocks'),
+  link('studio', 'Studio'),
+  link('architecture', 'Architecture'),
+  link('devlog', 'Devlog'),
+  { ...link('start', 'Get started'), appearance: 'button' }
 ];
 
 /**

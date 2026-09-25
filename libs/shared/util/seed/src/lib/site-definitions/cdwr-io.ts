@@ -580,7 +580,8 @@ export const cdwrIo: SiteDefinition = {
     },
     {
       reference: { relationTo: 'pages', lookupSlug: 'start' },
-      label: 'Get started'
+      label: 'Get started',
+      appearance: 'button'
     }
   ],
 

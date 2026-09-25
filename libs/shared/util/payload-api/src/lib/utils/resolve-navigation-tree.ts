@@ -24,37 +24,41 @@ export const resolveNavigationTree = (
 ): Array<NavigationItem> => {
   const items = navigationData[0]?.items ?? [];
 
-  return items.reduce((acc, { customLabel, id, labelSource, reference }) => {
-    // Reference can be missing when a page or post is deleted
-    if (!reference || typeof reference.value === 'number') {
-      return acc;
-    }
-
-    const { relationTo, value } = reference;
-
-    const key = id ?? String(value.id);
-
-    const label =
-      labelSource === 'custom' && customLabel
-        ? customLabel
-        : relationTo === 'pages'
-          ? value.name
-          : value.title;
-
-    // Create URL where 'pages' is the default collection and not provided
-    const url =
-      relationTo === 'pages'
-        ? `/${value.slug}`
-        : `/${relationTo}/${value.slug}`;
-
-    return [
-      ...acc,
-      {
-        collection: relationTo,
-        key,
-        label,
-        url
+  return items.reduce(
+    (acc, { appearance, customLabel, id, labelSource, reference }) => {
+      // Reference can be missing when a page or post is deleted
+      if (!reference || typeof reference.value === 'number') {
+        return acc;
       }
-    ];
-  }, [] as Array<NavigationItem>);
+
+      const { relationTo, value } = reference;
+
+      const key = id ?? String(value.id);
+
+      const label =
+        labelSource === 'custom' && customLabel
+          ? customLabel
+          : relationTo === 'pages'
+            ? value.name
+            : value.title;
+
+      // Create URL where 'pages' is the default collection and not provided
+      const url =
+        relationTo === 'pages'
+          ? `/${value.slug}`
+          : `/${relationTo}/${value.slug}`;
+
+      return [
+        ...acc,
+        {
+          appearance: appearance ?? 'link',
+          collection: relationTo,
+          key,
+          label,
+          url
+        }
+      ];
+    },
+    [] as Array<NavigationItem>
+  );
 };

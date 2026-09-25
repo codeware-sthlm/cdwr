@@ -91,6 +91,24 @@ const navigation: CollectionConfig = {
             condition: isCustomLabelSource
           },
           required: true
+        },
+        {
+          name: 'appearance',
+          type: 'radio',
+          label: { en: 'Appearance', sv: 'Utseende' },
+          admin: {
+            layout: 'horizontal',
+            description: {
+              en: 'A button stands out from the other links, for the one action you want a visitor to take. The footer lists it as a link.',
+              sv: 'En knapp sticker ut från de andra länkarna, för den handling du helst vill att en besökare gör. I sidfoten visas den som en länk.'
+            }
+          },
+          enumName: enumName('navigation_appearance'),
+          defaultValue: 'link',
+          options: [
+            { label: { en: 'Link', sv: 'Länk' }, value: 'link' },
+            { label: { en: 'Button', sv: 'Knapp' }, value: 'button' }
+          ]
         }
       ],
       admin: {
