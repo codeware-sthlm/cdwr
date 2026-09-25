@@ -28,11 +28,17 @@ describe('the cdwr.io definition', () => {
     expect(JSON.stringify(cdwrIo)).not.toMatch(/apiKey|lookupApiKey/);
   });
 
-  it('states the form its start page points at', () => {
-    // The reference that would otherwise publish a page with a dead form block
-    const titles = (cdwrIo.forms ?? []).map(({ title }) => title);
+  it('puts the contact form on the start page, and states the form it points at', () => {
+    // A form block pointing at a form the definition does not state would
+    // publish a page with a dead form
+    const start = cdwrIo.pages.find(({ slug }) => slug === 'start');
+    const pointsAt = (start?.layout ?? []).flatMap((block) =>
+      block.blockType === 'form' && block.form ? [block.form.lookupTitle] : []
+    );
+    const stated = (cdwrIo.forms ?? []).map(({ title }) => title);
 
-    expect(titles).toContain('Contact');
+    expect(pointsAt).toEqual(['Contact']);
+    expect(stated).toContain('Contact');
   });
 
   it('states the routes the content plan lays out', () => {
