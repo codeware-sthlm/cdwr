@@ -20,9 +20,21 @@ export type SiteSettingData = Pick<
 export async function ensureSiteSetting(
   payload: Payload,
   data: SiteSettingData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /**
+     * Let every field the caller states overwrite what is stored.
+     *
+     * By default an existing row only has its gaps filled, which is right for
+     * content someone may have edited. A fresh apply in development means the
+     * opposite: the definition is the truth, including for fields that have a
+     * database default and so are never a gap. Unstated fields are left alone.
+     */
+    definitionWins?: boolean;
+  }
 ): Promise<SiteSetting | number> {
-  const { locale, transactionID } = options;
+  const { locale, transactionID, definitionWins } = options;
   const {
     footer: footerFromProps,
     forms: formsFromProps,
@@ -48,6 +60,29 @@ export async function ensureSiteSetting(
 
   if (siteSettings.totalDocs) {
     const { footer, forms, general, id, legal } = siteSettings.docs[0];
+
+    if (definitionWins) {
+      await payload.update({
+        collection: 'site-settings',
+        id,
+        data: {
+          general: { ...general, ...stated(generalFromProps) },
+          ...(footerFromProps && {
+            footer: { ...footer, ...stated(footerFromProps) }
+          }),
+          ...(formsFromProps && {
+            forms: { ...forms, ...stated(formsFromProps) }
+          }),
+          ...(legalFromProps && {
+            legal: { ...legal, ...stated(legalFromProps) }
+          })
+        },
+        locale,
+        req: { transactionID }
+      });
+
+      return id;
+    }
 
     // Footer columns have database defaults, so a footer left untouched still
     // has values — seeded content is what tells the two apart
@@ -131,4 +166,11 @@ export async function ensureSiteSetting(
   });
 
   return newSiteSetting;
+}
+
+/** What the caller actually stated: an absent field is not a request to clear it. */
+function stated<T extends object>(value: T | null | undefined): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value ?? {}).filter(([, field]) => field !== undefined)
+  ) as Partial<T>;
 }

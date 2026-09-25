@@ -108,6 +108,15 @@ type ExactlyTheManaged = [ManagedCollectionSlug] extends [MatchedSlug]
 const everyManagedCollectionIsMatched: ExactlyTheManaged = true;
 void everyManagedCollectionIsMatched;
 
+/**
+ * The field each owned collection's documents are known by, from the matchers
+ * above — so the report of what was removed names documents the same way the
+ * report of what is extra does.
+ */
+export const identifierField = Object.fromEntries(
+  MATCHERS.map(({ collection, field }) => [collection, field])
+) as Record<ManagedCollectionSlug, string>;
+
 const stem = (value: string) => value.replace(/\.[^.]+$/, '');
 
 /**

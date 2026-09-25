@@ -22,6 +22,8 @@ import { getScriptPayload, runScript } from './script-payload';
  * - `APPLY_TENANT_SLUG` - the workspace to fill (required)
  * - `APPLY_DEFINITION` - absolute path to the definition module (required)
  * - `APPLY_DRY_RUN` - anything but `false` rolls the transaction back
+ * - `APPLY_FRESH` - `true` removes what the definition created first.
+ *   Development only: refused on any other `DEPLOY_ENV`
  *
  * The report is written to stdout as `APPLY_REPORT=` for the caller.
  */
@@ -33,6 +35,16 @@ async function applySite() {
   // Only an explicit `false` commits. A missing or misspelled value rolls back,
   // which is the direction a mistake should fall
   const dryRun = process.env['APPLY_DRY_RUN'] !== 'false';
+
+  // Deletes documents. Refused here as well as in the CLI, so no caller —
+  // and no mistyped environment — can run it against shared content
+  const fresh = process.env['APPLY_FRESH'] === 'true';
+  if (fresh && process.env['DEPLOY_ENV'] !== 'development') {
+    console.error(
+      `Error: a fresh apply is for development only, not '${process.env['DEPLOY_ENV']}'`
+    );
+    process.exit(1);
+  }
 
   for (const [name, value] of [
     ['APPLY_DATABASE_URL', databaseUrl],
@@ -50,7 +62,8 @@ async function applySite() {
 
   const report = await applySiteDefinition(payload, definition, {
     tenantSlug: tenantSlug as string,
-    dryRun
+    dryRun,
+    fresh
   });
 
   console.log(
