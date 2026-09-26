@@ -81,7 +81,7 @@ export const Toolbar = () => {
           {/* View mode */}
           <div className="flex rounded-md border">
             <Button
-              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
               size="icon"
               aria-label={t(locale, 'fileArea.viewGrid')}
               onClick={() => setViewMode('grid')}
@@ -90,7 +90,7 @@ export const Toolbar = () => {
               <Grid className="size-4" />
             </Button>
             <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
               size="icon"
               aria-label={t(locale, 'fileArea.viewList')}
               onClick={() => setViewMode('list')}

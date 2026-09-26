@@ -57,6 +57,9 @@ export const PillListBlock: React.FC<PillListBlockProps> = ({
         )}
       </div>
 
+      {/* Each pill carries its own surface: in some themes the border is the
+          very colour of a subtle band, and a pill made of border alone
+          disappears into it */}
       <div className="flex flex-wrap gap-2">
         {items.map((item, i) =>
           item.url ? (
@@ -65,7 +68,7 @@ export const PillListBlock: React.FC<PillListBlockProps> = ({
               href={item.url}
               target="_blank"
               rel="noreferrer"
-              className="border-border text-foreground hover:border-core-link hover:text-core-link inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm transition-colors"
+              className="border-border bg-card text-foreground hover:border-core-link hover:text-core-link inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm shadow-xs transition-colors"
             >
               <PillLogo pill={item} />
               {item.label}
@@ -73,7 +76,7 @@ export const PillListBlock: React.FC<PillListBlockProps> = ({
           ) : (
             <span
               key={i}
-              className="border-border text-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm"
+              className="border-border bg-card text-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm shadow-xs"
             >
               <PillLogo pill={item} />
               {item.label}

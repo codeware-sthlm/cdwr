@@ -103,7 +103,7 @@ export const CardBlock: React.FC<CardBlockProps> = ({ cards }) => {
                   </div>
                 )}
                 {title && (
-                  <CardTitle className="text-secondary-foreground mt-4 text-xl">
+                  <CardTitle className="text-core-headline mt-4 text-xl font-semibold">
                     {title}
                   </CardTitle>
                 )}
@@ -119,7 +119,7 @@ export const CardBlock: React.FC<CardBlockProps> = ({ cards }) => {
 
             {/* Add the link to card footer */}
             {linkDetails && linkDetails.navTrigger === 'link' && (
-              <CardFooter>
+              <CardFooter className="mt-auto">
                 <Button
                   variant="link"
                   className="text-secondary-foreground group-hover:text-core-link flex h-auto items-center gap-2 p-0 text-sm transition-all duration-300 hover:cursor-pointer"
