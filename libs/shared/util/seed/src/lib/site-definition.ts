@@ -338,6 +338,14 @@ export type SiteSettingsDefinition = {
     Omit<NonNullable<SiteSetting['general']>, 'landingPage' | 'icon'>
   > & {
     landingPage?: { lookupSlug: string };
+    /**
+     * The site's mark, stated as SVG code only: an upload is a document the
+     * definition would have to point at, and markup can follow the text colour
+     */
+    icon?: Pick<
+      NonNullable<NonNullable<SiteSetting['general']>['icon']>,
+      'source' | 'svgCode'
+    > & { source: 'svg'; svgCode: string };
   };
   footer?: SiteSetting['footer'];
   legal?: {

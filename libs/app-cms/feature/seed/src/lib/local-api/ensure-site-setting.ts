@@ -99,9 +99,15 @@ export async function ensureSiteSetting(
       ((!legalFromProps.privacyPage || !!legal?.privacyPage) &&
         (!legalFromProps.termsPage || !!legal?.termsPage));
 
+    // A group comes back as an object even when nothing is in it, so an icon
+    // is only there once it names a source
+    const storedIcon = general.icon?.source ? general.icon : null;
+    const hasIconContent = !generalFromProps.icon?.source || !!storedIcon;
+
     if (
       general.appName &&
       general.landingPage &&
+      hasIconContent &&
       hasFooterContent &&
       hasFormsContent &&
       hasLegalContent
@@ -137,7 +143,7 @@ export async function ensureSiteSetting(
         general: {
           ...general,
           appName: general.appName ?? generalFromProps.appName,
-          icon: general.icon ?? generalFromProps.icon,
+          icon: storedIcon ?? generalFromProps.icon,
           landingPage: general.landingPage ?? generalFromProps.landingPage
         }
       },
