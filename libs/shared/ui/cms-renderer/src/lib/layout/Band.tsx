@@ -1,8 +1,24 @@
+import type { HeroBlock } from '@codeware/shared/util/payload-types';
 import { cn } from '@codeware/shared/util/ui';
 import { type VariantProps, cva } from 'class-variance-authority';
 import { forwardRef } from 'react';
 
 import { type DarkScope, usePayload } from '../providers/PayloadProvider';
+
+/** A block's `band`, as the Payload field defines it */
+export type SectionBand = NonNullable<HeroBlock['band']>;
+
+/** Every band, in the order a control offers them */
+export const sectionBands = [
+  'none',
+  'subtle',
+  'strong'
+] as const satisfies ReadonlyArray<SectionBand>;
+
+/** Fails to compile when the field gains a band `sectionBands` leaves out. */
+export type AssertEveryBandListed<
+  TMissing extends never = Exclude<SectionBand, (typeof sectionBands)[number]>
+> = TMissing;
 
 /** How a site scopes a theme's dark tokens */
 const siteDarkScope = (theme: string): DarkScope => ({
@@ -20,7 +36,7 @@ const band = cva('', {
       // Tokens resolve per element, so the theme's dark block applies from
       // here down and the text colour has to be stated again to pick it up
       strong: 'bg-core-background-content text-core-text in-[.dark]:bg-card'
-    },
+    } satisfies Record<SectionBand, string>,
     fit: {
       // Between the container's outer and inner layers, so it spans the sheet
       // and the inner layer keeps the content where it always is
@@ -39,8 +55,6 @@ const band = cva('', {
   ],
   defaultVariants: { band: 'none', fit: 'contained' }
 });
-
-export type SectionBand = NonNullable<VariantProps<typeof band>['band']>;
 
 type BandProps = React.ComponentPropsWithoutRef<'div'> & {
   band: SectionBand | null | undefined;
