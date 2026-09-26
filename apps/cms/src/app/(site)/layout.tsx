@@ -9,6 +9,7 @@ import {
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { isUser } from '@codeware/app-cms/util/misc';
 import {
+  THEME_COOKIE,
   customThemeCss,
   resolveTheme,
   themeLabel
@@ -32,7 +33,6 @@ import {
 } from '../../utils/member-login';
 
 import { Providers } from './providers';
-import { THEME_COOKIE } from './theme-cookie';
 
 export default async function RootLayout({
   children
