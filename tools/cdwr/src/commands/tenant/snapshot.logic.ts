@@ -106,9 +106,17 @@ export function shotsOf(
   );
 }
 
-/** A route as a file name part: `/` is `index`, slashes become dashes */
-export const routeName = (route: string): string =>
-  route === '/' ? 'index' : route.replace(/^\/+|\/+$/g, '').replace(/\//g, '-');
+/**
+ * A route as a file name part: `/` is `index`, anything else keeps only
+ * letters, digits, dots, dashes and underscores.
+ *
+ * A route can come from `--routes`, and a path separator left in it (a
+ * backslash on Windows) would let the file land outside the output folder.
+ */
+export const routeName = (route: string): string => {
+  const name = route.replace(/[^a-z0-9._-]+/gi, '-').replace(/^[-.]+|-+$/g, '');
+  return name || 'index';
+};
 
 export const fileName = ({
   route,
