@@ -103,6 +103,7 @@ out
 
 # Generated showcase imagery, reviewed by hand before upload
 .showcase-images/
+.site-snapshots/
 
 # cdwr CLI credentials (see tools/cdwr/.env.example)
 tools/cdwr/.env
