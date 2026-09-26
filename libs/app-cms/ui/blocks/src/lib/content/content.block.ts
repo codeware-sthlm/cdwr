@@ -1,3 +1,4 @@
+import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import { multiTenantLinkFeature } from '@codeware/app-cms/ui/lexical';
 import { enumName } from '@codeware/app-cms/util/db';
 import type { BlockSlug } from '@codeware/shared/util/payload-types';
@@ -143,6 +144,7 @@ export const contentBlock: Block = {
           label: false
         }
       ]
-    }
+    },
+    sectionBandField()
   ]
 };

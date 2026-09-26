@@ -86,6 +86,7 @@ export const cdwrIo: SiteDefinition = {
         {
           blockType: 'feature-cards',
           eyebrow: 'What you get',
+          band: 'subtle',
           heading: 'Four things, each of them demonstrable',
           columns: '2',
           items: [
@@ -141,6 +142,7 @@ export const cdwrIo: SiteDefinition = {
         {
           blockType: 'feature-section',
           eyebrow: 'Theme studio',
+          band: 'strong',
           heading: 'A theme you cannot save until it is readable',
           intro:
             'Pick a brand colour and the studio derives the rest — surfaces, borders, charts, prose. Every pairing is checked for readability as you go, and one that fails cannot be published.',
@@ -186,7 +188,7 @@ export const cdwrIo: SiteDefinition = {
           heading: 'Nothing exotic, and nothing hidden',
           intro:
             'The interesting decisions are in how these fit together, not in the list itself.',
-          surface: 'dark',
+          band: 'subtle',
           items: [
             {
               label: 'Payload CMS',

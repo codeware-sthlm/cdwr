@@ -1,4 +1,4 @@
-import { linkGroupField } from '@codeware/app-cms/ui/fields';
+import { linkGroupField, sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
 /**
@@ -51,6 +51,7 @@ export const calloutBlock: Block = {
     linkGroupField({
       localizedLabel: true,
       overrides: { interfaceName: 'CalloutLink', label: false }
-    })
+    }),
+    sectionBandField()
   ]
 };

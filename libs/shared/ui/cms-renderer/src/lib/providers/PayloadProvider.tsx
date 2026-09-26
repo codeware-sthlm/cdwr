@@ -80,6 +80,11 @@ export type TourSignupResponse =
       data: { error: string };
     };
 
+/** Attributes that mark an element as the dark scheme of a theme */
+export type DarkScope = {
+  className?: string;
+} & Record<`data-${string}`, string>;
+
 export type PayloadValue = {
   /**
    * Provide the running app's build metadata (name, version, sha, deployEnv,
@@ -284,6 +289,15 @@ export type PayloadValue = {
    * @param theme - One of `themes`
    */
   setTheme: (theme: string) => void;
+
+  /**
+   * The attributes that scope the active theme's dark tokens to an element.
+   *
+   * A strong band draws its blocks in the theme's dark scheme by carrying
+   * these. A site scopes a theme as `[data-theme='x'].dark`, which is the
+   * default; a host that scopes it differently, like Storybook, says how.
+   */
+  darkScope?: (theme: string) => DarkScope;
 
   /**
    * The resolved color scheme (what is actually displayed).

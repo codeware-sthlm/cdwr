@@ -1,4 +1,7 @@
-import { sectionHeaderFields } from '@codeware/app-cms/ui/fields';
+import {
+  sectionBandField,
+  sectionHeaderFields
+} from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
 import { type TechBrand, techIconsMap } from '@codeware/shared/ui/primitives';
 import type { Block, Condition, TypeWithID } from 'payload';
@@ -30,10 +33,6 @@ const logoSource =
  * Pill list block — a header plus a list of labelled pills, each with an
  * optional link and logo. Reusable for packages, tech stacks, tag strips, and
  * more. The logo is a mark from the platform's list or the tenant's own.
- *
- * The `surface` variant is the bounded flexibility lever: `dark` renders an
- * inverted band (reads as a full-width card), `light` keeps it on the content
- * surface.
  */
 export const pillListBlock: Block = {
   slug: 'pill-list',
@@ -44,23 +43,6 @@ export const pillListBlock: Block = {
   },
   fields: [
     ...sectionHeaderFields(),
-    {
-      name: 'surface',
-      type: 'select',
-      label: { en: 'Surface', sv: 'Yta' },
-      enumName: enumName('pill_list_surface'),
-      admin: {
-        description: {
-          en: 'Background treatment',
-          sv: 'Bakgrund'
-        }
-      },
-      options: [
-        { label: { en: 'Dark', sv: 'Mörk' }, value: 'dark' },
-        { label: { en: 'Light', sv: 'Ljus' }, value: 'light' }
-      ],
-      defaultValue: 'dark'
-    },
     {
       name: 'items',
       type: 'array',
@@ -150,14 +132,15 @@ export const pillListBlock: Block = {
               admin: {
                 condition: logoSource('upload'),
                 description: {
-                  en: 'A square image reads best. An image keeps its colours, so pick one that shows on this surface.',
-                  sv: 'En kvadratisk bild fungerar bäst. En bild behåller sina färger, så välj en som syns mot den här ytan.'
+                  en: 'A square image reads best. An image keeps its colours, so pick one that shows against the block’s background.',
+                  sv: 'En kvadratisk bild fungerar bäst. En bild behåller sina färger, så välj en som syns mot blockets bakgrund.'
                 }
               }
             }
           ]
         }
       ]
-    }
+    },
+    sectionBandField()
   ]
 };

@@ -1,13 +1,12 @@
 import { InlineIcon, TechIcon } from '@codeware/shared/ui/primitives';
 import type { PillListBlock as PillListBlockProps } from '@codeware/shared/util/payload-types';
-import { cn } from '@codeware/shared/util/ui';
 
 type Pill = NonNullable<PillListBlockProps['items']>[number];
 
 /** The mark from the platform's list, else the tenant's own, else nothing */
-function PillLogo({ pill, onDark }: { pill: Pill; onDark: boolean }) {
+function PillLogo({ pill }: { pill: Pill }) {
   if (pill.icon) {
-    return <TechIcon brand={pill.icon} onDark={onDark} className="size-4" />;
+    return <TechIcon brand={pill.icon} className="size-4" />;
   }
 
   const { source, svgCode, file } = pill.logo ?? {};
@@ -25,56 +24,34 @@ function PillLogo({ pill, onDark }: { pill: Pill; onDark: boolean }) {
 }
 
 /**
- * Pill list block — labelled pills with optional links.
+ * Pill list block — labelled pills with optional links and logos.
  *
- * `dark` surface: signature eerie-black band (always dark, regardless of page theme).
- * `light` surface: sits on the content surface with theme-native tokens.
+ * Draws no surface of its own: a band behind it is the block's `band` setting,
+ * which the renderer draws for every block alike.
  */
 export const PillListBlock: React.FC<PillListBlockProps> = ({
   eyebrow,
   heading,
   intro,
-  surface,
   items
 }) => {
   if (!items?.length) return null;
 
-  const isDark = surface !== 'light';
-
   return (
-    <section
-      className={cn('rounded-2xl px-8 py-12 md:px-12 md:py-16', {
-        'bg-core-surface-invert': isDark
-      })}
-    >
+    <section>
       <div className="mb-9 max-w-xl">
         {eyebrow && (
-          <p
-            className={cn(
-              'text-sm font-semibold tracking-[0.14em] uppercase',
-              isDark ? 'text-white/70' : 'text-core-link'
-            )}
-          >
+          <p className="text-core-link text-sm font-semibold tracking-[0.14em] uppercase">
             {eyebrow}
           </p>
         )}
         {heading && (
-          <h2
-            className={cn(
-              'mt-3 text-3xl font-semibold tracking-tight',
-              isDark ? 'text-white' : 'text-core-headline'
-            )}
-          >
+          <h2 className="text-core-headline mt-3 text-3xl font-semibold tracking-tight">
             {heading}
           </h2>
         )}
         {intro && (
-          <p
-            className={cn(
-              'mt-3.5 text-base leading-relaxed',
-              isDark ? 'text-white/70' : 'text-muted-foreground'
-            )}
-          >
+          <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
             {intro}
           </p>
         )}
@@ -88,27 +65,17 @@ export const PillListBlock: React.FC<PillListBlockProps> = ({
               href={item.url}
               target="_blank"
               rel="noreferrer"
-              className={cn(
-                'inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm transition-colors',
-                isDark
-                  ? 'border-white/20 text-white hover:border-white/50'
-                  : 'border-border text-foreground hover:border-core-link hover:text-core-link'
-              )}
+              className="border-border text-foreground hover:border-core-link hover:text-core-link inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm transition-colors"
             >
-              <PillLogo pill={item} onDark={isDark} />
+              <PillLogo pill={item} />
               {item.label}
             </a>
           ) : (
             <span
               key={i}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm',
-                isDark
-                  ? 'border-white/20 text-white/80'
-                  : 'border-border text-foreground'
-              )}
+              className="border-border text-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm"
             >
-              <PillLogo pill={item} onDark={isDark} />
+              <PillLogo pill={item} />
               {item.label}
             </span>
           )

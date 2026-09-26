@@ -1,3 +1,4 @@
+import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
 /**
@@ -40,6 +41,7 @@ export const postsBlock: Block = {
       max: 100,
       defaultValue: 10,
       required: true
-    }
+    },
+    sectionBandField()
   ]
 };

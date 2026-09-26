@@ -1,4 +1,7 @@
-import { socialLinksField } from '@codeware/app-cms/ui/fields';
+import {
+  sectionBandField,
+  socialLinksField
+} from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
 import type { SocialMediaBlock } from '@codeware/shared/util/payload-types';
 import type { Block, Condition, TypeWithID } from 'payload';
@@ -48,6 +51,7 @@ export const socialMediaBlock: Block = {
         }
       ],
       defaultValue: 'horizontal'
-    }
+    },
+    sectionBandField()
   ]
 };

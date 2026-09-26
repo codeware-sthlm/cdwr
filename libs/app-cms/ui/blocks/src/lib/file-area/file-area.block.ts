@@ -1,4 +1,7 @@
-import { virtualComposeField } from '@codeware/app-cms/ui/fields';
+import {
+  sectionBandField,
+  virtualComposeField
+} from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
 import { composeFilesHook } from './compose-files-field.hook';
@@ -43,6 +46,7 @@ export const fileAreaBlock: Block = {
         ]
       },
       value: composeFilesHook
-    })
+    }),
+    sectionBandField()
   ]
 };

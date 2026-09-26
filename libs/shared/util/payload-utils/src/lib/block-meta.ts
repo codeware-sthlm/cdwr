@@ -64,6 +64,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           en: 'Optional heading shown above the deployment details.',
           sv: 'Valfri rubrik som visas ovanför distributionsdetaljerna.'
         }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -224,6 +236,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             }
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -377,6 +401,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             ]
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -401,6 +437,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         name: 'code',
         type: 'code',
         required: true
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -443,6 +491,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             ]
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -561,6 +621,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             }
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -714,6 +786,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             }
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -746,6 +830,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             type: 'relationship'
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -777,6 +873,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         label: {
           en: 'Introduction',
           sv: 'Introduktion'
+        }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
         }
       }
     ]
@@ -907,6 +1015,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             }
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -930,6 +1050,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           en: 'Select an image.',
           sv: 'Välj en bild.'
         }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -945,6 +1077,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         name: 'media',
         type: 'upload',
         required: true
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -990,18 +1134,6 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         description: {
           en: 'Short paragraph below the heading',
           sv: 'Kort stycke under rubriken'
-        }
-      },
-      {
-        name: 'surface',
-        type: 'select',
-        label: {
-          en: 'Surface',
-          sv: 'Yta'
-        },
-        description: {
-          en: 'Background treatment',
-          sv: 'Bakgrund'
         }
       },
       {
@@ -1088,13 +1220,25 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
                   sv: 'Bild'
                 },
                 description: {
-                  en: 'A square image reads best. An image keeps its colours, so pick one that shows on this surface.',
-                  sv: 'En kvadratisk bild fungerar bäst. En bild behåller sina färger, så välj en som syns mot den här ytan.'
+                  en: 'A square image reads best. An image keeps its colours, so pick one that shows against the block’s background.',
+                  sv: 'En kvadratisk bild fungerar bäst. En bild behåller sina färger, så välj en som syns mot blockets bakgrund.'
                 }
               }
             ]
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -1136,6 +1280,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         description: {
           en: 'Maximum number of posts to display',
           sv: 'Maximalt antal inlägg att visa'
+        }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
         }
       }
     ]
@@ -1378,6 +1534,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             ]
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -1470,6 +1638,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         description: {
           en: 'How the social media links are displayed',
           sv: 'Hur länkarna ska visas'
+        }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
         }
       }
     ]
@@ -1648,6 +1828,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             }
           }
         ]
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -1719,6 +1911,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           en: 'One line saying what this is. Leave the default unless it is wrong for the page.',
           sv: 'En rad som säger vad detta är. Behåll standardtexten om den inte är fel för sidan.'
         }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+        }
       }
     ]
   },
@@ -1760,6 +1964,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         description: {
           en: 'Maximum number of tours to display',
           sv: 'Maximalt antal resor att visa'
+        }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
         }
       }
     ]

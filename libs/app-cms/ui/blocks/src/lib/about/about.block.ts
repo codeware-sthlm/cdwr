@@ -1,3 +1,4 @@
+import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
 /**
@@ -26,6 +27,7 @@ export const aboutBlock: Block = {
           sv: 'Valfri rubrik som visas ovanför distributionsdetaljerna.'
         }
       }
-    }
+    },
+    sectionBandField()
   ]
 };

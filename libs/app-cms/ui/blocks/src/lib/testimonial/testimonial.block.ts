@@ -1,4 +1,4 @@
-import { linkGroupField } from '@codeware/app-cms/ui/fields';
+import { linkGroupField, sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { TestimonialBlock } from '@codeware/shared/util/payload-types';
 import type { Block, Condition, TypeWithID } from 'payload';
 
@@ -99,6 +99,7 @@ export const testimonialBlock: Block = {
         label: false,
         admin: { condition: isLinkEnabled }
       }
-    })
+    }),
+    sectionBandField()
   ]
 };
