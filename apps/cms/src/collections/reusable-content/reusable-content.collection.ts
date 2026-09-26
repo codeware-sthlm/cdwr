@@ -19,8 +19,6 @@ const blocks: Record<BlockSlug, boolean> = {
   'file-area': true,
   form: true,
   image: true,
-  // Retired: `image` replaces it. Blocks already placed keep
-  // rendering — this only stops the admin offering it for new content
   'social-media': true,
   spacing: true,
   testimonial: false,

@@ -28,8 +28,6 @@ const blocks: Record<BlockSlug, boolean> = {
   form: true,
   hero: true,
   image: true,
-  // Retired: `image` replaces it. Blocks already placed keep
-  // rendering — this only stops the admin offering it for new content
   'pill-list': true,
   posts: true,
   'reusable-content': true,
