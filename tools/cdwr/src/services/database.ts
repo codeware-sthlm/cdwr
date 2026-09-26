@@ -198,7 +198,34 @@ const GUARD_MESSAGE = 'ended without completing';
  * script with the same inputs simply gets another go at winning the race.
  */
 export const isGuardedNoOp = (error: unknown): boolean =>
-  error instanceof CommandError && error.stderr.includes(GUARD_MESSAGE);
+  (error instanceof CommandError && error.stderr.includes(GUARD_MESSAGE)) ||
+  error instanceof SilentNoOpError;
+
+/** The `KEY=value` lines the cms scripts print to report what they did. */
+export type ReportKey =
+  | 'APPLY_REPORT'
+  | 'CREATED_TENANT'
+  | 'RESOLVED_TENANT'
+  | 'ROTATED_API_KEY'
+  | 'TENANT_DEPLOYMENTS'
+  | 'TENANT_DETAILS';
+
+/**
+ * A script exited cleanly without the line it prints once its work is done.
+ *
+ * The same race as the guard's, only without the guard firing: `main` never
+ * ran, so nothing was reported and nothing was written. A script that ran and
+ * failed exits non-zero instead, so this never hides a real failure.
+ */
+export class SilentNoOpError extends Error {
+  constructor(
+    readonly script: string,
+    readonly key: ReportKey
+  ) {
+    super(`${script} exited without reporting ${key} (COD-433)`);
+    this.name = 'SilentNoOpError';
+  }
+}
 
 /**
  * Runs work again while it fails as a guarded no-op, a bounded number of times.
@@ -234,11 +261,28 @@ export function runCmsScript(
   script: string,
   environment: Environment,
   env: Record<string, string>,
-  parentEnv: NodeJS.ProcessEnv = process.env
+  {
+    parentEnv = process.env,
+    reports
+  }: {
+    parentEnv?: NodeJS.ProcessEnv;
+    /** The line the script prints once done; a clean exit without it is a no-op */
+    reports?: ReportKey;
+  } = {}
 ): Promise<{ stdout: string; stderr: string }> {
-  return retryGuardedNoOp(() =>
-    runCmsScriptOnce(root, script, environment, env, parentEnv)
-  );
+  return retryGuardedNoOp(async () => {
+    const result = await runCmsScriptOnce(
+      root,
+      script,
+      environment,
+      env,
+      parentEnv
+    );
+    if (reports && reported(result.stdout, reports) === undefined) {
+      throw new SilentNoOpError(script, reports);
+    }
+    return result;
+  });
 }
 
 function runCmsScriptOnce(
@@ -266,9 +310,9 @@ function runCmsScriptOnce(
 }
 
 /** The value a script reports on a `KEY=value` line of its stdout */
-export const reported = (stdout: string, key: string): string | undefined =>
+export const reported = (stdout: string, key: ReportKey): string | undefined =>
   stdout.match(new RegExp(`^${key}=(.+)$`, 'm'))?.[1];
 
 /** Replace the value of a `KEY=...` line, so an error can quote the output safely */
-export const redactReported = (output: string, key: string): string =>
+export const redactReported = (output: string, key: ReportKey): string =>
   output.replace(new RegExp(`^(${key}=).*$`, 'gm'), '$1<redacted>');

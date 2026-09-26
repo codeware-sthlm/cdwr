@@ -86,7 +86,7 @@ describe('db test-migration', () => {
       'run-migrations.ts',
       'development',
       expect.objectContaining({ DATABASE_SCHEMA: 'payload' }),
-      {}
+      { parentEnv: {} }
     );
     // Stops any stale container, starts one, and stops it again afterwards
     expect(
