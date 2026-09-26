@@ -65,6 +65,7 @@ import * as migration_20260920_082000_cod_451_content_visibility from './2026092
 import * as migration_20260924_221914_cod_475_theme_studio_block from './20260924_221914_cod_475_theme_studio_block';
 import * as migration_20260925_081302_cod_501_managed_by from './20260925_081302_cod_501_managed_by';
 import * as migration_20260926_160659_cod_509_renderer_polish from './20260926_160659_cod_509_renderer_polish';
+import * as migration_20260926_232613_cod_511_custom_themes_managed_by from './20260926_232613_cod_511_custom_themes_managed_by';
 
 export const migrations = [
   {
@@ -401,5 +402,10 @@ export const migrations = [
     up: migration_20260926_160659_cod_509_renderer_polish.up,
     down: migration_20260926_160659_cod_509_renderer_polish.down,
     name: '20260926_160659_cod_509_renderer_polish'
+  },
+  {
+    up: migration_20260926_232613_cod_511_custom_themes_managed_by.up,
+    down: migration_20260926_232613_cod_511_custom_themes_managed_by.down,
+    name: '20260926_232613_cod_511_custom_themes_managed_by'
   }
 ];
