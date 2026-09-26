@@ -2,11 +2,7 @@ import { mkdirSync } from 'fs';
 import { join, relative } from 'path';
 import { pathToFileURL } from 'url';
 
-import {
-  SITE_THEMES,
-  type SiteTheme,
-  THEME_COOKIE
-} from '@codeware/shared/theme';
+import { THEME_COOKIE } from '@codeware/shared/theme';
 
 import { defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
@@ -19,9 +15,11 @@ import {
   COLOR_SCHEMES,
   type ColorScheme,
   type RoutedDefinition,
+  SNAPSHOT_THEMES,
   type Shot,
   type ShotResult,
   type SkipReason,
+  type SnapshotTheme,
   VIEWPORTS,
   VIEWPORT_NAMES,
   type ViewportName,
@@ -107,7 +105,7 @@ export default defineCommand<
     url: ReturnType<typeof input.string>;
     routes: ReturnType<typeof input.string>;
     definition: ReturnType<typeof input.optional<string>>;
-    themes: ReturnType<typeof input.multiselect<SiteTheme>>;
+    themes: ReturnType<typeof input.multiselect<SnapshotTheme>>;
     colorSchemes: ReturnType<typeof input.multiselect<ColorScheme>>;
     viewports: ReturnType<typeof input.multiselect<ViewportName>>;
   },
@@ -135,11 +133,16 @@ export default defineCommand<
       definitionInput('Take the pages of which definition?'),
       (resolved) => !resolved['routes']
     ),
-    themes: input.multiselect<SiteTheme>({
+    themes: input.multiselect<SnapshotTheme>({
       prompt: 'In which themes?',
-      description: 'Only the ones the site offers are drawn',
-      choices: () => SITE_THEMES.map((value) => ({ value })),
-      default: [...SITE_THEMES],
+      description:
+        "Only the ones the site offers are drawn; 'default' is what a first visit shows",
+      choices: () =>
+        SNAPSHOT_THEMES.map((value) => ({
+          value,
+          hint: value === 'default' ? 'no theme chosen' : undefined
+        })),
+      default: [...SNAPSHOT_THEMES],
       min: 1
     }),
     colorSchemes: input.multiselect<ColorScheme>({
@@ -202,9 +205,12 @@ export default defineCommand<
               viewport: VIEWPORTS[viewport],
               colorScheme
             });
-            await context.addCookies([
-              { name: THEME_COOKIE, value: theme, url }
-            ]);
+            // No cookie for `default`: that is the visitor who has chosen nothing
+            if (theme !== 'default') {
+              await context.addCookies([
+                { name: THEME_COOKIE, value: theme, url }
+              ]);
+            }
             const page = await context.newPage();
             let errors: Array<string> = [];
             page.on('console', (message) => {
@@ -221,6 +227,7 @@ export default defineCommand<
                 results.push({
                   ...shot,
                   path: null,
+                  drawnTheme: null,
                   status: null,
                   consoleErrors: [],
                   skipped
@@ -238,7 +245,7 @@ export default defineCommand<
                 theme: document.documentElement.getAttribute('data-theme'),
                 dark: document.documentElement.classList.contains('dark')
               }));
-              if (drawn.theme !== theme) {
+              if (theme !== 'default' && drawn.theme !== theme) {
                 skipped = 'theme-not-offered';
               } else if (drawn.dark !== (colorScheme === 'dark')) {
                 skipped = 'scheme-locked';
@@ -247,6 +254,7 @@ export default defineCommand<
                 results.push({
                   ...shot,
                   path: null,
+                  drawnTheme: drawn.theme,
                   status: response?.status() ?? null,
                   consoleErrors: errors,
                   skipped
@@ -270,6 +278,7 @@ export default defineCommand<
               results.push({
                 ...shot,
                 path: relative(ctx.root, file),
+                drawnTheme: drawn.theme,
                 status: response?.status() ?? null,
                 consoleErrors: errors
               });
