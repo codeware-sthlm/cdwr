@@ -1,4 +1,8 @@
-import { HeroIcon, type HeroIconName } from '@codeware/shared/ui/primitives';
+import {
+  HeroIcon,
+  type HeroIconName,
+  TechIcon
+} from '@codeware/shared/ui/primitives';
 import {
   Card,
   CardContent,
@@ -53,20 +57,28 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
         })}
       >
         {items.map((item, i) => {
-          const { icon, color } = item.brand ?? {};
+          const { icon, color, tech } = item.brand ?? {};
           return (
             <Card
               key={i}
               className="bg-card/50 hover:bg-card hover:border-core-link/40 border transition-colors duration-300"
             >
               <CardHeader>
-                {icon && (
+                {/* A technology's own mark wins over the icon: it is the more
+                    specific statement, and it brings its own colour */}
+                {(tech || icon) && (
                   <span className="bg-core-link/10 text-core-link mb-4 flex size-11 items-center justify-center rounded-xl">
-                    <HeroIcon
-                      icon={icon as HeroIconName}
-                      color={color as TailwindColor}
-                      className="size-5"
-                    />
+                    {tech ? (
+                      <TechIcon brand={tech} className="size-5" />
+                    ) : (
+                      icon && (
+                        <HeroIcon
+                          icon={icon as HeroIconName}
+                          color={color as TailwindColor}
+                          className="size-5"
+                        />
+                      )
+                    )}
                   </span>
                 )}
                 <CardTitle className="text-card-foreground text-lg">

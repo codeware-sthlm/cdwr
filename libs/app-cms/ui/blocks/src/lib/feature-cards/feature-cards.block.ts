@@ -2,7 +2,8 @@ import {
   colorPickerField,
   iconPickerField,
   sectionBandField,
-  sectionHeaderFields
+  sectionHeaderFields,
+  techIconField
 } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
 import type { Block } from 'payload';
@@ -76,6 +77,17 @@ export const featureCardsBlock: Block = {
                 colorPickerField({
                   props: { hideLabel: true },
                   override: { admin: { width: '25%' } }
+                }),
+                techIconField({
+                  name: 'tech',
+                  label: { en: 'Or a technology', sv: 'Eller en teknik' },
+                  admin: {
+                    width: '50%',
+                    description: {
+                      en: 'Shows the technology’s own mark in its brand colour, in place of the icon.',
+                      sv: 'Visar teknikens eget märke i dess egen färg, i stället för ikonen.'
+                    }
+                  }
                 })
               ]
             }

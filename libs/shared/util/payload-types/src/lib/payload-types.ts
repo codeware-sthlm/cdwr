@@ -142,7 +142,6 @@ export interface Config {
     form: FormBlock;
     hero: HeroBlock;
     image: ImageBlock;
-    media: MediaBlock;
     'pill-list': PillListBlock;
     posts: PostsBlock;
     'reusable-content': ReusableContentBlock;
@@ -1325,6 +1324,40 @@ export interface FeatureCardsBlock {
         brand?: {
           icon?: string | null;
           color?: string | null;
+          /**
+           * Shows the technology’s own mark in its brand colour, in place of the icon.
+           */
+          tech?:
+            | (
+                | 'cloudflare'
+                | 'docker'
+                | 'flyio'
+                | 'github'
+                | 'github-actions'
+                | 'graphql'
+                | 'linear'
+                | 'mongodb'
+                | 'netlify'
+                | 'nextjs'
+                | 'nodejs'
+                | 'nx'
+                | 'payload'
+                | 'pnpm'
+                | 'postgresql'
+                | 'react'
+                | 'redis'
+                | 'remix'
+                | 'sentry'
+                | 'storybook'
+                | 'stripe'
+                | 'supabase'
+                | 'tailwind'
+                | 'typescript'
+                | 'vercel'
+                | 'vite'
+                | 'vitest'
+              )
+            | null;
         };
         title: string;
         description: string;
@@ -1757,20 +1790,6 @@ export interface CalloutLink {
    */
   url?: string | null;
   label: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "MediaBlock".
- */
-export interface MediaBlock {
-  media: number | Media;
-  /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
-   */
-  band?: ('none' | 'subtle' | 'strong') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'media';
 }
 /**
  * Your own themes. Select them in Site Settings to make them available on the site.

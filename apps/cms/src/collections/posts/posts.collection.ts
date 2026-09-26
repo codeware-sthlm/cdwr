@@ -31,7 +31,6 @@ const blocks: Record<BlockSlug, boolean> = {
   image: true,
   // Retired: `image` replaces it. Blocks already placed keep
   // rendering — this only stops the admin offering it for new content
-  media: false,
   'social-media': true,
   spacing: true,
   testimonial: false,

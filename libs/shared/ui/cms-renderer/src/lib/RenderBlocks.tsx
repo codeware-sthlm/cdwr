@@ -20,7 +20,6 @@ import { FileAreaBlock } from './blocks/file-area/FileAreaBlock';
 import { FormBlock } from './blocks/form/FormBlock';
 import { HeroBlock } from './blocks/hero/HeroBlock';
 import { ImageBlock } from './blocks/image/ImageBlock';
-import { MediaBlock } from './blocks/media/MediaBlock';
 import { PillListBlock } from './blocks/pill-list/PillListBlock';
 import { PostsBlock } from './blocks/posts/PostsBlock';
 import { RichText } from './blocks/RichText';
@@ -186,7 +185,6 @@ const blocksMap: Record<
   form: FormBlock,
   hero: HeroBlock,
   image: ImageBlock,
-  media: MediaBlock,
   'pill-list': PillListBlock,
   posts: PostsBlock,
   'reusable-content': ReusableContentBlock,
