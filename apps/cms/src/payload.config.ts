@@ -319,6 +319,12 @@ export default buildConfig({
 
     payload.logger.info(`Using ${payload.db.name} database adapter`);
 
+    if (env.APP_MODE.type === 'host') {
+      payload.logger.info('Running in host mode');
+    } else {
+      payload.logger.info(`Running as ${env.APP_MODE.tenantId} in tenant mode`);
+    }
+
     // Before anything generates a link or answers an origin: a custom domain
     // lives in the database, so it cannot be known when the config above is
     // built. Platform first — it is the host app's own identity, ahead of
