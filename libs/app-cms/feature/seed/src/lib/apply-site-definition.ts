@@ -516,10 +516,12 @@ export async function applySiteDefinition(
         }
       );
 
+      // Fresh: the definition's label and appearance win for an item it names,
+      // the same way its stated site settings do
       const { navigation } = await ensureNavigation(
         payload,
         { items, tenant: tenant.id },
-        ctx
+        { ...ctx, definitionWins: fresh }
       );
       record('navigation', tenantSlug, navigation);
     }

@@ -31,12 +31,21 @@ export type NavigationData = NonNullable<Pick<Navigation, 'tenant'>> & {
 export async function ensureNavigation(
   payload: Payload,
   data: NavigationData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /**
+     * Let an item the data also names take its label and appearance from the
+     * data. Off, an existing item is left as it is: it may be an editor's
+     * choice, and a stored `link` cannot be told apart from the default
+     */
+    definitionWins?: boolean;
+  }
 ): Promise<{
   navigation: Navigation | number;
   items: Array<NavigationReference>;
 }> {
-  const { locale, transactionID } = options;
+  const { locale, transactionID, definitionWins = false } = options;
   const { items: dataItems, tenant } = data;
 
   if (!tenant) {
@@ -62,22 +71,45 @@ export async function ensureNavigation(
     // An item whose page was deleted keeps its row but loses its reference,
     // and it points at nothing — so it is not navigation and is left behind
     // rather than compared against or written back
-    const items = (storedItems ?? []).filter((item) => item.reference);
-    const dangling = (storedItems?.length ?? 0) - items.length;
+    const kept = (storedItems ?? []).filter((item) => item.reference);
+    const dangling = (storedItems?.length ?? 0) - kept.length;
+
+    const sameTarget = (a: NavigationReference, b: NavigationReference) =>
+      a.reference.relationTo === b.reference.relationTo &&
+      getId(a.reference.value) === getId(b.reference.value);
 
     const missingItems = dataItems.filter(
-      ({ reference }) =>
-        !items.some(
-          (item) =>
-            item.reference.relationTo === reference.relationTo &&
-            getId(item.reference.value) === getId(reference.value)
-        )
+      (dataItem) => !kept.some((item) => sameTarget(item, dataItem))
     );
+
+    // What the data says about an item both name, when the data is the truth
+    let restated = 0;
+    const items = kept.map((item) => {
+      const stated = definitionWins
+        ? dataItems.find((dataItem) => sameTarget(item, dataItem))
+        : undefined;
+      if (
+        !stated ||
+        ((stated.appearance ?? 'link') === (item.appearance ?? 'link') &&
+          (stated.labelSource ?? 'document') ===
+            (item.labelSource ?? 'document') &&
+          (stated.customLabel ?? null) === (item.customLabel ?? null))
+      ) {
+        return item;
+      }
+      restated++;
+      return {
+        ...item,
+        appearance: stated.appearance,
+        labelSource: stated.labelSource,
+        customLabel: stated.customLabel
+      };
+    });
 
     // The document exists, so it is always updated in place — even when every
     // stored item was dangling. Falling through to create would give the
     // tenant a second navigation
-    if (missingItems.length || dangling) {
+    if (missingItems.length || dangling || restated) {
       itemsToAdd = items
         .concat(missingItems)
         .map(

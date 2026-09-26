@@ -89,4 +89,28 @@ describe('ensureNavigation', () => {
       'button'
     ]);
   });
+
+  it('leaves an existing item as it is unless the definition wins', async () => {
+    // A stored `link` may be an editor's choice, so a normal apply keeps it
+    const stored = [{ ...page(3), appearance: 'link' as const }];
+    const wanted = [{ ...page(3), appearance: 'button' as const }];
+
+    const normal = payloadWith(stored);
+    await ensureNavigation(
+      normal.payload,
+      { tenant: 1, items: wanted },
+      options
+    );
+    expect(normal.calls.update).toEqual([]);
+
+    const fresh = payloadWith(stored);
+    await ensureNavigation(
+      fresh.payload,
+      { tenant: 1, items: wanted },
+      { ...options, definitionWins: true }
+    );
+    expect(fresh.calls.update[0].map((item) => item.appearance)).toEqual([
+      'button'
+    ]);
+  });
 });
