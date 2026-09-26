@@ -32,20 +32,6 @@ export const cdwrIo: SiteDefinition = {
   name: 'cdwr.io',
   description: 'The platform showcase — a live demo, not a description of one',
 
-  forms: [
-    {
-      title: 'Contact',
-      emailLabel: 'How do we reach you?',
-      emailPlaceholder: 'you@example.com',
-      submitLabel: 'Send',
-      confirmation: 'Thank you — we will be in touch.',
-      subject: 'New enquiry from cdwr.io',
-      // Without this the form has nowhere to send: a workspace this definition
-      // has just filled has no generic recipient in its settings yet
-      emailTo: 'hello@cdwr.io'
-    }
-  ],
-
   categories: [
     { name: 'Themes', slug: 'themes' },
     { name: 'Palette', slug: 'palette' },
@@ -238,8 +224,8 @@ export const cdwrIo: SiteDefinition = {
         {
           blockType: 'callout',
           showMark: true,
-          heading: 'Building something this would suit?',
-          body: 'The platform is open, and the work that goes into it is what Codeware does for a living. If this looks like the shape of your problem, say what you are building.',
+          heading: 'Build on the same platform',
+          body: 'The plugin, the preset and the deployment tooling behind this site are published. One command starts a workspace of your own.',
           link: { type: 'custom', url: '/start', label: 'Get started' }
         }
       ]
@@ -287,11 +273,7 @@ export const cdwrIo: SiteDefinition = {
                   '',
                   '## What "cannot save" means',
                   '',
-                  'Text on a background has to be readable, and readability has a number: the contrast between the two. The studio measures every pairing against the accessibility standard as you work, and the save button stays off while any pair is below the line. You can still pin any single value by hand — the studio marks it, so a later change of brand colour does not surprise you.',
-                  '',
-                  '## Try it',
-                  '',
-                  'The studio below is the real one, not a picture of it. Nothing you do here leaves your browser.'
+                  'Text on a background has to be readable, and readability has a number: the contrast between the two. The studio measures every pairing against the accessibility standard as you work, and the save button stays off while any pair is below the line. You can still pin any single value by hand — the studio marks it, so a later change of brand colour does not surprise you.'
                 ].join('\n')
               }
             }
@@ -324,42 +306,6 @@ export const cdwrIo: SiteDefinition = {
               title: 'Reopens as the recipe',
               description:
                 'A saved theme parses back to what made it, so it can be changed rather than only overwritten.'
-            }
-          ]
-        },
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown: [
-                  '## From the browser to the repository',
-                  '',
-                  'Open a built-in theme, adjust it, and take the result out as committed CSS — or save it to the site and use it at once. Both paths lead from the same editor. This is what the export looks like:'
-                ].join('\n')
-              }
-            }
-          ]
-        },
-        {
-          blockType: 'code',
-          language: 'plaintext',
-          code: [
-            '/* spotlight-fork/tokens-light.css — generated */',
-            '--brand-600: var(--color-teal-600);',
-            '--core-link: var(--brand-700);'
-          ].join('\n')
-        },
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown:
-                  'Next: [how a site becomes its own deployment →](/architecture)'
-              }
             }
           ]
         }
@@ -422,26 +368,57 @@ export const cdwrIo: SiteDefinition = {
           ]
         },
         {
-          blockType: 'content',
-          columns: [
+          // Infisical and Playwright are not in the icon set, and feature
+          // cards take no logo of their own yet, so they carry an icon
+          blockType: 'feature-cards',
+          eyebrow: 'Built on',
+          heading: 'What it is built on, and why',
+          columns: '2',
+          items: [
             {
-              size: 'full',
-              richText: {
-                markdown: [
-                  '## What it is built on, and why',
-                  '',
-                  '- **Payload CMS** — the editor and the content API. Open source, and the whole admin is code we can change.',
-                  '- **Next.js** — serves the sites and the admin from one app.',
-                  '- **Postgres** — one database per environment, shared by every site in it; the platform keeps each site to its own content.',
-                  '- **Fly.io** — runs each site as its own app, close to its visitors.',
-                  '- **Infisical** — holds every secret, one folder per site, so nothing lives in the repository.',
-                  '- **Nx** — one repository for the platform, its tools and its published packages.',
-                  '- **Tailwind** — the styling the themes compile down to.',
-                  '- **Playwright** — the tests that open the running site and use it.',
-                  '',
-                  'Next: [what shipped, and when →](/devlog)'
-                ].join('\n')
-              }
+              brand: { tech: 'payload' },
+              title: 'Payload CMS',
+              description:
+                'The editor and the content API. Open source, and the whole admin is code we can change.'
+            },
+            {
+              brand: { tech: 'nextjs' },
+              title: 'Next.js',
+              description: 'Serves the sites and the admin from one app.'
+            },
+            {
+              brand: { tech: 'supabase' },
+              title: 'Supabase',
+              description:
+                'Postgres and file storage. One database per environment, shared by every site in it; the platform keeps each site to its own content.'
+            },
+            {
+              brand: { tech: 'flyio' },
+              title: 'Fly.io',
+              description:
+                'Runs each site as its own app, close to its visitors.'
+            },
+            {
+              brand: { icon: 'KeyIcon' },
+              title: 'Infisical',
+              description:
+                'Holds every secret, one folder per site, so nothing lives in the repository.'
+            },
+            {
+              brand: { tech: 'nx' },
+              title: 'Nx',
+              description:
+                'One repository for the platform, its tools and its published packages.'
+            },
+            {
+              brand: { tech: 'tailwind' },
+              title: 'Tailwind',
+              description: 'The styling the themes compile down to.'
+            },
+            {
+              brand: { icon: 'CursorArrowRaysIcon' },
+              title: 'Playwright',
+              description: 'The tests that open the running site and use it.'
             }
           ]
         }
@@ -472,8 +449,8 @@ export const cdwrIo: SiteDefinition = {
         {
           blockType: 'hero',
           badge: 'Get started',
-          heading: 'Two ways in',
-          lede: 'Have Codeware build and run your site on the platform — or take the same setup this platform runs on and start your own. The plugin, the preset and the deployment tools are all published.'
+          heading: 'Start from the same setup',
+          lede: 'The plugin, the preset and the deployment tooling this platform runs on are all published. Take them and start a platform of your own.'
         },
         {
           blockType: 'content',
@@ -481,15 +458,8 @@ export const cdwrIo: SiteDefinition = {
             {
               size: 'full',
               richText: {
-                markdown: [
-                  '## Have it built',
-                  '',
-                  'The platform is open, and the work that goes into it is what Codeware does for a living. If this looks like the shape of your problem, say what you are building and we will tell you plainly whether it fits.',
-                  '',
-                  '## Build on it yourself',
-                  '',
+                markdown:
                   'One command scaffolds a new workspace with Payload, Postgres and the deployment wiring already connected:'
-                ].join('\n')
               }
             }
           ]
@@ -509,16 +479,19 @@ export const cdwrIo: SiteDefinition = {
           columns: '3',
           items: [
             {
+              brand: { tech: 'nx' },
               title: '@cdwr/nx-payload',
               description:
                 'An Nx plugin adding Payload generators and executors to any workspace. Scaffold an app, run migrations, build for deploy.'
             },
             {
+              brand: { tech: 'payload' },
               title: 'create-nx-payload',
               description:
                 'The preset behind the command above — a new workspace with Payload, Postgres and the deployment wiring already connected.'
             },
             {
+              brand: { tech: 'flyio' },
               title: '@cdwr/fly-node',
               description:
                 'A programmatic Node wrapper around the Fly CLI. What the deployment tooling here is built on.'
@@ -528,20 +501,14 @@ export const cdwrIo: SiteDefinition = {
         {
           blockType: 'callout',
           showMark: true,
-          heading: 'Say what you are building',
-          body: 'A sentence is enough. We answer every message, and we will say if it is not a fit.',
+          heading: 'The source is open',
+          body: 'Read how it is built, follow along as it changes, or open an issue when something does not work the way this site says it does.',
           link: {
             type: 'custom',
-            url: 'https://codeware.se',
-            label: 'About Codeware',
+            url: 'https://github.com/codeware-sthlm/cdwr',
+            label: 'Open the repository',
             newTab: true
           }
-        },
-        {
-          blockType: 'form',
-          form: { lookupTitle: 'Contact' },
-          enableIntro: true,
-          introContent: { markdown: 'What are you building?' }
         }
       ]
     }
