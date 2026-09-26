@@ -66,7 +66,8 @@ async function listTenantRows(
     root,
     'list-tenant-deployments.ts',
     environment,
-    { PROVISION_DATABASE_URL: databaseUrl }
+    { PROVISION_DATABASE_URL: databaseUrl },
+    { reports: 'TENANT_DEPLOYMENTS' }
   );
   const json = reported(stdout, 'TENANT_DEPLOYMENTS');
   if (!json) {

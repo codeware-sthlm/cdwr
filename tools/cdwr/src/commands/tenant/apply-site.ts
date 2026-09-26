@@ -42,13 +42,19 @@ export async function applyInPayload(
   dryRun: boolean,
   fresh = false
 ): Promise<ApplyReport> {
-  const { stdout } = await runCmsScript(root, 'apply-site.ts', environment, {
-    APPLY_DATABASE_URL: databaseUrl,
-    APPLY_TENANT_SLUG: tenantSlug,
-    APPLY_DEFINITION: definitionPath,
-    APPLY_DRY_RUN: String(dryRun),
-    APPLY_FRESH: String(fresh)
-  });
+  const { stdout } = await runCmsScript(
+    root,
+    'apply-site.ts',
+    environment,
+    {
+      APPLY_DATABASE_URL: databaseUrl,
+      APPLY_TENANT_SLUG: tenantSlug,
+      APPLY_DEFINITION: definitionPath,
+      APPLY_DRY_RUN: String(dryRun),
+      APPLY_FRESH: String(fresh)
+    },
+    { reports: 'APPLY_REPORT' }
+  );
 
   return parseApplyReport(stdout);
 }

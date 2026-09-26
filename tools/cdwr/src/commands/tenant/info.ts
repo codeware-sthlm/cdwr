@@ -35,7 +35,8 @@ async function describeInPayload(
     {
       DESCRIBE_DATABASE_URL: databaseUrl,
       DESCRIBE_TENANT_SLUG: slug ?? ''
-    }
+    },
+    { reports: 'TENANT_DETAILS' }
   );
 
   try {

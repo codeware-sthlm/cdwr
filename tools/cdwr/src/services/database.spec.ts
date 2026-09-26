@@ -1,4 +1,4 @@
-import { isGuardedNoOp, retryGuardedNoOp } from './database';
+import { SilentNoOpError, isGuardedNoOp, retryGuardedNoOp } from './database';
 import { CommandError } from './shell';
 
 const guarded = () =>
@@ -20,6 +20,12 @@ const real = () =>
 describe('isGuardedNoOp', () => {
   it('recognises the exit guard by its message on stderr', () => {
     expect(isGuardedNoOp(guarded())).toBe(true);
+  });
+
+  it('recognises a clean exit that never reported as the same race', () => {
+    expect(
+      isGuardedNoOp(new SilentNoOpError('apply-site.ts', 'APPLY_REPORT'))
+    ).toBe(true);
   });
 
   it('does not mistake a real failure for the race', () => {

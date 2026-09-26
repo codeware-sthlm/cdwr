@@ -146,7 +146,7 @@ function runMigrations(ctx: Context) {
     'run-migrations.ts',
     'development',
     { DATABASE_URL: TEST_DATABASE_URL, DATABASE_SCHEMA: 'payload' },
-    ctx.env
+    { parentEnv: ctx.env }
   );
 }
 

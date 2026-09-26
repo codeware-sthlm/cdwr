@@ -45,7 +45,8 @@ async function createInPayload(
       CREATE_SLUG: fields.slug ?? '',
       CREATE_DEPLOYMENT: fields.deployment ?? '',
       CREATE_DRY_RUN: String(dryRun)
-    }
+    },
+    { reports: 'CREATED_TENANT' }
   );
 
   try {
