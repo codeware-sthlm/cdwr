@@ -79,7 +79,9 @@ export function ToursBlock({ title, description, tours }: Props) {
               )}
             >
               {heroImage && (
-                <div className="[&_img]:aspect-3/2 [&_img]:w-full [&_img]:object-cover">
+                // Square where the image meets the card body; `ImageBlock`
+                // rounds every corner at the same specificity, hence `!`
+                <div className="[&_img]:aspect-3/2 [&_img]:w-full [&_img]:rounded-b-none! [&_img]:object-cover">
                   <ImageBlock media={heroImage} hideCaption />
                 </div>
               )}
@@ -94,7 +96,7 @@ export function ToursBlock({ title, description, tours }: Props) {
                     </Badge>
                   )}
                 </div>
-                <CardTitle className="text-card-foreground text-base">
+                <CardTitle className="text-core-headline text-base font-semibold">
                   <a
                     href={`/tours/${tour.slug}`}
                     onClick={(e) => {

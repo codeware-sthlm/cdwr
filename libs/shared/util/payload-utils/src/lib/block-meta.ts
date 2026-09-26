@@ -1462,8 +1462,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
               sv: 'Meta'
             },
             description: {
-              en: 'Monospace line, e.g. "Nx · Payload · Postgres"',
-              sv: 'Monospace-rad, t.ex. "Nx · Payload · Postgres"'
+              en: 'Short tags separated by | or ·, e.g. "Nx | Payload | Postgres". Each one shows as a badge.',
+              sv: 'Korta etiketter åtskilda med | eller ·, t.ex. "Nx | Payload | Postgres". Var och en visas som en bricka.'
             }
           },
           {

@@ -61,7 +61,7 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
           return (
             <Card
               key={i}
-              className="bg-card/50 hover:bg-card hover:border-core-link/40 border transition-colors duration-300"
+              className="bg-card hover:border-core-link/40 border shadow-xs transition-colors duration-300"
             >
               <CardHeader>
                 {/* A technology's own mark wins over the icon: it is the more
@@ -81,7 +81,7 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
                     )}
                   </span>
                 )}
-                <CardTitle className="text-card-foreground text-lg">
+                <CardTitle className="text-core-headline text-lg font-semibold">
                   {item.title}
                 </CardTitle>
               </CardHeader>

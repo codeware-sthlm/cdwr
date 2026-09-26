@@ -34,6 +34,8 @@ export default function ThemeStudioEmbed({
       // The studio copies its opening theme into state once, on mount, so a
       // different theme has to be a different studio
       key={startFrom}
+      // Part of a page, which does the scrolling; the admin gives it the view
+      fit="content"
       recipe={opened?.recipe}
       overrides={opened?.overrides}
       themeName={themeLabel(startFrom)}

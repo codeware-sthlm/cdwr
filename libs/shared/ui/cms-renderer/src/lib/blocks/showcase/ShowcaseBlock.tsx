@@ -1,3 +1,4 @@
+import { Badge } from '@codeware/shared/ui/shadcn/components/badge';
 import type { ShowcaseBlock as ShowcaseBlockProps } from '@codeware/shared/util/payload-types';
 import { cn } from '@codeware/shared/util/ui';
 
@@ -80,9 +81,22 @@ export const ShowcaseBlock: React.FC<ShowcaseBlockProps> = ({
                     {item.description}
                   </p>
                   {item.meta && (
-                    <p className="text-muted-foreground mt-2 font-mono text-xs">
-                      {item.meta}
-                    </p>
+                    // One badge per item of the line, split where the field's
+                    // description tells the editor to separate them: a pipe,
+                    // which every keyboard has, or a middle dot
+                    <ul className="mt-3 flex flex-wrap gap-1.5">
+                      {item.meta
+                        .split(/[|·]/)
+                        .map((part) => part.trim())
+                        .filter(Boolean)
+                        .map((part) => (
+                          <li key={part}>
+                            <Badge variant="outline" className="font-mono">
+                              {part}
+                            </Badge>
+                          </li>
+                        ))}
+                    </ul>
                   )}
                 </div>
                 {resolvedItemLink && (

@@ -42,6 +42,7 @@ import {
 } from '@codeware/shared/util/color';
 import { createZip } from '@codeware/shared/util/pure';
 import { cn } from '@codeware/shared/util/ui';
+import { type VariantProps, cva } from 'class-variance-authority';
 import {
   DicesIcon,
   DownloadIcon,
@@ -211,7 +212,39 @@ export type ThemeStudioResult = {
   tokensDark: ThemeTokens;
 };
 
+/**
+ * How the studio takes its height.
+ *
+ * `viewport` is an app: it fills the screen and each pane scrolls on its own,
+ * which is right where the studio is the whole view. `content` is part of a
+ * page: it is as tall as what it holds, and the page does the scrolling.
+ */
+const studioFrame = cva('bg-background text-foreground flex', {
+  variants: {
+    fit: {
+      viewport: 'h-screen max-h-full overflow-hidden',
+      content: ''
+    }
+  },
+  defaultVariants: { fit: 'viewport' }
+});
+
+/** A pane's scrolling body, which scrolls only when the studio is the view */
+const studioPane = cva('min-h-0 flex-1', {
+  variants: {
+    fit: {
+      viewport: 'overflow-y-auto',
+      content: ''
+    }
+  },
+  defaultVariants: { fit: 'viewport' }
+});
+
+type StudioFit = NonNullable<VariantProps<typeof studioFrame>['fit']>;
+
 type ThemeStudioProps = {
+  /** How the studio takes its height; see `studioFrame`. Defaults to `viewport` */
+  fit?: StudioFit;
   /**
    * Whether to offer the export to committed theme files.
    *
@@ -376,6 +409,7 @@ function Pill({
  * dark render together without an iframe and without touching `<html>`.
  */
 export function ThemeStudio({
+  fit = 'viewport',
   canExport = false,
   canUseRestrictedFonts = false,
   themeName,
@@ -558,10 +592,7 @@ export function ThemeStudio({
   return (
     <TooltipProvider>
       <PortalContainer.Provider value={root}>
-        <div
-          ref={setRoot}
-          className="bg-background text-foreground flex h-screen max-h-full overflow-hidden"
-        >
+        <div ref={setRoot} className={studioFrame({ fit })}>
           <style>{previewCss(scope, light, dark)}</style>
 
           {optionsOpen && (
@@ -577,7 +608,7 @@ export function ThemeStudio({
                 )}
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className={studioPane({ fit })}>
                 <div className="space-y-5 p-4">
                   <div className="space-y-2">
                     <Label className="text-xs">Base colour</Label>
@@ -1101,7 +1132,7 @@ export function ThemeStudio({
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className={studioPane({ fit })}>
               <div
                 className={cn(
                   'gap-4 p-5',
