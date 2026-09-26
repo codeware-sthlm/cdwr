@@ -89,8 +89,9 @@ export const ShowcaseBlock: React.FC<ShowcaseBlockProps> = ({
                         .split(/[|·]/)
                         .map((part) => part.trim())
                         .filter(Boolean)
-                        .map((part) => (
-                          <li key={part}>
+                        .map((part, index) => (
+                          // By position: an editor may repeat a tag
+                          <li key={index}>
                             <Badge variant="outline" className="font-mono">
                               {part}
                             </Badge>

@@ -196,6 +196,9 @@ export const BlockGalleryBlock: React.FC<
     return (
       <section>
         <BlockGalleryEntry
+          // One entry per block: stepping to another must not carry the last
+          // one's band choice or full-screen state across
+          key={entry.meta.slug}
           meta={entry.meta}
           doc={entry.doc}
           render={render}
