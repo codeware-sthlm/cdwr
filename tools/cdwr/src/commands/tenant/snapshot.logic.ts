@@ -1,4 +1,4 @@
-import type { SiteTheme } from '@codeware/shared/theme';
+import { SITE_THEMES } from '@codeware/shared/theme';
 
 /**
  * The part of a site definition this reads: its pages and its landing page.
@@ -28,6 +28,14 @@ export const isRoutedDefinition = (value: unknown): value is RoutedDefinition =>
       typeof page.slug === 'string'
   );
 
+/**
+ * The themes a shot can ask for: a built-in by name, or `default`, which sends
+ * no theme cookie and so shows whatever a first visit shows. That is the only
+ * way to see a theme the site authored itself, which has no name here.
+ */
+export const SNAPSHOT_THEMES = ['default', ...SITE_THEMES] as const;
+export type SnapshotTheme = (typeof SNAPSHOT_THEMES)[number];
+
 /** What `prefers-color-scheme` can be told, which is what the site follows */
 export const COLOR_SCHEMES = ['light', 'dark'] as const;
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
@@ -44,7 +52,7 @@ export const VIEWPORTS = {
 /** One page, drawn one way */
 export type Shot = {
   route: string;
-  theme: SiteTheme;
+  theme: SnapshotTheme;
   colorScheme: ColorScheme;
   viewport: ViewportName;
 };
@@ -55,6 +63,8 @@ export type SkipReason = 'theme-not-offered' | 'scheme-locked';
 export type ShotResult = Shot & {
   /** The PNG, or nothing when the shot was skipped */
   path: string | null;
+  /** The theme the page actually drew, as its `data-theme` says */
+  drawnTheme: string | null;
   /** The page's HTTP status; null when it never answered */
   status: number | null;
   /** What the browser console reported as an error while the page loaded */
@@ -93,7 +103,7 @@ export const parseRoutes = (value: string): Array<string> =>
  */
 export function shotsOf(
   routes: ReadonlyArray<string>,
-  themes: ReadonlyArray<SiteTheme>,
+  themes: ReadonlyArray<SnapshotTheme>,
   colorSchemes: ReadonlyArray<ColorScheme>,
   viewports: ReadonlyArray<ViewportName>
 ): Array<Shot> {
