@@ -6,12 +6,14 @@ import { faqData } from './faq-data';
 import { readMediaFiles, readStockMediaFiles } from './read-media-files';
 
 const tenantSlug = {
+  cdwrIo: 'cdwr-io',
   moon: 'moon',
   sun: 'sun',
   star: 'star'
 } as const;
 
 const tenants = {
+  cdwrIo: { apiKey: '9d5316b1-0298-4113-904c-6cc10fcacb6c' },
   moon: { apiKey: 'b9c2fb25-df77-4304-a60a-028779a2cb37' },
   sun: { apiKey: 'f3799063-d55e-43ab-a96f-b6a386ced985' },
   star: { apiKey: 'a76d0168-f9b2-48d2-bc57-96e45aaf8542' }
@@ -19,7 +21,8 @@ const tenants = {
 
 const tenantApiKeys = Object.values(tenants).map(({ apiKey }) => apiKey);
 
-export type TenantSlug = keyof typeof tenantSlug;
+// Extract the record values, which are the final string representations of the tenant slugs.
+export type TenantSlug = (typeof tenantSlug)[keyof typeof tenantSlug];
 
 /**
  * Seed data for **DEVELOPMENT** environment.
@@ -643,6 +646,14 @@ export const seedData = (remoteDataUrl: string | undefined) => {
       }
     ]),
     tenants: [
+      {
+        name: 'cdwr.io',
+        slug: tenantSlug.cdwrIo,
+        description: 'cdwr platform showcase.',
+        locale: 'en',
+        supportedLocales: ['en'],
+        apiKey: tenants.cdwrIo.apiKey
+      },
       {
         name: 'Moon',
         slug: tenantSlug.moon,

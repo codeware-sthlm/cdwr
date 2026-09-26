@@ -19,6 +19,9 @@ const tenant = {
 
 const tenantApiKeys = Object.values(tenant).map((tenant) => tenant.apiKey);
 
+// Extract the record values, which are the final string representations of the tenant slugs.
+export type TenantSlug = (typeof tenantSlug)[keyof typeof tenantSlug];
+
 /**
  * Seed data for **PREVIEW** environment.
  *
