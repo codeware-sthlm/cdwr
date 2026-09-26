@@ -41,6 +41,28 @@ export const cdwrIo: SiteDefinition = {
     { name: 'Multi-tenancy', slug: 'multi-tenancy' }
   ],
 
+  // The platform's own look, made the way any tenant would make one: a recipe
+  // the studio reopens. Violet on slate with a brand-coloured primary, which
+  // none of the built-in themes use, so switching away from it shows at once
+  customThemes: [
+    {
+      name: 'cdwr',
+      slug: 'cdwr',
+      recipe: {
+        baseFamily: 'slate',
+        brandFamily: 'violet',
+        surface: 'flat',
+        radius: '0.75rem',
+        linkShade: { light: '700', dark: '400' },
+        primarySource: 'brand',
+        linkSource: 'brand',
+        chartSource: 'brand',
+        fontBody: 'inter',
+        fontHeading: 'inter'
+      }
+    }
+  ],
+
   pages: [
     // ── The landing page: the show ─────────────────────────────────────────
     {
@@ -589,7 +611,11 @@ export const cdwrIo: SiteDefinition = {
       appName: 'cdwr.io',
       landingPage: { lookupSlug: 'home' },
       chrome: 'flat',
-      icon: { source: 'svg', svgCode: cdwrCloudSvg }
+      icon: { source: 'svg', svgCode: cdwrCloudSvg },
+      // Every built-in beside its own: here the theme switch is the demo
+      themes: ['shadcn', 'spotlight', 'spotlight-fork', 'codeware'],
+      customThemes: [{ lookupSlug: 'cdwr' }],
+      defaultTheme: 'cdwr'
     }
   }
 };
