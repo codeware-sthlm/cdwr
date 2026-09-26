@@ -36,4 +36,8 @@ const BY_SLUG: Record<TenantSlug, SiteDefinition> = {
 
 /** The definition for a seeded tenant, or nothing if it has none. */
 export const definitionFor = (slug: string): SiteDefinition | undefined =>
-  BY_SLUG[slug as TenantSlug];
+  isSeededSlug(slug) ? BY_SLUG[slug] : undefined;
+
+/** Narrows a slug read from the database to one this map was written for. */
+const isSeededSlug = (slug: string): slug is TenantSlug =>
+  Object.hasOwn(BY_SLUG, slug);
