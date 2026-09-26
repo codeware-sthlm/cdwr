@@ -1,3 +1,5 @@
+import { cdwrCloudSvg } from '@codeware/shared/util/ui';
+
 import type { SiteDefinition } from '../site-definition';
 
 import { infisicalLogo, playwrightLogo } from './tech-logos';
@@ -619,7 +621,8 @@ export const cdwrIo: SiteDefinition = {
     general: {
       appName: 'cdwr.io',
       landingPage: { lookupSlug: 'home' },
-      chrome: 'flat'
+      chrome: 'flat',
+      icon: { source: 'svg', svgCode: cdwrCloudSvg }
     }
   }
 };

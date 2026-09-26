@@ -63,4 +63,31 @@ describe('ensureSiteSetting', () => {
 
     expect(updates).toEqual([]);
   });
+
+  it('fills in an icon on an otherwise complete row', async () => {
+    // Payload hands back an empty group rather than null
+    const emptyIcon = { source: null, svgCode: null, file: null };
+    const holding = {
+      ...stored,
+      general: { ...stored.general, icon: emptyIcon }
+    };
+    const updates: Array<Record<string, unknown>> = [];
+    const payload = {
+      find: async () => ({ totalDocs: 1, docs: [holding] }),
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        updates.push(data);
+        return {};
+      }
+    } as unknown as Payload;
+    const icon = { source: 'svg', svgCode: '<svg viewBox="0 0 1 1"/>' };
+
+    await ensureSiteSetting(
+      payload,
+      { ...data, general: { ...data.general, icon } } as typeof data,
+      base
+    );
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]['general']).toMatchObject({ icon });
+  });
 });
