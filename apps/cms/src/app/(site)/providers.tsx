@@ -1,5 +1,6 @@
 'use client';
 
+import { THEME_COOKIE, THEME_COOKIE_MAX_AGE } from '@codeware/shared/theme';
 import {
   PayloadProvider,
   type PayloadValue
@@ -15,8 +16,6 @@ import type {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import { useTheme } from 'next-themes';
-
-import { THEME_COOKIE, THEME_COOKIE_MAX_AGE } from './theme-cookie';
 
 type ProvidersProps = {
   children: React.ReactNode;

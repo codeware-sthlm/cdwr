@@ -1,17 +1,8 @@
+import { THEME_COOKIE } from '@codeware/shared/theme';
 import { createCookie } from '@remix-run/node';
 
-/**
- * Where the visitor's theme choice is kept.
- *
- * A cookie rather than `localStorage` so the server can render the right theme
- * on first paint — reading it on the client would flash the default first.
- *
- * Owner-prefixed kebab-case, matching `cdwr-color-scheme` and the name
- * `apps/cms` already uses for the same choice.
- */
-const cookieName = 'cdwr-theme';
-
-const cookie = createCookie(cookieName);
+// Named once for every client of the platform; see `THEME_COOKIE`
+const cookie = createCookie(THEME_COOKIE);
 
 /**
  * Get the theme from the 'cdwr-theme' cookie if present.
