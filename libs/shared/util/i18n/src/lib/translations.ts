@@ -69,6 +69,10 @@ export type TranslationKey =
   | 'humanCheck.unavailable'
   | 'gallery.accepts'
   | 'gallery.allBlocks'
+  | 'gallery.band'
+  | 'gallery.band.none'
+  | 'gallery.band.strong'
+  | 'gallery.band.subtle'
   | 'gallery.close'
   | 'gallery.conditional'
   | 'gallery.availableIn'
@@ -275,6 +279,10 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
       'The spam check could not load, so this form cannot be sent. A content blocker is the usual cause — allow challenges.cloudflare.com, or try another browser.',
     'gallery.accepts': 'Accepts',
     'gallery.allBlocks': 'All blocks',
+    'gallery.band': 'Background',
+    'gallery.band.none': 'None',
+    'gallery.band.strong': 'Strong',
+    'gallery.band.subtle': 'Subtle',
     'gallery.close': 'Close full screen',
     'gallery.conditional': 'Shown depending on another choice',
     'gallery.availableIn': 'Available in',
@@ -508,6 +516,10 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
       'Skräppostskyddet kunde inte laddas, så formuläret går inte att skicka. Orsaken är oftast en innehållsblockerare – tillåt challenges.cloudflare.com eller prova en annan webbläsare.',
     'gallery.accepts': 'Kan innehålla',
     'gallery.allBlocks': 'Alla block',
+    'gallery.band': 'Bakgrund',
+    'gallery.band.none': 'Ingen',
+    'gallery.band.strong': 'Kraftig',
+    'gallery.band.subtle': 'Diskret',
     'gallery.close': 'Stäng helskärm',
     'gallery.conditional': 'Visas beroende på ett annat val',
     'gallery.availableIn': 'Tillgängligt i',

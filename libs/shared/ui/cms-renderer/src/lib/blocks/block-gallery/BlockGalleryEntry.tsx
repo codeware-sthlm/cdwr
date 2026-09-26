@@ -13,6 +13,7 @@ import {
   ToggleGroupItem
 } from '@codeware/shared/ui/shadcn/components/toggle-group';
 import { t } from '@codeware/shared/util/i18n';
+import type { HeroBlock } from '@codeware/shared/util/payload-types';
 import type {
   BlockFieldMeta,
   BlockMeta,
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
+import { type SectionBand, sectionBands } from '../../layout/Band';
 import { usePayload } from '../../providers/PayloadProvider';
 import { segment, segmentTrack } from '../../theme/chrome';
 import {
@@ -132,6 +134,62 @@ function SchemeSwitch() {
           </ToggleGroupItem>
         );
       })}
+    </ToggleGroup>
+  );
+}
+
+/** The field a block is banded by, checked against the generated block type */
+const bandField = 'band' satisfies keyof HeroBlock;
+
+type BandedExample = Extract<BlockExample, { [bandField]?: unknown }>;
+
+/**
+ * Whether the example's block has a band field.
+ *
+ * Read from the block's registered fields rather than from the example, which
+ * may leave the field out; both are generated from the same registry.
+ */
+const isBanded = (
+  example: BlockExample,
+  meta: BlockMeta
+): example is BandedExample =>
+  meta.fields.some((field) => field.name === bandField);
+
+/**
+ * Try the example on each band the field offers.
+ *
+ * Only for blocks that have the field — read from the block's registered
+ * fields, so a block that gains one gets the switch without being named here.
+ */
+function BandSwitch({
+  value,
+  onChange
+}: {
+  value: SectionBand;
+  onChange: (band: SectionBand) => void;
+}) {
+  const { locale } = usePayload();
+
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      // Radix clears the value when the active item is pressed again, and a
+      // band always has one
+      onValueChange={(next) => {
+        const band = sectionBands.find((candidate) => candidate === next);
+        if (band) onChange(band);
+      }}
+      spacing={0}
+      size="sm"
+      aria-label={t(locale, 'gallery.band')}
+      className={segmentTrack()}
+    >
+      {sectionBands.map((band) => (
+        <ToggleGroupItem key={band} value={band} className={segment()}>
+          {t(locale, `gallery.band.${band}`)}
+        </ToggleGroupItem>
+      ))}
     </ToggleGroup>
   );
 }
@@ -293,12 +351,19 @@ export function BlockGalleryEntry({
   // Nothing is drawn for a block nobody has written up, or one no page offers
   const drawn = Boolean(doc && hasExample(doc) && RenderExample);
 
+  const exampleDoc = doc && hasExample(doc) ? doc : null;
+  const example = exampleDoc?.example ?? null;
+  const banded = example !== null && isBanded(example, meta);
+  const [band, setBand] = useState<SectionBand>(
+    (example && isBanded(example, meta) && example.band) || 'none'
+  );
+
   // Drawn once and shown twice: framed on the page, and again at full size
   const preview =
-    doc && hasExample(doc) && RenderExample ? (
+    exampleDoc && example && RenderExample ? (
       <RenderExample
-        blocks={[doc.example]}
-        blocksData={doc.exampleData}
+        blocks={[isBanded(example, meta) ? { ...example, band } : example]}
+        blocksData={exampleDoc.exampleData}
         preview
       />
     ) : (
@@ -417,6 +482,7 @@ export function BlockGalleryEntry({
                 {t(locale, 'gallery.liveNote')}
               </span>
             )}
+            {drawn && banded && <BandSwitch value={band} onChange={setBand} />}
             {/* Stepping sits here as well as at the top: flicking through the
                 library from the thing being looked at should not cost a scroll
                 back to the heading */}
@@ -470,8 +536,17 @@ export function BlockGalleryEntry({
               <div className="min-w-0">
                 {/* Wraps rather than truncates: on a phone the controls take
                     their own row, and the name is what says where you are */}
+                {/* The block first: at full size the page's own heading is out
+                    of sight, and the written name alone does not say which
+                    block this is */}
                 <DialogTitle className="text-core-headline text-base leading-snug font-semibold tracking-tight sm:text-lg">
-                  {name ?? localized(meta.label, locale)}
+                  {localized(meta.label, locale)}
+                  {name && (
+                    <span className="text-muted-foreground font-normal">
+                      {' · '}
+                      {name}
+                    </span>
+                  )}
                 </DialogTitle>
                 <DialogDescription className="text-muted-foreground mt-0.5 line-clamp-2 text-xs sm:line-clamp-1">
                   {doc
@@ -481,6 +556,7 @@ export function BlockGalleryEntry({
               </div>
             </div>
             <span className="flex shrink-0 items-center gap-3">
+              {banded && <BandSwitch value={band} onChange={setBand} />}
               <SchemeSwitch />
               <span className="text-muted-foreground font-mono text-xs tabular-nums">
                 {position.index + 1} / {position.total}
