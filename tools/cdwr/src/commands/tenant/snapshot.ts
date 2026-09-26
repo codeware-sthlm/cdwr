@@ -47,6 +47,23 @@ async function loadDefinition(path: string): Promise<RoutedDefinition> {
   return imported.default;
 }
 
+/** `--routes` when given, otherwise the pages of the definition */
+async function routesFrom(
+  root: string,
+  routes: string | undefined,
+  definition: string | undefined
+): Promise<Array<string>> {
+  if (routes?.trim()) {
+    return parseRoutes(routes);
+  }
+  if (!definition) {
+    throw new Error('Name a definition, or pass --routes');
+  }
+  return routesOf(
+    await loadDefinition(resolveDefinitionPath(root, definition))
+  );
+}
+
 /** How long the first request may take: a dev server compiles on demand */
 const FIRST_ANSWER_MS = 60_000;
 
@@ -88,8 +105,8 @@ const settingOf = ({ theme, colorScheme, viewport }: Shot) =>
 export default defineCommand<
   {
     url: ReturnType<typeof input.string>;
-    definition: ReturnType<typeof definitionInput>;
     routes: ReturnType<typeof input.string>;
+    definition: ReturnType<typeof input.optional<string>>;
     themes: ReturnType<typeof input.multiselect<SiteTheme>>;
     colorSchemes: ReturnType<typeof input.multiselect<ColorScheme>>;
     viewports: ReturnType<typeof input.multiselect<ViewportName>>;
@@ -107,13 +124,17 @@ export default defineCommand<
       description: 'Where the site is served',
       default: 'http://localhost:3000'
     }),
-    definition: definitionInput('Take the pages of which definition?'),
+    // Before the definition, which is only needed when this is not given
     routes: input.string({
       prompt: 'Which routes?',
-      description: "Comma-separated paths instead of the definition's pages",
+      description: "Comma-separated paths instead of a definition's pages",
       optional: true,
       flagOnly: true
     }),
+    definition: input.optional(
+      definitionInput('Take the pages of which definition?'),
+      (resolved) => !resolved['routes']
+    ),
     themes: input.multiselect<SiteTheme>({
       prompt: 'In which themes?',
       description: 'Only the ones the site offers are drawn',
@@ -142,13 +163,9 @@ export default defineCommand<
 
   async plan(
     ctx,
-    { url, definition, routes, themes, colorSchemes, viewports }
+    { url, routes, definition, themes, colorSchemes, viewports }
   ) {
-    const paths = routes?.trim()
-      ? parseRoutes(routes)
-      : routesOf(
-          await loadDefinition(resolveDefinitionPath(ctx.root, definition))
-        );
+    const paths = await routesFrom(ctx.root, routes, definition);
 
     await assertAnswers(url);
 

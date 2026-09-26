@@ -66,7 +66,10 @@ describe('fileName', () => {
   it.each([
     ['/', 'index--codeware-dark-phone.png'],
     ['/studio', 'studio--codeware-dark-phone.png'],
-    ['/posts/first/', 'posts-first--codeware-dark-phone.png']
+    ['/posts/first/', 'posts-first--codeware-dark-phone.png'],
+    // Nothing that could leave the output folder survives into the name
+    ['..\\..\\outside', 'outside--codeware-dark-phone.png'],
+    ['/../../etc', 'etc--codeware-dark-phone.png']
   ])('names %s', (route, expected) => {
     expect(
       fileName({
