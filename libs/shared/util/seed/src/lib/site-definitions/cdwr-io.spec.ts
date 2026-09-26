@@ -28,17 +28,15 @@ describe('the cdwr.io definition', () => {
     expect(JSON.stringify(cdwrIo)).not.toMatch(/apiKey|lookupApiKey/);
   });
 
-  it('puts the contact form on the start page, and states the form it points at', () => {
-    // A form block pointing at a form the definition does not state would
-    // publish a page with a dead form
-    const start = cdwrIo.pages.find(({ slug }) => slug === 'start');
-    const pointsAt = (start?.layout ?? []).flatMap((block) =>
-      block.blockType === 'form' && block.form ? [block.form.lookupTitle] : []
+  it('invites no contact yet: no form on any page, and none stated', () => {
+    // Decided 2026-09-26: /start is about building on the platform yourself.
+    // Contact comes back as a form block when it is wanted
+    const forms = cdwrIo.pages.flatMap(({ layout }) =>
+      layout.filter((block) => block.blockType === 'form')
     );
-    const stated = (cdwrIo.forms ?? []).map(({ title }) => title);
 
-    expect(pointsAt).toEqual(['Contact']);
-    expect(stated).toContain('Contact');
+    expect(forms).toEqual([]);
+    expect(cdwrIo.forms ?? []).toEqual([]);
   });
 
   it('states the routes the content plan lays out', () => {
