@@ -306,6 +306,10 @@ export interface AboutBlock {
    * Optional heading shown above the deployment details.
    */
   heading?: string | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'about';
@@ -345,6 +349,10 @@ export interface CalloutBlock {
    */
   image?: (number | null) | Media;
   link: CalloutLink;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'callout';
@@ -675,6 +683,10 @@ export interface CardBlock {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'card';
@@ -793,6 +805,10 @@ export interface Category {
 export interface CodeBlock {
   language: 'ts' | 'plaintext' | 'tsx' | 'js' | 'jsx';
   code: string;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'code';
@@ -835,6 +851,10 @@ export interface ContentBlock {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'content';
@@ -861,6 +881,10 @@ export interface FormBlock {
     };
     [k: string]: unknown;
   } | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'form';
@@ -1112,6 +1136,10 @@ export interface ImageBlock {
    * Select an image.
    */
   media: number | Media;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'image';
@@ -1171,6 +1199,10 @@ export interface FileAreaBlock {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'file-area';
@@ -1241,6 +1273,10 @@ export interface SocialMediaBlock {
    * How the social media links are displayed
    */
   direction?: ('horizontal' | 'vertical') | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'social-media';
@@ -1295,6 +1331,10 @@ export interface FeatureCardsBlock {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'feature-cards';
@@ -1329,6 +1369,10 @@ export interface FeatureSectionBlock {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'feature-section';
@@ -1380,6 +1424,10 @@ export interface HeroBlock {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'hero';
@@ -1420,10 +1468,6 @@ export interface PillListBlock {
    * Short paragraph below the heading
    */
   intro?: string | null;
-  /**
-   * Background treatment
-   */
-  surface?: ('dark' | 'light') | null;
   items?:
     | {
         /**
@@ -1475,13 +1519,17 @@ export interface PillListBlock {
            */
           svgCode?: string | null;
           /**
-           * A square image reads best. An image keeps its colours, so pick one that shows on this surface.
+           * A square image reads best. An image keeps its colours, so pick one that shows against the block’s background.
            */
           file?: (number | null) | Media;
         };
         id?: string | null;
       }[]
     | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'pill-list';
@@ -1497,6 +1545,10 @@ export interface PostsBlock {
    * Maximum number of posts to display
    */
   limit: number;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'posts';
@@ -1533,6 +1585,10 @@ export interface ShowcaseBlock {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'showcase';
@@ -1601,6 +1657,10 @@ export interface TestimonialBlock {
   logo?: (number | null) | Media;
   enableLink?: boolean | null;
   link?: TestimonialLink;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'testimonial';
@@ -1649,6 +1709,10 @@ export interface ThemeStudioBlock {
    * One line saying what this is. Leave the default unless it is wrong for the page.
    */
   note?: string | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'theme-studio';
@@ -1664,6 +1728,10 @@ export interface ToursBlock {
    * Maximum number of tours to display
    */
   limit: number;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'tours';
@@ -1696,6 +1764,10 @@ export interface CalloutLink {
  */
 export interface MediaBlock {
   media: number | Media;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'media';

@@ -1,3 +1,4 @@
+import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
 /**
@@ -23,6 +24,7 @@ export const mediaBlock: Block = {
         mimeType: { contains: 'image' }
       },
       required: true
-    }
+    },
+    sectionBandField()
   ]
 };

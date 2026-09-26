@@ -1,4 +1,4 @@
-import { linkGroupField } from '@codeware/app-cms/ui/fields';
+import { linkGroupField, sectionBandField } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
 import type { Block } from 'payload';
 
@@ -89,6 +89,7 @@ export const heroBlock: Block = {
           defaultValue: 'primary'
         }
       ]
-    }
+    },
+    sectionBandField()
   ]
 };

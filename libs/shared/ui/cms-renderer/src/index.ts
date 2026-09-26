@@ -13,6 +13,7 @@ export {
 } from './lib/layout/Container';
 
 export {
+  type DarkScope,
   type FormSubmitResponse,
   PayloadProvider,
   type PayloadValue,

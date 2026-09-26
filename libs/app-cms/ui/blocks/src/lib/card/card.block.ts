@@ -1,7 +1,8 @@
 import {
   colorPickerField,
   iconPickerField,
-  linkGroupField
+  linkGroupField,
+  sectionBandField
 } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
 import type {
@@ -193,6 +194,7 @@ export const cardBlock: Block = {
           ]
         })
       ]
-    }
+    },
+    sectionBandField()
   ]
 };

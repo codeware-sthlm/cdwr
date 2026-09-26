@@ -73,6 +73,12 @@ const withPayload: Decorator = (Story, context) => {
         theme,
         themes: STORYBOOK_THEMES.map((value) => ({ value, label: value })),
         setTheme: () => undefined,
+        // Scoped by `data-sb-theme` here, with Payload's own dark convention
+        // for the themes that do not use the class
+        darkScope: (value) =>
+          CLASS_DARK_THEMES.has(value as SbTheme)
+            ? { 'data-sb-theme': value, className: 'dark' }
+            : { 'data-sb-theme': value, 'data-theme': 'dark' },
         locale: 'en'
       }}
     >

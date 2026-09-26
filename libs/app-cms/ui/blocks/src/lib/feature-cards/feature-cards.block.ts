@@ -1,6 +1,7 @@
 import {
   colorPickerField,
   iconPickerField,
+  sectionBandField,
   sectionHeaderFields
 } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
@@ -95,6 +96,7 @@ export const featureCardsBlock: Block = {
           required: true
         }
       ]
-    }
+    },
+    sectionBandField()
   ]
 };

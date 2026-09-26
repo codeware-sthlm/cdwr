@@ -1,3 +1,4 @@
+import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
 /**
@@ -28,6 +29,7 @@ export const imageBlock: Block = {
         }
       },
       required: true
-    }
+    },
+    sectionBandField()
   ]
 };

@@ -1,4 +1,4 @@
-import { codeField } from '@codeware/app-cms/ui/fields';
+import { codeField, sectionBandField } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
 import {
   type CodeLanguage,
@@ -29,6 +29,7 @@ export const codeBlock: Block = {
       required: true,
       defaultValue: 'ts' satisfies CodeLanguage
     },
-    codeField
+    codeField,
+    sectionBandField()
   ]
 };

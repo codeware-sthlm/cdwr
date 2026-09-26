@@ -20,7 +20,7 @@ export const pillListGallery: BlockGalleryDoc<PillListBlockProps> = {
     eyebrow: 'Open Source',
     heading: 'Built in the open',
     intro: 'Our packages are published to npm and free to use.',
-    surface: 'dark',
+    band: 'strong',
     items: [
       {
         label: '@cdwr/nx-payload',

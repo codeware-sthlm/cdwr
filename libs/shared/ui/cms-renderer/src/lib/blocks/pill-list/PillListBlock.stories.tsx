@@ -1,6 +1,8 @@
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+import { Band } from '../../layout/Band';
+
 import { PillListBlock } from './PillListBlock';
 import { pillListGallery } from './PillListBlock.gallery';
 
@@ -16,18 +18,10 @@ type Story = StoryObj<typeof meta>;
 // The same instance the gallery renders, so the two cannot drift
 const args: Story['args'] = pillListGallery.example;
 
-export const DarkSurface: Story = {
-  name: 'Dark surface',
-  args
-};
+export const Default: Story = { args };
 
-export const LightSurface: Story = {
-  name: 'Light surface',
-  args: { ...args, surface: 'light' }
-};
-
-// Near-black marks (Next.js, GitHub) take the text colour on a dark surface
-// and in dark mode; the own logo's black part follows it through currentColor
+// Near-black marks (Next.js, GitHub) take the text colour in dark mode and in
+// a strong band; the own logo's black part follows it through currentColor
 const withLogos: Story['args'] = {
   ...args,
   eyebrow: 'Built on',
@@ -50,18 +44,20 @@ const withLogos: Story['args'] = {
   ]
 };
 
-export const LogosDarkSurface: Story = {
-  name: 'Logos on a dark surface',
-  args: withLogos
-};
+export const Logos: Story = { args: withLogos };
 
-export const LogosLightSurface: Story = {
-  name: 'Logos on a light surface',
-  args: { ...withLogos, surface: 'light' }
+export const LogosInAStrongBand: Story = {
+  name: 'Logos in a strong band',
+  args: withLogos,
+  render: (props) => (
+    <Band band="strong" fit="contained">
+      <PillListBlock {...props} />
+    </Band>
+  )
 };
 
 export const LogosCodewareDark = a11yStory(
-  { args: { ...withLogos, surface: 'light' } },
+  { args: withLogos },
   'codeware',
   'dark'
 );

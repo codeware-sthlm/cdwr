@@ -30,6 +30,8 @@ import { SpacingBlock } from './blocks/spacing/SpacingBlock';
 import { TestimonialBlock } from './blocks/testimonial/TestimonialBlock';
 import { ThemeStudioBlock } from './blocks/theme-studio/ThemeStudioBlock';
 import { ToursBlock } from './blocks/tours/ToursBlock';
+import { Band } from './layout/Band';
+import { ContainerInner } from './layout/Container';
 import { ColumnSizeProvider } from './providers/ColumnSizeProvider';
 
 type ContentBlockWithData = ContentBlockProps & {
@@ -39,6 +41,7 @@ type ContentBlockWithData = ContentBlockProps & {
 type ReusableContentBlockWithData = ReusableContentBlockProps & {
   blocksData?: BlocksData;
   preview?: boolean;
+  framed?: boolean;
 };
 
 /**
@@ -94,7 +97,8 @@ export const ReusableContentBlock: React.FC<ReusableContentBlockWithData> = ({
   reusableContent,
   refId,
   blocksData,
-  preview
+  preview,
+  framed
 }) => {
   if (reusableContent && typeof reusableContent === 'object') {
     return (
@@ -103,6 +107,7 @@ export const ReusableContentBlock: React.FC<ReusableContentBlockWithData> = ({
         refId={refId}
         blocksData={blocksData}
         preview={preview}
+        framed={framed}
       />
     );
   }
@@ -130,13 +135,16 @@ export const ReusableContentBlock: React.FC<ReusableContentBlockWithData> = ({
 function resolveBlockProps(
   block: NonNullable<Page['layout']>[number],
   blocksData: BlocksData | undefined,
-  preview: boolean | undefined
+  preview: boolean | undefined,
+  framed: boolean | undefined
 ): Record<string, unknown> {
   switch (block.blockType) {
     // Container blocks: thread blocksData through so nested listing blocks receive their data
     case 'content':
-    case 'reusable-content':
       return { blocksData, preview };
+    // Its blocks stand in for it on the page, so they are framed as it would be
+    case 'reusable-content':
+      return { blocksData, preview, framed };
 
     // Drawn as an example, where the form document belongs to nobody: the
     // fields are real, and submitting would post to a form that does not
@@ -202,6 +210,14 @@ type Props = {
    * that would reach for a document that is not there is told to stand still.
    */
   preview?: boolean;
+  /**
+   * The page's own blocks, drawn inside the container's outer layer.
+   *
+   * Each block brings the inner layer itself, so its band can sit between the
+   * two and span the sheet. Blocks nested in a column, or drawn in the
+   * gallery, have no sheet to span and keep their band to themselves.
+   */
+  framed?: boolean;
 };
 
 /**
@@ -213,6 +229,7 @@ export const RenderBlocks: React.FC<Props> = ({
   blocks,
   blocksData,
   className,
+  framed,
   preview,
   refId
 }) => {
@@ -232,20 +249,43 @@ export const RenderBlocks: React.FC<Props> = ({
             (index > 0 && blocks[index - 1].blockType === 'spacing');
 
           if (Block) {
-            const extraProps = resolveBlockProps(block, blocksData, preview);
+            const extraProps = resolveBlockProps(
+              block,
+              blocksData,
+              preview,
+              framed
+            );
+
+            // Do not set any margins around spacing block since it has its own margin options.
+            // For all other blocks, set a top margin unless it's the first block.
+            const spacing = cn({
+              'not-first:mt-16 md:not-first:mt-24': !isSpacingBlockOrFollowing
+            });
+            const band = 'band' in block ? block.band : null;
+
+            // Its own blocks are framed one by one, so it takes no frame here
+            if (framed && block.blockType === 'reusable-content') {
+              return (
+                <div className={spacing} key={index}>
+                  <Block {...block} {...extraProps} />
+                </div>
+              );
+            }
+
+            if (framed) {
+              return (
+                <Band band={band} fit="sheet" className={spacing} key={index}>
+                  <ContainerInner>
+                    <Block {...block} {...extraProps} />
+                  </ContainerInner>
+                </Band>
+              );
+            }
 
             return (
-              <div
-                // Do not set any margins around spacing block since it has its own margin options.
-                // For all other blocks, set a top margin unless it's the first block.
-                className={cn({
-                  'not-first:mt-16 md:not-first:mt-24':
-                    !isSpacingBlockOrFollowing
-                })}
-                key={index}
-              >
+              <Band band={band} fit="contained" className={spacing} key={index}>
                 <Block {...block} {...extraProps} />
-              </div>
+              </Band>
             );
           }
           return null;

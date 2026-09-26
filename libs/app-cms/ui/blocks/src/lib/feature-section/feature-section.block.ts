@@ -1,5 +1,6 @@
 import {
   linkGroupField,
+  sectionBandField,
   sectionHeaderFields
 } from '@codeware/app-cms/ui/fields';
 import type { FeatureSectionBlock } from '@codeware/shared/util/payload-types';
@@ -94,6 +95,7 @@ export const featureSectionBlock: Block = {
           required: true
         }
       ]
-    }
+    },
+    sectionBandField()
   ]
 };

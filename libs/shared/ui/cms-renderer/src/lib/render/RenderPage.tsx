@@ -1,7 +1,7 @@
 import type { Page } from '@codeware/shared/util/payload-types';
 import type { BlocksData } from '@codeware/shared/util/payload-utils';
 
-import { Container } from '../layout/Container';
+import { ContainerInner, ContainerOuter } from '../layout/Container';
 import { RenderBlocks } from '../RenderBlocks';
 
 type RenderPageProps = {
@@ -40,17 +40,21 @@ type RenderPageProps = {
  */
 export function RenderPage({ page, blocksData }: RenderPageProps) {
   return (
-    <Container className="mt-16 sm:mt-32">
+    // The outer layer only: each block brings the inner one, so a band can
+    // sit between the two and span the sheet
+    <ContainerOuter className="mt-16 sm:mt-32">
       {page.header && (
-        <header className="max-w-2xl">
-          <h1 className="text-core-headline text-4xl font-bold tracking-tight sm:text-5xl">
-            {page.header}
-          </h1>
-        </header>
+        <ContainerInner>
+          <header className="max-w-2xl">
+            <h1 className="text-core-headline text-4xl font-bold tracking-tight sm:text-5xl">
+              {page.header}
+            </h1>
+          </header>
+        </ContainerInner>
       )}
       <article className="mt-16">
-        <RenderBlocks blocks={page.layout} blocksData={blocksData} />
+        <RenderBlocks framed blocks={page.layout} blocksData={blocksData} />
       </article>
-    </Container>
+    </ContainerOuter>
   );
 }

@@ -1,4 +1,7 @@
-import { sectionHeaderFields } from '@codeware/app-cms/ui/fields';
+import {
+  sectionBandField,
+  sectionHeaderFields
+} from '@codeware/app-cms/ui/fields';
 import { SITE_THEMES, themeLabel } from '@codeware/shared/theme';
 import type { Block } from 'payload';
 
@@ -53,6 +56,7 @@ export const themeStudioBlock: Block = {
       localized: true,
       defaultValue:
         'Live — the studio itself, not a screenshot of it. Nothing you do here leaves your browser.'
-    }
+    },
+    sectionBandField()
   ]
 };

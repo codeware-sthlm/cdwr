@@ -1,3 +1,4 @@
+import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
 /**
@@ -32,6 +33,7 @@ export const formBlock: Block = {
       admin: {
         condition: (_, { enableIntro }) => Boolean(enableIntro)
       }
-    }
+    },
+    sectionBandField()
   ]
 };
