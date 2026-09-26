@@ -335,7 +335,9 @@ export function BlockGalleryEntry({
   render: RenderExample,
   onBack,
   onStep,
-  position
+  position,
+  expanded,
+  onExpandedChange: setExpanded
 }: {
   meta: BlockMeta;
   doc?: AnyBlockGalleryDoc;
@@ -343,9 +345,14 @@ export function BlockGalleryEntry({
   onBack: () => void;
   onStep: (delta: number) => void;
   position: { index: number; total: number };
+  /**
+   * Whether the block is shown full screen. Held by the gallery, not here: an
+   * entry is remounted per block, and stepping from full screen must stay there
+   */
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
 }) {
   const { locale } = usePayload();
-  const [expanded, setExpanded] = useState(false);
   const name = doc?.name && localized(doc.name, locale);
 
   // Nothing is drawn for a block nobody has written up, or one no page offers

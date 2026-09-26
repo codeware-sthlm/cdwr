@@ -176,6 +176,8 @@ export const BlockGalleryBlock: React.FC<
     return first?.meta.slug ?? null;
   };
   const [selected, setSelected] = useState(opening);
+  // Up here rather than in the entry, which is remounted for every block
+  const [expanded, setExpanded] = useState(false);
 
   // `RenderBlocks` keys by position, so a navigation that leaves the gallery
   // at the same index keeps this instance and its selection. Open again
@@ -197,12 +199,17 @@ export const BlockGalleryBlock: React.FC<
       <section>
         <BlockGalleryEntry
           // One entry per block: stepping to another must not carry the last
-          // one's band choice or full-screen state across
+          // one's band choice across. Full screen is the gallery's, so it stays
           key={entry.meta.slug}
           meta={entry.meta}
           doc={entry.doc}
           render={render}
-          onBack={() => setSelected(null)}
+          expanded={expanded}
+          onExpandedChange={setExpanded}
+          onBack={() => {
+            setExpanded(false);
+            setSelected(null);
+          }}
           // Wraps rather than disabling at the ends: a stepper that stops is a
           // dead control two clicks into a gallery meant to be flicked through
           onStep={(delta) =>
