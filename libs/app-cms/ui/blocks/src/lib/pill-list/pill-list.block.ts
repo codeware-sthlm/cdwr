@@ -1,22 +1,16 @@
 import {
   sectionBandField,
-  sectionHeaderFields
+  sectionHeaderFields,
+  techIconField
 } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
-import { type TechBrand, techIconsMap } from '@codeware/shared/ui/primitives';
+import type { TechBrand } from '@codeware/shared/ui/primitives';
 import type { Block, Condition, TypeWithID } from 'payload';
 
 type PillRow = {
   icon?: TechBrand | null;
   logo?: { source?: 'svg' | 'upload' | null } | null;
 };
-
-const techIconOptions = Object.entries(techIconsMap).map(
-  ([value, { name }]) => ({
-    label: name,
-    value
-  })
-);
 
 // An own logo is only asked for when no mark from the list is chosen
 const withoutIcon: Condition<TypeWithID, PillRow> = (_, siblingData) =>
@@ -77,19 +71,16 @@ export const pillListBlock: Block = {
             }
           }
         },
-        {
+        techIconField({
           name: 'icon',
-          type: 'select',
           label: { en: 'Logo', sv: 'Logotyp' },
-          enumName: enumName('pill_list_icon'),
-          options: techIconOptions,
           admin: {
             description: {
               en: 'A technology’s own mark, drawn in its brand colour. Leave it empty to add a logo of your own.',
               sv: 'En tekniks eget märke, i dess egen färg. Lämna tomt för att lägga till en egen logotyp.'
             }
           }
-        },
+        }),
         {
           name: 'logo',
           type: 'group',

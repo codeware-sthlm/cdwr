@@ -597,6 +597,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
                   en: 'Color',
                   sv: 'Färg'
                 }
+              },
+              {
+                name: 'tech',
+                type: 'select',
+                label: {
+                  en: 'Or a technology',
+                  sv: 'Eller en teknik'
+                },
+                description: {
+                  en: 'Shows the technology’s own mark in its brand colour, in place of the icon.',
+                  sv: 'Visar teknikens eget märke i dess egen färg, i stället för ikonen.'
+                }
               }
             ]
           },
@@ -1050,33 +1062,6 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           en: 'Select an image.',
           sv: 'Välj en bild.'
         }
-      },
-      {
-        name: 'band',
-        type: 'select',
-        label: {
-          en: 'Background',
-          sv: 'Bakgrund'
-        },
-        description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
-        }
-      }
-    ]
-  },
-  media: {
-    slug: 'media',
-    label: {
-      en: 'Media',
-      sv: 'Media'
-    },
-    availableIn: [],
-    fields: [
-      {
-        name: 'media',
-        type: 'upload',
-        required: true
       },
       {
         name: 'band',

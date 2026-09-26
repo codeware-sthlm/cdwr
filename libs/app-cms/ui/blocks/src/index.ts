@@ -10,7 +10,6 @@ export { fileAreaBlock } from './lib/file-area/file-area.block';
 export { formBlock } from './lib/form/form.block';
 export { heroBlock } from './lib/hero/hero.block';
 export { imageBlock } from './lib/image/image.block';
-export { mediaBlock } from './lib/media/media.block';
 export { pillListBlock } from './lib/pill-list/pill-list.block';
 export { postsBlock } from './lib/posts/posts.block';
 export { reusableContentBlock } from './lib/reusable-content/reusable-content.block';

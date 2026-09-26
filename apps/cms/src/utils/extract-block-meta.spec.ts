@@ -64,8 +64,15 @@ describe('extract-block-meta', () => {
     expect(nested?.blocks).toEqual(expect.arrayContaining(['code']));
   });
 
-  it('reports a block that no host offers as available nowhere', () => {
-    expect(extracted.meta['media'].availableIn).toEqual([]);
+  // The retired media block was the one registered block no host offered.
+  // With it gone every block is offered somewhere, so a new block that is
+  // registered but wired into no layout fails here rather than hiding
+  it('finds every registered block offered by at least one host', () => {
+    const nowhere = Object.entries(extracted.meta)
+      .filter(([, { availableIn }]) => availableIn.length === 0)
+      .map(([slug]) => slug);
+
+    expect(nowhere).toEqual([]);
   });
 
   it('lifts admin layout containers out of the field shape', () => {

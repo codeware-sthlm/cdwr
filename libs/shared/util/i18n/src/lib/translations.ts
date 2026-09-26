@@ -287,7 +287,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.example': 'Example',
     'gallery.fields': 'What an editor fills in',
     'gallery.next': 'Next block',
-    'gallery.notOffered': 'Not offered when a page is put together.',
+    'gallery.notOffered':
+      'Editors cannot add this block to a page, but it still shows where it is already in use.',
     'gallery.previous': 'Previous block',
     'gallery.required': 'required',
     'gallery.expand': 'Full screen',
@@ -519,7 +520,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.example': 'Exempel',
     'gallery.fields': 'Vad en redaktör fyller i',
     'gallery.next': 'Nästa block',
-    'gallery.notOffered': 'Erbjuds inte när en sida sätts ihop.',
+    'gallery.notOffered':
+      'Redaktörer kan inte lägga till det här blocket på en sida, men det visas fortfarande där det redan används.',
     'gallery.previous': 'Föregående block',
     'gallery.required': 'obligatoriskt',
     'gallery.expand': 'Helskärm',
