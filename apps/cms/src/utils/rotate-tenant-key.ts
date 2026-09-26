@@ -3,6 +3,7 @@ import './exit-guard';
 
 import { randomUUID } from 'crypto';
 
+import { report } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
 /**
@@ -62,12 +63,20 @@ async function rotate() {
     process.exit(1);
   }
 
+  // Reported back as the tenant this key belongs to, so a tenant without one
+  // stops here rather than after its key has been changed
+  const { slug } = tenant;
+  if (!slug) {
+    console.error(`Error: Tenant ${tenant.id} has no slug to report.`);
+    process.exit(1);
+  }
+
   // Resolving is the risky part to get wrong, so it can be checked on its own
   if (process.env['ROTATE_DRY_RUN'] === 'true') {
     console.log(
       `[ROTATE] Would rotate tenant '${tenant.slug}' (id: ${tenant.id})`
     );
-    console.log(`RESOLVED_TENANT=${tenant.slug}`);
+    report('RESOLVED_TENANT', slug);
     process.exit(0);
   }
 
@@ -81,8 +90,8 @@ async function rotate() {
   });
 
   console.log(`[ROTATE] Tenant '${tenant.slug}' (id: ${tenant.id}) updated`);
-  console.log(`RESOLVED_TENANT=${tenant.slug}`);
-  console.log(`ROTATED_API_KEY=${apiKey}`);
+  report('RESOLVED_TENANT', slug);
+  report('ROTATED_API_KEY', apiKey);
 
   process.exit(0);
 }

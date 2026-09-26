@@ -1,8 +1,10 @@
+import './exit-guard';
 import { pathToFileURL } from 'url';
 
 import { applySiteDefinition } from '@codeware/app-cms/feature/seed';
 import type { SiteDefinition } from '@codeware/shared/util/seed';
 
+import { report as writeReport } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
 /**
@@ -71,7 +73,7 @@ async function applySite() {
       report.dryRun ? 'rolled back' : 'committed'
     }`
   );
-  console.log(`APPLY_REPORT=${JSON.stringify(report)}`);
+  writeReport('APPLY_REPORT', JSON.stringify(report));
 
   process.exit(0);
 }

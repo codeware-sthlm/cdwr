@@ -1,6 +1,7 @@
 // Must be first: installs the guard before any module that might not finish
 import './exit-guard';
 
+import { report } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
 /**
@@ -41,7 +42,7 @@ async function list() {
     apiKey: apiKey ?? null
   }));
 
-  console.log(`TENANT_DEPLOYMENTS=${JSON.stringify(tenants)}`);
+  report('TENANT_DEPLOYMENTS', JSON.stringify(tenants));
   process.exit(0);
 }
 

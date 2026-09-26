@@ -49,9 +49,8 @@ async function rotateInPayload(
       ROTATE_DATABASE_URL: databaseUrl,
       ROTATE_CURRENT_API_KEY: currentApiKey,
       ROTATE_DRY_RUN: String(dryRun)
-    },
-    // Printed on a dry run as well; the new key is not
-    { reports: 'RESOLVED_TENANT' }
+    }
+    // No `reports`: a lost report after a rotation must not rotate again
   );
   const { apiKey, slug } = parseRotationOutput(stdout);
 

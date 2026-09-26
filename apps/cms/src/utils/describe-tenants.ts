@@ -3,6 +3,7 @@ import './exit-guard';
 
 import type { CollectionSlug, Payload } from 'payload';
 
+import { report } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
 /**
@@ -70,7 +71,7 @@ async function describe() {
     })
   );
 
-  console.log(`TENANT_DETAILS=${JSON.stringify(details)}`);
+  report('TENANT_DETAILS', JSON.stringify(details));
   process.exit(0);
 }
 

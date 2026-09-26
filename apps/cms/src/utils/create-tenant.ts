@@ -1,6 +1,7 @@
 // Must be first: installs the guard before any module that might not finish
 import './exit-guard';
 
+import { report } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
 /**
@@ -88,8 +89,9 @@ async function createTenant() {
         dryRun ? 'rolled back' : 'committed'
       }`
     );
-    console.log(
-      `CREATED_TENANT=${JSON.stringify({
+    report(
+      'CREATED_TENANT',
+      JSON.stringify({
         id: tenant.id,
         name: tenant.name,
         slug: tenant.slug,
@@ -97,7 +99,7 @@ async function createTenant() {
         deployment: tenant.deployment ?? null,
         apiKey: tenant.apiKey ?? null,
         dryRun
-      })}`
+      })
     );
 
     process.exit(0);
