@@ -74,6 +74,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./tenant/info').then((m) => m.default)
   },
   {
+    path: ['tenant', 'snapshot'],
+    summary: "Screenshots of a site's pages in each theme, scheme and screen",
+    danger: 'read',
+    load: () => import('./tenant/snapshot').then((m) => m.default)
+  },
+  {
     path: ['tenant', 'create'],
     summary: 'Create an empty workspace in Payload',
     danger: 'mutate',

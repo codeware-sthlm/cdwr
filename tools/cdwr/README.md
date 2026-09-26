@@ -7,6 +7,7 @@ cdwr                      # the app
 cdwr db backup --env production
 cdwr fly info --json
 cdwr tenant gate close --env preview --tenant demo --generate
+cdwr tenant snapshot --definition <path> --json
 cdwr <command> --help
 ```
 
@@ -46,6 +47,18 @@ asks wherever it runs, and destructive ones also make you type the target's name
 A command prints its plan before asking, so the question is about what you have just read.
 Commands that change something append to `~/.cdwr/history.jsonl`; `cdwr history` shows it.
 Remembered inputs (environment, app) live in `~/.cdwr/prefs.json`.
+
+## Seeing a site
+
+`cdwr tenant snapshot` screenshots a running site: every page of a site definition (or `--routes`),
+in each theme, colour scheme and screen size, into a gitignored `.site-snapshots/`. It changes
+nothing on the site and needs no credentials, only the site answering at `--url` (the dev server by
+default).
+
+It asks the way a visitor does: the theme through the theme cookie, the scheme through the system
+preference. A theme the site does not offer, or a scheme it locks, is reported as skipped rather
+than saved under a name that claims otherwise. With `--json`, each shot carries its path, the page's
+HTTP status and any console errors, which is what an agent reads first after changing something.
 
 ## Writing a command
 
