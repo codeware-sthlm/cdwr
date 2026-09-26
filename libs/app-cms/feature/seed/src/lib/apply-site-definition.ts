@@ -12,6 +12,7 @@ import type { Payload, TypedLocale } from 'payload';
 
 import { type ExtraDocument, findExtraDocuments } from './find-extra-documents';
 import { ensureCategory } from './local-api/ensure-category';
+import { ensureCustomTheme } from './local-api/ensure-custom-theme';
 import { ensureForm } from './local-api/ensure-form';
 import { ensureMedia } from './local-api/ensure-media';
 import { ensureNavigation } from './local-api/ensure-navigation';
@@ -402,6 +403,23 @@ export async function applySiteDefinition(
       );
     }
 
+    // Before site settings, which name them among the themes it offers
+    const customThemes = new Map<string, number>();
+    for (const theme of definition.customThemes ?? []) {
+      customThemes.set(
+        theme.slug,
+        record(
+          'custom-themes',
+          theme.slug,
+          await ensureCustomTheme(
+            payload,
+            { ...theme, tenant: tenant.id },
+            owned
+          )
+        )
+      );
+    }
+
     const resolver = {
       media: (filename: string) => media.get(filename),
       tag: (slug: string) => tags.get(slug),
@@ -564,7 +582,22 @@ export async function applySiteDefinition(
               // `ctx.locale` is the tenant's own: its settings, else the
               // first locale it supports
               defaultLocale: general?.defaultLocale ?? ctx.locale,
-              landingPage: page(general?.landingPage, 'landingPage')
+              landingPage: page(general?.landingPage, 'landingPage'),
+              // Named by slug in the definition, stored by id
+              ...(general?.customThemes && {
+                customThemes: general.customThemes.flatMap(({ lookupSlug }) => {
+                  const id = customThemes.get(lookupSlug);
+                  if (id === undefined) {
+                    unresolved.push({
+                      blockType: 'site-settings',
+                      field: 'customThemes',
+                      lookup: lookupSlug
+                    });
+                    return [];
+                  }
+                  return [id];
+                })
+              })
             },
             ...(legal && {
               legal: {

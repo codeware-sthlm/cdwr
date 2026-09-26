@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { BUNDLED_MEDIA } from './bundled-media';
+import type { SiteDefinition } from './site-definition';
 
 /**
  * What TypeScript cannot check about a definition.
@@ -34,11 +35,20 @@ const KNOWN_KEYS = [
   'categories',
   'media',
   'forms',
+  'customThemes',
   'pages',
   'posts',
   'navigation',
   'siteSettings'
-];
+] as const satisfies ReadonlyArray<keyof SiteDefinition>;
+
+/** Fails to compile when `SiteDefinition` gains a key this list leaves out. */
+export type AssertEveryKeyKnown<
+  TMissing extends never = Exclude<
+    keyof SiteDefinition,
+    (typeof KNOWN_KEYS)[number]
+  >
+> = TMissing;
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const Slug = z.string().regex(slugPattern, 'Expected a lowercase-dashed slug');
@@ -83,6 +93,19 @@ export const SiteDefinitionSchema = z
       .optional(),
     forms: z
       .array(z.object({ title: z.string().min(1) }).passthrough())
+      .optional(),
+    customThemes: z
+      .array(
+        z
+          .object({
+            name: z.string().min(1),
+            slug: Slug,
+            // Judged by the type and, on apply, by the theme's own validation,
+            // which refuses a theme whose colours fail the contrast check
+            recipe: z.object({}).passthrough()
+          })
+          .passthrough()
+      )
       .optional(),
     pages: z.array(
       z
@@ -136,7 +159,10 @@ export const SiteDefinitionSchema = z
 
     // Kept keys are not accepted keys: a typo should be told about, not stored
     for (const key of Object.keys(definition)) {
-      if (!KNOWN_KEYS.includes(key) && !FORBIDDEN_KEYS.includes(key)) {
+      if (
+        !(KNOWN_KEYS as ReadonlyArray<string>).includes(key) &&
+        !FORBIDDEN_KEYS.includes(key)
+      ) {
         problem(`'${key}' is not part of a site definition`, [key]);
       }
     }
@@ -216,6 +242,25 @@ export const SiteDefinitionSchema = z
       );
     }
 
+    // A site that offers a theme of its own has to state it
+    const themeSlugs = new Set(
+      (definition.customThemes ?? []).map(({ slug }) => slug)
+    );
+    duplicates((definition.customThemes ?? []).map(({ slug }) => slug)).forEach(
+      (slug) =>
+        problem(`Two custom themes share the slug '${slug}'`, ['customThemes'])
+    );
+    customThemeRefsIn(definition.siteSettings).forEach((lookupSlug, index) => {
+      if (typeof lookupSlug !== 'string' || !themeSlugs.has(lookupSlug)) {
+        problem(`No custom theme '${String(lookupSlug)}' in this definition`, [
+          'siteSettings',
+          'general',
+          'customThemes',
+          index
+        ]);
+      }
+    });
+
     (definition.media ?? []).forEach((item, index) => {
       (item.tags ?? []).forEach(({ lookupSlug }, tagIndex) => {
         if (!tagSlugs.has(lookupSlug)) {
@@ -231,6 +276,28 @@ export const SiteDefinitionSchema = z
   });
 
 export type ValidatedSiteDefinition = z.infer<typeof SiteDefinitionSchema>;
+
+/**
+ * The slugs site settings name under `general.customThemes`.
+ *
+ * `siteSettings` is an open record here, so it is narrowed by checking rather
+ * than by casting; anything that is not a `{ lookupSlug }` comes back as-is for
+ * the caller to report.
+ */
+function customThemeRefsIn(settings: unknown): Array<unknown> {
+  if (typeof settings !== 'object' || settings === null) return [];
+  if (!('general' in settings)) return [];
+  const { general } = settings;
+  if (typeof general !== 'object' || general === null) return [];
+  if (!('customThemes' in general) || !Array.isArray(general.customThemes)) {
+    return [];
+  }
+  return general.customThemes.map((ref: unknown) =>
+    typeof ref === 'object' && ref !== null && 'lookupSlug' in ref
+      ? ref.lookupSlug
+      : ref
+  );
+}
 
 const duplicates = (values: Array<string>): Array<string> => [
   ...new Set(values.filter((value, index) => values.indexOf(value) !== index))

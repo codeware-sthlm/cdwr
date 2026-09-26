@@ -1,5 +1,8 @@
 import { slugField } from '@codeware/app-cms/ui/fields';
-import { adminGroups } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import { customT } from '@codeware/app-cms/util/i18n';
 import { hasRole } from '@codeware/app-cms/util/misc';
 import {
@@ -183,6 +186,7 @@ const customThemes: CollectionConfig = {
     plural: { en: 'Custom themes', sv: 'Egna teman' }
   },
   fields: [
+    managedByField(),
     {
       name: 'name',
       type: 'text',

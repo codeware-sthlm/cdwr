@@ -89,6 +89,11 @@ const MATCHERS = [
     collection: 'posts',
     field: 'slug',
     named: (d: SiteDefinition) => (d.posts ?? []).map((p) => p.slug)
+  }),
+  matcher({
+    collection: 'custom-themes',
+    field: 'slug',
+    named: (d: SiteDefinition) => (d.customThemes ?? []).map((t) => t.slug)
   })
 ];
 

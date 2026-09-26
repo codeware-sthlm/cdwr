@@ -1611,7 +1611,7 @@ export interface ShowcaseBlock {
         title: string;
         description: string;
         /**
-         * Monospace line, e.g. "Nx · Payload · Postgres"
+         * Short tags separated by | or ·, e.g. "Nx | Payload | Postgres". Each one shows as a badge.
          */
         meta?: string | null;
         link: ShowcaseItemLink;
@@ -1800,6 +1800,7 @@ export interface CalloutLink {
 export interface CustomTheme {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   /**
    * Shown to visitors in the theme selector.
    */
@@ -2757,6 +2758,7 @@ export interface CategoriesSelect<T extends boolean = true> {
  */
 export interface CustomThemesSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   name?: T;
   recipe?: T;
   overrides?: T;

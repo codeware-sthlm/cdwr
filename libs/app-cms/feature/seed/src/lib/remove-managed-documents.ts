@@ -31,6 +31,9 @@ export const FRESH_POLICY = {
   pages: 'recreate',
   forms: 'recreate',
   categories: 'recreate',
+  // Only decisions are stated and the tokens are derived, so a recreated
+  // theme is the same theme
+  'custom-themes': 'recreate',
   tags: 'reuse',
   media: 'reuse'
 } as const satisfies Record<ManagedCollectionSlug, 'recreate' | 'reuse'>;
@@ -39,7 +42,13 @@ export const FRESH_POLICY = {
  * The order recreated collections are removed in: whatever points at a
  * document goes before it. Posts reference categories; pages reference forms.
  */
-const RECREATE_ORDER = ['posts', 'pages', 'forms', 'categories'] as const;
+const RECREATE_ORDER = [
+  'posts',
+  'pages',
+  'forms',
+  'categories',
+  'custom-themes'
+] as const;
 
 /** Every collection whose policy is `recreate` is in the order, and no other. */
 type Ordered = (typeof RECREATE_ORDER)[number];
