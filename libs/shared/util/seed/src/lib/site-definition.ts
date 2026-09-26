@@ -1,3 +1,4 @@
+import type { ThemeRecipe, ThemeTokens } from '@codeware/shared/util/color';
 import type {
   CalloutBlock,
   ContentBlock,
@@ -330,14 +331,35 @@ export type FormDefinition = {
   emailTo?: string;
 };
 
+/**
+ * A theme of the site's own, as the theme studio would save it.
+ *
+ * Only the decisions are stated: the apply derives both token maps from them
+ * with the same call the studio makes, so what lands is what the studio would
+ * have saved, and the two cannot drift.
+ */
+export type CustomThemeDefinition = {
+  name: string;
+  /** The `data-theme` value, and what site settings name it by */
+  slug: string;
+  recipe: ThemeRecipe;
+  /** Values pinned by hand, applied after the recipe */
+  overrides?: { light?: ThemeTokens; dark?: ThemeTokens };
+};
+
 /** Everything a definition may say about the site's own settings. */
 export type SiteSettingsDefinition = {
   // Partial: a definition states the settings it cares about and leaves the
   // rest as the workspace has them
   general?: Partial<
-    Omit<NonNullable<SiteSetting['general']>, 'landingPage' | 'icon'>
+    Omit<
+      NonNullable<SiteSetting['general']>,
+      'landingPage' | 'icon' | 'customThemes'
+    >
   > & {
     landingPage?: { lookupSlug: string };
+    /** Themes this definition states under `customThemes`, by slug */
+    customThemes?: Array<{ lookupSlug: string }>;
     /**
      * The site's mark, stated as SVG code only: an upload is a document the
      * definition would have to point at, and markup can follow the text colour
@@ -370,6 +392,7 @@ export type SiteDefinition = {
   categories?: Array<CategoryDefinition>;
   media?: Array<MediaDefinition>;
   forms?: Array<FormDefinition>;
+  customThemes?: Array<CustomThemeDefinition>;
   pages: Array<PageDefinition>;
   posts?: Array<PostDefinition>;
   navigation?: Array<NavigationItemDefinition>;

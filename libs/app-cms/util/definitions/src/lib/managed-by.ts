@@ -14,7 +14,8 @@ export const managedCollectionSlugs = [
   'media',
   'forms',
   'pages',
-  'posts'
+  'posts',
+  'custom-themes'
 ] as const satisfies ReadonlyArray<CollectionSlug>;
 
 export type ManagedCollectionSlug = (typeof managedCollectionSlugs)[number];
