@@ -37,6 +37,8 @@
   --core-background-body: var(--background);
   --core-background-content: var(--card);
   --core-content-border: var(--border);
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--background);
   --core-link: var(--brand-400);
   --core-surface-invert: var(--card);
 }

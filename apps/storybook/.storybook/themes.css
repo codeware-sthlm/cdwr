@@ -69,6 +69,10 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-sheet-edge: transparent;
+  --core-band-reach: calc(50% - 50vw);
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   /* Typefaces. Unquoted deliberately: a multi-word family is valid as a
   sequence of identifiers, and the runtime theme whitelist rejects
   quotes — so committed and injected themes can carry the same value */
@@ -153,6 +157,10 @@
 
   /* === core tokens === */
   --core-surface-invert: var(--card);
+
+  /* A band apart from the surface it sits on */
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
 }
 
 /* payload-admin */
@@ -227,6 +235,10 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-sheet-edge: transparent;
+  --core-band-reach: calc(50% - 50vw);
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   /* Typefaces. Unquoted deliberately: a multi-word family is valid as a
   sequence of identifiers, and the runtime theme whitelist rejects
   quotes — so committed and injected themes can carry the same value */
@@ -315,6 +327,10 @@
   /* === core tokens === */
   --core-link: var(--link);
   --core-surface-invert: var(--card);
+
+  /* A band apart from the surface it sits on */
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
 }
 
 /* spotlight */
@@ -409,6 +425,10 @@
   --core-background-body: var(--color-zinc-50);
   --core-background-content: var(--background);
   --core-content-border: var(--color-zinc-100);
+  --core-sheet-edge: var(--core-content-border);
+  --core-band-reach: 0px;
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Inter Variable, Inter, sans-serif;
   --core-interactive: var(--brand-400);
@@ -491,6 +511,10 @@
   --links: var(--color-teal-400);
   --links-hover: var(--color-teal-400);
   --underline-hover: var(--color-teal-400);
+
+  /* A band apart from the surface it sits on */
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
 }
 
 /* codeware */
@@ -570,6 +594,10 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-sheet-edge: transparent;
+  --core-band-reach: calc(50% - 50vw);
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   /* Typefaces. Unquoted deliberately: a multi-word family is valid as a
   sequence of identifiers, and the runtime theme whitelist rejects
   quotes — so committed and injected themes can carry the same value */
@@ -655,6 +683,10 @@
   /* === core tokens - aliases to shadcn tokens === */
   --core-link: var(--brand-400);
   --core-surface-invert: var(--card);
+
+  /* A band apart from the surface it sits on */
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
 }
 
 /* archipelago */
@@ -750,6 +782,10 @@
   --core-background-body: oklch(0.987 0.002 197.1);
   --core-background-content: var(--background);
   --core-content-border: oklch(0.963 0.002 197.1);
+  --core-sheet-edge: var(--core-content-border);
+  --core-band-reach: 0px;
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Inter Variable, Inter, sans-serif;
   --core-link: var(--brand-700);
@@ -794,6 +830,8 @@
   --core-background-body: var(--background);
   --core-background-content: var(--card);
   --core-content-border: var(--border);
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--background);
   --core-link: var(--brand-400);
   --core-surface-invert: var(--card);
 }
@@ -891,6 +929,10 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-sheet-edge: transparent;
+  --core-band-reach: calc(50% - 50vw);
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Inter Variable, Inter, sans-serif;
   --core-link: var(--brand-800);
@@ -935,6 +977,8 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
   --core-link: var(--brand-400);
   --core-surface-invert: var(--card);
 }
@@ -1032,6 +1076,10 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-sheet-edge: transparent;
+  --core-band-reach: calc(50% - 50vw);
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Inter Variable, Inter, sans-serif;
   --core-link: var(--brand-700);
@@ -1076,6 +1124,8 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
   --core-link: var(--brand-400);
   --core-surface-invert: var(--card);
 }
@@ -1173,6 +1223,10 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-sheet-edge: transparent;
+  --core-band-reach: calc(50% - 50vw);
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   --core-font-body:
     ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   --core-font-heading:
@@ -1219,6 +1273,8 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
   --core-link: var(--primary);
   --core-surface-invert: var(--card);
 }
@@ -1316,6 +1372,10 @@
   --core-background-body: var(--color-slate-50);
   --core-background-content: var(--background);
   --core-content-border: var(--color-slate-100);
+  --core-sheet-edge: var(--core-content-border);
+  --core-band-reach: 0px;
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Inter Variable, Inter, sans-serif;
   --core-link: var(--brand-700);
@@ -1360,6 +1420,8 @@
   --core-background-body: var(--background);
   --core-background-content: var(--card);
   --core-content-border: var(--border);
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--background);
   --core-link: var(--brand-400);
   --core-surface-invert: var(--card);
 }
@@ -1457,6 +1519,10 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-sheet-edge: transparent;
+  --core-band-reach: calc(50% - 50vw);
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Inter Variable, Inter, sans-serif;
   --core-link: var(--brand-700);
@@ -1501,6 +1567,8 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
   --core-link: var(--brand-400);
   --core-surface-invert: var(--card);
 }

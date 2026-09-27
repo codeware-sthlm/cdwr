@@ -260,6 +260,54 @@ export const ALIAS_LIGHT: Record<string, TokenSource> = {
 };
 
 /**
+ * The content column's outline, and how far a band reaches past it.
+ *
+ * On `flat` the column is the same colour as the page, so an outline would be
+ * two lone lines and a band stopping at them a box; the band reaches the
+ * browser edges instead. On `layered` the column is a surface of its own, and a
+ * band spans it edge to edge. Light only: neither changes with the scheme.
+ *
+ * Restated in `custom-theme-css.ts` for themes saved before these existed.
+ */
+const SHEET = {
+  flat: {
+    '--core-sheet-edge': { value: 'transparent' },
+    '--core-band-reach': { value: 'calc(50% - 50vw)' },
+    '--core-band-subtle': { value: 'var(--muted)' },
+    '--core-band-strong': { value: 'var(--card)' }
+  },
+  layered: {
+    '--core-sheet-edge': { value: 'var(--core-content-border)' },
+    '--core-band-reach': { value: '0px' },
+    '--core-band-subtle': { value: 'var(--muted)' },
+    '--core-band-strong': { value: 'var(--card)' }
+  }
+} as const satisfies Record<'flat' | 'layered', Record<string, TokenSource>>;
+
+/**
+ * A band on a dark page, which has to stand apart from whatever it sits on.
+ *
+ * Halfway between card and background is lighter than a flat page and darker
+ * than a layered sheet, so one subtle value serves both. The strong band is the
+ * card on a flat page and the page's own depth on a layered sheet, which is
+ * already the card. Restated in `custom-theme-css.ts` like {@link SHEET}.
+ */
+const BAND_DARK = {
+  flat: {
+    '--core-band-subtle': {
+      value: 'color-mix(in oklab, var(--card) 50%, var(--background))'
+    },
+    '--core-band-strong': { value: 'var(--card)' }
+  },
+  layered: {
+    '--core-band-subtle': {
+      value: 'color-mix(in oklab, var(--card) 50%, var(--background))'
+    },
+    '--core-band-strong': { value: 'var(--background)' }
+  }
+} as const satisfies Record<'flat' | 'layered', Record<string, TokenSource>>;
+
+/**
  * How the page separates its content column from the shell around it.
  *
  * `flat` paints body, content and footer the same — what `shadcn` and
@@ -274,12 +322,14 @@ export const SURFACE_LIGHT: Record<
   flat: {
     '--core-background-body': { value: 'var(--background)' },
     '--core-background-content': { value: 'var(--background)' },
-    '--core-content-border': { value: 'var(--border)' }
+    '--core-content-border': { value: 'var(--border)' },
+    ...SHEET.flat
   },
   layered: {
     '--core-background-body': { base: '50' },
     '--core-background-content': { value: 'var(--background)' },
-    '--core-content-border': { base: '100' }
+    '--core-content-border': { base: '100' },
+    ...SHEET.layered
   }
 };
 
@@ -294,13 +344,15 @@ export const SURFACE_DARK: Record<
   flat: {
     '--core-background-body': { value: 'var(--background)' },
     '--core-background-content': { value: 'var(--background)' },
-    '--core-content-border': { value: 'var(--border)' }
+    '--core-content-border': { value: 'var(--border)' },
+    ...BAND_DARK.flat
   },
   layered: {
     // The raised surface in dark is the card, the same relationship inverted
     '--core-background-body': { value: 'var(--background)' },
     '--core-background-content': { value: 'var(--card)' },
-    '--core-content-border': { value: 'var(--border)' }
+    '--core-content-border': { value: 'var(--border)' },
+    ...BAND_DARK.layered
   }
 };
 

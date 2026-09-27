@@ -90,6 +90,9 @@ export const CORE_TOKENS = [
   '--core-background-body',
   '--core-background-content',
   '--core-content-border',
+  '--core-sheet-edge',
+  '--core-band-subtle',
+  '--core-band-strong',
   '--core-header',
   '--core-headline',
   '--core-interactive',
@@ -102,6 +105,7 @@ export const CORE_TOKENS = [
   '--core-nav-link-hover',
   '--core-surface-invert',
   '--core-text',
+  '--core-band-reach',
   '--core-font-body',
   '--core-font-heading',
   '--core-font-mono'

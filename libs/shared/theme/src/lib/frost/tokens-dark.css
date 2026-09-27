@@ -40,4 +40,8 @@
 
   /* === core tokens === */
   --core-surface-invert: var(--card);
+
+  /* A band apart from the surface it sits on */
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
 }

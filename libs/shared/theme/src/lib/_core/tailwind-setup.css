@@ -111,6 +111,9 @@
   --color-core-background-body: var(--core-background-body);
   --color-core-background-content: var(--core-background-content);
   --color-core-content-border: var(--core-content-border);
+  --color-core-sheet-edge: var(--core-sheet-edge);
+  --color-core-band-subtle: var(--core-band-subtle);
+  --color-core-band-strong: var(--core-band-strong);
   --color-core-header: var(--core-header);
   --color-core-headline: var(--core-headline);
   --color-core-interactive: var(--core-interactive);
@@ -123,6 +126,11 @@
   --color-core-nav-link-hover: var(--core-nav-link-hover);
   --color-core-surface-invert: var(--core-surface-invert);
   --color-core-text: var(--core-text);
+
+  /* How far a band reaches past the content column: to the browser edges on a
+     flat theme, nowhere on a layered one. A spacing key, so it is
+     `inset-x-band-reach` */
+  --spacing-band-reach: var(--core-band-reach);
 
   /* Typefaces. `--font-*` is Tailwind's own namespace, so these also generate
      the `font-sans` / `font-heading` / `font-mono` utilities. No `--font-serif`:

@@ -7,8 +7,23 @@ import {
   isValidTokenValue
 } from './custom-theme-css';
 
-/** What every block ends with while its stored map predates the track. */
-const TRACK = ';--core-action-btn-track:var(--muted)';
+/** The sheet fill-in for a map that cannot tell its surfaces apart. */
+const FLAT_SHEET =
+  ';--core-sheet-edge:transparent;--core-band-reach:calc(50% - 50vw)';
+
+/** The band tones every block gains while its stored map predates them. */
+const BANDS = ';--core-band-subtle:var(--muted);--core-band-strong:var(--card)';
+
+/** What every light block ends with while its stored map predates the track. */
+const TRACK = `;--core-action-btn-track:var(--muted)${BANDS}${FLAT_SHEET}`;
+
+/** The dark band tones a flat theme is filled in with. */
+const DARK_BANDS =
+  '--core-band-subtle:color-mix(in oklab, var(--card) 50%, var(--background));--core-band-strong:var(--card)';
+
+/** The dark block a theme saved without dark band tones gains. */
+const darkBlock = (declarations = '') =>
+  `\n[data-theme='ocean'].dark{${declarations ? `${declarations};` : ''}${DARK_BANDS}}`;
 
 const theme = (
   overrides: Partial<Parameters<typeof customThemeCss>[0][0]>
@@ -22,7 +37,7 @@ const theme = (
 describe('customThemeCss', () => {
   it('scopes light tokens to the theme attribute', () => {
     expect(customThemeCss([theme({})])).toBe(
-      `[data-theme='ocean']{--background:oklch(1 0 0)${TRACK}}`
+      `[data-theme='ocean']{--background:oklch(1 0 0)${TRACK}}${darkBlock()}`
     );
   });
 
@@ -32,8 +47,8 @@ describe('customThemeCss', () => {
     expect(
       customThemeCss([theme({ tokensDark: { '--background': '#000' } })])
     ).toBe(
-      `[data-theme='ocean']{--background:oklch(1 0 0)${TRACK}}\n` +
-        "[data-theme='ocean'].dark{--background:#000}"
+      `[data-theme='ocean']{--background:oklch(1 0 0)${TRACK}}` +
+        darkBlock('--background:#000')
     );
   });
 
@@ -62,8 +77,42 @@ describe('customThemeCss', () => {
         })
       ])
     ).toBe(
-      "[data-theme='ocean']{--background:#fff;--core-action-btn-track:#eee}"
+      `[data-theme='ocean']{--background:#fff;--core-action-btn-track:#eee${BANDS}${FLAT_SHEET}}${darkBlock()}`
     );
+  });
+
+  describe('fills in the sheet by the surface the theme was saved with', () => {
+    const surfaces = (body: string, content: string) =>
+      customThemeCss([
+        theme({
+          tokensLight: {
+            '--core-background-body': body,
+            '--core-background-content': content
+          }
+        })
+      ]);
+
+    it('lets a flat theme reach the browser edges, with no outline', () => {
+      const css = surfaces('var(--background)', 'var(--background)');
+
+      expect(css).toContain('--core-sheet-edge:transparent');
+      expect(css).toContain('--core-band-reach:calc(50% - 50vw)');
+    });
+
+    it('keeps a layered theme within its outlined sheet', () => {
+      const css = surfaces('oklch(0.98 0 0)', 'var(--background)');
+
+      expect(css).toContain('--core-sheet-edge:var(--core-content-border)');
+      expect(css).toContain('--core-band-reach:0px');
+    });
+
+    // A layered sheet is already the card in dark, so a band the card colour
+    // would vanish into it
+    it("sets a layered theme's dark strong band apart from its sheet", () => {
+      expect(surfaces('oklch(0.98 0 0)', 'var(--background)')).toContain(
+        '.dark{--core-band-subtle:color-mix(in oklab, var(--card) 50%, var(--background));--core-band-strong:var(--background)}'
+      );
+    });
   });
 
   it('joins several themes', () => {
@@ -140,7 +189,7 @@ describe('customThemeCss', () => {
             tokensLight: { '--background': '#fff', '--x': 'red;}body{}' }
           })
         ])
-      ).toBe(`[data-theme='ocean']{--background:#fff${TRACK}}`);
+      ).toBe(`[data-theme='ocean']{--background:#fff${TRACK}}${darkBlock()}`);
     });
 
     it('drops a slug that would break out of the selector', () => {

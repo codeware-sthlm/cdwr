@@ -90,6 +90,10 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-sheet-edge: transparent;
+  --core-band-reach: calc(50% - 50vw);
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   --core-font-body:
     ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   --core-font-heading:

@@ -68,6 +68,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-sheet-edge': 'transparent',
+      '--core-band-reach': 'calc(50% - 50vw)',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
       '--core-font-heading': 'Inter Variable, Inter, sans-serif',
       '--core-font-mono':
@@ -140,7 +144,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--sidebar-accent-foreground': 'oklch(0.985 0 0)',
       '--sidebar-border': 'oklch(1 0 0 / 10%)',
       '--sidebar-ring': 'oklch(0.556 0 0)',
-      '--core-surface-invert': 'var(--card)'
+      '--core-surface-invert': 'var(--card)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--card)'
     }
   },
   'payload-admin': {
@@ -205,6 +212,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-sheet-edge': 'transparent',
+      '--core-band-reach': 'calc(50% - 50vw)',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
       '--core-font-heading': 'Inter Variable, Inter, sans-serif',
       '--core-font-mono':
@@ -279,7 +290,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--sidebar-ring': 'oklch(0.552 0.016 285.938)',
       '--link': 'var(--brand-300)',
       '--core-link': 'var(--link)',
-      '--core-surface-invert': 'var(--card)'
+      '--core-surface-invert': 'var(--card)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--card)'
     }
   },
   spotlight: {
@@ -373,6 +387,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--color-zinc-50)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--color-zinc-100)',
+      '--core-sheet-edge': 'var(--core-content-border)',
+      '--core-band-reach': '0px',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
       '--core-font-heading': 'Inter Variable, Inter, sans-serif',
       '--core-interactive': 'var(--brand-400)',
@@ -454,7 +472,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--counters': 'var(--color-zinc-200)',
       '--links': 'var(--color-teal-400)',
       '--links-hover': 'var(--color-teal-400)',
-      '--underline-hover': 'var(--color-teal-400)'
+      '--underline-hover': 'var(--color-teal-400)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--card)'
     }
   },
   codeware: {
@@ -524,6 +545,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-sheet-edge': 'transparent',
+      '--core-band-reach': 'calc(50% - 50vw)',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
       '--core-font-heading': 'Inter Variable, Inter, sans-serif',
       '--core-font-mono':
@@ -597,7 +622,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--sidebar-border': 'oklch(1 0 0 / 10%)',
       '--sidebar-ring': 'oklch(0.552 0.016 285.938)',
       '--core-link': 'var(--brand-400)',
-      '--core-surface-invert': 'var(--card)'
+      '--core-surface-invert': 'var(--card)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--card)'
     }
   },
   archipelago: {
@@ -692,6 +720,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'oklch(0.987 0.002 197.1)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'oklch(0.963 0.002 197.1)',
+      '--core-sheet-edge': 'var(--core-content-border)',
+      '--core-band-reach': '0px',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
       '--core-font-heading': 'Inter Variable, Inter, sans-serif',
       '--core-link': 'var(--brand-700)',
@@ -736,6 +768,9 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--card)',
       '--core-content-border': 'var(--border)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--background)',
       '--core-link': 'var(--brand-400)',
       '--core-surface-invert': 'var(--card)'
     }
@@ -832,6 +867,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-sheet-edge': 'transparent',
+      '--core-band-reach': 'calc(50% - 50vw)',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
       '--core-font-heading': 'Inter Variable, Inter, sans-serif',
       '--core-link': 'var(--brand-800)',
@@ -876,6 +915,9 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--card)',
       '--core-link': 'var(--brand-400)',
       '--core-surface-invert': 'var(--card)'
     }
@@ -972,6 +1014,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-sheet-edge': 'transparent',
+      '--core-band-reach': 'calc(50% - 50vw)',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
       '--core-font-heading': 'Inter Variable, Inter, sans-serif',
       '--core-link': 'var(--brand-700)',
@@ -1016,6 +1062,9 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--card)',
       '--core-link': 'var(--brand-400)',
       '--core-surface-invert': 'var(--card)'
     }
@@ -1112,6 +1161,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-sheet-edge': 'transparent',
+      '--core-band-reach': 'calc(50% - 50vw)',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body':
         'ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji',
       '--core-font-heading':
@@ -1158,6 +1211,9 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--card)',
       '--core-link': 'var(--primary)',
       '--core-surface-invert': 'var(--card)'
     }
@@ -1254,6 +1310,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--color-slate-50)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--color-slate-100)',
+      '--core-sheet-edge': 'var(--core-content-border)',
+      '--core-band-reach': '0px',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
       '--core-font-heading': 'Inter Variable, Inter, sans-serif',
       '--core-link': 'var(--brand-700)',
@@ -1298,6 +1358,9 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--card)',
       '--core-content-border': 'var(--border)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--background)',
       '--core-link': 'var(--brand-400)',
       '--core-surface-invert': 'var(--card)'
     }
@@ -1394,6 +1457,10 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-sheet-edge': 'transparent',
+      '--core-band-reach': 'calc(50% - 50vw)',
+      '--core-band-subtle': 'var(--muted)',
+      '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
       '--core-font-heading': 'Inter Variable, Inter, sans-serif',
       '--core-link': 'var(--brand-700)',
@@ -1438,6 +1505,9 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-background-body': 'var(--background)',
       '--core-background-content': 'var(--background)',
       '--core-content-border': 'var(--border)',
+      '--core-band-subtle':
+        'color-mix(in oklab, var(--card) 50%, var(--background))',
+      '--core-band-strong': 'var(--card)',
       '--core-link': 'var(--brand-400)',
       '--core-surface-invert': 'var(--card)'
     }
