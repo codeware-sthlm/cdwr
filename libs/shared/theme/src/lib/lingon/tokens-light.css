@@ -95,7 +95,7 @@
   --core-band-subtle: var(--muted);
   --core-band-strong: var(--card);
   --core-font-body: Inter Variable, Inter, sans-serif;
-  --core-font-heading: Inter Variable, Inter, sans-serif;
+  --core-font-heading: Fraunces Variable, ui-serif, Georgia, serif;
   --core-link: var(--brand-700);
   --core-surface-invert: var(--color-stone-900);
 }

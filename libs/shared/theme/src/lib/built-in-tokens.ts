@@ -729,7 +729,8 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-band-subtle': 'var(--muted)',
       '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
-      '--core-font-heading': 'Inter Variable, Inter, sans-serif',
+      '--core-font-heading':
+        'Sora Variable, ui-sans-serif, system-ui, sans-serif',
       '--core-link': 'var(--brand-700)',
       '--core-surface-invert': 'oklch(0.218 0.008 223.9)'
     },
@@ -876,7 +877,8 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-band-subtle': 'var(--muted)',
       '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
-      '--core-font-heading': 'Inter Variable, Inter, sans-serif',
+      '--core-font-heading':
+        'Sora Variable, ui-sans-serif, system-ui, sans-serif',
       '--core-link': 'var(--brand-800)',
       '--core-surface-invert': 'oklch(0.228 0.013 107.4)'
     },
@@ -1023,7 +1025,7 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-band-subtle': 'var(--muted)',
       '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
-      '--core-font-heading': 'Inter Variable, Inter, sans-serif',
+      '--core-font-heading': 'Fraunces Variable, ui-serif, Georgia, serif',
       '--core-link': 'var(--brand-700)',
       '--core-surface-invert': 'var(--color-stone-900)'
     },
@@ -1172,7 +1174,7 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-font-body':
         'ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji',
       '--core-font-heading':
-        'ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji',
+        'JetBrains Mono Variable, ui-monospace, SFMono-Regular, Menlo, monospace',
       '--core-link': 'var(--primary)',
       '--core-surface-invert': 'var(--color-zinc-900)'
     },
@@ -1466,7 +1468,8 @@ export const BUILT_IN_TOKENS: Record<string, BuiltInThemeTokens> = {
       '--core-band-subtle': 'var(--muted)',
       '--core-band-strong': 'var(--card)',
       '--core-font-body': 'Inter Variable, Inter, sans-serif',
-      '--core-font-heading': 'Inter Variable, Inter, sans-serif',
+      '--core-font-heading':
+        'Space Mono, ui-monospace, SFMono-Regular, Menlo, monospace',
       '--core-link': 'var(--brand-700)',
       '--core-surface-invert': 'oklch(0.214 0.009 43.1)'
     },

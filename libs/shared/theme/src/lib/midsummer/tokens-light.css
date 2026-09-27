@@ -95,7 +95,7 @@
   --core-band-subtle: var(--muted);
   --core-band-strong: var(--card);
   --core-font-body: Inter Variable, Inter, sans-serif;
-  --core-font-heading: Inter Variable, Inter, sans-serif;
+  --core-font-heading: Sora Variable, ui-sans-serif, system-ui, sans-serif;
   --core-link: var(--brand-800);
   --core-surface-invert: oklch(0.228 0.013 107.4);
 }

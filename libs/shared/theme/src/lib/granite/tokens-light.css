@@ -97,7 +97,7 @@
   --core-font-body:
     ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   --core-font-heading:
-    ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+    JetBrains Mono Variable, ui-monospace, SFMono-Regular, Menlo, monospace;
   --core-link: var(--primary);
   --core-surface-invert: var(--color-zinc-900);
 }
