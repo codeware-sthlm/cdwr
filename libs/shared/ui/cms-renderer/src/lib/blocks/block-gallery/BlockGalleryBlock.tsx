@@ -13,6 +13,7 @@ import { cn } from '@codeware/shared/util/ui';
 import { useState } from 'react';
 
 import { usePayload } from '../../providers/PayloadProvider';
+import { interactiveSurface } from '../../utils/interactive-surface';
 import { type AnyBlockGalleryDoc, localized } from '../gallery-doc';
 import { galleryDocs } from '../gallery-docs';
 
@@ -49,7 +50,10 @@ function BlockCard({ meta, doc, onOpen }: Entry & { onOpen: () => void }) {
       <button
         type="button"
         onClick={onOpen}
-        className="border-border bg-card/50 hover:border-core-interactive flex h-full w-full flex-col gap-2.5 rounded-xl border p-5 text-left transition-colors"
+        className={cn(
+          'flex h-full w-full flex-col gap-2.5 rounded-xl p-5 text-left',
+          interactiveSurface()
+        )}
       >
         <code className="text-core-link font-mono text-xs">{meta.slug}</code>
         <p className="text-foreground text-base font-semibold tracking-tight">

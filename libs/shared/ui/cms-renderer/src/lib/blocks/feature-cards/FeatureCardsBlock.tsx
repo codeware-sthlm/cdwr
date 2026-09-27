@@ -61,7 +61,8 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
           return (
             <Card
               key={i}
-              className="bg-card hover:border-core-link/40 border shadow-xs transition-colors duration-300"
+              // No hover: nothing here is clickable, and a hover says otherwise
+              className="bg-card border shadow-xs"
             >
               <CardHeader>
                 {/* A technology's own mark wins over the icon: it is the more

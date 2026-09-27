@@ -15,6 +15,7 @@ import { ExternalLinkIcon, LinkIcon } from 'lucide-react';
 
 import { useColumnSize } from '../../providers/ColumnSizeProvider';
 import { usePayload } from '../../providers/PayloadProvider';
+import { interactiveSurface } from '../../utils/interactive-surface';
 import { resolveCardBlockLink } from '../../utils/resolve-card-block-link';
 
 /**
@@ -60,7 +61,13 @@ export const CardBlock: React.FC<CardBlockProps> = ({ cards }) => {
               navigate(linkDetails.url, linkDetails.newTab)
             }
             className={cn(
-              'text-card-foreground group hover:border-core-link/40 bg-card/50 hover:bg-card overflow-hidden rounded-lg border transition-all duration-300 ease-in-out',
+              'text-card-foreground overflow-hidden rounded-lg',
+              // Only a card that is itself the link answers the pointer; one
+              // linking from its footer leaves that to the footer button.
+              // `group` with it, so the icon stays still on the rest
+              linkDetails?.navTrigger === 'card'
+                ? ['group', interactiveSurface()]
+                : 'bg-card/50 border',
               {
                 'cursor-pointer':
                   linkDetails && linkDetails.navTrigger === 'card'
