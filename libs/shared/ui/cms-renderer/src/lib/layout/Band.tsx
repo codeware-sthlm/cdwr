@@ -91,10 +91,18 @@ type BandProps = React.ComponentPropsWithoutRef<'div'> & {
  * The theme's dark tokens are declared on the band element itself, so they
  * would win over anything set there; one level down, these do. The page's
  * text measures 2–4:1 on a brand surface, which is why the band has its own.
+ *
+ * The prose aliases are listed too: they are computed where the theme is
+ * declared, so restating `--foreground` alone would leave rich text in the
+ * page's colours.
  */
-const gradientText = cva(
-  'contents [--core-header:var(--core-band-gradient-text)] [--core-headline:var(--core-band-gradient-text)] [--core-link:var(--core-band-gradient-text)] [--core-text:var(--core-band-gradient-text)] [--foreground:var(--core-band-gradient-text)] [--muted-foreground:var(--core-band-gradient-muted)]'
-);
+const gradientText = cva([
+  'contents',
+  // Blocks
+  '[--core-header:var(--core-band-gradient-text)] [--core-headline:var(--core-band-gradient-text)] [--core-link:var(--core-band-gradient-text)] [--core-text:var(--core-band-gradient-text)] [--foreground:var(--core-band-gradient-text)] [--muted-foreground:var(--core-band-gradient-muted)]',
+  // Rich text
+  '[--body:var(--core-band-gradient-text)] [--bold:var(--core-band-gradient-text)] [--headings:var(--core-band-gradient-text)] [--links:var(--core-band-gradient-text)] [--links-hover:var(--core-band-gradient-text)] [--underline:var(--core-band-gradient-text)] [--underline-hover:var(--core-band-gradient-text)] [--bullets:var(--core-band-gradient-muted)] [--counters:var(--core-band-gradient-muted)] [--captions:var(--core-band-gradient-muted)]'
+]);
 
 /**
  * The background a block is set apart with.

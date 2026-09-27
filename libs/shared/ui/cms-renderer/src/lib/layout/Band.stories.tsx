@@ -2,6 +2,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { calloutGallery } from '../blocks/callout/CalloutBlock.gallery';
+import { contentGallery } from '../blocks/content/ContentBlock.gallery';
 import { featureCardsGallery } from '../blocks/feature-cards/FeatureCardsBlock.gallery';
 import { featureSectionGallery } from '../blocks/feature-section/FeatureSectionBlock.gallery';
 import { pillListGallery } from '../blocks/pill-list/PillListBlock.gallery';
@@ -36,7 +37,9 @@ const args: Story['args'] = {
     { ...featureCardsGallery.example, band: 'none' },
     { ...pillListGallery.example, band: 'subtle' },
     { ...featureSectionGallery.example, band: 'strong' },
-    { ...calloutGallery.example, band: 'gradient' }
+    { ...calloutGallery.example, band: 'gradient' },
+    // Rich text on the gradient: its prose colours are restated separately
+    { ...contentGallery.example, band: 'gradient' }
   ]
 };
 
