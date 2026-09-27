@@ -12,7 +12,7 @@ import { cva } from 'class-variance-authority';
  * visitor it does something.
  */
 export const interactiveSurface = cva(
-  'ring-core-link/40 border outline-none transition-[background-color,border-color,box-shadow,translate,color] duration-200 ease-out hover:border-core-link/40 focus-visible:ring-2 has-focus-visible:ring-2',
+  'ring-core-link/40 border-border border outline-none transition-[background-color,border-color,box-shadow,translate,color] duration-200 ease-out hover:border-core-link/40 focus-visible:ring-2 has-focus-visible:ring-2',
   {
     variants: {
       shape: {
