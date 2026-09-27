@@ -2,8 +2,9 @@ import { MigrateDownArgs, MigrateUpArgs, sql } from '@payloadcms/db-postgres';
 
 export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   await db.execute(sql`
-  UPDATE "payload"."site_settings" AS "s" SET "general_default_theme" = "c"."slug" || '-own' FROM "payload"."custom_themes" AS "c" WHERE "c"."tenant_id" = "s"."tenant_id" AND "c"."slug" = "s"."general_default_theme" AND "c"."slug" IN ('frost', 'archipelago', 'midsummer', 'lingon', 'granite', 'aurora', 'cement');
-  UPDATE "payload"."custom_themes" SET "slug" = "slug" || '-own' WHERE "slug" IN ('frost', 'archipelago', 'midsummer', 'lingon', 'granite', 'aurora', 'cement');
+  -- A custom theme may hold a name that is now a built-in one. It becomes <slug>-own, or <slug>-own-<id> where the tenant already has that, and a site default naming it follows
+  WITH "renamed" AS (SELECT "c"."id", "c"."tenant_id", "c"."slug" AS "old", "c"."slug" || '-own' || CASE WHEN EXISTS (SELECT 1 FROM "payload"."custom_themes" AS "o" WHERE "o"."tenant_id" = "c"."tenant_id" AND "o"."slug" = "c"."slug" || '-own') THEN '-' || "c"."id" ELSE '' END AS "new" FROM "payload"."custom_themes" AS "c" WHERE "c"."slug" IN ('frost', 'archipelago', 'midsummer', 'lingon', 'granite', 'aurora', 'cement')) UPDATE "payload"."site_settings" AS "s" SET "general_default_theme" = "r"."new" FROM "renamed" AS "r" WHERE "r"."tenant_id" = "s"."tenant_id" AND "r"."old" = "s"."general_default_theme";
+  WITH "renamed" AS (SELECT "c"."id", "c"."tenant_id", "c"."slug" AS "old", "c"."slug" || '-own' || CASE WHEN EXISTS (SELECT 1 FROM "payload"."custom_themes" AS "o" WHERE "o"."tenant_id" = "c"."tenant_id" AND "o"."slug" = "c"."slug" || '-own') THEN '-' || "c"."id" ELSE '' END AS "new" FROM "payload"."custom_themes" AS "c" WHERE "c"."slug" IN ('frost', 'archipelago', 'midsummer', 'lingon', 'granite', 'aurora', 'cement')) UPDATE "payload"."custom_themes" AS "c" SET "slug" = "r"."new" FROM "renamed" AS "r" WHERE "r"."id" = "c"."id";
    ALTER TABLE "payload"."pages_blocks_theme_studio" ALTER COLUMN "start_from" SET DATA TYPE text;
   ALTER TABLE "payload"."pages_blocks_theme_studio" ALTER COLUMN "start_from" SET DEFAULT 'spotlight'::text;
   UPDATE "payload"."pages_blocks_theme_studio" SET "start_from" = CASE "start_from" WHEN 'shadcn' THEN 'frost' WHEN 'spotlight-fork' THEN 'spotlight' ELSE "start_from" END;
@@ -27,6 +28,13 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   ALTER TABLE "payload"."site_settings_general_themes" ALTER COLUMN "value" SET DATA TYPE "payload"."enum_site_settings_themes" USING "value"::"payload"."enum_site_settings_themes";`);
 }
 
+/**
+ * Restores the old theme names; the `-own` renames stay.
+ *
+ * Undoing one would need to know it was made here, and a tenant may since have
+ * named a theme `frost-own` itself. A renamed theme keeps working under its new
+ * slug, so leaving it is the safe direction.
+ */
 export async function down({
   db,
   payload,
