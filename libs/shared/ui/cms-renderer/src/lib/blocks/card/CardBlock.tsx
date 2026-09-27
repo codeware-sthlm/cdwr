@@ -88,23 +88,21 @@ export const CardBlock: React.FC<CardBlockProps> = ({ cards }) => {
                     style={{
                       borderColor: tailwind.colorMaybe(color)
                     }}
+                    // The link colour on a tint of itself, as feature cards draw
+                    // theirs: `primary-foreground` is the text *on* a primary
+                    // button, dark in dark mode, and left the icon unseen
                     className={cn(
-                      'border-primary/10 bg-card ring-offset-background dark:bg-primary/20 dark:border-primary-foreground/10 flex size-14 items-center justify-center rounded-full border shadow-sm ring-1 ring-offset-1 transition-all duration-300 ease-in-out group-hover:border-transparent group-hover:shadow-md',
-                      {
-                        'group-hover:border-core-link/50 dark:group-hover:border-core-link/50 ring-primary/20 dark:ring-primary-foreground/20':
-                          !color
-                      }
+                      'bg-core-link/10 flex size-14 items-center justify-center rounded-full border transition-[border-color,box-shadow] duration-200 ease-out group-hover:shadow-md',
+                      !color &&
+                        'border-core-link/20 group-hover:border-core-link/50'
                     )}
                   >
                     <HeroIcon
                       icon={icon as HeroIconName}
                       color={color as TailwindColor}
                       className={cn(
-                        'size-7 transition-all duration-300 ease-in-out motion-safe:group-hover:scale-110',
-                        {
-                          'text-primary/70 dark:text-primary-foreground/80 group-hover:text-core-link':
-                            !color
-                        }
+                        'size-7 transition-transform duration-200 ease-out motion-safe:group-hover:scale-110',
+                        !color && 'text-core-link'
                       )}
                     />
                   </div>
