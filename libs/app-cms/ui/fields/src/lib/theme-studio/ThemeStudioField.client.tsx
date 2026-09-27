@@ -37,8 +37,8 @@ const asOverrides = (value: unknown): Overrides =>
  * all four together or none of them.
  */
 export const ThemeStudioField: React.FC<
-  JSONFieldClientProps & { fontAssetsBaseUrl?: string }
-> = ({ field, path, readOnly, fontAssetsBaseUrl }) => {
+  JSONFieldClientProps & { fontAssetsBaseUrl?: string; grantedFonts?: string }
+> = ({ field, path, readOnly, fontAssetsBaseUrl, grantedFonts }) => {
   const { value, setValue } = useField<unknown>({ path });
   const { setValue: setOverrides, value: overridesValue } = useField<unknown>({
     path: 'overrides'
@@ -108,6 +108,7 @@ export const ThemeStudioField: React.FC<
               canExport={isSystemUser}
               canUseRestrictedFonts={isSystemUser}
               fontAssetsBaseUrl={fontAssetsBaseUrl}
+              grantedFonts={grantedFonts}
               recipe={recipe}
               overrides={asOverrides(overridesValue)}
               onSelect={onSelect}

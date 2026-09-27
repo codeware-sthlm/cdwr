@@ -98,6 +98,7 @@ const ThemeLibraryView: React.FC<AdminViewServerProps> = ({
     <ThemeLibrary
       themes={builtInThemes()}
       fontAssetsBaseUrl={getEnv().FONT_ASSETS_BASE_URL}
+      grantedFonts={getEnv().RESTRICTED_FONTS}
     />
   );
 };

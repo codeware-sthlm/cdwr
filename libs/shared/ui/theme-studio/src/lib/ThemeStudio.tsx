@@ -29,6 +29,7 @@ import {
   type ColorShade,
   DEFAULT_FONTS,
   DEFAULT_RECIPE,
+  type FontFamily,
   NEUTRAL_FAMILIES,
   type ThemeRecipe,
   type ThemeTokens,
@@ -36,6 +37,7 @@ import {
   buildThemeTokens,
   checkContrast,
   codewareColors,
+  entitledFonts,
   fontFaceCss,
   fontsForSlot,
   isRestrictedFont,
@@ -302,6 +304,15 @@ type ThemeStudioProps = {
    */
   fontAssetsBaseUrl?: string;
   /**
+   * The licensed faces this deployment may embed, as its `RESTRICTED_FONTS`
+   * lists them.
+   *
+   * The role says who may choose a licensed face; this says whether the
+   * deployment may show one at all. Both have to agree, the same boundary the
+   * site renderer holds.
+   */
+  grantedFonts?: string;
+  /**
    * The theme being edited, shown in the header.
    *
    * The studio fills the screen and is opened and closed repeatedly while
@@ -437,27 +448,29 @@ function Pill({
 }
 
 /**
- * A recipe with any licensed face the user may not assign put back to the
- * default, so the studio never shows a font its picker does not offer.
+ * A recipe with any licensed face the studio does not offer put back to the
+ * default, so it never shows a font its picker cannot choose.
  *
- * Opening Codeware in a public studio would otherwise carry its heading face
- * into a theme the visitor is not entitled to.
+ * Opening Codeware in a public studio, or on a deployment without the grant,
+ * would otherwise carry its heading face into a theme that may not use it.
  */
-const withAllowedFonts = (
+const withOfferedFonts = (
   recipe: ThemeRecipe,
-  canUseRestricted: boolean
-): ThemeRecipe =>
-  canUseRestricted
-    ? recipe
-    : {
-        ...recipe,
-        fontBody: isRestrictedFont(recipe.fontBody)
-          ? DEFAULT_FONTS.body
-          : recipe.fontBody,
-        fontHeading: isRestrictedFont(recipe.fontHeading)
-          ? DEFAULT_FONTS.heading
-          : recipe.fontHeading
-      };
+  offered: Record<'body' | 'heading', ReadonlyArray<FontFamily>>
+): ThemeRecipe => {
+  const keep = (id: string, slot: 'body' | 'heading') =>
+    !isRestrictedFont(id) || offered[slot].some((font) => font.id === id);
+
+  return {
+    ...recipe,
+    fontBody: keep(recipe.fontBody, 'body')
+      ? recipe.fontBody
+      : DEFAULT_FONTS.body,
+    fontHeading: keep(recipe.fontHeading, 'heading')
+      ? recipe.fontHeading
+      : DEFAULT_FONTS.heading
+  };
+};
 
 /**
  * Author a theme from a recipe, with both schemes visible and checked.
@@ -475,6 +488,7 @@ export function ThemeStudio({
   canExport = false,
   canUseRestrictedFonts = false,
   fontAssetsBaseUrl,
+  grantedFonts,
   themeName,
   themeSlug,
   selectLabel = 'Use this theme',
@@ -484,8 +498,22 @@ export function ThemeStudio({
   onClose
 }: ThemeStudioProps = {}) {
   const scope = useId().replace(/:/g, '');
+  // Who may choose a licensed face, narrowed to what this deployment may show
+  const offeredFonts = useMemo(
+    () => ({
+      heading: entitledFonts(
+        fontsForSlot('heading', canUseRestrictedFonts),
+        grantedFonts
+      ),
+      body: entitledFonts(
+        fontsForSlot('body', canUseRestrictedFonts),
+        grantedFonts
+      )
+    }),
+    [canUseRestrictedFonts, grantedFonts]
+  );
   const [recipe, setRecipe] = useState<ThemeRecipe>(() =>
-    withAllowedFonts(initialRecipe ?? DEFAULT_RECIPE, canUseRestrictedFonts)
+    withOfferedFonts(initialRecipe ?? DEFAULT_RECIPE, offeredFonts)
   );
   const [overrides, setOverrides] = useState<ThemeOverrides>(
     initialOverrides ?? NO_OVERRIDES
@@ -660,10 +688,7 @@ export function ThemeStudio({
           {/* Every self-served face the pickers offer, so each renders in the
               pills and in the preview once chosen */}
           <style>
-            {[
-              ...fontsForSlot('heading', canUseRestrictedFonts),
-              ...fontsForSlot('body', canUseRestrictedFonts)
-            ]
+            {[...offeredFonts.heading, ...offeredFonts.body]
               .filter((font) => font.file)
               .map((font) => fontFaceCss(font, fontAssetsBaseUrl))
               .join('')}
@@ -716,19 +741,17 @@ export function ThemeStudio({
                       body font to keep the page quiet.
                     </p>
                     <div className="flex flex-wrap gap-1.5">
-                      {fontsForSlot('heading', canUseRestrictedFonts).map(
-                        (font) => (
-                          <Pill
-                            key={font.id}
-                            active={recipe.fontHeading === font.id}
-                            onClick={() => update({ fontHeading: font.id })}
-                            // Each option in its own face, so the choice is seen
-                            style={{ fontFamily: font.stack }}
-                          >
-                            {font.label}
-                          </Pill>
-                        )
-                      )}
+                      {offeredFonts.heading.map((font) => (
+                        <Pill
+                          key={font.id}
+                          active={recipe.fontHeading === font.id}
+                          onClick={() => update({ fontHeading: font.id })}
+                          // Each option in its own face, so the choice is seen
+                          style={{ fontFamily: font.stack }}
+                        >
+                          {font.label}
+                        </Pill>
+                      ))}
                     </div>
                   </div>
 
@@ -738,19 +761,17 @@ export function ThemeStudio({
                       Everything a visitor reads at length.
                     </p>
                     <div className="flex flex-wrap gap-1.5">
-                      {fontsForSlot('body', canUseRestrictedFonts).map(
-                        (font) => (
-                          <Pill
-                            key={font.id}
-                            active={recipe.fontBody === font.id}
-                            onClick={() => update({ fontBody: font.id })}
-                            // Each option in its own face, so the choice is seen
-                            style={{ fontFamily: font.stack }}
-                          >
-                            {font.label}
-                          </Pill>
-                        )
-                      )}
+                      {offeredFonts.body.map((font) => (
+                        <Pill
+                          key={font.id}
+                          active={recipe.fontBody === font.id}
+                          onClick={() => update({ fontBody: font.id })}
+                          // Each option in its own face, so the choice is seen
+                          style={{ fontFamily: font.stack }}
+                        >
+                          {font.label}
+                        </Pill>
+                      ))}
                     </div>
                   </div>
 
