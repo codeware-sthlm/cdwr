@@ -42,17 +42,19 @@ Switching the toolbar changes these attributes at runtime. Because tokens resolv
 
 Nine are offered to tenant sites. `payload-admin` is Storybook-only: it matches Payload's own chrome, which is not a look a public site should ship.
 
-| Theme         | Base · brand     | Character                                              |
-| ------------- | ---------------- | ------------------------------------------------------ |
-| `frost`       | neutral · zinc   | shadcn.com's own theme, pixel for pixel — the baseline |
-| `spotlight`   | zinc · teal      | Soft cards on a deep page                              |
-| `codeware`    | zinc · Yale blue | Codeware's own look                                    |
-| `archipelago` | mist · cyan      | Cool sea light, layered surfaces                       |
-| `midsummer`   | olive · amber    | Warm meadow light, round corners                       |
-| `lingon`      | stone · rose     | Berry red on warm stone                                |
-| `granite`     | zinc · slate     | Near-monochrome, sharp corners, system font            |
-| `aurora`      | slate · emerald  | Northern-light green on cool slate                     |
-| `cement`      | taupe · sky      | Harbour concrete, sea, grass and sand                  |
+| Theme         | Base · brand        | Headings       | Character                                              |
+| ------------- | ------------------- | -------------- | ------------------------------------------------------ |
+| `frost`       | neutral · zinc      | Inter          | shadcn.com's own theme, pixel for pixel — the baseline |
+| `spotlight`   | zinc · teal         | Inter          | Soft cards on a deep page                              |
+| `codeware`    | neutral · yale-blue | Nasalization\* | Codeware's brand guide: yale on white, charcoal dark   |
+| `archipelago` | mist · cyan         | Sora           | Cool sea light, layered surfaces                       |
+| `midsummer`   | olive · amber       | Sora           | Warm meadow light, round corners                       |
+| `lingon`      | stone · rose        | Fraunces       | Berry red on warm stone                                |
+| `granite`     | zinc · slate        | JetBrains Mono | Near-monochrome, sharp corners, system font            |
+| `aurora`      | slate · emerald     | Inter          | Northern-light green on cool slate                     |
+| `cement`      | taupe · sky         | Space Mono     | Harbour concrete, sea, grass and sand                  |
+
+\* Licensed: embedded only where a deployment's `RESTRICTED_FONTS` grants it, and Inter everywhere else, Storybook included.
 
 `frost` is the reference: it verifies that shadcn components render correctly against upstream before any other theme is judged.
 
