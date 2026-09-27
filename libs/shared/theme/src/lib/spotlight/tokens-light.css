@@ -93,6 +93,10 @@
   --core-band-reach: 0px;
   --core-band-subtle: var(--muted);
   --core-band-strong: var(--card);
+  --core-band-gradient-from: var(--brand-800);
+  --core-band-gradient-to: var(--brand-950);
+  --core-band-gradient-text: var(--brand-50);
+  --core-band-gradient-muted: var(--brand-200);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Inter Variable, Inter, sans-serif;
   --core-interactive: var(--brand-400);

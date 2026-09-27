@@ -96,6 +96,30 @@ export const THEME_CONTRAST_PAIRS: Array<ContrastPair> = [
     minimum: WCAG_AA_NORMAL
   },
   {
+    foreground: '--core-band-gradient-text',
+    background: '--core-band-gradient-from',
+    usage: 'Text on a gradient band, at its light end',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
+    foreground: '--core-band-gradient-text',
+    background: '--core-band-gradient-to',
+    usage: 'Text on a gradient band, at its dark end',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
+    foreground: '--core-band-gradient-muted',
+    background: '--core-band-gradient-from',
+    usage: 'Secondary text on a gradient band, at its light end',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
+    foreground: '--core-band-gradient-muted',
+    background: '--core-band-gradient-to',
+    usage: 'Secondary text on a gradient band, at its dark end',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
     foreground: '--primary',
     background: '--card',
     usage: 'Primary-coloured text on a card',

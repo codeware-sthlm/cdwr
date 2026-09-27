@@ -94,6 +94,10 @@
   --core-band-reach: calc(50% - 50vw);
   --core-band-subtle: var(--muted);
   --core-band-strong: var(--card);
+  --core-band-gradient-from: var(--color-rose-800);
+  --core-band-gradient-to: var(--color-rose-950);
+  --core-band-gradient-text: var(--color-rose-50);
+  --core-band-gradient-muted: var(--color-rose-200);
   --core-font-body: Inter Variable, Inter, sans-serif;
   --core-font-heading: Fraunces Variable, ui-serif, Georgia, serif;
   --core-link: var(--brand-700);

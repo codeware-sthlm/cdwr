@@ -124,6 +124,11 @@ const backfillLight = (
   '--core-action-btn-track': 'var(--muted)',
   '--core-band-subtle': 'var(--muted)',
   '--core-band-strong': 'var(--card)',
+  // The theme template's gradient band, which every saved theme's ramp can draw
+  '--core-band-gradient-from': 'var(--brand-800)',
+  '--core-band-gradient-to': 'var(--brand-950)',
+  '--core-band-gradient-text': 'var(--brand-50)',
+  '--core-band-gradient-muted': 'var(--brand-200)',
   // The theme template's surface values, by the one thing a stored map can
   // say of its surface
   ...(isFlat(stored)
