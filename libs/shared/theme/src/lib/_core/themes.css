@@ -357,7 +357,6 @@
   --eerie-black: #242526;
   --darker-black: #111111;
 
-  /* === brand on the Codeware yale-blue ramp === */
   --brand-50: oklch(0.9666 0.011 243.652);
   --brand-100: oklch(0.9212 0.0252 236.841);
   --brand-200: oklch(0.8464 0.0465 242.325);
@@ -369,50 +368,46 @@
   --brand-800: oklch(0.3177 0.0889 254.918);
   --brand-900: oklch(0.2599 0.0741 258.029);
   --brand-950: oklch(0.2104 0.0525 258.271);
-
-  /* === shadcn zinc tokens === */
-  --radius: 0.625rem;
+  --radius: 0.5rem;
   --radius-md: calc(var(--radius) - 0.125rem);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.536 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(1 0 0);
-  /* text on tinted destructive surfaces (badge/button/alert soft variants) */
+  --background: var(--color-white);
+  --foreground: var(--color-neutral-950);
+  --card: var(--color-white);
+  --card-foreground: var(--color-neutral-950);
+  --popover: var(--color-white);
+  --popover-foreground: var(--color-neutral-950);
+  --secondary: var(--color-neutral-100);
+  --secondary-foreground: var(--color-neutral-900);
+  --muted: var(--color-neutral-100);
+  --muted-foreground: var(--color-neutral-600);
+  --accent: var(--color-neutral-100);
+  --accent-foreground: var(--color-neutral-900);
+  --destructive: var(--color-red-600);
+  --destructive-foreground: var(--color-white);
+  --border: var(--color-neutral-200);
+  --input: var(--color-neutral-200);
+  --sidebar: var(--color-neutral-50);
+  --sidebar-foreground: var(--color-neutral-950);
+  --sidebar-accent: var(--color-neutral-100);
+  --sidebar-accent-foreground: var(--color-neutral-900);
+  --sidebar-border: var(--color-neutral-200);
+  --primary: var(--brand-600);
+  --primary-foreground: var(--color-white);
+  --ring: var(--brand-600);
+  --sidebar-primary: var(--brand-600);
+  --sidebar-primary-foreground: var(--color-white);
+  --sidebar-ring: var(--brand-600);
+  --chart-1: oklch(0.4235 0.1287 254.984);
+  --chart-2: var(--color-fuchsia-600);
+  --chart-3: var(--color-orange-600);
+  --chart-4: var(--color-lime-600);
+  --chart-5: var(--color-teal-600);
   --destructive-subtle: var(--color-red-700);
-  /* text on tinted success surfaces (badge/alert soft variants) */
   --success-subtle: var(--color-green-700);
-  /* text on tinted warning surfaces (badge/alert soft variants) */
   --warning-subtle: var(--color-amber-700);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.552 0.016 285.938);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.21 0.006 285.885);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.552 0.016 285.938);
-
-  /* === core tokens - aliases to shadcn tokens === */
+  --core-font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono,
+    Courier New, monospace;
   --core-action-btn-foreground: var(--muted-foreground);
   --core-action-btn-foreground-hover: var(--foreground);
   --core-action-btn-background: var(--background);
@@ -421,26 +416,9 @@
   --core-action-btn-border-hover: var(--border);
   --core-action-btn-icon-fill: var(--muted);
   --core-action-btn-shadow: transparent;
-  --core-background-body: var(--background);
-  --core-background-content: var(--background);
-  --core-content-border: var(--border);
-  --core-sheet-edge: transparent;
-  --core-band-reach: calc(50% - 50vw);
-  --core-band-subtle: var(--muted);
-  --core-band-strong: var(--card);
-  /* Typefaces. Unquoted deliberately: a multi-word family is valid as a
-  sequence of identifiers, and the runtime theme whitelist rejects
-  quotes — so committed and injected themes can carry the same value */
-  --core-font-body: Inter Variable, Inter, sans-serif;
-  --core-font-heading: Inter Variable, Inter, sans-serif;
-  --core-font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono,
-    Courier New, monospace;
   --core-header: var(--foreground);
-  --core-headline: var(--foreground);
+  --core-headline: var(--brand-600);
   --core-interactive: var(--brand-400);
-  --core-link: var(--brand-600);
-  --core-surface-invert: var(--eerie-black);
   --core-navbar: var(--background);
   --core-navbar-border: var(--border);
   --core-navbar-shadow: transparent;
@@ -448,8 +426,6 @@
   --core-nav-link-active: var(--primary);
   --core-nav-link-hover: var(--primary);
   --core-text: var(--foreground);
-
-  /* === prose tokens — aliases to shadcn tokens === */
   --body: var(--foreground);
   --bold: var(--foreground);
   --bullets: var(--primary);
@@ -459,64 +435,72 @@
   --counters: var(--primary);
   --headings: var(--foreground);
   --hr: var(--border);
-  --links: var(--primary);
-  --links-hover: var(--primary);
+  --links: var(--core-link);
+  --links-hover: var(--core-link);
   --pre-bg: var(--secondary);
   --pre-border: var(--border);
   --pre-code: var(--foreground);
   --quote-borders: var(--border);
   --td-borders: var(--border);
   --th-borders: var(--border);
-  --underline: var(--primary);
-  --underline-hover: var(--primary);
+  --underline: var(--core-link);
+  --underline-hover: var(--core-link);
+  --core-background-body: var(--color-neutral-50);
+  --core-background-content: var(--background);
+  --core-content-border: var(--color-neutral-100);
+  --core-sheet-edge: var(--core-content-border);
+  --core-band-reach: 0px;
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
+  --core-font-body: Inter Variable, Inter, sans-serif;
+  --core-font-heading: Nasalization, Inter Variable, Inter, sans-serif;
+  --core-link: var(--brand-600);
+  --core-surface-invert: var(--color-neutral-900);
 }
 [data-theme='codeware'].dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.92 0.004 286.32);
-  --primary-foreground: oklch(0.21 0.006 285.885);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: var(--color-neutral-950);
+  --foreground: var(--color-neutral-50);
+  --card: var(--color-neutral-900);
+  --card-foreground: var(--color-neutral-50);
+  --popover: var(--color-neutral-900);
+  --popover-foreground: var(--color-neutral-50);
+  --secondary: var(--color-neutral-800);
+  --secondary-foreground: var(--color-neutral-50);
+  --muted: var(--color-neutral-800);
+  --muted-foreground: var(--color-neutral-400);
+  --accent: var(--color-neutral-800);
+  --accent-foreground: var(--color-neutral-50);
   --destructive: var(--color-red-700);
-  --destructive-foreground: oklch(1 0 0);
-  /* text on tinted destructive surfaces (badge/button/alert soft variants) */
-  --destructive-subtle: var(--color-red-400);
-  /* text on tinted success surfaces (badge/alert soft variants) */
-  --success-subtle: var(--color-green-400);
-  /* text on tinted warning surfaces (badge/alert soft variants) */
-  --warning-subtle: var(--color-amber-400);
+  --destructive-foreground: var(--color-white);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.016 285.938);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar: var(--color-neutral-900);
+  --sidebar-foreground: var(--color-neutral-50);
+  --sidebar-accent: var(--color-neutral-800);
+  --sidebar-accent-foreground: var(--color-neutral-50);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.016 285.938);
-
-  /* === core tokens - aliases to shadcn tokens === */
+  --primary: oklch(0.6148 0.0764 239.668);
+  --primary-foreground: oklch(0.2104 0.0525 258.271);
+  --ring: oklch(0.6148 0.0764 239.668);
+  --sidebar-primary: oklch(0.6148 0.0764 239.668);
+  --sidebar-primary-foreground: oklch(0.2104 0.0525 258.271);
+  --sidebar-ring: oklch(0.6148 0.0764 239.668);
+  --chart-1: oklch(0.6148 0.0764 239.668);
+  --chart-2: var(--color-fuchsia-400);
+  --chart-3: var(--color-orange-400);
+  --chart-4: var(--color-lime-400);
+  --chart-5: var(--color-teal-400);
+  --destructive-subtle: var(--color-red-400);
+  --success-subtle: var(--color-green-400);
+  --warning-subtle: var(--color-amber-400);
+  --core-background-body: var(--background);
+  --core-background-content: var(--card);
+  --core-content-border: var(--border);
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--background);
   --core-link: var(--brand-400);
   --core-surface-invert: var(--card);
-
-  /* A band apart from the surface it sits on */
-  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
-  --core-band-strong: var(--card);
+  --core-headline: var(--brand-300);
 }
 
 /* archipelago */
