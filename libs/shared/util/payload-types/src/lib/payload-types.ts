@@ -306,9 +306,9 @@ export interface AboutBlock {
    */
   heading?: string | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'about';
@@ -349,9 +349,9 @@ export interface CalloutBlock {
   image?: (number | null) | Media;
   link: CalloutLink;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'callout';
@@ -683,9 +683,9 @@ export interface CardBlock {
       }[]
     | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'card';
@@ -805,9 +805,9 @@ export interface CodeBlock {
   language: 'ts' | 'plaintext' | 'tsx' | 'js' | 'jsx';
   code: string;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'code';
@@ -851,9 +851,9 @@ export interface ContentBlock {
       }[]
     | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'content';
@@ -881,9 +881,9 @@ export interface FormBlock {
     [k: string]: unknown;
   } | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'form';
@@ -1136,9 +1136,9 @@ export interface ImageBlock {
    */
   media: number | Media;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'image';
@@ -1199,9 +1199,9 @@ export interface FileAreaBlock {
       }[]
     | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'file-area';
@@ -1273,9 +1273,9 @@ export interface SocialMediaBlock {
    */
   direction?: ('horizontal' | 'vertical') | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'social-media';
@@ -1365,9 +1365,9 @@ export interface FeatureCardsBlock {
       }[]
     | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'feature-cards';
@@ -1403,9 +1403,9 @@ export interface FeatureSectionBlock {
       }[]
     | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'feature-section';
@@ -1458,9 +1458,9 @@ export interface HeroBlock {
       }[]
     | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'hero';
@@ -1560,9 +1560,9 @@ export interface PillListBlock {
       }[]
     | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'pill-list';
@@ -1579,9 +1579,9 @@ export interface PostsBlock {
    */
   limit: number;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'posts';
@@ -1619,9 +1619,9 @@ export interface ShowcaseBlock {
       }[]
     | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'showcase';
@@ -1691,9 +1691,9 @@ export interface TestimonialBlock {
   enableLink?: boolean | null;
   link?: TestimonialLink;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'testimonial';
@@ -1752,9 +1752,9 @@ export interface ThemeStudioBlock {
    */
   note?: string | null;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'theme-studio';
@@ -1771,9 +1771,9 @@ export interface ToursBlock {
    */
   limit: number;
   /**
-   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
-  band?: ('none' | 'subtle' | 'strong') | null;
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'tours';
