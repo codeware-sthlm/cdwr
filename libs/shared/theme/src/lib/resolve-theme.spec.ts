@@ -10,7 +10,7 @@ describe('resolveTheme', () => {
   });
 
   it('falls back to the default for a deselected cookie theme', () => {
-    expect(resolveTheme('shadcn', ['spotlight', 'codeware'], 'spotlight')).toBe(
+    expect(resolveTheme('frost', ['spotlight', 'codeware'], 'spotlight')).toBe(
       'spotlight'
     );
   });
@@ -25,10 +25,10 @@ describe('resolveTheme', () => {
   // leaves the page with no tokens at all
   it('never returns a default the site does not offer', () => {
     expect(resolveTheme(null, ['spotlight'], 'codeware')).toBe('spotlight');
-    expect(resolveTheme('shadcn', ['spotlight'], 'shadcn')).toBe('spotlight');
+    expect(resolveTheme('frost', ['spotlight'], 'frost')).toBe('spotlight');
   });
 
   it('returns the default when the site offers nothing', () => {
-    expect(resolveTheme('shadcn', [], 'spotlight')).toBe('spotlight');
+    expect(resolveTheme('frost', [], 'spotlight')).toBe('spotlight');
   });
 });

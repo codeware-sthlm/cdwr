@@ -33,7 +33,7 @@ const theme = (name: string) => ({
 
 function setupTree() {
   const tree = createTreeWithEmptyWorkspace();
-  for (const name of ['shadcn', 'spotlight', 'codeware']) {
+  for (const name of ['frost', 'spotlight', 'codeware']) {
     tree.write(`${THEME_LIB}/${name}/tokens-light.css`, LIGHT);
     tree.write(`${THEME_LIB}/${name}/tokens-dark.css`, DARK);
     tree.write(`${THEME_LIB}/${name}/tailwind-base.css`, BASE);
@@ -80,10 +80,7 @@ describe('theme-write generator', () => {
     );
   });
 
-  it.each([
-    ['shadcn', 'baseline'],
-    ['spotlight', 'spotlight-fork']
-  ])('refuses %s', async (name, because) => {
+  it.each([['frost', 'baseline']])('refuses %s', async (name, because) => {
     const tree = setupTree();
 
     await expect(

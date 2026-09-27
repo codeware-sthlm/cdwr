@@ -46,5 +46,5 @@ export const List: StoryObj = {
 
 export const PayloadAdminLight = a11yStory(List, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory(List, 'payload-admin', 'dark');
-export const ShadcnLight = a11yStory(List, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(List, 'shadcn', 'dark');
+export const FrostLight = a11yStory(List, 'frost', 'light');
+export const FrostDark = a11yStory(List, 'frost', 'dark');

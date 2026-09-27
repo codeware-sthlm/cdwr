@@ -54,5 +54,5 @@ export const Grid: StoryObj = {
 
 export const PayloadAdminLight = a11yStory(Grid, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory(Grid, 'payload-admin', 'dark');
-export const ShadcnLight = a11yStory(Grid, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(Grid, 'shadcn', 'dark');
+export const FrostLight = a11yStory(Grid, 'frost', 'light');
+export const FrostDark = a11yStory(Grid, 'frost', 'dark');

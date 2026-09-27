@@ -54,12 +54,8 @@ export const LongName: Story = {
 
 // The slot is a link in one state and a form in the other, so both are worth
 // checking against a theme it was not designed in
-export const ShadcnLight = a11yStory(
-  { args: SignedIn.args },
-  'shadcn',
-  'light'
-);
-export const ShadcnDark = a11yStory({ args: SignedOut.args }, 'shadcn', 'dark');
+export const FrostLight = a11yStory({ args: SignedIn.args }, 'frost', 'light');
+export const FrostDark = a11yStory({ args: SignedOut.args }, 'frost', 'dark');
 export const SpotlightLight = a11yStory(
   { args: SignedIn.args },
   'spotlight',

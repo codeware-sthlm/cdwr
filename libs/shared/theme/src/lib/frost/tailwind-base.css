@@ -1,0 +1,6 @@
+/* Frost — the shadcn reference theme, pixel-perfect against shadcn.com */
+@import './tokens-light.css';
+@import './tokens-dark.css';
+
+/* Core setup — variants, theme mappings, base layer */
+@import '../_core/tailwind-setup.css';

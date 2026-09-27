@@ -4,19 +4,29 @@ export type SbTheme = (typeof STORYBOOK_THEMES)[number];
 export type ThemeDarkStrategy = 'class' | 'attribute';
 
 export const STORYBOOK_THEMES = [
-  'shadcn',
+  'frost',
   'payload-admin',
   'spotlight',
-  'spotlight-fork',
-  'codeware'
+  'codeware',
+  'archipelago',
+  'midsummer',
+  'lingon',
+  'granite',
+  'aurora',
+  'cement'
 ] as const;
 
 export const THEME_DARK_STRATEGIES = {
-  shadcn: 'class',
+  frost: 'class',
   'payload-admin': 'attribute',
   spotlight: 'class',
-  'spotlight-fork': 'class',
-  codeware: 'class'
+  codeware: 'class',
+  archipelago: 'class',
+  midsummer: 'class',
+  lingon: 'class',
+  granite: 'class',
+  aurora: 'class',
+  cement: 'class'
 } as const satisfies Record<SbTheme, ThemeDarkStrategy>;
 
 export const SHADCN_TOKENS = [

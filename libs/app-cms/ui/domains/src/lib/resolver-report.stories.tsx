@@ -65,5 +65,5 @@ export const Cases: StoryObj = {
 
 export const PayloadAdminLight = a11yStory(Cases, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory(Cases, 'payload-admin', 'dark');
-export const ShadcnLight = a11yStory(Cases, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(Cases, 'shadcn', 'dark');
+export const FrostLight = a11yStory(Cases, 'frost', 'light');
+export const FrostDark = a11yStory(Cases, 'frost', 'dark');

@@ -49,14 +49,10 @@ export const LocalDev: Story = {
   }
 };
 
-export const ShadcnLight = a11yStory(
+export const FrostLight = a11yStory(
   { args: Production.args },
-  'shadcn',
+  'frost',
   'light'
 );
 
-export const ShadcnDark = a11yStory(
-  { args: Production.args },
-  'shadcn',
-  'dark'
-);
+export const FrostDark = a11yStory({ args: Production.args }, 'frost', 'dark');

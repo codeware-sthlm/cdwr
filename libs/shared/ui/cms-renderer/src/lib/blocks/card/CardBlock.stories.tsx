@@ -110,14 +110,14 @@ export const ExternalLink: Story = {
   }
 };
 
-export const ShadcnLight = a11yStory(
+export const FrostLight = a11yStory(
   { args: { blockType: 'card', cards } },
-  'shadcn',
+  'frost',
   'light'
 );
-export const ShadcnDark = a11yStory(
+export const FrostDark = a11yStory(
   { args: { blockType: 'card', cards } },
-  'shadcn',
+  'frost',
   'dark'
 );
 export const PayloadAdminLight = a11yStory(

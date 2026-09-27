@@ -24,6 +24,6 @@ export const WithoutHeading: Story = {
   args: { blockType: 'about' }
 };
 
-export const ShadcnLight = a11yStory({ args: Default.args }, 'shadcn', 'light');
+export const FrostLight = a11yStory({ args: Default.args }, 'frost', 'light');
 
-export const ShadcnDark = a11yStory({ args: Default.args }, 'shadcn', 'dark');
+export const FrostDark = a11yStory({ args: Default.args }, 'frost', 'dark');

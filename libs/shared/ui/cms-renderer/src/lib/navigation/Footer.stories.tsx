@@ -233,12 +233,8 @@ export const MobileExpanded: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } }
 };
 
-export const ShadcnLight = a11yStory(
-  { args: Expanded.args },
-  'shadcn',
-  'light'
-);
-export const ShadcnDark = a11yStory({ args: Expanded.args }, 'shadcn', 'dark');
+export const FrostLight = a11yStory({ args: Expanded.args }, 'frost', 'light');
+export const FrostDark = a11yStory({ args: Expanded.args }, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory(
   { args: Expanded.args },
   'payload-admin',

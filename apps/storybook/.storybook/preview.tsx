@@ -11,6 +11,20 @@ import {
   THEME_DARK_STRATEGIES
 } from './themes-meta';
 
+/** Keyed by the registry, so a theme added there is not missing from the toolbar */
+const THEME_TITLES = {
+  frost: 'Frost (shadcn reference)',
+  'payload-admin': 'Payload Admin',
+  spotlight: 'Spotlight',
+  codeware: 'Codeware',
+  archipelago: 'Archipelago',
+  midsummer: 'Midsummer',
+  lingon: 'Lingon',
+  granite: 'Granite',
+  aurora: 'Aurora',
+  cement: 'Cement'
+} satisfies Record<SbTheme, string>;
+
 const CLASS_DARK_THEMES = new Set(
   STORYBOOK_THEMES.filter((t) => THEME_DARK_STRATEGIES[t] === 'class')
 );
@@ -147,12 +161,10 @@ const preview: Preview = {
       toolbar: {
         title: 'Theme',
         icon: 'paintbrush',
-        items: [
-          { value: 'shadcn', title: 'shadcn (reference)' },
-          { value: 'payload-admin', title: 'Payload Admin' },
-          { value: 'spotlight', title: 'Spotlight' },
-          { value: 'codeware', title: 'Codeware' }
-        ],
+        items: STORYBOOK_THEMES.map((value) => ({
+          value,
+          title: THEME_TITLES[value]
+        })),
         dynamicTitle: true
       }
     },

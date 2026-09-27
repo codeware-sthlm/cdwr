@@ -43,11 +43,16 @@ export type TokenFile = (typeof TOKEN_FILES)[number];
  * Each must have tokens-light.css, tokens-dark.css and tailwind-base.css.
  */
 export const STORYBOOK_THEMES = [
-  'shadcn',
+  'frost',
   'payload-admin',
   'spotlight',
-  'spotlight-fork',
-  'codeware'
+  'codeware',
+  'archipelago',
+  'midsummer',
+  'lingon',
+  'granite',
+  'aurora',
+  'cement'
 ] as const;
 
 export type SbTheme = (typeof STORYBOOK_THEMES)[number];
@@ -61,10 +66,15 @@ export type SbTheme = (typeof STORYBOOK_THEMES)[number];
  * token completeness check.
  */
 export const SITE_THEMES = [
-  'shadcn',
+  'frost',
   'spotlight',
-  'spotlight-fork',
-  'codeware'
+  'codeware',
+  'archipelago',
+  'midsummer',
+  'lingon',
+  'granite',
+  'aurora',
+  'cement'
 ] as const;
 
 export type SiteTheme = (typeof SITE_THEMES)[number];

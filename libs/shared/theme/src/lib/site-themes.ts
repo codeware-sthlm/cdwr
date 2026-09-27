@@ -1,10 +1,15 @@
 /* AUTO-GENERATED — do not edit manually. Run `pnpm nx sync` to update. */
 
 export const SITE_THEMES = [
-  'shadcn',
+  'frost',
   'spotlight',
-  'spotlight-fork',
-  'codeware'
+  'codeware',
+  'archipelago',
+  'midsummer',
+  'lingon',
+  'granite',
+  'aurora',
+  'cement'
 ] as const;
 
 export type SiteTheme = (typeof SITE_THEMES)[number];

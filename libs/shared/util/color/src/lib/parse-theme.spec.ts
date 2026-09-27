@@ -127,10 +127,10 @@ describe('parseTheme', () => {
    */
   describe('reads the committed themes', () => {
     it.each([
-      ['shadcn', 3, 0],
+      ['frost', 3, 0],
       ['codeware', 8, 6],
       ['payload-admin', 7, 2],
-      ['spotlight', 93, 0]
+      ['spotlight', 94, 0]
     ])('explains %s with %i overrides', (theme, overrides, passthrough) => {
       const parsed = parseTheme(committed(theme));
       const count = (block: { light: object; dark: object }) =>
@@ -141,7 +141,7 @@ describe('parseTheme', () => {
     });
 
     it.each([
-      ['shadcn', { baseFamily: 'neutral', brandFamily: 'zinc' }],
+      ['frost', { baseFamily: 'neutral', brandFamily: 'zinc' }],
       ['codeware', { baseFamily: 'zinc', brandFamily: 'yale-blue' }],
       ['spotlight', { baseFamily: 'zinc', brandFamily: 'teal' }],
       ['payload-admin', { baseFamily: 'zinc', brandFamily: 'yale-blue' }]
@@ -181,7 +181,7 @@ describe('parseTheme', () => {
 
     it('recovers the radius spotlight sets apart from the others', () => {
       expect(parseTheme(committed('spotlight')).recipe.radius).toBe('0.5rem');
-      expect(parseTheme(committed('shadcn')).recipe.radius).toBe('0.625rem');
+      expect(parseTheme(committed('frost')).recipe.radius).toBe('0.625rem');
     });
 
     // The six brand hexes `codeware`'s tailwind-base.css maps through
@@ -201,12 +201,18 @@ describe('parseTheme', () => {
 
     // Not a value until Tailwind resolves it, and not on the runtime whitelist
     // either — a caller has to be told rather than shipped a dead token
-    it('reports spotlight build-time calls rather than swallowing them', () => {
-      const calls = parseTheme(committed('spotlight')).unresolved.filter(
-        ({ reason }) => reason === 'build-time-call'
-      );
+    // Synthetic: `spotlight` carried these until the studio's version of it
+    // replaced the original, and no committed theme has one left
+    it('reports build-time calls rather than swallowing them', () => {
+      const calls = parseTheme({
+        'tokens-light.css': `:root {
+          --card: theme('colors.zinc.800 / 0.5');
+        }`,
+        'tokens-dark.css': '.dark { }'
+      }).unresolved.filter(({ reason }) => reason === 'build-time-call');
 
-      expect(calls.length).toBeGreaterThan(0);
+      // Once per scheme, since dark inherits the light declaration
+      expect(calls.map(({ scheme }) => scheme)).toEqual(['light', 'dark']);
       expect(calls.every(({ value }) => value.includes('theme('))).toBe(true);
     });
 
@@ -237,12 +243,7 @@ describe('parseTheme', () => {
     // The fix to those three, guarded: `--color-brand-600` is nothing, and the
     // token meant was `--brand-600`
     it('finds no dangling palette reference in any built-in', () => {
-      for (const theme of [
-        'shadcn',
-        'codeware',
-        'payload-admin',
-        'spotlight'
-      ]) {
+      for (const theme of ['frost', 'codeware', 'payload-admin', 'spotlight']) {
         expect(
           parseTheme(committed(theme)).unresolved.filter(
             ({ reason }) => reason === 'unknown-reference'
@@ -251,8 +252,8 @@ describe('parseTheme', () => {
       }
     });
 
-    it('finds no build-time call in the other three', () => {
-      for (const theme of ['shadcn', 'codeware', 'payload-admin']) {
+    it('finds no build-time call in any built-in', () => {
+      for (const theme of ['frost', 'codeware', 'payload-admin', 'spotlight']) {
         expect(parseTheme(committed(theme)).unresolved).toEqual([]);
       }
     });
@@ -264,12 +265,7 @@ describe('parseTheme', () => {
      * the seam where that would leak in.
      */
     it('never leaves a palette alias in an override', () => {
-      for (const theme of [
-        'shadcn',
-        'codeware',
-        'payload-admin',
-        'spotlight'
-      ]) {
+      for (const theme of ['frost', 'codeware', 'payload-admin', 'spotlight']) {
         const { overrides, unresolved } = parseTheme(committed(theme));
         const reported = new Set(unresolved.map(({ token }) => token));
 

@@ -1,37 +1,10 @@
 .dark {
-  /* === core tokens === */
-  --core-action-btn-foreground: var(--color-zinc-400);
-  --core-action-btn-foreground-hover: var(--color-teal-400);
-  --core-action-btn-background: theme('colors.zinc.800 / 0.9');
-  --core-action-btn-track: var(--color-zinc-900);
-  --core-action-btn-border: theme('colors.white / 0.1');
-  --core-action-btn-border-hover: theme('colors.white / 0.2');
-  --core-action-btn-icon-fill: var(--color-zinc-700);
-  --core-action-btn-shadow: theme('colors.zinc.800 / 0.05');
-  --core-background-body: var(--color-black);
-  --core-background-content: var(--color-zinc-900);
-  --core-content-border: theme('colors.zinc.300 / 0.2');
-  --core-header: var(--color-zinc-200);
-  --core-headline: var(--color-zinc-100);
-  --core-link: var(--color-teal-400);
-  --core-navbar: theme('colors.zinc.800 / 0.9');
-  --core-navbar-border: theme('colors.white / 0.10');
-  --core-navbar-shadow: theme('colors.zinc.800 / 0.05');
-  --core-nav-link: var(--color-zinc-200);
-  --core-nav-link-active: var(--color-teal-400);
-  --core-nav-link-hover: var(--color-teal-400);
-  --core-surface-invert: var(--color-zinc-700);
-  --core-text: var(--color-zinc-400);
-
-  /* === shadcn/ui tokens: https://ui.shadcn.com/docs/theming#list-of-variables === */
   --background: var(--core-background-content);
   --foreground: var(--core-text);
-  --card: theme('colors.zinc.800 / 0.5');
+  --card: oklch(0.274 0.006 286.033 / 50%);
   --card-foreground: var(--color-zinc-400);
   --popover: var(--secondary);
   --popover-foreground: var(--secondary-foreground);
-  --primary: var(--color-zinc-100);
-  --primary-foreground: var(--color-zinc-900);
   --secondary: var(--color-zinc-800);
   --secondary-foreground: var(--color-zinc-100);
   --muted: var(--color-zinc-800);
@@ -39,49 +12,66 @@
   --accent: var(--color-zinc-800);
   --accent-foreground: var(--color-zinc-100);
   --destructive: var(--color-red-600);
-  --destructive-foreground: oklch(1 0 0);
-  /* text on tinted destructive surfaces (badge/button/alert soft variants) */
-  --destructive-subtle: var(--color-red-400);
-  /* text on tinted success surfaces (badge/alert soft variants) */
-  --success-subtle: var(--color-green-400);
-  /* text on tinted warning surfaces (badge/alert soft variants) */
-  --warning-subtle: var(--color-amber-400);
-  --border: theme('colors.zinc.700 / 0.4');
-  --input: theme('colors.zinc.700 / 0.4');
+  --destructive-foreground: var(--color-white);
+  --border: oklch(0.37 0.013 285.805 / 40%);
+  --input: oklch(0.37 0.013 285.805 / 40%);
+  --sidebar: var(--color-zinc-900);
+  --sidebar-foreground: var(--color-zinc-50);
+  --sidebar-accent: var(--color-zinc-800);
+  --sidebar-accent-foreground: var(--color-zinc-50);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --primary: var(--color-zinc-100);
+  --primary-foreground: var(--color-zinc-900);
   --ring: var(--primary);
-  /* default zinc colors for now - replace when charts and sidebar is implemented */
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.016 285.938);
-
-  /* === prose tokens === */
+  --sidebar-ring: var(--color-zinc-500);
+  --chart-1: var(--color-blue-700);
+  --chart-2: var(--color-emerald-500);
+  --chart-3: var(--color-amber-500);
+  --chart-4: var(--color-purple-500);
+  --chart-5: var(--color-rose-500);
+  --destructive-subtle: var(--color-red-400);
+  --success-subtle: var(--color-green-400);
+  --warning-subtle: var(--color-amber-400);
+  --core-background-body: var(--color-black);
+  --core-background-content: var(--color-zinc-900);
+  --core-content-border: oklch(0.871 0.006 286.286 / 20%);
+  --core-link: var(--brand-400);
+  --core-surface-invert: var(--color-zinc-700);
+  --core-action-btn-foreground-hover: var(--color-teal-400);
+  --core-action-btn-background: oklch(0.274 0.006 286.033 / 90%);
+  --core-action-btn-track: var(--color-zinc-900);
+  --core-action-btn-border: oklch(1 0 0 / 10%);
+  --core-action-btn-border-hover: oklch(1 0 0 / 20%);
+  --core-action-btn-icon-fill: var(--color-zinc-700);
+  --core-action-btn-shadow: oklch(0.274 0.006 286.033 / 5%);
+  --core-header: var(--color-zinc-200);
+  --core-headline: var(--color-zinc-100);
+  --core-navbar: oklch(0.274 0.006 286.033 / 90%);
+  --core-navbar-border: oklch(1 0 0 / 10%);
+  --core-navbar-shadow: oklch(0.274 0.006 286.033 / 5%);
+  --core-nav-link: var(--color-zinc-200);
+  --core-nav-link-active: var(--color-teal-400);
+  --core-nav-link-hover: var(--color-teal-400);
+  --core-text: var(--color-zinc-400);
   --body: var(--core-text);
   --bold: var(--color-zinc-200);
-  --bullets: var(--color-zinc-200);
-  --captions: var(--color-zinc-400);
   --code: var(--color-zinc-300);
-  --code-bg: theme('color.zinc.200 / 0.05');
-  --counters: var(--color-zinc-200);
+  --code-bg: oklch(0.92 0.004 286.32 / 5%);
   --headings: var(--core-header);
-  --hr: theme('colors.zinc.600 / 0.4');
-  --links: var(--color-teal-400);
-  --links-hover: var(--color-teal-400);
+  --hr: oklch(0.442 0.017 285.786 / 40%);
   --pre-bg: rgb(0 0 0 / 0.4);
-  --pre-border: theme('colors.zinc.200 / 0.1');
+  --pre-border: oklch(0.92 0.004 286.32 / 10%);
   --pre-code: var(--color-zinc-100);
   --quote-borders: var(--color-zinc-500);
   --td-borders: var(--color-zinc-800);
   --th-borders: var(--color-zinc-700);
-  --underline: theme('colors.teal.400 / 0.3');
+  --underline: oklch(0.777 0.152 181.912 / 30%);
+  --bullets: var(--color-zinc-200);
+  --captions: var(--color-zinc-400);
+  --counters: var(--color-zinc-200);
+  --links: var(--color-teal-400);
+  --links-hover: var(--color-teal-400);
   --underline-hover: var(--color-teal-400);
 }

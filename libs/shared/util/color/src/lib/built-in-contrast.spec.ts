@@ -1,28 +1,41 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 import { THEME_CONTRAST_PAIRS, checkContrast } from './contrast';
-import { COLOR_FAMILIES, COLOR_SHADES, shade } from './palette';
+import { COLOR_FAMILIES, COLOR_SHADES, paletteColor, shade } from './palette';
 
 /**
  * Every built-in theme has to pass its own contrast check — and be measurable.
  *
  * The platform's strongest claim is that an inaccessible colour theme cannot be
  * published on it, so a built-in that fails would make the claim false in the
- * most embarrassing way available. `shadcn` and `codeware` both failed the
+ * most embarrassing way available. `frost` and `codeware` both failed the
  * focus ring in light mode until this test was written.
  *
  * The coverage assertion matters as much as the failure one. `checkContrast`
  * skips any pair whose colours it cannot parse, so an earlier version of this
- * suite passed `spotlight-fork` while evaluating **none** of the 22 pairs. A
+ * suite passed a Spotlight fork while evaluating **none** of the 22 pairs. A
  * test that measures nothing reports success.
  */
-const themeFile = (theme: string, name: string) =>
-  readFileSync(
-    new URL(`../../../../theme/src/lib/${theme}/${name}`, import.meta.url),
-    'utf8'
-  );
+const THEME_LIB = new URL('../../../../theme/src/lib/', import.meta.url);
 
-const BUILT_INS = ['shadcn', 'spotlight', 'spotlight-fork', 'codeware'];
+const themeFile = (theme: string, name: string) =>
+  readFileSync(new URL(`${theme}/${name}`, THEME_LIB), 'utf8');
+
+/**
+ * Every folder holding a theme, read from disk rather than listed.
+ *
+ * A list here would be one more place a new theme has to be remembered, and
+ * forgetting it is silent: the theme ships unmeasured. `payload-admin` is left
+ * out because it matches Payload's own chrome rather than making a claim.
+ */
+const BUILT_INS = readdirSync(THEME_LIB, { withFileTypes: true })
+  .filter(
+    (entry) =>
+      entry.isDirectory() &&
+      entry.name !== 'payload-admin' &&
+      existsSync(new URL(`${entry.name}/tokens-light.css`, THEME_LIB))
+  )
+  .map(({ name }) => name);
 
 /**
  * The Tailwind palette, as tokens.
@@ -37,6 +50,10 @@ const paletteTokens = (): Record<string, string> => {
     for (const step of COLOR_SHADES) {
       tokens[`--color-${family}-${step}`] = shade(family, step);
     }
+  }
+  // A theme generated from a recipe writes its white as `var(--color-white)`
+  for (const name of ['white', 'black'] as const) {
+    tokens[`--color-${name}`] = paletteColor(name);
   }
   return tokens;
 };
@@ -79,23 +96,16 @@ describe('built-in themes', () => {
 
     // Guards the assertion above: a theme whose colours cannot be parsed would
     // pass it while being checked on nothing at all, which is how an earlier
-    // version of this suite passed `spotlight-fork` on zero pairs.
-    //
-    // Not all 22: `spotlight` writes some tokens as Tailwind's build-time
-    // `theme('colors.white / 0.9')`, which has no meaning at runtime and
-    // cannot be read here. That caps it around 13 and is a known gap rather
-    // than a target — the floor exists to catch a collapse, not to bless the
-    // shortfall.
+    // version of this suite passed a Spotlight fork on zero pairs. Every pair,
+    // not a floor: a partial count is a partial check that still says pass.
     it.each(['light', 'dark'] as const)('is measurable in %s', (scheme) => {
       const evaluated = checkContrast(tokensFor(theme, scheme)).length;
 
-      expect(evaluated).toBeGreaterThanOrEqual(13);
+      expect(evaluated).toBe(THEME_CONTRAST_PAIRS.length);
     });
   });
 
   it('reads tokens rather than an empty object', () => {
-    expect(Object.keys(tokensFor('shadcn', 'light')).length).toBeGreaterThan(
-      20
-    );
+    expect(Object.keys(tokensFor('frost', 'light')).length).toBeGreaterThan(20);
   });
 });

@@ -38,27 +38,23 @@ Every story is wrapped by the decorator in `preview.tsx`:
 
 Switching the toolbar changes these attributes at runtime. Because tokens resolve through CSS custom properties, the visual output updates instantly — no rebuild.
 
-### The four themes
+### The themes
 
-<pre className="mermaid">
-  {`flowchart TD
-  subgraph lib["libs/shared/theme/src/lib/"]
-    shadcn["shadcn\\nzinc · reference"]
-    pa["payload-admin\\nteal · CMS admin"]
-    sp["spotlight\\nteal · tenant app"]
-    cw["codeware\\nblue · future brand"]
-  end
+Nine are offered to tenant sites. `payload-admin` is Storybook-only: it matches Payload's own chrome, which is not a look a public site should ship.
 
-  cms["apps/cms"]
-  web["apps/web"]
+| Theme         | Base · brand     | Character                                              |
+| ------------- | ---------------- | ------------------------------------------------------ |
+| `frost`       | neutral · zinc   | shadcn.com's own theme, pixel for pixel — the baseline |
+| `spotlight`   | zinc · teal      | Soft cards on a deep page                              |
+| `codeware`    | zinc · Yale blue | Codeware's own look                                    |
+| `archipelago` | mist · cyan      | Cool sea light, layered surfaces                       |
+| `midsummer`   | olive · amber    | Warm meadow light, round corners                       |
+| `lingon`      | stone · rose     | Berry red on warm stone                                |
+| `granite`     | zinc · slate     | Near-monochrome, sharp corners, system font            |
+| `aurora`      | slate · emerald  | Northern-light green on cool slate                     |
+| `cement`      | taupe · sky      | Harbour concrete, sea, grass and sand                  |
 
-  pa -->|"custom.css"| cms
-  sp -->|"tailwind.css"| cms & web
-  cw -.->|"planned"| cms
-  shadcn -.->|"reference only"| pa`}
-</pre>
-
-`shadcn` is a pixel-perfect replica of the default shadcn.com theme. It is not used in any app — its purpose is to verify that shadcn components render correctly against the upstream reference before checking a project-specific theme.
+`frost` is the reference: it verifies that shadcn components render correctly against upstream before any other theme is judged.
 
 ---
 
@@ -121,7 +117,7 @@ Each theme's `tailwind-base.css` imports `_core/tailwind-setup.css`, which decla
   toolbar["Appearance toolbar"]
 
   toolbar -->|"payload-admin"| attr["data-theme=dark on wrapper\\nmatches @custom-variant"]
-  toolbar -->|"shadcn / spotlight / codeware"| cls[".dark class on wrapper\\nthemes.css scoped selectors"]
+  toolbar -->|"every site theme"| cls[".dark class on wrapper\\nthemes.css scoped selectors"]
 
   attr --> active["dark: utilities activate"]
   cls --> active`}
@@ -135,12 +131,12 @@ Each theme's `tailwind-base.css` imports `_core/tailwind-setup.css`, which decla
 
 | Theme           | `--brand-500` resolves to |
 | --------------- | ------------------------- |
-| `shadcn`        | `var(--color-zinc-500)`   |
+| `frost`         | `var(--color-zinc-500)`   |
 | `payload-admin` | `#2f6ba1` (Codeware yale) |
 | `spotlight`     | `var(--color-teal-500)`   |
 | `codeware`      | `#2f6ba1` (Codeware yale) |
 
-Dashboard components use `brand-*` utilities (`bg-brand-500`, `text-brand-600`, etc.) rather than hardcoded color names — the same component renders teal in Spotlight and Yale blue in Codeware without any code changes. `shadcn` maps `--brand-*` to zinc to satisfy the token contract without asserting a brand identity.
+Dashboard components use `brand-*` utilities (`bg-brand-500`, `text-brand-600`, etc.) rather than hardcoded color names — the same component renders teal in Spotlight and Yale blue in Codeware without any code changes. `frost` maps `--brand-*` to zinc to satisfy the token contract without asserting a brand identity.
 
 ---
 
@@ -244,74 +240,31 @@ pnpm nx sync     # sync files when needed (run after any token change)
 
 After modifying the generator itself, rebuild the plugin with `pnpm nx build dev-plugin` before running sync.
 
-To verify a theme visually after syncing, open **Theme › Overview** in the sidebar — it renders every token as a color swatch for all four themes side by side, with light and dark variants.
+To verify a theme visually after syncing, open **Theme › Overview** in the sidebar — it renders every token as a color swatch for every theme side by side, with light and dark variants.
 
 ---
 
 ## Adding a new theme
 
-**1. Create the theme directory**
+**1. Draft it in the theme studio**
 
-```
-libs/shared/theme/src/lib/{your-theme}/
-```
+Open **Theme library** in the CMS admin, fork the closest built-in, and adjust the recipe (base and brand families, surface, radius, where the primary, links and charts come from) until the contrast panel is clean. Export it.
 
-**2. Add `tokens-light.css`**
+**2. Write it into the theme lib**
 
-Copy `payload-admin/tokens-light.css` as a starting point. Set all shadcn tokens and `--brand-*` palette entries:
+The write-back only replaces a theme that exists, so a new one starts as a folder: create `libs/shared/theme/src/lib/{your-theme}/` holding a copy of `cement`'s three files. Then:
 
-```css
-:root {
-  --radius: 0.5rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.14 0.005 285);
-  /* ... all shadcn tokens ... */
-
-  --brand-50: var(--color-indigo-50);
-  --brand-500: var(--color-indigo-500);
-  --brand-950: var(--color-indigo-950);
-  /* ... full 50–950 scale ... */
-}
+```sh
+pnpm nx g dev-plugin:theme-write --from=~/Downloads/your-theme.theme.json
 ```
 
-**3. Add `tokens-dark.css`**
+This replaces `tokens-light.css` and `tokens-dark.css` and leaves `tailwind-base.css` alone.
 
-Only override the tokens that change in dark mode. The **opening selector** is read by the sync generator to auto-detect the dark strategy:
+**3. Register it**
 
-- `.dark { … }` → class strategy (decorator adds `.dark` class to wrapper)
-- Anything else (e.g. `:root`, `[data-theme='dark']`) → attribute strategy
+Add the name to `STORYBOOK_THEMES`, and to `SITE_THEMES` when tenants should be able to pick it, in `tools/dev-plugin/src/generators/themes.ts`. The compiler then points at every place that needs a word for it: its label in `theme-labels.ts`, its Storybook toolbar title in `preview.tsx`, and its story in **Theme › Overview**.
 
-**4. Add `tailwind-base.css`**
-
-```css
-@import './tokens-light.css';
-@import './tokens-dark.css';
-@import '../_core/tailwind-setup.css';
-```
-
-**5. Register in the sync generator**
-
-Add your theme name to `STORYBOOK_THEMES` in `tools/dev-plugin/src/generators/theme-sync/theme-sync.ts`:
-
-```ts
-const STORYBOOK_THEMES = [
-  'shadcn',
-  'payload-admin',
-  'spotlight',
-  'codeware',
-  'your-theme'
-] as const;
-```
-
-**6. Register in the Storybook toolbar**
-
-Add an item to `theme.toolbar.items` in `apps/storybook/.storybook/preview.tsx`:
-
-```ts
-{ value: 'your-theme', title: 'Your Theme' }
-```
-
-The dark strategy is **auto-detected** from the opening selector of `tokens-dark.css`. After running sync, `themes-meta.ts` is regenerated with the correct `THEME_DARK_STRATEGIES` entry — no manual edits needed in `preview.tsx`.
+The dark strategy is **auto-detected** from the opening selector of `tokens-dark.css` — a site theme must use `.dark`.
 
 **7. Run sync**
 

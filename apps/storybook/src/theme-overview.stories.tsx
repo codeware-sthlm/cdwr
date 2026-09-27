@@ -183,15 +183,15 @@ export default meta;
  *
  * `satisfies Record<SbTheme, StoryObj>` is the point: a theme added to
  * `STORYBOOK_THEMES` without a story here stops compiling, instead of quietly
- * going unreviewed. `spotlight-fork` reached the registry, `All Themes` and the
- * toolbar while this list still named four themes — the one view built for
+ * going unreviewed. A studio fork of Spotlight once reached the registry, `All Themes`
+ * and the toolbar while this list still named four themes — the one view built for
  * looking at a single theme was the one place it was missing.
  *
  * Storybook needs a static named export per story, so the re-exports below stay
  * by hand; this object is what makes a missing one a type error.
  */
 const themeStories = {
-  shadcn: { name: 'shadcn', render: () => <ThemePair theme="shadcn" /> },
+  frost: { name: 'frost', render: () => <ThemePair theme="frost" /> },
   'payload-admin': {
     name: 'payload-admin',
     render: () => <ThemePair theme="payload-admin" />
@@ -200,22 +200,40 @@ const themeStories = {
     name: 'spotlight',
     render: () => <ThemePair theme="spotlight" />
   },
-  'spotlight-fork': {
-    name: 'spotlight-fork',
-    render: () => <ThemePair theme="spotlight-fork" />
+  codeware: { name: 'codeware', render: () => <ThemePair theme="codeware" /> },
+  archipelago: {
+    name: 'archipelago',
+    render: () => <ThemePair theme="archipelago" />
   },
-  codeware: { name: 'codeware', render: () => <ThemePair theme="codeware" /> }
+  midsummer: {
+    name: 'midsummer',
+    render: () => <ThemePair theme="midsummer" />
+  },
+  lingon: { name: 'lingon', render: () => <ThemePair theme="lingon" /> },
+  granite: { name: 'granite', render: () => <ThemePair theme="granite" /> },
+  aurora: { name: 'aurora', render: () => <ThemePair theme="aurora" /> },
+  cement: { name: 'cement', render: () => <ThemePair theme="cement" /> }
 } satisfies Record<SbTheme, StoryObj>;
 
-export const Shadcn: StoryObj = themeStories.shadcn;
+export const Frost: StoryObj = themeStories.frost;
 
 export const PayloadAdmin: StoryObj = themeStories['payload-admin'];
 
 export const Spotlight: StoryObj = themeStories.spotlight;
 
-export const SpotlightFork: StoryObj = themeStories['spotlight-fork'];
-
 export const Codeware: StoryObj = themeStories.codeware;
+
+export const Archipelago: StoryObj = themeStories.archipelago;
+
+export const Midsummer: StoryObj = themeStories.midsummer;
+
+export const Lingon: StoryObj = themeStories.lingon;
+
+export const Granite: StoryObj = themeStories.granite;
+
+export const Aurora: StoryObj = themeStories.aurora;
+
+export const Cement: StoryObj = themeStories.cement;
 
 export const All: StoryObj = {
   name: 'All Themes',

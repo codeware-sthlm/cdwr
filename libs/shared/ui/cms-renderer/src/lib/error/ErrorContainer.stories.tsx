@@ -95,24 +95,24 @@ export const WithoutContainer: Story = {
   }
 };
 
-export const ShadcnLight = a11yStory(
+export const FrostLight = a11yStory(
   {
     args: {
       severity: 'error',
       children: 'The page you requested could not be loaded. Please try again.'
     }
   },
-  'shadcn',
+  'frost',
   'light'
 );
-export const ShadcnDark = a11yStory(
+export const FrostDark = a11yStory(
   {
     args: {
       severity: 'error',
       children: 'The page you requested could not be loaded. Please try again.'
     }
   },
-  'shadcn',
+  'frost',
   'dark'
 );
 export const PayloadAdminLight = a11yStory(
