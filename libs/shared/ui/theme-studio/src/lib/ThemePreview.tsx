@@ -52,7 +52,9 @@ export function ThemePreview({ id, dark, className }: ThemePreviewProps) {
     <div
       id={id}
       className={cn(
-        'bg-core-background-body text-core-text overflow-hidden rounded-lg border',
+        // `font-sans` restates the body face here, where this pane's own
+        // tokens apply; inherited, it would be the page's
+        'bg-core-background-body text-core-text overflow-hidden rounded-lg border font-sans',
         dark && 'dark',
         className
       )}

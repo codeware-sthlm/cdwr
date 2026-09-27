@@ -49,7 +49,14 @@ export type BuiltInTheme = {
  * tenant, and nothing here writes to them. What it produces is an ordinary
  * custom theme, which is a row and belongs to this site.
  */
-export function ThemeLibrary({ themes }: { themes: Array<BuiltInTheme> }) {
+export function ThemeLibrary({
+  themes,
+  fontAssetsBaseUrl
+}: {
+  themes: Array<BuiltInTheme>;
+  /** Where self-hosted faces are served from, so the studio can draw them */
+  fontAssetsBaseUrl?: string;
+}) {
   const [open, setOpen] = useState<BuiltInTheme | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -225,6 +232,7 @@ export function ThemeLibrary({ themes }: { themes: Array<BuiltInTheme> }) {
               // capabilities are already decided by the time it renders
               canExport
               canUseRestrictedFonts
+              fontAssetsBaseUrl={fontAssetsBaseUrl}
               themeName={open.label}
               // The folder, not the label — the write-back names a directory,
               // and a label is not a folder

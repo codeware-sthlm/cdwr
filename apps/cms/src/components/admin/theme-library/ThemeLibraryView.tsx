@@ -1,3 +1,4 @@
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { hasRole } from '@codeware/app-cms/util/misc';
 import { BUILT_IN_TOKENS, themeLabel } from '@codeware/shared/theme';
 import {
@@ -93,7 +94,12 @@ const ThemeLibraryView: React.FC<AdminViewServerProps> = ({
     );
   }
 
-  return <ThemeLibrary themes={builtInThemes()} />;
+  return (
+    <ThemeLibrary
+      themes={builtInThemes()}
+      fontAssetsBaseUrl={getEnv().FONT_ASSETS_BASE_URL}
+    />
+  );
 };
 
 export default ThemeLibraryView;

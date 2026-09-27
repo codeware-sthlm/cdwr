@@ -162,18 +162,18 @@
   }
   body {
     /* core-background-body separates page background from content surface (see spotlight theme) */
-    @apply bg-core-background-body text-core-text;
-    font-family: var(--font-sans);
+    @apply bg-core-background-body text-core-text font-sans;
   }
   /* Headings follow their own token so a theme can pair a display face with a
-     readable body one. Every committed theme sets it to the body face, so this
-     changes nothing until a theme says otherwise. */
+     readable body one. Through the utility rather than `var(--font-heading)`:
+     that variable is resolved once at the root, so a heading inside a nested
+     theme scope, such as a studio preview, would keep the page's face */
   h1,
   h2,
   h3,
   h4,
   h5,
   h6 {
-    font-family: var(--font-heading);
+    @apply font-heading;
   }
 }
