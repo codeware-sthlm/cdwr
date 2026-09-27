@@ -27,6 +27,7 @@ import {
 import {
   type ColorFamily,
   type ColorShade,
+  DEFAULT_FONTS,
   DEFAULT_RECIPE,
   NEUTRAL_FAMILIES,
   type ThemeRecipe,
@@ -36,6 +37,7 @@ import {
   checkContrast,
   codewareColors,
   fontsForSlot,
+  isRestrictedFont,
   randomRecipe,
   shade,
   themeFiles
@@ -399,6 +401,29 @@ function Pill({
 }
 
 /**
+ * A recipe with any licensed face the user may not assign put back to the
+ * default, so the studio never shows a font its picker does not offer.
+ *
+ * Opening Codeware in a public studio would otherwise carry its heading face
+ * into a theme the visitor is not entitled to.
+ */
+const withAllowedFonts = (
+  recipe: ThemeRecipe,
+  canUseRestricted: boolean
+): ThemeRecipe =>
+  canUseRestricted
+    ? recipe
+    : {
+        ...recipe,
+        fontBody: isRestrictedFont(recipe.fontBody)
+          ? DEFAULT_FONTS.body
+          : recipe.fontBody,
+        fontHeading: isRestrictedFont(recipe.fontHeading)
+          ? DEFAULT_FONTS.heading
+          : recipe.fontHeading
+      };
+
+/**
  * Author a theme from a recipe, with both schemes visible and checked.
  *
  * Four decisions drive all 84 light and 32 dark tokens — the core and prose
@@ -422,8 +447,8 @@ export function ThemeStudio({
   onClose
 }: ThemeStudioProps = {}) {
   const scope = useId().replace(/:/g, '');
-  const [recipe, setRecipe] = useState<ThemeRecipe>(
-    initialRecipe ?? DEFAULT_RECIPE
+  const [recipe, setRecipe] = useState<ThemeRecipe>(() =>
+    withAllowedFonts(initialRecipe ?? DEFAULT_RECIPE, canUseRestrictedFonts)
   );
   const [overrides, setOverrides] = useState<ThemeOverrides>(
     initialOverrides ?? NO_OVERRIDES

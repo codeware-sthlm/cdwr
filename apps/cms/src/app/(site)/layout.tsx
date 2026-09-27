@@ -9,6 +9,7 @@ import {
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { isUser } from '@codeware/app-cms/util/misc';
 import {
+  BUILT_IN_TOKENS,
   THEME_COOKIE,
   customThemeCss,
   resolveTheme,
@@ -94,12 +95,18 @@ export default async function RootLayout({
   // Driven off the tokens because those are what renders, and only for a
   // family the platform serves itself: Inter comes from the bundle.
   const fontFaces = entitledFonts(
-    selfServedFontsIn(
-      customThemes.flatMap(({ tokensLight, tokensDark }) => [
+    selfServedFontsIn([
+      ...customThemes.flatMap(({ tokensLight, tokensDark }) => [
         tokensLight,
         tokensDark
-      ])
-    ),
+      ]),
+      // A built-in may name a licensed face too, which only an entitled
+      // deployment embeds; elsewhere its stack falls back to Inter
+      ...themes.flatMap((name) => {
+        const builtIn = BUILT_IN_TOKENS[name];
+        return builtIn ? [builtIn.light, builtIn.dark] : [];
+      })
+    ]),
     env.RESTRICTED_FONTS
   )
     .map((font) => fontFaceCss(font, env.FONT_ASSETS_BASE_URL))
