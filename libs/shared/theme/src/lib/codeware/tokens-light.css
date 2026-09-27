@@ -74,6 +74,10 @@
   --core-background-body: var(--background);
   --core-background-content: var(--background);
   --core-content-border: var(--border);
+  --core-sheet-edge: transparent;
+  --core-band-reach: calc(50% - 50vw);
+  --core-band-subtle: var(--muted);
+  --core-band-strong: var(--card);
   /* Typefaces. Unquoted deliberately: a multi-word family is valid as a
      sequence of identifiers, and the runtime theme whitelist rejects
      quotes — so committed and injected themes can carry the same value */

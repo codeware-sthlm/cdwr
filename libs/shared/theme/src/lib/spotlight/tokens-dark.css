@@ -74,4 +74,8 @@
   --links: var(--color-teal-400);
   --links-hover: var(--color-teal-400);
   --underline-hover: var(--color-teal-400);
+
+  /* A band apart from the surface it sits on */
+  --core-band-subtle: color-mix(in oklab, var(--card) 50%, var(--background));
+  --core-band-strong: var(--card);
 }

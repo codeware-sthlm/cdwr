@@ -117,9 +117,53 @@ export function themeDeclarations(tokens: Record<string, unknown>): string {
  * leaves it undefined. Each fills in only where the stored map lacks it, with
  * the value the theme template gives new themes.
  */
-const BACKFILL_LIGHT: Record<string, string> = {
+const backfillLight = (
+  stored: Record<string, unknown>
+): Record<string, string> => ({
   // Flat chrome has no ring or shadow; without a track it has no surface
-  '--core-action-btn-track': 'var(--muted)'
+  '--core-action-btn-track': 'var(--muted)',
+  '--core-band-subtle': 'var(--muted)',
+  '--core-band-strong': 'var(--card)',
+  // The theme template's surface values, by the one thing a stored map can
+  // say of its surface
+  ...(isFlat(stored)
+    ? {
+        '--core-sheet-edge': 'transparent',
+        '--core-band-reach': 'calc(50% - 50vw)'
+      }
+    : {
+        '--core-sheet-edge': 'var(--core-content-border)',
+        '--core-band-reach': '0px'
+      })
+});
+
+/** The theme template's dark band tones, by the same test. */
+const backfillDark = (
+  storedLight: Record<string, unknown>
+): Record<string, string> => ({
+  '--core-band-subtle':
+    'color-mix(in oklab, var(--card) 50%, var(--background))',
+  '--core-band-strong': isFlat(storedLight)
+    ? 'var(--card)'
+    : 'var(--background)'
+});
+
+/** A flat theme paints the content column the same as the page. */
+const isFlat = (stored: Record<string, unknown>): boolean =>
+  stored['--core-background-body'] === stored['--core-background-content'];
+
+/** Declarations, followed by each fill-in the stored map lacks. */
+const withMissing = (
+  declarations: string,
+  stored: Record<string, unknown> | null | undefined,
+  fill: Record<string, string>
+): string => {
+  const missing = themeDeclarations(
+    Object.fromEntries(
+      Object.entries(fill).filter(([name]) => !(name in (stored ?? {})))
+    )
+  );
+  return [declarations, missing].filter(Boolean).join(';');
 };
 
 /**
@@ -142,7 +186,6 @@ export function customThemeCss(themes: Array<CustomThemeInput>): string {
     .filter(({ slug }) => isValidThemeSlug(slug))
     .flatMap(({ slug, tokensLight, tokensDark }) => {
       const stored = themeDeclarations(tokensLight ?? {});
-      const dark = themeDeclarations(tokensDark ?? {});
 
       // A theme with no light tokens has no base to cascade from, so a dark
       // block on its own would leave the light scheme unthemed
@@ -150,14 +193,16 @@ export function customThemeCss(themes: Array<CustomThemeInput>): string {
         return [];
       }
 
-      const missing = themeDeclarations(
-        Object.fromEntries(
-          Object.entries(BACKFILL_LIGHT).filter(
-            ([name]) => !(name in (tokensLight ?? {}))
-          )
-        )
+      const light = withMissing(
+        stored,
+        tokensLight,
+        backfillLight(tokensLight ?? {})
       );
-      const light = missing ? `${stored};${missing}` : stored;
+      const dark = withMissing(
+        themeDeclarations(tokensDark ?? {}),
+        tokensDark,
+        backfillDark(tokensLight ?? {})
+      );
 
       const blocks = [`[data-theme='${slug}']{${light}}`];
       if (dark) {

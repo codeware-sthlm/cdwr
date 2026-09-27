@@ -30,12 +30,13 @@ const band = cva('', {
   variants: {
     band: {
       none: '',
-      // A dark page lifts to the card colour: muted is too close to some
-      // themes' link colour there, and the inverted surface to their muted text
-      subtle: 'bg-muted dark:bg-card/50',
+      // Muted on a light page; on a dark one the theme picks a tone apart from
+      // the surface beneath, which a layered sheet has already made the card
+      subtle: 'bg-core-band-subtle',
       // Tokens resolve per element, so the theme's dark block applies from
       // here down and the text colour has to be stated again to pick it up
-      strong: 'bg-core-background-content text-core-text in-[.dark]:bg-card'
+      strong:
+        'bg-core-background-content text-core-text in-[.dark]:bg-core-band-strong'
     } satisfies Record<SectionBand, string>,
     fit: {
       // Between the container's outer and inner layers, so it spans the sheet
@@ -46,7 +47,14 @@ const band = cva('', {
     }
   },
   compoundVariants: [
-    { band: ['subtle', 'strong'], fit: 'sheet', className: 'py-12 md:py-16' },
+    {
+      band: ['subtle', 'strong'],
+      fit: 'sheet',
+      // The colour is repeated on a layer the theme lets reach past the sheet,
+      // so a flat theme's band crosses the page while its content stays put
+      className:
+        'relative isolate py-12 before:absolute before:inset-y-0 before:inset-x-band-reach before:-z-10 before:bg-inherit md:py-16'
+    },
     {
       band: ['subtle', 'strong'],
       fit: 'contained',

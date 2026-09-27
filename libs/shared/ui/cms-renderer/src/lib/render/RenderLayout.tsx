@@ -120,12 +120,14 @@ export function RenderLayout({
   }, [navigationTree]);
 
   return (
-    <div className="flex w-full">
+    // Clipped sideways: a band on a flat theme reaches the full viewport width,
+    // which includes the scrollbar
+    <div className="flex w-full overflow-x-clip">
       {/* Create a center aligned section with background space on each side */}
       <div className="fixed inset-0 flex justify-center sm:px-8">
         <div className="flex w-full max-w-7xl lg:px-8">
           {/* Content section */}
-          <div className="bg-core-background-content ring-core-content-border w-full ring-1" />
+          <div className="bg-core-background-content ring-core-sheet-edge w-full ring-1" />
         </div>
       </div>
       {/* Display header, main and footer inside the content section.

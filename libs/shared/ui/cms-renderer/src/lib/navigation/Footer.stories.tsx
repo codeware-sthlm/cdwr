@@ -22,7 +22,7 @@ const withPageContext: Decorator = (Story) => (
   <div className="bg-core-background-body relative -m-6 flex min-h-screen flex-col">
     <div className="absolute inset-0 flex justify-center sm:px-8">
       <div className="flex w-full max-w-7xl lg:px-8">
-        <div className="bg-core-background-content ring-core-content-border w-full ring-1" />
+        <div className="bg-core-background-content ring-core-sheet-edge w-full ring-1" />
       </div>
     </div>
     <div className="relative flex flex-1 flex-col">
