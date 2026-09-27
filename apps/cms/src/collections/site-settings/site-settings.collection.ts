@@ -1,3 +1,4 @@
+import { FALLBACK_THEME } from '@codeware/app-cms/data-access';
 import { enumName } from '@codeware/app-cms/util/db';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
 import { customT } from '@codeware/app-cms/util/i18n';
@@ -173,7 +174,7 @@ const siteSettings: CollectionConfig = {
               enumName: enumName('site_settings_themes'),
               options: themeOptions,
               hasMany: true,
-              defaultValue: ['spotlight'],
+              defaultValue: [FALLBACK_THEME],
               // Not `required`: a site may offer only its own themes. What has
               // to hold is that it offers something, which spans both fields
               validate: (
@@ -222,7 +223,7 @@ const siteSettings: CollectionConfig = {
                     '@codeware/app-cms/ui/fields/default-theme/DefaultThemeField.client'
                 }
               },
-              defaultValue: 'spotlight',
+              defaultValue: FALLBACK_THEME,
               validate: async (
                 value: string | null | undefined,
                 {

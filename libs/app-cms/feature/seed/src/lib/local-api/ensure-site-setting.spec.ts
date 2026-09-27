@@ -90,4 +90,71 @@ describe('ensureSiteSetting', () => {
     expect(updates).toHaveLength(1);
     expect(updates[0]['general']).toMatchObject({ icon });
   });
+
+  describe('themes on an existing row', () => {
+    const holding = (general: Record<string, unknown>) => {
+      const updates: Array<Record<string, unknown>> = [];
+      const payload = {
+        find: async () => ({
+          totalDocs: 1,
+          docs: [{ ...stored, general: { ...stored.general, ...general } }]
+        }),
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          updates.push(data);
+          return {};
+        }
+      } as unknown as Payload;
+      return { payload, updates };
+    };
+    const stating = {
+      ...data,
+      general: {
+        ...data.general,
+        themes: ['frost', 'codeware'],
+        customThemes: [42],
+        defaultTheme: 'cdwr'
+      }
+    } as typeof data;
+
+    it('fills the fields still at their defaults', async () => {
+      const { payload, updates } = holding({
+        themes: ['spotlight'],
+        customThemes: [],
+        defaultTheme: 'spotlight'
+      });
+
+      await ensureSiteSetting(payload, stating, base);
+
+      expect(updates).toHaveLength(1);
+      expect(updates[0]['general']).toMatchObject({
+        themes: ['frost', 'codeware'],
+        customThemes: [42],
+        defaultTheme: 'cdwr'
+      });
+    });
+
+    it('keeps what an editor chose', async () => {
+      const { payload, updates } = holding({
+        themes: ['lingon'],
+        customThemes: [7],
+        defaultTheme: 'lingon'
+      });
+
+      await ensureSiteSetting(payload, stating, base);
+
+      expect(updates).toEqual([]);
+    });
+
+    it('does not rewrite a row that already says the same', async () => {
+      const { payload, updates } = holding({
+        themes: ['frost', 'codeware'],
+        customThemes: [42],
+        defaultTheme: 'cdwr'
+      });
+
+      await ensureSiteSetting(payload, stating, base);
+
+      expect(updates).toEqual([]);
+    });
+  });
 });
