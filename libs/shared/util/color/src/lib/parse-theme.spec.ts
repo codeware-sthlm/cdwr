@@ -114,21 +114,20 @@ describe('parseTheme', () => {
    * `spotlight` is most of the way to its own token count because it restates
    * thirty-five core and prose tokens in dark, where the template declares them
    * once and lets them cascade. That is its dark personality, and carrying it
-   * is what makes a fork of it look like it. Its 24 unresolved values are all
-   * build-time `theme()` calls; the three dangling aliases it used to carry are
-   * fixed.
+   * is what makes a fork of it look like it.
    *
-   * `codeware` and `payload-admin` sit above the count a pure best-fit search
-   * reaches, deliberately. Fitting for the smallest pile alone reads
-   * `codeware`'s links as following the primary, which is not what it says —
-   * it sets `--core-link: var(--brand-600)` and then points prose links
-   * somewhere else. Recovering the decision it actually made costs four
-   * overrides and is the more useful answer.
+   * `codeware`'s six put the wordmark's own yale on its primary group and its
+   * headlines, a step off the recipe's. Its six passthroughs are the brand
+   * colours its own stylesheet maps to `cdwr-*` utilities.
+   *
+   * `payload-admin` sits above the count a pure best-fit search reaches,
+   * deliberately: recovering the link decision it actually made costs overrides
+   * and is the more useful answer.
    */
   describe('reads the committed themes', () => {
     it.each([
       ['frost', 3, 0],
-      ['codeware', 8, 6],
+      ['codeware', 6, 6],
       ['payload-admin', 7, 2],
       ['spotlight', 95, 0]
     ])('explains %s with %i overrides', (theme, overrides, passthrough) => {
@@ -142,7 +141,7 @@ describe('parseTheme', () => {
 
     it.each([
       ['frost', { baseFamily: 'neutral', brandFamily: 'zinc' }],
-      ['codeware', { baseFamily: 'zinc', brandFamily: 'yale-blue' }],
+      ['codeware', { baseFamily: 'neutral', brandFamily: 'yale-blue' }],
       ['spotlight', { baseFamily: 'zinc', brandFamily: 'teal' }],
       ['payload-admin', { baseFamily: 'zinc', brandFamily: 'yale-blue' }]
     ])('recovers the families of %s', (theme, expected) => {
