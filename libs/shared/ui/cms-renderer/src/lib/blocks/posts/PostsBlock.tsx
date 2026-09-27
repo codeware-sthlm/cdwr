@@ -66,9 +66,11 @@ export function PostsBlock({ title, description, posts }: Props) {
                   if (!handleAsRoute(e)) return;
                   navigate(`/posts/${post.slug}`);
                 }}
-                className="group relative md:col-span-3"
+                className="group relative outline-none md:col-span-3"
               >
-                <span className="bg-accent absolute -inset-x-4 -inset-y-6 z-0 scale-95 opacity-0 transition group-hover:scale-100 group-hover:opacity-100 sm:-inset-x-6 sm:rounded-2xl" />
+                {/* The surface grows in only for a visitor who allows motion,
+                    and shows where the keyboard is as well as the pointer */}
+                <span className="bg-accent group-focus-visible:ring-core-link/40 absolute -inset-x-4 -inset-y-6 z-0 opacity-0 transition duration-200 ease-out group-hover:opacity-100 group-focus-visible:opacity-100 group-focus-visible:ring-2 motion-safe:scale-95 motion-safe:group-hover:scale-100 motion-safe:group-focus-visible:scale-100 sm:-inset-x-6 sm:rounded-2xl" />
                 <h2 className="text-core-headline group-hover:text-core-link relative z-10 text-base font-semibold tracking-tight">
                   {post.title}
                 </h2>

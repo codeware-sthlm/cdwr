@@ -1,5 +1,8 @@
 import { InlineIcon, TechIcon } from '@codeware/shared/ui/primitives';
 import type { PillListBlock as PillListBlockProps } from '@codeware/shared/util/payload-types';
+import { cn } from '@codeware/shared/util/ui';
+
+import { interactiveSurface } from '../../utils/interactive-surface';
 
 type Pill = NonNullable<PillListBlockProps['items']>[number];
 
@@ -68,7 +71,10 @@ export const PillListBlock: React.FC<PillListBlockProps> = ({
               href={item.url}
               target="_blank"
               rel="noreferrer"
-              className="border-border bg-card text-foreground hover:border-core-link hover:text-core-link inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm shadow-xs transition-colors"
+              className={cn(
+                'text-foreground inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-sm shadow-xs',
+                interactiveSurface({ shape: 'pill' })
+              )}
             >
               <PillLogo pill={item} />
               {item.label}

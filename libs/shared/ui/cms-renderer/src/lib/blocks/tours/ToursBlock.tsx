@@ -17,6 +17,7 @@ import { cn } from '@codeware/shared/util/ui';
 import { CalendarIcon, ClockIcon } from 'lucide-react';
 
 import { usePayload } from '../../providers/PayloadProvider';
+import { interactiveSurface } from '../../utils/interactive-surface';
 import { handleAsRoute } from '../../utils/internal-link';
 import {
   formatPrice,
@@ -74,7 +75,8 @@ export function ToursBlock({ title, description, tours }: Props) {
             <Card
               key={tour.id}
               className={cn(
-                'group/tour bg-card/50 hover:bg-card focus-within:ring-core-link/40 relative h-full transition-colors duration-300 ease-in-out focus-within:ring-2',
+                'group/tour relative h-full',
+                interactiveSurface(),
                 heroImage && 'pt-0'
               )}
             >
