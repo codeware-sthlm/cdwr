@@ -152,7 +152,7 @@ export const cdwrIo: SiteDefinition = {
         {
           blockType: 'feature-section',
           eyebrow: 'Theme studio',
-          band: 'strong',
+          band: 'gradient',
           heading: 'A theme you cannot save until it is readable',
           intro:
             'Pick a brand colour and the studio derives the rest — surfaces, borders, charts, prose. Every pairing is checked for readability as you go, and one that fails cannot be published.',
