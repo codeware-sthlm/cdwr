@@ -48,8 +48,8 @@ export const Demo: StoryObj = {
 // duplicate comes from sonner's internals, not from how we render it.
 const disabled = ['landmark-unique'];
 
-export const ShadcnLight = a11yStory(Demo, 'shadcn', 'light', disabled);
-export const ShadcnDark = a11yStory(Demo, 'shadcn', 'dark', disabled);
+export const FrostLight = a11yStory(Demo, 'frost', 'light', disabled);
+export const FrostDark = a11yStory(Demo, 'frost', 'dark', disabled);
 export const PayloadAdminLight = a11yStory(
   Demo,
   'payload-admin',

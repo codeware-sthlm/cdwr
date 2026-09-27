@@ -270,8 +270,8 @@ export const Minimal: Story = {
 
 const a11yArgs = { tour };
 
-export const ShadcnLight = a11yStory({ args: a11yArgs }, 'shadcn', 'light');
-export const ShadcnDark = a11yStory({ args: a11yArgs }, 'shadcn', 'dark');
+export const FrostLight = a11yStory({ args: a11yArgs }, 'frost', 'light');
+export const FrostDark = a11yStory({ args: a11yArgs }, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory(
   { args: a11yArgs },
   'payload-admin',

@@ -123,5 +123,5 @@ export const NotificationNoRecipient: StoryObj = {
 
 export const PayloadAdminLight = a11yStory(Values, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory(Values, 'payload-admin', 'dark');
-export const ShadcnLight = a11yStory(Values, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(Values, 'shadcn', 'dark');
+export const FrostLight = a11yStory(Values, 'frost', 'light');
+export const FrostDark = a11yStory(Values, 'frost', 'dark');

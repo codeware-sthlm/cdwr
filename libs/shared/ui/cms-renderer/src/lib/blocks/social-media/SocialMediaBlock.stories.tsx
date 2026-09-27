@@ -87,14 +87,14 @@ export const AllPlatforms: Story = {
   }
 };
 
-export const ShadcnLight = a11yStory(
+export const FrostLight = a11yStory(
   { args: { blockType: 'social-media', direction: 'horizontal', social } },
-  'shadcn',
+  'frost',
   'light'
 );
-export const ShadcnDark = a11yStory(
+export const FrostDark = a11yStory(
   { args: { blockType: 'social-media', direction: 'horizontal', social } },
-  'shadcn',
+  'frost',
   'dark'
 );
 export const PayloadAdminLight = a11yStory(

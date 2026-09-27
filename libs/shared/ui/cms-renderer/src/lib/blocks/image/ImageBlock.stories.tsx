@@ -56,8 +56,8 @@ export const HiddenCaption: Story = {
   }
 };
 
-export const ShadcnLight = a11yStory({ args: { media } }, 'shadcn', 'light');
-export const ShadcnDark = a11yStory({ args: { media } }, 'shadcn', 'dark');
+export const FrostLight = a11yStory({ args: { media } }, 'frost', 'light');
+export const FrostDark = a11yStory({ args: { media } }, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory(
   { args: { media } },
   'payload-admin',

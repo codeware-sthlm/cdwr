@@ -67,8 +67,8 @@ export const CopyButtonStory: StoryObj = {
   )
 };
 
-export const ShadcnLight = a11yStory(TypeScript, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(TypeScript, 'shadcn', 'dark');
+export const FrostLight = a11yStory(TypeScript, 'frost', 'light');
+export const FrostDark = a11yStory(TypeScript, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory(
   TypeScript,
   'payload-admin',

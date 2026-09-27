@@ -276,8 +276,9 @@ type ThemeStudioProps = {
   /**
    * The folder the open theme lives in, when it is a committed one.
    *
-   * Distinct from {@link themeName}, which is a display label: "Spotlight
-   * Studio" is not `spotlight-fork`, and the write-back names a directory. Its
+   * Distinct from {@link themeName}, which is a display label: "Frost" is
+   * not a folder the label could be turned back into, and the write-back names
+   * a directory. Its
    * absence is meaningful — a theme the studio cannot identify is one it must
    * not offer to replace.
    */
@@ -432,7 +433,7 @@ export function ThemeStudio({
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   // Seeded from the open theme, not left at a placeholder. The name is not
   // decoration: it is the folder the zip unpacks to and the theme the
-  // write-back replaces, so defaulting it to `my-theme` while `spotlight-fork`
+  // write-back replaces, so defaulting it to `my-theme` while a built-in
   // was on screen produced a payload naming a theme that does not exist
   const [exportName, setExportName] = useState(themeSlug ?? 'my-theme');
 

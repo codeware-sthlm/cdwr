@@ -77,7 +77,7 @@ export const Swedish: Story = {
   render: () => <ImageCrop locale="sv" onConfirm={() => undefined} />
 };
 
-export const ShadcnLight = a11yStory(Default, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(Default, 'shadcn', 'dark');
+export const FrostLight = a11yStory(Default, 'frost', 'light');
+export const FrostDark = a11yStory(Default, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory(Default, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory(Default, 'payload-admin', 'dark');

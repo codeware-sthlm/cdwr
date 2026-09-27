@@ -34,8 +34,8 @@ export const Demo: StoryObj = {
 // from our side would fight Radix's own focus management.
 const disabled = ['scrollable-region-focusable'];
 
-export const ShadcnLight = a11yStory(Demo, 'shadcn', 'light', disabled);
-export const ShadcnDark = a11yStory(Demo, 'shadcn', 'dark', disabled);
+export const FrostLight = a11yStory(Demo, 'frost', 'light', disabled);
+export const FrostDark = a11yStory(Demo, 'frost', 'dark', disabled);
 export const PayloadAdminLight = a11yStory(
   Demo,
   'payload-admin',

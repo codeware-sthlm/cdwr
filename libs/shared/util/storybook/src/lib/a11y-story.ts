@@ -11,8 +11,8 @@
  * ```ts
  * import { a11yStory } from '@codeware/shared/util/storybook';
  *
- * export const ShadcnLight    = a11yStory({ args }, 'shadcn', 'light');
- * export const ShadcnDark     = a11yStory({ args }, 'shadcn', 'dark');
+ * export const FrostLight    = a11yStory({ args }, 'frost', 'light');
+ * export const FrostDark     = a11yStory({ args }, 'frost', 'dark');
  * export const SpotlightLight = a11yStory({ args }, 'spotlight', 'light');
  * export const SpotlightDark  = a11yStory({ args }, 'spotlight', 'dark');
  * export const CodewareLight  = a11yStory({ args }, 'codeware', 'light');

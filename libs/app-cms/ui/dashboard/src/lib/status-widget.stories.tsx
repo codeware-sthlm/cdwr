@@ -203,5 +203,5 @@ export const UnevenAdminLight = a11yStory(
 );
 export const PayloadAdminLight = a11yStory(Tones, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory(Tones, 'payload-admin', 'dark');
-export const ShadcnLight = a11yStory(Tones, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(Tones, 'shadcn', 'dark');
+export const FrostLight = a11yStory(Tones, 'frost', 'light');
+export const FrostDark = a11yStory(Tones, 'frost', 'dark');

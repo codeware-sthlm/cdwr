@@ -27,12 +27,9 @@ import type { ThemeWriteGeneratorSchema } from './schema';
  * replaceable; the reason is the message the refusal carries.
  */
 const PROTECTED: Partial<Record<SbTheme, string>> = {
-  shadcn:
+  frost:
     'it is the pixel-perfect baseline against shadcn.com — the theme every ' +
-    'other one is judged against. Fork it instead.',
-  spotlight:
-    'it is written with build-time theme() calls the studio cannot express. ' +
-    'Edit spotlight-fork, which is the same theme in a form the studio owns.'
+    'other one is judged against. Fork it instead.'
 };
 
 /** The shape the studio downloads. */
@@ -97,8 +94,7 @@ function readPayload(given: string): ThemePayload {
   const payload = parsed as Partial<ThemePayload>;
   const name = payload?.name;
   const files = payload?.files as
-    | Partial<Record<TokenFile, string>>
-    | undefined;
+    Partial<Record<TokenFile, string>> | undefined;
 
   if (typeof name !== 'string' || !name) {
     throw new Error(`'${path}' has no theme name.`);

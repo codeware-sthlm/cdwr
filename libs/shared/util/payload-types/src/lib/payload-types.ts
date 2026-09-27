@@ -1737,7 +1737,16 @@ export interface ThemeStudioBlock {
   /**
    * The platform theme the studio starts from. Its recipe is read from the committed theme, so the studio opens on the real thing.
    */
-  startFrom: 'shadcn' | 'spotlight' | 'spotlight-fork' | 'codeware';
+  startFrom:
+    | 'frost'
+    | 'spotlight'
+    | 'codeware'
+    | 'archipelago'
+    | 'midsummer'
+    | 'lingon'
+    | 'granite'
+    | 'aurora'
+    | 'cement';
   /**
    * One line saying what this is. Leave the default unless it is wrong for the page.
    */
@@ -2036,7 +2045,19 @@ export interface SiteSettingsGeneral {
   /**
    * Themes this site may use. Select more than one to give visitors a theme selector.
    */
-  themes?: ('shadcn' | 'spotlight' | 'spotlight-fork' | 'codeware')[] | null;
+  themes?:
+    | (
+        | 'frost'
+        | 'spotlight'
+        | 'codeware'
+        | 'archipelago'
+        | 'midsummer'
+        | 'lingon'
+        | 'granite'
+        | 'aurora'
+        | 'cement'
+      )[]
+    | null;
   /**
    * Your own themes, offered alongside the ones above. Create them under Custom themes.
    */

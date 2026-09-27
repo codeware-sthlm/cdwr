@@ -46,5 +46,5 @@ export const PayloadAdminLight = a11yStory(
   'light'
 );
 export const PayloadAdminDark = a11yStory(WithAction, 'payload-admin', 'dark');
-export const ShadcnLight = a11yStory(WithAction, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(WithAction, 'shadcn', 'dark');
+export const FrostLight = a11yStory(WithAction, 'frost', 'light');
+export const FrostDark = a11yStory(WithAction, 'frost', 'dark');

@@ -225,8 +225,8 @@ export const NotFoundNoButton: StoryObj = {
   )
 };
 
-export const ShadcnLight = a11yStory(CalloutInfo, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(CalloutInfo, 'shadcn', 'dark');
+export const FrostLight = a11yStory(CalloutInfo, 'frost', 'light');
+export const FrostDark = a11yStory(CalloutInfo, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory(
   CalloutInfo,
   'payload-admin',

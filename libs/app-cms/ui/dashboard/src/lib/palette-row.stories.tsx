@@ -54,5 +54,5 @@ export const Variants: StoryObj = {
 
 export const PayloadAdminLight = a11yStory(Variants, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory(Variants, 'payload-admin', 'dark');
-export const ShadcnLight = a11yStory(Variants, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(Variants, 'shadcn', 'dark');
+export const FrostLight = a11yStory(Variants, 'frost', 'light');
+export const FrostDark = a11yStory(Variants, 'frost', 'dark');

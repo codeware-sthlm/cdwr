@@ -1,7 +1,11 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { describe, expect, it } from 'vitest';
 
-import { THEME_LIB_PATH as THEME_LIB } from '../themes.js';
+import {
+  SITE_THEMES,
+  STORYBOOK_THEMES as THEMES,
+  THEME_LIB_PATH as THEME_LIB
+} from '../themes.js';
 
 import themeSyncGenerator, { validateThemeRegistry } from './theme-sync';
 
@@ -11,19 +15,6 @@ const OUTPUT_META = 'apps/storybook/.storybook/themes-meta.ts';
 const OUTPUT_SITE_CSS = `${CORE_PATH}/themes.css`;
 const OUTPUT_SITE_THEMES = 'libs/shared/theme/src/lib/site-themes.ts';
 const OUTPUT_BUILT_IN_TOKENS = 'libs/shared/theme/src/lib/built-in-tokens.ts';
-const THEMES = [
-  'shadcn',
-  'payload-admin',
-  'spotlight',
-  'spotlight-fork',
-  'codeware'
-] as const;
-const SITE_THEMES = [
-  'shadcn',
-  'spotlight',
-  'spotlight-fork',
-  'codeware'
-] as const;
 
 // Payload's admin convention — valid for a Storybook theme, unsatisfiable for
 // a site theme whose name already occupies data-theme
@@ -84,14 +75,14 @@ describe('theme-sync generator — completeness check', () => {
   it('throws when a token is absent from tokens-light.css', async () => {
     const tree = setupTree();
     tree.write(
-      `${THEME_LIB}/shadcn/tokens-light.css`,
+      `${THEME_LIB}/frost/tokens-light.css`,
       `:root {
   --background: oklch(1 0 0);
   --primary: oklch(0.5 0.2 240);
 }`
     );
     await expect(themeSyncGenerator(tree)).rejects.toThrow(
-      'shadcn/tokens-light.css missing'
+      'frost/tokens-light.css missing'
     );
     await expect(themeSyncGenerator(tree)).rejects.toThrow('--body');
   });
@@ -108,13 +99,13 @@ describe('theme-sync generator — completeness check', () => {
   it('throws when a token is absent from tokens-dark.css', async () => {
     const tree = setupTree();
     tree.write(
-      `${THEME_LIB}/shadcn/tokens-dark.css`,
+      `${THEME_LIB}/frost/tokens-dark.css`,
       `.dark {
   --background: oklch(0.1 0 0);
 }`
     );
     await expect(themeSyncGenerator(tree)).rejects.toThrow(
-      'shadcn/tokens-dark.css missing'
+      'frost/tokens-dark.css missing'
     );
     await expect(themeSyncGenerator(tree)).rejects.toThrow('--primary');
   });
@@ -122,14 +113,14 @@ describe('theme-sync generator — completeness check', () => {
   it('throws when a commented-out token is missing from tokens-dark.css', async () => {
     const tree = setupTree();
     tree.write(
-      `${THEME_LIB}/shadcn/tokens-dark.css`,
+      `${THEME_LIB}/frost/tokens-dark.css`,
       `.dark {
   --background: oklch(0.1 0 0);
   /* --primary: oklch(0.6 0.2 240); */
 }`
     );
     await expect(themeSyncGenerator(tree)).rejects.toThrow(
-      'shadcn/tokens-dark.css missing'
+      'frost/tokens-dark.css missing'
     );
     await expect(themeSyncGenerator(tree)).rejects.toThrow('--primary');
   });
@@ -228,7 +219,7 @@ describe('theme-sync generator — site themes', () => {
     it('collapses a value that wraps across lines', async () => {
       const tree = setupTree();
       tree.write(
-        `${THEME_LIB}/shadcn/tokens-light.css`,
+        `${THEME_LIB}/frost/tokens-light.css`,
         `:root {
   --background: oklch(1 0 0);
   --primary: oklch(0.5 0.2 240);
@@ -252,10 +243,10 @@ describe('theme-sync generator — site themes', () => {
     await themeSyncGenerator(tree);
 
     const css = tree.read(OUTPUT_CSS, 'utf-8') ?? '';
-    expect(css).toContain("[data-sb-theme='shadcn']");
+    expect(css).toContain("[data-sb-theme='frost']");
     expect(css).toContain("[data-sb-theme='payload-admin']");
     // the site attribute must never leak into the Storybook output
-    expect(css).not.toContain("[data-theme='shadcn']");
+    expect(css).not.toContain("[data-theme='frost']");
   });
 
   it('throws when a site theme declares dark by attribute', async () => {

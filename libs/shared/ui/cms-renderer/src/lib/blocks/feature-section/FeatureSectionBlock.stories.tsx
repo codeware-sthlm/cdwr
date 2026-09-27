@@ -61,8 +61,8 @@ export const HeaderOnly: Story = {
   args: { ...args, enableLink: false, subFeatures: [] }
 };
 
-export const ShadcnLight = a11yStory({ args }, 'shadcn', 'light');
-export const ShadcnDark = a11yStory({ args }, 'shadcn', 'dark');
+export const FrostLight = a11yStory({ args }, 'frost', 'light');
+export const FrostDark = a11yStory({ args }, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory({ args }, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory({ args }, 'payload-admin', 'dark');
 export const SpotlightLight = a11yStory({ args }, 'spotlight', 'light');

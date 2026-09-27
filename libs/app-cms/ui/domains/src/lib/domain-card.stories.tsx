@@ -372,5 +372,5 @@ export const ResolversAdminDark = a11yStory(
   'payload-admin',
   'dark'
 );
-export const ShadcnLight = a11yStory(Lifecycle, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(Lifecycle, 'shadcn', 'dark');
+export const FrostLight = a11yStory(Lifecycle, 'frost', 'light');
+export const FrostDark = a11yStory(Lifecycle, 'frost', 'dark');

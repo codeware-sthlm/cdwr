@@ -613,7 +613,17 @@ export const cdwrIo: SiteDefinition = {
       chrome: 'flat',
       icon: { source: 'svg', svgCode: cdwrCloudSvg },
       // Every built-in beside its own: here the theme switch is the demo
-      themes: ['shadcn', 'spotlight', 'spotlight-fork', 'codeware'],
+      themes: [
+        'frost',
+        'spotlight',
+        'codeware',
+        'archipelago',
+        'midsummer',
+        'lingon',
+        'granite',
+        'aurora',
+        'cement'
+      ],
       customThemes: [{ lookupSlug: 'cdwr' }],
       defaultTheme: 'cdwr'
     }

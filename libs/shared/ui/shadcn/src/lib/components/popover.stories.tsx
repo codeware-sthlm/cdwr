@@ -43,8 +43,8 @@ export const Demo: StoryObj = {
   )
 };
 
-export const ShadcnLight = a11yStory(Demo, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(Demo, 'shadcn', 'dark');
+export const FrostLight = a11yStory(Demo, 'frost', 'light');
+export const FrostDark = a11yStory(Demo, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory(Demo, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory(Demo, 'payload-admin', 'dark');
 export const SpotlightLight = a11yStory(Demo, 'spotlight', 'light');

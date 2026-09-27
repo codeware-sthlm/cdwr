@@ -98,16 +98,16 @@ export const Bordered: StoryObj = {
   )
 };
 
-export const ShadcnLight = a11yStory(Demo, 'shadcn', 'light');
-export const ShadcnDark = a11yStory(Demo, 'shadcn', 'dark');
+export const FrostLight = a11yStory(Demo, 'frost', 'light');
+export const FrostDark = a11yStory(Demo, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory(Demo, 'payload-admin', 'light');
 export const PayloadAdminDark = a11yStory(Demo, 'payload-admin', 'dark');
 export const SpotlightLight = a11yStory(Demo, 'spotlight', 'light');
 export const SpotlightDark = a11yStory(Demo, 'spotlight', 'dark');
 export const CodewareLight = a11yStory(Demo, 'codeware', 'light');
 export const CodewareDark = a11yStory(Demo, 'codeware', 'dark');
-export const BorderedShadcnLight = a11yStory(Bordered, 'shadcn', 'light');
-export const BorderedShadcnDark = a11yStory(Bordered, 'shadcn', 'dark');
+export const BorderedFrostLight = a11yStory(Bordered, 'frost', 'light');
+export const BorderedFrostDark = a11yStory(Bordered, 'frost', 'dark');
 export const BorderedPayloadAdminLight = a11yStory(
   Bordered,
   'payload-admin',

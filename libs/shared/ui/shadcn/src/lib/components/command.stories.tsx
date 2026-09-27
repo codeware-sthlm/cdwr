@@ -58,8 +58,8 @@ export const Demo: StoryObj = {
 // children. The markup is owned by cmdk, so the rule is off for this story.
 const disabled = ['aria-required-children'];
 
-export const ShadcnLight = a11yStory(Demo, 'shadcn', 'light', disabled);
-export const ShadcnDark = a11yStory(Demo, 'shadcn', 'dark', disabled);
+export const FrostLight = a11yStory(Demo, 'frost', 'light', disabled);
+export const FrostDark = a11yStory(Demo, 'frost', 'dark', disabled);
 export const PayloadAdminLight = a11yStory(
   Demo,
   'payload-admin',
