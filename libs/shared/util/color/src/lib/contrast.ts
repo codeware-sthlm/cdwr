@@ -96,6 +96,12 @@ export const THEME_CONTRAST_PAIRS: Array<ContrastPair> = [
     minimum: WCAG_AA_NORMAL
   },
   {
+    foreground: '--primary',
+    background: '--card',
+    usage: 'Primary-coloured text on a card',
+    minimum: WCAG_AA_NORMAL
+  },
+  {
     foreground: '--core-headline',
     background: '--core-background-body',
     usage: 'Page headline',

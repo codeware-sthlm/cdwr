@@ -4,5 +4,31 @@
   "sourceRoot": "libs/shared/util/color/src",
   "projectType": "library",
   "tags": ["scope:shared", "type:util"],
-  "targets": {}
+  "targets": {
+    "test": {
+      "inputs": [
+        "default",
+        "^production",
+        {
+          "fileset": "{projectRoot}/tsconfig.spec.json",
+          "dependencies": true
+        },
+        {
+          "fileset": "{projectRoot}/tsconfig.storybook.json",
+          "dependencies": true
+        },
+        {
+          "externalDependencies": ["vitest"]
+        },
+        {
+          "env": "CI"
+        },
+        {
+          "dependentTasksOutputFiles": "**/*.js",
+          "transitive": true
+        },
+        "{workspaceRoot}/libs/shared/theme/src/lib/**/*.css"
+      ]
+    }
+  }
 }
