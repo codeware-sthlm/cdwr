@@ -51,11 +51,14 @@ export type BuiltInTheme = {
  */
 export function ThemeLibrary({
   themes,
-  fontAssetsBaseUrl
+  fontAssetsBaseUrl,
+  grantedFonts
 }: {
   themes: Array<BuiltInTheme>;
   /** Where self-hosted faces are served from, so the studio can draw them */
   fontAssetsBaseUrl?: string;
+  /** The licensed faces this deployment may embed */
+  grantedFonts?: string;
 }) {
   const [open, setOpen] = useState<BuiltInTheme | null>(null);
   const [saving, setSaving] = useState(false);
@@ -233,6 +236,7 @@ export function ThemeLibrary({
               canExport
               canUseRestrictedFonts
               fontAssetsBaseUrl={fontAssetsBaseUrl}
+              grantedFonts={grantedFonts}
               themeName={open.label}
               // The folder, not the label — the write-back names a directory,
               // and a label is not a folder

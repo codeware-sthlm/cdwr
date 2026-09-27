@@ -227,7 +227,11 @@ const customThemes: CollectionConfig = {
           Field: {
             path: '@codeware/app-cms/ui/fields/theme-studio/ThemeStudioField.client',
             // Public already: the same base every site's font faces point at
-            clientProps: { fontAssetsBaseUrl: getEnv().FONT_ASSETS_BASE_URL }
+            clientProps: {
+              fontAssetsBaseUrl: getEnv().FONT_ASSETS_BASE_URL,
+              // The same grant the site renderer holds a licensed face to
+              grantedFonts: getEnv().RESTRICTED_FONTS
+            }
           }
         }
       }
