@@ -1,3 +1,4 @@
+import { FALLBACK_THEME } from '@codeware/app-cms/data-access';
 import { getId } from '@codeware/app-cms/util/misc';
 import type { SiteSetting } from '@codeware/shared/util/payload-types';
 import type { Payload, TypedLocale } from 'payload';
@@ -104,10 +105,13 @@ export async function ensureSiteSetting(
     const storedIcon = general.icon?.source ? general.icon : null;
     const hasIconContent = !generalFromProps.icon?.source || !!storedIcon;
 
+    const themes = themeGaps(general, generalFromProps);
+
     if (
       general.appName &&
       general.landingPage &&
       hasIconContent &&
+      !Object.keys(themes).length &&
       hasFooterContent &&
       hasFormsContent &&
       hasLegalContent
@@ -144,7 +148,8 @@ export async function ensureSiteSetting(
           ...general,
           appName: general.appName ?? generalFromProps.appName,
           icon: storedIcon ?? generalFromProps.icon,
-          landingPage: general.landingPage ?? generalFromProps.landingPage
+          landingPage: general.landingPage ?? generalFromProps.landingPage,
+          ...themes
         }
       },
       locale,
@@ -172,6 +177,39 @@ export async function ensureSiteSetting(
   });
 
   return newSiteSetting;
+}
+
+type General = SiteSettingData['general'];
+
+/**
+ * The theme fields a definition states that the row has not had chosen yet.
+ *
+ * Each has a database default, so emptiness cannot be the test: a field still
+ * holding its default counts as untouched. An editor who picked something else
+ * keeps it. Without this a definition's own theme is created but never offered.
+ */
+function themeGaps(
+  stored: General,
+  from: General
+): Partial<Pick<General, 'themes' | 'customThemes' | 'defaultTheme'>> {
+  const untouchedThemes =
+    !stored.themes?.length ||
+    (stored.themes.length === 1 && stored.themes[0] === FALLBACK_THEME);
+  const untouchedDefault =
+    !stored.defaultTheme || stored.defaultTheme === FALLBACK_THEME;
+
+  return {
+    ...(from.themes &&
+      untouchedThemes &&
+      from.themes.join() !== (stored.themes ?? []).join() && {
+        themes: from.themes
+      }),
+    ...(from.customThemes?.length &&
+      !stored.customThemes?.length && { customThemes: from.customThemes }),
+    ...(from.defaultTheme &&
+      from.defaultTheme !== stored.defaultTheme &&
+      untouchedDefault && { defaultTheme: from.defaultTheme })
+  };
 }
 
 /** What the caller actually stated: an absent field is not a request to clear it. */
