@@ -70,6 +70,7 @@ export type TranslationKey =
   | 'gallery.accepts'
   | 'gallery.allBlocks'
   | 'gallery.band'
+  | 'gallery.band.gradient'
   | 'gallery.band.none'
   | 'gallery.band.strong'
   | 'gallery.band.subtle'
@@ -280,6 +281,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.accepts': 'Accepts',
     'gallery.allBlocks': 'All blocks',
     'gallery.band': 'Background',
+    'gallery.band.gradient': 'Gradient',
     'gallery.band.none': 'None',
     'gallery.band.strong': 'Strong',
     'gallery.band.subtle': 'Subtle',
@@ -517,6 +519,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.accepts': 'Kan innehålla',
     'gallery.allBlocks': 'Alla block',
     'gallery.band': 'Bakgrund',
+    'gallery.band.gradient': 'Färgtoning',
     'gallery.band.none': 'Ingen',
     'gallery.band.strong': 'Kraftig',
     'gallery.band.subtle': 'Diskret',

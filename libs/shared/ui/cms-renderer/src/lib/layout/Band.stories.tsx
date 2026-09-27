@@ -1,6 +1,7 @@
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+import { calloutGallery } from '../blocks/callout/CalloutBlock.gallery';
 import { featureCardsGallery } from '../blocks/feature-cards/FeatureCardsBlock.gallery';
 import { featureSectionGallery } from '../blocks/feature-section/FeatureSectionBlock.gallery';
 import { pillListGallery } from '../blocks/pill-list/PillListBlock.gallery';
@@ -9,8 +10,8 @@ import { RenderBlocks } from '../RenderBlocks';
 import { ContainerOuter } from './Container';
 
 /**
- * A slice of a page, drawn the way a page draws it: none, subtle and strong
- * in turn, each spanning the sheet between the container's two layers.
+ * A slice of a page, drawn the way a page draws it: none, subtle, strong and
+ * gradient in turn, each spanning the sheet between the container's two layers.
  */
 function PageSlice(props: React.ComponentProps<typeof RenderBlocks>) {
   return (
@@ -34,7 +35,8 @@ const args: Story['args'] = {
   blocks: [
     { ...featureCardsGallery.example, band: 'none' },
     { ...pillListGallery.example, band: 'subtle' },
-    { ...featureSectionGallery.example, band: 'strong' }
+    { ...featureSectionGallery.example, band: 'strong' },
+    { ...calloutGallery.example, band: 'gradient' }
   ]
 };
 
