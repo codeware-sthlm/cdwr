@@ -12,7 +12,10 @@ const FLAT_SHEET =
   ';--core-sheet-edge:transparent;--core-band-reach:calc(50% - 50vw)';
 
 /** The band tones every block gains while its stored map predates them. */
-const BANDS = ';--core-band-subtle:var(--muted);--core-band-strong:var(--card)';
+const BANDS =
+  ';--core-band-subtle:var(--muted);--core-band-strong:var(--card)' +
+  ';--core-band-gradient-from:var(--brand-800);--core-band-gradient-to:var(--brand-950)' +
+  ';--core-band-gradient-text:var(--brand-50);--core-band-gradient-muted:var(--brand-200)';
 
 /** What every light block ends with while its stored map predates the track. */
 const TRACK = `;--core-action-btn-track:var(--muted)${BANDS}${FLAT_SHEET}`;

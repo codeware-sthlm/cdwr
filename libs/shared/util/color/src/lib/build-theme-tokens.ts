@@ -11,6 +11,7 @@ import {
 } from './palette';
 import {
   ALIAS_LIGHT,
+  BAND_GRADIENT,
   BASE_CHART_SHADES,
   BASE_DARK,
   BASE_LIGHT,
@@ -212,6 +213,7 @@ export function buildThemeTokens(
     ...resolveAll(SUBTLE_LIGHT, recipe, format),
     ...resolveAll(ALIAS_LIGHT, recipe, format),
     ...resolveAll(SURFACE_LIGHT[recipe.surface], recipe, format),
+    ...resolveAll(BAND_GRADIENT, recipe, format),
     // Resolved from the registry rather than stored as a stack, so a family the
     // registry drops reads as the default instead of as an unheard-of name
     '--core-font-body': fontStack('body', recipe.fontBody),

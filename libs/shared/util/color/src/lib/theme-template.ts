@@ -285,6 +285,22 @@ const SHEET = {
 } as const satisfies Record<'flat' | 'layered', Record<string, TokenSource>>;
 
 /**
+ * The gradient band: a run down the brand ramp, with text of its own.
+ *
+ * The page's own text cannot sit on it. Neutral muted text and brand links
+ * measure 2–4:1 on a brand surface at any depth, so the band carries a light
+ * brand tint for both. From 800 every family in the palette clears 4.5:1
+ * against both ends; from 700 green falls just short. The same in either
+ * scheme, since the brand ramp is.
+ */
+export const BAND_GRADIENT: Record<string, TokenSource> = {
+  '--core-band-gradient-from': { brand: '800' },
+  '--core-band-gradient-to': { brand: '950' },
+  '--core-band-gradient-text': { brand: '50' },
+  '--core-band-gradient-muted': { brand: '200' }
+};
+
+/**
  * A band on a dark page, which has to stand apart from whatever it sits on.
  *
  * Halfway between card and background is lighter than a flat page and darker

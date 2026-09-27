@@ -116,8 +116,9 @@ describe('parseTheme', () => {
    * once and lets them cascade. That is its dark personality, and carrying it
    * is what makes a fork of it look like it.
    *
-   * `codeware`'s six put the wordmark's own yale on its primary group and its
-   * headlines, a step off the recipe's. Its six passthroughs are the brand
+   * `codeware`'s eight put the wordmark's own yale on its primary group and its
+   * headlines, a step off the recipe's, and run its gradient band down the
+   * logo's own colours, yale into space cadet. Its six passthroughs are the brand
    * colours its own stylesheet maps to `cdwr-*` utilities.
    *
    * `payload-admin` sits above the count a pure best-fit search reaches,
@@ -127,7 +128,7 @@ describe('parseTheme', () => {
   describe('reads the committed themes', () => {
     it.each([
       ['frost', 3, 0],
-      ['codeware', 6, 6],
+      ['codeware', 8, 6],
       ['payload-admin', 7, 2],
       ['spotlight', 95, 0]
     ])('explains %s with %i overrides', (theme, overrides, passthrough) => {

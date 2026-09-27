@@ -114,6 +114,10 @@
   --color-core-sheet-edge: var(--core-sheet-edge);
   --color-core-band-subtle: var(--core-band-subtle);
   --color-core-band-strong: var(--core-band-strong);
+  --color-core-band-gradient-from: var(--core-band-gradient-from);
+  --color-core-band-gradient-to: var(--core-band-gradient-to);
+  --color-core-band-gradient-text: var(--core-band-gradient-text);
+  --color-core-band-gradient-muted: var(--core-band-gradient-muted);
   --color-core-header: var(--core-header);
   --color-core-headline: var(--core-headline);
   --color-core-interactive: var(--core-interactive);
