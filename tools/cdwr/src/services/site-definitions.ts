@@ -1,3 +1,4 @@
+import { existsSync } from 'fs';
 import { readdir } from 'fs/promises';
 import { isAbsolute, join, resolve as resolvePath } from 'path';
 import { pathToFileURL } from 'url';
@@ -64,9 +65,30 @@ export async function listSiteDefinitions(
   );
 }
 
-/** A path from the flag, or from the workspace root when it is relative */
-export const resolveDefinitionPath = (root: string, value: string): string =>
-  isAbsolute(value) ? value : resolvePath(root, value);
+/**
+ * A path from the flag, or from the workspace root when it is relative.
+ *
+ * A bare name, with no separator, is one of the repository's own definitions
+ * when one goes by it: `cdwr-io` is `site-definitions/cdwr-io.ts`, the name the
+ * prompt lists it by. Otherwise it is a path like any other, so a file at the
+ * workspace root is still found by its name.
+ */
+export const resolveDefinitionPath = (root: string, value: string): string => {
+  if (isAbsolute(value)) {
+    return value;
+  }
+  if (!/[\\/]/.test(value)) {
+    const named = resolvePath(
+      root,
+      DEFINITIONS_DIR,
+      value.endsWith('.ts') ? value : `${value}.ts`
+    );
+    if (existsSync(named)) {
+      return named;
+    }
+  }
+  return resolvePath(root, value);
+};
 
 /**
  * `--definition`: one of the repository's definitions, or any path.

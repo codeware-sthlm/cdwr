@@ -46,6 +46,22 @@ describe('resolveDefinitionPath', () => {
     );
   });
 
+  // Against the real repository: the lookup only wins when the file is there
+  it('finds a bare name among the repository definitions', () => {
+    const expected = join(
+      root,
+      'libs/shared/util/seed/src/lib/site-definitions/cdwr-io.ts'
+    );
+    expect(resolveDefinitionPath(root, 'cdwr-io')).toBe(expected);
+    expect(resolveDefinitionPath(root, 'cdwr-io.ts')).toBe(expected);
+  });
+
+  it('reads a bare name no definition goes by as a workspace path', () => {
+    expect(resolveDefinitionPath(root, 'my-site.ts')).toBe(
+      join(root, 'my-site.ts')
+    );
+  });
+
   it('leaves an absolute path alone, so a definition can live anywhere', () => {
     expect(resolveDefinitionPath('/repo', '/elsewhere/b.ts')).toBe(
       '/elsewhere/b.ts'
