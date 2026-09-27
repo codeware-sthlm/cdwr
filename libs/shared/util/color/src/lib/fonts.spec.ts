@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -37,6 +39,30 @@ describe('the registry', () => {
       ])
     );
   });
+
+  // A registered face nothing declares falls back silently, so the stylesheet
+  // is held to the registry rather than trusted to keep up with it
+  it.each(FONT_FAMILIES.filter((font) => font.bundled))(
+    '$id is declared by the shared stylesheet',
+    (font) => {
+      const css = readFileSync(
+        new URL('../../../../theme/src/lib/_core/fonts.css', import.meta.url),
+        'utf8'
+      );
+      for (const sheet of font.bundled ?? []) {
+        expect(css).toContain(`@import '${sheet}';`);
+      }
+    }
+  );
+
+  // Either the platform serves the file or npm does; a family with neither
+  // has nothing to render with but the system's
+  it.each(FONT_FAMILIES.filter((font) => !font.stack.startsWith('ui-')))(
+    '$id has a source',
+    (font) => {
+      expect(Boolean(font.file) !== Boolean(font.bundled?.length)).toBe(true);
+    }
+  );
 
   it.each(SLOTS)('%s has a default that fills it', (slot) => {
     const font = fontById(DEFAULT_FONTS[slot]);

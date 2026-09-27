@@ -1,3 +1,4 @@
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { slugField } from '@codeware/app-cms/ui/fields';
 import {
   adminGroups,
@@ -223,8 +224,11 @@ const customThemes: CollectionConfig = {
         },
         components: {
           Cell: '@codeware/apps/cms/components/ThemeRecipeCell',
-          Field:
-            '@codeware/app-cms/ui/fields/theme-studio/ThemeStudioField.client'
+          Field: {
+            path: '@codeware/app-cms/ui/fields/theme-studio/ThemeStudioField.client',
+            // Public already: the same base every site's font faces point at
+            clientProps: { fontAssetsBaseUrl: getEnv().FONT_ASSETS_BASE_URL }
+          }
         }
       }
     },

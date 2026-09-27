@@ -13,3 +13,11 @@
  * in the system sans-serif.
  */
 @import '@fontsource-variable/inter/wght.css';
+
+/* Heading faces a theme may choose. Declared for every consumer, fetched only
+   where a page uses one; the registry in @codeware/shared/util/color lists them */
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+@import '@fontsource/space-mono/400.css';
+@import '@fontsource/space-mono/700.css';
+@import '@fontsource-variable/sora/wght.css';
+@import '@fontsource-variable/fraunces/wght.css';

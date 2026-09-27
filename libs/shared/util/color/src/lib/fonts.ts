@@ -38,6 +38,15 @@ export type FontFamily = {
    */
   file?: string;
   /**
+   * The fontsource stylesheets that declare the face, for one bundled from npm.
+   *
+   * Imported by `_core/fonts.css`, which a spec holds to this list: a family
+   * registered here and never imported renders as its fallback without a word.
+   * Bundled faces cost a site only their `@font-face` rules; a browser fetches
+   * the files for a family a page actually uses.
+   */
+  bundled?: ReadonlyArray<string>;
+  /**
    * Licensed to Codeware rather than freely redistributable.
    *
    * Only a system user may assign one. The studio hides it, and the collection
@@ -61,7 +70,8 @@ export const FONT_FAMILIES: ReadonlyArray<FontFamily> = [
     // `Inter` covers a reader who has it installed, and apps/web, which still
     // loads it from Google
     stack: 'Inter Variable, Inter, sans-serif',
-    slots: ['body', 'heading']
+    slots: ['body', 'heading'],
+    bundled: ['@fontsource-variable/inter/wght.css']
   },
   {
     id: 'system',
@@ -74,6 +84,38 @@ export const FONT_FAMILIES: ReadonlyArray<FontFamily> = [
     label: 'System mono',
     stack: SYSTEM_MONO,
     slots: ['mono']
+  },
+  {
+    id: 'jetbrains-mono',
+    label: 'JetBrains Mono',
+    stack:
+      'JetBrains Mono Variable, ui-monospace, SFMono-Regular, Menlo, monospace',
+    slots: ['heading'],
+    bundled: ['@fontsource-variable/jetbrains-mono/wght.css']
+  },
+  {
+    id: 'space-mono',
+    label: 'Space Mono',
+    stack: 'Space Mono, ui-monospace, SFMono-Regular, Menlo, monospace',
+    slots: ['heading'],
+    bundled: [
+      '@fontsource/space-mono/400.css',
+      '@fontsource/space-mono/700.css'
+    ]
+  },
+  {
+    id: 'sora',
+    label: 'Sora',
+    stack: 'Sora Variable, ui-sans-serif, system-ui, sans-serif',
+    slots: ['heading'],
+    bundled: ['@fontsource-variable/sora/wght.css']
+  },
+  {
+    id: 'fraunces',
+    label: 'Fraunces',
+    stack: 'Fraunces Variable, ui-serif, Georgia, serif',
+    slots: ['heading'],
+    bundled: ['@fontsource-variable/fraunces/wght.css']
   },
   {
     id: 'nasalization',

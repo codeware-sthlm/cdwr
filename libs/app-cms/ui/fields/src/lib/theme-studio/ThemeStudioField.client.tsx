@@ -36,11 +36,9 @@ const asOverrides = (value: unknown): Overrides =>
  * `overrides` beside it — those are what the site renders, so the studio owns
  * all four together or none of them.
  */
-export const ThemeStudioField: React.FC<JSONFieldClientProps> = ({
-  field,
-  path,
-  readOnly
-}) => {
+export const ThemeStudioField: React.FC<
+  JSONFieldClientProps & { fontAssetsBaseUrl?: string }
+> = ({ field, path, readOnly, fontAssetsBaseUrl }) => {
   const { value, setValue } = useField<unknown>({ path });
   const { setValue: setOverrides, value: overridesValue } = useField<unknown>({
     path: 'overrides'
@@ -109,6 +107,7 @@ export const ThemeStudioField: React.FC<JSONFieldClientProps> = ({
             <ThemeStudio
               canExport={isSystemUser}
               canUseRestrictedFonts={isSystemUser}
+              fontAssetsBaseUrl={fontAssetsBaseUrl}
               recipe={recipe}
               overrides={asOverrides(overridesValue)}
               onSelect={onSelect}

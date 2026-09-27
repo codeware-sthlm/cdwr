@@ -36,6 +36,7 @@ import {
   buildThemeTokens,
   checkContrast,
   codewareColors,
+  fontFaceCss,
   fontsForSlot,
   isRestrictedFont,
   randomRecipe,
@@ -242,6 +243,32 @@ const studioPane = cva('min-h-0 flex-1', {
   defaultVariants: { fit: 'viewport' }
 });
 
+/**
+ * The options column's scrolling body.
+ *
+ * On a page the preview sets the studio's height, not this long column: it is
+ * taken out of the flow and scrolls within whatever height the preview needs.
+ */
+const optionsPane = cva('min-h-0 flex-1', {
+  variants: {
+    fit: {
+      viewport: 'overflow-y-auto',
+      content: 'relative'
+    }
+  },
+  defaultVariants: { fit: 'viewport' }
+});
+
+const optionsBody = cva('space-y-5 p-4', {
+  variants: {
+    fit: {
+      viewport: '',
+      content: 'absolute inset-0 overflow-y-auto'
+    }
+  },
+  defaultVariants: { fit: 'viewport' }
+});
+
 type StudioFit = NonNullable<VariantProps<typeof studioFrame>['fit']>;
 
 type ThemeStudioProps = {
@@ -268,6 +295,12 @@ type ThemeStudioProps = {
    * column and never has to pass through this component at all.
    */
   canUseRestrictedFonts?: boolean;
+  /**
+   * Where the platform serves its own font files, so a face it self-hosts
+   * renders here as it does on a site. Without it such a face shows as its
+   * fallback; bundled faces render either way.
+   */
+  fontAssetsBaseUrl?: string;
   /**
    * The theme being edited, shown in the header.
    *
@@ -377,10 +410,12 @@ function Swatch({
 function Pill({
   active,
   onClick,
+  style,
   children
 }: {
   active: boolean;
   onClick: () => void;
+  style?: React.CSSProperties;
   children: React.ReactNode;
 }) {
   return (
@@ -388,6 +423,7 @@ function Pill({
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      style={style}
       className={cn(
         'rounded-md border px-2 py-1 text-xs transition-colors',
         active
@@ -438,6 +474,7 @@ export function ThemeStudio({
   fit = 'viewport',
   canExport = false,
   canUseRestrictedFonts = false,
+  fontAssetsBaseUrl,
   themeName,
   themeSlug,
   selectLabel = 'Use this theme',
@@ -620,6 +657,17 @@ export function ThemeStudio({
       <PortalContainer.Provider value={root}>
         <div ref={setRoot} className={studioFrame({ fit })}>
           <style>{previewCss(scope, light, dark)}</style>
+          {/* Every self-served face the pickers offer, so each renders in the
+              pills and in the preview once chosen */}
+          <style>
+            {[
+              ...fontsForSlot('heading', canUseRestrictedFonts),
+              ...fontsForSlot('body', canUseRestrictedFonts)
+            ]
+              .filter((font) => font.file)
+              .map((font) => fontFaceCss(font, fontAssetsBaseUrl))
+              .join('')}
+          </style>
 
           {optionsOpen && (
             <aside className="border-border bg-muted/30 flex min-h-0 w-72 shrink-0 flex-col border-r">
@@ -634,8 +682,8 @@ export function ThemeStudio({
                 )}
               </div>
 
-              <div className={studioPane({ fit })}>
-                <div className="space-y-5 p-4">
+              <div className={optionsPane({ fit })}>
+                <div className={optionsBody({ fit })}>
                   <div className="space-y-2">
                     <Label className="text-xs">Base colour</Label>
                     <p className="text-muted-foreground text-[11px]">
@@ -674,6 +722,8 @@ export function ThemeStudio({
                             key={font.id}
                             active={recipe.fontHeading === font.id}
                             onClick={() => update({ fontHeading: font.id })}
+                            // Each option in its own face, so the choice is seen
+                            style={{ fontFamily: font.stack }}
                           >
                             {font.label}
                           </Pill>
@@ -694,6 +744,8 @@ export function ThemeStudio({
                             key={font.id}
                             active={recipe.fontBody === font.id}
                             onClick={() => update({ fontBody: font.id })}
+                            // Each option in its own face, so the choice is seen
+                            style={{ fontFamily: font.stack }}
                           >
                             {font.label}
                           </Pill>
