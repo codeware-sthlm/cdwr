@@ -133,7 +133,8 @@ export function RenderLayout({
       {/* Display header, main and footer inside the content section.
           Full viewport height keeps the footer at the bottom on short pages,
           where its surface would otherwise end mid-panel */}
-      <div className="relative flex min-h-screen w-full flex-col">
+      {/* The footer's margin would leave a strip of page under a closing band */}
+      <div className="relative flex min-h-screen w-full flex-col [&:has([data-ends-on-band])_footer]:mt-0">
         <header className="pointer-events-none relative z-50 flex flex-none flex-col">
           <div className="top-0 z-10 h-16 pt-6">
             <Container className="w-full">

@@ -29,7 +29,7 @@ import { SpacingBlock } from './blocks/spacing/SpacingBlock';
 import { TestimonialBlock } from './blocks/testimonial/TestimonialBlock';
 import { ThemeStudioBlock } from './blocks/theme-studio/ThemeStudioBlock';
 import { ToursBlock } from './blocks/tours/ToursBlock';
-import { Band } from './layout/Band';
+import { Band, type SectionBand } from './layout/Band';
 import { ContainerInner } from './layout/Container';
 import { ColumnSizeProvider } from './providers/ColumnSizeProvider';
 
@@ -107,6 +107,7 @@ export const ReusableContentBlock: React.FC<ReusableContentBlockWithData> = ({
         blocksData={blocksData}
         preview={preview}
         framed={framed}
+        nested
       />
     );
   }
@@ -216,7 +217,18 @@ type Props = {
    * gallery, have no sheet to span and keep their band to themselves.
    */
   framed?: boolean;
+  /**
+   * The blocks of a reusable content block, drawn inside the page's own.
+   *
+   * Only the page's own list can say it ends on a band: a nested list ending
+   * on one may sit anywhere on the page.
+   */
+  nested?: boolean;
 };
+
+/** A block's band, `none` for a block that has none or cannot have one */
+const bandOf = (block: Props['blocks'][number]): SectionBand =>
+  ('band' in block ? block.band : null) ?? 'none';
 
 /**
  * Renders the blocks of a page.
@@ -228,6 +240,7 @@ export const RenderBlocks: React.FC<Props> = ({
   blocksData,
   className,
   framed,
+  nested,
   preview,
   refId
 }) => {
@@ -237,7 +250,18 @@ export const RenderBlocks: React.FC<Props> = ({
 
   if (hasBlocks) {
     return (
-      <div id={refId ?? undefined} ref={docRef} className={className}>
+      <div
+        id={refId ?? undefined}
+        ref={docRef}
+        className={className}
+        // A page that ends on a band spanning it meets the footer directly,
+        // which the layout reads from here
+        data-ends-on-band={
+          framed && !nested && bandOf(blocks[blocks.length - 1]) !== 'none'
+            ? ''
+            : undefined
+        }
+      >
         {blocks.map((block, index) => {
           const Block = blocksMap[block.blockType];
 
@@ -254,12 +278,23 @@ export const RenderBlocks: React.FC<Props> = ({
               framed
             );
 
+            const band = bandOf(block);
+
+            // Two bands spanning the page meet edge to edge: each carries its
+            // own padding, and the gap between them read as a stray strip.
+            // Contained bands are rounded panels and keep their distance
+            const followsBand =
+              framed &&
+              index > 0 &&
+              band !== 'none' &&
+              bandOf(blocks[index - 1]) !== 'none';
+
             // Do not set any margins around spacing block since it has its own margin options.
             // For all other blocks, set a top margin unless it's the first block.
             const spacing = cn({
-              'not-first:mt-16 md:not-first:mt-24': !isSpacingBlockOrFollowing
+              'not-first:mt-16 md:not-first:mt-24':
+                !isSpacingBlockOrFollowing && !followsBand
             });
-            const band = 'band' in block ? block.band : null;
 
             // Its own blocks are framed one by one, so it takes no frame here
             if (framed && block.blockType === 'reusable-content') {
