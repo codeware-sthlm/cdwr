@@ -295,12 +295,7 @@ export async function applySiteDefinition(
     // documents again rather than finding the old ones. Inside the `try`, so a
     // removal that fails is rolled back with everything else
     if (fresh) {
-      handover = await setAsideLandingPage(
-        payload,
-        definition,
-        tenant.id,
-        transactionID
-      );
+      handover = await setAsideLandingPage(payload, definition, tenant.id, ctx);
       // Read before anything changes: what this definition created and no
       // longer names, in the collections it reuses rather than recreates
       const dropped = droppedReusedDocuments(
@@ -715,7 +710,10 @@ async function setAsideLandingPage(
   payload: Payload,
   definition: SiteDefinition,
   tenantId: number,
-  transactionID: string | number | undefined
+  {
+    locale,
+    transactionID
+  }: { locale: TypedLocale; transactionID: string | number | undefined }
 ): Promise<LandingHandover | undefined> {
   const { docs } = await payload.find({
     collection: 'site-settings',
@@ -747,6 +745,9 @@ async function setAsideLandingPage(
       collection: 'pages',
       id: page.id,
       data: { slug: `${page.slug}--replaced-by-fresh-apply` },
+      // The page's own language: in any other its required fields are empty,
+      // and a Swedish workspace's landing page failed validation in English
+      locale,
       req: { transactionID }
     });
   }
