@@ -3,6 +3,7 @@ import { cn } from '@codeware/shared/util/ui';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import { ArrowLink } from '../../utils/ArrowLink';
+import { Illustration } from '../../utils/Illustration';
 import { resolveLinkGroup } from '../../utils/resolve-link-group';
 import { ImageBlock } from '../image/ImageBlock';
 
@@ -19,44 +20,58 @@ export const FeatureSectionBlock: React.FC<FeatureSectionBlockProps> = ({
   enableLink,
   link,
   media,
+  illustration,
   subFeatures
 }) => {
   const { navigate } = usePayload();
+  // Whitespace left in a cleared field is not a drawing
+  const drawing = illustration?.trim() ? illustration : null;
 
   const resolvedLink = enableLink && link ? resolveLinkGroup(link) : null;
   const points = subFeatures ?? [];
 
   return (
     <section>
-      <div className="max-w-2xl">
-        {eyebrow && (
-          <p className="text-core-link text-sm font-semibold tracking-[0.14em] uppercase">
-            {eyebrow}
-          </p>
+      {/* A drawing sits beside the text on a wide screen, where the text alone
+          leaves half the row empty; an image keeps a row of its own */}
+      <div
+        className={cn(
+          drawing &&
+            'grid grid-cols-1 items-center gap-9 lg:grid-cols-2 lg:gap-12'
         )}
-        {heading && (
-          <h2 className="text-core-headline mt-3 text-3xl font-semibold tracking-tight">
-            {heading}
-          </h2>
-        )}
-        {intro && (
-          <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
-            {intro}
-          </p>
-        )}
-        {resolvedLink && (
-          <ArrowLink
-            onClick={() => navigate(resolvedLink.path, resolvedLink.newTab)}
-            variant="outline"
-            className="mt-6"
-          >
-            {resolvedLink.label}
-          </ArrowLink>
-        )}
+      >
+        <div className="max-w-2xl">
+          {eyebrow && (
+            <p className="text-core-link text-sm font-semibold tracking-[0.14em] uppercase">
+              {eyebrow}
+            </p>
+          )}
+          {heading && (
+            <h2 className="text-core-headline mt-3 text-3xl font-semibold tracking-tight">
+              {heading}
+            </h2>
+          )}
+          {intro && (
+            <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
+              {intro}
+            </p>
+          )}
+          {resolvedLink && (
+            <ArrowLink
+              onClick={() => navigate(resolvedLink.path, resolvedLink.newTab)}
+              variant="outline"
+              className="mt-6"
+            >
+              {resolvedLink.label}
+            </ArrowLink>
+          )}
+        </div>
+
+        {drawing && <Illustration svg={drawing} />}
       </div>
 
       {/* An id alone is an unpopulated relation, which renders as nothing */}
-      {media && typeof media === 'object' && (
+      {!drawing && media && typeof media === 'object' && (
         <div className="mt-9">
           <ImageBlock media={media} hideCaption />
         </div>

@@ -1,4 +1,8 @@
-import { linkGroupField, sectionBandField } from '@codeware/app-cms/ui/fields';
+import {
+  illustrationField,
+  linkGroupField,
+  sectionBandField
+} from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
 import type { Block } from 'payload';
 
@@ -62,6 +66,7 @@ export const heroBlock: Block = {
         }
       }
     },
+    illustrationField(),
     {
       name: 'actions',
       type: 'array',

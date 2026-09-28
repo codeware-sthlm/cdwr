@@ -347,6 +347,10 @@ export interface CalloutBlock {
    * Optional. Sits beside the text and turns the band into a two-column section.
    */
   image?: (number | null) | Media;
+  /**
+   * SVG code, drawn in the page itself. Colours can use the theme, such as var(--brand-500) or var(--foreground), so it follows a change of theme. Shown instead of the visual when both are set.
+   */
+  illustration?: string | null;
   link: CalloutLink;
   /**
    * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
@@ -1404,6 +1408,10 @@ export interface FeatureSectionBlock {
    */
   media?: (number | null) | Media;
   /**
+   * SVG code, drawn in the page itself. Colours can use the theme, such as var(--brand-500) or var(--foreground), so it follows a change of theme. Shown instead of the visual when both are set.
+   */
+  illustration?: string | null;
+  /**
    * Shown as one divided row beneath the visual. Two to four reads best.
    */
   subFeatures?:
@@ -1461,6 +1469,10 @@ export interface HeroBlock {
    * Shown below the actions. What makes the claim above checkable rather than asserted.
    */
   media?: (number | null) | Media;
+  /**
+   * SVG code, drawn in the page itself. Colours can use the theme, such as var(--brand-500) or var(--foreground), so it follows a change of theme. Shown instead of the visual when both are set.
+   */
+  illustration?: string | null;
   actions?:
     | {
         link: HeroActionLink;
