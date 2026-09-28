@@ -24,6 +24,7 @@ import {
   VIEWPORT_NAMES,
   type ViewportName,
   fileName,
+  findStrips,
   hostFolder,
   isRoutedDefinition,
   parseRoutes,
@@ -230,6 +231,7 @@ export default defineCommand<
                   drawnTheme: null,
                   status: null,
                   consoleErrors: [],
+                  strips: [],
                   skipped
                 });
                 continue;
@@ -257,10 +259,37 @@ export default defineCommand<
                   drawnTheme: drawn.theme,
                   status: response?.status() ?? null,
                   consoleErrors: errors,
+                  strips: [],
                   skipped
                 });
                 continue;
               }
+
+              // The sections spanning the page, and the footer, where the
+              // browser laid them out: a band nested in another is a panel
+              // No named functions in here: the CLI's runner wraps them in a
+              // `__name` helper that does not exist in the page
+              const layout = await page.evaluate(() => ({
+                sections: [...document.querySelectorAll('main [data-band]')]
+                  .filter((el) => !el.parentElement?.closest('[data-band]'))
+                  .map((el) => ({
+                    band: el.getAttribute('data-band') ?? 'none',
+                    top: el.getBoundingClientRect().top + scrollY,
+                    bottom: el.getBoundingClientRect().bottom + scrollY
+                  })),
+                footerTop:
+                  [...document.querySelectorAll('footer')].map(
+                    (el) => el.getBoundingClientRect().top + scrollY
+                  )[0] ?? null
+              }));
+              const strips = findStrips([
+                ...layout.sections.map(
+                  (section) => ({ kind: 'section', ...section }) as const
+                ),
+                ...(layout.footerTop === null
+                  ? []
+                  : [{ kind: 'footer', top: layout.footerTop } as const])
+              ]);
 
               // As tall as the page rather than `fullPage`: the site's sheet is
               // a fixed element, which `fullPage` draws on the first screen only
@@ -280,7 +309,8 @@ export default defineCommand<
                 path: relative(ctx.root, file),
                 drawnTheme: drawn.theme,
                 status: response?.status() ?? null,
-                consoleErrors: errors
+                consoleErrors: errors,
+                strips
               });
             }
 
@@ -302,11 +332,16 @@ export default defineCommand<
     const failing = results.filter(
       (result) => (result.status ?? 0) >= 400 || result.consoleErrors.length
     ).length;
+    const stripped = results.filter((result) => result.strips.length).length;
 
     return {
       summary: `${taken} screenshot(s) in ${relative(ctx.root, dir)}${
         failing
           ? `, ${failing} page(s) with an error status or console errors`
+          : ''
+      }${
+        stripped
+          ? `, ${stripped} with a strip of page where bands should meet`
           : ''
       }`,
       json: results

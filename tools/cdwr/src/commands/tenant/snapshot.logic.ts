@@ -60,6 +60,63 @@ export type Shot = {
 /** Why a shot was not taken, when the site would not draw what was asked */
 export type SkipReason = 'theme-not-offered' | 'scheme-locked';
 
+/**
+ * Where a page's sections sit, top to bottom, as the browser laid them out.
+ *
+ * Only sections spanning the page: a band nested in a column is a panel, and
+ * its distance to the next is spacing, not a strip.
+ */
+export type PageBox =
+  | { kind: 'section'; band: string; top: number; bottom: number }
+  | { kind: 'footer'; top: number };
+
+/** A strip of page left showing where two bands, or a band and the footer, should meet */
+export type StrayStrip = {
+  /** The band above, as its `data-band` says */
+  above: string;
+  /** The band below, or `footer` */
+  below: string;
+  /** Height of the strip in CSS pixels */
+  px: number;
+};
+
+/** Anything under a pixel is rounding, not a strip */
+const STRIP_TOLERANCE = 1;
+
+/**
+ * The strips of page between sections that should meet.
+ *
+ * A band is set apart by its background, so two bands in a row, or a band
+ * right before the footer, belong edge to edge; space between them shows the
+ * page through as a stray strip. A section without a band is spaced as usual.
+ *
+ * @param boxes - The page's sections and footer, top to bottom
+ */
+export function findStrips(boxes: ReadonlyArray<PageBox>): Array<StrayStrip> {
+  const strips: Array<StrayStrip> = [];
+
+  for (const [index, box] of boxes.entries()) {
+    const next = boxes[index + 1];
+    if (box.kind !== 'section' || box.band === 'none' || !next) {
+      continue;
+    }
+    if (next.kind === 'section' && next.band === 'none') {
+      continue;
+    }
+
+    const px = Math.round(next.top - box.bottom);
+    if (px > STRIP_TOLERANCE) {
+      strips.push({
+        above: box.band,
+        below: next.kind === 'footer' ? 'footer' : next.band,
+        px
+      });
+    }
+  }
+
+  return strips;
+}
+
 export type ShotResult = Shot & {
   /** The PNG, or nothing when the shot was skipped */
   path: string | null;
@@ -69,6 +126,8 @@ export type ShotResult = Shot & {
   status: number | null;
   /** What the browser console reported as an error while the page loaded */
   consoleErrors: Array<string>;
+  /** Page showing where bands, or a band and the footer, should meet */
+  strips: Array<StrayStrip>;
   skipped?: SkipReason;
 };
 
