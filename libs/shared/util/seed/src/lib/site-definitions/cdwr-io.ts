@@ -2,6 +2,15 @@ import { cdwrCloudSvg } from '@codeware/shared/util/ui';
 
 import type { SiteDefinition } from '../site-definition';
 
+import {
+  blocksIllustration,
+  contrastIllustration,
+  heroIllustration,
+  oneBuildIllustration,
+  stackIllustration,
+  startIllustration,
+  themingIllustration
+} from './illustrations';
 import { infisicalLogo, playwrightLogo } from './tech-logos';
 
 /**
@@ -20,10 +29,11 @@ import { infisicalLogo, playwrightLogo } from './tech-logos';
  * headings may hook; eyebrows and the small titles under them say exactly
  * what the visitor is looking at.
  *
- * **Draft copy.** Close to final in structure, not in wording. What it cannot
- * state yet: the illustrations are still to be drawn — `media` is left empty
- * where one belongs. Screenshots are avoided on purpose: a site whose point is
- * that it renders live should not argue with pictures of an admin.
+ * **Draft copy.** Close to final in structure, not in wording.
+ *
+ * **Illustrations, not screenshots:** a site whose point is that it renders
+ * live should not argue with pictures of an admin. The drawings are drawn in
+ * the theme's own colours (`./illustrations`), so they recolour with it.
  *
  * The gallery's own index and browser pages are route chrome built from the
  * block registry, so they are not authored here — `/blocks` is.
@@ -73,6 +83,7 @@ export const cdwrIo: SiteDefinition = {
           blockType: 'hero',
           badge: 'Themes you author in the admin',
           heading: 'Every site its own. One platform underneath.',
+          illustration: heroIllustration,
           lede: 'A content platform built on Payload and Next.js. Each site gets its own domain, its own theme and its own editors — and this page is one of them.',
           actions: [
             {
@@ -126,6 +137,7 @@ export const cdwrIo: SiteDefinition = {
           blockType: 'feature-section',
           eyebrow: 'Theming',
           heading: 'Change the look. Nothing reloads.',
+          illustration: themingIllustration,
           intro:
             'A site chooses its palette, its colour scheme, and whether visitors may switch at all. Set in the admin, not in a stylesheet.',
           enableLink: true,
@@ -177,6 +189,7 @@ export const cdwrIo: SiteDefinition = {
           blockType: 'feature-section',
           eyebrow: 'Content',
           heading: 'Every block, rendered by the renderer that serves it',
+          illustration: blocksIllustration,
           intro:
             'Each on its own page, with the production component and a paragraph on when to reach for it. Editors compose pages from these; a block that renders badly is visible to everyone, immediately.',
           enableLink: true,
@@ -285,6 +298,7 @@ export const cdwrIo: SiteDefinition = {
           blockType: 'feature-section',
           eyebrow: 'Readability',
           heading: 'Readable is a number, so it can be checked',
+          illustration: contrastIllustration,
           intro:
             'A theme here is a recipe, not a stylesheet written by hand, and every colour it produces is measured against the colour it sits on.',
           subFeatures: [
@@ -348,6 +362,7 @@ export const cdwrIo: SiteDefinition = {
           blockType: 'feature-section',
           eyebrow: 'One build',
           heading: 'Built once, started for every site',
+          illustration: oneBuildIllustration,
           intro:
             'The platform is built once, when a change is merged. That one build is then started as many times as there are sites, and each start is told which site it is.',
           subFeatures: [
@@ -365,8 +380,6 @@ export const cdwrIo: SiteDefinition = {
             }
           ]
         },
-        // An illustration belongs here: one build fanning out into three
-        // sites. Left as text until it is drawn.
         {
           blockType: 'feature-cards',
           eyebrow: 'Three facts',
@@ -396,7 +409,7 @@ export const cdwrIo: SiteDefinition = {
           blockType: 'feature-cards',
           eyebrow: 'Built on',
           heading: 'What it is built on, and why',
-          columns: '2',
+          columns: '3',
           items: [
             {
               brand: { tech: 'payload' },
@@ -444,6 +457,17 @@ export const cdwrIo: SiteDefinition = {
               description: 'The tests that open the running site and use it.'
             }
           ]
+        },
+        {
+          // How the list above fits together, run from one tool. The tool is
+          // drawn, not named: it is not published, and a name would invite
+          // the question of where to get it
+          blockType: 'feature-section',
+          eyebrow: 'Connected',
+          heading: 'How the pieces fit together',
+          intro:
+            'A merged change becomes a running site; secrets arrive when it starts; data lives in one database; errors are watched. All of it is operated from one tool, which shows what it will do before it does it.',
+          illustration: stackIllustration
         }
       ]
     },
@@ -473,19 +497,8 @@ export const cdwrIo: SiteDefinition = {
           blockType: 'hero',
           badge: 'Get started',
           heading: 'Start from the same setup',
-          lede: 'The plugin, the preset and the deployment tooling this platform runs on are all published. Take them and start a platform of your own.'
-        },
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown:
-                  'One command scaffolds a new workspace with Payload, Postgres and the deployment wiring already connected:'
-              }
-            }
-          ]
+          lede: 'The plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace with Payload, Postgres and the deployment wiring already connected.',
+          illustration: startIllustration
         },
         {
           blockType: 'code',
