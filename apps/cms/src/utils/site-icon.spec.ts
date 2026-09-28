@@ -4,6 +4,17 @@ const mark =
   '<svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 20 10" fill="currentColor"><path d="M0 0h1"></path></svg>';
 
 describe('faviconSvg', () => {
+  it('restores every camelCase attribute an older mark was stored with', () => {
+    const svg = faviconSvg(
+      '<svg viewbox="0 0 2 1"><defs><linearGradient id="g" gradientunits="userSpaceOnUse" gradienttransform="rotate(9)"></linearGradient><clipPath id="c" clippathunits="objectBoundingBox"></clipPath><mask id="m" maskunits="userSpaceOnUse"></mask></defs></svg>'
+    );
+
+    expect(svg).toContain('gradientUnits=');
+    expect(svg).toContain('gradientTransform=');
+    expect(svg).toContain('clipPathUnits=');
+    expect(svg).toContain('maskUnits=');
+  });
+
   it('restores the viewBox case a standalone reader needs', () => {
     expect(faviconSvg(mark)).toContain('viewBox="0 0 20 10"');
     expect(faviconSvg(mark)).not.toContain('viewbox=');

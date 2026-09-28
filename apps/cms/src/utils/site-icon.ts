@@ -1,4 +1,5 @@
 import type { TenantIconConfig } from '@codeware/shared/util/payload-types';
+import { sanitizeSvg } from '@codeware/shared/util/pure';
 
 /** Text colours the mark takes as a favicon, where the page's own are absent */
 const INK = { light: '#1f2937', dark: '#f3f4f6' } as const;
@@ -9,7 +10,7 @@ const INK = { light: '#1f2937', dark: '#f3f4f6' } as const;
  * A mark drawn with `currentColor` follows the page's text in the header, but a
  * browser tab has no page text: unset, it is black, and invisible on a dark
  * tab. A style of its own gives it a colour for each scheme; a mark with fixed
- * colours is unaffected. The markup was sanitised when it was saved.
+ * colours is unaffected.
  *
  * @param svgCode - The mark as stored in site settings
  * @param scheme - A fixed scheme for a bitmap, which cannot follow the tab
@@ -18,11 +19,10 @@ export function faviconSvg(
   svgCode: string,
   scheme?: keyof typeof INK
 ): string | null {
-  // Marks saved before the sanitiser kept attribute case carry `viewbox`,
-  // which a standalone SVG reader does not recognise
-  const svg = svgCode
-    .replace(/\bviewbox=/gi, 'viewBox=')
-    .replace(/\bpreserveaspectratio=/gi, 'preserveAspectRatio=');
+  // Through the sanitiser again: it restores the case of every camelCase
+  // attribute an older mark was stored with, which a standalone SVG reader
+  // needs, and the markup goes out checked as well as it came in
+  const svg = sanitizeSvg(svgCode);
   const open = svg.match(/<svg\b[^>]*>/i);
   if (!open || open.index === undefined) {
     return null;
