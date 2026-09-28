@@ -18,7 +18,7 @@ pnpm cdwr setup           # links `cdwr` into ~/.local/bin and installs completi
 pnpm cdwr doctor          # what is missing: binaries, credentials, PATH
 ```
 
-Credentials live in `tools/cdwr/.env` (copy `.env.example`). `pnpm cdwr` works without the setup.
+Credentials live in `tools/cdwr/.env` (copy `.env.example`). `pnpm cdwr` works without the setup. Set up once per machine: the linked `cdwr` runs the code of the checkout you are standing in, and falls back to the one it was linked from.
 
 ## The app
 
@@ -94,7 +94,7 @@ pnpm nx typecheck cdwr
 ## Layout
 
 ```
-bin/cdwr.mjs      the shim `cdwr setup` links onto PATH; runs src/main.ts through tsx
+bin/cdwr.mjs      the shim `cdwr setup` links onto PATH; runs the current checkout's src/main.ts through tsx
 src/main.ts       argv → registry → runtime, inside the app on a terminal
 src/cli/          runtime: command contract, inputs, args, resolve, run, help, completion, prefs, history, preflight
 src/ui/           theme, banner, the Ink app (`app/`), plain and silent UIs
