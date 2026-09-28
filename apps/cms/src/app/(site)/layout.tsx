@@ -175,7 +175,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const icon = config?.icon ?? null;
 
   return {
-    title: config?.appName ?? 'Codeware CMS',
+    // A page names itself; the site follows it
+    title: {
+      default: config?.appName ?? 'Codeware CMS',
+      template: `%s · ${config?.appName ?? 'Codeware CMS'}`
+    },
+    // For a page stating no Open Graph of its own
+    openGraph: { siteName: config?.appName ?? 'Codeware CMS' },
     ...(icon?.source === 'svg' && {
       icons: {
         icon: [
