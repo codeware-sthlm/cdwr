@@ -162,9 +162,33 @@ export default async function RootLayout({
   );
 }
 
-// TODO: fetch metadata or static data?
-export const metadata: Metadata = {
-  title: 'Codeware CMS',
-  description:
-    'A headless CMS built with Payload CMS and Next.js, designed for flexibility and ease of use.'
-};
+/**
+ * The tab and the bookmark in the tenant's own name and mark.
+ *
+ * An SVG mark is served as the favicon as it is, since browsers take one, with
+ * PNGs drawn from it for those that want a bitmap and for a home screen. An
+ * uploaded mark is used as uploaded. Without one the app's default stays.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const runtime = await payloadRuntime({ asVisitor: true });
+  const config = runtime.tenantConfig;
+  const icon = config?.icon ?? null;
+
+  return {
+    title: config?.appName ?? 'Codeware CMS',
+    ...(icon?.source === 'svg' && {
+      icons: {
+        icon: [
+          { url: '/site-icon.svg', type: 'image/svg+xml' },
+          { url: '/site-icon.png', type: 'image/png', sizes: '32x32' }
+        ],
+        apple: [
+          { url: '/site-apple-icon.png', type: 'image/png', sizes: '180x180' }
+        ]
+      }
+    }),
+    ...(icon?.source === 'upload' && {
+      icons: { icon: icon.fileUrl, apple: icon.fileUrl }
+    })
+  };
+}
