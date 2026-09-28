@@ -1,7 +1,8 @@
 import { sanitizeSvg } from './sanitize-svg';
 
-// sanitize-html is an HTML serializer: it lowercases attribute names
-// (viewBox→viewbox), and expands self-closing tags (<path/>→<path></path>).
+// sanitize-html is an HTML serializer: it expands self-closing tags
+// (<path/>→<path></path>). Attribute names keep their case, since SVG is XML
+// and a standalone reader does not accept `viewbox` for `viewBox`.
 // Its underlying parser also canonicalizes recognized SVG foreign-content
 // tag names (clipPath, linearGradient, radialGradient, ...) to their
 // spec-correct camelCase form regardless of input casing — see the
@@ -16,7 +17,7 @@ describe('sanitizeSvg', () => {
         '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"></svg>'
       );
       expect(result).toContain('<svg');
-      expect(result).toContain('viewbox="0 0 24 24"');
+      expect(result).toContain('viewBox="0 0 24 24"');
       expect(result).toContain('xmlns="http://www.w3.org/2000/svg"');
     });
 
@@ -58,6 +59,33 @@ describe('sanitizeSvg', () => {
       expect(result).toContain('stroke-linecap="round"');
       expect(result).toContain('fill-rule="evenodd"');
       expect(result).toContain('clip-rule="evenodd"');
+    });
+
+    // An HTML page forgives a lowercased name; a favicon or an image drawn
+    // from the mark does not, and scales it wrongly or refuses it
+    // Saved before case was kept: stripping it would lose it for good
+    it('restores the case of a mark stored lowercase', () => {
+      const result = sanitizeSvg(
+        '<svg viewbox="0 0 24 24"><linearGradient id="g" gradienttransform="rotate(45)"></linearGradient></svg>'
+      );
+
+      expect(result).toContain('viewBox="0 0 24 24"');
+      expect(result).toContain('gradientTransform="rotate(45)"');
+    });
+
+    it('keeps the case of camelCase attributes', () => {
+      const result = sanitizeSvg(
+        '<svg viewBox="0 0 24 24"><defs>' +
+          '<linearGradient id="g" gradientUnits="userSpaceOnUse" gradientTransform="rotate(45)"></linearGradient>' +
+          '<clipPath id="c" clipPathUnits="objectBoundingBox"></clipPath>' +
+          '</defs></svg>'
+      );
+
+      expect(result).toContain('viewBox="0 0 24 24"');
+      expect(result).toContain('gradientUnits="userSpaceOnUse"');
+      expect(result).toContain('gradientTransform="rotate(45)"');
+      expect(result).toContain('clipPathUnits="objectBoundingBox"');
+      expect(result).not.toMatch(/viewbox|gradientunits|clippathunits/);
     });
 
     it('should preserve gradient definitions', () => {

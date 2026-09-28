@@ -6,9 +6,39 @@ import sanitizeHtml from 'sanitize-html';
  * Strips disallowed tags (script, style, foreignObject, etc.) and attributes
  * (event handlers, href with javascript: scheme, etc.) while preserving
  * valid SVG structure and presentation attributes.
+ *
+ * Attribute names keep their case. SVG is XML, where `viewbox` is not
+ * `viewBox`: an HTML page forgives it, but the same mark served as a favicon or
+ * drawn into an image by itself does not, and is scaled wrongly or refused.
  */
+/** The camelCase attributes kept, by the lowercase spelling older marks carry */
+const CAMEL_CASE_ATTRIBUTES = new Map(
+  [
+    'viewBox',
+    'clipPathUnits',
+    'maskUnits',
+    'gradientUnits',
+    'gradientTransform'
+  ].map((name) => [name.toLowerCase(), name])
+);
+
+/**
+ * Restore the case of a known camelCase attribute.
+ *
+ * Marks saved before case was kept are stored as `viewbox`. Matching only the
+ * right case would strip it from them, on the next render and for good on the
+ * next save, so it is put right before the allow-list sees it.
+ */
+const restoreAttributeCase = (svg: string): string =>
+  svg.replace(
+    /(\s)([a-z]+)(\s*=)/gi,
+    (match, space: string, name: string, equals: string) =>
+      `${space}${CAMEL_CASE_ATTRIBUTES.get(name.toLowerCase()) ?? name}${equals}`
+  );
+
 export const sanitizeSvg = (svg: string): string =>
-  sanitizeHtml(svg, {
+  sanitizeHtml(restoreAttributeCase(svg), {
+    parser: { lowerCaseAttributeNames: false },
     allowedTags: [
       'svg',
       'g',
@@ -36,7 +66,7 @@ export const sanitizeSvg = (svg: string): string =>
       '*': ['id', 'class'],
       svg: [
         'xmlns',
-        'viewbox',
+        'viewBox',
         'width',
         'height',
         'fill',
@@ -129,18 +159,18 @@ export const sanitizeSvg = (svg: string): string =>
         'transform'
       ],
       tspan: ['x', 'y', 'dx', 'dy'],
-      clipPath: ['clippathunits'],
-      mask: ['x', 'y', 'width', 'height', 'maskunits'],
+      clipPath: ['clipPathUnits'],
+      mask: ['x', 'y', 'width', 'height', 'maskUnits'],
       linearGradient: [
         'id',
         'x1',
         'y1',
         'x2',
         'y2',
-        'gradientunits',
-        'gradienttransform'
+        'gradientUnits',
+        'gradientTransform'
       ],
-      radialGradient: ['id', 'cx', 'cy', 'r', 'fx', 'fy', 'gradientunits'],
+      radialGradient: ['id', 'cx', 'cy', 'r', 'fx', 'fy', 'gradientUnits'],
       stop: ['offset', 'stop-color', 'stop-opacity'],
       // href intentionally omitted from <use> — xlink:href dropped automatically
       use: ['x', 'y', 'width', 'height']
