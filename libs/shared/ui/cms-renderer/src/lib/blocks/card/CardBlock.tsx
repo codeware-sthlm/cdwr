@@ -16,6 +16,7 @@ import { ExternalLinkIcon, LinkIcon } from 'lucide-react';
 import { useColumnSize } from '../../providers/ColumnSizeProvider';
 import { usePayload } from '../../providers/PayloadProvider';
 import { interactiveSurface } from '../../utils/interactive-surface';
+import { handleAsRoute } from '../../utils/internal-link';
 import { resolveCardBlockLink } from '../../utils/resolve-card-block-link';
 
 /**
@@ -51,27 +52,40 @@ export const CardBlock: React.FC<CardBlockProps> = ({ cards }) => {
 
         const hasHeader = title || description || icon;
         const linkDetails = enableLink ? resolveCardBlockLink(link) : null;
+        const cardLink =
+          linkDetails?.navTrigger === 'card' ? linkDetails : null;
+
+        // A real link stretched over the card: reachable by keyboard, opened
+        // in a new tab with a modified click, and named by the card's title.
+        // Links inside the card's content sit above it and stay clickable
+        const stretchedLink = (children: React.ReactNode, name?: string) =>
+          cardLink && (
+            <a
+              href={cardLink.url}
+              {...(cardLink.newTab && {
+                target: '_blank',
+                rel: 'noreferrer'
+              })}
+              aria-label={name}
+              onClick={(e) => {
+                if (cardLink.newTab || !handleAsRoute(e)) return;
+                navigate(cardLink.url);
+              }}
+              className="after:absolute after:inset-0 after:rounded-lg focus-visible:outline-hidden"
+            >
+              {children}
+            </a>
+          );
 
         return (
           <Card
             key={index}
-            onClick={() =>
-              linkDetails &&
-              linkDetails.navTrigger === 'card' &&
-              navigate(linkDetails.url, linkDetails.newTab)
-            }
             className={cn(
-              'text-card-foreground overflow-hidden rounded-lg',
+              'text-card-foreground relative overflow-hidden rounded-lg',
               // Only a card that is itself the link answers the pointer; one
               // linking from its footer leaves that to the footer button.
               // `group` with it, so the icon stays still on the rest
-              linkDetails?.navTrigger === 'card'
-                ? ['group', interactiveSurface()]
-                : 'bg-card/50 border',
-              {
-                'cursor-pointer':
-                  linkDetails && linkDetails.navTrigger === 'card'
-              },
+              cardLink ? ['group', interactiveSurface()] : 'bg-card/50 border',
               {
                 // Limit card width when a single column have more than half the page width
                 'max-w-sm': maxColumns === 1 && effectiveFraction > 0.5
@@ -109,7 +123,7 @@ export const CardBlock: React.FC<CardBlockProps> = ({ cards }) => {
                 )}
                 {title && (
                   <CardTitle className="text-core-headline mt-4 text-xl font-semibold">
-                    {title}
+                    {stretchedLink(title) ?? title}
                   </CardTitle>
                 )}
                 {description && (
@@ -120,7 +134,16 @@ export const CardBlock: React.FC<CardBlockProps> = ({ cards }) => {
               </CardHeader>
             )}
 
-            <CardContent>{content}</CardContent>
+            {/* Without a title the link has no text of its own to carry */}
+            {!title &&
+              stretchedLink(null, description ?? cardLink?.url ?? undefined)}
+
+            {/* Everything in the content a visitor can use rises above the
+                stretched link, not only links: a copy button or a video
+                control would otherwise follow the card instead */}
+            <CardContent className="[&_:is(a,button,input,select,textarea,summary,video,audio,iframe,[tabindex])]:relative [&_:is(a,button,input,select,textarea,summary,video,audio,iframe,[tabindex])]:z-10">
+              {content}
+            </CardContent>
 
             {/* Add the link to card footer */}
             {linkDetails && linkDetails.navTrigger === 'link' && (
