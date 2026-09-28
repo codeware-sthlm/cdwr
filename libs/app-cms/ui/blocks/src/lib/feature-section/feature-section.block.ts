@@ -1,4 +1,5 @@
 import {
+  illustrationField,
   linkGroupField,
   sectionBandField,
   sectionHeaderFields
@@ -63,6 +64,7 @@ export const featureSectionBlock: Block = {
         }
       }
     },
+    illustrationField(),
     {
       name: 'subFeatures',
       type: 'array',

@@ -11,6 +11,7 @@ export {
   sectionBandName
 } from './lib/section-band/section-band.field';
 export { sectionHeaderFields } from './lib/section-header/section-header.field';
+export { illustrationField } from './lib/illustration/illustration.field';
 export { ownLogoField } from './lib/own-logo/own-logo.field';
 export { techIconField } from './lib/tech-icon/tech-icon.field';
 export { slugField } from './lib/slug/slug.field';

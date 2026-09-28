@@ -3,6 +3,7 @@ import type { CalloutBlock as CalloutBlockProps } from '@codeware/shared/util/pa
 import { cn } from '@codeware/shared/util/ui';
 
 import { usePayload } from '../../providers/PayloadProvider';
+import { Illustration } from '../../utils/Illustration';
 import { resolveLinkGroup } from '../../utils/resolve-link-group';
 import { TenantIcon } from '../../utils/TenantIcon';
 import { ImageBlock } from '../image/ImageBlock';
@@ -16,12 +17,17 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
   heading,
   body,
   image,
+  illustration,
   link
 }) => {
   const { navigate, iconConfig } = usePayload();
   const resolved = resolveLinkGroup(link);
   // An id alone is an unpopulated relation, which ImageBlock renders as nothing
   const shownImage = image && typeof image === 'object' ? image : null;
+  // Whitespace left in a cleared field is not a drawing
+  const drawing = illustration?.trim() ? illustration : null;
+  // A drawing wins over an image, and either makes the band two columns
+  const hasVisual = Boolean(drawing || shownImage);
 
   return (
     <section
@@ -29,7 +35,7 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
         'flex',
         // An image turns the band from a centred call into a two-column one,
         // so the text stops competing with it for the middle
-        shownImage
+        hasVisual
           ? 'flex-col items-start gap-9 text-left sm:flex-row sm:items-center sm:gap-12'
           : 'flex-col items-center text-center'
       )}
@@ -37,7 +43,7 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
       <div
         className={cn(
           'flex min-w-0 flex-col',
-          shownImage ? 'flex-1 items-start' : 'w-full items-center'
+          hasVisual ? 'flex-1 items-start' : 'w-full items-center'
         )}
       >
         {showMark && iconConfig && (
@@ -61,9 +67,13 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
           </div>
         )}
       </div>
-      {shownImage && (
+      {hasVisual && (
         <div className="w-full sm:max-w-sm">
-          <ImageBlock media={shownImage} hideCaption />
+          {drawing ? (
+            <Illustration svg={drawing} />
+          ) : (
+            shownImage && <ImageBlock media={shownImage} hideCaption />
+          )}
         </div>
       )}
     </section>
