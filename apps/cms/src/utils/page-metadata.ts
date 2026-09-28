@@ -1,0 +1,56 @@
+import type { Metadata } from 'next';
+
+/** What a document states about itself for a search result or a shared link */
+export type DocumentMeta = {
+  /** The document's own name: a page's, a post's or a tour's title */
+  name: string;
+  /** Its SEO group, when the collection has one */
+  meta?: {
+    title?: string | null;
+    description?: string | null;
+    /** Only its address is read, so any loaded upload fits; an id is skipped */
+    image?: number | { url?: string | null } | null;
+  } | null;
+  /** A description to fall back on, such as a tour's summary */
+  summary?: string | null;
+};
+
+/**
+ * A page's title, description and sharing image.
+ *
+ * The SEO title wins over the name, since an editor set it for exactly this.
+ * The title is the page's part only: the site layout adds the site's name.
+ *
+ * @param doc - The page, post or tour
+ * @param options.landing - The front page carries the site's name alone,
+ *   unless an SEO title was set for it
+ * @param options.siteName - Restated for a shared link: a page's Open Graph
+ *   block replaces the layout's rather than adding to it
+ */
+export function documentMetadata(
+  doc: DocumentMeta,
+  { landing = false, siteName }: { landing?: boolean; siteName?: string } = {}
+): Metadata {
+  const seoTitle = doc.meta?.title?.trim() || null;
+  const description =
+    doc.meta?.description?.trim() || doc.summary?.trim() || undefined;
+  const image =
+    typeof doc.meta?.image === 'object' ? doc.meta.image?.url : undefined;
+
+  const title = landing
+    ? seoTitle
+      ? { absolute: seoTitle }
+      : undefined
+    : (seoTitle ?? doc.name);
+
+  return {
+    ...(title && { title }),
+    ...(description && { description }),
+    openGraph: {
+      ...(siteName && { siteName }),
+      ...(typeof title === 'string' && { title }),
+      ...(description && { description }),
+      ...(image && { images: [{ url: image }] })
+    }
+  };
+}
