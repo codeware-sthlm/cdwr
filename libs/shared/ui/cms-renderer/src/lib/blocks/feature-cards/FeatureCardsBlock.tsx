@@ -13,6 +13,8 @@ import type { FeatureCardsBlock as FeatureCardsBlockProps } from '@codeware/shar
 import { type TailwindColor } from '@codeware/shared/util/tailwind';
 import { cn } from '@codeware/shared/util/ui';
 
+import { OwnLogo, resolveOwnLogo } from '../../utils/OwnLogo';
+
 /**
  * Feature cards render component — reference for the marketing section blocks.
  * Mirrors CardBlock conventions: shadcn primitives, cn, HeroIcon, --core-* tokens.
@@ -57,7 +59,11 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
         })}
       >
         {items.map((item, i) => {
-          const { icon, color, tech } = item.brand ?? {};
+          const { icon, color, tech, logo } = item.brand ?? {};
+          // From the data: an element would be truthy even when empty
+          const ownLogo = !tech && resolveOwnLogo(logo) && (
+            <OwnLogo logo={logo} size={20} />
+          );
           return (
             <Card
               key={i}
@@ -65,20 +71,21 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
               className="bg-card border shadow-xs"
             >
               <CardHeader>
-                {/* A technology's own mark wins over the icon: it is the more
-                    specific statement, and it brings its own colour */}
-                {(tech || icon) && (
+                {/* The most specific mark wins: a technology's own from the
+                    list, then the tenant's own logo, then an icon */}
+                {(tech || ownLogo || icon) && (
                   <span className="bg-core-link/10 text-core-link mb-4 flex size-11 items-center justify-center rounded-xl">
                     {tech ? (
                       <TechIcon brand={tech} className="size-5" />
                     ) : (
-                      icon && (
+                      ownLogo ||
+                      (icon && (
                         <HeroIcon
                           icon={icon as HeroIconName}
                           color={color as TailwindColor}
                           className="size-5"
                         />
-                      )
+                      ))
                     )}
                   </span>
                 )}

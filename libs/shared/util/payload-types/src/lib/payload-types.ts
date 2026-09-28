@@ -1325,7 +1325,7 @@ export interface FeatureCardsBlock {
           icon?: string | null;
           color?: string | null;
           /**
-           * Shows the technology’s own mark in its brand colour, in place of the icon.
+           * Shows the technology’s own mark in its brand colour, in place of the icon. Leave it empty to add a logo of your own.
            */
           tech?:
             | (
@@ -1358,6 +1358,17 @@ export interface FeatureCardsBlock {
                 | 'vitest'
               )
             | null;
+          logo?: {
+            source?: ('svg' | 'upload') | null;
+            /**
+             * Paste the SVG markup, with a viewBox. A part filled with currentColor follows the text colour, so a dark mark stays visible on a dark background.
+             */
+            svgCode?: string | null;
+            /**
+             * A square image reads best. An image keeps its colours, so pick one that shows against the block’s background.
+             */
+            file?: (number | null) | Media;
+          };
         };
         title: string;
         description: string;

@@ -1,27 +1,17 @@
 import {
+  ownLogoField,
   sectionBandField,
   sectionHeaderFields,
   techIconField
 } from '@codeware/app-cms/ui/fields';
-import { enumName } from '@codeware/app-cms/util/db';
 import type { TechBrand } from '@codeware/shared/ui/primitives';
 import type { Block, Condition, TypeWithID } from 'payload';
 
-type PillRow = {
-  icon?: TechBrand | null;
-  logo?: { source?: 'svg' | 'upload' | null } | null;
-};
+type PillRow = { icon?: TechBrand | null };
 
 // An own logo is only asked for when no mark from the list is chosen
 const withoutIcon: Condition<TypeWithID, PillRow> = (_, siblingData) =>
   !siblingData.icon;
-
-const logoSource =
-  (
-    source: 'svg' | 'upload'
-  ): Condition<TypeWithID, NonNullable<PillRow['logo']>> =>
-  (_, siblingData) =>
-    siblingData.source === source;
 
 /**
  * Pill list block — a header plus a list of labelled pills, each with an
@@ -81,55 +71,10 @@ export const pillListBlock: Block = {
             }
           }
         }),
-        {
-          name: 'logo',
-          type: 'group',
-          label: { en: 'Own logo', sv: 'Egen logotyp' },
-          admin: { condition: withoutIcon },
-          fields: [
-            {
-              name: 'source',
-              type: 'select',
-              label: { en: 'Source', sv: 'Källa' },
-              enumName: enumName('pill_list_logo_source'),
-              options: [
-                { label: { en: 'SVG code', sv: 'SVG-kod' }, value: 'svg' },
-                {
-                  label: { en: 'Upload image', sv: 'Ladda upp bild' },
-                  value: 'upload'
-                }
-              ]
-            },
-            {
-              name: 'svgCode',
-              type: 'textarea',
-              label: { en: 'SVG code', sv: 'SVG-kod' },
-              admin: {
-                condition: logoSource('svg'),
-                description: {
-                  en: 'Paste the SVG markup, with a viewBox. A part filled with currentColor follows the text colour, so a dark mark stays visible on a dark background.',
-                  sv: 'Klistra in SVG-koden, med en viewBox. En del som fylls med currentColor följer textfärgen, så att ett mörkt märke syns även mot mörk bakgrund.'
-                }
-              }
-            },
-            {
-              name: 'file',
-              type: 'upload',
-              relationTo: 'media',
-              label: { en: 'Image', sv: 'Bild' },
-              filterOptions: {
-                or: [{ mimeType: { contains: 'image/' } }]
-              },
-              admin: {
-                condition: logoSource('upload'),
-                description: {
-                  en: 'A square image reads best. An image keeps its colours, so pick one that shows against the block’s background.',
-                  sv: 'En kvadratisk bild fungerar bäst. En bild behåller sina färger, så välj en som syns mot blockets bakgrund.'
-                }
-              }
-            }
-          ]
-        }
+        ownLogoField({
+          enumName: 'pill_list_logo_source',
+          condition: withoutIcon
+        })
       ]
     },
     sectionBandField()
