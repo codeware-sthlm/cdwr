@@ -1,6 +1,7 @@
 import {
   type RoutedDefinition,
   fileName,
+  findStrips,
   hostFolder,
   isRoutedDefinition,
   parseRoutes,
@@ -85,5 +86,45 @@ describe('fileName', () => {
 describe('hostFolder', () => {
   it('turns a host with a port into a folder name', () => {
     expect(hostFolder('http://localhost:3000/')).toBe('localhost-3000');
+  });
+});
+
+describe('findStrips', () => {
+  const section = (band: string, top: number, bottom: number) =>
+    ({ kind: 'section', band, top, bottom }) as const;
+  const footer = (top: number) => ({ kind: 'footer', top }) as const;
+
+  it('finds page showing between two bands', () => {
+    expect(
+      findStrips([section('subtle', 0, 400), section('gradient', 464, 900)])
+    ).toEqual([{ above: 'subtle', below: 'gradient', px: 64 }]);
+  });
+
+  it('finds page showing under a closing band, before the footer', () => {
+    expect(findStrips([section('gradient', 0, 500), footer(564)])).toEqual([
+      { above: 'gradient', below: 'footer', px: 64 }
+    ]);
+  });
+
+  it('passes bands that meet, allowing for rounding', () => {
+    expect(
+      findStrips([
+        section('subtle', 0, 400),
+        section('strong', 400.6, 800),
+        footer(800)
+      ])
+    ).toEqual([]);
+  });
+
+  // A section with no band is spaced like any content, on either side
+  it('leaves the spacing around a section without a band alone', () => {
+    expect(
+      findStrips([
+        section('none', 0, 200),
+        section('subtle', 296, 700),
+        section('none', 796, 900),
+        footer(964)
+      ])
+    ).toEqual([]);
   });
 });
