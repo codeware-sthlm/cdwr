@@ -60,7 +60,8 @@ export function runScript(label: string, main: () => Promise<void>): void {
       if (isSchemaNotReady(error)) {
         console.error(
           'Error: this database is behind the schema this checkout expects. ' +
-            'Deploy the pending migrations first, or run from the deployed code.'
+            'Deploy the pending migrations first, or run from the deployed code.\n' +
+            `Postgres said: ${rootMessage(error)}`
         );
         process.exit(1);
       }
@@ -73,4 +74,15 @@ export function runScript(label: string, main: () => Promise<void>): void {
     console.error(`Error: ${label} exited early (code ${code})`);
     process.exit(code || 1);
   });
+}
+
+/** The innermost message on the `cause` chain, where the adapter keeps the Postgres one */
+function rootMessage(error: unknown): string {
+  let current = error;
+  for (let depth = 0; depth < 5; depth++) {
+    const cause = (current as { cause?: unknown } | null)?.cause;
+    if (!cause) break;
+    current = cause;
+  }
+  return current instanceof Error ? current.message : String(current);
 }
