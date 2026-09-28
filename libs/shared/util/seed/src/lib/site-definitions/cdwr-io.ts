@@ -281,23 +281,24 @@ export const cdwrIo: SiteDefinition = {
           lede: 'Pick a brand colour. The studio derives every other colour from it and checks each pairing for readability while you work. A theme that fails cannot be published.'
         },
         {
-          blockType: 'content',
-          columns: [
+          // What the fact cards below leave out: the rule that makes the claim
+          blockType: 'feature-section',
+          eyebrow: 'Readability',
+          heading: 'Readable is a number, so it can be checked',
+          intro:
+            'A theme here is a recipe, not a stylesheet written by hand, and every colour it produces is measured against the colour it sits on.',
+          subFeatures: [
             {
-              size: 'full',
-              richText: {
-                markdown: [
-                  '## What a theme is here',
-                  '',
-                  'A theme is not a stylesheet somebody wrote by hand. It is a handful of decisions — a brand colour, a base tone, a surface, a corner radius, the typefaces — and a recipe that turns those into every value a page needs: backgrounds, borders, focus rings, prose, chart colours.',
-                  '',
-                  'Because the recipe is what gets saved, a theme can be reopened and changed later. It parses back to the decisions that made it, not to a pile of numbers.',
-                  '',
-                  '## What "cannot save" means',
-                  '',
-                  'Text on a background has to be readable, and readability has a number: the contrast between the two. The studio measures every pairing against the accessibility standard as you work, and the save button stays off while any pair is below the line. You can still pin any single value by hand — the studio marks it, so a later change of brand colour does not surprise you.'
-                ].join('\n')
-              }
+              title: 'Measured while you work',
+              body: 'Each pairing is checked against the accessibility standard as the theme changes, not in a review afterwards.'
+            },
+            {
+              title: 'A line, not a feeling',
+              body: '4.5:1 for text and 3:1 for large headings: the levels the standard sets, applied to every pair a visitor reads.'
+            },
+            {
+              title: 'Saving stays off until it passes',
+              body: 'While any pair is below the line the theme cannot be saved, so it never reaches a visitor.'
             }
           ]
         },
@@ -344,23 +345,23 @@ export const cdwrIo: SiteDefinition = {
           lede: 'A site is not a row in a table with a theme name. It is an app of its own, on its own domain, with its own certificate and its own secrets — built once and run many times.'
         },
         {
-          blockType: 'content',
-          columns: [
+          blockType: 'feature-section',
+          eyebrow: 'One build',
+          heading: 'Built once, started for every site',
+          intro:
+            'The platform is built once, when a change is merged. That one build is then started as many times as there are sites, and each start is told which site it is.',
+          subFeatures: [
             {
-              size: 'full',
-              richText: {
-                markdown: [
-                  '## One build, many sites',
-                  '',
-                  'The platform is built once, when a change is merged. That one build is then started as many times as there are sites, and each start is told which site it is. Everything that differs between two sites — the domain, the certificate, the secrets — arrives at start-up rather than being baked in. Their content lives in one shared database, kept apart by the platform itself.',
-                  '',
-                  'So codeware.se and cdwr.io are the same software, running twice. A third client site would be the same software running a third time, with different everything else.',
-                  '',
-                  '## Every change is reviewed running',
-                  '',
-                  'Each pull request gets a running site and a database of its own, provisioned when the branch opens and torn down when it merges. A content change and a code change are reviewed the same way — by opening the thing and using it.'
-                ].join('\n')
-              }
+              title: 'Told who it is at start',
+              body: 'The domain, the certificate and the secrets arrive when a site starts, rather than being baked into the build.'
+            },
+            {
+              title: 'One database, kept apart',
+              body: 'The sites share one database, and the platform keeps each site to its own content.'
+            },
+            {
+              title: 'The same software, twice',
+              body: 'codeware.se and cdwr.io are the same build. A third site would be that build again, with different everything else.'
             }
           ]
         },
