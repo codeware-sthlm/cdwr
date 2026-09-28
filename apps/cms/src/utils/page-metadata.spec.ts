@@ -1,4 +1,4 @@
-import { documentMetadata } from './page-metadata';
+import { documentMetadata, siteOrigin } from './page-metadata';
 
 describe('documentMetadata', () => {
   it('titles a page by its name, for the layout to follow with the site', () => {
@@ -53,5 +53,25 @@ describe('documentMetadata', () => {
       documentMetadata({ name: 'Om' }, { siteName: 'Codeware Sthlm AB' })
         .openGraph
     ).toMatchObject({ siteName: 'Codeware Sthlm AB' });
+  });
+});
+
+describe('siteOrigin', () => {
+  it('takes the scheme the proxy forwarded', () => {
+    expect(siteOrigin('codeware.se', 'https')?.origin).toBe(
+      'https://codeware.se'
+    );
+  });
+
+  it('assumes HTTPS for a public host, HTTP for a local one', () => {
+    expect(siteOrigin('cdwr.io', null)?.origin).toBe('https://cdwr.io');
+    expect(siteOrigin('localhost:3000', null)?.origin).toBe(
+      'http://localhost:3000'
+    );
+  });
+
+  it('gives nothing for a missing or malformed host', () => {
+    expect(siteOrigin(null, null)).toBeUndefined();
+    expect(siteOrigin('bad host', null)).toBeUndefined();
   });
 });

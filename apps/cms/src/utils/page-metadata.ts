@@ -54,3 +54,31 @@ export function documentMetadata(
     }
   };
 }
+
+/**
+ * The origin a visitor reached this site at, for turning relative URLs such as
+ * an upload's `/media/…` into the absolute ones a crawler needs.
+ *
+ * From the request, not from configuration: each tenant is served on its own
+ * domain, so the address in use is the only one that is right. Behind the
+ * proxy the scheme arrives as a header; without it, a local host is plain HTTP.
+ *
+ * @param host - The request's `host` header
+ * @param forwardedProto - Its `x-forwarded-proto` header
+ */
+export function siteOrigin(
+  host: string | null,
+  forwardedProto: string | null
+): URL | undefined {
+  if (!host) {
+    return undefined;
+  }
+  const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host);
+  const protocol = forwardedProto ?? (local ? 'http' : 'https');
+
+  try {
+    return new URL(`${protocol}://${host}`);
+  } catch {
+    return undefined;
+  }
+}

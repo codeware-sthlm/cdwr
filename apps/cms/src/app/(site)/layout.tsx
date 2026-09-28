@@ -22,7 +22,7 @@ import {
   selfServedFontsIn
 } from '@codeware/shared/util/color';
 import { Metadata } from 'next';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import './site.css';
@@ -32,6 +32,7 @@ import {
   MEMBER_LOGIN_PATH,
   MEMBER_LOGOUT_SUBMIT_PATH
 } from '../../utils/member-login';
+import { siteOrigin } from '../../utils/page-metadata';
 
 import { Providers } from './providers';
 
@@ -173,8 +174,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const runtime = await payloadRuntime({ asVisitor: true });
   const config = runtime.tenantConfig;
   const icon = config?.icon ?? null;
+  const headerList = await headers();
 
   return {
+    // Resolves a relative upload URL, such as a page's sharing image
+    metadataBase: siteOrigin(
+      headerList.get('host'),
+      headerList.get('x-forwarded-proto')
+    ),
     // A page names itself; the site follows it
     title: {
       default: config?.appName ?? 'Codeware CMS',
