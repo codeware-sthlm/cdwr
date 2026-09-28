@@ -421,7 +421,7 @@ export const cdwrIo: SiteDefinition = {
                 'Runs each site as its own app, close to its visitors.'
             },
             {
-              brand: { icon: 'KeyIcon' },
+              brand: { logo: { source: 'svg', svgCode: infisicalLogo } },
               title: 'Infisical',
               description:
                 'Holds every secret, one folder per site, so nothing lives in the repository.'
@@ -438,7 +438,7 @@ export const cdwrIo: SiteDefinition = {
               description: 'The styling the themes compile down to.'
             },
             {
-              brand: { icon: 'CursorArrowRaysIcon' },
+              brand: { logo: { source: 'svg', svgCode: playwrightLogo } },
               title: 'Playwright',
               description: 'The tests that open the running site and use it.'
             }

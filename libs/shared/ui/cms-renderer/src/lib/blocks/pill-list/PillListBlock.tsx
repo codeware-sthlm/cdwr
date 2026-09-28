@@ -1,8 +1,9 @@
-import { InlineIcon, TechIcon } from '@codeware/shared/ui/primitives';
+import { TechIcon } from '@codeware/shared/ui/primitives';
 import type { PillListBlock as PillListBlockProps } from '@codeware/shared/util/payload-types';
 import { cn } from '@codeware/shared/util/ui';
 
 import { interactiveSurface } from '../../utils/interactive-surface';
+import { OwnLogo } from '../../utils/OwnLogo';
 
 type Pill = NonNullable<PillListBlockProps['items']>[number];
 
@@ -12,18 +13,7 @@ function PillLogo({ pill }: { pill: Pill }) {
     return <TechIcon brand={pill.icon} className="size-4" />;
   }
 
-  const { source, svgCode, file } = pill.logo ?? {};
-
-  if (source === 'svg' && svgCode) {
-    return <InlineIcon svgCode={svgCode} size={16} />;
-  }
-
-  // An id alone is an unpopulated relation, which renders as nothing
-  if (source === 'upload' && file && typeof file === 'object' && file.url) {
-    return <InlineIcon src={file.url} size={16} />;
-  }
-
-  return null;
+  return <OwnLogo logo={pill.logo} size={16} />;
 }
 
 /**

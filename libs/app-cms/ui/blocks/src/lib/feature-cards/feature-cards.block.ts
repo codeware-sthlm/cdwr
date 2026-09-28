@@ -1,12 +1,20 @@
 import {
   colorPickerField,
   iconPickerField,
+  ownLogoField,
   sectionBandField,
   sectionHeaderFields,
   techIconField
 } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
-import type { Block } from 'payload';
+import type { TechBrand } from '@codeware/shared/ui/primitives';
+import type { Block, Condition, TypeWithID } from 'payload';
+
+// An own logo is only asked for when no technology from the list is chosen
+const withoutTech: Condition<TypeWithID, { tech?: TechBrand | null }> = (
+  _,
+  siblingData
+) => !siblingData.tech;
 
 /**
  * Feature cards block — a header plus a grid of icon + title + description
@@ -84,13 +92,18 @@ export const featureCardsBlock: Block = {
                   admin: {
                     width: '50%',
                     description: {
-                      en: 'Shows the technology’s own mark in its brand colour, in place of the icon.',
-                      sv: 'Visar teknikens eget märke i dess egen färg, i stället för ikonen.'
+                      en: 'Shows the technology’s own mark in its brand colour, in place of the icon. Leave it empty to add a logo of your own.',
+                      sv: 'Visar teknikens eget märke i dess egen färg, i stället för ikonen. Lämna tomt för att lägga till en egen logotyp.'
                     }
                   }
                 })
               ]
-            }
+            },
+            // For a technology the list lacks: wins over the icon, not the list
+            ownLogoField({
+              enumName: 'feature_cards_logo_source',
+              condition: withoutTech
+            })
           ]
         },
         {
