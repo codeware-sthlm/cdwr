@@ -44,6 +44,7 @@ export { type PageData, getPageData } from './lib/collections/get-page-data';
 export { getPages } from './lib/collections/get-pages';
 
 export { getPost } from './lib/collections/get-post';
+export { getPostsListingPath } from './lib/collections/get-posts-listing-path';
 export { getPosts } from './lib/collections/get-posts';
 
 export { getPreference } from './lib/collections/get-preference';
