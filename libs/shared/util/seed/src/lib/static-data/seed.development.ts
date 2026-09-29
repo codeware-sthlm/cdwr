@@ -7,6 +7,7 @@ import { readMediaFiles, readStockMediaFiles } from './read-media-files';
 
 const tenantSlug = {
   cdwrIo: 'cdwr-io',
+  codeware: 'codeware',
   moon: 'moon',
   sun: 'sun',
   star: 'star'
@@ -14,6 +15,7 @@ const tenantSlug = {
 
 const tenants = {
   cdwrIo: { apiKey: '9d5316b1-0298-4113-904c-6cc10fcacb6c' },
+  codeware: { apiKey: '81a86960-43e4-4e7d-ab4f-166c5c168183' },
   moon: { apiKey: 'b9c2fb25-df77-4304-a60a-028779a2cb37' },
   sun: { apiKey: 'f3799063-d55e-43ab-a96f-b6a386ced985' },
   star: { apiKey: 'a76d0168-f9b2-48d2-bc57-96e45aaf8542' }
@@ -653,6 +655,17 @@ export const seedData = (remoteDataUrl: string | undefined) => {
         locale: 'en',
         supportedLocales: ['en'],
         apiKey: tenants.cdwrIo.apiKey
+      },
+      {
+        name: 'codeware.se',
+        slug: tenantSlug.codeware,
+        // Matches `TENANT_ID=codeware`, the id it has in Infisical and production
+        deployment: 'codeware',
+        description:
+          'Konsultverksamheten — systemutveckling och teknisk ledning',
+        locale: 'sv',
+        supportedLocales: ['sv'],
+        apiKey: tenants.codeware.apiKey
       },
       {
         name: 'Moon',

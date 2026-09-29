@@ -723,11 +723,18 @@ export const seed = async (
 
         // The definition created this page a moment ago, so it is read from the
         // database rather than the store, which only knows what the seed itself
-        // made. Payload requires a landing page on the document
+        // made. Payload requires a landing page on the document. A definition
+        // may name its own, such as codeware.se's `hem`
+        const landingSlug =
+          definitionFor(tenant.slug)?.siteSettings?.general?.landingPage
+            ?.lookupSlug ?? 'home';
         const { docs: homePages } = await payload.find({
           collection: 'pages',
           where: {
-            and: [{ slug: { equals: 'home' } }, { tenant: { in: [tenant.id] } }]
+            and: [
+              { slug: { equals: landingSlug } },
+              { tenant: { in: [tenant.id] } }
+            ]
           },
           depth: 0,
           limit: 1,
@@ -738,7 +745,7 @@ export const seed = async (
         if (!page) {
           siteSettingFailed++;
           payload.logger.error(
-            `[SEED] No home page for tenant '${tenant.slug}', cannot set its landing page`
+            `[SEED] No page '${landingSlug}' for tenant '${tenant.slug}', cannot set its landing page`
           );
           continue;
         }
