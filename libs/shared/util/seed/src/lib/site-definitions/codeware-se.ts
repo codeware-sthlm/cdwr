@@ -75,6 +75,8 @@ export const codewareSe: SiteDefinition = {
             label: 'Följ utvecklingen på cdwr.io',
             newTab: true
           },
+          // A reference, not a call to act: nothing on this page is a button
+          linkStyle: 'text',
           illustration: codewarePlatformIllustration,
           subFeatures: [
             {

@@ -19,6 +19,7 @@ export const FeatureSectionBlock: React.FC<FeatureSectionBlockProps> = ({
   intro,
   enableLink,
   link,
+  linkStyle,
   media,
   illustration,
   subFeatures
@@ -59,7 +60,7 @@ export const FeatureSectionBlock: React.FC<FeatureSectionBlockProps> = ({
           {resolvedLink && (
             <ArrowLink
               onClick={() => navigate(resolvedLink.path, resolvedLink.newTab)}
-              variant="outline"
+              variant={linkStyle === 'text' ? 'text' : 'outline'}
               className="mt-6"
             >
               {resolvedLink.label}
