@@ -45,9 +45,13 @@ describe('the codeware.se definition', () => {
     expect(text).not.toMatch(/automatiser|handarbete|maskinteknik/i);
   });
 
-  // Beside the mark and in the default copyright, and nowhere else
-  it('carries the company name once, as the site name', () => {
-    expect(codewareSe.siteSettings?.general?.appName).toBe('Codeware Sthlm AB');
+  // Decided 2026-09-30: the brand names the site, the legal name only the
+  // copyright line, and the running copy says Codeware
+  it('keeps the brand and the legal name apart', () => {
+    expect(codewareSe.siteSettings?.general?.appName).toBe('Codeware Sthlm');
+    expect(codewareSe.siteSettings?.footer?.copyright).toBe(
+      '© {year} Codeware Sthlm AB'
+    );
     expect(text.match(/Codeware Sthlm AB/g)?.length).toBe(1);
   });
 

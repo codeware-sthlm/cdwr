@@ -2,6 +2,11 @@ import { cdwrCloudSvg } from '@codeware/shared/util/ui';
 
 import type { SiteDefinition } from '../site-definition';
 
+import {
+  codewareHeroIllustration,
+  codewarePlatformIllustration
+} from './illustrations';
+
 /**
  * `codeware.se` — the company, as data.
  *
@@ -15,7 +20,8 @@ import type { SiteDefinition } from '../site-definition';
  */
 export const codewareSe: SiteDefinition = {
   name: 'codeware.se',
-  description: 'Konsultverksamheten — systemutveckling och teknisk ledning',
+  description:
+    'Konsultverksamhet — systemutveckling, arkitektur och mentorskap',
 
   pages: [
     {
@@ -24,31 +30,32 @@ export const codewareSe: SiteDefinition = {
       layout: [
         {
           blockType: 'hero',
-          badge: 'Teknikbolag i Stockholm',
-          heading: 'Mjukvara som håller.',
-          lede: 'Codeware bygger och förvaltar moderna webbplattformar. Arkitektur, utveckling och drift, med kvalitet som går att kontrollera.'
+          badge: 'Codeware Sthlm',
+          heading: 'Mjukvara som fungerar. Även om fem år.',
+          lede: 'Codeware utvecklar system och leder tekniskt arbete i verksamheter där systemen inte får stanna. Det som byggs ska fungera länge, även när den som byggde det inte längre är kvar.',
+          illustration: codewareHeroIllustration
         },
         {
           blockType: 'feature-cards',
           eyebrow: 'Så arbetar Codeware',
           band: 'subtle',
-          heading: 'Byggt för att förvaltas, inte bara för att levereras',
+          heading: 'Byggt för att kunna förvaltas, inte bara för att levereras',
           columns: '3',
           items: [
             {
+              title: 'Helheten först',
+              description:
+                'Hur systemen hänger ihop och hur informationen rör sig mellan dem avgör hur lösningen ska se ut och hur den ska förvaltas. Den bilden kommer först, koden sedan.'
+            },
+            {
               title: 'Håller över tid',
               description:
-                'System som fortsätter att fungera när de som byggde dem har gått vidare. Det är måttet, inte lanseringsdagen.'
+                'Verksamheten förändras, och kraven med den. Ett system ska tåla det i många år utan att behöva byggas om.'
             },
             {
-              title: 'Arkitektur som bär',
+              title: 'Värdet stannar i koden',
               description:
-                'Strukturen ett team bygger vidare på, och ansvaret för att den håller när systemet växer.'
-            },
-            {
-              title: 'Går att granska',
-              description:
-                'Tester från början och en egen testmiljö för varje ändring. Kvalitet som går att kontrollera, inte bara lova.'
+                'Målet är att inte behövas. Det bestående värdet är det som finns kvar i koden, i testerna, i dokumentationen och hos dem som tar över, inte en person som måste finnas på plats.'
             }
           ]
         },
@@ -65,21 +72,22 @@ export const codewareSe: SiteDefinition = {
           link: {
             type: 'custom',
             url: 'https://cdwr.io',
-            label: 'Se plattformen',
+            label: 'Följ utvecklingen på cdwr.io',
             newTab: true
           },
+          illustration: codewarePlatformIllustration,
           subFeatures: [
             {
               title: 'En plattform, många webbplatser',
-              body: 'Varje webbplats är en egen driftsättning från samma grund, med egen domän och eget certifikat.'
+              body: 'Varje webbplats är en egen driftsättning av samma kodbas, med egen domän och eget certifikat.'
             },
             {
-              title: 'Utseendet är en inställning',
-              body: 'Färger, typsnitt och ljust eller mörkt läge väljs i administrationen och kontrolleras mot läsbarhetskrav.'
+              title: 'Utseendet är en konfiguration',
+              body: 'Färger, typsnitt och ljust eller mörkt läge ställs in i administrationen och kontrolleras mot läsbarhetskrav.'
             },
             {
-              title: 'Granskat innan det går ut',
-              body: 'Varje ändring får en egen körande kopia med egen databas, så innehåll och kod granskas på samma sätt.'
+              title: 'Granskat innan det lanseras',
+              body: 'Varje ändring får en egen driftsatt miljö med egen databas, så att innehåll och kod kan granskas på samma sätt.'
             }
           ]
         }
@@ -89,8 +97,9 @@ export const codewareSe: SiteDefinition = {
 
   siteSettings: {
     general: {
-      // The company's name: the footer shows it beside the mark
-      appName: 'Codeware Sthlm AB',
+      // The brand, for the tab, the sharing card and beside the mark; the
+      // legal name with its AB is the copyright line's alone
+      appName: 'Codeware Sthlm',
       landingPage: { lookupSlug: 'hem' },
       chrome: 'flat',
       icon: { source: 'svg', svgCode: cdwrCloudSvg },
@@ -103,7 +112,7 @@ export const codewareSe: SiteDefinition = {
       variant: 'expanded',
       linkSource: 'none',
       // The name stands beside the mark and in the copyright; not here too
-      tagline: 'Arkitektur, utveckling och drift av moderna webbplattformar.',
+      tagline: 'Arkitektur, utveckling och drift av system som ska hålla.',
       contact: [
         { platform: 'email', email: 'hello@codeware.se' },
         {
@@ -113,8 +122,10 @@ export const codewareSe: SiteDefinition = {
         { platform: 'github', url: 'https://github.com/codeware-sthlm' },
         { platform: 'npm', url: 'https://www.npmjs.com/org/cdwr' }
       ],
-      // Defaults to "© {year} <app name>", which is the company's
-      showCopyright: true
+      showCopyright: true,
+      copyright: '© {year} Codeware Sthlm AB',
+      // A business site; the release line belongs to the platform's own
+      showVersion: false
     }
   }
 };
