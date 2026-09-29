@@ -124,11 +124,14 @@ export default async function RootLayout({
   }));
 
   return (
-    <html lang="en" data-theme={theme} suppressHydrationWarning>
+    // The site's own language, so a screen reader and a translator hear it
+    // right; Next writes the charset and viewport tags itself
+    <html
+      lang={runtime.tenantConfig?.locale ?? 'en'}
+      data-theme={theme}
+      suppressHydrationWarning
+    >
       <head>
-        {/* Needed? */}
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
         {/*
           Tenant-authored tokens. `customThemeCss` whitelists every name and
           value it writes, so the result holds no `<`, `>` or `&` and is safe
