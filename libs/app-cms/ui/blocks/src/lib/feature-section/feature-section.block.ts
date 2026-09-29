@@ -50,6 +50,23 @@ export const featureSectionBlock: Block = {
       }
     }),
     {
+      name: 'linkStyle',
+      type: 'select',
+      defaultValue: 'button',
+      label: { en: 'Link style', sv: 'Länkens utseende' },
+      options: [
+        { label: { en: 'Button', sv: 'Knapp' }, value: 'button' },
+        { label: { en: 'Text', sv: 'Text' }, value: 'text' }
+      ],
+      admin: {
+        condition: isLinkEnabled,
+        description: {
+          en: 'A button asks to be clicked. Text reads as a reference, for a page that asks nothing of its visitor.',
+          sv: 'En knapp uppmanar till ett klick. Text uppfattas som en hänvisning, för en sida som inte ber besökaren om något.'
+        }
+      }
+    },
+    {
       name: 'media',
       type: 'upload',
       relationTo: 'media',

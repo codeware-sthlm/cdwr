@@ -1404,6 +1404,10 @@ export interface FeatureSectionBlock {
   enableLink?: boolean | null;
   link?: FeatureSectionLink;
   /**
+   * A button asks to be clicked. Text reads as a reference, for a page that asks nothing of its visitor.
+   */
+  linkStyle?: ('button' | 'text') | null;
+  /**
    * The image that carries the claim above it.
    */
   media?: (number | null) | Media;
