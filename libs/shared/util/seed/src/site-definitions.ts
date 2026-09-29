@@ -11,6 +11,7 @@
 export { bundledMediaPath } from './lib/bundled-media-path';
 export { bamse } from './lib/site-definitions/bamse';
 export { cdwrIo } from './lib/site-definitions/cdwr-io';
+export { codewareSe } from './lib/site-definitions/codeware-se';
 export { marvel } from './lib/site-definitions/marvel';
 export { moon } from './lib/site-definitions/moon';
 export { star } from './lib/site-definitions/star';

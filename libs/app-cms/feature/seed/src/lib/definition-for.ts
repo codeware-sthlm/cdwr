@@ -6,6 +6,7 @@ import type {
 import {
   bamse,
   cdwrIo,
+  codewareSe,
   marvel,
   moon,
   star,
@@ -27,6 +28,7 @@ type TenantSlug = TenantSlugDev | TenantSlugPreview;
 const BY_SLUG: Record<TenantSlug, SiteDefinition> = {
   bamse,
   'cdwr-io': cdwrIo,
+  codeware: codewareSe,
   marvel,
   moon,
   star,
