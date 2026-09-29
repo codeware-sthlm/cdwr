@@ -60,6 +60,13 @@ export function Providers({
       // A locked site never leaves its scheme; next-themes handles this
       // natively, so no switch has to be suppressed downstream
       forcedTheme={colorScheme === 'system' ? undefined : colorScheme}
+      // The script sets the scheme before the first paint, which only the
+      // server's copy can do. A page drawn in the browser, such as a 404,
+      // creates it there, where it never runs and React warns; as data it is
+      // left alone, and the provider applies the scheme once mounted
+      scriptProps={
+        typeof window === 'undefined' ? undefined : { type: 'application/json' }
+      }
     >
       <PayloadProviderInner
         appInfo={appInfo}
