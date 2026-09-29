@@ -15,7 +15,8 @@ export function RenderDoc(data: DocData) {
     case 'pages':
       return <RenderPage page={data.doc} blocksData={data.blocksData} />;
     case 'posts':
-      return <RenderPost post={data.doc} />;
+      // Which page lists the posts is not part of the document's data
+      return <RenderPost post={data.doc} listingPath={null} />;
     case 'tours':
       return <RenderTour tour={data.doc} />;
     default: {

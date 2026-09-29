@@ -7,12 +7,13 @@ import { LivePreview } from '../../../../components/LivePreview.client';
 
 type Props = {
   post: Post;
+  listingPath: string | null;
 };
 
-export function PostPreview({ post }: Props) {
+export function PostPreview({ post, listingPath }: Props) {
   return (
     <LivePreview initialData={post} depth={1}>
-      {(data) => <RenderPost post={data} />}
+      {(data) => <RenderPost post={data} listingPath={listingPath} />}
     </LivePreview>
   );
 }

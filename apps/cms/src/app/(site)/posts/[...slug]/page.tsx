@@ -1,4 +1,4 @@
-import { getPost } from '@codeware/app-cms/data-access';
+import { getPost, getPostsListingPath } from '@codeware/app-cms/data-access';
 import type { Metadata } from 'next';
 import { draftMode } from 'next/headers';
 import { notFound } from 'next/navigation';
@@ -34,11 +34,14 @@ export default async function Post({ params }: Props) {
 
   const { isEnabled: draft } = await draftMode();
   const runtime = await payloadRuntime({ asVisitor: true });
-  const post = await getPost(runtime, slugString, { draft });
+  const [post, listingPath] = await Promise.all([
+    getPost(runtime, slugString, { draft }),
+    getPostsListingPath(runtime)
+  ]);
 
   if (!post) {
     notFound();
   }
 
-  return <PostPreview post={post} />;
+  return <PostPreview post={post} listingPath={listingPath} />;
 }
