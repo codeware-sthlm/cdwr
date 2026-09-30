@@ -176,6 +176,30 @@ export const moon: SiteDefinition = {
     }
   ],
 
+  reusableContent: [
+    {
+      title: 'Observing checklist',
+      layout: [
+        {
+          blockType: 'content',
+          columns: [
+            {
+              size: 'full',
+              richText: {
+                markdown:
+                  '## Observing checklist\n- Check the forecast and moonrise time.\n- Let your eyes adjust to the dark for at least fifteen minutes.\n- Note the phase, and which mare or crater you are aiming at.\n- Keep a red light on hand: it does not undo the adjustment.\n'
+              }
+            }
+          ]
+        },
+        {
+          blockType: 'image',
+          media: { lookupFilename: 'abstract-image-3.jpg' }
+        }
+      ]
+    }
+  ],
+
   pages: [
     {
       name: 'Posts',
@@ -379,6 +403,212 @@ export const moon: SiteDefinition = {
           }
         }
       ]
+    },
+    {
+      name: 'About',
+      slug: 'about',
+      header: 'The people and tools behind Moon',
+      layout: [
+        {
+          blockType: 'about',
+          heading: 'Mission control'
+        },
+        {
+          blockType: 'image',
+          media: { lookupFilename: 'abstract-image-2.jpg' }
+        },
+        {
+          blockType: 'testimonial',
+          quote:
+            'Watching the terminator crawl across Tycho at two in the morning made the whole late night worth it.',
+          author: {
+            name: 'M. Ridley',
+            role: 'Amateur astronomer',
+            avatar: { lookupFilename: 'abstract-image-3.jpg' }
+          },
+          enableLink: true,
+          link: {
+            type: 'custom',
+            url: '/lunar-craters',
+            label: 'Read about craters',
+            newTab: false
+          }
+        },
+        {
+          blockType: 'social-media',
+          direction: 'horizontal',
+          social: [
+            {
+              platform: 'github',
+              url: 'https://github.com/codeware-sthlm'
+            },
+            {
+              platform: 'email',
+              email: 'hello@moon.dev'
+            }
+          ]
+        },
+        {
+          blockType: 'pill-list',
+          eyebrow: 'Kit bag',
+          heading: 'What fits in a backpack',
+          intro: 'Nothing exotic — the list itself is the point.',
+          items: [
+            { label: '8" Dobsonian' },
+            { label: 'Moon filter' },
+            { label: '2x Barlow' },
+            { label: 'Red headlamp' },
+            { label: 'Star chart' }
+          ]
+        },
+        {
+          blockType: 'spacing',
+          size: 'loose',
+          divider: true
+        }
+      ]
+    },
+    {
+      name: 'Observatory',
+      slug: 'observatory',
+      header: 'An observatory for the Moon',
+      layout: [
+        {
+          blockType: 'feature-section',
+          eyebrow: 'Observatory',
+          heading: 'Set up for a night under the Moon',
+          media: { lookupFilename: 'abstract-image-1.jpg' },
+          intro:
+            'A steady mount, dark-adapted eyes and fifteen minutes of patience turn a bright disc into a landscape of maria and craters.',
+          subFeatures: [
+            {
+              title: 'Pick your window',
+              body: 'A few nights either side of first or last quarter throw the longest shadows across the terminator, where craters read best.'
+            },
+            {
+              title: 'Protect your night vision',
+              body: 'A red light keeps your eyes adjusted between glances at a star chart.'
+            },
+            {
+              title: 'Start wide, then zoom in',
+              body: 'Find a mare with the naked eye, then let a telescope take you to the crater at its edge.'
+            }
+          ]
+        },
+        {
+          blockType: 'showcase',
+          eyebrow: 'Missions',
+          heading: 'Human and robotic visits',
+          intro:
+            'A short list of missions that shaped what we know, each pointing to more on this site.',
+          items: [
+            {
+              tag: 'Human landing',
+              title: 'Apollo 11',
+              description:
+                'The first crewed landing, touching down in Mare Tranquillitatis in July 1969 and returning the samples that dated the maria.',
+              meta: '1969 · Mare Tranquillitatis',
+              link: {
+                type: 'custom',
+                url: '/lunar-maria',
+                label: 'Read about the maria',
+                newTab: false
+              }
+            },
+            {
+              tag: 'Uncrewed orbiter',
+              title: 'LADEE',
+              description:
+                "Measured the Moon's thin exosphere and the dust it carries, in orbit through the winter of 2013 and 2014.",
+              meta: '2013 · Lunar orbit',
+              link: {
+                type: 'custom',
+                url: '/lunar-phases',
+                label: 'Read about the phases',
+                newTab: false
+              }
+            },
+            {
+              tag: 'Ongoing program',
+              title: 'Artemis',
+              description:
+                'Aims to return astronauts to the lunar south pole, where permanently shadowed craters are thought to hold water ice.',
+              meta: 'Ongoing · South pole',
+              link: {
+                type: 'custom',
+                url: '/lunar-craters',
+                label: 'Read about craters',
+                newTab: false
+              }
+            }
+          ]
+        },
+        {
+          blockType: 'card',
+          cards: [
+            {
+              brand: { icon: 'EyeIcon', color: 'sky-500' },
+              title: 'Naked eye',
+              description: 'Start here.',
+              content:
+                'Maria and the brightest crater rays are visible without any equipment at all.'
+            },
+            {
+              brand: { icon: 'MapIcon', color: 'indigo-500' },
+              title: 'Binoculars',
+              description: 'The easiest upgrade.',
+              content:
+                "A steady pair resolves Tycho's ray system and the shadowed floors of the largest craters."
+            },
+            {
+              brand: { icon: 'CogIcon', color: 'teal-500' },
+              title: 'Telescope',
+              description: 'For the terminator.',
+              content:
+                'A small scope on a tripod turns the line between day and night into a landscape of peaks and shadows.'
+            }
+          ]
+        },
+        {
+          blockType: 'code',
+          language: 'ts',
+          code: "type Observation = {\n  date: string;\n  phase: 'new' | 'crescent' | 'quarter' | 'gibbous' | 'full';\n  target: string; // e.g. 'Tycho', 'Mare Imbrium'\n  notes: string;\n};"
+        },
+        {
+          blockType: 'reusable-content',
+          reusableContent: { lookupTitle: 'Observing checklist' }
+        }
+      ]
+    },
+    {
+      name: 'Blocks',
+      slug: 'blocks',
+      header: 'Every block, live',
+      layout: [
+        {
+          blockType: 'block-gallery',
+          eyebrow: 'Every block',
+          heading: 'Every block Moon renders',
+          intro:
+            'The production component for each one, drawing from the same content API this site uses.',
+          mode: 'index'
+        }
+      ]
+    },
+    {
+      name: 'Studio',
+      slug: 'studio',
+      header: 'Theme studio',
+      layout: [
+        {
+          blockType: 'theme-studio',
+          eyebrow: 'Try it',
+          heading: 'A theme you cannot save until it is readable',
+          intro: 'Pick a brand colour and the studio derives the rest.',
+          startFrom: 'frost',
+          note: 'Live — the studio itself, not a screenshot of it.'
+        }
+      ]
     }
   ],
 
@@ -429,6 +659,30 @@ export const moon: SiteDefinition = {
         lookupSlug: 'file-area'
       },
       label: 'File area'
+    },
+    {
+      reference: {
+        relationTo: 'pages',
+        lookupSlug: 'about'
+      }
+    },
+    {
+      reference: {
+        relationTo: 'pages',
+        lookupSlug: 'observatory'
+      }
+    },
+    {
+      reference: {
+        relationTo: 'pages',
+        lookupSlug: 'blocks'
+      }
+    },
+    {
+      reference: {
+        relationTo: 'pages',
+        lookupSlug: 'studio'
+      }
     }
   ],
 
