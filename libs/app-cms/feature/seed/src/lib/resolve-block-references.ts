@@ -49,13 +49,17 @@ export function resolveBlockReferences(
   const source = block as AnyBlock;
   const blockType = String(source['blockType']);
 
-  /** Replaces one field, recording it when the reference leads nowhere. */
+  /**
+   * Replaces one field, recording it when the reference leads nowhere. A
+   * field inside a group is read from the group and reported by its path.
+   */
   const swap = (
     field: string,
     lookupKey: string,
-    find: (value: string) => number | undefined
+    find: (value: string) => number | undefined,
+    group: { values: AnyBlock; path: string } = { values: source, path: field }
   ): AnyBlock => {
-    const lookup = lookupValue(source[field], lookupKey);
+    const lookup = lookupValue(group.values[field], lookupKey);
 
     // A field the definition left out stays left out
     if (lookup === undefined) {
@@ -64,7 +68,7 @@ export function resolveBlockReferences(
 
     const id = find(lookup);
     if (id === undefined) {
-      unresolved.push({ blockType, field, lookup });
+      unresolved.push({ blockType, field: group.path, lookup });
       return {};
     }
 
@@ -95,12 +99,25 @@ export function resolveBlockReferences(
         ...swap('reusableContent', 'lookupTitle', resolver.reusableContent)
       };
 
-    case 'testimonial':
+    case 'testimonial': {
+      // The avatar belongs to the author group; the logo to the block
+      const author = source['author'];
       return {
         ...source,
-        ...swap('avatar', 'lookupFilename', resolver.media),
+        ...(author && typeof author === 'object'
+          ? {
+              author: {
+                ...author,
+                ...swap('avatar', 'lookupFilename', resolver.media, {
+                  values: author as AnyBlock,
+                  path: 'author.avatar'
+                })
+              }
+            }
+          : {}),
         ...swap('logo', 'lookupFilename', resolver.media)
       };
+    }
 
     case 'file-area': {
       const tags = Array.isArray(source['tags']) ? source['tags'] : undefined;

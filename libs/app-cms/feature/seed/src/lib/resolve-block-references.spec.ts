@@ -51,14 +51,26 @@ describe('resolveBlockReferences', () => {
   it('resolves both testimonial images independently', () => {
     const { resolved, unresolved } = resolve({
       blockType: 'testimonial',
-      avatar: { lookupFilename: 'hero.jpg' },
+      author: { name: 'Ada', avatar: { lookupFilename: 'hero.jpg' } },
       logo: { lookupFilename: 'absent.png' }
     });
 
-    expect(resolved['avatar']).toBe(11);
+    // The avatar is the author group's, so it resolves inside it
+    expect(resolved['author']).toEqual({ name: 'Ada', avatar: 11 });
     // The one that failed is reported; the one that worked still resolved
     expect(unresolved).toEqual([
       { blockType: 'testimonial', field: 'logo', lookup: 'absent.png' }
+    ]);
+  });
+
+  it("reports an author's avatar that leads nowhere by its path", () => {
+    const { unresolved } = resolve({
+      blockType: 'testimonial',
+      author: { name: 'Ada', avatar: { lookupFilename: 'absent.png' } }
+    });
+
+    expect(unresolved).toEqual([
+      { blockType: 'testimonial', field: 'author.avatar', lookup: 'absent.png' }
     ]);
   });
 
