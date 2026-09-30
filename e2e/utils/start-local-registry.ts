@@ -4,12 +4,18 @@
  * For e2e it is meant to be called in jest's `globalSetup`.
  */
 
+import { execSync } from 'child_process';
+
 import { registerTsProject } from '@nx/js/internal';
 import { startLocalRegistry } from '@nx/js/plugins/jest/local-registry';
 import { releasePublish, releaseVersion } from 'nx/release';
 
 import { isCI } from './is-ci';
-import { backupPackageJsonFiles } from './package-json-backup';
+import { LOCAL_PLUGIN_TAG } from './local-plugin';
+import {
+  backupPackageJsonFiles,
+  restorePackageJsonFiles
+} from './package-json-backup';
 
 module.exports = async () => {
   registerTsProject('./tsconfig.base.json');
@@ -48,6 +54,8 @@ module.exports = async () => {
   // published version; set, it correctly resolved the locally published one.
   process.env['pnpm_config_registry'] = process.env['npm_config_registry'];
 
+  // The rest of the pnpm sandbox settings are static and live in `.env.e2e`
+
   backupPackageJsonFiles();
 
   // Only the publishable packages. The `apps` release group (cms, web) has no
@@ -57,23 +65,39 @@ module.exports = async () => {
   // depending on a package here would be pulled back in past this filter.
   const projects = ['nx-payload', 'create-nx-payload', 'fly-node'];
 
-  await releaseVersion({
-    specifier: `0.0.${Date.now()}-e2e`,
-    stageChanges: false,
-    gitCommit: false,
-    gitTag: false,
-    firstRelease: true,
-    projects,
-    versionActionsOptionsOverrides: {
-      skipLockFileUpdate: true
-    },
-    verbose
-  });
+  // Jest runs no teardown when its setup fails, so a failure from here on
+  // would leave the registry running and the manifests on the e2e version
+  try {
+    await releaseVersion({
+      specifier: `0.0.${Date.now()}-e2e`,
+      stageChanges: false,
+      gitCommit: false,
+      gitTag: false,
+      firstRelease: true,
+      projects,
+      versionActionsOptionsOverrides: {
+        skipLockFileUpdate: true
+      },
+      verbose
+    });
 
-  await releasePublish({
-    tag: 'e2e',
-    firstRelease: true,
-    projects,
-    verbose
-  });
+    // Publishing takes each package from its build output, which the release
+    // groups build before versioning, so it still carries the released version
+    // and would reach the registry as that. Rebuilt, it carries the e2e one
+    execSync(`pnpm exec nx run-many -t build -p ${projects.join(',')}`, {
+      stdio: 'inherit'
+    });
+
+    await releasePublish({
+      tag: LOCAL_PLUGIN_TAG,
+      firstRelease: true,
+      projects,
+      verbose
+    });
+  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).stopLocalRegistry?.();
+    restorePackageJsonFiles();
+    throw error;
+  }
 };

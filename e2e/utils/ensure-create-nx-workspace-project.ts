@@ -11,7 +11,11 @@ import {
   logWarning
 } from '@codeware/shared/util/misc';
 import { runCommand } from '@codeware/shared/util/testing';
-import { type PackageManager, readJsonFile } from '@nx/devkit';
+import {
+  type PackageManager,
+  getPackageManagerCommand,
+  readJsonFile
+} from '@nx/devkit';
 import {
   directoryExists,
   exists,
@@ -26,9 +30,11 @@ import type { PackageJson } from 'nx/src/utils/package-json';
 import { cleanupE2E } from './cleanup-e2e';
 import { ensureAlignedNxPeers } from './ensure-aligned-nx-peers';
 import { ensureLegacyPeerDeps } from './ensure-legacy-peer-deps';
+import { ensureLocalPluginInstalled } from './ensure-local-plugin-installed';
 import { ensurePnpmApproveBuilds } from './ensure-pnpm-approve-builds';
 import { ensureTs6TsconfigCompat } from './ensure-ts6-tsconfig-compat';
 import { getE2EPackageManager } from './get-e2e-package-manager';
+import { LOCAL_PLUGIN } from './local-plugin';
 
 export type CreateNxWorkspaceProject = {
   /**
@@ -173,7 +179,7 @@ export async function ensureCreateNxWorkspaceProject({
   let appName: string | undefined;
   let appDirectory: string | undefined;
 
-  // Add required options for `@cdwr/nx-payload` preset
+  // App name and directory for the `@cdwr/nx-payload` preset
   if (preset === '@cdwr/nx-payload') {
     // Set app name from options or a default static name
     appName = !options?.appName
@@ -183,13 +189,6 @@ export async function ensureCreateNxWorkspaceProject({
         : options.appName.name;
 
     appDirectory = `apps/${appName}`;
-
-    cmdOptions.unshift(
-      '--payloadAppName',
-      appName,
-      '--payloadAppDirectory',
-      appDirectory
-    );
   }
 
   // The workspace should created in the e2e temp path
@@ -202,13 +201,17 @@ export async function ensureCreateNxWorkspaceProject({
     mkdirSync(runPath, { recursive: true });
   }
 
-  const cmd = `npx create-nx-workspace@${version} ${projectName} --preset ${preset} ${cmdOptions.join(' ')}`;
+  // The plugin's preset is applied in a second step, below, once the
+  // workspace's `@nx/*` packages are aligned. Run by `create-nx-workspace`,
+  // it would resolve those peers to npm's newest, which can run ahead of the
+  // workspace's own nx and crash the preset before it writes anything
+  const cmd = `npx create-nx-workspace@${version} ${projectName} --preset apps ${cmdOptions.join(' ')}`;
 
   logDebug('Creating Nx workspace project', `Preset '${preset}'`);
   logDebug('Run command', cmd);
 
   // pnpm 10+ exits non-zero when a dependency's build script is blocked -
-  // e.g. `esbuild`, pulled in by the `@cdwr/nx-payload` preset - even though
+  // e.g. `esbuild` - even though
   // the workspace itself was created successfully. Don't treat that as fatal
   // here; `exists(projectPath)` below is the real success signal, and
   // `ensurePnpmApproveBuilds` after it recovers the blocked build.
@@ -248,7 +251,7 @@ export async function ensureCreateNxWorkspaceProject({
   }
 
   // `create-nx-workspace` may have installed dependencies with postinstall
-  // scripts (e.g. via the `@cdwr/nx-payload` preset) that pnpm 10+ blocks
+  // scripts that pnpm 10+ blocks
   // without an explicit allowlist.
   await ensurePnpmApproveBuilds(pm);
 
@@ -287,16 +290,36 @@ export async function ensureCreateNxWorkspaceProject({
   // covers the first and precedes the second.
   await ensureAlignedNxPeers(pm);
 
+  // What `create-nx-workspace` does with a third-party preset: install the
+  // package with the package manager, then run its `preset` generator. Not
+  // `nx add`, which also runs the plugin's init; that route is the quick suite's
+  if (preset === '@cdwr/nx-payload' && appName && appDirectory) {
+    logDebug('Apply the @cdwr/nx-payload preset to the workspace');
+    await runCommand(
+      `${getPackageManagerCommand(pm, tmpProjPath()).add} ${LOCAL_PLUGIN}`,
+      {
+        cwd: tmpProjPath()
+      }
+    );
+    runNxCommand(
+      `g @cdwr/nx-payload:preset --payloadAppName ${appName} --payloadAppDirectory ${appDirectory} --no-interactive`
+    );
+  }
+
   if (preset === 'apps' && options?.ensureNxPayload) {
     logDebug('Install @cdwr/nx-payload plugin in the empty apps workspace');
     // `silenceError` because pnpm 10+ exits non-zero when a dependency's
     // build script is blocked - which also aborts `nx add` before it runs
     // its own init generator, so a recovered build must retry the command.
-    runNxCommand('add @cdwr/nx-payload', { silenceError: true });
+    runNxCommand(`add ${LOCAL_PLUGIN}`, { silenceError: true });
     const recovered = await ensurePnpmApproveBuilds(pm);
     if (recovered) {
-      runNxCommand('add @cdwr/nx-payload', { silenceError: true });
+      runNxCommand(`add ${LOCAL_PLUGIN}`, { silenceError: true });
     }
+  }
+
+  if (preset === '@cdwr/nx-payload' || options?.ensureNxPayload) {
+    ensureLocalPluginInstalled();
   }
 
   logDebug('Workspace created and ready for use', projectPath);

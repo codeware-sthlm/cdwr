@@ -1,3 +1,5 @@
+import { execSync } from 'child_process';
+
 import {
   type CreateNxWorkspaceProject,
   ensureCleanupDockerContainers,
@@ -6,7 +8,8 @@ import {
   resetDocker,
   waitForDockerLogMatch
 } from '@codeware/e2e/utils';
-import { runNxCommand } from '@nx/plugin/testing';
+import { logError } from '@codeware/shared/util/misc';
+import { runNxCommand, tmpProjPath } from '@nx/plugin/testing';
 import { Browser, BrowserContext, Page, chromium } from '@playwright/test';
 
 /**
@@ -106,6 +109,13 @@ describe('Test user login and onboarding', () => {
     ]);
     await adminPage.waitForLoadState();
 
+    // Kept for the failure record below
+    const browserErrors: Array<string> = [];
+    adminPage.on('console', (message) => {
+      if (message.type() === 'error') browserErrors.push(message.text());
+    });
+    adminPage.on('pageerror', (error) => browserErrors.push(error.message));
+
     const button = adminPage.getByRole('button');
 
     // Check if we have to onboard or login
@@ -125,10 +135,56 @@ describe('Test user login and onboarding', () => {
     // Submit form
     await button.click();
 
-    // Verify we reach the dashboard with Users and Media cards
-    await Promise.all([
-      adminPage.locator('#card-users').waitFor(),
-      adminPage.locator('#card-media').waitFor()
-    ]);
+    // Signed in once the admin renders its collection links, which it does
+    // only for a signed-in user; present, since the menu may be collapsed.
+    // Not the dashboard's own content, which Payload rewrites between versions
+    try {
+      await Promise.all([
+        adminPage
+          .locator('a[href="/admin/collections/users"]')
+          .first()
+          .waitFor({ state: 'attached' }),
+        adminPage
+          .locator('a[href="/admin/collections/media"]')
+          .first()
+          .waitFor({ state: 'attached' })
+      ]);
+    } catch (error) {
+      // Headless, a timeout says nothing about where the page got stuck.
+      // Each piece is gathered on its own, so a closed page or a gone
+      // container costs that piece and never the timeout reported below
+      const gather = async (read: () => unknown): Promise<string> => {
+        try {
+          return String(await read());
+        } catch (reason) {
+          return `(unavailable: ${reason instanceof Error ? reason.message : reason})`;
+        }
+      };
+      const screenshot = tmpProjPath('../ui-admin-failure.png');
+      logError(
+        'The admin never showed its collections',
+        [
+          `url: ${await gather(() => adminPage.url())}`,
+          `screenshot: ${await gather(async () => {
+            await adminPage.screenshot({ path: screenshot, fullPage: true });
+            return screenshot;
+          })}`,
+          `collection links in the page: ${await gather(() =>
+            adminPage.locator('a[href^="/admin/collections/"]').count()
+          )}`,
+          `browser errors:\n${browserErrors.join('\n') || '(none)'}`,
+          `page text:\n${await gather(async () =>
+            (await adminPage.locator('body').innerText()).slice(0, 1500)
+          )}`,
+          `server log:\n${await gather(() =>
+            execSync(`docker logs --tail 40 ${project.appName}`, {
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'pipe']
+            })
+          )}`
+        ].join('\n\n')
+      );
+      throw error;
+    }
   });
 });

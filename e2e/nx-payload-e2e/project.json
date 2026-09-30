@@ -14,13 +14,13 @@
       },
       "configurations": {
         "docker": {
-          "testPathPatterns": ["docker", "ui"]
+          "testPathPatterns": ["\\.docker\\.spec", "\\.ui\\.spec"]
         },
         "main": {
-          "testPathPatterns": ["main"]
+          "testPathPatterns": ["\\.main\\.spec"]
         },
         "quick": {
-          "testPathPatterns": ["quick"]
+          "testPathPatterns": ["\\.quick\\.spec"]
         }
       }
     }
