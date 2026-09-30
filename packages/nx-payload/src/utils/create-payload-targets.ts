@@ -78,7 +78,10 @@ export function createPayloadTargets(args: {
         description: `${dxPrefix} - Start a Postgres database in Docker container`,
         technologies: ['docker']
       },
-      command: `(docker ps -q -f name=^postgres-${projectName}$ | grep -q . || docker run --name postgres-${projectName} --rm -d --env-file ${projectRoot}/.env.local -p 5432:5432 postgres) && until docker exec postgres-${projectName} pg_isready -q; do sleep 1; done`
+      // Next's layering: shared values in `.env`, personal ones in `.env.local`,
+      // each read when it exists and the later winning. Without the password
+      // the container exits at once, and `--rm` takes its log with it
+      command: `(docker ps -q -f name=^postgres-${projectName}$ | grep -q . || docker run --name postgres-${projectName} --rm -d $(for f in ${projectRoot}/.env ${projectRoot}/.env.local; do [ -f "$f" ] && printf -- '--env-file %s ' "$f"; done) -p 5432:5432 postgres) && until docker exec postgres-${projectName} pg_isready -q; do sleep 1; done`
     },
     'dx:start': {
       metadata: {
