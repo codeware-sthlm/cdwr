@@ -12,7 +12,6 @@ import { withEnvVars } from '@codeware/shared/util/zod';
 
 import { SeedDataSchema } from './schema';
 import { seedData as getDevelopmentData } from './static-data/seed.development';
-import { seedData as getPreviewData } from './static-data/seed.preview';
 
 type Logger = {
   log: typeof console.log;
@@ -83,7 +82,7 @@ const loadSeedData = <TData>(
       seedData = getDevelopmentData(remoteDataUrl) as TData;
       break;
     case 'preview':
-      seedData = getPreviewData(remoteDataUrl) as TData;
+      seedData = getDevelopmentData(remoteDataUrl) as TData;
       break;
     default:
       logger.warn(`Static seed data for ${environment} not supported`);

@@ -1,20 +1,12 @@
-import type {
-  SiteDefinition,
-  TenantSlugDev,
-  TenantSlugPreview
-} from '@codeware/shared/util/seed';
+import type { SiteDefinition, TenantSlugDev } from '@codeware/shared/util/seed';
 import {
-  bamse,
   cdwrIo,
   codewareSe,
-  marvel,
   moon,
-  star,
-  starWars,
-  sun
+  star
 } from '@codeware/shared/util/seed/site-definitions';
 
-type TenantSlug = TenantSlugDev | TenantSlugPreview;
+type TenantSlug = TenantSlugDev;
 
 /**
  * Which definition fills which seeded workspace.
@@ -26,14 +18,10 @@ type TenantSlug = TenantSlugDev | TenantSlugPreview;
  * Fully typed to ensure that each defined tenant slug has a corresponding site definition.
  */
 const BY_SLUG: Record<TenantSlug, SiteDefinition> = {
-  bamse,
   'cdwr-io': cdwrIo,
   codeware: codewareSe,
-  marvel,
   moon,
-  star,
-  sun,
-  'star-wars': starWars
+  star
 };
 
 /** The definition for a seeded tenant, or nothing if it has none. */
