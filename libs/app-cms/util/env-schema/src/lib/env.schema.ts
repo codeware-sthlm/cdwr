@@ -129,7 +129,7 @@ export const EnvSchema = withEnvVars(
       SEED_DATA_URL: z
         .string({ description: 'URL to public seed data files' })
         .optional(),
-      SEED_SOURCE: SeedSourceSchema.default('cloud-local'),
+      SEED_SOURCE: SeedSourceSchema.default('local'),
       SEED_STRATEGY: SeedStrategySchema.default('delta'),
 
       // Internal
