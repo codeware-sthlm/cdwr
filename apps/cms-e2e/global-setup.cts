@@ -103,8 +103,7 @@ module.exports = async function globalSetup() {
   const warmupRoutes = [
     '/',
     '/lunar-maria',
-    '/lunar-craters',
-    '/lunar-phases',
+    '/moon-members',
     '/admin/collections/pages',
     '/admin/collections/pages/create',
     '/admin/collections/posts'

@@ -71,9 +71,8 @@ test.describe('members-only content', () => {
     // populate, which is what access control causes here.
     await page.goto('/');
 
-    await expect(page.getByRole('link', { name: 'Moon Members' })).toHaveCount(
-      0
-    );
+    // By where it leads rather than by its label, which the site may rename
+    await expect(page.locator('a[href="/moon-members"]')).toHaveCount(0);
   });
 });
 
