@@ -17,12 +17,7 @@ export type {
 } from './lib/site-definition';
 export { manageSeedData, type SeedOptions } from './lib/manage-seed-data';
 export { resolveTenantSeedFromSlug } from './lib/resolve-tenant-from-slug';
-export type {
-  CategoryLookup,
-  TagLookup,
-  TenantLookup,
-  UserLookup
-} from './lib/schema';
+export type { TenantLookup } from './lib/schema';
 
 import { TenantSlug as TenantSlugDev } from './lib/static-data/seed.development';
 
