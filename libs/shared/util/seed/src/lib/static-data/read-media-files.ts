@@ -3,25 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 /**
- * The file-area fixtures every tenant is seeded with, read by name both
- * locally and remotely. Images a definition states itself also live in the
- * 'media' directory, and are not among them.
- */
-const remoteMediaFiles = [
-  'crater-field.png',
-  'data-1.json',
-  'data-2.json',
-  'document-1.pdf',
-  'document-2.pdf',
-  'earthrise.png',
-  'moon-phases.png',
-  'text-1.txt',
-  'text-2.txt',
-  'word-1.docx',
-  'word-2.docx'
-] as const;
-
-/**
  * Stock image file names expected to be available remotely for seeding.
  *
  * The shared platform library — atmospheric wine-country landscapes offered to
@@ -86,10 +67,3 @@ const readFiles = (
  */
 export const readStockMediaFiles = (remoteDataUrl: string | undefined) =>
   readFiles('stock-media', remoteStockMediaFiles, remoteDataUrl);
-
-/**
- * Reads media files either from a remote URL
- * or from the local 'media' directory.
- */
-export const readMediaFiles = (remoteDataUrl: string | undefined) =>
-  readFiles('media', remoteMediaFiles, remoteDataUrl);

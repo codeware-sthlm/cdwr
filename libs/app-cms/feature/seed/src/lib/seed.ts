@@ -223,7 +223,6 @@ export const seed = async (
             { locale: user.locale, transactionID }
           );
 
-          let userId: number;
           if (typeof response === 'object') {
             payload.logger.info(
               `[SEED] User '${user.name}' (${user.locale}) on tenants ${
@@ -231,12 +230,7 @@ export const seed = async (
                 '<none>'
               }`
             );
-            userId = response.id;
-          } else {
-            userId = Number(response);
           }
-          // Save user id to map to lookup users later
-          store.user(user.email, userId);
         } catch (e) {
           const error = e as Error;
           payload.logger.error(error.message);
