@@ -474,6 +474,30 @@ export async function applySiteDefinition(
         )
       );
 
+      const content = {
+        header: page.header,
+        // Payload validates the blocks on the way in, inside this
+        // transaction — which is what makes a dry run exact
+        layout: layout as unknown as Page['layout'],
+        name: page.name,
+        visibility: page.visibility ?? 'public'
+      };
+
+      // The landing page a fresh apply kept, having nothing to hand over to.
+      // What it points at was recreated with the rest, so it takes the
+      // definition's content again instead of keeping ids that are now gone
+      if (handover && !handover.replaced && page.slug === handover.slug) {
+        await payload.update({
+          collection: 'pages',
+          id: handover.id,
+          data: content,
+          locale: ctx.locale,
+          req: { transactionID }
+        });
+        pages.set(page.slug, record('pages', page.slug, handover.id));
+        continue;
+      }
+
       pages.set(
         page.slug,
         record(
@@ -481,16 +505,7 @@ export async function applySiteDefinition(
           page.slug,
           await ensurePage(
             payload,
-            {
-              header: page.header,
-              // Payload validates the blocks on the way in, inside this
-              // transaction — which is what makes a dry run exact
-              layout: layout as unknown as Page['layout'],
-              name: page.name,
-              slug: page.slug,
-              tenant: tenant.id,
-              visibility: page.visibility ?? 'public'
-            },
+            { ...content, slug: page.slug, tenant: tenant.id },
             owned
           )
         )
