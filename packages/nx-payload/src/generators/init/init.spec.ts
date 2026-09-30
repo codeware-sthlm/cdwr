@@ -1,4 +1,12 @@
-import { type Tree, addDependenciesToPackageJson, readJson } from '@nx/devkit';
+import { join } from 'path';
+
+import {
+  NX_VERSION,
+  type Tree,
+  addDependenciesToPackageJson,
+  readJson,
+  readJsonFile
+} from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import type { PackageJson } from 'nx/src/utils/package-json';
 
@@ -9,6 +17,7 @@ import {
 } from '../../utils/versions';
 
 import { initGenerator } from './init';
+import { nxPeers } from './libs/update-dependencies';
 import type { InitSchema } from './schema';
 
 describe('init', () => {
@@ -53,6 +62,26 @@ describe('init', () => {
         next: next16Version
       }
     });
+  });
+
+  it('should add the Nx plugins it builds on at the installed nx version', async () => {
+    await initGenerator(tree, options);
+    const packageJson = readJson<PackageJson>(tree, 'package.json');
+
+    for (const name of nxPeers) {
+      expect(packageJson.devDependencies[name]).toBe(NX_VERSION);
+    }
+  });
+
+  it('should align every @nx peer the plugin declares', () => {
+    const { peerDependencies = {} } = readJsonFile<PackageJson>(
+      join(__dirname, '..', '..', '..', 'package.json')
+    );
+    const declared = Object.keys(peerDependencies)
+      .filter((name) => name.startsWith('@nx/'))
+      .sort();
+
+    expect([...nxPeers].sort()).toEqual(declared);
   });
 
   it('should not add or downgrade Next.js when already present', async () => {
