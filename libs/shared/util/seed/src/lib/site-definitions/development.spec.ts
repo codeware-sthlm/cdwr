@@ -5,13 +5,12 @@ import { moon } from './moon';
 import { star } from './star';
 
 /**
- * What every development workspace shares.
+ * What every development workspace shares, regardless of size.
  *
- * These definitions are not free to be *a* reasonable site — each has to be the
- * one already seeded, because the e2e suite asserts against what the seed
- * produces. The compiler checks the block shapes and this checks the envelope;
- * neither is the real proof. That is `cdwr tenant diff-site`, which reported
- * nothing missing and nothing extra for both.
+ * Moon is a full workspace and Star is a deliberately minimal dummy tenant
+ * (COD-502) — the invariants below hold for both. The richer "three listing
+ * pages" shape below is Moon's alone; see `moon.spec.ts` and `star.spec.ts`
+ * for what each one pins beyond this.
  */
 describe.each([
   ['moon', moon],
@@ -35,22 +34,6 @@ describe.each([
     expect(JSON.stringify(definition)).not.toMatch(/apiKey|lookupApiKey/);
   });
 
-  it('states the three listing pages the seed used to build imperatively', () => {
-    const slugs = definition.pages.map(({ slug }) => slug);
-
-    expect(slugs).toEqual(
-      expect.arrayContaining(['posts', 'tours', 'file-area'])
-    );
-  });
-
-  it('calls the posts listing page Posts in every locale', () => {
-    // `customSeed` hardcoded this name while localising the block's title,
-    // and a diff matches pages by slug — so getting it wrong is invisible
-    const posts = definition.pages.find(({ slug }) => slug === 'posts');
-
-    expect(posts?.name).toBe('Posts');
-  });
-
   it('states the form its home page points at', () => {
     const titles = (definition.forms ?? []).map(({ title }) => title);
 
@@ -70,12 +53,6 @@ describe.each([
     for (const { reference } of definition.navigation ?? []) {
       expect(slugs).toContain(reference.lookupSlug);
     }
-  });
-
-  it('labels the three listings, as the seed did', () => {
-    const labelled = (definition.navigation ?? []).filter(({ label }) => label);
-
-    expect(labelled).toHaveLength(3);
   });
 
   it('keeps the colour and icon each tag pill is drawn with', () => {
@@ -100,3 +77,36 @@ describe.each([
     }
   });
 });
+
+/**
+ * The richer shape only a full workspace carries. Moon is the only one today
+ * — Star is intentionally minimal and does not have listing pages to name.
+ */
+describe.each([['moon', moon]])(
+  'the %s definition, as a full workspace',
+  (_name, definition: SiteDefinition) => {
+    it('states the three listing pages the seed used to build imperatively', () => {
+      const slugs = definition.pages.map(({ slug }) => slug);
+
+      expect(slugs).toEqual(
+        expect.arrayContaining(['posts', 'tours', 'file-area'])
+      );
+    });
+
+    it('calls the posts listing page Posts in every locale', () => {
+      // `customSeed` hardcoded this name while localising the block's title,
+      // and a diff matches pages by slug — so getting it wrong is invisible
+      const posts = definition.pages.find(({ slug }) => slug === 'posts');
+
+      expect(posts?.name).toBe('Posts');
+    });
+
+    it('labels the three listings, as the seed did', () => {
+      const labelled = (definition.navigation ?? []).filter(
+        ({ label }) => label
+      );
+
+      expect(labelled).toHaveLength(3);
+    });
+  }
+);
