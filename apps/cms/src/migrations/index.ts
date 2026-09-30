@@ -71,6 +71,7 @@ import * as migration_20260927_220212_cod_513_gradient_band from './20260927_220
 import * as migration_20260928_202915_cod_515_feature_card_logo from './20260928_202915_cod_515_feature_card_logo';
 import * as migration_20260928_221439_cod_517_illustrations from './20260928_221439_cod_517_illustrations';
 import * as migration_20260929_223328_cod_517_feature_section_link_style from './20260929_223328_cod_517_feature_section_link_style';
+import * as migration_20260930_201622_cod_502_reusable_content_managed_by from './20260930_201622_cod_502_reusable_content_managed_by';
 
 export const migrations = [
   {
@@ -437,5 +438,10 @@ export const migrations = [
     up: migration_20260929_223328_cod_517_feature_section_link_style.up,
     down: migration_20260929_223328_cod_517_feature_section_link_style.down,
     name: '20260929_223328_cod_517_feature_section_link_style'
+  },
+  {
+    up: migration_20260930_201622_cod_502_reusable_content_managed_by.up,
+    down: migration_20260930_201622_cod_502_reusable_content_managed_by.down,
+    name: '20260930_201622_cod_502_reusable_content_managed_by'
   }
 ];
