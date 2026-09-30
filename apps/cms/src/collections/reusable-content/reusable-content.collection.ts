@@ -1,4 +1,7 @@
-import { adminGroups } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import { BlockSlug } from '@codeware/shared/util/payload-types';
 import { getActiveKeys } from '@codeware/shared/util/pure';
 import type { CollectionConfig } from 'payload';
@@ -59,6 +62,7 @@ const reusableContent: CollectionConfig = {
     singular: { en: 'Reusable Content', sv: 'Återanvändbart element' }
   },
   fields: [
+    managedByField(),
     {
       name: 'title',
       label: { en: 'Title', sv: 'Titel' },

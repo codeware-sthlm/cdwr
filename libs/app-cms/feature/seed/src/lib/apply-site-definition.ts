@@ -3,7 +3,12 @@ import {
   type ManagedCollectionSlug,
   managedCollectionSlugs
 } from '@codeware/app-cms/util/definitions';
-import type { Page, Post, Tenant } from '@codeware/shared/util/payload-types';
+import type {
+  Page,
+  Post,
+  ReusableContent,
+  Tenant
+} from '@codeware/shared/util/payload-types';
 import { SiteDefinitionSchema } from '@codeware/shared/util/seed';
 import type { BundledMediaFile } from '@codeware/shared/util/seed';
 import type { SiteDefinition } from '@codeware/shared/util/seed';
@@ -18,6 +23,7 @@ import { ensureMedia } from './local-api/ensure-media';
 import { ensureNavigation } from './local-api/ensure-navigation';
 import { ensurePage } from './local-api/ensure-page';
 import { ensurePost } from './local-api/ensure-post';
+import { ensureReusableContent } from './local-api/ensure-reusable-content';
 import { ensureSiteSetting } from './local-api/ensure-site-setting';
 import { ensureTag } from './local-api/ensure-tag';
 import {
@@ -415,13 +421,48 @@ export async function applySiteDefinition(
       );
     }
 
+    // Filled below, before pages — a page's `reusable-content` block looks a
+    // title up here the same way it looks a form or a tag up in its own map
+    const reusableContent = new Map<string, number>();
+
     const resolver = {
       media: (filename: string) => media.get(filename),
       tag: (slug: string) => tags.get(slug),
       form: (title: string) => forms.get(title),
-      // Not stated by a definition yet; reported rather than silently dropped
-      reusableContent: () => undefined
+      reusableContent: (title: string) => reusableContent.get(title)
     };
+
+    // After media, forms and custom themes, which its own layout may point
+    // at, and before pages, which may place one. Its own layout can never
+    // hold a `reusable-content` block — the collection refuses it — so
+    // `resolver.reusableContent` above is never actually reached here
+    for (const item of definition.reusableContent ?? []) {
+      const layout = await Promise.all(
+        item.layout.map(async (block) =>
+          resolveRichText(
+            payload,
+            resolveBlockReferences(block, resolver, unresolved)
+          )
+        )
+      );
+
+      reusableContent.set(
+        item.title,
+        record(
+          'reusable-content',
+          item.title,
+          await ensureReusableContent(
+            payload,
+            {
+              layout: layout as unknown as ReusableContent['layout'],
+              tenant: tenant.id,
+              title: item.title
+            },
+            owned
+          )
+        )
+      );
+    }
 
     for (const page of definition.pages) {
       const layout = await Promise.all(

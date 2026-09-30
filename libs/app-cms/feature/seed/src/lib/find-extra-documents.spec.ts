@@ -100,7 +100,8 @@ describe('findExtraDocuments', () => {
       media: [{ id: 3, filename: 'stray.png' }],
       forms: [{ id: 4, title: 'Stray' }],
       pages: [{ id: 5, slug: 'stray-page' }],
-      posts: [{ id: 6, slug: 'stray-post' }]
+      posts: [{ id: 6, slug: 'stray-post' }],
+      'reusable-content': [{ id: 7, title: 'Stray' }]
     });
 
     const extra = await findExtraDocuments(payload, definition, 7);
@@ -111,7 +112,8 @@ describe('findExtraDocuments', () => {
       'media',
       'forms',
       'pages',
-      'posts'
+      'posts',
+      'reusable-content'
     ]);
   });
 

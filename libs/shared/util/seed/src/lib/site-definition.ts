@@ -10,6 +10,7 @@ import type {
   Page,
   PillListBlock,
   Post,
+  ReusableContent,
   ReusableContentBlock,
   SiteSetting,
   Tag,
@@ -120,7 +121,8 @@ export type AssertEveryBlockClassified<
 export type MediaRef = { lookupFilename: string };
 export type TagRef = { lookupSlug: string };
 export type FormRef = { lookupTitle: string };
-export type ReusableContentRef = { lookupSlug: string };
+/** Reusable content has no slug, so it is named the way a form is */
+export type ReusableContentRef = { lookupTitle: string };
 
 /**
  * Body text, stated as markdown.
@@ -294,6 +296,24 @@ export type PostDefinition = Pick<Post, 'title'> & {
   createdAt?: string;
 };
 
+/**
+ * A piece of content meant to appear in more than one place.
+ *
+ * Its own layout is restricted to what the collection allows — a subset of a
+ * page's blocks, and never a `reusable-content` block itself, which the
+ * collection refuses. Deriving from `ReusableContent['layout']` rather than
+ * restating the list keeps the two from drifting apart.
+ */
+export type ReusableContentDefinition = {
+  title: string;
+  layout: Array<
+    Extract<
+      BlockDefinition,
+      { blockType: ReusableContent['layout'][number]['blockType'] }
+    >
+  >;
+};
+
 /** A navigation entry points at a page or post this definition states. */
 export type NavigationItemDefinition = {
   reference: { relationTo: 'pages' | 'posts'; lookupSlug: string };
@@ -393,6 +413,8 @@ export type SiteDefinition = {
   media?: Array<MediaDefinition>;
   forms?: Array<FormDefinition>;
   customThemes?: Array<CustomThemeDefinition>;
+  /** Content meant to appear in more than one page or post, by a `reusable-content` block */
+  reusableContent?: Array<ReusableContentDefinition>;
   pages: Array<PageDefinition>;
   posts?: Array<PostDefinition>;
   navigation?: Array<NavigationItemDefinition>;

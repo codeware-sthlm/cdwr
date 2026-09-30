@@ -1170,6 +1170,7 @@ export interface ReusableContentBlock {
 export interface ReusableContent {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   /**
    * What is the reusable content about? This is just an internal help text to keep the content organized.
    */
@@ -3044,6 +3045,7 @@ export interface PostsSelect<T extends boolean = true> {
  */
 export interface ReusableContentSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   title?: T;
   layout?: T | {};
   updatedAt?: T;

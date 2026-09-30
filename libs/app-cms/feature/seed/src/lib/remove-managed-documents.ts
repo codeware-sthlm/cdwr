@@ -29,6 +29,7 @@ export type RemovedDocument = {
 export const FRESH_POLICY = {
   posts: 'recreate',
   pages: 'recreate',
+  'reusable-content': 'recreate',
   forms: 'recreate',
   categories: 'recreate',
   // Only decisions are stated and the tokens are derived, so a recreated
@@ -40,11 +41,13 @@ export const FRESH_POLICY = {
 
 /**
  * The order recreated collections are removed in: whatever points at a
- * document goes before it. Posts reference categories; pages reference forms.
+ * document goes before it. Posts reference categories; pages reference
+ * reusable content, which in turn references forms.
  */
 const RECREATE_ORDER = [
   'posts',
   'pages',
+  'reusable-content',
   'forms',
   'categories',
   'custom-themes'

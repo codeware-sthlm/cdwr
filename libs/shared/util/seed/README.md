@@ -32,9 +32,9 @@ export const acme: SiteDefinition = {
 export default acme;
 ```
 
-The other keys — `tags`, `categories`, `media`, `forms`, `posts`, `navigation`,
-`siteSettings` — are optional and follow the same shape as the collections they
-fill.
+The other keys — `tags`, `categories`, `media`, `forms`, `customThemes`,
+`reusableContent`, `posts`, `navigation`, `siteSettings` — are optional and
+follow the same shape as the collections they fill.
 
 The block types come straight from Payload's generated types, so an editor
 completes them and a wrong field is a compile error rather than a surprise at
@@ -45,13 +45,13 @@ apply time.
 Ids do not exist until the apply creates the documents, so a definition names
 what it points at the way a person would:
 
-| Reference        | Written as                     | Finds                |
-| ---------------- | ------------------------------ | -------------------- |
-| Media            | `{ lookupFilename: 'a.png' }`  | a media file         |
-| Tag              | `{ lookupSlug: 'news' }`       | a tag                |
-| Form             | `{ lookupTitle: 'Contact' }`   | a form               |
-| Reusable content | `{ lookupSlug: 'footer-cta' }` | reusable content     |
-| Author           | `{ lookupEmail: 'a@b.se' }`    | a user of the tenant |
+| Reference        | Written as                      | Finds                |
+| ---------------- | ------------------------------- | -------------------- |
+| Media            | `{ lookupFilename: 'a.png' }`   | a media file         |
+| Tag              | `{ lookupSlug: 'news' }`        | a tag                |
+| Form             | `{ lookupTitle: 'Contact' }`    | a form               |
+| Reusable content | `{ lookupTitle: 'Footer CTA' }` | reusable content     |
+| Author           | `{ lookupEmail: 'a@b.se' }`     | a user of the tenant |
 
 A reference that resolves to nothing is **reported, not silently dropped** — it
 comes back in the report's `unresolved` list, and the apply refuses to commit.
@@ -196,7 +196,8 @@ script.
 
 What it does, inside the same transaction as the apply:
 
-- **Removes every page, post, form and category this definition created** —
+- **Removes every page, post, reusable content, form and category this
+  definition created** —
   found by the `managedBy` an apply stamps on what it creates — and creates
   them again. Edits made to them in the admin go with them; that is the point.
 - **Reuses media and tags** it still names, and removes only the ones it has

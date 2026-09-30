@@ -253,6 +253,87 @@ describe('SiteDefinitionSchema', () => {
     expect(errors).toEqual([]);
   });
 
+  describe('reusable content', () => {
+    it('refuses two entries sharing a title', () => {
+      const definition = {
+        ...minimal,
+        reusableContent: [
+          { title: 'Shared', layout: [] },
+          { title: 'Shared', layout: [] }
+        ]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain("'Shared'");
+    });
+
+    it('refuses a block referring to reusable content it does not state', () => {
+      const definition = {
+        ...minimal,
+        pages: [
+          {
+            name: 'Home',
+            slug: 'home',
+            layout: [
+              {
+                blockType: 'reusable-content',
+                reusableContent: { lookupTitle: 'Nowhere' }
+              }
+            ]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition)).toContainEqual(
+        "No reusable content named 'Nowhere' in this definition"
+      );
+    });
+
+    it('accepts a block referring to reusable content it states, and validates its own layout the same way pages are', () => {
+      const definition = {
+        ...minimal,
+        media: [{ filename: 'hero.jpg', alt: 'A hero', filePath: '/a/b.jpg' }],
+        reusableContent: [
+          {
+            title: 'Shared',
+            layout: [
+              { blockType: 'image', media: { lookupFilename: 'hero.jpg' } }
+            ]
+          }
+        ],
+        pages: [
+          {
+            name: 'Home',
+            slug: 'home',
+            layout: [
+              {
+                blockType: 'reusable-content',
+                reusableContent: { lookupTitle: 'Shared' }
+              }
+            ]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition)).toEqual([]);
+    });
+
+    it("refuses a reference inside its own layout that does not resolve, the same way a page's would", () => {
+      const definition = {
+        ...minimal,
+        reusableContent: [
+          {
+            title: 'Shared',
+            layout: [
+              { blockType: 'image', media: { lookupFilename: 'missing.jpg' } }
+            ]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain('missing.jpg');
+    });
+  });
+
   it('keeps a block it does not understand, rather than refusing it', () => {
     // Block internals are Payload's to judge, inside the rolled-back
     // transaction the dry run uses. This schema only asks that it is a block

@@ -68,12 +68,19 @@ describe('removeRecreatedDocuments', () => {
       categories: [{ id: 2, slug: 'c', ...mine }],
       forms: [{ id: 4, title: 'Contact', ...mine }],
       pages: [{ id: 5, slug: 'p', ...mine }],
-      posts: [{ id: 6, slug: 'q', ...mine }]
+      posts: [{ id: 6, slug: 'q', ...mine }],
+      'reusable-content': [{ id: 8, title: 'Shared', ...mine }]
     });
 
     await removeRecreatedDocuments(payload, definition, 7, options);
 
-    expect(deleted).toEqual(['posts:6', 'pages:5', 'forms:4', 'categories:2']);
+    expect(deleted).toEqual([
+      'posts:6',
+      'pages:5',
+      'reusable-content:8',
+      'forms:4',
+      'categories:2'
+    ]);
   });
 
   it('never deletes media or tags, which a fresh apply reuses', async () => {
