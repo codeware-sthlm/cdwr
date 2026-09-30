@@ -9,11 +9,7 @@
  * Only the seed and the apply scripts import from here, and both are server.
  */
 export { bundledMediaPath } from './lib/bundled-media-path';
-export { bamse } from './lib/site-definitions/bamse';
 export { cdwrIo } from './lib/site-definitions/cdwr-io';
 export { codewareSe } from './lib/site-definitions/codeware-se';
-export { marvel } from './lib/site-definitions/marvel';
 export { moon } from './lib/site-definitions/moon';
 export { star } from './lib/site-definitions/star';
-export { starWars } from './lib/site-definitions/star-wars';
-export { sun } from './lib/site-definitions/sun';

@@ -3,7 +3,6 @@ import { SiteDefinitionSchema } from '../site-definition.schema';
 
 import { moon } from './moon';
 import { star } from './star';
-import { sun } from './sun';
 
 /**
  * What every development workspace shares.
@@ -12,12 +11,11 @@ import { sun } from './sun';
  * one already seeded, because the e2e suite asserts against what the seed
  * produces. The compiler checks the block shapes and this checks the envelope;
  * neither is the real proof. That is `cdwr tenant diff-site`, which reported
- * nothing missing and nothing extra for all three.
+ * nothing missing and nothing extra for both.
  */
 describe.each([
   ['moon', moon],
-  ['star', star],
-  ['sun', sun]
+  ['star', star]
 ])('the %s definition', (_name, definition: SiteDefinition) => {
   it('is a valid site definition', () => {
     const result = SiteDefinitionSchema.safeParse(definition);
@@ -100,14 +98,5 @@ describe.each([
       expect(post.authors?.length).toBeGreaterThan(0);
       expect(post.createdAt).toBeTruthy();
     }
-  });
-});
-
-describe('the sun definition', () => {
-  it('is Swedish, because its tenant is', () => {
-    const fileArea = sun.pages.find(({ slug }) => slug === 'file-area');
-
-    // A definition states one locale; the tenant that names it decides which
-    expect(fileArea?.name).toBe('Filområde');
   });
 });

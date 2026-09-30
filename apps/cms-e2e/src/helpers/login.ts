@@ -18,10 +18,10 @@ export const TEST_USERS = {
   /** Moon tenant user. Core tenant user permission tests. */
   tenantUser: { email: 'phobos@local.dev', password: 'dev' },
 
-  /** Moon+Star+Sun tenant admin. Multi-tenant cookie scoping tests. */
+  /** Moon+Star tenant admin. Multi-tenant cookie scoping tests. */
   multiAdmin: { email: 'black@local.dev', password: 'dev' },
 
-  /** Moon+Star+Sun tenant user. Multi-tenant cookie scoping tests. */
+  /** Moon+Star tenant user. Multi-tenant cookie scoping tests. */
   multiUser: { email: 'iss@local.dev', password: 'dev' },
 
   /** Star-only tenant admin. Represents "no moon access" in cross-tenant tests. */

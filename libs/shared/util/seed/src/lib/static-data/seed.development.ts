@@ -9,7 +9,6 @@ const tenantSlug = {
   cdwrIo: 'cdwr-io',
   codeware: 'codeware',
   moon: 'moon',
-  sun: 'sun',
   star: 'star'
 } as const;
 
@@ -17,7 +16,6 @@ const tenants = {
   cdwrIo: { apiKey: '9d5316b1-0298-4113-904c-6cc10fcacb6c' },
   codeware: { apiKey: '81a86960-43e4-4e7d-ab4f-166c5c168183' },
   moon: { apiKey: 'b9c2fb25-df77-4304-a60a-028779a2cb37' },
-  sun: { apiKey: 'f3799063-d55e-43ab-a96f-b6a386ced985' },
   star: { apiKey: 'a76d0168-f9b2-48d2-bc57-96e45aaf8542' }
 } as const;
 
@@ -75,16 +73,6 @@ export const seedData = (remoteDataUrl: string | undefined) => {
         name: 'Planetary Moons',
         slug: 'planetary-moons',
         tenant: { lookupApiKey: tenants.moon.apiKey }
-      },
-      {
-        name: 'Solaktivitet',
-        slug: 'solar-activity',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
-      },
-      {
-        name: 'Solsystem',
-        slug: 'solar-system',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
       }
     ],
     faq: faqData(),
@@ -156,30 +144,6 @@ export const seedData = (remoteDataUrl: string | undefined) => {
           '## Lunar Phases 🌓\nLunar phases are the different appearances of the Moon as seen from Earth during its monthly orbit.\n### The Lunar Cycle\nThe Moon completes a full cycle of phases approximately every 29.5 days, a period known as a synodic month. This cycle begins with the New Moon (when the Moon is between Earth and the Sun), proceeds through waxing phases as more of the illuminated side becomes visible, reaches Full Moon (when the Moon and Sun are on opposite sides of Earth), and then wanes until returning to New Moon.\n\nThe primary phases in order are: New Moon, Waxing Crescent, First Quarter, Waxing Gibbous, Full Moon, Waning Gibbous, Last Quarter, and Waning Crescent. At First and Last Quarter phases, exactly half of the Moon\'s visible face is illuminated.\n\nLunar phases occur because the Moon orbits Earth while both bodies orbit the Sun. As the Moon moves around Earth, the angle between the Sun, Moon, and Earth changes, altering which portion of the Moon\'s sunlit side is visible from our perspective.\n\nThe Moon always presents approximately the same face toward Earth due to tidal locking. This synchronous rotation means that the Moon\'s rotation period matches its orbital period around Earth, resulting in one side (the near side) always facing us, while the far side remains hidden from direct view.\n\nThroughout history, lunar phases have been used to track time, with many calendars based on the lunar cycle. The words "month" and "moon" share etymological roots in many languages, reflecting this ancient connection.\n',
         slug: 'lunar-phases',
         tenant: { lookupApiKey: tenants.moon.apiKey }
-      },
-      {
-        name: 'Solfläckar',
-        header: 'Kraftfulla utbrott på solens yta',
-        layoutContent:
-          '## Solfläckar ☀️\nSolfläckar är massiva explosioner på solens yta som frigör energi, ljus och hög hastighet partiklar i rymden.\n### Bildning och påverkan\nSolfläckar uppstår nära solfläckar, tillfälliga mörka fläckar på solens yta där intensiva magnetfält uppträder. Dessa magnetfält kan bli vridna och plötsligt återansluta, vilket frigör enorma mängder energi. En typisk stor flare kan frigöra energi motsvarande miljontals 100-megaton vätebomber som exploderar samtidigt.\n\nFrekvensen av solfläckar följer den 11-åriga solcykeln, med fler fläckar under solmaximum när solfläckaktiviteten är högst. Fläckar klassificeras efter deras röntgenljusstyrka, med de mest kraftfulla som X-klass fläckar, följt av M, C, B och A-klass fläckar i minskande ordning av intensitet.\n\nStrålningen från solfläckar kan störa radiokommunikation, GPS-navigering och elnät på jorden. De kan också utgöra en strålningsrisk för astronauter och elektronisk utrustning i rymden. Den mest kraftfulla registrerade fläcken, Carrington-händelsen 1859, orsakade norrsken synliga så långt söderut som Karibien och störde telegrafsystem världen över.\n\nNASA och andra rymdorganisationer övervakar kontinuerligt solen för fläckaktivitet med satelliter som Solar Dynamics Observatory (SDO) och Solar and Heliospheric Observatory (SOHO). Dessa observationer hjälper forskare att bättre förstå solfysik och ge tidiga varningar om potentiellt störande solhändelser.\n\nSolfläckar är ofta associerade med koronala massutkast (CMEs), massiva moln av solplasma som kan färdas genom rymden med hastigheter på flera miljoner miles per timme, och potentiellt nå jorden inom 1-3 dagar.\n',
-        slug: 'solar-flares',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
-      },
-      {
-        name: 'Solvinden',
-        header: 'Strömmen av partiklar från solen',
-        layoutContent:
-          '## Solvinden 🌞\nSolvinden är en kontinuerlig ström av laddade partiklar (främst elektroner och protoner) som strömmar ut från solen i alla riktningar.\n### Egenskaper och effekter\nSolvinden har sitt ursprung i solens korona, det yttersta lagret av solens atmosfär där temperaturerna överstiger en miljon grader Celsius. Vid dessa temperaturer kan solens gravitation inte hålla kvar de snabbt rörliga partiklarna, vilket gör att de kan undkomma ut i rymden.\n\nSolvinden färdas med hastigheter som varierar från 300 till 800 kilometer per sekund (ungefär 1 till 2 miljoner miles per timme). Den bär med sig solens magnetfält, vilket skapar det vi kallar heliosfären - en enorm bubbla av solens inflytande som sträcker sig långt bortom Pluto.\n\nNär solvinden interagerar med jordens magnetfält skapas en skyddande magnetosfär runt vår planet, som skyddar oss från mycket av solens strålning. Vissa partiklar kan dock tränga in nära polerna och kollidera med atmosfäriska molekyler, vilket skapar de vackra norrsken (aurora borealis) och sydsken (aurora australis).\n\nSolvinden är inte uniform utan varierar i densitet, temperatur och hastighet. "Snabb" solvind kommer från koronala hål, områden där solens magnetfält sträcker sig ut i rymden utan att återvända. "Långsam" solvind kommer från områden nära solens ekvator under perioder med låg solaktivitet.\n\nInteraktionen mellan solvinden och det interstellära mediet skapar en gräns som kallas heliopausen, som Voyager-sonden korsade 2012 och blev de första människotillverkade objekten att komma in i interstellärt utrymme.\n',
-        slug: 'solar-wind',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
-      },
-      {
-        name: 'Solens dynamo',
-        header: 'Motorn bakom solaktiviteten',
-        layoutContent:
-          '## Solens dynamo 🧲☀️\nSolens dynamo är mekanismen som genererar solens magnetfält och driver dess 11-åriga aktivitetscykel.\n### Hur det fungerar\nSolens dynamo fungerar genom de kombinerade effekterna av differentialrotation och konvektion inom solen. Solen roterar inte som en solid kropp - dess ekvator fullbordar en rotation på cirka 25 dagar, medan polerna tar cirka 35 dagar. Denna differentialrotation sträcker och lindar magnetfältlinjerna, medan konvektionsströmmar lyfter och vrider dem.\n\nDenna process skapar en självförsörjande dynamoeffekt som kontinuerligt regenererar solens magnetfält. Med tiden blir fältet alltmer komplext och vridet, vilket leder till ökande antal solfläckar, flares och andra magnetiska fenomen - det vi observerar som solens maximala period i cykeln.\n\nSå småningom blir magnetfältet så trassligt att det i princip "återställer" sig självt i en process som kallas magnetisk rekoppling. Fältet förenklas och byter polaritet, vilket börjar nästa cykel med att de magnetiska nord- och sydpolerna byts. Denna fullständiga cykel, från en polaritet till samma polaritet igen, tar cirka 22 år (två 11-åriga solfläckscykler).\n\nSolens dynamo fungerar inte med konstant hastighet. Historiska register visar perioder med ovanligt låg aktivitet, såsom Maunder Minimum (1645-1715), när solfläckar var extremt sällsynta och Europa upplevde en "Liten istid." Detta antyder en potentiell koppling mellan solens magnetiska aktivitet och jordens klimat, även om det exakta sambandet fortfarande är ett aktivt forskningsområde.\n\nStudier av solens dynamo hjälper forskare att förutsäga solaktivitet, vilket är avgörande för att förutse rymdväderhändelser som kan påverka satelliter, elnät och telekommunikation på jorden.\n',
-        slug: 'solar-dynamo',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
       },
       {
         name: 'Home',
@@ -285,59 +249,6 @@ export const seedData = (remoteDataUrl: string | undefined) => {
           heading: 'Fascinated by the Moon?',
           body: 'Learn more about lunar geology, atmosphere and the history of lunar exploration.',
           link: { url: '/lunar-maria', label: 'Read articles' }
-        }
-      },
-      {
-        name: 'Hem',
-        slug: 'home',
-        tenant: { lookupApiKey: tenants.sun.apiKey },
-        hero: {
-          badge: 'Sun',
-          heading: 'Sommar och sol.',
-          lede: 'Solen är den centrala stjärnan i vårt planetsystem, runt vilken planeter, månar och asteroider kretsar.',
-          actions: [
-            {
-              link: { url: '/solar-flares', label: 'Utforska' },
-              emphasis: 'primary' as const
-            },
-            {
-              link: { url: '/solar-wind', label: 'Solvinden' },
-              emphasis: 'secondary' as const
-            }
-          ]
-        },
-        featureCards: {
-          eyebrow: 'Utforska',
-          heading: 'Vår stjärna – solen',
-          intro:
-            'Från mäktiga solutbrott till mystiska solcykler – utforska vetenskapen bakom vår livgivande stjärna.',
-          columns: '3' as const,
-          items: [
-            {
-              brand: { icon: 'BoltIcon', color: 'orange-500' },
-              title: 'Solfläckar',
-              description:
-                'Massiva explosioner på solens yta som frigör enorm energi och påverkar hela solsystemet.'
-            },
-            {
-              brand: { icon: 'GlobeAltIcon', color: 'sky-400' },
-              title: 'Solvinden',
-              description:
-                'Den kontinuerliga strömmen av laddade partiklar som strömmar ut från solen i alla riktningar.'
-            },
-            {
-              brand: { icon: 'Cog6ToothIcon', color: 'blue-400' },
-              title: 'Solens dynamo',
-              description:
-                'Mekanismen som genererar solens magnetfält och driver dess 11-åriga aktivitetscykel.'
-            }
-          ]
-        },
-        callout: {
-          showMark: true,
-          heading: 'Nyfiken på solen?',
-          body: 'Fördjupa dig i vår samling av artiklar om solaktivitet och solsystemet.',
-          link: { url: '/solar-flares', label: 'Läs artiklar' }
         }
       }
     ],
@@ -482,20 +393,6 @@ export const seedData = (remoteDataUrl: string | undefined) => {
         url: 'https://example.com/atacama-array',
         note: 'Professional array on the plateau, daytime visits only.',
         tenant: { lookupApiKey: tenants.star.apiKey }
-      },
-      {
-        name: 'Abisko Fjällstation',
-        kind: 'hotel',
-        url: 'https://example.com/abisko',
-        note: 'Basläger med utsikt över Torneträsk.',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
-      },
-      {
-        name: 'Solobservatoriet',
-        kind: 'activity',
-        url: 'https://example.com/solobservatoriet',
-        note: 'Observation i vitt ljus och H-alfa.',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
       }
     ],
     posts: [
@@ -578,46 +475,6 @@ export const seedData = (remoteDataUrl: string | undefined) => {
         content:
           "# The Moon's Formation\nThe origin of the Moon has fascinated humans since ancient times, but only in recent decades have scientists developed a compelling theory for its formation. The currently accepted model, known as the Giant Impact Hypothesis, suggests that about 4.5 billion years ago, a Mars-sized body (sometimes called Theia) collided with the proto-Earth.\n\nThis catastrophic impact ejected a vast amount of material from both the impactor and Earth's mantle into orbit around our planet. Within this debris disk, material began to coalesce, eventually forming the Moon. This violent birth explains several key observations about the Earth-Moon system.\n\nComputer simulations of the impact event closely match the current Earth-Moon system, including the Moon's relatively small iron core compared to Earth's. The hypothesis also accounts for the Moon's loss of volatile elements and explains why the Moon's orbit is in the same plane as Earth's equator.\n\n## Evidence for the Theory\nSamples returned by Apollo missions have been crucial in supporting the Giant Impact Theory. Moon rocks show isotopic compositions remarkably similar to Earth's mantle, suggesting a common origin, but they contain significantly less water and other volatile elements, consistent with the high-energy, high-temperature conditions of a giant impact.\n\nThe Moon's slightly elongated orbit and the fact that it's slowly receding from Earth (currently at a rate of about 3.8 centimeters per year) are also consistent with this formation model. Additionally, the Moon's density and internal structure—with a small core making up only about 20% of its volume compared to Earth's core at 30%—align with predictions of the impact hypothesis.\n\n",
         tenant: { lookupApiKey: tenants.moon.apiKey }
-      },
-      {
-        title: 'Solens Kärna',
-        slug: 'the-solar-core',
-        createdAt: '2026-11-01',
-        authors: [{ lookupEmail: 'rigel@local.dev' }],
-        categories: [{ lookupSlug: 'solar-activity' }],
-        content:
-          '# Solens Kärna\nI hjärtat av vår sol ligger dess kärna, en region med extrema förhållanden där kärnfusion driver vårt solsystem. Trots att den är relativt liten—och upptar endast cirka 20-25% av solens radie—innehåller kärnan ungefär 60% av solens massa på grund av dess otroliga densitet.\n\nKärnans temperatur når otroliga 15 miljoner grader Celsius (27 miljoner grader Fahrenheit), och dess tryck överstiger 200 miljarder gånger jordens atmosfärstryck. Under dessa extrema förhållanden tvingas väte-kärnor samman för att bilda helium genom kärnfusion, vilket frigör enorma mängder energi i processen.\n\nDenna energi, initialt i form av gammastrålar, påbörjar en resa som tar tusentals år att nå solens yta och slutligen jorden. Partiklarna interagerar otaliga gånger på vägen utåt, förlorar gradvis energi och omvandlas från gammastrålar till synligt ljus som slutligen strålar ut i rymden.\n\n## Detektion och Studier\nMänniskor har aldrig direkt observerat solens kärna—den är dold under tusentals kilometer av het plasma. Forskare har dock utvecklat geniala metoder för att studera den indirekt.\n\nHelioseismologi, studiet av oscillationer som sprider sig genom solen, tillåter astronomer att "se" inuti vår stjärna på samma sätt som seismologer använder jordbävningsvågor för att studera jordens inre. Dessutom kan neutriner—nästan masslösa subatomära partiklar som produceras under fusionsreaktioner—undkomma kärnan direkt och detekteras på jorden, vilket ger ett realtidsfönster in i de nukleära processerna som sker i solens centrum.\n\n',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
-      },
-      {
-        title: 'Solens Cykler',
-        slug: 'solar-cycles',
-        createdAt: '2026-11-15',
-        authors: [{ lookupEmail: 'rigel@local.dev' }],
-        categories: [{ lookupSlug: 'solar-activity' }],
-        content:
-          '# Solens Cykler\nSolen, långt från att vara ett statiskt objekt, går igenom regelbundna cykler av aktivitet som påverkar vårt solsystem på djupet. Den mest framträdande av dessa är den ungefär 11-åriga solfläckscykeln, under vilken antalet solfläckar—mörka, magnetiskt intensiva områden på solens yta—stiger och sjunker i ett relativt förutsägbart mönster.\n\nVid solminimum kan solen visa få eller inga solfläckar under dagar eller veckor. När aktiviteten ökar mot solmaximum kan dussintals solfläckar dyka upp samtidigt, åtföljda av ökade solutbrott, koronamassutkastningar och andra energirika fenomen. Dessa cykler har observerats och registrerats sedan tidigt 1600-tal, vilket ger en av astronomins längsta kontinuerliga dataserier.\n\nSolcykeln är faktiskt ett magnetiskt fenomen. Under varje cykel reverserar solens magnetfält helt polaritet, vilket innebär att en full magnetisk cykel tar ungefär 22 år—två 11-åriga solfläckscykler. Denna reversering sker vid solmaximum, när fältet är som mest trassligt och kaotiskt.\n\n## Effekter på jorden\nSolcykler har många effekter på jorden och mänsklig teknik. Under solmaximum kan ökad solaktivitet störa radiokommunikation, skada satelliter, skapa strålningsrisker för astronauter och till och med orsaka strömavbrott. De spektakulära norrsken och sydsken blir mer frekventa och synliga på lägre latituder under dessa aktiva perioder.\n\nForskare har också identifierat potentiella kopplingar mellan solcykler och jordens klimat, även om dessa samband är komplexa och föremål för pågående forskning. Historiska register visar perioder av ovanligt låg solaktivitet, såsom Maunder Minimum (1645-1715), som sammanföll med en period av kallare temperaturer i Europa känd som "Lilla istiden." Att förstå dessa samband är fortfarande viktigt för klimatforskning.\n\n',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
-      },
-      {
-        title: 'Heliosfären',
-        slug: 'the-heliosphere',
-        createdAt: '2026-12-01',
-        authors: [{ lookupEmail: 'rigel@local.dev' }],
-        categories: [{ lookupSlug: 'solar-system' }],
-        content:
-          '# Heliosfären\nHeliosfären är den enorma bubbelliknande regionen i rymden som domineras av solens magnetfält och solvind. Denna skyddande kappa skyddar vårt solsystem från den hårda interstellära strålningsmiljön och representerar solens sfär av fysisk påverkan.\n\nSolvinden—en ström av laddade partiklar som kontinuerligt strömmar utåt från solen i alla riktningar—skapar och upprätthåller heliosfären. När denna supersoniska vind färdas utåt, saktar den slutligen ner när den möter motstånd från det interstellära mediet, vilket bildar en gräns kallad termination shock. Bortom detta ligger heliosheath, en turbulent region där solvinden komprimeras och saktas ytterligare.\n\nDen yttersta gränsen för heliosfären är heliopausen, där trycket från solvinden balanserar med trycket från det interstellära mediet. Detta markerar den verkliga kanten av vårt solsystem när det gäller solens partikel- och magnetpåverkan. Bortom detta ligger interstellär rymd.\n\n## Utforskning och upptäckt\nÅr 2012 blev NASAs Voyager 1-rymdfarkost det första människotillverkade objektet att korsa heliopausen och gå in i interstellär rymd, följt av Voyager 2 år 2018. Dessa historiska korsningar gav oöverträffade data om gränsvillkoren mellan vårt solsystem och interstellär rymd.\n\nFormen på heliosfären har varit föremål för vetenskaplig debatt. Även om den ofta avbildas som kometliknande med en lång svans, tyder nyare forskning på att den kan vara mer sfärisk eller croissantformad. Interstellar Boundary Explorer (IBEX)-uppdraget har kartlagt gränsregionerna sedan 2008 och avslöjat oväntade funktioner, inklusive ett "band" av energirika neutrala atomer som verkar vara i linje med det lokala interstellära magnetfältet.\n\n',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
-      },
-      {
-        title: 'Solens Atmosfär',
-        slug: 'the-suns-atmosphere',
-        createdAt: '2026-12-15',
-        authors: [{ lookupEmail: 'ross@local.dev' }],
-        categories: [{ lookupSlug: 'solar-activity' }],
-        content:
-          '# Solens Atmosfär\nTill skillnad från jordens atmosfär med dess väldefinierade gräns, består solens atmosfär av flera distinkta lager som sträcker sig från dess synliga yta ut i rymden. Dessa lager uppvisar fascinerande och ibland kontraintuitiva egenskaper som fortsätter att utmana vår förståelse av stjärnfysik.\n\nFotosfären, eller solens synliga "yta", markerar det lägsta lagret av solens atmosfär. Detta relativt tunna lager (cirka 500 kilometer tjockt) har en temperatur på omkring 5 500°C (10 000°F) och är där det mesta av solens synliga ljus härstammar från. Fotosfärens granulära utseende avslöjar konvektionsceller där het plasma stiger, kyls och sjunker tillbaka.\n\nOvanför fotosfären ligger kromosfären, ett lager på cirka 2 000 kilometer som framträder som en tunn röd kant under totala solförmörkelser. Mot normalt förväntat, stiger temperaturen faktiskt genom kromosfären och når cirka 20 000°C vid dess övre gräns. Denna temperaturinversion representerar ett av de pågående mysterierna inom solfysiken.\n\n## Den Mystiska Koronan\nDet yttersta lagret av solens atmosfär är koronan, en tunn men extremt het region som sträcker sig miljontals kilometer ut i rymden. Med temperaturer som överstiger 1 miljon grader Celsius, är koronan mystiskt hundratals gånger varmare än lagren nedanför—ett fenomen känt som koronal uppvärmningsproblemet.\n\nKoronan är normalt osynlig på grund av fotosfärens överväldigande ljusstyrka, men blir spektakulärt synlig under totala solförmörkelser som en pärlvitt halo runt den mörklagda solen. Rymdbaserade instrument med koronografer, som blockerar solens skiva, tillåter forskare att studera koronan kontinuerligt. Koronan har ingen bestämd yttergräns och övergår gradvis till solvinden som fyller heliosfären.\n\n',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
       }
     ],
     // All tenants get file area and color-coded tags for testing purposes
@@ -686,15 +543,6 @@ export const seedData = (remoteDataUrl: string | undefined) => {
         locale: 'en',
         supportedLocales: ['en'],
         apiKey: tenants.star.apiKey
-      },
-      {
-        name: 'Sun',
-        slug: tenantSlug.sun,
-        description:
-          'Solen är den centrala stjärnan i ett planetsystem, runt vilken planeter, månar, asteroider och andra himlakroppar kretsar.',
-        locale: 'sv',
-        supportedLocales: ['sv'],
-        apiKey: tenants.sun.apiKey
       }
     ],
     tours: [
@@ -860,57 +708,6 @@ export const seedData = (remoteDataUrl: string | undefined) => {
         content:
           "## What's included\nSix nights in the valley, all breakfasts and dinners, telescope hire and nightly guiding.\n\n## Good to know\nThe site sits at 2,400 metres. Take the first day slowly.\n",
         tenant: { lookupApiKey: tenants.star.apiKey }
-      },
-      {
-        title: 'Solförmörkelsejakten',
-        slug: 'solformorkelsejakten',
-        summary:
-          'Fem dagar längs totalitetsstråket, med de bästa platserna bokade i förväg.',
-        destination: 'Kiruna, Sverige',
-        duration: '5 dagar',
-        price: 1600,
-        currency: 'SEK',
-        departureDate: '2027-08-16',
-        bookingDeadline: '2027-06-16',
-        heroImage: 'stock-vinerows-2.jpg',
-        intent: 'booking' as const,
-        included: [
-          'Fyra nätter med frukost',
-          'Solfilter',
-          'Transfer till observationsplatsen'
-        ],
-        notIncluded: ['Flyg till Kiruna', 'Luncher och middagar'],
-        itinerary: [
-          {
-            places: ['Abisko Fjällstation'],
-            title: 'Ankomst och genomgång',
-            description:
-              'Incheckning, utdelning av solfilter och en genomgång av veckans väderprognoser.'
-          },
-          {
-            places: ['Solobservatoriet'],
-            title: 'Solfläckar på dagtid',
-            description:
-              'Observation i vitt ljus och H-alfa från terrassen, om molnen tillåter.'
-          },
-          {
-            title: 'Förmörkelsedagen',
-            description:
-              'Tidig avfärd till observationsplatsen. Totaliteten varar i två minuter och tolv sekunder.'
-          },
-          {
-            title: 'Norrsken',
-            description:
-              'Kvällstur norrut när solaktiviteten ger utdelning även efter mörkrets inbrott.'
-          },
-          {
-            title: 'Hemresa',
-            description: 'Frukost, bildvisning och transfer till flygplatsen.'
-          }
-        ],
-        content:
-          '## Det här ingår\nFyra nätter, alla frukostar, solfilter och transfer till observationsplatsen.\n\n## Bra att veta\nGruppen är begränsad till tolv resenärer. Klä dig varmt, det blir kallt i skuggan.\n',
-        tenant: { lookupApiKey: tenants.sun.apiKey }
       }
     ],
     users: [
@@ -938,10 +735,6 @@ export const seedData = (remoteDataUrl: string | undefined) => {
           {
             lookupApiKey: tenants.moon.apiKey,
             role: 'admin'
-          },
-          {
-            lookupApiKey: tenants.sun.apiKey,
-            role: 'admin'
           }
         ]
       },
@@ -960,8 +753,7 @@ export const seedData = (remoteDataUrl: string | undefined) => {
           {
             lookupApiKey: tenants.moon.apiKey,
             role: 'user'
-          },
-          { lookupApiKey: tenants.sun.apiKey, role: 'user' }
+          }
         ]
       },
       {
@@ -1020,29 +812,6 @@ export const seedData = (remoteDataUrl: string | undefined) => {
         role: 'user',
         locale: 'en',
         tenants: [{ lookupApiKey: tenants.moon.apiKey, role: 'user' }]
-      },
-      {
-        name: 'Rigel Sun',
-        description: 'Administratör för Sun',
-        email: 'rigel@local.dev',
-        password: '',
-        role: 'user',
-        locale: 'sv',
-        tenants: [
-          {
-            lookupApiKey: tenants.sun.apiKey,
-            role: 'admin'
-          }
-        ]
-      },
-      {
-        name: 'Ross Sun',
-        description: 'Användare med åtkomst till Sun',
-        email: 'ross@local.dev',
-        password: '',
-        role: 'user',
-        locale: 'sv',
-        tenants: [{ lookupApiKey: tenants.sun.apiKey, role: 'user' }]
       }
     ]
   };

@@ -24,6 +24,5 @@ export type {
 } from './lib/schema';
 
 import { TenantSlug as TenantSlugDev } from './lib/static-data/seed.development';
-import { TenantSlug as TenantSlugPreview } from './lib/static-data/seed.preview';
 
-export type { TenantSlugDev, TenantSlugPreview };
+export type { TenantSlugDev };
