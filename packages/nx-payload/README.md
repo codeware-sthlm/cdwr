@@ -338,6 +338,24 @@ Now Payload will run migrations automatically when starting in production mode.
 > [!IMPORTANT]
 > The property `db.prodMigrations` in `payload.config.ts` must be set for this to work.
 
+#### pnpm stops with `ERR_PNPM_IGNORED_BUILDS` <!-- omit in toc -->
+
+pnpm 10 and later only run the build scripts of dependencies you have approved, and fail the install otherwise. Payload and Next.js depend on packages that have them, such as `esbuild` and `sharp`.
+
+When it happens while creating a workspace with the preset, the workspace is created but the preset never runs, so there is no application. Approve the builds in the new workspace and generate the application yourself:
+
+```sh
+pnpm approve-builds
+pnpm install
+nx g @cdwr/nx-payload:app [app-name]
+```
+
+When it happens while adding the plugin, approve the builds and run `nx add @cdwr/nx-payload` again.
+
+#### pnpm installs an older version than the latest release <!-- omit in toc -->
+
+pnpm 11 does not install a version published less than a day ago (`minimumReleaseAge`) and quietly picks the newest one old enough. A new release of the plugin is therefore available a day after it is published. To take it sooner, add it to `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`.
+
 ## You don't have an Nx workspace?
 
 Just use the plugin sibling to get started from scratch.
