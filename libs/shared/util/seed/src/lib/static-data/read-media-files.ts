@@ -8,13 +8,13 @@ import { fileURLToPath } from 'url';
  * 'media' directory, and are not among them.
  */
 const remoteMediaFiles = [
-  'abstract-image-1.jpg',
-  'abstract-image-2.jpg',
-  'abstract-image-3.jpg',
+  'crater-field.png',
   'data-1.json',
   'data-2.json',
   'document-1.pdf',
   'document-2.pdf',
+  'earthrise.png',
+  'moon-phases.png',
   'text-1.txt',
   'text-2.txt',
   'word-1.docx',

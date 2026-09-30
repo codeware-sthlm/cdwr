@@ -75,7 +75,10 @@ test.describe('GET /api/palette-search', () => {
     expect(results.length).toBeGreaterThan(0);
     expect(results.some((r) => r.collectionSlug === 'pages')).toBe(true);
     expect(results.some((r) => r.collectionSlug === 'posts')).toBe(true);
-    expect(results.every((r) => r.title.includes('Lunar'))).toBe(true);
+    // `contains` ignores case, and media is titled by its alt text
+    expect(results.every((r) => r.title.toLowerCase().includes('lunar'))).toBe(
+      true
+    );
   });
 
   test('finds a never-published draft page', async ({ page, browser }) => {

@@ -132,8 +132,8 @@ const stem = (value: string) => value.replace(/\.[^.]+$/, '');
 /**
  * Whether a stored file is the one a definition asked for.
  *
- * Uploading renames: a definition states `abstract-image-1.jpg` and the tenant
- * ends up with `moon-abstract-image-1.jpg`. `ensureMedia` finds it again with a
+ * Uploading renames: a definition states `crater-field.png` and the tenant
+ * ends up with `moon-crater-field.png`. `ensureMedia` finds it again with a
  * `contains` on the stem, so this has to ask the same question — matching
  * exactly here would report every media file as extra while the apply reported
  * the very same file as already there.

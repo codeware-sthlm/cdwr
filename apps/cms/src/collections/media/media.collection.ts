@@ -69,7 +69,7 @@ const prefixFilenameWithTenant: CollectionBeforeOperationHook<
       }
 
       // S3: store tenant slug as prefix so files land in tenant folders
-      // e.g. star/star-abstract-image-1.jpg
+      // e.g. star/star-crater-field.png
       data.prefix = tenant.slug;
     }
   } catch {
@@ -187,7 +187,7 @@ const media: CollectionConfig = {
     }),
     {
       // Stores the tenant slug for S3 storage — used by the cloud storage plugin
-      // to build the S3 key: {prefix}/{filename} (e.g. star/star-abstract-image-1.jpg).
+      // to build the S3 key: {prefix}/{filename} (e.g. star/star-crater-field.png).
       // Set automatically by the beforeOperation hook; not shown in admin UI.
       // afterRead: coerce null → undefined so the S3 delete handler's `{ prefix = '' }`
       // default kicks in for records created before this hook existed.
