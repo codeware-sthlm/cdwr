@@ -56,8 +56,6 @@ module.exports = async () => {
 
   // The rest of the pnpm sandbox settings are static and live in `.env.e2e`
 
-  backupPackageJsonFiles();
-
   // Only the publishable packages. The `apps` release group (cms, web) has no
   // `nx-release-publish` target, so an unscoped `releasePublish` errors with
   // "projects were matched for publishing but do not have the nx-release-publish
@@ -68,6 +66,8 @@ module.exports = async () => {
   // Jest runs no teardown when its setup fails, so a failure from here on
   // would leave the registry running and the manifests on the e2e version
   try {
+    backupPackageJsonFiles();
+
     await releaseVersion({
       specifier: `0.0.${Date.now()}-e2e`,
       stageChanges: false,
@@ -95,9 +95,15 @@ module.exports = async () => {
       verbose
     });
   } catch (error) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (global as any).stopLocalRegistry?.();
+    // The manifests first, and a registry that will not stop logged rather
+    // than thrown, so neither costs the other or hides the failure itself
     restorePackageJsonFiles();
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (global as any).stopLocalRegistry?.();
+    } catch (stopError) {
+      console.warn('Failed to stop the local registry:', stopError);
+    }
     throw error;
   }
 };
