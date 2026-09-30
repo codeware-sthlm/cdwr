@@ -1,4 +1,4 @@
-import { storedIllustration } from './illustration.field';
+import { storedIllustration, validateIllustration } from './illustration.field';
 
 describe('storedIllustration', () => {
   it('stores a blank drawing as none', () => {
@@ -18,5 +18,22 @@ describe('storedIllustration', () => {
     expect(stored).toContain('viewBox="0 0 10 10"');
     expect(stored).toContain('fill="var(--brand-500)"');
     expect(stored).not.toMatch(/onload|script/);
+  });
+
+  it('stores code that is not a drawing as none', () => {
+    expect(storedIllustration('<div>Not SVG</div>')).toBeNull();
+    expect(storedIllustration('just text')).toBeNull();
+  });
+});
+
+describe('validateIllustration', () => {
+  it('accepts a drawing, a blank field and no value', () => {
+    expect(validateIllustration('<svg viewBox="0 0 1 1"></svg>')).toBe(true);
+    expect(validateIllustration('  ')).toBe(true);
+    expect(validateIllustration(null)).toBe(true);
+  });
+
+  it('turns down code that is not a drawing', () => {
+    expect(validateIllustration('<div>Not SVG</div>')).toBe(false);
   });
 });
