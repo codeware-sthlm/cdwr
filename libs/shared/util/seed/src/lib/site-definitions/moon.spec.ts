@@ -11,13 +11,7 @@ describe('the moon definition', () => {
 
     // Changing any of these is changing what the suite tests, not a rename
     expect(slugs).toEqual(
-      expect.arrayContaining([
-        'home',
-        'moon-members',
-        'lunar-maria',
-        'lunar-craters',
-        'lunar-phases'
-      ])
+      expect.arrayContaining(['home', 'moon-members', 'lunar-maria'])
     );
   });
 

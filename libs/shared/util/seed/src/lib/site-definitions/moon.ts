@@ -1,10 +1,17 @@
 import type { SiteDefinition } from '../site-definition';
 
+import {
+  moonCalloutIllustration,
+  moonFeatureIllustration,
+  moonHeroIllustration
+} from './moon-illustrations';
+
 /**
- * The Moon workspace, as it is seeded in development.
+ * The Moon workspace: the seeded test tenant with every block and collection,
+ * for trying a feature locally or in a pull request's preview.
  *
- * Transcribed from `seed.development.ts` rather than invented, so what a
- * developer sees after `nx re-seed cms` does not change with this format.
+ * The e2e suite asserts on its content, so change what exists deliberately.
+ * The abstract images are file-area fixtures; the pictures are illustrations.
  */
 
 export const moon: SiteDefinition = {
@@ -93,6 +100,21 @@ export const moon: SiteDefinition = {
           lookupSlug: 'file-area'
         }
       ]
+    },
+    {
+      filename: 'moon-landscape.png',
+      external: true,
+      alt: 'The Moon rising over dark hills, beside a small observatory dome'
+    },
+    {
+      filename: 'observing-night.png',
+      external: true,
+      alt: 'A telescope aimed at a crescent Moon, a lantern lighting a star chart'
+    },
+    {
+      filename: 'astronomer-avatar.png',
+      external: true,
+      alt: 'An illustrated portrait of a smiling observer in a knit hat'
     },
     {
       filename: 'data-1.json',
@@ -194,13 +216,144 @@ export const moon: SiteDefinition = {
         },
         {
           blockType: 'image',
-          media: { lookupFilename: 'abstract-image-3.jpg' }
+          media: { lookupFilename: 'observing-night.png' }
         }
       ]
     }
   ],
 
   pages: [
+    {
+      name: 'Home',
+      slug: 'home',
+      layout: [
+        {
+          blockType: 'hero',
+          illustration: moonHeroIllustration,
+          badge: 'Moon',
+          heading: 'Look at the silver moon.',
+          lede: 'A natural satellite that orbits a planet or other celestial body larger than itself.',
+          actions: [
+            {
+              link: {
+                type: 'custom',
+                url: '/lunar-maria',
+                label: 'Explore',
+                newTab: false
+              },
+              emphasis: 'primary'
+            },
+            {
+              link: {
+                type: 'custom',
+                url: '/about',
+                label: 'About Moon',
+                newTab: false
+              },
+              emphasis: 'secondary'
+            }
+          ]
+        },
+        {
+          blockType: 'feature-cards',
+          eyebrow: 'Discover',
+          heading: 'The Moon Up Close',
+          intro:
+            "From dark volcanic plains to ancient craters, explore the many faces of Earth's closest celestial neighbour.",
+          columns: '3',
+          items: [
+            {
+              brand: {
+                icon: 'GlobeAltIcon',
+                color: 'stone-500'
+              },
+              title: 'Lunar Maria',
+              description:
+                'Dark basaltic plains formed by volcanic eruptions that flooded ancient impact basins.'
+            },
+            {
+              brand: {
+                icon: 'MapPinIcon',
+                color: 'gray-400'
+              },
+              title: 'Guided Tours',
+              description:
+                'Small-group tours through mission control and the kit that makes a night under the Moon worthwhile.'
+            },
+            {
+              brand: {
+                icon: 'MoonIcon',
+                color: 'yellow-300'
+              },
+              title: 'Mission Control',
+              description:
+                'The people and tools behind Moon, from a backyard telescope to a published star chart.'
+            }
+          ]
+        },
+        {
+          blockType: 'callout',
+          illustration: moonCalloutIllustration,
+          showMark: true,
+          heading: 'Fascinated by the Moon?',
+          body: 'Learn more about lunar geology, atmosphere and the history of lunar exploration.',
+          link: {
+            type: 'custom',
+            url: '/lunar-maria',
+            label: 'Read articles',
+            newTab: false
+          }
+        },
+        {
+          blockType: 'form',
+          form: { lookupTitle: 'Contact' },
+          enableIntro: true,
+          introContent: {
+            markdown:
+              '## Curious? Reach out.\n\nOne field, nothing more. Leave your email and we will take it from there.'
+          }
+        }
+      ]
+    },
+    {
+      name: 'Lunar Maria',
+      slug: 'lunar-maria',
+      header: 'The Dark Plains of the Moon',
+      layout: [
+        {
+          blockType: 'content',
+          columns: [
+            {
+              size: 'full',
+              richText: {
+                markdown:
+                  "## Lunar Maria 🌑\nLunar maria are the dark, basaltic plains on the Moon formed by ancient volcanic eruptions.\n### Formation and Characteristics\nThe term \"maria\" (Latin for \"seas\") dates back to early astronomers who mistook these dark regions for actual bodies of water. We now know they are vast solidified flows of basaltic lava that erupted billions of years ago.\n\nLunar maria cover about 16% of the Moon's surface, primarily on the near side. The most prominent maria include Mare Imbrium (Sea of Rains), Mare Serenitatis (Sea of Serenity), and Mare Tranquillitatis (Sea of Tranquility) - where humans first landed during the Apollo 11 mission.\n\nThese dark plains formed between 3 and 3.5 billion years ago when molten magma from the Moon's interior flooded large impact basins. The maria are significantly younger than the lighter, heavily cratered highland regions that make up most of the lunar surface.\n\nThe maria contain fewer craters than the highlands because they formed later in the Moon's history, after the heaviest period of meteorite bombardment. They also contain higher concentrations of iron-rich minerals, which gives them their darker appearance.\n\nSamples returned by Apollo astronauts revealed that maria basalts differ in composition from Earth's volcanic rocks, providing important clues about the Moon's formation and evolution.\n"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      name: 'Moon Members',
+      slug: 'moon-members',
+      header: 'For members of the Moon workspace',
+      visibility: 'members',
+      layout: [
+        {
+          blockType: 'content',
+          columns: [
+            {
+              size: 'full',
+              richText: {
+                markdown:
+                  '## Members only 🔒\nThis page is restricted to signed-in members of the Moon workspace. The public site must never render it, and a member of another workspace must not see it either.\n'
+              }
+            }
+          ]
+        }
+      ]
+    },
     {
       name: 'Posts',
       slug: 'posts',
@@ -238,173 +391,6 @@ export const moon: SiteDefinition = {
       ]
     },
     {
-      name: 'Moon Members',
-      slug: 'moon-members',
-      header: 'For members of the Moon workspace',
-      visibility: 'members',
-      layout: [
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown:
-                  '## Members only 🔒\nThis page is restricted to signed-in members of the Moon workspace. The public site must never render it, and a member of another workspace must not see it either.\n'
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      name: 'Lunar Maria',
-      slug: 'lunar-maria',
-      header: 'The Dark Plains of the Moon',
-      layout: [
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown:
-                  "## Lunar Maria 🌑\nLunar maria are the dark, basaltic plains on the Moon formed by ancient volcanic eruptions.\n### Formation and Characteristics\nThe term \"maria\" (Latin for \"seas\") dates back to early astronomers who mistook these dark regions for actual bodies of water. We now know they are vast solidified flows of basaltic lava that erupted billions of years ago.\n\nLunar maria cover about 16% of the Moon's surface, primarily on the near side. The most prominent maria include Mare Imbrium (Sea of Rains), Mare Serenitatis (Sea of Serenity), and Mare Tranquillitatis (Sea of Tranquility) - where humans first landed during the Apollo 11 mission.\n\nThese dark plains formed between 3 and 3.5 billion years ago when molten magma from the Moon's interior flooded large impact basins. The maria are significantly younger than the lighter, heavily cratered highland regions that make up most of the lunar surface.\n\nThe maria contain fewer craters than the highlands because they formed later in the Moon's history, after the heaviest period of meteorite bombardment. They also contain higher concentrations of iron-rich minerals, which gives them their darker appearance.\n\nSamples returned by Apollo astronauts revealed that maria basalts differ in composition from Earth's volcanic rocks, providing important clues about the Moon's formation and evolution.\n"
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      name: 'Lunar Craters',
-      slug: 'lunar-craters',
-      header: 'Impact Features on the Moon',
-      layout: [
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown:
-                  '## Lunar Craters 🌕\nLunar craters are bowl-shaped depressions formed by meteoroid impacts on the Moon\'s surface.\n### Formation and Significance\nWithout atmospheric protection, the Moon has preserved a record of impacts spanning more than 4 billion years. The largest lunar craters exceed 200 kilometers in diameter, while the smallest are microscopic. This preserved impact history makes the Moon an invaluable cosmic time capsule.\n\nCraters typically feature a raised rim, an interior bowl, and sometimes a central peak formed when the surface rebounded after impact. Larger impacts can create complex crater structures with terraced walls and multiple peaks.\n\nSome of the most prominent lunar craters include Tycho, with its distinctive ray system of ejected material stretching hundreds of kilometers; Copernicus, often called the "Monarch of the Moon"; and Clavius, one of the largest craters visible from Earth.\n\nThe distribution and density of craters in different regions help scientists determine the relative ages of lunar surfaces. Heavily cratered areas are generally older, having been exposed to impacts for a longer period. This principle was crucial in understanding the Moon\'s geological history.\n\nLunar craters are named after notable scientists, philosophers, and explorers. This naming convention, established by the International Astronomical Union, honors figures like Copernicus, Kepler, and Aristotle.\n'
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      name: 'Lunar Phases',
-      slug: 'lunar-phases',
-      header: 'The Changing Face of the Moon',
-      layout: [
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown:
-                  '## Lunar Phases 🌓\nLunar phases are the different appearances of the Moon as seen from Earth during its monthly orbit.\n### The Lunar Cycle\nThe Moon completes a full cycle of phases approximately every 29.5 days, a period known as a synodic month. This cycle begins with the New Moon (when the Moon is between Earth and the Sun), proceeds through waxing phases as more of the illuminated side becomes visible, reaches Full Moon (when the Moon and Sun are on opposite sides of Earth), and then wanes until returning to New Moon.\n\nThe primary phases in order are: New Moon, Waxing Crescent, First Quarter, Waxing Gibbous, Full Moon, Waning Gibbous, Last Quarter, and Waning Crescent. At First and Last Quarter phases, exactly half of the Moon\'s visible face is illuminated.\n\nLunar phases occur because the Moon orbits Earth while both bodies orbit the Sun. As the Moon moves around Earth, the angle between the Sun, Moon, and Earth changes, altering which portion of the Moon\'s sunlit side is visible from our perspective.\n\nThe Moon always presents approximately the same face toward Earth due to tidal locking. This synchronous rotation means that the Moon\'s rotation period matches its orbital period around Earth, resulting in one side (the near side) always facing us, while the far side remains hidden from direct view.\n\nThroughout history, lunar phases have been used to track time, with many calendars based on the lunar cycle. The words "month" and "moon" share etymological roots in many languages, reflecting this ancient connection.\n'
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      name: 'Home',
-      slug: 'home',
-      layout: [
-        {
-          blockType: 'hero',
-          badge: 'Moon',
-          heading: 'Look at the silver moon.',
-          lede: 'A natural satellite that orbits a planet or other celestial body larger than itself.',
-          actions: [
-            {
-              link: {
-                type: 'custom',
-                url: '/lunar-maria',
-                label: 'Explore',
-                newTab: false
-              },
-              emphasis: 'primary'
-            },
-            {
-              link: {
-                type: 'custom',
-                url: '/lunar-craters',
-                label: 'Lunar Craters',
-                newTab: false
-              },
-              emphasis: 'secondary'
-            }
-          ]
-        },
-        {
-          blockType: 'feature-cards',
-          eyebrow: 'Discover',
-          heading: 'The Moon Up Close',
-          intro:
-            "From dark volcanic plains to ancient craters, explore the many faces of Earth's closest celestial neighbour.",
-          columns: '3',
-          items: [
-            {
-              brand: {
-                icon: 'GlobeAltIcon',
-                color: 'stone-500'
-              },
-              title: 'Lunar Maria',
-              description:
-                'Dark basaltic plains formed by volcanic eruptions that flooded ancient impact basins.'
-            },
-            {
-              brand: {
-                icon: 'MapPinIcon',
-                color: 'gray-400'
-              },
-              title: 'Lunar Craters',
-              description:
-                'Bowl-shaped depressions preserving over 4 billion years of impact history.'
-            },
-            {
-              brand: {
-                icon: 'MoonIcon',
-                color: 'yellow-300'
-              },
-              title: 'Lunar Phases',
-              description:
-                'The changing appearance of the Moon during its monthly orbit around Earth.'
-            }
-          ]
-        },
-        {
-          blockType: 'callout',
-          showMark: true,
-          heading: 'Fascinated by the Moon?',
-          body: 'Learn more about lunar geology, atmosphere and the history of lunar exploration.',
-          link: {
-            type: 'custom',
-            url: '/lunar-maria',
-            label: 'Read articles',
-            newTab: false
-          }
-        },
-        {
-          blockType: 'form',
-          form: { lookupTitle: 'Contact' },
-          enableIntro: true,
-          introContent: {
-            markdown:
-              '## Curious? Reach out.\n\nOne field, nothing more. Leave your email and we will take it from there.'
-          }
-        }
-      ]
-    },
-    {
       name: 'About',
       slug: 'about',
       header: 'The people and tools behind Moon',
@@ -415,7 +401,7 @@ export const moon: SiteDefinition = {
         },
         {
           blockType: 'image',
-          media: { lookupFilename: 'abstract-image-2.jpg' }
+          media: { lookupFilename: 'moon-landscape.png' }
         },
         {
           blockType: 'testimonial',
@@ -424,13 +410,13 @@ export const moon: SiteDefinition = {
           author: {
             name: 'M. Ridley',
             role: 'Amateur astronomer',
-            avatar: { lookupFilename: 'abstract-image-3.jpg' }
+            avatar: { lookupFilename: 'astronomer-avatar.png' }
           },
           enableLink: true,
           link: {
             type: 'custom',
-            url: '/lunar-craters',
-            label: 'Read about craters',
+            url: '/tours',
+            label: 'Book a tour',
             newTab: false
           }
         },
@@ -465,19 +451,12 @@ export const moon: SiteDefinition = {
           blockType: 'spacing',
           size: 'loose',
           divider: true
-        }
-      ]
-    },
-    {
-      name: 'Observatory',
-      slug: 'observatory',
-      header: 'An observatory for the Moon',
-      layout: [
+        },
         {
           blockType: 'feature-section',
           eyebrow: 'Observatory',
           heading: 'Set up for a night under the Moon',
-          media: { lookupFilename: 'abstract-image-1.jpg' },
+          illustration: moonFeatureIllustration,
           intro:
             'A steady mount, dark-adapted eyes and fifteen minutes of patience turn a bright disc into a landscape of maria and craters.',
           subFeatures: [
@@ -523,8 +502,8 @@ export const moon: SiteDefinition = {
               meta: '2013 · Lunar orbit',
               link: {
                 type: 'custom',
-                url: '/lunar-phases',
-                label: 'Read about the phases',
+                url: '/blocks',
+                label: 'See every block',
                 newTab: false
               }
             },
@@ -536,8 +515,8 @@ export const moon: SiteDefinition = {
               meta: 'Ongoing · South pole',
               link: {
                 type: 'custom',
-                url: '/lunar-craters',
-                label: 'Read about craters',
+                url: '/studio',
+                label: 'Try the theme studio',
                 newTab: false
               }
             }
@@ -551,7 +530,13 @@ export const moon: SiteDefinition = {
               title: 'Naked eye',
               description: 'Start here.',
               content:
-                'Maria and the brightest crater rays are visible without any equipment at all.'
+                'Maria and the brightest crater rays are visible without any equipment at all.',
+              enableLink: true,
+              link: {
+                type: 'custom',
+                url: '/file-area',
+                newTab: false
+              }
             },
             {
               brand: { icon: 'MapIcon', color: 'indigo-500' },
@@ -613,30 +598,15 @@ export const moon: SiteDefinition = {
   ],
 
   // `seed.ts` navigated every page but home; `customSeed` appended the
-  // listings with their own labels. Both are ordinary content
+  // listings with their own labels. Both are ordinary content.
+  //
+  // Exactly five items, so the header never overflows into the "Menu"
+  // collapse on desktop
   navigation: [
     {
       reference: {
         relationTo: 'pages',
-        lookupSlug: 'moon-members'
-      }
-    },
-    {
-      reference: {
-        relationTo: 'pages',
         lookupSlug: 'lunar-maria'
-      }
-    },
-    {
-      reference: {
-        relationTo: 'pages',
-        lookupSlug: 'lunar-craters'
-      }
-    },
-    {
-      reference: {
-        relationTo: 'pages',
-        lookupSlug: 'lunar-phases'
       }
     },
     {
@@ -656,33 +626,15 @@ export const moon: SiteDefinition = {
     {
       reference: {
         relationTo: 'pages',
-        lookupSlug: 'file-area'
-      },
-      label: 'File area'
-    },
-    {
-      reference: {
-        relationTo: 'pages',
         lookupSlug: 'about'
       }
     },
     {
       reference: {
         relationTo: 'pages',
-        lookupSlug: 'observatory'
-      }
-    },
-    {
-      reference: {
-        relationTo: 'pages',
-        lookupSlug: 'blocks'
-      }
-    },
-    {
-      reference: {
-        relationTo: 'pages',
-        lookupSlug: 'studio'
-      }
+        lookupSlug: 'moon-members'
+      },
+      label: 'Members'
     }
   ],
 
