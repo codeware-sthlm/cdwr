@@ -97,11 +97,9 @@ describe('createPayloadTargets', () => {
       );
     });
 
-    it('should scope postgres container env file to the project root', () => {
-      const targets = createPayloadTargets(base);
-      expect(targets['dx:postgres'].command).toContain(
-        'apps/my-app/.env.local'
-      );
+    it('should read the postgres env files from the project root, .env first', () => {
+      const command = createPayloadTargets(base)['dx:postgres'].command;
+      expect(command).toContain('apps/my-app/.env apps/my-app/.env.local');
     });
   });
 
