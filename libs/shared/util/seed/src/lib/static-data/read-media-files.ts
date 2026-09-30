@@ -3,7 +3,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 /**
- * Media file names expected to be available remotely for seeding.
+ * The file-area fixtures every tenant is seeded with, read by name both
+ * locally and remotely. Images a definition states itself also live in the
+ * 'media' directory, and are not among them.
  */
 const remoteMediaFiles = [
   'abstract-image-1.jpg',
@@ -62,16 +64,20 @@ const readFiles = (
   const filename = fileURLToPath(import.meta.url);
   const dirname = path.dirname(filename);
 
-  return readdirSync(path.resolve(dirname, directory), {
-    encoding: 'utf-8',
-    recursive: false,
-    withFileTypes: true
-  })
-    .filter((file) => file.isFile())
-    .map(({ name, parentPath }) => ({
-      filePath: path.resolve(parentPath, name),
-      filename: name
-    }));
+  return (
+    readdirSync(path.resolve(dirname, directory), {
+      encoding: 'utf-8',
+      recursive: false,
+      withFileTypes: true
+    })
+      // The same named files as remotely, not whatever else shares the folder:
+      // a definition's own images live beside these and are no one's file area
+      .filter((file) => file.isFile() && remoteFiles.includes(file.name))
+      .map(({ name, parentPath }) => ({
+        filePath: path.resolve(parentPath, name),
+        filename: name
+      }))
+  );
 };
 
 /**
