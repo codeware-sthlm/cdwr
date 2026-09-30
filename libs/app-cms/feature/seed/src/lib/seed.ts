@@ -11,7 +11,6 @@ import type { Payload } from 'payload';
 
 import { applySiteDefinition } from './apply-site-definition';
 import { definitionFor } from './definition-for';
-import { loadInfisicalData } from './load-infisical-data';
 import { loadStaticData } from './load-static-data';
 import { ensureFaq } from './local-api/ensure-faq';
 import { ensurePlace } from './local-api/ensure-place';
@@ -120,45 +119,21 @@ export const seed = async (
       }
     }
 
-    let seedData: SeedData | null = null;
-
-    payload.logger.info('[SEED] Seed started');
-
-    // Try to load seed data from Infisical when source has cloud
-    if (source === 'cloud' || source === 'cloud-local') {
-      seedData = await loadInfisicalData({ environment, payload });
-    }
-
-    // !! Production guard !! //
-    // This will break DX since we can have local fallback for any environment.
-    // At the moment we rather protect production data than risk it.
-    if (!seedData && environment === 'production') {
+    // Production is never seeded, whatever the source says
+    if (environment === 'production') {
       payload.logger.warn(
-        `[SEED] Could not load secrets from cloud, skip seeding to protect ${environment} data`
+        `[SEED] Seeding is not done in ${environment}, skip seeding`
       );
       return true;
     }
 
-    // Fallback to static data when unable to seed from cloud
-    if (!seedData && source === 'cloud-local') {
-      payload.logger.info(
-        '[SEED] Could not load secrets from cloud, fallback to local data'
-      );
-      seedData = loadStaticData({
-        environment,
-        payload,
-        options: { remoteDataUrl }
-      });
-    }
+    payload.logger.info('[SEED] Seed started');
 
-    // Still no seed data, which is expected for local only, so get it
-    if (!seedData && source === 'local') {
-      seedData = loadStaticData({
-        environment,
-        payload,
-        options: { remoteDataUrl }
-      });
-    }
+    const seedData: SeedData | null = loadStaticData({
+      environment,
+      payload,
+      options: { remoteDataUrl }
+    });
 
     // Check seed data is loaded
     if (!seedData?.tenants?.length) {
