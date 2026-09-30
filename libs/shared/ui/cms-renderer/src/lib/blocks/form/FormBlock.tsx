@@ -57,17 +57,18 @@ type Props = FormBlockProps & {
 
 /**
  * Render Payload form block data, with the configured form fields.
+ *
+ * A form that is gone, or only an id, has no fields to draw, so the block
+ * renders nothing rather than failing the page it sits on.
  */
-export const FormBlock: React.FC<Props> = ({
-  disabled,
-  enableIntro,
-  form: formFromProps,
-  introContent,
-  onSuccess
-}) => {
-  const formBuilder =
-    typeof formFromProps === 'object' ? formFromProps : ({} as FormType);
+export const FormBlock: React.FC<Props> = ({ form, ...rest }) =>
+  form && typeof form === 'object' ? (
+    <PopulatedFormBlock {...rest} form={form} />
+  ) : null;
 
+const PopulatedFormBlock: React.FC<
+  Omit<Props, 'form'> & { form: FormType }
+> = ({ disabled, enableIntro, form: formBuilder, introContent, onSuccess }) => {
   // Since FormField is using a controlled component,
   // we need to provide default values for the form fields
   // since undefined is not allowed and will throw console errors.
