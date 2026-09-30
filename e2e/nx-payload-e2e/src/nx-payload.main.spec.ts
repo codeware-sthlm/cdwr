@@ -109,14 +109,15 @@ describe('Test plugin by creating workspace with preset (extended test suite)', 
         getFolderFiles(`${project.appDirectory}/src/generated`)
       ).toHaveLength(0);
 
-      // Expect a standalone NextJS build
+      // Expect a standalone NextJS build. The app has a package.json of its
+      // own, which Next 16 copies beside the server rather than to the root
       const standaloneDir = `${project.appDirectory}/.next/standalone`;
       const staticDir = `${project.appDirectory}/.next/static`;
 
       expect(() =>
         checkFilesExist(
-          `${standaloneDir}/package.json`,
           `${standaloneDir}/node_modules`,
+          `${standaloneDir}/${project.appDirectory}/package.json`,
           `${standaloneDir}/${project.appDirectory}/server.js`,
           staticDir
         )

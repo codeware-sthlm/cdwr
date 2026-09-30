@@ -1,5 +1,7 @@
 import {
+  LOCAL_PLUGIN,
   ensureCreateNxWorkspaceProject,
+  ensureLocalPluginInstalled,
   ensureLockFileIsDetected,
   ensurePnpmApproveBuilds,
   ensureTs6TsconfigCompat
@@ -34,11 +36,12 @@ describe('Test plugin by starting with an empty workspace (limited test suite)',
     // `silenceError` because pnpm 10+ exits non-zero when a dependency's
     // build script is blocked - which also aborts `nx add` before it runs
     // its own init generator, so a recovered build must retry the command.
-    await runNxCommandAsync('add @cdwr/nx-payload', { silenceError: true });
+    await runNxCommandAsync(`add ${LOCAL_PLUGIN}`, { silenceError: true });
     const recovered = await ensurePnpmApproveBuilds(packageManager);
     if (recovered) {
-      await runNxCommandAsync('add @cdwr/nx-payload', { silenceError: true });
+      await runNxCommandAsync(`add ${LOCAL_PLUGIN}`, { silenceError: true });
     }
+    ensureLocalPluginInstalled();
     logDebug(
       'Plugin added - package.json',
       JSON.stringify(readJson('package.json'), null, 2)
