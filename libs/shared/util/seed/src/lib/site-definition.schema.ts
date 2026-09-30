@@ -36,6 +36,7 @@ const KNOWN_KEYS = [
   'media',
   'forms',
   'customThemes',
+  'reusableContent',
   'pages',
   'posts',
   'navigation',
@@ -103,6 +104,16 @@ export const SiteDefinitionSchema = z
             // Judged by the type and, on apply, by the theme's own validation,
             // which refuses a theme whose colours fail the contrast check
             recipe: z.object({}).passthrough()
+          })
+          .passthrough()
+      )
+      .optional(),
+    reusableContent: z
+      .array(
+        z
+          .object({
+            title: z.string().min(1),
+            layout: z.array(BlockSchema)
           })
           .passthrough()
       )
@@ -178,6 +189,13 @@ export const SiteDefinitionSchema = z
     ).forEach((filename) =>
       problem(`Two media entries share the filename '${filename}'`, ['media'])
     );
+    duplicates(
+      (definition.reusableContent ?? []).map(({ title }) => title)
+    ).forEach((title) =>
+      problem(`Two reusable content entries share the title '${title}'`, [
+        'reusableContent'
+      ])
+    );
 
     // Every reference has to land on something this definition also states, or
     // the apply resolves it to nothing and drops it silently — which is how a
@@ -194,6 +212,9 @@ export const SiteDefinitionSchema = z
     const formTitles = new Set(
       (definition.forms ?? []).map(({ title }) => title)
     );
+    const reusableContentTitles = new Set(
+      (definition.reusableContent ?? []).map(({ title }) => title)
+    );
 
     (definition.navigation ?? []).forEach(({ reference }, index) => {
       const known = reference.relationTo === 'pages' ? pageSlugs : postSlugs;
@@ -206,22 +227,31 @@ export const SiteDefinitionSchema = z
     });
 
     for (const [path, ref] of referencesIn(definition)) {
+      const field = path[path.length - 1];
+
       const filename = ref['lookupFilename'];
       if (filename !== undefined && !filenames.has(filename)) {
         problem(`No media named '${filename}' in this definition`, path);
       }
 
+      // `lookupTitle` is worn by a form and reusable content alike, so the
+      // field it sits on is what says which
       const title = ref['lookupTitle'];
-      if (title !== undefined && !formTitles.has(title)) {
-        problem(`No form named '${title}' in this definition`, path);
+      if (title !== undefined) {
+        if (field === 'form' && !formTitles.has(title)) {
+          problem(`No form named '${title}' in this definition`, path);
+        }
+        if (field === 'reusableContent' && !reusableContentTitles.has(title)) {
+          problem(
+            `No reusable content named '${title}' in this definition`,
+            path
+          );
+        }
       }
 
-      // `lookupSlug` is worn by tags, categories and reusable content alike, so
-      // the field it sits on is what says which. Reusable content is the one a
-      // definition cannot state — it resolves against the tenant, so it is left
-      // to the apply to report
+      // `lookupSlug` is worn by tags and categories alike, so the field it
+      // sits on is what says which
       const slug = ref['lookupSlug'];
-      const field = path[path.length - 1];
       if (slug !== undefined) {
         if (field === 'tags' && !tagSlugs.has(slug)) {
           problem(`No tag '${slug}' in this definition`, path);

@@ -11,7 +11,7 @@ const resolver: ReferenceResolver = {
   media: (filename) => (filename === 'hero.jpg' ? 11 : undefined),
   tag: (slug) => (slug === 'reports' ? 22 : undefined),
   form: (title) => (title === 'Contact' ? 33 : undefined),
-  reusableContent: (slug) => (slug === 'shared' ? 44 : undefined)
+  reusableContent: (title) => (title === 'Shared' ? 44 : undefined)
 };
 
 const resolve = (block: unknown) => {
@@ -71,10 +71,10 @@ describe('resolveBlockReferences', () => {
     expect(resolved['form']).toBe(33);
   });
 
-  it('resolves reusable content by slug', () => {
+  it('resolves reusable content by title', () => {
     const { resolved } = resolve({
       blockType: 'reusable-content',
-      reusableContent: { lookupSlug: 'shared' }
+      reusableContent: { lookupTitle: 'Shared' }
     });
 
     expect(resolved['reusableContent']).toBe(44);

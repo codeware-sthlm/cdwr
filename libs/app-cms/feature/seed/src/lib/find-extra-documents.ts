@@ -94,6 +94,11 @@ const MATCHERS = [
     collection: 'custom-themes',
     field: 'slug',
     named: (d: SiteDefinition) => (d.customThemes ?? []).map((t) => t.slug)
+  }),
+  matcher({
+    collection: 'reusable-content',
+    field: 'title',
+    named: (d: SiteDefinition) => (d.reusableContent ?? []).map((r) => r.title)
   })
 ];
 

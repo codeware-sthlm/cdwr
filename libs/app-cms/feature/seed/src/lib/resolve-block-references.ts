@@ -4,7 +4,7 @@ import type { BlockDefinition } from '@codeware/shared/util/seed';
  * Turns the `lookup*` references in a block into the ids just created.
  *
  * Resolved **per block type** rather than by walking for anything shaped like a
- * reference. `lookupSlug` means a tag on one block and a reusable-content
+ * reference. `lookupTitle` means a form on one block and a reusable-content
  * document on another, so a generic walker would have to guess, and would guess
  * silently. Eight blocks carry references and the list is closed — being
  * explicit costs a switch and removes the guessing.
@@ -92,7 +92,7 @@ export function resolveBlockReferences(
     case 'reusable-content':
       return {
         ...source,
-        ...swap('reusableContent', 'lookupSlug', resolver.reusableContent)
+        ...swap('reusableContent', 'lookupTitle', resolver.reusableContent)
       };
 
     case 'testimonial':

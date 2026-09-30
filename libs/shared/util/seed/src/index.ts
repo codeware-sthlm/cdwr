@@ -10,6 +10,7 @@ export type {
   NavigationItemDefinition,
   PageDefinition,
   PostDefinition,
+  ReusableContentDefinition,
   SiteDefinition,
   SiteSettingsDefinition,
   TagRef
