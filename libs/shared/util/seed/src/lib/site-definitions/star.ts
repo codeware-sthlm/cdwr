@@ -64,9 +64,9 @@ export const star: SiteDefinition = {
 
   media: [
     {
-      filename: 'abstract-image-1.jpg',
+      filename: 'crater-field.png',
       external: true,
-      alt: 'Abstract image 1',
+      alt: 'Craters lit by a low Sun, with long shadows across the lunar surface',
       tags: [
         {
           lookupSlug: 'file-area'
@@ -74,9 +74,9 @@ export const star: SiteDefinition = {
       ]
     },
     {
-      filename: 'abstract-image-2.jpg',
+      filename: 'earthrise.png',
       external: true,
-      alt: 'Abstract image 2',
+      alt: 'Earth rising over the grey lunar horizon',
       tags: [
         {
           lookupSlug: 'file-area'
@@ -84,9 +84,9 @@ export const star: SiteDefinition = {
       ]
     },
     {
-      filename: 'abstract-image-3.jpg',
+      filename: 'moon-phases.png',
       external: true,
-      alt: 'Abstract image 3',
+      alt: 'The eight phases of the Moon, from new to full, on an arc across the night sky',
       tags: [
         {
           lookupSlug: 'file-area'

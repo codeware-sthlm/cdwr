@@ -6,15 +6,15 @@
  * is reachable from the main barrel — and so from a browser bundle.
  */
 export const BUNDLED_MEDIA = [
-  'abstract-image-1.jpg',
-  'abstract-image-2.jpg',
-  'abstract-image-3.jpg',
   'astronomer-avatar.png',
+  'crater-field.png',
   'data-1.json',
   'data-2.json',
   'document-1.pdf',
   'document-2.pdf',
+  'earthrise.png',
   'moon-landscape.png',
+  'moon-phases.png',
   'observing-night.png',
   'text-1.txt',
   'text-2.txt',

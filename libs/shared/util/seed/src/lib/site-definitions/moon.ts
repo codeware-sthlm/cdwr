@@ -72,9 +72,9 @@ export const moon: SiteDefinition = {
 
   media: [
     {
-      filename: 'abstract-image-1.jpg',
+      filename: 'crater-field.png',
       external: true,
-      alt: 'Abstract image 1',
+      alt: 'Craters lit by a low Sun, with long shadows across the lunar surface',
       tags: [
         {
           lookupSlug: 'file-area'
@@ -82,9 +82,9 @@ export const moon: SiteDefinition = {
       ]
     },
     {
-      filename: 'abstract-image-2.jpg',
+      filename: 'earthrise.png',
       external: true,
-      alt: 'Abstract image 2',
+      alt: 'Earth rising over the grey lunar horizon',
       tags: [
         {
           lookupSlug: 'file-area'
@@ -92,9 +92,9 @@ export const moon: SiteDefinition = {
       ]
     },
     {
-      filename: 'abstract-image-3.jpg',
+      filename: 'moon-phases.png',
       external: true,
-      alt: 'Abstract image 3',
+      alt: 'The eight phases of the Moon, from new to full, on an arc across the night sky',
       tags: [
         {
           lookupSlug: 'file-area'
@@ -519,6 +519,19 @@ export const moon: SiteDefinition = {
                 label: 'Try the theme studio',
                 newTab: false
               }
+            },
+            {
+              tag: 'Downloads',
+              title: 'Mission archive',
+              description:
+                'Maps, pictures and papers from the missions above, ready to download and keep.',
+              meta: 'Files · Maps and papers',
+              link: {
+                type: 'custom',
+                url: '/file-area',
+                label: 'Open the archive',
+                newTab: false
+              }
             }
           ]
         },
@@ -530,13 +543,7 @@ export const moon: SiteDefinition = {
               title: 'Naked eye',
               description: 'Start here.',
               content:
-                'Maria and the brightest crater rays are visible without any equipment at all.',
-              enableLink: true,
-              link: {
-                type: 'custom',
-                url: '/file-area',
-                newTab: false
-              }
+                'Maria and the brightest crater rays are visible without any equipment at all.'
             },
             {
               brand: { icon: 'MapIcon', color: 'indigo-500' },
