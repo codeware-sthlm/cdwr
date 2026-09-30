@@ -185,12 +185,14 @@ export type ContentBlockDefinition = Omit<Authored<ContentBlock>, 'columns'> & {
   }> | null;
 };
 
-/** Two media fields rather than one. */
+/** Two media fields rather than one: the author's avatar and the logo. */
 export type TestimonialBlockDefinition = Omit<
   Authored<TestimonialBlock>,
-  'avatar' | 'logo'
+  'author' | 'logo'
 > & {
-  avatar?: MediaRef | null;
+  author: Omit<TestimonialBlock['author'], 'avatar'> & {
+    avatar?: MediaRef | null;
+  };
   logo?: MediaRef | null;
 };
 
