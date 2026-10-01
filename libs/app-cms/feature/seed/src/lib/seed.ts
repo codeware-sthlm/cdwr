@@ -5,7 +5,6 @@ import type {
   SeedStrategy
 } from '@codeware/app-cms/util/env-schema';
 import { getId } from '@codeware/app-cms/util/misc';
-import { generateSeedIcon } from '@codeware/shared/ui/seed-icon-studio';
 import type { TenantRole } from '@codeware/shared/util/payload-types';
 import type { Payload } from 'payload';
 
@@ -15,7 +14,6 @@ import { loadStaticData } from './load-static-data';
 import { ensureFaq } from './local-api/ensure-faq';
 import { ensurePlatformLabel } from './local-api/ensure-platform-label';
 import { ensurePlatformSettings } from './local-api/ensure-platform-settings';
-import { ensureSiteSetting } from './local-api/ensure-site-setting';
 import { ensureStockMedia } from './local-api/ensure-stock-media';
 import { ensureTenant } from './local-api/ensure-tenant';
 import { ensureTourSignups } from './local-api/ensure-tour-signups';
@@ -533,129 +531,6 @@ export const seed = async (
           : '[SEED] >> Tour capacity and signups up to date'
       );
       seedError = seedError || signupFailed > 0;
-    }
-
-    // SITE SETTINGS
-
-    // Create settings for each tenant
-    if (seedData.tenants.length > 0) {
-      await ensureTransaction();
-
-      let siteSettingFailed = 0;
-
-      for (const { apiKey } of seedData.tenants) {
-        const tenant = findTenant(apiKey);
-
-        if (!tenant) {
-          siteSettingFailed++;
-          continue;
-        }
-
-        // The definition created this page a moment ago, so it is read from
-        // the database rather than tracked here. Payload requires a landing
-        // page on the document. A definition may name its own, such as
-        // codeware.se's `hem`
-        const landingSlug =
-          definitionFor(tenant.slug)?.siteSettings?.general?.landingPage
-            ?.lookupSlug ?? 'home';
-        const { docs: homePages } = await payload.find({
-          collection: 'pages',
-          where: {
-            and: [
-              { slug: { equals: landingSlug } },
-              { tenant: { in: [tenant.id] } }
-            ]
-          },
-          depth: 0,
-          limit: 1,
-          req: { transactionID }
-        });
-        const page = homePages.at(0)?.id;
-
-        if (!page) {
-          siteSettingFailed++;
-          payload.logger.error(
-            `[SEED] No page '${landingSlug}' for tenant '${tenant.slug}', cannot set its landing page`
-          );
-          continue;
-        }
-        try {
-          const response = await ensureSiteSetting(
-            payload,
-            {
-              // Standard footer for every tenant, with contacts that exercise
-              // both click-to-copy paths and the release line
-              footer: {
-                contact: [
-                  { platform: 'email', email: `hello@${tenant.slug}.dev` },
-                  { platform: 'phone', phone: '+46 70 123 45 67' }
-                ],
-                enabled: true,
-                linkSource: 'navigation',
-                showVersion: true,
-                tagline: tenant.description,
-                variant: 'standard'
-              },
-              // Same demo address as the footer contact — the seeded contact
-              // form leaves its own `emailTo` empty on purpose, to exercise
-              // this exact fallback
-              forms: {
-                notificationRecipients: [{ email: `hello@${tenant.slug}.dev` }]
-              },
-              general: {
-                appName: `${tenant.name} App`,
-                icon: {
-                  source: 'svg',
-                  svgCode: generateSeedIcon(tenant.name, {
-                    shape: 'circular',
-                    style: 'tech',
-                    techTheme: 'current'
-                  })
-                },
-                landingPage: page,
-                defaultLocale: tenant.locale,
-                // Two themes so the seeded site exercises the theme selector;
-                // spotlight is what tenants rendered before the setting existed
-                themes: ['spotlight', 'codeware'],
-                defaultTheme: 'spotlight',
-                colorScheme: 'system',
-                chrome: 'outlined'
-              },
-              tenant: tenant.id
-            },
-            { locale: tenant.locale, transactionID }
-          );
-
-          if (typeof response === 'object') {
-            payload.logger.info(
-              `[SEED] Site setting for tenant '${tenant.apiKey}' created (${tenant.locale})`
-            );
-          }
-        } catch (e) {
-          const error = e as Error;
-          payload.logger.error(error.message);
-          if ('data' in error) {
-            payload.logger.error(
-              `Site setting for tenant '${tenant.apiKey}'\n${JSON.stringify(
-                error.data,
-                null,
-                2
-              )}`
-            );
-          }
-          siteSettingFailed++;
-        }
-      }
-      const { totalDocs: siteSettingCount } = await payload.count({
-        collection: 'site-settings',
-        req: { transactionID }
-      });
-      payload.logger.info(
-        siteSettingFailed
-          ? `[SEED] Problem occurred for ${siteSettingFailed}/${seedData.tenants.length} site settings (count: ${siteSettingCount})`
-          : `[SEED] >> Site settings up to date (count: ${siteSettingCount})`
-      );
-      seedError = seedError || siteSettingFailed > 0;
     }
 
     // FAQ

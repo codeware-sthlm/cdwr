@@ -36,6 +36,11 @@ The other keys — `tags`, `categories`, `media`, `forms`, `customThemes`,
 `reusableContent`, `places`, `tours`, `posts`, `navigation`, `siteSettings` —
 are optional and follow the same shape as the collections they fill.
 
+A definition with no `siteSettings` still leaves the workspace with working
+ones: the apply fills in a standard footer, contact form recipient, app name,
+icon and theme, pointed at the definition's `home` page. State `siteSettings`
+only to override that.
+
 The block types come straight from Payload's generated types, so an editor
 completes them and a wrong field is a compile error rather than a surprise at
 apply time.
