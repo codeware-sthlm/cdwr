@@ -92,10 +92,7 @@ export const seed = async (args: {
             )
             .join('\n')
       );
-      payload.logger.warn(
-        '[SEED] >> Seed completed with issues, check your data!'
-      );
-      return true;
+      return false;
     }
 
     const platformCreated = platformReport.outcomes.filter(
@@ -173,11 +170,27 @@ export const seed = async (args: {
     }
 
     try {
+      // Only the tours the site definitions own, in the platform's tenants;
+      // an editor's tour never gets made-up visitors
       const { docs: tourDocs } = await payload.find({
         collection: 'tours',
         depth: 0,
         limit: 0,
         pagination: false,
+        where: {
+          and: [
+            {
+              managedBy: {
+                in: Object.values(SITE_BY_TENANT).map(({ name }) => name)
+              }
+            },
+            {
+              tenant: {
+                in: [...platformReport.tenants.values()].map(({ id }) => id)
+              }
+            }
+          ]
+        },
         req: { transactionID }
       });
 
