@@ -72,6 +72,7 @@ import * as migration_20260928_202915_cod_515_feature_card_logo from './20260928
 import * as migration_20260928_221439_cod_517_illustrations from './20260928_221439_cod_517_illustrations';
 import * as migration_20260929_223328_cod_517_feature_section_link_style from './20260929_223328_cod_517_feature_section_link_style';
 import * as migration_20260930_201622_cod_502_reusable_content_managed_by from './20260930_201622_cod_502_reusable_content_managed_by';
+import * as migration_20261001_182503_cod_502_tours_places_managed_by from './20261001_182503_cod_502_tours_places_managed_by';
 
 export const migrations = [
   {
@@ -443,5 +444,10 @@ export const migrations = [
     up: migration_20260930_201622_cod_502_reusable_content_managed_by.up,
     down: migration_20260930_201622_cod_502_reusable_content_managed_by.down,
     name: '20260930_201622_cod_502_reusable_content_managed_by'
+  },
+  {
+    up: migration_20261001_182503_cod_502_tours_places_managed_by.up,
+    down: migration_20261001_182503_cod_502_tours_places_managed_by.down,
+    name: '20261001_182503_cod_502_tours_places_managed_by'
   }
 ];
