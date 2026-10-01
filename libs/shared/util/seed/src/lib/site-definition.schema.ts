@@ -288,7 +288,10 @@ export const SiteDefinitionSchema = z
     });
 
     for (const [path, ref] of referencesIn(definition)) {
-      const field = path[path.length - 1];
+      // Inside an array the last segment is an index, so take the name before it
+      const field = path
+        .filter((segment) => typeof segment === 'string')
+        .at(-1);
 
       // A tour's hero image names stock media — the platform's own library,
       // never stated by a definition — so it cannot be checked against
@@ -374,8 +377,6 @@ export const SiteDefinitionSchema = z
       });
     });
   });
-
-export type ValidatedSiteDefinition = z.infer<typeof SiteDefinitionSchema>;
 
 /**
  * The slugs site settings name under `general.customThemes`.
