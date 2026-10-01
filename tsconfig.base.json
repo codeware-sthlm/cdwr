@@ -20,6 +20,9 @@
       "@codeware/app-cms/data-access": [
         "./libs/app-cms/data-access/src/index.ts"
       ],
+      "@codeware/app-cms/feature/component-builder": [
+        "./libs/app-cms/feature/component-builder/src/index.ts"
+      ],
       "@codeware/app-cms/feature/domains": [
         "./libs/app-cms/feature/domains/src/index.ts"
       ],

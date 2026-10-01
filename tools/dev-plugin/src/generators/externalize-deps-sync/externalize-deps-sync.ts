@@ -29,7 +29,8 @@ const UN_BUNDLEABLE_DEPS = [
   '@nx/devkit',
   'nx',
   '@swc/',
-  'esbuild'
+  'esbuild',
+  '@tailwindcss/oxide'
 ] as const;
 
 const LIBS_ROOT = 'libs/';
