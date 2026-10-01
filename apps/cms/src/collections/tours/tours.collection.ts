@@ -27,6 +27,7 @@ const blocks: Record<BlockSlug, boolean> = {
   about: false,
   card: true,
   code: true,
+  'custom-component': false,
   image: true,
   'social-media': true,
   spacing: true,

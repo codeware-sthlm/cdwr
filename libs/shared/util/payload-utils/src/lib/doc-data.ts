@@ -17,6 +17,7 @@ import type { BlocksData } from './blocks-data';
 const renderable = {
   categories: false,
   faq: false,
+  'custom-components': false,
   'custom-themes': false,
   'form-submissions': false,
   forms: false,

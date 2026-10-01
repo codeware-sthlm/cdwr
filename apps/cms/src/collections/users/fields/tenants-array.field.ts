@@ -1,3 +1,4 @@
+import { systemUserAccess } from '@codeware/app-cms/util/access';
 import { enumName } from '@codeware/app-cms/util/db';
 import { tenantsArrayField as tenantsArrayFieldPlugin } from '@payloadcms/plugin-multi-tenant/fields';
 import type { Field } from 'payload';
@@ -30,6 +31,20 @@ export const tenantsArrayField = (): Field => {
         },
         required: true,
         defaultValue: 'user'
+      },
+      {
+        name: 'componentDeveloper',
+        type: 'checkbox',
+        defaultValue: false,
+        label: { en: 'Component developer', sv: 'Komponentutvecklare' },
+        // Grants the right to run code on the site
+        access: { create: systemUserAccess, update: systemUserAccess },
+        admin: {
+          description: {
+            en: 'May write custom components in this workspace. The code runs on the site, so only platform administrators can grant this. Has no effect for readers.',
+            sv: 'Får skriva egna komponenter i arbetsytan. Koden körs på webbplatsen, så bara plattformsadministratörer kan ge behörigheten. Har ingen effekt för läsare.'
+          }
+        }
       }
     ]
   });

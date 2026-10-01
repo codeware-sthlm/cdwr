@@ -1,6 +1,7 @@
 export { ensureTenantFromApiKey } from './lib/ensure-tenant-from-api-key';
 export { findTenantFromCookie } from './lib/find-tenant-from-cookie';
 export { getId } from './lib/get-id';
+export { getComponentDeveloperTenantIDs } from './lib/get-component-developer-tenant-ids';
 export { getUserTenantIDs } from './lib/get-user-tenant-ids';
 export { hasNoAdminRoles } from './lib/has-no-admin-roles';
 export { hasRole } from './lib/has-role';

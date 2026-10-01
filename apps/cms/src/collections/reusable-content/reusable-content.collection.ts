@@ -18,6 +18,7 @@ const blocks: Record<BlockSlug, boolean> = {
   about: false,
   card: true,
   code: true,
+  'custom-component': true,
   content: true,
   'file-area': true,
   form: true,

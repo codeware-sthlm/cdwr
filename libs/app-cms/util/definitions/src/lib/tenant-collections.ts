@@ -11,6 +11,7 @@ import { globalCollectionSlugs } from './global-collections';
  */
 export const tenantCollectionSlugs = [
   'categories',
+  'custom-components',
   'custom-themes',
   'form-submissions',
   'forms',

@@ -73,8 +73,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -186,6 +186,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'illustration',
+        type: 'textarea',
+        label: {
+          en: 'Illustration',
+          sv: 'Illustration'
+        },
+        description: {
+          en: 'SVG code, drawn in the page itself. Colours can use the theme, such as var(--brand-500) or var(--foreground), so it follows a change of theme. Shown instead of the visual when both are set.',
+          sv: 'SVG-kod som ritas direkt i sidan. Färger kan hämtas från temat, till exempel var(--brand-500) eller var(--foreground), så att den följer med när temat byts. Visas i stället för bilden när båda är angivna.'
+        }
+      },
+      {
         name: 'link',
         type: 'group',
         fields: [
@@ -245,8 +257,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -410,8 +422,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -446,8 +458,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -483,6 +495,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
             blocks: [
               'card',
               'code',
+              'custom-component',
               'form',
               'image',
               'reusable-content',
@@ -500,8 +513,51 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
+        }
+      }
+    ]
+  },
+  'custom-component': {
+    slug: 'custom-component',
+    label: {
+      en: 'Custom component',
+      sv: 'Egen komponent'
+    },
+    availableIn: ['pages', 'reusable-content', 'content'],
+    fields: [
+      {
+        name: 'component',
+        type: 'relationship',
+        required: true,
+        label: {
+          en: 'Component',
+          sv: 'Komponent'
+        }
+      },
+      {
+        name: 'props',
+        type: 'json',
+        label: {
+          en: 'Props',
+          sv: 'Egenskaper'
+        },
+        description: {
+          en: 'The values for the props the component declares.',
+          sv: 'Värdena för de egenskaper komponenten deklarerar.'
+        }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -606,9 +662,54 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
                   sv: 'Eller en teknik'
                 },
                 description: {
-                  en: 'Shows the technology’s own mark in its brand colour, in place of the icon.',
-                  sv: 'Visar teknikens eget märke i dess egen färg, i stället för ikonen.'
+                  en: 'Shows the technology’s own mark in its brand colour, in place of the icon. Leave it empty to add a logo of your own.',
+                  sv: 'Visar teknikens eget märke i dess egen färg, i stället för ikonen. Lämna tomt för att lägga till en egen logotyp.'
                 }
+              },
+              {
+                name: 'logo',
+                type: 'group',
+                conditional: true,
+                label: {
+                  en: 'Own logo',
+                  sv: 'Egen logotyp'
+                },
+                fields: [
+                  {
+                    name: 'source',
+                    type: 'select',
+                    label: {
+                      en: 'Source',
+                      sv: 'Källa'
+                    }
+                  },
+                  {
+                    name: 'svgCode',
+                    type: 'textarea',
+                    conditional: true,
+                    label: {
+                      en: 'SVG code',
+                      sv: 'SVG-kod'
+                    },
+                    description: {
+                      en: 'Paste the SVG markup, with a viewBox. A part filled with currentColor follows the text colour, so a dark mark stays visible on a dark background.',
+                      sv: 'Klistra in SVG-koden, med en viewBox. En del som fylls med currentColor följer textfärgen, så att ett mörkt märke syns även mot mörk bakgrund.'
+                    }
+                  },
+                  {
+                    name: 'file',
+                    type: 'upload',
+                    conditional: true,
+                    label: {
+                      en: 'Image',
+                      sv: 'Bild'
+                    },
+                    description: {
+                      en: 'A square image reads best. An image keeps its colours, so pick one that shows against the block’s background.',
+                      sv: 'En kvadratisk bild fungerar bäst. En bild behåller sina färger, så välj en som syns mot blockets bakgrund.'
+                    }
+                  }
+                ]
               }
             ]
           },
@@ -642,8 +743,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -754,6 +855,19 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         ]
       },
       {
+        name: 'linkStyle',
+        type: 'select',
+        conditional: true,
+        label: {
+          en: 'Link style',
+          sv: 'Länkens utseende'
+        },
+        description: {
+          en: 'A button asks to be clicked. Text reads as a reference, for a page that asks nothing of its visitor.',
+          sv: 'En knapp uppmanar till ett klick. Text uppfattas som en hänvisning, för en sida som inte ber besökaren om något.'
+        }
+      },
+      {
         name: 'media',
         type: 'upload',
         label: {
@@ -763,6 +877,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         description: {
           en: 'The image that carries the claim above it.',
           sv: 'Bilden som bär påståendet ovanför.'
+        }
+      },
+      {
+        name: 'illustration',
+        type: 'textarea',
+        label: {
+          en: 'Illustration',
+          sv: 'Illustration'
+        },
+        description: {
+          en: 'SVG code, drawn in the page itself. Colours can use the theme, such as var(--brand-500) or var(--foreground), so it follows a change of theme. Shown instead of the visual when both are set.',
+          sv: 'SVG-kod som ritas direkt i sidan. Färger kan hämtas från temat, till exempel var(--brand-500) eller var(--foreground), så att den följer med när temat byts. Visas i stället för bilden när båda är angivna.'
         }
       },
       {
@@ -807,8 +933,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -851,8 +977,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -895,8 +1021,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -956,6 +1082,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         description: {
           en: 'Shown below the actions. What makes the claim above checkable rather than asserted.',
           sv: 'Visas under knapparna. Det som gör påståendet ovanför kontrollerbart i stället för påstått.'
+        }
+      },
+      {
+        name: 'illustration',
+        type: 'textarea',
+        label: {
+          en: 'Illustration',
+          sv: 'Illustration'
+        },
+        description: {
+          en: 'SVG code, drawn in the page itself. Colours can use the theme, such as var(--brand-500) or var(--foreground), so it follows a change of theme. Shown instead of the visual when both are set.',
+          sv: 'SVG-kod som ritas direkt i sidan. Färger kan hämtas från temat, till exempel var(--brand-500) eller var(--foreground), så att den följer med när temat byts. Visas i stället för bilden när båda är angivna.'
         }
       },
       {
@@ -1036,8 +1174,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -1071,8 +1209,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -1221,8 +1359,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -1275,8 +1413,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -1528,8 +1666,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -1633,8 +1771,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -1822,8 +1960,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -1905,8 +2043,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]
@@ -1959,8 +2097,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Bakgrund'
         },
         description: {
-          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours, also in light mode.',
-          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger, även i ljust läge.'
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
         }
       }
     ]

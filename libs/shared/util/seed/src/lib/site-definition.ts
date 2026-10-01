@@ -2,6 +2,7 @@ import type { ThemeRecipe, ThemeTokens } from '@codeware/shared/util/color';
 import type {
   CalloutBlock,
   ContentBlock,
+  CustomComponentBlock,
   FeatureSectionBlock,
   FileAreaBlock,
   FormBlock,
@@ -53,10 +54,16 @@ type Authored<T> = T extends unknown ? Omit<T, 'id' | 'blockName'> : never;
 
 type LayoutBlock = Page['layout'][number];
 
-/** The blocks that point at a document, and so cannot be stated as-is. */
+/**
+ * The blocks that point at a document, and so cannot be stated as-is.
+ *
+ * `CustomComponentBlock` has no definition: components are authored in the
+ * admin, never seeded, so a definition cannot place one.
+ */
 type ReferencingBlock =
   | CalloutBlock
   | ContentBlock
+  | CustomComponentBlock
   | FeatureSectionBlock
   | FileAreaBlock
   | FormBlock
