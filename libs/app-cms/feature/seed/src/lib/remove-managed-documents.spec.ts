@@ -83,12 +83,14 @@ describe('removeRecreatedDocuments', () => {
     ]);
   });
 
-  it('never deletes media or tags, which a fresh apply reuses', async () => {
+  it('never deletes media, tags, places or tours up front', async () => {
     // Media holds a file a rollback cannot bring back, and reused media points
-    // at tags by id — so neither is removed up front
+    // at tags by id. Tours carry bookings, and places are what tours point at
     const { payload, deleted } = payloadWith({
       tags: [{ id: 1, slug: 't', ...mine }],
-      media: [{ id: 3, filename: 'm.png', ...mine }]
+      media: [{ id: 3, filename: 'm.png', ...mine }],
+      places: [{ id: 9, name: 'The Hut', ...mine }],
+      tours: [{ id: 10, slug: 'a-tour', ...mine }]
     });
 
     await removeRecreatedDocuments(payload, definition, 7, options);
@@ -148,6 +150,9 @@ describe('droppedReusedDocuments', () => {
     const dropped = droppedReusedDocuments([
       extra('media', 'this-definition'),
       extra('tags', 'this-definition'),
+      // Kept collections are never removed
+      extra('places', 'this-definition'),
+      extra('tours', 'this-definition'),
       // Recreated collections are handled up front, not here
       extra('pages', 'this-definition'),
       // Never this definition's to remove

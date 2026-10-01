@@ -29,42 +29,6 @@ export const SeedDataSchema = z.object({
       filePath: z.string()
     })
   ),
-  places: z.array(
-    z.object({
-      name: z.string(),
-      kind: z.string({ description: 'Platform label name' }),
-      url: z.string().optional(),
-      note: z.string().optional(),
-      tenant: TenantLookupSchema.pick({ lookupApiKey: true })
-    })
-  ),
-  tours: z.array(
-    z.object({
-      title: z.string(),
-      slug: z.string(),
-      summary: z.string(),
-      destination: z.string(),
-      duration: z.string().optional(),
-      price: z.number(),
-      currency: z.enum(['EUR', 'SEK', 'USD', 'GBP']),
-      intent: z.enum(['booking', 'interest']),
-      departureDate: z.string().optional(),
-      departureNote: z.string().optional(),
-      bookingDeadline: z.string().optional(),
-      heroImage: z.string({ description: 'Stock media filename' }),
-      included: z.array(z.string()),
-      notIncluded: z.array(z.string()),
-      itinerary: z.array(
-        z.object({
-          title: z.string(),
-          description: z.string().optional(),
-          places: z.array(z.string()).optional()
-        })
-      ),
-      content: z.string({ description: 'Markdown content' }),
-      tenant: TenantLookupSchema.pick({ lookupApiKey: true })
-    })
-  ),
   users: z.array(
     z.object({
       name: z.string(),

@@ -76,6 +76,18 @@ describe.each([
       expect(post.createdAt).toBeTruthy();
     }
   });
+
+  it("only sends a tour's itinerary to a place it states", () => {
+    const placeNames = new Set((definition.places ?? []).map((p) => p.name));
+
+    for (const tour of definition.tours ?? []) {
+      for (const day of tour.itinerary ?? []) {
+        for (const { lookupName } of day.places ?? []) {
+          expect(placeNames.has(lookupName)).toBe(true);
+        }
+      }
+    }
+  });
 });
 
 /**

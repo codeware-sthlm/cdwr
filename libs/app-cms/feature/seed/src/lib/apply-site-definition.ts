@@ -22,10 +22,12 @@ import { ensureForm } from './local-api/ensure-form';
 import { ensureMedia } from './local-api/ensure-media';
 import { ensureNavigation } from './local-api/ensure-navigation';
 import { ensurePage } from './local-api/ensure-page';
+import { ensurePlace } from './local-api/ensure-place';
 import { ensurePost } from './local-api/ensure-post';
 import { ensureReusableContent } from './local-api/ensure-reusable-content';
 import { ensureSiteSetting } from './local-api/ensure-site-setting';
 import { ensureTag } from './local-api/ensure-tag';
+import { ensureTour } from './local-api/ensure-tour';
 import {
   FRESH_POLICY,
   type RemovedDocument,
@@ -245,6 +247,7 @@ export async function applySiteDefinition(
   const categories = new Map<string, number>();
   const media = new Map<string, number>();
   const forms = new Map<string, number>();
+  const places = new Map<string, number>();
   const pages = new Map<string, number>();
   const posts = new Map<string, number>();
 
@@ -317,14 +320,14 @@ export async function applySiteDefinition(
         }))
       );
 
-      // Tags hold no file, so a dropped one goes inside the transaction
-      for (const tag of dropped.filter((d) => d.collection === 'tags')) {
+      // Only media holds a file, so the rest go inside the transaction
+      for (const document of dropped.filter((d) => d.collection !== 'media')) {
         await payload.delete({
-          collection: 'tags',
-          id: tag.id,
+          collection: document.collection,
+          id: document.id,
           req: { transactionID }
         });
-        removed.push(tag);
+        removed.push(document);
       }
       droppedMedia = dropped.filter((d) => d.collection === 'media');
     }
@@ -460,6 +463,124 @@ export async function applySiteDefinition(
             },
             owned
           )
+        )
+      );
+    }
+
+    // Before tours, whose itinerary points at them
+    for (const place of definition.places ?? []) {
+      const { docs: labelDocs } = await payload.find({
+        collection: 'platform-labels',
+        where: {
+          and: [
+            { type: { equals: 'place-kind' } },
+            { name: { equals: place.kind } }
+          ]
+        },
+        depth: 0,
+        limit: 1,
+        req: { transactionID }
+      });
+      const kind = labelDocs[0]?.id;
+
+      if (kind === undefined) {
+        unresolved.push({
+          blockType: 'place',
+          field: 'kind',
+          lookup: place.kind
+        });
+        continue;
+      }
+
+      places.set(
+        place.name,
+        record(
+          'places',
+          place.name,
+          await ensurePlace(
+            payload,
+            {
+              kind,
+              name: place.name,
+              note: place.note,
+              url: place.url,
+              tenant: tenant.id
+            },
+            owned
+          )
+        )
+      );
+    }
+
+    // After places, whose ids its itinerary points at
+    for (const tour of definition.tours ?? []) {
+      const { docs: stockDocs } = await payload.find({
+        collection: 'stock-media',
+        where: { filename: { equals: tour.heroImage.lookupFilename } },
+        depth: 0,
+        limit: 1,
+        req: { transactionID }
+      });
+      const heroImageId = stockDocs[0]?.id;
+
+      if (heroImageId === undefined) {
+        unresolved.push({
+          blockType: 'tour',
+          field: 'heroImage',
+          lookup: tour.heroImage.lookupFilename
+        });
+        continue;
+      }
+
+      const itinerary = (tour.itinerary ?? []).map(
+        ({ places: dayPlaces, ...day }) => ({
+          ...day,
+          places: (dayPlaces ?? []).flatMap(({ lookupName }) => {
+            const id = places.get(lookupName);
+            if (id === undefined) {
+              unresolved.push({
+                blockType: 'tour',
+                field: 'itinerary.places',
+                lookup: lookupName
+              });
+              return [];
+            }
+            return [id];
+          })
+        })
+      );
+
+      record(
+        'tours',
+        tour.slug,
+        await ensureTour(
+          payload,
+          {
+            bookingDeadline: tour.bookingDeadline,
+            content: await convertMarkdownToLexical(
+              payload.config,
+              tour.content
+            ),
+            currency: tour.currency,
+            departureDate: tour.departureDate,
+            departureNote: tour.departureNote,
+            destination: tour.destination,
+            duration: tour.duration,
+            heroImage: {
+              relationTo: 'stock-media' as const,
+              value: heroImageId
+            },
+            included: (tour.included ?? []).map((item) => ({ item })),
+            intent: tour.intent,
+            itinerary,
+            notIncluded: (tour.notIncluded ?? []).map((item) => ({ item })),
+            price: tour.price,
+            slug: tour.slug,
+            summary: tour.summary,
+            tenant: tenant.id,
+            title: tour.title
+          },
+          owned
         )
       );
     }

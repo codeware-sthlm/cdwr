@@ -9,12 +9,14 @@ import type {
   ImageBlock,
   Page,
   PillListBlock,
+  Place,
   Post,
   ReusableContent,
   ReusableContentBlock,
   SiteSetting,
   Tag,
-  TestimonialBlock
+  TestimonialBlock,
+  Tour
 } from '@codeware/shared/util/payload-types';
 import type { TailwindColor } from '@codeware/shared/util/tailwind';
 import type * as HeroIcons from '@heroicons/react/20/solid';
@@ -119,6 +121,12 @@ export type AssertEveryBlockClassified<
  * minus the tenant.
  */
 export type MediaRef = { lookupFilename: string };
+/**
+ * A tour's hero image, against the platform's shared stock library rather
+ * than this tenant's own media. Same shape as `MediaRef` — a different name
+ * so the two collections are never confused at a call site.
+ */
+export type StockMediaRef = { lookupFilename: string };
 export type TagRef = { lookupSlug: string };
 export type FormRef = { lookupTitle: string };
 /** Reusable content has no slug, so it is named the way a form is */
@@ -316,6 +324,53 @@ export type ReusableContentDefinition = {
   >;
 };
 
+/**
+ * A winery, hotel or stop a tour visits.
+ *
+ * Places have no slug — a tour's itinerary names one the way an editor would,
+ * by its `name`, within the same definition.
+ */
+export type PlaceDefinition = Pick<Place, 'name' | 'note' | 'url'> & {
+  /** A `platform-labels` name of type `place-kind`, resolved on apply */
+  kind: string;
+};
+
+/** One day of a tour's itinerary. */
+export type TourItineraryDayDefinition = {
+  title: string;
+  description?: string;
+  /** Resolved against this definition's own `places`, by name */
+  places?: Array<{ lookupName: string }>;
+};
+
+/**
+ * A guided tour, stated as data.
+ *
+ * `maxCustomers` is deliberately absent — capacity is demo data the seed
+ * fills in afterwards, not part of what a site is.
+ */
+export type TourDefinition = Pick<
+  Tour,
+  | 'bookingDeadline'
+  | 'currency'
+  | 'departureDate'
+  | 'departureNote'
+  | 'destination'
+  | 'duration'
+  | 'intent'
+  | 'price'
+  | 'summary'
+  | 'title'
+> & {
+  slug: string;
+  heroImage: StockMediaRef;
+  /** Markdown, converted to Lexical on apply — as a post's content is */
+  content: string;
+  included?: Array<string>;
+  notIncluded?: Array<string>;
+  itinerary?: Array<TourItineraryDayDefinition>;
+};
+
 /** A navigation entry points at a page or post this definition states. */
 export type NavigationItemDefinition = {
   reference: { relationTo: 'pages' | 'posts'; lookupSlug: string };
@@ -417,6 +472,9 @@ export type SiteDefinition = {
   customThemes?: Array<CustomThemeDefinition>;
   /** Content meant to appear in more than one page or post, by a `reusable-content` block */
   reusableContent?: Array<ReusableContentDefinition>;
+  /** Wineries, hotels and stops a tour's itinerary names */
+  places?: Array<PlaceDefinition>;
+  tours?: Array<TourDefinition>;
   pages: Array<PageDefinition>;
   posts?: Array<PostDefinition>;
   navigation?: Array<NavigationItemDefinition>;

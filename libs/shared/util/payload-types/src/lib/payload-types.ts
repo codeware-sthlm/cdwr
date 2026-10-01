@@ -1933,6 +1933,7 @@ export interface Navigation {
 export interface Place {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   /**
    * The name of the place, as it should appear in an itinerary.
    */
@@ -2384,6 +2385,7 @@ export interface TourSignup {
 export interface Tour {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   /**
    * The name of the tour, used in listings and navigation.
    */
@@ -2957,6 +2959,7 @@ export interface PagesSelect<T extends boolean = true> {
  */
 export interface PlacesSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   name?: T;
   kind?: T;
   url?: T;
@@ -3338,6 +3341,7 @@ export interface TourSignupsSelect<T extends boolean = true> {
  */
 export interface ToursSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   title?: T;
   heroImage?: T;
   summary?: T;

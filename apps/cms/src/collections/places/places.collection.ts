@@ -1,4 +1,7 @@
-import { adminGroups } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import { customT } from '@codeware/app-cms/util/i18n';
 import { validateUrl } from '@payloadcms/richtext-lexical';
 import type { CollectionConfig, TextFieldSingleValidation } from 'payload';
@@ -40,6 +43,7 @@ const places: CollectionConfig<'places'> = {
     plural: { en: 'Places', sv: 'Platser' }
   },
   fields: [
+    managedByField(),
     {
       name: 'name',
       type: 'text',

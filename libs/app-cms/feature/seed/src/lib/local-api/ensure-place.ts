@@ -20,9 +20,14 @@ export type PlaceData = Pick<
 export async function ensurePlace(
   payload: Payload,
   data: PlaceData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /** Written on create only; an existing document is never claimed */
+    managedBy?: string;
+  }
 ): Promise<Place | number> {
-  const { locale, transactionID } = options;
+  const { locale, transactionID, managedBy } = options;
   const { name, tenant } = data;
 
   const places = await payload.find({
@@ -41,7 +46,7 @@ export async function ensurePlace(
 
   const place = await payload.create({
     collection: 'places',
-    data,
+    data: { ...(managedBy ? { managedBy } : {}), ...data },
     context: { seedAction: true },
     locale,
     req: { transactionID }

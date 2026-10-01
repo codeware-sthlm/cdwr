@@ -2,7 +2,10 @@ import { slugField } from '@codeware/app-cms/ui/fields';
 import { multiTenantLinkFeature } from '@codeware/app-cms/ui/lexical';
 import { seoTab } from '@codeware/app-cms/ui/tabs';
 import { enumName } from '@codeware/app-cms/util/db';
-import { adminGroups } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import { filterByTenantScope } from '@codeware/app-cms/util/filters';
 import { customT } from '@codeware/app-cms/util/i18n';
 import type { BlockSlug } from '@codeware/shared/util/payload-types';
@@ -74,6 +77,7 @@ const tours: CollectionConfig<'tours'> = {
     plural: { en: 'Tours', sv: 'Resor' }
   },
   fields: [
+    managedByField(),
     {
       name: 'title',
       label: { en: 'Title', sv: 'Titel' },

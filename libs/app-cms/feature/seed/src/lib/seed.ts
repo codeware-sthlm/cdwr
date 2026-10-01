@@ -1,38 +1,36 @@
 import { randomBytes } from 'crypto';
 
-import { convertMarkdownToLexical } from '@codeware/app-cms/util/content-templates';
 import type {
   SeedSource,
   SeedStrategy
 } from '@codeware/app-cms/util/env-schema';
 import { getId } from '@codeware/app-cms/util/misc';
 import { generateSeedIcon } from '@codeware/shared/ui/seed-icon-studio';
+import type { TenantRole } from '@codeware/shared/util/payload-types';
 import type { Payload } from 'payload';
 
 import { applySiteDefinition } from './apply-site-definition';
 import { definitionFor } from './definition-for';
 import { loadStaticData } from './load-static-data';
 import { ensureFaq } from './local-api/ensure-faq';
-import { ensurePlace } from './local-api/ensure-place';
 import { ensurePlatformLabel } from './local-api/ensure-platform-label';
 import { ensurePlatformSettings } from './local-api/ensure-platform-settings';
 import { ensureSiteSetting } from './local-api/ensure-site-setting';
 import { ensureStockMedia } from './local-api/ensure-stock-media';
 import { ensureTenant } from './local-api/ensure-tenant';
-import { ensureTour } from './local-api/ensure-tour';
 import { ensureTourSignups } from './local-api/ensure-tour-signups';
 import { ensureUser } from './local-api/ensure-user';
 import type {
   SeedData,
   SeedEnvironment,
-  StaticSeedOptions
+  StaticSeedOptions,
+  TenantDataLookup
 } from './seed-types';
 import {
   labelIcon,
   splitLabelKey,
   usedLabelsSorted
 } from './utils/platform-label-icons';
-import { createSeedStore } from './utils/temp-store';
 
 /**
  * Seed Payload collections.
@@ -60,9 +58,28 @@ export const seed = async (
   const { environment, payload, remoteDataUrl, source, strategy } = args;
 
   // Support transactions
-  // Ids recorded as documents are created, read back when later ones
-  // reference them. Scoped to this run
-  const store = createSeedStore();
+  // Tenant ids recorded as they are created, read back when users and site
+  // content reference them by api key. Scoped to this run — a second run in
+  // the same process would otherwise resolve against the first one's ids
+  const tenantsByApiKey = new Map<string, TenantDataLookup & { id: number }>();
+
+  /** The tenant for one api key, logging and skipping when it is missing. */
+  const findTenant = (apiKey: string) => {
+    const tenant = tenantsByApiKey.get(apiKey);
+    if (!tenant) {
+      payload.logger.error(`Skip: Tenant '${apiKey}' not found`);
+    }
+    return tenant;
+  };
+
+  /** The tenants a user belongs to, each with its role, by api key. */
+  const findTenants = (
+    refs: ReadonlyArray<{ lookupApiKey: string; role: TenantRole }>
+  ) =>
+    refs.flatMap(({ lookupApiKey, role }) => {
+      const tenant = findTenant(lookupApiKey);
+      return tenant ? [{ ...tenant, role }] : [];
+    });
 
   let transactionID: string | number | undefined;
 
@@ -175,7 +192,7 @@ export const seed = async (
           tenantId = Number(response);
         }
         // Save tenant id with seed data to map to lookup tenants later
-        store.tenant(tenant.apiKey, { ...tenant, id: tenantId });
+        tenantsByApiKey.set(tenant.apiKey, { ...tenant, id: tenantId });
       } catch (error) {
         // Abort when we have a problem with a tenant
         payload.logger.error(
@@ -202,7 +219,7 @@ export const seed = async (
       let userFailed = 0;
 
       for (const user of seedData.users) {
-        const tenants = store.lookupTenant(payload, user.tenants);
+        const tenants = findTenants(user.tenants);
 
         try {
           const password =
@@ -262,7 +279,7 @@ export const seed = async (
 
     // Derived from the data that uses them, so the shared vocabularies cannot
     // drift away from the documents referencing them. Must run before stock
-    // media and places, which resolve their labels by name.
+    // media and the site content apply, which resolve their labels by name.
     const labelKey = (type: string, name: string) => `${type}:${name}`;
     const labelIds = new Map<string, number>();
 
@@ -276,8 +293,11 @@ export const seed = async (
             .filter((name): name is string => Boolean(name))
             .map((name) => labelKey('stock-subject', name))
         ),
+        // Place kinds come from the site definitions that state the places
         ...new Set(
-          seedData.places.map(({ kind }) => labelKey('place-kind', kind))
+          seedData.tenants
+            .flatMap((tenant) => definitionFor(tenant.slug)?.places ?? [])
+            .map(({ kind }) => labelKey('place-kind', kind))
         )
       ];
 
@@ -349,15 +369,9 @@ export const seed = async (
             { transactionID }
           );
 
-          let stockId: number;
           if (typeof response === 'object') {
             payload.logger.info(`[SEED] Stock image '${stock.filename}'`);
-            stockId = response.id;
-          } else {
-            stockId = Number(response);
           }
-          // Shared across tenants, so keyed by filename alone
-          store.stockMedia(stock.filename, stockId);
         } catch (e) {
           const error = e as Error;
           payload.logger.error(error.message);
@@ -376,243 +390,10 @@ export const seed = async (
       seedError = seedError || stockFailed > 0;
     }
 
-    // PLACES
-
-    // Only seed places when no errors occurred.
-    // Must run before tours since itineraries reference them.
-    if (!seedError && seedData.places.length > 0) {
-      await ensureTransaction();
-
-      let placeFailed = 0;
-
-      for (const place of seedData.places) {
-        const [entity] = store.lookupTenant(payload, [place.tenant]);
-        const kind = labelIds.get(labelKey('place-kind', place.kind));
-
-        // A place is classified or it is not seeded
-        if (!kind) {
-          payload.logger.error(
-            `Skip: Place kind '${place.kind}' not found for '${place.name}'`
-          );
-          placeFailed++;
-          continue;
-        }
-
-        try {
-          const response = await ensurePlace(
-            payload,
-            {
-              kind,
-              name: place.name,
-              note: place.note,
-              url: place.url,
-              tenant: entity.id
-            },
-            { locale: entity.locale, transactionID }
-          );
-
-          let placeId: number;
-          if (typeof response === 'object') {
-            payload.logger.info(
-              `[SEED] Place '${place.name}' on tenant #${entity.id} (${entity.locale})`
-            );
-            placeId = response.id;
-          } else {
-            placeId = Number(response);
-          }
-          // Save place to map to lookup id's later
-          store.place(
-            { apiKey: place.tenant.lookupApiKey, slug: place.name },
-            placeId
-          );
-        } catch (e) {
-          const error = e as Error;
-          payload.logger.error(error.message);
-          if ('data' in error) {
-            payload.logger.error(
-              `Place '${place.name}'\n${JSON.stringify(error.data, null, 2)}`
-            );
-          }
-          placeFailed++;
-        }
-      }
-      const { totalDocs: placeCount } = await payload.count({
-        collection: 'places',
-        req: { transactionID }
-      });
-      payload.logger.info(
-        placeFailed
-          ? `[SEED] Problem occurred for ${placeFailed}/${seedData.places.length} places (count: ${placeCount})`
-          : `[SEED] >> Places up to date (count: ${placeCount})`
-      );
-      seedError = seedError || placeFailed > 0;
-    }
-
-    // TOURS
-
-    // Only seed tours when no errors occurred
-    if (!seedError && seedData.tours.length > 0) {
-      await ensureTransaction();
-
-      let tourFailed = 0;
-
-      for (const tour of seedData.tours) {
-        const [entity] = store.lookupTenant(payload, [tour.tenant]);
-        const heroImage = store.lookupStockMedia(payload, tour.heroImage);
-
-        // A tour cannot be published without a header image
-        if (!heroImage) {
-          tourFailed++;
-          continue;
-        }
-
-        try {
-          const response = await ensureTour(
-            payload,
-            {
-              bookingDeadline: tour.bookingDeadline,
-              content: await convertMarkdownToLexical(
-                payload.config,
-                tour.content
-              ),
-              currency: tour.currency,
-              departureDate: tour.departureDate,
-              departureNote: tour.departureNote,
-              destination: tour.destination,
-              intent: tour.intent,
-              duration: tour.duration,
-              heroImage: {
-                relationTo: 'stock-media' as const,
-                value: heroImage
-              },
-              included: tour.included.map((item) => ({ item })),
-              notIncluded: tour.notIncluded.map((item) => ({ item })),
-              itinerary: tour.itinerary.map(({ places, ...day }) => ({
-                ...day,
-                places: store.lookupPlace(
-                  payload,
-                  (places ?? []).map((name) => ({
-                    apiKey: tour.tenant.lookupApiKey,
-                    slug: name
-                  }))
-                )
-              })),
-              price: tour.price,
-              slug: tour.slug,
-              summary: tour.summary,
-              title: tour.title,
-              tenant: entity.id
-            },
-            { locale: entity.locale, transactionID }
-          );
-
-          if (typeof response === 'object') {
-            payload.logger.info(
-              `[SEED] Tour '${tour.slug}' on tenant #${entity.id} (${entity.locale})`
-            );
-          }
-        } catch (e) {
-          const error = e as Error;
-          payload.logger.error(error.message);
-          if ('data' in error) {
-            payload.logger.error(
-              `Tour '${tour.slug}'\n${JSON.stringify(error.data, null, 2)}`
-            );
-          }
-          tourFailed++;
-        }
-      }
-      const { totalDocs: tourCount } = await payload.count({
-        collection: 'tours',
-        req: { transactionID }
-      });
-      payload.logger.info(
-        tourFailed
-          ? `[SEED] Problem occurred for ${tourFailed}/${seedData.tours.length} tours (count: ${tourCount})`
-          : `[SEED] >> Tours up to date (count: ${tourCount})`
-      );
-      seedError = seedError || tourFailed > 0;
-    }
-
-    // TOUR CAPACITY AND SIGNUPS
-
-    // Demo data rather than site structure, so it stays imperative: a maximum
-    // and a signup list give the fill bar, the waiting queue and the promote
-    // button something to show in development
-    if (!seedError && seedData.tours.length > 0) {
-      await ensureTransaction();
-
-      const { docs: tourDocs } = await payload.find({
-        collection: 'tours',
-        depth: 0,
-        limit: 0,
-        pagination: false,
-        req: { transactionID }
-      });
-
-      // Resolved once; the loop runs per tour
-      const localeById = new Map<
-        number,
-        (typeof seedData.tenants)[number]['locale']
-      >();
-      for (const { apiKey } of seedData.tenants) {
-        const [entity] = store.lookupTenant(payload, [
-          { lookupApiKey: apiKey }
-        ]);
-        if (entity) {
-          localeById.set(entity.id, entity.locale);
-        }
-      }
-
-      let signupFailed = 0;
-
-      for (const tour of tourDocs) {
-        const tenantId = getId(tour.tenant);
-
-        try {
-          if (!tour.maxCustomers) {
-            await payload.update({
-              collection: 'tours',
-              id: tour.id,
-              data: { maxCustomers: 12 },
-              context: { seedAction: true },
-              // Tours carry localized required fields. Without the tenant's
-              // own locale the update lands on the default one, where those
-              // are empty — and validation refuses a tour with no title
-              locale: localeById.get(tenantId),
-              req: { transactionID }
-            });
-          }
-
-          const created = await ensureTourSignups(
-            payload,
-            { tour: tour.id, tenant: tenantId },
-            { transactionID }
-          );
-
-          if (created) {
-            payload.logger.info(
-              `[SEED] ${created} signups on tour #${tour.id} for tenant #${tenantId}`
-            );
-          }
-        } catch (e) {
-          payload.logger.error((e as Error).message);
-          signupFailed++;
-        }
-      }
-
-      payload.logger.info(
-        signupFailed
-          ? `[SEED] Problem occurred for ${signupFailed}/${tourDocs.length} tours`
-          : '[SEED] >> Tour capacity and signups up to date'
-      );
-      seedError = seedError || signupFailed > 0;
-    }
-
     // SITE CONTENT
 
     // Everything a site is made of — pages, posts, media, tags, categories,
-    // forms and navigation — is stated in one definition per tenant and
+    // forms, navigation, places and tours — is stated in one definition per tenant and
     // applied by the same code that fills a real workspace. So the seed is the
     // apply path's continuous proof rather than a second implementation of it
     if (!seedError) {
@@ -679,6 +460,81 @@ export const seed = async (
       seedError = seedError || contentFailed > 0;
     }
 
+    // TOUR CAPACITY AND SIGNUPS
+
+    // Demo data rather than site structure, so it stays imperative: a maximum
+    // and a signup list give the fill bar, the waiting queue and the promote
+    // button something to show in development. Tours themselves now come
+    // from the site content just applied, so this reads them back from the
+    // database rather than from a fixture
+    if (!seedError) {
+      await ensureTransaction();
+
+      const { docs: tourDocs } = await payload.find({
+        collection: 'tours',
+        depth: 0,
+        limit: 0,
+        pagination: false,
+        req: { transactionID }
+      });
+
+      // Resolved once; the loop runs per tour
+      const localeById = new Map<
+        number,
+        (typeof seedData.tenants)[number]['locale']
+      >();
+      for (const { apiKey } of seedData.tenants) {
+        const entity = findTenant(apiKey);
+        if (entity) {
+          localeById.set(entity.id, entity.locale);
+        }
+      }
+
+      let signupFailed = 0;
+
+      for (const tour of tourDocs) {
+        const tenantId = getId(tour.tenant);
+
+        try {
+          if (!tour.maxCustomers) {
+            await payload.update({
+              collection: 'tours',
+              id: tour.id,
+              data: { maxCustomers: 12 },
+              context: { seedAction: true },
+              // Tours carry localized required fields. Without the tenant's
+              // own locale the update lands on the default one, where those
+              // are empty — and validation refuses a tour with no title
+              locale: localeById.get(tenantId),
+              req: { transactionID }
+            });
+          }
+
+          const created = await ensureTourSignups(
+            payload,
+            { tour: tour.id, tenant: tenantId },
+            { transactionID }
+          );
+
+          if (created) {
+            payload.logger.info(
+              `[SEED] ${created} signups on tour #${tour.id} for tenant #${tenantId}`
+            );
+          }
+        } catch (e) {
+          payload.logger.error((e as Error).message);
+          signupFailed++;
+        }
+      }
+
+      payload.logger.info(
+        signupFailed
+          ? `[SEED] Problem occurred for ${signupFailed}/${tourDocs.length} tours`
+          : '[SEED] >> Tour capacity and signups up to date'
+      );
+      seedError = seedError || signupFailed > 0;
+    }
+
     // SITE SETTINGS
 
     // Create settings for each tenant
@@ -688,14 +544,17 @@ export const seed = async (
       let siteSettingFailed = 0;
 
       for (const { apiKey } of seedData.tenants) {
-        const [tenant] = store.lookupTenant(payload, [
-          { lookupApiKey: apiKey }
-        ]);
+        const tenant = findTenant(apiKey);
 
-        // The definition created this page a moment ago, so it is read from the
-        // database rather than the store, which only knows what the seed itself
-        // made. Payload requires a landing page on the document. A definition
-        // may name its own, such as codeware.se's `hem`
+        if (!tenant) {
+          siteSettingFailed++;
+          continue;
+        }
+
+        // The definition created this page a moment ago, so it is read from
+        // the database rather than tracked here. Payload requires a landing
+        // page on the document. A definition may name its own, such as
+        // codeware.se's `hem`
         const landingSlug =
           definitionFor(tenant.slug)?.siteSettings?.general?.landingPage
             ?.lookupSlug ?? 'home';

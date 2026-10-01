@@ -35,9 +35,14 @@ export type TourData = Pick<
 export async function ensureTour(
   payload: Payload,
   data: TourData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    transactionID: string | number | undefined;
+    /** Written on create only; an existing document is never claimed */
+    managedBy?: string;
+  }
 ): Promise<Tour | number> {
-  const { locale, transactionID } = options;
+  const { locale, transactionID, managedBy } = options;
   const { slug, tenant } = data;
 
   // Scoped to the tenant, like every sibling helper — see ensure-post
@@ -63,6 +68,7 @@ export async function ensureTour(
   const tour = await payload.create({
     collection: 'tours',
     data: {
+      ...(managedBy ? { managedBy } : {}),
       ...data,
       _status: 'published'
     },
