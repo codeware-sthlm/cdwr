@@ -6,6 +6,16 @@ export {
 } from './lib/block-meta';
 export { type BlocksData } from './lib/blocks-data';
 export {
+  COMPONENT_HASH_LENGTH,
+  COMPONENT_HASH_PATTERN,
+  COMPONENT_TAG_PREFIX,
+  HOST_MODULE_SPECIFIERS,
+  HOST_REGISTRY_GLOBAL,
+  type HostModuleSpecifier,
+  componentBundlePath,
+  componentTagName
+} from './lib/custom-component';
+export {
   type DocData,
   type LandingDoc,
   type RenderableCollection

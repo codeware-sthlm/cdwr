@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import { COMPONENT_HASH_LENGTH } from '@codeware/shared/util/payload-utils';
 import ts from 'typescript';
 
 import { bundle } from './bundle';
@@ -73,6 +74,6 @@ export const buildComponent = async (
     .update('\0')
     .update(css)
     .digest('hex')
-    .slice(0, 16);
+    .slice(0, COMPONENT_HASH_LENGTH);
   return { ok: true, js: js.js, css, hash };
 };

@@ -3,6 +3,7 @@ import { enumName } from '@codeware/app-cms/util/db';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
 import { customT } from '@codeware/app-cms/util/i18n';
 import { canEdit } from '@codeware/app-cms/util/misc';
+import { COMPONENT_TAG_PREFIX } from '@codeware/shared/util/payload-utils';
 import type {
   CollectionConfig,
   FieldAccess,
@@ -14,8 +15,7 @@ import type {
 import { componentDeveloperAccess } from '../../security/component-developer-access';
 import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
 
-/** Prefix of the element tag name, which is derived from the slug */
-export const COMPONENT_TAG_PREFIX = 'cdwr-x-';
+import { customComponentBundleEndpoint } from './bundle.endpoint';
 
 /**
  * A slug that makes a valid custom element name once prefixed: lowercase,
@@ -82,6 +82,7 @@ const customComponents: CollectionConfig = {
     update: componentDeveloperAccess(),
     delete: componentDeveloperAccess()
   },
+  endpoints: [customComponentBundleEndpoint],
   labels: {
     singular: { en: 'Custom component', sv: 'Egen komponent' },
     plural: { en: 'Custom components', sv: 'Egna komponenter' }
