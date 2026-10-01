@@ -151,8 +151,10 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
+      # pnpm's node_modules links do not survive a cache round-trip on Windows (EPERM)
       - uses: actions/cache@v5
         id: cache-modules
+        if: runner.os != 'Windows'
         with:
           lookup-only: true
           path: "**/node_modules"
@@ -203,10 +205,14 @@ jobs:
             name: macOS
             timeout: 30
             configuration: quick
+            # cms-e2e needs a Docker Postgres, which only Linux runners provide
+            skip-projects: cms-e2e
           - os: windows-latest
             name: Windows
             timeout: 60
             configuration: quick
+            # cms-e2e needs a Docker Postgres, which only Linux runners provide
+            skip-projects: cms-e2e
         exclude:
           - os: macos-latest
             pm: pnpm
@@ -234,6 +240,7 @@ jobs:
 
       - uses: actions/cache@v5
         id: cache-modules
+        if: runner.os != 'Windows'
         with:
           path: "**/node_modules"
           key: ${{ matrix.os }}-modules-${{ matrix.node }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -254,7 +261,7 @@ jobs:
 
       - name: Run affected e2e tests
         id: e2e-run
-        run: pnpm nx run-many -t e2e --projects ${{ env.projects }} -c ${{ matrix.configuration }}
+        run: pnpm nx run-many -t e2e --projects ${{ env.projects }} -c ${{ matrix.configuration }} --exclude "${{ matrix.skip-projects }}"
         timeout-minutes: ${{ matrix.timeout }}
         env:
           CDWR_E2E_PACKAGE_MANAGER: ${{ matrix.pm }}
