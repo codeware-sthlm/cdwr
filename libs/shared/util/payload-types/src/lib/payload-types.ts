@@ -19,6 +19,10 @@ export type TenantsArrayField =
        * Readers sign in on the website to reach members-only content, on top of everything the public can see. They never reach the admin. Admins have access to manage the users in the workspace.
        */
       role: 'reader' | 'user' | 'admin';
+      /**
+       * May write custom components in this workspace. The code runs on the site, so only platform administrators can grant this. Has no effect for readers.
+       */
+      componentDeveloper?: boolean | null;
       id?: string | null;
     }[]
   | null;
@@ -136,6 +140,7 @@ export interface Config {
     card: CardBlock;
     code: CodeBlock;
     content: ContentBlock;
+    'custom-component': CustomComponentBlock;
     'feature-cards': FeatureCardsBlock;
     'feature-section': FeatureSectionBlock;
     'file-area': FileAreaBlock;
@@ -154,6 +159,7 @@ export interface Config {
   };
   collections: {
     categories: Category;
+    'custom-components': CustomComponent;
     'custom-themes': CustomTheme;
     faq: Faq;
     media: Media;
@@ -196,6 +202,8 @@ export interface Config {
   };
   collectionsSelect: {
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
+    'custom-components':
+      CustomComponentsSelect<false> | CustomComponentsSelect<true>;
     'custom-themes': CustomThemesSelect<false> | CustomThemesSelect<true>;
     faq: FaqSelect<false> | FaqSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
@@ -621,6 +629,7 @@ export interface Page {
     | CalloutBlock
     | CardBlock
     | CodeBlock
+    | CustomComponentBlock
     | ContentBlock
     | FeatureCardsBlock
     | FeatureSectionBlock
@@ -818,6 +827,90 @@ export interface CodeBlock {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CustomComponentBlock".
+ */
+export interface CustomComponentBlock {
+  component: number | CustomComponent;
+  /**
+   * The values for the props the component declares.
+   */
+  props?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'custom-component';
+}
+/**
+ * Components written in code by developers. Editors place them on pages with the Custom component block.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "custom-components".
+ */
+export interface CustomComponent {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Names the component's element, which becomes cdwr-x-<slug>. Generated from the name if left empty.
+   */
+  slug: string;
+  /**
+   * The React component, compiled to a web component when saved.
+   */
+  source: string;
+  /**
+   * The values an editor fills in each time the component is placed on a page.
+   */
+  propsSchema?:
+    | {
+        /**
+         * The name the component reads the value by.
+         */
+        name: string;
+        /**
+         * Shown to the editor. Falls back to the name.
+         */
+        label?: string | null;
+        type: 'text' | 'textarea' | 'number' | 'checkbox';
+        required?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * The result of compiling the source. Written by the build, never by hand.
+   */
+  build: {
+    status: 'pending' | 'building' | 'ready' | 'failed';
+    diagnostics?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    js?: string | null;
+    css?: string | null;
+    hash?: string | null;
+    builtAt?: string | null;
+  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ContentBlock".
  */
 export interface ContentBlock {
@@ -844,6 +937,7 @@ export interface ContentBlock {
           | (
               | CardBlock
               | CodeBlock
+              | CustomComponentBlock
               | FormBlock
               | ImageBlock
               | ReusableContentBlock
@@ -1178,6 +1272,7 @@ export interface ReusableContent {
   layout: (
     | CardBlock
     | CodeBlock
+    | CustomComponentBlock
     | ContentBlock
     | FileAreaBlock
     | FormBlock
@@ -2659,6 +2754,10 @@ export interface PayloadLockedDocument {
         value: number | Category;
       } | null)
     | ({
+        relationTo: 'custom-components';
+        value: number | CustomComponent;
+      } | null)
+    | ({
         relationTo: 'custom-themes';
         value: number | CustomTheme;
       } | null)
@@ -2800,6 +2899,37 @@ export interface CategoriesSelect<T extends boolean = true> {
         relatedPosts?: T;
       };
   slug?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "custom-components_select".
+ */
+export interface CustomComponentsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  source?: T;
+  propsSchema?:
+    | T
+    | {
+        name?: T;
+        label?: T;
+        type?: T;
+        required?: T;
+        id?: T;
+      };
+  build?:
+    | T
+    | {
+        status?: T;
+        diagnostics?: T;
+        js?: T;
+        css?: T;
+        hash?: T;
+        builtAt?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
 }
@@ -3429,6 +3559,7 @@ export interface UsersSelect<T extends boolean = true> {
 export interface TenantsArrayFieldSelect<T extends boolean = true> {
   tenant?: T;
   role?: T;
+  componentDeveloper?: T;
   id?: T;
 }
 /**

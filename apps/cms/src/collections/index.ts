@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload';
 
 import categories from './categories/categories.collection';
+import customComponents from './custom-components/custom-components.collection';
 import customThemes from './custom-themes/custom-themes.collection';
 import faq from './faq/faq.collection';
 import media from './media/media.collection';
@@ -28,6 +29,7 @@ import users from './users/users.collection';
  */
 export const collections: Array<CollectionConfig> = [
   categories,
+  customComponents,
   customThemes,
   faq,
   media,

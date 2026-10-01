@@ -2,6 +2,7 @@ import { CollectionSlug } from '@codeware/shared/util/payload-types';
 import {
   Bars3Icon,
   ClipboardDocumentListIcon,
+  CodeBracketSquareIcon,
   Cog6ToothIcon,
   DocumentIcon,
   DocumentTextIcon,
@@ -26,6 +27,7 @@ import type { IconComponent } from './types';
 
 const SLUG_ICON: Record<CollectionSlug, IconComponent> = {
   categories: RectangleGroupIcon,
+  'custom-components': CodeBracketSquareIcon,
   'custom-themes': PaintBrushIcon,
   faq: QuestionMarkCircleIcon,
   forms: ClipboardDocumentListIcon,

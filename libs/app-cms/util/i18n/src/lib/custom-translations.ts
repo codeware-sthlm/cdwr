@@ -325,6 +325,8 @@ const customTranslationsSchema = z.object({
     platformSettingsSingleton: z.string(),
     signupWouldOverbook: z.string(),
     svgCode: z.string(),
+    componentSlugInvalid: z.string(),
+    propNameInvalid: z.string(),
     themeNameBuiltIn: z.string(),
     themeNameInvalid: z.string(),
     themeNameReserved: z.string(),
@@ -708,6 +710,10 @@ Supported locales: {{locales}}`,
       signupWouldOverbook:
         'Only {{available}} of {{max}} places are left and this signup needs {{people}}. Cancel a booking or raise the maximum first.',
       svgCode: 'Enter SVG code, starting with <svg>.',
+      componentSlugInvalid:
+        'Use lowercase letters, numbers and single dashes, starting with a letter, e.g. "price-table".',
+      propNameInvalid:
+        'Start with a lowercase letter and use only letters and numbers, e.g. "buttonLabel".',
       themeNameBuiltIn:
         '"{{name}}" is already a built-in theme. Pick another name.',
       themeNameInvalid:
@@ -1095,6 +1101,10 @@ Språk som stöds: {{locales}}`,
       signupWouldOverbook:
         'Endast {{available}} av {{max}} platser återstår och anmälan behöver {{people}}. Avboka någon eller höj maxantalet först.',
       svgCode: 'Ange SVG-kod som börjar med <svg>.',
+      componentSlugInvalid:
+        'Använd små bokstäver, siffror och enkla bindestreck, och börja med en bokstav, t.ex. "pristabell".',
+      propNameInvalid:
+        'Börja med en liten bokstav och använd bara bokstäver och siffror, t.ex. "knappText".',
       themeNameBuiltIn:
         '"{{name}}" är redan ett inbyggt tema. Välj ett annat namn.',
       themeNameInvalid:

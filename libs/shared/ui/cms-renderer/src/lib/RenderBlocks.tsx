@@ -14,6 +14,7 @@ import { BlockGalleryBlock } from './blocks/block-gallery/BlockGalleryBlock';
 import { CalloutBlock } from './blocks/callout/CalloutBlock';
 import { CardBlock } from './blocks/card/CardBlock';
 import { CodeBlock } from './blocks/code/CodeBlock';
+import { CustomComponentBlock } from './blocks/custom-component/CustomComponentBlock';
 import { FeatureCardsBlock } from './blocks/feature-cards/FeatureCardsBlock';
 import { FeatureSectionBlock } from './blocks/feature-section/FeatureSectionBlock';
 import { FileAreaBlock } from './blocks/file-area/FileAreaBlock';
@@ -180,6 +181,7 @@ const blocksMap: Record<
   card: CardBlock,
   code: CodeBlock,
   content: ContentBlock,
+  'custom-component': CustomComponentBlock,
   'feature-cards': FeatureCardsBlock,
   'feature-section': FeatureSectionBlock,
   'file-area': FileAreaBlock,

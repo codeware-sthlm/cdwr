@@ -21,6 +21,7 @@ const blocks: Record<BlockSlug, boolean> = {
   callout: true,
   card: true,
   code: true,
+  'custom-component': true,
   content: true,
   'feature-cards': true,
   'feature-section': true,
