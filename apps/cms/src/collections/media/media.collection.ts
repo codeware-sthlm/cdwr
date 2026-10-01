@@ -1,6 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { tagsSelectField } from '@codeware/app-cms/ui/fields';
 import {
   adminGroups,
@@ -139,7 +140,7 @@ const media: CollectionConfig = {
     filenameCompoundIndex: ['filename', 'prefix'],
     // Local storage will be disabled when S3 storage is configured.
     // Upload to the public/media directory in Next.js making them publicly accessible even outside of Payload.
-    staticDir: path.resolve(dirname, '../../../public/media')
+    staticDir: path.resolve(dirname, '../../..', getEnv().MEDIA_DIR, 'media')
   },
   fields: [
     managedByField(),

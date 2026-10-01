@@ -28,11 +28,27 @@ export async function ensureStockMedia(
   data: StockMediaData,
   options: { transactionID: string | number | undefined }
 ): Promise<StockMedia | number> {
-  let remoteFile: File | undefined = undefined;
-  let localFile: string | undefined = undefined;
-
   const { transactionID } = options;
   const { filename, filePath, ...fields } = data;
+
+  // Matched exactly: `contains` would let 'stock-hut-1' find 'stock-hut-10.jpg'.
+  // Unlike media, stock filenames are never tenant-prefixed on upload.
+  // Checked before touching the file at all — a delta seed should not fetch
+  // or read what it is about to throw away
+  const existing = await payload.find({
+    collection: 'stock-media',
+    where: { filename: { equals: filename } },
+    depth: 0,
+    limit: 1,
+    req: { transactionID }
+  });
+
+  if (existing.totalDocs) {
+    return existing.docs[0].id;
+  }
+
+  let remoteFile: File | undefined = undefined;
+  let localFile: string | undefined = undefined;
 
   // Remote files are uploaded as buffers and local files are absolute filesystem paths
   if (filePath.match(/^http/)) {
@@ -54,20 +70,6 @@ export async function ensureStockMedia(
 
   if (!remoteFile && !localFile) {
     throw new Error(`Stock media file could not be resolved: ${filePath}`);
-  }
-
-  // Matched exactly: `contains` would let 'stock-hut-1' find 'stock-hut-10.jpg'.
-  // Unlike media, stock filenames are never tenant-prefixed on upload.
-  const existing = await payload.find({
-    collection: 'stock-media',
-    where: { filename: { equals: filename } },
-    depth: 0,
-    limit: 1,
-    req: { transactionID }
-  });
-
-  if (existing.totalDocs) {
-    return existing.docs[0].id;
   }
 
   const stockMedia = await payload.create({
