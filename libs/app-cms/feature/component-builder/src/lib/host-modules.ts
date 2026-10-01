@@ -1,4 +1,11 @@
+import {
+  HOST_REGISTRY_GLOBAL,
+  type HostModuleSpecifier
+} from '@codeware/shared/util/payload-utils';
+
 import type { HostModule } from './types';
+
+export { HOST_REGISTRY_GLOBAL };
 
 export const DEFAULT_HOST_MODULES = {
   react: {},
@@ -6,7 +13,7 @@ export const DEFAULT_HOST_MODULES = {
   'react-dom/client': {},
   'react/jsx-runtime': {},
   '@site/ui': {}
-} as const satisfies Record<string, HostModule>;
+} as const satisfies Record<HostModuleSpecifier, HostModule>;
 
 export const DEFAULT_BUNDLED_PACKAGES = [
   'lucide-react',
@@ -15,9 +22,6 @@ export const DEFAULT_BUNDLED_PACKAGES = [
   'zod',
   'recharts'
 ] as const;
-
-/** Global the host page fills with its module instances. */
-export const HOST_REGISTRY_GLOBAL = '__cdwrHost';
 
 export const hostShim = (specifier: string): string =>
   `module.exports = globalThis.${HOST_REGISTRY_GLOBAL}[${JSON.stringify(specifier)}];`;
