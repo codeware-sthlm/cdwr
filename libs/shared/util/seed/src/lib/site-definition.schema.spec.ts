@@ -144,6 +144,41 @@ describe('SiteDefinitionSchema', () => {
     });
   });
 
+  describe('slug references inside arrays', () => {
+    it('refuses a post in a category the definition does not state', () => {
+      const definition = {
+        ...minimal,
+        posts: [
+          {
+            title: 'A post',
+            slug: 'a-post',
+            content: 'Text',
+            categories: [{ lookupSlug: 'absent' }]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain("category 'absent'");
+    });
+
+    it('refuses a file area filtered by a tag the definition does not state', () => {
+      const definition = {
+        ...minimal,
+        pages: [
+          {
+            name: 'Home',
+            slug: 'home',
+            layout: [
+              { blockType: 'file-area', tags: [{ lookupSlug: 'absent' }] }
+            ]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain("tag 'absent'");
+    });
+  });
+
   describe('slugs', () => {
     it('refuses two pages with the same slug', () => {
       const definition = {
