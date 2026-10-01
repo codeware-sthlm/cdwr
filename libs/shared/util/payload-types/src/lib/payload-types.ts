@@ -259,6 +259,7 @@ export interface Config {
   jobs: {
     tasks: {
       'anonymize-tour-signups': TaskAnonymizeTourSignups;
+      'build-custom-component': TaskBuildCustomComponent;
       'delete-expired-form-submissions': TaskDeleteExpiredFormSubmissions;
       inline: {
         input: unknown;
@@ -2691,6 +2692,7 @@ export interface PayloadJob {
         taskSlug:
           | 'inline'
           | 'anonymize-tour-signups'
+          | 'build-custom-component'
           | 'delete-expired-form-submissions';
         taskID: string;
         input?:
@@ -2725,7 +2727,12 @@ export interface PayloadJob {
       }[]
     | null;
   taskSlug?:
-    | ('inline' | 'anonymize-tour-signups' | 'delete-expired-form-submissions')
+    | (
+        | 'inline'
+        | 'anonymize-tour-signups'
+        | 'build-custom-component'
+        | 'delete-expired-form-submissions'
+      )
     | null;
   queue?: string | null;
   waitUntil?: string | null;
@@ -3861,6 +3868,16 @@ export interface CollectionsWidget {
  */
 export interface TaskAnonymizeTourSignups {
   input?: unknown;
+  output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskBuild-custom-component".
+ */
+export interface TaskBuildCustomComponent {
+  input: {
+    id: number;
+  };
   output?: unknown;
 }
 /**

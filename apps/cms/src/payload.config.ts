@@ -62,6 +62,10 @@ import { tourSignupsAnonymizeEndpoint } from './endpoints/tour-signups-anonymize
 import { tourSignupsExportEndpoint } from './endpoints/tour-signups-export';
 import { tourSignupsReorderEndpoint } from './endpoints/tour-signups-reorder';
 import { anonymizeTourSignupsTask } from './jobs/anonymize-tour-signups.task';
+import {
+  COMPONENT_BUILD_QUEUE,
+  buildCustomComponentTask
+} from './jobs/build-custom-component.task';
 import { deleteExpiredFormSubmissionsTask } from './jobs/delete-expired-form-submissions.task';
 import { queryStatsLogger } from './perf/query-stats';
 import { userOnlyAccess } from './security/user-only-access';
@@ -216,13 +220,26 @@ export default buildConfig({
     tourSignupsReorderEndpoint
   ],
   jobs: {
-    tasks: [anonymizeTourSignupsTask, deleteExpiredFormSubmissionsTask],
+    tasks: [
+      anonymizeTourSignupsTask,
+      buildCustomComponentTask,
+      deleteExpiredFormSubmissionsTask
+    ],
     // Scheduling only queues the job; something has to run the queue. Both are
-    // skipped during build, where no long-running process exists to hold a cron
+    // skipped during build, where no long-running process exists to hold a cron.
+    // The component sweep only catches builds a restart orphaned: a save starts
+    // its own. One at a time, as each build holds a few hundred MB
     autoRun:
       env.NX_RUN_TARGET === 'build'
         ? []
-        : [{ cron: '5 3 * * *', queue: 'nightly', limit: 10 }],
+        : [
+            { cron: '5 3 * * *', queue: 'nightly', limit: 10 },
+            {
+              cron: '*/10 * * * *',
+              queue: COMPONENT_BUILD_QUEUE,
+              limit: 1
+            }
+          ],
     deleteJobOnComplete: true
   },
   plugins: getPlugins(env, {

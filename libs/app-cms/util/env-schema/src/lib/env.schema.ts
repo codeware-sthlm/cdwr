@@ -142,6 +142,16 @@ export const EnvSchema = withEnvVars(
       SEED_SOURCE: SeedSourceSchema.default('local'),
       SEED_STRATEGY: SeedStrategySchema.default('delta'),
 
+      // Where the component build toolchain lives; found by walking up from
+      // the working directory when absent
+      COMPONENT_TOOLCHAIN_ROOT: z
+        .string({
+          description:
+            'Workspace root holding node_modules, tsconfig.base.json and the component kit'
+        })
+        .min(1)
+        .optional(),
+
       // Internal
       DISABLE_DB_PUSH: coerceBoolean(false).describe(
         'Disable database schema push in development'

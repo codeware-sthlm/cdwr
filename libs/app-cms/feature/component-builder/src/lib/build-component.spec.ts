@@ -162,4 +162,55 @@ export default () => <Badge nope="x">hi</Badge>;
 `);
     expect(bad[0]?.line).toBe(2);
   });
+
+  describe('against the real kit', () => {
+    const realKit = path.join(
+      root,
+      'libs/shared/ui/cms-renderer/src/lib/blocks/custom-component/kit.ts'
+    );
+    const buildReal = (source: string) =>
+      build(source, {
+        hostModules: {
+          ...DEFAULT_HOST_MODULES,
+          '@site/ui': { typesEntry: realKit }
+        }
+      });
+
+    const usage = `import { Button, Card, CardContent, cn } from '@site/ui';
+export default function C() {
+  return (
+    <Card className={cn('p-2')}>
+      <CardContent>
+        <Button variant="outline" size="sm">Go</Button>
+      </CardContent>
+    </Card>
+  );
+}
+`;
+
+    it('type-checks and builds a component that uses the kit', async () => {
+      const started = performance.now();
+      const result = await buildReal(usage);
+      const seconds = ((performance.now() - started) / 1000).toFixed(1);
+      const rssMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
+      console.info(`real kit build: ${seconds}s, rss ${rssMb} MB`);
+      if (!result.ok) {
+        throw new Error(JSON.stringify(result.diagnostics));
+      }
+      expect(result.js).toContain('__cdwrHost');
+    }, 60_000);
+
+    it('reports a wrong prop at its line', async () => {
+      const result = await buildReal(
+        usage.replace('variant="outline"', 'variant="nope"')
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics).toContainEqual(
+          expect.objectContaining({ line: 6, severity: 'error' })
+        );
+        expect(result.diagnostics.every((d) => d.line <= 10)).toBe(true);
+      }
+    }, 60_000);
+  });
 });

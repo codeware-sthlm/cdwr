@@ -18,6 +18,23 @@ const OPTIONS = {
   types: []
 } as const satisfies ts.CompilerOptions;
 
+/** The path aliases of the workspace, so the kit's own imports resolve. */
+const workspacePaths = (workspaceRoot: string): ts.CompilerOptions => {
+  const file = path.join(workspaceRoot, 'tsconfig.base.json');
+  if (!ts.sys.fileExists(file)) {
+    return {};
+  }
+  const { config } = ts.readConfigFile(file, ts.sys.readFile);
+  const { options } = ts.parseJsonConfigFileContent(
+    config,
+    ts.sys,
+    workspaceRoot
+  );
+  return options.paths
+    ? { paths: options.paths, pathsBasePath: options['pathsBasePath'] }
+    : {};
+};
+
 const extensionOf = (file: string): ts.Extension =>
   file.endsWith('.d.ts')
     ? ts.Extension.Dts
@@ -42,7 +59,11 @@ export const typecheck = (
     true,
     ts.ScriptKind.TSX
   );
-  const host = ts.createCompilerHost(OPTIONS);
+  const options: ts.CompilerOptions = {
+    ...OPTIONS,
+    ...workspacePaths(workspaceRoot)
+  };
+  const host = ts.createCompilerHost(options);
   const { getSourceFile, fileExists, readFile } = host;
 
   host.getSourceFile = (fileName, ...rest) =>
@@ -72,7 +93,7 @@ export const typecheck = (
       return ts.resolveModuleName(literal.text, containingFile, opts, host);
     });
 
-  const program = ts.createProgram([virtualPath], OPTIONS, host);
+  const program = ts.createProgram([virtualPath], options, host);
   const own = program.getSourceFile(virtualPath);
   if (!own) {
     return [];
