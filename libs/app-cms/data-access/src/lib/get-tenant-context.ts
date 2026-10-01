@@ -1,5 +1,5 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import { resolveTenantSeedFromSlug } from '@codeware/shared/util/seed';
+import { findPlatformTenant } from '@codeware/shared/util/seed';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 
@@ -44,7 +44,7 @@ export const getTenantContext = cache(
       : '';
     const tenantSlug = hostSlug || APP_MODE.tenantId;
 
-    const tenant = await resolveTenantSeedFromSlug(tenantSlug);
+    const tenant = findPlatformTenant(tenantSlug);
     if (tenant) {
       // Found tenant from slug, return its seeded API key
       return {
@@ -61,7 +61,7 @@ export const getTenantContext = cache(
     }
 
     console.error(
-      `No API key for '${tenantSlug}'. The development seed does not describe ` +
+      `No API key for '${tenantSlug}'. The platform definition does not state ` +
         'this workspace, so set PAYLOAD_API_KEY to the key ' +
         '`cdwr tenant create` reported for it.'
     );

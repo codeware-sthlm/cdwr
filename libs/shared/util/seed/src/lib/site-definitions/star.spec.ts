@@ -6,7 +6,7 @@ import { star } from './star';
  * a workspace boundary (see `apps/cms-e2e/PERMISSIONS.md`). None of those
  * tests read its content by name, so it stays deliberately small rather than
  * mirroring Moon's full shape. The invariants it shares with the other
- * development workspaces live in `development.spec.ts`.
+ * test workspaces live in `test-workspaces.spec.ts`.
  */
 describe('the star definition', () => {
   it('stays a minimal dummy: home plus one other page, one post', () => {

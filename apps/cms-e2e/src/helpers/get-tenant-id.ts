@@ -1,11 +1,11 @@
-import type { TenantSlugDev } from '@codeware/shared/util/seed';
+import type { PlatformTenantSlug } from '@codeware/shared/util/seed';
 import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 /** Look up a tenant by slug and return its ID. */
 export async function getTenantId(
   page: Page,
-  slug: TenantSlugDev
+  slug: PlatformTenantSlug
 ): Promise<number> {
   const res = await page.request.get(
     `/api/tenants?where[slug][equals]=${slug}&limit=1`

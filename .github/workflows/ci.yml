@@ -12,7 +12,7 @@ on:
       - ".github/PULL_REQUEST_TEMPLATE/**"
       - ".github/CODEOWNERS"
       - "LICENSE"
-      - "libs/shared/util/seed/src/lib/static-data/media/**"
+      - "libs/shared/util/seed/src/lib/bundled/media/**"
   merge_group:
   push:
     branches:

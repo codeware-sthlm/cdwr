@@ -1,4 +1,4 @@
-import type { SeedData } from '../schema';
+import type { FaqDefinition } from '../platform-definition';
 
 /**
  * Curated FAQ entries for the admin help drawer.
@@ -7,7 +7,7 @@ import type { SeedData } from '../schema';
  * to a non-technical editor in dev and QA environments. The list also
  * doubles as the copy-source for one-time manual entry in production.
  */
-export const faqData = (): NonNullable<SeedData['faq']> => [
+export const faq: ReadonlyArray<FaqDefinition> = [
   {
     question: {
       en: 'What is a draft?',

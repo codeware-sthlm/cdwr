@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { BundledMediaFile } from './bundled-media';
+import type { BundledMediaFile, BundledStockMediaFile } from './bundled-media';
 
 /**
  * Where a bundled file actually is.
@@ -25,7 +25,7 @@ export const bundledMediaPath = (
 ): string => {
   if (remoteDataUrl) {
     // A trailing slash makes the filename a child rather than replacing the
-    // last segment, the same way `readStockMediaFiles` builds its URLs
+    // last segment, the same way `bundledStockMediaPath` builds its URLs
     return new URL(file, `${remoteDataUrl.replace(/\/$/, '')}/`).href;
   }
 
@@ -33,7 +33,32 @@ export const bundledMediaPath = (
   // checkout under a path with a space would not exist
   return path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    'static-data/media',
+    'bundled/media',
+    file
+  );
+};
+
+/**
+ * Where a bundled stock image actually is.
+ *
+ * The platform's shared library, resolved the same way a site's own bundled
+ * media is.
+ *
+ * @param file - A stock image that ships with the seed
+ * @param remoteDataUrl - Where media is served from, when it is not local
+ * @returns An http(s) URL when one is given, otherwise an absolute path
+ */
+export const bundledStockMediaPath = (
+  file: BundledStockMediaFile,
+  remoteDataUrl?: string
+): string => {
+  if (remoteDataUrl) {
+    return new URL(file, `${remoteDataUrl.replace(/\/$/, '')}/`).href;
+  }
+
+  return path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    'bundled/stock-media',
     file
   );
 };

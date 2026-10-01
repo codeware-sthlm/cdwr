@@ -8,7 +8,10 @@
  *
  * Only the seed and the apply scripts import from here, and both are server.
  */
-export { bundledMediaPath } from './lib/bundled-media-path';
+export {
+  bundledMediaPath,
+  bundledStockMediaPath
+} from './lib/bundled-media-path';
 export { cdwrIo } from './lib/site-definitions/cdwr-io';
 export { codewareSe } from './lib/site-definitions/codeware-se';
 export { moon } from './lib/site-definitions/moon';

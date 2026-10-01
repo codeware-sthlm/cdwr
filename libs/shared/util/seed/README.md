@@ -8,6 +8,21 @@ decided when it is applied.
 That separation is the whole idea. `cdwr-io.ts` describes the cdwr.io site; it
 does not describe cdwr.io's database row.
 
+## The platform definition
+
+A site definition carries no identity on purpose — but something has to state
+the tenants, their users and memberships, the shared label vocabularies, the
+stock photo library and the FAQ. That's the **platform definition**,
+`platform/platform.ts`: the one thing in this package that does carry
+identity (tenant slugs, api keys, user emails), applied by
+`applyPlatformDefinition` before any site definition. `PlatformTenantSlug` —
+every slug it states — is what `Record<PlatformTenantSlug, SiteDefinition>`
+in `definition-for.ts` is keyed on, so a tenant without a site fails to
+compile.
+
+`findPlatformTenant` reads the platform definition directly; its
+runtime callers only ever read the `apiKey` it resolves to.
+
 ## Write one
 
 A definition is a TypeScript module exporting a `SiteDefinition` as its default.

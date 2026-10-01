@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { getTenantConfig } from '@codeware/shared/util/payload-api';
 import { TenantRuntimeConfig } from '@codeware/shared/util/payload-types';
-import { resolveTenantSeedFromSlug } from '@codeware/shared/util/seed';
+import { findPlatformTenant } from '@codeware/shared/util/seed';
 import { createMiddleware } from 'hono/factory';
 
 import { getPayloadRequestOptions } from '../app/utils/get-payload-request-options';
@@ -40,13 +40,13 @@ export const resolveAppLoadContextMiddleware = createMiddleware<{
       tenantSlug = context.tenantId;
     }
 
-    const tenantSeed = await resolveTenantSeedFromSlug(tenantSlug);
-    if (tenantSeed) {
-      context.tenantApiKey = tenantSeed.apiKey;
+    const tenant = findPlatformTenant(tenantSlug);
+    if (tenant) {
+      context.tenantApiKey = tenant.apiKey;
       context.tenantId ??= tenantSlug; // Fallback to tenant id from slug if not set in env
     } else {
       console.warn(
-        `No tenant seed found for slug '${tenantSlug}', unable to resolve tenant API key`
+        `No platform tenant '${tenantSlug}', unable to resolve tenant API key`
       );
     }
   }
