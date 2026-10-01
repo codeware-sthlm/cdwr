@@ -1,6 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import {
   authenticatedAccess,
   systemUserAccess
@@ -70,7 +71,12 @@ const stockMedia: CollectionConfig<'stock-media'> = {
     ...imageUploadConfig,
     mimeTypes: getMimeTypes({ limit: ['image'] }),
     // Files land in a single shared folder rather than a tenant one
-    staticDir: path.resolve(dirname, '../../../public/stock-media')
+    staticDir: path.resolve(
+      dirname,
+      '../../..',
+      getEnv().MEDIA_DIR,
+      'stock-media'
+    )
   },
   fields: [
     {

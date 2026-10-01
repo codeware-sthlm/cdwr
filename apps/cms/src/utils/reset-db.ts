@@ -1,11 +1,17 @@
 // Must be first: installs the guard before any module that might not finish
 import './exit-guard';
 
+import { mkdirSync, rmSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 import { loadEnv } from '@codeware/app-cms/feature/env-loader';
 import type { DrizzleAdapter } from '@payloadcms/drizzle';
 import { getPayload } from 'payload';
 
 import config from '../payload.config';
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * This script is used to reset the database for development purposes.
@@ -32,6 +38,18 @@ async function reset() {
     `[DB] Using ${env.DATABASE_URL} (schema: ${env.DATABASE_SCHEMA})`
   );
 
+  // Uploads live on disk beside the database, so they go with it. Otherwise
+  // the next seed's uploads collide with them and Payload stores suffixed copies
+  const emptyMediaFolders = () => {
+    const mediaRoot = path.resolve(dirname, '../..', env.MEDIA_DIR);
+    for (const folder of ['media', 'stock-media']) {
+      const dir = path.join(mediaRoot, folder);
+      rmSync(dir, { recursive: true, force: true });
+      mkdirSync(dir, { recursive: true });
+    }
+    console.log(`✅ Emptied media folders under ${mediaRoot}`);
+  };
+
   const payload = await getPayload({ config });
 
   // Query a collection to check if the database is empty
@@ -45,32 +63,18 @@ async function reset() {
     const message = cause?.message ?? err.message;
     if (message.match(/relation "(.+)" does not exist/)) {
       console.log('✅ Database is empty, skipping reset');
+      emptyMediaFolders();
       process.exit(0);
     }
     console.error('❌ Failed to connect to database');
     process.exit(1);
   }
 
-  // Truncate media collection separately to also delete the files on disk
-  const { docs, errors } = await payload.delete({
-    collection: 'media',
-    where: {}
-  });
-  if (errors.length) {
-    console.error('❌ Failed to delete media files');
-    console.error(errors);
-    process.exit(1);
-  }
-  if (docs.length) {
-    console.log(`✅ Deleted ${docs.length} media files`);
-  } else {
-    console.log('✅ No media files to delete');
-  }
-
-  // Now drop the database
   const adapter = payload.db as DrizzleAdapter;
   await payload.db.dropDatabase({ adapter });
   console.log('✅ Dropped database');
+
+  emptyMediaFolders();
 
   const end = Date.now();
   console.log(`✅ Reset took ${end - start} ms`);

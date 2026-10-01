@@ -43,7 +43,10 @@
         "command": "nx re-seed cms",
         "env": {
           "DATABASE_URL": "postgresql://postgres:postgres@localhost:5433/cms-e2e",
-          "WITH_SECRETS_PRESERVE": "DATABASE_URL"
+          "MEDIA_DIR": "tmp/cms-e2e-media",
+          "S3_ACCESS_KEY_ID": "",
+          "SEED_DATA_URL": "",
+          "WITH_SECRETS_PRESERVE": "DATABASE_URL,MEDIA_DIR,S3_ACCESS_KEY_ID,SEED_DATA_URL"
         }
       },
       "dependsOn": ["dx:postgres"]

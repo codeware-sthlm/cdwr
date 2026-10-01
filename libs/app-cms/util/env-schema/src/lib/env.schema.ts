@@ -114,6 +114,16 @@ export const EnvSchema = withEnvVars(
         .optional()
         .default('http://localhost:3000'),
 
+      // Local media storage, unused when S3 is configured. Relative to
+      // apps/cms; e2e sets its own so its uploads never meet development's
+      MEDIA_DIR: z
+        .string({
+          description: 'Directory media and stock media are written to'
+        })
+        .min(1)
+        .optional()
+        .default('public'),
+
       // Api key request verification
       SIGNATURE_SECRET: z
         .string({ description: 'Secret key for API request signatures' })

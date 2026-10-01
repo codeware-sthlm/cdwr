@@ -31,11 +31,36 @@ export async function ensureMedia(
     managedBy?: string;
   }
 ): Promise<Media | number> {
-  let remoteFile: File | undefined = undefined;
-  let localFile: string | undefined = undefined;
-
   const { locale, transactionID, managedBy } = options;
   const { alt, external, filename, filePath, tags, tenant } = data;
+
+  // File names should be unique by design
+  const filenameWithoutExtension = filename.replace(/\.[^/.]+$/, '');
+
+  // Check if the media file exists with the given filename and tenant, before
+  // touching the file at all — a delta seed should not fetch or read what it
+  // is about to throw away
+  const media = await payload.find({
+    collection: 'media',
+    where: {
+      and: [
+        { filename: { contains: filenameWithoutExtension } },
+        tenant ? { tenant: { in: [getId(tenant)] } } : {}
+      ]
+    },
+    depth: 0,
+    limit: 1,
+    req: { transactionID }
+  });
+
+  if (media.totalDocs) {
+    return media.docs[0].id;
+  }
+
+  // No media file found, resolve and upload it
+
+  let remoteFile: File | undefined = undefined;
+  let localFile: string | undefined = undefined;
 
   // Remote files are uploaded as buffers and local files are absolute filesystem paths
   if (filePath.match(/^http/)) {
@@ -58,29 +83,6 @@ export async function ensureMedia(
   if (!remoteFile && !localFile) {
     throw new Error(`Media file could not be resolved: ${filePath}`);
   }
-
-  // File names should be unique by design
-  const filenameWithoutExtension = filename.replace(/\.[^/.]+$/, '');
-
-  // Check if the media file exists with the given filename and tenant
-  const media = await payload.find({
-    collection: 'media',
-    where: {
-      and: [
-        { filename: { contains: filenameWithoutExtension } },
-        tenant ? { tenant: { in: [getId(tenant)] } } : {}
-      ]
-    },
-    depth: 0,
-    limit: 1,
-    req: { transactionID }
-  });
-
-  if (media.totalDocs) {
-    return media.docs[0].id;
-  }
-
-  // No media file found, create one by uploading the local file
 
   const mediaFile = await payload.create({
     collection: 'media',

@@ -129,10 +129,14 @@ export const seed = async (
 
     payload.logger.info('[SEED] Seed started');
 
+    // Preview has no repository files, so it is the only environment that
+    // downloads media; every other environment uses the bundled local files
+    const mediaUrl = environment === 'preview' ? remoteDataUrl : undefined;
+
     const seedData: SeedData | null = loadStaticData({
       environment,
       payload,
-      options: { remoteDataUrl }
+      options: { remoteDataUrl: mediaUrl }
     });
 
     // Check seed data is loaded
@@ -638,9 +642,7 @@ export const seed = async (
             tenantSlug: tenant.slug,
             dryRun: false,
             locale: tenant.locale,
-            // Deployed environments have no repository files; media comes from
-            // the same place the rest of the seed data does
-            mediaBaseUrl: remoteDataUrl
+            mediaBaseUrl: mediaUrl
           });
 
           if (report.unresolved.length) {
