@@ -99,6 +99,16 @@ const MATCHERS = [
     collection: 'reusable-content',
     field: 'title',
     named: (d: SiteDefinition) => (d.reusableContent ?? []).map((r) => r.title)
+  }),
+  matcher({
+    collection: 'places',
+    field: 'name',
+    named: (d: SiteDefinition) => (d.places ?? []).map((p) => p.name)
+  }),
+  matcher({
+    collection: 'tours',
+    field: 'slug',
+    named: (d: SiteDefinition) => (d.tours ?? []).map((t) => t.slug)
   })
 ];
 

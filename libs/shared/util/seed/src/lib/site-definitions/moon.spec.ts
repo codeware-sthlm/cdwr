@@ -20,4 +20,15 @@ describe('the moon definition', () => {
 
     expect(members?.visibility).toBe('members');
   });
+
+  it('keeps its two tours, by slug', () => {
+    const slugs = (moon.tours ?? []).map(({ slug }) => slug);
+
+    expect(slugs).toEqual(
+      expect.arrayContaining([
+        'sea-of-tranquility-expedition',
+        'lunar-south-pole-ice-walk'
+      ])
+    );
+  });
 });

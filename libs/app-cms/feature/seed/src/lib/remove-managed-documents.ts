@@ -22,6 +22,11 @@ export type RemovedDocument = {
  *   outside the transaction, so a dry run or a failed apply would roll the row
  *   back and lose the file. Tags are here because reused media points at them:
  *   a recreated tag has a new id, and every file area built on it would empty.
+ * - `keep` — nothing is removed, not even what the definition dropped. Tours
+ *   carry bookings: a signup's `tour` is required while its foreign key is
+ *   `ON DELETE set null`, so deleting a tour with signups fails, and in
+ *   production it would cut bookings loose. Places stay because tours point
+ *   at them. Taking one down is an editor's decision.
  *
  * A `Record`, so a collection given `managedBy` without a policy fails the
  * build instead of being quietly skipped.
@@ -36,8 +41,13 @@ export const FRESH_POLICY = {
   // theme is the same theme
   'custom-themes': 'recreate',
   tags: 'reuse',
-  media: 'reuse'
-} as const satisfies Record<ManagedCollectionSlug, 'recreate' | 'reuse'>;
+  media: 'reuse',
+  places: 'keep',
+  tours: 'keep'
+} as const satisfies Record<
+  ManagedCollectionSlug,
+  'recreate' | 'reuse' | 'keep'
+>;
 
 /**
  * The order recreated collections are removed in: whatever points at a

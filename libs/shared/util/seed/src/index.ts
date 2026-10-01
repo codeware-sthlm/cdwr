@@ -9,11 +9,15 @@ export type {
   MediaRef,
   NavigationItemDefinition,
   PageDefinition,
+  PlaceDefinition,
   PostDefinition,
   ReusableContentDefinition,
   SiteDefinition,
   SiteSettingsDefinition,
-  TagRef
+  StockMediaRef,
+  TagRef,
+  TourDefinition,
+  TourItineraryDayDefinition
 } from './lib/site-definition';
 export { manageSeedData, type SeedOptions } from './lib/manage-seed-data';
 export { resolveTenantSeedFromSlug } from './lib/resolve-tenant-from-slug';

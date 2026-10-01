@@ -334,6 +334,93 @@ describe('SiteDefinitionSchema', () => {
     });
   });
 
+  describe('places and tours', () => {
+    it('refuses two places sharing a name', () => {
+      const definition = {
+        ...minimal,
+        places: [
+          { name: 'The Hut', kind: 'hotel' },
+          { name: 'The Hut', kind: 'activity' }
+        ]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain("'The Hut'");
+    });
+
+    it('refuses two tours sharing a slug', () => {
+      const definition = {
+        ...minimal,
+        tours: [
+          {
+            title: 'A',
+            slug: 'a-tour',
+            heroImage: { lookupFilename: 'stock-a.jpg' },
+            content: 'hi'
+          },
+          {
+            title: 'B',
+            slug: 'a-tour',
+            heroImage: { lookupFilename: 'stock-b.jpg' },
+            content: 'hi'
+          }
+        ]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain("'a-tour'");
+    });
+
+    it("refuses an itinerary naming a place the definition doesn't state", () => {
+      const definition = {
+        ...minimal,
+        tours: [
+          {
+            title: 'A',
+            slug: 'a-tour',
+            heroImage: { lookupFilename: 'stock-a.jpg' },
+            content: 'hi',
+            itinerary: [{ title: 'Day 1', places: [{ lookupName: 'Nowhere' }] }]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain("'Nowhere'");
+    });
+
+    it('accepts an itinerary naming a place the definition states', () => {
+      const definition = {
+        ...minimal,
+        places: [{ name: 'The Hut', kind: 'hotel' }],
+        tours: [
+          {
+            title: 'A',
+            slug: 'a-tour',
+            heroImage: { lookupFilename: 'stock-a.jpg' },
+            content: 'hi',
+            itinerary: [{ title: 'Day 1', places: [{ lookupName: 'The Hut' }] }]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition)).toEqual([]);
+    });
+
+    it("never checks a tour's hero image against this definition's media — it names the platform's stock library instead", () => {
+      const definition = {
+        ...minimal,
+        tours: [
+          {
+            title: 'A',
+            slug: 'a-tour',
+            heroImage: { lookupFilename: 'stock-not-in-media.jpg' },
+            content: 'hi'
+          }
+        ]
+      };
+
+      expect(errorsOf(definition)).toEqual([]);
+    });
+  });
+
   it('keeps a block it does not understand, rather than refusing it', () => {
     // Block internals are Payload's to judge, inside the rolled-back
     // transaction the dry run uses. This schema only asks that it is a block

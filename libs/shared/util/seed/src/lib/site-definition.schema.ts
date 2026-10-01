@@ -37,6 +37,8 @@ const KNOWN_KEYS = [
   'forms',
   'customThemes',
   'reusableContent',
+  'places',
+  'tours',
   'pages',
   'posts',
   'navigation',
@@ -114,6 +116,37 @@ export const SiteDefinitionSchema = z
           .object({
             title: z.string().min(1),
             layout: z.array(BlockSchema)
+          })
+          .passthrough()
+      )
+      .optional(),
+    places: z
+      .array(
+        z
+          .object({ name: z.string().min(1), kind: z.string().min(1) })
+          .passthrough()
+      )
+      .optional(),
+    tours: z
+      .array(
+        z
+          .object({
+            title: z.string().min(1),
+            slug: Slug,
+            heroImage: z.object({ lookupFilename: z.string().min(1) }),
+            content: z.string(),
+            itinerary: z
+              .array(
+                z
+                  .object({
+                    title: z.string().min(1),
+                    places: z
+                      .array(z.object({ lookupName: z.string().min(1) }))
+                      .optional()
+                  })
+                  .passthrough()
+              )
+              .optional()
           })
           .passthrough()
       )
@@ -196,6 +229,12 @@ export const SiteDefinitionSchema = z
         'reusableContent'
       ])
     );
+    duplicates((definition.places ?? []).map(({ name }) => name)).forEach(
+      (name) => problem(`Two places share the name '${name}'`, ['places'])
+    );
+    duplicates((definition.tours ?? []).map(({ slug }) => slug)).forEach(
+      (slug) => problem(`Two tours share the slug '${slug}'`, ['tours'])
+    );
 
     // Every reference has to land on something this definition also states, or
     // the apply resolves it to nothing and drops it silently — which is how a
@@ -215,6 +254,9 @@ export const SiteDefinitionSchema = z
     const reusableContentTitles = new Set(
       (definition.reusableContent ?? []).map(({ title }) => title)
     );
+    const placeNames = new Set(
+      (definition.places ?? []).map(({ name }) => name)
+    );
 
     (definition.navigation ?? []).forEach(({ reference }, index) => {
       const known = reference.relationTo === 'pages' ? pageSlugs : postSlugs;
@@ -226,11 +268,39 @@ export const SiteDefinitionSchema = z
       }
     });
 
+    // An itinerary names a place by `name`, within the same definition —
+    // the same kind of check as navigation above, one level deeper
+    (definition.tours ?? []).forEach((tour, tourIndex) => {
+      (tour.itinerary ?? []).forEach((day, dayIndex) => {
+        (day.places ?? []).forEach(({ lookupName }, placeIndex) => {
+          if (!placeNames.has(lookupName)) {
+            problem(`No place named '${lookupName}' in this definition`, [
+              'tours',
+              tourIndex,
+              'itinerary',
+              dayIndex,
+              'places',
+              placeIndex
+            ]);
+          }
+        });
+      });
+    });
+
     for (const [path, ref] of referencesIn(definition)) {
       const field = path[path.length - 1];
 
+      // A tour's hero image names stock media — the platform's own library,
+      // never stated by a definition — so it cannot be checked against
+      // `media` the way every other `lookupFilename` is
+      const isStockMediaRef = path[0] === 'tours' && field === 'heroImage';
+
       const filename = ref['lookupFilename'];
-      if (filename !== undefined && !filenames.has(filename)) {
+      if (
+        filename !== undefined &&
+        !isStockMediaRef &&
+        !filenames.has(filename)
+      ) {
         problem(`No media named '${filename}' in this definition`, path);
       }
 

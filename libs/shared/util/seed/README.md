@@ -33,8 +33,8 @@ export default acme;
 ```
 
 The other keys — `tags`, `categories`, `media`, `forms`, `customThemes`,
-`reusableContent`, `posts`, `navigation`, `siteSettings` — are optional and
-follow the same shape as the collections they fill.
+`reusableContent`, `places`, `tours`, `posts`, `navigation`, `siteSettings` —
+are optional and follow the same shape as the collections they fill.
 
 The block types come straight from Payload's generated types, so an editor
 completes them and a wrong field is a compile error rather than a surprise at
@@ -45,13 +45,19 @@ apply time.
 Ids do not exist until the apply creates the documents, so a definition names
 what it points at the way a person would:
 
-| Reference        | Written as                      | Finds                |
-| ---------------- | ------------------------------- | -------------------- |
-| Media            | `{ lookupFilename: 'a.png' }`   | a media file         |
-| Tag              | `{ lookupSlug: 'news' }`        | a tag                |
-| Form             | `{ lookupTitle: 'Contact' }`    | a form               |
-| Reusable content | `{ lookupTitle: 'Footer CTA' }` | reusable content     |
-| Author           | `{ lookupEmail: 'a@b.se' }`     | a user of the tenant |
+| Reference        | Written as                      | Finds                             |
+| ---------------- | ------------------------------- | --------------------------------- |
+| Media            | `{ lookupFilename: 'a.png' }`   | a media file                      |
+| Stock media      | `{ lookupFilename: 'a.jpg' }`   | the platform's shared stock media |
+| Tag              | `{ lookupSlug: 'news' }`        | a tag                             |
+| Form             | `{ lookupTitle: 'Contact' }`    | a form                            |
+| Reusable content | `{ lookupTitle: 'Footer CTA' }` | reusable content                  |
+| Author           | `{ lookupEmail: 'a@b.se' }`     | a user of the tenant              |
+| Place            | `{ lookupName: 'The Hut' }`     | a place this definition states    |
+
+Stock media is the one exception: it is the platform's own shared library, not
+stated by any definition, so a tour's `heroImage` resolves against whatever is
+already there — not against this definition's `media`.
 
 A reference that resolves to nothing is **reported, not silently dropped** — it
 comes back in the report's `unresolved` list, and the apply refuses to commit.
@@ -202,9 +208,14 @@ What it does, inside the same transaction as the apply:
   them again. Edits made to them in the admin go with them; that is the point.
 - **Reuses media and tags** it still names, and removes only the ones it has
   dropped. Deleting media deletes its file outside the transaction, so a dry
-  run or a failed apply could lose a file whose row comes back; dropped media is
-  therefore removed only after the apply has committed. Tags stay because
+  run or a failed apply could lose a file whose row comes back; dropped media
+  is therefore removed only after the apply has committed. Tags stay because
   reused media points at them.
+- **Keeps tours and places**, even ones it has dropped. Tours carry bookings: a
+  signup's `tour` is required while its foreign key is `ON DELETE set null`,
+  so deleting a tour with signups fails, and in production it would cut
+  bookings loose. Places stay because tours point at them. `diff-site` lists a
+  dropped one as extra; taking it down is an editor's decision.
 - **Never removes anything else.** A document with no `managedBy` — an editor's,
   or one created before the field existed — is left, even when the definition
   names it. The plan lists each one, since it is why the tenant will not match.
