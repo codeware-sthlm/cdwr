@@ -34,7 +34,10 @@ const componentPath = /'(@codeware\/[^'\s]+)'/g;
 
 /** Import specifiers look the same but are not component references */
 const isImportLine = (line: string) =>
-  /^\s*(import|export)\b/.test(line) || line.includes(" from '");
+  /^\s*(import|export)\b/.test(line) ||
+  line.includes(" from '") ||
+  // A dynamic import of a module, as a job task loads its toolchain
+  /\bimport\(/.test(line);
 
 const toImportMapKey = (path: string) =>
   path.includes('#') ? path : `${path}#default`;

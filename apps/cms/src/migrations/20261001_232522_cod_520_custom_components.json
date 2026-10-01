@@ -27275,6 +27275,7 @@
       "values": [
         "inline",
         "anonymize-tour-signups",
+        "build-custom-component",
         "delete-expired-form-submissions"
       ]
     },
@@ -27289,6 +27290,7 @@
       "values": [
         "inline",
         "anonymize-tour-signups",
+        "build-custom-component",
         "delete-expired-form-submissions"
       ]
     }
@@ -27305,6 +27307,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "60834268-e164-420d-b89c-864f60eca67a",
+  "id": "62901e6b-b339-4f25-9fa6-22bbfd21eed5",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

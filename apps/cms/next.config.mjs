@@ -67,6 +67,14 @@ const nextConfig = {
 
   reactCompiler: false,
 
+  // The component builder: native and large, and only ever run on the server.
+  // `typescript` is externalized by Next already
+  serverExternalPackages: [
+    'esbuild',
+    '@tailwindcss/node',
+    '@tailwindcss/oxide'
+  ],
+
   experimental: {
     // The proxy runs on every route, api included, so Next buffers each body
     // and cuts it off at this size. It has to clear Payload's 25 MB upload

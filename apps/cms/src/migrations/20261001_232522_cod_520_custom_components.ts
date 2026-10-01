@@ -4,6 +4,8 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   await db.execute(sql`
    CREATE TYPE "payload"."enum_custom_component_prop_type" AS ENUM('text', 'textarea', 'number', 'checkbox');
   CREATE TYPE "payload"."enum_custom_component_build_status" AS ENUM('pending', 'building', 'ready', 'failed');
+  ALTER TYPE "payload"."enum_payload_jobs_log_task_slug" ADD VALUE 'build-custom-component' BEFORE 'delete-expired-form-submissions';
+  ALTER TYPE "payload"."enum_payload_jobs_task_slug" ADD VALUE 'build-custom-component' BEFORE 'delete-expired-form-submissions';
   CREATE TABLE "payload"."custom_components_props_schema" (
   	"_order" integer NOT NULL,
   	"_parent_id" integer NOT NULL,
@@ -108,13 +110,21 @@ export async function down({
   ALTER TABLE "payload"."pages_blocks_custom_component" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "payload"."_pages_v_blocks_custom_component" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "payload"."reusable_content_blocks_custom_component" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "payload"."payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_custom_components_fk";
   DROP TABLE "payload"."custom_components_props_schema" CASCADE;
   DROP TABLE "payload"."custom_components" CASCADE;
   DROP TABLE "payload"."pages_blocks_custom_component" CASCADE;
   DROP TABLE "payload"."_pages_v_blocks_custom_component" CASCADE;
   DROP TABLE "payload"."reusable_content_blocks_custom_component" CASCADE;
-  ALTER TABLE "payload"."payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_custom_components_fk";
   
+  ALTER TABLE "payload"."payload_jobs_log" ALTER COLUMN "task_slug" SET DATA TYPE text;
+  DROP TYPE "payload"."enum_payload_jobs_log_task_slug";
+  CREATE TYPE "payload"."enum_payload_jobs_log_task_slug" AS ENUM('inline', 'anonymize-tour-signups', 'delete-expired-form-submissions');
+  ALTER TABLE "payload"."payload_jobs_log" ALTER COLUMN "task_slug" SET DATA TYPE "payload"."enum_payload_jobs_log_task_slug" USING "task_slug"::"payload"."enum_payload_jobs_log_task_slug";
+  ALTER TABLE "payload"."payload_jobs" ALTER COLUMN "task_slug" SET DATA TYPE text;
+  DROP TYPE "payload"."enum_payload_jobs_task_slug";
+  CREATE TYPE "payload"."enum_payload_jobs_task_slug" AS ENUM('inline', 'anonymize-tour-signups', 'delete-expired-form-submissions');
+  ALTER TABLE "payload"."payload_jobs" ALTER COLUMN "task_slug" SET DATA TYPE "payload"."enum_payload_jobs_task_slug" USING "task_slug"::"payload"."enum_payload_jobs_task_slug";
   DROP INDEX "payload"."payload_locked_documents_rels_custom_components_id_idx";
   ALTER TABLE "payload"."users_tenants" DROP COLUMN "component_developer";
   ALTER TABLE "payload"."payload_locked_documents_rels" DROP COLUMN "custom_components_id";

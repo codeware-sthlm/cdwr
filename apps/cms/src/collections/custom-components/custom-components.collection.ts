@@ -16,6 +16,10 @@ import { componentDeveloperAccess } from '../../security/component-developer-acc
 import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
 
 import { customComponentBundleEndpoint } from './bundle.endpoint';
+import {
+  markBuildPending,
+  queueComponentBuild
+} from './hooks/component-build.hooks';
 
 /**
  * A slug that makes a valid custom element name once prefixed: lowercase,
@@ -83,6 +87,10 @@ const customComponents: CollectionConfig = {
     delete: componentDeveloperAccess()
   },
   endpoints: [customComponentBundleEndpoint],
+  hooks: {
+    beforeChange: [markBuildPending],
+    afterChange: [queueComponentBuild]
+  },
   labels: {
     singular: { en: 'Custom component', sv: 'Egen komponent' },
     plural: { en: 'Custom components', sv: 'Egna komponenter' }
