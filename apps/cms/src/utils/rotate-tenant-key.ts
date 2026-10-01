@@ -14,8 +14,8 @@ import { getScriptPayload, runScript } from './script-payload';
  * That is why rotation runs as a script rather than from the admin panel.
  *
  * The tenant is identified by its **current API key**, not by a slug. Infisical
- * tenant ids and Payload tenant slugs are separate namespaces - `/tenants/demo`
- * can hold the key of a tenant slugged `star-wars` - and the key is what a
+ * tenant ids and Payload tenant slugs are separate namespaces - a folder under
+ * `/tenants` need not share its tenant's slug - and the key is what a
  * deployment itself authenticates with (see `resolveScopedTenant`).
  *
  * Driven by env vars so the caller controls which database is targeted:

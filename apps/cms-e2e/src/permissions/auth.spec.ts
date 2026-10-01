@@ -42,7 +42,7 @@ test.describe('Auth — login in tenant mode', () => {
   });
 
   test('multi-tenant user can log in', async ({ page }) => {
-    // multiAdmin belongs to moon+star+sun — moon membership satisfies the hook.
+    // multiAdmin belongs to moon+star — moon membership satisfies the hook.
     const { email, password } = TEST_USERS.multiAdmin;
     const res = await page.request.post('/api/users/login', {
       data: { email, password }

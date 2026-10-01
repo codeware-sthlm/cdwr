@@ -119,14 +119,14 @@ After password auth, the `verifyTenantModeAccessHook` (afterLogin) checks that t
 All users are seeded by `libs/shared/util/seed/src/lib/static-data/seed.development.ts`.
 Password for every seed user: **`dev`** (blank in seed data, defaulted to `dev` at runtime).
 
-| Constant      | Email               | Persona      | Tenants               | Primary test purpose                                |
-| ------------- | ------------------- | ------------ | --------------------- | --------------------------------------------------- |
-| `systemUser`  | `system@local.dev`  | System user  | none                  | System-only operations; setup/teardown              |
-| `tenantAdmin` | `titan@local.dev`   | Tenant admin | moon (admin)          | Core tenant admin permission tests                  |
-| `tenantUser`  | `phobos@local.dev`  | Tenant user  | moon (user)           | Core tenant user permission tests                   |
-| `multiAdmin`  | `black@local.dev`   | Tenant admin | moon+star+sun (admin) | Multi-tenant admin; cookie-scoped content isolation |
-| `multiUser`   | `iss@local.dev`     | Tenant user  | moon+star+sun (user)  | Multi-tenant user; cookie-scoped content isolation  |
-| `otherAdmin`  | `antares@local.dev` | Tenant admin | star (admin)          | No moon access — verifies cross-tenant denial       |
+| Constant      | Email               | Persona      | Tenants           | Primary test purpose                                |
+| ------------- | ------------------- | ------------ | ----------------- | --------------------------------------------------- |
+| `systemUser`  | `system@local.dev`  | System user  | none              | System-only operations; setup/teardown              |
+| `tenantAdmin` | `titan@local.dev`   | Tenant admin | moon (admin)      | Core tenant admin permission tests                  |
+| `tenantUser`  | `phobos@local.dev`  | Tenant user  | moon (user)       | Core tenant user permission tests                   |
+| `multiAdmin`  | `black@local.dev`   | Tenant admin | moon+star (admin) | Multi-tenant admin; cookie-scoped content isolation |
+| `multiUser`   | `iss@local.dev`     | Tenant user  | moon+star (user)  | Multi-tenant user; cookie-scoped content isolation  |
+| `otherAdmin`  | `antares@local.dev` | Tenant admin | star (admin)      | No moon access — verifies cross-tenant denial       |
 
 > **`otherAdmin` is the primary "no access" actor** for moon-scoped tests. They are a valid admin
 > in a different tenant, so any denial is specifically about moon access, not about being unauthenticated.
@@ -182,7 +182,7 @@ Password for every seed user: **`dev`** (blank in seed data, defaulted to `dev` 
 >
 > **[C-05] note:** In tenant mode `userOrApiKeyAccess` returns `{ tenant: equals moonId }` for all
 > authenticated users. The plugin AND's this with `{ tenant: in userTenantIds }`. Multi-tenant users
-> (e.g. `multiAdmin` with moon+star+sun) therefore only receive moon content — server-enforced,
+> (e.g. `multiAdmin` with moon+star) therefore only receive moon content — server-enforced,
 > independent of the `payload-tenant` cookie.
 
 ### Platform-owned collections (faq, platform-labels, stock-media)

@@ -36,8 +36,8 @@ const validateDeployment: TextFieldSingleValidation = (value, { req }) => {
  *
  * It is the workspace's folder in Infisical and the ending of its Fly app
  * names, which is also what ties the two together — nothing else records which
- * folder belongs to which workspace, and the slug is not it: the `demo`
- * deployment serves a workspace whose slug is `star-wars`.
+ * folder belongs to which workspace, and the slug is not it: nothing requires
+ * the two to match.
  *
  * Writable while empty and fixed once set. Renaming would not move anything; it
  * would leave the old Fly apps and their settings behind under the old name,

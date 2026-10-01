@@ -48,7 +48,7 @@ test.describe('Content scope — read [C-01]', () => {
   test('multi-tenant user is restricted to moon content in tenant mode [C-05]', async ({
     page
   }) => {
-    // multiAdmin belongs to moon+star+sun but the server enforces moon scope.
+    // multiAdmin belongs to moon+star but the server enforces moon scope.
     // Only moon docs are returned regardless of cookie or user memberships.
     await loginAs(page, 'multiAdmin');
     const res = await page.request.get('/api/pages?limit=100');
@@ -102,7 +102,7 @@ test.describe('Content scope — write [C-06]', () => {
   test('multi-tenant user cannot write pages outside the active tenant', async ({
     page
   }) => {
-    // multiAdmin belongs to moon+star+sun. The multi-tenant plugin only
+    // multiAdmin belongs to moon+star. The multi-tenant plugin only
     // constrains writes to their memberships, so without the active-tenant
     // scope they could edit a star page by id — a document they cannot read.
     await loginAs(page, 'multiAdmin');
