@@ -14,7 +14,6 @@ import type {
   ReusableContent,
   ReusableContentBlock,
   SiteSetting,
-  Tag,
   TestimonialBlock,
   Tour
 } from '@codeware/shared/util/payload-types';
@@ -30,12 +29,12 @@ import type { BundledMediaFile } from './bundled-media';
 /**
  * One site, stated as data.
  *
- * Deliberately **not** `SeedData`. That schema names a document's tenant by
- * `lookupApiKey` and its fixtures carry those keys as literals, which is right
- * for a seed that creates its own tenants and impossible for a real one: the
- * tenant already exists and its key is a production secret. A definition
- * describes content and carries no identity at all — the tenant is named when
- * the definition is applied.
+ * Deliberately **not** `PlatformDefinition`. That one names a tenant's
+ * membership by `lookupSlug` and its data carries api keys as literals, which
+ * is right for what creates its own tenants and impossible for a real one:
+ * the tenant already exists and its key is a production secret. A site
+ * definition describes content and carries no identity at all — the tenant
+ * is named when the definition is applied.
  *
  * Authored as TypeScript rather than JSON, so the compiler checks a block's
  * shape against the same generated types Payload renders from. What a
@@ -117,8 +116,8 @@ export type AssertEveryBlockClassified<
  * How a definition points at something it also defines.
  *
  * Ids do not exist until the apply creates the documents, so a definition names
- * its own content the way a person would. The same indirection `SeedData` uses,
- * minus the tenant.
+ * its own content the way a person would. The same indirection a platform
+ * definition's memberships use, minus the tenant.
  */
 export type MediaRef = { lookupFilename: string };
 /**

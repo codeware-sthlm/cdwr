@@ -116,8 +116,8 @@ After password auth, the `verifyTenantModeAccessHook` (afterLogin) checks that t
 
 ## Test Users
 
-All users are seeded by `libs/shared/util/seed/src/lib/static-data/seed.development.ts`.
-Password for every seed user: **`dev`** (blank in seed data, defaulted to `dev` at runtime).
+All users are seeded by `libs/shared/util/seed/src/lib/platform/platform.ts`.
+Password for every seed user: **`dev`** (locally and in e2e; the seed sets it per environment).
 
 | Constant      | Email               | Persona      | Tenants           | Primary test purpose                                |
 | ------------- | ------------------- | ------------ | ----------------- | --------------------------------------------------- |

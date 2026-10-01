@@ -1,6 +1,6 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import type { Tenant } from '@codeware/shared/util/payload-types';
-import { resolveTenantSeedFromSlug } from '@codeware/shared/util/seed';
+import { findPlatformTenant } from '@codeware/shared/util/seed';
 import { Payload } from 'payload';
 
 import { findTenantByApiKey } from './find-tenant-by-api-key';
@@ -31,8 +31,7 @@ export const resolveScopedTenant = async (
       return undefined;
     }
 
-    const seedTenant = await resolveTenantSeedFromSlug(APP_MODE.tenantId);
-    apiKey = seedTenant?.apiKey ?? null;
+    apiKey = findPlatformTenant(APP_MODE.tenantId)?.apiKey ?? null;
   }
 
   if (!apiKey) {

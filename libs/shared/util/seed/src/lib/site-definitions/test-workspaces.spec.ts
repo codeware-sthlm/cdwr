@@ -5,10 +5,10 @@ import { moon } from './moon';
 import { star } from './star';
 
 /**
- * What every development workspace shares, regardless of size.
+ * What both test workspaces share, regardless of size.
  *
- * Moon is a full workspace and Star is a deliberately minimal dummy tenant
- * (COD-502) — the invariants below hold for both. The richer "three listing
+ * Moon is a full workspace and Star a deliberately minimal one; the
+ * invariants below hold for both. The richer "three listing
  * pages" shape below is Moon's alone; see `moon.spec.ts` and `star.spec.ts`
  * for what each one pins beyond this.
  */

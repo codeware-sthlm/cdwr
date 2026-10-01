@@ -3,7 +3,7 @@ import { moon } from './moon';
 /**
  * Moon is the tenant the e2e suite asserts against by name, so its slugs are
  * part of the contract rather than a detail. The invariants it shares with the
- * other development workspaces live in `development.spec.ts`.
+ * other test workspaces live in `test-workspaces.spec.ts`.
  */
 describe('the moon definition', () => {
   it('keeps the slugs the e2e suite asserts against', () => {
