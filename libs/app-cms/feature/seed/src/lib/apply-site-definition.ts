@@ -15,6 +15,7 @@ import type { SiteDefinition } from '@codeware/shared/util/seed';
 import { bundledMediaPath } from '@codeware/shared/util/seed/site-definitions';
 import type { Payload, TypedLocale } from 'payload';
 
+import { defaultSiteSettings } from './default-site-settings';
 import { type ExtraDocument, findExtraDocuments } from './find-extra-documents';
 import { ensureCategory } from './local-api/ensure-category';
 import { ensureCustomTheme } from './local-api/ensure-custom-theme';
@@ -782,6 +783,38 @@ export async function applySiteDefinition(
           { ...ctx, definitionWins: fresh }
         )
       );
+    } else {
+      // No stated settings: a new workspace still needs a working app, so it
+      // gets the platform's defaults. An existing one keeps what it has.
+      const { totalDocs: existingSettings } = await payload.count({
+        collection: 'site-settings',
+        where: { tenant: { equals: tenant.id } },
+        req: { transactionID }
+      });
+      const landingPage = pages.get('home');
+
+      if (!existingSettings) {
+        if (landingPage === undefined) {
+          unresolved.push({
+            blockType: 'site-settings',
+            field: 'general.landingPage',
+            lookup: 'home'
+          });
+        } else {
+          record(
+            'site-settings',
+            tenantSlug,
+            await ensureSiteSetting(
+              payload,
+              defaultSiteSettings(
+                { ...tenant, slug: tenantSlug },
+                { landingPage, locale: ctx.locale }
+              ),
+              ctx
+            )
+          );
+        }
+      }
     }
 
     // The settings now point at the new landing page, so the old one can go
@@ -936,7 +969,7 @@ async function setAsideLandingPage(
 async function findTenant(
   payload: Payload,
   slug: string
-): Promise<Pick<Tenant, 'id' | 'supportedLocales'>> {
+): Promise<Pick<Tenant, 'id' | 'supportedLocales' | 'name' | 'description'>> {
   const { docs } = await payload.find({
     collection: 'tenants',
     where: { slug: { equals: slug } },
