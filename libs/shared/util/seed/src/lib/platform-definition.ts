@@ -73,7 +73,12 @@ export type PlatformUserDefinition = {
   role: User['role'];
   locale: Locale;
   /** Workspaces this user belongs to, named by slug rather than api key */
-  tenants: ReadonlyArray<{ lookupSlug: string; role: TenantRole }>;
+  tenants: ReadonlyArray<{
+    lookupSlug: string;
+    role: TenantRole;
+    /** May author custom components in that workspace */
+    componentDeveloper?: boolean;
+  }>;
 };
 
 export type PlatformDefinition = {

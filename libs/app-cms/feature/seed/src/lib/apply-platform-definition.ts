@@ -138,18 +138,20 @@ export async function applyPlatformDefinition(
 
   try {
     for (const user of definition.users) {
-      const memberships = user.tenants.flatMap(({ lookupSlug, role }) => {
-        const tenant = tenants.get(lookupSlug);
-        if (!tenant) {
-          unresolved.push({
-            blockType: 'user',
-            field: 'tenants',
-            lookup: lookupSlug
-          });
-          return [];
+      const memberships = user.tenants.flatMap(
+        ({ lookupSlug, role, componentDeveloper }) => {
+          const tenant = tenants.get(lookupSlug);
+          if (!tenant) {
+            unresolved.push({
+              blockType: 'user',
+              field: 'tenants',
+              lookup: lookupSlug
+            });
+            return [];
+          }
+          return [{ tenant: tenant.id, role, componentDeveloper }];
         }
-        return [{ tenant: tenant.id, role }];
-      });
+      );
 
       record(
         'users',

@@ -78,7 +78,11 @@ const UserSchema = z.object({
   role: enumOf<User['role']>()(z.enum(['system-user', 'user'])),
   locale: LocaleSchema,
   tenants: z.array(
-    z.object({ lookupSlug: z.string().min(1), role: TenantRoleSchema })
+    z.object({
+      lookupSlug: z.string().min(1),
+      role: TenantRoleSchema,
+      componentDeveloper: z.boolean().optional()
+    })
   )
 });
 

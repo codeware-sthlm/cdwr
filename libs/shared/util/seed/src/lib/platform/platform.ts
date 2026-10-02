@@ -207,11 +207,11 @@ export const platform = {
     },
     {
       name: 'Titan Moon',
-      description: 'Administrator access to Moon',
+      description: 'Administrator access to Moon, writes its custom components',
       email: 'titan@local.dev',
       role: 'user',
       locale: 'en',
-      tenants: [{ lookupSlug: 'moon', role: 'admin' }]
+      tenants: [{ lookupSlug: 'moon', role: 'admin', componentDeveloper: true }]
     },
     {
       name: 'Luna Moon',
