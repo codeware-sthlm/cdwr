@@ -1,5 +1,5 @@
 import {
-  buildStatusField,
+  componentStudioField,
   slugField,
   tsxSourceField
 } from '@codeware/app-cms/ui/fields';
@@ -41,11 +41,15 @@ const base = slugField({ sourceField: 'name', required: true }) as TextField;
 const componentSlugField: TextField = {
   ...base,
   maxLength: 48,
+  label: { en: 'Slug', sv: 'Slug' },
   admin: {
     ...base.admin,
+    // The studio's row sits beside the name, not in the sidebar
+    position: undefined,
+    width: '40%',
     description: {
       en: `Names the component's element, which becomes ${COMPONENT_TAG_PREFIX}<slug>. Generated from the name if left empty.`,
-      sv: `Namnger komponentens element, som blir ${COMPONENT_TAG_PREFIX}<kortnamn>. Genereras från namnet om det lämnas tomt.`
+      sv: `Namnger komponentens element, som blir ${COMPONENT_TAG_PREFIX}<slug>. Genereras från namnet om det lämnas tomt.`
     }
   },
   validate: ((value, { req }) => {
@@ -102,152 +106,168 @@ const customComponents: CollectionConfig = {
   },
   fields: [
     {
-      name: 'name',
-      type: 'text',
-      required: true,
-      label: { en: 'Name', sv: 'Namn' }
-    },
-    componentSlugField,
-    {
-      ...tsxSourceField,
-      label: { en: 'Source', sv: 'Källkod' },
-      access: { read: usersOnly },
-      admin: {
-        ...tsxSourceField.admin,
-        description: {
-          en: 'The React component, compiled to a web component when saved.',
-          sv: 'React-komponenten, som kompileras till en webbkomponent när du sparar.'
-        }
-      }
-    },
-    {
-      name: 'propsSchema',
-      type: 'array',
-      label: { en: 'Props', sv: 'Egenskaper' },
-      labels: {
-        singular: { en: 'Prop', sv: 'Egenskap' },
-        plural: { en: 'Props', sv: 'Egenskaper' }
-      },
-      admin: {
-        description: {
-          en: 'The values an editor fills in each time the component is placed on a page.',
-          sv: 'De värden en redaktör fyller i varje gång komponenten placeras på en sida.'
-        }
-      },
+      type: 'row',
       fields: [
         {
           name: 'name',
           type: 'text',
           required: true,
           label: { en: 'Name', sv: 'Namn' },
-          admin: {
-            description: {
-              en: 'The name the component reads the value by.',
-              sv: 'Namnet som komponenten läser värdet med.'
-            }
-          },
-          validate: ((value, { req }) =>
-            !value || propNamePattern.test(value)
-              ? true
-              : customT((req as PayloadRequest).t)(
-                  'validation:propNameInvalid'
-                )) as Validate
+          admin: { width: '60%' }
         },
-        {
-          name: 'label',
-          type: 'text',
-          label: { en: 'Label', sv: 'Etikett' },
-          admin: {
-            description: {
-              en: 'Shown to the editor. Falls back to the name.',
-              sv: 'Visas för redaktören. Namnet används om etiketten saknas.'
-            }
-          }
-        },
-        {
-          name: 'type',
-          type: 'select',
-          required: true,
-          defaultValue: 'text',
-          enumName: enumName('custom_component_prop_type'),
-          label: { en: 'Type', sv: 'Typ' },
-          options: [
-            { label: { en: 'Text', sv: 'Text' }, value: 'text' },
-            { label: { en: 'Long text', sv: 'Lång text' }, value: 'textarea' },
-            { label: { en: 'Number', sv: 'Tal' }, value: 'number' },
-            { label: { en: 'Checkbox', sv: 'Kryssruta' }, value: 'checkbox' }
-          ]
-        },
-        {
-          name: 'required',
-          type: 'checkbox',
-          defaultValue: false,
-          label: { en: 'Required', sv: 'Obligatorisk' }
-        }
+        componentSlugField
       ]
     },
-    {
-      name: 'build',
-      type: 'group',
-      label: { en: 'Build', sv: 'Bygge' },
-      access: neverWritable,
-      admin: {
-        readOnly: true,
-        description: {
-          en: 'The result of compiling the source. Written by the build, never by hand.',
-          sv: 'Resultatet av kompileringen av källkoden. Skrivs av bygget, aldrig för hand.'
+    componentStudioField([
+      {
+        ...tsxSourceField,
+        label: { en: 'Source', sv: 'Source' },
+        access: { read: usersOnly },
+        admin: {
+          ...tsxSourceField.admin,
+          description: {
+            en: 'The React component, compiled to a web component when saved.',
+            sv: 'React-komponenten, som kompileras till en webbkomponent när du sparar.'
+          }
         }
       },
-      fields: [
-        buildStatusField,
-        {
-          name: 'status',
-          type: 'select',
-          required: true,
-          defaultValue: 'pending',
-          enumName: enumName('custom_component_build_status'),
-          label: { en: 'Status', sv: 'Status' },
-          admin: { hidden: true },
-          options: [
-            { label: { en: 'Pending', sv: 'Väntar' }, value: 'pending' },
-            { label: { en: 'Building', sv: 'Bygger' }, value: 'building' },
-            { label: { en: 'Ready', sv: 'Klar' }, value: 'ready' },
-            { label: { en: 'Failed', sv: 'Misslyckades' }, value: 'failed' }
-          ]
+      {
+        name: 'propsSchema',
+        type: 'array',
+        // The studio's panel is titled Inputs already
+        label: false,
+        labels: {
+          singular: { en: 'Input', sv: 'Input' },
+          plural: { en: 'Inputs', sv: 'Inputs' }
         },
-        {
-          name: 'diagnostics',
-          type: 'json',
-          label: { en: 'Diagnostics', sv: 'Felmeddelanden' },
-          admin: { hidden: true }
+        admin: {
+          initCollapsed: true,
+          components: {
+            RowLabel:
+              '@codeware/app-cms/ui/fields/component-studio/InputRowLabel.client'
+          },
+          description: {
+            en: 'The values an editor fills in each time the component is placed on a page.',
+            sv: 'De värden en redaktör fyller i varje gång komponenten placeras på en sida.'
+          }
         },
-        {
-          name: 'js',
-          type: 'textarea',
-          label: { en: 'JavaScript', sv: 'JavaScript' },
-          admin: { hidden: true }
+        fields: [
+          {
+            name: 'name',
+            type: 'text',
+            required: true,
+            label: { en: 'Name', sv: 'Name' },
+            admin: {
+              description: {
+                en: 'The name the component reads the value by.',
+                sv: 'Namnet som komponenten läser värdet med.'
+              }
+            },
+            validate: ((value, { req }) =>
+              !value || propNamePattern.test(value)
+                ? true
+                : customT((req as PayloadRequest).t)(
+                    'validation:propNameInvalid'
+                  )) as Validate
+          },
+          {
+            name: 'label',
+            type: 'text',
+            label: { en: 'Label', sv: 'Label' },
+            admin: {
+              description: {
+                en: 'Shown to the editor. Falls back to the name.',
+                sv: 'Visas för redaktören. Namnet används om etiketten saknas.'
+              }
+            }
+          },
+          {
+            name: 'type',
+            type: 'select',
+            required: true,
+            defaultValue: 'text',
+            enumName: enumName('custom_component_prop_type'),
+            label: { en: 'Type', sv: 'Type' },
+            options: [
+              { label: { en: 'Text', sv: 'Text' }, value: 'text' },
+              {
+                label: { en: 'Long text', sv: 'Lång text' },
+                value: 'textarea'
+              },
+              { label: { en: 'Number', sv: 'Tal' }, value: 'number' },
+              { label: { en: 'Checkbox', sv: 'Kryssruta' }, value: 'checkbox' }
+            ]
+          },
+          {
+            name: 'required',
+            type: 'checkbox',
+            defaultValue: false,
+            label: { en: 'Required', sv: 'Required' }
+          }
+        ]
+      },
+      {
+        name: 'build',
+        type: 'group',
+        label: { en: 'Build', sv: 'Build' },
+        access: neverWritable,
+        admin: {
+          readOnly: true,
+          description: {
+            en: 'The result of compiling the source. Written by the build, never by hand.',
+            sv: 'Resultatet av kompileringen av källkoden. Skrivs av bygget, aldrig för hand.'
+          }
         },
-        {
-          name: 'css',
-          type: 'textarea',
-          label: { en: 'CSS', sv: 'CSS' },
-          admin: { hidden: true }
-        },
-        {
-          name: 'hash',
-          type: 'text',
-          index: true,
-          label: { en: 'Hash', sv: 'Hash' },
-          admin: { hidden: true }
-        },
-        {
-          name: 'builtAt',
-          type: 'date',
-          label: { en: 'Built', sv: 'Byggd' },
-          admin: { hidden: true }
-        }
-      ]
-    }
+        fields: [
+          {
+            name: 'status',
+            type: 'select',
+            required: true,
+            defaultValue: 'pending',
+            enumName: enumName('custom_component_build_status'),
+            label: { en: 'Status', sv: 'Status' },
+            admin: { hidden: true },
+            options: [
+              { label: { en: 'Pending', sv: 'Väntar' }, value: 'pending' },
+              { label: { en: 'Building', sv: 'Bygger' }, value: 'building' },
+              { label: { en: 'Ready', sv: 'Klar' }, value: 'ready' },
+              { label: { en: 'Failed', sv: 'Misslyckades' }, value: 'failed' }
+            ]
+          },
+          {
+            name: 'diagnostics',
+            type: 'json',
+            label: { en: 'Diagnostics', sv: 'Felmeddelanden' },
+            admin: { hidden: true }
+          },
+          {
+            name: 'js',
+            type: 'textarea',
+            label: { en: 'JavaScript', sv: 'JavaScript' },
+            admin: { hidden: true }
+          },
+          {
+            name: 'css',
+            type: 'textarea',
+            label: { en: 'CSS', sv: 'CSS' },
+            admin: { hidden: true }
+          },
+          {
+            name: 'hash',
+            type: 'text',
+            index: true,
+            label: { en: 'Hash', sv: 'Hash' },
+            admin: { hidden: true }
+          },
+          {
+            name: 'builtAt',
+            type: 'date',
+            label: { en: 'Built', sv: 'Byggd' },
+            admin: { hidden: true }
+          }
+        ]
+      }
+    ])
   ]
 };
 

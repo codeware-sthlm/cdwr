@@ -18,6 +18,7 @@
 @source '../../../../../libs/shared/ui';
 @source '../../../../../libs/app-cms/ui/dashboard';
 @source '../../../../../libs/app-cms/ui/domains';
+@source '../../../../../libs/app-cms/ui/fields';
 @source '../../../../../libs/app-cms/ui/submissions';
 
 /* Use Payload Admin theme — single source of truth for shadcn tokens */
@@ -110,7 +111,14 @@
     ::after {
     @apply border-border outline-ring/50;
   }
-  .no-twp {
+  /*
+   * Payload's own fields drawn inside a `.twp` scope (the component studio's
+   * side panel) get the preflight above and come out misshapen. This rolls it
+   * back for them: it has to outrank the scoped preflight's `:is(…) *`
+   * (0,2,1) in the same layer, hence the repeated class, (0,3,0). Payload's
+   * unlayered styles and Tailwind's utilities layer are untouched by it.
+   */
+  .twp .no-twp.no-twp {
     *,
     ::after,
     ::before,

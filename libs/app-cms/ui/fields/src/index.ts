@@ -1,7 +1,9 @@
 export { defaultLexical } from './lib/default-lexical';
 export { calloutField } from './lib/callout/callout.field';
-export { buildStatusField } from './lib/build-status/build-status.field';
-export { tsxSourceField } from './lib/tsx-source/tsx-source.field';
+export {
+  componentStudioField,
+  tsxSourceField
+} from './lib/component-studio/component-studio.field';
 export { componentPropsField } from './lib/component-props/component-props.field';
 export { codeField } from './lib/code/code.field';
 export { colorPickerField } from './lib/color-picker/color-picker.field';

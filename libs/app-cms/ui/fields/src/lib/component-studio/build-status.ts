@@ -5,18 +5,6 @@ import type {
 } from '@codeware/shared/ui/component-studio';
 import type { CustomComponent } from '@codeware/shared/util/payload-types';
 
-export {
-  type BuildDiagnostic,
-  type BuildState,
-  type BuildStatus,
-  formatPosition,
-  isBuiltWithWarnings,
-  isServingPrevious,
-  shouldPoll,
-  showsDiagnostics,
-  sortDiagnostics
-} from '@codeware/shared/ui/component-studio';
-
 /** Fields to ask the REST API for, so the bundle stays on the server */
 export const buildSelectFields = [
   'status',

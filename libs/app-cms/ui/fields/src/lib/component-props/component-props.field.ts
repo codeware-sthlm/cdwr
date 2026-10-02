@@ -10,17 +10,17 @@ import {
 } from './component-props';
 
 /**
- * The values for the props a custom component declares, as one JSON object.
+ * The values for the inputs a custom component declares, as one JSON object.
  * The form follows the sibling `component` relationship in the same row.
  */
 export const componentPropsField: JSONField = {
   name: 'props',
   type: 'json',
-  label: { en: 'Props', sv: 'Egenskaper' },
+  label: { en: 'Inputs', sv: 'Inputs' },
   admin: {
     description: {
-      en: 'The values for the props the component declares.',
-      sv: 'Värdena för de egenskaper komponenten deklarerar.'
+      en: 'The values for the inputs the component declares.',
+      sv: 'Värdena för de inputs komponenten deklarerar.'
     },
     components: {
       Field: '@codeware/app-cms/ui/fields/component-props/ComponentProps.client'

@@ -40,20 +40,20 @@ describe('compareComponentProps', () => {
 
   it('warns about an optional prop editors cannot set', () => {
     expect(messages([prop('step', 'number')], [])).toEqual([
-      '`step` is not declared in Props, so editors cannot set it.'
+      '`step` is not declared in Inputs, so editors cannot set it.'
     ]);
     expect(messages([prop('step', 'number')], null)).toHaveLength(1);
   });
 
   it('warns that a required undeclared prop will be undefined', () => {
     expect(messages([prop('label', 'string', false)], undefined)).toEqual([
-      '`label` is required by the component but not declared in Props, so it will be undefined.'
+      '`label` is required by the component but not declared in Inputs, so it will be undefined.'
     ]);
   });
 
   it('warns about a declared prop the code does not take', () => {
     expect(messages([], [text('extra')])).toEqual([
-      '`extra` is declared in Props but the component does not take it, so it has no effect.'
+      '`extra` is declared in Inputs but the component does not take it, so it has no effect.'
     ]);
   });
 
@@ -76,7 +76,7 @@ describe('compareComponentProps', () => {
 
   it('warns when a required prop is not marked required', () => {
     expect(messages([prop('a', 'string', false)], [text('a')])).toEqual([
-      '`a` is required by the component but not marked required in Props, so it can be undefined.'
+      '`a` is required by the component but not marked required in Inputs, so it can be undefined.'
     ]);
   });
 
