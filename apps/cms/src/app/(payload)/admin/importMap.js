@@ -1,5 +1,7 @@
 import { TenantField as TenantField_1d0591e3cf4f332c83a86da13a0de59a } from '@payloadcms/plugin-multi-tenant/client';
 import { AssignTenantFieldTrigger as AssignTenantFieldTrigger_1d0591e3cf4f332c83a86da13a0de59a } from '@payloadcms/plugin-multi-tenant/client';
+import { default as default_aeb05dca670b5ae1af2f1a512a8780e1 } from '@codeware/app-cms/ui/fields/tsx-source/TsxSource.client';
+import { default as default_00c8b4c856b367814e1cd35befb13a69 } from '@codeware/app-cms/ui/fields/build-status/BuildStatus.client';
 import { default as default_a002f2d84101c6c675bbd597489a2d3f } from '@codeware/apps/cms/components/ThemeRecipeCell';
 import { default as default_be685d15f7420cc176c5de08321cf13b } from '@codeware/app-cms/ui/fields/theme-studio/ThemeStudioField.client';
 import { default as default_9449f087f0287fc073e73d89e75c9ce1 } from '@codeware/apps/cms/components/ThemeOverridesCell';
@@ -84,6 +86,10 @@ export const importMap = {
     TenantField_1d0591e3cf4f332c83a86da13a0de59a,
   '@payloadcms/plugin-multi-tenant/client#AssignTenantFieldTrigger':
     AssignTenantFieldTrigger_1d0591e3cf4f332c83a86da13a0de59a,
+  '@codeware/app-cms/ui/fields/tsx-source/TsxSource.client#default':
+    default_aeb05dca670b5ae1af2f1a512a8780e1,
+  '@codeware/app-cms/ui/fields/build-status/BuildStatus.client#default':
+    default_00c8b4c856b367814e1cd35befb13a69,
   '@codeware/apps/cms/components/ThemeRecipeCell#default':
     default_a002f2d84101c6c675bbd597489a2d3f,
   '@codeware/app-cms/ui/fields/theme-studio/ThemeStudioField.client#default':

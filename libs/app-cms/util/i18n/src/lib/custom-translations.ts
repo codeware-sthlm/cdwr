@@ -18,6 +18,16 @@ const customTranslationsSchema = z.object({
     cardWithSuffix: z.string(),
     socialMediaWithSuffix: z.string()
   }),
+  customComponents: z.object({
+    builtAt: z.string(),
+    builtOnSave: z.string(),
+    servingPrevious: z.string(),
+    statusBuilding: z.string(),
+    statusFailed: z.string(),
+    statusPending: z.string(),
+    statusReady: z.string(),
+    stillBuilding: z.string()
+  }),
   dashboard: z.object({
     badgeDraft: z.string(),
     badgeNew: z.string(),
@@ -351,6 +361,16 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
     collection: {
       cardWithSuffix: 'Card {{suffix}}',
       socialMediaWithSuffix: 'Social Media {{suffix}}'
+    },
+    customComponents: {
+      builtAt: 'Built {{time}}',
+      builtOnSave: 'The component is built when you save it.',
+      servingPrevious: 'The previous version is still in use.',
+      statusBuilding: 'Building',
+      statusFailed: 'Failed',
+      statusPending: 'Waiting to build',
+      statusReady: 'Ready',
+      stillBuilding: 'Still building. Reload the page later to see the result.'
     },
     dashboard: {
       badgeDraft: 'Draft',
@@ -738,6 +758,17 @@ Supported locales: {{locales}}`,
     collection: {
       cardWithSuffix: 'Kort {{suffix}}',
       socialMediaWithSuffix: 'Sociala Medier {{suffix}}'
+    },
+    customComponents: {
+      builtAt: 'Byggd {{time}}',
+      builtOnSave: 'Komponenten byggs när du sparar den.',
+      servingPrevious: 'Den tidigare versionen används fortfarande.',
+      statusBuilding: 'Bygger',
+      statusFailed: 'Misslyckades',
+      statusPending: 'Väntar på bygge',
+      statusReady: 'Klar',
+      stillBuilding:
+        'Bygget pågår fortfarande. Ladda om sidan senare för att se resultatet.'
     },
     dashboard: {
       badgeDraft: 'Utkast',
