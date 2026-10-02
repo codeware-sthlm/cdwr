@@ -20,6 +20,7 @@ import { componentDeveloperAccess } from '../../security/component-developer-acc
 import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
 
 import { customComponentBundleEndpoint } from './bundle.endpoint';
+import { customComponentCheckEndpoint } from './check.endpoint';
 import {
   markBuildPending,
   queueComponentBuild
@@ -90,7 +91,7 @@ const customComponents: CollectionConfig = {
     update: componentDeveloperAccess(),
     delete: componentDeveloperAccess()
   },
-  endpoints: [customComponentBundleEndpoint],
+  endpoints: [customComponentBundleEndpoint, customComponentCheckEndpoint],
   hooks: {
     beforeChange: [markBuildPending],
     afterChange: [queueComponentBuild]
