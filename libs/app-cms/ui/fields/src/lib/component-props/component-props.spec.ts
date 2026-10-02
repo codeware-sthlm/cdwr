@@ -13,6 +13,7 @@ import {
   siblingPath,
   siblingRelationId,
   undeclaredKeys,
+  withCheckboxDefaults,
   withValue
 } from './component-props';
 
@@ -194,7 +195,8 @@ describe('missingRequired', () => {
     ['number', Number.POSITIVE_INFINITY, true],
     ['number', 0, false],
     ['number', 5, false],
-    ['checkbox', undefined, false],
+    ['checkbox', undefined, true],
+    ['checkbox', 'yes', true],
     ['checkbox', false, false],
     ['checkbox', true, false]
   ] as const)('%s with %j -> missing %s', (type, value, missing) => {
@@ -236,5 +238,27 @@ describe('siblingRelationId', () => {
     [undefined, null]
   ])('%j -> %s', (sibling, expected) => {
     expect(siblingRelationId(sibling, 'component')).toBe(expected);
+  });
+});
+
+describe('withCheckboxDefaults', () => {
+  const box = (name: string): PropDeclaration => ({ name, type: 'checkbox' });
+  const text: PropDeclaration = { name: 't', type: 'text' };
+
+  it('writes false for a checkbox with no stored boolean, keeping the rest', () => {
+    expect(
+      withCheckboxDefaults({ t: 'x', other: 1 }, [box('a'), text])
+    ).toEqual({ t: 'x', other: 1, a: false });
+    expect(withCheckboxDefaults(null, [box('a')])).toEqual({ a: false });
+  });
+
+  it('leaves stored booleans alone', () => {
+    expect(
+      withCheckboxDefaults({ a: true, b: false }, [box('a'), box('b')])
+    ).toBe(null);
+  });
+
+  it('has nothing to write without checkboxes', () => {
+    expect(withCheckboxDefaults({}, [text])).toBe(null);
   });
 });

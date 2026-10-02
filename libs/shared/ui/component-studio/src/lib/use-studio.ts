@@ -182,14 +182,18 @@ export const useStudio = ({
     [onCheck]
   );
 
-  /** Keeps a result only while the source still is what was checked */
+  /**
+   * Keeps a result only while the source still is what was checked; false when
+   * it was dropped, so the caller reports nothing either.
+   */
   const keep = useCallback(
-    (text: string, result: CheckResult) => {
+    (text: string, result: CheckResult): boolean => {
       if (source() !== text) {
-        return;
+        return false;
       }
       checked.current = { source: text, result };
       setCheck({ diagnostics: result.diagnostics });
+      return true;
     },
     [source]
   );
@@ -210,7 +214,9 @@ export const useStudio = ({
       });
       return;
     }
-    keep(text, outcome.result);
+    if (!keep(text, outcome.result)) {
+      return;
+    }
     setLast({
       kind: 'check',
       ...countFindings(outcome.result.diagnostics),
@@ -237,7 +243,11 @@ export const useStudio = ({
         });
         return;
       }
-      keep(text, outcome.result);
+      // Edited while it ran: nothing to sync, nothing to report
+      if (!keep(text, outcome.result)) {
+        finish();
+        return;
+      }
       result = outcome.result;
     }
 

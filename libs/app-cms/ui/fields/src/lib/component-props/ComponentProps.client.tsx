@@ -30,6 +30,7 @@ import {
   relationId,
   siblingPath,
   undeclaredKeys,
+  withCheckboxDefaults,
   withValue
 } from './component-props';
 import { readComponentSchema } from './read-component-props';
@@ -40,6 +41,7 @@ type PropInputProps = {
   declaration: PropDeclaration;
   id: string;
   stored: unknown;
+  readOnly: boolean;
   onChange: (value: PropValue | undefined) => void;
 };
 
@@ -47,17 +49,23 @@ const PropInput: React.FC<PropInputProps> = ({
   declaration,
   id,
   stored,
+  readOnly,
   onChange
 }) => {
   const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const { name, label, type, required } = declaration;
-  const text = (raw: string) => onChange(coerceInput(type, raw));
+  const text = (raw: string) => {
+    if (!readOnly) {
+      onChange(coerceInput(type, raw));
+    }
+  };
 
   const inputs = {
     text: (
       <Input
         id={id}
         value={displayText(stored)}
+        readOnly={readOnly}
         onChange={(event) => text(event.target.value)}
       />
     ),
@@ -65,6 +73,7 @@ const PropInput: React.FC<PropInputProps> = ({
       <Textarea
         id={id}
         value={displayText(stored)}
+        readOnly={readOnly}
         onChange={(event) => text(event.target.value)}
       />
     ),
@@ -73,6 +82,7 @@ const PropInput: React.FC<PropInputProps> = ({
         id={id}
         type="number"
         value={displayText(stored)}
+        readOnly={readOnly}
         onChange={(event) => text(event.target.value)}
       />
     ),
@@ -80,9 +90,12 @@ const PropInput: React.FC<PropInputProps> = ({
       <Checkbox
         id={id}
         checked={stored === true}
-        onCheckedChange={(checked) =>
-          onChange(coerceInput(type, checked === true))
-        }
+        disabled={readOnly}
+        onCheckedChange={(checked) => {
+          if (!readOnly) {
+            onChange(coerceInput(type, checked === true));
+          }
+        }}
       />
     )
   } as const satisfies Record<PropDeclaration['type'], React.ReactNode>;
@@ -134,7 +147,8 @@ const ComponentProps: React.FC<JSONFieldClientProps> = (props) => {
   const { field, path } = props;
   const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const { config } = useConfig();
-  const { value, setValue } = useField<unknown>({ path });
+  const { value, setValue, disabled } = useField<unknown>({ path });
+  const readOnly = props.readOnly === true || disabled;
   const componentId = useFormFields(([fields]) =>
     relationId(fields[siblingPath(path, 'component')]?.value)
   );
@@ -162,6 +176,17 @@ const ComponentProps: React.FC<JSONFieldClientProps> = (props) => {
 
   const current = outcome?.id === componentId ? outcome : null;
   const schema = current?.schema ?? null;
+
+  // An untouched checkbox is a real `false`, which also satisfies `required`
+  useEffect(() => {
+    if (readOnly || !schema) {
+      return;
+    }
+    const next = withCheckboxDefaults(value, schema.declarations);
+    if (next) {
+      setValue(next);
+    }
+  }, [readOnly, schema, value, setValue]);
 
   let body: React.ReactNode;
   if (componentId === null) {
@@ -202,6 +227,7 @@ const ComponentProps: React.FC<JSONFieldClientProps> = (props) => {
             declaration={declaration}
             id={`${path}.${declaration.name}`}
             stored={stored[declaration.name]}
+            readOnly={readOnly}
             onChange={(next) =>
               setValue(withValue(value, declaration.name, next))
             }

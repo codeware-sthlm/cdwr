@@ -3,6 +3,7 @@ import type { CustomComponent } from '@codeware/shared/util/payload-types';
 import { componentTagName } from '@codeware/shared/util/payload-utils';
 import type { BasePayload, TaskConfig } from 'payload';
 
+import { schemaSignature } from './component-schema-signature';
 import {
   type BuildDeps,
   defaultDeps,
@@ -53,8 +54,9 @@ const writeBuild = (
  * Builds one custom component and records the outcome on it.
  *
  * A failed build leaves the previous bundle in place, so a page keeps
- * rendering the last version that compiled. When the source changed while the
- * build ran, nothing is written: that save queued a build of its own.
+ * rendering the last version that compiled. When the source, slug or inputs
+ * changed while the build ran, nothing is written: that save queued a build of
+ * its own.
  */
 export async function buildCustomComponent(
   payload: BasePayload,
@@ -104,7 +106,9 @@ export async function buildCustomComponent(
   if (
     !latest ||
     latest.source !== component.source ||
-    latest.slug !== component.slug
+    latest.slug !== component.slug ||
+    schemaSignature(latest.propsSchema) !==
+      schemaSignature(component.propsSchema)
   ) {
     return 'skipped';
   }

@@ -335,6 +335,7 @@ const customTranslationsSchema = z.object({
     svgCode: z.string(),
     componentSlugInvalid: z.string(),
     propNameInvalid: z.string(),
+    propNameDuplicate: z.string(),
     propsNotObject: z.string(),
     propsRequiredMissing: z.string(),
     themeNameBuiltIn: z.string(),
@@ -734,6 +735,7 @@ Supported locales: {{locales}}`,
         'Use lowercase letters, numbers and single dashes, starting with a letter, e.g. "price-table".',
       propNameInvalid:
         'Start with a lowercase letter and use only letters and numbers, e.g. "buttonLabel".',
+      propNameDuplicate: 'Each input needs its own name. Repeated: {{names}}.',
       propsNotObject: 'The inputs must be a JSON object.',
       propsRequiredMissing: 'Fill in the required inputs: {{names}}.',
       themeNameBuiltIn:
@@ -1137,6 +1139,8 @@ Språk som stöds: {{locales}}`,
         'Använd små bokstäver, siffror och enkla bindestreck, och börja med en bokstav, t.ex. "pristabell".',
       propNameInvalid:
         'Börja med en liten bokstav och använd bara bokstäver och siffror, t.ex. "knappText".',
+      propNameDuplicate:
+        'Varje input behöver ett eget namn. Upprepade: {{names}}.',
       propsNotObject: 'Inputs måste vara ett JSON-objekt.',
       propsRequiredMissing: 'Fyll i de obligatoriska inputs: {{names}}.',
       themeNameBuiltIn:

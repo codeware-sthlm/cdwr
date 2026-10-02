@@ -160,8 +160,8 @@ const isMissing = {
   text: (value) => typeof value !== 'string' || value === '',
   textarea: (value) => typeof value !== 'string' || value === '',
   number: (value) => typeof value !== 'number' || !Number.isFinite(value),
-  // false is a value
-  checkbox: () => false
+  // false is a value, but absent is not: the form writes it once
+  checkbox: (value) => typeof value !== 'boolean'
 } as const satisfies Record<PropType, (value: unknown) => boolean>;
 
 /** The required props with no usable value, as label (else name) */
@@ -176,4 +176,25 @@ export const missingRequired = (
         required === true && isMissing[type](values[name])
     )
     .map(({ name, label }) => label || name);
+};
+
+/**
+ * The stored object with a `false` for every declared checkbox that holds no
+ * boolean yet, so an untouched checkbox is a real `false`. Null when nothing
+ * needs writing.
+ */
+export const withCheckboxDefaults = (
+  stored: unknown,
+  declarations: readonly PropDeclaration[]
+): PropValues | null => {
+  const values = readValues(stored);
+  const absent = declarations.filter(
+    ({ name, type }) => type === 'checkbox' && typeof values[name] !== 'boolean'
+  );
+  return absent.length === 0
+    ? null
+    : {
+        ...values,
+        ...Object.fromEntries(absent.map(({ name }) => [name, false]))
+      };
 };

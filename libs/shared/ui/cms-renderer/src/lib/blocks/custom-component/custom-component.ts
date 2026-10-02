@@ -18,8 +18,9 @@ export const COMPONENT_SCRIPT_ATTRIBUTE = 'data-cdwr-component';
  * The component as far as it can be rendered, or `null` when it is not
  * populated or has no usable build.
  *
- * A failed rebuild keeps the previous good bundle, so the hash is what makes
- * it renderable, not the build status. The code is fetched by hash, so a page
+ * A failed rebuild keeps the previous good bundle (the hooks clear it when the
+ * slug changes, since it defines the old tag), so the hash is what makes it
+ * renderable, not the build status. The code is fetched by hash, so a page
  * query is free to leave it out.
  */
 export function placeComponent(
