@@ -56,6 +56,8 @@ export const CustomComponentBlock: React.FC<Props> = ({ component, props }) => {
         {placed.css}
       </style>
       {createElement(placed.tagName, {
+        // An unknown element is inline until told otherwise
+        className: 'block',
         props: JSON.stringify(props ?? {}),
         suppressHydrationWarning: true
       })}

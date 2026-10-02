@@ -59,7 +59,9 @@ export const ContentBlock: React.FC<ContentBlockWithData> = ({
   preview
 }) => {
   return (
-    <div className="grid w-full grid-cols-12 gap-x-4 gap-y-8 overflow-hidden md:gap-x-8 lg:gap-x-16">
+    // Clipped sideways only, and a little outside its own edge, so a ring or
+    // shadow on a block at the edge of a column is not cut off
+    <div className="-mx-1 grid w-[calc(100%+0.5rem)] grid-cols-12 gap-x-4 gap-y-8 overflow-x-clip px-1 md:gap-x-8 lg:gap-x-16">
       {columns?.map((col, index) => {
         const { blocks, richText } = col;
         const size = col.size ?? 'full';
