@@ -1,0 +1,39 @@
+{
+  "name": "component-builder",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/component-builder/src",
+  "projectType": "application",
+  "tags": ["scope:component-builder", "type:app"],
+  "targets": {
+    "serve": {
+      "metadata": {
+        "description": "Runs the build service from source, restarting on change",
+        "help": {
+          "command": "nx serve component-builder"
+        }
+      },
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "tsx watch src/main.ts",
+        "cwd": "apps/component-builder",
+        "env": {
+          "COMPONENT_BUILDER_TOKEN": "dev-token"
+        }
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "options": {
+        "commands": [
+          "tsc --noEmit -p tsconfig.app.json",
+          "tsc --noEmit -p tsconfig.spec.json"
+        ],
+        "cwd": "apps/component-builder",
+        "parallel": false
+      }
+    }
+  }
+}

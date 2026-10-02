@@ -12,3 +12,16 @@ export type {
   ComponentPropKind,
   HostModule
 } from './lib/types';
+export { compareComponentProps } from './lib/compare-component-props';
+export {
+  type ComponentBuildDeps,
+  type ComponentBuildInput,
+  type ToolchainLocation,
+  errorDiagnostic,
+  runComponentBuild
+} from './lib/run-component-build';
+export {
+  type ComponentToolchain,
+  type ToolchainResult,
+  resolveToolchain
+} from './lib/toolchain';

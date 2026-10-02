@@ -1,4 +1,4 @@
-import type { ComponentProp } from '@codeware/app-cms/feature/component-builder';
+import type { ComponentProp } from '@codeware/shared/util/payload-utils';
 
 import { compareComponentProps } from './compare-component-props';
 

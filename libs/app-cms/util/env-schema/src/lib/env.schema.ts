@@ -152,6 +152,19 @@ export const EnvSchema = withEnvVars(
         .min(1)
         .optional(),
 
+      // A separate build service takes over component builds when set; the
+      // local toolchain is used when absent
+      COMPONENT_BUILDER_URL: z
+        .string({ description: 'Base URL of the component build service' })
+        .url()
+        .optional(),
+      COMPONENT_BUILDER_TOKEN: z
+        .string({
+          description: 'Bearer token the component build service expects'
+        })
+        .min(1)
+        .optional(),
+
       // Internal
       DISABLE_DB_PUSH: coerceBoolean(false).describe(
         'Disable database schema push in development'

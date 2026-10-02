@@ -58,3 +58,65 @@ export const componentTagName = (slug: string): string =>
 /** Path, from the CMS origin, that serves the bundle with this hash */
 export const componentBundlePath = (hash: string): string =>
   `/api/custom-components/bundle/${hash}.js`;
+
+/** What building one component comes to: its bundle, or what went wrong */
+export type ComponentBuildResult =
+  | {
+      ok: true;
+      js: string;
+      css: string;
+      hash: string;
+      /** Warnings from the type-check */
+      diagnostics: ComponentDiagnostic[];
+      /** Undefined when the props could not be resolved */
+      props?: ComponentProp[];
+    }
+  | { ok: false; diagnostics: ComponentDiagnostic[] };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isDiagnostic = (value: unknown): value is ComponentDiagnostic =>
+  isRecord(value) &&
+  typeof value['message'] === 'string' &&
+  typeof value['line'] === 'number' &&
+  typeof value['column'] === 'number' &&
+  (value['severity'] === 'error' || value['severity'] === 'warning');
+
+const propKinds = {
+  string: true,
+  number: true,
+  boolean: true,
+  other: true
+} as const satisfies Record<ComponentPropKind, true>;
+
+const isProp = (value: unknown): value is ComponentProp =>
+  isRecord(value) &&
+  typeof value['name'] === 'string' &&
+  typeof value['kind'] === 'string' &&
+  Object.hasOwn(propKinds, value['kind']) &&
+  typeof value['optional'] === 'boolean';
+
+/** Checks untyped JSON, such as a build service's answer, for the result shape. */
+export const isComponentBuildResult = (
+  value: unknown
+): value is ComponentBuildResult => {
+  if (!isRecord(value) || !Array.isArray(value['diagnostics'])) {
+    return false;
+  }
+  if (!value['diagnostics'].every(isDiagnostic)) {
+    return false;
+  }
+  if (value['ok'] === false) {
+    return true;
+  }
+  const { props } = value;
+  return (
+    value['ok'] === true &&
+    typeof value['js'] === 'string' &&
+    typeof value['css'] === 'string' &&
+    typeof value['hash'] === 'string' &&
+    COMPONENT_HASH_PATTERN.test(value['hash']) &&
+    (props === undefined || (Array.isArray(props) && props.every(isProp)))
+  );
+};

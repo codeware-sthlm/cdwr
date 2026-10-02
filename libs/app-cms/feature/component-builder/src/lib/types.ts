@@ -1,7 +1,4 @@
-import type {
-  ComponentDiagnostic,
-  ComponentProp
-} from '@codeware/shared/util/payload-utils';
+import type { ComponentBuildResult } from '@codeware/shared/util/payload-utils';
 
 export type {
   ComponentDiagnostic,
@@ -9,18 +6,7 @@ export type {
   ComponentPropKind
 } from '@codeware/shared/util/payload-utils';
 
-export type BuildComponentResult =
-  | {
-      ok: true;
-      js: string;
-      css: string;
-      hash: string;
-      /** Warnings from the type-check */
-      diagnostics: ComponentDiagnostic[];
-      /** Undefined when the props could not be resolved */
-      props?: ComponentProp[];
-    }
-  | { ok: false; diagnostics: ComponentDiagnostic[] };
+export type BuildComponentResult = ComponentBuildResult;
 
 /** A module the host page provides at runtime instead of the bundle. */
 export type HostModule = {

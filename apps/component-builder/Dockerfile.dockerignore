@@ -1,0 +1,38 @@
+.DS_Store
+.git
+.github
+
+# Config
+.settings
+.verdaccio
+.vscode
+
+# Nx
+.nx
+migrations.json
+*.log
+
+# Other apps and what only they or CI need
+/apps/*
+!/apps/component-builder
+/e2e
+/docs
+
+# Build artifacts and local leftovers
+**/.next
+**/dist
+/apps/*/build
+/coverage
+/tmp
+/backups
+
+# Dependencies come from the lockfile install in the image
+**/node_modules
+
+# Local-only env files
+**/.env.*
+
+# Exclude non-pnpm lock files to prevent wrong package manager detection
+bun.lockb
+package-lock.json
+yarn.lock

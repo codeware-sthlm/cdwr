@@ -123,6 +123,14 @@ export default [
               ]
             },
             {
+              sourceTag: 'scope:component-builder',
+              onlyDependOnLibsWithTags: [
+                'scope:component-builder',
+                'scope:app-cms',
+                'scope:shared'
+              ]
+            },
+            {
               sourceTag: 'scope:web',
               onlyDependOnLibsWithTags: [
                 'scope:web',

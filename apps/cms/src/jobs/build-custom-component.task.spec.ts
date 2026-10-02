@@ -44,17 +44,10 @@ const setup = (docs: Array<Doc | null>) => {
   return { payload, update, logger };
 };
 
-const toolchain = {
-  ok: true,
-  toolchain: { root: '/ws', kit: '/ws/kit.ts', themeCss: '/ws/theme.css' }
-} as const;
-
-const depsWith = (
-  buildComponent: jest.Mock,
-  resolve: BuildDeps['resolveToolchain'] = () => toolchain
-): BuildDeps => ({
-  resolveToolchain: resolve,
-  loadBuilder: async () => ({ buildComponent, DEFAULT_HOST_MODULES: {} })
+const depsWith = (buildLocally: jest.Mock): BuildDeps => ({
+  buildLocally,
+  service: () => undefined,
+  fetch: jest.fn()
 });
 
 const writes = (update: jest.Mock) =>
@@ -75,15 +68,11 @@ describe('buildCustomComponent', () => {
       buildCustomComponent(payload, 5, depsWith(build))
     ).resolves.toBe('ready');
 
-    expect(build).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tagName: 'cdwr-x-counter',
-        source: 'export default () => null',
-        workspaceRoot: '/ws',
-        themeCss: '/ws/theme.css',
-        hostModules: { '@site/ui': { typesEntry: '/ws/kit.ts' } }
-      })
-    );
+    expect(build).toHaveBeenCalledWith({
+      tagName: 'cdwr-x-counter',
+      source: 'export default () => null',
+      propsSchema: []
+    });
     const [building, ready] = writes(update);
     expect(building).toMatchObject({ status: 'building', js: 'old-js' });
     expect(ready).toMatchObject({
@@ -96,21 +85,18 @@ describe('buildCustomComponent', () => {
     expect(ready.builtAt).toEqual(expect.any(String));
   });
 
-  it('stores builder and prop warnings on a ready build', async () => {
+  it('stores the warnings of a ready build', async () => {
     const { payload, update } = setup([doc({ propsSchema: [] })]);
-    const builderWarning = {
-      message: 'unused',
-      line: 3,
-      column: 2,
-      severity: 'warning'
-    };
+    const warnings = [
+      { message: 'unused', line: 3, column: 2, severity: 'warning' },
+      { message: 'undeclared', line: 0, column: 0, severity: 'warning' }
+    ];
     const build = jest.fn().mockResolvedValue({
       ok: true,
       js: 'js',
       css: 'css',
       hash: 'h',
-      diagnostics: [builderWarning],
-      props: [{ name: 'label', kind: 'string', optional: false }]
+      diagnostics: warnings
     });
 
     await expect(
@@ -119,25 +105,23 @@ describe('buildCustomComponent', () => {
 
     const ready = writes(update).at(-1);
     expect(ready.status).toBe('ready');
-    expect(ready.diagnostics).toHaveLength(2);
-    expect(ready.diagnostics[0]).toEqual(builderWarning);
-    expect(ready.diagnostics[1]).toMatchObject({
-      severity: 'warning',
-      message: expect.stringContaining('`label`')
-    });
+    expect(ready.diagnostics).toEqual(warnings);
   });
 
-  it('fails a build whose declared prop type the code does not take', async () => {
-    const { payload, update } = setup([
-      doc({ propsSchema: [{ name: 'label', type: 'number' }] })
-    ]);
+  it('fails a build that compiled but carries an error finding', async () => {
+    const { payload, update } = setup([doc()]);
+    const error = {
+      message: 'declared as `number`',
+      line: 0,
+      column: 0,
+      severity: 'error'
+    };
     const build = jest.fn().mockResolvedValue({
       ok: true,
       js: 'js',
       css: 'css',
       hash: 'h',
-      diagnostics: [],
-      props: [{ name: 'label', kind: 'string', optional: true }]
+      diagnostics: [error]
     });
 
     await expect(
@@ -146,15 +130,10 @@ describe('buildCustomComponent', () => {
 
     const failed = writes(update).at(-1);
     expect(failed.status).toBe('failed');
-    expect(failed.diagnostics).toEqual([
-      expect.objectContaining({
-        severity: 'error',
-        message: expect.stringContaining('declared as `number`')
-      })
-    ]);
+    expect(failed.diagnostics).toEqual([error]);
     // The bundle that was built is discarded; the previous one stays
-    expect(failed.js).not.toBe('js');
-    expect(failed.hash).not.toBe('h');
+    expect(failed.js).toBe('old-js');
+    expect(failed.hash).toBe('oldhash');
   });
 
   it('keeps the previous bundle when the build fails', async () => {
@@ -175,28 +154,6 @@ describe('buildCustomComponent', () => {
       css: 'old-css',
       hash: 'oldhash'
     });
-  });
-
-  it('fails with one clear diagnostic when the toolchain is missing', async () => {
-    const { payload, update } = setup([doc()]);
-    const build = jest.fn();
-
-    await expect(
-      buildCustomComponent(
-        payload,
-        5,
-        depsWith(build, () => ({ ok: false, reason: 'No workspace root' }))
-      )
-    ).resolves.toBe('failed');
-
-    expect(build).not.toHaveBeenCalled();
-    const { diagnostics, status, hash } = writes(update).at(-1);
-    expect(status).toBe('failed');
-    expect(hash).toBe('oldhash');
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].message).toContain(
-      'The component build toolchain is not available in this environment'
-    );
   });
 
   it('ends in failed when the builder throws', async () => {
@@ -220,10 +177,11 @@ describe('buildCustomComponent', () => {
     const { payload, update } = setup([doc()]);
 
     await expect(
-      buildCustomComponent(payload, 5, {
-        resolveToolchain: () => toolchain,
-        loadBuilder: () => Promise.reject(new Error('no esbuild'))
-      })
+      buildCustomComponent(
+        payload,
+        5,
+        depsWith(jest.fn().mockRejectedValue(new Error('no esbuild')))
+      )
     ).resolves.toBe('failed');
 
     expect(writes(update).at(-1)).toMatchObject({ status: 'failed' });
