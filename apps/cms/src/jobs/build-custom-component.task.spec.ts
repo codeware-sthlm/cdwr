@@ -269,6 +269,26 @@ describe('buildCustomComponent', () => {
     expect(update).toHaveBeenCalledTimes(1);
   });
 
+  it('writes nothing when the inputs changed during the build', async () => {
+    const { payload, update } = setup([
+      doc({ propsSchema: [{ name: 'a', type: 'text', required: false }] }),
+      doc({ propsSchema: [{ name: 'a', type: 'number', required: false }] })
+    ]);
+    const build = jest.fn().mockResolvedValue({
+      ok: true,
+      js: 'js',
+      css: 'css',
+      hash: 'h',
+      diagnostics: []
+    });
+
+    await expect(
+      buildCustomComponent(payload, 5, depsWith(build))
+    ).resolves.toBe('skipped');
+
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['ready', 'failed'])(
     'skips a component already %s',
     async (status) => {

@@ -11,6 +11,7 @@ import {
   COMPONENT_BUILD_QUEUE
 } from '../../../jobs/build-custom-component.task';
 import { inBuildTurn } from '../../../jobs/build-turn';
+import { schemaSignature } from '../../../jobs/component-schema-signature';
 
 /** The seed passes this; a seeded component is built by the queue sweep. */
 const SEED_CONTEXT = 'seedAction';
@@ -20,21 +21,13 @@ const COMMIT_TIMEOUT_MS = 30_000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** What the build compares the code against; labels and row ids do not count. */
-const schemaSignature = (schema: CustomComponent['propsSchema']): string =>
-  JSON.stringify(
-    (schema ?? []).map(({ name, type, required }) => [
-      name,
-      type,
-      required === true
-    ])
-  );
-
 /**
  * Marks the component pending when its source, slug or declared props are new
  * or changed.
  *
- * The previous bundle stays in place until the next build replaces it.
+ * The previous bundle stays in place until the next build replaces it, except
+ * on a slug change: it defines the old tag, so it is cleared rather than
+ * served under the new one.
  */
 export const markBuildPending: CollectionBeforeChangeHook<CustomComponent> = ({
   data,
@@ -54,12 +47,24 @@ export const markBuildPending: CollectionBeforeChangeHook<CustomComponent> = ({
       schemaSignature(data.propsSchema) !==
         schemaSignature(originalDoc?.propsSchema));
 
-  return changed
-    ? {
-        ...data,
-        build: { ...originalDoc?.build, ...data.build, status: 'pending' }
-      }
-    : data;
+  if (!changed) {
+    return data;
+  }
+
+  const slugChanged =
+    operation === 'update' &&
+    data.slug !== undefined &&
+    data.slug !== originalDoc?.slug;
+
+  return {
+    ...data,
+    build: {
+      ...originalDoc?.build,
+      ...data.build,
+      status: 'pending',
+      ...(slugChanged && { js: null, css: null, hash: null })
+    }
+  };
 };
 
 /**

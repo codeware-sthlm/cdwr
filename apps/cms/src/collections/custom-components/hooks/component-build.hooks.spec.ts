@@ -38,7 +38,24 @@ describe('markBuildPending', () => {
     ).toMatchObject({ build: { status: 'pending' } });
   });
 
-  it.each([{ source: 'b' }, { slug: 'other' }])(
+  it('clears the bundle when the slug changes, since it defines the old tag', () => {
+    expect(callBefore({ data: { slug: 'other' } })).toMatchObject({
+      slug: 'other',
+      build: { status: 'pending', js: null, css: null, hash: null }
+    });
+  });
+
+  it('keeps the bundle for a created component with its own slug', () => {
+    expect(
+      callBefore({
+        operation: 'create',
+        originalDoc: undefined,
+        data: { slug: 'x' }
+      })
+    ).toMatchObject({ build: { status: 'pending' } });
+  });
+
+  it.each([{ source: 'b' }])(
     'marks a changed %o pending and keeps the bundle',
     (data) => {
       expect(callBefore({ data })).toMatchObject({
@@ -65,6 +82,12 @@ describe('markBuildPending', () => {
     expect(callBefore({ data, originalDoc: withSchema })).toMatchObject({
       build: { status: 'pending', js: 'js' }
     });
+  });
+
+  it('keeps the bundle when only the inputs change', () => {
+    expect(
+      callBefore({ data: { propsSchema: [] }, originalDoc: withSchema })
+    ).toMatchObject({ build: { js: 'js', css: 'css', hash: 'h' } });
   });
 
   it('marks the first declared prop pending', () => {

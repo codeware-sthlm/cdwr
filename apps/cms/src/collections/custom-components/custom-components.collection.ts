@@ -21,6 +21,7 @@ import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
 
 import { customComponentBundleEndpoint } from './bundle.endpoint';
 import { customComponentCheckEndpoint } from './check.endpoint';
+import { duplicatePropNames } from './duplicate-prop-names';
 import {
   markBuildPending,
   queueComponentBuild
@@ -91,9 +92,9 @@ const customComponents: CollectionConfig = {
   },
   access: {
     read: userOrApiKeyAccess(),
-    create: componentDeveloperAccess(),
-    update: componentDeveloperAccess(),
-    delete: componentDeveloperAccess()
+    create: componentDeveloperAccess('create'),
+    update: componentDeveloperAccess('update'),
+    delete: componentDeveloperAccess('delete')
   },
   endpoints: [customComponentBundleEndpoint, customComponentCheckEndpoint],
   hooks: {
@@ -136,6 +137,17 @@ const customComponents: CollectionConfig = {
         type: 'array',
         // The studio's panel is titled Inputs already
         label: false,
+        validate: ((value, { req }) => {
+          const repeated = duplicatePropNames(value);
+          return repeated.length === 0
+            ? true
+            : customT((req as PayloadRequest).t)(
+                'validation:propNameDuplicate',
+                {
+                  names: repeated.join(', ')
+                }
+              );
+        }) as Validate,
         labels: {
           singular: { en: 'Input', sv: 'Input' },
           plural: { en: 'Inputs', sv: 'Inputs' }
