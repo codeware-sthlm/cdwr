@@ -1,4 +1,8 @@
-import { slugField } from '@codeware/app-cms/ui/fields';
+import {
+  buildStatusField,
+  slugField,
+  tsxSourceField
+} from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
 import { customT } from '@codeware/app-cms/util/i18n';
@@ -104,13 +108,11 @@ const customComponents: CollectionConfig = {
     },
     componentSlugField,
     {
-      name: 'source',
-      type: 'code',
-      required: true,
+      ...tsxSourceField,
       label: { en: 'Source', sv: 'Källkod' },
       access: { read: usersOnly },
       admin: {
-        language: 'typescript',
+        ...tsxSourceField.admin,
         description: {
           en: 'The React component, compiled to a web component when saved.',
           sv: 'React-komponenten, som kompileras till en webbkomponent när du sparar.'
@@ -196,6 +198,7 @@ const customComponents: CollectionConfig = {
         }
       },
       fields: [
+        buildStatusField,
         {
           name: 'status',
           type: 'select',
@@ -203,6 +206,7 @@ const customComponents: CollectionConfig = {
           defaultValue: 'pending',
           enumName: enumName('custom_component_build_status'),
           label: { en: 'Status', sv: 'Status' },
+          admin: { hidden: true },
           options: [
             { label: { en: 'Pending', sv: 'Väntar' }, value: 'pending' },
             { label: { en: 'Building', sv: 'Bygger' }, value: 'building' },
@@ -213,7 +217,8 @@ const customComponents: CollectionConfig = {
         {
           name: 'diagnostics',
           type: 'json',
-          label: { en: 'Diagnostics', sv: 'Felmeddelanden' }
+          label: { en: 'Diagnostics', sv: 'Felmeddelanden' },
+          admin: { hidden: true }
         },
         {
           name: 'js',
@@ -231,12 +236,14 @@ const customComponents: CollectionConfig = {
           name: 'hash',
           type: 'text',
           index: true,
-          label: { en: 'Hash', sv: 'Hash' }
+          label: { en: 'Hash', sv: 'Hash' },
+          admin: { hidden: true }
         },
         {
           name: 'builtAt',
           type: 'date',
-          label: { en: 'Built', sv: 'Byggd' }
+          label: { en: 'Built', sv: 'Byggd' },
+          admin: { hidden: true }
         }
       ]
     }
