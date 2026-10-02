@@ -6,6 +6,12 @@ uplinks:
   npmjs:
     url: https://registry.npmjs.org/
     maxage: 60m
+    # Verdaccio's defaults take the uplink offline for 5 minutes after 2 failed
+    # requests, and answer 404 for every package not yet cached meanwhile - a
+    # brief npm hiccup during a large install then fails it outright
+    timeout: 60s
+    max_fails: 20
+    fail_timeout: 10s
 
 # give all users (including non-authenticated users) full access because it is a local registry
 packages:
