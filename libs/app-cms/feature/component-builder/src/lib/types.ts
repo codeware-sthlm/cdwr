@@ -7,8 +7,26 @@ export type ComponentDiagnostic = {
   severity: 'error' | 'warning';
 };
 
+export type ComponentPropKind = 'string' | 'number' | 'boolean' | 'other';
+
+/** One prop the component's default export takes */
+export type ComponentProp = {
+  name: string;
+  kind: ComponentPropKind;
+  optional: boolean;
+};
+
 export type BuildComponentResult =
-  | { ok: true; js: string; css: string; hash: string }
+  | {
+      ok: true;
+      js: string;
+      css: string;
+      hash: string;
+      /** Warnings from the type-check */
+      diagnostics: ComponentDiagnostic[];
+      /** Undefined when the props could not be resolved */
+      props?: ComponentProp[];
+    }
   | { ok: false; diagnostics: ComponentDiagnostic[] };
 
 /** A module the host page provides at runtime instead of the bundle. */

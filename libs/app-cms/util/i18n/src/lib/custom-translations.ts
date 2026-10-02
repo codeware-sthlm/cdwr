@@ -21,6 +21,14 @@ const customTranslationsSchema = z.object({
   customComponents: z.object({
     builtAt: z.string(),
     builtOnSave: z.string(),
+    builtWithWarnings: z.string(),
+    formatSource: z.string(),
+    propRequired: z.string(),
+    propsLoadFailed: z.string(),
+    propsLoading: z.string(),
+    propsNone: z.string(),
+    propsPickComponent: z.string(),
+    propsUndeclared: z.string(),
     servingPrevious: z.string(),
     statusBuilding: z.string(),
     statusFailed: z.string(),
@@ -337,6 +345,8 @@ const customTranslationsSchema = z.object({
     svgCode: z.string(),
     componentSlugInvalid: z.string(),
     propNameInvalid: z.string(),
+    propsNotObject: z.string(),
+    propsRequiredMissing: z.string(),
     themeNameBuiltIn: z.string(),
     themeNameInvalid: z.string(),
     themeNameReserved: z.string(),
@@ -365,6 +375,16 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
     customComponents: {
       builtAt: 'Built {{time}}',
       builtOnSave: 'The component is built when you save it.',
+      builtWithWarnings: 'Built with warnings',
+      formatSource: 'Format',
+      propRequired: 'Required',
+      propsLoadFailed:
+        'The properties could not be loaded. Edit the values as JSON instead.',
+      propsLoading: 'Loading properties…',
+      propsNone: 'This component takes no properties.',
+      propsPickComponent: 'Choose a component to fill in its properties.',
+      propsUndeclared:
+        'Kept but not shown, since the component no longer declares them: {{names}}',
       servingPrevious: 'The previous version is still in use.',
       statusBuilding: 'Building',
       statusFailed: 'Failed',
@@ -734,6 +754,8 @@ Supported locales: {{locales}}`,
         'Use lowercase letters, numbers and single dashes, starting with a letter, e.g. "price-table".',
       propNameInvalid:
         'Start with a lowercase letter and use only letters and numbers, e.g. "buttonLabel".',
+      propsNotObject: 'The properties must be a JSON object.',
+      propsRequiredMissing: 'Fill in the required properties: {{names}}.',
       themeNameBuiltIn:
         '"{{name}}" is already a built-in theme. Pick another name.',
       themeNameInvalid:
@@ -762,6 +784,16 @@ Supported locales: {{locales}}`,
     customComponents: {
       builtAt: 'Byggd {{time}}',
       builtOnSave: 'Komponenten byggs när du sparar den.',
+      builtWithWarnings: 'Byggd med varningar',
+      formatSource: 'Formatera',
+      propRequired: 'Obligatorisk',
+      propsLoadFailed:
+        'Egenskaperna kunde inte läsas in. Redigera värdena som JSON i stället.',
+      propsLoading: 'Läser in egenskaper…',
+      propsNone: 'Den här komponenten har inga egenskaper.',
+      propsPickComponent: 'Välj en komponent för att fylla i dess egenskaper.',
+      propsUndeclared:
+        'Sparade men visas inte, eftersom komponenten inte längre deklarerar dem: {{names}}',
       servingPrevious: 'Den tidigare versionen används fortfarande.',
       statusBuilding: 'Bygger',
       statusFailed: 'Misslyckades',
@@ -1136,6 +1168,8 @@ Språk som stöds: {{locales}}`,
         'Använd små bokstäver, siffror och enkla bindestreck, och börja med en bokstav, t.ex. "pristabell".',
       propNameInvalid:
         'Börja med en liten bokstav och använd bara bokstäver och siffror, t.ex. "knappText".',
+      propsNotObject: 'Egenskaperna måste vara ett JSON-objekt.',
+      propsRequiredMissing: 'Fyll i de obligatoriska egenskaperna: {{names}}.',
       themeNameBuiltIn:
         '"{{name}}" är redan ett inbyggt tema. Välj ett annat namn.',
       themeNameInvalid:

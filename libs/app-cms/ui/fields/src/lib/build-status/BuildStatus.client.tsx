@@ -21,9 +21,11 @@ import {
   POLL_TIMEOUT_MS,
   type BuildStatus as Status,
   formatPosition,
+  isBuiltWithWarnings,
   isServingPrevious,
   parseBuild,
   shouldPoll,
+  showsDiagnostics,
   sortDiagnostics
 } from './build-status';
 import { readBuild } from './read-build';
@@ -118,7 +120,13 @@ const BuildPanel: React.FC<PanelProps> = ({
   return (
     <div className="twp flex flex-col gap-2 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={statusVariants[build.status]}>
+        <Badge
+          variant={
+            isBuiltWithWarnings(build)
+              ? 'warning'
+              : statusVariants[build.status]
+          }
+        >
           {t(statusLabels[build.status])}
         </Badge>
         {build.status === 'ready' && builtAt && (
@@ -145,7 +153,13 @@ const BuildPanel: React.FC<PanelProps> = ({
         </p>
       )}
 
-      {build.status === 'failed' && diagnostics.length > 0 && (
+      {isBuiltWithWarnings(build) && (
+        <p className="text-(--warning-subtle)">
+          {t('customComponents:builtWithWarnings')}
+        </p>
+      )}
+
+      {showsDiagnostics(build) && (
         <ul className="m-0 flex list-none flex-col gap-1 p-0 font-mono">
           {diagnostics.map((diagnostic, index) => (
             <li
@@ -157,9 +171,9 @@ const BuildPanel: React.FC<PanelProps> = ({
                   : 'text-(--warning-subtle)'
               )}
             >
-              {formatPosition(diagnostic)}
-              {'  '}
-              {diagnostic.message}
+              {[formatPosition(diagnostic), diagnostic.message]
+                .filter(Boolean)
+                .join('  ')}
             </li>
           ))}
         </ul>
@@ -170,7 +184,7 @@ const BuildPanel: React.FC<PanelProps> = ({
 
 /**
  * The build result of a custom component: status, built time and, when the
- * build failed, its diagnostics. Follows a build that is still running by
+ * build failed or has warnings, its diagnostics. Follows a build that is still running by
  * polling the document until it settles.
  */
 const BuildStatus: UIFieldClientComponent = () => {

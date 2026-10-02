@@ -8,5 +8,7 @@ export type {
   BuildComponentOptions,
   BuildComponentResult,
   ComponentDiagnostic,
+  ComponentProp,
+  ComponentPropKind,
   HostModule
 } from './lib/types';

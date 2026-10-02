@@ -56,7 +56,7 @@ export const buildComponent = async (
     return fail(forbidden);
   }
 
-  const diagnostics = typecheck(source, workspaceRoot, hostModules);
+  const { diagnostics, props } = typecheck(source, workspaceRoot, hostModules);
   if (diagnostics.some((d) => d.severity === 'error')) {
     return fail(diagnostics);
   }
@@ -75,5 +75,5 @@ export const buildComponent = async (
     .update(css)
     .digest('hex')
     .slice(0, COMPONENT_HASH_LENGTH);
-  return { ok: true, js: js.js, css, hash };
+  return { ok: true, js: js.js, css, hash, diagnostics, props };
 };

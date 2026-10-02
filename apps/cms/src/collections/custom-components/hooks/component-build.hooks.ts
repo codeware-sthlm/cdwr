@@ -19,8 +19,19 @@ const COMMIT_TIMEOUT_MS = 30_000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** What the build compares the code against; labels and row ids do not count. */
+const schemaSignature = (schema: CustomComponent['propsSchema']): string =>
+  JSON.stringify(
+    (schema ?? []).map(({ name, type, required }) => [
+      name,
+      type,
+      required === true
+    ])
+  );
+
 /**
- * Marks the component pending when its source or slug is new or changed.
+ * Marks the component pending when its source, slug or declared props are new
+ * or changed.
  *
  * The previous bundle stays in place until the next build replaces it.
  */
@@ -37,7 +48,10 @@ export const markBuildPending: CollectionBeforeChangeHook<CustomComponent> = ({
   const changed =
     operation === 'create' ||
     (data.source !== undefined && data.source !== originalDoc?.source) ||
-    (data.slug !== undefined && data.slug !== originalDoc?.slug);
+    (data.slug !== undefined && data.slug !== originalDoc?.slug) ||
+    (data.propsSchema !== undefined &&
+      schemaSignature(data.propsSchema) !==
+        schemaSignature(originalDoc?.propsSchema));
 
   return changed
     ? {

@@ -4,10 +4,12 @@ import {
   type BuildDiagnostic,
   type BuildState,
   formatPosition,
+  isBuiltWithWarnings,
   isServingPrevious,
   parseBuild,
   parseDiagnostics,
   shouldPoll,
+  showsDiagnostics,
   sortDiagnostics
 } from './build-status';
 
@@ -123,4 +125,31 @@ describe('formatPosition', () => {
   it('joins line and column', () => {
     expect(formatPosition({ line: 3, column: 14 })).toBe('3:14');
   });
+
+  it('is empty for a finding without a source line', () => {
+    expect(formatPosition({ line: 0, column: 0 })).toBe('');
+  });
+});
+
+describe('diagnostics display', () => {
+  const state = (
+    status: BuildState['status'],
+    diagnostics: BuildDiagnostic[]
+  ): BuildState => ({ status, hash: null, builtAt: null, diagnostics });
+  const warning = [diagnostic({ severity: 'warning' })];
+
+  it.each([
+    ['failed', warning, true, false],
+    ['ready', warning, true, true],
+    ['ready', [], false, false],
+    ['failed', [], false, false],
+    ['building', warning, false, false],
+    ['pending', warning, false, false]
+  ] as const)(
+    '%s with %j -> show %s, warnings %s',
+    (status, diagnostics, shows, warns) => {
+      expect(showsDiagnostics(state(status, [...diagnostics]))).toBe(shows);
+      expect(isBuiltWithWarnings(state(status, [...diagnostics]))).toBe(warns);
+    }
+  );
 });
