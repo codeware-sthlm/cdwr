@@ -9,6 +9,7 @@ export {
   COMPONENT_HASH_LENGTH,
   COMPONENT_HASH_PATTERN,
   COMPONENT_TAG_PREFIX,
+  type ComponentBuildResult,
   type ComponentDiagnostic,
   type ComponentProp,
   type ComponentPropKind,
@@ -17,6 +18,7 @@ export {
   HOST_REGISTRY_GLOBAL,
   type HostModuleSpecifier,
   componentBundlePath,
+  isComponentBuildResult,
   componentTagName
 } from './lib/custom-component';
 export {
@@ -24,6 +26,12 @@ export {
   type LandingDoc,
   type RenderableCollection
 } from './lib/doc-data';
+export {
+  type ComponentPropDeclaration,
+  type ComponentSourceBody,
+  MAX_COMPONENT_SOURCE_LENGTH,
+  parseComponentSource
+} from './lib/parse-component-source';
 export { getExcerpt } from './lib/get-excerpt';
 export { resolveDocMeta, resolveMeta } from './lib/resolve-meta';
 export {

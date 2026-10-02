@@ -1,0 +1,25 @@
+app = 'cdwr-component-builder'
+primary_region = 'arn'
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Reached over Flycast from the cms, so no force_https: the private network is
+# plain http, and fly-proxy starts a suspended machine on the first request
+[http_service]
+  internal_port = 3002
+  auto_stop_machines = 'suspend'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[http_service.checks]]
+  method = 'GET'
+  path = '/api/health'
+  grace_period = '10s'
+  interval = '20s'
+  timeout = '5s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1024mb'

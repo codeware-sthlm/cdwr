@@ -1,11 +1,10 @@
 import type {
   ComponentDiagnostic,
   ComponentProp,
-  ComponentPropKind
-} from '@codeware/app-cms/feature/component-builder';
-import type { CustomComponent } from '@codeware/shared/util/payload-types';
+  ComponentPropKind,
+  ComponentPropDeclaration as PropDeclaration
+} from '@codeware/shared/util/payload-utils';
 
-type PropDeclaration = NonNullable<CustomComponent['propsSchema']>[number];
 type PropType = PropDeclaration['type'];
 
 /** The code-side type each form input supplies */
