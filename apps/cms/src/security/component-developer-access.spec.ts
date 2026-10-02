@@ -37,37 +37,19 @@ beforeEach(() => {
 describe('componentDeveloperAccess create', () => {
   const developer = user('user', [member(1, true), member(2, false)]);
 
-  it('lets a system user create anywhere', async () => {
-    await expect(
-      call('create', user('system-user'), { tenant: 9 })
-    ).resolves.toBe(true);
+  it('lets a system user create', async () => {
+    await expect(call('create', user('system-user'))).resolves.toBe(true);
   });
 
-  it('lets a developer create in their workspace, bare or populated', async () => {
-    await expect(call('create', developer, { tenant: 1 })).resolves.toBe(true);
-    await expect(
-      call('create', developer, { tenant: { id: 1 } })
-    ).resolves.toBe(true);
-  });
-
-  it('refuses a developer creating in another workspace', async () => {
-    await expect(call('create', developer, { tenant: 3 })).resolves.toBe(false);
+  it('lets a developer create, whatever data the admin asks with', async () => {
+    await expect(call('create', developer)).resolves.toBe(true);
+    await expect(call('create', developer, {})).resolves.toBe(true);
+    await expect(call('create', developer, { tenant: 3 })).resolves.toBe(true);
   });
 
   it('refuses an editor without the developer flag', async () => {
     await expect(
       call('create', user('user', [member(1, false)]), { tenant: 1 })
-    ).resolves.toBe(false);
-  });
-
-  it('refuses data without a tenant', async () => {
-    await expect(call('create', developer, {})).resolves.toBe(false);
-  });
-
-  it('offers Create to a developer when asked without data', async () => {
-    await expect(call('create', developer)).resolves.toBe(true);
-    await expect(
-      call('create', user('user', [member(1, false)]))
     ).resolves.toBe(false);
   });
 

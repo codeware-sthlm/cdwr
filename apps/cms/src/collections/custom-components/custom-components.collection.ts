@@ -22,6 +22,7 @@ import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
 import { customComponentBundleEndpoint } from './bundle.endpoint';
 import { customComponentCheckEndpoint } from './check.endpoint';
 import { duplicatePropNames } from './duplicate-prop-names';
+import { assertDeveloperInTenant } from './hooks/assert-developer-in-tenant.hook';
 import {
   markBuildPending,
   queueComponentBuild
@@ -98,7 +99,7 @@ const customComponents: CollectionConfig = {
   },
   endpoints: [customComponentBundleEndpoint, customComponentCheckEndpoint],
   hooks: {
-    beforeChange: [markBuildPending],
+    beforeChange: [assertDeveloperInTenant, markBuildPending],
     afterChange: [queueComponentBuild]
   },
   labels: {
