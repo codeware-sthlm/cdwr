@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   type PropDeclaration,
   mergeProps,
-  readPropsSchema
+  readPropsSchema,
+  toSyncOutcome
 } from './sync-props';
 
 const row = (
@@ -24,7 +25,7 @@ describe('mergeProps', () => {
     );
 
     expect(merge.changed).toBe(false);
-    expect(merge.removed).toEqual([]);
+    expect(merge.removeAt).toEqual([]);
     expect(merge.rows.map(({ from }) => from)).toEqual([0, 1]);
   });
 
@@ -59,6 +60,7 @@ describe('mergeProps', () => {
     );
 
     expect(merge.rows[0]?.type).toBe(to);
+    expect(merge.updated).toEqual(['a']);
     expect(merge.changed).toBe(true);
   });
 
@@ -72,6 +74,7 @@ describe('mergeProps', () => {
     );
 
     expect(merge.rows.map(({ required }) => required)).toEqual([false, true]);
+    expect(merge.updated).toEqual(['a', 'b']);
     expect(merge.changed).toBe(true);
   });
 
@@ -91,6 +94,7 @@ describe('mergeProps', () => {
       required: true,
       from: null
     });
+    expect(merge.added).toEqual(['count']);
     expect(merge.changed).toBe(true);
   });
 
@@ -100,7 +104,8 @@ describe('mergeProps', () => {
       [{ name: 'a', kind: 'string', optional: true }]
     );
 
-    expect(merge.removed).toEqual([0]);
+    expect(merge.removeAt).toEqual([0]);
+    expect(merge.removed).toEqual(['gone']);
     expect(merge.rows.map(({ name }) => name)).toEqual(['a']);
     expect(merge.changed).toBe(true);
   });
@@ -111,7 +116,7 @@ describe('mergeProps', () => {
       [{ name: 'a', kind: 'string', optional: true }]
     );
 
-    expect(merge.removed).toEqual([1]);
+    expect(merge.removeAt).toEqual([1]);
   });
 
   it('adds a list to an empty one', () => {
@@ -149,7 +154,8 @@ describe('mergeProps', () => {
   it('empties the list when the code takes nothing', () => {
     const merge = mergeProps([row('a', 'text')], []);
 
-    expect(merge.removed).toEqual([0]);
+    expect(merge.removeAt).toEqual([0]);
+    expect(merge.removed).toEqual(['a']);
     expect(merge.rows).toEqual([]);
   });
 });
@@ -173,5 +179,38 @@ describe('readPropsSchema', () => {
   it('reads anything but a list as empty', () => {
     expect(readPropsSchema(undefined)).toEqual([]);
     expect(readPropsSchema({})).toEqual([]);
+  });
+});
+
+describe('toSyncOutcome', () => {
+  it('names what changed and what was skipped', () => {
+    const merge = mergeProps(
+      [row('gone', 'text'), row('n', 'text', false)],
+      [
+        { name: 'n', kind: 'number', optional: false },
+        { name: 'fresh', kind: 'boolean', optional: true },
+        { name: 'items', kind: 'other', optional: true }
+      ]
+    );
+
+    expect(toSyncOutcome(merge)).toEqual({
+      status: 'changed',
+      added: ['fresh'],
+      removed: ['gone'],
+      updated: ['n'],
+      skipped: ['items']
+    });
+  });
+
+  it('is unchanged when only skipped props differ', () => {
+    const merge = mergeProps(
+      [],
+      [{ name: 'items', kind: 'other', optional: true }]
+    );
+
+    expect(toSyncOutcome(merge)).toEqual({
+      status: 'unchanged',
+      skipped: ['items']
+    });
   });
 });

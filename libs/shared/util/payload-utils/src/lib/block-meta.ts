@@ -540,12 +540,12 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         name: 'props',
         type: 'json',
         label: {
-          en: 'Props',
-          sv: 'Egenskaper'
+          en: 'Inputs',
+          sv: 'Inputs'
         },
         description: {
-          en: 'The values for the props the component declares.',
-          sv: 'Värdena för de egenskaper komponenten deklarerar.'
+          en: 'The values for the inputs the component declares.',
+          sv: 'Värdena för de inputs komponenten deklarerar.'
         }
       },
       {

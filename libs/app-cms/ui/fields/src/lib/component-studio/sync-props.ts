@@ -1,3 +1,4 @@
+import type { SyncOutcome } from '@codeware/shared/ui/component-studio';
 import type { CustomComponent } from '@codeware/shared/util/payload-types';
 import type {
   ComponentProp,
@@ -39,7 +40,13 @@ export type MergedRow = {
 export type PropsMerge = {
   rows: MergedRow[];
   /** Indexes of the old rows that go */
-  removed: number[];
+  removeAt: number[];
+  /** Names of the props added as new rows */
+  added: string[];
+  /** Names of the props whose rows went */
+  removed: string[];
+  /** Names of the rows that kept their place but changed type or required */
+  updated: string[];
   /** Props of a type no form input can supply, so they were left out */
   skipped: string[];
   changed: boolean;
@@ -60,16 +67,18 @@ export const mergeProps = (
 ): PropsMerge => {
   const byName = new Map(code.map((prop) => [prop.name, prop]));
   const rows: MergedRow[] = [];
-  const removed: number[] = [];
+  const removeAt: number[] = [];
+  const added: string[] = [];
+  const removed: string[] = [];
+  const updated: string[] = [];
   const seen = new Set<string>();
   const skipped: string[] = [];
-  let changed = false;
 
   existing.forEach((row, index) => {
     const prop = byName.get(row.name);
     if (!prop || seen.has(row.name)) {
-      removed.push(index);
-      changed = true;
+      removeAt.push(index);
+      removed.push(row.name);
       return;
     }
     seen.add(row.name);
@@ -90,7 +99,7 @@ export const mergeProps = (
       suppliedKind[row.type] === prop.kind ? row.type : defaultType[prop.kind];
     const required = !prop.optional;
     if (type !== row.type || required !== (row.required === true)) {
-      changed = true;
+      updated.push(row.name);
     }
     rows.push({
       name: row.name,
@@ -117,11 +126,31 @@ export const mergeProps = (
       required: !prop.optional,
       from: null
     });
-    changed = true;
+    added.push(prop.name);
   }
 
-  return { rows, removed, skipped, changed };
+  return {
+    rows,
+    removeAt,
+    added,
+    removed,
+    updated,
+    skipped,
+    changed: added.length + removed.length + updated.length > 0
+  };
 };
+
+/** What the studio is told when the inputs were brought in line with the code */
+export const toSyncOutcome = ({
+  changed,
+  added,
+  removed,
+  updated,
+  skipped
+}: PropsMerge): SyncOutcome =>
+  changed
+    ? { status: 'changed', added, removed, updated, skipped }
+    : { status: 'unchanged', skipped };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;

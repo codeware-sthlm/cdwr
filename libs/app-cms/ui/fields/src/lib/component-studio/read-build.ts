@@ -1,4 +1,6 @@
-import { type BuildState, buildSelectFields, parseBuild } from './build-status';
+import type { BuildState } from '@codeware/shared/ui/component-studio';
+
+import { buildSelectFields, parseBuild } from './build-status';
 
 type ReadBuildArgs = {
   /** The api route, relative to the admin's origin */

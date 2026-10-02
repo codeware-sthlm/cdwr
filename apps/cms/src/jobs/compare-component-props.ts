@@ -50,8 +50,8 @@ export const compareComponentProps = (
       warnings.push(
         warn(
           prop.optional
-            ? `${name} is not declared in Props, so editors cannot set it.`
-            : `${name} is required by the component but not declared in Props, so it will be undefined.`
+            ? `${name} is not declared in Inputs, so editors cannot set it.`
+            : `${name} is required by the component but not declared in Inputs, so it will be undefined.`
         )
       );
       continue;
@@ -75,7 +75,7 @@ export const compareComponentProps = (
     if (!prop.optional && !declaration.required) {
       warnings.push(
         warn(
-          `${name} is required by the component but not marked required in Props, so it can be undefined.`
+          `${name} is required by the component but not marked required in Inputs, so it can be undefined.`
         )
       );
     }
@@ -85,7 +85,7 @@ export const compareComponentProps = (
     if (!taken.has(name)) {
       warnings.push(
         warn(
-          `\`${name}\` is declared in Props but the component does not take it, so it has no effect.`
+          `\`${name}\` is declared in Inputs but the component does not take it, so it has no effect.`
         )
       );
     }

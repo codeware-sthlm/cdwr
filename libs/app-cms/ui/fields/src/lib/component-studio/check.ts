@@ -8,14 +8,6 @@ import type {
   ComponentPropKind
 } from '@codeware/shared/util/payload-utils';
 
-export {
-  type CheckOutcome,
-  type CheckResult,
-  type MarkerSpec,
-  toMarkers,
-  unlocated
-} from '@codeware/shared/ui/component-studio';
-
 const propKinds = {
   string: true,
   number: true,

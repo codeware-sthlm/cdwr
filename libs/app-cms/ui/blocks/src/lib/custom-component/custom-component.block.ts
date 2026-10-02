@@ -5,7 +5,7 @@ import {
 import type { Block } from 'payload';
 
 /**
- * Places a custom component, with the values for the props it declares
+ * Places a custom component, with the values for the inputs it declares
  */
 export const customComponentBlock: Block = {
   slug: 'custom-component',

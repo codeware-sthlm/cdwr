@@ -28,6 +28,8 @@ export type ComponentStudioProps = StudioHandlers & {
   catalog: ImportCatalog;
   sidePanel?: ReactNode;
   sidePanelTitle?: string;
+  /** Added to the panel, e.g. to widen it */
+  panelClassName?: string;
   defaultPanelOpen?: boolean;
   /** Names the editor's model; each studio gets its own unless told otherwise */
   modelPath?: string;
@@ -54,6 +56,7 @@ export const ComponentStudio = ({
   catalog,
   sidePanel,
   sidePanelTitle = 'Inputs',
+  panelClassName,
   defaultPanelOpen = true,
   modelPath,
   portalClassName,
@@ -155,7 +158,10 @@ export const ComponentStudio = ({
           {hasPanel && panelOpen && (
             <aside
               aria-label={sidePanelTitle}
-              className="bg-card flex shrink-0 flex-col rounded-lg border @2xl:max-h-160 @2xl:w-72"
+              className={cn(
+                'bg-card flex shrink-0 flex-col rounded-lg border @2xl:max-h-160 @2xl:w-72',
+                panelClassName
+              )}
             >
               <div className="bg-muted/40 flex items-center justify-between rounded-t-lg border-b py-1.5 pr-2 pl-3">
                 <h2 className="m-0 text-sm font-medium">{sidePanelTitle}</h2>
