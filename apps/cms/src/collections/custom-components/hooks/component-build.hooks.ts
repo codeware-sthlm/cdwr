@@ -10,6 +10,7 @@ import {
   COMPONENT_BUILD_CONTEXT,
   COMPONENT_BUILD_QUEUE
 } from '../../../jobs/build-custom-component.task';
+import { inBuildTurn } from '../../../jobs/build-turn';
 
 /** The seed passes this; a seeded component is built by the queue sweep. */
 const SEED_CONTEXT = 'seedAction';
@@ -61,9 +62,6 @@ export const markBuildPending: CollectionBeforeChangeHook<CustomComponent> = ({
     : data;
 };
 
-/** Builds run one after another: each costs a few hundred MB. */
-let running: Promise<void> = Promise.resolve();
-
 /**
  * The save's transaction deletes its id from the request when it ends. The
  * job reads the component through another connection, so it waits for that.
@@ -93,13 +91,10 @@ const queueAndRun = async (
     return;
   }
 
-  const turn = running.then(async () => {
+  await inBuildTurn(async () => {
     await waitForCommit(req);
     await payload.jobs.runByID({ id: job.id });
   });
-  // The next build starts whether or not this one threw
-  running = turn.catch(() => undefined);
-  await turn;
 };
 
 /**

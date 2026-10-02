@@ -1,20 +1,13 @@
-export type ComponentDiagnostic = {
-  message: string;
-  /** 1-based line in the authored source; 1 when no location is known */
-  line: number;
-  /** 1-based column in the authored source; 1 when no location is known */
-  column: number;
-  severity: 'error' | 'warning';
-};
+import type {
+  ComponentDiagnostic,
+  ComponentProp
+} from '@codeware/shared/util/payload-utils';
 
-export type ComponentPropKind = 'string' | 'number' | 'boolean' | 'other';
-
-/** One prop the component's default export takes */
-export type ComponentProp = {
-  name: string;
-  kind: ComponentPropKind;
-  optional: boolean;
-};
+export type {
+  ComponentDiagnostic,
+  ComponentProp,
+  ComponentPropKind
+} from '@codeware/shared/util/payload-utils';
 
 export type BuildComponentResult =
   | {

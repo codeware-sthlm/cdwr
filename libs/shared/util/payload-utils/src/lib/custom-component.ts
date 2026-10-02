@@ -15,6 +15,34 @@ export const HOST_MODULE_SPECIFIERS = [
 
 export type HostModuleSpecifier = (typeof HOST_MODULE_SPECIFIERS)[number];
 
+/** Packages bundled into each component instead of read from the host page */
+export const DEFAULT_BUNDLED_PACKAGES = [
+  'lucide-react',
+  'class-variance-authority',
+  'react-hook-form',
+  'zod',
+  'recharts'
+] as const;
+
+/** One finding of a component build */
+export type ComponentDiagnostic = {
+  message: string;
+  /** 1-based line in the authored source; 1 when no location is known */
+  line: number;
+  /** 1-based column in the authored source; 1 when no location is known */
+  column: number;
+  severity: 'error' | 'warning';
+};
+
+export type ComponentPropKind = 'string' | 'number' | 'boolean' | 'other';
+
+/** One prop the component's default export takes */
+export type ComponentProp = {
+  name: string;
+  kind: ComponentPropKind;
+  optional: boolean;
+};
+
 /** Characters of the content hash that names a built bundle */
 export const COMPONENT_HASH_LENGTH = 16;
 

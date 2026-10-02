@@ -116,6 +116,9 @@
       "@codeware/shared/ui/cms-renderer": [
         "./libs/shared/ui/cms-renderer/src/index.ts"
       ],
+      "@codeware/shared/ui/cms-renderer/site-ui": [
+        "./libs/shared/ui/cms-renderer/src/lib/blocks/custom-component/kit.ts"
+      ],
       "@codeware/shared/ui/code": ["./libs/shared/ui/code/src/index.ts"],
       "@codeware/shared/ui/color-picker": [
         "./libs/shared/ui/color-picker/src/index.ts"

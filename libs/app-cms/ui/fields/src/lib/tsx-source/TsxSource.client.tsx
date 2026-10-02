@@ -1,20 +1,14 @@
 'use client';
 
-import type {
-  TranslationsKeys,
-  TranslationsObject
-} from '@codeware/app-cms/util/i18n';
-import { Button } from '@codeware/shared/ui/shadcn/components/button';
-import { CodeField, useTranslation } from '@payloadcms/ui';
+import { CodeField } from '@payloadcms/ui';
 import type { CodeFieldClientProps } from 'payload';
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback } from 'react';
 
-import { tsxModelUri } from './tsx-source';
+import SourceToolbar from './SourceToolbar';
+import { indentOptions, tsxModelUri } from './tsx-source';
+import { useSourceTools } from './use-source-tools';
 
 type OnMount = NonNullable<React.ComponentProps<typeof CodeField>['onMount']>;
-type Editor = Parameters<OnMount>[0];
-
-const indentOptions = { tabSize: 2, insertSpaces: true } as const;
 
 /**
  * Code field for a React component written in TSX.
@@ -23,6 +17,9 @@ const indentOptions = { tabSize: 2, insertSpaces: true } as const;
  * editor's model is swapped for one with a `.tsx` uri. Semantic validation is
  * off: the server build is the type-check authority, and Monaco has no types
  * for `react` or the site kit. Syntax errors still show.
+ *
+ * A toolbar above the editor formats, inserts imports, checks the unsaved
+ * source on the server and syncs the declared props from the code.
  *
  * Monaco's TypeScript defaults are global to the admin session, so every
  * `typescript` editor opened after this one shares these options.
@@ -38,15 +35,8 @@ const TsxSource: React.FC<CodeFieldClientProps> = ({
   schemaPath,
   validate
 }) => {
-  const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
-  const editorRef = useRef<Editor | null>(null);
-
-  const format = useCallback(() => {
-    const editor = editorRef.current;
-    // The TypeScript formatter reads its indentation from the model
-    editor?.getModel()?.updateOptions(indentOptions);
-    void editor?.getAction('editor.action.formatDocument')?.run();
-  }, []);
+  const tools = useSourceTools();
+  const { attach } = tools;
 
   const onMount = useCallback<OnMount>(
     (editor, monaco) => {
@@ -62,7 +52,7 @@ const TsxSource: React.FC<CodeFieldClientProps> = ({
       );
       editor.setModel(model);
       original?.dispose();
-      editorRef.current = editor;
+      const detach = attach(editor, monaco);
 
       // Payload sets the model's indentation right after this callback returns
       void Promise.resolve().then(() => model.updateOptions(indentOptions));
@@ -89,15 +79,16 @@ const TsxSource: React.FC<CodeFieldClientProps> = ({
       // The defaults are left as set: putting them back raced a second mount
       // of the editor and switched semantic validation on again under it
       editor.onDidDispose(() => {
-        editorRef.current = null;
+        detach();
         model.dispose();
       });
     },
-    [path]
+    [attach, path]
   );
 
   return (
     <>
+      {!readOnly && <SourceToolbar tools={tools} />}
       <CodeField
         autoComplete={autoComplete}
         field={field}
@@ -110,13 +101,6 @@ const TsxSource: React.FC<CodeFieldClientProps> = ({
         schemaPath={schemaPath}
         validate={validate}
       />
-      {!readOnly && (
-        <div className="twp mt-2 flex justify-end">
-          <Button type="button" variant="outline" size="sm" onClick={format}>
-            {t('customComponents:formatSource')}
-          </Button>
-        </div>
-      )}
     </>
   );
 };

@@ -1,20 +1,17 @@
-import type {
-  BuildComponentOptions,
-  BuildComponentResult,
-  ComponentDiagnostic,
-  HostModule
-} from '@codeware/app-cms/feature/component-builder';
-import { getEnv } from '@codeware/app-cms/feature/env-loader';
+import type { BuildComponentResult } from '@codeware/app-cms/feature/component-builder';
 import type { CustomComponent } from '@codeware/shared/util/payload-types';
 import { componentTagName } from '@codeware/shared/util/payload-utils';
 import type { BasePayload, TaskConfig } from 'payload';
 
 import {
-  type ToolchainResult,
-  resolveToolchain
-} from '../collections/custom-components/toolchain';
+  type BuildDeps,
+  defaultDeps,
+  errorDiagnostic,
+  hasErrors,
+  runComponentBuild
+} from './run-component-build';
 
-import { compareComponentProps } from './compare-component-props';
+export type { BuildDeps };
 
 export const BUILD_CUSTOM_COMPONENT_TASK = 'build-custom-component';
 
@@ -25,37 +22,8 @@ export const COMPONENT_BUILD_QUEUE = 'component-builds';
 export const COMPONENT_BUILD_CONTEXT = 'componentBuild';
 
 type Build = NonNullable<CustomComponent['build']>;
-type Builder = {
-  buildComponent: (
-    options: BuildComponentOptions
-  ) => Promise<BuildComponentResult>;
-  DEFAULT_HOST_MODULES: Readonly<Record<string, HostModule>>;
-};
 
 export type BuildOutcome = 'ready' | 'failed' | 'skipped';
-
-export type BuildDeps = {
-  resolveToolchain: () => ToolchainResult;
-  loadBuilder: () => Promise<Builder>;
-};
-
-const defaultDeps: BuildDeps = {
-  resolveToolchain: () =>
-    resolveToolchain({
-      override: getEnv(false)?.COMPONENT_TOOLCHAIN_ROOT,
-      cwd: process.cwd()
-    }),
-  // Imported when a build runs, so esbuild, typescript and the native
-  // tailwind engine never enter a graph Next bundles
-  loadBuilder: () => import('@codeware/app-cms/feature/component-builder')
-};
-
-const errorDiagnostic = (message: string): ComponentDiagnostic => ({
-  message,
-  line: 1,
-  column: 1,
-  severity: 'error'
-});
 
 const findComponent = (payload: BasePayload, id: number) =>
   payload.findByID({
@@ -80,33 +48,6 @@ const writeBuild = (
     depth: 0,
     overrideAccess: true
   });
-
-const runBuilder = async (
-  component: CustomComponent,
-  deps: BuildDeps
-): Promise<BuildComponentResult> => {
-  const resolved = deps.resolveToolchain();
-  if (!resolved.ok) {
-    return {
-      ok: false,
-      diagnostics: [
-        errorDiagnostic(
-          `The component build toolchain is not available in this environment. ${resolved.reason}.`
-        )
-      ]
-    };
-  }
-
-  const { root, kit, themeCss } = resolved.toolchain;
-  const { buildComponent, DEFAULT_HOST_MODULES } = await deps.loadBuilder();
-  return buildComponent({
-    tagName: componentTagName(component.slug),
-    source: component.source,
-    themeCss,
-    workspaceRoot: root,
-    hostModules: { ...DEFAULT_HOST_MODULES, '@site/ui': { typesEntry: kit } }
-  });
-};
 
 /**
  * Builds one custom component and records the outcome on it.
@@ -136,7 +77,14 @@ export async function buildCustomComponent(
 
   let result: BuildComponentResult;
   try {
-    result = await runBuilder(component, deps);
+    result = await runComponentBuild(
+      {
+        tagName: componentTagName(component.slug),
+        source: component.source,
+        propsSchema: component.propsSchema ?? []
+      },
+      deps
+    );
   } catch (error) {
     payload.logger.error(
       { err: error },
@@ -162,13 +110,10 @@ export async function buildCustomComponent(
   }
 
   if (result.ok) {
-    const diagnostics = [
-      ...result.diagnostics,
-      ...compareComponentProps(result.props, latest.propsSchema)
-    ];
+    const { diagnostics } = result;
 
     // The code compiles, but the form would hand it the wrong type
-    if (diagnostics.some(({ severity }) => severity === 'error')) {
+    if (hasErrors(diagnostics)) {
       await writeBuild(payload, latest, { status: 'failed', diagnostics });
       return 'failed';
     }

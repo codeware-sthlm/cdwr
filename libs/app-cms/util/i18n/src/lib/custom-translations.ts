@@ -22,7 +22,19 @@ const customTranslationsSchema = z.object({
     builtAt: z.string(),
     builtOnSave: z.string(),
     builtWithWarnings: z.string(),
+    checkFailed: z.string(),
+    checkForbidden: z.string(),
+    checking: z.string(),
+    checkNone: z.string(),
+    checkOneProblem: z.string(),
+    checkProblems: z.string(),
+    checkSource: z.string(),
     formatSource: z.string(),
+    importPresent: z.string(),
+    importsBundled: z.string(),
+    importsKitFailed: z.string(),
+    importsLoading: z.string(),
+    insertImport: z.string(),
     propRequired: z.string(),
     propsLoadFailed: z.string(),
     propsLoading: z.string(),
@@ -34,7 +46,12 @@ const customTranslationsSchema = z.object({
     statusFailed: z.string(),
     statusPending: z.string(),
     statusReady: z.string(),
-    stillBuilding: z.string()
+    stillBuilding: z.string(),
+    syncDone: z.string(),
+    syncProps: z.string(),
+    syncSkipped: z.string(),
+    syncUnresolved: z.string(),
+    syncUpToDate: z.string()
   }),
   dashboard: z.object({
     badgeDraft: z.string(),
@@ -376,7 +393,19 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       builtAt: 'Built {{time}}',
       builtOnSave: 'The component is built when you save it.',
       builtWithWarnings: 'Built with warnings',
+      checkFailed: 'The check could not be run.',
+      checkForbidden: 'You are not allowed to check components.',
+      checking: 'Checking…',
+      checkNone: 'No problems',
+      checkOneProblem: '1 problem',
+      checkProblems: '{{count}} problems',
+      checkSource: 'Check',
       formatSource: 'Format',
+      importPresent: 'Already imported',
+      importsBundled: 'Bundled packages',
+      importsKitFailed: 'The component kit could not be loaded.',
+      importsLoading: 'Loading…',
+      insertImport: 'Insert import',
       propRequired: 'Required',
       propsLoadFailed:
         'The properties could not be loaded. Edit the values as JSON instead.',
@@ -390,7 +419,14 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       statusFailed: 'Failed',
       statusPending: 'Waiting to build',
       statusReady: 'Ready',
-      stillBuilding: 'Still building. Reload the page later to see the result.'
+      stillBuilding: 'Still building. Reload the page later to see the result.',
+      syncDone: 'Props updated from the code. Save to keep them.',
+      syncProps: 'Sync props from code',
+      syncSkipped:
+        'Not added, since a form cannot fill in their type: {{names}}.',
+      syncUnresolved:
+        'The props could not be read from the code. Fix the errors and check again.',
+      syncUpToDate: 'Props already match.'
     },
     dashboard: {
       badgeDraft: 'Draft',
@@ -785,7 +821,19 @@ Supported locales: {{locales}}`,
       builtAt: 'Byggd {{time}}',
       builtOnSave: 'Komponenten byggs när du sparar den.',
       builtWithWarnings: 'Byggd med varningar',
+      checkFailed: 'Kontrollen kunde inte köras.',
+      checkForbidden: 'Du har inte behörighet att kontrollera komponenter.',
+      checking: 'Kontrollerar…',
+      checkNone: 'Inga problem',
+      checkOneProblem: '1 problem',
+      checkProblems: '{{count}} problem',
+      checkSource: 'Kontrollera',
       formatSource: 'Formatera',
+      importPresent: 'Redan importerad',
+      importsBundled: 'Medföljande paket',
+      importsKitFailed: 'Komponentkitet kunde inte läsas in.',
+      importsLoading: 'Läser in…',
+      insertImport: 'Infoga import',
       propRequired: 'Obligatorisk',
       propsLoadFailed:
         'Egenskaperna kunde inte läsas in. Redigera värdena som JSON i stället.',
@@ -800,7 +848,15 @@ Supported locales: {{locales}}`,
       statusPending: 'Väntar på bygge',
       statusReady: 'Klar',
       stillBuilding:
-        'Bygget pågår fortfarande. Ladda om sidan senare för att se resultatet.'
+        'Bygget pågår fortfarande. Ladda om sidan senare för att se resultatet.',
+      syncDone:
+        'Egenskaperna uppdaterades från koden. Spara för att behålla dem.',
+      syncProps: 'Synka egenskaper från koden',
+      syncSkipped:
+        'Lades inte till, eftersom ett formulär inte kan fylla i deras typ: {{names}}.',
+      syncUnresolved:
+        'Egenskaperna kunde inte läsas ut ur koden. Åtgärda felen och kontrollera igen.',
+      syncUpToDate: 'Egenskaperna stämmer redan.'
     },
     dashboard: {
       badgeDraft: 'Utkast',
