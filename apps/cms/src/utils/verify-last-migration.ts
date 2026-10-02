@@ -14,6 +14,8 @@ import { getMigrations, getPayload } from 'payload';
 
 import config from '../payload.config';
 
+import { emptyMediaFolders } from './empty-media-folders';
+
 /** Collections created by the seed — checked for row count integrity */
 const SEEDED_COLLECTIONS = [
   'categories',
@@ -212,6 +214,7 @@ async function verifyLastMigration() {
   // then replay all migrations from scratch
   console.log('🔄 Drop database...');
   await payload.db.dropDatabase({ adapter });
+  emptyMediaFolders(env.MEDIA_DIR);
 
   console.log('🔄 Run migrations on clean database...');
   await payload.db.migrate();
