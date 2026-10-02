@@ -1,4 +1,7 @@
-import { sectionBandField } from '@codeware/app-cms/ui/fields';
+import {
+  componentPropsField,
+  sectionBandField
+} from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
 /**
@@ -19,17 +22,7 @@ export const customComponentBlock: Block = {
       required: true,
       label: { en: 'Component', sv: 'Komponent' }
     },
-    {
-      name: 'props',
-      type: 'json',
-      label: { en: 'Props', sv: 'Egenskaper' },
-      admin: {
-        description: {
-          en: 'The values for the props the component declares.',
-          sv: 'Värdena för de egenskaper komponenten deklarerar.'
-        }
-      }
-    },
+    componentPropsField,
     sectionBandField()
   ]
 };

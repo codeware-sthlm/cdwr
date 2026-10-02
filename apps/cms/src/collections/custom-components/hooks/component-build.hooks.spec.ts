@@ -48,6 +48,52 @@ describe('markBuildPending', () => {
     }
   );
 
+  const declared: NonNullable<CustomComponent['propsSchema']> = [
+    { name: 'label', type: 'text', required: true }
+  ];
+  const withSchema = {
+    ...original,
+    propsSchema: declared
+  } as unknown as CustomComponent;
+
+  it.each<[Pick<CustomComponent, 'propsSchema'>]>([
+    [{ propsSchema: [] }],
+    [{ propsSchema: [{ name: 'label', type: 'text', required: false }] }],
+    [{ propsSchema: [{ name: 'label', type: 'number', required: true }] }],
+    [{ propsSchema: [{ name: 'other', type: 'text', required: true }] }]
+  ])('marks changed declared props %o pending', (data) => {
+    expect(callBefore({ data, originalDoc: withSchema })).toMatchObject({
+      build: { status: 'pending', js: 'js' }
+    });
+  });
+
+  it('marks the first declared prop pending', () => {
+    expect(callBefore({ data: { propsSchema: declared } })).toMatchObject({
+      build: { status: 'pending' }
+    });
+  });
+
+  it('ignores row ids, labels and a missing required flag', () => {
+    const data: Pick<CustomComponent, 'propsSchema'> = {
+      propsSchema: [
+        { id: 'x', name: 'label', label: 'Label', type: 'text', required: true }
+      ]
+    };
+    expect(callBefore({ data, originalDoc: withSchema })).toBe(data);
+    const loose: Pick<CustomComponent, 'propsSchema'> = {
+      propsSchema: [{ name: 'label', type: 'text', required: null }]
+    };
+    expect(
+      callBefore({
+        data: loose,
+        originalDoc: {
+          ...withSchema,
+          propsSchema: [{ name: 'label', type: 'text' }]
+        } as unknown as CustomComponent
+      })
+    ).toBe(loose);
+  });
+
   it('leaves an unchanged source and slug alone', () => {
     const data = { source: 'a', slug: 'counter', name: 'New name' };
     expect(callBefore({ data })).toBe(data);

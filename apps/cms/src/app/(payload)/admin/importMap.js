@@ -60,6 +60,7 @@ import { default as default_5c4721952cea6137a5b655132d82172f } from '@codeware/a
 import { default as default_aa577ffa11e4f1931cf9142a4eed30a6 } from '@codeware/apps/cms/components/SubmissionCountCell';
 import { default as default_b8bb6bd04eccdbda47b5169ea620714a } from '@codeware/apps/cms/components/admin/submissions/SubmissionDetailView';
 import { default as default_5c99d712bddea7b07fa7fa976465b47c } from '@codeware/apps/cms/components/admin/submissions/SubmissionsListView';
+import { default as default_17171b08da9df131b054249009f00db6 } from '@codeware/app-cms/ui/fields/component-props/ComponentProps.client';
 import { default as default_176fd26d15967a8046e38df612c30d49 } from '@codeware/apps/cms/components/admin/AdminNavWrapper';
 import { default as default_42c5f221d82b17c6d729c2d401f23dbf } from '@codeware/apps/cms/components/Icon.client';
 import { default as default_42ab7a6f795fd44e8c166a2bb6b2adc0 } from '@codeware/apps/cms/components/Logo.client';
@@ -206,6 +207,8 @@ export const importMap = {
     default_b8bb6bd04eccdbda47b5169ea620714a,
   '@codeware/apps/cms/components/admin/submissions/SubmissionsListView#default':
     default_5c99d712bddea7b07fa7fa976465b47c,
+  '@codeware/app-cms/ui/fields/component-props/ComponentProps.client#default':
+    default_17171b08da9df131b054249009f00db6,
   '@codeware/apps/cms/components/admin/AdminNavWrapper#default':
     default_176fd26d15967a8046e38df612c30d49,
   '@codeware/apps/cms/components/Icon.client#default':

@@ -83,11 +83,22 @@ export const sortDiagnostics = (
     return a.line - b.line || a.column - b.column;
   });
 
+/** Empty for a finding that is not about a source line, which carries line 0 */
 export const formatPosition = ({
   line,
   column
-}: Pick<BuildDiagnostic, 'line' | 'column'>): string => `${line}:${column}`;
+}: Pick<BuildDiagnostic, 'line' | 'column'>): string =>
+  line > 0 ? `${line}:${column}` : '';
 
 /** A failed build leaves the last good bundle in place, which has a hash. */
 export const isServingPrevious = (build: BuildState): boolean =>
   build.status === 'failed' && Boolean(build.hash);
+
+/** A build that went through but has something to report. */
+export const isBuiltWithWarnings = (build: BuildState): boolean =>
+  build.status === 'ready' && build.diagnostics.length > 0;
+
+/** Diagnostics show whenever there are any: errors when failed, else warnings. */
+export const showsDiagnostics = (build: BuildState): boolean =>
+  (build.status === 'failed' || build.status === 'ready') &&
+  build.diagnostics.length > 0;

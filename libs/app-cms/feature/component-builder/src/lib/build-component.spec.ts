@@ -64,6 +64,57 @@ describe('buildComponent', () => {
     expect(result.css).toContain('.px-3');
   });
 
+  describe('props', () => {
+    const propsOf = async (source: string) => {
+      const result = await build(source);
+      if (!result.ok) {
+        throw new Error(JSON.stringify(result.diagnostics));
+      }
+      return result.props;
+    };
+
+    it('reads a function component, optional and required', async () => {
+      expect(
+        await propsOf(`export default function C(
+  { label, step }: { label: string; step?: number; children?: unknown }
+) { return <p>{label}{step}</p>; }`)
+      ).toEqual([
+        { name: 'label', kind: 'string', optional: false },
+        { name: 'step', kind: 'number', optional: true }
+      ]);
+    });
+
+    it('reads an arrow function typed as React.FC', async () => {
+      expect(
+        await propsOf(`import React from 'react';
+const C: React.FC<{ on: boolean; mode: 'a' | 'b' }> = ({ on, mode }) => <p>{String(on)}{mode}</p>;
+export default C;`)
+      ).toEqual([
+        { name: 'on', kind: 'boolean', optional: false },
+        { name: 'mode', kind: 'string', optional: false }
+      ]);
+    });
+
+    it('reads a memo-wrapped component', async () => {
+      expect(
+        await propsOf(`import { memo } from 'react';
+export default memo(function C({ n }: { n?: number | null }) { return <p>{n}</p>; });`)
+      ).toEqual([{ name: 'n', kind: 'number', optional: true }]);
+    });
+
+    it('reports a non-primitive prop as other', async () => {
+      expect(
+        await propsOf(`export default function C({ items }: { items: string[] }) {
+  return <p>{items.length}</p>;
+}`)
+      ).toEqual([{ name: 'items', kind: 'other', optional: false }]);
+    });
+
+    it('gives an empty list for a component without props', async () => {
+      expect(await propsOf(`export default () => <p />;`)).toEqual([]);
+    });
+  });
+
   it('gives identical input an identical hash and changed input another', async () => {
     const a = await build(small);
     const b = await build(small);

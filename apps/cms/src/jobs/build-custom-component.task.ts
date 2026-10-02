@@ -14,6 +14,8 @@ import {
   resolveToolchain
 } from '../collections/custom-components/toolchain';
 
+import { compareComponentProps } from './compare-component-props';
+
 export const BUILD_CUSTOM_COMPONENT_TASK = 'build-custom-component';
 
 /** Own queue, so builds never wait behind the nightly sweeps. */
@@ -160,12 +162,23 @@ export async function buildCustomComponent(
   }
 
   if (result.ok) {
+    const diagnostics = [
+      ...result.diagnostics,
+      ...compareComponentProps(result.props, latest.propsSchema)
+    ];
+
+    // The code compiles, but the form would hand it the wrong type
+    if (diagnostics.some(({ severity }) => severity === 'error')) {
+      await writeBuild(payload, latest, { status: 'failed', diagnostics });
+      return 'failed';
+    }
+
     await writeBuild(payload, latest, {
       status: 'ready',
       js: result.js,
       css: result.css,
       hash: result.hash,
-      diagnostics: [],
+      diagnostics,
       builtAt: new Date().toISOString()
     });
     return 'ready';

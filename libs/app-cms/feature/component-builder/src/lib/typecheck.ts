@@ -2,7 +2,8 @@ import path from 'node:path';
 
 import ts from 'typescript';
 
-import type { ComponentDiagnostic, HostModule } from './types';
+import { extractProps } from './extract-props';
+import type { ComponentDiagnostic, ComponentProp, HostModule } from './types';
 
 const VIRTUAL_NAME = '__cdwr_component__.tsx';
 
@@ -45,12 +46,18 @@ const extensionOf = (file: string): ts.Extension =>
 const severityOf = (category: ts.DiagnosticCategory) =>
   category === ts.DiagnosticCategory.Error ? 'error' : 'warning';
 
+export type TypecheckResult = {
+  diagnostics: ComponentDiagnostic[];
+  /** The default export's props; undefined when they cannot be resolved */
+  props?: ComponentProp[];
+};
+
 /** Type-checks the source in memory, as if it lived in `workspaceRoot`. */
 export const typecheck = (
   source: string,
   workspaceRoot: string,
   hostModules: Readonly<Record<string, HostModule>>
-): ComponentDiagnostic[] => {
+): TypecheckResult => {
   const virtualPath = path.join(workspaceRoot, VIRTUAL_NAME);
   const sourceFile = ts.createSourceFile(
     virtualPath,
@@ -96,7 +103,7 @@ export const typecheck = (
   const program = ts.createProgram([virtualPath], options, host);
   const own = program.getSourceFile(virtualPath);
   if (!own) {
-    return [];
+    return { diagnostics: [] };
   }
 
   const diagnostics: ComponentDiagnostic[] = [
@@ -129,5 +136,12 @@ export const typecheck = (
     });
   }
 
-  return diagnostics;
+  const hasErrors = diagnostics.some((d) => d.severity === 'error');
+  return {
+    diagnostics,
+    props:
+      hasErrors || !moduleSymbol
+        ? undefined
+        : extractProps(checker, moduleSymbol, own)
+  };
 };

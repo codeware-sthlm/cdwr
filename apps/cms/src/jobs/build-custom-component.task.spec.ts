@@ -11,6 +11,7 @@ jest.mock('@codeware/app-cms/feature/env-loader', () => ({
 }));
 
 type Doc = {
+  propsSchema?: unknown[];
   id: number;
   slug: string;
   source: string;
@@ -62,9 +63,13 @@ const writes = (update: jest.Mock) =>
 describe('buildCustomComponent', () => {
   it('records a ready bundle and marks the build as running first', async () => {
     const { payload, update } = setup([doc()]);
-    const build = jest
-      .fn()
-      .mockResolvedValue({ ok: true, js: 'js', css: 'css', hash: 'h' });
+    const build = jest.fn().mockResolvedValue({
+      ok: true,
+      js: 'js',
+      css: 'css',
+      hash: 'h',
+      diagnostics: []
+    });
 
     await expect(
       buildCustomComponent(payload, 5, depsWith(build))
@@ -89,6 +94,67 @@ describe('buildCustomComponent', () => {
       diagnostics: []
     });
     expect(ready.builtAt).toEqual(expect.any(String));
+  });
+
+  it('stores builder and prop warnings on a ready build', async () => {
+    const { payload, update } = setup([doc({ propsSchema: [] })]);
+    const builderWarning = {
+      message: 'unused',
+      line: 3,
+      column: 2,
+      severity: 'warning'
+    };
+    const build = jest.fn().mockResolvedValue({
+      ok: true,
+      js: 'js',
+      css: 'css',
+      hash: 'h',
+      diagnostics: [builderWarning],
+      props: [{ name: 'label', kind: 'string', optional: false }]
+    });
+
+    await expect(
+      buildCustomComponent(payload, 5, depsWith(build))
+    ).resolves.toBe('ready');
+
+    const ready = writes(update).at(-1);
+    expect(ready.status).toBe('ready');
+    expect(ready.diagnostics).toHaveLength(2);
+    expect(ready.diagnostics[0]).toEqual(builderWarning);
+    expect(ready.diagnostics[1]).toMatchObject({
+      severity: 'warning',
+      message: expect.stringContaining('`label`')
+    });
+  });
+
+  it('fails a build whose declared prop type the code does not take', async () => {
+    const { payload, update } = setup([
+      doc({ propsSchema: [{ name: 'label', type: 'number' }] })
+    ]);
+    const build = jest.fn().mockResolvedValue({
+      ok: true,
+      js: 'js',
+      css: 'css',
+      hash: 'h',
+      diagnostics: [],
+      props: [{ name: 'label', kind: 'string', optional: true }]
+    });
+
+    await expect(
+      buildCustomComponent(payload, 5, depsWith(build))
+    ).resolves.toBe('failed');
+
+    const failed = writes(update).at(-1);
+    expect(failed.status).toBe('failed');
+    expect(failed.diagnostics).toEqual([
+      expect.objectContaining({
+        severity: 'error',
+        message: expect.stringContaining('declared as `number`')
+      })
+    ]);
+    // The bundle that was built is discarded; the previous one stays
+    expect(failed.js).not.toBe('js');
+    expect(failed.hash).not.toBe('h');
   });
 
   it('keeps the previous bundle when the build fails', async () => {
@@ -165,9 +231,13 @@ describe('buildCustomComponent', () => {
 
   it('flags every write so none queues another build', async () => {
     const { payload, update } = setup([doc()]);
-    const build = jest
-      .fn()
-      .mockResolvedValue({ ok: true, js: 'js', css: 'css', hash: 'h' });
+    const build = jest.fn().mockResolvedValue({
+      ok: true,
+      js: 'js',
+      css: 'css',
+      hash: 'h',
+      diagnostics: []
+    });
 
     await buildCustomComponent(payload, 5, depsWith(build));
 
@@ -183,9 +253,13 @@ describe('buildCustomComponent', () => {
       doc(),
       doc({ source: 'edited meanwhile' })
     ]);
-    const build = jest
-      .fn()
-      .mockResolvedValue({ ok: true, js: 'js', css: 'css', hash: 'h' });
+    const build = jest.fn().mockResolvedValue({
+      ok: true,
+      js: 'js',
+      css: 'css',
+      hash: 'h',
+      diagnostics: []
+    });
 
     await expect(
       buildCustomComponent(payload, 5, depsWith(build))
@@ -220,9 +294,13 @@ describe('buildCustomComponent', () => {
 
   it('rebuilds a component a restart left in building', async () => {
     const { payload } = setup([doc({ build: { status: 'building' } })]);
-    const build = jest
-      .fn()
-      .mockResolvedValue({ ok: true, js: 'js', css: 'css', hash: 'h' });
+    const build = jest.fn().mockResolvedValue({
+      ok: true,
+      js: 'js',
+      css: 'css',
+      hash: 'h',
+      diagnostics: []
+    });
 
     await expect(
       buildCustomComponent(payload, 5, depsWith(build))

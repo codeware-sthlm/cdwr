@@ -1,12 +1,20 @@
 'use client';
 
-import { CodeField } from '@payloadcms/ui';
+import type {
+  TranslationsKeys,
+  TranslationsObject
+} from '@codeware/app-cms/util/i18n';
+import { Button } from '@codeware/shared/ui/shadcn/components/button';
+import { CodeField, useTranslation } from '@payloadcms/ui';
 import type { CodeFieldClientProps } from 'payload';
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 
 import { tsxModelUri } from './tsx-source';
 
 type OnMount = NonNullable<React.ComponentProps<typeof CodeField>['onMount']>;
+type Editor = Parameters<OnMount>[0];
+
+const indentOptions = { tabSize: 2, insertSpaces: true } as const;
 
 /**
  * Code field for a React component written in TSX.
@@ -30,6 +38,16 @@ const TsxSource: React.FC<CodeFieldClientProps> = ({
   schemaPath,
   validate
 }) => {
+  const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
+  const editorRef = useRef<Editor | null>(null);
+
+  const format = useCallback(() => {
+    const editor = editorRef.current;
+    // The TypeScript formatter reads its indentation from the model
+    editor?.getModel()?.updateOptions(indentOptions);
+    void editor?.getAction('editor.action.formatDocument')?.run();
+  }, []);
+
   const onMount = useCallback<OnMount>(
     (editor, monaco) => {
       const uri = monaco.Uri.parse(tsxModelUri(path));
@@ -44,6 +62,10 @@ const TsxSource: React.FC<CodeFieldClientProps> = ({
       );
       editor.setModel(model);
       original?.dispose();
+      editorRef.current = editor;
+
+      // Payload sets the model's indentation right after this callback returns
+      void Promise.resolve().then(() => model.updateOptions(indentOptions));
 
       const defaults: typeof monaco.typescript | undefined = monaco.typescript;
       const typescriptDefaults = defaults?.typescriptDefaults;
@@ -66,24 +88,36 @@ const TsxSource: React.FC<CodeFieldClientProps> = ({
 
       // The defaults are left as set: putting them back raced a second mount
       // of the editor and switched semantic validation on again under it
-      editor.onDidDispose(() => model.dispose());
+      editor.onDidDispose(() => {
+        editorRef.current = null;
+        model.dispose();
+      });
     },
     [path]
   );
 
   return (
-    <CodeField
-      autoComplete={autoComplete}
-      field={field}
-      forceRender={forceRender}
-      onMount={onMount}
-      path={path}
-      permissions={permissions}
-      readOnly={readOnly}
-      renderedBlocks={renderedBlocks}
-      schemaPath={schemaPath}
-      validate={validate}
-    />
+    <>
+      <CodeField
+        autoComplete={autoComplete}
+        field={field}
+        forceRender={forceRender}
+        onMount={onMount}
+        path={path}
+        permissions={permissions}
+        readOnly={readOnly}
+        renderedBlocks={renderedBlocks}
+        schemaPath={schemaPath}
+        validate={validate}
+      />
+      {!readOnly && (
+        <div className="twp mt-2 flex justify-end">
+          <Button type="button" variant="outline" size="sm" onClick={format}>
+            {t('customComponents:formatSource')}
+          </Button>
+        </div>
+      )}
+    </>
   );
 };
 
