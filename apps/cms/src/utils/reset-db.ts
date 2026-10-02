@@ -1,17 +1,13 @@
 // Must be first: installs the guard before any module that might not finish
 import './exit-guard';
 
-import { mkdirSync, rmSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
 import { loadEnv } from '@codeware/app-cms/feature/env-loader';
 import type { DrizzleAdapter } from '@payloadcms/drizzle';
 import { getPayload } from 'payload';
 
 import config from '../payload.config';
 
-const dirname = path.dirname(fileURLToPath(import.meta.url));
+import { emptyMediaFolders } from './empty-media-folders';
 
 /**
  * This script is used to reset the database for development purposes.
@@ -38,18 +34,6 @@ async function reset() {
     `[DB] Using ${env.DATABASE_URL} (schema: ${env.DATABASE_SCHEMA})`
   );
 
-  // Uploads live on disk beside the database, so they go with it. Otherwise
-  // the next seed's uploads collide with them and Payload stores suffixed copies
-  const emptyMediaFolders = () => {
-    const mediaRoot = path.resolve(dirname, '../..', env.MEDIA_DIR);
-    for (const folder of ['media', 'stock-media']) {
-      const dir = path.join(mediaRoot, folder);
-      rmSync(dir, { recursive: true, force: true });
-      mkdirSync(dir, { recursive: true });
-    }
-    console.log(`✅ Emptied media folders under ${mediaRoot}`);
-  };
-
   const payload = await getPayload({ config });
 
   // Query a collection to check if the database is empty
@@ -63,7 +47,7 @@ async function reset() {
     const message = cause?.message ?? err.message;
     if (message.match(/relation "(.+)" does not exist/)) {
       console.log('✅ Database is empty, skipping reset');
-      emptyMediaFolders();
+      emptyMediaFolders(env.MEDIA_DIR);
       process.exit(0);
     }
     console.error('❌ Failed to connect to database');
@@ -74,7 +58,7 @@ async function reset() {
   await payload.db.dropDatabase({ adapter });
   console.log('✅ Dropped database');
 
-  emptyMediaFolders();
+  emptyMediaFolders(env.MEDIA_DIR);
 
   const end = Date.now();
   console.log(`✅ Reset took ${end - start} ms`);
