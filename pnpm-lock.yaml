@@ -86,6 +86,9 @@ importers:
       '@infisical/sdk':
         specifier: ^4.0.6
         version: 4.0.6(@aws-sdk/client-sso-oidc@3.600.0)(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
+      '@monaco-editor/react':
+        specifier: 4.7.0
+        version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@octokit/request-error':
         specifier: ^5.0.1
         version: 5.1.1
@@ -248,6 +251,9 @@ importers:
       payload:
         specifier: 3.86.0
         version: 3.86.0(graphql@16.14.2)(supports-color@7.2.0)(typescript@6.0.3)
+      prettier:
+        specifier: ~3.9.0
+        version: 3.9.8
       prism-react-renderer:
         specifier: ^2.4.1
         version: 2.4.1(react@19.3.0)
@@ -672,9 +678,6 @@ importers:
       postcss:
         specifier: '>=8.5.14'
         version: 8.5.28
-      prettier:
-        specifier: ~3.9.0
-        version: 3.9.8
       prettier-plugin-tailwindcss:
         specifier: ^0.8.0
         version: 0.8.1(prettier@3.9.8)

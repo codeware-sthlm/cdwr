@@ -123,6 +123,9 @@
       "@codeware/shared/ui/color-picker": [
         "./libs/shared/ui/color-picker/src/index.ts"
       ],
+      "@codeware/shared/ui/component-studio": [
+        "./libs/shared/ui/component-studio/src/index.ts"
+      ],
       "@codeware/shared/ui/copy-button": [
         "./libs/shared/ui/copy-button/src/index.ts"
       ],
