@@ -86,10 +86,7 @@ export const createApp = ({ token, build }: AppOptions) => {
       try {
         return c.json(await build({ ...parsed, tagName }));
       } catch (error) {
-        console.error(
-          '[component-builder] The build failed unexpectedly',
-          error
-        );
+        console.error('[builder] The build failed unexpectedly', error);
         return c.json(
           failure(
             `The build failed unexpectedly: ${error instanceof Error ? error.message : String(error)}`

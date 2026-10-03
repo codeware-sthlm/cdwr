@@ -15,7 +15,7 @@ on:
         options:
           - ""
           - cms
-          - component-builder
+          - builder
           - web
       tenant:
         description: "Tenant ID (leave empty for all tenants, only applies to

@@ -154,11 +154,11 @@ export const EnvSchema = withEnvVars(
 
       // A separate build service takes over component builds when set; the
       // local toolchain is used when absent
-      COMPONENT_BUILDER_URL: z
+      BUILDER_URL: z
         .string({ description: 'Base URL of the component build service' })
         .url()
         .optional(),
-      COMPONENT_BUILDER_TOKEN: z
+      BUILDER_TOKEN: z
         .string({
           description: 'Bearer token the component build service expects'
         })

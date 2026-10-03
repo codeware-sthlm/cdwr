@@ -1,7 +1,7 @@
 # syntax = docker/dockerfile:1
 
 # Build from the repository root:
-#   docker build -f apps/component-builder/Dockerfile .
+#   docker build -f apps/builder/Dockerfile .
 
 ARG NODE_VERSION=22.22.2
 FROM node:${NODE_VERSION}-slim AS base
@@ -39,7 +39,7 @@ ENV NODE_ENV=production \
 
 # Where tsx finds the tsconfig path aliases, and where builds look for the
 # workspace (found by walking up from here)
-WORKDIR /app/apps/component-builder
+WORKDIR /app/apps/builder
 
 EXPOSE 3002
 CMD [ "../../node_modules/.bin/tsx", "src/main.ts" ]

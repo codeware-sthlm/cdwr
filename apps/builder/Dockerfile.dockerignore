@@ -14,7 +14,7 @@ migrations.json
 
 # Other apps and what only they or CI need
 /apps/*
-!/apps/component-builder
+!/apps/builder
 /e2e
 /docs
 

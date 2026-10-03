@@ -1,4 +1,4 @@
-app = 'cdwr-component-builder'
+app = 'cdwr-builder'
 primary_region = 'arn'
 
 [build]

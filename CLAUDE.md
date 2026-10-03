@@ -95,32 +95,36 @@ preview link. Nothing is dropped silently.
 
 Saving a custom component builds it. In development the cms builds in-process
 from the workspace on disk. Production has no toolchain in the cms image and
-calls the builder service (`apps/component-builder`) instead; a cms without
-`COMPONENT_BUILDER_URL` and without a toolchain marks every build as failed.
+calls the builder service (`apps/builder`) instead; a cms without
+`BUILDER_URL` and without a toolchain marks every build as failed.
 
 To run the service locally and make the cms use it, the way production does:
 
 ```sh
 # Terminal 1: the service on http://localhost:3002, token `dev-token`
-nx serve component-builder
+nx serve builder
 
 # Or the image production runs, built from the repo root
-docker build -f apps/component-builder/Dockerfile -t component-builder .
-docker run --rm -p 3002:3002 -e COMPONENT_BUILDER_TOKEN=dev-token component-builder
+docker build -f apps/builder/Dockerfile -t builder .
+docker run --rm -p 3002:3002 -e BUILDER_TOKEN=dev-token builder
 ```
 
 ```sh
 # apps/cms/.env.local — unset both to build in-process again
-COMPONENT_BUILDER_URL=http://localhost:3002
-COMPONENT_BUILDER_TOKEN=dev-token
+BUILDER_URL=http://localhost:3002
+BUILDER_TOKEN=dev-token
 ```
 
 The same two values reach the deployed cms apps from Infisical (`/apps/cms/`),
-and the service reads its token from `/apps/component-builder/`. On Fly the url
-is the service's public address, `https://cdwr-component-builder.fly.dev`; the
-token is what keeps it closed. Deployed without a token it stays up and refuses
-every build, so the missing secret shows in the admin rather than as a failed
-deploy.
+and the service reads its token from `/apps/builder/`. On Fly the url
+is the service's public address, `https://cdwr-builder.fly.dev`; the
+token is what keeps it closed. Preview apps are named after their pull
+request, so the preview value carries the placeholder every app url does,
+`https://cdwr-builder-pr-${PR_NUMBER}.fly.dev`, expanded by the cms at boot.
+It resolves only when that PR deployed the builder, which happens when the
+builder changed; otherwise `cdwr fly deploy` sends it there. Deployed without
+a token the service stays up and refuses every build, so a missing secret
+shows in the admin rather than as a failed deploy.
 
 #### CMS admin components + import map
 
