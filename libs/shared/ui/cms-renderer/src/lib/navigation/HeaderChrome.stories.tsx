@@ -1,4 +1,7 @@
-import type { NavigationItem } from '@codeware/shared/util/payload-api';
+import type {
+  NavigationItem,
+  NavigationLink
+} from '@codeware/shared/util/payload-api';
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -28,7 +31,8 @@ const meta = {
 
 export default meta;
 
-const link = (key: string, label: string): NavigationItem => ({
+const link = (key: string, label: string): NavigationLink => ({
+  kind: 'link',
   appearance: 'link',
   collection: 'pages',
   key,

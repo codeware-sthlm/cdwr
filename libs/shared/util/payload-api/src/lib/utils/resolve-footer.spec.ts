@@ -6,6 +6,7 @@ import type { NavigationItem } from './types';
 
 const navigationTree: Array<NavigationItem> = [
   {
+    kind: 'link',
     appearance: 'link',
     collection: 'pages',
     key: 'nav-1',
@@ -13,6 +14,7 @@ const navigationTree: Array<NavigationItem> = [
     url: '/about'
   },
   {
+    kind: 'link',
     appearance: 'link',
     collection: 'posts',
     key: 'nav-2',
@@ -58,6 +60,32 @@ describe('resolveFooter', () => {
       tagline: null,
       variant: 'standard'
     });
+  });
+
+  it('flattens navigation groups into their links', () => {
+    const footer = resolveFooter(makeSettings(), [
+      navigationTree[0],
+      {
+        kind: 'group',
+        key: 'group-1',
+        label: 'More',
+        children: [
+          {
+            kind: 'link',
+            appearance: 'link',
+            collection: 'posts',
+            key: 'nav-3',
+            label: 'Blog',
+            url: '/posts/blog'
+          }
+        ]
+      }
+    ]);
+
+    expect(footer?.links).toEqual([
+      { key: 'nav-1', label: 'About', newTab: false, url: '/about' },
+      { key: 'nav-3', label: 'Blog', newTab: false, url: '/posts/blog' }
+    ]);
   });
 
   it('renders no links when links are turned off', () => {

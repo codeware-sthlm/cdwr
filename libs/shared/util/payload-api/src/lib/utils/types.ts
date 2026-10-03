@@ -118,21 +118,23 @@ export type MethodOptions<T extends RestApiMethod> = T extends 'GET'
 export type NavigationAppearance = 'link' | 'button';
 
 /**
- * Navigation tree item.
+ * Navigation tree link to a page or post.
  */
-export type NavigationItem = {
+export type NavigationLink = {
+  kind: 'link';
+
   /**
-   * How the header draws the item.
+   * How the header draws the link.
    */
   appearance: NavigationAppearance;
 
   /**
-   * The collection for the navigation item.
+   * The collection for the navigation link.
    */
   collection: NavigationReferenceCollection;
 
   /**
-   * Unique identifier for the navigation item.
+   * Unique identifier for the navigation link.
    */
   key: string;
 
@@ -142,12 +144,39 @@ export type NavigationItem = {
   label: string;
 
   /**
-   * The URL of the navigation item as a `collection/slug` string.
+   * The URL of the navigation link as a `collection/slug` string.
    *
    * Use `findDoc` to fetch the document from the CMS.
    */
   url: string;
 };
+
+/**
+ * Navigation tree group, a label that opens to its links.
+ */
+export type NavigationGroup = {
+  kind: 'group';
+
+  /**
+   * Unique identifier for the navigation group.
+   */
+  key: string;
+
+  /**
+   * Group label in the language declared in the request.
+   */
+  label: string;
+
+  /**
+   * Links in the group, at least one.
+   */
+  children: NavigationLink[];
+};
+
+/**
+ * Navigation tree item.
+ */
+export type NavigationItem = NavigationLink | NavigationGroup;
 
 /**
  * Base options for all requests.
