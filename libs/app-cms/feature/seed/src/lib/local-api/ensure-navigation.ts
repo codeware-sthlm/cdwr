@@ -2,11 +2,20 @@ import { getId } from '@codeware/app-cms/util/misc';
 import type { Navigation } from '@codeware/shared/util/payload-types';
 import type { Payload, TypedLocale } from 'payload';
 
+type NavigationItem = NonNullable<Pick<Navigation, 'items'>['items']>[number];
+
 // Refine the model to type safe the data
 type NavigationReference = Pick<
-  NonNullable<Pick<Navigation, 'items'>['items']>[number],
-  'reference' | 'customLabel' | 'labelSource' | 'appearance'
->;
+  NavigationItem,
+  'customLabel' | 'labelSource' | 'appearance'
+> & { reference: NonNullable<NavigationItem['reference']> };
+
+const isGroup = (item: NavigationItem) => item.type === 'group';
+
+const hasReference = (
+  item: NavigationItem
+): item is NavigationItem & Pick<NavigationReference, 'reference'> =>
+  !!item.reference;
 export type NavigationData = NonNullable<Pick<Navigation, 'tenant'>> & {
   items: Array<NavigationReference>;
 };
@@ -52,8 +61,6 @@ export async function ensureNavigation(
     throw new Error('Tenant is required');
   }
 
-  let itemsToAdd: Array<NavigationReference> = [];
-
   // Check if the navigation exists with the given tenant
   const navigations = await payload.find({
     collection: 'navigation',
@@ -70,24 +77,32 @@ export async function ensureNavigation(
 
     // An item whose page was deleted keeps its row but loses its reference,
     // and it points at nothing — so it is not navigation and is left behind
-    // rather than compared against or written back
-    const kept = (storedItems ?? []).filter((item) => item.reference);
+    // rather than compared against or written back. A group has no reference
+    // of its own and is kept as it is
+    const kept = (storedItems ?? []).filter(
+      (item) => isGroup(item) || hasReference(item)
+    );
     const dangling = (storedItems?.length ?? 0) - kept.length;
 
-    const sameTarget = (a: NavigationReference, b: NavigationReference) =>
+    const sameTarget = (
+      a: Pick<NavigationReference, 'reference'>,
+      b: Pick<NavigationReference, 'reference'>
+    ) =>
       a.reference.relationTo === b.reference.relationTo &&
       getId(a.reference.value) === getId(b.reference.value);
 
     const missingItems = dataItems.filter(
-      (dataItem) => !kept.some((item) => sameTarget(item, dataItem))
+      (dataItem) =>
+        !kept.some((item) => hasReference(item) && sameTarget(item, dataItem))
     );
 
     // What the data says about an item both name, when the data is the truth
     let restated = 0;
     const items = kept.map((item) => {
-      const stated = definitionWins
-        ? dataItems.find((dataItem) => sameTarget(item, dataItem))
-        : undefined;
+      const stated =
+        definitionWins && hasReference(item)
+          ? dataItems.find((dataItem) => sameTarget(item, dataItem))
+          : undefined;
       if (
         !stated ||
         ((stated.appearance ?? 'link') === (item.appearance ?? 'link') &&
@@ -110,29 +125,24 @@ export async function ensureNavigation(
     // stored item was dangling. Falling through to create would give the
     // tenant a second navigation
     if (missingItems.length || dangling || restated) {
-      itemsToAdd = items
-        .concat(missingItems)
-        .map(
-          ({
-            appearance = 'link',
-            customLabel,
-            id,
-            labelSource = 'document',
-            reference
-          }) => ({
-            id,
-            appearance,
-            customLabel,
-            reference,
-            labelSource
-          })
-        );
+      const itemsToUpdate = items.concat(missingItems).map((item) =>
+        isGroup(item)
+          ? item
+          : {
+              id: item.id,
+              type: 'link' as const,
+              appearance: item.appearance ?? 'link',
+              customLabel: item.customLabel,
+              reference: item.reference,
+              labelSource: item.labelSource ?? 'document'
+            }
+      );
 
       await payload.update({
         collection: 'navigation',
         id: docId,
         data: {
-          items: itemsToAdd
+          items: itemsToUpdate
         },
         locale,
         req: { transactionID }
@@ -147,7 +157,7 @@ export async function ensureNavigation(
 
   // No navigation found, create one with data items
 
-  itemsToAdd = dataItems.map(
+  const itemsToAdd = dataItems.map(
     ({
       appearance = 'link',
       customLabel,

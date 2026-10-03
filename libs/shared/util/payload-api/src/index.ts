@@ -10,7 +10,9 @@ export type {
   FooterLink,
   MethodOptions,
   NavigationAppearance,
+  NavigationGroup,
   NavigationItem,
+  NavigationLink,
   RequestBaseOptions
 } from './lib/utils/types';
 
