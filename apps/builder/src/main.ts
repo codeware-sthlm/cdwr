@@ -7,11 +7,9 @@ import { createApp } from './app';
 // Without a token the service still answers its health check, so a deploy
 // that is missing the secret goes through and says so here instead of
 // crash-looping; every build is refused until the token arrives
-const token = process.env['COMPONENT_BUILDER_TOKEN'] || null;
+const token = process.env['BUILDER_TOKEN'] || null;
 if (token === null) {
-  console.error(
-    '[component-builder] COMPONENT_BUILDER_TOKEN is not set: builds are refused.'
-  );
+  console.error('[builder] BUILDER_TOKEN is not set: builds are refused.');
 }
 
 const port = Number(process.env['PORT'] ?? 3002);
@@ -26,7 +24,7 @@ const app = createApp({
 });
 
 const server = serve({ fetch: app.fetch, port }, ({ port: listening }) => {
-  console.log(`[component-builder] Listening on port ${listening}`);
+  console.log(`[builder] Listening on port ${listening}`);
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

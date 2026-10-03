@@ -30,8 +30,8 @@ export const defaultDeps: BuildDeps = {
   },
   service: () => {
     const env = getEnv(false);
-    return env?.COMPONENT_BUILDER_URL
-      ? { url: env.COMPONENT_BUILDER_URL, token: env.COMPONENT_BUILDER_TOKEN }
+    return env?.BUILDER_URL
+      ? { url: env.BUILDER_URL, token: env.BUILDER_TOKEN }
       : undefined;
   },
   fetch: (input, init) => fetch(input, init)

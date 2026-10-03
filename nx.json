@@ -135,7 +135,7 @@
         }
       },
       "apps": {
-        "projects": ["cms", "component-builder", "web"],
+        "projects": ["cms", "builder", "web"],
         "projectsRelationship": "independent",
         "version": {
           "updateDependents": "never"

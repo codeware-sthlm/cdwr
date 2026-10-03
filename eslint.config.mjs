@@ -123,9 +123,9 @@ export default [
               ]
             },
             {
-              sourceTag: 'scope:component-builder',
+              sourceTag: 'scope:builder',
               onlyDependOnLibsWithTags: [
-                'scope:component-builder',
+                'scope:builder',
                 'scope:app-cms',
                 'scope:shared'
               ]
