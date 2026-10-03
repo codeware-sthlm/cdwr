@@ -219,6 +219,11 @@ export const EnvSchema = withEnvVars(
         path: ['SIGNATURE_SECRET']
       }
     )
+    // The build service refuses every request without its token
+    .refine((data) => !data.BUILDER_URL || Boolean(data.BUILDER_TOKEN), {
+      message: 'BUILDER_TOKEN is required when BUILDER_URL is set',
+      path: ['BUILDER_TOKEN']
+    })
     // PAYLOAD_API_KEY is required for tenant deployments
     .refine(
       (data) => {

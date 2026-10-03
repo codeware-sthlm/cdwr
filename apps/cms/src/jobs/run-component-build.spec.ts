@@ -51,7 +51,8 @@ describe('runComponentBuild', () => {
 
   it('does not fall back to the local toolchain when the service fails', async () => {
     const { deps, buildLocally } = depsWith(() => ({
-      url: 'http://builder:3002'
+      url: 'http://builder:3002',
+      token: 't'
     }));
     deps.fetch = jest.fn().mockRejectedValue(new Error('refused'));
 

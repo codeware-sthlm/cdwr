@@ -30,7 +30,8 @@ export const defaultDeps: BuildDeps = {
   },
   service: () => {
     const env = getEnv(false);
-    return env?.BUILDER_URL
+    // The schema holds the token to the url, so both are there or neither
+    return env?.BUILDER_URL && env.BUILDER_TOKEN
       ? { url: env.BUILDER_URL, token: env.BUILDER_TOKEN }
       : undefined;
   },

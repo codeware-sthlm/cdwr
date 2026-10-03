@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 import { releaseChangelog } from 'nx/release';
 
@@ -29,7 +29,7 @@ export type AppChangelogOptions = {
 
 const tagExists = (tag: string): boolean => {
   try {
-    execSync(`git rev-parse -q --verify refs/tags/${tag}`, {
+    execFileSync('git', ['rev-parse', '-q', '--verify', `refs/tags/${tag}`], {
       stdio: 'ignore'
     });
     return true;
@@ -39,7 +39,9 @@ const tagExists = (tag: string): boolean => {
 };
 
 const rootCommit = (): string =>
-  execSync('git rev-list --max-parents=0 HEAD', { encoding: 'utf8' })
+  execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], {
+    encoding: 'utf8'
+  })
     .trim()
     .split('\n')[0];
 

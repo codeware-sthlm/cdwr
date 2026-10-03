@@ -82,6 +82,61 @@ describe('component builder app', () => {
       expect(build).toHaveBeenCalledWith({ ...valid, propsSchema });
     });
 
+    it('turns requests away above the pending cap', async () => {
+      let release: (() => void) | undefined;
+      const slow: BuildHandler = () =>
+        new Promise((resolve) => {
+          release = () => resolve(built);
+        });
+      const app = createApp({ token: TOKEN, build: slow, maxPending: 1 });
+      const request = () =>
+        app.request('/build', {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${TOKEN}`,
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify(valid)
+        });
+
+      const first = request();
+      // Until the first build has started, nothing is pending
+      while (release === undefined) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      const second = await request();
+      expect(second.status).toBe(503);
+
+      release?.();
+      expect((await first).status).toBe(200);
+
+      // The slot is free again once the build is done
+      const third = request();
+      release = undefined;
+      while (release === undefined) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      (release as () => void)();
+      expect((await third).status).toBe(200);
+    });
+
+    it('gives up on a build that passes the deadline', async () => {
+      const never: BuildHandler = () => new Promise(() => undefined);
+      const app = createApp({ token: TOKEN, build: never, deadlineMs: 20 });
+
+      const response = await app.request('/build', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${TOKEN}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(valid)
+      });
+
+      expect(response.status).toBe(504);
+      expect(await response.json()).toMatchObject({ ok: false });
+    });
+
     it('returns a failed build as a 200', async () => {
       const failed = {
         ok: false,
