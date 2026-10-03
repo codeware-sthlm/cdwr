@@ -159,6 +159,17 @@ export default memo(function C({ n }: { n?: number | null }) { return <p>{n}</p>
     }
   );
 
+  it.each([
+    'lucide-react/../../package.json',
+    'zod/./package.json',
+    'recharts//package.json'
+  ])('keeps a bundled subpath inside its package: %s', async (specifier) => {
+    const diagnostics = await failed(
+      `import x from '${specifier}';\nexport default () => <p>{String(x)}</p>;\n`
+    );
+    expect(diagnostics[0]?.message).toContain(`"${specifier}"`);
+  });
+
   it('rejects dynamic imports of other modules', async () => {
     const diagnostics = await failed(
       `export default () => { import('fs'); return <p />; };`

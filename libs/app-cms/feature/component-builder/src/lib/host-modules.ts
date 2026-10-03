@@ -19,6 +19,18 @@ export const DEFAULT_HOST_MODULES = {
 export const hostShim = (specifier: string): string =>
   `module.exports = globalThis.${HOST_REGISTRY_GLOBAL}[${JSON.stringify(specifier)}];`;
 
-/** True when `specifier` is `pkg` or a subpath of `pkg`. */
+/**
+ * True when `specifier` is `pkg` or a subpath of `pkg`.
+ *
+ * A subpath that climbs (`pkg/../x`) would let the bundler read any file the
+ * builder can, so the subpath has to stay inside the package.
+ */
 export const matchesPackage = (specifier: string, pkg: string): boolean =>
-  specifier === pkg || specifier.startsWith(`${pkg}/`);
+  specifier === pkg ||
+  (specifier.startsWith(`${pkg}/`) &&
+    !specifier
+      .slice(pkg.length + 1)
+      .split('/')
+      .some(
+        (segment) => segment === '..' || segment === '.' || segment === ''
+      ));
