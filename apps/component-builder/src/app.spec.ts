@@ -37,6 +37,21 @@ describe('component builder app', () => {
   });
 
   describe('POST /build', () => {
+    it('refuses every build while the service has no token', async () => {
+      const build: BuildHandler = jest.fn().mockResolvedValue(built);
+      const unconfigured = createApp({ token: null, build });
+      const response = await unconfigured.request('/build', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${TOKEN}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(valid)
+      });
+      expect(response.status).toBe(503);
+      expect(build).not.toHaveBeenCalled();
+    });
+
     it('refuses a request without a token', async () => {
       const { post, build } = setup();
 

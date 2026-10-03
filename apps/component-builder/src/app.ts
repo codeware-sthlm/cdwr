@@ -16,15 +16,21 @@ export type BuildHandler = (
 ) => Promise<ComponentBuildResult>;
 
 export type AppOptions = {
-  /** Bearer token a build request must carry */
-  token: string;
+  /** Bearer token a build request must carry; without one every build is refused */
+  token: string | null;
   build: BuildHandler;
 };
 
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
 /** Compares the header's bearer token with the expected one in constant time. */
-const isAuthorized = (header: string | undefined, token: string): boolean => {
+const isAuthorized = (
+  header: string | undefined,
+  token: string | null
+): boolean => {
+  if (token === null) {
+    return false;
+  }
   const presented = header?.startsWith('Bearer ') ? header.slice(7) : '';
   // Equal-length digests, so the comparison does not leak the token's length
   return timingSafeEqual(digest(presented), digest(token)) && presented !== '';
@@ -42,10 +48,17 @@ export const createApp = ({ token, build }: AppOptions) => {
 
   app.post(
     '/build',
-    async (c, next) =>
-      isAuthorized(c.req.header('authorization'), token)
+    async (c, next) => {
+      if (token === null) {
+        return c.json(
+          { error: 'The build service has no token configured.' },
+          503
+        );
+      }
+      return isAuthorized(c.req.header('authorization'), token)
         ? next()
-        : c.json({ error: 'Unauthorized' }, 401),
+        : c.json({ error: 'Unauthorized' }, 401);
+    },
     bodyLimit({
       maxSize: MAX_BODY_BYTES,
       onError: (c) => c.json({ error: 'The body is too large.' }, 413)
