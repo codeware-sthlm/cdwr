@@ -48,7 +48,7 @@ describe('builder service (integration)', () => {
 
   beforeAll(async () => {
     const app = createApp({
-      token: TOKEN,
+      tokens: [TOKEN],
       build: (input) =>
         runComponentBuild(input, { root, cwd: path.join(root, 'apps/builder') })
     });

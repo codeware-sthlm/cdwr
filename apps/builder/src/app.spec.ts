@@ -13,7 +13,7 @@ const built: ComponentBuildResult = {
 };
 
 const setup = (build: BuildHandler = jest.fn().mockResolvedValue(built)) => {
-  const app = createApp({ token: TOKEN, build });
+  const app = createApp({ tokens: [TOKEN], build });
   const post = (body: unknown, headers: Record<string, string> = {}) =>
     app.request('/build', {
       method: 'POST',
@@ -39,7 +39,7 @@ describe('component builder app', () => {
   describe('POST /build', () => {
     it('refuses every build while the service has no token', async () => {
       const build: BuildHandler = jest.fn().mockResolvedValue(built);
-      const unconfigured = createApp({ token: null, build });
+      const unconfigured = createApp({ tokens: [], build });
       const response = await unconfigured.request('/build', {
         method: 'POST',
         headers: {
@@ -50,6 +50,24 @@ describe('component builder app', () => {
       });
       expect(response.status).toBe(503);
       expect(build).not.toHaveBeenCalled();
+    });
+
+    it('accepts either token during a rollover and refuses others', async () => {
+      const build: BuildHandler = jest.fn().mockResolvedValue(built);
+      const app = createApp({ tokens: ['new-token', 'old-token'], build });
+      const post = (token: string) =>
+        app.request('/build', {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${token}`,
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify(valid)
+        });
+
+      expect((await post('new-token')).status).toBe(200);
+      expect((await post('old-token')).status).toBe(200);
+      expect((await post('older-token')).status).toBe(401);
     });
 
     it('refuses a request without a token', async () => {
@@ -88,7 +106,7 @@ describe('component builder app', () => {
         new Promise((resolve) => {
           release = () => resolve(built);
         });
-      const app = createApp({ token: TOKEN, build: slow, maxPending: 1 });
+      const app = createApp({ tokens: [TOKEN], build: slow, maxPending: 1 });
       const request = () =>
         app.request('/build', {
           method: 'POST',
@@ -122,7 +140,7 @@ describe('component builder app', () => {
 
     it('gives up on a build that passes the deadline', async () => {
       const never: BuildHandler = () => new Promise(() => undefined);
-      const app = createApp({ token: TOKEN, build: never, deadlineMs: 20 });
+      const app = createApp({ tokens: [TOKEN], build: never, deadlineMs: 20 });
 
       const response = await app.request('/build', {
         method: 'POST',

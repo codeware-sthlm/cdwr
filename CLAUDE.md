@@ -126,6 +126,9 @@ builder changed; otherwise `cdwr fly deploy` sends it there. Deployed without
 a token the service stays up and refuses every build, so a missing secret
 shows in the admin rather than as a failed deploy.
 
+Rotating the token is `cdwr builder rotate-token`: the service accepts the previous token
+(`BUILDER_TOKEN_PREVIOUS`) while the cms switches over, so nothing is refused on the way.
+
 #### CMS admin components + import map
 
 Payload resolves custom admin components (`admin.components.*` in `payload.config.ts`) through the

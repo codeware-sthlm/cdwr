@@ -16,8 +16,11 @@ export type BuildHandler = (
 ) => Promise<ComponentBuildResult>;
 
 export type AppOptions = {
-  /** Bearer token a build request must carry; without one every build is refused */
-  token: string | null;
+  /**
+   * Bearer tokens a build request may carry (the active one, and the previous
+   * one during a rollover); with none every build is refused
+   */
+  tokens: readonly string[];
   build: BuildHandler;
   /** Requests in flight, queued or running, before new ones are turned away */
   maxPending?: number;
@@ -40,17 +43,18 @@ class DeadlineError extends Error {}
 
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
-/** Compares the header's bearer token with the expected one in constant time. */
+/** Compares the header's bearer token with each accepted one in constant time. */
 const isAuthorized = (
   header: string | undefined,
-  token: string | null
+  tokens: readonly string[]
 ): boolean => {
-  if (token === null) {
-    return false;
-  }
   const presented = header?.startsWith('Bearer ') ? header.slice(7) : '';
-  // Equal-length digests, so the comparison does not leak the token's length
-  return timingSafeEqual(digest(presented), digest(token)) && presented !== '';
+  // Equal-length digests, so the comparison does not leak the token's length;
+  // every token is compared, so a match does not show in the timing either
+  const matches = tokens.map((token) =>
+    timingSafeEqual(digest(presented), digest(token))
+  );
+  return matches.includes(true) && presented !== '';
 };
 
 const failure = (message: string): ComponentBuildResult => ({
@@ -59,7 +63,7 @@ const failure = (message: string): ComponentBuildResult => ({
 });
 
 export const createApp = ({
-  token,
+  tokens,
   build,
   maxPending = DEFAULT_MAX_PENDING,
   deadlineMs = DEFAULT_DEADLINE_MS
@@ -72,13 +76,13 @@ export const createApp = ({
   app.post(
     '/build',
     async (c, next) => {
-      if (token === null) {
+      if (tokens.length === 0) {
         return c.json(
           { error: 'The build service has no token configured.' },
           503
         );
       }
-      return isAuthorized(c.req.header('authorization'), token)
+      return isAuthorized(c.req.header('authorization'), tokens)
         ? next()
         : c.json({ error: 'Unauthorized' }, 401);
     },
