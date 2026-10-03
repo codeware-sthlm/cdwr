@@ -75,6 +75,17 @@ export async function buildCustomComponent(
     return 'skipped';
   }
 
+  // Filled from the name on save; the type keeps it optional
+  if (!component.slug) {
+    await writeBuild(payload, component, {
+      status: 'failed',
+      diagnostics: [
+        errorDiagnostic('The component has no slug to name its element by.')
+      ]
+    });
+    return 'failed';
+  }
+
   await writeBuild(payload, component, { status: 'building' });
 
   let result: BuildComponentResult;
