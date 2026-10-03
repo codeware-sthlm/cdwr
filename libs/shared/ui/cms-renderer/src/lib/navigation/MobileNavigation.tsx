@@ -2,7 +2,10 @@
 
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { t } from '@codeware/shared/util/i18n';
-import type { NavigationItem } from '@codeware/shared/util/payload-api';
+import type {
+  NavigationItem,
+  NavigationLink
+} from '@codeware/shared/util/payload-api';
 import {
   Popover,
   PopoverBackdrop,
@@ -16,14 +19,60 @@ import { mobileNavChrome } from '../theme/chrome';
 import { isActivePath } from '../utils/active-path';
 import { handleAsRoute } from '../utils/internal-link';
 
+function MobileLink({
+  close,
+  link
+}: {
+  close: () => void;
+  link: NavigationLink;
+}) {
+  const { getCurrentPath, navigate } = usePayload();
+  const { appearance, label, url } = link;
+  const isActive = isActivePath(getCurrentPath(), url);
+
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    // A modified click opens elsewhere, so the menu stays put
+    if (!handleAsRoute(e)) return;
+    close();
+    navigate(url);
+  };
+
+  if (appearance === 'button') {
+    return (
+      <li className="pt-4">
+        <Button asChild>
+          <a href={url} onClick={handleClick}>
+            {label}
+          </a>
+        </Button>
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <a
+        href={url}
+        onClick={handleClick}
+        className={
+          isActive
+            ? 'text-core-nav-link-active hover:text-core-nav-link-hover block py-2'
+            : 'hover:text-core-nav-link-hover block py-2'
+        }
+      >
+        {label}
+      </a>
+    </li>
+  );
+}
+
 export function MobileNavigation({
   navigationTree,
   ...props
 }: React.ComponentPropsWithoutRef<typeof Popover> & {
   navigationTree: NavigationItem[];
 }) {
-  const { chrome, getCurrentPath, navigate, locale } = usePayload();
-  const pathname = getCurrentPath();
+  const { chrome, locale } = usePayload();
 
   if (navigationTree.length === 0) {
     return null;
@@ -50,7 +99,10 @@ export function MobileNavigation({
         {({ close }) => (
           <>
             <div className="flex flex-row-reverse items-center justify-between">
-              <PopoverButton aria-label="Close menu" className="-m-1 p-1">
+              <PopoverButton
+                aria-label={t(locale, 'navigation.close')}
+                className="-m-1 p-1"
+              >
                 <XMarkIcon className="size-6 hover:cursor-pointer" />
               </PopoverButton>
               <h2 className="text-sm font-medium">
@@ -59,49 +111,26 @@ export function MobileNavigation({
             </div>
             <nav aria-label={t(locale, 'navigation.menu')} className="mt-6">
               <ul className="text-core-nav-link -my-2">
-                {navigationTree.map((item) => {
-                  if (item.kind !== 'link') return null;
-
-                  const { appearance, key, label, url } = item;
-                  const isActive = isActivePath(pathname, url);
-
-                  const handleClick = (
-                    e: React.MouseEvent<HTMLAnchorElement>
-                  ) => {
-                    // A modified click opens elsewhere, so the menu stays put
-                    if (!handleAsRoute(e)) return;
-                    close();
-                    navigate(url);
-                  };
-
-                  if (appearance === 'button') {
-                    return (
-                      <li key={key} className="pt-4">
-                        <Button asChild>
-                          <a href={url} onClick={handleClick}>
-                            {label}
-                          </a>
-                        </Button>
-                      </li>
-                    );
-                  }
-
-                  return (
-                    <li key={key}>
-                      <a
-                        href={url}
-                        onClick={handleClick}
-                        className={
-                          isActive
-                            ? 'text-core-nav-link-active hover:text-core-nav-link-hover block py-2'
-                            : 'hover:text-core-nav-link-hover block py-2'
-                        }
-                      >
-                        {label}
-                      </a>
+                {navigationTree.map((item) =>
+                  item.kind === 'group' ? (
+                    <li key={item.key}>
+                      <p className="text-muted-foreground pt-4 pb-1 text-xs font-medium tracking-[0.12em] uppercase">
+                        {item.label}
+                      </p>
+                      <ul className="pl-3">
+                        {item.children.map((child) => (
+                          <MobileLink
+                            key={child.key}
+                            close={close}
+                            link={child}
+                          />
+                        ))}
+                      </ul>
                     </li>
-                  );
-                })}
+                  ) : (
+                    <MobileLink key={item.key} close={close} link={item} />
+                  )
+                )}
               </ul>
             </nav>
           </>

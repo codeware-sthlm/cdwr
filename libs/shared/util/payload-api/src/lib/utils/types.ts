@@ -27,8 +27,15 @@ export type FooterData = {
 
   /**
    * Links to display, resolved from the navigation tree or from custom links.
+   * Flat: a navigation group's children are included.
    */
   links: Array<FooterLink>;
+
+  /**
+   * The same links in groups, for a footer that draws columns. Always at least
+   * one group when there are links; a group with a `null` label has no heading.
+   */
+  groups: Array<FooterLinkGroup>;
 
   /**
    * Links to the privacy and terms pages, shown beside the copyright whatever
@@ -57,6 +64,23 @@ export type FooterData = {
  * Footer layout size.
  */
 export type FooterVariant = 'compact' | 'standard' | 'expanded';
+
+/**
+ * A run of footer links under one heading.
+ */
+export type FooterLinkGroup = {
+  /**
+   * Unique identifier for the group.
+   */
+  key: string;
+
+  /**
+   * Heading, or `null` for links that sit outside any navigation group.
+   */
+  label: string | null;
+
+  links: Array<FooterLink>;
+};
 
 /**
  * Footer link item.
