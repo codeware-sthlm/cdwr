@@ -8,7 +8,7 @@ import type { ComponentBuildInput } from './run-component-build';
 /** A build service that takes builds over from this process */
 export type BuildService = {
   url: string;
-  token?: string;
+  token: string;
 };
 
 /** Longest a build may take before it is given up on, in milliseconds */
@@ -52,7 +52,7 @@ export const buildRemotely = async (
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {})
+        authorization: `Bearer ${token}`
       },
       body: JSON.stringify({ tagName, source, propsSchema }),
       signal: AbortSignal.timeout(REMOTE_BUILD_TIMEOUT_MS)

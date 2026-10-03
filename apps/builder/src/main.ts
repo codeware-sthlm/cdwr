@@ -1,8 +1,20 @@
 import { runComponentBuild } from '@codeware/app-cms/feature/component-builder';
+import { withInfisical } from '@codeware/shared/feature/infisical';
 import { createTurnQueue } from '@codeware/shared/util/pure';
 import { serve } from '@hono/node-server';
 
 import { createApp } from './app';
+
+// Deployed, the token lives in Infisical under the app's folder, as the cms
+// keeps its own; the deploy action only hands over the Infisical credentials
+if (!process.env['BUILDER_TOKEN'] && process.env['INFISICAL_CLIENT_ID']) {
+  await withInfisical({
+    environment: process.env['DEPLOY_ENV'],
+    filter: { path: '/apps/builder', recurse: true },
+    injectEnv: true,
+    silent: true
+  });
+}
 
 // Without a token the service still answers its health check, so a deploy
 // that is missing the secret goes through and says so here instead of

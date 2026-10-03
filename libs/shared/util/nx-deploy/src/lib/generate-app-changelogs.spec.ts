@@ -1,11 +1,11 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 import { releaseChangelog } from 'nx/release';
 
 import { generateAppChangelogs } from './generate-app-changelogs';
 
 vi.mock('nx/release', () => ({ releaseChangelog: vi.fn() }));
-vi.mock('node:child_process', () => ({ execSync: vi.fn() }));
+vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }));
 
 describe('generateAppChangelogs', () => {
   const mockReleaseChangelog = vi.mocked(releaseChangelog);
@@ -35,12 +35,12 @@ describe('generateAppChangelogs', () => {
     vi.clearAllMocks();
     withContents({});
     // Every previous tag exists unless a test says otherwise
-    vi.mocked(execSync).mockReturnValue('');
+    vi.mocked(execFileSync).mockReturnValue('');
   });
 
   it('should start a first release from the root commit', async () => {
-    vi.mocked(execSync).mockImplementation((command) => {
-      if (String(command).includes('refs/tags/api-0.0.0')) {
+    vi.mocked(execFileSync).mockImplementation((_file, args) => {
+      if ((args ?? []).includes('refs/tags/api-0.0.0')) {
         throw new Error('not found');
       }
       return '';

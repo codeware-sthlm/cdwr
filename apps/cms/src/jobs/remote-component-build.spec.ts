@@ -111,14 +111,4 @@ describe('buildRemotely', () => {
     expect(message(result)).toHaveLength(1);
     expect(message(result)[0]).toContain('The build service did not answer');
   });
-
-  it('sends no authorization header without a token', async () => {
-    const fetchMock = reply(built);
-
-    await buildRemotely(input, { url: service.url }, fetchMock);
-
-    expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty(
-      'authorization'
-    );
-  });
 });
