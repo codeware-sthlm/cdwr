@@ -51,6 +51,16 @@ describe('resolveFooter', () => {
       appName: 'Acme',
       contact: [],
       copyright: '© {year} Acme',
+      groups: [
+        {
+          key: 'links',
+          label: null,
+          links: [
+            { key: 'nav-1', label: 'About', newTab: false, url: '/about' },
+            { key: 'nav-2', label: 'News', newTab: false, url: '/posts/news' }
+          ]
+        }
+      ],
       links: [
         { key: 'nav-1', label: 'About', newTab: false, url: '/about' },
         { key: 'nav-2', label: 'News', newTab: false, url: '/posts/news' }
@@ -86,6 +96,20 @@ describe('resolveFooter', () => {
       { key: 'nav-1', label: 'About', newTab: false, url: '/about' },
       { key: 'nav-3', label: 'Blog', newTab: false, url: '/posts/blog' }
     ]);
+    expect(footer?.groups).toEqual([
+      {
+        key: 'links',
+        label: null,
+        links: [{ key: 'nav-1', label: 'About', newTab: false, url: '/about' }]
+      },
+      {
+        key: 'group-1',
+        label: 'More',
+        links: [
+          { key: 'nav-3', label: 'Blog', newTab: false, url: '/posts/blog' }
+        ]
+      }
+    ]);
   });
 
   it('renders no links when links are turned off', () => {
@@ -95,6 +119,7 @@ describe('resolveFooter', () => {
     );
 
     expect(footer?.links).toEqual([]);
+    expect(footer?.groups).toEqual([]);
   });
 
   it('resolves custom links to reference paths and custom URLs', () => {

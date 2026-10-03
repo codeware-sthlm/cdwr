@@ -3,7 +3,13 @@ import type {
   SiteSettingsFooterLink
 } from '@codeware/shared/util/payload-types';
 
-import type { FooterData, FooterLink, NavigationItem } from './types';
+import type {
+  FooterData,
+  FooterLink,
+  FooterLinkGroup,
+  NavigationItem,
+  NavigationLink
+} from './types';
 
 /**
  * Resolve a custom footer link into a path and a label.
@@ -105,19 +111,54 @@ export const resolveFooter = (
     return null;
   }
 
-  const links: Array<FooterLink> =
+  const toFooterLink = ({ key, label, url }: NavigationLink): FooterLink => ({
+    key,
+    label,
+    newTab: false,
+    url
+  });
+
+  const linkGroups: Array<FooterLinkGroup> =
     footer?.linkSource === 'none'
       ? []
       : footer?.linkSource === 'custom'
-        ? (footer.links ?? []).flatMap((item) => resolveLink(item) ?? [])
-        : navigationTree
-            .flatMap((item) => (item.kind === 'group' ? item.children : item))
-            .map(({ key, label, url }) => ({
-              key,
-              label,
-              newTab: false,
-              url
-            }));
+        ? [
+            {
+              key: 'links',
+              label: null,
+              links: (footer.links ?? []).flatMap(
+                (item) => resolveLink(item) ?? []
+              )
+            }
+          ]
+        : [
+            {
+              key: 'links',
+              label: null,
+              links: navigationTree.flatMap((item) =>
+                item.kind === 'link' ? toFooterLink(item) : []
+              )
+            },
+            ...navigationTree.flatMap((item) =>
+              item.kind === 'group'
+                ? {
+                    key: item.key,
+                    label: item.label,
+                    links: item.children.map(toFooterLink)
+                  }
+                : []
+            )
+          ];
+
+  const groups = linkGroups.filter(({ links }) => links.length > 0);
+
+  // Flat in navigation order, for the variants that draw a single row
+  const links =
+    footer?.linkSource === 'none' || footer?.linkSource === 'custom'
+      ? groups.flatMap((group) => group.links)
+      : navigationTree
+          .flatMap((item) => (item.kind === 'group' ? item.children : item))
+          .map(toFooterLink);
 
   const legalLinks = [
     resolveLegalLink('legal-privacy', legal?.privacyPage),
@@ -134,6 +175,7 @@ export const resolveFooter = (
     appName: general.appName,
     contact: footer?.contact ?? [],
     copyright,
+    groups,
     legalLinks,
     links,
     showVersion: footer?.showVersion ?? false,

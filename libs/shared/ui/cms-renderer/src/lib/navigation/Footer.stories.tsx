@@ -72,6 +72,7 @@ const complete: FooterData = {
   appName: 'Codeware Sthlm AB',
   contact,
   copyright: '© {year} Codeware Sthlm AB. All rights reserved.',
+  groups: [{ key: 'links', label: null, links }],
   legalLinks: [
     { key: 'legal-privacy', label: 'Privacy', newTab: false, url: '/privacy' },
     { key: 'legal-terms', label: 'Terms', newTab: false, url: '/terms' }
@@ -104,6 +105,21 @@ export const ExpandedFewLinks: Story = {
     footer: {
       ...complete,
       links: links.slice(0, 2),
+      variant: 'expanded'
+    }
+  }
+};
+
+/** Navigation groups become columns, each under its own heading. */
+export const ExpandedGrouped: Story = {
+  args: {
+    footer: {
+      ...complete,
+      groups: [
+        { key: 'links', label: null, links: links.slice(0, 2) },
+        { key: 'explore', label: 'Explore', links: links.slice(2, 4) },
+        { key: 'company', label: 'Company', links: links.slice(4) }
+      ],
       variant: 'expanded'
     }
   }
