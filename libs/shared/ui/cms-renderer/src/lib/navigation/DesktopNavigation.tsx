@@ -86,11 +86,17 @@ export const DesktopNavigation = forwardRef<
     // unnamed ones are indistinguishable to a screen reader
     <nav ref={ref} aria-label={t(locale, 'navigation.primary')} {...props}>
       <ul className={navChrome({ chrome })}>
-        {navigationTree.map(({ appearance, key, label, url }) => (
-          <NavItem key={key} appearance={appearance} href={url}>
-            {label}
-          </NavItem>
-        ))}
+        {navigationTree.map((item) =>
+          item.kind === 'link' ? (
+            <NavItem
+              key={item.key}
+              appearance={item.appearance}
+              href={item.url}
+            >
+              {item.label}
+            </NavItem>
+          ) : null
+        )}
       </ul>
     </nav>
   );

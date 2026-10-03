@@ -2,18 +2,117 @@ import { enumName } from '@codeware/app-cms/util/db';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
 import { hasNoAdminRoles } from '@codeware/app-cms/util/misc';
 import type { Navigation } from '@codeware/shared/util/payload-types';
-import type { CollectionConfig, Condition } from 'payload';
+import type {
+  ArrayField,
+  CollectionConfig,
+  Condition,
+  RadioField,
+  RelationshipField
+} from 'payload';
 
 import { userOnlyAccess } from '../../security/user-only-access';
 import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
 
+type Item = NonNullable<Navigation['items']>[number];
+
 /**
- * Whether a custom label source is selected.
+ * Whether the item is a link to a page or post; an item saved before groups
+ * existed has no type and is a link.
  */
-const isCustomLabelSource: Condition<
+const isLink: Condition<Navigation, Item> = (_, siblingData) =>
+  siblingData.type !== 'group';
+
+/**
+ * Whether the item is a group of links.
+ */
+const isGroup: Condition<Navigation, Item> = (_, siblingData) =>
+  siblingData.type === 'group';
+
+/**
+ * Whether a link item uses a custom label.
+ */
+const isCustomLinkLabel: Condition<Navigation, Item> = (_, siblingData) =>
+  siblingData.type !== 'group' && siblingData.labelSource === 'custom';
+
+/**
+ * Whether a group child uses a custom label.
+ */
+const isCustomChildLabel: Condition<
   Navigation,
-  NonNullable<Navigation['items']>[number]
+  NonNullable<Item['children']>[number]
 > = (_, siblingData) => siblingData.labelSource === 'custom';
+
+const rowLabel = {
+  RowLabel: '@codeware/apps/cms/components/NavigationArrayRowLabel'
+};
+
+/**
+ * Where an item points, shared by links and group children.
+ */
+const referenceField: RelationshipField = {
+  name: 'reference',
+  type: 'relationship',
+  label: {
+    en: 'Navigate to',
+    sv: 'Navigera till'
+  },
+  relationTo: ['pages', 'posts']
+};
+
+const labelSourceField: RadioField = {
+  name: 'labelSource',
+  type: 'radio',
+  label: false,
+  admin: {
+    layout: 'horizontal'
+  },
+  enumName: enumName('navigation_label_source'),
+  defaultValue: 'document',
+  options: [
+    {
+      label: {
+        en: 'Use document name as link label',
+        sv: 'Använd dokumentets namn som länktext'
+      },
+      value: 'document'
+    },
+    {
+      label: { en: 'Custom link label', sv: 'Anpassad länktext' },
+      value: 'custom'
+    }
+  ]
+};
+
+/**
+ * Links under a group.
+ */
+const childrenField: ArrayField = {
+  name: 'children',
+  type: 'array',
+  interfaceName: 'NavigationArrayChildren',
+  labels: {
+    singular: { en: 'Link', sv: 'Länk' },
+    plural: { en: 'Links', sv: 'Länkar' }
+  },
+  admin: {
+    condition: isGroup,
+    initCollapsed: true,
+    components: rowLabel
+  },
+  fields: [
+    { ...referenceField, required: true },
+    labelSourceField,
+    {
+      name: 'customLabel',
+      type: 'text',
+      label: { en: 'Link label', sv: 'Länktext' },
+      admin: {
+        condition: isCustomChildLabel
+      },
+      required: true
+    }
+  ]
+};
 
 /**
  * Navigation collection.
@@ -51,44 +150,39 @@ const navigation: CollectionConfig = {
       },
       fields: [
         {
-          name: 'reference',
-          type: 'relationship',
-          label: {
-            en: 'Navigate to',
-            sv: 'Navigera till'
-          },
-          relationTo: ['pages', 'posts'],
-          required: true
-        },
-        {
-          name: 'labelSource',
+          name: 'type',
           type: 'radio',
           label: false,
           admin: {
-            layout: 'horizontal'
-          },
-          enumName: enumName('navigation_label_source'),
-          defaultValue: 'document',
-          options: [
-            {
-              label: {
-                en: 'Use document name as link label',
-                sv: 'Använd dokumentets namn som länktext'
-              },
-              value: 'document'
-            },
-            {
-              label: { en: 'Custom link label', sv: 'Anpassad länktext' },
-              value: 'custom'
+            layout: 'horizontal',
+            description: {
+              en: 'A group is a label in the menu that opens to its links; it is not a page itself.',
+              sv: 'En grupp är en rubrik i menyn som öppnar sina länkar; den är inte en sida i sig.'
             }
+          },
+          enumName: enumName('navigation_items_type'),
+          defaultValue: 'link',
+          options: [
+            { label: { en: 'Link', sv: 'Länk' }, value: 'link' },
+            { label: { en: 'Group', sv: 'Grupp' }, value: 'group' }
           ]
+        },
+        {
+          ...referenceField,
+          // Validated only while shown: a group has no reference
+          admin: { condition: isLink },
+          required: true
+        },
+        {
+          ...labelSourceField,
+          admin: { layout: 'horizontal', condition: isLink }
         },
         {
           name: 'customLabel',
           type: 'text',
           label: { en: 'Link label', sv: 'Länktext' },
           admin: {
-            condition: isCustomLabelSource
+            condition: isCustomLinkLabel
           },
           required: true
         },
@@ -97,6 +191,7 @@ const navigation: CollectionConfig = {
           type: 'radio',
           label: { en: 'Appearance', sv: 'Utseende' },
           admin: {
+            condition: isLink,
             layout: 'horizontal',
             description: {
               en: 'A button stands out from the other links, for the one action you want a visitor to take. The footer lists it as a link.',
@@ -109,13 +204,19 @@ const navigation: CollectionConfig = {
             { label: { en: 'Link', sv: 'Länk' }, value: 'link' },
             { label: { en: 'Button', sv: 'Knapp' }, value: 'button' }
           ]
-        }
+        },
+        {
+          name: 'label',
+          type: 'text',
+          label: { en: 'Group label', sv: 'Gruppens rubrik' },
+          admin: { condition: isGroup },
+          required: true
+        },
+        childrenField
       ],
       admin: {
         initCollapsed: true,
-        components: {
-          RowLabel: '@codeware/apps/cms/components/NavigationArrayRowLabel'
-        }
+        components: rowLabel
       }
     }
   ]

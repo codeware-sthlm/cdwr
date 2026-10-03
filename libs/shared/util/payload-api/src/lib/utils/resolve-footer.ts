@@ -110,12 +110,14 @@ export const resolveFooter = (
       ? []
       : footer?.linkSource === 'custom'
         ? (footer.links ?? []).flatMap((item) => resolveLink(item) ?? [])
-        : navigationTree.map(({ key, label, url }) => ({
-            key,
-            label,
-            newTab: false,
-            url
-          }));
+        : navigationTree
+            .flatMap((item) => (item.kind === 'group' ? item.children : item))
+            .map(({ key, label, url }) => ({
+              key,
+              label,
+              newTab: false,
+              url
+            }));
 
   const legalLinks = [
     resolveLegalLink('legal-privacy', legal?.privacyPage),
