@@ -377,13 +377,25 @@ export type TourDefinition = Pick<
   itinerary?: Array<TourItineraryDayDefinition>;
 };
 
-/** A navigation entry points at a page or post this definition states. */
-export type NavigationItemDefinition = {
+/** A navigation link points at a page or post this definition states. */
+export type NavigationLinkDefinition = {
   reference: { relationTo: 'pages' | 'posts'; lookupSlug: string };
   label?: string;
   /** A button stands out from the links; the footer still lists it as one */
   appearance?: 'link' | 'button';
 };
+
+/**
+ * A group is a label in the menu that opens to its links; it is not a page.
+ * Its children are links, which cannot be buttons.
+ */
+export type NavigationGroupDefinition = {
+  label: string;
+  children: Array<Omit<NavigationLinkDefinition, 'appearance'>>;
+};
+
+export type NavigationItemDefinition =
+  NavigationLinkDefinition | NavigationGroupDefinition;
 
 /**
  * A contact form, as the platform builds one.

@@ -32,6 +32,36 @@ export type TenantsArrayField =
  */
 export type NavigationArrayItems =
   | {
+      /**
+       * A group is a label in the menu that opens to its links; it is not a page itself.
+       */
+      type?: ('link' | 'group') | null;
+      reference?:
+        | ({
+            relationTo: 'pages';
+            value: number | Page;
+          } | null)
+        | ({
+            relationTo: 'posts';
+            value: number | Post;
+          } | null);
+      labelSource?: ('document' | 'custom') | null;
+      customLabel?: string | null;
+      /**
+       * A button stands out from the other links, for the one action you want a visitor to take. The footer lists it as a link.
+       */
+      appearance?: ('link' | 'button') | null;
+      label?: string | null;
+      children?: NavigationArrayChildren;
+      id?: string | null;
+    }[]
+  | null;
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "NavigationArrayChildren".
+ */
+export type NavigationArrayChildren =
+  | {
       reference:
         | {
             relationTo: 'pages';
@@ -43,10 +73,6 @@ export type NavigationArrayItems =
           };
       labelSource?: ('document' | 'custom') | null;
       customLabel?: string | null;
-      /**
-       * A button stands out from the other links, for the one action you want a visitor to take. The footer lists it as a link.
-       */
-      appearance?: ('link' | 'button') | null;
       id?: string | null;
     }[]
   | null;
@@ -3061,10 +3087,23 @@ export interface NavigationSelect<T extends boolean = true> {
  * via the `definition` "NavigationArrayItems_select".
  */
 export interface NavigationArrayItemsSelect<T extends boolean = true> {
+  type?: T;
   reference?: T;
   labelSource?: T;
   customLabel?: T;
   appearance?: T;
+  label?: T;
+  children?: T | NavigationArrayChildrenSelect<T>;
+  id?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "NavigationArrayChildren_select".
+ */
+export interface NavigationArrayChildrenSelect<T extends boolean = true> {
+  reference?: T;
+  labelSource?: T;
+  customLabel?: T;
   id?: T;
 }
 /**

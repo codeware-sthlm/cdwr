@@ -24,4 +24,20 @@ test.describe('navigation', () => {
       page.getByRole('heading', { name: 'The Dark Plains of the Moon' })
     ).toBeVisible();
   });
+
+  test('a group opens to its links and a child link routes', async ({
+    page
+  }) => {
+    await page.goto('/');
+
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    await nav.getByRole('button', { name: 'Explore' }).click();
+
+    // Scoped: the footer lists the same link
+    const child = nav.getByRole('link', { name: 'Block gallery' });
+    await expect(child).toBeVisible();
+    await child.click();
+
+    await page.waitForURL(/\/blocks/, { timeout: 30_000 });
+  });
 });

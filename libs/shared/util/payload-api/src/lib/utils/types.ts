@@ -27,8 +27,15 @@ export type FooterData = {
 
   /**
    * Links to display, resolved from the navigation tree or from custom links.
+   * Flat: a navigation group's children are included.
    */
   links: Array<FooterLink>;
+
+  /**
+   * The same links in groups, for a footer that draws columns. Always at least
+   * one group when there are links; a group with a `null` label has no heading.
+   */
+  groups: Array<FooterLinkGroup>;
 
   /**
    * Links to the privacy and terms pages, shown beside the copyright whatever
@@ -57,6 +64,23 @@ export type FooterData = {
  * Footer layout size.
  */
 export type FooterVariant = 'compact' | 'standard' | 'expanded';
+
+/**
+ * A run of footer links under one heading.
+ */
+export type FooterLinkGroup = {
+  /**
+   * Unique identifier for the group.
+   */
+  key: string;
+
+  /**
+   * Heading, or `null` for links that sit outside any navigation group.
+   */
+  label: string | null;
+
+  links: Array<FooterLink>;
+};
 
 /**
  * Footer link item.
@@ -118,21 +142,23 @@ export type MethodOptions<T extends RestApiMethod> = T extends 'GET'
 export type NavigationAppearance = 'link' | 'button';
 
 /**
- * Navigation tree item.
+ * Navigation tree link to a page or post.
  */
-export type NavigationItem = {
+export type NavigationLink = {
+  kind: 'link';
+
   /**
-   * How the header draws the item.
+   * How the header draws the link.
    */
   appearance: NavigationAppearance;
 
   /**
-   * The collection for the navigation item.
+   * The collection for the navigation link.
    */
   collection: NavigationReferenceCollection;
 
   /**
-   * Unique identifier for the navigation item.
+   * Unique identifier for the navigation link.
    */
   key: string;
 
@@ -142,12 +168,39 @@ export type NavigationItem = {
   label: string;
 
   /**
-   * The URL of the navigation item as a `collection/slug` string.
+   * The URL of the navigation link as a `collection/slug` string.
    *
    * Use `findDoc` to fetch the document from the CMS.
    */
   url: string;
 };
+
+/**
+ * Navigation tree group, a label that opens to its links.
+ */
+export type NavigationGroup = {
+  kind: 'group';
+
+  /**
+   * Unique identifier for the navigation group.
+   */
+  key: string;
+
+  /**
+   * Group label in the language declared in the request.
+   */
+  label: string;
+
+  /**
+   * Links in the group, at least one.
+   */
+  children: NavigationLink[];
+};
+
+/**
+ * Navigation tree item.
+ */
+export type NavigationItem = NavigationLink | NavigationGroup;
 
 /**
  * Base options for all requests.

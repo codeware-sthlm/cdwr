@@ -10,7 +10,10 @@ import type {
   Tenant
 } from '@codeware/shared/util/payload-types';
 import { SiteDefinitionSchema } from '@codeware/shared/util/seed';
-import type { BundledMediaFile } from '@codeware/shared/util/seed';
+import type {
+  BundledMediaFile,
+  NavigationLinkDefinition
+} from '@codeware/shared/util/seed';
 import type { SiteDefinition } from '@codeware/shared/util/seed';
 import { bundledMediaPath } from '@codeware/shared/util/seed/site-definitions';
 import type { Payload, TypedLocale } from 'payload';
@@ -22,6 +25,7 @@ import { ensureCustomTheme } from './local-api/ensure-custom-theme';
 import { ensureForm } from './local-api/ensure-form';
 import { ensureMedia } from './local-api/ensure-media';
 import { ensureNavigation } from './local-api/ensure-navigation';
+import type { NavigationItemData } from './local-api/ensure-navigation';
 import { ensurePage } from './local-api/ensure-page';
 import { ensurePlace } from './local-api/ensure-place';
 import { ensurePost } from './local-api/ensure-post';
@@ -682,28 +686,47 @@ export async function applySiteDefinition(
     }
 
     if (definition.navigation?.length) {
-      const items = definition.navigation.flatMap(
-        ({ appearance, reference, label }) => {
-          const known = reference.relationTo === 'pages' ? pages : posts;
-          const value = known.get(reference.lookupSlug);
+      // A link that points nowhere is reported and left out. `at` says where
+      // in the definition it was, for a child of a group
+      const resolveLink = (
+        { reference, label }: NavigationLinkDefinition,
+        at = ''
+      ) => {
+        const known = reference.relationTo === 'pages' ? pages : posts;
+        const value = known.get(reference.lookupSlug);
 
-          if (value === undefined) {
-            unresolved.push({
-              blockType: 'navigation',
-              field: reference.relationTo,
-              lookup: reference.lookupSlug
+        if (value === undefined) {
+          unresolved.push({
+            blockType: 'navigation',
+            field: `${reference.relationTo}${at}`,
+            lookup: reference.lookupSlug
+          });
+          return undefined;
+        }
+
+        return {
+          reference: { relationTo: reference.relationTo, value },
+          labelSource: label ? ('custom' as const) : ('document' as const),
+          customLabel: label ?? null
+        };
+      };
+
+      const items = definition.navigation.flatMap(
+        (item, index): Array<NavigationItemData> => {
+          if ('children' in item) {
+            const children = item.children.flatMap((child, childIndex) => {
+              const link = resolveLink(
+                child,
+                ` (item ${index + 1}, child ${childIndex + 1})`
+              );
+              return link ? [link] : [];
             });
-            return [];
+            // A group with nothing to open to is dropped, as a dangling link is
+            return children.length ? [{ label: item.label, children }] : [];
           }
 
-          return [
-            {
-              reference: { relationTo: reference.relationTo, value },
-              labelSource: label ? ('custom' as const) : ('document' as const),
-              customLabel: label ?? null,
-              appearance
-            }
-          ];
+          const link = resolveLink(item);
+          return link ? [{ ...link, appearance: item.appearance }] : [];
         }
       );
 

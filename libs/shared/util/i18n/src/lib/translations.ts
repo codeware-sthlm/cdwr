@@ -98,6 +98,7 @@ export type TranslationKey =
   | 'gallery.structural'
   | 'gallery.structuralNote'
   | 'gallery.undocumented'
+  | 'navigation.close'
   | 'navigation.footer'
   | 'navigation.menu'
   | 'memberLogin.email'
@@ -314,6 +315,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.structuralNote':
       'Listed for completeness, not a design choice an editor makes.',
     'gallery.undocumented': 'Nobody has written about this one yet.',
+    'navigation.close': 'Close menu',
     'navigation.footer': 'Footer',
     'navigation.menu': 'Menu',
     'memberLogin.email': 'Email',
@@ -552,6 +554,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.structuralNote':
       'Listade för fullständighetens skull, inte ett designval en redaktör gör.',
     'gallery.undocumented': 'Ingen har skrivit om det här ännu.',
+    'navigation.close': 'Stäng menyn',
     'navigation.footer': 'Sidfot',
     'navigation.menu': 'Meny',
     'memberLogin.email': 'E-post',

@@ -31,17 +31,21 @@ import type {
 export type CustomApiEndpoint = 'palette-search' | 'tenant-config';
 
 export type CollectionWithoutPayload = {
-  [key in keyof Config['collections'] as key extends `payload${string}`
-    ? never
-    : key]: Config['collections'][key];
+  [
+    key in keyof Config['collections'] as key extends `payload${string}`
+      ? never
+      : key
+  ]: Config['collections'][key];
 };
 
 type CollectionWithTenantField = {
-  [key in keyof CollectionWithoutPayload as CollectionWithoutPayload[key] extends {
-    tenant?: (number | null) | Tenant;
-  }
-    ? key
-    : never]: CollectionWithoutPayload[key];
+  [
+    key in keyof CollectionWithoutPayload as CollectionWithoutPayload[key] extends {
+      tenant?: (number | null) | Tenant;
+    }
+      ? key
+      : never
+  ]: CollectionWithoutPayload[key];
 };
 
 /** Collection slugs */
@@ -125,8 +129,8 @@ export type TourMeta = {
 
 /** Navigation reference collection */
 export type NavigationReferenceCollection = NonNullable<
-  NonNullable<Navigation['items']>[number]
->['reference']['relationTo'];
+  NonNullable<NonNullable<Navigation['items']>[number]['reference']>
+>['relationTo'];
 
 /** Site settings footer contact details */
 export type SiteSettingsFooterContact = NonNullable<
@@ -155,8 +159,7 @@ export type SocialMediaBlockSocial = NonNullable<
  * Upload path: resolved URL to the media file.
  */
 export type TenantIconConfig =
-  | { source: 'svg'; svgCode: string }
-  | { source: 'upload'; fileUrl: string };
+  { source: 'svg'; svgCode: string } | { source: 'upload'; fileUrl: string };
 
 /**
  * A tenant-authored theme, resolved for injection into the site.

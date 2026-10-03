@@ -1,4 +1,7 @@
-import type { NavigationItem } from '@codeware/shared/util/payload-api';
+import type {
+  NavigationItem,
+  NavigationLink
+} from '@codeware/shared/util/payload-api';
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -28,7 +31,8 @@ const meta = {
 
 export default meta;
 
-const link = (key: string, label: string): NavigationItem => ({
+const link = (key: string, label: string): NavigationLink => ({
+  kind: 'link',
   appearance: 'link',
   collection: 'pages',
   key,
@@ -36,12 +40,23 @@ const link = (key: string, label: string): NavigationItem => ({
   url: `/${key}`
 });
 
-// Ends in a button, so every chrome shows the call to action beside its links
+// A group between the links and the button, so every chrome shows a trigger
+// and the call to action beside its links
 const navigationTree: Array<NavigationItem> = [
   link('blocks', 'Blocks'),
   link('studio', 'Studio'),
   link('architecture', 'Architecture'),
   link('devlog', 'Devlog'),
+  {
+    kind: 'group',
+    key: 'explore',
+    label: 'Explore',
+    children: [
+      link('tours', 'Tours'),
+      link('showcase', 'Showcase'),
+      link('changelog', 'Changelog')
+    ]
+  },
   { ...link('start', 'Get started'), appearance: 'button' }
 ];
 
