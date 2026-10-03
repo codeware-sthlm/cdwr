@@ -39,6 +39,7 @@ export async function pullRequestBranch(
 export interface WorkflowRun {
   id: number;
   status: string;
+  url: string;
 }
 
 /** Trigger a workflow and return the arguments used, for a copy-paste retry */
@@ -79,14 +80,19 @@ export async function listWorkflowRuns(
       '--limit',
       String(limit),
       '--json',
-      'databaseId,status'
+      'databaseId,status,url'
     ],
     { cwd }
   );
   return (
-    JSON.parse(stdout) as Array<{ databaseId: number; status: string }>
+    JSON.parse(stdout) as Array<{
+      databaseId: number;
+      status: string;
+      url: string;
+    }>
   ).map((r) => ({
     id: r.databaseId,
-    status: r.status
+    status: r.status,
+    url: r.url
   }));
 }
