@@ -1,5 +1,6 @@
 import type { SiteDefinition } from '../site-definition';
 
+import { moonMetricCardSource } from './moon-components';
 import {
   moonCalloutIllustration,
   moonFeatureIllustration,
@@ -29,6 +30,22 @@ export const moon: SiteDefinition = {
       confirmation: 'Thanks! We will get back to you shortly.',
       subject: 'New message from {{email}}',
       emailTo: 'hello@moon.dev'
+    }
+  ],
+
+  customComponents: [
+    {
+      name: 'Metric card',
+      slug: 'metric-card',
+      source: moonMetricCardSource,
+      propsSchema: [
+        { name: 'title', type: 'text', required: true },
+        { name: 'description', type: 'text' },
+        { name: 'values', type: 'textarea', required: true },
+        { name: 'unit', type: 'text' },
+        { name: 'decimals', type: 'number' },
+        { name: 'showChart', type: 'checkbox' }
+      ]
     }
   ],
 
@@ -526,6 +543,18 @@ export const moon: SiteDefinition = {
         {
           blockType: 'about',
           heading: 'Mission control'
+        },
+        {
+          blockType: 'custom-component',
+          component: { lookupSlug: 'metric-card' },
+          props: {
+            title: 'Visitors per week',
+            description: 'Seven weeks of lunar enthusiasm',
+            values: '12, 15, 14, 19, 23, 21, 28',
+            unit: '',
+            decimals: 0,
+            showChart: true
+          }
         },
         {
           blockType: 'image',

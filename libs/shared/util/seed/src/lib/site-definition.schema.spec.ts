@@ -288,6 +288,46 @@ describe('SiteDefinitionSchema', () => {
     expect(errors).toEqual([]);
   });
 
+  describe('custom components', () => {
+    const component = { name: 'Metric card', slug: 'metric-card', source: 'x' };
+    const pageWith = (slug: string) => [
+      {
+        name: 'Home',
+        slug: 'home',
+        layout: [
+          { blockType: 'custom-component', component: { lookupSlug: slug } }
+        ]
+      }
+    ];
+
+    it('refuses two components sharing a slug', () => {
+      const definition = {
+        ...minimal,
+        customComponents: [component, component]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain("'metric-card'");
+    });
+
+    it('refuses a block referring to a component it does not state', () => {
+      const definition = { ...minimal, pages: pageWith('nowhere') };
+
+      expect(errorsOf(definition)).toContainEqual(
+        "No custom component 'nowhere' in this definition"
+      );
+    });
+
+    it('accepts a block referring to a component it states', () => {
+      const definition = {
+        ...minimal,
+        customComponents: [component],
+        pages: pageWith('metric-card')
+      };
+
+      expect(errorsOf(definition)).toEqual([]);
+    });
+  });
+
   describe('reusable content', () => {
     it('refuses two entries sharing a title', () => {
       const definition = {

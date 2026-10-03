@@ -40,6 +40,18 @@ describe('buildRemotely', () => {
     expect(init.headers.authorization).toBe('Bearer secret');
     expect(JSON.parse(init.body)).toEqual(input);
     expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(init.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('names the request id it sent when the service does not answer', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockRejectedValue(new TypeError('fetch failed'));
+
+    const result = await buildRemotely(input, service, fetchMock);
+
+    const sent = fetchMock.mock.calls[0][1].headers['x-request-id'];
+    expect(message(result)[0]).toContain(`(request ${sent})`);
   });
 
   it('returns a failed build as the service reported it', async () => {

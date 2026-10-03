@@ -13,6 +13,8 @@ import { serve } from '@hono/node-server';
 
 import { createApp } from './app';
 
+const noop = () => undefined;
+
 jest.setTimeout(60_000);
 
 const TOKEN = 'test-token';
@@ -49,6 +51,7 @@ describe('builder service (integration)', () => {
   beforeAll(async () => {
     const app = createApp({
       tokens: [TOKEN],
+      logger: { info: noop, warn: noop, error: noop },
       build: (input) =>
         runComponentBuild(input, { root, cwd: path.join(root, 'apps/builder') })
     });

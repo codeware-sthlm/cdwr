@@ -4,7 +4,10 @@ import {
   tsxSourceField
 } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
-import { adminGroups } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import { customT } from '@codeware/app-cms/util/i18n';
 import { canEdit } from '@codeware/app-cms/util/misc';
 import { COMPONENT_TAG_PREFIX } from '@codeware/shared/util/payload-utils';
@@ -107,6 +110,14 @@ const customComponents: CollectionConfig = {
     update: componentDeveloperAccess('update'),
     delete: componentDeveloperAccess('delete')
   },
+  // What a page carries for a placed component: enough to name the element
+  // and style it before the bundle, which is fetched by hash, arrives. The
+  // code itself would otherwise ride along in every page that places one
+  defaultPopulate: {
+    name: true,
+    slug: true,
+    build: { status: true, hash: true, css: true }
+  },
   endpoints: [customComponentBundleEndpoint, customComponentCheckEndpoint],
   hooks: {
     beforeChange: [assertDeveloperInTenant, markBuildPending],
@@ -117,6 +128,7 @@ const customComponents: CollectionConfig = {
     plural: { en: 'Custom components', sv: 'Egna komponenter' }
   },
   fields: [
+    managedByField(),
     {
       type: 'row',
       fields: [

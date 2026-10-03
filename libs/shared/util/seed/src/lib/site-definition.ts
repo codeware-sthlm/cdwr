@@ -2,6 +2,7 @@ import type { ThemeRecipe, ThemeTokens } from '@codeware/shared/util/color';
 import type {
   CalloutBlock,
   ContentBlock,
+  CustomComponent,
   CustomComponentBlock,
   FeatureSectionBlock,
   FileAreaBlock,
@@ -56,9 +57,6 @@ type LayoutBlock = Page['layout'][number];
 
 /**
  * The blocks that point at a document, and so cannot be stated as-is.
- *
- * `CustomComponentBlock` has no definition: components are authored in the
- * admin, never seeded, so a definition cannot place one.
  */
 type ReferencingBlock =
   | CalloutBlock
@@ -178,6 +176,13 @@ export type FormBlockDefinition = Omit<
 > & {
   introContent?: RichTextRef | null;
 };
+/** Components are keyed by slug, which the collection has */
+export type CustomComponentRef = { lookupSlug: string };
+export type CustomComponentBlockDefinition = WithRef<
+  CustomComponentBlock,
+  'component',
+  CustomComponentRef
+>;
 export type ReusableContentBlockDefinition = WithRef<
   ReusableContentBlock,
   'reusableContent',
@@ -244,6 +249,7 @@ export type BlockDefinition =
   | ImageBlockDefinition
   | FeatureSectionBlockDefinition
   | FormBlockDefinition
+  | CustomComponentBlockDefinition
   | ContentBlockDefinition
   | ReusableContentBlockDefinition
   | TestimonialBlockDefinition
@@ -415,6 +421,23 @@ export type FormDefinition = {
 };
 
 /**
+ * A custom component, as an editor would save it.
+ *
+ * Only what an editor writes: the build is the platform's to produce and is
+ * never stated, so the component is queued and built after it is applied.
+ */
+export type CustomComponentDefinition = Pick<
+  CustomComponent,
+  'name' | 'source'
+> & {
+  /** What a `custom-component` block points at */
+  slug: string;
+  propsSchema?: Array<
+    Omit<NonNullable<CustomComponent['propsSchema']>[number], 'id'>
+  >;
+};
+
+/**
  * A theme of the site's own, as the theme studio would save it.
  *
  * Only the decisions are stated: the apply derives both token maps from them
@@ -476,6 +499,8 @@ export type SiteDefinition = {
   media?: Array<MediaDefinition>;
   forms?: Array<FormDefinition>;
   customThemes?: Array<CustomThemeDefinition>;
+  /** Components built from source, placed by a `custom-component` block */
+  customComponents?: Array<CustomComponentDefinition>;
   /** Content meant to appear in more than one page or post, by a `reusable-content` block */
   reusableContent?: Array<ReusableContentDefinition>;
   /** Wineries, hotels and stops a tour's itinerary names */

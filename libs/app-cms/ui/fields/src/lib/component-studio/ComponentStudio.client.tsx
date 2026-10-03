@@ -14,6 +14,7 @@ import { useCallback } from 'react';
 
 import { importCatalog } from './catalog';
 import { requestCheck } from './check';
+import { loadEditorTypes } from './load-editor-types';
 import { inputsName, slugName, sourceName } from './names';
 import { readPropsSchema } from './sync-props';
 import { useStoredBuild } from './use-stored-build';
@@ -28,7 +29,7 @@ import { useSyncInputs } from './use-sync-inputs';
  * form state, validation and permissions.
  *
  * Monaco's TypeScript defaults are global to the admin session; the studio
- * sets them once and leaves them.
+ * sets them once, loads the editor's declarations once, and leaves them.
  */
 const ComponentStudioField: RowFieldClientComponent = ({
   field,
@@ -88,6 +89,7 @@ const ComponentStudioField: RowFieldClientComponent = ({
         build={build}
         catalog={importCatalog}
         onCheck={onCheck}
+        loadTypes={loadEditorTypes}
         onSyncInputs={readOnly ? undefined : syncInputs}
         portalClassName="codeware-admin"
         panelClassName="@2xl:w-88"

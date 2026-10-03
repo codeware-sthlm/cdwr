@@ -6,6 +6,7 @@ import type { StudioBuild } from './build-state';
 import type { ImportCatalog } from './catalog';
 import type { CheckOutcome } from './check';
 import { ComponentStudio, type ComponentStudioProps } from './ComponentStudio';
+import type { EditorTypes } from './editor-types';
 import type { SyncOutcome } from './last-action';
 
 const SOURCE = `import { useState } from 'react';
@@ -41,6 +42,44 @@ export default function Counter({ label }: { label: string }) {
   return <button>{label}: {count}</button>;
 }
 `;
+
+const TYPED = `import { useState } from 'react';
+import { Card, cn } from '@site/ui';
+
+export default function Counter({ label }: { label: string }) {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div className={cn('flex gap-3')}>
+      <Card title={42}>{label}: {count}</Card>
+      <button onClick={() => setCount(count + 1)}>Add</button>
+    </div>
+  );
+}
+`;
+
+/** A hand-sized stand-in for what the host generates from the workspace */
+const editorTypes: EditorTypes = {
+  version: 'story',
+  files: {
+    'node_modules/@types/react/package.json':
+      '{"name":"@types/react","types":"index.d.ts"}',
+    'node_modules/@types/react/index.d.ts': `export function useState<S>(initial: S): [S, (next: S) => void];
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [tag: string]: any;
+    }
+  }
+}`,
+    'node_modules/@types/react/jsx-runtime.d.ts': `export const Fragment: any;
+export function jsx(type: any, props: any, key?: any): any;
+export function jsxs(type: any, props: any, key?: any): any;`,
+    'workspace/site-ui/kit.d.ts': `export declare function Card(props: { title: string; children?: unknown }): any;
+export declare const cn: (...classes: string[]) => string;`
+  },
+  paths: { '@site/ui': ['workspace/site-ui/kit'] }
+};
 
 const wait = <T,>(value: T, ms: number): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), ms));
@@ -273,6 +312,14 @@ export const Ready: Story = {
   args: { withPanel: true }
 };
 
+export const WithTypes: Story = {
+  name: 'With editor types',
+  args: {
+    initial: TYPED,
+    loadTypes: () => wait(editorTypes, 300)
+  }
+};
+
 export const ReadyWithWarnings: Story = {
   name: 'Ready with warnings',
   args: {
@@ -321,6 +368,15 @@ export const CheckWithProblems: Story = {
 export const CheckUnreachable: Story = {
   name: 'Check cannot reach the build service',
   args: { onCheck: () => wait<CheckOutcome>({ status: 'failed' }, 600) }
+};
+
+export const CheckForbidden: Story = {
+  name: 'Check refused for the account',
+  args: {
+    onCheck: () => wait<CheckOutcome>({ status: 'forbidden' }, 400),
+    onSyncInputs: () => wait(synced, 400),
+    withPanel: true
+  }
 };
 
 export const SyncInputs: Story = {

@@ -377,9 +377,11 @@ export function BlockGalleryEntry({
       <p className="text-muted-foreground text-sm italic">
         {t(
           locale,
-          meta.availableIn.length === 0
-            ? 'gallery.notOffered'
-            : 'gallery.undocumented'
+          doc && 'ownBuild' in doc
+            ? 'gallery.ownBuild'
+            : meta.availableIn.length === 0
+              ? 'gallery.notOffered'
+              : 'gallery.undocumented'
         )}
       </p>
     );

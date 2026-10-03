@@ -27,9 +27,11 @@ export async function getScriptPayload(databaseUrl: string): Promise<Payload> {
   // before the config reads it:
   // - the deployment's own DATABASE_URL host is not reachable from here
   // - a script must never seed or push schema to the target database
+  // - nor run the deployment's queued jobs
   process.env['DATABASE_URL'] = databaseUrl;
   process.env['SEED_SOURCE'] = 'off';
   process.env['DISABLE_DB_PUSH'] = 'true';
+  process.env['PAYLOAD_SCRIPT'] = 'true';
 
   console.log(`[DB] Using schema '${env.DATABASE_SCHEMA}'`);
 

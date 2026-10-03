@@ -2,6 +2,7 @@ import type { Monaco, OnMount } from '@monaco-editor/react';
 
 import type { BuildDiagnostic } from './build-state';
 import { type MarkerSpec, toMarkers } from './check';
+import type { EditorTypes } from './editor-types';
 import type { TextEdit } from './insert-import';
 import type { Shortcut } from './menu';
 
@@ -27,9 +28,12 @@ export const editorHeight = (lineCount: number): number =>
     Math.max(MIN_HEIGHT, Math.max(lineCount, 1) * LINE_HEIGHT + PADDING)
   );
 
-/** The model's uri; a `.tsx` extension is what turns JSX on in the worker */
+/**
+ * The model's uri; a `.tsx` extension is what turns JSX on in the worker, and
+ * the `file:` scheme lets bare imports find the declarations' `node_modules`
+ */
 export const modelUri = (path: string): string =>
-  `inmemory://studio/${path.replace(/[^\w/-]+/g, '-')}.tsx`;
+  `file:///studio/${path.replace(/[^\w/-]+/g, '-')}.tsx`;
 
 /**
  * TypeScript defaults are global to the page, so this sets them once and never
@@ -55,6 +59,72 @@ export const configureTypescript = (monaco: Monaco): void => {
     noSemanticValidation: true,
     noSyntaxValidation: false
   });
+};
+
+/**
+ * Gives the editor's TypeScript worker the declarations, so imports resolve
+ * and the source is type-checked. Keeps what `configureTypescript` set.
+ */
+export const installEditorTypes = (
+  monaco: Monaco,
+  types: EditorTypes
+): void => {
+  const defaults: typeof monaco.typescript | undefined = monaco.typescript;
+  const typescriptDefaults = defaults?.typescriptDefaults;
+  if (!defaults || !typescriptDefaults) {
+    return;
+  }
+  // One call: each `addExtraLib` re-sends the whole set to the worker
+  typescriptDefaults.setExtraLibs(
+    Object.entries(types.files).map(([path, content]) => ({
+      filePath: `file:///${path}`,
+      content
+    }))
+  );
+  typescriptDefaults.setCompilerOptions({
+    ...typescriptDefaults.getCompilerOptions(),
+    baseUrl: 'file:///',
+    paths: types.paths,
+    moduleResolution: defaults.ModuleResolutionKind.NodeJs,
+    jsx: defaults.JsxEmit.ReactJSX,
+    target: defaults.ScriptTarget.ESNext,
+    strict: true,
+    skipLibCheck: true,
+    esModuleInterop: true,
+    allowNonTsExtensions: true,
+    noEmit: true
+  });
+  typescriptDefaults.setDiagnosticsOptions({
+    ...typescriptDefaults.getDiagnosticsOptions(),
+    noSemanticValidation: false,
+    noSyntaxValidation: false
+  });
+};
+
+let typesLoad: Promise<void> | null = null;
+
+/**
+ * Loads and installs the declarations once per page: the defaults are global,
+ * so the first studio's loader wins and later ones share its outcome. A failed
+ * or empty load leaves the editor syntax-only.
+ */
+export const loadEditorTypes = (
+  monaco: Monaco,
+  load: () => Promise<EditorTypes | null>
+): Promise<void> => {
+  typesLoad ??= load().then(
+    (types) => {
+      if (types) {
+        installEditorTypes(monaco, types);
+      } else {
+        console.warn('Editor types unavailable; checking syntax only');
+      }
+    },
+    (error: unknown) => {
+      console.warn('Editor types failed to load; checking syntax only', error);
+    }
+  );
+  return typesLoad;
 };
 
 export const drawMarkers = (

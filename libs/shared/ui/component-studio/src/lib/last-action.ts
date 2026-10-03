@@ -33,7 +33,12 @@ export type ActionResult =
       warnings: number;
       durationMs: number | null;
     }
-  | { kind: 'check-failed'; reason: 'forbidden' | 'unreachable' }
+  | {
+      kind: 'check-failed';
+      /** Which action asked for the check: sync runs one too */
+      task: 'check' | 'sync';
+      reason: 'forbidden' | 'unreachable';
+    }
   | { kind: 'sync'; outcome: SyncOutcome }
   | { kind: 'sync-unresolved' }
   | { kind: 'sync-failed'; message: string }
@@ -135,14 +140,22 @@ const describers = {
       ]
     };
   },
-  'check-failed': ({ reason }) => ({
-    tone: 'error',
-    text:
-      reason === 'forbidden'
-        ? 'Check: not allowed for this account'
-        : 'Check: the build service could not be reached',
-    details: []
-  }),
+  'check-failed': ({ task, reason }) => {
+    const action = task === 'sync' ? 'Sync inputs' : 'Check';
+    return reason === 'forbidden'
+      ? {
+          tone: 'error',
+          text: `${action}: this account may not check components`,
+          details: [
+            'Checking runs the code through the build, which only a component developer may do. A platform administrator grants that on the account, per workspace.'
+          ]
+        }
+      : {
+          tone: 'error',
+          text: `${action}: the build service could not be reached`,
+          details: []
+        };
+  },
   sync: ({ outcome }) => ({
     tone: outcome.status === 'changed' ? 'ok' : 'muted',
     text: syncText(outcome),

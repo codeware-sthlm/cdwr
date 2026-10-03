@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   type ComponentBuildResult,
   isComponentBuildResult
@@ -14,11 +16,14 @@ export type BuildService = {
 /** Longest a build may take before it is given up on, in milliseconds */
 export const REMOTE_BUILD_TIMEOUT_MS = 60_000;
 
-const unavailable = (reason: string): ComponentBuildResult => ({
+const unavailable = (
+  requestId: string,
+  reason: string
+): ComponentBuildResult => ({
   ok: false,
   diagnostics: [
     {
-      message: `The build service did not answer: ${reason}.`,
+      message: `The build service did not answer (request ${requestId}): ${reason}.`,
       line: 1,
       column: 1,
       severity: 'error'
@@ -46,19 +51,22 @@ export const buildRemotely = async (
   { url, token }: BuildService,
   fetchImpl: typeof fetch = fetch
 ): Promise<ComponentBuildResult> => {
+  // The service logs the same id, so a failure here finds its line there
+  const requestId = randomUUID();
   let response: Response;
   try {
     response = await fetchImpl(new URL('/build', url), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        'x-request-id': requestId,
         authorization: `Bearer ${token}`
       },
       body: JSON.stringify({ tagName, source, propsSchema }),
       signal: AbortSignal.timeout(REMOTE_BUILD_TIMEOUT_MS)
     });
   } catch (error) {
-    return unavailable(describeError(error));
+    return unavailable(requestId, describeError(error));
   }
 
   let body: unknown;
@@ -66,6 +74,7 @@ export const buildRemotely = async (
     body = await response.json();
   } catch {
     return unavailable(
+      requestId,
       response.ok
         ? 'the reply was not JSON'
         : `status ${response.status} ${response.statusText}`.trim()
@@ -78,6 +87,7 @@ export const buildRemotely = async (
     return body;
   }
   return unavailable(
+    requestId,
     response.ok
       ? 'the reply was not a build result'
       : `status ${response.status} ${response.statusText}`.trim()

@@ -48,9 +48,21 @@ describe('describeAction', () => {
     ],
     [
       'forbidden check',
-      { kind: 'check-failed', reason: 'forbidden' },
+      { kind: 'check-failed', task: 'check', reason: 'forbidden' },
       'error',
-      'Check: not allowed for this account'
+      'Check: this account may not check components'
+    ],
+    [
+      'forbidden sync',
+      { kind: 'check-failed', task: 'sync', reason: 'forbidden' },
+      'error',
+      'Sync inputs: this account may not check components'
+    ],
+    [
+      'unreachable sync',
+      { kind: 'check-failed', task: 'sync', reason: 'unreachable' },
+      'error',
+      'Sync inputs: the build service could not be reached'
     ],
     [
       'import added',
