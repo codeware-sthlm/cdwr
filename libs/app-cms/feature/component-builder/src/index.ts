@@ -25,3 +25,7 @@ export {
   type ToolchainResult,
   resolveToolchain
 } from './lib/toolchain';
+export {
+  type EditorTypes,
+  collectEditorTypes
+} from './lib/collect-editor-types';

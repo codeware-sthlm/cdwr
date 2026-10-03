@@ -6,10 +6,30 @@
   "tags": ["scope:cms", "type:app"],
   "// targets": "remove custom dev target once @cdwr/nx-payload supports turbopack (COD-319)",
   "targets": {
+    "build": {
+      "dependsOn": ["^build", "studio-types"]
+    },
+    "studio-types": {
+      "metadata": {
+        "description": "Collect the declarations the component studio's editor type-checks against, into public/studio-types.json. `build` depends on it; `dev` runs it inline."
+      },
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx tsx src/utils/generate-studio-types.ts",
+        "cwd": "apps/cms"
+      },
+      "cache": true,
+      "inputs": ["default", "^production", "{workspaceRoot}/pnpm-lock.yaml"],
+      "outputs": ["{projectRoot}/public/studio-types.json"]
+    },
     "dev": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=local --set=SEED_STRATEGY=delta -- next dev --turbopack",
+        "commands": [
+          "npx tsx src/utils/generate-studio-types.ts",
+          "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=local --set=SEED_STRATEGY=delta -- next dev --turbopack"
+        ],
+        "parallel": false,
         "cwd": "apps/cms"
       },
       "configurations": {
