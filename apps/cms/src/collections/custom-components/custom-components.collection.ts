@@ -110,6 +110,14 @@ const customComponents: CollectionConfig = {
     update: componentDeveloperAccess('update'),
     delete: componentDeveloperAccess('delete')
   },
+  // What a page carries for a placed component: enough to name the element
+  // and style it before the bundle, which is fetched by hash, arrives. The
+  // code itself would otherwise ride along in every page that places one
+  defaultPopulate: {
+    name: true,
+    slug: true,
+    build: { status: true, hash: true, css: true }
+  },
   endpoints: [customComponentBundleEndpoint, customComponentCheckEndpoint],
   hooks: {
     beforeChange: [assertDeveloperInTenant, markBuildPending],
