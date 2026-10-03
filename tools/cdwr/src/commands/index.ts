@@ -3,7 +3,10 @@ import type { Entry, Group } from '../cli/registry';
 /** Groups in the order the menu and help show them */
 export const GROUPS: Group[] = [
   { name: 'db', summary: 'CMS database: backups, restores, migrations' },
-  { name: 'fly', summary: 'Fly apps: status, restarts, config patches' },
+  {
+    name: 'fly',
+    summary: 'Fly apps: status, deploys, restarts, config patches'
+  },
   {
     name: 'tenant',
     summary: 'Tenant lifecycle: provisioning, keys, site gate'
@@ -60,6 +63,12 @@ export const ENTRIES: Entry[] = [
     summary: 'Restart every machine of a Fly app, one at a time',
     danger: 'mutate',
     load: () => import('./fly/restart').then((m) => m.default)
+  },
+  {
+    path: ['fly', 'deploy'],
+    summary: 'Deploy an app to Fly through the deployment workflow',
+    danger: 'mutate',
+    load: () => import('./fly/deploy').then((m) => m.default)
   },
   {
     path: ['fly', 'patch'],

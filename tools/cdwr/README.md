@@ -60,6 +60,14 @@ preference. A theme the site does not offer, or a scheme it locks, is reported a
 than saved under a name that claims otherwise. With `--json`, each shot carries its path, the page's
 HTTP status and any console errors, which is what an agent reads first after changing something.
 
+## Deploying
+
+`cdwr fly deploy <app> --env preview --pr 566` dispatches the Fly Deployment workflow, so a pull
+request can get an app it did not change. The apps offered are the `apps` release group in
+`nx.json`. Preview runs from the pull request's branch (`--pr` defaults to the current branch's);
+production runs from `main` and asks for confirmation. `--tenant` limits it to one tenant. The run's
+URL is reported, and is in the `--json` result.
+
 ## Writing a command
 
 One file under `src/commands/<group>/`, one entry in `src/commands/index.ts`:
