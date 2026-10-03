@@ -212,6 +212,7 @@ export const useStudio = ({
     if (outcome.status !== 'done') {
       setLast({
         kind: 'check-failed',
+        task: 'check',
         reason: outcome.status === 'forbidden' ? 'forbidden' : 'unreachable'
       });
       return;
@@ -241,6 +242,7 @@ export const useStudio = ({
         finish();
         setLast({
           kind: 'check-failed',
+          task: 'sync',
           reason: outcome.status === 'forbidden' ? 'forbidden' : 'unreachable'
         });
         return;
