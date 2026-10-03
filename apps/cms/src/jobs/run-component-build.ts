@@ -5,6 +5,7 @@ import {
   type ComponentDiagnostic
 } from '@codeware/shared/util/payload-utils';
 
+import { resolveBuildService } from './build-service';
 import { type BuildService, buildRemotely } from './remote-component-build';
 
 export type { ComponentBuildInput };
@@ -28,12 +29,7 @@ export const defaultDeps: BuildDeps = {
       cwd: process.cwd()
     });
   },
-  service: () => {
-    const env = getEnv(false);
-    return env?.COMPONENT_BUILDER_URL
-      ? { url: env.COMPONENT_BUILDER_URL, token: env.COMPONENT_BUILDER_TOKEN }
-      : undefined;
-  },
+  service: () => resolveBuildService(getEnv(false)),
   fetch: (input, init) => fetch(input, init)
 };
 
