@@ -370,6 +370,15 @@ export const CheckUnreachable: Story = {
   args: { onCheck: () => wait<CheckOutcome>({ status: 'failed' }, 600) }
 };
 
+export const CheckForbidden: Story = {
+  name: 'Check refused for the account',
+  args: {
+    onCheck: () => wait<CheckOutcome>({ status: 'forbidden' }, 400),
+    onSyncInputs: () => wait(synced, 400),
+    withPanel: true
+  }
+};
+
 export const SyncInputs: Story = {
   name: 'Sync inputs from code',
   args: {
