@@ -28,6 +28,7 @@ type Args = StudioHandlers & {
   build: StudioBuild | null;
   openPicker: () => void;
   togglePanel: () => void;
+  toggleFullscreen: () => void;
 };
 
 const buildKey = (build: StudioBuild | null): string =>
@@ -47,7 +48,8 @@ export const useStudio = ({
   readOnly,
   build,
   openPicker,
-  togglePanel
+  togglePanel,
+  toggleFullscreen
 }: Args) => {
   const handle = useRef<{ editor: Editor; monaco: Monaco } | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -274,9 +276,10 @@ export const useStudio = ({
         import: openPicker,
         check: () => void runCheck(),
         sync: () => void syncInputs(),
-        togglePanel
+        togglePanel,
+        fullscreen: toggleFullscreen
       }) satisfies Record<CommandId, () => void>,
-    [format, openPicker, runCheck, syncInputs, togglePanel]
+    [format, openPicker, runCheck, syncInputs, togglePanel, toggleFullscreen]
   );
 
   return {
