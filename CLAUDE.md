@@ -91,6 +91,34 @@ such as Mailtrap. With nothing configured at all, development falls back to
 a disposable Ethereal inbox created on the first send, and logs a per-message
 preview link. Nothing is dropped silently.
 
+#### Custom component builds
+
+Saving a custom component builds it. In development the cms builds in-process
+from the workspace on disk. Production has no toolchain in the cms image and
+calls the builder service (`apps/component-builder`) instead; a cms without
+`COMPONENT_BUILDER_URL` and without a toolchain marks every build as failed.
+
+To run the service locally and make the cms use it, the way production does:
+
+```sh
+# Terminal 1: the service on http://localhost:3002, token `dev-token`
+nx serve component-builder
+
+# Or the image production runs, built from the repo root
+docker build -f apps/component-builder/Dockerfile -t component-builder .
+docker run --rm -p 3002:3002 -e COMPONENT_BUILDER_TOKEN=dev-token component-builder
+```
+
+```sh
+# apps/cms/.env.local — unset both to build in-process again
+COMPONENT_BUILDER_URL=http://localhost:3002
+COMPONENT_BUILDER_TOKEN=dev-token
+```
+
+The same two values reach the deployed cms apps from Infisical (`/apps/cms/`),
+and the service reads its token from `/apps/component-builder/`. On Fly the url
+is the service's private Flycast address, `http://cdwr-component-builder.flycast`.
+
 #### CMS admin components + import map
 
 Payload resolves custom admin components (`admin.components.*` in `payload.config.ts`) through the
