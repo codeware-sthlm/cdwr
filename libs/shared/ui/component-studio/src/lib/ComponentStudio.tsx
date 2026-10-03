@@ -226,7 +226,15 @@ export const ComponentStudio = ({
           >
             <StudioToolbar
               groups={menus.filter(({ id }) => id !== 'view')}
-              onRun={(id) => run.current[id]()}
+              onRun={(id) => {
+                run.current[id]();
+                // The click left the keyboard on the button. Import's dialog
+                // takes it itself and gives it back on close; full screen
+                // gives it back once the layout has changed
+                if (id !== 'import' && id !== 'fullscreen') {
+                  focusEditor();
+                }
+              }}
               panel={
                 hasPanel ? { open: panelOpen, title: sidePanelTitle } : null
               }
@@ -261,7 +269,10 @@ export const ComponentStudio = ({
                   variant="ghost"
                   size="icon-sm"
                   aria-label={`Hide ${sidePanelTitle.toLowerCase()} panel`}
-                  onClick={() => setPanelOpen(false)}
+                  onClick={() => {
+                    setPanelOpen(false);
+                    focusEditor();
+                  }}
                 >
                   <XIcon />
                 </Button>
