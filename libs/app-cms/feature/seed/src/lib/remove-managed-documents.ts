@@ -40,6 +40,8 @@ export const FRESH_POLICY = {
   // Only decisions are stated and the tokens are derived, so a recreated
   // theme is the same theme
   'custom-themes': 'recreate',
+  // The source is the decision; the build is derived and queued again
+  'custom-components': 'recreate',
   tags: 'reuse',
   media: 'reuse',
   places: 'keep',
@@ -52,7 +54,8 @@ export const FRESH_POLICY = {
 /**
  * The order recreated collections are removed in: whatever points at a
  * document goes before it. Posts reference categories; pages reference
- * reusable content, which in turn references forms.
+ * reusable content, which in turn references forms; pages and reusable
+ * content place custom components.
  */
 const RECREATE_ORDER = [
   'posts',
@@ -60,7 +63,8 @@ const RECREATE_ORDER = [
   'reusable-content',
   'forms',
   'categories',
-  'custom-themes'
+  'custom-themes',
+  'custom-components'
 ] as const;
 
 /** Every collection whose policy is `recreate` is in the order, and no other. */

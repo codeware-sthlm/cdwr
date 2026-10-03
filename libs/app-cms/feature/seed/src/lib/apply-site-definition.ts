@@ -18,6 +18,7 @@ import type { Payload, TypedLocale } from 'payload';
 import { defaultSiteSettings } from './default-site-settings';
 import { type ExtraDocument, findExtraDocuments } from './find-extra-documents';
 import { ensureCategory } from './local-api/ensure-category';
+import { ensureCustomComponent } from './local-api/ensure-custom-component';
 import { ensureCustomTheme } from './local-api/ensure-custom-theme';
 import { ensureForm } from './local-api/ensure-form';
 import { ensureMedia } from './local-api/ensure-media';
@@ -425,6 +426,24 @@ export async function applySiteDefinition(
       );
     }
 
+    // Before reusable content and pages, whose layouts may place one. Left to
+    // the build queue afterwards: this writes the source and nothing of `build`
+    const customComponents = new Map<string, number>();
+    for (const component of definition.customComponents ?? []) {
+      customComponents.set(
+        component.slug,
+        record(
+          'custom-components',
+          component.slug,
+          await ensureCustomComponent(
+            payload,
+            { ...component, tenant: tenant.id },
+            owned
+          )
+        )
+      );
+    }
+
     // Filled below, before pages — a page's `reusable-content` block looks a
     // title up here the same way it looks a form or a tag up in its own map
     const reusableContent = new Map<string, number>();
@@ -433,6 +452,7 @@ export async function applySiteDefinition(
       media: (filename: string) => media.get(filename),
       tag: (slug: string) => tags.get(slug),
       form: (title: string) => forms.get(title),
+      customComponent: (slug: string) => customComponents.get(slug),
       reusableContent: (title: string) => reusableContent.get(title)
     };
 

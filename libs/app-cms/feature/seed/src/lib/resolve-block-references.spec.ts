@@ -11,6 +11,7 @@ const resolver: ReferenceResolver = {
   media: (filename) => (filename === 'hero.jpg' ? 11 : undefined),
   tag: (slug) => (slug === 'reports' ? 22 : undefined),
   form: (title) => (title === 'Contact' ? 33 : undefined),
+  customComponent: (slug) => (slug === 'metric-card' ? 55 : undefined),
   reusableContent: (title) => (title === 'Shared' ? 44 : undefined)
 };
 
@@ -25,6 +26,29 @@ const resolve = (block: unknown) => {
 };
 
 describe('resolveBlockReferences', () => {
+  it('resolves a custom component by slug and keeps its props', () => {
+    const { resolved, unresolved } = resolve({
+      blockType: 'custom-component',
+      component: { lookupSlug: 'metric-card' },
+      props: { title: 'Visitors' }
+    });
+
+    expect(resolved['component']).toBe(55);
+    expect(resolved['props']).toEqual({ title: 'Visitors' });
+    expect(unresolved).toEqual([]);
+  });
+
+  it('reports a custom component that does not exist', () => {
+    const { unresolved } = resolve({
+      blockType: 'custom-component',
+      component: { lookupSlug: 'absent' }
+    });
+
+    expect(unresolved).toEqual([
+      { blockType: 'custom-component', field: 'component', lookup: 'absent' }
+    ]);
+  });
+
   it.each([
     ['hero', 'media'],
     ['feature-section', 'media'],
