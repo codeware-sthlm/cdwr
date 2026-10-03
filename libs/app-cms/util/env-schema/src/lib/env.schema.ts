@@ -172,6 +172,9 @@ export const EnvSchema = withEnvVars(
       DISABLE_DOMAIN_ADOPTION: coerceBoolean(false).describe(
         "Skip taking a database-stored domain as the app's own url at boot — cors/csrf still accept it as an origin — the break-glass escape hatch when a stored domain stops working"
       ),
+      PAYLOAD_SCRIPT: coerceBoolean(false).describe(
+        'Set by a script that boots Payload against a database, so the config leaves what only a serving process should do: running and recovering queued jobs'
+      ),
       NX_TASK_TARGET_TARGET: z
         .enum(
           [

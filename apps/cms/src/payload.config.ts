@@ -67,6 +67,10 @@ import {
   buildCustomComponentTask
 } from './jobs/build-custom-component.task';
 import { deleteExpiredFormSubmissionsTask } from './jobs/delete-expired-form-submissions.task';
+import {
+  REQUEUE_INTERVAL_MS,
+  recoverComponentBuilds
+} from './jobs/recover-component-builds';
 import { queryStatsLogger } from './perf/query-stats';
 import { userOnlyAccess } from './security/user-only-access';
 import { userOrApiKeyAccess } from './security/user-or-api-key-access';
@@ -417,6 +421,22 @@ export default buildConfig({
       payload.logger.info(
         'Skipping seeding for tenant mode in non-development environment'
       );
+    }
+
+    // Only a process that stays up to serve: a script against a deployment's
+    // database, or a one-off target, must not claim that deployment's jobs.
+    // After the seed, so nothing is queued while it runs
+    const serves =
+      !env.PAYLOAD_SCRIPT &&
+      (env.NX_RUN_TARGET === '' ||
+        env.NX_RUN_TARGET === 'dev' ||
+        env.NX_RUN_TARGET === 'serve');
+    if (serves) {
+      // Not awaited: builds may take a while and the server should come up
+      void recoverComponentBuilds(payload, { boot: true });
+      setInterval(() => {
+        void recoverComponentBuilds(payload, { boot: false });
+      }, REQUEUE_INTERVAL_MS).unref();
     }
   },
   // Generate types and schemas
