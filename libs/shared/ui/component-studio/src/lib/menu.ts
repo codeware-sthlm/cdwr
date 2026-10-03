@@ -1,6 +1,7 @@
 import type { BusyTask } from './last-action';
 
-export type CommandId = 'format' | 'import' | 'check' | 'sync' | 'togglePanel';
+export type CommandId =
+  'format' | 'import' | 'check' | 'sync' | 'togglePanel' | 'fullscreen';
 
 export type MenuId = 'edit' | 'insert' | 'build' | 'view';
 
@@ -27,6 +28,7 @@ export type MenuState = {
   hasPanel: boolean;
   panelOpen: boolean;
   panelTitle: string;
+  fullscreen: boolean;
 };
 
 type CommandSpec = {
@@ -57,6 +59,11 @@ const COMMANDS = {
     label: ({ panelOpen, panelTitle }) =>
       `${panelOpen ? 'Hide' : 'Show'} ${panelTitle.toLowerCase()} panel`,
     disabled: ({ hasPanel }) => !hasPanel
+  },
+  fullscreen: {
+    label: ({ fullscreen }) =>
+      fullscreen ? 'Exit full screen' : 'Full screen',
+    disabled: () => false
   }
 } as const satisfies Record<CommandId, CommandSpec>;
 
@@ -65,7 +72,7 @@ const MENUS = [
   { id: 'insert', label: 'Insert', commands: ['import'] },
   { id: 'edit', label: 'Edit', commands: ['format'] },
   { id: 'build', label: 'Build', commands: ['sync', 'check'] },
-  { id: 'view', label: 'View', commands: ['togglePanel'] }
+  { id: 'view', label: 'View', commands: ['togglePanel', 'fullscreen'] }
 ] as const satisfies ReadonlyArray<{
   id: MenuId;
   label: string;

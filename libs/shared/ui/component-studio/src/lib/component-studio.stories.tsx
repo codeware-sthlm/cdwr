@@ -373,6 +373,11 @@ export const KitFailsToLoad: Story = {
   }
 };
 
+export const Fullscreen: Story = {
+  name: 'Full screen',
+  args: { defaultFullscreen: true, build: failedBuild, withPanel: true }
+};
+
 export const Dark: Story = {
   name: 'Dark colour scheme',
   args: { colorScheme: 'dark', build: failedBuild, withPanel: true },

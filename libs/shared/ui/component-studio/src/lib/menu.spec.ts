@@ -14,6 +14,7 @@ const state = (overrides: Partial<MenuState> = {}): MenuState => ({
   hasPanel: true,
   panelOpen: true,
   panelTitle: 'Inputs',
+  fullscreen: false,
   ...overrides
 });
 
@@ -35,7 +36,7 @@ describe('buildMenus', () => {
       ['Insert', ['Import']],
       ['Edit', ['Format']],
       ['Build', ['Sync inputs', 'Check']],
-      ['View', ['Hide inputs panel']]
+      ['View', ['Hide inputs panel', 'Full screen']]
     ]);
   });
 
@@ -46,6 +47,20 @@ describe('buildMenus', () => {
     expect(entries(state({ panelTitle: 'Props' })).togglePanel?.label).toBe(
       'Hide props panel'
     );
+  });
+
+  it('flips the full screen label while it is on', () => {
+    expect(entries(state()).fullscreen?.label).toBe('Full screen');
+    expect(entries(state({ fullscreen: true })).fullscreen?.label).toBe(
+      'Exit full screen'
+    );
+  });
+
+  it('keeps full screen available when read-only or busy', () => {
+    expect(
+      entries(state({ readOnly: true, busy: 'check', hasPanel: false }))
+        .fullscreen?.disabled
+    ).toBe(false);
   });
 
   it('enables everything when idle', () => {

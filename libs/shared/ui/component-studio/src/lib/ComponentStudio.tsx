@@ -4,7 +4,14 @@ import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { cn } from '@codeware/shared/util/ui';
 import type { OnMount } from '@monaco-editor/react';
 import { XIcon } from 'lucide-react';
-import { type ReactNode, useCallback, useId, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState
+} from 'react';
 
 import type { StudioBuild } from './build-state';
 import type { ImportCatalog } from './catalog';
@@ -31,6 +38,8 @@ export type ComponentStudioProps = StudioHandlers & {
   /** Added to the panel, e.g. to widen it */
   panelClassName?: string;
   defaultPanelOpen?: boolean;
+  /** Starts as an overlay covering the window */
+  defaultFullscreen?: boolean;
   /** Names the editor's model; each studio gets its own unless told otherwise */
   modelPath?: string;
   /** Added to what portals out of the studio (menus, the picker) */
@@ -58,6 +67,7 @@ export const ComponentStudio = ({
   sidePanelTitle = 'Inputs',
   panelClassName,
   defaultPanelOpen = true,
+  defaultFullscreen = false,
   modelPath,
   portalClassName,
   className
@@ -67,6 +77,7 @@ export const ComponentStudio = ({
   const hasPanel = sidePanel !== undefined;
   const [panelOpen, setPanelOpen] = useState(defaultPanelOpen);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(defaultFullscreen);
 
   const studio = useStudio({
     onCheck,
@@ -78,7 +89,8 @@ export const ComponentStudio = ({
       if (hasPanel) {
         setPanelOpen((open) => !open);
       }
-    }, [hasPanel])
+    }, [hasPanel]),
+    toggleFullscreen: useCallback(() => setFullscreen((on) => !on), [])
   });
 
   // Key bindings are registered once, so they reach the commands by ref
@@ -86,9 +98,24 @@ export const ComponentStudio = ({
   run.current = studio.run;
   const { attach, handle } = studio;
 
+  // Escape belongs to the editor's own widgets first, so the binding only
+  // applies while full screen is on and none of them is open
+  const fullscreenKey = useRef<{ set: (on: boolean) => void } | null>(null);
+  const fullscreenNow = useRef(fullscreen);
+  fullscreenNow.current = fullscreen;
+
   const onMount = useCallback<OnMount>(
     (editor, monaco) => {
       attach(editor, monaco);
+      fullscreenKey.current = editor.createContextKey(
+        'studioFullscreen',
+        fullscreenNow.current
+      );
+      editor.addCommand(
+        monaco.KeyCode.Escape,
+        () => setFullscreen(false),
+        'studioFullscreen && !suggestWidgetVisible && !findWidgetVisible && !parameterHintsVisible && !editorHasMultipleSelections'
+      );
       for (const { id, shortcut } of boundCommands()) {
         editor.addCommand(toKeybinding(monaco, shortcut), () =>
           run.current[id]()
@@ -103,6 +130,47 @@ export const ComponentStudio = ({
     [handle]
   );
 
+  useEffect(() => {
+    fullscreenKey.current?.set(fullscreen);
+  }, [fullscreen]);
+
+  // Entering or leaving hands the keyboard back to the editor
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    focusEditor();
+  }, [fullscreen, focusEditor]);
+
+  // The page behind must not scroll under the overlay
+  useEffect(() => {
+    if (!fullscreen) {
+      return;
+    }
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, [fullscreen]);
+
+  // For when the editor is not focused; the picker's dialog has already
+  // claimed its own Escape by the time it bubbles up to the document
+  useEffect(() => {
+    if (!fullscreen || pickerOpen) {
+      return;
+    }
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        setFullscreen(false);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [fullscreen, pickerOpen]);
+
   const model = stripModel(
     build,
     studio.busy ? { kind: 'busy', task: studio.busy } : studio.last
@@ -113,14 +181,22 @@ export const ComponentStudio = ({
     canSync: onSyncInputs !== undefined,
     hasPanel,
     panelOpen,
-    panelTitle: sidePanelTitle
+    panelTitle: sidePanelTitle,
+    fullscreen
   });
 
   return (
     <div
       data-slot="component-studio"
       data-color-scheme={colorScheme}
-      className={cn('twp flex flex-col gap-3', className)}
+      className={cn(
+        'twp flex flex-col gap-3',
+        // Above Payload's nav, modals and status bar (20-40), below the
+        // dialogs and popovers that portal out of the studio (50, 60)
+        fullscreen &&
+          'bg-background text-foreground fixed inset-0 z-45 overflow-hidden p-4',
+        className
+      )}
     >
       <StatusStrip
         model={model}
@@ -135,31 +211,46 @@ export const ComponentStudio = ({
         }}
       />
 
-      <div className="@container">
-        <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start">
-          <div className="min-w-0 flex-1 overflow-hidden rounded-lg border">
+      <div className={cn('@container', fullscreen && 'min-h-0 flex-1')}>
+        <div
+          className={cn(
+            'flex flex-col gap-3 @2xl:flex-row',
+            fullscreen ? 'h-full' : '@2xl:items-start'
+          )}
+        >
+          <div
+            className={cn(
+              'flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border',
+              fullscreen && 'min-h-0'
+            )}
+          >
             <StudioToolbar
               groups={menus.filter(({ id }) => id !== 'view')}
               onRun={(id) => run.current[id]()}
               panel={
                 hasPanel ? { open: panelOpen, title: sidePanelTitle } : null
               }
+              fullscreen={fullscreen}
             />
-            <SourceEditor
-              value={value}
-              onChange={onChange}
-              readOnly={readOnly}
-              colorScheme={colorScheme}
-              modelPath={modelPath ?? ownPath}
-              onMount={onMount}
-            />
+            <div className={cn(fullscreen && 'min-h-0 flex-1')}>
+              <SourceEditor
+                value={value}
+                onChange={onChange}
+                readOnly={readOnly}
+                colorScheme={colorScheme}
+                modelPath={modelPath ?? ownPath}
+                onMount={onMount}
+                fill={fullscreen}
+              />
+            </div>
           </div>
 
           {hasPanel && panelOpen && (
             <aside
               aria-label={sidePanelTitle}
               className={cn(
-                'bg-card flex shrink-0 flex-col rounded-lg border @2xl:max-h-160 @2xl:w-72',
+                'bg-card flex shrink-0 flex-col rounded-lg border @2xl:w-72',
+                fullscreen ? 'max-h-1/2 @2xl:max-h-none' : '@2xl:max-h-160',
                 panelClassName
               )}
             >

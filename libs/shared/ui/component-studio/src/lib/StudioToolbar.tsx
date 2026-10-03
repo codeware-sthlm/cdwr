@@ -3,6 +3,8 @@ import { ButtonGroup } from '@codeware/shared/ui/shadcn/components/button-group'
 import {
   CircleCheckIcon,
   type LucideIcon,
+  Maximize2Icon,
+  Minimize2Icon,
   PackagePlusIcon,
   PanelRightCloseIcon,
   PanelRightOpenIcon,
@@ -19,6 +21,7 @@ type Props = {
   onRun: (id: CommandId) => void;
   /** The side panel's toggle, at the far end; absent without a panel */
   panel: { open: boolean; title: string } | null;
+  fullscreen: boolean;
 };
 
 /** One entry per command; a command without an icon does not compile */
@@ -27,7 +30,8 @@ const icons = {
   import: PackagePlusIcon,
   check: CircleCheckIcon,
   sync: RefreshCwIcon,
-  togglePanel: PanelRightOpenIcon
+  togglePanel: PanelRightOpenIcon,
+  fullscreen: Maximize2Icon
 } as const satisfies Record<CommandId, LucideIcon>;
 
 /** What a button does, said in full where its label is short */
@@ -36,7 +40,8 @@ const hints = {
   import: 'Add an import from React, the site kit or a bundled package',
   check: 'Build the unsaved source and show what is wrong, without saving',
   sync: 'Fill the Inputs list from the props the code takes',
-  togglePanel: 'Show or hide the inputs panel'
+  togglePanel: 'Show or hide the inputs panel',
+  fullscreen: 'Fill the window with the editor'
 } as const satisfies Record<CommandId, string>;
 
 /** Whether the keys read as a Mac's; false until mounted, so server and client agree */
@@ -50,9 +55,9 @@ const useIsMac = (): boolean => {
 
 /**
  * The header of the editor: the actions as one row of joined buttons, and
- * the side panel's toggle at the far end.
+ * the side panel's and full screen's toggles at the far end.
  */
-export const StudioToolbar = ({ groups, onRun, panel }: Props) => {
+export const StudioToolbar = ({ groups, onRun, panel, fullscreen }: Props) => {
   const mac = useIsMac();
 
   return (
@@ -83,19 +88,32 @@ export const StudioToolbar = ({ groups, onRun, panel }: Props) => {
             );
           })}
       </ButtonGroup>
-      {panel && (
+      <div className="flex items-center gap-1">
+        {panel && (
+          <Button
+            type="button"
+            variant={panel.open ? 'secondary' : 'ghost'}
+            size="icon-sm"
+            aria-pressed={panel.open}
+            aria-label={`${panel.open ? 'Hide' : 'Show'} ${panel.title.toLowerCase()} panel`}
+            title={`${panel.open ? 'Hide' : 'Show'} ${panel.title.toLowerCase()}`}
+            onClick={() => onRun('togglePanel')}
+          >
+            {panel.open ? <PanelRightCloseIcon /> : <PanelRightOpenIcon />}
+          </Button>
+        )}
         <Button
           type="button"
-          variant={panel.open ? 'secondary' : 'ghost'}
+          variant={fullscreen ? 'secondary' : 'ghost'}
           size="icon-sm"
-          aria-pressed={panel.open}
-          aria-label={`${panel.open ? 'Hide' : 'Show'} ${panel.title.toLowerCase()} panel`}
-          title={`${panel.open ? 'Hide' : 'Show'} ${panel.title.toLowerCase()}`}
-          onClick={() => onRun('togglePanel')}
+          aria-pressed={fullscreen}
+          aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
+          title={fullscreen ? 'Exit full screen (Esc)' : hints.fullscreen}
+          onClick={() => onRun('fullscreen')}
         >
-          {panel.open ? <PanelRightCloseIcon /> : <PanelRightOpenIcon />}
+          {fullscreen ? <Minimize2Icon /> : <Maximize2Icon />}
         </Button>
-      )}
+      </div>
     </div>
   );
 };

@@ -11,6 +11,8 @@ type Props = {
   /** Names the editor's model; two editors on one page need two */
   modelPath: string;
   onMount: OnMount;
+  /** Takes the height of its parent instead of growing with the source */
+  fill?: boolean;
 };
 
 const MONACO_THEMES = {
@@ -18,16 +20,17 @@ const MONACO_THEMES = {
   dark: 'vs-dark'
 } as const satisfies Record<Props['colorScheme'], string>;
 
-/** Monaco, as a controlled TSX editor that grows with its source. */
+/** Monaco, as a controlled TSX editor that grows with its source, or fills its parent. */
 export const SourceEditor = ({
   value,
   onChange,
   readOnly,
   colorScheme,
   modelPath,
-  onMount
+  onMount,
+  fill = false
 }: Props) => {
-  const height = editorHeight(value.split('\n').length);
+  const height = fill ? '100%' : editorHeight(value.split('\n').length);
   const beforeMount: BeforeMount = configureTypescript;
 
   return (
