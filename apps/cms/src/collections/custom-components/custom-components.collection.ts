@@ -34,11 +34,20 @@ import {
  */
 const componentSlugPattern = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
+/** Room for a bundle that carries a chart library, with margin */
+const MAX_BUNDLE_LENGTH = 4_000_000;
+
 /** An identifier an editor-facing prop can be addressed by */
 const propNamePattern = /^[a-z][a-zA-Z0-9]*$/;
 
-/** Reuses the slug field's per-tenant uniqueness and dash formatting. */
-const base = slugField({ sourceField: 'name', required: true }) as TextField;
+/**
+ * Reuses the slug field's per-tenant uniqueness and dash formatting.
+ *
+ * Not `required`: the admin would then insist on a value before the hook that
+ * fills it from the name has run. Validation below refuses an empty slug once
+ * the hook has had its turn.
+ */
+const base = slugField({ sourceField: 'name', required: false }) as TextField;
 
 const componentSlugField: TextField = {
   ...base,
@@ -55,13 +64,14 @@ const componentSlugField: TextField = {
     }
   },
   validate: ((value, { req }) => {
-    // `required` already reports an empty slug
-    if (!value || componentSlugPattern.test(value)) {
-      return true;
+    if (!value) {
+      return customT((req as PayloadRequest).t)(
+        'validation:componentSlugRequired'
+      );
     }
-    return customT((req as PayloadRequest).t)(
-      'validation:componentSlugInvalid'
-    );
+    return componentSlugPattern.test(value)
+      ? true
+      : customT((req as PayloadRequest).t)('validation:componentSlugInvalid');
   }) as Validate
 };
 
@@ -257,12 +267,16 @@ const customComponents: CollectionConfig = {
             name: 'js',
             type: 'textarea',
             label: { en: 'JavaScript', sv: 'JavaScript' },
+            // A bundle with a chart library runs to hundreds of KB; Payload's
+            // default ceiling for text is 40 000 characters
+            maxLength: MAX_BUNDLE_LENGTH,
             admin: { hidden: true }
           },
           {
             name: 'css',
             type: 'textarea',
             label: { en: 'CSS', sv: 'CSS' },
+            maxLength: MAX_BUNDLE_LENGTH,
             admin: { hidden: true }
           },
           {

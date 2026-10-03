@@ -334,6 +334,7 @@ const customTranslationsSchema = z.object({
     signupWouldOverbook: z.string(),
     svgCode: z.string(),
     componentSlugInvalid: z.string(),
+    componentSlugRequired: z.string(),
     propNameInvalid: z.string(),
     propNameDuplicate: z.string(),
     propsNotObject: z.string(),
@@ -733,6 +734,7 @@ Supported locales: {{locales}}`,
       svgCode: 'Enter SVG code, starting with <svg>.',
       componentSlugInvalid:
         'Use lowercase letters, numbers and single dashes, starting with a letter, e.g. "price-table".',
+      componentSlugRequired: 'A slug is needed; it is made from the name.',
       propNameInvalid:
         'Start with a lowercase letter and use only letters and numbers, e.g. "buttonLabel".',
       propNameDuplicate: 'Each input needs its own name. Repeated: {{names}}.',
@@ -1137,6 +1139,7 @@ Språk som stöds: {{locales}}`,
       svgCode: 'Ange SVG-kod som börjar med <svg>.',
       componentSlugInvalid:
         'Använd små bokstäver, siffror och enkla bindestreck, och börja med en bokstav, t.ex. "pristabell".',
+      componentSlugRequired: 'En slug behövs; den skapas från namnet.',
       propNameInvalid:
         'Börja med en liten bokstav och använd bara bokstäver och siffror, t.ex. "knappText".',
       propNameDuplicate:

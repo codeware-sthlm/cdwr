@@ -833,7 +833,7 @@ export interface CodeBlock {
 export interface CustomComponentBlock {
   component: number | CustomComponent;
   /**
-   * The values for the props the component declares.
+   * The values for the inputs the component declares.
    */
   props?:
     | {
@@ -865,7 +865,7 @@ export interface CustomComponent {
   /**
    * Names the component's element, which becomes cdwr-x-<slug>. Generated from the name if left empty.
    */
-  slug: string;
+  slug?: string | null;
   /**
    * The React component, compiled to a web component when saved.
    */
