@@ -15,9 +15,10 @@ import {
 
 import type { StudioBuild } from './build-state';
 import type { ImportCatalog } from './catalog';
+import type { EditorTypes } from './editor-types';
 import { ImportPicker } from './ImportPicker';
 import { boundCommands, buildMenus } from './menu';
-import { revealPosition, toKeybinding } from './monaco';
+import { loadEditorTypes, revealPosition, toKeybinding } from './monaco';
 import { SourceEditor } from './SourceEditor';
 import { StatusStrip } from './StatusStrip';
 import { stripModel } from './strip';
@@ -33,6 +34,11 @@ export type ComponentStudioProps = StudioHandlers & {
   /** The stored build, or null before there is one */
   build: StudioBuild | null;
   catalog: ImportCatalog;
+  /**
+   * Declarations that turn on type-checking and import completion. Loaded once
+   * per page; until they arrive, or without them, only syntax is checked.
+   */
+  loadTypes?: () => Promise<EditorTypes | null>;
   sidePanel?: ReactNode;
   sidePanelTitle?: string;
   /** Added to the panel, e.g. to widen it */
@@ -63,6 +69,7 @@ export const ComponentStudio = ({
   onCheck,
   onSyncInputs,
   catalog,
+  loadTypes,
   sidePanel,
   sidePanelTitle = 'Inputs',
   panelClassName,
@@ -107,6 +114,9 @@ export const ComponentStudio = ({
   const onMount = useCallback<OnMount>(
     (editor, monaco) => {
       attach(editor, monaco);
+      if (loadTypes) {
+        void loadEditorTypes(monaco, loadTypes);
+      }
       fullscreenKey.current = editor.createContextKey(
         'studioFullscreen',
         fullscreenNow.current
@@ -122,7 +132,7 @@ export const ComponentStudio = ({
         );
       }
     },
-    [attach]
+    [attach, loadTypes]
   );
 
   const focusEditor = useCallback(

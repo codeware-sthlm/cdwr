@@ -126,7 +126,12 @@ builder changed; otherwise `cdwr fly deploy` sends it there. Deployed without
 a token the service stays up and refuses every build, so a missing secret
 shows in the admin rather than as a failed deploy.
 
-The service logs one JSON line per outcome (`listening`, `build received`, `build finished`, `build refused`) tagged with a request id, never the token or the source; the cms sends the id as `x-request-id` and names it in "The build service did not answer (request <id>)", so `fly logs -a cdwr-builder` filtered on that id finds the matching line.
+The service logs one JSON line per outcome (`listening`, `build received`, `build finished`, `build refused`) tagged with a request id, never the token or the source; the cms sends the id as `x-request-id` and names it in `The build service did not answer (request <id>)`, so `fly logs -a cdwr-builder` filtered on that id finds the matching line.
+
+The studio's editor type-checks against the same declarations the build uses: `nx studio-types cms`
+collects them into `apps/cms/public/studio-types.json` (gitignored, cached on the lockfile and the kit).
+`build` depends on it and `dev` runs it first, inline. The admin loads it from `/studio-types.json`;
+without the file the editor is syntax-only and the build still decides.
 
 Rotating the token is `cdwr builder rotate-token`: the service accepts the previous token
 (`BUILDER_TOKEN_PREVIOUS`) while the cms switches over, so nothing is refused on the way.
