@@ -64,6 +64,14 @@ const BlockSchema = z.object({ blockType: z.string().min(1) }).passthrough();
 
 const NamedSlug = z.object({ name: z.string().min(1), slug: Slug });
 
+const NavigationLink = z.object({
+  reference: z.object({
+    relationTo: z.enum(['pages', 'posts']),
+    lookupSlug: Slug
+  }),
+  label: z.string().optional()
+});
+
 export const SiteDefinitionSchema = z
   .object({
     name: z.string().min(1),
@@ -183,16 +191,21 @@ export const SiteDefinitionSchema = z
           .passthrough()
       )
       .optional(),
+    // Strict on both sides: an item stating a reference and children would
+    // otherwise pass as a link and lose the children without a word
     navigation: z
       .array(
-        z.object({
-          reference: z.object({
-            relationTo: z.enum(['pages', 'posts']),
-            lookupSlug: Slug
-          }),
-          label: z.string().optional(),
-          appearance: z.enum(['link', 'button']).optional()
-        })
+        z.union([
+          NavigationLink.extend({
+            appearance: z.enum(['link', 'button']).optional()
+          }).strict(),
+          z
+            .object({
+              label: z.string().min(1),
+              children: z.array(NavigationLink.strict()).min(1)
+            })
+            .strict()
+        ])
       )
       .optional(),
     siteSettings: z.record(z.unknown()).optional()
@@ -280,13 +293,31 @@ export const SiteDefinitionSchema = z
       (definition.places ?? []).map(({ name }) => name)
     );
 
-    (definition.navigation ?? []).forEach(({ reference }, index) => {
+    const checkNavigationLink = (
+      { reference }: z.infer<typeof NavigationLink>,
+      path: Array<string | number>
+    ) => {
       const known = reference.relationTo === 'pages' ? pageSlugs : postSlugs;
       if (!known.has(reference.lookupSlug)) {
         problem(
           `Navigation points at ${reference.relationTo} '${reference.lookupSlug}', which this definition does not state`,
-          ['navigation', index]
+          path
         );
+      }
+    };
+
+    (definition.navigation ?? []).forEach((item, index) => {
+      if ('children' in item) {
+        item.children.forEach((child, childIndex) =>
+          checkNavigationLink(child, [
+            'navigation',
+            index,
+            'children',
+            childIndex
+          ])
+        );
+      } else {
+        checkNavigationLink(item, ['navigation', index]);
       }
     });
 

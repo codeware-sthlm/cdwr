@@ -50,7 +50,12 @@ describe.each([
   it('navigates only to pages it states', () => {
     const slugs = definition.pages.map(({ slug }) => slug);
 
-    for (const { reference } of definition.navigation ?? []) {
+    // A group states its links as children
+    const links = (definition.navigation ?? []).flatMap((item) =>
+      'children' in item ? item.children : [item]
+    );
+
+    for (const { reference } of links) {
       expect(slugs).toContain(reference.lookupSlug);
     }
   });
@@ -115,7 +120,7 @@ describe.each([['moon', moon]])(
 
     it('labels the three listings, as the seed did', () => {
       const labelled = (definition.navigation ?? []).filter(
-        ({ label }) => label
+        (item) => !('children' in item) && item.label
       );
 
       expect(labelled).toHaveLength(3);

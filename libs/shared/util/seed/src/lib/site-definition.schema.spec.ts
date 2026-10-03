@@ -90,6 +90,70 @@ describe('SiteDefinitionSchema', () => {
       expect(errorsOf(definition)).toEqual([]);
     });
 
+    it('accepts a navigation group of links it does state', () => {
+      const definition = {
+        ...minimal,
+        navigation: [
+          {
+            label: 'Explore',
+            children: [
+              { reference: { relationTo: 'pages', lookupSlug: 'home' } }
+            ]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition)).toEqual([]);
+    });
+
+    it('refuses a group child pointing at a page it does not state', () => {
+      const definition = {
+        ...minimal,
+        navigation: [
+          {
+            label: 'Explore',
+            children: [
+              { reference: { relationTo: 'pages', lookupSlug: 'home' } },
+              { reference: { relationTo: 'pages', lookupSlug: 'nowhere' } }
+            ]
+          }
+        ]
+      };
+
+      const result = SiteDefinitionSchema.safeParse(definition);
+      expect(result.success).toBe(false);
+      expect(
+        !result.success && result.error.issues.map((issue) => issue.path)
+      ).toContainEqual(['navigation', 0, 'children', 1]);
+    });
+
+    it('refuses an item that is both a link and a group', () => {
+      // Would otherwise pass as a link and lose its children in silence
+      const definition = {
+        ...minimal,
+        navigation: [
+          {
+            reference: { relationTo: 'pages', lookupSlug: 'home' },
+            label: 'Explore',
+            children: [
+              { reference: { relationTo: 'pages', lookupSlug: 'home' } }
+            ]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition)).not.toEqual([]);
+    });
+
+    it('refuses a group without children', () => {
+      const definition = {
+        ...minimal,
+        navigation: [{ label: 'Explore', children: [] }]
+      };
+
+      expect(errorsOf(definition)).not.toEqual([]);
+    });
+
     it('refuses a block referring to media it does not state', () => {
       // How a page ships without its image: the apply resolves the reference to
       // nothing and drops it, saying so only in a log nobody reads

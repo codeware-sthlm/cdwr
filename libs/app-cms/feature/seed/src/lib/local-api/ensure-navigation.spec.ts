@@ -6,6 +6,9 @@ type Item = {
   id?: string;
   reference?: { relationTo: 'pages'; value: number };
   appearance?: 'link' | 'button';
+  type?: 'link' | 'group';
+  label?: string;
+  children?: Array<{ reference?: { relationTo: 'pages'; value: number } }>;
 };
 
 /** A Payload holding one tenant's navigation, recording what is written. */
@@ -112,5 +115,85 @@ describe('ensureNavigation', () => {
     expect(fresh.calls.update[0].map((item) => item.appearance)).toEqual([
       'button'
     ]);
+  });
+
+  describe('groups', () => {
+    const group = (...values: Array<number>) => ({
+      label: 'Explore',
+      children: values.map((value) => page(value))
+    });
+    const storedGroup = (...values: Array<number>) => ({
+      type: 'group' as const,
+      ...group(...values)
+    });
+
+    it('appends a group the navigation lacks', async () => {
+      const { payload, calls } = payloadWith([page(3)]);
+
+      await ensureNavigation(
+        payload,
+        { tenant: 1, items: [page(3), group(4, 5)] },
+        options
+      );
+
+      expect(calls.update[0]).toHaveLength(2);
+      expect(calls.update[0][1]).toMatchObject({
+        type: 'group',
+        label: 'Explore'
+      });
+      expect(
+        calls.update[0][1].children?.map((child) => child.reference?.value)
+      ).toEqual([4, 5]);
+    });
+
+    it('matches a group by label and keeps its links unless the definition wins', async () => {
+      const { payload, calls } = payloadWith([storedGroup(4)]);
+
+      await ensureNavigation(
+        payload,
+        { tenant: 1, items: [group(4, 5)] },
+        options
+      );
+
+      expect(calls.update).toEqual([]);
+    });
+
+    it('drops a child whose page is gone, and the group once none is left', async () => {
+      const { payload, calls } = payloadWith([
+        {
+          type: 'group',
+          label: 'Explore',
+          children: [page(4), { id: 'gone' }]
+        },
+        { type: 'group', label: 'Empty', children: [{ id: 'gone' }] }
+      ]);
+
+      await ensureNavigation(
+        payload,
+        { tenant: 1, items: [group(4)] },
+        options
+      );
+
+      expect(calls.update).toHaveLength(1);
+      expect(calls.update[0]).toHaveLength(1);
+      expect(
+        calls.update[0][0].children?.map((child) => child.reference?.value)
+      ).toEqual([4]);
+    });
+
+    it('replaces a matched groups links when the definition wins', async () => {
+      const { payload, calls } = payloadWith([storedGroup(4)]);
+
+      await ensureNavigation(
+        payload,
+        { tenant: 1, items: [group(5, 6)] },
+        { ...options, definitionWins: true }
+      );
+
+      expect(calls.update).toHaveLength(1);
+      expect(
+        calls.update[0][0].children?.map((child) => child.reference?.value)
+      ).toEqual([5, 6]);
+    });
   });
 });
