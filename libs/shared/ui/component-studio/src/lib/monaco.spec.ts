@@ -17,9 +17,9 @@ describe('editorHeight', () => {
 
 describe('modelUri', () => {
   it('ends in .tsx so JSX is on', () => {
-    expect(modelUri('component')).toBe('inmemory://studio/component.tsx');
+    expect(modelUri('component')).toBe('file:///studio/component.tsx');
     expect(modelUri('custom components/a.b')).toBe(
-      'inmemory://studio/custom-components/a-b.tsx'
+      'file:///studio/custom-components/a-b.tsx'
     );
   });
 });
