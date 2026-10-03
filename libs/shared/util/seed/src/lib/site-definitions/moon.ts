@@ -794,6 +794,20 @@ export const moon: SiteDefinition = {
       }
     },
     {
+      label: 'Explore',
+      children: [
+        { reference: { relationTo: 'pages', lookupSlug: 'file-area' } },
+        {
+          reference: { relationTo: 'pages', lookupSlug: 'blocks' },
+          label: 'Block gallery'
+        },
+        {
+          reference: { relationTo: 'pages', lookupSlug: 'studio' },
+          label: 'Theme studio'
+        }
+      ]
+    },
+    {
       reference: {
         relationTo: 'pages',
         lookupSlug: 'moon-members'
