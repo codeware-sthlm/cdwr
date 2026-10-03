@@ -1,3 +1,5 @@
+import { execSync } from 'node:child_process';
+
 import { releaseChangelog } from 'nx/release';
 
 export type AppChangelogRange = {
@@ -16,7 +18,30 @@ export type AppChangelogOptions = {
    * pull request comment instead.
    */
   createRelease: boolean;
+  /**
+   * Where an app's range starts when its previous release tag does not exist,
+   * which is the case for an app released for the first time. Defaults to the
+   * repository's root commit, so the first changelog lists everything that
+   * ever touched the app.
+   */
+  firstRef?: () => string;
 };
+
+const tagExists = (tag: string): boolean => {
+  try {
+    execSync(`git rev-parse -q --verify refs/tags/${tag}`, {
+      stdio: 'ignore'
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const rootCommit = (): string =>
+  execSync('git rev-list --max-parents=0 HEAD', { encoding: 'utf8' })
+    .trim()
+    .split('\n')[0];
 
 /**
  * Render the changelog for each released app.
@@ -41,7 +66,8 @@ export type AppChangelogOptions = {
  */
 export const generateAppChangelogs = async ({
   releases,
-  createRelease
+  createRelease,
+  firstRef = rootCommit
 }: AppChangelogOptions): Promise<Map<string, string>> => {
   const changelogs = new Map<string, string>();
 
@@ -53,9 +79,13 @@ export const generateAppChangelogs = async ({
   // The ref mirrors `releaseTag.pattern` for the `apps` group in nx.json;
   // changing that pattern means changing this too.
   for (const [projectName, { version, previousVersion }] of releases) {
+    // An app released for the first time has no tag to start from
+    const previousTag = `${projectName}-${previousVersion}`;
+    const from = tagExists(previousTag) ? previousTag : firstRef();
+
     const { projectChangelogs } = await releaseChangelog({
       projects: [projectName],
-      from: `${projectName}-${previousVersion}`,
+      from,
       versionData: {
         [projectName]: {
           currentVersion: previousVersion,

@@ -1,8 +1,11 @@
+import { execSync } from 'node:child_process';
+
 import { releaseChangelog } from 'nx/release';
 
 import { generateAppChangelogs } from './generate-app-changelogs';
 
 vi.mock('nx/release', () => ({ releaseChangelog: vi.fn() }));
+vi.mock('node:child_process', () => ({ execSync: vi.fn() }));
 
 describe('generateAppChangelogs', () => {
   const mockReleaseChangelog = vi.mocked(releaseChangelog);
@@ -31,6 +34,30 @@ describe('generateAppChangelogs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     withContents({});
+    // Every previous tag exists unless a test says otherwise
+    vi.mocked(execSync).mockReturnValue('');
+  });
+
+  it('should start a first release from the root commit', async () => {
+    vi.mocked(execSync).mockImplementation((command) => {
+      if (String(command).includes('refs/tags/api-0.0.0')) {
+        throw new Error('not found');
+      }
+      return '';
+    });
+    const firstRef = vi.fn(() => 'abc123');
+
+    await generateAppChangelogs({
+      releases: new Map([
+        ['api', { version: '0.0.1', previousVersion: '0.0.0' }]
+      ]),
+      createRelease: false,
+      firstRef
+    });
+
+    expect(mockReleaseChangelog).toHaveBeenCalledWith(
+      expect.objectContaining({ projects: ['api'], from: 'abc123' })
+    );
   });
 
   it('should anchor `from` to each app own previous tag', async () => {
