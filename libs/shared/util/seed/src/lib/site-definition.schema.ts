@@ -36,6 +36,7 @@ const KNOWN_KEYS = [
   'media',
   'forms',
   'customThemes',
+  'customComponents',
   'reusableContent',
   'places',
   'tours',
@@ -106,6 +107,17 @@ export const SiteDefinitionSchema = z
             // Judged by the type and, on apply, by the theme's own validation,
             // which refuses a theme whose colours fail the contrast check
             recipe: z.object({}).passthrough()
+          })
+          .passthrough()
+      )
+      .optional(),
+    customComponents: z
+      .array(
+        z
+          .object({
+            name: z.string().min(1),
+            slug: Slug,
+            source: z.string().min(1)
           })
           .passthrough()
       )
@@ -223,6 +235,13 @@ export const SiteDefinitionSchema = z
       problem(`Two media entries share the filename '${filename}'`, ['media'])
     );
     duplicates(
+      (definition.customComponents ?? []).map(({ slug }) => slug)
+    ).forEach((slug) =>
+      problem(`Two custom components share the slug '${slug}'`, [
+        'customComponents'
+      ])
+    );
+    duplicates(
       (definition.reusableContent ?? []).map(({ title }) => title)
     ).forEach((title) =>
       problem(`Two reusable content entries share the title '${title}'`, [
@@ -250,6 +269,9 @@ export const SiteDefinitionSchema = z
     );
     const formTitles = new Set(
       (definition.forms ?? []).map(({ title }) => title)
+    );
+    const customComponentSlugs = new Set(
+      (definition.customComponents ?? []).map(({ slug }) => slug)
     );
     const reusableContentTitles = new Set(
       (definition.reusableContent ?? []).map(({ title }) => title)
@@ -322,10 +344,13 @@ export const SiteDefinitionSchema = z
         }
       }
 
-      // `lookupSlug` is worn by tags and categories alike, so the field it
-      // sits on is what says which
+      // `lookupSlug` is worn by tags, categories and custom components alike,
+      // so the field it sits on is what says which
       const slug = ref['lookupSlug'];
       if (slug !== undefined) {
+        if (field === 'component' && !customComponentSlugs.has(slug)) {
+          problem(`No custom component '${slug}' in this definition`, path);
+        }
         if (field === 'tags' && !tagSlugs.has(slug)) {
           problem(`No tag '${slug}' in this definition`, path);
         }

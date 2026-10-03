@@ -16,6 +16,7 @@ export const managedCollectionSlugs = [
   'pages',
   'posts',
   'custom-themes',
+  'custom-components',
   'reusable-content',
   'places',
   'tours'

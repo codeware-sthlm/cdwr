@@ -4,7 +4,10 @@ import {
   tsxSourceField
 } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
-import { adminGroups } from '@codeware/app-cms/util/definitions';
+import {
+  adminGroups,
+  managedByField
+} from '@codeware/app-cms/util/definitions';
 import { customT } from '@codeware/app-cms/util/i18n';
 import { canEdit } from '@codeware/app-cms/util/misc';
 import { COMPONENT_TAG_PREFIX } from '@codeware/shared/util/payload-utils';
@@ -117,6 +120,7 @@ const customComponents: CollectionConfig = {
     plural: { en: 'Custom components', sv: 'Egna komponenter' }
   },
   fields: [
+    managedByField(),
     {
       type: 'row',
       fields: [

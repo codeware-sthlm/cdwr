@@ -6,13 +6,14 @@ import type { BlockDefinition } from '@codeware/shared/util/seed';
  * Resolved **per block type** rather than by walking for anything shaped like a
  * reference. `lookupTitle` means a form on one block and a reusable-content
  * document on another, so a generic walker would have to guess, and would guess
- * silently. Eight blocks carry references and the list is closed — being
+ * silently. Nine blocks carry references and the list is closed — being
  * explicit costs a switch and removes the guessing.
  */
 export type ReferenceResolver = {
   media: (filename: string) => number | undefined;
   tag: (slug: string) => number | undefined;
   form: (title: string) => number | undefined;
+  customComponent: (slug: string) => number | undefined;
   reusableContent: (slug: string) => number | undefined;
 };
 
@@ -93,6 +94,12 @@ export function resolveBlockReferences(
     case 'form':
       return { ...source, ...swap('form', 'lookupTitle', resolver.form) };
 
+    case 'custom-component':
+      return {
+        ...source,
+        ...swap('component', 'lookupSlug', resolver.customComponent)
+      };
+
     case 'reusable-content':
       return {
         ...source,
@@ -147,7 +154,7 @@ export function resolveBlockReferences(
       };
     }
 
-    // The other twelve blocks point at nothing, so there is nothing to resolve
+    // The other blocks point at nothing, so there is nothing to resolve
     default:
       return source;
   }

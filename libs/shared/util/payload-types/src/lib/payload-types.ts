@@ -861,6 +861,7 @@ export interface CustomComponentBlock {
 export interface CustomComponent {
   id: number;
   tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   name: string;
   /**
    * Names the component's element, which becomes cdwr-x-<slug>. Generated from the name if left empty.
@@ -2915,6 +2916,7 @@ export interface CategoriesSelect<T extends boolean = true> {
  */
 export interface CustomComponentsSelect<T extends boolean = true> {
   tenant?: T;
+  managedBy?: T;
   name?: T;
   slug?: T;
   source?: T;
