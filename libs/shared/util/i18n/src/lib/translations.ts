@@ -86,6 +86,7 @@ export type TranslationKey =
   | 'gallery.fields'
   | 'gallery.next'
   | 'gallery.notOffered'
+  | 'gallery.ownBuild'
   | 'gallery.previous'
   | 'gallery.required'
   | 'gallery.expand'
@@ -299,6 +300,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.next': 'Next block',
     'gallery.notOffered':
       'Editors cannot add this block to a page, but it still shows where it is already in use.',
+    'gallery.ownBuild':
+      'What this block shows is built by each workspace\u2019s own developers, so there is no example to draw here. See it where a page uses one.',
     'gallery.previous': 'Previous block',
     'gallery.required': 'required',
     'gallery.expand': 'Full screen',
@@ -537,6 +540,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'gallery.next': 'Nästa block',
     'gallery.notOffered':
       'Redaktörer kan inte lägga till det här blocket på en sida, men det visas fortfarande där det redan används.',
+    'gallery.ownBuild':
+      'Det som det här blocket visar bygger varje arbetsytas egna utvecklare, så det finns inget exempel att rita här. Se det där en sida använder ett.',
     'gallery.previous': 'Föregående block',
     'gallery.required': 'obligatoriskt',
     'gallery.expand': 'Helskärm',

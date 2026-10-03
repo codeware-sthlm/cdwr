@@ -82,8 +82,18 @@ export type BlockGalleryDoc<TExample extends BlockExample = BlockExample> =
  */
 export type RetiredBlockDoc = BlockGalleryProse & { retired: true };
 
-/** Either shape, as the gallery receives it. */
-export type AnyBlockGalleryDoc = BlockGalleryDoc | RetiredBlockDoc;
+/**
+ * A block whose content is built by the workspace that places it.
+ *
+ * `custom-component` draws a bundle a tenant's own developer wrote and the
+ * cms built; the gallery is source and has no bundle to hand the renderer,
+ * so the entry describes the block and points at a page that uses one.
+ */
+export type OwnBuildBlockDoc = BlockGalleryProse & { ownBuild: true };
+
+/** Any shape, as the gallery receives it. */
+export type AnyBlockGalleryDoc =
+  BlockGalleryDoc | RetiredBlockDoc | OwnBuildBlockDoc;
 
 /** Whether this entry has something to draw. */
 export const hasExample = (doc: AnyBlockGalleryDoc): doc is BlockGalleryDoc =>
