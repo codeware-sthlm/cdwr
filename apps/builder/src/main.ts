@@ -19,8 +19,12 @@ if (!process.env['BUILDER_TOKEN'] && process.env['INFISICAL_CLIENT_ID']) {
 // Without a token the service still answers its health check, so a deploy
 // that is missing the secret goes through and says so here instead of
 // crash-looping; every build is refused until the token arrives
-const token = process.env['BUILDER_TOKEN'] || null;
-if (token === null) {
+// During a token rollover the previous token is accepted too
+const tokens = [
+  process.env['BUILDER_TOKEN'],
+  process.env['BUILDER_TOKEN_PREVIOUS']
+].filter((value): value is string => Boolean(value));
+if (!process.env['BUILDER_TOKEN']) {
   console.error('[builder] BUILDER_TOKEN is not set: builds are refused.');
 }
 
@@ -31,7 +35,7 @@ const root = process.env['COMPONENT_TOOLCHAIN_ROOT'] || undefined;
 const inBuildTurn = createTurnQueue();
 
 const app = createApp({
-  token,
+  tokens,
   build: (input) => inBuildTurn(() => runComponentBuild(input, { root }))
 });
 

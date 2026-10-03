@@ -68,6 +68,15 @@ request can get an app it did not change. The apps offered are the `apps` releas
 production runs from `main` and asks for confirmation. `--tenant` limits it to one tenant. The run's
 URL is reported, and is in the `--json` result.
 
+## Rotating the builder token
+
+`cdwr builder rotate-token --env production` rolls over the token the cms sends to the builder
+service. The builder first accepts the old and the new token (`BUILDER_TOKEN_PREVIOUS`), then the
+cms gets the new one and every cms app restarts, then the old token is retired and the builder
+restarts, so nothing is refused on the way. Progress lives in the three Infisical secrets, so an
+interrupted run resumes where it stopped. Preview shares one Infisical environment, so a preview
+rollover covers every pull request's apps. The token is never printed.
+
 ## Writing a command
 
 One file under `src/commands/<group>/`, one entry in `src/commands/index.ts`:

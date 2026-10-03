@@ -13,6 +13,7 @@ export const GROUPS: Group[] = [
   },
   { name: 'infisical', summary: 'Look at what Infisical holds' },
   { name: 'signature', summary: 'Request signing between web and cms' },
+  { name: 'builder', summary: 'The component build service' },
   { name: 'media', summary: 'Showcase imagery' }
 ];
 
@@ -147,6 +148,12 @@ export const ENTRIES: Entry[] = [
     summary: 'Roll over the request signature secret, step by step',
     danger: 'destructive',
     load: () => import('./signature/rotate').then((m) => m.default)
+  },
+  {
+    path: ['builder', 'rotate-token'],
+    summary: 'Roll over the builder token, step by step',
+    danger: 'destructive',
+    load: () => import('./builder/rotate-token').then((m) => m.default)
   },
   {
     path: ['media', 'generate-images'],
