@@ -8,6 +8,7 @@ export {
 export type {
   FooterData,
   FooterLink,
+  FooterLinkGroup,
   MethodOptions,
   NavigationAppearance,
   NavigationGroup,

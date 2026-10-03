@@ -259,11 +259,14 @@ function ExpandedFooter({
     appName,
     contact,
     copyright,
+    groups,
     legalLinks,
     links,
     showVersion,
     tagline
   } = footer;
+
+  const isGrouped = groups.some(({ label }) => label !== null);
 
   return (
     <footer className="bg-core-background-body border-core-content-border mt-16 flex-none border-t">
@@ -293,23 +296,54 @@ function ExpandedFooter({
                   brand column instead, leaving holes in the last row.
                   A second column only earns its keep once the list is long
                   enough to fill it, otherwise the few links drift apart */}
-              {links.length > 0 && (
-                <nav
-                  aria-label={t(locale, 'navigation.footer')}
-                  className={cn(
-                    'text-core-nav-link gap-x-8 text-center text-sm font-medium md:text-left',
-                    links.length >= 4 ? 'columns-1 sm:columns-2' : 'columns-1'
-                  )}
-                >
-                  {links.map(({ key, label, newTab, url }) => (
-                    <div key={key} className="mb-3 break-inside-avoid">
-                      <NavLink href={url} newTab={newTab}>
-                        {label}
-                      </NavLink>
-                    </div>
-                  ))}
-                </nav>
-              )}
+              {links.length > 0 &&
+                (isGrouped ? (
+                  <nav
+                    aria-label={t(locale, 'navigation.footer')}
+                    className="text-core-nav-link grid gap-8 text-center text-sm font-medium sm:grid-cols-2 md:text-left lg:grid-cols-3"
+                  >
+                    {groups.map(({ key, label, links: groupLinks }) => (
+                      <div key={key}>
+                        {/* The unlabelled column keeps the heading's room, so
+                            its first link lines up with the others' */}
+                        <h2
+                          className={cn(
+                            'text-muted-foreground mb-3 text-xs font-semibold tracking-[0.12em] uppercase',
+                            !label && 'invisible'
+                          )}
+                          aria-hidden={!label}
+                        >
+                          {label ?? '\u00a0'}
+                        </h2>
+                        <ul className="flex flex-col gap-3">
+                          {groupLinks.map((link) => (
+                            <li key={link.key}>
+                              <NavLink href={link.url} newTab={link.newTab}>
+                                {link.label}
+                              </NavLink>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </nav>
+                ) : (
+                  <nav
+                    aria-label={t(locale, 'navigation.footer')}
+                    className={cn(
+                      'text-core-nav-link gap-x-8 text-center text-sm font-medium md:text-left',
+                      links.length >= 4 ? 'columns-1 sm:columns-2' : 'columns-1'
+                    )}
+                  >
+                    {links.map(({ key, label, newTab, url }) => (
+                      <div key={key} className="mb-3 break-inside-avoid">
+                        <NavLink href={url} newTab={newTab}>
+                          {label}
+                        </NavLink>
+                      </div>
+                    ))}
+                  </nav>
+                ))}
             </div>
 
             <SecondaryLine
