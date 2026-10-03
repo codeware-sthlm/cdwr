@@ -31,7 +31,8 @@ export function placeComponent(
   }
 
   const { hash, css } = component.build;
-  if (!hash || !COMPONENT_HASH_PATTERN.test(hash)) {
+  // The slug is filled from the name on save; the type keeps it optional
+  if (!component.slug || !hash || !COMPONENT_HASH_PATTERN.test(hash)) {
     return null;
   }
 
