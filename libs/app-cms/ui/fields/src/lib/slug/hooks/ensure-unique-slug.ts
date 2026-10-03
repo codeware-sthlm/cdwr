@@ -7,7 +7,8 @@ import type {
 import {
   type FieldHook,
   type RelationshipField,
-  ValidationError
+  ValidationError,
+  flattenTopLevelFields
 } from 'payload';
 
 import { slugName } from '../slug.field';
@@ -37,9 +38,10 @@ export const ensureUniqueSlug: FieldHook<CollectionType> = async ({
     return value;
   }
 
-  // Skip validation if the slug field does not exist
+  // Skip validation if the slug field does not exist. Flattened, so a slug
+  // laid out in a row or a tab still counts
   if (
-    !collection.fields.find(
+    !flattenTopLevelFields(collection.fields).find(
       (field) => field.type === 'text' && field.name === slugName
     )
   ) {

@@ -102,16 +102,23 @@ const queueAndRun = async (
   });
 };
 
+/** The states in which a save should (re)start a build */
+const shouldQueue = (status: CustomComponent['build']['status']): boolean =>
+  status === 'pending' || status === 'building';
+
 /**
- * Queues a build for a pending component and starts it in the background.
+ * Queues a build for a component that waits for one and starts it in the
+ * background.
  *
  * The save does not wait for it. A job a restart orphans is picked up by the
- * queue's scheduled sweep.
+ * queue's scheduled sweep. A component still `building` after a save is one
+ * whose job was cut off or gave up, so saving it queues a build as well; the
+ * task skips a job that finds the build done.
  */
 export const queueComponentBuild: CollectionAfterChangeHook<
   CustomComponent
 > = ({ doc, context, req }) => {
-  if (context[COMPONENT_BUILD_CONTEXT] || doc.build.status !== 'pending') {
+  if (context[COMPONENT_BUILD_CONTEXT] || !shouldQueue(doc.build.status)) {
     return doc;
   }
 

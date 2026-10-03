@@ -185,7 +185,7 @@ describe('queueComponentBuild', () => {
     expect(runByID).not.toHaveBeenCalled();
   });
 
-  it.each(['ready', 'failed', 'building'])(
+  it.each(['ready', 'failed'])(
     'does nothing for a %s component',
     async (status) => {
       const { queue, call } = setup();
@@ -196,6 +196,15 @@ describe('queueComponentBuild', () => {
       expect(queue).not.toHaveBeenCalled();
     }
   );
+
+  it('queues again for a component left in building', async () => {
+    const { queue, call } = setup();
+
+    call('building');
+    await settle();
+
+    expect(queue).toHaveBeenCalledTimes(1);
+  });
 
   it('does nothing for the build task’s own writes', async () => {
     const { queue, call } = setup();
