@@ -56,8 +56,10 @@ export const CustomComponentBlock: React.FC<Props> = ({ component, props }) => {
         {placed.css}
       </style>
       {createElement(placed.tagName, {
-        // An unknown element is inline until told otherwise
-        className: 'block',
+        // An unknown element is inline until told otherwise, and empty until
+        // the bundle defines it: a little height meanwhile keeps the page
+        // from closing the gap and opening it again
+        className: 'block [&:not(:defined)]:min-h-16',
         props: JSON.stringify(props ?? {}),
         suppressHydrationWarning: true
       })}
