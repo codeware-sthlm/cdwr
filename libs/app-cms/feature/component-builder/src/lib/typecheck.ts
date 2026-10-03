@@ -7,7 +7,7 @@ import type { ComponentDiagnostic, ComponentProp, HostModule } from './types';
 
 const VIRTUAL_NAME = '__cdwr_component__.tsx';
 
-const OPTIONS = {
+export const OPTIONS = {
   strict: true,
   jsx: ts.JsxEmit.ReactJSX,
   noEmit: true,
@@ -20,7 +20,7 @@ const OPTIONS = {
 } as const satisfies ts.CompilerOptions;
 
 /** The path aliases of the workspace, so the kit's own imports resolve. */
-const workspacePaths = (workspaceRoot: string): ts.CompilerOptions => {
+export const workspacePaths = (workspaceRoot: string): ts.CompilerOptions => {
   const file = path.join(workspaceRoot, 'tsconfig.base.json');
   if (!ts.sys.fileExists(file)) {
     return {};
@@ -43,33 +43,16 @@ const extensionOf = (file: string): ts.Extension =>
       ? ts.Extension.Tsx
       : ts.Extension.Ts;
 
-const severityOf = (category: ts.DiagnosticCategory) =>
-  category === ts.DiagnosticCategory.Error ? 'error' : 'warning';
-
-export type TypecheckResult = {
-  diagnostics: ComponentDiagnostic[];
-  /** The default export's props; undefined when they cannot be resolved */
-  props?: ComponentProp[];
-};
-
-/** Type-checks the source in memory, as if it lived in `workspaceRoot`. */
-export const typecheck = (
-  source: string,
-  workspaceRoot: string,
-  hostModules: Readonly<Record<string, HostModule>>
-): TypecheckResult => {
-  const virtualPath = path.join(workspaceRoot, VIRTUAL_NAME);
-  const sourceFile = ts.createSourceFile(
-    virtualPath,
-    source,
-    ts.ScriptTarget.ES2022,
-    true,
-    ts.ScriptKind.TSX
-  );
-  const options: ts.CompilerOptions = {
-    ...OPTIONS,
-    ...workspacePaths(workspaceRoot)
-  };
+/**
+ * A compiler host that serves `sourceFile` from memory and resolves the host
+ * modules through their types entries.
+ */
+export const createProgramHost = (
+  options: ts.CompilerOptions,
+  hostModules: Readonly<Record<string, HostModule>>,
+  sourceFile: ts.SourceFile
+): ts.CompilerHost => {
+  const virtualPath = sourceFile.fileName;
   const host = ts.createCompilerHost(options);
   const { getSourceFile, fileExists, readFile } = host;
 
@@ -99,6 +82,37 @@ export const typecheck = (
       }
       return ts.resolveModuleName(literal.text, containingFile, opts, host);
     });
+  return host;
+};
+
+const severityOf = (category: ts.DiagnosticCategory) =>
+  category === ts.DiagnosticCategory.Error ? 'error' : 'warning';
+
+export type TypecheckResult = {
+  diagnostics: ComponentDiagnostic[];
+  /** The default export's props; undefined when they cannot be resolved */
+  props?: ComponentProp[];
+};
+
+/** Type-checks the source in memory, as if it lived in `workspaceRoot`. */
+export const typecheck = (
+  source: string,
+  workspaceRoot: string,
+  hostModules: Readonly<Record<string, HostModule>>
+): TypecheckResult => {
+  const virtualPath = path.join(workspaceRoot, VIRTUAL_NAME);
+  const sourceFile = ts.createSourceFile(
+    virtualPath,
+    source,
+    ts.ScriptTarget.ES2022,
+    true,
+    ts.ScriptKind.TSX
+  );
+  const options: ts.CompilerOptions = {
+    ...OPTIONS,
+    ...workspacePaths(workspaceRoot)
+  };
+  const host = createProgramHost(options, hostModules, sourceFile);
 
   const program = ts.createProgram([virtualPath], options, host);
   const own = program.getSourceFile(virtualPath);
