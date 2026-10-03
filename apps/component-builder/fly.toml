@@ -4,10 +4,12 @@ primary_region = 'arn'
 [build]
   dockerfile = "Dockerfile"
 
-# Reached over Flycast from the cms, so no force_https: the private network is
-# plain http, and fly-proxy starts a suspended machine on the first request
+# The deploy action gives every app public addresses, so the cms reaches it as
+# https://<app>.fly.dev with the bearer token; fly-proxy starts a suspended
+# machine on the first request
 [http_service]
   internal_port = 3002
+  force_https = true
   auto_stop_machines = 'suspend'
   auto_start_machines = true
   min_machines_running = 0

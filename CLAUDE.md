@@ -117,7 +117,10 @@ COMPONENT_BUILDER_TOKEN=dev-token
 
 The same two values reach the deployed cms apps from Infisical (`/apps/cms/`),
 and the service reads its token from `/apps/component-builder/`. On Fly the url
-is the service's private Flycast address, `http://cdwr-component-builder.flycast`.
+is the service's public address, `https://cdwr-component-builder.fly.dev`; the
+token is what keeps it closed. Deployed without a token it stays up and refuses
+every build, so the missing secret shows in the admin rather than as a failed
+deploy.
 
 #### CMS admin components + import map
 
