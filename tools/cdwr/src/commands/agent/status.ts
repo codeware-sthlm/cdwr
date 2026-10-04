@@ -6,6 +6,7 @@ import {
   checkRun,
   jobState,
   keyPresent,
+  lockAge,
   paths,
   readText,
   requireMac,
@@ -18,6 +19,7 @@ import {
   drift,
   lastSchedulerLine,
   latestRunLog,
+  lockState,
   parseCheck,
   parseNotifyLevel
 } from './agent.logic';
@@ -63,8 +65,7 @@ export default defineCommand({
           scriptInstalled: installed !== undefined,
           worktree: { path: worktree, exists: existsSync(worktree) },
           lastScheduled,
-          // The script clears its lock on exit; one with nothing running outlived a crash or reboot
-          staleLock: existsSync(queue.lock) && !(job.loaded && job.running),
+          lockState: lockState(lockAge(queue.lock), job.loaded && job.running),
           lock: queue.lock,
           lastRunLog: runLog ? join(queue.logs, runLog) : null,
           next: line === undefined ? null : parseCheck(line)
@@ -139,7 +140,7 @@ export default defineCommand({
             `${report.lastScheduled.at} ${report.lastScheduled.message}`
           )
         : row('warn', 'last run', 'nothing logged yet'),
-      ...(report.staleLock
+      ...(report.lockState === 'stale'
         ? [
             row(
               false,

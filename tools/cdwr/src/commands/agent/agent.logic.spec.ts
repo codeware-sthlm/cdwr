@@ -2,11 +2,13 @@ import {
   KEYCHAIN_SERVICE,
   LABEL,
   SCRIPT_SOURCE,
+  STALE_LOCK_MS,
   domainTarget,
   drift,
   lastSchedulerLine,
   latestRunLog,
   launchPath,
+  lockState,
   parseCheck,
   parseLaunchctlPrint,
   parseNotifyLevel,
@@ -113,6 +115,18 @@ describe('parseNotifyLevel', () => {
     ['junk', 'all']
   ] as const)('reads %j as %s', (text, level) => {
     expect(parseNotifyLevel(text)).toBe(level);
+  });
+});
+
+describe('lockState', () => {
+  it.each([
+    [undefined, false, 'free'],
+    [undefined, true, 'free'],
+    [5_000, false, 'held'],
+    [STALE_LOCK_MS + 1, true, 'held'],
+    [STALE_LOCK_MS + 1, false, 'stale']
+  ] as const)('age %s, running %s is %s', (age, running, expected) => {
+    expect(lockState(age, running)).toBe(expected);
   });
 });
 
