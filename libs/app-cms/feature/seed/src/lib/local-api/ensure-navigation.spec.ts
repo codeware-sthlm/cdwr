@@ -181,6 +181,18 @@ describe('ensureNavigation', () => {
       ).toEqual([4]);
     });
 
+    it('removes a stored group with no children even when nothing else changes', async () => {
+      const { payload, calls } = payloadWith([
+        page(3),
+        { type: 'group', label: 'Empty' }
+      ]);
+
+      await ensureNavigation(payload, { tenant: 1, items: [page(3)] }, options);
+
+      expect(calls.update).toHaveLength(1);
+      expect(calls.update[0]).toHaveLength(1);
+    });
+
     it('replaces a matched groups links when the definition wins', async () => {
       const { payload, calls } = payloadWith([storedGroup(4)]);
 

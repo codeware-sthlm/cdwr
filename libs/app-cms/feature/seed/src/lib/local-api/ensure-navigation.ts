@@ -147,7 +147,7 @@ export async function ensureNavigation(
         if (pruned) {
           kept.push(pruned);
         }
-        if (pruned?.children?.length !== item.children?.length) {
+        if (!pruned || pruned.children?.length !== item.children?.length) {
           dangling++;
         }
       } else if (hasReference(item)) {
