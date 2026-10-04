@@ -76,6 +76,7 @@ import * as migration_20261001_182503_cod_502_tours_places_managed_by from './20
 import * as migration_20261001_232522_cod_520_custom_components from './20261001_232522_cod_520_custom_components';
 import * as migration_20261003_170051_cod_521_component_slug_generated from './20261003_170051_cod_521_component_slug_generated';
 import * as migration_20261003_223747_cod_522_component_managed_by from './20261003_223747_cod_522_component_managed_by';
+import * as migration_20261004_120624_cod_522_rebuild_components from './20261004_120624_cod_522_rebuild_components';
 
 export const migrations = [
   {
@@ -467,5 +468,10 @@ export const migrations = [
     up: migration_20261003_223747_cod_522_component_managed_by.up,
     down: migration_20261003_223747_cod_522_component_managed_by.down,
     name: '20261003_223747_cod_522_component_managed_by'
+  },
+  {
+    up: migration_20261004_120624_cod_522_rebuild_components.up,
+    down: migration_20261004_120624_cod_522_rebuild_components.down,
+    name: '20261004_120624_cod_522_rebuild_components'
   }
 ];

@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { bundle } from './bundle';
 import { DEFAULT_BUNDLED_PACKAGES, DEFAULT_HOST_MODULES } from './host-modules';
 import { scanImports } from './scan-imports';
+import { scopeStyles } from './scope-styles';
 import { buildStyles } from './styles';
 import { validateTagName } from './tag-name';
 import { typecheck } from './typecheck';
@@ -61,13 +62,16 @@ export const buildComponent = async (
     return fail(diagnostics);
   }
 
-  const [js, css] = await Promise.all([
+  const [js, styles] = await Promise.all([
     bundle(source, tagName, workspaceRoot, hostModules, bundledPackages),
     buildStyles(source, themeCss, workspaceRoot)
   ]);
   if (!js.ok) {
     return fail(js.diagnostics);
   }
+  // The stylesheet lives in the page head beside the site's, so it must only
+  // ever reach the element it was built for
+  const css = scopeStyles(styles, tagName);
 
   const hash = createHash('sha256')
     .update(js.js)
