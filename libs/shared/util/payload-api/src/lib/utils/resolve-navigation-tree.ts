@@ -1,6 +1,10 @@
 import type { Navigation } from '@codeware/shared/util/payload-types';
 
-import type { NavigationItem, NavigationLink } from '../utils/types';
+import type {
+  NavigationChildLink,
+  NavigationItem,
+  NavigationLink
+} from '../utils/types';
 
 type NavigationRow = NonNullable<Navigation['items']>[number];
 type NavigationChildRow = NonNullable<NavigationRow['children']>[number];
@@ -8,17 +12,14 @@ type NavigationChildRow = NonNullable<NavigationRow['children']>[number];
 /**
  * Resolve a link row, or `null` when it points at nothing.
  */
-const resolveLink = (
-  {
-    customLabel,
-    id,
-    labelSource,
-    reference
-  }: Pick<NavigationChildRow, 'customLabel' | 'id' | 'labelSource'> & {
-    reference?: NavigationChildRow['reference'] | null;
-  },
-  appearance: NavigationLink['appearance']
-): NavigationLink | null => {
+const resolveLink = ({
+  customLabel,
+  id,
+  labelSource,
+  reference
+}: Pick<NavigationChildRow, 'customLabel' | 'id' | 'labelSource'> & {
+  reference?: NavigationChildRow['reference'] | null;
+}): NavigationChildLink | null => {
   // Reference can be missing when a page or post is deleted
   if (!reference || typeof reference.value === 'number') {
     return null;
@@ -39,7 +40,6 @@ const resolveLink = (
 
   return {
     kind: 'link',
-    appearance,
     collection: relationTo,
     key: id ?? String(value.id),
     label,
@@ -75,7 +75,7 @@ export const resolveNavigationTree = (
     // An item saved before groups existed has no type and is a link
     if (item.type === 'group') {
       const children = (item.children ?? []).flatMap(
-        (child) => resolveLink(child, 'link') ?? []
+        (child) => resolveLink(child) ?? []
       );
 
       return children.length
@@ -90,7 +90,14 @@ export const resolveNavigationTree = (
         : [];
     }
 
-    const link = resolveLink(item, item.appearance ?? 'link');
-    return link ? [link] : [];
+    const link = resolveLink(item);
+    return link
+      ? [
+          {
+            ...link,
+            appearance: item.appearance ?? 'link'
+          } satisfies NavigationLink
+        ]
+      : [];
   });
 };

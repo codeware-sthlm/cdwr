@@ -192,10 +192,13 @@ export type NavigationGroup = {
   label: string;
 
   /**
-   * Links in the group, at least one.
+   * Links in the group, at least one. A button has no place in a panel.
    */
-  children: NavigationLink[];
+  children: NavigationChildLink[];
 };
+
+/** A link inside a group: drawn as a link, whatever the header does with buttons. */
+export type NavigationChildLink = Omit<NavigationLink, 'appearance'>;
 
 /**
  * Navigation tree item.

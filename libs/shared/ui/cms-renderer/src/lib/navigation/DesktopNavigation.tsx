@@ -20,7 +20,7 @@ import { forwardRef } from 'react';
 
 import { usePayload } from '../providers/PayloadProvider';
 import { navChrome } from '../theme/chrome';
-import { isActivePath } from '../utils/active-path';
+import { isActivePath, isExactPath } from '../utils/active-path';
 import { handleAsRoute } from '../utils/internal-link';
 
 /** Activates a link as a route change, unless the click opens elsewhere. */
@@ -32,7 +32,17 @@ function useRouteLink(href: string) {
     navigate(href);
   };
 
-  return { handleClick, isActive: isActivePath(getCurrentPath(), href) };
+  const path = getCurrentPath();
+  const isActive = isActivePath(path, href);
+  // Radix says `page` for an active link; a parent of the page is current
+  // in a looser sense, and a screen reader should not hear it is the page
+  const ariaCurrent: 'page' | 'true' | undefined = isActive
+    ? isExactPath(path, href)
+      ? 'page'
+      : 'true'
+    : undefined;
+
+  return { handleClick, isActive, ariaCurrent };
 }
 
 function NavItem({
@@ -44,7 +54,7 @@ function NavItem({
   href: string;
   children: React.ReactNode;
 }) {
-  const { handleClick, isActive } = useRouteLink(href);
+  const { handleClick, isActive, ariaCurrent } = useRouteLink(href);
 
   // The same button as a hero's call to action, so the one action a site
   // asks for looks the same wherever it is offered. It stays put when active:
@@ -58,7 +68,12 @@ function NavItem({
         <NavigationMenuLink
           href={href}
           onClick={handleClick}
-          className={buttonVariants({ size: 'sm' })}
+          className={cn(
+            buttonVariants({ size: 'sm' }),
+            // The link base keeps a muted focus fill and its own padding;
+            // only clashing utilities give way, so these are said again
+            'focus:bg-primary focus:text-primary-foreground py-0'
+          )}
         >
           {children}
         </NavigationMenuLink>
@@ -71,6 +86,7 @@ function NavItem({
       <NavigationMenuLink
         asChild
         active={isActive}
+        aria-current={ariaCurrent}
         className={cn(
           'relative block min-w-max bg-transparent px-3 py-2 transition hover:bg-transparent focus:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent data-active:focus:bg-transparent',
           isActive
@@ -104,13 +120,14 @@ function GroupChild({
   children: React.ReactNode;
 }) {
   const { chrome } = usePayload();
-  const { handleClick, isActive } = useRouteLink(href);
+  const { handleClick, isActive, ariaCurrent } = useRouteLink(href);
 
   return (
     <li>
       <NavigationMenuLink
         asChild
         active={isActive}
+        aria-current={ariaCurrent}
         className={cn(
           chrome === 'outlined' && [
             'block rounded-md px-3 py-2 text-sm font-normal',

@@ -3,6 +3,7 @@
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { t } from '@codeware/shared/util/i18n';
 import type {
+  NavigationChildLink,
   NavigationItem,
   NavigationLink
 } from '@codeware/shared/util/payload-api';
@@ -24,7 +25,7 @@ function MobileLink({
   link
 }: {
   close: () => void;
-  link: NavigationLink;
+  link: NavigationChildLink & Partial<Pick<NavigationLink, 'appearance'>>;
 }) {
   const { getCurrentPath, navigate } = usePayload();
   const { appearance, label, url } = link;

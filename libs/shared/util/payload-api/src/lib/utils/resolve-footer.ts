@@ -7,6 +7,7 @@ import type {
   FooterData,
   FooterLink,
   FooterLinkGroup,
+  NavigationChildLink,
   NavigationItem,
   NavigationLink
 } from './types';
@@ -111,7 +112,11 @@ export const resolveFooter = (
     return null;
   }
 
-  const toFooterLink = ({ key, label, url }: NavigationLink): FooterLink => ({
+  const toFooterLink = ({
+    key,
+    label,
+    url
+  }: NavigationChildLink): FooterLink => ({
     key,
     label,
     newTab: false,
