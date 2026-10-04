@@ -62,10 +62,7 @@ import { tourSignupsAnonymizeEndpoint } from './endpoints/tour-signups-anonymize
 import { tourSignupsExportEndpoint } from './endpoints/tour-signups-export';
 import { tourSignupsReorderEndpoint } from './endpoints/tour-signups-reorder';
 import { anonymizeTourSignupsTask } from './jobs/anonymize-tour-signups.task';
-import {
-  COMPONENT_BUILD_QUEUE,
-  buildCustomComponentTask
-} from './jobs/build-custom-component.task';
+import { buildCustomComponentTask } from './jobs/build-custom-component.task';
 import { deleteExpiredFormSubmissionsTask } from './jobs/delete-expired-form-submissions.task';
 import {
   REQUEUE_INTERVAL_MS,
@@ -83,6 +80,14 @@ const dirname = path.dirname(filename);
 const env = getEnv();
 
 const emailAdapter = getEmailAdapter(env);
+
+// Only a process that stays up to serve runs the deployment's jobs: a script
+// against its database, or a one-off target, must not claim them
+const serves =
+  !env.PAYLOAD_SCRIPT &&
+  (env.NX_RUN_TARGET === '' ||
+    env.NX_RUN_TARGET === 'dev' ||
+    env.NX_RUN_TARGET === 'serve');
 
 export default buildConfig({
   serverURL: env.APP_MODE.serverURL,
@@ -229,21 +234,11 @@ export default buildConfig({
       buildCustomComponentTask,
       deleteExpiredFormSubmissionsTask
     ],
-    // Scheduling only queues the job; something has to run the queue. Both are
-    // skipped during build, where no long-running process exists to hold a cron.
-    // The component sweep only catches builds a restart orphaned: a save starts
-    // its own. One at a time, as each build holds a few hundred MB
-    autoRun:
-      env.NX_RUN_TARGET === 'build'
-        ? []
-        : [
-            { cron: '5 3 * * *', queue: 'nightly', limit: 10 },
-            {
-              cron: '*/10 * * * *',
-              queue: COMPONENT_BUILD_QUEUE,
-              limit: 1
-            }
-          ],
+    // Scheduling only queues the job; something has to run the queue. The
+    // component queue has one consumer, the recovery pass in `onInit`, which
+    // runs builds one at a time in the build turn: a cron here would run a
+    // second build beside it, and each holds a few hundred MB
+    autoRun: serves ? [{ cron: '5 3 * * *', queue: 'nightly', limit: 10 }] : [],
     deleteJobOnComplete: true
   },
   plugins: getPlugins(env, {
@@ -423,14 +418,7 @@ export default buildConfig({
       );
     }
 
-    // Only a process that stays up to serve: a script against a deployment's
-    // database, or a one-off target, must not claim that deployment's jobs.
     // After the seed, so nothing is queued while it runs
-    const serves =
-      !env.PAYLOAD_SCRIPT &&
-      (env.NX_RUN_TARGET === '' ||
-        env.NX_RUN_TARGET === 'dev' ||
-        env.NX_RUN_TARGET === 'serve');
     if (serves) {
       // Not awaited: builds may take a while and the server should come up
       void recoverComponentBuilds(payload, { boot: true });

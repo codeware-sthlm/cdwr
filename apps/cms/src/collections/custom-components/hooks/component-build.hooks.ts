@@ -13,7 +13,7 @@ import {
 import { inBuildTurn } from '../../../jobs/build-turn';
 import { schemaSignature } from '../../../jobs/component-schema-signature';
 
-/** The seed passes this; a seeded component is built by the queue sweep. */
+/** The seed passes this; a seeded component is built by the recovery pass. */
 const SEED_CONTEXT = 'seedAction';
 
 const COMMIT_POLL_MS = 50;
@@ -111,7 +111,7 @@ const shouldQueue = (status: CustomComponent['build']['status']): boolean =>
  * background.
  *
  * The save does not wait for it. A job a restart orphans is picked up by the
- * queue's scheduled sweep. A component still `building` after a save is one
+ * recovery pass. A component still `building` after a save is one
  * whose job was cut off or gave up, so saving it queues a build as well; the
  * task skips a job that finds the build done.
  */
