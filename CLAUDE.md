@@ -42,6 +42,13 @@
 - Never add `Co-Authored-By` trailers to commits
 - Never push directly to main — always create a branch and open a PR
 
+## Agent queue
+
+Tickets carrying a Linear `agent:*` label (Agent group, Codeware team) are worked by the
+`/work-queue` skill (`.claude/skills/work-queue`). It plans into the ticket, hands planned
+steps to the `implementer` subagent (`.claude/agents/implementer.md`, Sonnet) and stops
+only at gates. The skill holds the queue order, the labels and how a gate asks.
+
 ## Nx-generated projects cleanup
 
 - ensure project name reflects the project path for a consistent and unique pattern
