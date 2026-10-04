@@ -38,6 +38,12 @@ describe('markBuildPending', () => {
     ).toMatchObject({ build: { status: 'pending' } });
   });
 
+  it('lets an explicit pending through when nothing else changed', () => {
+    expect(callBefore({ data: { build: { status: 'pending' } } })).toEqual({
+      build: { status: 'pending' }
+    });
+  });
+
   it('clears the bundle when the slug changes, since it defines the old tag', () => {
     expect(callBefore({ data: { slug: 'other' } })).toMatchObject({
       slug: 'other',

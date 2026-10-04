@@ -2,7 +2,9 @@ import type { ComponentBuildInput } from '@codeware/app-cms/feature/component-bu
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import {
   type ComponentBuildResult,
-  type ComponentDiagnostic
+  type ComponentDiagnostic,
+  isComponentDiagnostic,
+  isTransientFailure
 } from '@codeware/shared/util/payload-utils';
 
 import { type BuildService, buildRemotely } from './remote-component-build';
@@ -38,12 +40,26 @@ export const defaultDeps: BuildDeps = {
   fetch: (input, init) => fetch(input, init)
 };
 
-export const errorDiagnostic = (message: string): ComponentDiagnostic => ({
+/** `transient` marks a failure of the build's circumstances, not the source */
+export const errorDiagnostic = (
+  message: string,
+  { transient }: { transient?: true } = {}
+): ComponentDiagnostic => ({
   message,
   line: 1,
   column: 1,
-  severity: 'error'
+  severity: 'error',
+  ...(transient && { transient })
 });
+
+/**
+ * True when stored diagnostics (a JSON field) hold a transient one. Anything
+ * that is not a list of findings counts as none.
+ */
+export const hasTransientDiagnostic = (diagnostics: unknown): boolean =>
+  Array.isArray(diagnostics) &&
+  diagnostics.every(isComponentDiagnostic) &&
+  isTransientFailure(diagnostics);
 
 /** True when a finding stops the component from being used. */
 export const hasErrors = (diagnostics: readonly ComponentDiagnostic[]) =>

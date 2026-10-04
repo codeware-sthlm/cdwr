@@ -9,6 +9,7 @@ import {
   COMPONENT_BUILD_QUEUE
 } from './build-custom-component.task';
 import { inBuildTurn } from './build-turn';
+import { hasTransientDiagnostic } from './run-component-build';
 
 /** How long a component may wait for a build before it is looked at */
 export const STALE_BUILD_MS = 5 * 60 * 1000;
@@ -24,7 +25,9 @@ const LIMIT = 100;
 const LOG = '[componentBuilds]';
 
 export type WaitingComponent = Pick<CustomComponent, 'id' | 'updatedAt'> & {
-  build: Pick<CustomComponent['build'], 'status'>;
+  build: Pick<CustomComponent['build'], 'status'> & {
+    diagnostics?: unknown;
+  };
 };
 
 export type OpenJob = Pick<
@@ -47,9 +50,16 @@ type Options = {
   staleMs?: number;
 };
 
+/** Waiting for a build, or failed on the build's circumstances, not the source */
+const needsBuild = ({ status, diagnostics }: WaitingComponent['build']) =>
+  status === 'pending' ||
+  status === 'building' ||
+  (status === 'failed' && hasTransientDiagnostic(diagnostics));
+
 /**
  * Ids of components waiting for a build that nothing is going to run: older
- * than the threshold, with no job that can still run for them.
+ * than the threshold, with no job that can still run for them. A failed
+ * build counts when it failed on its circumstances.
  */
 export function staleComponentBuildIds(
   components: readonly WaitingComponent[],
@@ -72,7 +82,7 @@ export function staleComponentBuildIds(
   return components
     .filter(
       ({ id, build, updatedAt }) =>
-        (build.status === 'pending' || build.status === 'building') &&
+        needsBuild(build) &&
         now.getTime() - new Date(updatedAt).getTime() >= staleMs &&
         !covered.has(id)
     )
@@ -109,8 +119,11 @@ const requeueStale = async (payload: BasePayload): Promise<number> => {
   const [components, jobs] = await Promise.all([
     payload.find({
       collection: 'custom-components',
-      where: { 'build.status': { in: ['pending', 'building'] } },
-      select: { build: { status: true }, updatedAt: true },
+      where: { 'build.status': { in: ['pending', 'building', 'failed'] } },
+      select: {
+        build: { status: true, diagnostics: true },
+        updatedAt: true
+      },
       limit: LIMIT,
       pagination: false,
       depth: 0,
@@ -141,13 +154,22 @@ const requeueStale = async (payload: BasePayload): Promise<number> => {
   const ids = staleComponentBuildIds(components.docs, jobs.docs, {
     now: new Date()
   });
+  const failed = new Set(
+    components.docs
+      .filter(({ build }) => build.status === 'failed')
+      .map(({ id }) => id)
+  );
   for (const id of ids) {
     await payload.jobs.queue({
       task: BUILD_CUSTOM_COMPONENT_TASK,
       input: { id },
       queue: COMPONENT_BUILD_QUEUE
     });
-    payload.logger.info(`${LOG} Queued a build for component ${id}`);
+    payload.logger.info(
+      failed.has(id)
+        ? `${LOG} Retrying component ${id}: the last build failed on its circumstances`
+        : `${LOG} Queued a build for component ${id}`
+    );
   }
   return ids.length;
 };

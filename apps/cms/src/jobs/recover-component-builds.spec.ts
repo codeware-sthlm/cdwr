@@ -18,8 +18,21 @@ const ago = (minutes: number) =>
 const component = (
   id: number,
   minutes: number,
-  status: 'pending' | 'building' | 'ready' | 'failed' = 'building'
-): WaitingComponent => ({ id, updatedAt: ago(minutes), build: { status } });
+  status: 'pending' | 'building' | 'ready' | 'failed' = 'building',
+  diagnostics?: unknown
+): WaitingComponent => ({
+  id,
+  updatedAt: ago(minutes),
+  build: { status, diagnostics }
+});
+
+const finding = (transient?: true) => ({
+  message: 'm',
+  line: 1,
+  column: 1,
+  severity: 'error',
+  ...(transient && { transient })
+});
 
 const job = (id: number, overrides: Partial<OpenJob> = {}): OpenJob => ({
   taskSlug: 'build-custom-component',
@@ -78,6 +91,46 @@ describe('staleComponentBuildIds', () => {
       )
     ).toEqual([]);
   });
+
+  it('retries a failed build whose diagnostics are transient', () => {
+    expect(
+      staleComponentBuildIds(
+        [
+          component(1, 30, 'failed', [finding(true)]),
+          component(2, 30, 'failed', [finding()]),
+          component(3, 30, 'failed', [finding(), finding(true)])
+        ],
+        [],
+        { now }
+      )
+    ).toEqual([1, 3]);
+  });
+
+  it('gives a just-failed transient build time, and respects a runnable job', () => {
+    expect(
+      staleComponentBuildIds(
+        [
+          component(1, 4, 'failed', [finding(true)]),
+          component(2, 30, 'failed', [finding(true)])
+        ],
+        [job(2)],
+        { now }
+      )
+    ).toEqual([]);
+  });
+
+  it.each([
+    ['null', null],
+    ['an object', { transient: true }],
+    ['a string', 'transient'],
+    ['entries that are not findings', [{ transient: true }]]
+  ])('counts malformed diagnostics (%s) as none', (_label, diagnostics) => {
+    expect(
+      staleComponentBuildIds([component(1, 30, 'failed', diagnostics)], [], {
+        now
+      })
+    ).toEqual([]);
+  });
 });
 
 describe('recoverComponentBuilds', () => {
@@ -130,6 +183,23 @@ describe('recoverComponentBuilds', () => {
     });
     expect(run).toHaveBeenCalledTimes(3);
     expect(run).toHaveBeenCalledWith({ queue: 'component-builds', limit: 1 });
+  });
+
+  it('retries a failed build and says why', async () => {
+    jest.useFakeTimers({ now });
+    const { payload, queue, logger } = setup(
+      [component(1, 30, 'failed', [finding(true)])],
+      []
+    );
+
+    await recoverComponentBuilds(payload, { boot: false });
+
+    expect(queue).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { id: 1 } })
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      '[componentBuilds] Retrying component 1: the last build failed on its circumstances'
+    );
   });
 
   it('releases claimed jobs at boot, before anything else', async () => {

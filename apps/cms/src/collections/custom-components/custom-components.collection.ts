@@ -30,6 +30,7 @@ import {
   markBuildPending,
   queueComponentBuild
 } from './hooks/component-build.hooks';
+import { customComponentRebuildEndpoint } from './rebuild.endpoint';
 
 /**
  * A slug that makes a valid custom element name once prefixed: lowercase,
@@ -118,7 +119,11 @@ const customComponents: CollectionConfig = {
     slug: true,
     build: { status: true, hash: true, css: true }
   },
-  endpoints: [customComponentBundleEndpoint, customComponentCheckEndpoint],
+  endpoints: [
+    customComponentBundleEndpoint,
+    customComponentCheckEndpoint,
+    customComponentRebuildEndpoint
+  ],
   hooks: {
     beforeChange: [assertDeveloperInTenant, markBuildPending],
     afterChange: [queueComponentBuild]

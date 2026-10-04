@@ -90,6 +90,57 @@ describe('buildRemotely', () => {
     expect(message(result)[0]).toContain('fetch failed');
   });
 
+  it('marks an unreachable service as transient', async () => {
+    const result = await buildRemotely(
+      input,
+      service,
+      jest.fn().mockRejectedValue(new TypeError('fetch failed'))
+    );
+
+    expect(result.diagnostics.map((d) => d.transient)).toEqual([true]);
+  });
+
+  it('marks the errors of a build the service gave up on as transient', async () => {
+    const result = await buildRemotely(
+      input,
+      service,
+      reply(
+        {
+          ok: false,
+          diagnostics: [
+            { message: 'timed out', line: 1, column: 1, severity: 'error' },
+            { message: 'note', line: 1, column: 1, severity: 'warning' }
+          ]
+        },
+        504
+      )
+    );
+
+    expect(result.diagnostics).toEqual([
+      {
+        message: 'timed out',
+        line: 1,
+        column: 1,
+        severity: 'error',
+        transient: true
+      },
+      { message: 'note', line: 1, column: 1, severity: 'warning' }
+    ]);
+  });
+
+  it('leaves the errors of a build that failed on its source alone', async () => {
+    const result = await buildRemotely(
+      input,
+      service,
+      reply({
+        ok: false,
+        diagnostics: [{ message: 'no', line: 2, column: 3, severity: 'error' }]
+      })
+    );
+
+    expect(result.diagnostics[0]).not.toHaveProperty('transient');
+  });
+
   it('reports a timeout', async () => {
     const timeout = Object.assign(new Error('timed out'), {
       name: 'TimeoutError'

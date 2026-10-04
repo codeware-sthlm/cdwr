@@ -168,7 +168,10 @@ describe('buildCustomComponent', () => {
     expect(writes(update).at(-1)).toMatchObject({
       status: 'failed',
       diagnostics: [
-        expect.objectContaining({ message: expect.stringContaining('boom') })
+        expect.objectContaining({
+          message: expect.stringContaining('boom'),
+          transient: true
+        })
       ]
     });
   });
@@ -260,6 +263,36 @@ describe('buildCustomComponent', () => {
       expect(update).not.toHaveBeenCalled();
     }
   );
+
+  it('rebuilds a component that failed on the build circumstances', async () => {
+    const { payload } = setup([
+      doc({
+        build: {
+          status: 'failed',
+          diagnostics: [
+            {
+              message: 'down',
+              line: 1,
+              column: 1,
+              severity: 'error',
+              transient: true
+            }
+          ]
+        }
+      })
+    ]);
+    const build = jest.fn().mockResolvedValue({
+      ok: true,
+      js: 'js',
+      css: 'css',
+      hash: 'h',
+      diagnostics: []
+    });
+
+    await expect(
+      buildCustomComponent(payload, 5, depsWith(build))
+    ).resolves.toBe('ready');
+  });
 
   it('skips a component that no longer exists', async () => {
     const { payload, update } = setup([null]);

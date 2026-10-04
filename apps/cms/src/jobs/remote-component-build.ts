@@ -26,7 +26,8 @@ const unavailable = (
       message: `The build service did not answer (request ${requestId}): ${reason}.`,
       line: 1,
       column: 1,
-      severity: 'error'
+      severity: 'error',
+      transient: true
     }
   ]
 });
@@ -82,9 +83,18 @@ export const buildRemotely = async (
   }
 
   if (isComponentBuildResult(body)) {
-    // A failed build is a 200 with `ok: false`; the service's own 500
-    // carries one diagnostic in the same shape
-    return body;
+    // A failed build is a 200 with `ok: false`. An error status (busy, timed
+    // out, unexpected) is the service's circumstances, not the source
+    return response.ok
+      ? body
+      : {
+          ...body,
+          diagnostics: body.diagnostics.map((diagnostic) =>
+            diagnostic.severity === 'error'
+              ? { ...diagnostic, transient: true }
+              : diagnostic
+          )
+        };
   }
   return unavailable(
     requestId,
