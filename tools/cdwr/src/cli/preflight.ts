@@ -4,13 +4,13 @@ import { delimiter, join } from 'node:path';
 import type { Need } from './command';
 import { CliError, EXIT } from './errors';
 
-/** Whether an executable is on PATH */
-export function onPath(
+/** The PATH directory holding an executable, first match wins */
+export function locate(
   binary: string,
   env: NodeJS.ProcessEnv = process.env
-): boolean {
+): string | undefined {
   const dirs = (env['PATH'] ?? '').split(delimiter).filter(Boolean);
-  return dirs.some((dir) => {
+  return dirs.find((dir) => {
     try {
       accessSync(join(dir, binary), constants.X_OK);
       return true;
@@ -19,6 +19,12 @@ export function onPath(
     }
   });
 }
+
+/** Whether an executable is on PATH */
+export const onPath = (
+  binary: string,
+  env: NodeJS.ProcessEnv = process.env
+): boolean => locate(binary, env) !== undefined;
 
 /** Infisical is reachable when the env carries a project and one way to authenticate */
 export const infisicalConfigured = (env: NodeJS.ProcessEnv): boolean =>
@@ -48,7 +54,9 @@ const BINARY: Partial<Record<Need, { binary: string; install: string }>> = {
   },
   docker: { binary: 'docker', install: 'install Docker Desktop' },
   aws: { binary: 'aws', install: 'brew install awscli' },
-  gh: { binary: 'gh', install: 'brew install gh' }
+  gh: { binary: 'gh', install: 'brew install gh' },
+  claude: { binary: 'claude', install: 'brew install --cask claude-code' },
+  jq: { binary: 'jq', install: 'brew install jq' }
 };
 
 export function check(need: Need, env: NodeJS.ProcessEnv = process.env): Check {

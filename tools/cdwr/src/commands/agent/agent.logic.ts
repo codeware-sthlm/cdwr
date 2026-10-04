@@ -1,0 +1,212 @@
+import { join } from 'node:path';
+
+export const LABEL = 'se.codeware.agent-queue';
+export const KEYCHAIN_SERVICE = 'linear-agent-queue';
+/** The queue script in the repo, relative to the workspace root */
+export const SCRIPT_SOURCE = 'tools/cdwr/agent-queue/run.sh';
+/** Pref holding the worktree the queue plans in */
+export const WORKTREE_PREF = 'agentWorktree';
+
+export interface QueuePaths {
+  home: string;
+  script: string;
+  paused: string;
+  lock: string;
+  logs: string;
+  schedulerLog: string;
+  launchdLog: string;
+  plist: string;
+}
+
+export const queuePaths = (
+  cdwrHomeDir: string,
+  userHome: string
+): QueuePaths => {
+  const home = join(cdwrHomeDir, 'agent-queue');
+  const logs = join(home, 'logs');
+  return {
+    home,
+    script: join(home, 'run.sh'),
+    paused: join(home, 'paused'),
+    lock: join(home, 'lock'),
+    logs,
+    schedulerLog: join(logs, 'scheduler.log'),
+    launchdLog: join(logs, 'launchd.log'),
+    plist: join(userHome, 'Library', 'LaunchAgents', `${LABEL}.plist`)
+  };
+};
+
+export const serviceTarget = (uid: number): string => `gui/${uid}/${LABEL}`;
+export const domainTarget = (uid: number): string => `gui/${uid}`;
+
+const escapeXml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+export interface PlistInput {
+  script: string;
+  home: string;
+  repo: string;
+  path: string;
+}
+
+export const renderPlist = ({
+  script,
+  home,
+  repo,
+  path
+}: PlistInput): string => {
+  const e = escapeXml;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${e(LABEL)}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>${e(script)}</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${e(path)}</string>
+    <key>AGENT_QUEUE_HOME</key>
+    <string>${e(home)}</string>
+    <key>AGENT_QUEUE_REPO</key>
+    <string>${e(repo)}</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>${e(join(home, 'logs', 'launchd.log'))}</string>
+  <key>StandardErrorPath</key>
+  <string>${e(join(home, 'logs', 'launchd.log'))}</string>
+</dict>
+</plist>
+`;
+};
+
+export interface JobState {
+  running: boolean;
+  runs?: number;
+  lastExitCode?: number;
+  script?: string;
+  intervalSeconds?: number;
+}
+
+/** Reads the top-level keys of `launchctl print`; nested blocks are ignored */
+export const parseLaunchctlPrint = (text: string): JobState => {
+  const state: JobState = { running: false };
+  let inArguments = false;
+  let lastArgument: string | undefined;
+
+  for (const line of text.split('\n')) {
+    if (inArguments) {
+      if (line.startsWith('\t\t')) {
+        lastArgument = line.trim();
+        continue;
+      }
+      inArguments = false;
+    }
+    const match = /^\t([^\t].*)$/.exec(line);
+    if (!match?.[1]) continue;
+    const entry = match[1];
+    if (entry === 'arguments = {') {
+      inArguments = true;
+      continue;
+    }
+    const pair = /^([^=]+?) = (.*)$/.exec(entry);
+    if (!pair) continue;
+    const [, key, value = ''] = pair;
+    switch (key) {
+      case 'state':
+        state.running = value.trim() === 'running';
+        break;
+      case 'runs':
+        if (/^\d+$/.test(value.trim())) state.runs = Number(value);
+        break;
+      case 'last exit code':
+        if (/^-?\d+$/.test(value.trim())) state.lastExitCode = Number(value);
+        break;
+      case 'run interval': {
+        const seconds = /^(\d+) seconds?$/.exec(value.trim());
+        if (seconds?.[1]) state.intervalSeconds = Number(seconds[1]);
+        break;
+      }
+    }
+  }
+  if (lastArgument) state.script = lastArgument;
+  return state;
+};
+
+const RUN_LOG = /^\d{4}-\d{2}-\d{2}_\d{4}\.log$/;
+
+/** The newest `YYYY-MM-DD_HHMM.log`, by name */
+export const latestRunLog = (fileNames: string[]): string | undefined =>
+  fileNames
+    .filter((name) => RUN_LOG.test(name))
+    .sort()
+    .at(-1);
+
+const nonEmptyLines = (text: string): string[] => {
+  const lines = text.split(/\r?\n/);
+  while (lines.length > 0 && lines.at(-1)?.trim() === '') lines.pop();
+  return lines;
+};
+
+export const lastSchedulerLine = (
+  text: string
+): { at: string; message: string } | undefined => {
+  const last = nonEmptyLines(text).at(-1);
+  const match = last
+    ? /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (.*)$/.exec(last)
+    : null;
+  return match?.[1] ? { at: match[1], message: match[2] ?? '' } : undefined;
+};
+
+export const tailLines = (text: string, n: number): string[] => {
+  const lines = nonEmptyLines(text);
+  return n <= 0 ? [] : lines.slice(-n);
+};
+
+const SYSTEM_PATH = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
+
+/** PATH for the job: the given dirs first, then the system ones, no repeats */
+export const launchPath = (binaryDirs: string[]): string =>
+  [...new Set([...binaryDirs, ...SYSTEM_PATH])].join(':');
+
+export const drift = (
+  installed: string | undefined,
+  source: string
+): 'missing' | 'current' | 'stale' =>
+  installed === undefined
+    ? 'missing'
+    : installed === source
+      ? 'current'
+      : 'stale';
+
+export interface QueueCheck {
+  kind: 'idle' | 'ready' | 'busy' | 'skip' | 'unknown';
+  tickets: string[];
+  text: string;
+}
+
+/** Reads the one line `run.sh --check` prints */
+export const parseCheck = (line: string): QueueCheck => {
+  const text = line.trim();
+  const tickets = text.match(/[A-Z][A-Z0-9]*-\d+/g) ?? [];
+  if (text.startsWith('idle:')) return { kind: 'idle', tickets: [], text };
+  if (text.startsWith('would plan one of:'))
+    return { kind: 'ready', tickets, text };
+  if (text.startsWith('busy:')) return { kind: 'busy', tickets: [], text };
+  if (text.startsWith('skip:')) return { kind: 'skip', tickets: [], text };
+  return { kind: 'unknown', tickets: [], text };
+};
