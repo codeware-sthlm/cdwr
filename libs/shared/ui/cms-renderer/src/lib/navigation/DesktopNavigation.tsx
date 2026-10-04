@@ -90,6 +90,12 @@ function NavItem({
   );
 }
 
+/**
+ * A link inside a group's panel.
+ *
+ * Flat chrome keeps the component's own look, so the panel reads as the kit's
+ * popover; outlined chrome dresses it in the bar's tokens, to match the pill.
+ */
 function GroupChild({
   href,
   children
@@ -97,6 +103,7 @@ function GroupChild({
   href: string;
   children: React.ReactNode;
 }) {
+  const { chrome } = usePayload();
   const { handleClick, isActive } = useRouteLink(href);
 
   return (
@@ -105,11 +112,13 @@ function GroupChild({
         asChild
         active={isActive}
         className={cn(
-          'block rounded-md px-3 py-2 text-sm font-normal',
-          'hover:bg-core-action-btn-track focus:bg-core-action-btn-track data-active:bg-transparent',
-          isActive
-            ? 'text-core-nav-link-active'
-            : 'text-core-nav-link hover:text-core-nav-link-hover'
+          chrome === 'outlined' && [
+            'block rounded-md px-3 py-2 text-sm font-normal',
+            'hover:bg-core-action-btn-track focus:bg-core-action-btn-track data-active:bg-transparent',
+            isActive
+              ? 'text-core-nav-link-active'
+              : 'text-core-nav-link hover:text-core-nav-link-hover'
+          ]
         )}
       >
         <a href={href} onClick={handleClick}>
@@ -122,7 +131,7 @@ function GroupChild({
 
 /** A label that opens a panel of links, marked active while one of them is. */
 function NavGroup({ group }: { group: NavigationGroup }) {
-  const { getCurrentPath } = usePayload();
+  const { chrome, getCurrentPath } = usePayload();
 
   const isActive = group.children.some(({ url }) =>
     isActivePath(getCurrentPath(), url)
@@ -132,15 +141,23 @@ function NavGroup({ group }: { group: NavigationGroup }) {
     <NavigationMenuItem className="content-center">
       <NavigationMenuTrigger
         className={cn(
-          'h-auto bg-transparent px-3 py-2 hover:bg-transparent focus:bg-transparent data-open:bg-transparent data-open:hover:bg-transparent data-open:focus:bg-transparent data-popup-open:bg-transparent data-popup-open:hover:bg-transparent',
+          chrome === 'outlined' &&
+            'h-auto bg-transparent px-3 py-2 hover:bg-transparent focus:bg-transparent data-open:bg-transparent data-open:hover:bg-transparent data-open:focus:bg-transparent data-popup-open:bg-transparent data-popup-open:hover:bg-transparent',
           isActive
             ? 'text-core-nav-link-active'
-            : 'text-core-nav-link hover:text-core-nav-link-hover data-open:text-core-nav-link-hover'
+            : chrome === 'outlined' &&
+                'text-core-nav-link hover:text-core-nav-link-hover data-open:text-core-nav-link-hover'
         )}
       >
         {group.label}
       </NavigationMenuTrigger>
-      <NavigationMenuContent className="group-data-[viewport=false]/navigation-menu:bg-core-background-content group-data-[viewport=false]/navigation-menu:ring-core-navbar-border min-w-48 p-2 group-data-[viewport=false]/navigation-menu:mt-2 group-data-[viewport=false]/navigation-menu:rounded-xl group-data-[viewport=false]/navigation-menu:shadow-lg">
+      <NavigationMenuContent
+        className={cn(
+          'min-w-48',
+          chrome === 'outlined' &&
+            'group-data-[viewport=false]/navigation-menu:bg-core-background-content group-data-[viewport=false]/navigation-menu:ring-core-navbar-border p-2 group-data-[viewport=false]/navigation-menu:mt-2 group-data-[viewport=false]/navigation-menu:rounded-xl group-data-[viewport=false]/navigation-menu:shadow-lg'
+        )}
+      >
         <ul>
           {group.children.map(({ key, label, url }) => (
             <GroupChild key={key} href={url}>

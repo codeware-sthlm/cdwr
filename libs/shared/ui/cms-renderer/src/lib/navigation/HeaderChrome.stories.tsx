@@ -3,6 +3,7 @@ import type {
   NavigationLink
 } from '@codeware/shared/util/payload-api';
 import { a11yStory } from '@codeware/shared/util/storybook';
+import { cn } from '@codeware/shared/util/ui';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import {
@@ -102,17 +103,19 @@ function Header({ label }: { label?: string }) {
 function AtChrome({
   chrome,
   label,
-  themeCount = segmentLimit
+  themeCount = segmentLimit,
+  className
 }: {
   chrome: Chrome;
   label: string;
   /** How many themes the tenant offers, which is what picks the flat control */
   themeCount?: number;
+  className?: string;
 }) {
   const value = usePayload();
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={cn('flex flex-col gap-3', className)}>
       <p className="text-muted-foreground text-xs tracking-[0.12em] uppercase">
         {label}
       </p>
@@ -143,9 +146,13 @@ export const BothExpressions: StoryObj = {
   name: 'Framed vs blended',
   render: () => (
     <div className="flex flex-col gap-10">
-      <AtChrome chrome="outlined" label="Framed" />
-      <AtChrome chrome="flat" label="Blended" />
+      {/* Stacked headers are each a stacking context; earlier ones sit above
+          later ones, so an open group's panel is not painted over by the next
+          header, which a page with one header never has */}
+      <AtChrome chrome="outlined" label="Framed" className="relative z-30" />
+      <AtChrome chrome="flat" label="Blended" className="relative z-20" />
       <AtChrome
+        className="relative z-10"
         chrome="flat"
         label="Blended, past the segment limit"
         themeCount={segmentLimit + 2}
