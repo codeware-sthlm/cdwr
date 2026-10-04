@@ -59,7 +59,7 @@ describe('buildComponent', () => {
     expect(result.js).toContain('__cdwrHost');
     expect(result.js).not.toContain('react.production');
     expect(result.js.length).toBeLessThan(5_000);
-    expect(result.css).toContain('.bg-primary');
+    expect(result.css).toContain(':where(acme-counter) .bg-primary');
     expect(result.css).toContain('var(--primary)');
     expect(result.css).toContain('.px-3');
   });
