@@ -31,7 +31,9 @@ test.describe('navigation', () => {
     await page.goto('/');
 
     const nav = page.getByRole('navigation', { name: 'Main' });
-    await nav.getByRole('button', { name: 'Explore' }).click();
+    // Hover rather than click: the pointer's arrival opens the group after a
+    // short delay, and a click that lands after it would close it again
+    await nav.getByRole('button', { name: 'Explore' }).hover();
 
     // Scoped: the footer lists the same link
     const child = nav.getByRole('link', { name: 'Block gallery' });
