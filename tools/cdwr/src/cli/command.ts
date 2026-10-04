@@ -6,7 +6,15 @@ export type Danger = 'read' | 'mutate' | 'destructive' | 'spends-money';
 
 /** External things a command relies on, checked before anything else runs */
 export type Need =
-  'fly' | 'psql' | 'pg_dump' | 'docker' | 'aws' | 'gh' | 'infisical';
+  | 'fly'
+  | 'psql'
+  | 'pg_dump'
+  | 'docker'
+  | 'aws'
+  | 'gh'
+  | 'infisical'
+  | 'claude'
+  | 'jq';
 
 /** When to confirm; the default follows from the danger level */
 export type Confirm = 'never' | 'production' | 'always';

@@ -14,7 +14,8 @@ export const GROUPS: Group[] = [
   { name: 'infisical', summary: 'Look at what Infisical holds' },
   { name: 'signature', summary: 'Request signing between web and cms' },
   { name: 'builder', summary: 'The component build service' },
-  { name: 'media', summary: 'Showcase imagery' }
+  { name: 'media', summary: 'Showcase imagery' },
+  { name: 'agent', summary: 'The scheduled agent queue on this machine' }
 ];
 
 /**
@@ -160,6 +161,43 @@ export const ENTRIES: Entry[] = [
     summary: 'Generate showcase imagery with Replicate',
     danger: 'spends-money',
     load: () => import('./media/generate-images').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'status'],
+    summary:
+      'Whether the scheduled planner is loaded, healthy and what it would take next',
+    danger: 'read',
+    load: () => import('./agent/status').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'logs'],
+    summary: "The scheduler log, or the latest run's full log",
+    danger: 'read',
+    load: () => import('./agent/logs').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'run'],
+    summary: 'Start a planning run now',
+    danger: 'mutate',
+    load: () => import('./agent/run').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'pause'],
+    summary: 'Stop scheduled runs until resumed',
+    danger: 'mutate',
+    load: () => import('./agent/pause').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'resume'],
+    summary: 'Let scheduled runs start again',
+    danger: 'mutate',
+    load: () => import('./agent/resume').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'install'],
+    summary: 'Set up the scheduled planner on this machine',
+    danger: 'mutate',
+    load: () => import('./agent/install').then((m) => m.default)
   },
   {
     path: ['release'],
