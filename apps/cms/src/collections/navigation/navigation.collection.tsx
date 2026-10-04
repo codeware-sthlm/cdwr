@@ -90,6 +90,8 @@ const childrenField: ArrayField = {
   name: 'children',
   type: 'array',
   interfaceName: 'NavigationArrayChildren',
+  // A group with nothing to open to is never drawn, so it cannot be saved
+  minRows: 1,
   labels: {
     singular: { en: 'Link', sv: 'Länk' },
     plural: { en: 'Links', sv: 'Länkar' }
