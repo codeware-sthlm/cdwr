@@ -2,9 +2,19 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { type Need, defineCommand, readOnly } from '../cli/command';
+import type { Context } from '../cli/context';
 import { type Check, check, onPath } from '../cli/preflight';
 import { ENV_FILE, LEGACY_ENV_FILE } from '../cli/workspace';
+import {
+  jobState,
+  keyPresent,
+  paths,
+  readText,
+  worktreeOf
+} from '../services/agent-queue';
 import { symbols, theme } from '../ui/theme';
+
+import { SCRIPT_SOURCE, drift } from './agent/agent.logic';
 
 const NEEDS: Need[] = [
   'fly',
@@ -23,6 +33,29 @@ interface Report {
   node: string;
   /** Tool versions the workspace pins, read from its manifests */
   versions: { nx: string; pnpm: string; nodeWanted: string };
+  /** The scheduled agent queue; macOS only */
+  agentQueue?: {
+    loaded: boolean;
+    keyPresent: boolean;
+    worktree: boolean;
+    script: 'missing' | 'current' | 'stale';
+  };
+}
+
+/** The agent queue at a glance; `cdwr agent status` has the detail */
+async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
+  if (process.platform !== 'darwin') return undefined;
+  const queue = paths(ctx.env);
+  const [job, key] = await Promise.all([jobState(), keyPresent()]);
+  return {
+    loaded: job.loaded,
+    keyPresent: key,
+    worktree: existsSync(worktreeOf(ctx)),
+    script: drift(
+      readText(queue.script),
+      readText(join(ctx.root, SCRIPT_SOURCE)) ?? ''
+    )
+  };
 }
 
 const readJson = (file: string): Record<string, unknown> => {
@@ -62,11 +95,11 @@ export default defineCommand({
         nodeWanted: String(
           (
             readJson(join(ctx.root, 'package.json'))['engines'] as
-              | { node?: string }
-              | undefined
+              { node?: string } | undefined
           )?.node ?? ''
         )
-      }
+      },
+      agentQueue: await agentQueue(ctx)
     };
     return readOnly(report);
   },
@@ -114,11 +147,41 @@ export default defineCommand({
             theme.warn('not on PATH; `cdwr setup` links it')
           ]
     );
+    const queue = report.agentQueue;
+    let queueProblems = 0;
+    // Optional per machine: never set up is not a problem
+    if (queue && !queue.loaded && queue.script === 'missing') {
+      rows.push([
+        symbols.ok,
+        'agent queue',
+        theme.muted('not set up here; `cdwr agent install` if you want it')
+      ]);
+    } else if (queue) {
+      const problems = [
+        !queue.loaded && 'job not loaded',
+        !queue.keyPresent && 'no Linear key',
+        !queue.worktree && 'no worktree',
+        queue.script === 'missing' && 'script not installed',
+        queue.script === 'stale' && 'script out of date'
+      ].filter((p) => p !== false);
+      queueProblems = problems.length;
+      rows.push(
+        problems.length === 0
+          ? [symbols.ok, 'agent queue', theme.muted('installed and current')]
+          : [
+              symbols.warn,
+              'agent queue',
+              theme.warn(`${problems.join(', ')}; \`cdwr agent install\``)
+            ]
+      );
+    }
     ctx.ui.table(['', 'check', 'detail'], rows);
 
     const missing = report.checks.filter((c) => !c.ok).length;
     const warnings =
-      (report.envFile === 'current' ? 0 : 1) + (report.onPath ? 0 : 1);
+      (report.envFile === 'current' ? 0 : 1) +
+      (report.onPath ? 0 : 1) +
+      (queueProblems > 0 ? 1 : 0);
     const summary =
       missing > 0
         ? `${missing} thing(s) missing`
