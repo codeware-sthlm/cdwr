@@ -146,12 +146,29 @@ describe('ensureNavigation', () => {
       ).toEqual([4, 5]);
     });
 
-    it('matches a group by label and keeps its links unless the definition wins', async () => {
-      const { payload, calls } = payloadWith([storedGroup(4)]);
+    it('matches a group by label and adds the links it lacks, keeping its own', async () => {
+      // 9 is the editor's; 5 is stated and missing, as after a page was
+      // deleted and made again
+      const { payload, calls } = payloadWith([storedGroup(4, 9)]);
 
       await ensureNavigation(
         payload,
         { tenant: 1, items: [group(4, 5)] },
+        options
+      );
+
+      expect(calls.update).toHaveLength(1);
+      expect(
+        calls.update[0][0].children?.map((child) => child.reference?.value)
+      ).toEqual([4, 9, 5]);
+    });
+
+    it('writes nothing when a matched group already holds every stated link', async () => {
+      const { payload, calls } = payloadWith([storedGroup(4, 5)]);
+
+      await ensureNavigation(
+        payload,
+        { tenant: 1, items: [group(4)] },
         options
       );
 

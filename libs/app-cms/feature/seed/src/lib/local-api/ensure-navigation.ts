@@ -182,27 +182,45 @@ export async function ensureNavigation(
         customLabel ?? null
       ].join('|');
 
-    // What the data says about an item both name, when the data is the truth
+    // What the data says about an item both name, when the data is the truth.
+    // A group is matched by its label, so a link it states and the stored
+    // group lacks is appended either way: a page deleted and made again, say
     let restated = 0;
     const items = kept.map((item) => {
-      if (!definitionWins) {
-        return item;
-      }
-
       if (isGroup(item)) {
         const stated = dataItems.find(
           (dataItem): dataItem is NavigationGroupData =>
             isGroupData(dataItem) && dataItem.label === item.label
         );
-        if (
-          !stated ||
-          (item.children ?? []).map(childKey).join(',') ===
+        if (!stated) {
+          return item;
+        }
+        const children = item.children ?? [];
+        if (definitionWins) {
+          if (
+            children.map(childKey).join(',') ===
             stated.children.map(childKey).join(',')
-        ) {
+          ) {
+            return item;
+          }
+          restated++;
+          return { ...item, children: stated.children.map(toStoredChild) };
+        }
+        const added = stated.children.filter(
+          (child) => !children.some((stored) => sameTarget(stored, child))
+        );
+        if (added.length === 0) {
           return item;
         }
         restated++;
-        return { ...item, children: stated.children.map(toStoredChild) };
+        return {
+          ...item,
+          children: [...children, ...added.map(toStoredChild)]
+        };
+      }
+
+      if (!definitionWins) {
+        return item;
       }
 
       const stated = hasReference(item)
@@ -233,18 +251,12 @@ export async function ensureNavigation(
     // stored item was dangling. Falling through to create would give the
     // tenant a second navigation
     if (missingItems.length || dangling || restated) {
+      // Kept links are written in the one stored shape, with their row id
       const itemsToUpdate = [
         ...items.map((item) =>
-          isGroup(item)
+          isGroup(item) || !hasReference(item)
             ? item
-            : {
-                id: item.id,
-                type: 'link' as const,
-                appearance: item.appearance ?? 'link',
-                customLabel: item.customLabel,
-                reference: item.reference,
-                labelSource: item.labelSource ?? 'document'
-              }
+            : { id: item.id, ...toStored(item) }
         ),
         ...missingItems.map(toStored)
       ];
