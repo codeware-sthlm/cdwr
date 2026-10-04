@@ -16,7 +16,7 @@ export const STALE_BUILD_MS = 5 * 60 * 1000;
 /** How often the check runs while the server is up */
 export const REQUEUE_INTERVAL_MS = 10 * 60 * 1000;
 
-/** Builds drained in one pass; the sweep takes the rest */
+/** Builds drained in one pass; the next pass takes the rest */
 const DRAIN_LIMIT = 20;
 
 const LIMIT = 100;
@@ -82,7 +82,7 @@ export function staleComponentBuildIds(
 /**
  * Frees the jobs a gone process left claimed. Payload never runs a job marked
  * `processing` again, so a build a restart cut off would otherwise stay
- * claimed for good and mask its component from the sweep.
+ * claimed for good and mask its component from the passes.
  *
  * A rolling deploy may free a job the old machine is still building; both
  * then build the same source, and the later write wins with the same hash.
