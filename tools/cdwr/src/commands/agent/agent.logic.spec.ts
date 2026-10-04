@@ -9,6 +9,7 @@ import {
   launchPath,
   parseCheck,
   parseLaunchctlPrint,
+  parseNotifyLevel,
   queuePaths,
   renderPlist,
   serviceTarget,
@@ -93,12 +94,25 @@ describe('queuePaths', () => {
       home: '/h/.cdwr/agent-queue',
       script: '/h/.cdwr/agent-queue/run.sh',
       paused: '/h/.cdwr/agent-queue/paused',
+      notifyLevel: '/h/.cdwr/agent-queue/notify-level',
       lock: '/h/.cdwr/agent-queue/lock',
       logs: '/h/.cdwr/agent-queue/logs',
       schedulerLog: '/h/.cdwr/agent-queue/logs/scheduler.log',
       launchdLog: '/h/.cdwr/agent-queue/logs/launchd.log',
       plist: '/h/Library/LaunchAgents/se.codeware.agent-queue.plist'
     });
+  });
+});
+
+describe('parseNotifyLevel', () => {
+  it.each([
+    [undefined, 'all'],
+    ['', 'all'],
+    ['action\n', 'action'],
+    ['all', 'all'],
+    ['junk', 'all']
+  ] as const)('reads %j as %s', (text, level) => {
+    expect(parseNotifyLevel(text)).toBe(level);
   });
 });
 

@@ -18,7 +18,8 @@ import {
   drift,
   lastSchedulerLine,
   latestRunLog,
-  parseCheck
+  parseCheck,
+  parseNotifyLevel
 } from './agent.logic';
 
 export default defineCommand({
@@ -53,6 +54,7 @@ export default defineCommand({
         return {
           job,
           paused: existsSync(queue.paused),
+          notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
           keyPresent: key,
           script:
             source === undefined
@@ -102,6 +104,13 @@ export default defineCommand({
       report.paused
         ? row('warn', 'paused', 'yes; `cdwr agent resume`')
         : row(true, 'paused', 'no'),
+      row(
+        true,
+        'notify',
+        report.notifyLevel === 'action'
+          ? 'action (only what needs you)'
+          : report.notifyLevel
+      ),
       report.keyPresent
         ? row(true, 'Linear key', 'in the Keychain')
         : row(
