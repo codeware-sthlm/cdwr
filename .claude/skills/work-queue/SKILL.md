@@ -15,6 +15,7 @@ source of truth for state. The conversation is not, so a fresh session can alway
 - `COD-123`: work that ticket, whether or not it is labelled
 - `unattended` (or the user says they are leaving or going to bed): gates go to Linear
   instead of the session, and the run continues with the next ticket instead of waiting
+- `once`: stop after one ticket reaches review or a gate, so each ticket gets a fresh context
 
 ## The queue rule
 
@@ -28,9 +29,14 @@ The queue view (the "Agent Queue" artifact) computes the same order, so keep the
 3. Sort by priority, Urgent → High → Medium → Low, with _No priority_ last, then oldest
    `createdAt` first.
 
-Before picking anything new, check **agent:needs-input** tickets. If the newest comment is
-Håkan's and comes after the agent's question, the question has been answered. Resume that
-ticket first.
+Before picking anything new, resume in this order:
+
+1. An **agent:working** ticket: an earlier run stopped partway. Read its Status table and
+   **Next:** line, check the branch for commits beyond them, and continue.
+2. An **agent:needs-input** ticket whose newest comment does **not** start with `**Agent`.
+   The agent comments through Håkan's own Linear account, so the author can't tell an
+   answer from a question. The marker can. Every comment the agent writes starts with
+   `**Agent`.
 
 ## Labels (group "Agent", one at a time)
 
@@ -46,8 +52,9 @@ remove the ticket's other labels.
 
 ## Per ticket
 
-1. **Claim.** Set `agent:working` and status In Progress. Fetch `origin main` and branch from
-   `main` using the ticket's `gitBranchName`. Keep the branch independent of open PRs.
+1. **Claim.** Set `agent:working` and status In Progress. Run `git fetch origin` and branch from
+   `origin/main` (not a local `main`, which may be stale or checked out elsewhere) using
+   the ticket's `gitBranchName`. Keep the branch independent of open PRs.
 2. **Plan (Opus).** Investigate, then write the plan into the ticket **description**: keep
    the original report under its own heading, then `## Plan` with **Decisions**, a
    **Status** table (`| Step | What | Status |`, one row per step), and one line
@@ -65,8 +72,9 @@ remove the ticket's other labels.
 5. **Finish.** Run `nx affected` lint, typecheck and test against main, run `/code-review`
    and fold the fixes into the commits they correct, push, and open the PR (plan summary
    in the body). Set `agent:review` and status In Review. Add a comment with the PR link
-   and the **hand-off checklist**.
-6. **Next.** Ask: "COD-xxx is in review. Pick the next one?" Unattended: continue. Either way,
+   and the **hand-off checklist**, starting the comment with `**Agent: PR open**`.
+6. **Next.** Ask: "COD-xxx is in review. Pick the next one?" Unattended: continue, unless
+   `once` is set, in which case stop. Either way,
    suggest `/clear` before a big next ticket. Linear holds the state, so nothing is lost.
 
 ## Gates: stop only for these
