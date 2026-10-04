@@ -289,6 +289,7 @@ const Harness = ({ initial = SOURCE, withPanel, ...props }: Args) => {
       catalog={catalog}
       onCheck={() => wait(clean, 1000)}
       onSyncInputs={sync}
+      onRebuild={() => wait({ status: 'queued' }, 500)}
       sidePanel={withPanel ? <InputsList inputs={inputs} /> : undefined}
       {...props}
       value={value}
@@ -331,6 +332,40 @@ export const ReadyWithWarnings: Story = {
 export const Failed: Story = {
   name: 'Failed build',
   args: { build: failedBuild, withPanel: true }
+};
+
+export const FailedTransient: Story = {
+  name: 'Failed build, will retry',
+  args: {
+    build: {
+      status: 'failed',
+      hash: null,
+      builtAt: null,
+      diagnostics: [
+        {
+          ...at,
+          line: 0,
+          severity: 'error',
+          transient: true,
+          message:
+            'The build service did not answer (request 7c1e4b2a): fetch failed'
+        }
+      ]
+    }
+  }
+};
+
+export const StalePending: Story = {
+  name: 'Pending build, gone quiet',
+  args: {
+    build: {
+      status: 'pending',
+      hash: null,
+      builtAt: null,
+      diagnostics: [],
+      stale: true
+    }
+  }
 };
 
 export const Pending: Story = {

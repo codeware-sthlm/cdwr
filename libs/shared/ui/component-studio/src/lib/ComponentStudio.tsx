@@ -68,6 +68,7 @@ export const ComponentStudio = ({
   build,
   onCheck,
   onSyncInputs,
+  onRebuild,
   catalog,
   loadTypes,
   sidePanel,
@@ -89,6 +90,7 @@ export const ComponentStudio = ({
   const studio = useStudio({
     onCheck,
     onSyncInputs,
+    onRebuild,
     readOnly,
     build,
     openPicker: useCallback(() => setPickerOpen(true), []),
@@ -211,6 +213,9 @@ export const ComponentStudio = ({
       <StatusStrip
         model={model}
         busy={studio.busy !== null}
+        onRebuild={
+          model.rebuildable && onRebuild && !readOnly ? studio.rebuild : null
+        }
         findings={studio.findings}
         checked={studio.checked}
         onReveal={(line, column) => {

@@ -20,11 +20,21 @@ export type BuildJob = {
   durationMs: number | null;
 };
 
-export type StudioBuild = BuildState & { job?: BuildJob };
+export type StudioBuild = BuildState & {
+  job?: BuildJob;
+  /** Still pending or building, yet nothing has changed for a long while */
+  stale?: boolean;
+};
 
 /** A build is still in flight while it waits or runs. */
 export const shouldPoll = (status: BuildStatus | undefined): boolean =>
   status === 'pending' || status === 'building';
+
+/** A rebuild helps once a build has failed or has gone quiet. */
+export const canRebuild = (build: StudioBuild | null): boolean =>
+  build !== null &&
+  (build.status === 'failed' ||
+    (shouldPoll(build.status) && build.stale === true));
 
 /** Errors first, then warnings; source order within each. */
 export const sortDiagnostics = (

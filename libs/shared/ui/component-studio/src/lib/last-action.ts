@@ -1,5 +1,7 @@
 import type { ComponentDiagnostic } from '@codeware/shared/util/payload-utils';
 
+import type { RebuildOutcome } from './rebuild';
+
 export type Tone = 'ok' | 'warn' | 'error' | 'muted';
 
 /** What the host did to its form when asked to sync the inputs */
@@ -15,7 +17,7 @@ export type SyncOutcome =
   | { status: 'unchanged'; skipped: readonly string[] };
 
 /** What the studio is doing right now */
-export type BusyTask = 'format' | 'check' | 'sync';
+export type BusyTask = 'format' | 'check' | 'sync' | 'rebuild';
 
 /** What the last action came to; the strip words it */
 export type ActionResult =
@@ -39,6 +41,7 @@ export type ActionResult =
       task: 'check' | 'sync';
       reason: 'forbidden' | 'unreachable';
     }
+  | { kind: 'rebuild'; outcome: RebuildOutcome['status'] }
   | { kind: 'sync'; outcome: SyncOutcome }
   | { kind: 'sync-unresolved' }
   | { kind: 'sync-failed'; message: string }
@@ -108,7 +111,8 @@ const describers = {
     text: {
       format: 'Formatting…',
       check: 'Checking…',
-      sync: 'Syncing inputs…'
+      sync: 'Syncing inputs…',
+      rebuild: 'Queueing a rebuild…'
     }[task],
     details: []
   }),
@@ -156,6 +160,17 @@ const describers = {
           details: []
         };
   },
+  rebuild: ({ outcome }) =>
+    outcome === 'queued'
+      ? { tone: 'ok', text: 'Rebuild queued', details: [] }
+      : {
+          tone: 'error',
+          text:
+            outcome === 'forbidden'
+              ? 'Rebuild: this account may not rebuild components'
+              : 'Rebuild: the request failed',
+          details: []
+        },
   sync: ({ outcome }) => ({
     tone: outcome.status === 'changed' ? 'ok' : 'muted',
     text: syncText(outcome),
@@ -194,6 +209,8 @@ export const describeAction = (result: ActionResult): Described => {
       return describers.check(result);
     case 'check-failed':
       return describers['check-failed'](result);
+    case 'rebuild':
+      return describers.rebuild(result);
     case 'sync':
       return describers.sync(result);
     case 'sync-unresolved':
