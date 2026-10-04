@@ -14,7 +14,9 @@ on:
     tags:
       - "*-[0-9]*.[0-9]*.[0-9]*" # Matches any package name followed by semver, e.g. core-2.0.0
       - "*-[0-9]*.[0-9]*.[0-9]*-*.[0-9]*" # Also matches prerelease versions, e.g. core-2.0.0-beta.1
-      # Apps are versioned by the deployment workflow and never published
+      # Apps are versioned by the deployment workflow and never published;
+      # keep in step with the `apps` release group in nx.json
+      - "!builder-*"
       - "!cms-*"
       - "!web-*"
 
