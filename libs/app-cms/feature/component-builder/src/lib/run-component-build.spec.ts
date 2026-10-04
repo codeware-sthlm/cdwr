@@ -144,5 +144,6 @@ describe('runComponentBuild', () => {
     expect(result.diagnostics[0]?.message).toContain(
       'The component build toolchain is not available in this environment'
     );
+    expect(result.diagnostics[0]?.transient).toBe(true);
   });
 });

@@ -37,11 +37,15 @@ const defaultDeps: ComponentBuildDeps = {
   buildComponent
 };
 
-export const errorDiagnostic = (message: string): ComponentDiagnostic => ({
+export const errorDiagnostic = (
+  message: string,
+  { transient }: { transient?: true } = {}
+): ComponentDiagnostic => ({
   message,
   line: 1,
   column: 1,
-  severity: 'error'
+  severity: 'error',
+  ...(transient && { transient })
 });
 
 /**
@@ -63,7 +67,8 @@ export const runComponentBuild = async (
       ok: false,
       diagnostics: [
         errorDiagnostic(
-          `The component build toolchain is not available in this environment. ${resolved.reason}.`
+          `The component build toolchain is not available in this environment. ${resolved.reason}.`,
+          { transient: true }
         )
       ]
     };

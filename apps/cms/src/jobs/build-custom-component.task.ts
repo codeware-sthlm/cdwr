@@ -9,6 +9,7 @@ import {
   defaultDeps,
   errorDiagnostic,
   hasErrors,
+  hasTransientDiagnostic,
   runComponentBuild
 } from './run-component-build';
 
@@ -25,6 +26,11 @@ export const COMPONENT_BUILD_CONTEXT = 'componentBuild';
 type Build = NonNullable<CustomComponent['build']>;
 
 export type BuildOutcome = 'ready' | 'failed' | 'skipped';
+
+const isWaiting = ({ status, diagnostics }: Build): boolean =>
+  status === 'pending' ||
+  status === 'building' ||
+  (status === 'failed' && hasTransientDiagnostic(diagnostics));
 
 const findComponent = (payload: BasePayload, id: number) =>
   payload.findByID({
@@ -66,12 +72,10 @@ export async function buildCustomComponent(
   const component = await findComponent(payload, id);
 
   // Built already (or deleted): a second queued job has nothing to do. A
-  // component stuck in `building` is a build a restart cut off, so it re-runs
-  if (
-    !component ||
-    (component.build.status !== 'pending' &&
-      component.build.status !== 'building')
-  ) {
+  // component stuck in `building` is a build a restart cut off, and one that
+  // `failed` on its circumstances is queued again by the recovery pass, so
+  // both re-run
+  if (!component || !isWaiting(component.build)) {
     return 'skipped';
   }
 
@@ -107,7 +111,8 @@ export async function buildCustomComponent(
       ok: false,
       diagnostics: [
         errorDiagnostic(
-          `The build failed unexpectedly: ${error instanceof Error ? error.message : String(error)}`
+          `The build failed unexpectedly: ${error instanceof Error ? error.message : String(error)}`,
+          { transient: true }
         )
       ]
     };
