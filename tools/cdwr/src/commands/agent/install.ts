@@ -216,6 +216,7 @@ export default defineCommand({
         message: 'Linear API key for the agent queue',
         validate: (value) => (value.trim() ? undefined : 'Enter the key')
       });
+      // A failed call's error would carry the key in its argv
       await run('security', [
         'add-generic-password',
         '-U',
@@ -225,7 +226,13 @@ export default defineCommand({
         userInfo().username,
         '-w',
         key.trim()
-      ]);
+      ]).catch(() => {
+        throw new CliError(
+          'Could not store the Linear key in the Keychain',
+          undefined,
+          `Store it by hand: security add-generic-password -U -s ${KEYCHAIN_SERVICE} -a "$USER" -w`
+        );
+      });
       ctx.ui.success('Linear key stored in the Keychain');
     }
 
