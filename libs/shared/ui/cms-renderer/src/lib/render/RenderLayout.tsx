@@ -105,6 +105,11 @@ export function RenderLayout({
     }
 
     const measure = () => {
+      // An open group's panel hangs off the nav and would count as width;
+      // the last measurement stands until it closes
+      if (nav.querySelector('[data-slot="navigation-menu-content"]')) {
+        return;
+      }
       const gap = Number.parseFloat(getComputedStyle(row).columnGap) || 0;
       const needed =
         logo.scrollWidth + nav.scrollWidth + actions.scrollWidth + gap * 2;

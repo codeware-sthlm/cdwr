@@ -116,10 +116,10 @@ describe('resolveNavigationTree', () => {
         kind: 'group',
         key: 'g',
         label: 'Company',
+        // A child carries no appearance: a panel holds links only
         children: [
           {
             kind: 'link',
-            appearance: 'link',
             collection: 'pages',
             key: 'c1',
             label: 'About',
@@ -127,7 +127,6 @@ describe('resolveNavigationTree', () => {
           },
           {
             kind: 'link',
-            appearance: 'link',
             collection: 'posts',
             key: 'c2',
             label: 'Latest',

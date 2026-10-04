@@ -19,6 +19,11 @@ export function isActivePath(pathname: string, href: string) {
   return target !== '/' && path.startsWith(`${target}/`);
 }
 
+/** The link is the current location itself, not a parent of it. */
+export function isExactPath(pathname: string, href: string) {
+  return normalize(pathname) === normalize(href);
+}
+
 function normalize(value: string) {
   return value.endsWith('/') && value !== '/' ? value.slice(0, -1) : value;
 }

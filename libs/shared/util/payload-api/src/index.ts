@@ -11,6 +11,7 @@ export type {
   FooterLinkGroup,
   MethodOptions,
   NavigationAppearance,
+  NavigationChildLink,
   NavigationGroup,
   NavigationItem,
   NavigationLink,

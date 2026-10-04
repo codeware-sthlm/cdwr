@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isActivePath } from './active-path';
+import { isActivePath, isExactPath } from './active-path';
 
 describe('isActivePath', () => {
   it('matches the exact path', () => {
@@ -30,5 +30,13 @@ describe('isActivePath', () => {
 
   it('does not match a child link from a parent route', () => {
     expect(isActivePath('/posts', '/posts/some-slug')).toBe(false);
+  });
+});
+
+describe('isExactPath', () => {
+  it('is true only for the location itself, trailing slash aside', () => {
+    expect(isExactPath('/posts', '/posts')).toBe(true);
+    expect(isExactPath('/posts/', '/posts')).toBe(true);
+    expect(isExactPath('/posts/one', '/posts')).toBe(false);
   });
 });
