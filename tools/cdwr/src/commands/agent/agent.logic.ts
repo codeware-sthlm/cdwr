@@ -45,6 +45,22 @@ export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
 export const parseNotifyLevel = (text: string | undefined): NotifyLevel =>
   NOTIFY_LEVELS.find((level) => level === text?.trim()) ?? 'all';
 
+/** A check holds the lock for seconds; older than this with no job running, nothing does */
+export const STALE_LOCK_MS = 10 * 60_000;
+
+export type LockState = 'free' | 'held' | 'stale';
+
+/** Whether the runner's lock is free, held by a run or check, or left by one that died */
+export const lockState = (
+  ageMs: number | undefined,
+  running: boolean
+): LockState =>
+  ageMs === undefined
+    ? 'free'
+    : running || ageMs < STALE_LOCK_MS
+      ? 'held'
+      : 'stale';
+
 export const serviceTarget = (uid: number): string => `gui/${uid}/${LABEL}`;
 export const domainTarget = (uid: number): string => `gui/${uid}`;
 

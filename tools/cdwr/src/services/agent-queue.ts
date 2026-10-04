@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -74,6 +74,15 @@ export async function checkRun(
     timeout: 30_000
   });
   return stdout.trim().split('\n').at(-1) ?? '';
+}
+
+/** Milliseconds since the lock was taken; undefined when it is free */
+export function lockAge(lock: string): number | undefined {
+  try {
+    return Date.now() - statSync(lock).mtimeMs;
+  } catch {
+    return undefined;
+  }
 }
 
 export function readText(file: string): string | undefined {

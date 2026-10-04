@@ -6,13 +6,14 @@ import {
   checkRun,
   currentUid,
   jobState,
+  lockAge,
   paths,
   requireMac,
   worktreeOf
 } from '../../services/agent-queue';
 import { run } from '../../services/shell';
 
-import { parseCheck, serviceTarget } from './agent.logic';
+import { lockState, parseCheck, serviceTarget } from './agent.logic';
 
 export default defineCommand({
   summary: 'Start a planning run now',
@@ -56,9 +57,9 @@ export default defineCommand({
         return none('Nothing to plan');
       case 'busy':
         return none(
-          job.running
-            ? 'A run is already in progress'
-            : `A lock was left by a run that did not finish; \`rmdir ${queue.lock}\``
+          lockState(lockAge(queue.lock), job.running) === 'stale'
+            ? `A lock was left by a run that did not finish; \`rmdir ${queue.lock}\``
+            : 'A run or a check is in progress; try again shortly'
         );
       case 'skip':
       case 'unknown':
