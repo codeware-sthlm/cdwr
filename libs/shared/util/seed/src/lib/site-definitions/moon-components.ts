@@ -36,14 +36,19 @@ type Props = {
 const parseValues = (raw: string): number[] =>
   raw
     .split(/[,\\n;]+/)
-    .map((part) => Number(part.trim().replace(/\\s/g, '')))
+    .map((part) => part.replace(/\\s/g, ''))
+    .filter((part) => part !== '')
+    .map(Number)
     .filter((n) => Number.isFinite(n));
 
-const format = (n: number, decimals: number) =>
-  new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals
+// Intl takes a whole number of decimals between 0 and 20
+const format = (n: number, decimals: number) => {
+  const digits = Math.min(20, Math.max(0, Math.trunc(decimals) || 0));
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
   }).format(n);
+};
 
 export default function MetricCard({
   title,
