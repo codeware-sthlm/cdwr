@@ -31,13 +31,17 @@ test.describe('navigation', () => {
     await page.goto('/');
 
     const nav = page.getByRole('navigation', { name: 'Main' });
-    // Hover rather than click: the pointer's arrival opens the group after a
-    // short delay, and a click that lands after it would close it again
-    await nav.getByRole('button', { name: 'Explore' }).hover();
-
+    const trigger = nav.getByRole('button', { name: 'Explore' });
     // Scoped: the footer lists the same link
     const child = nav.getByRole('link', { name: 'Block gallery' });
-    await expect(child).toBeVisible();
+
+    // Hovered again until the panel shows: a pointer that arrives before the
+    // header has hydrated opens nothing, and a click would toggle a group the
+    // hover had just opened
+    await expect(async () => {
+      await trigger.hover();
+      await expect(child).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 15_000 });
     await child.click();
 
     await page.waitForURL(/\/blocks/, { timeout: 30_000 });
