@@ -36,7 +36,7 @@ jobs:
           client-id: ${{ secrets.CDWR_ACTIONS_BOT_ID }}
           private-key: ${{ secrets.CDWR_ACTIONS_BOT_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Delete release tags as the app, the ruleset's bypass actor
           token: ${{ steps.generate-token.outputs.token }}
