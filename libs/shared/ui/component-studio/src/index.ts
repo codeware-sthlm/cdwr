@@ -6,3 +6,4 @@ export * from './lib/editor-types';
 export * from './lib/format-source';
 export * from './lib/insert-import';
 export * from './lib/last-action';
+export * from './lib/rebuild';

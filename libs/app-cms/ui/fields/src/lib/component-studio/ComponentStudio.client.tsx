@@ -5,6 +5,7 @@ import {
   FieldError,
   RenderFields,
   useConfig,
+  useDocumentInfo,
   useField,
   useForm,
   useTheme
@@ -16,6 +17,7 @@ import { importCatalog } from './catalog';
 import { requestCheck } from './check';
 import { loadEditorTypes } from './load-editor-types';
 import { inputsName, slugName, sourceName } from './names';
+import { requestRebuild } from './rebuild';
 import { readPropsSchema } from './sync-props';
 import { useStoredBuild } from './use-stored-build';
 import { useSyncInputs } from './use-sync-inputs';
@@ -43,7 +45,8 @@ const ComponentStudioField: RowFieldClientComponent = ({
   const { theme } = useTheme();
   const { config } = useConfig();
   const { getDataByPath } = useForm();
-  const build = useStoredBuild();
+  const { build, refresh } = useStoredBuild();
+  const { id, collectionSlug } = useDocumentInfo();
   const syncInputs = useSyncInputs();
 
   const at = (name: string) => (parentPath ? `${parentPath}.${name}` : name);
@@ -75,6 +78,17 @@ const ComponentStudioField: RowFieldClientComponent = ({
     [apiRoute, getDataByPath, inputsPath, slugPath]
   );
 
+  const onRebuild = useCallback(async () => {
+    if (!id || !collectionSlug) {
+      return { status: 'failed' } as const;
+    }
+    const outcome = await requestRebuild({ apiRoute, collectionSlug, id });
+    if (outcome.status === 'queued') {
+      refresh();
+    }
+    return outcome;
+  }, [apiRoute, collectionSlug, id, refresh]);
+
   const inputs = field.fields.filter(
     (sub) => 'name' in sub && sub.name === inputsName
   );
@@ -91,6 +105,7 @@ const ComponentStudioField: RowFieldClientComponent = ({
         onCheck={onCheck}
         loadTypes={loadEditorTypes}
         onSyncInputs={readOnly ? undefined : syncInputs}
+        onRebuild={id && !readOnly ? onRebuild : undefined}
         portalClassName="codeware-admin"
         panelClassName="@2xl:w-88"
         sidePanel={

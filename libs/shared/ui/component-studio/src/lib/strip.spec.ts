@@ -91,6 +91,29 @@ describe('buildSummary', () => {
     );
   });
 
+  it('says what kind of failure it is and what happens next', () => {
+    expect(buildSummary(build({ status: 'failed' }))).toContain(
+      'source needs a fix'
+    );
+    expect(
+      buildSummary(
+        build({
+          status: 'failed',
+          diagnostics: [{ ...warning, severity: 'error', transient: true }]
+        })
+      )
+    ).toContain('tried again every ten minutes');
+  });
+
+  it('says so when a build has gone quiet', () => {
+    expect(buildSummary(build({ status: 'pending', stale: true }))).toContain(
+      'stalled'
+    );
+    expect(buildSummary(build({ status: 'building', stale: true }))).toContain(
+      'stalled'
+    );
+  });
+
   it('has a line for every state, built or not', () => {
     expect(buildSummary(null)).toContain('Not built yet');
     expect(buildSummary(build({ status: 'pending' }))).toContain('Queued');
@@ -98,6 +121,20 @@ describe('buildSummary', () => {
     expect(buildSummary(build({ status: 'ready' }))).toContain(
       'serves this build'
     );
+  });
+});
+
+describe('rebuildable', () => {
+  it.each([
+    [build({ status: 'failed' }), true],
+    [build({ status: 'pending', stale: true }), true],
+    [build({ status: 'building', stale: true }), true],
+    [build({ status: 'pending' }), false],
+    [build({ status: 'building' }), false],
+    [build({ status: 'ready', stale: true }), false],
+    [null, false]
+  ])('%j is %s', (studioBuild, expected) => {
+    expect(stripModel(studioBuild, null).rebuildable).toBe(expected);
   });
 });
 

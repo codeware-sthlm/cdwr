@@ -65,6 +65,24 @@ describe('describeAction', () => {
       'Sync inputs: the build service could not be reached'
     ],
     [
+      'rebuild queued',
+      { kind: 'rebuild', outcome: 'queued' },
+      'ok',
+      'Rebuild queued'
+    ],
+    [
+      'rebuild forbidden',
+      { kind: 'rebuild', outcome: 'forbidden' },
+      'error',
+      'Rebuild: this account may not rebuild components'
+    ],
+    [
+      'rebuild failed',
+      { kind: 'rebuild', outcome: 'failed' },
+      'error',
+      'Rebuild: the request failed'
+    ],
+    [
       'import added',
       { kind: 'import', label: 'Button', added: true },
       'ok',

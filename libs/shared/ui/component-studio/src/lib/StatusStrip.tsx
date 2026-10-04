@@ -12,6 +12,7 @@ import {
   CircleXIcon,
   InfoIcon,
   LoaderCircleIcon,
+  RefreshCwIcon,
   TriangleAlertIcon
 } from 'lucide-react';
 import { type ComponentType, useState } from 'react';
@@ -60,6 +61,8 @@ type Props = {
   model: StripModel;
   /** Whether a task is running, which the action text is then about */
   busy: boolean;
+  /** Set only while a rebuild would help and the host can do one */
+  onRebuild: (() => void) | null;
   findings: Listed | null;
   /** Whether a check has run since the source last changed */
   checked: boolean;
@@ -117,6 +120,7 @@ const Finding = ({
 export const StatusStrip = ({
   model,
   busy,
+  onRebuild,
   findings,
   checked,
   onReveal
@@ -208,14 +212,28 @@ export const StatusStrip = ({
             </span>
           )}
         </span>
-        {hasMore && (
-          <CollapsibleTrigger asChild>
-            <Button type="button" variant="ghost" size="xs">
-              {open ? 'Hide details' : 'Show details'}
-              <ChevronsUpDownIcon />
+        <div className="flex shrink-0 items-center gap-1">
+          {onRebuild && (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={busy}
+              onClick={onRebuild}
+            >
+              <RefreshCwIcon />
+              Rebuild
             </Button>
-          </CollapsibleTrigger>
-        )}
+          )}
+          {hasMore && (
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" size="xs">
+                {open ? 'Hide details' : 'Show details'}
+                <ChevronsUpDownIcon />
+              </Button>
+            </CollapsibleTrigger>
+          )}
+        </div>
       </div>
 
       <CollapsibleContent className="flex flex-col gap-2">

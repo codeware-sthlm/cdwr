@@ -15,12 +15,15 @@ import {
 } from './last-action';
 import type { CommandId } from './menu';
 import { type Editor, type Monaco, applyTextEdit, drawMarkers } from './monaco';
+import type { RebuildOutcome } from './rebuild';
 
 export type StudioHandlers = {
   onCheck: (source: string) => Promise<CheckOutcome>;
   onSyncInputs?: (
     props: readonly ComponentProp[]
   ) => SyncOutcome | Promise<SyncOutcome>;
+  /** Asks the server to build the stored source again */
+  onRebuild?: () => Promise<RebuildOutcome>;
 };
 
 type Args = StudioHandlers & {
@@ -45,6 +48,7 @@ const errorMessage = (error: unknown): string =>
 export const useStudio = ({
   onCheck,
   onSyncInputs,
+  onRebuild,
   readOnly,
   build,
   openPicker,
@@ -271,6 +275,21 @@ export const useStudio = ({
     }
   }, [ask, finish, keep, onSyncInputs, readOnly, source, start]);
 
+  const rebuild = useCallback(async () => {
+    if (busyRef.current || readOnly || !onRebuild) {
+      return;
+    }
+    start('rebuild');
+    let outcome: RebuildOutcome;
+    try {
+      outcome = await onRebuild();
+    } catch {
+      outcome = { status: 'failed' };
+    }
+    finish();
+    setLast({ kind: 'rebuild', outcome: outcome.status });
+  }, [finish, onRebuild, readOnly, start]);
+
   const run = useMemo(
     () =>
       ({
@@ -289,6 +308,7 @@ export const useStudio = ({
     busy,
     last,
     run,
+    rebuild,
     insertImport,
     handle,
     findings: listedFindings({ build, check, edited }),

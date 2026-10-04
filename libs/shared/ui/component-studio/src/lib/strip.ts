@@ -1,9 +1,11 @@
 import type { Badge } from '@codeware/shared/ui/shadcn/components/badge';
+import { isTransientFailure } from '@codeware/shared/util/payload-utils';
 import type { ComponentProps } from 'react';
 
 import {
   type BuildStatus,
   type StudioBuild,
+  canRebuild,
   isBuiltWithWarnings,
   isServingPrevious,
   shouldPoll,
@@ -107,17 +109,27 @@ export const buildSummary = (build: StudioBuild | null): string => {
   }
   switch (build.status) {
     case 'pending':
-      return 'Queued, waiting for the build to start.';
+      return build.stale
+        ? 'Still queued; the build may have stalled.'
+        : 'Queued, waiting for the build to start.';
     case 'building':
-      return 'Building…';
+      return build.stale
+        ? 'Still building; the build may have stalled.'
+        : 'Building…';
     case 'ready':
       return isBuiltWithWarnings(build)
         ? 'The site serves this build, which has warnings.'
         : 'The site serves this build.';
     case 'failed':
-      return isServingPrevious(build)
-        ? 'The previous bundle is still served.'
-        : 'There is no earlier bundle to serve.';
+      return `${
+        isServingPrevious(build)
+          ? 'The previous bundle is still served.'
+          : 'There is no earlier bundle to serve.'
+      } ${
+        isTransientFailure(build.diagnostics)
+          ? 'The build could not run; it is tried again every ten minutes.'
+          : 'The source needs a fix before it builds.'
+      }`;
   }
 };
 
@@ -143,6 +155,8 @@ export type StripModel = {
   /** Job step and duration, when known */
   meta: string | null;
   action: Described | null;
+  /** Whether a rebuild would help: the build failed or has gone quiet */
+  rebuildable: boolean;
   /** Whether the strip should open by itself */
   expand: boolean;
 };
@@ -162,6 +176,7 @@ export const stripModel = (
     hash: shortHash(build?.hash ?? null),
     meta: buildMeta(build),
     action,
+    rebuildable: canRebuild(build),
     expand:
       (build?.status === 'failed' && showsDiagnostics(build)) ||
       action?.tone === 'error'
