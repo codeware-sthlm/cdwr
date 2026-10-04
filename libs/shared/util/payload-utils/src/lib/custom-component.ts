@@ -32,7 +32,17 @@ export type ComponentDiagnostic = {
   /** 1-based column in the authored source; 1 when no location is known */
   column: number;
   severity: 'error' | 'warning';
+  /**
+   * Set when the build's circumstances failed, not the source: the service
+   * out of reach, no toolchain, a crash. Such a build is tried again.
+   */
+  transient?: true;
 };
+
+/** True for a failure the next attempt may not repeat. */
+export const isTransientFailure = (
+  diagnostics: readonly ComponentDiagnostic[]
+): boolean => diagnostics.some((d) => d.transient === true);
 
 export type ComponentPropKind = 'string' | 'number' | 'boolean' | 'other';
 
@@ -76,12 +86,17 @@ export type ComponentBuildResult =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const isDiagnostic = (value: unknown): value is ComponentDiagnostic =>
+export const isComponentDiagnostic = (
+  value: unknown
+): value is ComponentDiagnostic =>
   isRecord(value) &&
   typeof value['message'] === 'string' &&
   typeof value['line'] === 'number' &&
   typeof value['column'] === 'number' &&
-  (value['severity'] === 'error' || value['severity'] === 'warning');
+  (value['severity'] === 'error' || value['severity'] === 'warning') &&
+  (value['transient'] === undefined || value['transient'] === true);
+
+const isDiagnostic = isComponentDiagnostic;
 
 const propKinds = {
   string: true,

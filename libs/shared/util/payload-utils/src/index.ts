@@ -19,6 +19,8 @@ export {
   type HostModuleSpecifier,
   componentBundlePath,
   isComponentBuildResult,
+  isComponentDiagnostic,
+  isTransientFailure,
   componentTagName
 } from './lib/custom-component';
 export {
