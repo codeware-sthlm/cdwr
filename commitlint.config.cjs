@@ -56,6 +56,8 @@ module.exports = {
   extends: ['@commitlint/config-angular'],
   rules: {
     'scope-enum': [RuleConfigSeverity.Error, 'always', scopes],
+    // No AI co-author trailers in this repo's history
+    'trailer-exists': [RuleConfigSeverity.Error, 'never', 'Co-Authored-By:'],
     'type-enum': [
       RuleConfigSeverity.Error,
       'always',
