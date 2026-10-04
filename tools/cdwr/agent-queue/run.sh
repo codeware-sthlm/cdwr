@@ -24,6 +24,12 @@ mkdir -p "$LOGS"
 
 note() { print -r -- "$(date '+%F %T') $*" >> "$LOGS/scheduler.log"; }
 say() { note "$*"; $check && print -r -- "$*"; return 0; }
+# Always action-level: a run that planned something or went wrong needs Håkan. No webhook, no-op.
+notify() {
+  local hook="$HOME/.claude/hooks/notify-slack.sh"
+  [[ -x "$hook" ]] || return 0
+  jq -n --arg m "$1" --arg c "$REPO" '{message: $m, cwd: $c}' | "$hook" || true
+}
 check=false; [[ "${1:-}" == "--check" ]] && check=true
 
 if [[ -e "$HOME_DIR/paused" ]] && ! $check; then exit 0; fi
@@ -49,9 +55,13 @@ query {
 }
 GQL
 
-resp="$(jq -n --arg q "$QUERY" '{query: $q}' |
-  curl -sS -m 20 https://api.linear.app/graphql \
-    -H "Authorization: $key" -H 'Content-Type: application/json' --data @-)" ||
+linear() {
+  jq -n --arg q "$1" '{query: $q}' |
+    curl -sS -m 20 https://api.linear.app/graphql \
+      -H "Authorization: $key" -H 'Content-Type: application/json' --data @-
+}
+
+resp="$(linear "$QUERY")" ||
   { say "skip: Linear did not answer"; exit 0; }
 if jq -e '.errors' >/dev/null <<<"$resp"; then
   say "skip: Linear error $(jq -c '.errors[0].message' <<<"$resp")"; exit 0
@@ -75,6 +85,7 @@ log="$LOGS/$(date +%F_%H%M).log"
 note "plan: $(print -r -- "$ready" | tr '\n' ' ')→ $log"
 
 L=mcp__claude_ai_Linear
+rc=0
 claude -p "/work-queue unattended once plan-only" \
   --model opus \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
@@ -87,6 +98,36 @@ claude -p "/work-queue unattended once plan-only" \
     Skill Read Grep Glob \
     "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels \
     "$L"__save_issue "$L"__save_comment \
-  > "$log" 2>&1 || note "fail: claude exited $? (see $log)"
+  > "$log" 2>&1 || rc=$?
+
+if (( rc != 0 )); then
+  if tail -n 3 "$log" | grep -q 'Exceeded USD budget'; then
+    note "cap: stopped at the \$$BUDGET_USD budget (see $log)"
+    notify "Agent queue: a planning run hit the \$$BUDGET_USD cap and stopped. Log: $log"
+  else
+    note "fail: claude exited $rc (see $log)"
+    notify "Agent queue: a planning run failed (exit $rc). Log: $log"
+  fi
+fi
+
+# A ticket offered as agent:ready that now waits on needs-input was planned by this run.
+read -r -d '' PLANNED <<'GQL' || true
+query {
+  issues(first: 50, filter: {
+    team: { key: { eq: "COD" } }
+    labels: { some: { name: { eq: "agent:needs-input" } } }
+  }) { nodes { identifier } }
+}
+GQL
+if after="$(linear "$PLANNED")" && ! jq -e '.errors' >/dev/null <<<"$after"; then
+  for id in $(jq -r --arg ready "$ready" '
+      ($ready | split("\n")) as $offered
+      | .data.issues.nodes[].identifier | select(IN($offered[]))' <<<"$after" 2>/dev/null); do
+    note "planned: $id"
+    notify "$id: plan ready, needs your approval"
+  done
+else
+  note "warn: could not ask Linear what was planned"
+fi
 
 note "done: $log"
