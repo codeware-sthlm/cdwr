@@ -49,6 +49,11 @@ Tickets carrying a Linear `agent:*` label (Agent group, Codeware team) are worke
 steps to the `implementer` subagent (`.claude/agents/implementer.md`, Sonnet) and stops
 only at gates. The skill holds the queue order, the labels and how a gate asks.
 
+An hourly launchd job runs it plan-only on this machine; `cdwr agent install` sets that up
+and `cdwr agent status` says what it would take next. Launchd runs an installed copy of
+`tools/cdwr/agent-queue/run.sh`, so a merged change to its guardrails waits for the next
+`install`.
+
 ## Nx-generated projects cleanup
 
 - ensure project name reflects the project path for a consistent and unique pattern
@@ -201,7 +206,7 @@ nx seed cms
 
 ```sh
 pnpm cdwr                         # the app; `cdwr` after `pnpm cdwr setup`
-cdwr <group> <command> --help     # db, fly, tenant, infisical, signature, media, release
+cdwr <group> <command> --help     # db, fly, tenant, infisical, signature, media, agent, release
 cdwr db backup --env production   # flags first, prompts for the rest
 cdwr fly info --json              # machine output, never prompts
 cdwr tenant gate close --dry-run  # the plan, nothing applied

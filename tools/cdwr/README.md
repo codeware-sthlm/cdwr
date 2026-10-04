@@ -77,6 +77,28 @@ restarts, so nothing is refused on the way. Progress lives in the three Infisica
 interrupted run resumes where it stopped. Preview shares one Infisical environment, so a preview
 rollover covers every pull request's apps. The token is never printed.
 
+## The agent queue
+
+An hourly launchd job (`se.codeware.agent-queue`) runs `/work-queue` plan-only against a
+separate worktree, `codeware-agent` beside this checkout. macOS only.
+
+```sh
+cdwr agent install        # worktree, env files, deps, script, launchd job, Keychain key
+cdwr agent status         # loaded, paused, key, script current, what the next run would take
+cdwr agent run            # start a planning run now
+cdwr agent pause|resume   # hold or release the schedule
+cdwr agent logs [--run]   # the scheduler log, or the latest run
+```
+
+The script's source is `agent-queue/run.sh`. Launchd runs the copy `install` puts in
+`~/.cdwr/agent-queue/`, beside its pause flag and logs, so a merged change does nothing
+unattended until the next `install`; `status` and `doctor` say when that copy is out of date. The
+script holds the guardrails (read-only tools, Linear the only writable server, no API key), so
+review a change to it as one. The Linear key lives in the Keychain under `linear-agent-queue`;
+cdwr checks that it is there and never reads it. `install` asks for it when it is missing, and
+only does what differs, so run it again after the script changes. `--worktree` picks another
+checkout and is remembered.
+
 ## Writing a command
 
 One file under `src/commands/<group>/`, one entry in `src/commands/index.ts`:
