@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   renameSync,
+  rmdirSync,
   writeFileSync
 } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
@@ -171,88 +172,107 @@ export default defineCommand({
     const { queue, work, worktree } = data;
     const uid = currentUid();
 
-    if (work.worktree) {
-      await ctx.ui.task('Creating the worktree', async () => {
-        await run('git', ['fetch', '-q', 'origin'], { cwd: data.root });
-        await run(
-          'git',
-          ['worktree', 'add', '--detach', worktree, 'origin/main'],
-          { cwd: data.root }
-        );
-      });
-    }
-    for (const file of work.envCopies) {
-      mkdirSync(dirname(join(worktree, file)), { recursive: true });
-      copyFileSync(join(data.root, file), join(worktree, file));
-      ctx.ui.info(`Copied ${file}`);
-    }
-    if (work.deps) {
-      await ctx.ui.task('Installing dependencies in the worktree', () =>
-        run('pnpm', ['install', '--frozen-lockfile'], {
-          cwd: worktree,
-          env: childEnv(ctx.env),
-          timeout: 15 * 60_000
-        })
+    // The runner's own lock: a scheduled run can't start mid-install, and bootout can't kill one
+    mkdirSync(queue.home, { recursive: true });
+    try {
+      mkdirSync(queue.lock);
+    } catch {
+      throw new CliError(
+        'A planning run or a check holds the queue lock',
+        undefined,
+        'Try again once `cdwr agent status` shows no run in progress'
       );
     }
-
-    mkdirSync(queue.logs, { recursive: true });
-    if (work.script) {
-      // A rename swaps the file whole, never one zsh is reading halfway
-      const next = `${queue.script}.next`;
-      writeFileSync(next, data.source);
-      chmodSync(next, 0o755);
-      renameSync(next, queue.script);
-      ctx.ui.info(`Installed ${queue.script}`);
-    }
-    if (work.plist) {
-      mkdirSync(dirname(queue.plist), { recursive: true });
-      writeFileSync(queue.plist, data.plist);
-      ctx.ui.info(`Wrote ${queue.plist}`);
-    }
-
-    if (work.key) {
-      const key = await ctx.ui.password({
-        message: 'Linear API key for the agent queue',
-        validate: (value) => (value.trim() ? undefined : 'Enter the key')
-      });
-      // A failed call's error would carry the key in its argv
-      await run('security', [
-        'add-generic-password',
-        '-U',
-        '-s',
-        KEYCHAIN_SERVICE,
-        '-a',
-        userInfo().username,
-        '-w',
-        key.trim()
-      ]).catch(() => {
-        throw new CliError(
-          'Could not store the Linear key in the Keychain',
-          undefined,
-          `Store it by hand: security add-generic-password -U -s ${KEYCHAIN_SERVICE} -a "$USER" -w`
-        );
-      });
-      ctx.ui.success('Linear key stored in the Keychain');
-    }
-
-    if (work.reload) {
-      if (data.wasLoaded) {
-        await run('launchctl', ['bootout', serviceTarget(uid)]).catch(
-          () => undefined
+    try {
+      if (work.worktree) {
+        await ctx.ui.task('Creating the worktree', async () => {
+          await run('git', ['fetch', '-q', 'origin'], { cwd: data.root });
+          await run(
+            'git',
+            ['worktree', 'add', '--detach', worktree, 'origin/main'],
+            { cwd: data.root }
+          );
+        });
+      }
+      for (const file of work.envCopies) {
+        mkdirSync(dirname(join(worktree, file)), { recursive: true });
+        copyFileSync(join(data.root, file), join(worktree, file));
+        ctx.ui.info(`Copied ${file}`);
+      }
+      if (work.deps) {
+        await ctx.ui.task('Installing dependencies in the worktree', () =>
+          run('pnpm', ['install', '--frozen-lockfile'], {
+            cwd: worktree,
+            env: childEnv(ctx.env),
+            timeout: 15 * 60_000
+          })
         );
       }
-      // bootout returns before launchd lets go of the label
-      for (let attempt = 1; ; attempt++) {
-        try {
-          await run('launchctl', ['bootstrap', domainTarget(uid), queue.plist]);
-          break;
-        } catch (error) {
-          if (attempt === 5) throw error;
-          await sleep(500);
+
+      mkdirSync(queue.logs, { recursive: true });
+      if (work.script) {
+        // A rename swaps the file whole, never one zsh is reading halfway
+        const next = `${queue.script}.next`;
+        writeFileSync(next, data.source);
+        chmodSync(next, 0o755);
+        renameSync(next, queue.script);
+        ctx.ui.info(`Installed ${queue.script}`);
+      }
+      if (work.plist) {
+        mkdirSync(dirname(queue.plist), { recursive: true });
+        writeFileSync(queue.plist, data.plist);
+        ctx.ui.info(`Wrote ${queue.plist}`);
+      }
+
+      if (work.key) {
+        const key = await ctx.ui.password({
+          message: 'Linear API key for the agent queue',
+          validate: (value) => (value.trim() ? undefined : 'Enter the key')
+        });
+        // A failed call's error would carry the key in its argv
+        await run('security', [
+          'add-generic-password',
+          '-U',
+          '-s',
+          KEYCHAIN_SERVICE,
+          '-a',
+          userInfo().username,
+          '-w',
+          key.trim()
+        ]).catch(() => {
+          throw new CliError(
+            'Could not store the Linear key in the Keychain',
+            undefined,
+            `Store it by hand: security add-generic-password -U -s ${KEYCHAIN_SERVICE} -a "$USER" -w`
+          );
+        });
+        ctx.ui.success('Linear key stored in the Keychain');
+      }
+
+      if (work.reload) {
+        if (data.wasLoaded) {
+          await run('launchctl', ['bootout', serviceTarget(uid)]).catch(
+            () => undefined
+          );
         }
+        // bootout returns before launchd lets go of the label
+        for (let attempt = 1; ; attempt++) {
+          try {
+            await run('launchctl', [
+              'bootstrap',
+              domainTarget(uid),
+              queue.plist
+            ]);
+            break;
+          } catch (error) {
+            if (attempt === 5) throw error;
+            await sleep(500);
+          }
+        }
+        ctx.ui.success(`Loaded ${serviceTarget(uid)}`);
       }
-      ctx.ui.success(`Loaded ${serviceTarget(uid)}`);
+    } finally {
+      rmdirSync(queue.lock);
     }
 
     if (data.remember) ctx.prefs.set(WORKTREE_PREF, data.remember);
