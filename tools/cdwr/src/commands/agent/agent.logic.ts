@@ -11,6 +11,7 @@ export interface QueuePaths {
   home: string;
   script: string;
   paused: string;
+  notifyLevel: string;
   lock: string;
   logs: string;
   schedulerLog: string;
@@ -28,6 +29,7 @@ export const queuePaths = (
     home,
     script: join(home, 'run.sh'),
     paused: join(home, 'paused'),
+    notifyLevel: join(home, 'notify-level'),
     lock: join(home, 'lock'),
     logs,
     schedulerLog: join(logs, 'scheduler.log'),
@@ -35,6 +37,13 @@ export const queuePaths = (
     plist: join(userHome, 'Library', 'LaunchAgents', `${LABEL}.plist`)
   };
 };
+
+export const NOTIFY_LEVELS = ['all', 'action'] as const;
+export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
+
+/** A missing or unreadable level file means all */
+export const parseNotifyLevel = (text: string | undefined): NotifyLevel =>
+  NOTIFY_LEVELS.find((level) => level === text?.trim()) ?? 'all';
 
 export const serviceTarget = (uid: number): string => `gui/${uid}/${LABEL}`;
 export const domainTarget = (uid: number): string => `gui/${uid}`;

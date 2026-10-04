@@ -88,6 +88,7 @@ cdwr agent status         # loaded, paused, key, script current, what the next r
 cdwr agent run            # start a planning run now
 cdwr agent pause|resume   # hold or release the schedule
 cdwr agent logs [--run]   # the scheduler log, or the latest run
+cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
 ```
 
 The script's source is `agent-queue/run.sh`. Launchd runs the copy `install` puts in
@@ -97,7 +98,9 @@ script holds the guardrails (read-only tools, Linear the only writable server, n
 review a change to it as one. The Linear key lives in the Keychain under `linear-agent-queue`;
 cdwr checks that it is there and never reads it. `install` asks for it when it is missing, and
 only does what differs, so run it again after the script changes. `--worktree` picks another
-checkout and is remembered.
+checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/notify-level`
+(missing means `all`), while the scheduler's own notices (a planned ticket, a failed or capped
+run) always go out.
 
 ## Writing a command
 

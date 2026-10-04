@@ -194,6 +194,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/resume').then((m) => m.default)
   },
   {
+    path: ['agent', 'notify'],
+    summary: 'Which notices the queue sends: all, or only what needs you',
+    danger: 'mutate',
+    load: () => import('./agent/notify').then((m) => m.default)
+  },
+  {
     path: ['agent', 'install'],
     summary: 'Set up the scheduled planner on this machine',
     danger: 'mutate',
