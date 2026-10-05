@@ -31,7 +31,12 @@ describe('run.sh', () => {
     expect(SCRIPT).toMatch(/note "fail: planned nothing/);
   });
 
-  it('never sends a mutation', () => {
-    expect(SCRIPT).not.toMatch(/mutation/i);
+  // The runs document is the only thing run.sh writes to Linear
+  it('sends no mutation but the runs document', () => {
+    const mutations = [...SCRIPT.matchAll(/mutation\b[^{]*\{\s*(\w+)/gi)].map(
+      ([, field]) => field
+    );
+    expect(mutations).toEqual(['documentCreate', 'documentUpdate']);
+    expect(SCRIPT.match(/mutation/gi)).toHaveLength(2);
   });
 });
