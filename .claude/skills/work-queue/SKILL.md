@@ -79,6 +79,11 @@ remove the ticket's other labels.
    that starts with `**Agent: PR ready**`. It holds the PR link, what the Copilot round
    fixed and dismissed, anything left open for Håkan, and the **hand-off checklist**.
    Notify `action`: PR ready for review. This is a gate.
+
+   Write the checklist as a line `Hand-off checklist:` followed by one `- [ ] <item>` per
+   line, with nothing else in between. The scheduler watches the PR after the gate and, on
+   merge, sends the unticked items as a notice, so keep each item to one line.
+
 7. **Next.** Ask: "COD-xxx is in review. Pick the next one?" Unattended: continue, unless
    `once` is set, in which case stop. Either way,
    suggest `/clear` before a big next ticket. Linear holds the state, so nothing is lost.
