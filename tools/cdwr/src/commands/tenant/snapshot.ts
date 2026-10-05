@@ -8,7 +8,7 @@ import { defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
 import {
   definitionInput,
-  resolveDefinitionPath
+  resolveDefinition
 } from '../../services/site-definitions';
 
 import {
@@ -59,7 +59,7 @@ async function routesFrom(
     throw new Error('Name a definition, or pass --routes');
   }
   return routesOf(
-    await loadDefinition(resolveDefinitionPath(root, definition))
+    await loadDefinition(await resolveDefinition(root, definition))
   );
 }
 
