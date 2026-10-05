@@ -28,8 +28,8 @@ The queue view (the "Agent Queue" artifact) computes the same order, so keep the
    means this repo.
 2. Drop tickets that are `blockedBy` an issue that is not Done or Canceled (`get_issue` with
    `includeRelations`).
-3. Sort by priority, Urgent → High → Medium → Low, with _No priority_ last, then oldest
-   `createdAt` first.
+3. Sort by status, In Progress → Todo → Backlog → Triage, then priority, Urgent → High →
+   Medium → Low with _No priority_ last, then oldest `createdAt` first.
 
 Before picking anything new, resume in this order:
 
