@@ -30,6 +30,12 @@ notify() {
   [[ -x "$hook" ]] || return 0
   jq -n --arg m "$1" --arg c "$REPO" '{message: $m, cwd: $c}' | "$hook" || true
 }
+# notice <action|info> <message>: info is dropped when notify-level says action.
+notice() {
+  local level; level="$(tr -d '[:space:]' 2>/dev/null < "$HOME_DIR/notify-level" || true)"
+  [[ "$1" == info && "$level" == action ]] && return 0
+  notify "$2"
+}
 check=false; [[ "${1:-}" == "--check" ]] && check=true
 
 if [[ -e "$HOME_DIR/paused" ]] && ! $check; then exit 0; fi
@@ -38,6 +44,94 @@ trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
 
 key="$(security find-generic-password -s linear-agent-queue -w 2>/dev/null || true)"
 [[ -z "$key" ]] && { say "skip: no Linear API key in Keychain (service linear-agent-queue)"; exit 0; }
+
+linear() {
+  jq -n --arg q "$1" '{query: $q}' |
+    curl -sS -m 20 https://api.linear.app/graphql \
+      -H "Authorization: $key" -H 'Content-Type: application/json' --data @-
+}
+
+# PR watch: gh runs as Håkan, so only reads (gh pr list, gh api graphql with a query).
+# The decisions live in watch.jq, installed next to this file.
+read -r -d '' WATCHED <<'GQL' || true
+query {
+  issues(first: 50, filter: {
+    team: { key: { eq: "COD" } }
+    labels: { some: { name: { eq: "agent:review" } } }
+    state: { type: { neq: "canceled" } }
+    or: [{ completedAt: { null: true } }, { completedAt: { gt: "-P14D" } }]
+  }) {
+    nodes {
+      identifier
+      labels { nodes { name } }
+      attachments { nodes { url createdAt } }
+      comments(first: 50) { nodes { body createdAt } }
+    }
+  }
+}
+GQL
+read -r -d '' PR_QUERY <<'GQL' || true
+query($n: Int!) {
+  repository(owner: "codeware-sthlm", name: "cdwr") {
+    pullRequest(number: $n) {
+      state
+      mergeQueueEntry { state }
+      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+      timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
+        nodes { ... on RemovedFromMergeQueueEvent { reason createdAt } }
+      }
+    }
+  }
+}
+GQL
+
+watch() { jq -L "$HOME_DIR" "$@"; }
+
+watch_prs() {
+  # One PR failing to read skips that PR, not the rest.
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/watch.json" resp nodes state node id pr now out level msg
+  resp="$(linear "$WATCHED")" || { print -r -- "Linear did not answer"; return 1; }
+  jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
+    { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
+  # Same repo rule as planning: tickets labelled for another repo have no PR here.
+  nodes="$(jq -c --argjson other "$OTHER_REPOS" '[.data.issues.nodes[]
+    | select((.labels.nodes | map(.name | IN($other[])) | any) | not)]' <<<"$resp")"
+  # A missing or broken state file counts as empty; tickets no longer watched drop out.
+  state="$(jq -c 'if type == "object" then . else {} end' "$file" 2>/dev/null || print '{}')"
+  state="$(watch -c --argjson ids "$(jq -c 'map(.identifier)' <<<"$nodes")" \
+    'include "watch"; prune($ids)' <<<"$state")" || { print -r -- "watch.jq failed"; return 1; }
+
+  for node in ${(f)"$(jq -c '.[]' <<<"$nodes")"}; do
+    id="$(jq -r '.identifier' <<<"$node")"
+    pr="$(watch 'include "watch"; pr_number // empty' <<<"$node")"
+    if [[ -z "$pr" ]]; then
+      pr="$(gh pr list --repo codeware-sthlm/cdwr --state all --search "\"$id\" in:title,body" \
+        --json number --limit 1 --jq '.[0].number // empty')" || { note "warn: watch: no PR lookup for $id"; continue; }
+    fi
+    [[ -z "$pr" ]] && continue
+    now="$(gh api graphql -f query="$PR_QUERY" -F n="$pr" --jq '.data.repository.pullRequest')"
+    if [[ $? -ne 0 || -z "$now" || "$now" == null ]]; then note "warn: watch: could not read PR #$pr ($id)"; continue; fi
+    out="$(watch -cn --arg id "$id" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
+      --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
+      include "watch";
+      {id: $id, pr: $pr, now: ($now | pr_state), prev: $state[$id], handoffs: ($node | handoffs), at: $at} | step')" ||
+      { note "warn: watch: watch.jq failed on $id"; continue; }
+    while IFS=$'\t' read -r level msg; do
+      [[ -z "$level" ]] && continue
+      note "watch: $level $msg"
+      notice "$level" "$msg"
+    done <<<"$(jq -r '.notices[] | "\(.level)\t\(.message)"' <<<"$out")"
+    state="$(jq -c --arg id "$id" --argjson e "$(jq -c '.entry' <<<"$out")" '.[$id] = $e' <<<"$state")"
+  done
+
+  print -r -- "$state" > "$file.tmp" && mv "$file.tmp" "$file"
+}
+
+# Watching sends notices, so --check leaves it out; a failure never stops planning.
+if ! $check; then
+  err="$(watch_prs)" || note "warn: watch failed (${err:-unknown})"
+fi
 
 read -r -d '' QUERY <<'GQL' || true
 query {
@@ -54,12 +148,6 @@ query {
   }
 }
 GQL
-
-linear() {
-  jq -n --arg q "$1" '{query: $q}' |
-    curl -sS -m 20 https://api.linear.app/graphql \
-      -H "Authorization: $key" -H 'Content-Type: application/json' --data @-
-}
 
 resp="$(linear "$QUERY")" ||
   { say "skip: Linear did not answer"; exit 0; }
