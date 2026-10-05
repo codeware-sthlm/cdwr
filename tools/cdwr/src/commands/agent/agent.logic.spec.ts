@@ -1,10 +1,13 @@
 import {
   KEYCHAIN_SERVICE,
   LABEL,
-  SCRIPT_SOURCE,
+  QUEUE_FILES,
+  QUEUE_SOURCE_DIR,
   STALE_LOCK_MS,
   domainTarget,
   drift,
+  filesDrift,
+  formatWatching,
   lastSchedulerLine,
   latestRunLog,
   launchPath,
@@ -12,6 +15,7 @@ import {
   parseCheck,
   parseLaunchctlPrint,
   parseNotifyLevel,
+  parseWatchState,
   queuePaths,
   renderPlist,
   serviceTarget,
@@ -83,10 +87,11 @@ const LAUNCHCTL_PRINT = `gui/501/se.codeware.agent-queue = {
 `;
 
 describe('constants', () => {
-  it('names the job, the keychain item and the script', () => {
+  it('names the job, the keychain item and the queue files', () => {
     expect(LABEL).toBe('se.codeware.agent-queue');
     expect(KEYCHAIN_SERVICE).toBe('linear-agent-queue');
-    expect(SCRIPT_SOURCE).toBe('tools/cdwr/agent-queue/run.sh');
+    expect(QUEUE_SOURCE_DIR).toBe('tools/cdwr/agent-queue');
+    expect(QUEUE_FILES).toEqual(['run.sh', 'watch.jq']);
   });
 });
 
@@ -95,6 +100,11 @@ describe('queuePaths', () => {
     expect(queuePaths('/h/.cdwr', '/h')).toEqual({
       home: '/h/.cdwr/agent-queue',
       script: '/h/.cdwr/agent-queue/run.sh',
+      files: {
+        'run.sh': '/h/.cdwr/agent-queue/run.sh',
+        'watch.jq': '/h/.cdwr/agent-queue/watch.jq'
+      },
+      watchState: '/h/.cdwr/agent-queue/watch.json',
       paused: '/h/.cdwr/agent-queue/paused',
       notifyLevel: '/h/.cdwr/agent-queue/notify-level',
       lock: '/h/.cdwr/agent-queue/lock',
@@ -279,6 +289,70 @@ describe('drift', () => {
     ['a', 'b', 'stale']
   ] as const)('%s vs %s -> %s', (installed, source, expected) => {
     expect(drift(installed, source)).toBe(expected);
+  });
+});
+
+describe('filesDrift', () => {
+  const source = { 'run.sh': 'a', 'watch.jq': 'b' };
+
+  it.each([
+    [{ 'run.sh': 'a', 'watch.jq': 'b' }, 'current'],
+    [{ 'run.sh': 'a', 'watch.jq': undefined }, 'missing'],
+    [{ 'run.sh': undefined, 'watch.jq': 'x' }, 'missing'],
+    [{ 'run.sh': 'a', 'watch.jq': 'x' }, 'stale'],
+    [{ 'run.sh': 'x', 'watch.jq': undefined }, 'missing']
+  ] as const)('%j -> %s', (installed, expected) => {
+    expect(filesDrift(installed, source)).toBe(expected);
+  });
+});
+
+describe('parseWatchState', () => {
+  it.each([undefined, '', 'not json', '[]', '"x"', 'null', '{}'])(
+    'reads %j as nothing',
+    (text) => {
+      expect(parseWatchState(text)).toEqual([]);
+    }
+  );
+
+  it('keeps well-formed entries sorted by ticket number', () => {
+    const text = JSON.stringify({
+      'COD-525': { pr: 569, state: 'merged', removedAt: null },
+      'COD-1000': { pr: 9, state: 'open' },
+      'COD-524': { pr: 570, state: 'failing' }
+    });
+    expect(parseWatchState(text)).toEqual([
+      { ticket: 'COD-524', pr: 570, state: 'failing' },
+      { ticket: 'COD-525', pr: 569, state: 'merged' },
+      { ticket: 'COD-1000', pr: 9, state: 'open' }
+    ]);
+  });
+
+  it('drops entries with the wrong shape', () => {
+    const text = JSON.stringify({
+      'COD-1': { pr: '12', state: 'open' },
+      'COD-2': { pr: 12, state: 'weird' },
+      'COD-3': 'merged',
+      'COD-4': { state: 'open' },
+      'COD-5': { pr: 5, state: 'queued' }
+    });
+    expect(parseWatchState(text)).toEqual([
+      { ticket: 'COD-5', pr: 5, state: 'queued' }
+    ]);
+  });
+});
+
+describe('formatWatching', () => {
+  it('lists ticket, PR and state', () => {
+    expect(
+      formatWatching([
+        { ticket: 'COD-524', pr: 570, state: 'merged' },
+        { ticket: 'COD-525', pr: 569, state: 'merged' }
+      ])
+    ).toBe('COD-524 #570 merged, COD-525 #569 merged');
+  });
+
+  it('is empty for no entries', () => {
+    expect(formatWatching([])).toBe('');
   });
 });
 

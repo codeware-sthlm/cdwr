@@ -9,12 +9,10 @@ import {
   jobState,
   keyPresent,
   paths,
-  readText,
+  queueDrift,
   worktreeOf
 } from '../services/agent-queue';
 import { symbols, theme } from '../ui/theme';
-
-import { SCRIPT_SOURCE, drift } from './agent/agent.logic';
 
 const NEEDS: Need[] = [
   'fly',
@@ -51,10 +49,7 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
     loaded: job.loaded,
     keyPresent: key,
     worktree: existsSync(worktreeOf(ctx)),
-    script: drift(
-      readText(queue.script),
-      readText(join(ctx.root, SCRIPT_SOURCE)) ?? ''
-    )
+    script: queueDrift(queue, ctx.root)
   };
 }
 

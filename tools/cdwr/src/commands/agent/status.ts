@@ -8,6 +8,7 @@ import {
   keyPresent,
   lockAge,
   paths,
+  readQueueSources,
   readText,
   requireMac,
   worktreeOf
@@ -15,13 +16,15 @@ import {
 import { symbols, theme } from '../../ui/theme';
 
 import {
-  SCRIPT_SOURCE,
-  drift,
+  byFile,
+  filesDrift,
+  formatWatching,
   lastSchedulerLine,
   latestRunLog,
   lockState,
   parseCheck,
-  parseNotifyLevel
+  parseNotifyLevel,
+  parseWatchState
 } from './agent.logic';
 
 export default defineCommand({
@@ -41,8 +44,8 @@ export default defineCommand({
       'Reading the agent queue',
       async () => {
         const [job, key] = await Promise.all([jobState(), keyPresent()]);
-        const installed = readText(queue.script);
-        const source = readText(join(ctx.root, SCRIPT_SOURCE));
+        const installed = byFile((file) => readText(queue.files[file]));
+        const sources = readQueueSources(ctx.root);
         const runLog = latestRunLog(
           existsSync(queue.logs) ? readdirSync(queue.logs) : []
         );
@@ -59,10 +62,13 @@ export default defineCommand({
           notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
           keyPresent: key,
           script:
-            source === undefined
-              ? ('missing' as const)
-              : drift(installed, source),
-          scriptInstalled: installed !== undefined,
+            'source' in sources
+              ? filesDrift(installed, sources.source)
+              : ('no-source' as const),
+          installedAny: Object.values(installed).some(
+            (text) => text !== undefined
+          ),
+          watching: parseWatchState(readText(queue.watchState)),
           worktree: { path: worktree, exists: existsSync(worktree) },
           lastScheduled,
           lockState: lockState(lockAge(queue.lock), job.loaded && job.running),
@@ -120,13 +126,14 @@ export default defineCommand({
             'not in the Keychain (service linear-agent-queue)'
           ),
       report.script === 'current'
-        ? row(true, 'script', 'current')
-        : report.script === 'stale'
-          ? row('warn', 'script', 're-run `cdwr agent install`')
+        ? row(true, 'scripts', 'current')
+        : report.script === 'stale' ||
+            (report.script === 'missing' && report.installedAny)
+          ? row('warn', 'scripts', 're-run `cdwr agent install`')
           : row(
               false,
-              'script',
-              report.scriptInstalled
+              'scripts',
+              report.script === 'no-source'
                 ? 'repo source missing'
                 : 'not installed; `cdwr agent install`'
             ),
@@ -140,6 +147,9 @@ export default defineCommand({
             `${report.lastScheduled.at} ${report.lastScheduled.message}`
           )
         : row('warn', 'last run', 'nothing logged yet'),
+      ...(report.watching.length > 0
+        ? [row(true, 'watching', formatWatching(report.watching))]
+        : []),
       ...(report.lockState === 'stale'
         ? [
             row(
