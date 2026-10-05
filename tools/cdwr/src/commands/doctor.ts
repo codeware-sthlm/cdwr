@@ -1,9 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { type Need, defineCommand, readOnly } from '../cli/command';
+import { type Shell, collect, render } from '../cli/completion';
 import type { Context } from '../cli/context';
 import { type Check, check, onPath } from '../cli/preflight';
+import { cdwrHome } from '../cli/prefs';
 import { ENV_FILE, LEGACY_ENV_FILE } from '../cli/workspace';
 import {
   jobState,
@@ -13,6 +16,10 @@ import {
   worktreeOf
 } from '../services/agent-queue';
 import { symbols, theme } from '../ui/theme';
+
+import { shellOf } from './completion';
+import { completionFile, completionState } from './completion.logic';
+import { ENTRIES, GROUPS } from './index';
 
 const NEEDS: Need[] = [
   'fly',
@@ -31,6 +38,12 @@ interface Report {
   node: string;
   /** Tool versions the workspace pins, read from its manifests */
   versions: { nx: string; pnpm: string; nodeWanted: string };
+  /** The completion script of the shell in $SHELL, against what the registry renders */
+  completion: {
+    shell: Shell | null;
+    file: string | null;
+    state: 'current' | 'stale' | 'missing' | 'unsupported' | 'unknown';
+  };
   /** The scheduled agent queue; macOS only */
   agentQueue?: {
     loaded: boolean;
@@ -51,6 +64,23 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
     worktree: existsSync(worktreeOf(ctx)),
     script: queueDrift(queue, ctx.root)
   };
+}
+
+async function completion(ctx: Context): Promise<Report['completion']> {
+  const shell = shellOf(ctx.env['SHELL']);
+  if (!shell) return { shell: null, file: null, state: 'unsupported' };
+  const file = completionFile(shell, {
+    cdwrHome: cdwrHome(ctx.env),
+    home: homedir()
+  });
+  // Rendering loads every command; a broken one must not take the report down
+  try {
+    const installed = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
+    const rendered = render(shell, GROUPS, await collect(ENTRIES));
+    return { shell, file, state: completionState(installed, rendered) };
+  } catch {
+    return { shell, file, state: 'unknown' };
+  }
 }
 
 const readJson = (file: string): Record<string, unknown> => {
@@ -94,6 +124,7 @@ export default defineCommand({
           )?.node ?? ''
         )
       },
+      completion: await completion(ctx),
       agentQueue: await agentQueue(ctx)
     };
     return readOnly(report);
@@ -142,6 +173,40 @@ export default defineCommand({
             theme.warn('not on PATH; `cdwr setup` links it')
           ]
     );
+    const { completion: comp } = report;
+    const completionRows: Record<
+      Report['completion']['state'],
+      () => [string, string, string]
+    > = {
+      current: () => [
+        symbols.ok,
+        'completion',
+        theme.muted(`${comp.shell} is current`)
+      ],
+      stale: () => [
+        symbols.warn,
+        'completion',
+        theme.warn('out of date; run cdwr setup')
+      ],
+      missing: () => [
+        symbols.ok,
+        'completion',
+        theme.muted('not installed; cdwr setup adds it')
+      ],
+      unknown: () => [
+        symbols.ok,
+        'completion',
+        theme.muted('could not be checked')
+      ],
+      unsupported: () => [
+        symbols.ok,
+        'completion',
+        theme.muted(
+          `no completion for ${ctx.env['SHELL']?.split('/').pop() || 'this shell'}`
+        )
+      ]
+    };
+    rows.push(completionRows[comp.state]());
     const queue = report.agentQueue;
     let queueProblems = 0;
     // Optional per machine: never set up is not a problem
@@ -176,6 +241,7 @@ export default defineCommand({
     const warnings =
       (report.envFile === 'current' ? 0 : 1) +
       (report.onPath ? 0 : 1) +
+      (comp.state === 'stale' ? 1 : 0) +
       (queueProblems > 0 ? 1 : 0);
     const summary =
       missing > 0
