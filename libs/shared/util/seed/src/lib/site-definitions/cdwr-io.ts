@@ -2,6 +2,7 @@ import { cdwrCloudSvg } from '@codeware/shared/util/ui';
 
 import type { SiteDefinition } from '../site-definition';
 
+import { cdwrIoThemeSwatchSource } from './cdwr-io-components';
 import {
   blocksIllustration,
   contrastIllustration,
@@ -187,6 +188,27 @@ export const cdwrIo: SiteDefinition = {
         },
         {
           blockType: 'feature-section',
+          eyebrow: 'Custom components',
+          heading: 'When no block fits, write one',
+          intro:
+            'A developer writes a component in the admin, saving it builds it, and an editor places it on a page like any other block. This site runs one that reads the colours of the active theme.',
+          enableLink: true,
+          link: {
+            type: 'custom',
+            url: '/components',
+            label: 'See the component'
+          }
+        },
+        {
+          blockType: 'custom-component',
+          component: { lookupSlug: 'theme-swatch' },
+          props: {
+            title: 'The colours on this page',
+            description: 'Read from the active theme as it changes'
+          }
+        },
+        {
+          blockType: 'feature-section',
           eyebrow: 'Content',
           heading: 'Every block, rendered by the renderer that serves it',
           illustration: blocksIllustration,
@@ -345,6 +367,82 @@ export const cdwrIo: SiteDefinition = {
                 'A saved theme parses back to what made it, so it can be changed rather than only overwritten.'
             }
           ]
+        }
+      ]
+    },
+    {
+      name: 'Components',
+      slug: 'components',
+      layout: [
+        {
+          blockType: 'hero',
+          badge: 'Custom components',
+          heading: 'A component written in the admin',
+          lede: 'When no block does what a page needs, a developer writes one in the component studio. Saving it builds it, and an editor places it on a page like any other block.'
+        },
+        {
+          blockType: 'feature-section',
+          eyebrow: 'How it works',
+          heading: 'Written, saved, placed',
+          intro:
+            'A component is source typed in the admin, not a release to deploy. The site it belongs to is the only one that sees it.',
+          subFeatures: [
+            {
+              title: 'Written in the admin',
+              body: 'The studio type-checks against the same declarations the build uses, so a mistake shows while you type.'
+            },
+            {
+              title: 'Built on save',
+              body: 'Saving builds the component, and a page shows it once the build has finished.'
+            },
+            {
+              title: 'Placed by an editor',
+              body: 'It is a block with its own fields, so putting it on a page needs no code and no release.'
+            }
+          ]
+        },
+        {
+          blockType: 'custom-component',
+          component: { lookupSlug: 'theme-swatch' },
+          props: {
+            title: 'The colours on this page',
+            description: 'Read from the active theme as it changes'
+          }
+        },
+        {
+          blockType: 'code',
+          language: 'tsx',
+          code: cdwrIoThemeSwatchSource
+        },
+        {
+          blockType: 'feature-cards',
+          eyebrow: 'Three facts',
+          heading: 'What a component can and cannot do',
+          columns: '3',
+          items: [
+            {
+              title: 'Built in a sandbox',
+              description:
+                "The source is built apart from the site that runs it, from a fixed set of packages and the site's own primitives."
+            },
+            {
+              title: 'Typed props',
+              description:
+                'Its fields are declared with it, so an editor fills in a form instead of writing props.'
+            },
+            {
+              title: 'Belongs to one site',
+              description:
+                'A component lives in the site that wrote it. Another site does not see it, and cannot break it.'
+            }
+          ]
+        },
+        {
+          blockType: 'callout',
+          showMark: true,
+          heading: 'Start with the platform',
+          body: 'The component studio is part of what the setup scaffolds. Start from it and write the first component on your own site.',
+          link: { type: 'custom', url: '/start', label: 'Get started' }
         }
       ]
     },
@@ -550,6 +648,19 @@ export const cdwrIo: SiteDefinition = {
     }
   ],
 
+  customComponents: [
+    {
+      name: 'Theme swatch',
+      slug: 'theme-swatch',
+      source: cdwrIoThemeSwatchSource,
+      propsSchema: [
+        { name: 'title', type: 'text', required: true },
+        { name: 'description', type: 'text' },
+        { name: 'tokens', type: 'textarea' }
+      ]
+    }
+  ],
+
   posts: [
     {
       title: 'The Codeware blue finally has a name',
@@ -604,6 +715,10 @@ export const cdwrIo: SiteDefinition = {
     {
       reference: { relationTo: 'pages', lookupSlug: 'studio' },
       label: 'Studio'
+    },
+    {
+      reference: { relationTo: 'pages', lookupSlug: 'components' },
+      label: 'Components'
     },
     {
       reference: { relationTo: 'pages', lookupSlug: 'architecture' },
