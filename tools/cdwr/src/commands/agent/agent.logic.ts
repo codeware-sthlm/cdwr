@@ -2,14 +2,27 @@ import { join } from 'node:path';
 
 export const LABEL = 'se.codeware.agent-queue';
 export const KEYCHAIN_SERVICE = 'linear-agent-queue';
-/** The queue script in the repo, relative to the workspace root */
-export const SCRIPT_SOURCE = 'tools/cdwr/agent-queue/run.sh';
+/** Where the queue's files live in the repo, relative to the workspace root */
+export const QUEUE_SOURCE_DIR = 'tools/cdwr/agent-queue';
+/** The files install puts in the queue home; run.sh loads the rest from beside it */
+export const QUEUE_FILES = ['run.sh', 'watch.jq'] as const;
+export type QueueFile = (typeof QUEUE_FILES)[number];
+
+/** One value per queue file; the return type keeps it exhaustive */
+export const byFile = <T>(
+  fn: (file: QueueFile) => T
+): Record<QueueFile, T> => ({
+  'run.sh': fn('run.sh'),
+  'watch.jq': fn('watch.jq')
+});
 /** Pref holding the worktree the queue plans in */
 export const WORKTREE_PREF = 'agentWorktree';
 
 export interface QueuePaths {
   home: string;
   script: string;
+  files: Record<QueueFile, string>;
+  watchState: string;
   paused: string;
   notifyLevel: string;
   lock: string;
@@ -28,6 +41,8 @@ export const queuePaths = (
   return {
     home,
     script: join(home, 'run.sh'),
+    files: byFile((file) => join(home, file)),
+    watchState: join(home, 'watch.json'),
     paused: join(home, 'paused'),
     notifyLevel: join(home, 'notify-level'),
     lock: join(home, 'lock'),
@@ -217,6 +232,67 @@ export const drift = (
     : installed === source
       ? 'current'
       : 'stale';
+
+/** Missing if any file is missing, else stale if any differs */
+export const filesDrift = (
+  installed: Record<QueueFile, string | undefined>,
+  source: Record<QueueFile, string>
+): 'missing' | 'current' | 'stale' => {
+  const each = QUEUE_FILES.map((file) => drift(installed[file], source[file]));
+  return each.includes('missing')
+    ? 'missing'
+    : each.includes('stale')
+      ? 'stale'
+      : 'current';
+};
+
+export const WATCH_STATES = [
+  'open',
+  'queued',
+  'failing',
+  'merged',
+  'closed'
+] as const;
+export type WatchState = (typeof WATCH_STATES)[number];
+
+export interface WatchEntry {
+  ticket: string;
+  pr: number;
+  state: WatchState;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const watchStateOf = (value: unknown): WatchState | undefined =>
+  WATCH_STATES.find((state) => state === value);
+
+const ticketNumber = (ticket: string): number =>
+  Number(/(\d+)$/.exec(ticket)?.[1] ?? 0);
+
+/** The PRs the queue watches, from watch.json; anything unreadable is left out */
+export const parseWatchState = (text: string | undefined): WatchEntry[] => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text ?? '');
+  } catch {
+    return [];
+  }
+  if (!isRecord(parsed)) return [];
+  const entries: WatchEntry[] = [];
+  for (const [ticket, value] of Object.entries(parsed)) {
+    if (!isRecord(value)) continue;
+    const { pr } = value;
+    const state = watchStateOf(value['state']);
+    if (typeof pr === 'number' && state) entries.push({ ticket, pr, state });
+  }
+  return entries.sort(
+    (a, b) => ticketNumber(a.ticket) - ticketNumber(b.ticket)
+  );
+};
+
+export const formatWatching = (entries: WatchEntry[]): string =>
+  entries.map((e) => `${e.ticket} #${e.pr} ${e.state}`).join(', ');
 
 export interface QueueCheck {
   kind: 'idle' | 'ready' | 'busy' | 'skip' | 'unknown';

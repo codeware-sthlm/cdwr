@@ -19,6 +19,7 @@ import {
   jobState,
   keyPresent,
   paths,
+  readQueueSources,
   readText,
   requireMac,
   worktreeOf
@@ -27,10 +28,11 @@ import { childEnv, run, sleep } from '../../services/shell';
 
 import {
   KEYCHAIN_SERVICE,
-  SCRIPT_SOURCE,
+  QUEUE_FILES,
   WORKTREE_PREF,
+  byFile,
   domainTarget,
-  drift,
+  filesDrift,
   launchPath,
   renderPlist,
   serviceTarget
@@ -39,7 +41,7 @@ import {
 /** Files the worktree needs but git does not carry */
 const ENV_COPIES = ['apps/cms/.env.local', 'tools/cdwr/.env'];
 /** What the queue script calls; their directories make up the job's PATH */
-const BINARIES = ['node', 'claude', 'jq', 'git'];
+const BINARIES = ['node', 'claude', 'jq', 'git', 'gh'];
 const LEGACY_HOME = join(homedir(), '.claude', 'agent-queue');
 
 const expand = (path: string): string =>
@@ -48,9 +50,9 @@ const expand = (path: string): string =>
 export default defineCommand({
   summary: 'Set up the scheduled planner on this machine',
   description:
-    'Creates the worktree the queue plans in, copies the env files and installs its dependencies, installs the queue script and the launchd job, and stores the Linear key in the Keychain when it is missing. Run it again after the script changes; it only does what differs.',
+    'Creates the worktree the queue plans in, copies the env files and installs its dependencies, installs the queue scripts and the launchd job, and stores the Linear key in the Keychain when it is missing. Run it again after the scripts change; it only does what differs.',
   danger: 'mutate',
-  needs: ['claude', 'jq'],
+  needs: ['claude', 'jq', 'gh'],
   inputs: {
     agentWorktree: input.optional(
       input.string({
@@ -78,10 +80,11 @@ export default defineCommand({
 
     const queue = paths(ctx.env);
     const worktree = expand(agentWorktree ?? worktreeOf(ctx));
-    const source = readText(join(ctx.root, SCRIPT_SOURCE));
-    if (source === undefined) {
-      throw new CliError(`${SCRIPT_SOURCE} is missing from this checkout`);
+    const sources = readQueueSources(ctx.root);
+    if ('missing' in sources) {
+      throw new CliError(`${sources.missing} is missing from this checkout`);
     }
+    const { source } = sources;
 
     const dirs = BINARIES.map((binary) => {
       const dir = locate(binary, ctx.env);
@@ -107,7 +110,11 @@ export default defineCommand({
       worktree: !worktreeExists,
       envCopies,
       deps: !existsSync(join(worktree, 'node_modules')),
-      script: drift(readText(queue.script), source) !== 'current',
+      script:
+        filesDrift(
+          byFile((file) => readText(queue.files[file])),
+          source
+        ) !== 'current',
       plist: readText(queue.plist) !== plist,
       reload: false,
       key: !(await keyPresent())
@@ -129,8 +136,8 @@ export default defineCommand({
       ...envCopies.map((file) => ({ label: `Copy ${file}`, detail: worktree })),
       work.deps && { label: 'Install dependencies', detail: 'pnpm install' },
       work.script && {
-        label: 'Install the queue script',
-        detail: queue.script
+        label: 'Install the queue scripts',
+        detail: QUEUE_FILES.join(', ')
       },
       work.plist && { label: 'Write the launchd job', detail: queue.plist },
       work.reload && {
@@ -211,12 +218,15 @@ export default defineCommand({
 
       mkdirSync(queue.logs, { recursive: true });
       if (work.script) {
-        // A rename swaps the file whole, never one zsh is reading halfway
-        const next = `${queue.script}.next`;
-        writeFileSync(next, data.source);
-        chmodSync(next, 0o755);
-        renameSync(next, queue.script);
-        ctx.ui.info(`Installed ${queue.script}`);
+        for (const file of QUEUE_FILES) {
+          // A rename swaps the file whole, never one zsh is reading halfway
+          const target = queue.files[file];
+          const next = `${target}.next`;
+          writeFileSync(next, data.source[file]);
+          chmodSync(next, 0o755);
+          renameSync(next, target);
+          ctx.ui.info(`Installed ${target}`);
+        }
       }
       if (work.plist) {
         mkdirSync(dirname(queue.plist), { recursive: true });

@@ -8,8 +8,13 @@ import { cdwrHome } from '../cli/prefs';
 import {
   type JobState,
   KEYCHAIN_SERVICE,
+  QUEUE_FILES,
+  QUEUE_SOURCE_DIR,
+  type QueueFile,
   type QueuePaths,
   WORKTREE_PREF,
+  byFile,
+  filesDrift,
   parseLaunchctlPrint,
   queuePaths,
   serviceTarget
@@ -91,4 +96,33 @@ export function readText(file: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** The queue's files in the repo; names the first one that is missing otherwise */
+export function readQueueSources(
+  root: string
+): { source: Record<QueueFile, string> } | { missing: string } {
+  const texts = byFile((file) => readText(join(root, QUEUE_SOURCE_DIR, file)));
+  for (const file of QUEUE_FILES) {
+    if (texts[file] === undefined) {
+      return { missing: `${QUEUE_SOURCE_DIR}/${file}` };
+    }
+  }
+  return {
+    source: byFile((file) => texts[file] ?? '')
+  };
+}
+
+/** Whether the installed queue files match the repo's; a missing source counts as missing */
+export function queueDrift(
+  queue: QueuePaths,
+  root: string
+): ReturnType<typeof filesDrift> {
+  const sources = readQueueSources(root);
+  return 'source' in sources
+    ? filesDrift(
+        byFile((file) => readText(queue.files[file])),
+        sources.source
+      )
+    : 'missing';
 }

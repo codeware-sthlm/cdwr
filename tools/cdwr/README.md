@@ -84,7 +84,7 @@ separate worktree, `codeware-agent` beside this checkout. macOS only.
 
 ```sh
 cdwr agent install        # worktree, env files, deps, script, launchd job, Keychain key
-cdwr agent status         # loaded, paused, key, script current, what the next run would take
+cdwr agent status         # loaded, paused, key, scripts current, watched PRs, next run
 cdwr agent run            # start a planning run now
 cdwr agent pause|resume   # hold or release the schedule
 cdwr agent logs [--run]   # the scheduler log, or the latest run
