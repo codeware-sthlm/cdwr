@@ -41,6 +41,15 @@ const page = (value: number) => ({
   reference: { relationTo: 'pages' as const, value }
 });
 
+/** A link row as Payload reads it: the group's `children` comes back empty */
+const storedLink = (value: number, extra: Partial<Item> = {}): Item => ({
+  id: `row-${value}`,
+  type: 'link',
+  ...page(value),
+  ...extra,
+  children: []
+});
+
 describe('ensureNavigation', () => {
   it('updates the existing navigation when every stored item is dangling', async () => {
     // The pages were deleted, so every row lost its reference. Falling through
@@ -55,7 +64,7 @@ describe('ensureNavigation', () => {
   });
 
   it('drops a dangling item even when nothing new is added', async () => {
-    const { payload, calls } = payloadWith([page(3), { id: 'gone' }]);
+    const { payload, calls } = payloadWith([storedLink(3), { id: 'gone' }]);
 
     await ensureNavigation(payload, { tenant: 1, items: [page(3)] }, options);
 
@@ -63,11 +72,28 @@ describe('ensureNavigation', () => {
   });
 
   it('writes nothing when the navigation already matches', async () => {
-    const { payload, calls } = payloadWith([page(3)]);
+    const { payload, calls } = payloadWith([storedLink(3)]);
 
     await ensureNavigation(payload, { tenant: 1, items: [page(3)] }, options);
 
     expect(calls).toEqual({ create: 0, created: [], update: [] });
+  });
+
+  it('writes every kept link as a link and appends the new one', async () => {
+    const { payload, calls } = payloadWith([storedLink(3), storedLink(4)]);
+
+    await ensureNavigation(
+      payload,
+      { tenant: 1, items: [page(3), page(4), page(5)] },
+      options
+    );
+
+    expect(calls.update).toHaveLength(1);
+    expect(calls.update[0]).toMatchObject([
+      { id: 'row-3', type: 'link', ...page(3) },
+      { id: 'row-4', type: 'link', ...page(4) },
+      { type: 'link', ...page(5) }
+    ]);
   });
 
   it('creates one only when the tenant has none', async () => {
@@ -95,7 +121,7 @@ describe('ensureNavigation', () => {
 
   it('leaves an existing item as it is unless the definition wins', async () => {
     // A stored `link` may be an editor's choice, so a normal apply keeps it
-    const stored = [{ ...page(3), appearance: 'link' as const }];
+    const stored = [storedLink(3, { appearance: 'link' })];
     const wanted = [{ ...page(3), appearance: 'button' as const }];
 
     const normal = payloadWith(stored);
@@ -128,7 +154,7 @@ describe('ensureNavigation', () => {
     });
 
     it('appends a group the navigation lacks', async () => {
-      const { payload, calls } = payloadWith([page(3)]);
+      const { payload, calls } = payloadWith([storedLink(3)]);
 
       await ensureNavigation(
         payload,
@@ -200,7 +226,7 @@ describe('ensureNavigation', () => {
 
     it('removes a stored group with no children even when nothing else changes', async () => {
       const { payload, calls } = payloadWith([
-        page(3),
+        storedLink(3),
         { type: 'group', label: 'Empty' }
       ]);
 

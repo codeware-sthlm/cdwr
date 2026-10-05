@@ -62,21 +62,23 @@ const toStoredChild = ({
   customLabel: customLabel ?? null
 });
 
+const toStoredGroup = (item: NavigationGroupData) => ({
+  type: 'group' as const,
+  label: item.label,
+  children: item.children.map(toStoredChild)
+});
+
+const toStoredLink = (item: NavigationReference) => ({
+  type: 'link' as const,
+  appearance: item.appearance ?? ('link' as const),
+  customLabel: item.customLabel,
+  reference: item.reference,
+  labelSource: item.labelSource ?? ('document' as const)
+});
+
 /** What a definition item is stored as, a link by default */
 const toStored = (item: NavigationItemData) =>
-  isGroupData(item)
-    ? {
-        type: 'group' as const,
-        label: item.label,
-        children: item.children.map(toStoredChild)
-      }
-    : {
-        type: 'link' as const,
-        appearance: item.appearance ?? ('link' as const),
-        customLabel: item.customLabel,
-        reference: item.reference,
-        labelSource: item.labelSource ?? ('document' as const)
-      };
+  isGroupData(item) ? toStoredGroup(item) : toStoredLink(item);
 
 /**
  * Ensure that navigation items exist for the given tenant.
@@ -251,12 +253,14 @@ export async function ensureNavigation(
     // stored item was dangling. Falling through to create would give the
     // tenant a second navigation
     if (missingItems.length || dangling || restated) {
-      // Kept links are written in the one stored shape, with their row id
+      // Kept links are written in the one stored shape, with their row id.
+      // A stored link reads back with empty `children`, so it is told apart
+      // by its type, never by `children`
       const itemsToUpdate = [
         ...items.map((item) =>
           isGroup(item) || !hasReference(item)
             ? item
-            : { id: item.id, ...toStored(item) }
+            : { id: item.id, ...toStoredLink(item) }
         ),
         ...missingItems.map(toStored)
       ];
