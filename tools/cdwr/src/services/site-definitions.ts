@@ -1,8 +1,9 @@
 import { existsSync } from 'fs';
 import { readdir } from 'fs/promises';
-import { isAbsolute, join, resolve as resolvePath } from 'path';
+import { basename, isAbsolute, join, resolve as resolvePath } from 'path';
 import { pathToFileURL } from 'url';
 
+import { UsageError } from '../cli/errors';
 import { type InputSpec, input } from '../cli/inputs';
 
 /** Where the repository keeps its site definitions */
@@ -24,13 +25,23 @@ export type DefinitionEntry = {
   description?: string;
 };
 
+/** A module's default export is a site definition when it has a name and pages */
+const isSiteDefinition = (
+  value: unknown
+): value is { name: string; description?: string; pages: Array<unknown> } =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { name?: unknown }).name === 'string' &&
+  Array.isArray((value as { pages?: unknown }).pages);
+
 /**
  * The definitions in the repository, each with what it says about itself.
  *
  * The name and description come from importing the module, which is cheap
  * because a definition is data with type-only imports. One that fails to load
  * is still offered — the path is what the command needs, and refusing to list
- * it would hide the very definition someone is trying to debug.
+ * it would hide the very definition someone is trying to debug. A module that
+ * loads but is not a definition, such as a helper, is left out.
  */
 export async function listSiteDefinitions(
   root: string
@@ -41,8 +52,8 @@ export async function listSiteDefinitions(
     .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'))
     .sort();
 
-  return Promise.all(
-    files.map(async (file) => {
+  const entries = await Promise.all(
+    files.map(async (file): Promise<DefinitionEntry | undefined> => {
       const path = join(DEFINITIONS_DIR, file);
 
       try {
@@ -50,52 +61,83 @@ export async function listSiteDefinitions(
           pathToFileURL(join(dir, file)).href
         )) as Record<string, unknown>;
 
-        const definition = imported['default'] as
-          { name?: string; description?: string } | undefined;
+        const definition = imported['default'];
 
+        if (!isSiteDefinition(definition)) {
+          return undefined;
+        }
         return {
           path,
-          name: definition?.name,
-          description: definition?.description
+          name: definition.name,
+          description: definition.description
         };
       } catch {
         return { path };
       }
     })
   );
+
+  return entries.filter((entry): entry is DefinitionEntry => !!entry);
 }
 
 /**
- * A path from the flag, or from the workspace root when it is relative.
+ * The absolute path of the definition a `--definition` value names.
  *
- * A bare name, with no separator, is one of the repository's own definitions
- * when one goes by it: `cdwr-io` is `site-definitions/cdwr-io.ts`, the name the
- * prompt lists it by. Otherwise it is a path like any other, so a file at the
- * workspace root is still found by its name.
+ * A path, absolute or with a separator, is resolved from the workspace root and
+ * must exist. A bare value is a definition's file name, with or without `.ts`,
+ * or else the site name of exactly one listed definition. Anything else fails
+ * here, listing what is available, rather than later as a module-not-found.
  */
-export const resolveDefinitionPath = (root: string, value: string): string => {
-  if (isAbsolute(value)) {
-    return value;
-  }
-  if (!/[\\/]/.test(value)) {
-    const named = resolvePath(
-      root,
-      DEFINITIONS_DIR,
-      value.endsWith('.ts') ? value : `${value}.ts`
-    );
-    if (existsSync(named)) {
-      return named;
+export async function resolveDefinition(
+  root: string,
+  value: string
+): Promise<string> {
+  if (isAbsolute(value) || /[\\/]/.test(value)) {
+    const path = resolvePath(root, value);
+    if (!existsSync(path)) {
+      throw new UsageError(`No definition at ${path}`);
     }
+    return path;
   }
-  return resolvePath(root, value);
-};
+
+  const entries = await listSiteDefinitions(root);
+  const fileOf = (entry: DefinitionEntry) => basename(entry.path);
+  const fileName = value.endsWith('.ts') ? value : `${value}.ts`;
+
+  const byFile = entries.find((entry) => fileOf(entry) === fileName);
+  if (byFile) {
+    return resolvePath(root, byFile.path);
+  }
+
+  const bySite = entries.filter((entry) => entry.name === value);
+  if (bySite.length === 1) {
+    return resolvePath(root, bySite[0].path);
+  }
+  if (bySite.length > 1) {
+    throw new UsageError(
+      `More than one definition is named '${value}'`,
+      `Name one by its file: ${bySite.map((e) => basename(e.path, '.ts')).join(', ')}`
+    );
+  }
+
+  throw new UsageError(
+    `No definition called '${value}'`,
+    `Available: ${entries
+      .map((e) => {
+        const file = basename(e.path, '.ts');
+        return e.name ? `${file} (${e.name})` : file;
+      })
+      .join(', ')}`
+  );
+}
 
 /**
  * `--definition`: one of the repository's definitions, or any path.
  *
  * `trustFlag` is what keeps both true. The choices are loaded only to fill the
  * prompt, never to validate a flag, so a definition living somewhere else is
- * still applied by naming its path.
+ * still applied by naming its path. `resolveDefinition` checks the value
+ * afterwards, and fails early on a name or path that matches nothing.
  */
 export const definitionInput = (
   prompt = 'Which definition?'

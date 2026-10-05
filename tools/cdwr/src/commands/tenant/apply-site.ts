@@ -14,7 +14,7 @@ import {
 import type { Environment } from '../../services/infisical';
 import {
   definitionInput,
-  resolveDefinitionPath
+  resolveDefinition
 } from '../../services/site-definitions';
 
 import {
@@ -113,7 +113,7 @@ export default defineCommand<
 
   async plan(ctx, { environment, previewApp, tenant, definition, fresh }) {
     const isFresh = fresh === true;
-    const definitionPath = resolveDefinitionPath(ctx.root, definition);
+    const definitionPath = await resolveDefinition(ctx.root, definition);
 
     const databaseUrl = await resolveDatabaseUrl(environment, previewApp);
 

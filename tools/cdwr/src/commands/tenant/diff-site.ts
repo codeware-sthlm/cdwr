@@ -8,7 +8,7 @@ import {
 } from '../../services/environment';
 import {
   definitionInput,
-  resolveDefinitionPath
+  resolveDefinition
 } from '../../services/site-definitions';
 import { symbols, theme } from '../../ui/theme';
 
@@ -52,7 +52,7 @@ export default defineCommand<
   },
 
   async plan(ctx, { environment, previewApp, tenant, definition }) {
-    const definitionPath = resolveDefinitionPath(ctx.root, definition);
+    const definitionPath = await resolveDefinition(ctx.root, definition);
 
     const databaseUrl = await resolveDatabaseUrl(environment, previewApp);
 
