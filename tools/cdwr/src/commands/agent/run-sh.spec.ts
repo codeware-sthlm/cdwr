@@ -22,6 +22,15 @@ describe('run.sh', () => {
     expect(READS.some((read) => read.test(call))).toBe(true);
   });
 
+  // Tool search hides the Linear tools from a run limited by --tools
+  it('runs claude without tool search', () => {
+    expect(SCRIPT).toMatch(/^ENABLE_TOOL_SEARCH=false claude -p /m);
+  });
+
+  it('fails a clean run that planned nothing', () => {
+    expect(SCRIPT).toMatch(/note "fail: planned nothing/);
+  });
+
   it('never sends a mutation', () => {
     expect(SCRIPT).not.toMatch(/mutation/i);
   });

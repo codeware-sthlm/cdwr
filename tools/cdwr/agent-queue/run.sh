@@ -174,7 +174,8 @@ note "plan: $(print -r -- "$ready" | tr '\n' ' ')→ $log"
 
 L=mcp__claude_ai_Linear
 rc=0
-claude -p "/work-queue unattended once plan-only" \
+# Tool search would defer the Linear tools behind ToolSearch, which --tools leaves out.
+ENABLE_TOOL_SEARCH=false claude -p "/work-queue unattended once plan-only" \
   --model opus \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
   --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
@@ -208,12 +209,19 @@ query {
 }
 GQL
 if after="$(linear "$PLANNED")" && ! jq -e '.errors' >/dev/null <<<"$after"; then
+  planned=0
   for id in $(jq -r --arg ready "$ready" '
       ($ready | split("\n")) as $offered
       | .data.issues.nodes[].identifier | select(IN($offered[]))' <<<"$after" 2>/dev/null); do
     note "planned: $id"
     notify "$id: plan ready, needs your approval"
+    (( ++planned ))
   done
+  # A clean exit that planned nothing is a failure all the same, e.g. no Linear tools.
+  if (( rc == 0 && planned == 0 )); then
+    note "fail: planned nothing (see $log)"
+    notify "Agent queue: a planning run exited cleanly but planned nothing. Log: $log"
+  fi
 else
   note "warn: could not ask Linear what was planned"
 fi
