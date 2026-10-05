@@ -6,7 +6,7 @@
  */
 import path from 'node:path';
 
-import { moon } from '@codeware/shared/util/seed/site-definitions';
+import { cdwrIo, moon } from '@codeware/shared/util/seed/site-definitions';
 import ts from 'typescript';
 
 import {
@@ -27,6 +27,13 @@ const metricCardSource = moon.customComponents?.find(
 )?.source;
 if (!metricCardSource) {
   throw new Error('The Moon seed has no metric card');
+}
+
+const themeSwatchSource = cdwrIo.customComponents?.find(
+  (c) => c.slug === 'theme-swatch'
+)?.source;
+if (!themeSwatchSource) {
+  throw new Error('The cdwr.io seed has no theme swatch');
 }
 
 const ROOT = '/';
@@ -134,6 +141,10 @@ describe('collectEditorTypes (integration)', () => {
 
   it('type-checks the Moon metric card from the files alone', () => {
     expect(check(types, metricCardSource)).toEqual([]);
+  }, 60_000);
+
+  it('type-checks the cdwr.io theme swatch from the files alone', () => {
+    expect(check(types, themeSwatchSource)).toEqual([]);
   }, 60_000);
 
   it('reports a type error', () => {

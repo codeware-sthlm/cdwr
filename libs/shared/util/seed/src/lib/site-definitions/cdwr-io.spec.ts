@@ -48,6 +48,7 @@ describe('the cdwr.io definition', () => {
       'home',
       'blocks',
       'studio',
+      'components',
       'architecture',
       'devlog',
       'start'
@@ -75,6 +76,40 @@ describe('the cdwr.io definition', () => {
 
     for (const { reference } of cdwrIo.navigation ?? []) {
       expect(slugs).toContain(reference.lookupSlug);
+    }
+  });
+
+  it('shows on the components page the source it declares', () => {
+    // The page prints the component's code beside the running component, so a
+    // copy that drifted would show one thing and run another
+    const source = cdwrIo.customComponents?.find(
+      ({ slug }) => slug === 'theme-swatch'
+    )?.source;
+    const page = cdwrIo.pages.find(({ slug }) => slug === 'components');
+    const listings = (page?.layout ?? []).filter(
+      (block) => block.blockType === 'code' && block.language === 'tsx'
+    );
+
+    expect(source).toBeDefined();
+    expect(listings).not.toEqual([]);
+    for (const block of listings) {
+      expect(block).toMatchObject({ code: source });
+    }
+  });
+
+  it('places only custom components it declares', () => {
+    const declared = (cdwrIo.customComponents ?? []).map(({ slug }) => slug);
+    const placed = cdwrIo.pages.flatMap(({ layout }) =>
+      layout.flatMap((block) =>
+        block.blockType === 'custom-component'
+          ? [block.component.lookupSlug]
+          : []
+      )
+    );
+
+    expect(placed).not.toEqual([]);
+    for (const slug of placed) {
+      expect(declared).toContain(slug);
     }
   });
 });
