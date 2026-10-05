@@ -51,8 +51,9 @@ only at gates. The skill holds the queue order, the labels and how a gate asks.
 
 An hourly launchd job runs it plan-only on this machine; `cdwr agent install` sets that up
 and `cdwr agent status` says what it would take next. Launchd runs an installed copy of
-`tools/cdwr/agent-queue/run.sh`, so a merged change to its guardrails waits for the next
-`install`.
+`tools/cdwr/agent-queue/run.sh` (and its `watch.jq`), so a merged change to its guardrails
+waits for the next `install`. Before planning, the same job watches the PRs of `agent:review`
+tickets and sends a notice when one leaves the merge queue, fails, or merges with hand-offs left.
 
 ## Nx-generated projects cleanup
 

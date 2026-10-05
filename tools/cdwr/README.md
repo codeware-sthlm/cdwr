@@ -102,6 +102,16 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 (missing means `all`), while the scheduler's own notices (a planned ticket, a failed or capped
 run) always go out.
 
+Before it plans, the scheduler watches the PRs of `agent:review` tickets (open, or done within 14
+days) without starting Claude. It sends one notice per change: a PR that left the merge queue
+or has failing checks (`action`), a merge with the hand-offs still unticked in the agent's
+`**Agent: PR ready**` comment (`action`), and a plain merge or a close (`info`, which follows
+the level). `~/.cdwr/agent-queue/watch.json` remembers what was last sent, and `status` shows
+it. `gh` runs as you here, so the script only lists and queries; a spec fails on anything
+else. The watch's decisions live in `agent-queue/watch.jq`, installed beside `run.sh`, rather
+than in a `*.logic.ts`: what runs unattended stays behind `install`, and jq is already a
+dependency of the script. Its spec runs it through `jq`.
+
 ## Writing a command
 
 One file under `src/commands/<group>/`, one entry in `src/commands/index.ts`:
