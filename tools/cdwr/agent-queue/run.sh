@@ -65,7 +65,7 @@ query {
       identifier
       labels { nodes { name } }
       attachments { nodes { url createdAt } }
-      comments(first: 50) { nodes { body createdAt } }
+      comments(first: 50, orderBy: createdAt) { nodes { body createdAt } }
     }
   }
 }
