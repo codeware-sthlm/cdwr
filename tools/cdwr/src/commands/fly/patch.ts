@@ -118,7 +118,8 @@ export default defineCommand({
         prompt: 'Path to the patch TOML file?',
         schema: patchFileSchema
       }),
-      (r) => r['patch'] === 'custom'
+      (r) => r['patch'] === 'custom',
+      'applies only to a custom patch'
     ),
     prefix: input.string({
       prompt: 'Filter apps by prefix?',

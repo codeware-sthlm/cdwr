@@ -52,7 +52,8 @@ export default defineCommand({
           'Preview only; defaults to the pull request of the current branch',
         flagOnly: true
       }),
-      (r) => r['environment'] === 'preview'
+      (r) => r['environment'] === 'preview',
+      'applies only to preview'
     ),
     tenant: input.string({
       prompt: 'Which tenant?',

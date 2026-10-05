@@ -85,7 +85,8 @@ export default defineCommand({
         prompt: 'NPM OTP code from your 2FA app',
         schema: z.string().regex(/^\d{6}$/, 'OTP code must be a 6-digit number')
       }),
-      (r) => r['mode'] === 'publish' || r['postponePublish'] === false
+      (r) => r['mode'] === 'publish' || r['postponePublish'] === false,
+      'applies only when publishing now'
     )
   },
 

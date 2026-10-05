@@ -132,7 +132,8 @@ export default defineCommand<
     }),
     definition: input.optional(
       definitionInput('Take the pages of which definition?'),
-      (resolved) => !resolved['routes']
+      (resolved) => !resolved['routes'],
+      'does not apply with --routes'
     ),
     themes: input.multiselect<SnapshotTheme>({
       prompt: 'In which themes?',

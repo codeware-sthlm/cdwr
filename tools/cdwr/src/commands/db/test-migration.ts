@@ -201,7 +201,8 @@ export default defineCommand({
             hint: `${b.environment} · ${b.takenAt}`
           }))
       }),
-      (r) => !r['fresh']
+      (r) => !r['fresh'],
+      'does not apply to a fresh database'
     ),
     keep: input.boolean({
       prompt: 'Keep the container running afterwards?',
