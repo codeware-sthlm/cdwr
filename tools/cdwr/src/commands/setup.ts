@@ -19,6 +19,7 @@ import { input } from '../cli/inputs';
 import { cdwrHome } from '../cli/prefs';
 
 import { shellOf } from './completion';
+import { completionFile } from './completion.logic';
 import { ENTRIES, GROUPS } from './index';
 
 const SHIM = 'tools/cdwr/bin/cdwr.mjs';
@@ -56,10 +57,10 @@ export default defineCommand({
     const link = join(binDir, 'cdwr');
     const target = join(ctx.root, SHIM);
     const home = cdwrHome(ctx.env);
-    const completionFile =
-      shell === 'fish'
-        ? join(homedir(), '.config', 'fish', 'completions', 'cdwr.fish')
-        : join(home, `completion.${shell}`);
+    const completion = completionFile(shell, {
+      cdwrHome: home,
+      home: homedir()
+    });
     const rc = rcFile(shell, homedir());
     const onPath = (ctx.env['PATH'] ?? '').split(delimiter).includes(binDir);
 
@@ -84,7 +85,7 @@ export default defineCommand({
       linkState === 'ours'
         ? `Keep ${link} (already points here)`
         : `Link ${link} → ${SHIM}`,
-      `Write ${shell} completion to ${completionFile}`,
+      `Write ${shell} completion to ${completion}`,
       ...(rc && !rcHasSource ? [`Add a source line to ${rc}`] : [])
     ];
     const notes = onPath
@@ -97,7 +98,7 @@ export default defineCommand({
         link,
         target,
         linkState,
-        completionFile,
+        completionFile: completion,
         rc,
         rcHasSource: Boolean(rcHasSource),
         shell,
