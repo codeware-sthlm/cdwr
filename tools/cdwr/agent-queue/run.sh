@@ -120,7 +120,18 @@ publish_runs() {
     note "warn: runs document: update failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"
   fi
 }
-trap 'publish_runs; rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
+# Every handled outcome exits 0, so a non-zero exit is a failure nothing recorded.
+on_exit() {
+  local st=$1
+  if (( st != 0 )); then
+    note "fail: run.sh exited $st"
+    record failed "" "run.sh exited $st, see scheduler.log"
+  fi
+  publish_runs
+  rmdir "$HOME_DIR/lock" 2>/dev/null
+  return 0
+}
+trap 'st=$?; on_exit $st; exit $st' EXIT
 
 # PR watch: gh runs as Håkan, so only reads (gh pr list, gh api graphql with a query).
 # The decisions live in watch.jq, installed next to this file.
