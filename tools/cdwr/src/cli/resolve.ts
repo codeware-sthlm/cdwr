@@ -214,8 +214,8 @@ export async function resolveInputs<I extends Inputs>(
       // production environment would quietly become a plain apply
       if (given !== undefined) {
         throw new UsageError(
-          `--${flag} does not apply with the other inputs given`,
-          `${spec.description ?? spec.prompt} Remove it, or change what it depends on`
+          `--${flag} ${spec.whenReason ?? 'does not apply with the other inputs given'}`,
+          'Remove it, or change what it depends on.'
         );
       }
       resolved[key] = undefined;

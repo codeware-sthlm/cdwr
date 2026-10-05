@@ -54,7 +54,8 @@ export default defineCommand({
           .string()
           .regex(MODEL_PATTERN, 'Expected owner/name, optionally with :version')
       }),
-      (r) => r['model'] === CUSTOM_MODEL
+      (r) => r['model'] === CUSTOM_MODEL,
+      'applies only to the custom model'
     )
   },
 

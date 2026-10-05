@@ -52,5 +52,6 @@ export const previewAppInput = (): InputSpec<string | undefined> =>
           .sort((a, b) => (a.hint ? -1 : b.hint ? 1 : 0));
       }
     }),
-    (r) => r['environment'] === 'preview'
+    (r) => r['environment'] === 'preview',
+    'applies only to preview'
   );

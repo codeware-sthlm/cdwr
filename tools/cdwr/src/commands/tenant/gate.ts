@@ -71,7 +71,8 @@ export default defineCommand({
           return prChoices(pullRequestChoices(apps, mine));
         }
       }),
-      (r) => r['environment'] === 'preview'
+      (r) => r['environment'] === 'preview',
+      'applies only to preview'
     ),
     tenant: input.select<string>({
       prompt: 'Which tenant?',
@@ -98,7 +99,8 @@ export default defineCommand({
             `At least ${MIN_PASSWORD_LENGTH} characters — the cms refuses to start below that`
           )
       }),
-      (r) => r['action'] === 'close' && !r['generate']
+      (r) => r['action'] === 'close' && !r['generate'],
+      'applies only when closing without a generated password'
     )
   },
 

@@ -42,6 +42,8 @@ export interface InputSpec<T = unknown> {
   remember?: boolean;
   /** Ask only when this holds; otherwise the value is undefined */
   when?: (resolved: Partial) => boolean;
+  /** Why `when` can rule the input out, finishing `--flag …` in the error for a flag given anyway */
+  whenReason?: string;
   /** Used, without a prompt, when the flag is not given */
   default?: T | ((resolved: Partial) => T | undefined);
   /** Validates and coerces a flag value or a typed answer */
@@ -121,11 +123,17 @@ export const input = {
     opts: Opts<T[]> & { choices: Loader<T> }
   ): InputSpec<T[]> => ({ kind: 'multiselect', ...opts }),
 
-  /** Asked only while `when` holds; the value is undefined otherwise */
+  /** Asked only while `when` holds; the value is undefined otherwise. `reason` says why, for a flag given when it does not hold */
   optional: <T>(
     spec: InputSpec<T>,
-    when: (resolved: Partial) => boolean
-  ): InputSpec<T | undefined> => ({ ...spec, when, optional: true })
+    when: (resolved: Partial) => boolean,
+    reason?: string
+  ): InputSpec<T | undefined> => ({
+    ...spec,
+    when,
+    whenReason: reason,
+    optional: true
+  })
 };
 
 /** kebab-case flag name for an input key */

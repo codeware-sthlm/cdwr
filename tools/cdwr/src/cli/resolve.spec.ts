@@ -116,7 +116,8 @@ describe('a flag its condition rules out', () => {
     }),
     fresh: input.optional(
       input.boolean({ prompt: 'Start fresh?' }),
-      (r) => r['environment'] === 'development'
+      (r) => r['environment'] === 'development',
+      'applies only in development'
     )
   };
 
@@ -125,6 +126,31 @@ describe('a flag its condition rules out', () => {
 
     await expect(
       resolveInputs(ctx, inputs, { environment: 'production', fresh: true })
+    ).rejects.toThrow('--fresh applies only in development');
+  });
+
+  it('says what to do about it', async () => {
+    const { ctx } = context([]);
+
+    await expect(
+      resolveInputs(ctx, inputs, { environment: 'production', fresh: true })
+    ).rejects.toMatchObject({
+      hint: 'Remove it, or change what it depends on.'
+    });
+  });
+
+  it('falls back to a generic message when no reason was given', async () => {
+    const { ctx } = context([]);
+    const bare = {
+      environment: inputs.environment,
+      fresh: input.optional(
+        input.boolean({ prompt: 'Start fresh?' }),
+        (r) => r['environment'] === 'development'
+      )
+    };
+
+    await expect(
+      resolveInputs(ctx, bare, { environment: 'production', fresh: true })
     ).rejects.toThrow('--fresh does not apply with the other inputs given');
   });
 

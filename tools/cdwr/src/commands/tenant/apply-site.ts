@@ -106,7 +106,8 @@ export default defineCommand<
         description:
           'Remove what this definition created first, so the site matches it — including edits made to those documents in the admin'
       }),
-      (resolved) => resolved['environment'] === 'development'
+      (resolved) => resolved['environment'] === 'development',
+      'applies only in development'
     )
   },
 
