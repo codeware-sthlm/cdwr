@@ -84,6 +84,10 @@ remove the ticket's other labels.
    line, with nothing else in between. The scheduler watches the PR after the gate and, on
    merge, sends the unticked items as a notice, so keep each item to one line.
 
+   Check every command in the checklist before posting: run it with `--help`, or with
+   `--dry-run` where it has one, and fix the flags until it parses. A guessed command
+   costs Håkan a failed production step.
+
 7. **Next.** Ask: "COD-xxx is in review. Pick the next one?" Unattended: continue, unless
    `once` is set, in which case stop. Either way,
    suggest `/clear` before a big next ticket. Linear holds the state, so nothing is lost.
@@ -170,7 +174,8 @@ push, and it shouldn't try.
 2. Investigate with Read, Grep and Glob against the checked-out `origin/main`. There is no
    shell, so no git history; note in the plan where history would have helped.
 3. Write the plan into the description exactly as in **Plan**, with every Status row
-   `Planned` and `**Next:** waiting for plan approval`.
+   `Planned` and `**Next:** waiting for plan approval`. Any command the plan hands off
+   ends in `(unverified)`, since nothing here can run it; the attended session checks it.
 4. Post `**Agent: plan ready**`, then the decisions you'd most like checked, and any open
    questions as numbered options. Set `agent:needs-input`.
 5. Stop. There's no shell here, so the scheduler sends the notice. When Håkan replies, an attended `/work-queue` resumes the ticket and implements it.
