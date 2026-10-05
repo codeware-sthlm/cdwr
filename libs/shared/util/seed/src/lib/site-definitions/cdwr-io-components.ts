@@ -39,7 +39,8 @@ const parseTokens = (raw: string): string[] => {
     .split(/[,\\n]+/)
     .map((part) => part.trim().replace(/^-+/, ''))
     .filter((part) => part !== '');
-  return names.length > 0 ? names : DEFAULT_TOKENS;
+  // Names are the swatches' keys, so each appears once
+  return names.length > 0 ? [...new Set(names)] : DEFAULT_TOKENS;
 };
 
 type Swatch = { name: string; value: string };
