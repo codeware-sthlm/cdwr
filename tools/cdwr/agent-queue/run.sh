@@ -38,6 +38,17 @@ notice() {
 }
 check=false; [[ "${1:-}" == "--check" ]] && check=true
 
+# Run history for the "Agent queue: runs" Linear document, newest last. Idle adds no row.
+RUNS="$HOME_DIR/runs.jsonl"
+last_outcome=idle
+# record <outcome> [ticket] [detail]: a warn is a row, never the run's outcome.
+record() {
+  $check && return 0
+  [[ "$1" == warn ]] || last_outcome="$1${2:+ $2}"
+  jq -nc --arg w "$(date '+%F %H:%M')" --arg o "$1" --arg t "${2:-}" --arg d "${3:-}" \
+    '{when: $w, outcome: $o, ticket: $t, detail: $d}' >> "$RUNS" 2>/dev/null || true
+}
+
 if [[ -e "$HOME_DIR/paused" ]] && ! $check; then exit 0; fi
 if ! mkdir "$HOME_DIR/lock" 2>/dev/null; then say "busy: a run is in progress"; exit 0; fi
 trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
@@ -45,11 +56,71 @@ trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
 key="$(security find-generic-password -s linear-agent-queue -w 2>/dev/null || true)"
 [[ -z "$key" ]] && { say "skip: no Linear API key in Keychain (service linear-agent-queue)"; exit 0; }
 
+# linear <query> [variables as JSON]
 linear() {
-  jq -n --arg q "$1" '{query: $q}' |
+  local vars="${2:-}"; [[ -z "$vars" ]] && vars='{}'
+  jq -n --arg q "$1" --argjson v "$vars" '{query: $q, variables: $v}' |
     curl -sS -m 20 https://api.linear.app/graphql \
       -H "Authorization: $key" -H 'Content-Type: application/json' --data @-
 }
+
+# The only writes run.sh makes: the runs document, created once on the Codeware team.
+DOC_TITLE='Agent queue: runs'
+read -r -d '' DOC_FIND <<'GQL' || true
+query($title: String!) {
+  documents(first: 1, filter: { title: { eq: $title } }) { nodes { id } }
+  teams(filter: { key: { eq: "COD" } }) { nodes { id } }
+}
+GQL
+read -r -d '' DOC_CREATE <<'GQL' || true
+mutation($team: String!, $title: String!, $content: String!) {
+  documentCreate(input: { teamId: $team, title: $title, content: $content }) { document { id } }
+}
+GQL
+read -r -d '' DOC_UPDATE <<'GQL' || true
+mutation($id: String!, $content: String!) {
+  documentUpdate(id: $id, input: { content: $content }) { success }
+}
+GQL
+
+# Rewrites the whole document from runs.jsonl; a failure is a warn line, never a stop.
+publish_runs() {
+  $check && return 0
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/runs-doc-id" id content resp team
+  [[ -f "$RUNS" ]] && tail -n 20 "$RUNS" > "$RUNS.tmp" && mv "$RUNS.tmp" "$RUNS"
+  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" '
+    def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
+    "Last run: \($last)\n\nWritten by the agent queue scheduler after every run. Idle runs only update the line above.\n\n"
+    + "| When | Outcome | Ticket | Detail |\n| -- | -- | -- | -- |\n"
+    + (reverse | map("| \(.when | cell) | \(.outcome | cell) | \(.ticket | cell) | \(.detail | cell) |") | join("\n"))
+  ')" || { note "warn: runs document: could not render"; return 0; }
+
+  id="$(cat "$file" 2>/dev/null)"
+  if [[ -z "$id" ]]; then
+    resp="$(linear "$DOC_FIND" "$(jq -nc --arg t "$DOC_TITLE" '{title: $t}')")"
+    id="$(jq -r '.data.documents.nodes[0].id // empty' <<<"$resp" 2>/dev/null)"
+    if [[ -z "$id" ]]; then
+      team="$(jq -r '.data.teams.nodes[0].id // empty' <<<"$resp" 2>/dev/null)"
+      [[ -z "$team" ]] && { note "warn: runs document: no Codeware team from Linear"; return 0; }
+      resp="$(linear "$DOC_CREATE" "$(jq -nc --arg team "$team" --arg t "$DOC_TITLE" --arg c "$content" \
+        '{team: $team, title: $t, content: $c}')")"
+      id="$(jq -r '.data.documentCreate.document.id // empty' <<<"$resp" 2>/dev/null)"
+      [[ -z "$id" ]] && { note "warn: runs document: create failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0; }
+      print -r -- "$id" > "$file"
+      return 0
+    fi
+    print -r -- "$id" > "$file"
+  fi
+
+  resp="$(linear "$DOC_UPDATE" "$(jq -nc --arg id "$id" --arg c "$content" '{id: $id, content: $c}')")"
+  if ! jq -e '.data.documentUpdate.success' >/dev/null <<<"$resp" 2>/dev/null; then
+    # A deleted document is found or created again next run
+    rm -f "$file"
+    note "warn: runs document: update failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"
+  fi
+}
+trap 'publish_runs; rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
 
 # PR watch: gh runs as Håkan, so only reads (gh pr list, gh api graphql with a query).
 # The decisions live in watch.jq, installed next to this file.
@@ -107,16 +178,18 @@ watch_prs() {
     pr="$(watch 'include "watch"; pr_number // empty' <<<"$node")"
     if [[ -z "$pr" ]]; then
       pr="$(gh pr list --repo codeware-sthlm/cdwr --state all --search "\"$id\" in:title,body" \
-        --json number --limit 1 --jq '.[0].number // empty')" || { note "warn: watch: no PR lookup for $id"; continue; }
+        --json number --limit 1 --jq '.[0].number // empty')" || { note "warn: watch: no PR lookup for $id"; record warn "$id" "watch: no PR lookup"; continue; }
     fi
     [[ -z "$pr" ]] && continue
     now="$(gh api graphql -f query="$PR_QUERY" -F n="$pr" --jq '.data.repository.pullRequest')"
-    if [[ $? -ne 0 || -z "$now" || "$now" == null ]]; then note "warn: watch: could not read PR #$pr ($id)"; continue; fi
+    if [[ $? -ne 0 || -z "$now" || "$now" == null ]]; then
+      note "warn: watch: could not read PR #$pr ($id)"; record warn "$id" "watch: could not read PR #$pr"; continue
+    fi
     out="$(watch -cn --arg id "$id" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
       --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
       {id: $id, pr: $pr, now: ($now | pr_state), prev: $state[$id], handoffs: ($node | handoffs), at: $at} | step')" ||
-      { note "warn: watch: watch.jq failed on $id"; continue; }
+      { note "warn: watch: watch.jq failed on $id"; record warn "$id" "watch: watch.jq failed"; continue; }
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue
       note "watch: $level $msg"
@@ -130,7 +203,7 @@ watch_prs() {
 
 # Watching sends notices, so --check leaves it out; a failure never stops planning.
 if ! $check; then
-  err="$(watch_prs)" || note "warn: watch failed (${err:-unknown})"
+  err="$(watch_prs)" || { note "warn: watch failed (${err:-unknown})"; record warn "" "watch failed: ${err:-unknown}"; }
 fi
 
 read -r -d '' QUERY <<'GQL' || true
@@ -150,9 +223,10 @@ query {
 GQL
 
 resp="$(linear "$QUERY")" ||
-  { say "skip: Linear did not answer"; exit 0; }
+  { say "skip: Linear did not answer"; record skip "" "Linear did not answer"; exit 0; }
 if jq -e '.errors' >/dev/null <<<"$resp"; then
-  say "skip: Linear error $(jq -c '.errors[0].message' <<<"$resp")"; exit 0
+  say "skip: Linear error $(jq -c '.errors[0].message' <<<"$resp")"
+  record skip "" "Linear error $(jq -c '.errors[0].message' <<<"$resp")"; exit 0
 fi
 
 # Plan-only: an agent:ready ticket for this repo, not blocked by an open ticket.
@@ -167,7 +241,8 @@ if $check; then echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')";
 
 cd "$REPO"
 git fetch -q origin
-git switch -q --detach origin/main 2>/dev/null || note "warn: worktree not clean, planning against its current state"
+git switch -q --detach origin/main 2>/dev/null ||
+  { note "warn: worktree not clean, planning against its current state"; record warn "" "worktree not clean"; }
 
 log="$LOGS/$(date +%F_%H%M).log"
 note "plan: $(print -r -- "$ready" | tr '\n' ' ')→ $log"
@@ -193,9 +268,11 @@ if (( rc != 0 )); then
   if tail -n 3 "$log" | grep -q 'Exceeded USD budget'; then
     note "cap: stopped at the \$$BUDGET_USD budget (see $log)"
     notify "Agent queue: a planning run hit the \$$BUDGET_USD cap and stopped. Log: $log"
+    record cap "" "stopped at the \$$BUDGET_USD budget, log $log"
   else
     note "fail: claude exited $rc (see $log)"
     notify "Agent queue: a planning run failed (exit $rc). Log: $log"
+    record failed "" "claude exited $rc, log $log"
   fi
 fi
 
@@ -214,6 +291,7 @@ if after="$(linear "$PLANNED")" && ! jq -e '.errors' >/dev/null <<<"$after"; the
       ($ready | split("\n")) as $offered
       | .data.issues.nodes[].identifier | select(IN($offered[]))' <<<"$after" 2>/dev/null); do
     note "planned: $id"
+    record planned "$id" "log $log"
     notify "$id: plan ready, needs your approval"
     (( ++planned ))
   done
@@ -221,9 +299,11 @@ if after="$(linear "$PLANNED")" && ! jq -e '.errors' >/dev/null <<<"$after"; the
   if (( rc == 0 && planned == 0 )); then
     note "fail: planned nothing (see $log)"
     notify "Agent queue: a planning run exited cleanly but planned nothing. Log: $log"
+    record "planned nothing" "" "log $log"
   fi
 else
   note "warn: could not ask Linear what was planned"
+  record warn "" "could not ask Linear what was planned"
 fi
 
 note "done: $log"
