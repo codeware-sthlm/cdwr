@@ -115,8 +115,7 @@ export function cspHeaders(options: CspOptions): CspHeaders {
     'frame-ancestors': ["'self'", ...(frameAncestors ?? [])],
     'object-src': ["'none'"],
     'base-uri': ["'self'"],
-    'form-action': ["'self'"],
-    ...reporting
+    'form-action': ["'self'"]
   };
 
   const full: Policy = {
@@ -140,7 +139,10 @@ export function cspHeaders(options: CspOptions): CspHeaders {
       ...(site ? [TURNSTILE_ORIGIN] : [])
     ],
     'worker-src': ["'self'", 'blob:'],
-    'manifest-src': ["'self'"]
+    'manifest-src': ["'self'"],
+    // Only the full policy reports: it holds every baseline directive too, so
+    // reporting from both would send each baseline violation twice
+    ...reporting
   };
 
   return {
