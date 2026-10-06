@@ -148,6 +148,59 @@ export async function removeRecreatedDocuments(
 }
 
 /**
+ * Refuse a fresh apply that would cut form submissions loose from their form.
+ *
+ * A submission's `form` is `ON DELETE SET NULL`, so recreating a form keeps
+ * its submissions but loses which form they answered. Each form of this
+ * definition that has any is named, with its count.
+ *
+ * @throws If any form this definition created has submissions
+ */
+export async function refuseFormsWithSubmissions(
+  payload: Payload,
+  definition: SiteDefinition,
+  tenantId: number,
+  options: { transactionID: string | number | undefined }
+): Promise<void> {
+  const { transactionID } = options;
+  const { docs: forms } = await payload.find({
+    collection: 'forms',
+    where: {
+      and: [
+        { tenant: { equals: tenantId } },
+        { managedBy: { equals: definition.name } }
+      ]
+    },
+    limit: 0,
+    depth: 0,
+    pagination: false,
+    req: { transactionID }
+  });
+
+  const answered: Array<string> = [];
+  for (const form of forms) {
+    const { totalDocs } = await payload.count({
+      collection: 'form-submissions',
+      where: { form: { equals: form.id } },
+      req: { transactionID }
+    });
+    if (totalDocs > 0) {
+      answered.push(`  ${form.title} (${totalDocs} submission(s))`);
+    }
+  }
+
+  if (answered.length) {
+    throw new Error(
+      [
+        `A fresh apply would recreate ${answered.length} form(s) that have submissions, and the submissions would lose their form:`,
+        ...answered,
+        'Nothing was written. Export or delete the submissions first, or apply without --fresh.'
+      ].join('\n')
+    );
+  }
+}
+
+/**
  * What a fresh apply removes from its reused collections: only what this
  * definition created and has since dropped. Everything it still names stays.
  *

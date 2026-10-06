@@ -38,6 +38,7 @@ import {
   FRESH_POLICY,
   type RemovedDocument,
   droppedReusedDocuments,
+  refuseFormsWithSubmissions,
   removeRecreatedDocuments
 } from './remove-managed-documents';
 import {
@@ -106,11 +107,17 @@ export type ApplyOptions = {
    * Remove what this definition created before applying it, so the tenant
    * ends up matching the definition rather than only gaining what it lacks.
    *
-   * Development only — the caller must refuse it anywhere else. Removal is by
-   * `managedBy` alone: an editor's document is never touched, and one the
-   * definition names but did not create is left and found as `existed`.
+   * Replaces a live site's documents, so outside development the caller
+   * confirms it as destructive. Removal is by `managedBy` alone: an editor's
+   * document is never touched, and one the definition names but did not
+   * create is left and found as `existed`.
    */
   fresh?: boolean;
+  /**
+   * Refuse a fresh apply that would recreate a form with submissions, which
+   * would lose their form. Set where submissions are real visitor data.
+   */
+  protectFormSubmissions?: boolean;
 };
 
 /**
@@ -226,7 +233,8 @@ export async function applySiteDefinition(
     dryRun = true,
     locale,
     mediaBaseUrl,
-    fresh = false
+    fresh = false,
+    protectFormSubmissions = false
   } = options;
 
   const parsed = SiteDefinitionSchema.safeParse(definition);
@@ -310,6 +318,11 @@ export async function applySiteDefinition(
     // documents again rather than finding the old ones. Inside the `try`, so a
     // removal that fails is rolled back with everything else
     if (fresh) {
+      if (protectFormSubmissions) {
+        await refuseFormsWithSubmissions(payload, definition, tenant.id, {
+          transactionID
+        });
+      }
       handover = await setAsideLandingPage(payload, definition, tenant.id, ctx);
       // Read before anything changes: what this definition created and no
       // longer names, in the collections it reuses rather than recreates
