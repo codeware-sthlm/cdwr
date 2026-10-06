@@ -215,6 +215,17 @@ describe('aggregate', () => {
   });
 });
 
+describe('aggregate dayOf', () => {
+  it('groups days by the given function, UTC by default', () => {
+    const since = new Date('2026-10-01T00:00:00.000Z');
+    const late = [reply({ timestamp: '2026-10-06T23:30:00.000Z' })];
+    expect(aggregate(late, { since }).days[0].day).toBe('2026-10-06');
+    expect(
+      aggregate(late, { since, dayOf: () => '2026-10-07' }).days[0].day
+    ).toBe('2026-10-07');
+  });
+});
+
 describe('renderUsageDocument', () => {
   const since = new Date('2026-10-01T00:00:00.000Z');
   const result = aggregate(

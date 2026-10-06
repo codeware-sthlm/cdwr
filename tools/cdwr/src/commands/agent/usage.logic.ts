@@ -195,17 +195,27 @@ const finish = (sum: Sum): { tokens: Tokens; cost: number | null } => ({
 
 const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
+/** `YYYY-MM-DD` in local time, the day the Desk's other charts use */
+export const localDay = (timestamp: string): string => {
+  const d = new Date(timestamp);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 /** Sums replies since a moment by day, by ticket and overall; cents only at output */
 export const aggregate = (
   replies: Reply[],
-  { since }: { since: Date }
+  {
+    since,
+    dayOf = (timestamp) => timestamp.slice(0, 10)
+  }: { since: Date; dayOf?: (timestamp: string) => string }
 ): Aggregate => {
   const kept = replies.filter((r) => new Date(r.timestamp) >= since);
   const days = new Map<string, Sum>();
   const tickets = new Map<string, Sum>();
   const models = new Map<string, Sum>();
   for (const reply of kept) {
-    const day = reply.timestamp.slice(0, 10);
+    const day = dayOf(reply.timestamp);
     add(days, [day, reply.role, reply.model].join('\t'), reply);
     add(tickets, [reply.ticket, reply.role, reply.model].join('\t'), reply);
     add(models, reply.model, reply);

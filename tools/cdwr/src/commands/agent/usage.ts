@@ -13,6 +13,7 @@ import {
   countsDir,
   dedupeReplies,
   familyBase,
+  localDay,
   normaliseModel,
   renderUsageDocument,
   roleOf,
@@ -138,7 +139,10 @@ export default defineCommand({
       }
     }
 
-    const result = aggregate(dedupeReplies(records), { since });
+    const result = aggregate(dedupeReplies(records), {
+      since,
+      dayOf: localDay
+    });
 
     const dayRows = [...new Set(result.days.map((d) => d.day))].map((day) => {
       const rows = result.days.filter((d) => d.day === day);
