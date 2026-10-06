@@ -188,9 +188,10 @@ const add = (sums: Map<string, Sum>, key: string, reply: Reply): void => {
   sums.set(key, sum);
 };
 
+// Rows keep full precision: the document sums them per day, role and ticket before rounding
 const finish = (sum: Sum): { tokens: Tokens; cost: number | null } => ({
   tokens: sum.tokens,
-  cost: sum.priced ? cents(sum.cost) : null
+  cost: sum.priced ? sum.cost : null
 });
 
 const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
