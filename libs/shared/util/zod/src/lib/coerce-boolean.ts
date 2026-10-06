@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Coerce to boolean with a default value for empty/missing values.
  *
  * Useful for environment variables where empty strings or missing values should use the default.
- * Accepts boolean values directly, and coerces string 'true'/'false' to booleans.
+ * Accepts boolean values directly, and coerces the lowercase strings 'true'/'false' to booleans.
  *
  * @param defaultValue - The default boolean value (true or false)
  * @returns Zod schema that coerces to boolean with the specified default
@@ -19,8 +19,7 @@ import { z } from 'zod';
  * // false → false
  * // 'true' → true
  * // 'false' → false
- * // 'TruE' → true
- * // 'fALSe' → false
+ * // 'TRUE', 'False', 'yes' → validation error
  * ```
  */
 export const coerceBoolean = (defaultValue: boolean) =>
