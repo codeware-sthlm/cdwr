@@ -25,6 +25,13 @@ export function parseDatabaseList(output: string): ClusterDatabase[] {
     .filter((db) => !SYSTEM_DATABASES.has(db.name));
 }
 
+/** Quote a Postgres identifier, doubling any embedded quote */
+const quoteIdent = (ident: string): string => `"${ident.replace(/"/g, '""')}"`;
+
 /** A `DROP DATABASE` statement for one name, quoted for psql */
 export const dropStatement = (name: string): string =>
-  `DROP DATABASE IF EXISTS "${name.replace(/"/g, '""')}" WITH (FORCE);`;
+  `DROP DATABASE IF EXISTS ${quoteIdent(name)} WITH (FORCE);`;
+
+/** A `DROP ROLE` statement for one role, quoted for psql */
+export const dropRoleStatement = (role: string): string =>
+  `DROP ROLE IF EXISTS ${quoteIdent(role)};`;
