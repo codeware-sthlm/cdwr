@@ -1,7 +1,7 @@
 /* =============================================================================
    Payload native UI re-theme — imported by the CMS app ONLY (custom.css).
-   NOTE: sets --font-body to Inter; the importing app must load the Inter
-   font itself (a CSS @import here would land mid-bundle and break parsing).
+   NOTE: sets --font-body to Inter Variable, self-hosted by tailwind-base.css
+   (_core/fonts.css), so the admin fetches no font from a third party.
    -----------------------------------------------------------------------------
    Contract: one direction. This file adapts Payload's own admin UI (toolbar,
    lists, document editor, fields) to blend with the payload-admin theme
@@ -83,7 +83,8 @@
 
   /* Type — Inter for all UI/body */
   --font-body:
-    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
