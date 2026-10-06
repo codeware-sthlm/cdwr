@@ -176,6 +176,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/logs').then((m) => m.default)
   },
   {
+    path: ['agent', 'usage'],
+    summary: 'What the agent workflow spent, by day, role, model and ticket',
+    danger: 'read',
+    load: () => import('./agent/usage').then((m) => m.default)
+  },
+  {
     path: ['agent', 'run'],
     summary: 'Start a planning run now',
     danger: 'mutate',
