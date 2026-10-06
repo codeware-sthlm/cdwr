@@ -89,14 +89,11 @@ describe('cspForRequest', () => {
   ])('%s allows Monaco and gravatar: %s', (pathname, allowed) => {
     const { requestPolicy } = cspForRequest(pathname, {});
 
-    expect(
-      sourcesOf(requestPolicy, 'script-src').includes(
-        'https://cdn.jsdelivr.net'
-      )
-    ).toBe(allowed);
-    expect(
-      sourcesOf(requestPolicy, 'img-src').includes('https://www.gravatar.com')
-    ).toBe(allowed);
+    const allows = (directive: string, origin: string) =>
+      sourcesOf(requestPolicy, directive).some((source) => source === origin);
+
+    expect(allows('script-src', 'https://cdn.jsdelivr.net')).toBe(allowed);
+    expect(allows('img-src', 'https://www.gravatar.com')).toBe(allowed);
   });
 
   it.each([
