@@ -152,16 +152,17 @@ describe('cspHeaders', () => {
   });
 
   it.each([true, false])(
-    'adds reporting to every policy only with reportUri (enforce %s)',
+    'reports from the full policy only, and only with reportUri (enforce %s)',
     (enforce) => {
       const uri = 'https://o1.example.com/api/1/security/?sentry_key=k';
       const withReport = cspHeaders(base({ enforce, reportUri: uri }));
       const without = cspHeaders(base({ enforce }));
 
-      for (const name of [CSP, REPORT_ONLY]) {
-        if (!withReport[name]) continue;
-        expect(withReport[name]).toContain(`report-uri ${uri}`);
-        expect(withReport[name]).toContain('report-to csp-endpoint');
+      const full = enforce ? withReport[CSP] : withReport[REPORT_ONLY];
+      expect(full).toContain(`report-uri ${uri}`);
+      expect(full).toContain('report-to csp-endpoint');
+      if (!enforce) {
+        expect(withReport[CSP]).not.toContain('report-');
       }
       expect(withReport['Reporting-Endpoints']).toBe(`csp-endpoint="${uri}"`);
 
