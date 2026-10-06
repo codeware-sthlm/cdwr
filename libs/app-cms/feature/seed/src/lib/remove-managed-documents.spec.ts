@@ -4,6 +4,7 @@ import type { Payload } from 'payload';
 import type { ExtraDocument } from './find-extra-documents';
 import {
   droppedReusedDocuments,
+  refuseFormsWithSubmissions,
   removeRecreatedDocuments
 } from './remove-managed-documents';
 
@@ -164,5 +165,55 @@ describe('droppedReusedDocuments', () => {
       'media-this-definition',
       'tags-this-definition'
     ]);
+  });
+});
+
+describe('refuseFormsWithSubmissions', () => {
+  /** Forms as `payloadWith` holds them, and submissions counted per form id */
+  const payloadCounting = (
+    forms: Array<Doc>,
+    submissions: Record<number, number>
+  ) => {
+    const { payload } = payloadWith({ forms });
+    Object.assign(payload, {
+      count: async ({ where }: { where: { form: { equals: number } } }) => ({
+        totalDocs: submissions[where.form.equals] ?? 0
+      })
+    });
+    return payload;
+  };
+
+  it('names each form of this definition that has submissions, with its count', async () => {
+    const payload = payloadCounting(
+      [
+        { id: 1, title: 'Contact', ...mine },
+        { id: 2, title: 'Newsletter', ...mine },
+        { id: 3, title: 'Unanswered', ...mine }
+      ],
+      { 1: 4, 2: 1 }
+    );
+
+    const refused = refuseFormsWithSubmissions(payload, definition, 7, options);
+
+    await expect(refused).rejects.toThrow(
+      'A fresh apply would recreate 2 form(s) that have submissions'
+    );
+    await expect(refused).rejects.toThrow('  Contact (4 submission(s))');
+    await expect(refused).rejects.toThrow('  Newsletter (1 submission(s))');
+    await expect(refused).rejects.not.toThrow('Unanswered');
+  });
+
+  it("ignores another definition's or an editor's form, which a fresh apply never removes", async () => {
+    const payload = payloadCounting(
+      [
+        { id: 1, title: 'Moon contact', managedBy: 'moon' },
+        { id: 2, title: 'By hand', managedBy: null }
+      ],
+      { 1: 3, 2: 3 }
+    );
+
+    await expect(
+      refuseFormsWithSubmissions(payload, definition, 7, options)
+    ).resolves.toBeUndefined();
   });
 });
