@@ -1,7 +1,11 @@
 import { join } from 'node:path';
 
 export const LABEL = 'se.codeware.agent-queue';
-/** Seconds between scheduled runs; launchd's StartInterval */
+/**
+ * Seconds between scheduled runs; launchd's StartInterval.
+ * run.sh reads this line from origin/main to tell whether the install is current,
+ * so keep the `export const RUN_INTERVAL_SECONDS = <n>;` shape.
+ */
 export const RUN_INTERVAL_SECONDS = 600;
 export const KEYCHAIN_SERVICE = 'linear-agent-queue';
 /** Where the queue's files live in the repo, relative to the workspace root */

@@ -86,6 +86,28 @@ mutation($id: String!, $content: String!) {
 }
 GQL
 
+# Job state for the runs document: the interval launchd uses and whether the installed copy
+# matches origin/main. Keep INTERVAL_SED in step with the line in agent.logic.ts.
+PLIST="$HOME/Library/LaunchAgents/se.codeware.agent-queue.plist"
+INTERVAL_SED='s/^export const RUN_INTERVAL_SECONDS = \([0-9][0-9]*\);$/\1/p'
+job_line() {
+  setopt local_options no_err_exit
+  local dir=tools/cdwr/agent-queue secs want theirs f out
+  local -a differs
+  secs="$(plutil -extract StartInterval raw -o - "$PLIST" 2>/dev/null)"
+  if [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
+  want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
+  if [[ -z "$want" ]]; then print -r -- "$out · install unknown"; return 0; fi
+  for f in run.sh watch.jq; do
+    theirs="$(git -C "$REPO" show "origin/main:$dir/$f" 2>/dev/null)" ||
+      { print -r -- "$out · install unknown"; return 0; }
+    [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")
+  done
+  [[ "$secs" == "$want" ]] || differs+=(interval)
+  if (( ${#differs} )); then print -r -- "$out · install out of date (${(j:, :)differs})"
+  else print -r -- "$out · install current"; fi
+}
+
 # Rewrites the whole document from runs.jsonl; a failure is a warn line, never a stop.
 # A run that recorded nothing publishes only when the last publish is over an hour old.
 publish_runs() {
@@ -99,9 +121,9 @@ publish_runs() {
   fi
   local file="$HOME_DIR/runs-doc-id" id content resp team
   [[ -f "$RUNS" ]] && tail -n 20 "$RUNS" > "$RUNS.tmp" && mv "$RUNS.tmp" "$RUNS"
-  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" '
+  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" '
     def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
-    "Last run: \($last)\n\nWritten by the agent queue scheduler after every run. Idle runs update the line above at most once an hour.\n\n"
+    "Last run: \($last)\n\n\($job)\n\nWritten by the agent queue scheduler after every run. Idle runs update the lines above at most once an hour.\n\n"
     + "| When | Outcome | Ticket | Detail |\n| -- | -- | -- | -- |\n"
     + (reverse | map("| \(.when | cell) | \(.outcome | cell) | \(.ticket | cell) | \(.detail | cell) |") | join("\n"))
   ')" || { note "warn: runs document: could not render"; return 0; }
@@ -225,6 +247,11 @@ watch_prs() {
   print -r -- "$state" > "$file.tmp" && mv "$file.tmp" "$file"
 }
 
+# One fetch per run: the job line and planning both read origin/main. A failure never stops the run.
+if ! $check; then
+  git -C "$REPO" fetch -q origin 2>/dev/null || note "warn: fetch failed"
+fi
+
 # Watching sends notices, so --check leaves it out; a failure never stops planning.
 if ! $check; then
   err="$(watch_prs)" || { note "warn: watch failed (${err:-unknown})"; record warn "" "watch failed: ${err:-unknown}"; }
@@ -264,7 +291,6 @@ if [[ -z "$ready" ]]; then $check && echo "idle: nothing to plan"; exit 0; fi
 if $check; then echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')"; exit 0; fi
 
 cd "$REPO"
-git fetch -q origin
 git switch -q --detach origin/main 2>/dev/null ||
   { note "warn: worktree not clean, planning against its current state"; record warn "" "worktree not clean"; }
 
