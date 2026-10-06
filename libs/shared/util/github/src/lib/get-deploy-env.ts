@@ -1,5 +1,7 @@
-import { Context } from '@actions/github/lib/context';
+import type { context } from '@actions/github';
 import type { Environment } from '@codeware/shared/util/nx-deploy';
+
+type Context = typeof context;
 
 /**
  * Get the environment to use for deployment.

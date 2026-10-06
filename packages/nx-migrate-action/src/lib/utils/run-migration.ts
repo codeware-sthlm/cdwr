@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as exec from '@actions/exec';
 import { getPackageManagerCommand } from '@nx/devkit';
-import { replaceInFile } from 'replace-in-file';
+import replaceInFile from 'replace-in-file';
 
 import { readDeferredPrompts } from './read-deferred-prompts';
 import type { DeferredPrompt, MigrateConfig } from './types';

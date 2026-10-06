@@ -2,7 +2,7 @@ import * as core from '@actions/core';
 import * as exec from '@actions/exec';
 import * as coreActions from '@codeware/shared/util/github';
 import * as devkit from '@nx/devkit';
-import * as replaceInFile from 'replace-in-file';
+import replaceInFile from 'replace-in-file';
 
 import * as nxMigrateImport from './nx-migrate';
 import * as addPullRequestAssignees from './utils/add-pull-request-assignees';
@@ -17,58 +17,63 @@ import * as runNxTests from './utils/run-nx-tests';
 import type { ActionInputs } from './utils/types';
 
 // Mock strategy:
-// - Wrap every module/function with `jest.mock` to mock away the real implementation
-// - Create a mock function using `jest.spyOn` for those functions that needs to be interacted with
+// - Wrap every module/function with `vi.mock` to mock away the real implementation
+// - Create a mock function using `vi.spyOn` for those functions that needs to be interacted with
 
-jest.mock('@actions/core');
-jest.mock('@actions/exec');
-jest.mock('@actions/github');
-jest.mock('@nx/devkit');
-jest.mock('replace-in-file');
+vi.mock('@actions/core');
+vi.mock('@actions/exec');
+// Root Vitest mock of the Octokit client
+vi.mock(
+  '@actions/github',
+  // eslint-disable-next-line @nx/enforce-module-boundaries
+  () => import('../../../../__mocks__/@actions/github')
+);
+vi.mock('@nx/devkit');
+vi.mock('replace-in-file', () => ({ default: vi.fn() }));
 
 describe('nxMigrate', () => {
-  const infoMock = jest.spyOn(core, 'info');
-  const execMock = jest.spyOn(exec, 'exec');
-  const getExecOutputMock = jest.spyOn(exec, 'getExecOutput');
-  const getPackageManagerCommandMock = jest.spyOn(
+  const infoMock = vi.spyOn(core, 'info');
+  const execMock = vi.spyOn(exec, 'exec');
+  const getExecOutputMock = vi.spyOn(exec, 'getExecOutput');
+  const getPackageManagerCommandMock = vi.spyOn(
     devkit,
     'getPackageManagerCommand'
   );
-  const replaceInFileMock = jest.spyOn(replaceInFile, 'replaceInFile');
+  const replaceInFileMock = vi.mocked(replaceInFile);
 
-  const addPullRequestAssigneesMock = jest.spyOn(
+  const addPullRequestAssigneesMock = vi.spyOn(
     addPullRequestAssignees,
     'addPullRequestAssignees'
   );
-  const addPullRequestCommentMock = jest.spyOn(
+  const addPullRequestCommentMock = vi.spyOn(
     coreActions,
     'addPullRequestComment'
   );
-  const addPullRequestLabelMock = jest.spyOn(
+  const addPullRequestLabelMock = vi.spyOn(
     addPullRequestLabel,
     'addPullRequestLabel'
   );
-  const cleanupPullRequestsMock = jest.spyOn(
+  const cleanupPullRequestsMock = vi.spyOn(
     cleanupPullRequests,
     'cleanupPullRequests'
   );
-  const createPullRequestMock = jest.spyOn(
+  const createPullRequestMock = vi.spyOn(
     createPullRequest,
     'createPullRequest'
   );
-  const enablePullRequestAutoMergeMock = jest.spyOn(
+  const enablePullRequestAutoMergeMock = vi.spyOn(
     enablePullRequestAutoMerge,
     'enablePullRequestAutoMerge'
   );
-  const getNxVersionInfoMock = jest.spyOn(getNxVersionInfo, 'getNxVersionInfo');
-  const readDeferredPromptsMock = jest.spyOn(
+  const getNxVersionInfoMock = vi.spyOn(getNxVersionInfo, 'getNxVersionInfo');
+  const readDeferredPromptsMock = vi.spyOn(
     readDeferredPrompts,
     'readDeferredPrompts'
   );
-  const runNxTestsMock = jest.spyOn(runNxTests, 'runNxTests');
-  const runNxE2eMock = jest.spyOn(runNxE2e, 'runNxE2e');
+  const runNxTestsMock = vi.spyOn(runNxTests, 'runNxTests');
+  const runNxE2eMock = vi.spyOn(runNxE2e, 'runNxE2e');
 
-  const nxMigrateMock = jest.spyOn(nxMigrateImport, 'nxMigrate');
+  const nxMigrateMock = vi.spyOn(nxMigrateImport, 'nxMigrate');
   const nxMigrate = nxMigrateImport.nxMigrate;
 
   /**
@@ -133,7 +138,7 @@ describe('nxMigrate', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Mock default responses
     execMock.mockResolvedValue(0);
@@ -829,7 +834,7 @@ describe('nxMigrate', () => {
         expect.arrayContaining(['install'])
       );
       expect(execMock).not.toHaveBeenCalledWith('test', expect.any(Array));
-      expect(replaceInFile.replaceInFile).not.toHaveBeenCalled();
+      expect(replaceInFile).not.toHaveBeenCalled();
     });
 
     it('should not commit', async () => {

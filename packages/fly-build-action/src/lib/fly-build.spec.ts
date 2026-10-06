@@ -1,12 +1,14 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { WebhookPayload } from '@actions/github/lib/interfaces';
+import type { context } from '@actions/github';
 import { Fly } from '@cdwr/fly-node';
 import * as coreAction from '@codeware/shared/util/github';
 import type { PullRequestEvent } from '@octokit/webhooks-types';
 
 import { flyBuild } from './fly-build';
 import type { ActionInputs } from './schemas/action-inputs.schema';
+
+type WebhookPayload = (typeof context)['payload'];
 
 // Mock strategy mirrors `fly-deployment-action`
 vi.mock('@homebridge/node-pty-prebuilt-multiarch', () => ({

@@ -44,4 +44,4 @@ inputs:
 
 runs:
   using: "node24"
-  main: "../../dist/packages/pr-comment-action/action.cjs"
+  main: "../../dist/packages/pr-comment-action/action.js"

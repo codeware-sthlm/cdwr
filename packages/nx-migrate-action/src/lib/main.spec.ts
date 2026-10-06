@@ -12,21 +12,21 @@ import * as main from './main';
 import * as nxMigrate from './nx-migrate';
 import type { ActionInputs, ActionOutputs } from './utils/types';
 
-jest.mock('@actions/core');
-jest.mock('./nx-migrate');
+vi.mock('@actions/core');
+vi.mock('./nx-migrate');
 
 describe('main', () => {
-  const getBooleanInputMock = jest.spyOn(core, 'getBooleanInput');
-  const getInputMock = jest.spyOn(core, 'getInput');
-  const getMultilineInputMock = jest.spyOn(core, 'getMultilineInput');
-  const setFailedMock = jest.spyOn(core, 'setFailed');
-  const setOutputMock = jest.spyOn(core, 'setOutput');
+  const getBooleanInputMock = vi.spyOn(core, 'getBooleanInput');
+  const getInputMock = vi.spyOn(core, 'getInput');
+  const getMultilineInputMock = vi.spyOn(core, 'getMultilineInput');
+  const setFailedMock = vi.spyOn(core, 'setFailed');
+  const setOutputMock = vi.spyOn(core, 'setOutput');
 
-  const runMock = jest.spyOn(main, 'run');
-  const nxMigrateMock = jest.spyOn(nxMigrate, 'nxMigrate');
+  const runMock = vi.spyOn(main, 'run');
+  const nxMigrateMock = vi.spyOn(nxMigrate, 'nxMigrate');
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Default mock values
     getBooleanInputMock.mockImplementation(() => true);

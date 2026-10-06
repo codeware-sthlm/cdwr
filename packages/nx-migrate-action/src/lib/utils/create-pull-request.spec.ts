@@ -3,14 +3,14 @@ import * as github from '@actions/github';
 import { createPullRequest } from './create-pull-request';
 import type { MigrateConfig } from './types';
 
-jest.mock('@actions/core', () => ({ info: jest.fn() }));
-jest.mock('@actions/github');
-jest.mock('@codeware/shared/util/github', () => ({
+vi.mock('@actions/core', () => ({ info: vi.fn() }));
+vi.mock('@actions/github');
+vi.mock('@codeware/shared/util/github', () => ({
   withGitHub: (fn: () => unknown) => fn()
 }));
 
-const createMock = jest.fn().mockResolvedValue({ data: { number: 1 } });
-jest.spyOn(github, 'getOctokit').mockReturnValue({
+const createMock = vi.fn().mockResolvedValue({ data: { number: 1 } });
+vi.spyOn(github, 'getOctokit').mockReturnValue({
   rest: { pulls: { create: createMock } }
 } as never);
 
@@ -27,7 +27,7 @@ const bodyOf = () => createMock.mock.calls[0][0].body as string;
 
 describe('createPullRequest', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     createMock.mockResolvedValue({ data: { number: 1 } });
   });
 

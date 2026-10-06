@@ -42,4 +42,4 @@ outputs:
 
 runs:
   using: "node24"
-  main: "../../dist/packages/nx-changelog-action/action.cjs"
+  main: "../../dist/packages/nx-changelog-action/action.js"
