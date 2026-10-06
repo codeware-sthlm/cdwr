@@ -27,7 +27,7 @@ resumes. One ticket is in flight at a time.
 
 ## The queue rule
 
-The queue view (the "Agent Queue" artifact) computes the same order, so keep the two in step.
+The Agent Desk (the "cdwr Agent Desk" artifact) computes the same order, so keep the two in step.
 
 1. Team **Codeware**, label **agent:ready**, status not Done or Canceled. Skip tickets whose
    **Repo** label names another repo (`nx-plugins`, `enjinex`). No Repo label, or `codeware`,
@@ -139,7 +139,7 @@ on claim and refresh it with every Status row update.
 2. **Plan (Opus).** Investigate, then write the plan into the ticket **description**: keep
    the original report under its own heading, then `## Plan` with **Decisions**, a
    **Status** table (`| Step | What | Status |`, one row per step), the **Claim:** line, and
-   one line `**Next:** <what happens next, or what it is waiting on>`. The Agent Queue view
+   one line `**Next:** <what happens next, or what it is waiting on>`. The Agent Desk
    reads that table and line, so keep the format. Notify `info`: plan written.
 3. **Plan approval, in Linear.** Post `**Agent: plan ready**` with the decisions most worth
    checking and any open questions as numbered options (the format in **How a gate asks**).
