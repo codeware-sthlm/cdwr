@@ -17,6 +17,7 @@ import { getAppInfo } from './app/utils/app-info';
 import { initSentry } from './app/utils/sentry.server';
 import type { AppLoadContext } from './app/utils/types';
 import env from './env-resolver/env';
+import { cspMiddleware } from './middlewares/csp';
 import { debugHeadersMiddleware } from './middlewares/debug-headers';
 import { resolveAppLoadContextMiddleware } from './middlewares/resolve-app-load-context.js';
 import { siteGateMiddleware } from './middlewares/site-gate';
@@ -54,6 +55,7 @@ const app = new Hono()
     '*',
     logger(env.DEBUG ? undefined : noop),
     debugHeadersMiddleware,
+    cspMiddleware,
     siteGateMiddleware,
     resolveAppLoadContextMiddleware,
     remix({
@@ -61,6 +63,7 @@ const app = new Hono()
       mode: env.NODE_ENV as RemixMiddlewareOptions['mode'],
       getLoadContext: (c) => {
         const ctx = {
+          cspNonce: c.get('cspNonce'),
           deviceId: c.get('deviceId'),
           fallbackLocale: c.get('fallbackLocale'),
           tenantApiKey: c.get('tenantApiKey'),

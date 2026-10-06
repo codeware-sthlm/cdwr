@@ -19,10 +19,10 @@ import env from '../env-resolver/env';
  * It then fetches the tenant configuration from the Payload API and sets it in the context for use in loaders and actions.
  */
 export const resolveAppLoadContextMiddleware = createMiddleware<{
-  Variables: AppLoadContext;
+  Variables: Omit<AppLoadContext, 'cspNonce'>;
 }>(async (c, next) => {
   // Initialize context details with what we could have at this point
-  const context: AppLoadContext = {
+  const context: Omit<AppLoadContext, 'cspNonce'> = {
     deviceId: randomUUID(),
     tenantApiKey: env.PAYLOAD_API_KEY ?? '',
     tenantId: env.TENANT_ID,
