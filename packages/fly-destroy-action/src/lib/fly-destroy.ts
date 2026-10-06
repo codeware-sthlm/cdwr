@@ -40,12 +40,22 @@ export async function flyDestroy(inputs: ActionInputs): Promise<ActionOutputs> {
   core.info('Fly client is ready 🚀');
   core.endGroup();
 
+  // An app sweep failure must not keep the databases from being swept;
+  // it fails the action once both phases have run
+  let appsError: unknown;
+  let destroyed: string[] = [];
+  let skipped: string[] = [];
+
   core.startGroup('Destroy deprecated applications');
-  const { destroyed, skipped } = await runDestroyApps(
-    inputs.token,
-    fly,
-    inputs.dryRun
-  );
+  try {
+    ({ destroyed, skipped } = await runDestroyApps(
+      inputs.token,
+      fly,
+      inputs.dryRun
+    ));
+  } catch (error) {
+    appsError = error;
+  }
   core.endGroup();
 
   let droppedDatabases: string[] = [];
@@ -64,6 +74,10 @@ export async function flyDestroy(inputs: ActionInputs): Promise<ActionOutputs> {
     core.info('No postgres cluster configured, skip databases');
   }
   core.endGroup();
+
+  if (appsError) {
+    throw appsError;
+  }
 
   return ActionOutputsSchema.parse({
     destroyed,
