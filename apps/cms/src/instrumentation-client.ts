@@ -2,6 +2,8 @@ import { getSentrySampleRate } from '@codeware/shared/util/pure';
 import * as Sentry from '@sentry/nextjs';
 import { isbot } from 'isbot';
 
+import { reloadOnStaleAction } from './utils/server-action';
+
 // Client-side env variables must use NEXT_PUBLIC_ prefix
 type ClientEnv = {
   DEPLOY_ENV?: string;
@@ -63,6 +65,11 @@ Sentry.init({
 
 // Required export to enable instrument router navigations
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+
+// An admin tab left open across a deploy calls an action that no longer exists
+if (typeof window !== 'undefined') {
+  reloadOnStaleAction(window);
+}
 
 if (enabled) {
   console.log('[SENTRY] Sentry initialized for client runtime');
