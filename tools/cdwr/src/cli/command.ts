@@ -33,7 +33,7 @@ export interface Plan<D = unknown> {
   target?: { environment?: string; name?: string };
   /** Set when there is nothing to apply; the run ends after the plan */
   nothing?: string;
-  /** Raises the command's danger for this plan, e.g. a fresh apply outside development */
+  /** Raises the command's danger for this plan, e.g. a fresh apply outside development; never lowers it */
   danger?: Danger;
   data: D;
 }
@@ -74,6 +74,17 @@ export const defineCommand = <I extends Inputs, D>(
 
 /** Read-only commands answer without plan output */
 export const readOnly = <D>(data: D): Plan<D> => ({ steps: [], data });
+
+const RANK: Record<Danger, number> = {
+  read: 0,
+  mutate: 1,
+  destructive: 2,
+  'spends-money': 2
+};
+
+/** The danger a plan runs at: the command's, unless the plan names a higher one */
+export const planDanger = (command: Danger, plan?: Danger): Danger =>
+  plan && RANK[plan] > RANK[command] ? plan : command;
 
 /**
  * The confirmation a command gets unless it says otherwise.
