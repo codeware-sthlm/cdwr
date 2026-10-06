@@ -45,8 +45,8 @@ Linear account, so the author can't tell an answer from a question. The marker c
 Check in this order, between tickets and never in the middle of a step. Take the first match.
 
 1. **An `agent:working` ticket you may resume.** Read the `**Claim:**` line under its Status
-   table. Resume it when the claim names this session's worktree for the ticket, or is older
-   than 2 hours. A newer claim from another worktree means another session holds it: leave it
+   table. Resume it when the claim carries this session's id, or is older than 2 hours. A newer
+   claim with another id means another session holds it, even in the same worktree: leave it
    alone. On a take-over, post `**Agent: took over**` with the old claim line, then
    continue from the Status table and **Next:** line, checking the branch for commits beyond
    them.
@@ -123,10 +123,13 @@ implementer prompt. `codeware-agent` belongs to the scheduled planner; never wor
 The claim line sits directly under the Status table:
 
 ```md
-**Claim:** <worktree path> · <UTC time, e.g. 2026-10-06T07:40Z>
+**Claim:** <session id> · <worktree path> · <UTC time, e.g. 2026-10-06T07:40Z>
 ```
 
-Set it on claim and refresh it with every Status row update.
+The session id tells two sessions apart; the worktree path doesn't, since every session gets
+the same path for a ticket. Use the id in the `Claude-Session` commit attribution when there is
+one, else make one at the first claim (`uuidgen | cut -c1-8`) and keep using it. Set the line
+on claim and refresh it with every Status row update.
 
 ## Per ticket
 
