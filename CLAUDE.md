@@ -161,6 +161,17 @@ or re-path an admin component**, regenerate and commit it, or the component sile
 nx payload cms generate:importmap
 ```
 
+#### Content Security Policy
+
+Both apps send one, built by `@codeware/shared/util/csp`: the cms from `apps/cms/src/proxy.ts`,
+`apps/web` from `middlewares/csp.ts`. Framing, plugins, `base-uri` and form targets are always
+enforced. The full policy — a per-request nonce with `'strict-dynamic'` for scripts — goes out
+`Content-Security-Policy-Report-Only` until `CSP_ENFORCE=true`. A new third-party origin has to be
+added there, or it breaks the site once enforcement is on.
+
+Violations go to Sentry's security endpoint, derived from `SENTRY_DSN`. In Sentry they are
+issues of type _CSP_; without a DSN, locally, they appear only in the browser console.
+
 #### CMS Host mode + external web client
 
 Ensure `TENANT_ID` has no value in `apps/cms/.env.local`.
