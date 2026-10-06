@@ -35,6 +35,7 @@
 - Match existing local plugin/package conventions before introducing new patterns
 - Prefer explicit project targets over inferred tasks unless a natural config file already exists
 - Avoid adding new dependencies unless clearly justified
+- Pin a dependency family released in lockstep (Nx, Payload, Remix, Storybook, Vitest, Tailwind, Playwright, Jest) exact on every member; a caret on one member floats on the next lockfile refresh while the rest stay put. Independent packages keep a caret
 - Do not add CI integration unless explicitly asked
 - Before making large structural changes, summarize the conventions found in the repo and the planned approach
 - Git commits should follow conventional commit pattern in commitlint.config.cjs
