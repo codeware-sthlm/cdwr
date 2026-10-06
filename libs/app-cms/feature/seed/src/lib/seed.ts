@@ -263,6 +263,12 @@ export const seed = async (args: {
     }
   } catch (error) {
     payload.logger.error((error as Error).message);
+    const cause = (error as Error).cause;
+    if (cause) {
+      payload.logger.error(
+        `[SEED] Cause: ${cause instanceof Error ? cause.message : String(cause)}`
+      );
+    }
     payload.logger.error('[SEED] Something broke :(');
     return false;
   }
