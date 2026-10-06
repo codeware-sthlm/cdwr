@@ -434,6 +434,7 @@ export interface Media {
    * Allow external access to the file without authentication. For example, this is required for file areas and document images.
    */
   external?: boolean | null;
+  _objectKey?: string | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -590,6 +591,7 @@ export interface Tenant {
   enableAPIKey?: boolean | null;
   apiKey?: string | null;
   apiKeyIndex?: string | null;
+  hasAPIKey?: boolean | null;
   collection: 'tenants';
 }
 /**
@@ -617,6 +619,7 @@ export interface User {
   resetPasswordExpiration?: string | null;
   salt?: string | null;
   hash?: string | null;
+  resetPasswordRequestedAt?: string | null;
   loginAttempts?: number | null;
   lockUntil?: string | null;
   sessions?:
@@ -2401,6 +2404,7 @@ export interface StockMedia {
    * The licence this image is used under, so its terms can be checked later.
    */
   licence?: string | null;
+  _objectKey?: string | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -3008,6 +3012,7 @@ export interface MediaSelect<T extends boolean = true> {
   tags?: T;
   prefix?: T;
   external?: T;
+  _objectKey?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;
@@ -3349,6 +3354,7 @@ export interface StockMediaSelect<T extends boolean = true> {
   prefix?: T;
   credit?: T;
   licence?: T;
+  _objectKey?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;
@@ -3492,6 +3498,7 @@ export interface TenantsSelect<T extends boolean = true> {
   enableAPIKey?: T;
   apiKey?: T;
   apiKeyIndex?: T;
+  hasAPIKey?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -3590,6 +3597,7 @@ export interface UsersSelect<T extends boolean = true> {
   resetPasswordExpiration?: T;
   salt?: T;
   hash?: T;
+  resetPasswordRequestedAt?: T;
   loginAttempts?: T;
   lockUntil?: T;
   sessions?:

@@ -78,6 +78,7 @@ import * as migration_20261003_170051_cod_521_component_slug_generated from './2
 import * as migration_20261003_223747_cod_522_component_managed_by from './20261003_223747_cod_522_component_managed_by';
 import * as migration_20261004_120624_cod_522_rebuild_components from './20261004_120624_cod_522_rebuild_components';
 import * as migration_20261004_135735_cod_518_nested_navigation from './20261004_135735_cod_518_nested_navigation';
+import * as migration_20261006_232639_cod_534_payload_3_90 from './20261006_232639_cod_534_payload_3_90';
 
 export const migrations = [
   {
@@ -479,5 +480,10 @@ export const migrations = [
     up: migration_20261004_135735_cod_518_nested_navigation.up,
     down: migration_20261004_135735_cod_518_nested_navigation.down,
     name: '20261004_135735_cod_518_nested_navigation'
+  },
+  {
+    up: migration_20261006_232639_cod_534_payload_3_90.up,
+    down: migration_20261006_232639_cod_534_payload_3_90.down,
+    name: '20261006_232639_cod_534_payload_3_90'
   }
 ];
