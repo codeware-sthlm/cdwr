@@ -6,10 +6,24 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { FORCE_LOGOUT_PATH, SESSION_COOKIES } from './utils/force-logout';
+import { isWellFormedActionId } from './utils/server-action';
 import { SITE_GATE_PATH, isGatedPath } from './utils/site-gate';
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Malformed server action id — a scanner probe, not a stale tab.
+  //
+  // Next only treats a POST with this header as an action call. Refusing it
+  // here keeps the probe out of Next's action handler and out of Sentry.
+  const actionId = request.headers.get('next-action');
+  if (
+    request.method === 'POST' &&
+    actionId !== null &&
+    !isWellFormedActionId(actionId)
+  ) {
+    return new NextResponse(null, { status: 404 });
+  }
 
   // Force logout — drops the session cookies and lands on the login screen.
   //
