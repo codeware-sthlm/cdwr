@@ -2,6 +2,7 @@ import {
   type Candidate,
   isTicket,
   isTicketWorktree,
+  parsePrHead,
   parsePrState,
   parseWorktreeList,
   pruneVerdict,
@@ -81,12 +82,25 @@ describe('parsePrState', () => {
   });
 });
 
+describe('parsePrHead', () => {
+  it.each([
+    ['[{"state":"MERGED","headRefOid":"abc"}]', 'abc'],
+    ['[{"state":"MERGED","headRefOid":""}]', undefined],
+    ['[{"state":"MERGED"}]', undefined],
+    ['[]', undefined],
+    ['not json', undefined]
+  ])('%s -> %s', (text, expected) => {
+    expect(parsePrHead(text)).toBe(expected);
+  });
+});
+
 describe('pruneVerdict', () => {
   const base: Candidate = {
     path: '/w/codeware-cod-1',
     branch: 'b',
     missing: false,
-    dirty: false
+    dirty: false,
+    tipIsPrHead: true
   };
   it.each([
     [{ pr: 'MERGED' as const }, 'remove', true],
@@ -95,7 +109,8 @@ describe('pruneVerdict', () => {
     [{}, 'keep', undefined],
     [{ pr: 'MERGED' as const, dirty: true }, 'keep', undefined],
     [{ pr: 'MERGED' as const, branch: undefined }, 'keep', undefined],
-    [{ pr: 'MERGED' as const, missing: true }, 'keep', undefined]
+    [{ pr: 'MERGED' as const, missing: true }, 'keep', undefined],
+    [{ pr: 'MERGED' as const, tipIsPrHead: false }, 'remove', false]
   ])('%j -> %s', (patch, action, deleteBranch) => {
     const verdict = pruneVerdict({ ...base, ...patch });
     expect(verdict.action).toBe(action);
