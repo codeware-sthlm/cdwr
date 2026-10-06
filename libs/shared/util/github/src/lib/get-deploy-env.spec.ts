@@ -1,6 +1,8 @@
-import { Context } from '@actions/github/lib/context';
+import type { context } from '@actions/github';
 
 import { getDeployEnv } from './get-deploy-env';
+
+type Context = typeof context;
 
 describe('getDeployEnv', () => {
   const createContext = (eventName: string, ref: string): Partial<Context> => ({

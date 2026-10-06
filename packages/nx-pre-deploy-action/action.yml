@@ -73,4 +73,4 @@ outputs:
 
 runs:
   using: "node24"
-  main: "../../dist/packages/nx-pre-deploy-action/action.cjs"
+  main: "../../dist/packages/nx-pre-deploy-action/action.js"

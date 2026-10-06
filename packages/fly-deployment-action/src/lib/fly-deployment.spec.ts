@@ -1,6 +1,6 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { WebhookPayload } from '@actions/github/lib/interfaces';
+import type { context } from '@actions/github';
 import { type DeployAppOptions, Fly } from '@cdwr/fly-node';
 import * as coreAction from '@codeware/shared/util/github';
 import type { PullRequestEvent } from '@octokit/webhooks-types';
@@ -9,6 +9,8 @@ import { vol } from 'memfs';
 import { flyDeployment } from './fly-deployment';
 import type { ActionInputs } from './schemas/action-inputs.schema';
 import { ActionOutputs } from './schemas/action-outputs.schema';
+
+type WebhookPayload = (typeof context)['payload'];
 
 // Mock strategy:
 // - Wrap every module/function with `vi.mock` to mock away the real implementation
@@ -71,10 +73,7 @@ describe('flyDeployment', () => {
    */
   const setContext = (
     event:
-      | 'pr-closed'
-      | 'pr-opened'
-      | 'push-feature-branch'
-      | 'push-main-branch',
+      'pr-closed' | 'pr-opened' | 'push-feature-branch' | 'push-main-branch',
     override?: Pick<typeof github.context, 'eventName' | 'payload'>
   ) => {
     const isPR = event.match(/pr-/);

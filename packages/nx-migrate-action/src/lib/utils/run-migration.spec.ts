@@ -13,17 +13,17 @@ let formatFails = false;
 let syncFails = false;
 
 // Mock log functions
-const infoMock = jest.fn();
-const debugMock = jest.fn();
-const warningMock = jest.fn();
-jest.mock('@actions/core', () => ({
+const infoMock = vi.fn();
+const debugMock = vi.fn();
+const warningMock = vi.fn();
+vi.mock('@actions/core', () => ({
   info: (args: any[]) => infoMock(args),
   debug: (args: any[]) => debugMock(args),
   warning: (args: any[]) => warningMock(args)
 }));
 
 // Mock exec to capture calls
-jest.mock('@actions/exec', () => ({
+vi.mock('@actions/exec', () => ({
   exec: (cmd: string, args?: string[], options?: any) => {
     // Track all calls
     execCalls.push({ cmd, args, options });
@@ -43,7 +43,7 @@ jest.mock('@actions/exec', () => ({
 
 // Mock a predictable package manager command
 const packageManager = 'pnpm' as const;
-jest.mock('@nx/devkit', () => ({
+vi.mock('@nx/devkit', () => ({
   getPackageManagerCommand: () => ({
     exec: packageManager,
     install: `${packageManager} install`
@@ -51,13 +51,13 @@ jest.mock('@nx/devkit', () => ({
 }));
 
 // Mock replaceInFile
-const replaceInFileMock = jest.fn();
-jest.mock('replace-in-file', () => ({
-  replaceInFile: (args: any[]) => replaceInFileMock(args)
+const replaceInFileMock = vi.fn();
+vi.mock('replace-in-file', () => ({
+  default: (args: any[]) => replaceInFileMock(args)
 }));
 
 // Mock updateDependencies returning latest version for Nx devkit to prove it was called
-const updateDependenciesMock = jest.fn((text: string, latest: string) => {
+const updateDependenciesMock = vi.fn((text: string, latest: string) => {
   if (text.includes('"@nx/devkit"')) {
     return text.replace(
       '"@nx/devkit": "^21.0.0"',
@@ -66,14 +66,14 @@ const updateDependenciesMock = jest.fn((text: string, latest: string) => {
   }
   return text;
 });
-jest.mock('./update-dependencies', () => ({
+vi.mock('./update-dependencies', () => ({
   updateDependencies: (text: string, latest: string) =>
     updateDependenciesMock(text, latest)
 }));
 
 // Mock deferred prompts lookup, no prompt migrations by default
-const readDeferredPromptsMock = jest.fn(() => [] as Array<unknown>);
-jest.mock('./read-deferred-prompts', () => ({
+const readDeferredPromptsMock = vi.fn(() => [] as Array<unknown>);
+vi.mock('./read-deferred-prompts', () => ({
   readDeferredPrompts: () => readDeferredPromptsMock()
 }));
 
@@ -83,7 +83,7 @@ describe('runMigration', () => {
   } as MigrateConfig;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     replaceInFileMock.mockReset();
     execCalls.length = 0;
     formatFails = false;

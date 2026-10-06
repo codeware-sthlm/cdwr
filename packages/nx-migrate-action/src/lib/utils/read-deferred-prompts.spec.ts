@@ -2,27 +2,25 @@ import { existsSync, readFileSync } from 'node:fs';
 
 import { readDeferredPrompts } from './read-deferred-prompts';
 
-jest.mock('node:fs', () => ({
-  existsSync: jest.fn(),
-  readFileSync: jest.fn()
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn()
 }));
 
-const warningMock = jest.fn();
-jest.mock('@actions/core', () => ({
+const warningMock = vi.fn();
+vi.mock('@actions/core', () => ({
   warning: (args: unknown) => warningMock(args)
 }));
 
-const existsSyncMock = existsSync as jest.MockedFunction<typeof existsSync>;
-const readFileSyncMock = readFileSync as jest.MockedFunction<
-  typeof readFileSync
->;
+const existsSyncMock = vi.mocked(existsSync);
+const readFileSyncMock = vi.mocked(readFileSync);
 
 const migrationsFile = (migrations: unknown) =>
   readFileSyncMock.mockReturnValue(JSON.stringify({ migrations }));
 
 describe('readDeferredPrompts', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     existsSyncMock.mockReturnValue(true);
   });
 

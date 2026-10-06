@@ -52,4 +52,4 @@ outputs:
 
 runs:
   using: "node24"
-  main: "../../dist/packages/fly-destroy-action/action.cjs"
+  main: "../../dist/packages/fly-destroy-action/action.js"

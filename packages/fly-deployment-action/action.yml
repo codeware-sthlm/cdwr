@@ -112,4 +112,4 @@ outputs:
 
 runs:
   using: "node24"
-  main: "../../dist/packages/fly-deployment-action/action.cjs"
+  main: "../../dist/packages/fly-deployment-action/action.js"

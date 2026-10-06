@@ -74,4 +74,4 @@ outputs:
 
 runs:
   using: "node24"
-  main: "../../dist/packages/nx-migrate-action/action.cjs"
+  main: "../../dist/packages/nx-migrate-action/action.js"
