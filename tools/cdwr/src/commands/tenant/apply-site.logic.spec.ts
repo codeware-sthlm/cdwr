@@ -4,6 +4,7 @@ import {
   type ApplyReport,
   countByCollection,
   extraMeaning,
+  freshDanger,
   nothingToApply,
   parseApplyReport,
   planNotes,
@@ -245,6 +246,29 @@ describe('a fresh apply', () => {
         })
       )
     ).toBe(false);
+  });
+
+  it('says what recreating costs a live site', () => {
+    const notes = planNotes(fresh).join('\n');
+
+    expect(notes).toContain(
+      'A fresh apply recreates pages: their ids change, admin edits to them are replaced, and a custom component renders nothing until it is rebuilt.'
+    );
+    // Tags are reused: a dropped one is gone, never recreated
+    expect(notes).toContain(
+      'What the definition dropped from tags is deleted, not recreated.'
+    );
+  });
+
+  it('says nothing of recreating when nothing is removed', () => {
+    expect(planNotes(report()).join('\n')).not.toContain('recreates');
+  });
+
+  it('confirms as destructive outside development only', () => {
+    expect(freshDanger('production', true)).toBe('destructive');
+    expect(freshDanger('preview', true)).toBe('destructive');
+    expect(freshDanger('development', true)).toBeUndefined();
+    expect(freshDanger('production', false)).toBeUndefined();
   });
 
   it('counts what it removed in the summary', () => {

@@ -48,6 +48,9 @@ export function extraMeaning(extra: ExtraDocument): string {
   }
 }
 
+/** The collections a fresh apply reuses rather than recreates — the engine's `FRESH_POLICY`, restated. */
+const REUSED: ReadonlyArray<string> = ['tags', 'media'];
+
 /** A document a fresh apply removed first — the engine's `RemovedDocument`, restated. */
 export type RemovedDocument = {
   collection: string;
@@ -166,12 +169,41 @@ export function planNotes(report: ApplyReport): Array<string> {
     );
   }
 
+  // Recreating is not editing in place: say what a live site loses meanwhile
+  const collectionsOf = (removed: Array<RemovedDocument>) => [
+    ...new Set(removed.map(({ collection }) => collection))
+  ];
+  const recreated = collectionsOf(
+    report.removed.filter(({ collection }) => !REUSED.includes(collection))
+  );
+  if (recreated.length) {
+    notes.push(
+      `A fresh apply recreates ${recreated.join(', ')}: their ids change, admin edits to them are replaced, and a custom component renders nothing until it is rebuilt.`
+    );
+  }
+  // A reused collection only loses what the definition dropped, for good
+  const dropped = collectionsOf(
+    report.removed.filter(({ collection }) => REUSED.includes(collection))
+  );
+  if (dropped.length) {
+    notes.push(
+      `What the definition dropped from ${dropped.join(', ')} is deleted, not recreated.`
+    );
+  }
+
   notes.push(
     'The plan above was produced by applying the definition and rolling it back, so Payload has already validated every field.'
   );
 
   return notes;
 }
+
+/** A fresh apply outside development replaces a live site's documents, so it confirms as destructive. */
+export const freshDanger = (
+  environment: string,
+  fresh: boolean
+): 'destructive' | undefined =>
+  fresh && environment !== 'development' ? 'destructive' : undefined;
 
 /** True when the plan found nothing worth applying. */
 export function nothingToApply(report: ApplyReport): boolean {
