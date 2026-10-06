@@ -196,8 +196,8 @@ fields read by hand — a clean diff is necessary, not sufficient.
 
 **It never updates.** There is no `updated` outcome: a document that is already
 there is left exactly as it is. Editing a definition and re-applying it will not
-change pages that exist — it only fills in what is missing. In development, use
-a fresh apply for that (below).
+change pages that exist — it only fills in what is missing. Use a fresh apply
+for that (below).
 
 **It never deletes.** A definition says what should exist, not that nothing else
 may. A page it stops mentioning stays where it is — except under a fresh apply,
@@ -207,7 +207,7 @@ and then only if this definition created it.
 `DISABLE_DB_PUSH=true`, so applying a definition cannot rewrite the schema of
 the database it is pointed at.
 
-## Start fresh, in development
+## Start fresh
 
 The daily loop — change the definition, apply again, look — needs the tenant to
 _match_ the definition rather than only gain what it lacks:
@@ -217,8 +217,25 @@ cdwr tenant apply-site --env=development --tenant=cdwr-io --definition=… --fre
 ```
 
 From the `cdwr` menu it is the _Start fresh?_ question, which is asked only for
-development. Anywhere else the flag is refused, by the CLI and again by the cms
-script.
+development. On preview and production `--fresh` has to be passed, and the
+apply confirms as destructive: _This cannot be undone_ on preview, the tenant's
+name typed on production.
+
+### Rolling out one of our own sites
+
+The sites we run ourselves (cdwr.io, codeware.se) are owned by their
+definitions, so a fresh apply is how a change reaches production. Dry run
+first, read the plan, then apply:
+
+```sh
+cdwr tenant apply-site -e production --tenant cdwr-io --definition cdwr-io --fresh --dry-run
+cdwr tenant apply-site -e production --tenant cdwr-io --definition cdwr-io --fresh
+```
+
+Ids change and admin edits to recreated documents are replaced, and a custom
+component renders nothing until the builder has rebuilt it. On production the
+apply is refused when a form it would recreate has submissions, since they
+would lose their form; the refusal names each form.
 
 What it does, inside the same transaction as the apply:
 

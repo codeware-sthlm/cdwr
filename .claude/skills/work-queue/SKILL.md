@@ -84,6 +84,9 @@ remove the ticket's other labels.
    line, with nothing else in between. The scheduler watches the PR after the gate and, on
    merge, sends the unticked items as a notice, so keep each item to one line.
 
+   A production apply of one of our own sites (cdwr.io, codeware.se) is two items: the
+   `cdwr tenant apply-site … --fresh --dry-run`, then the same without `--dry-run`.
+
    Check every command in the checklist before posting: run it with `--help`, or with
    `--dry-run` where it has one, and fix the flags until it parses. A guessed command
    costs Håkan a failed production step.
