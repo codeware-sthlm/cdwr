@@ -7,7 +7,7 @@ import { input } from './inputs';
 import { memoryPrefs } from './prefs';
 import { runCommand } from './run';
 
-const command = (danger: Danger, applied: string[] = []) =>
+const command = (danger: Danger, applied: string[] = [], planDanger?: Danger) =>
   defineCommand({
     summary: 'Test command',
     danger,
@@ -20,6 +20,7 @@ const command = (danger: Danger, applied: string[] = []) =>
     plan: async (_ctx, inputs) => ({
       steps: ['Do the thing'],
       target: { environment: inputs.environment, name: 'demo' },
+      danger: planDanger,
       data: { env: inputs.environment }
     }),
     apply: async (_ctx, data) => {
@@ -32,7 +33,8 @@ const run = (
   danger: Danger,
   argv: string[],
   answers: Answer[] = [],
-  interactive = true
+  interactive = true,
+  planDanger?: Danger
 ) => {
   const applied: string[] = [];
   const history: HistoryEntry[] = [];
@@ -40,7 +42,7 @@ const run = (
   const ui = fakeUi(answers, interactive);
   const exit = runCommand({
     name: 'test run',
-    command: command(danger, applied),
+    command: command(danger, applied, planDanger),
     argv,
     root: '/repo',
     env: {},
@@ -96,6 +98,28 @@ describe('runCommand', () => {
     const r = run('destructive', ['--environment', 'preview'], [false]);
     expect(await r.exit).toBe(EXIT.cancelled);
     expect(r.ui.asked).toEqual(['This cannot be undone. Continue?']);
+  });
+
+  it('lets a plan raise a mutating command to destructive', async () => {
+    const production = run(
+      'mutate',
+      ['--environment', 'production'],
+      ['demo'],
+      true,
+      'destructive'
+    );
+    expect(await production.exit).toBe(EXIT.ok);
+    expect(production.ui.asked[0]).toContain('Type');
+
+    const preview = run(
+      'mutate',
+      ['--environment', 'preview'],
+      [true],
+      true,
+      'destructive'
+    );
+    expect(await preview.exit).toBe(EXIT.ok);
+    expect(preview.ui.asked).toEqual(['This cannot be undone. Continue?']);
   });
 
   it('skips every confirmation with --yes', async () => {
