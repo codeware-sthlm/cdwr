@@ -1,0 +1,72 @@
+name: Preview database sweep
+
+# `fly-deployment.yml` drops a PR's database when the PR closes, but a failed or
+# cancelled destroy job leaves it behind, and preview databases fill the cluster
+# volume. This sweeps whatever is left.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "List the databases that would be dropped without dropping them"
+        required: false
+        type: boolean
+        default: true
+  schedule:
+    # Every Monday at 4am UTC
+    - cron: 0 4 * * 1
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: generate-token
+        with:
+          client-id: ${{ secrets.CDWR_ACTIONS_BOT_ID }}
+          private-key: ${{ secrets.CDWR_ACTIONS_BOT_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build destroy action
+        run: pnpm nx build fly-destroy-action
+
+      - name: Read Fly CLI version
+        id: fly-cli-version
+        run: echo "version=$(jq -r .flyctl packages/fly-node/verified-version.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: ${{ steps.fly-cli-version.outputs.version }}
+
+      # Scheduled runs have no inputs, so they are never dry
+      - name: Sweep preview databases
+        uses: ./packages/fly-destroy-action
+        with:
+          fly-api-token: ${{ secrets.FLY_API_TOKEN }}
+          fly-trace-cli: ${{ vars.FLY_TRACE_CLI }}
+          fly-console-logs: ${{ vars.FLY_CONSOLE_LOGS }}
+          token: ${{ steps.generate-token.outputs.token }}
+          postgres-cluster: ${{ vars.FLY_POSTGRES_PREVIEW }}
+          # Plain text for the action, not an expression; matches apps/cms/github.json
+          database-name: cdwr_cms_${PR_NUMBER}
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || 'false' }}

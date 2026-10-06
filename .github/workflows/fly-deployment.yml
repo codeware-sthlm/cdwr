@@ -768,6 +768,9 @@ jobs:
           fly-trace-cli: ${{ vars.FLY_TRACE_CLI }}
           fly-console-logs: ${{ steps.flags.outputs.console-logs }}
           token: ${{ steps.generate-token.outputs.token }}
+          postgres-cluster: ${{ vars.FLY_POSTGRES_PREVIEW }}
+          # Plain text for the action, not an expression; matches apps/cms/github.json
+          database-name: cdwr_cms_${PR_NUMBER}
 
       # Every preview push leaves an app tag behind, `<app>-<version>-preview.<pr>.<n>`.
       # The lane belongs to this PR alone, so it goes the same way as its apps and
@@ -843,7 +846,7 @@ jobs:
             echo "🚪 PR closed - running cleanup" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             if [ "$DESTROY_RESULT" = "success" ]; then
-              echo "✅ Preview apps and tags cleaned up successfully" >> $GITHUB_STEP_SUMMARY
+              echo "✅ Preview apps, databases and tags cleaned up successfully" >> $GITHUB_STEP_SUMMARY
             elif [ "$DESTROY_RESULT" = "skipped" ]; then
               echo "⏭️ Nothing to clean up" >> $GITHUB_STEP_SUMMARY
             else
