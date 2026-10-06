@@ -21,7 +21,7 @@ export function proxy(request: NextRequest) {
 
   const response = route(request, requestHeaders);
   for (const [name, value] of Object.entries(csp.responseHeaders)) {
-    response.headers.set(name, value);
+    if (value) response.headers.set(name, value);
   }
   return response;
 }

@@ -94,29 +94,40 @@ export function createCspNonce(): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-export function cspHeaders(options: CspOptions): CspHeaders {
-  const {
-    nonce,
-    surface,
-    enforce,
-    sources,
-    frameAncestors,
-    reportUri,
-    development
-  } = options;
+const baselinePolicy = (frameAncestors?: ReadonlyArray<string>): Policy => ({
+  ...EMPTY_POLICY,
+  'frame-ancestors': ["'self'", ...(frameAncestors ?? [])],
+  'object-src': ["'none'"],
+  'base-uri': ["'self'"],
+  'form-action': ["'self'"]
+});
+
+/**
+ * The always-enforced baseline on its own: framing, plugins, base uri and form
+ * targets. Needs no nonce, so it can be sent from static config.
+ */
+export function cspBaseline(frameAncestors?: ReadonlyArray<string>): string {
+  return serialize(baselinePolicy(frameAncestors));
+}
+
+export type CspPolicies = {
+  baseline: string;
+  /** The baseline plus the nonce-based fetch directives and reporting */
+  full: string;
+  /** `Reporting-Endpoints` value, when there is a report uri */
+  reportingEndpoints: string | undefined;
+};
+
+export function cspPolicies(options: Omit<CspOptions, 'enforce'>): CspPolicies {
+  const { nonce, surface, sources, frameAncestors, reportUri, development } =
+    options;
   const site = surface === 'site';
 
   const reporting: Partial<Policy> = reportUri
     ? { 'report-uri': [reportUri], 'report-to': [REPORT_GROUP] }
     : {};
 
-  const baseline: Policy = {
-    ...EMPTY_POLICY,
-    'frame-ancestors': ["'self'", ...(frameAncestors ?? [])],
-    'object-src': ["'none'"],
-    'base-uri': ["'self'"],
-    'form-action': ["'self'"]
-  };
+  const baseline = baselinePolicy(frameAncestors);
 
   const full: Policy = {
     ...baseline,
@@ -146,15 +157,23 @@ export function cspHeaders(options: CspOptions): CspHeaders {
   };
 
   return {
-    ...(enforce
-      ? { 'Content-Security-Policy': serialize(full) }
+    baseline: serialize(baseline),
+    full: serialize(full),
+    reportingEndpoints: reportUri ? `${REPORT_GROUP}="${reportUri}"` : undefined
+  };
+}
+
+export function cspHeaders(options: CspOptions): CspHeaders {
+  const { baseline, full, reportingEndpoints } = cspPolicies(options);
+
+  return {
+    ...(options.enforce
+      ? { 'Content-Security-Policy': full }
       : {
-          'Content-Security-Policy': serialize(baseline),
-          'Content-Security-Policy-Report-Only': serialize(full)
+          'Content-Security-Policy': baseline,
+          'Content-Security-Policy-Report-Only': full
         }),
-    ...(reportUri
-      ? { 'Reporting-Endpoints': `${REPORT_GROUP}="${reportUri}"` }
-      : {})
+    ...(reportingEndpoints ? { 'Reporting-Endpoints': reportingEndpoints } : {})
   };
 }
 

@@ -14,15 +14,12 @@ const sourcesOf = (policy: string, directive: string): Array<string> =>
     ?.slice(1) ?? [];
 
 describe('cspForRequest', () => {
-  it('reports the full policy and enforces only the baseline by default', () => {
+  it('sends only the full policy, report-only, by default', () => {
     const { responseHeaders } = cspForRequest('/', {});
 
-    expect(responseHeaders['Content-Security-Policy']).not.toContain(
-      'script-src'
-    );
-    expect(responseHeaders['Content-Security-Policy']).toContain(
-      "object-src 'none'"
-    );
+    // The baseline comes from next.config: sent from the proxy, Next would
+    // read it off the request instead of the policy that carries the nonce
+    expect('Content-Security-Policy' in responseHeaders).toBe(false);
     expect(responseHeaders['Content-Security-Policy-Report-Only']).toContain(
       "'strict-dynamic'"
     );
@@ -38,9 +35,7 @@ describe('cspForRequest', () => {
   ])('CSP_ENFORCE=%j enforces the full policy: %s', (value, enforced) => {
     const { responseHeaders } = cspForRequest('/', { CSP_ENFORCE: value });
 
-    expect(
-      responseHeaders['Content-Security-Policy'].includes('script-src')
-    ).toBe(enforced);
+    expect('Content-Security-Policy' in responseHeaders).toBe(enforced);
     expect('Content-Security-Policy-Report-Only' in responseHeaders).toBe(
       !enforced
     );
