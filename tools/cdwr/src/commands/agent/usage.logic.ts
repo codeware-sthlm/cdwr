@@ -360,7 +360,7 @@ export const renderUsageDocument = (
   return [
     `Updated: ${updated} · last ${windowDays} days · ${money(totals.cost)} USD`,
     `Prices: ${PRICES_DATE}${totals.unpricedModels.length > 0 ? ` · not priced: ${totals.unpricedModels.join(', ')}` : ''}`,
-    'Written by the agent queue scheduler at most once an hour from the local Claude Code transcripts of this repo and its worktrees. Costs are API-equivalent USD; nothing is billed on Max. Only numbers and ticket ids leave the machine.',
+    'Written by the agent queue scheduler at most once an hour from the local Claude Code transcripts of this repo and its worktrees. Costs are API-equivalent USD; nothing is billed on Max. Only numbers, model names and ticket ids leave the machine, never transcript content.',
     `## Models\n\n${models}`,
     `## Daily\n\n${daily}`,
     `## Tickets\n\n${tickets}`

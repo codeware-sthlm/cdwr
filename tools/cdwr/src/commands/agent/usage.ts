@@ -66,7 +66,7 @@ const transcriptsIn = (
 export default defineCommand({
   summary: 'What the agent workflow spent, by day, role, model and ticket',
   description:
-    'Reads the local Claude Code transcripts of this repo and its worktrees and prices them at API rates. Nothing is billed on Max; the cost is what the same tokens would cost on the API. Only numbers and ticket ids are output, never transcript content.',
+    'Reads the local Claude Code transcripts of this repo and its worktrees and prices them at API rates. Nothing is billed on Max; the cost is what the same tokens would cost on the API. The output holds numbers, model names, ticket ids and project directory names, never transcript content.',
   danger: 'read',
   inputs: {
     days: input.number({

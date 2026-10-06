@@ -133,7 +133,7 @@ publish_runs() {
 
 # The usage document from `cdwr agent usage`, at most once an hour. The CLI runs from $REPO,
 # which follows origin/main, so it needs that checkout's install; when it can't start, that
-# is a warn row. Only numbers and ticket ids leave the machine.
+# is a warn row. Only numbers, model names and ticket ids leave the machine.
 publish_usage() {
   $check && return 0
   setopt local_options no_err_exit
