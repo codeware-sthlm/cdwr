@@ -27,6 +27,7 @@ import {
 import { childEnv, run, sleep } from '../../services/shell';
 
 import {
+  ENV_COPIES,
   KEYCHAIN_SERVICE,
   QUEUE_FILES,
   WORKTREE_PREF,
@@ -38,8 +39,6 @@ import {
   serviceTarget
 } from './agent.logic';
 
-/** Files the worktree needs but git does not carry */
-const ENV_COPIES = ['apps/cms/.env.local', 'tools/cdwr/.env'];
 /** What the queue script calls; their directories make up the job's PATH */
 const BINARIES = ['node', 'claude', 'jq', 'git', 'gh'];
 const LEGACY_HOME = join(homedir(), '.claude', 'agent-queue');

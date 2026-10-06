@@ -42,6 +42,12 @@ export async function collect(entries: Entry[]): Promise<Completable[]> {
   );
 }
 
+/** A group's commands once per second word; a nested command (`agent worktree add`) completes only as far as its group word */
+const subcommands = (own: Completable[]): Completable[] =>
+  own.filter(
+    (c, i) => own.findIndex((other) => other.path[1] === c.path[1]) === i
+  );
+
 const q = (text: string): string => text.replace(/'/g, "'\\''");
 const zshEscape = (text: string): string =>
   text.replace(/[:\\]/g, '\\$&').replace(/'/g, "'\\''");
@@ -82,7 +88,9 @@ export function zsh(groups: Group[], commands: Completable[]): string {
     lines.push(
       `        ${group.name})`,
       '          local -a items',
-      `          items=(${own.map((c) => `'${c.path[1]}:${zshEscape(c.summary)}'`).join(' ')})`,
+      `          items=(${subcommands(own)
+        .map((c) => `'${c.path[1]}:${zshEscape(c.summary)}'`)
+        .join(' ')})`,
       `          _describe -t commands '${group.name} command' items`,
       '          ;;'
     );
@@ -126,7 +134,9 @@ export function bash(groups: Group[], commands: Completable[]): string {
       (c) => c.path[0] === group.name && c.path.length > 1
     );
     lines.push(
-      `      ${group.name}) words="${own.map((c) => c.path[1]).join(' ')}" ;;`
+      `      ${group.name}) words="${subcommands(own)
+        .map((c) => c.path[1])
+        .join(' ')}" ;;`
     );
   }
   for (const c of commands.filter((c) => c.path.length === 1)) {
@@ -165,9 +175,14 @@ export function fish(groups: Group[], commands: Completable[]): string {
       `complete -c cdwr -n '__fish_use_subcommand' -a ${g.name} -d '${q(g.summary)}'`
     );
   }
-  for (const c of commands) {
+  for (const [i, c] of commands.entries()) {
     const [first, second] = c.path;
-    if (second) {
+    const repeated = commands.findIndex(
+      (other) => other.path[0] === first && other.path[1] === second
+    );
+    if (second && repeated < i) {
+      // Already offered by an earlier command with the same group and word
+    } else if (second) {
       lines.push(
         `complete -c cdwr -n '__fish_seen_subcommand_from ${first}; and not __fish_seen_subcommand_from ${second}' -a ${second} -d '${q(c.summary)}'`
       );

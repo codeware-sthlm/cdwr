@@ -89,7 +89,16 @@ cdwr agent run            # start a planning run now
 cdwr agent pause|resume   # hold or release the schedule
 cdwr agent logs [--run]   # the scheduler log, or the latest run
 cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
+cdwr agent worktree add COD-529 --branch <name>   # codeware-cod-529 beside this checkout
+cdwr agent worktree prune          # remove ticket worktrees whose PR is merged or closed
 ```
+
+`worktree add` gives each ticket its own checkout, so starting the next never disturbs an earlier
+branch: the pushed branch when origin has it, else the local one, else a new one from `origin/main`.
+It copies the env files and installs dependencies, and does only what differs. `worktree prune`
+removes the `codeware-cod-<n>` checkouts whose pull request is merged or closed, deleting the
+branch too when merged. One with no pull request, an open one or uncommitted changes is kept, as
+are the agent worktree and the one you run it from. Shell completion stops at `worktree`.
 
 The script's source is `agent-queue/run.sh`. Launchd runs the copy `install` puts in
 `~/.cdwr/agent-queue/`, beside its pause flag and logs, so a merged change does nothing
