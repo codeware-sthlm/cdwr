@@ -29,6 +29,8 @@ const tenants: CollectionConfig = {
     create: systemUserAccess,
     delete: systemUserAccess,
     read: restrictToTenantInTenantMode,
+    // Payload's default is any authenticated identity, tenant api keys included
+    unlock: systemUserAccess,
     update: systemUserAccess
   },
   hooks: {
