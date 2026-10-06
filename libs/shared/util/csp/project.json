@@ -1,0 +1,8 @@
+{
+  "name": "shared-util-csp",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/util/csp/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:util", "domain:csp"],
+  "targets": {}
+}
