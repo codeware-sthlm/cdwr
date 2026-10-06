@@ -8,6 +8,7 @@ import { run } from '../../services/shell';
 import {
   REPO,
   isTicketWorktree,
+  parsePrHead,
   parsePrState,
   parseWorktreeList,
   pruneVerdict
@@ -33,29 +34,36 @@ export default defineCommand({
 
     const verdicts = await Promise.all(
       found.map(async ({ path, branch }) => {
-        const pr = branch
-          ? parsePrState(
-              (
-                await run(
-                  'gh',
-                  [
-                    'pr',
-                    'list',
-                    '--repo',
-                    REPO,
-                    '--head',
-                    branch,
-                    '--state',
-                    'all',
-                    '--json',
-                    'number,state',
-                    '--limit',
-                    '1'
-                  ],
-                  { cwd: ctx.root }
-                )
-              ).stdout
-            )
+        const prJson = branch
+          ? (
+              await run(
+                'gh',
+                [
+                  'pr',
+                  'list',
+                  '--repo',
+                  REPO,
+                  '--head',
+                  branch,
+                  '--state',
+                  'all',
+                  '--json',
+                  'number,state,headRefOid',
+                  '--limit',
+                  '1'
+                ],
+                { cwd: ctx.root }
+              )
+            ).stdout
+          : undefined;
+        const pr = prJson === undefined ? undefined : parsePrState(prJson);
+        const prHead = prJson === undefined ? undefined : parsePrHead(prJson);
+        const tip = branch
+          ? (
+              await run('git', ['rev-parse', `refs/heads/${branch}`], {
+                cwd: ctx.root
+              })
+            ).stdout.trim()
           : undefined;
         const missing = !existsSync(path);
         const dirty =
@@ -63,7 +71,14 @@ export default defineCommand({
           (
             await run('git', ['-C', path, 'status', '--porcelain'])
           ).stdout.trim() !== '';
-        const verdict = pruneVerdict({ path, branch, pr, missing, dirty });
+        const verdict = pruneVerdict({
+          path,
+          branch,
+          pr,
+          missing,
+          dirty,
+          tipIsPrHead: tip !== undefined && tip === prHead
+        });
         return { path, branch, verdict };
       })
     );
@@ -104,6 +119,7 @@ export default defineCommand({
       await ctx.ui.task(`Removing ${path}`, async () => {
         await run('git', ['worktree', 'remove', path], { cwd: root });
         if (deleteBranch && branch) {
+          // The tip is the PR's head, which GitHub keeps, so -D loses nothing
           await run('git', ['branch', '-D', branch], { cwd: root });
         }
       });

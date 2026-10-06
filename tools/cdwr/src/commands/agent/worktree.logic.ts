@@ -62,6 +62,22 @@ export const parsePrState = (text: string): PrState | undefined => {
   return PR_STATES.find((known) => known === state);
 };
 
+/** The head commit of the first PR in `gh pr list --json headRefOid` */
+export const parsePrHead = (text: string): string | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const first: unknown = Array.isArray(parsed) ? parsed[0] : undefined;
+  const head =
+    typeof first === 'object' && first !== null && 'headRefOid' in first
+      ? first.headRefOid
+      : undefined;
+  return typeof head === 'string' && head !== '' ? head : undefined;
+};
+
 export interface Candidate {
   path: string;
   branch?: string;
@@ -69,6 +85,8 @@ export interface Candidate {
   /** The folder is gone though git still lists the worktree */
   missing: boolean;
   dirty: boolean;
+  /** The local branch tip is the PR's head, so deleting the branch loses nothing */
+  tipIsPrHead: boolean;
 }
 
 export type PruneVerdict =
@@ -77,7 +95,7 @@ export type PruneVerdict =
 
 /** Remove only a checkout whose PR is done and whose tree is clean; keep the branch of a closed PR */
 export const pruneVerdict = (candidate: Candidate): PruneVerdict => {
-  const { pr, dirty, branch, missing } = candidate;
+  const { pr, dirty, branch, missing, tipIsPrHead } = candidate;
   if (missing) {
     return {
       action: 'keep',
@@ -92,11 +110,19 @@ export const pruneVerdict = (candidate: Candidate): PruneVerdict => {
     return { action: 'keep', reason: 'pull request is open' };
   }
   if (dirty) return { action: 'keep', reason: 'uncommitted changes' };
-  return pr === 'MERGED'
-    ? { action: 'remove', deleteBranch: true, reason: 'pull request merged' }
-    : {
-        action: 'remove',
-        deleteBranch: false,
-        reason: 'pull request closed, branch kept'
-      };
+  if (pr === 'MERGED') {
+    return tipIsPrHead
+      ? { action: 'remove', deleteBranch: true, reason: 'pull request merged' }
+      : {
+          action: 'remove',
+          deleteBranch: false,
+          reason:
+            'pull request merged, branch kept: it has commits beyond the PR'
+        };
+  }
+  return {
+    action: 'remove',
+    deleteBranch: false,
+    reason: 'pull request closed, branch kept'
+  };
 };
