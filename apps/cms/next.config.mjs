@@ -6,6 +6,9 @@ import { withPayload } from '@payloadcms/next/withPayload';
 import { withSentryConfig } from '@sentry/nextjs';
 import isCI from 'is-ci';
 
+// Plain TypeScript with no imports, so Node loads it with its types stripped
+import { cspBaseline } from '../../libs/shared/util/csp/src/lib/csp.ts';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Log build-time environment for debugging
@@ -74,6 +77,19 @@ const nextConfig = {
     '@tailwindcss/node',
     '@tailwindcss/oxide'
   ],
+
+  // The enforced CSP baseline. Not sent from the proxy: Next copies every
+  // header the proxy sets onto the request too, where this nonce-less policy
+  // would hide the proxy's nonce from Next. With CSP_ENFORCE on, the proxy's
+  // full policy replaces it (same header, and the proxy runs after these)
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [{ key: 'content-security-policy', value: cspBaseline() }]
+      }
+    ];
+  },
 
   experimental: {
     // The proxy runs on every route, api included, so Next buffers each body

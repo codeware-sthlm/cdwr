@@ -3,7 +3,9 @@ import {
   type CspSurface,
   TURNSTILE_ORIGIN,
   createCspNonce,
+  cspBaseline,
   cspHeaders,
+  cspPolicies,
   sentryCspReportUri,
   toOrigin
 } from './csp';
@@ -170,6 +172,30 @@ describe('cspHeaders', () => {
       expect(Object.values(without).join()).not.toContain('report-');
     }
   );
+});
+
+describe('cspBaseline', () => {
+  it('is the baseline cspHeaders enforces in report-only mode', () => {
+    expect(cspBaseline()).toBe(cspHeaders(base({ enforce: false }))[CSP]);
+  });
+
+  it('lists extra frame ancestors', () => {
+    expect(cspBaseline(['https://cms.example.com'])).toContain(
+      "frame-ancestors 'self' https://cms.example.com"
+    );
+  });
+});
+
+describe('cspPolicies', () => {
+  it('gives the same policies cspHeaders sends', () => {
+    const options = base({ reportUri: 'https://r.example.com/x' });
+    const { baseline, full, reportingEndpoints } = cspPolicies(options);
+    const headers = cspHeaders({ ...options, enforce: false });
+
+    expect(baseline).toBe(headers[CSP]);
+    expect(full).toBe(headers[REPORT_ONLY]);
+    expect(reportingEndpoints).toBe(headers['Reporting-Endpoints']);
+  });
 });
 
 describe('createCspNonce', () => {

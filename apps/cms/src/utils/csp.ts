@@ -2,7 +2,7 @@ import {
   type CspHeaders,
   type CspSurface,
   createCspNonce,
-  cspHeaders,
+  cspPolicies,
   sentryCspReportUri,
   toOrigin
 } from '@codeware/shared/util/csp';
@@ -19,8 +19,8 @@ const GRAVATAR = 'https://www.gravatar.com';
 export type CspForRequest = {
   /** For the inline scripts the page renders itself */
   nonce: string;
-  /** Sent to the browser on every response */
-  responseHeaders: CspHeaders;
+  /** Sent to the browser on every response, next to the baseline from `next.config` */
+  responseHeaders: Partial<CspHeaders>;
   /** The full nonce policy, for the request Next renders */
   requestPolicy: string;
 };
@@ -28,10 +28,12 @@ export type CspForRequest = {
 /**
  * Policy for one cms request: a fresh nonce, the admin or the site surface.
  *
- * Next reads the nonce from the request's `content-security-policy` header
- * and stamps its own scripts with it. That header always carries the full
- * policy, even while the browser only gets it report-only, or Next would find
- * the nonce-less baseline and stamp nothing.
+ * Next reads the nonce from the request's `content-security-policy` header,
+ * then `-report-only`, and stamps its own scripts with it. It also copies every
+ * header the proxy sets on the response onto the request. So the proxy sends
+ * only the policy that carries the nonce, and the nonce-less baseline comes
+ * from `next.config` headers, which stay off the request: sent from here, it
+ * would be the policy Next read, and Next would stamp nothing.
  *
  * Read from the env passed in on every request: the env loader injects the
  * tenant's secrets after this module is first evaluated.
@@ -61,15 +63,20 @@ export function cspForRequest(pathname: string, env: Env): CspForRequest {
     development: env.NODE_ENV === 'development'
   };
 
+  const { full, reportingEndpoints } = cspPolicies(options);
+  // Parsed as the env schema does; a value it would refuse stays report-only
+  const enforce = coerceBoolean(false).safeParse(env.CSP_ENFORCE).data ?? false;
+
   return {
     nonce,
-    responseHeaders: cspHeaders({
-      ...options,
-      // Parsed as the env schema does; a value it would refuse stays report-only
-      enforce: coerceBoolean(false).safeParse(env.CSP_ENFORCE).data ?? false
-    }),
-    requestPolicy: cspHeaders({ ...options, enforce: true })[
-      'Content-Security-Policy'
-    ]
+    responseHeaders: {
+      ...(enforce
+        ? { 'Content-Security-Policy': full }
+        : { 'Content-Security-Policy-Report-Only': full }),
+      ...(reportingEndpoints
+        ? { 'Reporting-Endpoints': reportingEndpoints }
+        : {})
+    },
+    requestPolicy: full
   };
 }
