@@ -2,11 +2,13 @@ import type { Env } from '@codeware/app-cms/util/env-schema';
 import { isCatcherHost } from '@codeware/shared/util/pure';
 import { nodemailerAdapter } from '@payloadcms/email-nodemailer';
 import nodemailer from 'nodemailer';
-import nodemailerSendgrid from 'nodemailer-sendgrid';
 import type { EmailAdapter } from 'payload';
 
 import { etherealFallbackAdapter } from './ethereal-fallback-adapter';
 import { withDeliveryReporting } from './with-delivery-reporting';
+
+const SENDGRID_SMTP_HOST = 'smtp.sendgrid.net';
+const SENDGRID_SMTP_PORT = 587;
 
 /**
  * Get the email adapter, or undefined when email is disabled.
@@ -26,7 +28,8 @@ import { withDeliveryReporting } from './with-delivery-reporting';
  */
 export const getEmailAdapter = (env: Env) => {
   const adapter: EmailAdapter | Promise<EmailAdapter> | undefined = (() => {
-    // First check if sendgrid is configured
+    // SendGrid through its SMTP relay (user `apikey`); STARTTLS is required so
+    // the key never travels in the clear
     if (env.EMAIL?.sendgrid) {
       const { apiKey, defaultFromAddress, defaultFromName } =
         env.EMAIL.sendgrid;
@@ -34,8 +37,11 @@ export const getEmailAdapter = (env: Env) => {
       return nodemailerAdapter({
         defaultFromAddress,
         defaultFromName,
-        transportOptions: nodemailerSendgrid({
-          apiKey
+        transport: nodemailer.createTransport({
+          host: SENDGRID_SMTP_HOST,
+          port: SENDGRID_SMTP_PORT,
+          requireTLS: true,
+          auth: { user: 'apikey', pass: apiKey }
         })
       });
     }

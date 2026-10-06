@@ -13,7 +13,6 @@ vi.mock('nodemailer', () => ({
 vi.mock('@payloadcms/email-nodemailer', () => ({
   nodemailerAdapter: (...args: Array<unknown>) => nodemailerAdapter(...args)
 }));
-vi.mock('nodemailer-sendgrid', () => ({ default: vi.fn() }));
 
 /** Minimal env, only what the adapter reads */
 const env = (smtp: Record<string, unknown>) =>
@@ -105,5 +104,37 @@ describe('getEmailAdapter — SMTP transport', () => {
 
     getEmailAdapter(env({ host: 'localhost', port: 1025 }));
     expect(adapterOptions()).toMatchObject({ skipVerify: true });
+  });
+});
+
+describe('getEmailAdapter — SendGrid', () => {
+  beforeEach(() => {
+    createTransport.mockClear();
+    nodemailerAdapter.mockClear();
+  });
+
+  it('sends through the SMTP relay with STARTTLS required', () => {
+    getEmailAdapter({
+      DEPLOY_ENV: 'production',
+      NX_RUN_TARGET: '',
+      EMAIL: {
+        sendgrid: {
+          defaultFromAddress: 'a@b.se',
+          defaultFromName: 'X',
+          apiKey: 'SG.key'
+        }
+      }
+    } as unknown as Parameters<typeof getEmailAdapter>[0]);
+
+    expect(transportOptions()).toMatchObject({
+      host: 'smtp.sendgrid.net',
+      port: 587,
+      requireTLS: true,
+      auth: { user: 'apikey', pass: 'SG.key' }
+    });
+    expect(adapterOptions()).toMatchObject({
+      defaultFromAddress: 'a@b.se',
+      defaultFromName: 'X'
+    });
   });
 });
