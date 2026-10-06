@@ -8,6 +8,10 @@ import {
   ActionOutputsSchema
 } from './schemas/action-outputs.schema';
 import { runDestroyApps } from './utils/run-destroy-apps';
+import {
+  reportVolumeUsage,
+  runDestroyDatabases
+} from './utils/run-destroy-databases';
 
 /**
  * Run fly destroy process for deprecated preview applications.
@@ -37,8 +41,34 @@ export async function flyDestroy(inputs: ActionInputs): Promise<ActionOutputs> {
   core.endGroup();
 
   core.startGroup('Destroy deprecated applications');
-  const { destroyed, skipped } = await runDestroyApps(inputs.token, fly);
+  const { destroyed, skipped } = await runDestroyApps(
+    inputs.token,
+    fly,
+    inputs.dryRun
+  );
   core.endGroup();
 
-  return ActionOutputsSchema.parse({ destroyed, skipped });
+  let droppedDatabases: string[] = [];
+  let skippedDatabases: string[] = [];
+
+  core.startGroup('Destroy deprecated preview databases');
+  if (inputs.postgresCluster && inputs.databaseName) {
+    await reportVolumeUsage(fly, inputs.postgresCluster);
+    ({ dropped: droppedDatabases, skipped: skippedDatabases } =
+      await runDestroyDatabases(inputs.token, fly, {
+        cluster: inputs.postgresCluster,
+        template: inputs.databaseName,
+        dryRun: inputs.dryRun
+      }));
+  } else {
+    core.info('No postgres cluster configured, skip databases');
+  }
+  core.endGroup();
+
+  return ActionOutputsSchema.parse({
+    destroyed,
+    skipped,
+    droppedDatabases,
+    skippedDatabases
+  });
 }
