@@ -34,8 +34,8 @@ describe('run.sh', () => {
     expect(SCRIPT).toMatch(/note "fail: planned nothing/);
   });
 
-  // The runs document is the only thing run.sh writes to Linear
-  it('sends no mutation but the runs document', () => {
+  // The runs and usage documents are the only things run.sh writes to Linear
+  it('sends no mutation but the documents', () => {
     const mutations = [...SCRIPT.matchAll(/mutation\b[^{]*\{\s*(\w+)/gi)].map(
       ([, field]) => field
     );
@@ -52,6 +52,28 @@ describe('run.sh', () => {
       encoding: 'utf8'
     });
     expect(out.trim()).toBe(String(RUN_INTERVAL_SECONDS));
+  });
+
+  // The cap is told from the result JSON, not from the wording of a log line
+  it('reads the budget cap and cost from the run result', () => {
+    expect(SCRIPT).toMatch(/^ {2}--output-format json \\$/m);
+    expect(SCRIPT).toContain(`.subtype // empty' "$result"`);
+    expect(SCRIPT).toContain('== error_max_budget_usd ]]');
+    expect(SCRIPT).toContain(`.total_cost_usd // empty' "$result"`);
+    expect(SCRIPT).not.toContain('Exceeded USD budget');
+  });
+
+  it('publishes the usage document from cdwr agent usage', () => {
+    expect(SCRIPT).toMatch(/^USAGE_TITLE='Agent queue: usage'$/m);
+    expect(SCRIPT).toContain(
+      'node tools/cdwr/bin/cdwr.mjs agent usage --days 30 --json'
+    );
+    expect(SCRIPT).toMatch(
+      /publish_doc "\$USAGE_TITLE" "\$HOME_DIR\/usage-doc-id" "\$stamp"/
+    );
+    expect(SCRIPT).toMatch(
+      /publish_doc "\$DOC_TITLE" "\$HOME_DIR\/runs-doc-id" "\$stamp"/
+    );
   });
 
   it('publishes the job line after the last run', () => {

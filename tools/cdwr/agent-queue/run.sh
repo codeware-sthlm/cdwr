@@ -67,8 +67,10 @@ linear() {
       -H "Authorization: $key" -H 'Content-Type: application/json' --data @-
 }
 
-# The only writes run.sh makes: the runs document, created once on the Codeware team.
+# The only writes run.sh makes: the runs and usage documents, each created once on the
+# Codeware team and then updated in place.
 DOC_TITLE='Agent queue: runs'
+USAGE_TITLE='Agent queue: usage'
 read -r -d '' DOC_FIND <<'GQL' || true
 query($title: String!) {
   documents(first: 1, filter: { title: { eq: $title } }) { nodes { id } }
@@ -113,13 +115,12 @@ job_line() {
 publish_runs() {
   $check && return 0
   setopt local_options no_err_exit
-  local stamp="$HOME_DIR/runs-published-at" last=0
+  local stamp="$HOME_DIR/runs-published-at" last=0 content
   if (( $(rows) <= rows_at_start )); then
     last="$(cat "$stamp" 2>/dev/null)"
     [[ "$last" == <-> ]] || last=0
     (( $(date +%s) - last > 3600 )) || return 0
   fi
-  local file="$HOME_DIR/runs-doc-id" id content resp team
   [[ -f "$RUNS" ]] && tail -n 20 "$RUNS" > "$RUNS.tmp" && mv "$RUNS.tmp" "$RUNS"
   content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" '
     def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
@@ -127,18 +128,44 @@ publish_runs() {
     + "| When | Outcome | Ticket | Detail |\n| -- | -- | -- | -- |\n"
     + (reverse | map("| \(.when | cell) | \(.outcome | cell) | \(.ticket | cell) | \(.detail | cell) |") | join("\n"))
   ')" || { note "warn: runs document: could not render"; return 0; }
+  publish_doc "$DOC_TITLE" "$HOME_DIR/runs-doc-id" "$stamp" "$content"
+}
 
+# The usage document from `cdwr agent usage`, at most once an hour. The CLI runs from $REPO,
+# which follows origin/main, so it needs that checkout's install; when it can't start, that
+# is a warn row. Only numbers and ticket ids leave the machine.
+publish_usage() {
+  $check && return 0
+  setopt local_options no_err_exit
+  local stamp="$HOME_DIR/usage-published-at" last content
+  last="$(cat "$stamp" 2>/dev/null)"
+  [[ "$last" == <-> ]] || last=0
+  (( $(date +%s) - last > 3600 )) || return 0
+  content="$(cd "$REPO" && node tools/cdwr/bin/cdwr.mjs agent usage --days 30 --json 2>/dev/null </dev/null |
+    jq -er '.result.document')" || {
+    # Stamped all the same, so a broken install warns once an hour, not every run
+    date +%s > "$stamp"
+    note "warn: usage document: cdwr agent usage failed"; record warn "" "usage: cdwr agent usage failed"; return 0
+  }
+  publish_doc "$USAGE_TITLE" "$HOME_DIR/usage-doc-id" "$stamp" "$content"
+}
+
+# publish_doc <title> <id file> <stamp file> <content>: finds the document by title or
+# creates it, then rewrites it. A failure is a warn line, never a stop.
+publish_doc() {
+  setopt local_options no_err_exit
+  local title=$1 file=$2 stamp=$3 content=$4 id resp team
   id="$(cat "$file" 2>/dev/null)"
   if [[ -z "$id" ]]; then
-    resp="$(linear "$DOC_FIND" "$(jq -nc --arg t "$DOC_TITLE" '{title: $t}')")"
+    resp="$(linear "$DOC_FIND" "$(jq -nc --arg t "$title" '{title: $t}')")"
     id="$(jq -r '.data.documents.nodes[0].id // empty' <<<"$resp" 2>/dev/null)"
     if [[ -z "$id" ]]; then
       team="$(jq -r '.data.teams.nodes[0].id // empty' <<<"$resp" 2>/dev/null)"
-      [[ -z "$team" ]] && { note "warn: runs document: no Codeware team from Linear"; return 0; }
-      resp="$(linear "$DOC_CREATE" "$(jq -nc --arg team "$team" --arg t "$DOC_TITLE" --arg c "$content" \
+      [[ -z "$team" ]] && { note "warn: $title: no Codeware team from Linear"; return 0; }
+      resp="$(linear "$DOC_CREATE" "$(jq -nc --arg team "$team" --arg t "$title" --arg c "$content" \
         '{team: $team, title: $t, content: $c}')")"
       id="$(jq -r '.data.documentCreate.document.id // empty' <<<"$resp" 2>/dev/null)"
-      [[ -z "$id" ]] && { note "warn: runs document: create failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0; }
+      [[ -z "$id" ]] && { note "warn: $title: create failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0; }
       print -r -- "$id" > "$file"
       date +%s > "$stamp"
       return 0
@@ -150,7 +177,7 @@ publish_runs() {
   if ! jq -e '.data.documentUpdate.success' >/dev/null <<<"$resp" 2>/dev/null; then
     # A deleted document is found or created again next run
     rm -f "$file"
-    note "warn: runs document: update failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"
+    note "warn: $title: update failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"
   else
     date +%s > "$stamp"
   fi
@@ -162,6 +189,8 @@ on_exit() {
     note "fail: run.sh exited $st"
     record failed "" "run.sh exited $st, see scheduler.log"
   fi
+  # Usage first: its warn row belongs in this run's runs document
+  publish_usage
   publish_runs
   rmdir "$HOME_DIR/lock" 2>/dev/null
   return 0
@@ -295,6 +324,7 @@ git switch -q --detach origin/main 2>/dev/null ||
   { note "warn: worktree not clean, planning against its current state"; record warn "" "worktree not clean"; }
 
 log="$LOGS/$(date +%F_%H%M).log"
+result="${log%.log}.json"
 note "plan: $(print -r -- "$ready" | tr '\n' ' ')→ $log"
 
 L=mcp__claude_ai_Linear
@@ -308,21 +338,27 @@ ENABLE_TOOL_SEARCH=false claude -p "/work-queue unattended once plan-only" \
   --permission-mode dontAsk \
   --permission-prompts none \
   --max-budget-usd "$BUDGET_USD" \
+  --output-format json \
   --allowedTools \
     Skill Read Grep Glob \
     "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels \
     "$L"__save_issue "$L"__save_comment \
-  > "$log" 2>&1 || rc=$?
+  > "$result" 2> "$log" || rc=$?
+
+# The JSON carries the run's own cost; the log keeps the readable result.
+jq -r '.result // empty, (.errors // [])[]' "$result" >> "$log" 2>/dev/null || cat "$result" >> "$log"
+cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
+spent=""; [[ "$cost" == <->(|.<->) ]] && spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result") turns"
 
 if (( rc != 0 )); then
-  if tail -n 3 "$log" | grep -q 'Exceeded USD budget'; then
+  if [[ "$(jq -r '.subtype // empty' "$result" 2>/dev/null)" == error_max_budget_usd ]]; then
     note "cap: stopped at the \$$BUDGET_USD budget (see $log)"
     notify "Agent queue: a planning run hit the \$$BUDGET_USD cap and stopped. Log: $log"
     record cap "" "stopped at the \$$BUDGET_USD budget, log $log"
   else
     note "fail: claude exited $rc (see $log)"
     notify "Agent queue: a planning run failed (exit $rc). Log: $log"
-    record failed "" "claude exited $rc, log $log"
+    record failed "" "claude exited $rc, log $log$spent"
   fi
 fi
 
@@ -341,7 +377,7 @@ if after="$(linear "$PLANNED")" && ! jq -e '.errors' >/dev/null <<<"$after"; the
       ($ready | split("\n")) as $offered
       | .data.issues.nodes[].identifier | select(IN($offered[]))' <<<"$after" 2>/dev/null); do
     note "planned: $id"
-    record planned "$id" "log $log"
+    record planned "$id" "log $log$spent"
     notify "$id: plan ready, needs your approval"
     (( ++planned ))
   done
@@ -349,7 +385,7 @@ if after="$(linear "$PLANNED")" && ! jq -e '.errors' >/dev/null <<<"$after"; the
   if (( rc == 0 && planned == 0 )); then
     note "fail: planned nothing (see $log)"
     notify "Agent queue: a planning run exited cleanly but planned nothing. Log: $log"
-    record "planned nothing" "" "log $log"
+    record "planned nothing" "" "log $log$spent"
   fi
 else
   note "warn: could not ask Linear what was planned"
