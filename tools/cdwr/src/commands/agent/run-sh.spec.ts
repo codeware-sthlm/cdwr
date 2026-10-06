@@ -1,5 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
+import { RUN_INTERVAL_SECONDS } from './agent.logic';
 
 // run.sh runs gh unattended as Håkan, so every gh call must be a read
 const SCRIPT = readFileSync(
@@ -38,5 +41,23 @@ describe('run.sh', () => {
     );
     expect(mutations).toEqual(['documentCreate', 'documentUpdate']);
     expect(SCRIPT.match(/mutation/gi)).toHaveLength(2);
+  });
+
+  // run.sh tells an out-of-date install by reading this constant from origin/main
+  it('reads the run interval the way agent.logic.ts declares it', () => {
+    const pattern = SCRIPT.match(/^INTERVAL_SED='(.*)'$/m)?.[1];
+    expect(pattern).toContain('RUN_INTERVAL_SECONDS = ');
+    const logic = fileURLToPath(new URL('./agent.logic.ts', import.meta.url));
+    const out = execFileSync('sed', ['-n', pattern as string, logic], {
+      encoding: 'utf8'
+    });
+    expect(out.trim()).toBe(String(RUN_INTERVAL_SECONDS));
+  });
+
+  it('publishes the job line after the last run', () => {
+    expect(SCRIPT).toMatch(
+      /Last run: \\\(\$last\)\\n\\n\\\(\$job\)\\n\\nWritten/
+    );
+    expect(SCRIPT).toMatch(/--arg job "\$\(job_line\)"/);
   });
 });
