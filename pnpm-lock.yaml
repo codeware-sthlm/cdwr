@@ -19,7 +19,7 @@ overrides:
   mongoose: '>=8.24.1 <9'
   qs: '>=6.16.0 <7'
   smol-toml: '>=1.7.1 <2'
-  '@vitest/mocker': '>=4.1.11 <5'
+  '@vitest/mocker': 4.1.11
   yaml@1: '>=1.10.3 <2'
   minimatch@7: '>=7.4.8 <8'
   js-yaml@3: '>=3.15.2 <4'
@@ -27,7 +27,7 @@ overrides:
   undici@7: '>=7.29.0 <8'
   postcss: '>=8.5.14'
   request>form-data: '>=2.5.4'
-  '@vitest/browser': '>=4.1.11 <5'
+  '@vitest/browser': 4.1.11
   '@xhmikosr/decompress': '>=11.1.3'
   shell-quote: '>=1.8.4'
 
@@ -6741,7 +6741,7 @@ packages:
   '@storybook/addon-vitest@10.6.0':
     resolution: {integrity: sha512-GY2SwSXLNgyMqjQ59J7YTkEQTHdEbBMggOvbbuhuPUBhWo97OGSDCmn1UW3nXDZvkoWyWhF9T9628m1uei7FbA==}
     peerDependencies:
-      '@vitest/browser': '>=4.1.11 <5'
+      '@vitest/browser': 4.1.11
       '@vitest/browser-playwright': ^4.0.0
       '@vitest/runner': ^3.0.0 || ^4.0.0
       storybook: ^10.6.0
@@ -7923,7 +7923,7 @@ packages:
   '@vitest/coverage-v8@4.1.11':
     resolution: {integrity: sha512-8MVGEFnJIcdGjcbfKmeq8z0pZHH0JlVtoVZH9Q/qwUp6wyFnEJUBMrw9DCaj+ra3vShGmhavjalMIhPNxZAUcw==}
     peerDependencies:
-      '@vitest/browser': '>=4.1.11 <5'
+      '@vitest/browser': 4.1.11
       vitest: 4.1.11
     peerDependenciesMeta:
       '@vitest/browser':
