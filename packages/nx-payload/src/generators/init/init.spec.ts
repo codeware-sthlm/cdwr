@@ -85,7 +85,7 @@ describe('init', () => {
   });
 
   it('should not add or downgrade Next.js when already present', async () => {
-    // A workspace already on Next 15 is kept as-is (Payload v3.86 still
+    // A workspace already on Next 15 is kept as-is (Payload v3.90 still
     // supports Next 15), never downgraded or bumped to the v16 default.
     const existingNextVersion = '15.2.9';
     addDependenciesToPackageJson(tree, { next: existingNextVersion }, {});
