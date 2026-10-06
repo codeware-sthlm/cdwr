@@ -79,7 +79,7 @@ rollover covers every pull request's apps. The token is never printed.
 
 ## The agent queue
 
-An hourly launchd job (`se.codeware.agent-queue`) runs `/work-queue` plan-only against a
+A launchd job (`se.codeware.agent-queue`), every 10 minutes, runs `/work-queue` plan-only against a
 separate worktree, `codeware-agent` beside this checkout. macOS only.
 
 ```sh

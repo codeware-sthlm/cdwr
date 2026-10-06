@@ -169,7 +169,7 @@ export default defineCommand({
     }
     return {
       steps,
-      notes: ['The job runs every hour; `cdwr agent pause` holds it'],
+      notes: ['The job runs every 10 minutes; `cdwr agent pause` holds it'],
       data
     };
   },

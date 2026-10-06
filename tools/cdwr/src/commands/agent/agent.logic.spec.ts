@@ -160,7 +160,7 @@ describe('renderPlist', () => {
     expect(plist).toContain('<string>se.codeware.agent-queue</string>');
     expect(plist).toContain('<string>/bin/zsh</string>');
     expect(plist).toContain('<string>/h/.cdwr/agent-queue/run.sh</string>');
-    expect(plist).toContain('<integer>3600</integer>');
+    expect(plist).toContain('<integer>600</integer>');
     expect(plist).toContain('<key>RunAtLoad</key>\n  <false/>');
     expect(plist).toContain(
       '<key>AGENT_QUEUE_HOME</key>\n    <string>/h/.cdwr/agent-queue</string>'
