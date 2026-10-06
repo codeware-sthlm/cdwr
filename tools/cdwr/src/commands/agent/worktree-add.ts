@@ -19,6 +19,17 @@ const succeeds = (cwd: string, args: string[]): Promise<boolean> =>
     () => false
   );
 
+const gitCommonDir = async (cwd: string): Promise<string> =>
+  (
+    await run(
+      'git',
+      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+      {
+        cwd
+      }
+    )
+  ).stdout.trim();
+
 /** Whether origin has the branch; exit 2 means it doesn't, any other failure is an error */
 const onOrigin = (cwd: string, branch: string): Promise<boolean> =>
   run('git', ['ls-remote', '--exit-code', 'origin', `refs/heads/${branch}`], {
@@ -63,6 +74,24 @@ export default defineCommand({
     if (exists && !existsSync(join(path, '.git'))) {
       throw new CliError(`${path} exists and is not a git checkout`);
     }
+    const commonDir = await gitCommonDir(ctx.root);
+    // An existing folder gets env files and an install only when it is ours, on this branch
+    if (exists) {
+      const theirs = await gitCommonDir(path).catch(() => undefined);
+      if (theirs !== commonDir) {
+        throw new CliError(`${path} is a checkout of another repository`);
+      }
+      const current = (
+        await run('git', ['branch', '--show-current'], { cwd: path })
+      ).stdout.trim();
+      if (current !== branch) {
+        throw new CliError(
+          `${path} is on ${current || 'a detached HEAD'}, not ${branch}`
+        );
+      }
+    }
+    // The env files live in the main checkout; other worktrees may lack them
+    const envSource = dirname(commonDir);
 
     let source: Source = 'new';
     if (!exists) {
@@ -80,13 +109,6 @@ export default defineCommand({
         source = 'local';
       }
     }
-    // The env files live in the main checkout; other worktrees may lack them
-    const commonDir = await run(
-      'git',
-      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
-      { cwd: ctx.root }
-    );
-    const envSource = dirname(commonDir.stdout.trim());
     const envCopies = ENV_COPIES.filter((file) => {
       const ours = readText(join(envSource, file));
       return ours !== undefined && ours !== readText(join(path, file));
