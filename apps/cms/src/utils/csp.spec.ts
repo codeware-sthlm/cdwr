@@ -5,6 +5,14 @@ import { cspForRequest } from './csp';
 const nonceOf = (policy: string | undefined) =>
   policy?.match(/'nonce-([^']+)'/)?.[1];
 
+/** The exact sources of one directive */
+const sourcesOf = (policy: string, directive: string): Array<string> =>
+  policy
+    .split(';')
+    .map((part) => part.trim().split(' '))
+    .find(([name]) => name === directive)
+    ?.slice(1) ?? [];
+
 describe('cspForRequest', () => {
   it('reports the full policy and enforces only the baseline by default', () => {
     const { responseHeaders } = cspForRequest('/', {});
@@ -81,8 +89,14 @@ describe('cspForRequest', () => {
   ])('%s allows Monaco and gravatar: %s', (pathname, allowed) => {
     const { requestPolicy } = cspForRequest(pathname, {});
 
-    expect(requestPolicy.includes('https://cdn.jsdelivr.net')).toBe(allowed);
-    expect(requestPolicy.includes('https://www.gravatar.com')).toBe(allowed);
+    expect(
+      sourcesOf(requestPolicy, 'script-src').includes(
+        'https://cdn.jsdelivr.net'
+      )
+    ).toBe(allowed);
+    expect(
+      sourcesOf(requestPolicy, 'img-src').includes('https://www.gravatar.com')
+    ).toBe(allowed);
   });
 
   it.each([
