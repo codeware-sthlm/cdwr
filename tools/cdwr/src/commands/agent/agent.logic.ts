@@ -15,6 +15,8 @@ export const byFile = <T>(
   'run.sh': fn('run.sh'),
   'watch.jq': fn('watch.jq')
 });
+/** Files a worktree needs but git does not carry, relative to the workspace root */
+export const ENV_COPIES = ['apps/cms/.env.local', 'tools/cdwr/.env'];
 /** Pref holding the worktree the queue plans in */
 export const WORKTREE_PREF = 'agentWorktree';
 

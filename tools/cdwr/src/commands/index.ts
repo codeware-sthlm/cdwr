@@ -206,6 +206,18 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/install').then((m) => m.default)
   },
   {
+    path: ['agent', 'worktree', 'add'],
+    summary: 'Create the checkout for a ticket, beside this one',
+    danger: 'mutate',
+    load: () => import('./agent/worktree-add').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'worktree', 'prune'],
+    summary: 'Remove the checkouts of tickets whose pull request is done',
+    danger: 'mutate',
+    load: () => import('./agent/worktree-prune').then((m) => m.default)
+  },
+  {
     path: ['release'],
     summary: 'Version, changelog, tag and publish the npm packages',
     danger: 'destructive',
