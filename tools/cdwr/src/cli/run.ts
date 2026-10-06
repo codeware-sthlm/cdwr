@@ -4,7 +4,7 @@ import { symbols, theme } from '../ui/theme';
 import type { Ui } from '../ui/ui';
 
 import { parseCommandArgs } from './args';
-import { type AnyCommand, type Plan, confirmFor } from './command';
+import { type AnyCommand, type Plan, confirmFor, planDanger } from './command';
 import type { Context, Flags } from './context';
 import { Cancelled, CliError, EXIT, UsageError, messageOf } from './errors';
 import { renderCommandHelp } from './help';
@@ -43,7 +43,7 @@ async function confirmPlan(
   command: AnyCommand,
   plan: Plan
 ): Promise<void> {
-  const danger = plan.danger ?? command.danger;
+  const danger = planDanger(command.danger, plan.danger);
   const mode = confirmFor(danger, command.confirm);
   const production = plan.target?.environment === 'production';
   const needed = mode === 'always' || (mode === 'production' && production);

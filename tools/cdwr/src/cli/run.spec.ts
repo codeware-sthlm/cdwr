@@ -122,6 +122,18 @@ describe('runCommand', () => {
     expect(preview.ui.asked).toEqual(['This cannot be undone. Continue?']);
   });
 
+  it('never lets a plan lower the danger its command declares', async () => {
+    const r = run(
+      'destructive',
+      ['--environment', 'production'],
+      ['demo'],
+      true,
+      'mutate'
+    );
+    expect(await r.exit).toBe(EXIT.ok);
+    expect(r.ui.asked[0]).toContain('Type');
+  });
+
   it('skips every confirmation with --yes', async () => {
     const r = run('destructive', ['--environment', 'production', '--yes']);
     expect(await r.exit).toBe(EXIT.ok);
