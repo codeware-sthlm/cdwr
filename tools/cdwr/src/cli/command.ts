@@ -33,6 +33,8 @@ export interface Plan<D = unknown> {
   target?: { environment?: string; name?: string };
   /** Set when there is nothing to apply; the run ends after the plan */
   nothing?: string;
+  /** Raises the command's danger for this plan, e.g. a fresh apply outside development */
+  danger?: Danger;
   data: D;
 }
 

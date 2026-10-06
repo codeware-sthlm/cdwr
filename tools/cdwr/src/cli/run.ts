@@ -43,7 +43,8 @@ async function confirmPlan(
   command: AnyCommand,
   plan: Plan
 ): Promise<void> {
-  const mode = confirmFor(command.danger, command.confirm);
+  const danger = plan.danger ?? command.danger;
+  const mode = confirmFor(danger, command.confirm);
   const production = plan.target?.environment === 'production';
   const needed = mode === 'always' || (mode === 'production' && production);
   if (!needed || ctx.flags.yes) return;
@@ -55,7 +56,7 @@ async function confirmPlan(
     );
   }
 
-  if (command.danger === 'destructive' && production) {
+  if (danger === 'destructive' && production) {
     const name = plan.target?.name ?? 'production';
     const typed = await ctx.ui.text({
       message: `${symbols.warn} Type ${theme.danger(name)} to continue`,
@@ -66,9 +67,9 @@ async function confirmPlan(
   }
 
   const label =
-    command.danger === 'spends-money'
+    danger === 'spends-money'
       ? 'This spends money. Continue?'
-      : command.danger === 'destructive'
+      : danger === 'destructive'
         ? 'This cannot be undone. Continue?'
         : `Continue${production ? ' on production' : ''}?`;
   if (!(await ctx.ui.confirm({ message: label }))) throw new Cancelled();
