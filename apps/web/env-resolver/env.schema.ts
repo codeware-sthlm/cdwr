@@ -1,4 +1,4 @@
-import { withEnvVars } from '@codeware/shared/util/zod';
+import { coerceBoolean, withEnvVars } from '@codeware/shared/util/zod';
 import { z } from 'zod';
 
 /**
@@ -81,6 +81,10 @@ export const EnvSchema = z.object({
       .string({ description: 'Shared password the site asks visitors for' })
       .min(12, { message: 'SITE_GATE_PASSWORD must be at least 12 characters' })
       .optional()
+  ),
+  // Report-only until a tenant's reports come back clean
+  CSP_ENFORCE: coerceBoolean(false).describe(
+    'Enforce the full Content Security Policy instead of reporting it'
   ),
   SIGNATURE_SECRET: z
     .string({ description: 'Secret key for API request signatures' })

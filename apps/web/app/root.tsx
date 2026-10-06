@@ -48,6 +48,7 @@ import { getClientEnv } from './utils/client-env';
 import { ClientHintCheck, getHints } from './utils/client-hints';
 import { type ColorScheme, getColorScheme } from './utils/color-scheme.server';
 import { getPayloadRequestOptions } from './utils/get-payload-request-options';
+import { useNonce } from './utils/nonce-provider';
 import { getTheme } from './utils/theme.server';
 import { TypedLoaderFunctionArgs } from './utils/types';
 
@@ -171,10 +172,12 @@ function Document({
   theme?: string;
   customCss?: string;
 }) {
+  const nonce = useNonce();
+
   return (
     <html lang={lang} className={colorScheme} data-theme={theme}>
       <head>
-        <ClientHintCheck />
+        <ClientHintCheck nonce={nonce} />
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         {/*
@@ -193,8 +196,8 @@ function Document({
       </head>
       <body className="flex h-full">
         {children}
-        <ScrollRestoration />
-        <Scripts />
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
       </body>
     </html>
   );

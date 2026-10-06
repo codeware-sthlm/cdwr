@@ -19,12 +19,12 @@ import type { AppLoadContext } from './types';
  */
 export function getPayloadRequestOptions(
   method: 'GET',
-  context: AppLoadContext,
+  context: Omit<AppLoadContext, 'cspNonce'>,
   headers?: Headers
 ): RequestBaseOptions;
 export function getPayloadRequestOptions<TBody = Record<string, unknown>>(
   method: 'POST',
-  context: AppLoadContext,
+  context: Omit<AppLoadContext, 'cspNonce'>,
   headers?: Headers,
   body?: TBody
 ): RequestBaseOptions & MethodOptions<'POST'>;
@@ -33,7 +33,7 @@ export function getPayloadRequestOptions<
   TBody = Record<string, unknown>
 >(
   method: T,
-  context: AppLoadContext,
+  context: Omit<AppLoadContext, 'cspNonce'>,
   headers?: Headers,
   body?: TBody
 ): RequestBaseOptions | (RequestBaseOptions & MethodOptions<'POST'>) {

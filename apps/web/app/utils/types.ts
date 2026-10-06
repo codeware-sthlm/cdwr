@@ -15,6 +15,8 @@ export type AppLoadContext = {
   tenantConfig: TenantRuntimeConfig | null;
   /** Fallback locale when tenant configuration is not available */
   fallbackLocale: FallbackLocale;
+  /** Per-request CSP nonce for scripts Remix renders */
+  cspNonce: string;
 };
 
 /** Action function arguments with properly typed context */
