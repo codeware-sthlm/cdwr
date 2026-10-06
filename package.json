@@ -99,7 +99,7 @@
     "replace-in-file": "^7.2.0",
     "sanitize-html": "^2.17.7",
     "sharp": "0.35.4",
-    "simple-git": "^3.27.0",
+    "simple-git": "^4.0.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.0.17",
