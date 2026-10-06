@@ -28,6 +28,7 @@ import { redirect } from 'next/navigation';
 import './site.css';
 import { getAppInfo } from '../../app-info';
 import { payloadRuntime } from '../../security/payload-runtime';
+import { NONCE_HEADER } from '../../utils/csp';
 import {
   MEMBER_LOGIN_PATH,
   MEMBER_LOGOUT_SUBMIT_PATH
@@ -74,6 +75,9 @@ export default async function RootLayout({
 
   // Parsed once and shared — `getEnv()` revalidates `process.env` on every call
   const env = getEnv();
+
+  // Set by the proxy for the inline theme script
+  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
 
   // Theme is resolved server-side so the first paint is already correct.
   // A tenant without theme settings falls back to what sites rendered before
@@ -146,6 +150,7 @@ export default async function RootLayout({
           iconConfig={runtime.tenantConfig?.icon ?? null}
           humanCheckSiteKey={env.HUMAN_CHECK?.siteKey ?? null}
           locale={runtime.tenantConfig?.locale ?? 'en'}
+          nonce={nonce}
           payloadUrl={env.APP_MODE.serverURL}
           signupPolicy={signupPolicy}
           chrome={runtime.tenantConfig?.chrome ?? 'outlined'}

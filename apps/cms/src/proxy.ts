@@ -5,11 +5,28 @@ import {
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { NONCE_HEADER, cspForRequest } from './utils/csp';
 import { FORCE_LOGOUT_PATH, SESSION_COOKIES } from './utils/force-logout';
 import { isWellFormedActionId } from './utils/server-action';
 import { SITE_GATE_PATH, isGatedPath } from './utils/site-gate';
 
 export function proxy(request: NextRequest) {
+  const csp = cspForRequest(request.nextUrl.pathname, process.env);
+
+  // The page Next renders reads its script nonce from this
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('content-security-policy', csp.requestPolicy);
+  // ...and the theme script the layouts render reads it from this
+  requestHeaders.set(NONCE_HEADER, csp.nonce);
+
+  const response = route(request, requestHeaders);
+  for (const [name, value] of Object.entries(csp.responseHeaders)) {
+    response.headers.set(name, value);
+  }
+  return response;
+}
+
+function route(request: NextRequest, requestHeaders: Headers) {
   const { pathname } = request.nextUrl;
 
   // Malformed server action id — a scanner probe, not a stale tab.
@@ -49,7 +66,9 @@ export function proxy(request: NextRequest) {
     pathname !== '/maintenance' &&
     pathname !== '/cdwr-cloud.png'
   ) {
-    return NextResponse.rewrite(new URL('/maintenance', request.url));
+    return NextResponse.rewrite(new URL('/maintenance', request.url), {
+      request: { headers: requestHeaders }
+    });
   }
 
   // Whole-site gate — a tenant site that is not open to the public yet.
@@ -76,6 +95,7 @@ export function proxy(request: NextRequest) {
       gate.searchParams.set('from', `${pathname}${request.nextUrl.search}`);
 
       return NextResponse.rewrite(gate, {
+        request: { headers: requestHeaders },
         headers: { 'x-robots-tag': 'noindex' }
       });
     }
@@ -103,7 +123,7 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

@@ -1,8 +1,10 @@
 import { cn } from '@codeware/shared/util/ui';
 import { Inter } from 'next/font/google';
+import { headers } from 'next/headers';
 import React from 'react';
 
 import './globals.css';
+import { NONCE_HEADER } from '../../utils/csp';
 import { ColorSchemeToggle } from './components/ColorSchemeToggle.client';
 import { ThemeProvider } from './components/theme-provider';
 
@@ -13,6 +15,11 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Set by the proxy for the inline theme script. Reading it also renders
+  // these pages per request, which a nonce needs: maintenance mode rewrites
+  // every route here
+  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -26,6 +33,7 @@ export default async function RootLayout({
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
+          nonce={nonce}
         >
           <header className="flex justify-end p-6 sm:p-8">
             <ColorSchemeToggle />

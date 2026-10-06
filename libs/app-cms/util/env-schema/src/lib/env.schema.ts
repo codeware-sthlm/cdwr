@@ -165,6 +165,12 @@ export const EnvSchema = withEnvVars(
         .min(1)
         .optional(),
 
+      // Content Security Policy. Off sends the full policy report-only, with
+      // only framing, plugins, base uri and form targets enforced
+      CSP_ENFORCE: coerceBoolean(false).describe(
+        'Enforce the full Content Security Policy instead of reporting it'
+      ),
+
       // Internal
       DISABLE_DB_PUSH: coerceBoolean(false).describe(
         'Disable database schema push in development'
