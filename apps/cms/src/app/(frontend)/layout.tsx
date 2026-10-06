@@ -5,6 +5,7 @@ import React from 'react';
 
 import './globals.css';
 import { NONCE_HEADER } from '../../utils/csp';
+
 import { ColorSchemeToggle } from './components/ColorSchemeToggle.client';
 import { ThemeProvider } from './components/theme-provider';
 
