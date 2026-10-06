@@ -16,6 +16,20 @@ inputs:
     description: >
       Whether to enable console logs for Fly CLI commands.
       Defaults to `false`.
+  postgres-cluster:
+    description: >
+      The preview Postgres cluster app whose databases and roles are dropped
+      for closed pull requests. Set together with `database-name`;
+      both empty skips databases.
+  database-name:
+    description: >
+      Database name template, must contain `${PR_NUMBER}` exactly once,
+      for example `cdwr_cms_${PR_NUMBER}`. Set together with `postgres-cluster`.
+  dry-run:
+    description: >
+      List what would be destroyed or dropped without doing it.
+      Defaults to `false`.
+    default: "false"
   token:
     description: >
       The token to use for repository authentication.
@@ -29,6 +43,12 @@ outputs:
   skipped:
     description: >
       A list of app names that were skipped (e.g., failed to destroy).
+  dropped-databases:
+    description: >
+      A list of database names that were dropped.
+  skipped-databases:
+    description: >
+      A list of database names that could not be dropped.
 
 runs:
   using: "node24"

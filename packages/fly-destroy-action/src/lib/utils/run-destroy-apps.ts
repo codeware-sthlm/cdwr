@@ -10,11 +10,13 @@ import { getPullRequest } from '@codeware/shared/util/github';
  *
  * @param token - GitHub token for API access
  * @param fly - Fly instance
+ * @param dryRun - List what would be destroyed without destroying it
  * @returns Destroyed and skipped app names
  */
 export const runDestroyApps = async (
   token: string,
-  fly: Fly
+  fly: Fly,
+  dryRun = false
 ): Promise<{ destroyed: string[]; skipped: string[] }> => {
   const destroyed: string[] = [];
   const skipped: string[] = [];
@@ -42,6 +44,11 @@ export const runDestroyApps = async (
   core.info(`Found ${appsToDestroy.length} apps to destroy`);
 
   for (const { name } of appsToDestroy) {
+    if (dryRun) {
+      core.info(`[${name}] Would destroy app (dry run)`);
+      continue;
+    }
+
     core.info(`[${name}] About to destroy app...`);
 
     try {

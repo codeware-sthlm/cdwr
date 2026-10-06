@@ -41,15 +41,30 @@ destroy:
       with:
         fly-api-token: ${{ secrets.FLY_API_TOKEN }}
         token: ${{ secrets.GITHUB_TOKEN }}
+        # Optional: also drop the PR's database
+        postgres-cluster: ${{ vars.FLY_POSTGRES_PREVIEW }}
+        database-name: cdwr_cms_${PR_NUMBER}
 ```
 
 ## Inputs
 
 See [action.yml](action.yml) for descriptions of all inputs.
 
+### Databases
+
+Set `postgres-cluster` and `database-name` together to also drop preview databases; leaving both empty skips databases, setting only one fails the action.
+
+- `database-name` is a template and must contain `${PR_NUMBER}` exactly once, for example `cdwr_cms_${PR_NUMBER}`. Every database on the cluster matching it whose pull request is closed is dropped, and so are the roles Fly created for closed PRs' apps (such as `cdwr_cms_pr_575_moon`).
+- The password is the cluster's own `OPERATOR_PASSWORD`, read inside the machine over `fly ssh`; no database credentials are passed to the action.
+- The cluster's volume usage is reported first, with a warning at 80% or more.
+- A failed drop is a warning, never a failed job.
+- `dry-run: true` lists what would be destroyed or dropped without doing it.
+
 ## Outputs
 
-| Output      | Description                                         |
-| ----------- | --------------------------------------------------- |
-| `destroyed` | List of app names that were successfully destroyed. |
-| `skipped`   | List of app names that could not be destroyed.      |
+| Output              | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `destroyed`         | List of app names that were successfully destroyed. |
+| `skipped`           | List of app names that could not be destroyed.      |
+| `dropped-databases` | List of database names that were dropped.           |
+| `skipped-databases` | List of database names that could not be dropped.   |
