@@ -10,10 +10,6 @@
  */
 @layer payload-default, theme, base, components, utilities;
 
-/* Inter — required by payload-retheme.css (--font-body); must be the first
-   non-layer statement since @import rules cannot follow other rules */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 /* Scan classes from libs not resolvable via path aliases */
 @source '../../../../../libs/shared/ui';
 @source '../../../../../libs/app-cms/ui/dashboard';
