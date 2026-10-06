@@ -3,6 +3,12 @@ import * as Sentry from '@sentry/nextjs';
 
 export async function register() {
   const runtime = process.env.NEXT_RUNTIME;
+
+  if (runtime === 'nodejs') {
+    const { raiseTunnelMaxListeners } = await import('./tunnel-max-listeners');
+    raiseTunnelMaxListeners();
+  }
+
   console.log(`[REGISTER] Load environment variables in ${runtime} runtime`);
 
   const env = await loadEnv();
