@@ -92,6 +92,8 @@ Everything waits on Håkan, or the limit is reached.
 3. Otherwise poll: start `sleep 300` as a background Bash command (foreground `sleep` is
    blocked). When it finishes the session is woken; check **What to take next** again. Send no
    new notice while the waiting set is unchanged; send one when it changes.
+   Without `once` or `plan-only`, never end a turn unless that sleep is running: an idle session
+   with nothing to wake it stops answering Linear until Håkan types.
 
 ## Labels (group "Agent", one at a time)
 
@@ -175,7 +177,8 @@ on claim and refresh it with every Status row update.
 
 7. **Next.** Don't ask. With `once`, stop. Otherwise go to **What to take next**. After a big
    ticket, say in one line that `/clear` is a good idea before the next one, without waiting
-   for it: Linear holds the state, so compaction loses nothing that matters.
+   for it: Linear holds the state, so compaction loses nothing that matters. Only Håkan can
+   type `/clear`; the line is advice, not a stop. Continue in the same turn.
 
 ## Review feedback
 
