@@ -276,6 +276,22 @@ describe('renderUsageDocument', () => {
     ]);
   });
 
+  it('rounds after summing, so sub-cent rows add up to the total', () => {
+    const tiny = tokens({ output: 160 }); // $0.004 on claude-opus-5
+    const doc = renderUsageDocument(
+      aggregate(
+        [
+          reply({ tokens: tiny }),
+          reply({ tokens: tiny, model: 'claude-opus-4-8' })
+        ],
+        { since }
+      ),
+      { updated: 'x', windowDays: 1 }
+    );
+    expect(doc).toContain('· 0.01 USD');
+    expect(doc).toContain('| 2026-10-06 | 0.00 | 0.01 | 0.00 | 0.01 |');
+  });
+
   it('shows an unpriced cost as ? and names the model', () => {
     const unpriced = renderUsageDocument(
       aggregate([reply({ model: 'claude-mystery' })], { since }),
