@@ -1,4 +1,10 @@
-import { dropStatement, parseDatabaseList } from './drop.logic';
+import { describe, expect, it } from 'vitest';
+
+import {
+  dropRoleStatement,
+  dropStatement,
+  parseDatabaseList
+} from './postgres';
 
 describe('parseDatabaseList', () => {
   it('parses CSV rows into databases', () => {
@@ -38,6 +44,18 @@ describe('dropStatement', () => {
   it('doubles an embedded quote so it cannot close the identifier early', () => {
     expect(dropStatement('pr"; DROP DATABASE postgres; --')).toBe(
       'DROP DATABASE IF EXISTS "pr""; DROP DATABASE postgres; --" WITH (FORCE);'
+    );
+  });
+});
+
+describe('dropRoleStatement', () => {
+  it('quotes the role', () => {
+    expect(dropRoleStatement('pr-123')).toBe('DROP ROLE IF EXISTS "pr-123";');
+  });
+
+  it('doubles an embedded quote so it cannot close the identifier early', () => {
+    expect(dropRoleStatement('pr"; DROP ROLE postgres; --')).toBe(
+      'DROP ROLE IF EXISTS "pr""; DROP ROLE postgres; --";'
     );
   });
 });

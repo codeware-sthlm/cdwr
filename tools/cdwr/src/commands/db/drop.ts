@@ -1,3 +1,4 @@
+import { dropStatement, parseDatabaseList } from '@codeware/shared/util/pure';
 import { z } from 'zod';
 
 import { defineCommand } from '../../cli/command';
@@ -5,8 +6,6 @@ import { messageOf } from '../../cli/errors';
 import { input } from '../../cli/inputs';
 import { sshExec } from '../../services/fly';
 import { shellQuote } from '../../services/shell';
-
-import { dropStatement, parseDatabaseList } from './drop.logic';
 
 /** The URL is quoted for the remote shell and the password encoded for the URL */
 const connectionString = (password: string) =>
