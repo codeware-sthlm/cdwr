@@ -46,10 +46,11 @@
 
 Tickets carrying a Linear `agent:*` label (Agent group, Codeware team) are worked by the
 `/work-queue` skill (`.claude/skills/work-queue`). It plans into the ticket, hands planned
-steps to the `implementer` subagent (`.claude/agents/implementer.md`, Sonnet) and stops
-only at gates. The skill holds the queue order, the labels and how a gate asks.
+steps to the `implementer` subagent (`.claude/agents/implementer.md`, Sonnet) in a worktree
+per ticket, asks in Linear instead of waiting in the terminal, and keeps going until a limit
+of what waits on Håkan. The skill holds the queue order, the labels and how a gate asks.
 
-An hourly launchd job runs it plan-only on this machine; `cdwr agent install` sets that up
+A launchd job runs it plan-only every 10 minutes on this machine; `cdwr agent install` sets that up
 and `cdwr agent status` says what it would take next. Launchd runs an installed copy of
 `tools/cdwr/agent-queue/run.sh` (and its `watch.jq`), so a merged change to its guardrails
 waits for the next `install`. Before planning, the same job watches the PRs of `agent:review`

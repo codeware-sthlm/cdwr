@@ -41,6 +41,9 @@ check=false; [[ "${1:-}" == "--check" ]] && check=true
 # Run history for the "Agent queue: runs" Linear document, newest last. Idle adds no row.
 RUNS="$HOME_DIR/runs.jsonl"
 last_outcome=idle
+# Rows at the start; watch_prs records from a subshell, so a flag would miss its rows
+rows() { [[ -f "$RUNS" ]] && wc -l < "$RUNS" | tr -d ' ' || print 0; }
+rows_at_start="$(rows)"
 # record <outcome> [ticket] [detail]: a warn is a row, never the run's outcome.
 record() {
   $check && return 0
@@ -84,14 +87,21 @@ mutation($id: String!, $content: String!) {
 GQL
 
 # Rewrites the whole document from runs.jsonl; a failure is a warn line, never a stop.
+# A run that recorded nothing publishes only when the last publish is over an hour old.
 publish_runs() {
   $check && return 0
   setopt local_options no_err_exit
+  local stamp="$HOME_DIR/runs-published-at" last=0
+  if (( $(rows) <= rows_at_start )); then
+    last="$(cat "$stamp" 2>/dev/null)"
+    [[ "$last" == <-> ]] || last=0
+    (( $(date +%s) - last > 3600 )) || return 0
+  fi
   local file="$HOME_DIR/runs-doc-id" id content resp team
   [[ -f "$RUNS" ]] && tail -n 20 "$RUNS" > "$RUNS.tmp" && mv "$RUNS.tmp" "$RUNS"
   content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" '
     def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
-    "Last run: \($last)\n\nWritten by the agent queue scheduler after every run. Idle runs only update the line above.\n\n"
+    "Last run: \($last)\n\nWritten by the agent queue scheduler after every run. Idle runs update the line above at most once an hour.\n\n"
     + "| When | Outcome | Ticket | Detail |\n| -- | -- | -- | -- |\n"
     + (reverse | map("| \(.when | cell) | \(.outcome | cell) | \(.ticket | cell) | \(.detail | cell) |") | join("\n"))
   ')" || { note "warn: runs document: could not render"; return 0; }
@@ -108,6 +118,7 @@ publish_runs() {
       id="$(jq -r '.data.documentCreate.document.id // empty' <<<"$resp" 2>/dev/null)"
       [[ -z "$id" ]] && { note "warn: runs document: create failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0; }
       print -r -- "$id" > "$file"
+      date +%s > "$stamp"
       return 0
     fi
     print -r -- "$id" > "$file"
@@ -118,6 +129,8 @@ publish_runs() {
     # A deleted document is found or created again next run
     rm -f "$file"
     note "warn: runs document: update failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"
+  else
+    date +%s > "$stamp"
   fi
 }
 # Every handled outcome exits 0, so a non-zero exit is a failure nothing recorded.

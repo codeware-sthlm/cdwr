@@ -16,6 +16,7 @@ import {
 import { symbols, theme } from '../../ui/theme';
 
 import {
+  RUN_INTERVAL_SECONDS,
   byFile,
   filesDrift,
   formatWatching,
@@ -90,10 +91,17 @@ export default defineCommand({
       ok === true ? theme.muted(detail) : theme.warn(detail)
     ];
 
+    // The loaded job's interval when it differs from what install writes
+    const staleInterval =
+      job.loaded && job.intervalSeconds !== RUN_INTERVAL_SECONDS
+        ? job.intervalSeconds
+        : undefined;
+
     const rows = [
       job.loaded
         ? row(
-            job.lastExitCode === undefined || job.lastExitCode === 0
+            (job.lastExitCode === undefined || job.lastExitCode === 0) &&
+              staleInterval === undefined
               ? true
               : 'warn',
             'job',
@@ -102,7 +110,10 @@ export default defineCommand({
               job.runs === undefined ? undefined : `${job.runs} run(s)`,
               job.lastExitCode === undefined
                 ? undefined
-                : `last exit ${job.lastExitCode}`
+                : `last exit ${job.lastExitCode}`,
+              staleInterval === undefined
+                ? undefined
+                : `every ${staleInterval} s; re-run \`cdwr agent install\``
             ]
               .filter(Boolean)
               .join(', ')

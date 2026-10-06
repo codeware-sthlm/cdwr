@@ -432,6 +432,25 @@ describe('step', () => {
       }
     );
 
+    // The second step reads the entry the first one produced, as run.sh does
+    it.each([
+      ['merged', now('merged'), []],
+      ['merged with hand-offs', now('merged'), ['run install']],
+      ['failing', now('failing'), []],
+      [
+        'removed from the merge queue',
+        now('open', {
+          removedAt: '2026-04-01T00:00:00Z',
+          removedReason: 'FAILED_CHECKS'
+        }),
+        []
+      ]
+    ])('%s: an identical observation repeated is silent', (_name, n, h) => {
+      const first = step(n, prev('queued'), h);
+      expect(first.notices.length).toBeGreaterThan(0);
+      expect(step(n, first.entry as Prev, h).notices).toEqual([]);
+    });
+
     it('failing -> open -> failing notifies twice over three steps', () => {
       const states = ['failing', 'open', 'failing'];
       let p: Prev = prev('open');

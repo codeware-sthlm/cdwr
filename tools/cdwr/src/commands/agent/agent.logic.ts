@@ -1,6 +1,8 @@
 import { join } from 'node:path';
 
 export const LABEL = 'se.codeware.agent-queue';
+/** Seconds between scheduled runs; launchd's StartInterval */
+export const RUN_INTERVAL_SECONDS = 600;
 export const KEYCHAIN_SERVICE = 'linear-agent-queue';
 /** Where the queue's files live in the repo, relative to the workspace root */
 export const QUEUE_SOURCE_DIR = 'tools/cdwr/agent-queue';
@@ -124,7 +126,7 @@ export const renderPlist = ({
     <string>${e(repo)}</string>
   </dict>
   <key>StartInterval</key>
-  <integer>3600</integer>
+  <integer>${RUN_INTERVAL_SECONDS}</integer>
   <key>RunAtLoad</key>
   <false/>
   <key>StandardOutPath</key>
