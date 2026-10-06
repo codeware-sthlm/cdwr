@@ -19,6 +19,7 @@ import {
 
 import {
   type ApplyReport,
+  freshDanger,
   nothingToApply,
   parseApplyReport,
   planNotes,
@@ -72,8 +73,10 @@ interface PlanData {
  * Fills a tenant's workspace from a site definition held in the repository.
  *
  * The definition states one site and carries no identity — the tenant is named
- * here. Nothing is ever deleted: a definition says what should exist, not that
- * nothing else may, so a page it stops mentioning stays where it is.
+ * here. A plain apply deletes nothing: a definition says what should exist, not
+ * that nothing else may, so a page it stops mentioning stays where it is.
+ * `--fresh` first removes what this definition created; outside development it
+ * confirms as destructive, which on production means typing the tenant's name.
  */
 export default defineCommand<
   {
@@ -81,13 +84,13 @@ export default defineCommand<
     previewApp: ReturnType<typeof previewAppInput>;
     tenant: ReturnType<typeof input.string>;
     definition: ReturnType<typeof definitionInput>;
-    fresh: ReturnType<typeof input.optional<boolean>>;
+    fresh: ReturnType<typeof input.boolean>;
   },
   PlanData
 >({
   summary: 'Fill a tenant from a site definition in the repository',
   description:
-    'The plan is produced by applying the definition and rolling it back, so it is what the write actually did rather than a guess. Nothing is deleted — except with --fresh, in development, which first removes what this definition created.',
+    'The plan is produced by applying the definition and rolling it back, so it is what the write actually did rather than a guess. Nothing is deleted — except with --fresh, which first removes what this definition created. Development asks; elsewhere --fresh must be passed, and confirms as destructive.',
   danger: 'mutate',
   needs: ['fly', 'infisical'],
   inputs: {
@@ -98,17 +101,15 @@ export default defineCommand<
       description: 'The workspace to fill. It must already exist'
     }),
     definition: definitionInput('Which definition should fill it?'),
-    // Development only: asked there, and refused as a flag anywhere else
-    fresh: input.optional(
-      input.boolean({
-        prompt:
-          'Start fresh? Removes what this definition created, then applies it again',
-        description:
-          'Remove what this definition created first, so the site matches it — including edits made to those documents in the admin'
-      }),
-      (resolved) => resolved['environment'] === 'development',
-      'applies only in development'
-    )
+    // Asked in development; elsewhere it replaces a live site, so only as a flag
+    fresh: input.boolean({
+      prompt:
+        'Start fresh? Removes what this definition created, then applies it again',
+      description:
+        'Remove what this definition created first, so the site matches it — including edits made to those documents in the admin',
+      default: (resolved) =>
+        resolved['environment'] === 'development' ? undefined : false
+    })
   },
 
   async plan(ctx, { environment, previewApp, tenant, definition, fresh }) {
@@ -154,6 +155,7 @@ export default defineCommand<
       steps: planSteps(report),
       notes: planNotes(report),
       target: { environment, name: tenant },
+      danger: freshDanger(environment, isFresh),
       nothing: nothingToApply(report)
         ? `'${tenant}' already has everything the definition names`
         : undefined,
