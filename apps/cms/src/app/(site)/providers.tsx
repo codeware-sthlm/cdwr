@@ -23,6 +23,8 @@ type ProvidersProps = {
   colorScheme: SiteSettingsGeneral['colorScheme'];
   /** How the header and its controls are drawn */
   chrome: PayloadValue['chrome'];
+  /** Content Security Policy nonce for the pre-paint theme script */
+  nonce: string | undefined;
 } & Pick<
   PayloadValue,
   | 'appInfo'
@@ -47,6 +49,7 @@ export function Providers({
   humanCheckSiteKey,
   iconConfig,
   locale,
+  nonce,
   payloadUrl,
   signupPolicy,
   theme,
@@ -60,6 +63,7 @@ export function Providers({
       // A locked site never leaves its scheme; next-themes handles this
       // natively, so no switch has to be suppressed downstream
       forcedTheme={colorScheme === 'system' ? undefined : colorScheme}
+      nonce={nonce}
       // The script sets the scheme before the first paint, which only the
       // server's copy can do. A page drawn in the browser, such as a 404,
       // creates it there, where it never runs and React warns; as data it is
@@ -98,7 +102,7 @@ function PayloadProviderInner({
   signupPolicy,
   theme,
   themes
-}: ProvidersProps) {
+}: Omit<ProvidersProps, 'nonce'>) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
