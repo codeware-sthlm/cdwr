@@ -1,0 +1,9 @@
+{
+  "executors": {
+    "infisical-run": {
+      "implementation": "./src/executors/infisical-run/executor",
+      "schema": "./src/executors/infisical-run/schema.json",
+      "description": "Run commands with an Infisical folder layered under everything the target sets on purpose"
+    }
+  }
+}
