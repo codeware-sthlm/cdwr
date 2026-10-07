@@ -45,7 +45,7 @@ describe('getComponentDeveloperTenantIDs', () => {
     expect(
       getComponentDeveloperTenantIDs({
         id: 1,
-        apiKey: 'k'
+        collection: 'tenants'
       } as unknown as UserAny)
     ).toEqual([]);
   });

@@ -39,7 +39,9 @@ describe('canEdit', () => {
 
   it('is false for nothing and for a tenant api key', () => {
     expect(canEdit(null)).toBe(false);
-    expect(canEdit({ id: 1, apiKey: 'k' } as unknown as UserAny)).toBe(false);
+    expect(
+      canEdit({ id: 1, collection: 'tenants' } as unknown as UserAny)
+    ).toBe(false);
   });
 });
 

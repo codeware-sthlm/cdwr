@@ -12,7 +12,11 @@ const user = (
 ): UserAny => ({ id: 1, role, tenants }) as unknown as UserAny;
 
 /** The identity the public site itself runs as */
-const tenantApiKey = { id: 7, apiKey: 'k', slug: 'moon' } as unknown as UserAny;
+const tenantApiKey = {
+  id: 7,
+  collection: 'tenants',
+  slug: 'moon'
+} as unknown as UserAny;
 
 const reader = user('user', [{ tenant: 7, role: 'reader' }]);
 const editor = user('user', [{ tenant: 7, role: 'user' }]);

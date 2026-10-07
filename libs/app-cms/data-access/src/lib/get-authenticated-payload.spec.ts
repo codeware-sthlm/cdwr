@@ -25,7 +25,7 @@ vi.mock('./get-tenant-context', () => ({
 
 const { getAuthenticatedPayload } = await import('./get-authenticated-payload');
 
-const tenantDoc = { id: 7, slug: 'moon', apiKey: 'k' };
+const tenantDoc = { id: 7, slug: 'moon', collection: 'tenants' };
 
 /** A users-collection document; `isUser` keys on `role` + `tenants` */
 const member = {
