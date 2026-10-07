@@ -74,13 +74,14 @@ What waits on Håkan after implementation, counted from Linear:
 - each `agent:review` ticket that is not Done or Canceled (an open PR) counts one
 - each `agent:review` ticket completed within the last 14 days whose newest
   `**Agent: PR ready**` comment still has an unticked hand-off counts one, however many
-  items are left
+  items are left, but together they count at most `limit − 3`: hand-offs that need weeks of
+  observation never take the last 3 slots, so new work always has room
 
 Read hand-offs the way the scheduler's PR watch does, so both agree. Put the ticket's comments
 in a file as `{"comments":{"nodes":[{"body":…,"createdAt":…}]}}` and run
 `jq -L tools/cdwr/agent-queue 'include "watch"; handoffs | length' <file>`.
 
-Default limit 5, `limit=N` overrides it for the run. Plans waiting for approval don't count.
+Default limit 5, `limit=N` overrides it for the run (at least 3). Plans waiting for approval don't count.
 
 ## Nothing workable
 
