@@ -2,6 +2,7 @@ import type { HostnameCheck } from '@cdwr/fly-node/api';
 import {
   type CertificateState,
   applyCertificateState,
+  flyUnavailableMessage,
   getFlyApi,
   parseHostname,
   toCertificateState
@@ -81,14 +82,21 @@ export const platformDomainCertificateEndpoint: Endpoint = {
       return fail(StatusCodes.NOT_FOUND);
     }
 
-    const fly = await getFlyApi();
+    const flyApi = await getFlyApi();
 
-    if (!fly) {
+    if (flyApi.status !== 'ready') {
+      if (flyApi.status === 'unreachable') {
+        req.payload.logger.error(
+          `[platformDomainCertificate] Fly credentials unreadable: ${flyApi.error}`
+        );
+      }
       return fail(
         StatusCodes.SERVICE_UNAVAILABLE,
-        'No Fly credentials are configured for this platform.'
+        flyUnavailableMessage[flyApi.status]
       );
     }
+
+    const { fly } = flyApi;
 
     const app = domain.app;
     let result: Result;

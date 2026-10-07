@@ -9,7 +9,11 @@ export {
 } from './lib/certificate-state';
 export { describeCertificateIssues } from './lib/certificate-issues';
 export { domainsField } from './lib/domains-field';
-export { getFlyApi } from './lib/get-fly-api';
+export {
+  type FlyApiResult,
+  flyUnavailableMessage,
+  getFlyApi
+} from './lib/get-fly-api';
 export { guardDomainConflicts } from './lib/guard-domain-conflicts';
 export { normalizeDomains } from './lib/normalize-domains';
 export {
