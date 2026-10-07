@@ -5,7 +5,8 @@ import {
 import {
   editorTenantRoles,
   getUserTenantIDs,
-  hasRole
+  hasRole,
+  isTenant
 } from '@codeware/app-cms/util/misc';
 import type { Config } from '@codeware/shared/util/payload-types';
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant';
@@ -65,5 +66,12 @@ export const getMultiTenantPlugin = () =>
     tenantsArrayField: {
       includeDefaultField: false
     },
-    userHasAccessToAllTenants: (user) => hasRole(user, 'system-user')
+    // A tenant api key carries no tenants array, so since 3.90 the plugin's
+    // membership check refuses the tenant `ensureTenantFromApiKey` stamps on
+    // public writes. Counting the key here only lifts that check: the plugin's
+    // access wrapper applies to `users` alone, and its filters already leave a
+    // user without assigned tenants unfiltered. The tenant field's create
+    // access above still keeps a key from choosing the value itself.
+    userHasAccessToAllTenants: (user) =>
+      hasRole(user, 'system-user') || isTenant(user)
   });
