@@ -15,6 +15,7 @@ import {
 } from '@codeware/shared/util/infisical-cli';
 import type { ExecutorContext } from '@nx/devkit';
 
+import { killTree } from './process-tree';
 import type { InfisicalRunExecutorSchema } from './schema';
 
 type Env = Record<string, string | undefined>;
@@ -27,7 +28,9 @@ const runCommand = (command: string, cwd: string, env: Env): Promise<boolean> =>
 
     const forward = (signal: NodeJS.Signals) => () => {
       stopped = true;
-      child.kill(signal);
+      // The shell is not the only process to stop; its children can hold ports
+      if (child.pid !== undefined) killTree(child.pid, signal);
+      else child.kill(signal);
     };
     const onInt = forward('SIGINT');
     const onTerm = forward('SIGTERM');

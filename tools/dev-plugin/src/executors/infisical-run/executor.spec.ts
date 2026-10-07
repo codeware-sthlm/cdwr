@@ -231,6 +231,53 @@ describe('infisicalRun', () => {
     expect(existsSync(join(root, 'apps/cms/out.json'))).toBe(false);
   });
 
+  it.skipIf(process.platform === 'win32')(
+    'stops a grandchild with the command',
+    async () => {
+      const handlers: Array<() => void> = [];
+      const on = process.on.bind(process);
+      vi.spyOn(process, 'on').mockImplementation(((
+        event: string,
+        handler: () => void
+      ) => {
+        if (event === 'SIGINT') handlers.push(handler);
+        return on(event, handler);
+      }) as typeof process.on);
+
+      const pidFile = join(root, 'apps/cms/grandchild.pid');
+      const script = `const c = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' }); require('fs').writeFileSync('grandchild.pid', String(c.pid)); setInterval(() => {}, 1000)`;
+      const running = infisicalRun(
+        options({ commands: [`node -e "${script.replace(/"/g, '\\"')}"`] }),
+        context()
+      );
+      const until = async (done: () => boolean) => {
+        const deadline = Date.now() + 10000;
+        while (!done() && Date.now() < deadline) {
+          await new Promise((tick) => setTimeout(tick, 50));
+        }
+      };
+      await until(
+        () => existsSync(pidFile) && readFileSync(pidFile, 'utf8') !== ''
+      );
+      const grandchild = Number(readFileSync(pidFile, 'utf8'));
+      expect(() => process.kill(grandchild, 0)).not.toThrow();
+
+      handlers.forEach((handler) => handler());
+      expect(await running).toEqual({ success: false });
+
+      const gone = () => {
+        try {
+          process.kill(grandchild, 0);
+          return false;
+        } catch (error) {
+          return (error as NodeJS.ErrnoException).code === 'ESRCH';
+        }
+      };
+      await until(gone);
+      expect(gone()).toBe(true);
+    }
+  );
+
   it('prints the failure of Infisical, never its output', async () => {
     writeFileSync(
       join(bin, 'infisical'),
