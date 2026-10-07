@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 
 import {
   InfisicalMissingError,
@@ -9,9 +8,10 @@ import {
   fetchVault,
   layerVault,
   offlineCacheFile,
-  parseDotenv,
+  readCommittedEnv,
   readOfflineCache,
-  secretsMode
+  secretsMode,
+  taskEnvFiles
 } from '@codeware/shared/util/infisical-cli';
 import type { ExecutorContext } from '@nx/devkit';
 
@@ -19,22 +19,7 @@ import type { InfisicalRunExecutorSchema } from './schema';
 
 type Env = Record<string, string | undefined>;
 
-/** The committed files Nx loads before an executor runs, later wins */
-const readCommitted = (
-  workspaceRoot: string,
-  projectRoot: string
-): Record<string, string> => {
-  const committed: Record<string, string> = {};
-  for (const dir of [workspaceRoot, projectRoot]) {
-    const file = join(dir, '.env');
-    if (existsSync(file)) {
-      Object.assign(committed, parseDotenv(readFileSync(file, 'utf8')));
-    }
-  }
-  return committed;
-};
-
-/** Runs one command, forwarding stop signals; resolves true when it ended well */
+/** Runs one command, forwarding stop signals; resolves true when it ended well, false when it failed or was stopped */
 const runCommand = (command: string, cwd: string, env: Env): Promise<boolean> =>
   new Promise((resolvePromise) => {
     const child = spawn(command, { shell: true, stdio: 'inherit', cwd, env });
@@ -60,11 +45,8 @@ const runCommand = (command: string, cwd: string, env: Env): Promise<boolean> =>
       done(false);
     });
     child.on('exit', (code, signal) => {
-      if (signal) {
-        done(stopped && (signal === 'SIGINT' || signal === 'SIGTERM'));
-      } else {
-        done(code === 0);
-      }
+      // A stop ends the sequence, however the child took it
+      done(!stopped && !signal && code === 0);
     });
   });
 
@@ -77,6 +59,18 @@ const runAll = async (
     if (!(await runCommand(command, cwd, env))) return { success: false };
   }
   return { success: true };
+};
+
+/** The parent target of an atomized target, which Nx also loads env files for */
+const nonAtomizedTarget = (
+  context: ExecutorContext,
+  target: string
+): string | undefined => {
+  const project =
+    context.projectName !== undefined
+      ? context.projectsConfigurations?.projects[context.projectName]
+      : undefined;
+  return project?.targets?.[target]?.metadata?.nonAtomizedTarget;
 };
 
 export default async function infisicalRun(
@@ -97,10 +91,15 @@ export default async function infisicalRun(
     return runAll(options.commands, cwd, inherited);
   }
 
-  const committed = readCommitted(
-    context.root,
-    resolve(context.root, projectRoot ?? '.')
-  );
+  const target = context.targetName ?? 'infisical-run';
+  const { committed: committedFiles } = taskEnvFiles({
+    workspaceRoot: context.root,
+    projectRoot: projectRoot ?? '.',
+    target,
+    configuration: context.configurationName,
+    nonAtomizedTarget: nonAtomizedTarget(context, target)
+  });
+  const committed = readCommittedEnv(committedFiles);
   const environment = deployEnvironment(inherited);
   const cacheFile = offlineCacheFile(context.root, options.path);
   const cacheName = relative(context.root, cacheFile);
@@ -112,19 +111,23 @@ export default async function infisicalRun(
         ? readOfflineCache(cacheFile)
         : fetchVault(options.path, environment).values;
   } catch (error) {
-    if (error instanceof InfisicalMissingError || mode === 'offline') {
+    console.error(
+      `\ninfisical-run: ${error instanceof Error ? error.message : String(error)}`
+    );
+    if (!(error instanceof InfisicalMissingError) && mode !== 'offline') {
       console.error(
-        `\ninfisical-run: ${error instanceof Error ? error.message : String(error)}`
-      );
-    } else {
-      console.error(
-        `\ninfisical-run: if Infisical is the problem, \`infisical login\` — or OFFLINE=1 to use ${cacheName} on purpose.`
+        `infisical-run: if Infisical is the problem, \`infisical login\` — or OFFLINE=1 to use ${cacheName} on purpose.`
       );
     }
     return { success: false };
   }
 
-  const { apply, sources } = layerVault({ inherited, committed, vault });
+  const { apply, sources } = layerVault({
+    inherited,
+    committed,
+    explicit: new Set(Object.keys(options.env ?? {})),
+    vault
+  });
   console.log(
     describeLayers({
       mode,
