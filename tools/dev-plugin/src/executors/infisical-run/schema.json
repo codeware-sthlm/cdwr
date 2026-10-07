@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "InfisicalRun",
+  "title": "Run commands with Infisical secrets",
+  "description": "Runs the commands in order, stopping at the first failure. Precedence, lowest first: the committed .env files, the Infisical folder, then everything set on purpose — the target's env, .env.local, the shell and a parent target. OFFLINE=1 reads the offline cache instead; CI=true skips Infisical.",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Infisical folder, e.g. /apps/cms. Its sub-folders are included."
+    },
+    "commands": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Commands to run in order through a shell"
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory relative to the workspace root. Defaults to the project root."
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Values the target sets on purpose; the vault does not overwrite them"
+    }
+  },
+  "required": ["path", "commands"],
+  "additionalProperties": false
+}
