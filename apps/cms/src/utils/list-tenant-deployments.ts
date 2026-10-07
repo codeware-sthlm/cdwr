@@ -1,6 +1,8 @@
 // Must be first: installs the guard before any module that might not finish
 import './exit-guard';
 
+import { readTenantApiKeys } from '../security/read-tenant-api-keys';
+
 import { report } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
@@ -34,12 +36,14 @@ async function list() {
     depth: 0
   });
 
-  const tenants = docs.map(({ id, name, slug, deployment, apiKey }) => ({
+  const apiKeys = await readTenantApiKeys(payload);
+
+  const tenants = docs.map(({ id, name, slug, deployment }) => ({
     id,
     name,
     slug,
     deployment: deployment ?? null,
-    apiKey: apiKey ?? null
+    apiKey: apiKeys.get(id) ?? null
   }));
 
   report('TENANT_DEPLOYMENTS', JSON.stringify(tenants));

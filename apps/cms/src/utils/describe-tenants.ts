@@ -3,6 +3,8 @@ import './exit-guard';
 
 import type { CollectionSlug, Payload } from 'payload';
 
+import { readTenantApiKeys } from '../security/read-tenant-api-keys';
+
 import { report } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
@@ -44,6 +46,11 @@ async function describe() {
     process.exit(1);
   }
 
+  const apiKeys = await readTenantApiKeys(
+    payload,
+    docs.map(({ id }) => id)
+  );
+
   const details = await Promise.all(
     docs.map(async (tenant) => {
       const [settings, counts] = await Promise.all([
@@ -58,7 +65,7 @@ async function describe() {
         deployment: tenant.deployment ?? null,
         supportedLocales: tenant.supportedLocales,
         createdAt: tenant.createdAt,
-        apiKey: tenant.apiKey ?? null,
+        apiKey: apiKeys.get(tenant.id) ?? null,
         domains: (tenant.domains ?? []).map((domain) => ({
           hostname: domain.hostname,
           app: domain.app,
