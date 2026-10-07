@@ -66,6 +66,11 @@ export type ExecFlyOptions = SpawnOptions &
     streamStrategy?: 'stdout' | 'stderr' | 'combined';
   };
 
+/** How often to poll a machine's state while waiting on it */
+const MACHINE_STATE_INTERVAL_MS = 2_000;
+/** How long to wait for a machine to reach a state */
+const MACHINE_STATE_TIMEOUT_MS = 120_000;
+
 /**
  * Manages deployments to Fly.io using the `flyctl` CLI tool.
  */
@@ -511,7 +516,11 @@ export class Fly {
       }
     },
     /**
-     * Restart a machine by stopping then starting it
+     * Restart a machine by stopping then starting it.
+     *
+     * Waits until Fly reports the machine stopped (or suspended) before
+     * starting it, then until it is started. If the start fails after the
+     * stop, the error says the machine was left stopped.
      *
      * @param app - The name of the application
      * @param machineId - The machine ID to restart
@@ -1264,14 +1273,53 @@ export class Fly {
 
   /**
    * @private
-   * Restart a machine by stopping then starting it
-   * @throws An error if the machine cannot be restarted
+   * Restart a machine by stopping then starting it, waiting on the state Fly
+   * reports rather than a fixed delay: the start is only issued once the
+   * machine is stopped (or suspended), and the restart is done once it is
+   * started again.
+   * @throws An error saying the machine was left stopped when anything after
+   * the stop fails
    */
   private async restartMachine(app: string, machineId: string): Promise<void> {
     await this.stopMachine(app, machineId);
-    // Wait a bit for the machine to fully stop
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    await this.startMachine(app, machineId);
+    try {
+      await this.waitForMachineState(app, machineId, ['stopped', 'suspended']);
+      await this.startMachine(app, machineId);
+      await this.waitForMachineState(app, machineId, ['started']);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Machine '${machineId}' in app '${app}' was stopped but did not start again: ${reason}`,
+        { cause: error }
+      );
+    }
+  }
+
+  /**
+   * @private
+   * Poll the app status until the machine reports one of the given states
+   * @throws An error if the machine does not reach a state in time
+   */
+  private async waitForMachineState(
+    app: string,
+    machineId: string,
+    states: readonly string[]
+  ): Promise<void> {
+    const deadline = Date.now() + MACHINE_STATE_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      // A failed poll is retried until the deadline, not fatal
+      const status = await this.fetchAppStatus('nullOnError', { app });
+      const machine = status?.machines.find(({ id }) => id === machineId);
+      if (machine && states.includes(machine.state)) {
+        return;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, MACHINE_STATE_INTERVAL_MS)
+      );
+    }
+    throw new Error(
+      `Machine '${machineId}' in app '${app}' did not reach ${states.join('/')} in time`
+    );
   }
 
   /**
