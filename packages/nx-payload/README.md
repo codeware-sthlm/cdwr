@@ -66,11 +66,11 @@
 > [!IMPORTANT]
 > This plugin installs **Next.js v16** when generating a new Payload application, unless your workspace already has a Next.js version installed.
 
-**Next.js v16 is not required — Next.js v15 still works.** The plugin installs Payload v3.90, whose `@payloadcms/next` package supports both Next.js v16 (`>=16.3.3`) and Next.js v15 (`>=15.2.9`). v16 is simply the new default for fresh installs.
+**Next.js v16 is not required — Next.js v15 still works.** The plugin installs Payload v3.90, whose `@payloadcms/next` package supports both Next.js v16 (`>=16.3.3`) and the patched Next.js v15 lines (`15.2.9+`, `15.3.9+` or `15.4.11+`; not `15.5`). v16 is simply the new default for fresh installs.
 
 ### Can I stay on Next.js v15? <!-- omit in toc -->
 
-Yes. If your workspace already has Next.js v15 installed, the generator **will not upgrade or downgrade** it — it only adds Next.js when none is present. Any Next.js version supported by the installed Payload release (`>=15.2.9`) is fine.
+Yes. If your workspace already has Next.js v15 installed, the generator **will not upgrade or downgrade** it — it only adds Next.js when none is present. It has to be on a line the installed Payload release supports: `15.2.9+`, `15.3.9+` or `15.4.11+`. Next.js `15.5` is not supported.
 
 ### Notes <!-- omit in toc -->
 
