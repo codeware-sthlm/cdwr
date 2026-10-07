@@ -1,6 +1,6 @@
 import type { Payload } from 'payload';
 
-/** Advisory lock key, named so `pg_locks` says what holds it */
+/** Advisory lock key: a stable number hashed from a namespaced name, not a bare constant */
 const LOCK = "hashtext('cdwr:seed')";
 
 /** How long a booting machine waits for another seed before giving up */
