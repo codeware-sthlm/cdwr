@@ -53,7 +53,9 @@ const context = (): ExecutorContext => ({
   projectsConfigurations: {
     version: 2,
     projects: { cms: { root: 'apps/cms' } }
-  }
+  },
+  nxJsonConfiguration: {},
+  projectGraph: { nodes: {}, dependencies: {} }
 });
 
 const options = (
@@ -104,7 +106,12 @@ afterEach(() => {
 });
 
 describe('infisicalRun', () => {
-  it.each([
+  it.each<{
+    name: string;
+    env: Record<string, string>;
+    target: Partial<InfisicalRunExecutorSchema>;
+    expected: Record<string, string>;
+  }>([
     {
       name: 'a database set by the shell beats the vault',
       env: { DATABASE_URL: E2E_DB },
