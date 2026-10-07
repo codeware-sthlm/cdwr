@@ -132,7 +132,7 @@
       },
       "executor": "nx:run-commands",
       "options": {
-        "command": "node tools/scripts/with-secrets.mjs --refresh-offline"
+        "command": "pnpm cdwr infisical cache --path=/apps/cms --yes --non-interactive"
       }
     }
   }

@@ -106,6 +106,14 @@ such as Mailtrap. With nothing configured at all, development falls back to
 a disposable Ethereal inbox created on the first send, and logs a per-message
 preview link. Nothing is dropped silently.
 
+#### Dev secrets
+
+The `dev`, `seed`, `reset-db` and `verify` targets run through the `dev-plugin:infisical-run`
+executor, which reads the app's Infisical folder with your CLI session. Precedence: committed `.env` < vault < anything set on
+purpose (target env, `.env.local`, the shell). `OFFLINE=1` uses `apps/<app>/.env.offline`
+instead, refreshed with `nx dx:secrets <app>`; `CI` skips the vault. `cdwr infisical resolve`
+shows where each key comes from, `cdwr infisical session` whether you are logged in.
+
 #### Custom component builds
 
 Saving a custom component builds it. In development the cms builds in-process
