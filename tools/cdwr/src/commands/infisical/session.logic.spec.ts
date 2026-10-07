@@ -28,17 +28,16 @@ describe('probeSession', () => {
       throw new Error('exit 1');
     });
     expect(probeSession('development', run)).toMatchObject({
-      state: 'not-logged-in',
-      hint: expect.stringMatching(
-        /Infisical CLI failed: exit 1 .*infisical login/
-      )
+      state: 'failed',
+      message: 'Infisical CLI check failed: exit 1',
+      hint: expect.stringContaining('infisical login')
     });
   });
 
   it('does not echo output that is not JSON', () => {
     const run = vi.fn().mockReturnValue('SECRET-SENTINEL');
     const state = probeSession('development', run);
-    expect(state.state).toBe('not-logged-in');
+    expect(state.state).toBe('failed');
     expect(JSON.stringify(state)).not.toContain('SECRET-SENTINEL');
   });
 });
