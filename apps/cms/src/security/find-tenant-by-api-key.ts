@@ -1,10 +1,11 @@
 import type { Tenant } from '@codeware/shared/util/payload-types';
 import type { Payload } from 'payload';
 
+import { apiKeyIndexWhere } from './api-key-index';
+
 /**
- * The apiKey field is hashed in the DB index and cannot be matched via a WHERE
- * clause, so the only way to resolve a tenant from its key is to read them all
- * and compare in JS.
+ * Resolves a tenant from its API key through the HMAC index, the same lookup
+ * Payload's API-key strategy uses.
  *
  * Access control calls this per collection per operation, which made a single
  * admin render resolve the same tenant hundreds of times. The identity is
@@ -32,11 +33,13 @@ export const findTenantByApiKey = (
       collection: 'tenants',
       overrideAccess: true,
       pagination: false,
-      // Callers only need `id` (and `apiKey` to match on), so skip relationship
-      // population on what is an access-control hot path
+      limit: 1,
+      where: apiKeyIndexWhere(payload.secret, apiKey),
+      // Callers only need `id`, so skip relationship population on what is an
+      // access-control hot path
       depth: 0
     })
-    .then(({ docs }) => docs.find((t) => t.apiKey === apiKey))
+    .then(({ docs }) => docs[0])
     .catch((error) => {
       // Never cache a failed lookup — the next call should retry
       cache.delete(apiKey);

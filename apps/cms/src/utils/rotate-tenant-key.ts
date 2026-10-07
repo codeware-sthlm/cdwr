@@ -3,6 +3,8 @@ import './exit-guard';
 
 import { randomUUID } from 'crypto';
 
+import { apiKeyIndexWhere } from '../security/api-key-index';
+
 import { report } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
@@ -43,17 +45,17 @@ async function rotate() {
 
   const payload = await getScriptPayload(databaseUrl);
 
-  // The key is hashed in the DB index and cannot be matched with a where
-  // clause, so resolve it the same way access control does - read them all and
-  // compare in memory.
-  const { docs } = await payload.find({
+  // Resolved the same way access control does, through the key's HMAC index
+  const {
+    docs: [tenant]
+  } = await payload.find({
     collection: 'tenants',
     overrideAccess: true,
     pagination: false,
+    limit: 1,
+    where: apiKeyIndexWhere(payload.secret, currentApiKey),
     depth: 0
   });
-
-  const tenant = docs.find(({ apiKey }) => apiKey === currentApiKey);
 
   if (!tenant) {
     console.error(

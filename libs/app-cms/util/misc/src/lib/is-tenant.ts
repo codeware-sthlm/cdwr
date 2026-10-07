@@ -14,5 +14,6 @@ export const isTenant = <T extends TypeWithID = UserAny>(
   if (!user) {
     return false;
   }
-  return 'apiKey' in user;
+  // Not `apiKey`: Payload strips it from every document it returns, req.user included
+  return 'collection' in user && user.collection === 'tenants';
 };
