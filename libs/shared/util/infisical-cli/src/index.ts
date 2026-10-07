@@ -1,3 +1,4 @@
+export * from './lib/committed-env';
 export * from './lib/describe-layers';
 export * from './lib/discover-paths';
 export * from './lib/fetch-vault';

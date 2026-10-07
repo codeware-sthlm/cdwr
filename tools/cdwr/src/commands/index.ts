@@ -11,7 +11,10 @@ export const GROUPS: Group[] = [
     name: 'tenant',
     summary: 'Tenant lifecycle: provisioning, keys, site gate'
   },
-  { name: 'infisical', summary: 'Look at what Infisical holds' },
+  {
+    name: 'infisical',
+    summary: 'Look at what Infisical holds, and cache it for offline work'
+  },
   { name: 'signature', summary: 'Request signing between web and cms' },
   { name: 'builder', summary: 'The component build service' },
   { name: 'media', summary: 'Showcase imagery' },
@@ -143,6 +146,24 @@ export const ENTRIES: Entry[] = [
     summary: 'Deploy rules, app tenants and app secrets side by side',
     danger: 'read',
     load: () => import('./infisical/analysis').then((m) => m.default)
+  },
+  {
+    path: ['infisical', 'cache'],
+    summary: 'Refresh the offline copy of an app vault',
+    danger: 'mutate',
+    load: () => import('./infisical/cache').then((m) => m.default)
+  },
+  {
+    path: ['infisical', 'resolve'],
+    summary: 'Where each vault key comes from in this shell',
+    danger: 'read',
+    load: () => import('./infisical/resolve').then((m) => m.default)
+  },
+  {
+    path: ['infisical', 'session'],
+    summary: 'Whether the Infisical CLI is installed and logged in',
+    danger: 'read',
+    load: () => import('./infisical/session').then((m) => m.default)
   },
   {
     path: ['signature', 'rotate'],
