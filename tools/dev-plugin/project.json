@@ -5,37 +5,11 @@
   "projectType": "library",
   "tags": ["scope:tools"],
   "targets": {
-    "build": {
-      "executor": "@nx/js:tsc",
-      "outputs": ["{options.outputPath}"],
-      "options": {
-        "outputPath": "dist/tools/dev-plugin",
-        "main": "tools/dev-plugin/src/index.ts",
-        "tsConfig": "tools/dev-plugin/tsconfig.lib.json",
-        "assets": [
-          "tools/dev-plugin/*.md",
-          {
-            "input": "./tools/dev-plugin/src",
-            "glob": "**/!(*.ts)",
-            "output": "./src"
-          },
-          {
-            "input": "./tools/dev-plugin/src",
-            "glob": "**/*.d.ts",
-            "output": "./src"
-          },
-          {
-            "input": "./tools/dev-plugin",
-            "glob": "generators.json",
-            "output": "."
-          },
-          {
-            "input": "./tools/dev-plugin",
-            "glob": "executors.json",
-            "output": "."
-          }
-        ]
-      }
+    "typecheck": {
+      "metadata": {
+        "description": "Type-check the dev plugin and its tests"
+      },
+      "command": "tsc -p tools/dev-plugin/tsconfig.lib.json --noEmit && tsc -p tools/dev-plugin/tsconfig.spec.json --noEmit"
     }
   }
 }
