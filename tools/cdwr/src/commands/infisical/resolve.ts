@@ -24,7 +24,14 @@ export default defineCommand({
   inputs: { path: vaultPathInput() },
 
   async plan(ctx, { path }) {
-    const mode = secretsMode(ctx.env);
+    const cacheFile = offlineCacheFile(ctx.root, path);
+    const files = taskEnvFiles({
+      workspaceRoot: ctx.root,
+      projectRoot: dirname(relative(ctx.root, cacheFile)),
+      target: 'dev'
+    });
+    const inherited = { ...readEnvFiles(files.all), ...ctx.env };
+    const mode = secretsMode(inherited);
     if (mode === 'ci') {
       return {
         steps: [],
@@ -33,20 +40,14 @@ export default defineCommand({
       };
     }
 
-    const environment = deployEnvironment(ctx.env);
-    const cacheFile = offlineCacheFile(ctx.root, path);
-    const files = taskEnvFiles({
-      workspaceRoot: ctx.root,
-      projectRoot: dirname(relative(ctx.root, cacheFile)),
-      target: 'dev'
-    });
+    const environment = deployEnvironment(inherited);
     const keys = await ctx.ui.task(
       mode === 'offline'
         ? `Reading ${relative(ctx.root, cacheFile)}`
         : `Reading ${path} for ${environment}`,
       async () =>
         resolveKeys({
-          inherited: { ...readEnvFiles(files.all), ...ctx.env },
+          inherited,
           committed: readCommittedEnv(files.committed),
           vault:
             mode === 'offline'

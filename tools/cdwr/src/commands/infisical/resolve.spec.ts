@@ -87,6 +87,14 @@ describe('infisical resolve', () => {
     expect(lib.fetchVault).not.toHaveBeenCalled();
   });
 
+  it('honours OFFLINE set only in a local env file', async () => {
+    vi.mocked(lib.readEnvFiles).mockReturnValueOnce({ OFFLINE: '1' });
+    const { code } = await run({});
+    expect(code).toBe(EXIT.ok);
+    expect(lib.readOfflineCache).toHaveBeenCalled();
+    expect(lib.fetchVault).not.toHaveBeenCalled();
+  });
+
   it('skips the vault in CI', async () => {
     const { code } = await run({ CI: 'true' });
     expect(code).toBe(EXIT.ok);
