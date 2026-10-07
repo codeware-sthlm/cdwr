@@ -98,31 +98,10 @@ export async function startMachines(app: string): Promise<void> {
   if (stopped.length) await sleep(5_000);
 }
 
-async function waitForMachineState(
-  app: string,
-  machineId: string,
-  states: string[],
-  timeoutMs = 120_000
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const machine = (await fly().status({ app }))?.machines?.find(
-      ({ id }) => id === machineId
-    );
-    if (machine && states.includes(machine.state)) return;
-    await sleep(2_000);
-  }
-  throw new Error(
-    `Machine ${machineId} in '${app}' did not reach ${states.join('/')} in time`
-  );
-}
-
 /**
  * Restart every machine of an app so it re-reads its runtime configuration,
  * one machine at a time so the app keeps serving. Stop then start is a cold
- * boot; a suspended machine resumed from its snapshot re-reads nothing. Waits
- * are on observed state: the two-second sleep in fly-node's own restart is
- * not enough and the start is rejected while the machine is still stopping.
+ * boot; a suspended machine resumed from its snapshot re-reads nothing.
  */
 export async function restartMachines(
   app: string,
@@ -131,10 +110,7 @@ export async function restartMachines(
   const machines = await machinesOf(app);
   for (const [index, machine] of machines.entries()) {
     onMachine?.(machine.id, index, machines.length);
-    await fly().machines.stop(app, machine.id);
-    await waitForMachineState(app, machine.id, ['stopped', 'suspended']);
-    await fly().machines.start(app, machine.id);
-    await waitForMachineState(app, machine.id, ['started']);
+    await fly().machines.restart(app, machine.id);
   }
   return machines.length;
 }
