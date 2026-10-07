@@ -1,0 +1,8 @@
+{
+  "name": "shared-util-infisical-cli",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/util/infisical-cli/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:util"],
+  "targets": {}
+}
