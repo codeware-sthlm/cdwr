@@ -246,8 +246,10 @@ describe('infisicalRun', () => {
 
       const pidFile = join(root, 'apps/cms/grandchild.pid');
       const script = `const c = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' }); require('fs').writeFileSync('grandchild.pid', String(c.pid)); setInterval(() => {}, 1000)`;
+      // A file, not `node -e`, so the script needs no shell quoting
+      writeFileSync(join(root, 'apps/cms/grandchild.cjs'), script);
       const running = infisicalRun(
-        options({ commands: [`node -e "${script.replace(/"/g, '\\"')}"`] }),
+        options({ commands: ['node grandchild.cjs'] }),
         context()
       );
       const until = async (done: () => boolean) => {
