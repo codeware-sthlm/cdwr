@@ -14,6 +14,7 @@ import {
   isProvisioningEnvironment,
   readInfisicalStatus
 } from '../provisioning/read-infisical-status';
+import { readTenantApiKeys } from '../security/read-tenant-api-keys';
 
 /** Long enough that reopening a workspace does not sign in to Infisical again */
 const CACHE_TTL_MS = 60_000;
@@ -76,7 +77,7 @@ export const tenantInfisicalStatusEndpoint: Endpoint = {
       return fail(StatusCodes.NOT_FOUND);
     }
 
-    const { deployment, apiKey } = tenant;
+    const { deployment } = tenant;
 
     if (!deployment) {
       return fail(
@@ -92,6 +93,11 @@ export const tenantInfisicalStatusEndpoint: Endpoint = {
     const cached = cache.get(cacheKey);
     const fresh =
       body.refresh !== true && cached && Date.now() - cached.at < CACHE_TTL_MS;
+
+    // The read above decides access; Payload strips the key from it
+    const apiKey = (await readTenantApiKeys(req.payload, [tenant.id])).get(
+      tenant.id
+    );
 
     const promise = fresh
       ? cached.promise

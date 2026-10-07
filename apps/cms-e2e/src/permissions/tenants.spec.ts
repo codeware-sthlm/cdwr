@@ -144,20 +144,19 @@ test.describe('Tenants — delete [T-04]', () => {
 test.describe('Tenants — API key on create', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('a workspace created without a key gets one that authenticates', async ({
+  test('a workspace key authenticates through its index', async ({
     page,
     playwright,
     baseURL
   }) => {
     await loginAs(page, 'systemUser');
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { apiKey: _omitted, ...data } = newTenant('create');
-    const created = await page.request.post('/api/tenants', { data });
+    // Payload never returns the key, so the test sends one it knows
+    const apiKey = randomUUID();
+    const created = await page.request.post('/api/tenants', {
+      data: { ...newTenant('create'), apiKey }
+    });
     expect(created.status(), await created.text()).toBe(201);
-
-    const { doc } = (await created.json()) as { doc: Tenant };
-    expect(doc.apiKey).toMatch(/^[0-9a-f-]{36}$/);
 
     // Tenant-scoped reads answer a key Payload recognises and refuse one it
     // does not, so a 200 proves the key was stored with the index it is found
@@ -168,7 +167,7 @@ test.describe('Tenants — API key on create', () => {
         headers: { Authorization: `tenants API-Key ${apiKey}` }
       });
 
-    expect((await readWith(doc.apiKey as string)).status()).toBe(200);
+    expect((await readWith(apiKey)).status()).toBe(200);
     expect((await readWith(randomUUID())).status()).toBe(403);
     await anonymous.dispose();
   });

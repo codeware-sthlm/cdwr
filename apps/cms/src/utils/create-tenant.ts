@@ -1,6 +1,8 @@
 // Must be first: installs the guard before any module that might not finish
 import './exit-guard';
 
+import { randomUUID } from 'crypto';
+
 import { report } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
@@ -12,7 +14,8 @@ import { getScriptPayload, runScript } from './script-payload';
  * rather than from the admin panel — the same reason rotation does.
  *
  * There is no password to state: the collection disables the local strategy, so
- * a tenant authenticates by API key alone, and `generateApiKeyHook` mints it.
+ * a tenant authenticates by API key alone. The key is minted here, since Payload
+ * strips it from every read, including the result of `create`.
  * The slug is derived from the name unless one is given.
  *
  * Driven by env vars so the caller controls the target:
@@ -66,12 +69,15 @@ async function createTenant() {
     process.exit(1);
   }
 
+  const apiKey = randomUUID();
+
   try {
     const tenant = await payload.create({
       collection: 'tenants',
       data: {
         name: name as string,
         supportedLocales: locales as Array<'en' | 'sv'>,
+        apiKey,
         enableAPIKey: true,
         ...(slug ? { slug } : {}),
         ...(deployment ? { deployment } : {})
@@ -97,7 +103,7 @@ async function createTenant() {
         slug: tenant.slug,
         supportedLocales: tenant.supportedLocales,
         deployment: tenant.deployment ?? null,
-        apiKey: tenant.apiKey ?? null,
+        apiKey,
         dryRun
       })
     );
