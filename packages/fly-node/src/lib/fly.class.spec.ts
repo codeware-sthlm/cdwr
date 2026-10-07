@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import process from 'process';
 
 import { spawn, spawnPty } from '@codeware/shared/util/misc';
-import { Mock, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ExecFlyOptions, Fly } from './fly.class';
 import {
@@ -1773,6 +1773,155 @@ describe('Fly', () => {
         '--json'
       ]);
       expect(response).toEqual(mockListSecretForAllResponse);
+    });
+  });
+
+  describe('machines.restart', () => {
+    const machineId = 'machine-id';
+
+    /** Status rules reporting the given machine states, one per poll */
+    const statusRules = (states: Array<string>) =>
+      states.map((state) => ({
+        cmdMatch: /^status --app test-app --json$/,
+        resolveOrReject: 'resolve' as const,
+        output: JSON.stringify({
+          ...mockStatusResponse(mockDefs.testApp),
+          machines: mockStatusResponse(mockDefs.testApp).machines.map((m) => ({
+            ...m,
+            state
+          }))
+        }),
+        calls: 1
+      }));
+
+    /** Index of the first spawn call whose args contain all given words */
+    const callIndex = (...words: Array<string>) =>
+      mockSpawn.mock.calls.findIndex((call) =>
+        words.every((word) => call[1].includes(word))
+      );
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it.each([
+      {
+        name: 'waits for stopped before starting',
+        states: ['stopping', 'stopped', 'started']
+      },
+      {
+        name: 'counts suspended as stopped',
+        states: ['suspended', 'started']
+      }
+    ])('$name', async ({ states }) => {
+      setupFlyMocks([
+        {
+          cmdMatch: /machine (stop|start) /,
+          resolveOrReject: 'resolve',
+          output: ''
+        },
+        ...statusRules(states)
+      ]);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      const done = fly.machines.restart(mockDefs.testApp, machineId);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await expect(done).resolves.toBeUndefined();
+
+      const stopAt = callIndex('machine', 'stop');
+      const startAt = callIndex('machine', 'start');
+      expect(stopAt).toBeGreaterThanOrEqual(0);
+      // Every status poll reporting a stopped state precedes the start
+      const stoppedPolls = states.findIndex((s) =>
+        ['stopped', 'suspended'].includes(s)
+      );
+      const statusCalls = mockSpawn.mock.calls
+        .map((call, index) => ({ call, index }))
+        .filter(({ call }) => call[1].includes('status'));
+      expect(statusCalls.length).toBe(states.length);
+      expect(startAt).toBeGreaterThan(statusCalls[stoppedPolls].index);
+      expect(startAt).toBeLessThan(statusCalls[stoppedPolls + 1].index);
+    });
+
+    it('rejects without starting when the machine never stops', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /machine stop /,
+          resolveOrReject: 'resolve',
+          output: ''
+        },
+        {
+          cmdMatch: /^status --app test-app --json$/,
+          resolveOrReject: 'resolve',
+          output: JSON.stringify({
+            ...mockStatusResponse(mockDefs.testApp),
+            machines: mockStatusResponse(mockDefs.testApp).machines.map(
+              (m) => ({ ...m, state: 'stopping' })
+            )
+          })
+        }
+      ]);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      const done = fly.machines.restart(mockDefs.testApp, machineId);
+      const assertion = expect(done).rejects.toThrow(
+        `Machine '${machineId}' in app '${mockDefs.testApp}' did not reach stopped/suspended in time`
+      );
+      await vi.advanceTimersByTimeAsync(130_000);
+      await assertion;
+      await expect(done).rejects.toThrow('was stopped but did not start again');
+
+      expect(callIndex('machine', 'start')).toBe(-1);
+    });
+
+    it('keeps polling when a status call fails', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /machine (stop|start) /,
+          resolveOrReject: 'resolve',
+          output: ''
+        },
+        {
+          cmdMatch: /^status --app test-app --json$/,
+          resolveOrReject: 'reject',
+          output: 'status unavailable',
+          calls: 1
+        },
+        ...statusRules(['stopped', 'started'])
+      ]);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      const done = fly.machines.restart(mockDefs.testApp, machineId);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await expect(done).resolves.toBeUndefined();
+    });
+
+    it('says the machine was stopped when the start fails', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /machine stop /,
+          resolveOrReject: 'resolve',
+          output: ''
+        },
+        {
+          cmdMatch: /machine start /,
+          resolveOrReject: 'reject',
+          output: 'start refused'
+        },
+        ...statusRules(['stopped'])
+      ]);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      const done = fly.machines.restart(mockDefs.testApp, machineId);
+      const assertion = expect(done).rejects.toThrow(
+        'was stopped but did not start again'
+      );
+      await vi.advanceTimersByTimeAsync(30_000);
+      await assertion;
     });
   });
 

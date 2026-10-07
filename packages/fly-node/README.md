@@ -364,9 +364,11 @@ await fly.machines.start('foo-app', 'machine-id-123');
 // Stop a machine
 await fly.machines.stop('foo-app', 'machine-id-123');
 
-// Restart a machine (stop then start with delay)
+// Restart a machine (stop, wait until stopped, start, wait until started)
 await fly.machines.restart('foo-app', 'machine-id-123');
 ```
+
+`restart` handles one machine: it waits until Fly reports it stopped (or suspended) before starting it, then until it is `started`. If the start fails after the stop, the error says the machine was left stopped.
 
 ### Configuration & scaling
 
