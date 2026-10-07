@@ -30,10 +30,20 @@ describe('infisical session', () => {
     expect(await run()).toBe(EXIT.ok);
   });
 
-  it('fails when logged out', async () => {
+  it('fails when the check fails', async () => {
     const { probeSession } = await import('./session.logic');
     vi.mocked(probeSession).mockReturnValue({
-      state: 'not-logged-in',
+      state: 'failed',
+      message: 'Infisical CLI check failed: exit 1',
+      hint: 'If your session expired: `infisical login`'
+    });
+    expect(await run()).toBe(EXIT.failed);
+  });
+
+  it('fails when not installed', async () => {
+    const { probeSession } = await import('./session.logic');
+    vi.mocked(probeSession).mockReturnValue({
+      state: 'not-installed',
       hint: 'Run `infisical login`'
     });
     expect(await run()).toBe(EXIT.failed);

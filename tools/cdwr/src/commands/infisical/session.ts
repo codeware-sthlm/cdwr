@@ -25,7 +25,9 @@ export default defineCommand({
   async apply(_ctx, session: SessionState) {
     if (session.state !== 'ok') {
       throw new CliError(
-        `Infisical is ${session.state.replace(/-/g, ' ')}`,
+        session.state === 'failed'
+          ? session.message
+          : 'Infisical CLI is not installed',
         EXIT.failed,
         session.hint
       );

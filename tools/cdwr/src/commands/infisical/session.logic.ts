@@ -8,7 +8,7 @@ import {
 export type SessionState =
   | { state: 'ok' }
   | { state: 'not-installed'; hint: string }
-  | { state: 'not-logged-in'; hint: string };
+  | { state: 'failed'; message: string; hint: string };
 
 /** One cheap read: listing the root folders needs a session and returns no value */
 export const probeSession = (
@@ -27,8 +27,9 @@ export const probeSession = (
     }
     // The message never holds CLI output, so it is safe to show
     return {
-      state: 'not-logged-in',
-      hint: `Infisical CLI failed: ${error instanceof Error ? error.message : String(error)} — not logged in? \`infisical login\``
+      state: 'failed',
+      message: `Infisical CLI check failed: ${error instanceof Error ? error.message : String(error)}`,
+      hint: 'If your session expired: `infisical login`'
     };
   }
 };
