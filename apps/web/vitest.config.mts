@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  root: __dirname,
+  root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/apps/web',
   plugins: [react(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
   // Uncomment this if you are using workers.
@@ -15,7 +15,7 @@ export default defineConfig({
   // },
   resolve: {
     alias: {
-      '@': resolve(__dirname, './app')
+      '@': resolve(import.meta.dirname, './app')
     }
   },
   test: {

@@ -38,7 +38,7 @@ const sentryEnabled = [
 ].every((key) => !!process.env[key]);
 
 export default defineConfig({
-  root: __dirname,
+  root: import.meta.dirname,
   build: {
     target: ['node20', 'esnext'],
     sourcemap: sentryEnabled
