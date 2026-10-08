@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  root: __dirname,
+  root: import.meta.dirname,
   cacheDir: '../../../../node_modules/.vite/libs/app-cms/ui/tabs',
   plugins: [react(), nxViteTsPaths()],
   test: {
