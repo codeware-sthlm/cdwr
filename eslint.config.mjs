@@ -1,7 +1,7 @@
 import nx from '@nx/eslint-plugin';
 import importPlugin from 'eslint-plugin-import';
 
-import { codewareRules } from './tools/eslint-rules/index.js';
+import { codewareRules } from './tools/lint-rules/index.js';
 
 /**
  * Restricts fly-node to its api half.
