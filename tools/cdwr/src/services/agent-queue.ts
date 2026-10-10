@@ -79,7 +79,8 @@ export async function checkRun(
       AGENT_QUEUE_HOME: queue.home,
       AGENT_QUEUE_REPO: repo
     },
-    timeout: 30_000
+    // Two Linear reads of up to 20 s each (attended, then the plan query)
+    timeout: 60_000
   });
   const lines = stdout.trim().split('\n');
   const attended = lines.filter((line) => line.startsWith('attended: ')).at(-1);
