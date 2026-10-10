@@ -6,7 +6,7 @@ exports[`preset generator should generate project config without payload targets
   "name": "test-app",
   "projectType": "application",
   "root": "app-dir/test-app",
-  "sourceRoot": "app-dir/test-app",
+  "sourceRoot": "app-dir/test-app/src",
   "tags": [],
 }
 `;
