@@ -58,12 +58,14 @@ export default defineCommand({
     days: input.number({
       prompt: 'How many days?',
       description: 'Days back from now to include',
-      default: 7
+      default: 7,
+      schema: z.number().int().positive()
     }),
     limit: input.number({
       prompt: 'How many events?',
-      description: 'Newest events to keep',
-      default: 200
+      description: 'Newest events to keep, at most 200',
+      default: 200,
+      schema: z.number().int().min(1).max(200)
     })
   },
 
