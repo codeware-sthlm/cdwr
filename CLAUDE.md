@@ -58,6 +58,7 @@ waits for the next `install`. Before planning, the same job watches the PRs of `
 tickets and sends a notice when one leaves the merge queue, fails, or merges with hand-offs left.
 Each run also keeps three Linear documents up to date: "Agent queue: runs", "Agent queue: usage" (`cdwr agent usage`)
 and "Agent queue: activity" (`cdwr agent activity`, from Linear's issue history), which the Agent Desk reads.
+The runs document also carries an `Attended:` line saying whether an attended `/work-queue` has something to do, and `cdwr agent status` shows it too.
 
 ## Nx-generated projects cleanup
 
