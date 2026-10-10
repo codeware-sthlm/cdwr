@@ -34,7 +34,7 @@ describe('run.sh', () => {
     expect(SCRIPT).toMatch(/note "fail: planned nothing/);
   });
 
-  // The runs and usage documents are the only things run.sh writes to Linear
+  // The documents are the only things run.sh writes to Linear
   it('sends no mutation but the documents', () => {
     const mutations = [...SCRIPT.matchAll(/mutation\b[^{]*\{\s*(\w+)/gi)].map(
       ([, field]) => field
@@ -73,6 +73,25 @@ describe('run.sh', () => {
     );
     expect(SCRIPT).toMatch(
       /publish_doc "\$DOC_TITLE" "\$HOME_DIR\/runs-doc-id" "\$stamp"/
+    );
+  });
+
+  it('publishes the activity document from cdwr agent activity', () => {
+    expect(SCRIPT).toMatch(/^ACTIVITY_TITLE='Agent queue: activity'$/m);
+    expect(SCRIPT).toContain(
+      'node tools/cdwr/bin/cdwr.mjs agent activity --runs "$RUNS" --json'
+    );
+    expect(SCRIPT).toMatch(
+      /publish_doc "\$ACTIVITY_TITLE" "\$HOME_DIR\/activity-doc-id" "\$stamp"/
+    );
+  });
+
+  // Its warn rows land in the runs document of the same run
+  it('publishes activity before the runs document', () => {
+    const exit = SCRIPT.slice(SCRIPT.indexOf('on_exit() {'));
+    expect(exit.indexOf('  publish_activity')).toBeGreaterThan(-1);
+    expect(exit.indexOf('  publish_activity')).toBeLessThan(
+      exit.indexOf('  publish_runs')
     );
   });
 

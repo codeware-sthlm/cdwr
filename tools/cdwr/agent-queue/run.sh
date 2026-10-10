@@ -67,10 +67,11 @@ linear() {
       -H "Authorization: $key" -H 'Content-Type: application/json' --data @-
 }
 
-# The only writes run.sh makes: the runs and usage documents, each created once on the
-# Codeware team and then updated in place.
+# The only writes run.sh makes: the runs, usage and activity documents, each created once
+# on the Codeware team and then updated in place.
 DOC_TITLE='Agent queue: runs'
 USAGE_TITLE='Agent queue: usage'
+ACTIVITY_TITLE='Agent queue: activity'
 read -r -d '' DOC_FIND <<'GQL' || true
 query($title: String!) {
   documents(first: 1, filter: { title: { eq: $title } }) { nodes { id } }
@@ -150,6 +151,59 @@ publish_usage() {
   publish_doc "$USAGE_TITLE" "$HOME_DIR/usage-doc-id" "$stamp" "$content"
 }
 
+# The activity document from Linear's issue history and runs.jsonl, rendered by
+# `cdwr agent activity` (same install caveat as usage). Every run reads Linear, but publishes
+# only when something below the "Updated:" line changed, so idle runs leave it alone.
+read -r -d '' ACTIVITY_QUERY <<'GQL' || true
+query {
+  issues(first: 30, filter: {
+    team: { key: { eq: "COD" } }
+    updatedAt: { gt: "-P7D" }
+    labels: { some: { name: { startsWith: "agent:" } } }
+  }) {
+    nodes {
+      identifier
+      history(first: 100) {
+        nodes {
+          createdAt actor { name } botActor { name type }
+          fromState { name } toState { name }
+          addedLabels { name } removedLabels { name } updatedDescription
+        }
+      }
+      comments(first: 50) { nodes { createdAt body user { name } botActor { name type } } }
+    }
+  }
+}
+GQL
+# A warn row at most once an hour, so a lasting failure can't push real rows out of runs.jsonl
+activity_warn() {
+  local stamp="$HOME_DIR/activity-warned-at" last
+  note "warn: activity document: $1"
+  last="$(cat "$stamp" 2>/dev/null)"
+  [[ "$last" == <-> ]] || last=0
+  (( $(date +%s) - last > 3600 )) || return 0
+  date +%s > "$stamp"
+  record warn "" "activity: $1"
+}
+publish_activity() {
+  $check && return 0
+  setopt local_options no_err_exit
+  local stamp="$HOME_DIR/activity-published-at" hashfile="$HOME_DIR/activity-hash" resp content hash before
+  resp="$(linear "$ACTIVITY_QUERY")"
+  if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then
+    activity_warn "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
+  fi
+  content="$(cd "$REPO" && node tools/cdwr/bin/cdwr.mjs agent activity --runs "$RUNS" --json 2>/dev/null <<<"$resp" |
+    jq -er '.result.document')" || { activity_warn "cdwr agent activity failed"; return 0; }
+  hash="$(print -r -- "$content" | sed 1d | shasum | cut -d' ' -f1)"
+  [[ "$hash" == "$(cat "$hashfile" 2>/dev/null)" ]] && return 0
+  before="$(cat "$stamp" 2>/dev/null)"
+  publish_doc "$ACTIVITY_TITLE" "$HOME_DIR/activity-doc-id" "$stamp" "$content"
+  # publish_doc stamps only a publish that went through
+  [[ "$(cat "$stamp" 2>/dev/null)" != "$before" ]] && print -r -- "$hash" > "$hashfile"
+  return 0
+}
+
 # publish_doc <title> <id file> <stamp file> <content>: finds the document by title or
 # creates it, then rewrites it. A failure is a warn line, never a stop.
 publish_doc() {
@@ -189,8 +243,9 @@ on_exit() {
     note "fail: run.sh exited $st"
     record failed "" "run.sh exited $st, see scheduler.log"
   fi
-  # Usage first: its warn row belongs in this run's runs document
+  # Usage and activity first: their warn rows belong in this run's runs document
   publish_usage
+  publish_activity
   publish_runs
   rmdir "$HOME_DIR/lock" 2>/dev/null
   return 0
