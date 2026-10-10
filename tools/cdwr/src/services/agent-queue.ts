@@ -63,12 +63,15 @@ export async function keyPresent(): Promise<boolean> {
   }
 }
 
-/** What the installed script would do now; undefined when it is not installed */
+/**
+ * What the installed script would do now: its decision (the last line) and the
+ * `attended:` verdict line when it printed one. Undefined when it is not installed
+ */
 export async function checkRun(
   queue: QueuePaths,
   repo: string,
   env: NodeJS.ProcessEnv
-): Promise<string | undefined> {
+): Promise<{ decision: string; attended?: string } | undefined> {
   if (!existsSync(queue.script)) return undefined;
   const { stdout } = await run('/bin/zsh', [queue.script, '--check'], {
     env: {
@@ -78,7 +81,14 @@ export async function checkRun(
     },
     timeout: 30_000
   });
-  return stdout.trim().split('\n').at(-1) ?? '';
+  const lines = stdout.trim().split('\n');
+  const attended = lines.filter((line) => line.startsWith('attended: ')).at(-1);
+  return {
+    decision: lines.at(-1) ?? '',
+    ...(attended === undefined
+      ? {}
+      : { attended: attended.slice('attended: '.length) })
+  };
 }
 
 /** Milliseconds since the lock was taken; undefined when it is free */

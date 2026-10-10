@@ -12,6 +12,7 @@ import {
   latestRunLog,
   launchPath,
   lockState,
+  parseAttended,
   parseCheck,
   parseLaunchctlPrint,
   parseNotifyLevel,
@@ -372,6 +373,31 @@ describe('parseCheck', () => {
     const result = parseCheck(line);
     expect(result.kind).toBe(kind);
     expect(result.tickets).toEqual(tickets);
+    expect(result.text).toBe(line.trim());
+  });
+});
+
+describe('parseAttended', () => {
+  it.each([
+    ['running: COD-545 · step 4 of 5', 'running', 'COD-545'],
+    ['running: COD-545', 'running', 'COD-545'],
+    ['run now: COD-543 answered', 'run', 'COD-543'],
+    ['run now: COD-544 review feedback', 'run', 'COD-544'],
+    ['run now: COD-546 ready', 'run', 'COD-546'],
+    ['run now: take over COD-540 (claim 3 h old)', 'run', 'COD-540'],
+    ['run now: take over COD-540 (no claim)', 'run', 'COD-540'],
+    [
+      'idle: waits on COD-1 input, COD-2 PR, COD-3 hand-offs; limit 3/5',
+      'idle',
+      undefined
+    ],
+    ['idle: nothing waiting; limit 0/5', 'idle', undefined],
+    ['garbage', 'unknown', undefined],
+    ['', 'unknown', undefined]
+  ])('%j -> %s', (line, kind, ticket) => {
+    const result = parseAttended(line);
+    expect(result.kind).toBe(kind);
+    expect(result.ticket).toBe(ticket);
     expect(result.text).toBe(line.trim());
   });
 });

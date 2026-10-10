@@ -308,7 +308,7 @@ export interface QueueCheck {
   text: string;
 }
 
-/** Reads the one line `run.sh --check` prints */
+/** Reads the decision line `run.sh --check` prints last */
 export const parseCheck = (line: string): QueueCheck => {
   const text = line.trim();
   const tickets = text.match(/[A-Z][A-Z0-9]*-\d+/g) ?? [];
@@ -318,4 +318,20 @@ export const parseCheck = (line: string): QueueCheck => {
   if (text.startsWith('busy:')) return { kind: 'busy', tickets: [], text };
   if (text.startsWith('skip:')) return { kind: 'skip', tickets: [], text };
   return { kind: 'unknown', tickets: [], text };
+};
+
+export interface AttendedCheck {
+  kind: 'running' | 'run' | 'idle' | 'unknown';
+  ticket?: string;
+  text: string;
+}
+
+/** Reads the text after `attended: ` in the `run.sh --check` output */
+export const parseAttended = (line: string): AttendedCheck => {
+  const text = line.trim();
+  const ticket = text.match(/[A-Z][A-Z0-9]*-\d+/)?.[0];
+  if (text.startsWith('running:')) return { kind: 'running', ticket, text };
+  if (text.startsWith('run now:')) return { kind: 'run', ticket, text };
+  if (text.startsWith('idle:')) return { kind: 'idle', text };
+  return { kind: 'unknown', text };
 };

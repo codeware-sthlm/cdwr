@@ -43,15 +43,15 @@ export default defineCommand({
     if (existsSync(queue.paused)) {
       return none('The queue is paused; `cdwr agent resume` first');
     }
-    const line = await ctx.ui.task(
+    const checked = await ctx.ui.task(
       'Asking the queue what it would take',
       () => checkRun(queue, worktreeOf(ctx), ctx.env),
       () => 'Asked the queue'
     );
-    if (line === undefined) {
+    if (checked === undefined) {
       return none('The queue script is not installed; `cdwr agent install`');
     }
-    const check = parseCheck(line);
+    const check = parseCheck(checked.decision);
     switch (check.kind) {
       case 'idle':
         return none('Nothing to plan');

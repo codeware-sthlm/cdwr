@@ -28,6 +28,7 @@ resumes. One ticket is in flight at a time.
 ## The queue rule
 
 The Agent Desk (the "cdwr Agent Desk" artifact) computes the same order, so keep the two in step.
+The scheduler computes the same order as `attended` in `tools/cdwr/agent-queue/watch.jq` (the computed form of **What to take next** and **The limit**) and publishes it as the `Attended:` line of the "Agent queue: runs" document, so a change to either is made in both.
 
 1. Team **Codeware**, label **agent:ready**, status not Done or Canceled. Skip tickets whose
    **Repo** label names another repo (`nx-plugins`, `enjinex`). No Repo label, or `codeware`,

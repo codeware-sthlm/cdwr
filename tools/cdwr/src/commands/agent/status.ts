@@ -23,6 +23,7 @@ import {
   lastSchedulerLine,
   latestRunLog,
   lockState,
+  parseAttended,
   parseCheck,
   parseNotifyLevel,
   parseWatchState
@@ -53,9 +54,10 @@ export default defineCommand({
         // Before the check, which logs its own skip and busy lines
         const lastScheduled =
           lastSchedulerLine(readText(queue.schedulerLog) ?? '') ?? null;
-        const line = await checkRun(queue, worktree, ctx.env).catch(
-          (error: unknown) =>
-            `skip: check failed (${error instanceof Error ? error.message : String(error)})`
+        const checked = await checkRun(queue, worktree, ctx.env).catch(
+          (error: unknown): Awaited<ReturnType<typeof checkRun>> => ({
+            decision: `skip: check failed (${error instanceof Error ? error.message : String(error)})`
+          })
         );
         return {
           job,
@@ -75,7 +77,11 @@ export default defineCommand({
           lockState: lockState(lockAge(queue.lock), job.loaded && job.running),
           lock: queue.lock,
           lastRunLog: runLog ? join(queue.logs, runLog) : null,
-          next: line === undefined ? null : parseCheck(line)
+          next: checked === undefined ? null : parseCheck(checked.decision),
+          attended:
+            checked?.attended === undefined
+              ? null
+              : parseAttended(checked.attended)
         };
       },
       () => 'Read the agent queue'
@@ -178,7 +184,16 @@ export default defineCommand({
             'next run',
             report.next.text
           )
-        : row('warn', 'next run', 'unknown; script not installed')
+        : row('warn', 'next run', 'unknown; script not installed'),
+      report.attended
+        ? row(
+            report.attended.kind === 'run' || report.attended.kind === 'unknown'
+              ? 'warn'
+              : true,
+            'attended',
+            report.attended.text
+          )
+        : row('warn', 'attended', 'unknown; no verdict from the script')
     ];
     ctx.ui.table(['', 'check', 'detail'], rows);
 
