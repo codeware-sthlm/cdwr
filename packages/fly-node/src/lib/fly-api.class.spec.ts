@@ -308,7 +308,7 @@ describe('FlyApi', () => {
     ]);
   });
 
-  it('lists no shared v4 when the app has none, and nothing for a missing app', async () => {
+  it('lists no shared v4 when the app has none', async () => {
     fetchMock.mockReturnValue(
       respond({
         data: {
@@ -322,10 +322,9 @@ describe('FlyApi', () => {
     await expect(api().ips.list('cdwr-web-moon')).resolves.toEqual([
       { address: '192.0.2.20', type: 'v4' }
     ]);
+  });
 
-    fetchMock.mockReturnValue(respond({ data: { app: null } }));
-    await expect(api().ips.list('gone')).resolves.toEqual([]);
-
+  it('rejects an unknown app rather than answering emptily', async () => {
     fetchMock.mockReturnValue(
       respond({
         errors: [
@@ -333,7 +332,8 @@ describe('FlyApi', () => {
         ]
       })
     );
-    await expect(api().ips.list('gone')).resolves.toEqual([]);
+
+    await expect(api().ips.list('gone')).rejects.toThrow('Could not find App');
   });
 
   it('surfaces a GraphQL error rather than failing to parse', async () => {
