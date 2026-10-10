@@ -267,6 +267,9 @@ jobs:
           CDWR_E2E_PACKAGE_MANAGER: ${{ matrix.pm }}
           CDWR_E2E_VERDACCIO_HOST: ${{ matrix.verdaccio }}
           NX_CACHE_DIRECTORY: tmp
+          # With a custom cache directory the daemon fails to record task runs
+          # (SQLite FOREIGN KEY error, nrwl/nx#37118) and exits 1 after a green run
+          NX_DAEMON: false
           NX_PERF_LOGGING: false
           # Fix out-of-memory issue on macOS runners
           NODE_OPTIONS: --max_old_space_size=4096
