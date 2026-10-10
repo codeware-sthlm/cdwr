@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
-import type { EmailAdapter } from 'payload';
+import type { EmailAdapter, SendEmailOptions } from 'payload';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { withDeliveryReporting } from './with-delivery-reporting';
@@ -123,6 +123,27 @@ describe('withDeliveryReporting', () => {
 
     const [, context] = vi.mocked(Sentry.captureException).mock.calls[0];
     expect(context).toMatchObject({ extra: { recipientCount: 3 } });
+  });
+
+  it('counts group members and survives a cyclic list', async () => {
+    const err = new Error('down');
+    const factory = await Promise.resolve(
+      withDeliveryReporting(fakeAdapter(vi.fn().mockRejectedValue(err)))
+    );
+    const cyclic: SendEmailOptions['to'][] = ['one@example.se'];
+    cyclic.push(cyclic);
+
+    await expect(
+      factory({ payload }).sendEmail({
+        to: [cyclic, { name: 'Team', group: [{ address: 'two@example.se' }] }],
+        subject: 'Groups'
+      })
+    ).rejects.toBe(err);
+
+    const [, context] = vi.mocked(Sentry.captureException).mock.calls[0];
+    expect(context).toMatchObject({
+      extra: { to: '***@example.se, ***@example.se', recipientCount: 2 }
+    });
   });
 
   it('preserves the adapter identity fields', async () => {
