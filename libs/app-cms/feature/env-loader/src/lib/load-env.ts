@@ -10,6 +10,9 @@ import { withInfisical } from '@codeware/shared/feature/infisical';
  * @returns The parsed environment variables or `undefined` if the data is insufficient or invalid.
  */
 export const loadEnv = async (): Promise<Env | undefined> => {
+  // Deploy metadata in /apps/cms, not configuration for the running app
+  delete process.env['DEPLOY_ENABLED'];
+
   // Pre-check environment variables as they can be injected from CLI.
   // Then there is no reason to connect to Infisical using the SDK.
   const preResponse = EnvSchema.safeParse(process.env);
@@ -75,9 +78,6 @@ export const loadEnv = async (): Promise<Env | undefined> => {
   // Deleting it here prevents an accidental Infisical entry from locking the app in
   // maintenance mode permanently — the Fly secret is always transient.
   delete process.env['MAINTENANCE_MODE'];
-
-  // Deploy metadata in /apps/cms, not configuration for the running app
-  delete process.env['DEPLOY_ENABLED'];
 
   // Validate loaded environment variables
   const { success, error, data } = EnvSchema.safeParse(process.env);
