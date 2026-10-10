@@ -107,6 +107,7 @@ cdwr agent run            # start a planning run now
 cdwr agent pause|resume   # hold or release the schedule
 cdwr agent logs [--run]   # the scheduler log, or the latest run
 cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ticket, from local transcripts
+… | cdwr agent activity [--runs <file>]   # the activity document from a Linear history response on stdin
 cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
 cdwr agent worktree add COD-529 --branch <name>   # codeware-cod-529 beside this checkout
 cdwr agent worktree prune          # remove ticket worktrees whose PR is merged or closed
