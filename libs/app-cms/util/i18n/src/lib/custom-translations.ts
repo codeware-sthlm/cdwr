@@ -67,6 +67,7 @@ const customTranslationsSchema = z.object({
   domains: z.object({
     actionFailed: z.string(),
     active: z.string(),
+    apexAddressesPending: z.string(),
     apexNote: z.string(),
     check: z.string(),
     checkedAt: z.string(),
@@ -417,6 +418,8 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
     domains: {
       actionFailed: 'Fly could not be reached. Try again in a moment.',
       active: 'Active',
+      apexAddressesPending:
+        'No addresses known yet. Press Check now to fetch them; if none appear, the app has no public address and needs one allocated in Fly.',
       apexNote:
         'This is the domain itself rather than a subdomain, so a CNAME is not allowed — it needs A and AAAA records pointing at the app’s IP addresses.',
       check: 'Check now',
@@ -818,6 +821,8 @@ Supported locales: {{locales}}`,
     domains: {
       actionFailed: 'Fly gick inte att nå. Försök igen om en stund.',
       active: 'Aktivt',
+      apexAddressesPending:
+        'Inga adresser är kända ännu. Tryck på Kontrollera nu för att hämta dem. Om inga adresser visas har appen ingen publik adress, och en adress behöver tilldelas i Fly.',
       apexNote:
         'Det här är själva domänen och inte en underdomän, så CNAME är inte tillåtet — den behöver A- och AAAA-poster som pekar på appens IP-adresser.',
       check: 'Kontrollera nu',
