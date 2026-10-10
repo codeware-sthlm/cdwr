@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { relative, resolve } from 'node:path';
 
 import {
@@ -14,54 +13,26 @@ import {
   taskEnvFiles
 } from '@codeware/shared/util/infisical-cli';
 import type { ExecutorContext } from '@nx/devkit';
+// Not devkit API, but the same code `nx:run-commands` runs: PATH, pty, signals and process trees on every OS
+import { runCommands } from 'nx/src/executors/run-commands/run-commands.impl';
 
-import { killTree } from './process-tree';
 import type { InfisicalRunExecutorSchema } from './schema';
 
 type Env = Record<string, string | undefined>;
 
-/** Runs one command, forwarding stop signals; resolves true when it ended well, false when it failed or was stopped */
-const runCommand = (command: string, cwd: string, env: Env): Promise<boolean> =>
-  new Promise((resolvePromise) => {
-    const child = spawn(command, { shell: true, stdio: 'inherit', cwd, env });
-    let stopped = false;
-
-    const forward = (signal: NodeJS.Signals) => () => {
-      stopped = true;
-      // The shell is not the only process to stop; its children can hold ports
-      if (child.pid !== undefined) killTree(child.pid, signal);
-      else child.kill(signal);
-    };
-    const onInt = forward('SIGINT');
-    const onTerm = forward('SIGTERM');
-    process.on('SIGINT', onInt);
-    process.on('SIGTERM', onTerm);
-
-    const done = (ok: boolean) => {
-      process.off('SIGINT', onInt);
-      process.off('SIGTERM', onTerm);
-      resolvePromise(ok);
-    };
-
-    child.on('error', (error) => {
-      console.error(`infisical-run: ${error.message}`);
-      done(false);
-    });
-    child.on('exit', (code, signal) => {
-      // A stop ends the sequence, however the child took it
-      done(!stopped && !signal && code === 0);
-    });
-  });
-
+/** Runs the commands in order through `nx:run-commands`, with `env` over the inherited environment */
 const runAll = async (
   commands: string[],
   cwd: string,
-  env: Env
+  env: Record<string, string>,
+  context: ExecutorContext
 ): Promise<{ success: boolean }> => {
-  for (const command of commands) {
-    if (!(await runCommand(command, cwd, env))) return { success: false };
-  }
-  return { success: true };
+  const task = await runCommands(
+    { commands, cwd, parallel: false, env, __unparsed__: [] },
+    context
+  );
+  const { code } = await task.getResults();
+  return { success: code === 0 };
 };
 
 /** The parent target of an atomized target, which Nx also loads env files for */
@@ -91,7 +62,7 @@ export default async function infisicalRun(
 
   if (mode === 'ci') {
     console.log('[SECRETS] CI — using the environment the workflow provides');
-    return runAll(options.commands, cwd, inherited);
+    return runAll(options.commands, cwd, options.env ?? {}, context);
   }
 
   const target = context.targetName ?? 'infisical-run';
@@ -141,5 +112,5 @@ export default async function infisicalRun(
     })
   );
 
-  return runAll(options.commands, cwd, { ...inherited, ...apply });
+  return runAll(options.commands, cwd, { ...options.env, ...apply }, context);
 }
