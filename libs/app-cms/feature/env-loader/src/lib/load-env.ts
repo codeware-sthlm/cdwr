@@ -76,6 +76,9 @@ export const loadEnv = async (): Promise<Env | undefined> => {
   // maintenance mode permanently — the Fly secret is always transient.
   delete process.env['MAINTENANCE_MODE'];
 
+  // Deploy metadata in /apps/cms, not configuration for the running app
+  delete process.env['DEPLOY_ENABLED'];
+
   // Validate loaded environment variables
   const { success, error, data } = EnvSchema.safeParse(process.env);
 

@@ -26,13 +26,12 @@ const status = (
 });
 
 describe('toInfisicalStatusItems', () => {
-  it('reads an app folder by its key and the rules', () => {
+  it('reads an app folder by its key and its flag', () => {
     const items = toInfisicalStatusItems(
       status([
         {
           environment: 'production',
           access: 'ok',
-          tenants: 'wildcard',
           apps: [
             app({ optionalKeys: ['RESTRICTED_FONTS'] }),
             app({ app: 'web', apiKey: 'mismatch' })
@@ -41,7 +40,6 @@ describe('toInfisicalStatusItems', () => {
         {
           environment: 'preview',
           access: 'ok',
-          tenants: 'excluded',
           apps: [app({ included: false, apiKey: 'missing' })]
         }
       ])
@@ -55,37 +53,29 @@ describe('toInfisicalStatusItems', () => {
     expect(items[0].optionalKeys).toEqual(['RESTRICTED_FONTS']);
   });
 
-  it.each([
-    ['listed', 'missing-folder'],
-    ['wildcard', 'not-provisioned'],
-    ['excluded', 'not-deployed']
-  ] as const)(
-    'reads an environment without folders where the tenants rule is %s as %s',
-    (tenants, state) => {
-      const [item] = toInfisicalStatusItems(
-        status([{ environment: 'preview', access: 'ok', tenants, apps: [] }])
-      );
+  it('reads an environment without folders as not provisioned', () => {
+    const [item] = toInfisicalStatusItems(
+      status([{ environment: 'preview', access: 'ok', apps: [] }])
+    );
 
-      expect(item).toMatchObject({ app: null, state });
-    }
-  );
+    expect(item).toMatchObject({ app: null, state: 'not-provisioned' });
+  });
 
-  it.each(['unreadable', 'no-rules'] as const)(
-    'reports an environment that is %s as one row',
-    (access) => {
-      expect(
-        toInfisicalStatusItems(status([{ environment: 'preview', access }]))
-      ).toEqual([
-        {
-          environment: 'preview',
-          app: null,
-          flyApp: null,
-          state: access,
-          optionalKeys: []
-        }
-      ]);
-    }
-  );
+  it('reports an environment that is unreadable as one row', () => {
+    expect(
+      toInfisicalStatusItems(
+        status([{ environment: 'preview', access: 'unreadable' }])
+      )
+    ).toEqual([
+      {
+        environment: 'preview',
+        app: null,
+        flyApp: null,
+        state: 'unreadable',
+        optionalKeys: []
+      }
+    ]);
+  });
 });
 
 describe('summarizeInfisicalStatus', () => {
@@ -95,7 +85,6 @@ describe('summarizeInfisicalStatus', () => {
         {
           environment: 'production',
           access: 'ok',
-          tenants: 'wildcard',
           apps: [app(), app({ app: 'web', apiKey: 'missing' })]
         },
         { environment: 'preview', access: 'unreadable' }
@@ -116,10 +105,9 @@ describe('summarizeInfisicalStatus', () => {
         {
           environment: 'production',
           access: 'ok',
-          tenants: 'wildcard',
           apps: [app()]
         },
-        { environment: 'preview', access: 'ok', tenants: 'excluded', apps: [] }
+        { environment: 'preview', access: 'ok', apps: [] }
       ])
     );
 

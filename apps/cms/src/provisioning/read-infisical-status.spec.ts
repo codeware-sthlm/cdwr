@@ -6,7 +6,7 @@ import { readInfisicalStatus } from './read-infisical-status';
 // cannot load, so it is narrowed to the real modules the reader uses
 jest.mock('@codeware/shared/util/pure', () => ({
   ...jest.requireActual(
-    '../../../../libs/shared/util/pure/src/lib/deploy-rules'
+    '../../../../libs/shared/util/pure/src/lib/deploy-enabled'
   ),
   ...jest.requireActual(
     '../../../../libs/shared/util/pure/src/lib/get-app-name'
@@ -59,13 +59,9 @@ const fakeClient = (
     })
   }) as unknown as InfisicalSDK;
 
-const rules = (apps: string, tenants: string): Secret => ({
-  secretKey: 'DEPLOY_RULES',
-  secretValue: '',
-  secretMetadata: [
-    { key: 'apps', value: apps },
-    { key: 'tenants', value: tenants }
-  ]
+const enabled = (value: string): Secret => ({
+  secretKey: 'DEPLOY_ENABLED',
+  secretValue: value
 });
 
 const read = (
@@ -84,19 +80,19 @@ const read = (
   });
 
 describe('readInfisicalStatus', () => {
-  it('reports each app folder, its key and the fly app it deploys as', async () => {
+  it('reports each app folder, its flag, key and the fly app it deploys as', async () => {
     const client = fakeClient(
       {
-        'production|/': [rules('*', '*')],
         'production|/tenants/demo/apps/cms': [
+          enabled('true'),
           { secretKey: 'PAYLOAD_API_KEY', secretValue: 'own-key' },
           { secretKey: 'RESTRICTED_FONTS', secretValue: 'x' }
         ],
         'production|/tenants/demo/apps/web': [
+          enabled(' TRUE '),
           { secretKey: 'PAYLOAD_API_KEY', secretValue: 'other-key' }
         ],
-        'preview|/': [rules('cms', '_default,demo')],
-        'preview|/tenants/demo/apps/cms': [],
+        'preview|/tenants/demo/apps/cms': [enabled('false')],
         'preview|/tenants/demo/apps/web': [
           { secretKey: 'PAYLOAD_API_KEY', secretValue: 'own-key' }
         ]
@@ -113,7 +109,6 @@ describe('readInfisicalStatus', () => {
       {
         environment: 'production',
         access: 'ok',
-        tenants: 'wildcard',
         apps: [
           {
             app: 'cms',
@@ -134,12 +129,11 @@ describe('readInfisicalStatus', () => {
       {
         environment: 'preview',
         access: 'ok',
-        tenants: 'listed',
         apps: [
           {
             app: 'cms',
             flyApp: 'cdwr-cms-pr-<n>-demo',
-            included: true,
+            included: false,
             apiKey: 'missing',
             optionalKeys: []
           },
@@ -155,58 +149,48 @@ describe('readInfisicalStatus', () => {
     ]);
   });
 
-  it('marks a workspace the tenants rule leaves out, with no folders', async () => {
-    const client = fakeClient(
-      {
-        'production|/': [rules('*', '*')],
-        'preview|/': [rules('*', '_default,demo')]
-      },
-      {}
-    );
-
-    const { environments } = await read(client, 'ks-vininfo');
-
-    expect(environments).toEqual([
-      {
-        environment: 'production',
-        access: 'ok',
-        tenants: 'wildcard',
-        apps: []
-      },
-      { environment: 'preview', access: 'ok', tenants: 'excluded', apps: [] }
-    ]);
-  });
-
-  it('reports an environment it cannot read or judge', async () => {
-    const client = fakeClient(
-      {
-        'production|/': [{ secretKey: 'OTHER', secretValue: '' }],
-        'preview|/': 403
-      },
-      {}
-    );
+  it('reports no apps when the workspace has no folder', async () => {
+    const client = fakeClient({}, { 'production|/tenants/demo/apps': 404 });
 
     const { environments } = await read(client);
 
     expect(environments).toEqual([
-      { environment: 'production', access: 'no-rules' },
-      { environment: 'preview', access: 'unreadable' }
+      { environment: 'production', access: 'ok', apps: [] },
+      { environment: 'preview', access: 'ok', apps: [] }
     ]);
   });
+
+  it.each([401, 403])(
+    'reports an environment as unreadable on %s',
+    async (status) => {
+      const client = fakeClient(
+        {},
+        {
+          'production|/tenants/demo/apps': status,
+          'preview|/tenants/demo/apps': 404
+        }
+      );
+
+      const { environments } = await read(client);
+
+      expect(environments).toEqual([
+        { environment: 'production', access: 'unreadable' },
+        { environment: 'preview', access: 'ok', apps: [] }
+      ]);
+    }
+  );
 
   it('treats a workspace without a key as not matching', async () => {
     const client = fakeClient(
       {
-        'production|/': [rules('cms', '*')],
         'production|/tenants/demo/apps/cms': [
           { secretKey: 'PAYLOAD_API_KEY', secretValue: 'own-key' }
-        ],
-        'preview|/': 403
+        ]
       },
       { 'production|/tenants/demo/apps': ['cms'] }
     );
 
-    const { environments } = await read(client, 'demo', null);
+    const { environments } = await read(client, 'demo', null, ['production']);
 
     expect(environments[0]).toMatchObject({
       apps: [{ app: 'cms', apiKey: 'mismatch' }]
@@ -214,20 +198,23 @@ describe('readInfisicalStatus', () => {
   });
 
   it('reads only the environments it is given', async () => {
-    const client = fakeClient(
-      { 'production|/': 403, 'preview|/': [rules('*', '*')] },
-      {}
-    );
+    const client = fakeClient({}, {});
 
     const { environments } = await read(client, 'demo', 'own-key', ['preview']);
 
     expect(environments).toEqual([
-      { environment: 'preview', access: 'ok', tenants: 'wildcard', apps: [] }
+      { environment: 'preview', access: 'ok', apps: [] }
     ]);
   });
 
   it('lets a failure that is not about access through', async () => {
-    const client = fakeClient({ 'production|/': 500, 'preview|/': 500 }, {});
+    const client = fakeClient(
+      {},
+      {
+        'production|/tenants/demo/apps': 500,
+        'preview|/tenants/demo/apps': 500
+      }
+    );
 
     await expect(read(client)).rejects.toThrow('sdk');
   });
