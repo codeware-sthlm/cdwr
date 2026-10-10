@@ -99,6 +99,8 @@ export type DomainCardProps = {
     /** Heading for the same box, once the certificate is issued and answering */
     issuesActiveHeading: string;
     apexNote: string;
+    /** Hint for an apex stored before its addresses were known */
+    apexAddressesPending: string;
     /** The dns block's lede once the certificate is issued and clean */
     dnsSettledLede: string;
     issuedHeading: string;
@@ -244,6 +246,7 @@ export function DomainCard({
               ownershipLede: labels.dnsOwnershipLede,
               instructionsLede: labels.dnsLede,
               apexNote: labels.apexNote,
+              apexAddressesPending: labels.apexAddressesPending,
               nameHint: labels.dnsNameHint,
               settledLede: labels.dnsSettledLede,
               copyRecord: labels.copyRecord

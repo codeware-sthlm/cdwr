@@ -376,7 +376,8 @@ export const DomainsPanel: React.FC<{
       resolversHeading: t('domains:resolversHeading'),
       resolversNoAnswer: t('domains:resolversNoAnswer'),
       resolversUnreachable: t('domains:resolversUnreachable'),
-      apexNote: t('domains:apexNote')
+      apexNote: t('domains:apexNote'),
+      apexAddressesPending: t('domains:apexAddressesPending')
     }),
     [t]
   );
