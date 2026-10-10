@@ -131,12 +131,15 @@ def answered:
   ((.comments.nodes // []) | sort_by(.createdAt) | last) as $c
   | $c != null and (($c.body | trim | startswith("**Agent")) | not);
 
-# True when a human commented after the newest PR-ready comment, or review threads are unresolved
+# True when a human commented after the newest PR-ready comment, or review threads are unresolved.
+# Only while the PR is open: once the watch has seen it merged or closed there is nothing to address.
 def review_feedback($watch):
   ((.comments.nodes // []) | map(select(.body | startswith("**Agent: PR ready**"))) | sort_by(.createdAt) | last) as $ready
-  | ( $ready != null
-      and any((.comments.nodes // [])[]; (.body | startswith("**Agent") | not) and (.createdAt | epoch) > ($ready.createdAt | epoch)) )
-    or (($watch[.identifier].unresolved // 0) > 0);
+  | ($watch[.identifier].state // "open") as $pr
+  | ($pr != "merged" and $pr != "closed")
+    and (( $ready != null
+           and any((.comments.nodes // [])[]; (.body | startswith("**Agent") | not) and (.createdAt | epoch) > ($ready.createdAt | epoch)) )
+         or (($watch[.identifier].unresolved // 0) > 0));
 
 # Sort key for ready tickets: status, then priority (none last), then oldest first
 def queue_order:

@@ -805,6 +805,17 @@ describe('attended picks', () => {
       );
       expect(r.verdict).toBe('idle');
     });
+
+    it.each(['merged', 'closed'])(
+      'a %s PR is no feedback, even with threads or a comment',
+      (state) => {
+        expect(
+          attended([rev(prReady(true))], 5, {
+            'COD-4': { state, unresolved: 2 }
+          }).verdict
+        ).toBe('idle');
+      }
+    );
   });
 
   describe('limit', () => {
