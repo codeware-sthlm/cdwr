@@ -15,7 +15,7 @@ tools/*
 # The root eslint config imports these, and `@nx/eslint/plugin` reads that
 # config while building the project graph — which every nx command does,
 # `nx build cms` included. Without them the image build fails resolving them.
-!tools/eslint-rules
+!tools/lint-rules
 *.log
 
 # Build artifacts
