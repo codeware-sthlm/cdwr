@@ -1,3 +1,23 @@
+# 3.0.0 (2026-10-10)
+
+### 🐞 Bug Fixes
+
+- **nx-payload:** install payload 3.90.2 and next ^16.3.6 ([93aa3515](https://github.com/codeware-sthlm/cdwr/commit/93aa3515))
+- **nx-payload:** dx:postgres reads .env as well as .env.local ([cd7adfa1](https://github.com/codeware-sthlm/cdwr/commit/cd7adfa1))
+- **nx-payload:** init pins its Nx plugins to the workspace's nx ([bb362197](https://github.com/codeware-sthlm/cdwr/commit/bb362197))
+- **nx-payload:** a generated app ships Payload's admin import map ([f4bd550e](https://github.com/codeware-sthlm/cdwr/commit/f4bd550e))
+- **repo:** ship the licence in published tarballs ([aea1f581](https://github.com/codeware-sthlm/cdwr/commit/aea1f581))
+- **codeware:** match module syntax to each package declared type ([e391c5b0](https://github.com/codeware-sthlm/cdwr/commit/e391c5b0))
+
+### 📄 Documentation
+
+- **nx-payload:** name the supported next 15 patch lines ([a0a415dc](https://github.com/codeware-sthlm/cdwr/commit/a0a415dc))
+- **nx-payload:** pnpm build approval and release age ([1bb73642](https://github.com/codeware-sthlm/cdwr/commit/1bb73642))
+
+### ⚙️ Miscellaneous Chores
+
+- **repo:** platform under FSL-1.1-MIT, npm packages stay MIT ([ce949b26](https://github.com/codeware-sthlm/cdwr/commit/ce949b26))
+
 ## 2.3.0 (2026-08-25)
 
 ### 🐞 Bug Fixes

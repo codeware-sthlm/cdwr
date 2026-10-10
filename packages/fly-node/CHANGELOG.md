@@ -1,3 +1,20 @@
+## 0.3.2 (2026-10-10)
+
+### ✨ Features
+
+- **fly-node:** manage an app's public ip addresses ([21d1813e](https://github.com/codeware-sthlm/cdwr/commit/21d1813e))
+
+### 🐞 Bug Fixes
+
+- **fly-node:** machines.restart waits on the machine's state ([07297c53](https://github.com/codeware-sthlm/cdwr/commit/07297c53))
+- **repo:** ship the licence in published tarballs ([aea1f581](https://github.com/codeware-sthlm/cdwr/commit/aea1f581))
+- **fly-node:** stage every secret a deploy is given ([524abc74](https://github.com/codeware-sthlm/cdwr/commit/524abc74))
+- **fly-node:** drop the unsupported confirm flag from ipv6 allocation ([778b3444](https://github.com/codeware-sthlm/cdwr/commit/778b3444))
+
+### ⚙️ Miscellaneous Chores
+
+- **repo:** platform under FSL-1.1-MIT, npm packages stay MIT ([ce949b26](https://github.com/codeware-sthlm/cdwr/commit/ce949b26))
+
 ## 0.3.1 (2026-08-25)
 
 ### ✨ Features

@@ -1,3 +1,14 @@
+# 3.0.0 (2026-10-10)
+
+### 🐞 Bug Fixes
+
+- **repo:** ship the licence in published tarballs ([aea1f581](https://github.com/codeware-sthlm/cdwr/commit/aea1f581))
+- **codeware:** match module syntax to each package declared type ([e391c5b0](https://github.com/codeware-sthlm/cdwr/commit/e391c5b0))
+
+### ⚙️ Miscellaneous Chores
+
+- **repo:** platform under FSL-1.1-MIT, npm packages stay MIT ([ce949b26](https://github.com/codeware-sthlm/cdwr/commit/ce949b26))
+
 ## 2.3.0 (2026-08-25)
 
 This was a version bump only for create-nx-payload to align it with other projects, there were no code changes.

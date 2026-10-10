@@ -1,6 +1,6 @@
 {
   "name": "@cdwr/fly-node",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "The flyctl node wrapper for programmatic deployments to fly.io.",
   "repository": {
     "type": "git",
