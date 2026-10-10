@@ -10,6 +10,7 @@ import {
   type LinearActivityResponse,
   type RunRow,
   collectEvents,
+  plural,
   renderActivityDocument
 } from './activity.logic';
 import { localMinute } from './usage.logic';
@@ -115,7 +116,7 @@ export default defineCommand({
     }
 
     return {
-      summary: `${events.length} events over ${days} days`,
+      summary: `${plural(events.length, 'event')} over ${plural(days, 'day')}`,
       json: {
         generatedAt: now.toISOString(),
         windowDays: days,
