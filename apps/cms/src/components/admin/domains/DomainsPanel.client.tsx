@@ -6,7 +6,10 @@ import type {
   ResolverComparison,
   TenantDomain
 } from '@codeware/app-cms/feature/domains';
-import { describeCertificateIssues } from '@codeware/app-cms/feature/domains';
+import {
+  CERTIFICATE_ACTIONS,
+  describeCertificateIssues
+} from '@codeware/app-cms/feature/domains';
 import {
   type DomainAction,
   DomainCard,
@@ -373,7 +376,8 @@ export const DomainsPanel: React.FC<{
       resolversHeading: t('domains:resolversHeading'),
       resolversNoAnswer: t('domains:resolversNoAnswer'),
       resolversUnreachable: t('domains:resolversUnreachable'),
-      apexNote: t('domains:apexNote')
+      apexNote: t('domains:apexNote'),
+      apexAddressesPending: t('domains:apexAddressesPending')
     }),
     [t]
   );
@@ -437,7 +441,14 @@ export const DomainsPanel: React.FC<{
                     name: certificate.dnsValidationHostname,
                     target: certificate.dnsValidationTarget,
                     instructions: certificate.dnsValidationInstructions,
-                    isApex: certificate.isApex ?? false
+                    isApex: certificate.isApex ?? false,
+                    addresses: (certificate.addresses ?? []).filter(
+                      (
+                        entry
+                      ): entry is { type: 'A' | 'AAAA'; address: string } =>
+                        Boolean(entry?.address) &&
+                        (entry?.type === 'A' || entry?.type === 'AAAA')
+                    )
                   }
                 : null
             }
@@ -449,7 +460,11 @@ export const DomainsPanel: React.FC<{
                     confirmed: row.check
                       ? {
                           traffic: Boolean(row.check.dnsConfigured),
-                          validation: Boolean(row.check.acmeDnsConfigured)
+                          validation: Boolean(row.check.acmeDnsConfigured),
+                          addresses: [
+                            ...(row.check.aRecords ?? []),
+                            ...(row.check.aaaaRecords ?? [])
+                          ]
                         }
                       : null
                   }
@@ -457,7 +472,7 @@ export const DomainsPanel: React.FC<{
             }
             saved={row.saved}
             runningAction={
-              (['request', 'check', 'remove'] as const).find(
+              CERTIFICATE_ACTIONS.find(
                 (action) => busy === actionKey(row.hostname, action)
               ) ?? null
             }

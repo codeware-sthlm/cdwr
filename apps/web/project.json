@@ -62,7 +62,7 @@
       "dependsOn": ["build"]
     },
     "dev": {
-      "executor": "nx:run-commands",
+      "executor": "dev-plugin:infisical-run",
       "metadata": {
         "description": "Start Hono and Remix in development mode",
         "help": {
@@ -70,8 +70,11 @@
         }
       },
       "options": {
-        "command": "node ../../tools/scripts/with-secrets.mjs --path=/apps/web -- npx concurrently -n \"RMX,HNO\" -c \"magenta,blue\" --pad-prefix \"remix vite:dev\" \"nodemon\"",
-        "cwd": "apps/web"
+        "path": "/apps/web",
+        "cwd": "apps/web",
+        "commands": [
+          "npx concurrently -n \"RMX,HNO\" -c \"magenta,blue\" --pad-prefix \"remix vite:dev\" \"nodemon\""
+        ]
       },
       "cache": false
     },
@@ -81,7 +84,7 @@
       },
       "executor": "nx:run-commands",
       "options": {
-        "command": "node tools/scripts/with-secrets.mjs --path=/apps/web --refresh-offline"
+        "command": "pnpm cdwr infisical cache --path=/apps/web --yes --non-interactive"
       }
     }
   }

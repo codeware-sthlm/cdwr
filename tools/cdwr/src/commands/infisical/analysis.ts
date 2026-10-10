@@ -1,21 +1,18 @@
+import { isNotFound } from '@codeware/shared/feature/infisical';
+
 import { defineCommand, readOnly } from '../../cli/command';
 import { input } from '../../cli/inputs';
 import { DEPLOYED } from '../../services/environment';
 import { maskValues, readSecrets } from '../../services/infisical';
-import {
-  appTenants,
-  deployRules,
-  filterByDeployRules,
-  tenancyConfig
-} from '../../services/tenancy';
+import { deployments, tenancyConfig } from '../../services/tenancy';
 import { theme } from '../../ui/theme';
 
 import { APPS, type EnvironmentAnalysis, summarize } from './analysis.logic';
 
 export default defineCommand({
-  summary: 'Deploy rules, app tenants and app secrets side by side',
+  summary: 'Deploy switches, tenant folders and app secrets side by side',
   description:
-    'For preview and production: the deploy rules, which tenants they let through, and each app secrets. Secret values are masked unless --reveal is given.',
+    'For preview and production, per app (cms, web, builder): whether the host deploys, each tenant folder with its DEPLOY_ENABLED state (on, off or no flag), and the app secrets. Secret values are masked unless --reveal is given.',
   danger: 'read',
   needs: ['infisical'],
   inputs: {
@@ -29,14 +26,23 @@ export default defineCommand({
       const analysis = await ctx.ui.task(
         `Analyzing ${environment}`,
         async () => {
-          const rules = await deployRules(config);
-          const allTenants = await appTenants(config, [...APPS]);
-          const tenants = filterByDeployRules(allTenants, rules);
+          const plan = await deployments(config, [...APPS]);
           const secrets: Record<string, Record<string, string>> = {};
           for (const app of APPS) {
-            secrets[app] = await readSecrets(environment, `/apps/${app}`);
+            // An app without a folder in this environment has no secrets
+            secrets[app] = await readSecrets(environment, `/apps/${app}`).catch(
+              (error: unknown) => {
+                if (isNotFound(error)) return {};
+                throw error;
+              }
+            );
           }
-          return summarize(environment, tenants, secrets);
+          return summarize(
+            environment,
+            plan.deployments,
+            plan.skipped,
+            secrets
+          );
         },
         (a) => `${a.apps.length} app(s) analyzed`
       );
@@ -48,9 +54,15 @@ export default defineCommand({
   async apply(ctx, results, { reveal }) {
     for (const { environment, apps } of results) {
       ctx.ui.info(theme.title(environment));
-      for (const { app, tenants, secrets } of apps) {
+      for (const { app, host, tenants, secrets } of apps) {
         ctx.ui.info(
-          `${app}: ${tenants.length ? tenants.join(', ') : 'no tenants'}`
+          `${app}: host ${host}; ${
+            tenants.length
+              ? tenants
+                  .map(({ tenant, flag }) => `${tenant} ${flag}`)
+                  .join(', ')
+              : 'no tenant folders'
+          }`
         );
         ctx.ui.table(
           ['key', 'value'],
@@ -62,8 +74,9 @@ export default defineCommand({
       summary: `Analyzed ${results.length} environment(s)`,
       json: results.map(({ environment, apps }) => ({
         environment,
-        apps: apps.map(({ app, tenants, secrets }) => ({
+        apps: apps.map(({ app, host, tenants, secrets }) => ({
           app,
+          host,
           tenants,
           secrets: reveal ? secrets : maskValues(secrets)
         }))

@@ -21,15 +21,13 @@ vi.mock('@codeware/shared/util/nx-deploy', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@codeware/shared/util/nx-deploy')>()),
   analyzeAppsToDeploy: vi.fn()
 }));
-// Partially mock the tenancy lib: override the fetchers, but spread through
-// the real `filterByDeployRules` to test its actual (pure) implementation.
+// Partially mock the tenancy lib: override the fetchers
 vi.mock('@codeware/shared/feature/tenancy', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@codeware/shared/feature/tenancy')
   >()),
   fetchAppSentry: vi.fn(),
-  fetchAppTenants: vi.fn(),
-  fetchDeployRules: vi.fn()
+  fetchDeployments: vi.fn()
 }));
 
 describe('preDeploy', () => {
@@ -39,12 +37,43 @@ describe('preDeploy', () => {
 
   // Dynamic mock values or spies
   const mockCoreInfo = vi.mocked(core.info);
+  const mockCoreWarning = vi.mocked(core.warning);
   const mockGithubContext = vi.mocked(github.context);
   const mockAnalyzeAppsToDeploy = vi.mocked(analyzeAppsToDeploy);
   const mockFetchAppSentry = vi.mocked(tenancy.fetchAppSentry);
-  const mockFetchAppTenants = vi.mocked(tenancy.fetchAppTenants);
-  const mockFetchDeployRules = vi.mocked(tenancy.fetchDeployRules);
-  const spyFilterByDeployRules = vi.spyOn(tenancy, 'filterByDeployRules');
+  const mockFetchDeployments = vi.mocked(tenancy.fetchDeployments);
+
+  const infisicalInputs: Partial<ActionInputs> = {
+    infisicalClientId: 'test-client-id',
+    infisicalClientSecret: 'test-client-secret',
+    infisicalProjectId: 'test-project-id',
+    infisicalSite: 'eu'
+  };
+
+  /** An app that `analyzeAppsToDeploy` says to deploy */
+  const deployable = (name: string) => ({
+    projectName: name,
+    status: 'deploy' as const,
+    flyConfigFile: `apps/${name}/fly.toml`,
+    githubConfig: {},
+    version: '1.0.0',
+    previousVersion: '0.9.0'
+  });
+
+  /** The same app as the action outputs it */
+  const appOutput = (name: string) => ({
+    name,
+    flyConfigFile: `apps/${name}/fly.toml`,
+    githubConfig: {},
+    version: '1.0.0',
+    previousVersion: '0.9.0'
+  });
+
+  /** What `fetchDeployments` finds in the vault */
+  const mockDeployments = (
+    deployments: tenancy.DeploymentsMap,
+    skipped: Array<tenancy.SkippedDeployment> = []
+  ) => mockFetchDeployments.mockResolvedValue({ deployments, skipped });
 
   /**
    * Set github context
@@ -129,8 +158,7 @@ describe('preDeploy', () => {
     // Default mocks
     mockAnalyzeAppsToDeploy.mockResolvedValue([]);
     mockFetchAppSentry.mockResolvedValue({});
-    mockFetchAppTenants.mockResolvedValue({});
-    mockFetchDeployRules.mockResolvedValue({ apps: '*', tenants: '*' });
+    mockFetchDeployments.mockResolvedValue({ deployments: {}, skipped: [] });
   });
 
   describe('analyze environment', () => {
@@ -192,51 +220,23 @@ describe('preDeploy', () => {
   describe('determine applications to deploy', () => {
     it('should filter and return only apps marked for deployment', async () => {
       mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        },
+        deployable('web'),
         {
           projectName: 'cms',
           status: 'skip',
           reason: 'Deployment is disabled'
         },
-        {
-          projectName: 'api',
-          status: 'deploy',
-          flyConfigFile: 'apps/api/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
+        deployable('api')
       ]);
+      mockDeployments({ web: [{}], api: [{}] });
 
       setContext('push-main-branch');
-      const config = setupTest();
+      const config = setupTest(infisicalInputs);
       const result = await preDeploy(config, true);
 
       expect(result).toEqual({
-        apps: [
-          {
-            name: 'web',
-            flyConfigFile: 'apps/web/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          },
-          {
-            name: 'api',
-            flyConfigFile: 'apps/api/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
-        appTenants: {},
+        apps: [appOutput('web'), appOutput('api')],
+        appTenants: { web: [{}], api: [{}] },
         environment: 'production'
       });
       expect(mockCoreInfo).toHaveBeenCalledWith('Deploy: web @ 1.0.0');
@@ -347,149 +347,289 @@ describe('preDeploy', () => {
     });
   });
 
-  describe('fetch app tenants from Infisical', () => {
-    const infisicalConfig: Partial<ActionInputs> = {
-      infisicalClientId: 'test-client-id',
-      infisicalClientSecret: 'test-client-secret',
-      infisicalProjectId: 'test-project-id',
-      infisicalSite: 'eu'
-    };
+  describe('deployment discovery', () => {
+    it('should fail when credentials are missing and there is something to deploy', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
 
-    it('should not fetch from Infisical when configuration is not provided', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
+      const result = await preDeploy(setupTest());
 
-      setContext('push-main-branch');
-      const config = setupTest(); // No Infisical config
-      const result = await preDeploy(config, true);
+      expect(core.setFailed).toHaveBeenCalledWith(
+        "Infisical credentials are required to decide where apps deploy in 'production'"
+      );
+      expect(result).toEqual({});
+      expect(mockFetchDeployments).not.toHaveBeenCalled();
+      expect(mockFetchAppSentry).not.toHaveBeenCalled();
+    });
 
-      expect(result).toEqual({
-        apps: [
-          {
-            name: 'web',
-            flyConfigFile: 'apps/web/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
-        appTenants: {},
-        environment: 'production'
-      });
-      expect(mockFetchAppTenants).not.toHaveBeenCalled();
-      expect(mockFetchDeployRules).not.toHaveBeenCalled();
+    it('should rethrow the missing credentials error when asked to', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+
+      await expect(preDeploy(setupTest(), true)).rejects.toBe(
+        "Infisical credentials are required to decide where apps deploy in 'production'"
+      );
+    });
+
+    it('should not need credentials when environment is empty', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+
+      setContext('push-feature-branch');
+      const result = await preDeploy(setupTest(), true);
+
+      expect(result.appTenants).toEqual({});
+      expect(result.environment).toBe('');
+      expect(core.setFailed).not.toHaveBeenCalled();
+      expect(mockFetchDeployments).not.toHaveBeenCalled();
       expect(mockCoreInfo).toHaveBeenCalledWith(
-        'Infisical configuration not provided, skipping tenant fetching'
+        'Skipping deployment discovery (no valid environment)'
       );
     });
 
     it('should not fetch from Infisical when environment is empty', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
 
-      setContext('push-feature-branch'); // Non-deployable environment
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
+      setContext('push-feature-branch');
+      const result = await preDeploy(setupTest(infisicalInputs), true);
 
       expect(result).toEqual({
-        apps: [
-          {
-            name: 'web',
-            flyConfigFile: 'apps/web/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
+        apps: [appOutput('web')],
         appTenants: {},
         environment: ''
       });
-      expect(mockFetchAppTenants).not.toHaveBeenCalled();
-      expect(mockFetchDeployRules).not.toHaveBeenCalled();
-      expect(mockCoreInfo).toHaveBeenCalledWith(
-        'Skipping tenant fetching (no valid environment)'
-      );
+      expect(mockFetchDeployments).not.toHaveBeenCalled();
+      expect(mockFetchAppSentry).not.toHaveBeenCalled();
     });
 
-    it('should not fetch from Infisical when no apps to deploy', async () => {
+    it('should not need credentials when there are no apps', async () => {
       mockAnalyzeAppsToDeploy.mockResolvedValue([]);
 
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
+      const result = await preDeploy(setupTest(), true);
 
       expect(result).toEqual({
         apps: [],
         appTenants: {},
         environment: 'production'
       });
-      expect(mockFetchAppTenants).not.toHaveBeenCalled();
-      expect(mockFetchDeployRules).not.toHaveBeenCalled();
+      expect(core.setFailed).not.toHaveBeenCalled();
+      expect(mockFetchDeployments).not.toHaveBeenCalled();
       expect(mockCoreInfo).toHaveBeenCalledWith(
-        'Skipping tenant fetching (no apps to deploy)'
+        'Skipping deployment discovery (no apps to deploy)'
       );
     });
 
-    it('should attach Sentry details to the apps that have them', async () => {
+    it('should not fetch from Infisical when there are no apps', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([]);
+
+      await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(mockFetchDeployments).not.toHaveBeenCalled();
+      expect(mockFetchAppSentry).not.toHaveBeenCalled();
+    });
+
+    it('should call fetchDeployments with the Infisical config and app names', async () => {
       mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        },
-        {
-          projectName: 'cms',
-          status: 'deploy',
-          flyConfigFile: 'apps/cms/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
+        deployable('web'),
+        deployable('cms')
       ]);
 
+      await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(mockFetchDeployments).toHaveBeenCalledTimes(1);
+      expect(mockFetchDeployments).toHaveBeenCalledWith(
+        {
+          clientId: 'test-client-id',
+          clientSecret: 'test-client-secret',
+          projectId: 'test-project-id',
+          site: 'eu',
+          environment: 'production'
+        },
+        ['web', 'cms']
+      );
+    });
+
+    it('should use the preview environment for pull requests', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+
+      setContext('pull-request');
+      await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(mockFetchDeployments).toHaveBeenCalledWith(
+        expect.objectContaining({ environment: 'preview' }),
+        ['web']
+      );
+    });
+
+    it('should use US site when configured', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+
+      await preDeploy(
+        setupTest({ ...infisicalInputs, infisicalSite: 'us' }),
+        true
+      );
+
+      expect(mockFetchDeployments).toHaveBeenCalledWith(
+        expect.objectContaining({ site: 'us' }),
+        ['web']
+      );
+    });
+
+    it('should default to the EU site', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+
+      await preDeploy(
+        setupTest({ ...infisicalInputs, infisicalSite: undefined }),
+        true
+      );
+
+      expect(mockFetchDeployments).toHaveBeenCalledWith(
+        expect.objectContaining({ site: 'eu' }),
+        ['web']
+      );
+    });
+
+    it('should pass host and tenants through as appTenants, host first', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([
+        deployable('web'),
+        deployable('cms')
+      ]);
+      mockDeployments({
+        web: [
+          {},
+          { tenant: 'acme', env: { PUBLIC_URL: 'https://acme.com' } },
+          { tenant: 'demo', secrets: { API_KEY: 'secret' } }
+        ],
+        cms: [{ tenant: 'demo' }]
+      });
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.appTenants).toEqual({
+        web: [
+          {},
+          { tenant: 'acme', env: { PUBLIC_URL: 'https://acme.com' } },
+          { tenant: 'demo', secrets: { API_KEY: 'secret' } }
+        ],
+        cms: [{ tenant: 'demo' }]
+      });
+      expect(result.apps.map((a) => a.name)).toEqual(['web', 'cms']);
+      expect(mockCoreInfo).toHaveBeenCalledWith(
+        'Deploy web to: <host>, acme, demo'
+      );
+    });
+
+    it('should deploy a host-only app with a single host entry', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('builder')]);
+      mockDeployments({ builder: [{}] });
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps.map((a) => a.name)).toEqual(['builder']);
+      expect(result.appTenants).toEqual({ builder: [{}] });
+    });
+
+    it('should deploy tenants of an app whose host is off', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('cms')]);
+      mockDeployments({ cms: [{ tenant: 'acme' }] }, [
+        { app: 'cms', reason: 'flag-off' }
+      ]);
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.appTenants).toEqual({ cms: [{ tenant: 'acme' }] });
+    });
+
+    it('should drop an app that has nothing enabled, naming the flag-off reason', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([
+        deployable('web'),
+        deployable('cms')
+      ]);
+      mockDeployments({ web: [], cms: [{ tenant: 'demo' }] }, [
+        { app: 'web', tenant: 'demo', reason: 'flag-off' }
+      ]);
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps.map((a) => a.name)).toEqual(['cms']);
+      expect(result.appTenants).toEqual({ cms: [{ tenant: 'demo' }] });
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        "Skip: web - nothing enabled in 'production' (demo: DEPLOY_ENABLED is not true)"
+      );
+    });
+
+    it('should drop an app that has secrets but no flag, naming the no-flag reason', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+      mockDeployments({ web: [] }, [
+        { app: 'web', reason: 'no-flag' },
+        { app: 'web', tenant: 'demo', reason: 'flag-off' }
+      ]);
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps).toEqual([]);
+      expect(result.appTenants).toEqual({});
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        "Skip: web - nothing enabled in 'production' (host: no DEPLOY_ENABLED secret, demo: DEPLOY_ENABLED is not true)"
+      );
+    });
+
+    it('should drop an app that has no folder at all', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+      mockDeployments({ web: [] });
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps).toEqual([]);
+      expect(result.appTenants).toEqual({});
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        "Skip: web - nothing enabled in 'production' (no folder sets DEPLOY_ENABLED)"
+      );
+    });
+
+    it('should drop web with only a preview tenant in production, never a bare host app', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([
+        deployable('web'),
+        deployable('builder')
+      ]);
+      // The preview tenant's flag lives in the preview environment, so
+      // production sees nothing for web
+      mockDeployments({ web: [], builder: [{}] });
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps.map((a) => a.name)).toEqual(['builder']);
+      expect(result.appTenants).toEqual({ builder: [{}] });
+      expect(result.appTenants).not.toHaveProperty('web');
+    });
+
+    it('should drop an app that is also not in the discovered map', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+      mockDeployments({});
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps).toEqual([]);
+      expect(result.appTenants).toEqual({});
+    });
+  });
+
+  describe('sentry configuration', () => {
+    it('should attach Sentry details to the apps that have them', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([
+        deployable('web'),
+        deployable('cms')
+      ]);
+      mockDeployments({ web: [{}], cms: [{}] });
       mockFetchAppSentry.mockResolvedValue({
         web: { project: 'web', dsn: 'https://web@sentry.io/2' }
       });
 
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
+      const result = await preDeploy(setupTest(infisicalInputs), true);
 
       expect(result.apps).toEqual([
         {
-          name: 'web',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0',
+          ...appOutput('web'),
           sentry: { project: 'web', dsn: 'https://web@sentry.io/2' }
         },
-        {
-          name: 'cms',
-          flyConfigFile: 'apps/cms/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
+        appOutput('cms')
       ]);
       expect(mockFetchAppSentry).toHaveBeenCalledWith(
         {
@@ -503,508 +643,37 @@ describe('preDeploy', () => {
       );
     });
 
-    it('should fetch tenants for single app', async () => {
+    it('should fetch Sentry only for the apps that remain', async () => {
       mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
+        deployable('web'),
+        deployable('cms'),
+        deployable('builder')
       ]);
+      mockDeployments({ web: [], cms: [{ tenant: 'demo' }], builder: [{}] });
 
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }, { tenant: 'customer1' }]
-      });
+      await preDeploy(setupTest(infisicalInputs), true);
 
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
-
-      expect(result).toEqual({
-        apps: [
-          {
-            name: 'web',
-            flyConfigFile: 'apps/web/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
-        appTenants: { web: [{ tenant: 'demo' }, { tenant: 'customer1' }] },
-        environment: 'production'
-      });
-
-      expect(mockFetchAppTenants).toHaveBeenCalledWith(
-        {
-          clientId: 'test-client-id',
-          clientSecret: 'test-client-secret',
-          projectId: 'test-project-id',
-          site: 'eu',
-          environment: 'production'
-        },
-        ['web']
-      );
-      expect(spyFilterByDeployRules).toHaveBeenCalledWith(
-        { web: [{ tenant: 'demo' }, { tenant: 'customer1' }] },
-        { apps: '*', tenants: '*' }
+      expect(mockFetchAppSentry).toHaveBeenCalledTimes(1);
+      expect(mockFetchAppSentry).toHaveBeenCalledWith(
+        expect.objectContaining({ environment: 'production' }),
+        ['cms', 'builder']
       );
     });
 
-    it('should fetch tenants for multiple apps', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        },
-        {
-          projectName: 'api',
-          status: 'deploy',
-          flyConfigFile: 'apps/api/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        },
-        {
-          projectName: 'cms',
-          status: 'skip',
-          reason: 'Deployment is disabled'
-        }
-      ]);
+    it('should fetch Sentry after discovery', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+      mockDeployments({ web: [{}] });
 
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }, { tenant: 'acme' }, { tenant: 'globex' }],
-        api: [{ tenant: 'demo' }, { tenant: 'acme' }]
-      });
+      await preDeploy(setupTest(infisicalInputs), true);
 
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
-
-      expect(result).toEqual({
-        apps: [
-          {
-            name: 'web',
-            flyConfigFile: 'apps/web/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          },
-          {
-            name: 'api',
-            flyConfigFile: 'apps/api/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
-        appTenants: {
-          web: [{ tenant: 'demo' }, { tenant: 'acme' }, { tenant: 'globex' }],
-          api: [{ tenant: 'demo' }, { tenant: 'acme' }]
-        },
-        environment: 'production'
-      });
-
-      expect(mockFetchAppTenants).toHaveBeenCalledWith(
-        {
-          clientId: 'test-client-id',
-          clientSecret: 'test-client-secret',
-          projectId: 'test-project-id',
-          site: 'eu',
-          environment: 'production'
-        },
-        ['web', 'api']
+      expect(mockFetchDeployments.mock.invocationCallOrder[0]).toBeLessThan(
+        mockFetchAppSentry.mock.invocationCallOrder[0]
       );
-      expect(spyFilterByDeployRules).toHaveBeenCalledWith(
-        {
-          web: [{ tenant: 'demo' }, { tenant: 'acme' }, { tenant: 'globex' }],
-          api: [{ tenant: 'demo' }, { tenant: 'acme' }]
-        },
-        { apps: '*', tenants: '*' }
-      );
-    });
-
-    it('should handle app with no tenants (single-tenant app)', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'cms',
-          status: 'deploy',
-          flyConfigFile: 'apps/cms/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
-
-      mockFetchAppTenants.mockResolvedValue({
-        cms: []
-      });
-
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
-
-      expect(result).toEqual({
-        apps: [
-          {
-            name: 'cms',
-            flyConfigFile: 'apps/cms/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
-        appTenants: { cms: [] },
-        environment: 'production'
-      });
-    });
-
-    it('should fetch tenants for preview environment', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
-
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }]
-      });
-
-      setContext('pull-request');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
-
-      expect(result).toEqual({
-        apps: [
-          {
-            name: 'web',
-            flyConfigFile: 'apps/web/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
-        appTenants: { web: [{ tenant: 'demo' }] },
-        environment: 'preview'
-      });
-
-      expect(mockFetchAppTenants).toHaveBeenCalledWith(
-        expect.objectContaining({
-          environment: 'preview'
-        }),
-        ['web']
-      );
-    });
-
-    it('should use US site when configured', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
-
-      mockFetchAppTenants.mockResolvedValue({ web: [] });
-
-      setContext('push-main-branch');
-      const config = setupTest({
-        ...infisicalConfig,
-        infisicalSite: 'us'
-      });
-      await preDeploy(config, true);
-
-      expect(mockFetchAppTenants).toHaveBeenCalledWith(
-        expect.objectContaining({
-          site: 'us'
-        }),
-        ['web']
-      );
-    });
-
-    it('should handle mixed multi-tenant and single-tenant apps', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        },
-        {
-          projectName: 'cms',
-          status: 'deploy',
-          flyConfigFile: 'apps/cms/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        },
-        {
-          projectName: 'api',
-          status: 'deploy',
-          flyConfigFile: 'apps/api/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
-
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }, { tenant: 'customer1' }],
-        cms: [],
-        api: [{ tenant: 'demo' }]
-      });
-
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
-
-      expect(result).toEqual({
-        apps: [
-          {
-            name: 'web',
-            flyConfigFile: 'apps/web/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          },
-          {
-            name: 'cms',
-            flyConfigFile: 'apps/cms/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          },
-          {
-            name: 'api',
-            flyConfigFile: 'apps/api/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
-        appTenants: {
-          web: [{ tenant: 'demo' }, { tenant: 'customer1' }],
-          cms: [],
-          api: [{ tenant: 'demo' }]
-        },
-        environment: 'production'
-      });
-
-      expect(mockCoreInfo).toHaveBeenCalledWith(
-        'Multi-tenant apps: web (2), api (1)'
-      );
-      expect(mockCoreInfo).toHaveBeenCalledWith('Single-tenant apps: cms');
-    });
-  });
-
-  describe('deployment rules filtering', () => {
-    const infisicalConfig: Partial<ActionInputs> = {
-      infisicalClientId: 'test-client-id',
-      infisicalClientSecret: 'test-client-secret',
-      infisicalProjectId: 'test-project-id',
-      infisicalSite: 'eu'
-    };
-
-    it('should call fetchDeployRules with correct config', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
-
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }, { tenant: 'acme' }]
-      });
-
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      await preDeploy(config, true);
-
-      expect(mockFetchDeployRules).toHaveBeenCalledWith({
-        clientId: 'test-client-id',
-        clientSecret: 'test-client-secret',
-        projectId: 'test-project-id',
-        site: 'eu',
-        environment: 'production'
-      });
-      expect(mockFetchDeployRules).toHaveBeenCalledTimes(1);
-    });
-
-    it('should call filter by deploy rules with fetched tenants and rules', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
-
-      const mockAppTenants: fetchAppTenantsModule.AppTenantsMap = {
-        web: [{ tenant: 'demo' }, { tenant: 'acme' }, { tenant: 'globex' }]
-      };
-      const mockRules: tenancy.DeployRules = { apps: '*', tenants: 'demo' };
-
-      mockFetchAppTenants.mockResolvedValue(mockAppTenants);
-      mockFetchDeployRules.mockResolvedValue(mockRules);
-
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
-
-      expect(spyFilterByDeployRules).toHaveBeenCalledWith(
-        mockAppTenants,
-        mockRules
-      );
-      expect(spyFilterByDeployRules).toHaveBeenCalledTimes(1);
-      expect(result.appTenants).toEqual({ web: [{ tenant: 'demo' }] });
-    });
-
-    it('should use filtered results in output', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        },
-        {
-          projectName: 'api',
-          status: 'deploy',
-          flyConfigFile: 'apps/api/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
-      // Filter should remove api based on apps rule
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }, { tenant: 'acme' }],
-        api: [{ tenant: 'demo' }]
-      });
-      mockFetchDeployRules.mockResolvedValue({ apps: 'web', tenants: '*' });
-
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
-
-      expect(result).toEqual({
-        apps: [
-          {
-            name: 'web',
-            flyConfigFile: 'apps/web/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          },
-          {
-            name: 'api',
-            flyConfigFile: 'apps/api/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
-        appTenants: {
-          web: [{ tenant: 'demo' }, { tenant: 'acme' }]
-        },
-        environment: 'production'
-      });
-    });
-
-    it('should handle tenant filtering in preview environment', async () => {
-      mockAnalyzeAppsToDeploy.mockResolvedValue([
-        {
-          projectName: 'web',
-          status: 'deploy',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
-      // Filter should keep only 'demo' tenant based on tenants rule
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }, { tenant: 'acme' }, { tenant: 'globex' }]
-      });
-      mockFetchDeployRules.mockResolvedValue({ apps: '*', tenants: 'demo' });
-
-      setContext('pull-request');
-      const config = setupTest(infisicalConfig);
-      const result = await preDeploy(config, true);
-
-      expect(mockFetchDeployRules).toHaveBeenCalledWith(
-        expect.objectContaining({
-          environment: 'preview'
-        })
-      );
-      expect(result).toEqual({
-        apps: [
-          {
-            name: 'web',
-            flyConfigFile: 'apps/web/fly.toml',
-            githubConfig: {},
-            version: '1.0.0',
-            previousVersion: '0.9.0'
-          }
-        ],
-        appTenants: { web: [{ tenant: 'demo' }] },
-        environment: 'preview'
-      });
     });
   });
 
   describe('manual deployment overrides', () => {
-    const infisicalConfig: Partial<ActionInputs> = {
-      infisicalClientId: 'test-client-id',
-      infisicalClientSecret: 'test-client-secret',
-      infisicalProjectId: 'test-project-id',
-      infisicalSite: 'eu'
-    };
-
-    const allApps = [
-      {
-        projectName: 'web',
-        status: 'deploy' as const,
-        flyConfigFile: 'apps/web/fly.toml',
-        githubConfig: {},
-        version: '1.0.0',
-        previousVersion: '0.9.0'
-      },
-      {
-        projectName: 'cms',
-        status: 'deploy' as const,
-        flyConfigFile: 'apps/cms/fly.toml',
-        githubConfig: {},
-        version: '1.0.0',
-        previousVersion: '0.9.0'
-      }
-    ];
+    const allApps = [deployable('web'), deployable('cms')];
 
     beforeEach(() => {
       mockAnalyzeAppsToDeploy.mockImplementation(async (_env, _preid, apps) =>
@@ -1015,7 +684,7 @@ describe('preDeploy', () => {
     it('should override environment when manualEnvironment is provided', async () => {
       setContext('push-feature-branch'); // Normally no environment
       const config = setupTest({
-        ...infisicalConfig,
+        ...infisicalInputs,
         manualEnvironment: 'production'
       });
       const result = await preDeploy(config, true);
@@ -1026,24 +695,27 @@ describe('preDeploy', () => {
       );
     });
 
-    it('should override app when manualApp is provided', async () => {
-      setContext('push-main-branch');
+    it('should discover with the manual environment', async () => {
+      setContext('push-feature-branch'); // Normally no environment
       const config = setupTest({
-        ...infisicalConfig,
-        manualApp: 'cms'
+        ...infisicalInputs,
+        manualEnvironment: 'preview'
       });
-      mockFetchAppTenants.mockResolvedValue({ cms: [] });
+
+      await preDeploy(config, true);
+
+      expect(mockFetchDeployments).toHaveBeenCalledWith(
+        expect.objectContaining({ environment: 'preview' }),
+        ['web', 'cms']
+      );
+    });
+
+    it('should override app when manualApp is provided', async () => {
+      mockDeployments({ cms: [{}] });
+      const config = setupTest({ ...infisicalInputs, manualApp: 'cms' });
       const result = await preDeploy(config, true);
 
-      expect(result.apps).toEqual([
-        {
-          name: 'cms',
-          flyConfigFile: 'apps/cms/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
+      expect(result.apps).toEqual([appOutput('cms')]);
       expect(mockCoreInfo).toHaveBeenCalledWith('Manual app override: cms');
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'production',
@@ -1052,48 +724,90 @@ describe('preDeploy', () => {
       );
     });
 
-    it('should override tenant when manualTenant is provided', async () => {
-      setContext('push-main-branch');
-      const config = setupTest({
-        ...infisicalConfig,
-        manualTenant: 'acme'
+    it('should keep only the manual tenant and drop the host and other tenants', async () => {
+      mockDeployments({
+        web: [{}, { tenant: 'demo' }, { tenant: 'acme' }, { tenant: 'globex' }],
+        cms: [{ tenant: 'acme', env: { A: '1' } }]
       });
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }, { tenant: 'acme' }, { tenant: 'globex' }],
-        cms: []
-      });
+      const config = setupTest({ ...infisicalInputs, manualTenant: 'acme' });
 
       const result = await preDeploy(config, true);
 
       expect(result.appTenants).toEqual({
         web: [{ tenant: 'acme' }],
-        cms: []
+        cms: [{ tenant: 'acme', env: { A: '1' } }]
       });
       expect(mockCoreInfo).toHaveBeenCalledWith('Manual tenant override: acme');
     });
 
-    it('should combine manual app and environment overrides', async () => {
-      setContext('push-feature-branch'); // Normally no environment
-      const config = setupTest({
-        ...infisicalConfig,
-        manualApp: 'web',
-        manualEnvironment: 'preview'
+    it('should drop an app left with nothing for the manual tenant', async () => {
+      mockDeployments({
+        web: [{}, { tenant: 'demo' }],
+        cms: [{ tenant: 'acme' }]
       });
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }]
+      const config = setupTest({ ...infisicalInputs, manualTenant: 'acme' });
+
+      const result = await preDeploy(config, true);
+
+      expect(result.apps.map((a) => a.name)).toEqual(['cms']);
+      expect(result.appTenants).toEqual({ cms: [{ tenant: 'acme' }] });
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        "Skip: web - no deployment for tenant 'acme'"
+      );
+      expect(mockFetchAppSentry).toHaveBeenCalledWith(expect.anything(), [
+        'cms'
+      ]);
+    });
+
+    it('should never add a tenant whose flag is off', async () => {
+      mockDeployments({ web: [], cms: [] }, [
+        { app: 'web', tenant: 'acme', reason: 'flag-off' }
+      ]);
+      const config = setupTest({ ...infisicalInputs, manualTenant: 'acme' });
+
+      const result = await preDeploy(config, true);
+
+      expect(result.apps).toEqual([]);
+      expect(result.appTenants).toEqual({});
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        "Skip: web - nothing enabled in 'production' (acme: DEPLOY_ENABLED is not true)"
+      );
+    });
+
+    it('should combine manual app, tenant, and environment overrides', async () => {
+      setContext('push-feature-branch'); // Normally no environment
+      mockDeployments({ web: [{}, { tenant: 'demo' }, { tenant: 'acme' }] });
+      const config = setupTest({
+        ...infisicalInputs,
+        manualApp: 'web',
+        manualTenant: 'demo',
+        manualEnvironment: 'production'
       });
 
       const result = await preDeploy(config, true);
 
-      expect(result.apps).toEqual([
-        {
-          name: 'web',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
+      expect(result.apps).toEqual([appOutput('web')]);
+      expect(result.environment).toBe('production');
+      expect(result.appTenants).toEqual({ web: [{ tenant: 'demo' }] });
+      expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
+        'production',
+        undefined,
+        ['web']
+      );
+    });
+
+    it('should combine manual app and environment overrides', async () => {
+      setContext('push-feature-branch'); // Normally no environment
+      mockDeployments({ web: [{ tenant: 'demo' }] });
+      const config = setupTest({
+        ...infisicalInputs,
+        manualApp: 'web',
+        manualEnvironment: 'preview'
+      });
+
+      const result = await preDeploy(config, true);
+
+      expect(result.apps).toEqual([appOutput('web')]);
       expect(result.environment).toBe('preview');
       // Manual dispatch with no PR number still gets a preview lane, never the
       // production one
@@ -1104,100 +818,14 @@ describe('preDeploy', () => {
       );
     });
 
-    it('should combine manual app, tenant, and environment overrides', async () => {
-      setContext('push-feature-branch'); // Normally no environment
-      const config = setupTest({
-        ...infisicalConfig,
-        manualApp: 'web',
-        manualTenant: 'demo',
-        manualEnvironment: 'production'
-      });
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }, { tenant: 'acme' }]
-      });
-
-      const result = await preDeploy(config, true);
-
-      expect(result.apps).toEqual([
-        {
-          name: 'web',
-          flyConfigFile: 'apps/web/fly.toml',
-          githubConfig: {},
-          version: '1.0.0',
-          previousVersion: '0.9.0'
-        }
-      ]);
-      expect(result.environment).toBe('production');
-      expect(result.appTenants).toEqual({
-        web: [{ tenant: 'demo' }]
-      });
-      expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
-        'production',
-        undefined,
-        ['web']
-      );
-    });
-
     it('should not affect affected app analysis when manual overrides are not provided', async () => {
-      setContext('push-main-branch');
-      const config = setupTest(infisicalConfig);
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }],
-        cms: []
-      });
-
-      await preDeploy(config, true);
+      await preDeploy(setupTest(infisicalInputs), true);
 
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledTimes(1);
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'production',
         undefined,
         undefined
-      );
-    });
-
-    it('should filter out tenants that do not match manualTenant', async () => {
-      setContext('push-main-branch');
-      const config = setupTest({
-        ...infisicalConfig,
-        manualTenant: 'nonexistent'
-      });
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }, { tenant: 'acme' }],
-        cms: []
-      });
-
-      const result = await preDeploy(config, true);
-
-      expect(result.appTenants).toEqual({
-        web: [],
-        cms: []
-      });
-    });
-
-    it('should still fetch from Infisical with manual environment override', async () => {
-      setContext('push-feature-branch'); // Normally no environment
-      const config = setupTest({
-        ...infisicalConfig,
-        manualEnvironment: 'preview'
-      });
-      mockFetchAppTenants.mockResolvedValue({
-        web: [{ tenant: 'demo' }],
-        cms: []
-      });
-
-      await preDeploy(config, true);
-
-      expect(mockFetchAppTenants).toHaveBeenCalledWith(
-        expect.objectContaining({
-          environment: 'preview'
-        }),
-        ['web', 'cms']
-      );
-      expect(mockFetchDeployRules).toHaveBeenCalledWith(
-        expect.objectContaining({
-          environment: 'preview'
-        })
       );
     });
   });

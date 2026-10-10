@@ -2,8 +2,8 @@ import { splitCodeNames } from './code-names';
 
 describe('splitCodeNames', () => {
   it('marks a setting name at the start', () => {
-    expect(splitCodeNames('DEPLOY_RULES could not be read')).toEqual([
-      { text: 'DEPLOY_RULES', code: true },
+    expect(splitCodeNames('DEPLOY_ENABLED could not be read')).toEqual([
+      { text: 'DEPLOY_ENABLED', code: true },
       { text: ' could not be read', code: false }
     ]);
   });

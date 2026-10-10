@@ -1,11 +1,12 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import {
+  type DeploymentsMap,
   type InfisicalConfig,
+  type SkippedDeployment,
   fetchAppSentry,
-  fetchAppTenants,
-  fetchDeployRules,
-  filterByDeployRules
+  fetchDeployments,
+  skipReasons
 } from '@codeware/shared/feature/tenancy';
 import { getDeployEnv, printGitHubContext } from '@codeware/shared/util/github';
 import {
@@ -113,22 +114,22 @@ export async function preDeploy(
     const appNames = apps.map((a) => a.name);
     core.info(`Applications to deploy: ${appNames.join(', ') || '<none>'}`);
 
-    if (!config.infisical) {
-      core.info(
-        'Infisical configuration not provided, skipping tenant fetching'
-      );
-      return ActionOutputsSchema.parse({ apps, environment, appTenants: {} });
-    }
-
-    // Fetch app-specific tenant configuration from Infisical if credentials are provided
     if (!environment) {
-      core.info('Skipping tenant fetching (no valid environment)');
+      core.info('Skipping deployment discovery (no valid environment)');
       return ActionOutputsSchema.parse({ apps, environment, appTenants: {} });
     }
 
     if (apps.length === 0) {
-      core.info('Skipping tenant fetching (no apps to deploy)');
+      core.info('Skipping deployment discovery (no apps to deploy)');
       return ActionOutputsSchema.parse({ apps, environment, appTenants: {} });
+    }
+
+    // Without the vault nothing says where an app may deploy, and guessing
+    // "everywhere" is how a bare host app reaches production
+    if (!config.infisical) {
+      throw new Error(
+        `Infisical credentials are required to decide where apps deploy in '${environment}'`
+      );
     }
 
     const { clientId, clientSecret, projectId, site } = config.infisical;
@@ -141,12 +142,57 @@ export async function preDeploy(
       site
     };
 
+    core.startGroup('Discover deployments from Infisical');
+
+    const discovered = await fetchDeployments(infisicalConfig, appNames);
+    let deployments: DeploymentsMap = discovered.deployments;
+
+    // Narrows the set, never widens it: a tenant whose flag is off stays off
+    if (inputs.manualTenant) {
+      core.info(`Manual tenant override: ${inputs.manualTenant}`);
+      deployments = Object.fromEntries(
+        Object.entries(deployments).map(([app, entries]) => [
+          app,
+          entries.filter((entry) => entry.tenant === inputs.manualTenant)
+        ])
+      );
+    }
+
+    const deployable = apps.filter((app) => {
+      if (deployments[app.name]?.length) {
+        return true;
+      }
+      // A warning, not a line in the log: a release that ships nowhere still
+      // leaves the run green
+      core.warning(
+        discovered.deployments[app.name]?.length
+          ? `Skip: ${app.name} - no deployment for tenant '${inputs.manualTenant}'`
+          : `Skip: ${app.name} - nothing enabled in '${environment}'${describeSkipped(app.name, discovered.skipped)}`
+      );
+      return false;
+    });
+
+    const appTenants: DeploymentsMap = Object.fromEntries(
+      deployable.map((app) => [app.name, deployments[app.name]])
+    );
+
+    for (const [app, entries] of Object.entries(appTenants)) {
+      core.info(
+        `Deploy ${app} to: ${entries.map((entry) => entry.tenant ?? '<host>').join(', ')}`
+      );
+    }
+
+    core.endGroup();
+
     core.startGroup('Fetch app-specific Sentry configuration from Infisical');
 
     // Attach the Sentry project each app reports to. Apps without a complete
     // configuration are left untouched, which disables Sentry for them.
-    const appSentry = await fetchAppSentry(infisicalConfig, appNames);
-    for (const app of apps) {
+    const appSentry = await fetchAppSentry(
+      infisicalConfig,
+      deployable.map((app) => app.name)
+    );
+    for (const app of deployable) {
       // Only set it when there is something to set — an explicit `undefined`
       // is not the same as an absent key to every downstream consumer
       if (appSentry[app.name]) {
@@ -156,49 +202,11 @@ export async function preDeploy(
 
     core.endGroup();
 
-    core.startGroup('Fetch app-specific tenant configuration from Infisical');
-
-    // Fetch deployment rules
-    const deployRules = await fetchDeployRules(infisicalConfig);
-
-    // Fetch all tenant-app relationships
-    const allAppTenants = await fetchAppTenants(infisicalConfig, appNames);
-
-    // Apply deployment rules to filter tenants
-    let appTenants = filterByDeployRules(allAppTenants, deployRules);
-
-    // Apply manual tenant override if provided
-    if (inputs.manualTenant) {
-      core.info(`Manual tenant override: ${inputs.manualTenant}`);
-      appTenants = Object.fromEntries(
-        Object.entries(appTenants).map(([app, tenants]) => [
-          app,
-          tenants.filter((t) => t.tenant === inputs.manualTenant)
-        ])
-      );
-    }
-
-    // Number of tenants per app for logging
-    const appsCount = Object.entries(appTenants).reduce(
-      (aggr, [app, tenants]) => aggr.set(app, tenants.length),
-      new Map<string, number>()
-    );
-
-    core.info(
-      `Multi-tenant apps: ${Array.from(appsCount)
-        .filter(([, count]) => count)
-        .map(([app, count]) => `${app} (${count})`)
-        .join(', ')}`
-    );
-    core.info(
-      `Single-tenant apps: ${Array.from(appsCount)
-        .filter(([, count]) => !count)
-        .map(([app]) => app)
-        .join(', ')}`
-    );
-    core.endGroup();
-
-    return ActionOutputsSchema.parse({ apps, environment, appTenants });
+    return ActionOutputsSchema.parse({
+      apps: deployable,
+      environment,
+      appTenants
+    });
   } catch (error) {
     if (error instanceof Error) {
       core.setFailed(error.message);
@@ -211,3 +219,18 @@ export async function preDeploy(
     return {} as ActionOutputs;
   }
 }
+
+/** Why an app has nothing to deploy, as far as the folders say */
+const describeSkipped = (
+  app: string,
+  skipped: Array<SkippedDeployment>
+): string => {
+  const own = skipped.filter((entry) => entry.app === app);
+  if (own.length === 0) {
+    return ' (no folder sets DEPLOY_ENABLED)';
+  }
+  const parts = own.map(
+    ({ tenant, reason }) => `${tenant ?? 'host'}: ${skipReasons[reason]}`
+  );
+  return ` (${parts.join(', ')})`;
+};

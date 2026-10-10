@@ -16,6 +16,8 @@ export type DnsRecordProps = {
     instructions?: string | null;
     /** The domain itself rather than a subdomain, which cannot use a CNAME */
     isApex?: boolean;
+    /** The A and AAAA records an apex points at, in place of a CNAME */
+    addresses?: Array<{ type: 'A' | 'AAAA'; address: string }>;
   };
   /**
    * Value for the `_fly-ownership` TXT record, when Fly has offered one.
@@ -34,6 +36,8 @@ export type DnsRecordProps = {
   confirmed?: {
     traffic?: boolean | null;
     validation?: boolean | null;
+    /** The addresses Fly found the domain resolving to */
+    addresses?: Array<string> | null;
   } | null;
   /**
    * The certificate is issued, with no known outstanding issue — true both
@@ -53,6 +57,8 @@ export type DnsRecordProps = {
     /** Lede for Fly's prose, which is not always the validation record */
     instructionsLede: string;
     apexNote: string;
+    /** Hint shown with the note while the addresses are not yet known */
+    apexAddressesPending: string;
     nameHint: string;
     /** The one line a settled block shows instead of the instructional ledes */
     settledLede: string;
@@ -81,6 +87,10 @@ export function DnsRecord({
 }: DnsRecordProps) {
   const { name, target, instructions, isApex } = validation;
   const hasChallenge = Boolean(name && target);
+  const addresses = validation.addresses ?? [];
+  const confirmedAddresses = new Set(
+    (confirmed?.addresses ?? []).map((address) => address.toLowerCase())
+  );
 
   return (
     /* Deliberately not a `Card`: this is a surface nested inside one, and
@@ -94,9 +104,31 @@ export function DnsRecord({
           <p className="text-muted-foreground">{labels.trafficLede}</p>
         )}
         {isApex ? (
-          // An apex needs addresses rather than a name, and Fly spells the
-          // current ones out below
-          <p className="text-muted-foreground">{labels.apexNote}</p>
+          // An apex needs addresses rather than a name
+          <>
+            <p className="text-muted-foreground">{labels.apexNote}</p>
+            {addresses.length === 0 ? (
+              <p className="text-muted-foreground text-xs">
+                {labels.apexAddressesPending}
+              </p>
+            ) : (
+              addresses.map(({ type, address }) => (
+                <Record
+                  key={`${type}-${address}`}
+                  type={type}
+                  name={hostname}
+                  target={address}
+                  copyLabel={labels.copyRecord}
+                  confirmed={
+                    // Fly's own verdict counts too: a proxied domain or a
+                    // differently written v6 never matches the address as text
+                    Boolean(confirmed?.traffic) ||
+                    confirmedAddresses.has(address.toLowerCase())
+                  }
+                />
+              ))
+            )}
+          </>
         ) : (
           <Record
             name={hostname}
@@ -159,7 +191,7 @@ function Record({
   copyLabel,
   confirmed
 }: {
-  type?: 'CNAME' | 'TXT';
+  type?: 'CNAME' | 'TXT' | 'A' | 'AAAA';
   name: string;
   target: string;
   copyLabel: string;

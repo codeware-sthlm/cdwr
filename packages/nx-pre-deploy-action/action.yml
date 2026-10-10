@@ -2,7 +2,7 @@ name: "Nx Pre-deploy"
 
 description: >
   Analyze the applications to deploy and to which environment.
-  Optionally fetch multi-tenant information from Infisical.
+  Discover from Infisical which deployments (host app and tenants) are switched on.
 
 inputs:
   main-branch:
@@ -15,16 +15,16 @@ inputs:
       Defaults to `GITHUB_TOKEN`.
   infisical-client-id:
     description: >
-      Infisical client ID for tenant fetching.
-      Optional - if not provided, no tenants will be fetched.
+      Infisical client ID for deployment discovery.
+      Required when there are apps to deploy.
   infisical-client-secret:
     description: >
-      Infisical client secret for tenant fetching.
-      Optional - if not provided, no tenants will be fetched.
+      Infisical client secret for deployment discovery.
+      Required when there are apps to deploy.
   infisical-project-id:
     description: >
-      Infisical project ID for tenant fetching.
-      Optional - if not provided, no tenants will be fetched.
+      Infisical project ID for deployment discovery.
+      Required when there are apps to deploy.
   infisical-site:
     description: >
       Infisical site to use ('eu' or 'us').
@@ -42,9 +42,9 @@ inputs:
   manual-tenant:
     description: >
       Manual override: specific tenant ID to deploy.
-      Used for manual workflow dispatch to force deployment to a specific tenant.
-      Only applies to multi-tenant apps.
-      Optional - if not provided, all tenants will be deployed.
+      Used for manual workflow dispatch to deploy to a specific tenant only.
+      Narrows the deployments switched on with `DEPLOY_ENABLED`, never bypasses it.
+      Optional - if not provided, all enabled deployments are used.
   manual-environment:
     description: >
       Manual override: target environment (preview/production).
@@ -54,7 +54,8 @@ inputs:
 outputs:
   apps:
     description: >
-      JSON array of applications to deploy, selected by `nx release` bump
+      JSON array of applications to deploy, limited to apps with a deployment
+      switched on in Infisical. Selected by `nx release` bump
       rather than by `nx affected` - an app is listed when its conventional
       commits produce a version bump since its last release tag.
       Each entry has name, flyConfigFile, githubConfig, the resolved version
@@ -67,9 +68,9 @@ outputs:
       Empty string if the event couldn't match any environment.
   app-tenants:
     description: >
-      JSON object mapping apps to their tenant deployment details.
-      Each app maps to an array of objects with tenant, env, and secrets.
-      Example: { "web": [{ "tenant": "acme", "env": { "PUBLIC_URL": "https://acme.com" }, "secrets": { "API_KEY": "..." } }] }
+      JSON object mapping apps to their deployments. A host deployment is an
+      empty object and comes first; a tenant deployment has tenant, env, and secrets.
+      Example: { "web": [{}, { "tenant": "acme", "env": { "PUBLIC_URL": "https://acme.com" }, "secrets": { "API_KEY": "..." } }] }
 
 runs:
   using: "node24"

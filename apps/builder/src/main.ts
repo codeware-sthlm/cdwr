@@ -20,6 +20,9 @@ if (!process.env['BUILDER_TOKEN'] && process.env['INFISICAL_CLIENT_ID']) {
   });
 }
 
+// Deploy metadata in /apps/builder, not configuration for the running app
+delete process.env['DEPLOY_ENABLED'];
+
 // Without a token the service still answers its health check, so a deploy
 // that is missing the secret goes through and says so here instead of
 // crash-looping; every build is refused until the token arrives

@@ -12,7 +12,7 @@ export type InfisicalAppFacts = {
   app: string;
   /** Fly app it deploys as; preview names carry `<n>` for the pull request */
   flyApp: string;
-  /** Whether `DEPLOY_RULES` deploys this app for this workspace */
+  /** Whether the folder's `DEPLOY_ENABLED` is on */
   included: boolean;
   apiKey: ApiKeyState;
   /** Optional keys that are set, e.g. `RESTRICTED_FONTS` */
@@ -22,20 +22,13 @@ export type InfisicalAppFacts = {
 /**
  * What one environment holds for a workspace.
  *
- * `unreadable` when the identity cannot read the environment at all, and
- * `no-rules` when `DEPLOY_RULES` is missing or invalid — without the rules no
- * folder can be judged, since they decide whether it deploys.
+ * `unreadable` when the identity cannot read the environment at all.
  */
 export type InfisicalEnvironmentFacts =
-  | {
-      environment: ProvisioningEnvironment;
-      access: 'unreadable' | 'no-rules';
-    }
+  | { environment: ProvisioningEnvironment; access: 'unreadable' }
   | {
       environment: ProvisioningEnvironment;
       access: 'ok';
-      /** How the tenants rule treats this workspace */
-      tenants: 'listed' | 'wildcard' | 'excluded';
       /** App folders that exist; an app without one is not deployed */
       apps: Array<InfisicalAppFacts>;
     };
@@ -52,8 +45,6 @@ export type InfisicalStatus = {
 export type InfisicalRowState =
   | 'key-mismatch'
   | 'missing-key'
-  | 'missing-folder'
-  | 'no-rules'
   | 'unreadable'
   | 'ready'
   | 'not-provisioned'
@@ -77,8 +68,6 @@ export type InfisicalStatusItem = {
 export const INFISICAL_STATES = [
   { state: 'key-mismatch', tone: 'error' },
   { state: 'missing-key', tone: 'error' },
-  { state: 'missing-folder', tone: 'error' },
-  { state: 'no-rules', tone: 'warning' },
   { state: 'unreadable', tone: 'warning' },
   { state: 'ready', tone: 'ok' },
   { state: 'not-provisioned', tone: 'neutral' },
@@ -101,10 +90,9 @@ const appState = (app: InfisicalAppFacts): InfisicalRowState => {
 /**
  * Flatten the facts into rows.
  *
- * The deploy only ships an app for a workspace when its folder exists, so a
- * missing folder is not a fault in itself — most workspaces use one app. It is
- * one only when the tenants rule names this workspace and there is nothing to
- * deploy.
+ * The deploy only ships an app for a workspace when its folder exists and
+ * has `DEPLOY_ENABLED` on, so a missing folder is not a fault — most
+ * workspaces use one app. It just means nothing is set up.
  */
 export const toInfisicalStatusItems = (
   status: InfisicalStatus
@@ -118,13 +106,7 @@ export const toInfisicalStatusItems = (
     }
 
     if (!facts.apps.length) {
-      const state: InfisicalRowState =
-        facts.tenants === 'listed'
-          ? 'missing-folder'
-          : facts.tenants === 'wildcard'
-            ? 'not-provisioned'
-            : 'not-deployed';
-      return [{ ...bare, state }];
+      return [{ ...bare, state: 'not-provisioned' }];
     }
 
     return facts.apps.map((app) => ({

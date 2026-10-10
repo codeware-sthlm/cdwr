@@ -23,18 +23,24 @@
       "outputs": ["{projectRoot}/public/studio-types.json"]
     },
     "dev": {
-      "executor": "nx:run-commands",
+      "executor": "dev-plugin:infisical-run",
       "options": {
+        "path": "/apps/cms",
+        "cwd": "apps/cms",
         "commands": [
           "npx tsx src/utils/generate-studio-types.ts",
-          "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=local --set=SEED_STRATEGY=delta -- next dev --turbopack"
+          "next dev --turbopack"
         ],
-        "parallel": false,
-        "cwd": "apps/cms"
+        "env": {
+          "SEED_SOURCE": "local",
+          "SEED_STRATEGY": "delta"
+        }
       },
       "configurations": {
         "host": {
           "env": {
+            "SEED_SOURCE": "local",
+            "SEED_STRATEGY": "delta",
             "TENANT_ID": ""
           }
         }
@@ -48,10 +54,11 @@
       }
     },
     "reset-db": {
-      "executor": "nx:run-commands",
+      "executor": "dev-plugin:infisical-run",
       "options": {
-        "command": "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=off -- npx tsx src/utils/reset-db.ts",
+        "path": "/apps/cms",
         "cwd": "apps/cms",
+        "commands": ["npx tsx src/utils/reset-db.ts"],
         "env": {
           "DISABLE_DB_PUSH": "true",
           "NODE_ENV": "development",
@@ -63,12 +70,15 @@
       "metadata": {
         "description": "Ad-hoc seed process using the local-api."
       },
-      "executor": "nx:run-commands",
+      "executor": "dev-plugin:infisical-run",
       "options": {
-        "command": "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=local --set=SEED_STRATEGY=delta -- npx tsx src/utils/seed.ts",
+        "path": "/apps/cms",
         "cwd": "apps/cms",
+        "commands": ["npx tsx src/utils/seed.ts"],
         "env": {
-          "NODE_ENV": "development"
+          "NODE_ENV": "development",
+          "SEED_SOURCE": "local",
+          "SEED_STRATEGY": "delta"
         }
       }
     },
@@ -86,10 +96,11 @@
       "metadata": {
         "description": "Verify that the last migration works as expected."
       },
-      "executor": "nx:run-commands",
+      "executor": "dev-plugin:infisical-run",
       "options": {
-        "command": "node ../../tools/scripts/with-secrets.mjs --set=SEED_SOURCE=off -- npx tsx src/utils/verify-last-migration.ts",
+        "path": "/apps/cms",
         "cwd": "apps/cms",
+        "commands": ["npx tsx src/utils/verify-last-migration.ts"],
         "env": {
           "DISABLE_DB_PUSH": "true",
           "NODE_ENV": "development",
@@ -121,7 +132,7 @@
       },
       "executor": "nx:run-commands",
       "options": {
-        "command": "node tools/scripts/with-secrets.mjs --refresh-offline"
+        "command": "pnpm cdwr infisical cache --path=/apps/cms --yes --non-interactive"
       }
     }
   }

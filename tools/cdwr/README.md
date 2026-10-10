@@ -48,6 +48,24 @@ A command prints its plan before asking, so the question is about what you have 
 Commands that change something append to `~/.cdwr/history.jsonl`; `cdwr history` shows it.
 Remembered inputs (environment, app) live in `~/.cdwr/prefs.json`.
 
+## Infisical
+
+`cdwr infisical tenants|data|analysis` read what Infisical holds for tenants and apps, with values
+masked unless `--reveal` is given. A deployment ships when its folder holds `DEPLOY_ENABLED=true`
+(`/apps/<app>` for a host, `/tenants/<t>/apps/<app>` for a tenant); `tenants` and `analysis` show
+each folder as on, off or no flag, and `tenant provision` writes the flag for a new tenant. Three more work on your own CLI session (`infisical login`, no
+token involved) and the same core as the `dev-plugin:infisical-run` executor:
+
+```sh
+cdwr infisical session                     # is the CLI installed and logged in
+cdwr infisical resolve --path=/apps/cms    # per key: inherited, vault, or vault over committed; values masked
+cdwr infisical cache --path=/apps/cms      # refresh apps/cms/.env.offline for OFFLINE=1; counts only, never values
+```
+
+`--path` defaults to `/apps/cms`. `resolve` follows `OFFLINE` and `CI` as `nx dev` does. `cache`
+writes a local file (mode 600, gitignored) so it asks first; `--dry-run` lists the folders it
+would read and fetches no value. `nx dx:secrets <app>` runs it.
+
 ## Seeing a site
 
 `cdwr tenant snapshot` screenshots a running site: every page of a site definition (or `--routes`),

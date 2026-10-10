@@ -36,6 +36,8 @@ const labels: DomainCardProps['labels'] = {
     'These are the records the domain runs on. They stay needed — remove one and the domain stops answering, certificate or not:',
   apexNote:
     'This is the domain itself rather than a subdomain, so a CNAME is not allowed — it needs A and AAAA records pointing at the app’s IP addresses.',
+  apexAddressesPending:
+    'No addresses known yet. Press Check now to fetch them; if none appear, the app has no public address and needs one allocated in Fly.',
   issuedHeading: 'Issued certificates',
   issuedBy: 'Issued by',
   compareResolvers: 'Compare resolvers',
@@ -193,20 +195,55 @@ export const NeedsAttention: StoryObj = {
   )
 };
 
-/** An apex domain cannot use a CNAME, so the note stands in for the record */
+const apexDns = {
+  isApex: true,
+  name: '_acme-challenge.example.com',
+  target: 'example.com.abc123.flydns.net',
+  instructions:
+    'CNAME _acme-challenge.example.com => example.com.abc123.flydns.net.',
+  addresses: [
+    { type: 'A' as const, address: '192.0.2.10' },
+    { type: 'AAAA' as const, address: '2001:db8:1::19b:2e4e:0' }
+  ]
+};
+
+/**
+ * An apex domain cannot use a CNAME, so the A and AAAA records stand in for
+ * it. The second card has been checked: the A record resolves, AAAA does not.
+ * The third was stored before the addresses were known.
+ */
 export const ApexDomain: StoryObj = {
   render: () => (
     <Frame>
       <DomainCard
         {...base}
-        hostname="codeware.se"
+        hostname="example.com"
         status="pending"
         statusDetail="Awaiting configuration"
-        dns={{
-          isApex: true,
-          instructions:
-            'A codeware.se ⇒ 66.241.125.1\nAAAA codeware.se ⇒ 2a09:8280:1::4:c0de'
+        dns={apexDns}
+      />
+      <DomainCard
+        {...base}
+        hostname="example.com"
+        status="pending"
+        statusDetail="Awaiting configuration"
+        checkedLabel="Checked 15 Aug 00:40"
+        dns={apexDns}
+        check={{
+          issues: ['No AAAA records were found for your domain'],
+          confirmed: {
+            traffic: false,
+            validation: false,
+            addresses: ['192.0.2.10']
+          }
         }}
+      />
+      <DomainCard
+        {...base}
+        hostname="example.com"
+        status="pending"
+        statusDetail="Awaiting configuration"
+        dns={{ ...apexDns, addresses: undefined }}
       />
     </Frame>
   )
@@ -372,5 +409,7 @@ export const ResolversAdminDark = a11yStory(
   'payload-admin',
   'dark'
 );
+export const ApexAdminLight = a11yStory(ApexDomain, 'payload-admin', 'light');
+export const ApexAdminDark = a11yStory(ApexDomain, 'payload-admin', 'dark');
 export const FrostLight = a11yStory(Lifecycle, 'frost', 'light');
 export const FrostDark = a11yStory(Lifecycle, 'frost', 'dark');

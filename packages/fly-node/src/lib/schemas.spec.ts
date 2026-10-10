@@ -5,6 +5,7 @@ import {
   createSchemaTests
 } from '@codeware/shared/util/testing/vitest';
 
+import { AppIpAddressesApiResponseSchema } from './schemas/app-ip-addresses.schema';
 import { AppsCreateTransformedResponseSchema } from './schemas/apps-create.schema';
 import { AppsListTransformedResponseSchema } from './schemas/apps-list.schema';
 import {
@@ -59,6 +60,14 @@ SchemaRegistry.register(
   CertificateListApiResponseSchema,
   {
     name: 'CertificateListApiResponseSchema',
+    tags: ['fly-api']
+  }
+);
+SchemaRegistry.register(
+  'fly-api/app-ip-addresses',
+  AppIpAddressesApiResponseSchema,
+  {
+    name: 'AppIpAddressesApiResponseSchema',
     tags: ['fly-api']
   }
 );

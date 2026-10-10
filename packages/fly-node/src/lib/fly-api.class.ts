@@ -1,4 +1,8 @@
 import {
+  type AppIpAddress,
+  AppIpAddressesApiResponseSchema
+} from './schemas/app-ip-addresses.schema';
+import {
   type Certificate,
   CertificateApiResponseSchema,
   CertificateListApiResponseSchema,
@@ -83,7 +87,8 @@ export class FlyApiError extends Error {
  * itself at runtime. It is deliberately a small subset rather than a second
  * implementation of the whole CLI: certificates, because a custom domain has to
  * be requested, checked and shown to a customer while they wait, and machine
- * restarts, because a setting read at boot needs a boot to take effect.
+ * restarts, because a setting read at boot needs a boot to take effect. And
+ * addresses, because an apex domain points A and AAAA records at them.
  *
  * Fly splits those across two APIs and so does this class — certificates over
  * GraphQL, machines over the REST Machines API. One token authenticates both.
@@ -295,6 +300,49 @@ export class FlyApi {
     }
   };
 
+  /** Read an app's addresses */
+  ips = {
+    /**
+     * The addresses an app answers on: `shared_v4`, `v4`, `v6`, and its
+     * `private_v6`.
+     *
+     * The shared v4 is folded in as a `shared_v4` row, the way `fly ips list`
+     * shows it; Fly's API keeps it in a separate field. Egress addresses,
+     * which the CLI also lists, are not part of this API and never appear.
+     * Pick the public types before pointing DNS at them.
+     *
+     * Rejects for an unknown app, like `certs.list`: a typo in an app name
+     * must not read as "this app has no addresses".
+     *
+     * @returns The addresses, empty when the app has none
+     */
+    list: async (app: string): Promise<Array<AppIpAddress>> => {
+      const data = await this.request<{ app: unknown }>(
+        `query AppIpAddresses($appName: String!) {
+          app(name: $appName) {
+            sharedIpAddress
+            ipAddresses { nodes { address type } }
+          }
+        }`,
+        { appName: app }
+      );
+
+      if (!data.app) {
+        return [];
+      }
+
+      const { sharedIpAddress, ipAddresses } =
+        AppIpAddressesApiResponseSchema.parse(data.app);
+
+      return [
+        ...(sharedIpAddress
+          ? [{ address: sharedIpAddress, type: 'shared_v4' }]
+          : []),
+        ...ipAddresses.nodes
+      ];
+    }
+  };
+
   /**
    * Operate an app's machines.
    *
@@ -459,8 +507,7 @@ export class FlyApi {
     // Read the body first: an error body is the useful half of a failure, and
     // it is gone once the response is discarded
     const body = (await response.json().catch(() => null)) as
-      | (T & { error?: string })
-      | null;
+      (T & { error?: string }) | null;
 
     if (!response.ok) {
       throw new Error(

@@ -3,7 +3,7 @@ export type * from './lib/cms-script-report';
 export * from './lib/create-zip';
 export * from './lib/csv';
 export * from './lib/deep-merge';
-export * from './lib/deploy-rules';
+export * from './lib/deploy-enabled';
 export * from './lib/deployment-name';
 export * from './lib/extract-version';
 export * from './lib/format-day-only-date';

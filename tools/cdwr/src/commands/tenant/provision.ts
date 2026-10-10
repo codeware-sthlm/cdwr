@@ -1,5 +1,5 @@
 import { createClient, isNotFound } from '@codeware/shared/feature/infisical';
-import { readDeployRules } from '@codeware/shared/util/pure';
+import { DEPLOY_ENABLED_KEY } from '@codeware/shared/util/pure';
 
 import { defineCommand } from '../../cli/command';
 import { CliError, EXIT, messageOf } from '../../cli/errors';
@@ -24,6 +24,7 @@ import {
 } from '../../services/github';
 import {
   type Environment,
+  readDeployFlag,
   readSecrets,
   setInfisicalSecret
 } from '../../services/infisical';
@@ -32,16 +33,16 @@ import { sleep } from '../../services/shell';
 import {
   type AppKind,
   DEPLOY_WORKFLOW,
-  type DeployRules,
+  type FlagPlan,
   type Folder,
-  type KeyAction,
+  type KeyPlan,
   TENANT_APPS,
   type TenantRow,
   conflictMessage,
   deployArgs,
-  deployRuleGaps,
+  flagActionOf,
   folderPath,
-  metadataOf,
+  pausedMessage,
   planFlyAppsToDeploy,
   planFolders,
   provisionSteps,
@@ -113,32 +114,6 @@ function namesInFactory(
   };
 }
 
-/** `DEPLOY_RULES` at the project root, or `null` when it cannot be read */
-async function readRules(
-  connection: Connection,
-  environment: Environment
-): Promise<DeployRules | null> {
-  try {
-    const secrets = await connection.client.secrets().listSecretsWithImports({
-      environment,
-      projectId: connection.projectId,
-      secretPath: '/',
-      expandSecretReferences: true,
-      recursive: false
-    });
-    const secret = secrets.find(
-      ({ secretKey }) => secretKey === 'DEPLOY_RULES'
-    );
-    if (!secret) return null;
-    return readDeployRules({
-      secretValue: secret.secretValue,
-      secretMetadata: metadataOf(secret.secretMetadata)
-    }).rules;
-  } catch {
-    return null;
-  }
-}
-
 /** Run states that have not started yet, and still wait for the branch's slot */
 const NOT_STARTED = new Set(['queued', 'pending', 'requested', 'waiting']);
 
@@ -177,13 +152,15 @@ interface PlanData {
   connection: Connection;
   folders: Folder[];
   keysToWrite: AppKind[];
+  flags: FlagPlan[];
   changes: number;
 }
 
 /**
  * Sets up a tenant in Infisical from what Payload already knows about it -
  * folders, then the API key its Fly apps authenticate with - and offers to
- * kick off the deployment once DEPLOY_RULES allows it.
+ * kick off the deployment. A new tenant folder is switched on with
+ * `DEPLOY_ENABLED=true`; an existing non-true value is left as a pause.
  */
 export default defineCommand({
   summary: "Set up a tenant's Infisical folders and API key from Payload",
@@ -251,7 +228,7 @@ export default defineCommand({
 
     const connection = await createClient({});
 
-    const { folders, keys } = await ctx.ui.task(
+    const { folders, keys, flags } = await ctx.ui.task(
       'Reading what Infisical already holds',
       async () => {
         const folders = await planFolders(
@@ -260,26 +237,38 @@ export default defineCommand({
           namesInFactory(connection, environment)
         );
         const missing = new Set(folders.map(folderPath));
-        const keys = await Promise.all(
-          apps.map(
-            async (app): Promise<{ app: AppKind; action: KeyAction }> => {
-              const secretPath = `/tenants/${deployment}/apps/${app}`;
-              if (missing.has(secretPath)) return { app, action: 'create' };
-              const stored = (await readSecrets(environment, secretPath))[
-                'PAYLOAD_API_KEY'
-              ];
-              return {
-                app,
-                action: !stored
-                  ? 'create'
-                  : stored === apiKey
-                    ? 'matches'
-                    : 'conflict'
-              };
-            }
-          )
+        const rows = await Promise.all(
+          apps.map(async (app) => {
+            const secretPath = `/tenants/${deployment}/apps/${app}`;
+            const secrets = missing.has(secretPath)
+              ? {}
+              : await readSecrets(environment, secretPath);
+            const stored = secrets['PAYLOAD_API_KEY'];
+            // Only this folder's own flag counts; an imported one would hide a missing local flag
+            const flag = missing.has(secretPath)
+              ? undefined
+              : await readDeployFlag(environment, secretPath);
+            const key: KeyPlan = {
+              app,
+              action: !stored
+                ? 'create'
+                : stored === apiKey
+                  ? 'matches'
+                  : 'conflict'
+            };
+            const action = flagActionOf(flag);
+            const plan: FlagPlan =
+              action === 'paused'
+                ? { app, action, value: flag }
+                : { app, action };
+            return { key, plan };
+          })
         );
-        return { folders, keys };
+        return {
+          folders,
+          keys: rows.map(({ key }) => key),
+          flags: rows.map(({ plan }) => plan)
+        };
       },
       () => 'Plan ready'
     );
@@ -295,7 +284,7 @@ export default defineCommand({
       .map(({ app }) => app);
 
     return {
-      steps: provisionSteps(deployment, folders, keys),
+      steps: provisionSteps(deployment, folders, keys, flags),
       target: { environment, name: deployment },
       data: {
         environment,
@@ -306,7 +295,11 @@ export default defineCommand({
         connection,
         folders,
         keysToWrite,
-        changes: folders.length + keysToWrite.length
+        flags,
+        changes:
+          folders.length +
+          keysToWrite.length +
+          flags.filter(({ action }) => action === 'create').length
       } satisfies PlanData
     };
   },
@@ -321,6 +314,7 @@ export default defineCommand({
       connection,
       folders,
       keysToWrite,
+      flags,
       changes
     } = data;
     const { client, projectId } = connection;
@@ -373,53 +367,44 @@ export default defineCommand({
       if (status === 'created') written.push(app);
     }
 
+    // Created like the key: a flag that appeared after the plan is never overwritten
+    for (const { app } of flags.filter(({ action }) => action === 'create')) {
+      const secretPath = `/tenants/${deployment}/apps/${app}`;
+      await ctx.ui.task(
+        `Setting ${DEPLOY_ENABLED_KEY} in ${secretPath}`,
+        async () => {
+          const stored = await readDeployFlag(environment, secretPath);
+          if (stored !== undefined) return 'kept' as const;
+          await setInfisicalSecret({
+            environment,
+            path: secretPath,
+            key: DEPLOY_ENABLED_KEY,
+            value: 'true'
+          });
+          return 'created' as const;
+        },
+        (result) =>
+          result === 'kept'
+            ? `${secretPath} already has a flag`
+            : `${secretPath} enabled`
+      );
+    }
+
+    const paused = flags.filter(({ action }) => action === 'paused');
+    if (paused.length) {
+      ctx.ui.warn(pausedMessage(environment, deployment, paused));
+    }
+    const pausedApps = new Set(paused.map(({ app }) => app));
+
     const pullRequest = previewApp ? pullRequestOf(previewApp) : undefined;
-    const flyApps = apps.map((app) => ({
-      app,
-      flyApp: flyAppName(ctx.root, app, deployment, pullRequest)
-    }));
+    const flyApps = apps
+      .filter((app) => !pausedApps.has(app))
+      .map((app) => ({
+        app,
+        flyApp: flyAppName(ctx.root, app, deployment, pullRequest)
+      }));
     const existing = await listAppNames().catch(() => null);
     const toDeploy = planFlyAppsToDeploy(flyApps, existing, written);
-
-    let gaps = deployRuleGaps(
-      environment,
-      deployment,
-      apps,
-      await readRules(connection, environment)
-    );
-
-    if (toDeploy.length && gaps.length) {
-      ctx.ui.warn(
-        [
-          ...gaps,
-          '',
-          'A deployment only ships what DEPLOY_RULES allows, so it cannot start before that.'
-        ].join('\n')
-      );
-
-      // Keep offering to read the rule again until it deploys the workspace,
-      // or the answer is no - editing it happens outside this command
-      if (ctx.ui.interactive && !ctx.flags.nonInteractive) {
-        let attempt = 0;
-        while (gaps.length) {
-          const check = await ctx.ui.confirm({
-            message: attempt
-              ? 'DEPLOY_RULES still does not deploy it. Check again?'
-              : `Have you updated DEPLOY_RULES in ${environment}? It is read again`,
-            initial: false
-          });
-          if (!check) break;
-          attempt++;
-          gaps = deployRuleGaps(
-            environment,
-            deployment,
-            apps,
-            await readRules(connection, environment)
-          );
-          if (gaps.length) ctx.ui.warn(gaps.join('\n'));
-        }
-      }
-    }
 
     // A preview run has to build its own pull request, not the default branch
     const ref =
@@ -435,7 +420,7 @@ export default defineCommand({
     const branch = ref ?? 'main';
 
     const started: string[] = [];
-    if (toDeploy.length && !gaps.length && (!pullRequest || ref)) {
+    if (toDeploy.length && (!pullRequest || ref)) {
       const active = await listWorkflowRuns(
         ctx.root,
         DEPLOY_WORKFLOW,
@@ -511,7 +496,6 @@ export default defineCommand({
     }
 
     const next = [
-      ...gaps,
       ...toDeploy
         .filter(({ flyApp }) => !started.includes(flyApp))
         .map(
@@ -553,7 +537,10 @@ export default defineCommand({
         written,
         toDeploy: toDeploy.map(({ flyApp }) => flyApp),
         started,
-        gaps
+        flagsWritten: flags
+          .filter(({ action }) => action === 'create')
+          .map(({ app }) => app),
+        paused: paused.map(({ app }) => app)
       }
     };
   }

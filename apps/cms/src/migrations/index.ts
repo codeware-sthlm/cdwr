@@ -79,6 +79,7 @@ import * as migration_20261003_223747_cod_522_component_managed_by from './20261
 import * as migration_20261004_120624_cod_522_rebuild_components from './20261004_120624_cod_522_rebuild_components';
 import * as migration_20261004_135735_cod_518_nested_navigation from './20261004_135735_cod_518_nested_navigation';
 import * as migration_20261006_232639_cod_534_payload_3_90 from './20261006_232639_cod_534_payload_3_90';
+import * as migration_20261010_154752_cod_541_apex_addresses from './20261010_154752_cod_541_apex_addresses';
 
 export const migrations = [
   {
@@ -485,5 +486,10 @@ export const migrations = [
     up: migration_20261006_232639_cod_534_payload_3_90.up,
     down: migration_20261006_232639_cod_534_payload_3_90.down,
     name: '20261006_232639_cod_534_payload_3_90'
+  },
+  {
+    up: migration_20261010_154752_cod_541_apex_addresses.up,
+    down: migration_20261010_154752_cod_541_apex_addresses.down,
+    name: '20261010_154752_cod_541_apex_addresses'
   }
 ];

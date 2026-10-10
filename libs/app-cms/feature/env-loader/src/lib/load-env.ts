@@ -10,6 +10,9 @@ import { withInfisical } from '@codeware/shared/feature/infisical';
  * @returns The parsed environment variables or `undefined` if the data is insufficient or invalid.
  */
 export const loadEnv = async (): Promise<Env | undefined> => {
+  // Deploy metadata in /apps/cms, not configuration for the running app
+  delete process.env['DEPLOY_ENABLED'];
+
   // Pre-check environment variables as they can be injected from CLI.
   // Then there is no reason to connect to Infisical using the SDK.
   const preResponse = EnvSchema.safeParse(process.env);

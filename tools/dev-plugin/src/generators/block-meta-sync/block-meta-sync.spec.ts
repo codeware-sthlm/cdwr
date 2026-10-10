@@ -38,7 +38,7 @@ describe('block-meta-sync generator', () => {
 
     const result = await blockMetaSyncGenerator(tree);
 
-    expect(result.outOfSyncMessage).toContain(OUTPUT);
+    expect(result?.outOfSyncMessage).toContain(OUTPUT);
     const written = tree.read(OUTPUT, 'utf-8') ?? '';
     expect(written).toContain('AUTO-GENERATED');
     expect(written).toContain("export type BlockHost = 'pages' | 'content';");
@@ -59,7 +59,7 @@ describe('block-meta-sync generator', () => {
 
     const result = await blockMetaSyncGenerator(tree);
 
-    expect(result.outOfSyncMessage).toBeDefined();
+    expect(result?.outOfSyncMessage).toBeDefined();
     expect(tree.read(OUTPUT, 'utf-8')).not.toContain('// stale');
   });
 
