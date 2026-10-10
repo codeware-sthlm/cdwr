@@ -24,6 +24,7 @@ import {
 } from '../../services/github';
 import {
   type Environment,
+  readDeployFlag,
   readSecrets,
   setInfisicalSecret
 } from '../../services/infisical';
@@ -243,7 +244,10 @@ export default defineCommand({
               ? {}
               : await readSecrets(environment, secretPath);
             const stored = secrets['PAYLOAD_API_KEY'];
-            const flag = secrets[DEPLOY_ENABLED_KEY];
+            // Only this folder's own flag counts; an imported one would hide a missing local flag
+            const flag = missing.has(secretPath)
+              ? undefined
+              : await readDeployFlag(environment, secretPath);
             const key: KeyPlan = {
               app,
               action: !stored
@@ -369,9 +373,7 @@ export default defineCommand({
       await ctx.ui.task(
         `Setting ${DEPLOY_ENABLED_KEY} in ${secretPath}`,
         async () => {
-          const stored = (await readSecrets(environment, secretPath))[
-            DEPLOY_ENABLED_KEY
-          ];
+          const stored = await readDeployFlag(environment, secretPath);
           if (stored !== undefined) return 'kept' as const;
           await setInfisicalSecret({
             environment,

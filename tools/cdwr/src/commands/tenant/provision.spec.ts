@@ -58,6 +58,7 @@ vi.mock('../../services/github', () => ({
 
 vi.mock('../../services/infisical', () => ({
   readSecrets: vi.fn(async () => ({})),
+  readDeployFlag: vi.fn(async (): Promise<string | undefined> => undefined),
   setInfisicalSecret: vi.fn().mockResolvedValue({
     action: 'created',
     key: 'PAYLOAD_API_KEY',
@@ -101,11 +102,13 @@ const EXISTING_FOLDERS: Record<string, Array<{ name: string }>> = {
 
 /** The tenant folder exists and holds the key, plus the given flag if any */
 const existingFolder = async (flag?: string) => {
-  const { readSecrets } = await import('../../services/infisical');
+  const { readSecrets, readDeployFlag } =
+    await import('../../services/infisical');
   vi.mocked(readSecrets).mockResolvedValue({
     PAYLOAD_API_KEY: 'the-key',
     ...(flag === undefined ? {} : { DEPLOY_ENABLED: flag })
   });
+  vi.mocked(readDeployFlag).mockResolvedValue(flag);
   listFolders.mockImplementation(
     async ({ path }: { path: string }) => EXISTING_FOLDERS[path] ?? []
   );
@@ -114,8 +117,10 @@ const existingFolder = async (flag?: string) => {
 describe('tenant provision', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const { readSecrets } = await import('../../services/infisical');
+    const { readSecrets, readDeployFlag } =
+      await import('../../services/infisical');
     vi.mocked(readSecrets).mockResolvedValue({});
+    vi.mocked(readDeployFlag).mockResolvedValue(undefined);
     listFolders.mockImplementation(async () => []);
   });
 
@@ -156,6 +161,24 @@ describe('tenant provision', () => {
     await run();
 
     expect(setInfisicalSecret).toHaveBeenCalledTimes(1);
+    expect(setInfisicalSecret).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'DEPLOY_ENABLED', value: 'true' })
+    );
+  });
+
+  it('writes the local flag when only an imported one is true', async () => {
+    const { setInfisicalSecret, readSecrets, readDeployFlag } =
+      await import('../../services/infisical');
+    await existingFolder();
+    // The flattened record holds the imported flag; the folder's own is absent
+    vi.mocked(readSecrets).mockResolvedValue({
+      PAYLOAD_API_KEY: 'the-key',
+      DEPLOY_ENABLED: 'true'
+    });
+    vi.mocked(readDeployFlag).mockResolvedValue(undefined);
+
+    await run();
+
     expect(setInfisicalSecret).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'DEPLOY_ENABLED', value: 'true' })
     );

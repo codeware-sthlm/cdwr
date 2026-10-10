@@ -83,4 +83,53 @@ describe('infisical analysis', () => {
       tenants: [{ tenant: 'acme', flag: 'off' }]
     });
   });
+
+  const run = (stdout: string[]) =>
+    runCommand({
+      name: 'infisical analysis',
+      command,
+      argv: ['--json'],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([], false),
+      history: () => undefined,
+      stdout: (t) => stdout.push(t)
+    });
+
+  it('shows an app without a folder as having no secrets', async () => {
+    const { readSecrets } = await import('../../services/infisical');
+    vi.mocked(readSecrets).mockImplementation(async (_env, path) => {
+      if (path === '/apps/builder') {
+        throw Object.assign(new Error('missing'), {
+          response: { status: 404 }
+        });
+      }
+      return { DATABASE_URL: 'postgres://secret' };
+    });
+    const stdout: string[] = [];
+
+    const exit = await run(stdout);
+
+    expect(exit).toBe(EXIT.ok);
+    const payload = JSON.parse(stdout[0] ?? '{}') as {
+      result: Array<{ apps: Array<{ app: string; host: string }> }>;
+    };
+    expect(payload.result[0]?.apps[2]).toMatchObject({
+      app: 'builder',
+      host: 'no flag'
+    });
+  });
+
+  it('fails on a read error that is not a missing folder', async () => {
+    const { readSecrets } = await import('../../services/infisical');
+    vi.mocked(readSecrets).mockRejectedValue(
+      Object.assign(new Error('denied'), { response: { status: 403 } })
+    );
+
+    const exit = await run([]);
+
+    expect(exit).not.toBe(EXIT.ok);
+  });
 });

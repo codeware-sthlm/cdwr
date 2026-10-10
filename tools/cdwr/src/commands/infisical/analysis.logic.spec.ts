@@ -2,20 +2,32 @@ import { APPS, flagStateOf, summarize } from './analysis.logic';
 
 describe('flagStateOf', () => {
   it('is on only for true', () => {
-    expect(flagStateOf({ DEPLOY_ENABLED: ' TRUE ' })).toBe('on');
+    expect(flagStateOf(' TRUE ')).toBe('on');
   });
 
   it('is off for any other value', () => {
-    expect(flagStateOf({ DEPLOY_ENABLED: 'false' })).toBe('off');
-    expect(flagStateOf({ DEPLOY_ENABLED: '' })).toBe('off');
+    expect(flagStateOf('false')).toBe('off');
+    expect(flagStateOf('')).toBe('off');
   });
 
   it('is no flag when absent', () => {
-    expect(flagStateOf({ OTHER: 'x' })).toBe('no flag');
+    expect(flagStateOf(undefined)).toBe('no flag');
   });
 });
 
 describe('summarize', () => {
+  it('names an invalid tenant folder name instead of calling it no flag', () => {
+    const result = summarize(
+      'production',
+      {},
+      [{ app: 'cms', tenant: '_default', reason: 'invalid-name' }],
+      {}
+    );
+    expect(result.apps[0]?.tenants).toEqual([
+      { tenant: '_default', flag: 'invalid name' }
+    ]);
+  });
+
   it('rows every app even without deployments or secrets', () => {
     const result = summarize('production', {}, [], {});
     expect(result).toEqual({

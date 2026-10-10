@@ -7,11 +7,10 @@ import type { DeploymentsMap, SkippedDeployment } from '../../services/tenancy';
 export const APPS = ['cms', 'web', 'builder'] as const;
 
 /** State of a folder's `DEPLOY_ENABLED` secret */
-export type FlagState = 'on' | 'off' | 'no flag';
+export type FlagState = 'on' | 'off' | 'no flag' | 'invalid name';
 
-/** The state a folder's secrets put it in */
-export const flagStateOf = (secrets: Record<string, string>): FlagState => {
-  const value = secrets['DEPLOY_ENABLED'];
+/** The state a folder's own `DEPLOY_ENABLED` value puts it in */
+export const flagStateOf = (value: string | undefined): FlagState => {
   if (value === undefined) return 'no flag';
   return isDeployEnabled(value) ? 'on' : 'off';
 };
@@ -37,7 +36,11 @@ export interface EnvironmentAnalysis {
 }
 
 const skippedState = ({ reason }: SkippedDeployment): FlagState =>
-  reason === 'flag-off' ? 'off' : 'no flag';
+  reason === 'flag-off'
+    ? 'off'
+    : reason === 'invalid-name'
+      ? 'invalid name'
+      : 'no flag';
 
 /**
  * Combine what the deploy ships and skips, per app, with that app's own

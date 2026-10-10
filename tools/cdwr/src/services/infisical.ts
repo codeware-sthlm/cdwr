@@ -8,6 +8,7 @@ import {
   withInfisical as readInfisical,
   setInfisicalSecret as setSecret
 } from '@codeware/shared/feature/infisical';
+import { ownDeployFlag } from '@codeware/shared/util/pure';
 
 import { messageOf } from '../cli/errors';
 import { muted } from '../cli/muted';
@@ -37,6 +38,20 @@ export async function readSecrets(
       secretValue
     ])
   );
+}
+
+/**
+ * The folder's own `DEPLOY_ENABLED`, apart from one imported or from a
+ * subfolder, which `readSecrets` flattens into the record
+ */
+export async function readDeployFlag(
+  environment: Environment,
+  path: string
+): Promise<string | undefined> {
+  const secrets = await muted(() =>
+    readInfisical({ environment, filter: { path } })
+  );
+  return ownDeployFlag(secrets ?? [], path);
 }
 
 /** One secret, or an error naming what is missing where */
@@ -75,6 +90,8 @@ export async function readFolders(
 export interface TenantApp {
   app: string;
   secrets: Record<string, string>;
+  /** The folder's own `DEPLOY_ENABLED`, not one imported or from a subfolder */
+  flag?: string;
 }
 
 /** What `/tenants/<id>/apps/<app>` holds, keyed by tenant id */
@@ -94,6 +111,7 @@ export function groupTenantApps(
     const list = tenants.get(tenantId) ?? [];
     list.push({
       app,
+      flag: ownDeployFlag(folder.secrets, folder.path),
       secrets: Object.fromEntries(
         folder.secrets.map(({ secretKey, secretValue }) => [
           secretKey,

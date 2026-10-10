@@ -8,9 +8,9 @@ import type {
   ProvisioningEnvironment
 } from '@codeware/app-cms/ui/provisioning';
 import {
-  DEPLOY_ENABLED_KEY,
   getAppName,
-  isDeployEnabled
+  isDeployEnabled,
+  ownDeployFlag
 } from '@codeware/shared/util/pure';
 import type { InfisicalSDK } from '@infisical/sdk';
 
@@ -133,10 +133,11 @@ export async function readInfisicalStatus({
     const apps = await Promise.all(
       TENANT_APPS.filter((app) => folderNames.includes(app)).map(
         async (app): Promise<InfisicalAppFacts> => {
+          const folderPath = `${appsPath}/${app}`;
           const secrets = await client.secrets().listSecretsWithImports({
             environment,
             projectId,
-            secretPath: `${appsPath}/${app}`,
+            secretPath: folderPath,
             expandSecretReferences: true,
             recursive: false
           });
@@ -147,7 +148,7 @@ export async function readInfisicalStatus({
           return {
             app,
             flyApp: flyAppName(app, environment, deployment),
-            included: isDeployEnabled(keys.get(DEPLOY_ENABLED_KEY)),
+            included: isDeployEnabled(ownDeployFlag(secrets, folderPath)),
             apiKey: compareKey(keys.get('PAYLOAD_API_KEY'), apiKey),
             optionalKeys: OPTIONAL_KEYS.filter((key) => keys.has(key))
           };
