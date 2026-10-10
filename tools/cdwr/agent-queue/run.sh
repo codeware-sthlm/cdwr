@@ -155,12 +155,13 @@ publish_usage() {
 # `cdwr agent activity` (same install caveat as usage). Every run reads Linear, but publishes
 # only when something below the "Updated:" line changed, so idle runs leave it alone.
 read -r -d '' ACTIVITY_QUERY <<'GQL' || true
-query {
-  issues(first: 30, filter: {
+query($after: String) {
+  issues(first: 25, after: $after, filter: {
     team: { key: { eq: "COD" } }
     updatedAt: { gt: "-P7D" }
     labels: { some: { name: { startsWith: "agent:" } } }
   }) {
+    pageInfo { hasNextPage endCursor }
     nodes {
       identifier
       history(first: 100) {
@@ -188,11 +189,22 @@ activity_warn() {
 publish_activity() {
   $check && return 0
   setopt local_options no_err_exit
-  local stamp="$HOME_DIR/activity-published-at" hashfile="$HOME_DIR/activity-hash" resp content hash before
-  resp="$(linear "$ACTIVITY_QUERY")"
-  if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then
-    activity_warn "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
-  fi
+  local stamp="$HOME_DIR/activity-published-at" hashfile="$HOME_DIR/activity-hash" pages="$HOME_DIR/activity-pages.jsonl"
+  local resp content hash before after=null page
+  # Every page, so a ticket past the first can't hide one of the newest events; pages go
+  # through a file, since all of them together can outgrow a command line.
+  : > "$pages"
+  for page in {1..8}; do
+    resp="$(linear "$ACTIVITY_QUERY" "$(jq -nc --argjson a "$after" '{after: $a}')")"
+    if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then
+      activity_warn "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
+    fi
+    jq -c '.data.issues.nodes' <<<"$resp" >> "$pages"
+    [[ "$(jq -r '.data.issues.pageInfo.hasNextPage' <<<"$resp")" == true ]] || break
+    after="$(jq -c '.data.issues.pageInfo.endCursor' <<<"$resp")"
+    (( page == 8 )) && note "warn: activity document: more than 8 pages of tickets, the rest left out"
+  done
+  resp="$(jq -cs '{data: {issues: {nodes: add}}}' "$pages")"
   content="$(cd "$REPO" && node tools/cdwr/bin/cdwr.mjs agent activity --runs "$RUNS" --json 2>/dev/null <<<"$resp" |
     jq -er '.result.document')" || { activity_warn "cdwr agent activity failed"; return 0; }
   hash="$(print -r -- "$content" | sed 1d | shasum | cut -d' ' -f1)"
