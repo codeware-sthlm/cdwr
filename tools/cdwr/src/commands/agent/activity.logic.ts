@@ -162,8 +162,9 @@ export const collectEvents = (
   };
 };
 
+/** Backslash first, so a cell ending in `\` can't swallow the delimiter after it */
 const cell = (text: string): string =>
-  text.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 
 /**
  * The "Agent queue: activity" Linear document. The Agent Desk parses it, so the
