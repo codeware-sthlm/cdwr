@@ -336,6 +336,17 @@ The platform is multi-tenant. Tenants are configured via Infisical secrets. The 
 
 In production, multi-tenancy is handled automatically by the `nx-pre-deploy-action` and `fly-deployment-action` GitHub Actions, which fetch tenant configs from Infisical and deploy accordingly.
 
+#### Deployment switches
+
+A deployment is switched on per environment by an Infisical secret `DEPLOY_ENABLED=true` in the app's own folder; anything else, or absent, is off. Release analysis decides _when_ an app deploys, the flags decide _where_.
+
+| Folder                         | Switch on deploys                                          |
+| ------------------------------ | ---------------------------------------------------------- |
+| `/apps/<app>`                  | host app `cdwr-<app>`                                      |
+| `/tenants/<tenant>/apps/<app>` | tenant app `cdwr-<app>-<tenant>` with `TENANT_ID=<tenant>` |
+
+A host app reads `/apps/<app>` itself at boot, so the deploy pushes no folder secrets to it. The flag never reaches Fly. `cdwr infisical analysis` prints the matrix, and `cdwr tenant provision` sets a tenant's flags.
+
 #### Tenancy & Authentication Model
 
 ##### Tenants

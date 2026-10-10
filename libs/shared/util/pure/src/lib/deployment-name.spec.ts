@@ -24,8 +24,7 @@ describe('deploymentNameIssue', () => {
     }
   );
 
-  it('refuses the reserved folder for a deployment with no tenant', () => {
-    // Refused on its underscore, which is the point: it can never be chosen
+  it('refuses a name starting with an underscore', () => {
     expect(deploymentNameIssue('_default')).toBe('characters');
   });
 
