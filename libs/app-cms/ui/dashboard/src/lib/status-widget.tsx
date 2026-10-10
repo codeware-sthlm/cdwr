@@ -19,7 +19,7 @@ export type StatusWidgetProps = {
   detail: ReactNode;
   /** Opens the detail sheet; omit for a widget with nothing more to show */
   onOpen?: () => void;
-  /** Accessible name for the open affordance, e.g. "Show all domains" */
+  /** Read after the card's own text by assistive tech, e.g. "Show all domains" */
   openLabel?: string;
   className?: string;
 };
@@ -101,17 +101,20 @@ export function StatusWidget({
     return <div className={cn('h-full', className)}>{body}</div>;
   }
 
+  // The action goes after the card's text, not in place of it: an
+  // `aria-label` would hide the title and metric a voice-control user reads
+  // off the screen to press it (axe `label-content-name-mismatch`)
   return (
     <button
       type="button"
       onClick={onOpen}
-      aria-label={openLabel}
       className={cn(
         'group ring-offset-background focus-visible:ring-ring block h-full w-full rounded-xl text-left focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
         className
       )}
     >
       {body}
+      {openLabel && <span className="sr-only">{openLabel}</span>}
     </button>
   );
 }
