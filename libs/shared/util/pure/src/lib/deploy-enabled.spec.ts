@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEPLOY_ENABLED_KEY, isDeployEnabled } from './deploy-enabled';
+import {
+  DEPLOY_ENABLED_KEY,
+  isDeployEnabled,
+  ownDeployFlag
+} from './deploy-enabled';
 
 describe('DEPLOY_ENABLED_KEY', () => {
   it('names the secret', () => {
@@ -27,5 +31,50 @@ describe('isDeployEnabled', () => {
     [null, false]
   ])('%j -> %s', (value, expected) => {
     expect(isDeployEnabled(value)).toBe(expected);
+  });
+});
+
+describe('ownDeployFlag', () => {
+  const flag = (secretValue: string, secretPath?: string) => ({
+    secretKey: 'DEPLOY_ENABLED',
+    secretValue,
+    secretPath
+  });
+
+  it('returns the value when the secret path is absent', () => {
+    expect(ownDeployFlag([flag('true')], '/apps/cms')).toBe('true');
+  });
+
+  it('returns the value of a secret in the folder, ignoring trailing slashes', () => {
+    expect(ownDeployFlag([flag('true', '/apps/cms/')], '/apps/cms')).toBe(
+      'true'
+    );
+    expect(ownDeployFlag([flag('false', '/apps/cms')], '/apps/cms/')).toBe(
+      'false'
+    );
+  });
+
+  it('ignores a flag reached through an import or a subfolder', () => {
+    expect(
+      ownDeployFlag([flag('true', '/shared')], '/apps/cms')
+    ).toBeUndefined();
+    expect(
+      ownDeployFlag([flag('true', '/apps/cms/sub')], '/apps/cms')
+    ).toBeUndefined();
+  });
+
+  it('prefers the own flag over an imported one', () => {
+    expect(
+      ownDeployFlag(
+        [flag('true', '/shared'), flag('false', '/apps/cms')],
+        '/apps/cms'
+      )
+    ).toBe('false');
+  });
+
+  it('returns undefined without a flag', () => {
+    expect(
+      ownDeployFlag([{ secretKey: 'A', secretValue: '1' }], '/apps/cms')
+    ).toBeUndefined();
   });
 });

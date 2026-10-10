@@ -16,6 +16,7 @@ jest.mock('@codeware/shared/util/pure', () => ({
 type Secret = {
   secretKey: string;
   secretValue: string;
+  secretPath?: string;
   secretMetadata?: unknown;
 };
 
@@ -80,6 +81,25 @@ const read = (
   });
 
 describe('readInfisicalStatus', () => {
+  it('does not include a folder whose flag is imported from elsewhere', async () => {
+    const client = fakeClient(
+      {
+        'production|/tenants/demo/apps/cms': [
+          { ...enabled('true'), secretPath: '/shared' }
+        ]
+      },
+      { 'production|/tenants/demo/apps': ['cms'] }
+    );
+
+    const { environments } = await read(client, 'demo', 'own-key', [
+      'production'
+    ]);
+
+    expect(environments[0]).toMatchObject({
+      apps: [{ app: 'cms', included: false }]
+    });
+  });
+
   it('reports each app folder, its flag, key and the fly app it deploys as', async () => {
     const client = fakeClient(
       {

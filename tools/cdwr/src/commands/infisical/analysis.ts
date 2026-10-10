@@ -1,3 +1,5 @@
+import { isNotFound } from '@codeware/shared/feature/infisical';
+
 import { defineCommand, readOnly } from '../../cli/command';
 import { input } from '../../cli/inputs';
 import { DEPLOYED } from '../../services/environment';
@@ -27,7 +29,13 @@ export default defineCommand({
           const plan = await deployments(config, [...APPS]);
           const secrets: Record<string, Record<string, string>> = {};
           for (const app of APPS) {
-            secrets[app] = await readSecrets(environment, `/apps/${app}`);
+            // An app without a folder in this environment has no secrets
+            secrets[app] = await readSecrets(environment, `/apps/${app}`).catch(
+              (error: unknown) => {
+                if (isNotFound(error)) return {};
+                throw error;
+              }
+            );
           }
           return summarize(
             environment,

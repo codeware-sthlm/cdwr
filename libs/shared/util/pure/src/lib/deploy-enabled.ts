@@ -10,3 +10,21 @@ export const DEPLOY_ENABLED_KEY = 'DEPLOY_ENABLED';
  */
 export const isDeployEnabled = (value: string | null | undefined): boolean =>
   value?.trim().toLowerCase() === 'true';
+
+const samePath = (a: string, b: string) =>
+  a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
+
+/** The folder's own DEPLOY_ENABLED, ignoring one reached through an import or a subfolder */
+export const ownDeployFlag = (
+  secrets: ReadonlyArray<{
+    secretKey: string;
+    secretValue: string;
+    secretPath?: string;
+  }>,
+  folderPath: string
+): string | undefined =>
+  secrets.find(
+    (s) =>
+      s.secretKey === DEPLOY_ENABLED_KEY &&
+      (s.secretPath === undefined || samePath(s.secretPath, folderPath))
+  )?.secretValue;

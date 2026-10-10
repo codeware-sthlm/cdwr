@@ -27,8 +27,8 @@ export default defineCommand({
       APPS.map((app) => [app, []])
     );
     for (const [tenant, apps] of deployments) {
-      for (const { app, secrets } of apps) {
-        (byApp[app] ??= []).push({ tenant, flag: flagStateOf(secrets) });
+      for (const { app, flag } of apps) {
+        (byApp[app] ??= []).push({ tenant, flag: flagStateOf(flag) });
       }
     }
     for (const tenants of Object.values(byApp)) {

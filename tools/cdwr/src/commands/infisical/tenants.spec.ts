@@ -13,11 +13,12 @@ vi.mock('../../services/infisical', () => ({
       [
         'acme',
         [
-          { app: 'web', secrets: { DEPLOY_ENABLED: 'true' } },
-          { app: 'cms', secrets: { DEPLOY_ENABLED: 'false' } }
+          { app: 'web', secrets: {}, flag: 'true' },
+          { app: 'cms', secrets: {}, flag: 'false' }
         ]
       ],
-      ['globex', [{ app: 'cms', secrets: {} }]]
+      ['globex', [{ app: 'cms', secrets: {} }]],
+      ['initech', [{ app: 'cms', secrets: { DEPLOY_ENABLED: 'true' } }]]
     ])
   )
 }));
@@ -44,7 +45,8 @@ describe('infisical tenants', () => {
     expect(JSON.parse(stdout[0] ?? '').result).toEqual({
       cms: [
         { tenant: 'acme', flag: 'off' },
-        { tenant: 'globex', flag: 'no flag' }
+        { tenant: 'globex', flag: 'no flag' },
+        { tenant: 'initech', flag: 'no flag' }
       ],
       web: [{ tenant: 'acme', flag: 'on' }]
     });

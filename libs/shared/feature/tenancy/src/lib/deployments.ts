@@ -1,7 +1,8 @@
 import {
   DEPLOY_ENABLED_KEY,
   deploymentNameIssue,
-  isDeployEnabled
+  isDeployEnabled,
+  ownDeployFlag
 } from '@codeware/shared/util/pure';
 
 export type DeploymentDetails = {
@@ -33,9 +34,6 @@ export type DeploymentFolder = {
     secretMetadata: ReadonlyArray<{ key: string; value: string }>;
   }>;
 };
-
-const samePath = (a: string, b: string) =>
-  a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
 
 const hostPattern = /^\/apps\/([^/]+)$/;
 const tenantPattern = /^\/tenants\/([^/]+)\/apps\/([^/]+)$/;
@@ -78,25 +76,21 @@ export const planDeployments = (
 
     // Only the folder's own flag counts: one reached through an import or a
     // subfolder would switch on a deployment nobody switched on here
-    const flag = folder.secrets.find(
-      (s) =>
-        s.secretKey === DEPLOY_ENABLED_KEY &&
-        (s.secretPath === undefined || samePath(s.secretPath, folder.path))
-    );
+    const flag = ownDeployFlag(folder.secrets, folder.path);
     const others = folder.secrets.filter(
       (s) => s.secretKey !== DEPLOY_ENABLED_KEY
     );
 
     // Not a name the deploy can build an app from, e.g. the retired `_default`
     if (tenant !== undefined && deploymentNameIssue(tenant) !== null) {
-      if (flag || others.length > 0) {
+      if (flag !== undefined || others.length > 0) {
         skipped.push({ app, tenant, reason: 'invalid-name' });
       }
       continue;
     }
 
-    if (!isDeployEnabled(flag?.secretValue)) {
-      if (flag) {
+    if (!isDeployEnabled(flag)) {
+      if (flag !== undefined) {
         skipped.push({ app, tenant, reason: 'flag-off' });
       } else if (others.length > 0) {
         skipped.push({ app, tenant, reason: 'no-flag' });
