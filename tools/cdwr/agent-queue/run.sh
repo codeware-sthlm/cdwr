@@ -125,7 +125,7 @@ publish_runs() {
     (( $(date +%s) - last > 3600 )) || return 0
   fi
   [[ -f "$RUNS" ]] && tail -n 20 "$RUNS" > "$RUNS.tmp" && mv "$RUNS.tmp" "$RUNS"
-  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" --arg attended "$attended_line" '
+  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" --arg attended "${attended_line:-$(cat "$seen" 2>/dev/null)}" '
     def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
     "Last run: \($last)\n\n"
     + (if $attended == "" then "" else "Attended: \($attended)\n\n" end)
