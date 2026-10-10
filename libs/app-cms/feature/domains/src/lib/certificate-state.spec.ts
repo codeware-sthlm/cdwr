@@ -30,7 +30,35 @@ describe('toCertificateState', () => {
       rateLimitedUntil: null,
       validationErrors: null,
       certificateAuthority: null,
-      issuedCertificates: []
+      issuedCertificates: [],
+      addresses: []
+    });
+  });
+
+  describe('addresses', () => {
+    const ips = [
+      { address: '66.241.124.1', type: 'shared_v4' },
+      { address: '137.66.0.1', type: 'v4' },
+      { address: '2a09:8280:1::1', type: 'v6' },
+      { address: 'fdaa:0:1::1', type: 'private_v6' }
+    ];
+
+    it('maps an apex certificate’s addresses to A and AAAA records', () => {
+      const state = toCertificateState(certificate({ isApex: true }), now, ips);
+
+      expect(state.addresses).toEqual([
+        { type: 'A', address: '66.241.124.1' },
+        { type: 'A', address: '137.66.0.1' },
+        { type: 'AAAA', address: '2a09:8280:1::1' }
+      ]);
+    });
+
+    it('keeps none for a subdomain, which uses a CNAME', () => {
+      expect(toCertificateState(certificate(), now, ips).addresses).toEqual([]);
+    });
+
+    it('keeps none when there is no certificate', () => {
+      expect(toCertificateState(null, now, ips).addresses).toEqual([]);
     });
   });
 

@@ -3,6 +3,12 @@ export {
   adoptableDomains
 } from './lib/adoptable-domains';
 export {
+  CERTIFICATE_ACTIONS,
+  type CertificateAction,
+  type CertificateResult,
+  runCertificateAction
+} from './lib/certificate-action';
+export {
   type CertificateState,
   applyCertificateState,
   toCertificateState

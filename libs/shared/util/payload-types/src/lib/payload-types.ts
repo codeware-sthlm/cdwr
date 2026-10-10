@@ -551,6 +551,13 @@ export interface Tenant {
                 id?: string | null;
               }[]
             | null;
+          addresses?:
+            | {
+                type?: ('A' | 'AAAA') | null;
+                address?: string | null;
+                id?: string | null;
+              }[]
+            | null;
         };
         id?: string | null;
       }[]
@@ -2149,6 +2156,13 @@ export interface PlatformSetting {
                 id?: string | null;
               }[]
             | null;
+          addresses?:
+            | {
+                type?: ('A' | 'AAAA') | null;
+                address?: string | null;
+                id?: string | null;
+              }[]
+            | null;
         };
         id?: string | null;
       }[]
@@ -3193,6 +3207,13 @@ export interface PlatformSettingsSelect<T extends boolean = true> {
                     expiresAt?: T;
                     id?: T;
                   };
+              addresses?:
+                | T
+                | {
+                    type?: T;
+                    address?: T;
+                    id?: T;
+                  };
             };
         id?: T;
       };
@@ -3478,6 +3499,13 @@ export interface TenantsSelect<T extends boolean = true> {
                 | {
                     type?: T;
                     expiresAt?: T;
+                    id?: T;
+                  };
+              addresses?:
+                | T
+                | {
+                    type?: T;
+                    address?: T;
                     id?: T;
                   };
             };

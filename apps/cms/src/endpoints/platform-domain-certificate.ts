@@ -1,11 +1,12 @@
-import type { HostnameCheck } from '@cdwr/fly-node/api';
 import {
-  type CertificateState,
+  CERTIFICATE_ACTIONS,
+  type CertificateAction,
+  type CertificateResult,
   applyCertificateState,
   flyUnavailableMessage,
   getFlyApi,
   parseHostname,
-  toCertificateState
+  runCertificateAction
 } from '@codeware/app-cms/feature/domains';
 import { hasRole } from '@codeware/app-cms/util/misc';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
@@ -16,18 +17,7 @@ import {
   headersWithCors
 } from 'payload';
 
-/** What the panel may ask for */
-const ACTIONS = ['request', 'check', 'remove'] as const;
-
-type Action = (typeof ACTIONS)[number];
-
 type Body = { hostname?: unknown; action?: unknown };
-
-type Result = {
-  certificate: CertificateState | null;
-  /** Live dns resolution, and whatever Fly objects to about it */
-  check: HostnameCheck | null;
-};
 
 const fail = (status: StatusCodes, message?: string) =>
   Response.json({ error: message ?? getReasonPhrase(status) }, { status });
@@ -54,10 +44,10 @@ export const platformDomainCertificateEndpoint: Endpoint = {
     await addDataAndFileToRequest(req);
     const body = (req.data ?? {}) as Body;
 
-    const action = String(body.action) as Action;
+    const action = String(body.action) as CertificateAction;
     const parsed = parseHostname(String(body.hostname ?? ''));
 
-    if (!ACTIONS.includes(action) || !parsed.valid) {
+    if (!CERTIFICATE_ACTIONS.includes(action) || !parsed.valid) {
       return fail(StatusCodes.BAD_REQUEST);
     }
 
@@ -99,22 +89,10 @@ export const platformDomainCertificateEndpoint: Endpoint = {
     const { fly } = flyApi;
 
     const app = domain.app;
-    let result: Result;
+    let result: CertificateResult;
 
     try {
-      if (action === 'request') {
-        const { certificate, check } = await fly.certs.add(app, hostname);
-        result = { certificate: toCertificateState(certificate), check };
-      } else if (action === 'check') {
-        const [certificate, check] = await Promise.all([
-          fly.certs.get(app, hostname),
-          fly.certs.check(app, hostname)
-        ]);
-        result = { certificate: toCertificateState(certificate), check };
-      } else {
-        await fly.certs.remove(app, hostname);
-        result = { certificate: null, check: null };
-      }
+      result = await runCertificateAction(fly, app, hostname, action);
     } catch (error) {
       req.payload.logger.error(
         `[platformDomainCertificate] ${action} failed for ${hostname} on ${app}: ${String(error)}`

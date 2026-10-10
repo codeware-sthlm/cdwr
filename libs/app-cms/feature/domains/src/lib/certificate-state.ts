@@ -1,4 +1,8 @@
-import { type Certificate, FlyApi } from '@cdwr/fly-node/api';
+import {
+  type AppIpAddress,
+  type Certificate,
+  FlyApi
+} from '@cdwr/fly-node/api';
 
 import type { TenantDomain } from './tenant-domain';
 
@@ -30,6 +34,31 @@ export type CertificateState = {
    * written. Its `group` branch guards against null; the array branch does not.
    */
   issuedCertificates: Array<{ type: string; expiresAt: string }>;
+  /**
+   * The addresses an apex domain's A and AAAA records should point at.
+   *
+   * Empty for anything but an apex, which uses a CNAME instead. Always an
+   * array, never null, for the reason given on `issuedCertificates`.
+   */
+  addresses: Array<{ type: 'A' | 'AAAA'; address: string }>;
+};
+
+/** Fly's address list as the A and AAAA records it asks for */
+const toAddressRecords = (
+  addresses: Array<AppIpAddress>
+): CertificateState['addresses'] => {
+  const records: CertificateState['addresses'] = [];
+
+  for (const { type, address } of addresses) {
+    if (type === 'v4' || type === 'shared_v4') {
+      records.push({ type: 'A', address });
+    } else if (type === 'v6') {
+      records.push({ type: 'AAAA', address });
+    }
+    // Private addresses and anything Fly adds later are not for a registrar
+  }
+
+  return records;
 };
 
 /**
@@ -46,10 +75,12 @@ export type CertificateState = {
  *
  * @param certificate - What Fly returned, or `null` when none exists yet
  * @param now - Injectable clock, so a test can assert the stamp
+ * @param addresses - The app's addresses, kept only for an apex certificate
  */
 export const toCertificateState = (
   certificate: Certificate | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  addresses: Array<AppIpAddress> = []
 ): CertificateState => {
   const checkedAt = now.toISOString();
 
@@ -66,7 +97,8 @@ export const toCertificateState = (
       rateLimitedUntil: null,
       validationErrors: null,
       certificateAuthority: null,
-      issuedCertificates: []
+      issuedCertificates: [],
+      addresses: []
     };
   }
 
@@ -94,7 +126,8 @@ export const toCertificateState = (
     certificateAuthority: certificate.certificateAuthority ?? null,
     // Both halves have to be there to be worth a row: a type with no expiry
     // says nothing the status line does not already say
-    issuedCertificates: issued
+    issuedCertificates: issued,
+    addresses: certificate.isApex ? toAddressRecords(addresses) : []
   };
 };
 
