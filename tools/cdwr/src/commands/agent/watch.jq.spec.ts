@@ -679,9 +679,13 @@ describe('attended picks', () => {
       ).toBe('run');
     });
 
-    it('missing claim is a take over', () => {
+    it('missing claim counts as running, never a take over', () => {
       const r = attended([node('COD-1', 'agent:working')]);
-      expect(r).toMatchObject({ reason: 'take over', detail: 'no claim' });
+      expect(r).toMatchObject({
+        verdict: 'running',
+        ticket: 'COD-1',
+        detail: 'no claim line'
+      });
     });
 
     it('running beats a stale take over', () => {
@@ -1032,7 +1036,7 @@ describe('attended picks', () => {
         ])
       ).toBe('run now: take over COD-540 (claim 3 h old)');
       expect(line([node('COD-540', 'agent:working')])).toBe(
-        'run now: take over COD-540 (no claim)'
+        'running: COD-540 · no claim line'
       );
     });
 

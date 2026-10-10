@@ -166,15 +166,18 @@ def attended($now; $limit; $watch):
   | { used: $lu.used, limit: $limit, waiting: $waiting } as $base
   | ([ $all[] | select(agent_label == "agent:working") | . + { claim: claim } ]) as $working
   | ([ $working[] | select(.claim != null and ($now - .claim.at) < 7200) ] | sort_by(.claim.at) | last) as $fresh
-  | ([ $working[] | select(.claim == null or ($now - .claim.at) >= 7200) ] | sort_by(queue_order) | first) as $stale
+  # No readable claim is no proof the session is gone: the skill takes over only a claim 2 h old
+  | ([ $working[] | select(.claim == null) ] | sort_by(queue_order) | first) as $unclaimed
+  | ([ $working[] | select(.claim != null and ($now - .claim.at) >= 7200) ] | sort_by(queue_order) | first) as $stale
   | ([ $all[] | select(agent_label == "agent:needs-input" and is_open and answered) ] | sort_by(queue_order) | first) as $ans
   | ([ $all[] | select(agent_label == "agent:review" and is_open and review_feedback($watch)) ] | sort_by(queue_order) | first) as $fb
   | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not)) ] | sort_by(queue_order) | first) as $rdy
   | $base + (
       if $fresh != null then { verdict: "running", ticket: $fresh.identifier, reason: "working", detail: ($fresh | next_line) }
+      elif $unclaimed != null then { verdict: "running", ticket: $unclaimed.identifier, reason: "working", detail: "no claim line" }
       elif $stale != null then
         { verdict: "run", ticket: $stale.identifier, reason: "take over",
-          detail: (if $stale.claim == null then "no claim" else "claim \((($now - $stale.claim.at) / 3600 | floor)) h old" end) }
+          detail: "claim \((($now - $stale.claim.at) / 3600 | floor)) h old" }
       elif $ans != null then { verdict: "run", ticket: $ans.identifier, reason: "answered", detail: null }
       elif $fb != null then { verdict: "run", ticket: $fb.identifier, reason: "review feedback", detail: null }
       elif $lu.used >= $limit then { verdict: "idle", ticket: null, reason: null, detail: null }
