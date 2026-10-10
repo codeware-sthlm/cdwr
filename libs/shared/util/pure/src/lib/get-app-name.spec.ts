@@ -30,17 +30,6 @@ describe('getAppName', () => {
     ).toBe('cdwr-cms-pr-12-demo');
   });
 
-  it('adds no suffix for the reserved _default tenant', () => {
-    expect(
-      getAppName({
-        environment: 'preview',
-        configAppName: 'cdwr-cms',
-        pullRequest: 12,
-        tenantId: '_default'
-      })
-    ).toBe('cdwr-cms-pr-12');
-  });
-
   it('refuses a preview app without a pull request', () => {
     expect(() =>
       getAppName({ environment: 'preview', configAppName: 'cdwr-cms' })

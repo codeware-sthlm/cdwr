@@ -33,6 +33,17 @@ export const runBuildApps = async (options: {
 
     core.startGroup(`Build Docker image for ${projectName}`);
 
+    // Pushing an image creates the app on Fly, so an app with nowhere to
+    // deploy would leave a bare host app behind
+    const details = config.appDetails[projectName] ?? [];
+    if (details.length === 0) {
+      core.warning(
+        `Skipping ${projectName}: no host or tenant deployment is enabled for it`
+      );
+      core.endGroup();
+      continue;
+    }
+
     let configAppName: string;
 
     core.info(`Read Fly config file: ${flyConfigFile}`);
@@ -49,13 +60,10 @@ export const runBuildApps = async (options: {
       );
     }
 
-    // For apps that have no host deployment (no _default tenant), use the first tenant
-    // as the build target to avoid creating a ghost host app with no machines.
-    // The resulting image URL is still shared across all tenants of the same app.
-    const details = config.appDetails[projectName] ?? [];
-    const hasTenantOnlyDeployment =
-      details.length > 0 &&
-      !details.some((d) => !d.tenant || d.tenant === '_default');
+    // For apps that have no host deployment, use the first tenant as the build
+    // target to avoid creating a ghost host app with no machines. The resulting
+    // image URL is still shared across all tenants of the same app.
+    const hasTenantOnlyDeployment = details.every((d) => d.tenant);
     const buildTenantId = hasTenantOnlyDeployment
       ? details[0]?.tenant
       : undefined;

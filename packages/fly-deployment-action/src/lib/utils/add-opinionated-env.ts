@@ -6,9 +6,6 @@
  * - `PR_NUMBER`
  * - `TENANT_ID` (if applicable)
  *
- * Reserved tenant names:
- * - `_default`: Indicates headless/default deployment without TENANT_ID
- *
  * @param appName - The name of the app
  * @param prNumber - The pull request number
  * @param tenantId - The tenant ID (if applicable)
@@ -33,9 +30,8 @@ export const addOpinionatedEnv = (
     PR_NUMBER: prNumber ? String(prNumber) : ''
   };
 
-  // Add TENANT_ID environment variable only if tenant is specified
-  // Skip for reserved tenant name '_default' which indicates headless/default deployment
-  if (tenantId && tenantId !== '_default') {
+  // A host deployment has no tenant and gets no TENANT_ID
+  if (tenantId) {
     newEnv = { ...newEnv, TENANT_ID: tenantId };
   }
 
