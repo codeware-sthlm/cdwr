@@ -1,4 +1,4 @@
-import { fetchDeployRules } from '@codeware/shared/feature/tenancy';
+import { fetchDeployments } from '@codeware/shared/feature/tenancy';
 
 import { EXIT } from '../../cli/errors';
 import { memoryPrefs } from '../../cli/prefs';
@@ -10,12 +10,10 @@ import command from './analysis';
 vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
 vi.mock('@codeware/shared/feature/tenancy', () => ({
-  fetchDeployRules: vi.fn().mockResolvedValue({ apps: '*', tenants: '*' }),
-  fetchAppTenants: vi.fn().mockResolvedValue({
-    cms: [{ tenant: 'acme' }],
-    web: [{ tenant: 'acme' }]
-  }),
-  filterByDeployRules: vi.fn((appTenants) => appTenants)
+  fetchDeployments: vi.fn().mockResolvedValue({
+    deployments: { cms: [{}, { tenant: 'acme' }], web: [], builder: [] },
+    skipped: [{ app: 'web', tenant: 'acme', reason: 'flag-off' }]
+  })
 }));
 
 vi.mock('../../services/infisical', () => ({
@@ -41,7 +39,7 @@ describe('infisical analysis', () => {
     });
 
     expect(exit).toBe(EXIT.ok);
-    expect(fetchDeployRules).toHaveBeenCalledTimes(2);
+    expect(fetchDeployments).toHaveBeenCalledTimes(2);
     expect(ui.asked).toEqual([]);
     expect(ui.printed.outro[0]).toContain('Analyzed 2 environment(s)');
   });
@@ -61,8 +59,28 @@ describe('infisical analysis', () => {
       stdout: (t) => stdout.push(t)
     });
     const payload = JSON.parse(stdout[0] ?? '{}') as {
-      result: Array<{ apps: Array<{ secrets: Record<string, string> }> }>;
+      result: Array<{
+        apps: Array<{
+          app: string;
+          host: string;
+          tenants: Array<{ tenant: string; flag: string }>;
+          secrets: Record<string, string>;
+        }>;
+      }>;
     };
     expect(payload.result[0]?.apps[0]?.secrets['DATABASE_URL']).toBe('••••');
+    expect(payload.result[0]?.apps.map(({ app }) => app)).toEqual([
+      'cms',
+      'web',
+      'builder'
+    ]);
+    expect(payload.result[0]?.apps[0]).toMatchObject({
+      host: 'on',
+      tenants: [{ tenant: 'acme', flag: 'on' }]
+    });
+    expect(payload.result[0]?.apps[1]).toMatchObject({
+      host: 'no flag',
+      tenants: [{ tenant: 'acme', flag: 'off' }]
+    });
   });
 });

@@ -1,7 +1,7 @@
 import {
+  DEPLOY_ENABLED_KEY,
   deploymentNameIssue,
-  matchesDeployRule,
-  parseDeployRule
+  isDeployEnabled
 } from '@codeware/shared/util/pure';
 
 import type { Environment } from '../../services/infisical';
@@ -31,15 +31,6 @@ export interface Folder {
 
 export const folderPath = ({ parent, name }: Folder): string =>
   `${parent === '/' ? '' : parent}/${name}`;
-
-/** The SDK types metadata as a record; the API sends an array */
-export const metadataOf = (
-  value: unknown
-): ReadonlyArray<{ key: string; value: string }> =>
-  (Array.isArray(value) ? value : value ? [value] : []) as ReadonlyArray<{
-    key: string;
-    value: string;
-  }>;
 
 /** Why a workspace row cannot be provisioned, or `null` when it can */
 export function reasonSkipped(tenant: TenantRow): string | null {
@@ -96,11 +87,33 @@ export interface KeyPlan {
   action: KeyAction;
 }
 
+/**
+ * What to do with `DEPLOY_ENABLED` of one app folder: `create` when absent,
+ * `enabled` when already on, `paused` for any other value - a deliberate
+ * pause that provisioning leaves alone.
+ */
+export type FlagAction = 'create' | 'enabled' | 'paused';
+
+export interface FlagPlan {
+  app: AppKind;
+  action: FlagAction;
+  /** The stored value of a paused flag */
+  value?: string;
+}
+
+export const flagActionOf = (stored: string | undefined): FlagAction =>
+  stored === undefined
+    ? 'create'
+    : isDeployEnabled(stored)
+      ? 'enabled'
+      : 'paused';
+
 /** The plan step lines shown before a provisioning write is confirmed */
 export function provisionSteps(
   deployment: string,
   folders: ReadonlyArray<Folder>,
-  keys: ReadonlyArray<KeyPlan>
+  keys: ReadonlyArray<KeyPlan>,
+  flags: ReadonlyArray<FlagPlan> = []
 ): string[] {
   return [
     ...folders.map((folder) => `Create folder ${folderPath(folder)}`),
@@ -108,7 +121,15 @@ export function provisionSteps(
       action === 'create'
         ? `Set PAYLOAD_API_KEY in /tenants/${deployment}/apps/${app}`
         : `Keep PAYLOAD_API_KEY in /tenants/${deployment}/apps/${app} (already matches)`
-    )
+    ),
+    ...flags.map(({ app, action, value }) => {
+      const path = `/tenants/${deployment}/apps/${app}`;
+      if (action === 'create')
+        return `Set ${DEPLOY_ENABLED_KEY}=true in ${path}`;
+      return action === 'enabled'
+        ? `Keep ${DEPLOY_ENABLED_KEY} in ${path} (already true)`
+        : `Keep ${DEPLOY_ENABLED_KEY}=${value} in ${path} (paused)`;
+    })
   ];
 }
 
@@ -126,45 +147,20 @@ export function conflictMessage(
   ].join('\n');
 }
 
-export interface DeployRules {
-  apps: string;
-  tenants: string;
-}
-
-/**
- * What `DEPLOY_RULES` must still allow before a deployment ships these apps.
- * `rules` is `null` when the secret could not be read.
- */
-export function deployRuleGaps(
+/** The warning for apps whose tenant folder deliberately holds a non-true flag */
+export function pausedMessage(
   environment: Environment,
   deployment: string,
-  apps: ReadonlyArray<AppKind>,
-  rules: DeployRules | null
-): string[] {
-  if (!rules) {
-    return [
-      `DEPLOY_RULES in ${environment} could not be read - check that it deploys '${deployment}'.`
-    ];
-  }
-
-  const gaps: string[] = [];
-
-  if (!matchesDeployRule(deployment, parseDeployRule(rules.tenants))) {
-    gaps.push(
-      `Add '${deployment}' to the tenants rule of DEPLOY_RULES in ${environment} (now: ${rules.tenants}).`
-    );
-  }
-
-  const excluded = apps.filter(
-    (app) => !matchesDeployRule(app, parseDeployRule(rules.apps))
-  );
-  if (excluded.length) {
-    gaps.push(
-      `Add ${excluded.join(', ')} to the apps rule of DEPLOY_RULES in ${environment} (now: ${rules.apps}).`
-    );
-  }
-
-  return gaps;
+  paused: ReadonlyArray<FlagPlan>
+): string {
+  return [
+    `'${deployment}' stays paused in ${environment} for ${paused.map(({ app }) => app).join(', ')}:`,
+    ...paused.map(
+      ({ app, value }) =>
+        `  /tenants/${deployment}/apps/${app} has ${DEPLOY_ENABLED_KEY}=${value}`
+    ),
+    `Set it to true to deploy; provisioning leaves it alone.`
+  ].join('\n');
 }
 
 export interface FlyAppCheck {

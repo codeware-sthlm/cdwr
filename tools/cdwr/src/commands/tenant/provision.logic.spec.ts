@@ -4,9 +4,9 @@ import {
   type TenantRow,
   conflictMessage,
   deployArgs,
-  deployRuleGaps,
+  flagActionOf,
   folderPath,
-  metadataOf,
+  pausedMessage,
   planFlyAppsToDeploy,
   planFolders,
   provisionSteps,
@@ -22,23 +22,6 @@ describe('folderPath', () => {
 
   it('does not double the leading slash at the root', () => {
     expect(folderPath({ parent: '/', name: 'tenants' })).toBe('/tenants');
-  });
-});
-
-describe('metadataOf', () => {
-  it('passes an array through', () => {
-    const value = [{ key: 'apps', value: '*' }];
-    expect(metadataOf(value)).toBe(value);
-  });
-
-  it('wraps a single object', () => {
-    const value = { key: 'apps', value: '*' };
-    expect(metadataOf(value)).toEqual([value]);
-  });
-
-  it('is empty for nothing', () => {
-    expect(metadataOf(undefined)).toEqual([]);
-    expect(metadataOf(null)).toEqual([]);
   });
 });
 
@@ -66,7 +49,7 @@ describe('reasonSkipped', () => {
   });
 
   it('flags an invalid deployment name', () => {
-    expect(reasonSkipped({ ...base, deployment: '_default' })).toBe(
+    expect(reasonSkipped({ ...base, deployment: 'Bad Name' })).toBe(
       'invalid deployment name'
     );
   });
@@ -128,39 +111,53 @@ describe('planFolders', () => {
   });
 });
 
-describe('deployRuleGaps', () => {
-  it('reports every rule missing when it could not be read', () => {
-    expect(deployRuleGaps('production', 'demo', ['cms'], null)).toEqual([
-      "DEPLOY_RULES in production could not be read - check that it deploys 'demo'."
-    ]);
+describe('flagActionOf', () => {
+  it('creates the flag when absent', () => {
+    expect(flagActionOf(undefined)).toBe('create');
   });
 
-  it('is empty when the wildcard allows everything', () => {
-    expect(
-      deployRuleGaps('production', 'demo', ['cms'], { apps: '*', tenants: '*' })
-    ).toEqual([]);
+  it('keeps a true flag, trimmed and case-insensitive', () => {
+    expect(flagActionOf('true')).toBe('enabled');
+    expect(flagActionOf(' TRUE ')).toBe('enabled');
   });
 
-  it('names the tenant gap', () => {
+  it('treats any other value as a pause', () => {
+    expect(flagActionOf('false')).toBe('paused');
+    expect(flagActionOf('')).toBe('paused');
+  });
+});
+
+describe('provisionSteps flags', () => {
+  it('shows the flag write, keep and pause', () => {
     expect(
-      deployRuleGaps('production', 'demo', ['cms'], {
-        apps: '*',
-        tenants: 'other'
-      })
+      provisionSteps(
+        'demo',
+        [],
+        [],
+        [
+          { app: 'cms', action: 'create' },
+          { app: 'web', action: 'paused', value: 'false' }
+        ]
+      )
     ).toEqual([
-      "Add 'demo' to the tenants rule of DEPLOY_RULES in production (now: other)."
+      'Set DEPLOY_ENABLED=true in /tenants/demo/apps/cms',
+      'Keep DEPLOY_ENABLED=false in /tenants/demo/apps/web (paused)'
     ]);
-  });
-
-  it('names the excluded apps', () => {
     expect(
-      deployRuleGaps('production', 'demo', ['cms', 'web'], {
-        apps: 'cms',
-        tenants: '*'
-      })
-    ).toEqual([
-      'Add web to the apps rule of DEPLOY_RULES in production (now: cms).'
+      provisionSteps('demo', [], [], [{ app: 'cms', action: 'enabled' }])
+    ).toEqual(['Keep DEPLOY_ENABLED in /tenants/demo/apps/cms (already true)']);
+  });
+});
+
+describe('pausedMessage', () => {
+  it('names each paused app and its value', () => {
+    const message = pausedMessage('production', 'demo', [
+      { app: 'cms', action: 'paused', value: 'false' }
     ]);
+    expect(message).toContain("'demo' stays paused in production for cms");
+    expect(message).toContain(
+      '/tenants/demo/apps/cms has DEPLOY_ENABLED=false'
+    );
   });
 });
 

@@ -131,7 +131,7 @@ export const ENTRIES: Entry[] = [
   },
   {
     path: ['infisical', 'tenants'],
-    summary: 'Which tenants each app deploys for',
+    summary: 'Tenant folders per app and their deploy switch',
     danger: 'read',
     load: () => import('./infisical/tenants').then((m) => m.default)
   },
@@ -143,7 +143,7 @@ export const ENTRIES: Entry[] = [
   },
   {
     path: ['infisical', 'analysis'],
-    summary: 'Deploy rules, app tenants and app secrets side by side',
+    summary: 'Deploy switches, tenant folders and app secrets side by side',
     danger: 'read',
     load: () => import('./infisical/analysis').then((m) => m.default)
   },
