@@ -121,6 +121,8 @@ export const platform = {
     {
       name: 'cdwr.io',
       slug: 'cdwr-io',
+      // Matches its Infisical folder and the `cdwr-cms-cdwr-io` Fly app
+      deployment: 'cdwr-io',
       apiKey: '9d5316b1-0298-4113-904c-6cc10fcacb6c',
       description: 'cdwr platform showcase.',
       locale: 'en',
