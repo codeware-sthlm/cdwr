@@ -3,6 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FlyApi } from '../src/lib/fly-api.class';
 import type { Fly } from '../src/lib/fly.class';
 import {
+  AppIpAddressSchema,
+  AppIpAddressesApiResponseSchema
+} from '../src/lib/schemas/app-ip-addresses.schema';
+import {
   CertificateApiResponseSchema,
   HostnameCheckApiResponseSchema
 } from '../src/lib/schemas/certificate.schema';
@@ -181,6 +185,24 @@ describe('FlyApi machines', () => {
   });
 });
 
+describe('FlyApi ips', () => {
+  it('lists the addresses of an app as typed rows', async () => {
+    const addresses = await api.ips.list(app);
+
+    // A fresh, undeployed app may hold none; whatever it holds must parse
+    expect(Array.isArray(addresses)).toBe(true);
+    for (const address of addresses) {
+      expect(AppIpAddressSchema.safeParse(address).success).toBe(true);
+    }
+  });
+
+  it('rejects an unknown app rather than answering emptily', async () => {
+    await expect(
+      api.ips.list(`does-not-exist-${Date.now()}`)
+    ).rejects.toThrow();
+  });
+});
+
 /**
  * Does Fly's schema still match what we parse?
  *
@@ -213,6 +235,22 @@ describe('Fly GraphQL schema drift', () => {
   it('still exposes every certificate field we parse', async () => {
     const actual = await fieldsOf('AppCertificate');
     const parsed = Object.keys(CertificateApiResponseSchema.shape);
+
+    expect(actual.length).toBeGreaterThan(0);
+    expect(parsed.filter((field) => !actual.includes(field))).toEqual([]);
+  });
+
+  it('still exposes the app address fields we query', async () => {
+    const actual = await fieldsOf('App');
+    const parsed = Object.keys(AppIpAddressesApiResponseSchema.shape);
+
+    expect(actual.length).toBeGreaterThan(0);
+    expect(parsed.filter((field) => !actual.includes(field))).toEqual([]);
+  });
+
+  it('still exposes every ip address field we parse', async () => {
+    const actual = await fieldsOf('IPAddress');
+    const parsed = Object.keys(AppIpAddressSchema.shape);
 
     expect(actual.length).toBeGreaterThan(0);
     expect(parsed.filter((field) => !actual.includes(field))).toEqual([]);
