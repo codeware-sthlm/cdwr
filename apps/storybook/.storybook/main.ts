@@ -1,7 +1,7 @@
-import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import type { StorybookConfig } from '@storybook/react-vite';
 import tailwindcss from '@tailwindcss/vite';
 import remarkGfm from 'remark-gfm';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 const config: StorybookConfig = {
   stories: [
@@ -63,7 +63,7 @@ const config: StorybookConfig = {
   async viteFinal(config) {
     config.plugins = [
       ...(config.plugins ?? []),
-      nxViteTsPaths(),
+      tsconfigPaths(),
       tailwindcss()
     ];
     // Story files live outside Storybook's project root so Vite can't

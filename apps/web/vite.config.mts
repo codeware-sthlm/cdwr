@@ -1,7 +1,7 @@
-import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { vitePlugin as remix } from '@remix-run/dev';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { defineConfig } from 'vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 declare module '@remix-run/node' {
   interface Future {
@@ -89,7 +89,7 @@ export default defineConfig({
         v3_lazyRouteDiscovery: true
       }
     }),
-    nxViteTsPaths(),
+    tsconfigPaths({ projects: ['../../tsconfig.base.json'] }),
     ...(sentryEnabled
       ? [
           sentryVitePlugin({
