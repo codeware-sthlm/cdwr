@@ -1,16 +1,15 @@
 import {
-  type AppTenantsMap,
+  type DeploymentsMap,
   type InfisicalConfig,
-  fetchAppTenants,
-  fetchDeployRules
+  type SkippedDeployment,
+  fetchDeployments
 } from '@codeware/shared/feature/tenancy';
 
 import { muted } from '../cli/muted';
 
 import type { Environment } from './infisical';
 
-export type { AppTenantsMap };
-export { filterByDeployRules } from '@codeware/shared/feature/tenancy';
+export type { DeploymentsMap, SkippedDeployment };
 
 /** The tenancy lib's client config from the loaded env */
 export const tenancyConfig = (
@@ -24,13 +23,9 @@ export const tenancyConfig = (
   projectId: env['INFISICAL_PROJECT_ID'] ?? ''
 });
 
-/** Which tenants deploy each app, as the deploy reads it; muted, the lib narrates */
-export const appTenants = (
+/** What the deploy ships per app, and what it skips; muted, the lib narrates */
+export const deployments = (
   config: InfisicalConfig,
   apps: string[]
-): Promise<AppTenantsMap> => muted(() => fetchAppTenants(config, apps));
-
-/** The DEPLOY_RULES the deploy applies */
-export const deployRules = (
-  config: InfisicalConfig
-): ReturnType<typeof fetchDeployRules> => muted(() => fetchDeployRules(config));
+): Promise<{ deployments: DeploymentsMap; skipped: SkippedDeployment[] }> =>
+  muted(() => fetchDeployments(config, apps));

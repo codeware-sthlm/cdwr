@@ -51,7 +51,9 @@ Remembered inputs (environment, app) live in `~/.cdwr/prefs.json`.
 ## Infisical
 
 `cdwr infisical tenants|data|analysis` read what Infisical holds for tenants and apps, with values
-masked unless `--reveal` is given. Three more work on your own CLI session (`infisical login`, no
+masked unless `--reveal` is given. A deployment ships when its folder holds `DEPLOY_ENABLED=true`
+(`/apps/<app>` for a host, `/tenants/<t>/apps/<app>` for a tenant); `tenants` and `analysis` show
+each folder as on, off or no flag, and `tenant provision` writes the flag for a new tenant. Three more work on your own CLI session (`infisical login`, no
 token involved) and the same core as the `dev-plugin:infisical-run` executor:
 
 ```sh
