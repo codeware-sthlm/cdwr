@@ -35,6 +35,8 @@ overrides:
   "@vitest/browser": "4.1.11"
   "@xhmikosr/decompress": ">=11.1.3"
   shell-quote: ">=1.8.4"
+  # Payload's adapter still declares nodemailer 9; we pass it our own transport
+  "@payloadcms/email-nodemailer>nodemailer": ">=10 <11"
 
 allowBuilds:
   "@evilmartians/lefthook": true
