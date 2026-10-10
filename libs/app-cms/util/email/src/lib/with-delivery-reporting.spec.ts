@@ -108,6 +108,23 @@ describe('withDeliveryReporting', () => {
     });
   });
 
+  it('counts recipients in nested lists', async () => {
+    const err = new Error('down');
+    const factory = await Promise.resolve(
+      withDeliveryReporting(fakeAdapter(vi.fn().mockRejectedValue(err)))
+    );
+
+    await expect(
+      factory({ payload }).sendEmail({
+        to: [['one@example.se', { address: 'two@example.se' }], 'three@ex.se'],
+        subject: 'Nested'
+      })
+    ).rejects.toBe(err);
+
+    const [, context] = vi.mocked(Sentry.captureException).mock.calls[0];
+    expect(context).toMatchObject({ extra: { recipientCount: 3 } });
+  });
+
   it('preserves the adapter identity fields', async () => {
     const factory = await Promise.resolve(
       withDeliveryReporting(fakeAdapter(vi.fn()))

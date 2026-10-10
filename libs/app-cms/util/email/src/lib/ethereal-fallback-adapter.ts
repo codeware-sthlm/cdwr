@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import type { EmailAdapter } from 'payload';
 
 /**
@@ -21,7 +21,7 @@ export const etherealFallbackAdapter = (): EmailAdapter => {
   return ({ payload }) => {
     /** Created once per process, on the first send */
     let transport: Promise<{
-      transporter: nodemailer.Transporter;
+      transporter: Transporter;
       user: string;
     }> | null = null;
 
