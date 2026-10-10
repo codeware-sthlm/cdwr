@@ -17,14 +17,20 @@ const EMAIL_PATTERN = /[^\s<>@,;:"]+@([^\s<>@,;:"]+)/g;
 const redactEmails = (value: string): string =>
   value.replace(EMAIL_PATTERN, '***@$1');
 
-/** Recipients as one string, whatever shape nodemailer was handed */
+/** Every address in whatever shape nodemailer was handed, nested lists included */
+const listRecipients = (to: SendEmailOptions['to']): string[] => {
+  if (Array.isArray(to)) {
+    return to.flatMap(listRecipients);
+  }
+  if (typeof to === 'string') {
+    return [to];
+  }
+  return to?.address ? [to.address] : [];
+};
+
+/** Recipients as one string */
 const formatRecipients = (to: SendEmailOptions['to']): string =>
-  (Array.isArray(to) ? to : [to])
-    .map((entry) =>
-      typeof entry === 'string' ? entry : (entry?.address ?? '')
-    )
-    .filter(Boolean)
-    .join(', ');
+  listRecipients(to).filter(Boolean).join(', ');
 
 /**
  * Make a transport failure loud instead of a line only `fly logs` sees.
