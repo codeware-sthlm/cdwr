@@ -16,6 +16,8 @@ export type DnsRecordProps = {
     instructions?: string | null;
     /** The domain itself rather than a subdomain, which cannot use a CNAME */
     isApex?: boolean;
+    /** The A and AAAA records an apex points at, in place of a CNAME */
+    addresses?: Array<{ type: 'A' | 'AAAA'; address: string }>;
   };
   /**
    * Value for the `_fly-ownership` TXT record, when Fly has offered one.
@@ -34,6 +36,8 @@ export type DnsRecordProps = {
   confirmed?: {
     traffic?: boolean | null;
     validation?: boolean | null;
+    /** The addresses Fly found the domain resolving to */
+    addresses?: Array<string> | null;
   } | null;
   /**
    * The certificate is issued, with no known outstanding issue — true both

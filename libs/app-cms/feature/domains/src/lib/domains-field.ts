@@ -84,7 +84,8 @@ export const domainsField = ({ override }: Props = {}): ArrayField => {
         },
         {
           // What Fly last said about this domain. Field names are Fly's own, so
-          // a stored value can be read straight against its schema.
+          // a stored value can be read straight against its schema. The one
+          // exception is `addresses`, already turned into the records to create.
           //
           // Hidden rather than rendered: eight read-only inputs per row would
           // bury the two fields that are actually filled in. The panel below
@@ -112,6 +113,23 @@ export const domainsField = ({ override }: Props = {}): ArrayField => {
               fields: [
                 { name: 'type', type: 'text' },
                 { name: 'expiresAt', type: 'date' }
+              ]
+            },
+            {
+              // The A and AAAA records an apex points at, mapped from the app's
+              // addresses: an apex cannot use the CNAME a subdomain does
+              name: 'addresses',
+              type: 'array',
+              fields: [
+                {
+                  name: 'type',
+                  type: 'select',
+                  options: [
+                    { label: 'A', value: 'A' },
+                    { label: 'AAAA', value: 'AAAA' }
+                  ]
+                },
+                { name: 'address', type: 'text' }
               ]
             }
           ]
