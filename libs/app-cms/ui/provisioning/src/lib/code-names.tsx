@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 
-/** A setting name as Infisical holds it: `DEPLOY_RULES`, `PAYLOAD_API_KEY` */
+/** A setting name as Infisical holds it: `DEPLOY_ENABLED`, `PAYLOAD_API_KEY` */
 const SETTING_NAME = /\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\b/g;
 
 /** Split text into plain runs and setting names, in order */

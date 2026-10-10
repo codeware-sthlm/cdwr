@@ -8,11 +8,9 @@ import type {
   ProvisioningEnvironment
 } from '@codeware/app-cms/ui/provisioning';
 import {
-  type DeployRulesSecret,
+  DEPLOY_ENABLED_KEY,
   getAppName,
-  matchesDeployRule,
-  parseDeployRule,
-  readDeployRules
+  isDeployEnabled
 } from '@codeware/shared/util/pure';
 import type { InfisicalSDK } from '@infisical/sdk';
 
@@ -48,7 +46,7 @@ type Options = {
 };
 
 /** Statuses that mean "this identity cannot see it", not "something broke" */
-const UNREADABLE = new Set([401, 403, 404]);
+const UNREADABLE = new Set([401, 403]);
 
 /**
  * Compared in constant time, so the check takes the same time wherever the
@@ -73,14 +71,6 @@ const compareKey = (
     : 'mismatch';
 };
 
-/** The SDK types metadata as a record; the API sends an array */
-const metadataOf = (value: unknown): DeployRulesSecret['secretMetadata'] =>
-  (Array.isArray(value)
-    ? value
-    : value
-      ? [value]
-      : []) as DeployRulesSecret['secretMetadata'];
-
 /**
  * The Fly app a folder deploys as. A preview's pull request number is not
  * known here, so it is written as `<n>` in the name the deploy would build.
@@ -103,7 +93,7 @@ const flyAppName = (
  * Read what Infisical holds for a workspace, per environment.
  *
  * Reports the folders the deploy reads — `/tenants/<deployment>/apps/<app>` —
- * and whether `DEPLOY_RULES` deploys them. No secret value leaves this
+ * and whether each one's `DEPLOY_ENABLED` is on. No secret value leaves this
  * function: the API key is compared here and only the verdict is returned.
  */
 export async function readInfisicalStatus({
@@ -117,54 +107,8 @@ export async function readInfisicalStatus({
   const readEnvironment = async (
     environment: ProvisioningEnvironment
   ): Promise<InfisicalEnvironmentFacts> => {
-    let rootSecrets;
-
-    try {
-      // With imports and references resolved, the way the deploy reads them
-      rootSecrets = await client.secrets().listSecretsWithImports({
-        environment,
-        projectId,
-        secretPath: '/',
-        expandSecretReferences: true,
-        recursive: false
-      });
-    } catch (error) {
-      if (UNREADABLE.has(statusOf(error) ?? 0)) {
-        return { environment, access: 'unreadable' };
-      }
-      throw error;
-    }
-
-    const rulesSecret = rootSecrets.find(
-      (secret) => secret.secretKey === 'DEPLOY_RULES'
-    );
-
-    if (!rulesSecret) {
-      return { environment, access: 'no-rules' };
-    }
-
-    let rules;
-
-    try {
-      ({ rules } = readDeployRules({
-        secretValue: rulesSecret.secretValue,
-        secretMetadata: metadataOf(rulesSecret.secretMetadata)
-      }));
-    } catch {
-      return { environment, access: 'no-rules' };
-    }
-
-    const tenantRule = parseDeployRule(rules.tenants);
-    const appRule = parseDeployRule(rules.apps);
-    const tenants =
-      tenantRule === null
-        ? 'wildcard'
-        : tenantRule.includes(deployment)
-          ? 'listed'
-          : 'excluded';
-
     const appsPath = `/tenants/${deployment}/apps`;
-    let folderNames: Array<string> = [];
+    let folderNames: Array<string>;
 
     try {
       const folders = await client.folders().listFolders({
@@ -174,8 +118,14 @@ export async function readInfisicalStatus({
       });
       folderNames = folders.map((folder) => folder.name);
     } catch (error) {
+      const status = statusOf(error) ?? 0;
+
       // No folder for this workspace in this environment yet
-      if (statusOf(error) !== 404) {
+      if (status === 404) {
+        folderNames = [];
+      } else if (UNREADABLE.has(status)) {
+        return { environment, access: 'unreadable' };
+      } else {
         throw error;
       }
     }
@@ -197,7 +147,7 @@ export async function readInfisicalStatus({
           return {
             app,
             flyApp: flyAppName(app, environment, deployment),
-            included: tenants !== 'excluded' && matchesDeployRule(app, appRule),
+            included: isDeployEnabled(keys.get(DEPLOY_ENABLED_KEY)),
             apiKey: compareKey(keys.get('PAYLOAD_API_KEY'), apiKey),
             optionalKeys: OPTIONAL_KEYS.filter((key) => keys.has(key))
           };
@@ -205,7 +155,7 @@ export async function readInfisicalStatus({
       )
     );
 
-    return { environment, access: 'ok', tenants, apps };
+    return { environment, access: 'ok', apps };
   };
 
   return {

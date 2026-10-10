@@ -40,8 +40,6 @@ type Outcome = { status: InfisicalStatus } | { error: string };
 const STATE_KEYS = {
   'key-mismatch': 'provisioning:stateKeyMismatch',
   'missing-key': 'provisioning:stateMissingKey',
-  'missing-folder': 'provisioning:stateMissingFolder',
-  'no-rules': 'provisioning:stateNoRules',
   unreadable: 'provisioning:stateUnreadable',
   ready: 'provisioning:stateReady',
   'not-provisioned': 'provisioning:stateNotProvisioned',
@@ -51,8 +49,6 @@ const STATE_KEYS = {
 const DETAIL_KEYS = {
   'key-mismatch': 'provisioning:detailKeyMismatch',
   'missing-key': 'provisioning:detailMissingKey',
-  'missing-folder': 'provisioning:detailMissingFolder',
-  'no-rules': 'provisioning:detailNoRules',
   unreadable: 'provisioning:detailUnreadable',
   ready: 'provisioning:detailReady',
   'not-provisioned': 'provisioning:detailNotProvisioned',

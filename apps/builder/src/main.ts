@@ -18,6 +18,8 @@ if (!process.env['BUILDER_TOKEN'] && process.env['INFISICAL_CLIENT_ID']) {
     injectEnv: true,
     silent: true
   });
+  // Deploy metadata in /apps/builder, not configuration for the running app
+  delete process.env['DEPLOY_ENABLED'];
 }
 
 // Without a token the service still answers its health check, so a deploy

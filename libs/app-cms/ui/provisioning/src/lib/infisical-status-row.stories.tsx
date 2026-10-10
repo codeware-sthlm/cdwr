@@ -18,8 +18,6 @@ const labels = {
   states: {
     'key-mismatch': 'Different key',
     'missing-key': 'Key missing',
-    'missing-folder': 'No app folder',
-    'no-rules': 'No deploy rules',
     unreadable: 'Cannot read',
     ready: 'Ready',
     'not-provisioned': 'Not set up',
@@ -36,7 +34,6 @@ const status: InfisicalStatus = {
     {
       environment: 'production',
       access: 'ok',
-      tenants: 'wildcard',
       apps: [
         {
           app: 'cms',
@@ -66,7 +63,6 @@ const everyState: InfisicalStatus = {
     {
       environment: 'preview',
       access: 'ok',
-      tenants: 'listed',
       apps: [
         {
           app: 'cms',
@@ -84,9 +80,7 @@ const everyState: InfisicalStatus = {
         }
       ]
     },
-    { environment: 'production', access: 'ok', tenants: 'listed', apps: [] },
-    { environment: 'preview', access: 'ok', tenants: 'wildcard', apps: [] },
-    { environment: 'production', access: 'no-rules' }
+    { environment: 'production', access: 'ok', apps: [] }
   ]
 };
 
