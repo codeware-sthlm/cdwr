@@ -32,7 +32,12 @@ describe('preset generator', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    tree = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
+    tree = createTreeWithEmptyWorkspace({
+      layout: 'apps-libs',
+      // Prettier, as before Nx 23.3: an oxfmt tree installs oxfmt out of
+      // band, and Jest cannot load it
+      formatter: 'prettier'
+    });
   });
 
   it('should generate project config without payload targets', async () => {
@@ -69,7 +74,7 @@ describe('preset generator', () => {
 
     const { name, sourceRoot } = readProjectConfiguration(tree, 'test-app');
     expect(name).toBe('test-app');
-    expect(sourceRoot).toBe('apps/test-app');
+    expect(sourceRoot).toBe('apps/test-app/src');
   });
 
   it('should delete "libs" folder', async () => {

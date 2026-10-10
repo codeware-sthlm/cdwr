@@ -31,20 +31,24 @@ describe('application generator', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    tree = createTreeWithEmptyWorkspace({ layout: 'apps-libs' });
+    tree = createTreeWithEmptyWorkspace({
+      layout: 'apps-libs',
+      // Prettier, as before Nx 23.3: an oxfmt tree installs oxfmt out of
+      // band, and Jest cannot load it
+      formatter: 'prettier'
+    });
   });
 
   afterEach(() => {
     process.removeAllListeners('SIGTERM');
   });
 
-  // Having a dedicated test for projects roots as other plugins have different root values
-  it('should have same value for project root and source root', async () => {
+  it('should put the source root in the src folder', async () => {
     await applicationGenerator(tree, options);
 
     const { root, sourceRoot } = readProjectConfiguration(tree, options.name);
     expect(root).toEqual(options.directory);
-    expect(root).toEqual(sourceRoot);
+    expect(sourceRoot).toEqual(`${options.directory}/src`);
   });
 
   it('should generate payload files in src folder', async () => {
