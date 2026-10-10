@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 
 import { composePlugins, withNx } from '@nx/next';
 import { withPayload } from '@payloadcms/next/withPayload';
-import { withSentryConfig } from '@sentry/nextjs';
+import { withSentryConfig } from '@sentry/nextjs/config';
 import isCI from 'is-ci';
 
 // Plain TypeScript with no imports, so Node loads it with its types stripped

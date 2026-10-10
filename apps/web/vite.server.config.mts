@@ -1,5 +1,5 @@
-import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { defineConfig } from 'vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   root: __dirname,
@@ -18,7 +18,7 @@ export default defineConfig({
       external: ['./build/server/index.js']
     }
   },
-  plugins: [nxViteTsPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../tsconfig.base.json'] })],
   // Exlude public directory from the build
   publicDir: false
 });
