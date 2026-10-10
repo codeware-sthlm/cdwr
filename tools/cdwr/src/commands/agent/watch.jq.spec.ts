@@ -212,7 +212,8 @@ describe('pr_state', () => {
     ).toEqual({
       state: 'open',
       removedAt: '2026-01-01T00:00:00Z',
-      removedReason: 'FAILED_CHECKS'
+      removedReason: 'FAILED_CHECKS',
+      unresolved: 0
     });
   });
 
@@ -220,8 +221,51 @@ describe('pr_state', () => {
     expect(run('pr_state', pr())).toEqual({
       state: 'open',
       removedAt: null,
-      removedReason: null
+      removedReason: null,
+      unresolved: 0
     });
+  });
+
+  const thread = (resolved: boolean, type: string, body: string) => ({
+    isResolved: resolved,
+    comments: { nodes: [{ author: { __typename: type }, body }] }
+  });
+  it.each([
+    ['a person spoke last', [thread(false, 'User', 'Please rename')], 1],
+    ['resolved threads', [thread(true, 'User', 'Please rename')], 0],
+    ['Copilot threads', [thread(false, 'Bot', 'Consider…')], 0],
+    [
+      'threads the agent left open',
+      [thread(false, 'User', '**Agent:** My reading: …')],
+      0
+    ],
+    [
+      'a deleted author counts as a person',
+      [
+        {
+          isResolved: false,
+          comments: { nodes: [{ author: null, body: 'x' }] }
+        }
+      ],
+      1
+    ],
+    [
+      'several',
+      [
+        thread(false, 'User', 'a'),
+        thread(false, 'User', 'b'),
+        thread(false, 'Bot', 'c')
+      ],
+      2
+    ]
+  ])('counts unresolved review threads: %s', (_name, nodes, expected) => {
+    expect(
+      (
+        run('pr_state', pr({ reviewThreads: { nodes } })) as {
+          unresolved: number;
+        }
+      ).unresolved
+    ).toBe(expected);
   });
 });
 
@@ -230,6 +274,7 @@ describe('step', () => {
     state: string;
     removedAt: string | null;
     removedReason: string | null;
+    unresolved?: number;
   };
   type Prev = { pr: number; state: string; removedAt: string | null } | null;
 
@@ -391,6 +436,12 @@ describe('step', () => {
   });
 
   describe('entry', () => {
+    it('carries the unresolved review threads', () => {
+      expect(
+        step(now('open', { unresolved: 2 }), null).entry['unresolved']
+      ).toBe(2);
+    });
+
     it('records pr, state, removedAt and at', () => {
       expect(
         step(
@@ -404,6 +455,7 @@ describe('step', () => {
         pr: 5,
         state: 'queued',
         removedAt: '2026-04-01T00:00:00Z',
+        unresolved: 0,
         at: '2026-05-01T00:00:00Z'
       });
     });
@@ -415,6 +467,7 @@ describe('step', () => {
         pr: 5,
         state: 'open',
         removedAt: '2026-03-01T00:00:00Z',
+        unresolved: 0,
         at: '2026-05-01T00:00:00Z'
       });
     });
@@ -482,5 +535,526 @@ describe('prune', () => {
 
   it('null input gives {}', () => {
     expect(run('prune(["COD-1"])', null)).toEqual({});
+  });
+});
+
+describe('epoch', () => {
+  it.each([
+    ['plain', '2026-10-10T18:49:25Z', 1791658165],
+    ['with millis', '2026-10-10T18:49:25.765Z', 1791658165],
+    ['without seconds', '2026-10-10T18:49Z', 1791658140]
+  ])('%s', (_name, iso, expected) => {
+    expect(run(`"${iso}" | epoch`)).toBe(expected);
+  });
+});
+
+describe('attended picks', () => {
+  const NOW = Date.parse('2026-10-11T12:00:00Z') / 1000;
+  const iso = (secondsAgo: number) =>
+    new Date((NOW - secondsAgo) * 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+  const HOUR = 3600;
+  const DAY = 86400;
+
+  type Node = ReturnType<typeof node>;
+  const node = (
+    id: string,
+    label: string | null,
+    over: Record<string, unknown> = {}
+  ) => ({
+    identifier: id,
+    priority: 3,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    completedAt: null as string | null,
+    state: { type: 'unstarted' },
+    labels: { nodes: label ? [{ name: label }] : [] },
+    description: null as string | null,
+    comments: { nodes: [] as Array<{ body: string; createdAt: string }> },
+    inverseRelations: { nodes: [] as unknown[] },
+    ...over
+  });
+  const ready = (id: string, over: Record<string, unknown> = {}) =>
+    node(id, 'agent:ready', over);
+  const claimLine = (ago: number, path = '`/work/cod-1`', id = 'sess-1') =>
+    `Status\n\n**Claim:** ${id} · ${path} · ${iso(ago).slice(0, 16)}Z\n**Next:** step 2\n`;
+  const prReady = (checklist = true, createdAt = '2026-09-01T00:00:00Z') => ({
+    body: `**Agent: PR ready**: ${PR}/1\n\n${checklist ? 'Hand-off checklist:\n- [ ] check' : 'Done'}`,
+    createdAt
+  });
+  const review = (id: string, over: Record<string, unknown> = {}) =>
+    node(id, 'agent:review', over);
+
+  const attended = (
+    issues: Node[],
+    limit = 5,
+    watch: Record<string, unknown> = {}
+  ) =>
+    run(`attended(${NOW}; ${limit}; ${JSON.stringify(watch)})`, issues) as {
+      verdict: string;
+      ticket: string | null;
+      reason: string | null;
+      detail: string | null;
+      waiting: string[];
+      used: number;
+      limit: number;
+    };
+  const line = (issues: Node[], limit = 5, watch = {}) =>
+    run(
+      `attended(${NOW}; ${limit}; ${JSON.stringify(watch)}) | attended_line`,
+      issues
+    );
+
+  describe('claim', () => {
+    it.each([
+      [
+        'backticked path',
+        'x\n**Claim:** s1 · `/a/b` · 2026-10-11T10:30Z',
+        's1'
+      ],
+      ['plain path', '**Claim:** s2 · /a/b · 2026-10-11T10:30Z\nmore', 's2']
+    ])('%s', (_name, description, id) => {
+      expect(run('claim', node('COD-1', null, { description }))).toEqual({
+        id,
+        at: Date.parse('2026-10-11T10:30:00Z') / 1000
+      });
+    });
+
+    it.each([null, 'no claim here', '**Claim:** broken'])(
+      'null for %j',
+      (description) => {
+        expect(run('claim', node('COD-1', null, { description }))).toBeNull();
+      }
+    );
+  });
+
+  it('next_line is trimmed or null', () => {
+    expect(
+      run(
+        'next_line',
+        node('A', null, { description: 'x\n**Next:** go on  \ny' })
+      )
+    ).toBe('go on');
+    expect(run('next_line', node('A', null))).toBeNull();
+  });
+
+  describe('running and take over', () => {
+    it('fresh claim is running with next line', () => {
+      const r = attended([
+        node('COD-1', 'agent:working', { description: claimLine(HOUR) }),
+        ready('COD-2')
+      ]);
+      expect(r).toMatchObject({
+        verdict: 'running',
+        ticket: 'COD-1',
+        reason: 'working',
+        detail: 'step 2'
+      });
+    });
+
+    it('newest of several fresh claims', () => {
+      const r = attended([
+        node('COD-1', 'agent:working', { description: claimLine(HOUR) }),
+        node('COD-2', 'agent:working', { description: claimLine(600) })
+      ]);
+      expect(r.ticket).toBe('COD-2');
+    });
+
+    it('stale claim is a take over with age in hours', () => {
+      const r = attended([
+        node('COD-1', 'agent:working', {
+          description: claimLine(3 * HOUR + 60)
+        })
+      ]);
+      expect(r).toMatchObject({
+        verdict: 'run',
+        reason: 'take over',
+        detail: 'claim 3 h old'
+      });
+    });
+
+    it('exactly 2 h is stale', () => {
+      expect(
+        attended([
+          node('COD-1', 'agent:working', { description: claimLine(2 * HOUR) })
+        ]).verdict
+      ).toBe('run');
+    });
+
+    it('missing claim is a take over', () => {
+      const r = attended([node('COD-1', 'agent:working')]);
+      expect(r).toMatchObject({ reason: 'take over', detail: 'no claim' });
+    });
+
+    it('running beats a stale take over', () => {
+      const r = attended([
+        node('COD-1', 'agent:working', { description: claimLine(5 * HOUR) }),
+        node('COD-2', 'agent:working', { description: claimLine(60) })
+      ]);
+      expect(r.verdict).toBe('running');
+      expect(r.ticket).toBe('COD-2');
+    });
+  });
+
+  describe('answered', () => {
+    const input = (...bodies: string[]) =>
+      node('COD-3', 'agent:needs-input', {
+        comments: {
+          nodes: bodies.map((body, i) => ({
+            body,
+            createdAt: `2026-10-0${i + 1}T00:00:00.000Z`
+          }))
+        }
+      });
+
+    it('human comment last is answered', () => {
+      const r = attended([input('**Agent: question**', ' Yes, go ahead ')]);
+      expect(r).toMatchObject({
+        verdict: 'run',
+        ticket: 'COD-3',
+        reason: 'answered'
+      });
+    });
+
+    it('agent comment last is not answered', () => {
+      const r = attended([input('hello', '**Agent: question** ok?')]);
+      expect(r.verdict).toBe('idle');
+      expect(r.waiting).toEqual(['COD-3 input']);
+    });
+
+    it('no comments is not answered', () => {
+      expect(attended([input()]).verdict).toBe('idle');
+    });
+
+    it('newest by createdAt, not array order', () => {
+      const n = input();
+      n.comments.nodes = [
+        { body: 'answer', createdAt: '2026-10-05T00:00:00Z' },
+        { body: '**Agent** q', createdAt: '2026-10-01T00:00:00Z' }
+      ];
+      expect(attended([n]).reason).toBe('answered');
+    });
+  });
+
+  describe('review feedback', () => {
+    const rev = (...comments: Array<{ body: string; createdAt: string }>) =>
+      review('COD-4', { comments: { nodes: comments } });
+
+    it('human comment after PR ready', () => {
+      const r = attended([
+        rev(prReady(false), {
+          body: 'fix this',
+          createdAt: '2026-09-02T00:00:00Z'
+        })
+      ]);
+      expect(r).toMatchObject({
+        verdict: 'run',
+        ticket: 'COD-4',
+        reason: 'review feedback'
+      });
+    });
+
+    it('human comment before PR ready is not feedback', () => {
+      const r = attended([
+        rev(prReady(false, '2026-09-02T00:00:00Z'), {
+          body: 'earlier',
+          createdAt: '2026-09-01T00:00:00Z'
+        })
+      ]);
+      expect(r.verdict).toBe('idle');
+    });
+
+    it('agent comment after PR ready is not feedback', () => {
+      const r = attended([
+        rev(prReady(false), {
+          body: '**Agent: note**',
+          createdAt: '2026-09-02T00:00:00Z'
+        })
+      ]);
+      expect(r.verdict).toBe('idle');
+    });
+
+    it('human comment without any PR ready is not feedback', () => {
+      expect(
+        attended([rev({ body: 'hi', createdAt: '2026-09-02T00:00:00.500Z' })])
+          .verdict
+      ).toBe('idle');
+    });
+
+    it('unresolved review threads from the watch', () => {
+      const r = attended([rev(prReady(false))], 5, {
+        'COD-4': { unresolved: 2 }
+      });
+      expect(r.reason).toBe('review feedback');
+    });
+
+    it.each([{ 'COD-4': { unresolved: 0 } }, { 'COD-4': {} }, {}])(
+      'no unresolved in %j',
+      (watch) => {
+        expect(attended([rev(prReady(false))], 5, watch).verdict).toBe('idle');
+      }
+    );
+
+    it('a completed review ticket is not feedback', () => {
+      const r = attended(
+        [review('COD-4', { state: { type: 'completed' } })],
+        5,
+        { 'COD-4': { unresolved: 1 } }
+      );
+      expect(r.verdict).toBe('idle');
+    });
+  });
+
+  describe('limit', () => {
+    const done = (id: string, daysAgo: number) =>
+      review(id, {
+        state: { type: 'completed' },
+        completedAt: iso(daysAgo * DAY),
+        comments: { nodes: [prReady()] }
+      });
+    const used = (issues: Node[], limit = 5) =>
+      run(`limit_used(${NOW}; ${limit})`, issues) as {
+        used: number;
+        open: string[];
+        handoffs: string[];
+      };
+
+    it('caps hand-off tickets at limit - 3', () => {
+      const r = used([
+        review('COD-1'),
+        done('COD-2', 1),
+        done('COD-3', 2),
+        done('COD-4', 3),
+        done('COD-5', 4)
+      ]);
+      expect(r).toEqual({
+        used: 3,
+        open: ['COD-1'],
+        handoffs: ['COD-2', 'COD-3', 'COD-4', 'COD-5']
+      });
+    });
+
+    it('counts open reviews fully', () => {
+      expect(used([review('A'), review('B'), review('C')]).used).toBe(3);
+    });
+
+    it('ignores hand-offs completed over 14 days ago', () => {
+      expect(used([done('A', 15)]).used).toBe(0);
+      expect(used([done('A', 13)]).used).toBe(1);
+    });
+
+    it('ignores completed tickets without hand-offs', () => {
+      const n = done('A', 1);
+      n.comments.nodes = [prReady(false)];
+      expect(used([n]).used).toBe(0);
+    });
+
+    it('ignores non-review tickets', () => {
+      expect(used([ready('A'), node('B', 'agent:needs-input')]).used).toBe(0);
+    });
+
+    it('limit reached is idle even with a ready ticket', () => {
+      const r = attended(
+        [review('COD-1'), review('COD-2'), review('COD-3'), ready('COD-9')],
+        3
+      );
+      expect(r).toMatchObject({ verdict: 'idle', used: 3, limit: 3 });
+    });
+
+    it('limit reached still yields to answered and feedback', () => {
+      const r = attended(
+        [
+          review('COD-1'),
+          review('COD-2'),
+          review('COD-3'),
+          node('COD-7', 'agent:needs-input', {
+            comments: {
+              nodes: [{ body: 'yes', createdAt: '2026-10-01T00:00:00Z' }]
+            }
+          })
+        ],
+        3
+      );
+      expect(r.reason).toBe('answered');
+    });
+  });
+
+  describe('ready', () => {
+    it('picks a ready ticket', () => {
+      expect(attended([ready('COD-9')])).toMatchObject({
+        verdict: 'run',
+        ticket: 'COD-9',
+        reason: 'ready'
+      });
+    });
+
+    it('skips blocked, keeps unblocked or resolved blockers', () => {
+      const rel = (type: string, state: string) => ({
+        inverseRelations: {
+          nodes: [{ type, issue: { state: { type: state } } }]
+        }
+      });
+      expect(attended([ready('A', rel('blocks', 'started'))]).verdict).toBe(
+        'idle'
+      );
+      expect(attended([ready('A', rel('blocks', 'completed'))]).ticket).toBe(
+        'A'
+      );
+      expect(attended([ready('A', rel('blocks', 'canceled'))]).ticket).toBe(
+        'A'
+      );
+      expect(attended([ready('A', rel('related', 'started'))]).ticket).toBe(
+        'A'
+      );
+    });
+
+    it.each(['nx-plugins', 'enjinex'])('skips other repo %s', (repo) => {
+      const n = ready('A', {
+        labels: { nodes: [{ name: 'agent:ready' }, { name: repo }] }
+      });
+      expect(attended([n]).verdict).toBe('idle');
+    });
+
+    it('skips completed ready tickets', () => {
+      expect(
+        attended([ready('A', { state: { type: 'completed' } })]).verdict
+      ).toBe('idle');
+    });
+
+    it('other-repo working ticket is ignored', () => {
+      const n = node('A', 'agent:working', {
+        labels: { nodes: [{ name: 'agent:working' }, { name: 'enjinex' }] }
+      });
+      expect(attended([n]).verdict).toBe('idle');
+    });
+  });
+
+  describe('queue_order', () => {
+    const order = (issues: Node[]) =>
+      (run('sort_by(queue_order) | map(.identifier)', issues) as string[]).join(
+        ' '
+      );
+    const st = (type: string) => ({ state: { type } });
+
+    it('status first', () => {
+      expect(
+        order([
+          ready('T', st('triage')),
+          ready('B', st('backlog')),
+          ready('U', st('unstarted')),
+          ready('S', st('started'))
+        ])
+      ).toBe('S U B T');
+    });
+
+    it('priority next, none last', () => {
+      expect(
+        order([
+          ready('N', { priority: 0 }),
+          ready('L', { priority: 4 }),
+          ready('U', { priority: 1 }),
+          ready('M', { priority: 3 })
+        ])
+      ).toBe('U M L N');
+    });
+
+    it('oldest first last', () => {
+      expect(
+        order([
+          ready('new', { createdAt: '2026-05-01T00:00:00.000Z' }),
+          ready('old', { createdAt: '2026-02-01T00:00:00.000Z' })
+        ])
+      ).toBe('old new');
+    });
+
+    it('status beats priority', () => {
+      expect(
+        order([
+          ready('hi', { priority: 1, ...st('backlog') }),
+          ready('lo', { priority: 4, ...st('started') })
+        ])
+      ).toBe('lo hi');
+    });
+
+    it('attended takes the first in order', () => {
+      expect(
+        attended([
+          ready('A', { priority: 3 }),
+          ready('B', { priority: 1 }),
+          ready('C', { priority: 0 })
+        ]).ticket
+      ).toBe('B');
+    });
+  });
+
+  describe('attended_line', () => {
+    const waitingTicket = (id: string) =>
+      node(id, 'agent:needs-input', {
+        comments: {
+          nodes: [{ body: '**Agent** q', createdAt: '2026-10-01T00:00:00Z' }]
+        }
+      });
+    const handoffTicket = (id: string) =>
+      review(id, {
+        state: { type: 'completed' },
+        completedAt: iso(DAY),
+        comments: { nodes: [prReady()] }
+      });
+
+    it('running with and without detail', () => {
+      expect(
+        line([node('COD-545', 'agent:working', { description: claimLine(60) })])
+      ).toBe('running: COD-545 · step 2');
+      expect(
+        line([
+          node('COD-545', 'agent:working', {
+            description: `**Claim:** s · p · ${iso(60).slice(0, 16)}Z`
+          })
+        ])
+      ).toBe('running: COD-545');
+    });
+
+    it('run wordings', () => {
+      expect(
+        line([
+          node('COD-543', 'agent:needs-input', {
+            comments: {
+              nodes: [{ body: 'ok', createdAt: '2026-10-01T00:00:00Z' }]
+            }
+          })
+        ])
+      ).toBe('run now: COD-543 answered');
+      expect(
+        line([review('COD-544')], 5, { 'COD-544': { unresolved: 1 } })
+      ).toBe('run now: COD-544 review feedback');
+      expect(line([ready('COD-546')])).toBe('run now: COD-546 ready');
+      expect(
+        line([
+          node('COD-540', 'agent:working', { description: claimLine(3 * HOUR) })
+        ])
+      ).toBe('run now: take over COD-540 (claim 3 h old)');
+      expect(line([node('COD-540', 'agent:working')])).toBe(
+        'run now: take over COD-540 (no claim)'
+      );
+    });
+
+    it('idle lists what waits, in order', () => {
+      expect(
+        line([handoffTicket('COD-3'), review('COD-2'), waitingTicket('COD-1')])
+      ).toBe(
+        'idle: waits on COD-1 input, COD-2 PR, COD-3 hand-offs; limit 2/5'
+      );
+    });
+
+    it('idle with nothing waiting', () => {
+      expect(line([])).toBe('idle: nothing waiting; limit 0/5');
+    });
+
+    it('idle because the limit is reached keeps the wording', () => {
+      expect(
+        line(
+          [review('COD-1'), review('COD-2'), review('COD-3'), ready('COD-9')],
+          3
+        )
+      ).toBe('idle: waits on COD-1 PR, COD-2 PR, COD-3 PR; limit 3/3');
+    });
   });
 });
