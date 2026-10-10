@@ -275,6 +275,11 @@ describe('renderActivityDocument', () => {
     expect(doc).toContain('| a \\| b c |');
   });
 
+  it('escapes backslashes before pipes', () => {
+    const doc = renderActivityDocument([event({ change: 'path\\' })], opts);
+    expect(doc).toContain('| path\\\\ |');
+  });
+
   it('mentions what the cap left out only when something was', () => {
     const line = 'Older events beyond the newest 1 are left out (4).';
     const cut = renderActivityDocument([event()], { ...opts, dropped: 4 });
