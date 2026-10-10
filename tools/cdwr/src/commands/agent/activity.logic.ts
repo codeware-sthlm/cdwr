@@ -163,6 +163,10 @@ export const collectEvents = (
 };
 
 /** Backslash first, so a cell ending in `\` can't swallow the delimiter after it */
+/** `1 event`, `2 events` */
+export const plural = (n: number, noun: string): string =>
+  `${n} ${noun}${n === 1 ? '' : 's'}`;
+
 const cell = (text: string): string =>
   text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 
@@ -190,7 +194,7 @@ export const renderActivityDocument = (
   ].join('\n');
 
   return [
-    `Updated: ${updated} · last ${windowDays} days · ${events.length} events`,
+    `Updated: ${updated} · last ${plural(windowDays, 'day')} · ${plural(events.length, 'event')}`,
     'Written by the agent queue scheduler from Linear\'s issue history and its own runs. Times are local. Actor "agent" is a comment marked `**Agent`; the agent and Håkan otherwise write through the same Linear account.',
     ...(dropped > 0
       ? [

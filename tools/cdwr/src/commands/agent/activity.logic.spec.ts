@@ -6,6 +6,7 @@ import {
   collectEvents,
   commentEvents,
   historyEvents,
+  plural,
   renderActivityDocument,
   runEvents
 } from './activity.logic';
@@ -259,7 +260,7 @@ describe('renderActivityDocument', () => {
   it('renders the contract', () => {
     expect(renderActivityDocument([event()], opts)).toBe(
       [
-        'Updated: 2026-10-10 20:30 · last 7 days · 1 events',
+        'Updated: 2026-10-10 20:30 · last 7 days · 1 event',
         '',
         'Written by the agent queue scheduler from Linear\'s issue history and its own runs. Times are local. Actor "agent" is a comment marked `**Agent`; the agent and Håkan otherwise write through the same Linear account.',
         '',
@@ -285,6 +286,15 @@ describe('renderActivityDocument', () => {
     const cut = renderActivityDocument([event()], { ...opts, dropped: 4 });
     expect(cut).toContain(`the same Linear account.\n\n${line}\n\n| When`);
     expect(renderActivityDocument([event()], opts)).not.toContain('Older');
+  });
+
+  it.each([
+    [0, 'event', '0 events'],
+    [1, 'event', '1 event'],
+    [1, 'day', '1 day'],
+    [7, 'day', '7 days']
+  ])('plural(%i, %s) is %s', (n, noun, expected) => {
+    expect(plural(n, noun)).toBe(expected);
   });
 
   it('prints the header alone without events', () => {
