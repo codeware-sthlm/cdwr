@@ -1,11 +1,11 @@
-import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import react from '@vitejs/plugin-react';
+import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../../../node_modules/.vite/libs/app-cms/ui/components',
-  plugins: [react(), nxViteTsPaths()],
+  plugins: [react(), tsconfigPaths()],
   test: {
     name: 'app-cms-ui-components',
     watch: false,

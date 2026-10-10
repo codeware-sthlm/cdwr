@@ -1,10 +1,10 @@
-import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../../../node_modules/.vite/libs/app-cms/feature/env-loader',
-  plugins: [nxViteTsPaths()],
+  plugins: [tsconfigPaths()],
   test: {
     name: 'app-cms-util-env-loader',
     watch: false,

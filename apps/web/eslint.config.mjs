@@ -61,7 +61,6 @@ export default [
             'payload',
             '@payloadcms/plugin-form-builder',
             // Dev dependencies
-            '@nx/vite',
             '@storybook/react-vite',
             'dotenv',
             'is-ci',
@@ -71,6 +70,7 @@ export default [
             '@vitejs/plugin-react',
             'jsonc-eslint-parser',
             'vite',
+            'vite-tsconfig-paths',
             'vitest'
           ],
           ignoredFiles: [
