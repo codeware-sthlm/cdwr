@@ -203,6 +203,12 @@ export const localDay = (timestamp: string): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
+/** `2026-10-07 00:13` in local time, like the runs document */
+export const localMinute = (d: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 /** Sums replies since a moment by day, by ticket and overall; cents only at output */
 export const aggregate = (
   replies: Reply[],

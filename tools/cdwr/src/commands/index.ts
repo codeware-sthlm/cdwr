@@ -203,6 +203,13 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/usage').then((m) => m.default)
   },
   {
+    path: ['agent', 'activity'],
+    summary:
+      "The activity document from Linear's issue history and the runs file",
+    danger: 'read',
+    load: () => import('./agent/activity').then((m) => m.default)
+  },
+  {
     path: ['agent', 'run'],
     summary: 'Start a planning run now',
     danger: 'mutate',

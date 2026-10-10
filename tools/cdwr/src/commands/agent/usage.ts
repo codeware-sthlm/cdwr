@@ -14,6 +14,7 @@ import {
   dedupeReplies,
   familyBase,
   localDay,
+  localMinute,
   normaliseModel,
   renderUsageDocument,
   roleOf,
@@ -204,12 +205,6 @@ export default defineCommand({
     };
   }
 });
-
-/** `2026-10-07 00:13` in local time, like the runs document */
-const localMinute = (d: Date): string => {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
 
 const dollars = (n: number): string => `$${n.toFixed(2)}`;
 
