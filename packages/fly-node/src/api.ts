@@ -12,6 +12,11 @@
  */
 export { FlyApi, FlyApiError, type FlyApiConfig } from './lib/fly-api.class';
 export {
+  type AppIpAddress,
+  AppIpAddressesApiResponseSchema,
+  AppIpAddressSchema
+} from './lib/schemas/app-ip-addresses.schema';
+export {
   type Certificate,
   CertificateApiResponseSchema,
   CertificateListApiResponseSchema,

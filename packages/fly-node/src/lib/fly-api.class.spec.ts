@@ -284,6 +284,58 @@ describe('FlyApi', () => {
     await expect(api().certs.list('gone')).resolves.toEqual([]);
   });
 
+  it('lists addresses with the shared v4 folded in, as the cli does', async () => {
+    fetchMock.mockReturnValue(
+      respond({
+        data: {
+          app: {
+            sharedIpAddress: '192.0.2.10',
+            ipAddresses: {
+              nodes: [
+                { address: '2001:db8::1', type: 'v6' },
+                { address: 'fdaa:0:1::3', type: 'private_v6' }
+              ]
+            }
+          }
+        }
+      })
+    );
+
+    await expect(api().ips.list('cdwr-web-moon')).resolves.toEqual([
+      { address: '192.0.2.10', type: 'shared_v4' },
+      { address: '2001:db8::1', type: 'v6' },
+      { address: 'fdaa:0:1::3', type: 'private_v6' }
+    ]);
+  });
+
+  it('lists no shared v4 when the app has none, and nothing for a missing app', async () => {
+    fetchMock.mockReturnValue(
+      respond({
+        data: {
+          app: {
+            sharedIpAddress: null,
+            ipAddresses: { nodes: [{ address: '192.0.2.20', type: 'v4' }] }
+          }
+        }
+      })
+    );
+    await expect(api().ips.list('cdwr-web-moon')).resolves.toEqual([
+      { address: '192.0.2.20', type: 'v4' }
+    ]);
+
+    fetchMock.mockReturnValue(respond({ data: { app: null } }));
+    await expect(api().ips.list('gone')).resolves.toEqual([]);
+
+    fetchMock.mockReturnValue(
+      respond({
+        errors: [
+          { message: 'Could not find App', extensions: { code: 'NOT_FOUND' } }
+        ]
+      })
+    );
+    await expect(api().ips.list('gone')).resolves.toEqual([]);
+  });
+
   it('surfaces a GraphQL error rather than failing to parse', async () => {
     // Fly rejects with 200 and an errors array — trusting the status alone
     // would turn "permission denied" into a confusing parse failure

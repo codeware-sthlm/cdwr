@@ -1,5 +1,19 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`fly-node schema validation > validates all schemas against fixtures > AppIpAddressesApiResponseSchema transformed shape 1`] = `
+{
+  "ipAddresses": {
+    "nodes": [
+      {
+        "address": "2001:db8:1::19b:2e4e:0",
+        "type": "v6",
+      },
+    ],
+  },
+  "sharedIpAddress": "192.0.2.10",
+}
+`;
+
 exports[`fly-node schema validation > validates all schemas against fixtures > AppsCreateTransformedResponseSchema transformed shape 1`] = `
 {
   "id": "test-app",
