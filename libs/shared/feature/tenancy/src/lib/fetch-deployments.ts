@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import { withInfisical } from '@codeware/shared/feature/infisical';
+import { isNotFound, withInfisical } from '@codeware/shared/feature/infisical';
 
 import {
   type DeploymentsMap,
@@ -34,6 +34,7 @@ export async function fetchDeployments(
     return { deployments: {}, skipped: [] };
   }
 
+  // An environment without the root has nothing to deploy from it
   const read = (path: string) =>
     withInfisical({
       clientId,
@@ -43,6 +44,9 @@ export async function fetchDeployments(
       environment,
       filter: { path, recurse: true },
       groupByFolder: true
+    }).catch((error: unknown) => {
+      if (isNotFound(error)) return [];
+      throw error;
     });
 
   try {

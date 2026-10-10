@@ -26,6 +26,9 @@ describe('fetchDeployments', () => {
     vi.mocked(infisicalModule.withInfisical).mockImplementation(
       mockWithInfisical as never
     );
+    vi.mocked(infisicalModule.isNotFound).mockImplementation(
+      (error) => (error as { status?: number }).status === 404
+    );
   });
 
   it('skips Infisical when no apps are provided', async () => {
@@ -102,6 +105,26 @@ describe('fetchDeployments', () => {
     expect(core.info).toHaveBeenCalledWith(
       '[fetch-deployments] Total: 2 deployment(s) enabled, 1 skipped'
     );
+  });
+
+  it('plans the other root when one does not exist in the environment', async () => {
+    mockWithInfisical.mockImplementation(async ({ filter }) => {
+      if (filter.path === '/tenants') {
+        throw Object.assign(new Error('not found'), { status: 404 });
+      }
+      return [{ path: '/apps/cms', secrets: [{ ...on, secretMetadata: [] }] }];
+    });
+
+    const result = await fetchDeployments(config, ['cms']);
+
+    expect(result).toEqual({ deployments: { cms: [{}] }, skipped: [] });
+  });
+
+  it('rethrows an error that is not a missing root', async () => {
+    const error = Object.assign(new Error('forbidden'), { status: 403 });
+    mockWithInfisical.mockRejectedValue(error);
+
+    await expect(fetchDeployments(config, ['cms'])).rejects.toBe(error);
   });
 
   it('logs and rethrows errors', async () => {
