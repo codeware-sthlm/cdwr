@@ -76,6 +76,15 @@ describe('run.sh', () => {
     );
   });
 
+  // The verdict comes from watch.jq, never from logic copied into run.sh
+  it('computes the attended line with watch.jq', () => {
+    expect(SCRIPT).toContain(
+      `'include "watch"; .data.issues.nodes | attended($now; 5; $watch)'`
+    );
+    expect(SCRIPT).toMatch(/^attended$/m);
+    expect(SCRIPT).toContain('print -r -- "attended: $attended_line"');
+  });
+
   it('publishes the activity document from cdwr agent activity', () => {
     expect(SCRIPT).toMatch(/^ACTIVITY_TITLE='Agent queue: activity'$/m);
     expect(SCRIPT).toContain(
@@ -95,10 +104,10 @@ describe('run.sh', () => {
     );
   });
 
-  it('publishes the job line after the last run', () => {
-    expect(SCRIPT).toMatch(
-      /Last run: \\\(\$last\)\\n\\n\\\(\$job\)\\n\\nWritten/
-    );
+  it('publishes the job line after the last run and the attended line', () => {
+    expect(SCRIPT).toContain('"Last run: \\($last)\\n\\n"');
+    expect(SCRIPT).toContain('"Attended: \\($attended)\\n\\n"');
+    expect(SCRIPT).toContain('+ "\\($job)\\n\\nWritten');
     expect(SCRIPT).toMatch(/--arg job "\$\(job_line\)"/);
   });
 });

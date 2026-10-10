@@ -116,20 +116,26 @@ job_line() {
 publish_runs() {
   $check && return 0
   setopt local_options no_err_exit
-  local stamp="$HOME_DIR/runs-published-at" last=0 content
-  if (( $(rows) <= rows_at_start )); then
+  local stamp="$HOME_DIR/runs-published-at" seen="$HOME_DIR/attended-published" last=0 content
+  # A changed Attended line publishes at once, so it is never more than one run old
+  # (an empty line means no verdict this run, which is no change)
+  if (( $(rows) <= rows_at_start )) && [[ -z "$attended_line" || "$attended_line" == "$(cat "$seen" 2>/dev/null)" ]]; then
     last="$(cat "$stamp" 2>/dev/null)"
     [[ "$last" == <-> ]] || last=0
     (( $(date +%s) - last > 3600 )) || return 0
   fi
   [[ -f "$RUNS" ]] && tail -n 20 "$RUNS" > "$RUNS.tmp" && mv "$RUNS.tmp" "$RUNS"
-  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" '
+  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" --arg attended "$attended_line" '
     def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
-    "Last run: \($last)\n\n\($job)\n\nWritten by the agent queue scheduler after every run. Idle runs update the lines above at most once an hour.\n\n"
+    "Last run: \($last)\n\n"
+    + (if $attended == "" then "" else "Attended: \($attended)\n\n" end)
+    + "\($job)\n\nWritten by the agent queue scheduler after every run. Idle runs update the lines above at most once an hour.\n\n"
     + "| When | Outcome | Ticket | Detail |\n| -- | -- | -- | -- |\n"
     + (reverse | map("| \(.when | cell) | \(.outcome | cell) | \(.ticket | cell) | \(.detail | cell) |") | join("\n"))
   ')" || { note "warn: runs document: could not render"; return 0; }
   publish_doc "$DOC_TITLE" "$HOME_DIR/runs-doc-id" "$stamp" "$content"
+  [[ -n "$attended_line" ]] && print -r -- "$attended_line" > "$seen"
+  return 0
 }
 
 # The usage document from `cdwr agent usage`, at most once an hour. The CLI runs from $REPO,
@@ -290,6 +296,9 @@ query($n: Int!) {
       state
       mergeQueueEntry { state }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+      reviewThreads(first: 100) {
+        nodes { isResolved comments(last: 1) { nodes { author { __typename } body } } }
+      }
       timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
         nodes { ... on RemovedFromMergeQueueEvent { reason createdAt } }
       }
@@ -352,6 +361,55 @@ fi
 if ! $check; then
   err="$(watch_prs)" || { note "warn: watch failed (${err:-unknown})"; record warn "" "watch failed: ${err:-unknown}"; }
 fi
+
+# What an attended /work-queue session would do now, from watch.jq's `attended` (the computed
+# form of the skill's "What to take next"). It reads watch.json, so it runs after the watch;
+# --check uses the last run's watch.json. A failure leaves the line empty, never stops the run.
+read -r -d '' ATTENDED_QUERY <<'GQL' || true
+query {
+  issues(first: 100, filter: {
+    team: { key: { eq: "COD" } }
+    labels: { some: { name: { startsWith: "agent:" } } }
+    state: { type: { neq: "canceled" } }
+    or: [{ completedAt: { null: true } }, { completedAt: { gt: "-P14D" } }]
+  }) {
+    nodes {
+      identifier priority createdAt completedAt description
+      state { type }
+      labels { nodes { name } }
+      comments(first: 50, orderBy: createdAt) { nodes { body createdAt } }
+      inverseRelations { nodes { type issue { state { type } } } }
+    }
+  }
+}
+GQL
+attended_line=""
+attended() {
+  setopt local_options no_err_exit
+  local resp state verdict
+  resp="$(linear "$ATTENDED_QUERY")"
+  if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then
+    note "warn: attended: Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
+  fi
+  state="$(jq -c 'if type == "object" then . else {} end' "$HOME_DIR/watch.json" 2>/dev/null || print '{}')"
+  verdict="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" \
+    'include "watch"; .data.issues.nodes | attended($now; 5; $watch)' <<<"$resp")" ||
+    { note "warn: attended: watch.jq failed"; return 0; }
+  attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
+  $check && { print -r -- "attended: $attended_line"; return 0; }
+  # Once per change, and not for a fresh agent:ready ticket: this scheduler plans that itself
+  local file="$HOME_DIR/attended.json" key prev
+  key="$(jq -c '{verdict, ticket, reason}' <<<"$verdict")"
+  prev="$(cat "$file" 2>/dev/null)"
+  if [[ "$key" != "$prev" ]]; then
+    print -r -- "$key" > "$file"
+    if [[ "$(jq -r '.verdict' <<<"$verdict")" == run && "$(jq -r '.reason' <<<"$verdict")" != ready ]]; then
+      note "attended: $attended_line"
+      notice action "Agent queue: run /work-queue now: ${attended_line#run now: }"
+    fi
+  fi
+}
+attended
 
 read -r -d '' QUERY <<'GQL' || true
 query {
