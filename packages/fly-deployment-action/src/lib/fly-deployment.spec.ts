@@ -276,7 +276,7 @@ describe('flyDeployment', () => {
   ): ActionInputs => {
     return {
       apps: getDefaultApps(env),
-      appDetails: {},
+      appDetails: { 'app-one': [{}], 'app-two': [{}] },
       env: [],
       environment: env,
       flyApiToken: 'fly-api-token',
@@ -1006,7 +1006,7 @@ describe('flyDeployment', () => {
       } satisfies ActionOutputs);
     });
 
-    it('should deploy apps with _default tenant (headless mode) without TENANT_ID', async () => {
+    it('should deploy the host before its tenants, without TENANT_ID', async () => {
       setContext('push-main-branch');
       setupMocks();
 
@@ -1020,67 +1020,104 @@ describe('flyDeployment', () => {
             previousVersion: '0.9.0'
           }
         ],
-        appDetails: {
-          cms: [
-            { tenant: '_default' }, // Headless CMS deployment
-            { tenant: 'demo' } // Tenant-scoped CMS
-          ]
-        }
+        appDetails: { cms: [{ tenant: 'demo' }, {}] }
       });
       const result = await flyDeployment(config, true);
 
       expect(getMockFly().deploy).toHaveBeenCalledTimes(2);
 
-      // _default tenant deployment should NOT have TENANT_ID and should use base app name (no suffix)
+      // Host deployment uses the base app name and has no TENANT_ID
       expect(getMockFly().deploy).toHaveBeenCalledWith(
         expect.objectContaining({
-          app: 'app-one-config', // No -_default suffix
+          app: 'app-one-config',
           config: '/apps/app-one/fly.toml',
           env: {
             APP_NAME: 'app-one-config',
             FLY_URL: 'https://app-one-config.fly.dev',
             PR_NUMBER: ''
-            // Note: TENANT_ID should NOT be present
           },
           environment: 'production'
         })
       );
 
-      // Regular tenant deployment should have TENANT_ID
       expect(getMockFly().deploy).toHaveBeenCalledWith(
         expect.objectContaining({
           app: 'app-one-config-demo',
-          config: '/apps/app-one/fly.toml',
-          env: {
-            APP_NAME: 'app-one-config-demo',
-            FLY_URL: 'https://app-one-config-demo.fly.dev',
-            PR_NUMBER: '',
-            TENANT_ID: 'demo'
-          },
-          environment: 'production'
+          env: expect.objectContaining({ TENANT_ID: 'demo' })
         })
       );
 
-      expect(result).toEqual({
-        environment: 'production',
-        projects: [
-          {
-            action: 'deploy',
-            app: 'app-one-config', // No -_default suffix
-            name: 'cms (_default)',
-            projectName: 'cms',
-            url: 'https://app-one-config.fly.dev'
-          },
-          {
-            action: 'deploy',
-            app: 'app-one-config-demo',
-            name: 'cms (demo)',
-            projectName: 'cms',
-            url: 'https://app-one-config-demo.fly.dev'
-          }
-        ]
-      } satisfies ActionOutputs);
+      // Host first, even though the tenant was listed first
+      expect(result.projects.map((p) => p.app)).toEqual([
+        'app-one-config',
+        'app-one-config-demo'
+      ]);
     });
+
+    it('should skip tenants when the host deployment failed', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+      const deploy = vi.fn().mockRejectedValue(new Error('host boom'));
+      const base = mockFly.getMockImplementation() as () => Fly;
+      mockFly.mockImplementation(function () {
+        return { ...base(), deploy } as unknown as Fly;
+      });
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{ tenant: 'demo' }, {}] }
+      });
+      await flyDeployment(config, true).catch(() => undefined);
+
+      expect(deploy).toHaveBeenCalledTimes(1);
+      expect(deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-one-config' })
+      );
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        expect.stringContaining('host deployment')
+      );
+    });
+
+    it('should deploy a host-only app once under the base name without TENANT_ID', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{}] }
+      });
+      await flyDeployment(config, true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      const call = vi.mocked(getMockFly().deploy).mock.calls[0][0];
+      expect(call.app).toBe('app-one-config');
+      expect(call.env).not.toHaveProperty('TENANT_ID');
+    });
+
+    it.each([
+      ['is missing from appDetails', {}],
+      ['has no deployments', { 'app-two': [] }]
+    ])(
+      'should skip an app that %s and still deploy the others',
+      async (_label, appDetails) => {
+        setContext('push-main-branch');
+        setupMocks();
+
+        const config = setupTest({
+          appDetails: { 'app-one': [{}], ...appDetails }
+        });
+        const result = await flyDeployment(config, true);
+
+        expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+        expect(getMockFly().deploy).toHaveBeenCalledWith(
+          expect.objectContaining({ app: 'app-one-config' })
+        );
+        expect(result.projects.map((p) => p.projectName)).toEqual(['app-one']);
+        expect(mockCoreWarning).toHaveBeenCalledWith(
+          expect.stringContaining('Skipping app-two')
+        );
+      }
+    );
   });
 
   describe('workflow_dispatch event', () => {

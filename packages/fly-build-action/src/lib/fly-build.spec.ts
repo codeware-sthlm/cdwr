@@ -88,7 +88,7 @@ describe('flyBuild', () => {
 
   const setupTest = (configOverride?: Partial<ActionInputs>): ActionInputs => ({
     apps: [app('app-one')],
-    appDetails: {},
+    appDetails: { 'app-one': [{}], 'app-two': [{}] },
     buildArgs: [],
     flyApiToken: 'fly-api-token',
     flyOrg: 'fly-org',
@@ -239,18 +239,33 @@ describe('flyBuild', () => {
       );
     });
 
-    it('should not add a tenant suffix for the reserved _default tenant', async () => {
+    it('should build a host app under the base name when it has a host entry', async () => {
       setContext('push', {}, 'refs/heads/main');
       await flyBuild(
         setupTest({
           appDetails: {
-            'app-one': [{ tenant: '_default' }, { tenant: 'acme' }]
+            'app-one': [{}, { tenant: 'acme' }]
           }
         })
       );
 
       expect(getMockFly().build).toHaveBeenCalledWith(
         expect.objectContaining({ app: 'app-one-config' })
+      );
+    });
+
+    it('should build a tenant-only app under the first tenant, whatever the order', async () => {
+      setContext('push', {}, 'refs/heads/main');
+      await flyBuild(
+        setupTest({
+          appDetails: {
+            'app-one': [{ tenant: 'acme' }, { tenant: 'zeta' }]
+          }
+        })
+      );
+
+      expect(getMockFly().build).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-one-config-acme' })
       );
     });
 
@@ -317,6 +332,25 @@ describe('flyBuild', () => {
             SENTRY_PROJECT: 'app-one'
           }
         })
+      );
+    });
+
+    it('should skip an app without a deployment and still build the others', async () => {
+      setContext('push', {}, 'refs/heads/main');
+      const result = await flyBuild(
+        setupTest({
+          apps: [app('app-one'), app('app-two'), app('app-three')],
+          appDetails: { 'app-two': [{}], 'app-three': [] }
+        })
+      );
+
+      expect(getMockFly().build).toHaveBeenCalledTimes(1);
+      expect(Object.keys(result.images)).toEqual(['app-two']);
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining('Skipping app-one')
+      );
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining('Skipping app-three')
       );
     });
 

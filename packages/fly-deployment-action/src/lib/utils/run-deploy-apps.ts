@@ -39,6 +39,18 @@ export const runDeployApps = async (options: {
 
     core.startGroup(`Deploy ${projectName}`);
 
+    // Pre-deploy only lists apps that have somewhere to go. One without any is
+    // never deployed as a bare host app: that is how a host nobody asked for
+    // reaches production.
+    const appDeploymentDetails = config.appDetails[projectName] ?? [];
+    if (appDeploymentDetails.length === 0) {
+      core.warning(
+        `Skipping ${projectName}: no host or tenant deployment is enabled for it`
+      );
+      core.endGroup();
+      continue;
+    }
+
     // Read the base app name from local config
     let configAppName: string;
 
@@ -59,39 +71,23 @@ export const runDeployApps = async (options: {
     core.info(`Resolved app name: ${configAppName}`);
     core.info(`Ready to fly >>>`);
 
-    // Get deployment details for this specific app
-    // If app not in appDetails map or has empty array, deploy once without deployment-specific config
-    const appDeploymentDetails = config.appDetails[projectName] || [];
-    // Host deployment (no tenant or _default) must run first so migrations
-    // complete before tenant apps start.
-    const deploymentsToRun = (
-      appDeploymentDetails.length > 0 ? appDeploymentDetails : [{}]
-    ).sort((a, b) => {
-      const aIsHost = !a.tenant || a.tenant === '_default';
-      const bIsHost = !b.tenant || b.tenant === '_default';
-      return aIsHost === bIsHost ? 0 : aIsHost ? -1 : 1;
-    });
+    // The host deployment (no tenant) must run first so migrations complete
+    // before tenant apps start
+    const deploymentsToRun = [...appDeploymentDetails].sort((a, b) =>
+      !a.tenant === !b.tenant ? 0 : !a.tenant ? -1 : 1
+    );
 
-    if (appDeploymentDetails.length > 0) {
-      const tenantNames = appDeploymentDetails
-        .map((d) => d.tenant || 'default')
-        .join(', ');
-      core.info(
-        `Multi-deployment app with ${appDeploymentDetails.length} deployment(s): ${tenantNames}`
-      );
-    } else {
-      core.info(`Single deployment app`);
-    }
+    core.info(
+      `${deploymentsToRun.length} deployment(s): ${deploymentsToRun
+        .map((d) => d.tenant ?? 'host')
+        .join(', ')}`
+    );
 
     // Deploy once for each deployment configuration
     for (const deploymentDetails of deploymentsToRun) {
       const tenantId = deploymentDetails.tenant;
-      const isHostDeployment = !tenantId || tenantId === '_default';
-      const tenantLabel = tenantId
-        ? tenantId === '_default'
-          ? ' (headless mode)'
-          : ` for tenant '${tenantId}'`
-        : '';
+      const isHostDeployment = !tenantId;
+      const tenantLabel = tenantId ? ` for tenant '${tenantId}'` : '';
 
       if (!isHostDeployment && failedHostApps.has(configAppName)) {
         core.warning(
