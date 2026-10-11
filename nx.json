@@ -320,6 +320,7 @@
   ],
   "sync": {
     "globalGenerators": [
+      "dev-plugin:block-images-sync",
       "dev-plugin:block-meta-sync",
       "dev-plugin:externalize-deps-sync",
       "dev-plugin:theme-sync",

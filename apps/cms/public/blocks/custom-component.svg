@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320">
+  <path d="M132 80h-12a16 16 0 0 0-16 16v48a16 16 0 0 1-16 16a16 16 0 0 1 16 16v48a16 16 0 0 0 16 16h12" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M348 80h12a16 16 0 0 1 16 16v48a16 16 0 0 0 16 16a16 16 0 0 0-16 16v48a16 16 0 0 1-16 16h-12" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="176" y="108" width="128" height="104" rx="10" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="198" y1="132" x2="250" y2="132" stroke="#8a8a8a" stroke-width="12" stroke-linecap="round"/>
+  <rect x="192" y="153" width="96" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="192" y="169" width="57.6" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="192" y="178" width="56" height="20" rx="8" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="209" y1="188" x2="231" y2="188" stroke="#8a8a8a" stroke-width="6" stroke-linecap="round"/>
+</svg>

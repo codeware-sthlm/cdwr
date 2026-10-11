@@ -1,5 +1,10 @@
 {
   "generators": {
+    "block-images-sync": {
+      "factory": "./src/generators/block-images-sync/block-images-sync",
+      "schema": "./src/generators/block-images-sync/schema.json",
+      "description": "Draw the block thumbnails and icons the admin shows, from shared shapes, in one colour that reads on light and dark"
+    },
     "block-meta-sync": {
       "factory": "./src/generators/block-meta-sync/block-meta-sync",
       "schema": "./src/generators/block-meta-sync/schema.json",

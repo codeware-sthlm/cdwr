@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320">
+  <line x1="34" y1="44" x2="222" y2="44" stroke="#8a8a8a" stroke-width="12" stroke-linecap="round"/>
+  <rect x="28" y="65" width="260" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="28" y="92" width="132" height="192" rx="10" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="45" y1="112" x2="79" y2="112" stroke="#8a8a8a" stroke-width="6" stroke-linecap="round"/>
+  <rect x="112" y="102" width="34" height="20" rx="10" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="48" y1="142" x2="136" y2="142" stroke="#8a8a8a" stroke-width="12" stroke-linecap="round"/>
+  <rect x="42" y="165" width="104" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="42" y="179" width="104" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="42" y="193" width="62.4" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <circle cx="48" cy="222" r="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="60" y="219.5" width="64" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <circle cx="48" cy="242" r="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="60" y="239.5" width="48" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="46" y1="268" x2="78" y2="268" stroke="#8a8a8a" stroke-width="8" stroke-linecap="round"/>
+  <rect x="174" y="92" width="132" height="192" rx="10" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="191" y1="112" x2="225" y2="112" stroke="#8a8a8a" stroke-width="6" stroke-linecap="round"/>
+  <rect x="258" y="102" width="34" height="20" rx="10" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="194" y1="142" x2="282" y2="142" stroke="#8a8a8a" stroke-width="12" stroke-linecap="round"/>
+  <rect x="188" y="165" width="104" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="188" y="179" width="104" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="188" y="193" width="62.4" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <circle cx="194" cy="222" r="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="206" y="219.5" width="64" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <circle cx="194" cy="242" r="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="206" y="239.5" width="48" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="192" y1="268" x2="224" y2="268" stroke="#8a8a8a" stroke-width="8" stroke-linecap="round"/>
+  <rect x="320" y="92" width="132" height="192" rx="10" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="337" y1="112" x2="371" y2="112" stroke="#8a8a8a" stroke-width="6" stroke-linecap="round"/>
+  <rect x="404" y="102" width="34" height="20" rx="10" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="340" y1="142" x2="428" y2="142" stroke="#8a8a8a" stroke-width="12" stroke-linecap="round"/>
+  <rect x="334" y="165" width="104" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="334" y="179" width="104" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="334" y="193" width="62.4" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <circle cx="340" cy="222" r="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="352" y="219.5" width="64" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <circle cx="340" cy="242" r="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="352" y="239.5" width="48" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="338" y1="268" x2="370" y2="268" stroke="#8a8a8a" stroke-width="8" stroke-linecap="round"/>
+</svg>
