@@ -11,7 +11,7 @@ export const KEYCHAIN_SERVICE = 'linear-agent-queue';
 /** Where the queue's files live in the repo, relative to the workspace root */
 export const QUEUE_SOURCE_DIR = 'tools/cdwr/agent-queue';
 /** The files install puts in the queue home; run.sh loads the rest from beside it */
-export const QUEUE_FILES = ['run.sh', 'watch.jq'] as const;
+export const QUEUE_FILES = ['run.sh', 'lib.sh', 'watch.jq'] as const;
 export type QueueFile = (typeof QUEUE_FILES)[number];
 
 /** One value per queue file; the return type keeps it exhaustive */
@@ -19,6 +19,7 @@ export const byFile = <T>(
   fn: (file: QueueFile) => T
 ): Record<QueueFile, T> => ({
   'run.sh': fn('run.sh'),
+  'lib.sh': fn('lib.sh'),
   'watch.jq': fn('watch.jq')
 });
 /** Files a worktree needs but git does not carry, relative to the workspace root */

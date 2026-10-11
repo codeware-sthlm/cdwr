@@ -56,16 +56,8 @@ if [[ -e "$HOME_DIR/paused" ]] && ! $check; then exit 0; fi
 if ! mkdir "$HOME_DIR/lock" 2>/dev/null; then say "busy: a run is in progress"; exit 0; fi
 trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
 
-key="$(security find-generic-password -s linear-agent-queue -w 2>/dev/null || true)"
+source "${0:A:h}/lib.sh"
 [[ -z "$key" ]] && { say "skip: no Linear API key in Keychain (service linear-agent-queue)"; exit 0; }
-
-# linear <query> [variables as JSON]
-linear() {
-  local vars="${2:-}"; [[ -z "$vars" ]] && vars='{}'
-  jq -n --arg q "$1" --argjson v "$vars" '{query: $q, variables: $v}' |
-    curl -sS -m 20 https://api.linear.app/graphql \
-      -H "Authorization: $key" -H 'Content-Type: application/json' --data @-
-}
 
 # The only writes run.sh makes: the runs, usage and activity documents, each created once
 # on the Codeware team and then updated in place.
@@ -101,7 +93,7 @@ job_line() {
   if [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
   if [[ -z "$want" ]]; then print -r -- "$out · install unknown"; return 0; fi
-  for f in run.sh watch.jq; do
+  for f in run.sh lib.sh watch.jq; do
     theirs="$(git -C "$REPO" show "origin/main:$dir/$f" 2>/dev/null)" ||
       { print -r -- "$out · install unknown"; return 0; }
     [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")
@@ -365,24 +357,6 @@ fi
 # What an attended /work-queue session would do now, from watch.jq's `attended` (the computed
 # form of the skill's "What to take next"). It reads watch.json, so it runs after the watch;
 # --check uses the last run's watch.json. A failure leaves the line empty, never stops the run.
-read -r -d '' ATTENDED_QUERY <<'GQL' || true
-query {
-  issues(first: 100, filter: {
-    team: { key: { eq: "COD" } }
-    labels: { some: { name: { startsWith: "agent:" } } }
-    state: { type: { neq: "canceled" } }
-    or: [{ completedAt: { null: true } }, { completedAt: { gt: "-P14D" } }]
-  }) {
-    nodes {
-      identifier priority createdAt completedAt description
-      state { type }
-      labels { nodes { name } }
-      comments(first: 50, orderBy: createdAt) { nodes { body createdAt } }
-      inverseRelations { nodes { type issue { state { type } } } }
-    }
-  }
-}
-GQL
 attended_line=""
 attended() {
   setopt local_options no_err_exit
