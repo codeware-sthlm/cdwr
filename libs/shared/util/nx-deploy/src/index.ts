@@ -19,3 +19,14 @@ export {
 export { type AppRelease, getAppsToRelease } from './lib/get-apps-to-release';
 export { getNxProject } from './lib/get-nx-project';
 export { type Environment, EnvironmentSchema } from './lib/environment.schema';
+export {
+  type GetChangedAppsOptions,
+  getChangedApps
+} from './lib/get-changed-apps';
+export { ignoredFiles, isIgnoredFile } from './lib/ignored-files';
+export { matchesGlob } from './lib/glob';
+export {
+  type DiffRange,
+  type ResolveRangesOptions,
+  resolveRanges
+} from './lib/resolve-ranges';

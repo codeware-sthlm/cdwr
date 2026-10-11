@@ -3,6 +3,7 @@ import { vol } from 'memfs';
 
 import { analyzeAppsToDeploy } from './analyze-apps-to-deploy';
 import { type AppRelease, getAppsToRelease } from './get-apps-to-release';
+import { resolveRanges } from './resolve-ranges';
 
 /**
  * Integration tests for `analyzeAppsToDeploy` function.
@@ -32,9 +33,27 @@ vi.mock('@actions/exec');
 // Mock the release resolver — it drives `nx release` against the real workspace
 vi.mock('./get-apps-to-release');
 
+// Git ranges are resolved against a real repository; the diff itself is mocked
+// through exec below
+vi.mock('./resolve-ranges');
+
 describe('analyzeAppsToDeploy - Integration', () => {
   const mockGetExecOutput = vi.mocked(exec.getExecOutput);
   const mockGetAppsToRelease = vi.mocked(getAppsToRelease);
+  const mockResolveRanges = vi.mocked(resolveRanges);
+
+  /** Files `git diff --name-only` reports */
+  let changedFiles: string[] = [];
+  /** Projects `nx show projects --affected` reports */
+  let affectedProjects: string[] = [];
+
+  /**
+   * Mock what changed: the files in the range and the projects they affect
+   */
+  const mockChanges = (files: string[], affected: string[]) => {
+    changedFiles = files;
+    affectedProjects = affected;
+  };
 
   /**
    * Mock the versions `nx release` resolves for the workspace apps
@@ -96,6 +115,24 @@ describe('analyzeAppsToDeploy - Integration', () => {
     mockGetExecOutput.mockImplementation(async (command, args) => {
       const argsStr = args?.join(' ') || '';
 
+      // Mock: git diff --name-only <base> <head>
+      if (command === 'git' && argsStr.includes('diff --name-only')) {
+        return {
+          exitCode: 0,
+          stdout: changedFiles.join('\n'),
+          stderr: ''
+        };
+      }
+
+      // Mock: nx show projects --affected --files <files> --json
+      if (argsStr.includes('show projects')) {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify(affectedProjects),
+          stderr: ''
+        };
+      }
+
       // Mock: nx show project <name> --json
       if (argsStr.includes('show project')) {
         const projectName = args?.find(
@@ -125,6 +162,19 @@ describe('analyzeAppsToDeploy - Integration', () => {
     vol.reset();
     process.cwd = () => '/';
     allAppsBumped();
+    // Something changed in every app unless a test says otherwise
+    mockChanges(
+      ['apps/app/src/main.ts'],
+      ['web', 'cms', 'api', 'app-a', 'app-b', 'app-c', 'nested-app']
+    );
+    mockResolveRanges.mockImplementation(async ({ previousVersions }) => {
+      return new Map(
+        [...previousVersions.keys()].map((name) => [
+          name,
+          { base: 'base-sha', head: 'head-sha' }
+        ])
+      );
+    });
   });
 
   afterEach(() => {
@@ -233,6 +283,113 @@ describe('analyzeAppsToDeploy - Integration', () => {
         projectName: 'web',
         status: 'deploy',
         flyConfigFile: 'apps/web/fly.production.toml'
+      });
+    });
+  });
+
+  describe('runtime change gate', () => {
+    const twoApps = () => {
+      createWorkspace([
+        {
+          name: 'web',
+          root: 'apps/web',
+          hasGithubJson: true,
+          githubConfig: {},
+          hasFlyToml: true
+        },
+        {
+          name: 'cms',
+          root: 'apps/cms',
+          hasGithubJson: true,
+          githubConfig: {},
+          hasFlyToml: true
+        }
+      ]);
+      mockNxProject([
+        { name: 'web', root: 'apps/web' },
+        { name: 'cms', root: 'apps/cms' }
+      ]);
+      mockReleases({
+        web: { version: '1.1.4', previousVersion: '1.1.3', bumped: true },
+        cms: { version: '1.3.2', previousVersion: '1.3.1', bumped: true }
+      });
+    };
+
+    it('should deploy nothing for a docs-only change', async () => {
+      twoApps();
+      mockChanges(['apps/cms/AGENTS.md', 'docs/guide.mdx'], ['cms']);
+
+      const result = await analyzeAppsToDeploy(undefined);
+
+      expect(result).toEqual([
+        {
+          projectName: 'web',
+          status: 'skip',
+          reason:
+            'bumped by nx release, but no runtime change in base-sha..head-sha'
+        },
+        {
+          projectName: 'cms',
+          status: 'skip',
+          reason:
+            'bumped by nx release, but no runtime change in base-sha..head-sha'
+        }
+      ]);
+      // Nothing left after filtering, so Nx is never asked
+      expect(mockGetExecOutput).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.arrayContaining(['--affected']),
+        expect.anything()
+      );
+    });
+
+    it('should deploy only the app whose source changed', async () => {
+      twoApps();
+      mockChanges(['apps/web/src/main.ts'], ['web']);
+
+      const result = await analyzeAppsToDeploy(undefined);
+
+      expect(result).toMatchObject([
+        { projectName: 'web', status: 'deploy' },
+        { projectName: 'cms', status: 'skip' }
+      ]);
+    });
+
+    it('should deploy both apps when a shared lib changed', async () => {
+      twoApps();
+      mockChanges(['libs/shared/src/x.ts'], ['shared', 'web', 'cms']);
+
+      const result = await analyzeAppsToDeploy(undefined);
+
+      expect(result).toMatchObject([
+        { projectName: 'web', status: 'deploy' },
+        { projectName: 'cms', status: 'deploy' }
+      ]);
+    });
+
+    it('should not call git or Nx for an explicit app', async () => {
+      twoApps();
+      mockChanges(['docs/guide.mdx'], []);
+
+      const result = await analyzeAppsToDeploy(undefined, undefined, ['web']);
+
+      expect(result).toMatchObject([{ projectName: 'web', status: 'deploy' }]);
+      expect(mockResolveRanges).not.toHaveBeenCalled();
+    });
+
+    it('should resolve ranges for the bumped apps in the preview lane', async () => {
+      twoApps();
+      mockReleases({
+        web: { version: '1.1.4', previousVersion: '1.1.3', bumped: true },
+        cms: { version: '1.3.2', previousVersion: '1.3.1', bumped: false }
+      });
+
+      await analyzeAppsToDeploy(undefined, 'preview.466', undefined, 466);
+
+      expect(mockResolveRanges).toHaveBeenCalledWith({
+        preid: 'preview.466',
+        prNumber: 466,
+        previousVersions: new Map([['web', '1.1.3']])
       });
     });
   });

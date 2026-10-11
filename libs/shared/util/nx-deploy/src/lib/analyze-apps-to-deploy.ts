@@ -7,7 +7,9 @@ import {
 } from '@codeware/shared/util/schemas';
 
 import { getAppsToRelease } from './get-apps-to-release';
+import { getChangedApps } from './get-changed-apps';
 import { getNxProject } from './get-nx-project';
+import { type DiffRange, resolveRanges } from './resolve-ranges';
 
 const githubJsonFileName = 'github.json' as const;
 
@@ -64,6 +66,10 @@ const findFlyConfig = (
   return null;
 };
 
+/** Abbreviate a commit SHA; tag names are left as they are */
+const shortRef = (ref: string): string =>
+  /^[0-9a-f]{40}$/.test(ref) ? ref.slice(0, 7) : ref;
+
 /**
  * Analyzes Nx workspace apps to determine which are ready for deployment.
  *
@@ -75,16 +81,24 @@ const findFlyConfig = (
  * Affected answers "what must be rebuilt and retested", which is a strictly
  * wider question than "what changed for the consumer".
  *
+ * A bump alone is not enough: the app must also have a runtime change in its
+ * range (see `resolveRanges`), because nx counts every commit since the last
+ * stable tag, docs-only ones included. Unreleased commits on main would
+ * otherwise deploy every preview.
+ *
  * @param environment - Environment to look for environment-specific fly configs or undefined
  * @param preid - Prerelease identifier for preview lanes (e.g. `preview.42`)
  * @param apps - Explicit app project names, bypassing bump selection. Used by
- *               manual dispatch to force a redeploy of an unbumped app.
+ *               manual dispatch to force a redeploy of an unbumped app. Skips
+ *               the runtime change check too.
+ * @param prNumber - Pull request number, whose head a preview is judged on
  * @returns List of apps with their deployment status and details.
  */
 export const analyzeAppsToDeploy = async (
   environment: string | undefined,
   preid?: string,
-  apps?: string[]
+  apps?: string[],
+  prNumber?: number
 ): Promise<App[]> => {
   const response: App[] = [];
 
@@ -95,7 +109,53 @@ export const analyzeAppsToDeploy = async (
     apps ??
     [...releases].filter(([, { bumped }]) => bumped).map(([name]) => name);
 
+  // Only bump selection is gated; an explicit app is the caller's decision
+  const ranges = new Map<string, DiffRange>();
+  const unchanged = new Set<string>();
+
+  if (!apps && projectNames.length > 0) {
+    const resolved = await resolveRanges({
+      preid,
+      prNumber,
+      previousVersions: new Map(
+        projectNames.map((name) => [
+          name,
+          releases.get(name)?.previousVersion ?? ''
+        ])
+      )
+    });
+
+    // Apps sharing a range are answered by one diff
+    const byRange = new Map<string, { range: DiffRange; names: string[] }>();
+    for (const [name, range] of resolved) {
+      const key = `${range.base}..${range.head}`;
+      const group = byRange.get(key) ?? { range, names: [] };
+      group.names.push(name);
+      byRange.set(key, group);
+    }
+
+    for (const { range, names } of byRange.values()) {
+      const changed = new Set(await getChangedApps({ ...range, apps: names }));
+      for (const name of names) {
+        ranges.set(name, range);
+        if (!changed.has(name)) {
+          unchanged.add(name);
+        }
+      }
+    }
+  }
+
   for (const projectName of projectNames) {
+    if (unchanged.has(projectName)) {
+      const { base, head } = ranges.get(projectName) as DiffRange;
+      response.push({
+        projectName,
+        status: 'skip',
+        reason: `bumped by nx release, but no runtime change in ${shortRef(base)}..${shortRef(head)}`
+      });
+      continue;
+    }
+
     // Get project configuration
     const projectConfig = await getNxProject(projectName);
 

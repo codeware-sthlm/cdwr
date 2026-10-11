@@ -301,6 +301,7 @@ describe('preDeploy', () => {
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'production',
         undefined,
+        undefined,
         undefined
       );
     });
@@ -315,7 +316,8 @@ describe('preDeploy', () => {
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'preview',
         'preview.467',
-        undefined
+        undefined,
+        467
       );
     });
 
@@ -330,6 +332,7 @@ describe('preDeploy', () => {
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'preview',
         'preview.0',
+        undefined,
         undefined
       );
     });
@@ -342,7 +345,8 @@ describe('preDeploy', () => {
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'production',
         undefined,
-        undefined
+        undefined,
+        467
       );
     });
   });
@@ -720,7 +724,8 @@ describe('preDeploy', () => {
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'production',
         undefined,
-        ['cms']
+        ['cms'],
+        undefined
       );
     });
 
@@ -792,7 +797,8 @@ describe('preDeploy', () => {
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'production',
         undefined,
-        ['web']
+        ['web'],
+        undefined
       );
     });
 
@@ -814,7 +820,8 @@ describe('preDeploy', () => {
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'preview',
         'preview.0',
-        ['web']
+        ['web'],
+        undefined
       );
     });
 
@@ -824,6 +831,7 @@ describe('preDeploy', () => {
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledTimes(1);
       expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledWith(
         'production',
+        undefined,
         undefined,
         undefined
       );
