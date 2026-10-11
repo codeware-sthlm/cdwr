@@ -63,7 +63,7 @@ export async function ensureStockMedia(
     }
   } else {
     localFile = filePath;
-    if (!existsSync(localFile)) {
+    if (!existsSync(/*turbopackIgnore: true*/ localFile)) {
       throw new Error(`Stock media file does not exist: ${localFile}`);
     }
   }

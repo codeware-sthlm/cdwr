@@ -75,7 +75,7 @@ export async function ensureMedia(
     }
   } else {
     localFile = filePath;
-    if (!existsSync(localFile)) {
+    if (!existsSync(/*turbopackIgnore: true*/ localFile)) {
       throw new Error(`Media file does not exist: ${localFile}`);
     }
   }
