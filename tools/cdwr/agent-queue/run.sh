@@ -94,7 +94,7 @@ job_line() {
   if [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
   if [[ -z "$want" ]]; then print -r -- "$out · install unknown"; return 0; fi
-  for f in run.sh lib.sh watch.jq; do
+  for f in run.sh lib.sh watch.jq implement.sh; do
     theirs="$(git -C "$REPO" show "origin/main:$dir/$f" 2>/dev/null)" ||
       { print -r -- "$out · install unknown"; return 0; }
     [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")
@@ -420,23 +420,63 @@ attended() {
   queue_view="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson session "$session" --argjson waits "$waits" \
     'include "watch"; .data.issues.nodes | queue_view($now; 5; $watch; $session; $waits)' <<<"$resp")" ||
     { note "warn: queue view: watch.jq failed"; queue_view=""; }
+  # Should an implement-only session start? watch.jq `launch` decides from the pick and the
+  # guards; implement.sh holds implement.lock while its session runs and writes the spend ledger.
+  # A lock left by a killed session (no EXIT trap) is cleared after 6 h, longer than any session.
+  local lockdir="$HOME_DIR/implement.lock" locked=false spent cap last decision
+  [[ -d "$lockdir" && -n "$(find "$lockdir" -maxdepth 0 -mmin +360 2>/dev/null)" ]] &&
+    { rmdir "$lockdir" 2>/dev/null && note "warn: cleared a stale implement.lock"; }
+  [[ -d "$lockdir" ]] && locked=true
+  # jq prints `0` and still fails on a missing file, so check for it first
+  spent=0
+  # An unreadable ledger fails closed: the cap reads as spent
+  if [[ -f "$HOME_DIR/implement-spend.jsonl" ]]; then
+    spent="$(jq -s --arg d "$(date +%F)" '[.[] | select(.day == $d) | .cost] | add // 0' \
+      "$HOME_DIR/implement-spend.jsonl" 2>/dev/null)" || spent=""
+    [[ "$spent" == <->(|.<->) ]] || { note "warn: implement-spend.jsonl unreadable; no launch today"; spent=1000000; }
+  fi
+  cap="${AGENT_QUEUE_IMPLEMENT_CAP_USD:-40}"
+  [[ "$cap" == <->(|.<->) ]] || cap=null
+  last=null
+  [[ -f "$HOME_DIR/launch.json" ]] && last="$(jq -ce 'objects' "$HOME_DIR/launch.json" 2>/dev/null || print null)"
+  local guards
+  guards="$(jq -nc --argjson session "$session" --argjson locked "$locked" --argjson spent "$spent" \
+    --argjson cap "$cap" --argjson last "$last" \
+    '{session: $session, locked: $locked, spent: $spent, cap: $cap, last: $last}')"
+  decision="$(watch -c --argjson g "$guards" 'include "watch"; launch($g)' <<<"$verdict" 2>/dev/null)" ||
+    { note "warn: launch: watch.jq failed"; decision='{"action":"skip","reason":"watch.jq failed","key":null}'; }
   if $check; then
     print -r -- "attended: $attended_line"
+    print -r -- "launch: $(jq -r '.action + (if .reason then " (" + .reason + ")" else "" end)' <<<"$decision")"
     [[ -n "$queue_view" ]] && print -r -- "queue-view: $queue_view"
     return 0
   fi
+  local action; action="$(jq -r '.action' <<<"$decision")"
+  # Misses count only while work waits: once the pick is idle, a later launch starts fresh. Not on
+  # `running`: a launched session holds a fresh claim, and its death must still count as a miss.
+  [[ "$(jq -r '.verdict' <<<"$verdict")" == idle ]] && rm -f "$HOME_DIR/launch.json"
+  if [[ "$action" == launch ]]; then
+    jq -c '.last' <<<"$decision" > "$HOME_DIR/launch.json"
+    # nohup and the plist's AbandonProcessGroup keep the session alive after this job exits
+    nohup "$HOME_DIR/implement.sh" "$(jq -r '.key' <<<"$decision")" >/dev/null 2>&1 &
+    note "launch: $(jq -r '.key' <<<"$decision") (pid $!)"
+    notice info "Agent queue: started an implementing session, ${attended_line#*run now: }."
+    return 0
+  fi
   # Once per change, only with no live session (a live one picks the work up), and not for a
-  # fresh agent:ready ticket: this scheduler plans that itself
-  local file="$HOME_DIR/attended.json" key prev
-  key="$(jq -c --argjson s "$session" '{verdict, ticket, reason, session: $s.state}' <<<"$verdict")"
+  # fresh agent:ready ticket: this scheduler plans that itself. A launch that a guard refused
+  # (cap, back-off) says why.
+  local file="$HOME_DIR/attended.json" key prev why=""
+  [[ "$action" == notify ]] && why=" Not launched: $(jq -r '.reason' <<<"$decision")."
+  key="$(jq -c --argjson s "$session" --arg a "$action" '{verdict, ticket, reason, session: $s.state, launch: $a}' <<<"$verdict")"
   prev="$(cat "$file" 2>/dev/null)"
   if [[ "$key" != "$prev" ]]; then
     print -r -- "$key" > "$file"
     sstate="$(jq -r '.state' <<<"$session")"
     if [[ "$(jq -r '.verdict' <<<"$verdict")" == run && "$(jq -r '.reason' <<<"$verdict")" != ready &&
-          ( "$sstate" == none || "$sstate" == stopped ) ]]; then
+          ( "$sstate" == none || "$sstate" == stopped ) && ! $locked ]]; then
       note "attended: $attended_line"
-      notice action "Agent queue: no session running, ${attended_line#*run now: }. Start /work-queue."
+      notice action "Agent queue: no session running, ${attended_line#*run now: }.$why Start /work-queue."
     fi
   fi
 }
