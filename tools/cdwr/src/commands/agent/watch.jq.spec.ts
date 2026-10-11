@@ -1186,6 +1186,16 @@ describe('attended picks', () => {
           { wait: 'copilot', pr: 7, sha: null, since: 1791735600 }
         ],
         [
+          'a PR Linear turned into a link',
+          '**Next:** Waiting: copilot · PR [codeware-sthlm/cdwr#606](https://linear.app/codeware/review/x-1) · since 2026-10-11T16:20Z',
+          { wait: 'copilot', pr: 606, sha: null, since: 1791735600 }
+        ],
+        [
+          'a linked PR on a commit',
+          '**Next:** Waiting: CI · PR [codeware-sthlm/cdwr#606](https://linear.app/codeware/review/x-1) @ abc1234 · since 2026-10-11T16:20Z',
+          { wait: 'ci', pr: 606, sha: 'abc1234', since: 1791735600 }
+        ],
+        [
           'CI on a commit',
           '**Next:** Waiting: CI · PR #7 @ abc1234 · since 2026-10-11T16:20Z',
           { wait: 'ci', pr: 7, sha: 'abc1234', since: 1791735600 }
