@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { defineCommand, readOnly } from '../../cli/command';
 import {
   checkRun,
+  implementReport,
   jobState,
   keyPresent,
   lockAge,
@@ -20,6 +21,7 @@ import {
   byFile,
   filesDrift,
   formatHeld,
+  formatImplement,
   formatNext,
   formatParked,
   formatTable,
@@ -81,6 +83,7 @@ export default defineCommand({
           lastScheduled,
           lockState: lockState(lockAge(queue.lock), job.loaded && job.running),
           lock: queue.lock,
+          implement: implementReport(queue, ctx.env),
           lastRunLog: runLog ? join(queue.logs, runLog) : null,
           next: checked === undefined ? null : parseCheck(checked.decision),
           attended:
@@ -185,6 +188,15 @@ export default defineCommand({
             )
           ]
         : []),
+      row(
+        true,
+        'implement',
+        formatImplement(
+          report.implement.spent,
+          report.implement.cap,
+          report.implement.last
+        )
+      ),
       report.next
         ? row(
             report.next.kind === 'skip' || report.next.kind === 'unknown'
