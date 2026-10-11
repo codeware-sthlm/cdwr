@@ -235,11 +235,12 @@ session goes on to **What to take next**.
 To park, set the **Next:** line to exactly
 
 ```md
-**Next:** Waiting: copilot · PR #123 · since 2026-10-11T16:20Z
-**Next:** Waiting: CI · PR #123 @ 1a2b3c4 · since 2026-10-11T16:20Z
+**Next:** `Waiting: copilot · PR 123 · since 2026-10-11T16:20Z`
+**Next:** `Waiting: CI · PR 123 @ 1a2b3c4 · since 2026-10-11T16:20Z`
 ```
 
-with the current UTC time. A CI wait names the commit just pushed (`git rev-parse --short HEAD`),
+with the current UTC time, as a code span and with a bare PR number: Linear rewrites `PR #123`
+into a link once the PR is attached, sometimes titled with the PR's name, and the number is lost. A CI wait names the commit just pushed (`git rev-parse --short HEAD`),
 so the checks of the commit before it, still green on GitHub for a few seconds, don't count.
 
 Set the Status row of the step that pushed to `Waiting: copilot` or `Waiting: CI`, refresh the
