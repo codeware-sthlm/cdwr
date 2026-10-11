@@ -38,7 +38,10 @@ const session = (id: string, state: string, lastSeen: string) => ({
 const response = (...nodes: ReturnType<typeof ticket>[]) =>
   JSON.stringify({ data: { issues: { nodes } } });
 
-describe('wait.sh', () => {
+// The queue scripts run on macOS only; a CI runner without zsh skips them
+const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+
+describe.skipIf(!hasZsh)('wait.sh', () => {
   let dir: string;
 
   // A fake linear: answers[n] for call n (the last one repeats)
