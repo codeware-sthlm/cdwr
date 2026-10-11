@@ -90,7 +90,8 @@ export async function preDeploy(
       environment,
       preid,
       inputs.manualApp ? [inputs.manualApp] : undefined,
-      Number(inputs.prNumber) || undefined
+      Number(inputs.prNumber) || undefined,
+      config.mainBranch
     );
 
     const apps: DeployableApp[] = analyzed.flatMap((app) => {

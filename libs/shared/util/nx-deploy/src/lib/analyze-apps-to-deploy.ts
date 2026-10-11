@@ -92,13 +92,15 @@ const shortRef = (ref: string): string =>
  *               manual dispatch to force a redeploy of an unbumped app. Skips
  *               the runtime change check too.
  * @param prNumber - Pull request number, whose head a preview is judged on
+ * @param mainBranch - Branch a preview is compared with (the action's normalized `main-branch`)
  * @returns List of apps with their deployment status and details.
  */
 export const analyzeAppsToDeploy = async (
   environment: string | undefined,
   preid?: string,
   apps?: string[],
-  prNumber?: number
+  prNumber?: number,
+  mainBranch?: string
 ): Promise<App[]> => {
   const response: App[] = [];
 
@@ -117,6 +119,7 @@ export const analyzeAppsToDeploy = async (
     const resolved = await resolveRanges({
       preid,
       prNumber,
+      mainBranch,
       previousVersions: new Map(
         projectNames.map((name) => [
           name,

@@ -389,6 +389,7 @@ describe('analyzeAppsToDeploy - Integration', () => {
       expect(mockResolveRanges).toHaveBeenCalledWith({
         preid: 'preview.466',
         prNumber: 466,
+        mainBranch: undefined,
         previousVersions: new Map([['web', '1.1.3']])
       });
     });
