@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { defineCommand } from '../../cli/command';
-import { CliError, UsageError } from '../../cli/errors';
+import { CliError, EXIT, UsageError } from '../../cli/errors';
 import { input } from '../../cli/inputs';
 import { readText, worktreeOf } from '../../services/agent-queue';
 import { CommandError, childEnv, run } from '../../services/shell';
@@ -78,8 +78,19 @@ export default defineCommand({
     // An existing folder gets env files and an install only when it is ours, on this branch
     if (exists) {
       const theirs = await gitCommonDir(path).catch(() => undefined);
+      if (theirs === undefined) {
+        throw new CliError(`${path} is not a readable git checkout`);
+      }
       if (theirs !== commonDir) {
-        throw new CliError(`${path} is a checkout of another repository`);
+        const owner = dirname(theirs);
+        if (resolve(owner) === resolve(path)) {
+          throw new CliError(`${path} is a separate clone, not a worktree`);
+        }
+        throw new CliError(
+          `${path} is a worktree of ${owner}, not of this clone`,
+          EXIT.failed,
+          `Run this from ${owner}`
+        );
       }
       const current = (
         await run('git', ['branch', '--show-current'], { cwd: path })
