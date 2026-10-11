@@ -109,24 +109,36 @@ publish_runs() {
   $check && return 0
   setopt local_options no_err_exit
   local stamp="$HOME_DIR/runs-published-at" seen="$HOME_DIR/attended-published" last=0 content
-  # A changed Attended line publishes at once, so it is never more than one run old
-  # (an empty line means no verdict this run, which is no change)
-  if (( $(rows) <= rows_at_start )) && [[ -z "$attended_line" || "$attended_line" == "$(cat "$seen" 2>/dev/null)" ]]; then
+  local seen_view="$HOME_DIR/queue-view-published" view_key=""
+  # The view without its timestamp and heartbeat, so an unchanged queue is no change
+  [[ -n "$queue_view" ]] &&
+    view_key="$(jq -c '{limit, next, held, table, session: (.session | if . == null then null else {state, ticket} end)}' <<<"$queue_view" 2>/dev/null)"
+  # A changed Attended line or queue view publishes at once, so it is never more than one run old
+  # (empty means no verdict this run, which is no change)
+  if (( $(rows) <= rows_at_start )) &&
+     [[ -z "$attended_line" || "$attended_line" == "$(cat "$seen" 2>/dev/null)" ]] &&
+     [[ -z "$view_key" || "$view_key" == "$(cat "$seen_view" 2>/dev/null)" ]]; then
     last="$(cat "$stamp" 2>/dev/null)"
     [[ "$last" == <-> ]] || last=0
     (( $(date +%s) - last > 3600 )) || return 0
   fi
   [[ -f "$RUNS" ]] && tail -n 20 "$RUNS" > "$RUNS.tmp" && mv "$RUNS.tmp" "$RUNS"
-  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" --arg attended "${attended_line:-$(cat "$seen" 2>/dev/null)}" '
+  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" --arg attended "${attended_line:-$(cat "$seen" 2>/dev/null)}" \
+    --arg view "$(jq . <<<"${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}" 2>/dev/null)" '
     def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
     "Last run: \($last)\n\n"
     + (if $attended == "" then "" else "Attended: \($attended)\n\n" end)
+    + (if $view == "" then "" else "```json queue-view\n\($view)\n```\n\n" end)
     + "\($job)\n\nWritten by the agent queue scheduler after every run. Idle runs update the lines above at most once an hour.\n\n"
     + "| When | Outcome | Ticket | Detail |\n| -- | -- | -- | -- |\n"
     + (reverse | map("| \(.when | cell) | \(.outcome | cell) | \(.ticket | cell) | \(.detail | cell) |") | join("\n"))
   ')" || { note "warn: runs document: could not render"; return 0; }
   publish_doc "$DOC_TITLE" "$HOME_DIR/runs-doc-id" "$stamp" "$content"
   [[ -n "$attended_line" ]] && print -r -- "$attended_line" > "$seen"
+  if [[ -n "$view_key" ]]; then
+    print -r -- "$view_key" > "$seen_view"
+    print -r -- "$queue_view" > "$HOME_DIR/queue-view.json"
+  fi
   return 0
 }
 
@@ -358,6 +370,7 @@ fi
 # form of the skill's "What to take next"). It reads watch.json, so it runs after the watch;
 # --check uses the last run's watch.json. A failure leaves the line empty, never stops the run.
 attended_line=""
+queue_view=""
 attended() {
   setopt local_options no_err_exit
   local resp state verdict
@@ -395,9 +408,18 @@ attended() {
     (( ${#items[@]} )) && sessions_json="$(printf '%s\n' "${items[@]}" | jq -cs '.' 2>/dev/null || echo '[]')"
   fi
   session="$(watch -c --argjson now "$(date +%s)" 'include "watch"; session_state($now)' <<<"$sessions_json" 2>/dev/null)" ||
-    session='{"state":"none","detail":null,"id":null}'
+    session='{"state":"none","detail":null,"id":null,"ticket":null,"lastSeen":null}'
   attended_line="$(watch -r 'include "watch"; session_prefix' <<<"$session") · $attended_line"
-  $check && { print -r -- "attended: $attended_line"; return 0; }
+  # The whole queue for the runs document and `cdwr agent status`; the pick above stays the
+  # line and the notice
+  queue_view="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson session "$session" \
+    'include "watch"; .data.issues.nodes | queue_view($now; 5; $watch; $session)' <<<"$resp")" ||
+    { note "warn: queue view: watch.jq failed"; queue_view=""; }
+  if $check; then
+    print -r -- "attended: $attended_line"
+    [[ -n "$queue_view" ]] && print -r -- "queue-view: $queue_view"
+    return 0
+  fi
   # Once per change, only with no live session (a live one picks the work up), and not for a
   # fresh agent:ready ticket: this scheduler plans that itself
   local file="$HOME_DIR/attended.json" key prev
