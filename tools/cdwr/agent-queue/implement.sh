@@ -34,9 +34,24 @@ record() {
     '{when: $w, outcome: $o, ticket: $t, detail: $d}' >> "$HOME_DIR/runs.jsonl" 2>/dev/null || true
 }
 
-# One session at a time; run.sh reads this lock as `locked`
-if ! mkdir "$HOME_DIR/implement.lock" 2>/dev/null; then note "busy: a session is running"; exit 0; fi
-trap 'rmdir "$HOME_DIR/implement.lock" 2>/dev/null' EXIT
+# One session at a time; run.sh reads this lock as `locked`. It holds this script's pid, so
+# run.sh clears it only when its owner is gone, and only the owner removes it.
+LOCK="$HOME_DIR/implement.lock"
+if ! mkdir "$LOCK" 2>/dev/null; then note "busy: a session is running"; exit 0; fi
+print -r -- "$$" > "$LOCK/pid"
+trap '[[ "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]] && rm -rf "$LOCK"' EXIT
+
+# Reserve the whole budget before the session starts, so a machine that dies mid-session still
+# counts it against the daily cap; the actual cost settles it afterwards. No reservation, no start.
+ledger() {
+  jq -nc --arg day "$(date +%F)" --arg t "$TICKET" --argjson c "$1" --arg k "$2" \
+    '{day: $day, ticket: $t, cost: $c, kind: $k}' >> "$HOME_DIR/implement-spend.jsonl"
+}
+if ! ledger "$BUDGET_USD" reserve 2>/dev/null; then
+  note "fail: could not reserve the budget in the spend ledger; not starting"
+  record failed "$KEY · spend ledger not writable"
+  exit 1
+fi
 
 cd "$REPO"
 log="$LOGS/implement_$(date +%F_%H%M).log"
@@ -56,12 +71,10 @@ DENY=(
   "Bash(git * push * --force)" "Bash(git * push * --force *)" "Bash(git * push * -f)" "Bash(git * push * -f *)"
   "Bash(pnpm nx exec*)" "Bash(pnpm * nx exec*)"
   "Bash(gh pr merge*)" "Bash(gh pr close*)" "Bash(gh pr ready*)"
-  "Bash(gh api * -X *)" "Bash(gh api * --method *)"
-  "Bash(gh api repos/* -f *)" "Bash(gh api repos/* -F *)" "Bash(gh api repos/* --field *)"
-  "Bash(gh api repos/* --raw-field *)" "Bash(gh api repos/* --input *)"
-  "Bash(gh api graphql *mergePullRequest*)" "Bash(gh api graphql *AutoMerge*)"
-  "Bash(gh api graphql *Ref(*)" "Bash(gh api graphql *BranchProtection*)"
-  "Bash(gh api graphql *createCommitOnBranch*)" "Bash(gh api graphql *Ruleset*)"
+  # REST reads only; GraphQL goes through gh-review.sh, never raw
+  "Bash(gh api graphql*)" "Bash(gh api * -X *)" "Bash(gh api * --method *)"
+  "Bash(gh api * -f *)" "Bash(gh api * -F *)" "Bash(gh api * --field *)" "Bash(gh api * --raw-field *)"
+  "Bash(gh api * --input*)" "Bash(gh api *@*)"
 )
 # The ticket worktrees sit beside the agent worktree; `//` anchors the rule at the root
 WT="/${REPO:h}/codeware-cod-*/**"
@@ -78,7 +91,8 @@ ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
   --allowedTools \
     Skill Read Grep Glob Agent \
     "Edit($WT)" "Write($WT)" \
-    "Bash(git *)" "Bash(gh pr *)" "Bash(gh api *)" \
+    "Bash(git *)" "Bash(gh pr *)" "Bash(gh api repos/codeware-sthlm/cdwr/*)" \
+    "Bash(tools/cdwr/agent-queue/gh-review.sh *)" \
     "Bash(pnpm nx *)" "Bash(pnpm -C * nx *)" "Bash(pnpm -C * vitest *)" "Bash(pnpm -C * install*)" \
     "Bash(pnpm cdwr agent worktree *)" \
     "Bash(jq *)" "Bash(uuidgen*)" "Bash(cut *)" "Bash(date *)" \
@@ -91,11 +105,12 @@ ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
 
 jq -r '.result // empty, (.errors // [])[]' "$result" >> "$log" 2>/dev/null || cat "$result" >> "$log"
 cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
-# No result (a crash or a kill) charges the full budget, so failing launches still meet the cap
+# No result (a crash or a kill) keeps the full reservation, so failing launches still meet the cap
 [[ "$cost" == <->(|.<->) ]] || cost="$BUDGET_USD"
-# The daily cap reads this ledger, not the hourly usage document, so two launches can't slip through
-jq -nc --arg day "$(date +%F)" --arg t "$TICKET" --argjson c "$cost" '{day: $day, ticket: $t, cost: $c}' \
-  >> "$HOME_DIR/implement-spend.jsonl" 2>/dev/null || note "warn: could not write the spend ledger"
+# Settle the reservation to the actual cost. The daily cap reads this ledger, not the hourly usage
+# document, so two launches can't slip through.
+settle="$(jq -n --argjson c "$cost" --argjson b "$BUDGET_USD" '$c - $b')"
+[[ "$settle" == 0 ]] || ledger "$settle" settle 2>/dev/null || note "warn: could not settle the spend ledger"
 spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result" 2>/dev/null) turns"
 
 if (( rc == 0 )); then

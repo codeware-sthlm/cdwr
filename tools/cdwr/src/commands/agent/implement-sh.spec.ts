@@ -58,12 +58,18 @@ describe('implement.sh', () => {
   });
 
   it('runs one session at a time behind implement.lock', () => {
-    expect(code).toContain('mkdir "$HOME_DIR/implement.lock"');
-    expect(code).toContain('rmdir "$HOME_DIR/implement.lock"');
+    expect(code).toContain('LOCK="$HOME_DIR/implement.lock"');
+    expect(code).toContain('mkdir "$LOCK"');
+    // Owned by pid: only the owner removes it
+    expect(code).toContain('print -r -- "$$" > "$LOCK/pid"');
+    expect(code).toContain(
+      `[[ "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]] && rm -rf "$LOCK"`
+    );
   });
 
   it('keeps the spend ledger the daily cap reads', () => {
-    expect(code).toContain(`'{day: $day, ticket: $t, cost: $c}'`);
+    expect(code).toContain(`'{day: $day, ticket: $t, cost: $c, kind: $k}'`);
+    expect(code).toContain('ledger "$BUDGET_USD" reserve');
     expect(code).toContain('>> "$HOME_DIR/implement-spend.jsonl"');
   });
 
@@ -75,7 +81,10 @@ describe('implement.sh', () => {
     'Bash(pnpm * nx exec*)',
     'Bash(gh pr merge*)',
     'Bash(gh api * -X *)',
-    'Bash(gh api graphql *mergePullRequest*)'
+    'Bash(gh api graphql*)',
+    'Bash(gh api * -f *)',
+    'Bash(gh api * --input*)',
+    'Bash(gh api *@*)'
   ])('denies the escape %s', (rule) => {
     expect(code).toContain(`"${rule}"`);
     expect(code).toContain('"${DENY[@]}"');
@@ -135,7 +144,8 @@ describe('implement.sh', () => {
       const result = start();
       expect(result.status).toBe(0);
       expect(rows('implement-spend.jsonl')).toEqual([
-        { day: today(), ticket: 'COD-1', cost: 1.5 }
+        { day: today(), ticket: 'COD-1', cost: 15, kind: 'reserve' },
+        { day: today(), ticket: 'COD-1', cost: -13.5, kind: 'settle' }
       ]);
       expect(rows('runs.jsonl').map((r) => r['outcome'])).toEqual([
         'launched',
@@ -161,7 +171,7 @@ describe('implement.sh', () => {
       const outcomes = rows('runs.jsonl').map((r) => r['outcome']);
       expect(outcomes.at(-1)).toBe('cap');
       expect(rows('implement-spend.jsonl')).toEqual([
-        { day: today(), ticket: 'COD-1', cost: 15 }
+        { day: today(), ticket: 'COD-1', cost: 15, kind: 'reserve' }
       ]);
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
     });
@@ -175,7 +185,10 @@ describe('implement.sh', () => {
     it('charges the full budget when the session leaves no result', () => {
       fakeClaude(137, '');
       start();
-      expect(rows('implement-spend.jsonl').at(-1)).toMatchObject({ cost: 15 });
+      // The reservation stands: no settle row
+      expect(rows('implement-spend.jsonl')).toEqual([
+        { day: today(), ticket: 'COD-1', cost: 15, kind: 'reserve' }
+      ]);
     });
   });
 });
