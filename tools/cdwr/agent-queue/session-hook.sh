@@ -26,7 +26,7 @@ patch() {
 }
 
 main() {
-  local payload id event tool cmd kind reason file wp state
+  local payload id event tool cmd out kind reason file wp state
   payload="$(cat)" || return 0
   # One jq for the scalars: this runs after every tool call in every session
   # Unit separator, not tab: IFS whitespace would collapse an empty field
@@ -37,9 +37,13 @@ main() {
 
   if [[ "$event" == PostToolUse && "$tool" == Bash ]]; then
     cmd="$(jq -r '.tool_input.command // empty' <<<"$payload")"
-    # Only the bare command registers: an optional path prefix, nothing else on the line
+    # The line session.sh prints registers, so a `cd … &&` prefix or a chained command still
+    # counts; grepping or printing the script never outputs that line on its own.
+    # The bare command is the fallback for a payload without the output.
+    out="$(jq -r '.tool_response.stdout // empty' <<<"$payload")"
     cmd="${${cmd##[[:space:]]##}%%[[:space:]]##}"
-    if [[ "$tool" == Bash && "$cmd" == (([^[:space:]\;\&\|\`\$\(\)\<\>]##/|))tools/cdwr/agent-queue/session.sh\ register ]]; then
+    if [[ $'\n'"$out"$'\n' == *$'\n'"registered work-queue session"$'\n'* ||
+          "$cmd" == (([^[:space:]\;\&\|\`\$\(\)\<\>]##/|))tools/cdwr/agent-queue/session.sh\ register ]]; then
       mkdir -p "$DIR" || return 0
       jq -n --arg id "$id" --argjson pid "$(claude_pid)" --arg now "$(now)" \
         --arg cwd "$(jq -r '.cwd // empty' <<<"$payload")" \
