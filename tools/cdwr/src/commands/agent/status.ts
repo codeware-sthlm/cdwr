@@ -19,6 +19,9 @@ import {
   RUN_INTERVAL_SECONDS,
   byFile,
   filesDrift,
+  formatHeld,
+  formatNext,
+  formatTable,
   formatWatching,
   lastSchedulerLine,
   latestRunLog,
@@ -26,6 +29,7 @@ import {
   parseAttended,
   parseCheck,
   parseNotifyLevel,
+  parseQueueView,
   parseWatchState
 } from './agent.logic';
 
@@ -81,7 +85,11 @@ export default defineCommand({
           attended:
             checked?.attended === undefined
               ? null
-              : parseAttended(checked.attended)
+              : parseAttended(checked.attended),
+          queueView:
+            checked?.queueView === undefined
+              ? null
+              : (parseQueueView(checked.queueView) ?? ('malformed' as const))
         };
       },
       () => 'Read the agent queue'
@@ -193,7 +201,20 @@ export default defineCommand({
             'attended',
             report.attended.text
           )
-        : row('warn', 'attended', 'unknown; no verdict from the script')
+        : row('warn', 'attended', 'unknown; no verdict from the script'),
+      ...(report.queueView === null
+        ? [row('warn', 'queue view', 'unknown; no queue view from the script')]
+        : report.queueView === 'malformed'
+          ? [row('warn', 'queue view', 'malformed queue view from the script')]
+          : [
+              row(true, 'next', formatNext(report.queueView)),
+              row(
+                report.queueView.held.tickets.length > 0 ? 'warn' : true,
+                'held',
+                formatHeld(report.queueView)
+              ),
+              row(true, 'on your table', formatTable(report.queueView))
+            ])
     ];
     ctx.ui.table(['', 'check', 'detail'], rows);
 

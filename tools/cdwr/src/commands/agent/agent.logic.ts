@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 
+import { z } from 'zod';
+
 export const LABEL = 'se.codeware.agent-queue';
 /**
  * Seconds between scheduled runs; launchd's StartInterval.
@@ -335,4 +337,115 @@ export const parseAttended = (line: string): AttendedCheck => {
   if (text.startsWith('run now:')) return { kind: 'run', ticket, text };
   if (text.startsWith('idle:')) return { kind: 'idle', text };
   return { kind: 'unknown', text };
+};
+
+const ticketSchema = z.string();
+const prSchema = z.number().nullable();
+
+export const queueViewSchema = z.object({
+  at: z.string(),
+  limit: z.object({ used: z.number(), max: z.number() }),
+  session: z
+    .object({
+      state: z.enum(['alive', 'waiting', 'stopped', 'none']),
+      detail: z.string().nullable(),
+      id: z.string().nullable(),
+      ticket: z.string().nullable(),
+      lastSeen: z.string().nullable()
+    })
+    .nullable(),
+  next: z.array(
+    z.object({
+      ticket: ticketSchema,
+      reason: z.enum([
+        'resume',
+        'take over',
+        'answered',
+        'review feedback',
+        'ready'
+      ]),
+      detail: z.string().nullable()
+    })
+  ),
+  held: z.object({
+    tickets: z.array(ticketSchema),
+    free: z.array(
+      z.discriminatedUnion('action', [
+        z.object({
+          action: z.literal('review'),
+          ticket: ticketSchema,
+          pr: prSchema
+        }),
+        z.object({ action: z.literal('limit'), value: z.number() })
+      ])
+    )
+  }),
+  table: z.object({
+    before: z.array(
+      z.object({ ticket: ticketSchema, kind: z.enum(['plan', 'question']) })
+    ),
+    after: z.array(
+      z.discriminatedUnion('kind', [
+        z.object({ ticket: ticketSchema, kind: z.literal('pr'), pr: prSchema }),
+        z.object({
+          ticket: ticketSchema,
+          kind: z.literal('handoffs'),
+          items: z.array(z.string())
+        })
+      ])
+    )
+  })
+});
+
+export type QueueView = z.infer<typeof queueViewSchema>;
+
+/** Reads the text after `queue-view: ` in the `run.sh --check` output; never throws */
+export const parseQueueView = (text: string): QueueView | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const result = queueViewSchema.safeParse(parsed);
+  return result.success ? result.data : undefined;
+};
+
+export const formatNext = (view: QueueView): string =>
+  view.next
+    .map((n) => `${n.ticket} ${n.reason}${n.detail ? ` (${n.detail})` : ''}`)
+    .join(', ') || 'nothing';
+
+export const formatHeld = (view: QueueView): string => {
+  const { tickets, free } = view.held;
+  const slots = free.map((f) =>
+    f.action === 'review'
+      ? `review ${f.ticket}${f.pr === null ? '' : ` (#${f.pr})`}`
+      : `limit=${f.value}`
+  );
+  const held = tickets.join(', ');
+  return held === ''
+    ? 'nothing'
+    : slots.length > 0
+      ? `${held}; free a slot: ${slots.join(', ')}`
+      : held;
+};
+
+export const formatTable = (view: QueueView): string => {
+  const { before, after } = view.table;
+  const parts = [
+    before.length > 0
+      ? `before: ${before.map((b) => `${b.ticket} ${b.kind}`).join(', ')}`
+      : undefined,
+    after.length > 0
+      ? `after: ${after
+          .map((a) =>
+            a.kind === 'pr'
+              ? `${a.ticket} PR${a.pr === null ? '' : ` #${a.pr}`}`
+              : `${a.ticket} hand-offs (${a.items.length})`
+          )
+          .join(', ')}`
+      : undefined
+  ].filter((part) => part !== undefined);
+  return parts.join(' · ') || 'nothing';
 };
