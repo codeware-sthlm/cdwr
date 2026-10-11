@@ -76,8 +76,8 @@ Check in this order, between tickets and never in the middle of a step. Take the
    When it isn't, post a narrower follow-up question (see **How a gate asks**) and move on.
 3. **Håkan's review on an `agent:review` ticket** whose PR is still open: an unresolved review
    thread on the PR by someone other than a bot, or a ticket comment not starting with
-   `**Agent` that is newer than the agent's `**Agent: PR ready**` comment. See **Review
-   feedback**.
+   `**Agent` that is newer than the agent's newest `**Agent: PR ready**` or
+   `**Agent: review addressed**` comment. See **Review feedback**.
 4. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
    removes anything. It only removes ticket worktrees whose PR merged or closed and that
    have nothing uncommitted. Then close each parent ticket whose sub-issues are all Done or
