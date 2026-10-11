@@ -50,6 +50,13 @@ describe('run.sh', () => {
     );
   });
 
+  // A failed publish must not mark the line and view as published
+  it('marks the runs document published only when its stamp moved', () => {
+    expect(SCRIPT).toContain(
+      `[[ "$(cat "$stamp" 2>/dev/null)" != "$before" ]] || return 0`
+    );
+  });
+
   // The documents are the only things run.sh writes to Linear
   it('sends no mutation but the documents', () => {
     const mutations = [...SCRIPT.matchAll(/mutation\b[^{]*\{\s*(\w+)/gi)].map(
