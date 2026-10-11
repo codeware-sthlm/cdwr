@@ -145,6 +145,11 @@ on claim and refresh it with every Status row update.
    **Status** table (`| Step | What | Status |`, one row per step), the **Claim:** line, and
    one line `**Next:** <what happens next, or what it is waiting on>`. The Agent Desk
    reads that table and line, so keep the format. Notify `info`: plan written.
+
+   One ticket, one PR, so every PR maps to a ticket of its own. Work that needs more than
+   one PR becomes sub-issues of the ticket, one per PR, each on its own branch and worked
+   as a ticket. The parent holds the overview and closes when all its sub-issues are done.
+
 3. **Plan approval, in Linear.** Post `**Agent: plan ready**` with the decisions most worth
    checking and any open questions as numbered options (the format in **How a gate asks**).
    Set `agent:needs-input`, notify `action`, and move on to **What to take next**: the ticket
@@ -159,7 +164,9 @@ on claim and refresh it with every Status row update.
    security, boot-path and published-API steps yourself, not through the implementer.
 5. **Finish.** Run `nx affected` lint, typecheck and test against main, then `/code-review`,
    folding its fixes into the commits they correct. Push and open the PR (plan summary in the
-   body). Notify `info`: PR opened.
+   body, ending with `Closes COD-123`). Never `Part of`, `Ref` or another contributing word:
+   on merge Linear moves those tickets back to In Progress instead of Done. Notify `info`:
+   PR opened.
 6. **Copilot round.** Copilot reviews every PR on its own; handle it before the gate. See
    **Copilot review** below. Then set `agent:review` and status In Review, and add a comment
    that starts with `**Agent: PR ready**`. It holds the PR link, what the Copilot round
@@ -256,7 +263,7 @@ A gate never asks in the terminal, attended or not. Don't use AskUserQuestion.
   conventions settle, a reversible trade-off, a contradiction with an obvious reading. Record
   it under **Decisions** with the reason, and continue.
 - **Ask in Linear** when the answer rests on Håkan's priorities, product direction, or
-  knowledge outside the repo, or when the plan outgrows the ticket (propose a split). Then
+  knowledge outside the repo, or when the plan outgrows the ticket (propose sub-issues). Then
   move on to **What to take next**.
 - **Never do it yourself:** a production action, deleting data, spending money. Those go in
   the hand-off checklist, or become a question when the work can't go on without them.
