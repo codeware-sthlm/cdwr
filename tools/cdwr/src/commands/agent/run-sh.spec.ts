@@ -102,8 +102,17 @@ describe('run.sh', () => {
   // The verdict comes from watch.jq, never from logic copied into run.sh
   it('computes the attended line with watch.jq', () => {
     expect(SCRIPT).toContain(
-      `'include "watch"; .data.issues.nodes | attended($now; 5; $watch)'`
+      `'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)'`
     );
+    expect(SCRIPT).toContain(
+      `'include "watch"; .data.issues.nodes | queue_view($now; 5; $watch; $session; $waits)'`
+    );
+  });
+
+  // The parked tickets' PR reads live in waits.sh, installed beside run.sh
+  it('reads parked waits once through waits.sh', () => {
+    expect(SCRIPT).toContain('source "${0:A:h}/waits.sh"');
+    expect(SCRIPT.match(/parked_waits <<</g)).toHaveLength(1);
     expect(SCRIPT).toMatch(/^attended$/m);
     expect(SCRIPT).toContain('print -r -- "attended: $attended_line"');
   });

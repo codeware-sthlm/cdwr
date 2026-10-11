@@ -21,6 +21,7 @@ import {
   filesDrift,
   formatHeld,
   formatNext,
+  formatParked,
   formatTable,
   formatWatching,
   lastSchedulerLine,
@@ -213,6 +214,7 @@ export default defineCommand({
                 'held',
                 formatHeld(report.queueView)
               ),
+              row(true, 'parked', formatParked(report.queueView)),
               row(true, 'on your table', formatTable(report.queueView))
             ])
     ];

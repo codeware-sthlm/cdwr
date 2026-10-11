@@ -112,6 +112,38 @@ def next_line:
   [ (.description // "") | split("\n")[] | select(startswith("**Next:** ")) | ltrimstr("**Next:** ") | trim ]
   | first;
 
+# { wait: copilot|ci, pr, sha, since } from a
+# "**Next:** Waiting: <copilot|CI> · PR #<n>[ @ <sha>] · since <time>" line: the ticket is parked
+# on an external wait. A CI wait names the pushed commit, so checks of the commit before it
+# don't count. Else null.
+def parked:
+  [ next_line // empty
+    | capture("^Waiting: (?<wait>[A-Za-z]+) · PR #(?<pr>[0-9]+)(?: @ (?<sha>[0-9a-f]{7,40}))? · since (?<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z)$")
+    | { wait: (.wait | ascii_downcase), pr: (.pr | tonumber), sha: (.sha // null), since: (.at | epoch) }
+    | select(.wait == "copilot" or .wait == "ci") ]
+  | first;
+
+# { resolved, outcome } for a parked issue. $waits maps identifier to { reviewed, rollup, oid };
+# a missing entry is pending. Copilot answers within 20 minutes or not at all; CI checks that
+# haven't finished on the named commit within an hour resolve as a timeout, so no ticket stays
+# parked for good.
+def wait_state($now; $waits):
+  parked as $p
+  | ($waits[.identifier] // {}) as $w
+  | if $p.wait == "copilot" then
+      if $w.reviewed == true then { resolved: true, outcome: "reviewed" }
+      elif ($now - $p.since) >= 1200 then { resolved: true, outcome: "no review" }
+      else { resolved: false, outcome: null }
+      end
+    else
+      ($p.sha == null or (($w.oid // "") | startswith($p.sha))) as $head
+      | if $head and $w.rollup == "SUCCESS" then { resolved: true, outcome: "success" }
+        elif $head and ($w.rollup == "FAILURE" or $w.rollup == "ERROR") then { resolved: true, outcome: "failure" }
+        elif ($now - $p.since) >= 3600 then { resolved: true, outcome: "timeout" }
+        else { resolved: false, outcome: null }
+        end
+    end;
+
 # The issue's agent:* label name, else null
 def agent_label:
   [ (.labels.nodes // [])[].name | select(startswith("agent:")) ] | first;
@@ -164,24 +196,39 @@ def limit_used($now; $limit):
       | .identifier ] as $hand
   | { used: ($open | length), open: $open, handoffs: $hand };
 
-# The whole queue: { at, limit, session, next, held, table }. `next` is every actionable item in
-# the order the skill takes them; `held` is what the limit keeps from starting; `table` is what
-# waits on Håkan, before and after implementation. $session comes from session_state, or null.
-def queue_view($now; $limit; $watch; $session):
+# The whole queue: { at, limit, session, next, held, parked, table }. `next` is every actionable
+# item in the order the skill takes them; `held` is what the limit keeps from starting; `parked`
+# is every ticket waiting on a PR check or Copilot; `table` is what waits on Håkan, before and
+# after implementation. $session comes from session_state, or null. $waits comes from
+# waits.sh, keyed by identifier.
+def queue_view($now; $limit; $watch; $session; $waits):
   map(select(other_repo | not)) as $all
-  | ($all | limit_used($now; $limit)) as $lu
+  | ($all | limit_used($now; $limit)) as $lu0
+  | ([ $all[] | select((agent_label == "agent:working" or agent_label == "agent:review")
+                       and is_open and parked != null)
+       | . + { park: parked, ws: wait_state($now; $waits) } ] | sort_by(.park.since)) as $park
+  | ($park | map(.identifier)) as $parkIds
+  | ([ $park[] | select(agent_label == "agent:working") ]) as $parkWorking
+  # A parked working ticket holds a slot like an open review
+  | ($lu0 + { used: ($lu0.used + ($parkWorking | length)) }) as $lu
   | ([ $all[] | select(agent_label == "agent:working") | . + { claim: claim } ]) as $working
-  | ([ $working[] | select(.claim != null and ($now - .claim.at) < 7200) ] | sort_by(.claim.at) | reverse
+  | ([ $working[] | select(.claim != null and ($now - .claim.at) < 7200 and (.identifier | IN($parkIds[]) | not)) ]
+     | sort_by(.claim.at) | reverse
      | map({ ticket: .identifier, reason: "resume", detail: next_line })) as $fresh
   # No readable claim is no proof the session is gone: the skill takes over only a claim 2 h old
-  | ([ $working[] | select(.claim == null) ] | sort_by(queue_order)
+  | ([ $working[] | select(.claim == null and (.identifier | IN($parkIds[]) | not)) ] | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "resume", detail: "no claim line" })) as $unclaimed
   | ([ $working[] | select(.claim != null and ($now - .claim.at) >= 7200) ] | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "take over",
              detail: "claim \((($now - .claim.at) / 3600 | floor)) h old" })) as $stale
+  # A stale parked ticket is taken over, not listed twice
+  | ($stale | map(.ticket)) as $staleIds
+  | ([ $park[] | select(.ws.resolved and (.identifier | IN($staleIds[]) | not))
+       | { ticket: .identifier, reason: "parked wait resolved", detail: .ws.outcome } ]) as $resolved
   | ([ $all[] | select(agent_label == "agent:needs-input" and is_open and answered) ] | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "answered", detail: null })) as $ans
-  | ([ $all[] | select(agent_label == "agent:review" and is_open and review_feedback($watch)) ] | sort_by(queue_order)
+  | ([ $all[] | select(agent_label == "agent:review" and is_open and (.identifier | IN($parkIds[]) | not)
+                       and review_feedback($watch)) ] | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "review feedback", detail: null })) as $fb
   | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not)) ] | sort_by(queue_order)
      | map(.identifier)) as $rdy
@@ -195,26 +242,31 @@ def queue_view($now; $limit; $watch; $session):
       at: ($now | todateiso8601),
       limit: { used: $lu.used, max: $limit },
       session: $session,
-      next: ($fresh + $unclaimed + $stale + $ans + $fb
+      next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb
              + (if $full then [] else $rdy | map({ ticket: ., reason: "ready", detail: null }) end)),
       held: {
         tickets: (if $full then $rdy else [] end),
         free: (if $full and ($rdy | length) > 0
-               then ($lu.open | map({ action: "review", ticket: ., pr: ($watch[.].pr // null) }))
+               then ($lu0.open | map({ action: "review", ticket: ., pr: ($watch[.].pr // null) }))
+                    + ($parkWorking | map({ action: "wait", ticket: .identifier, pr: .park.pr }))
                     + [ { action: "limit", value: ($lu.used + 1) } ]
                else [] end)
       },
+      parked: ($park | map({ ticket: .identifier, wait: .park.wait, pr: .park.pr,
+                             since: (.park.since | todateiso8601),
+                             resolved: .ws.resolved, outcome: .ws.outcome })),
       table: {
         before: $before,
         after: (($lu.open | map({ ticket: ., kind: "pr", pr: ($watch[.].pr // null) }))
                 + ($lu.handoffs | map({ ticket: ., kind: "handoffs", items: ($by[.] | handoffs) })))
       }
     };
+def queue_view($now; $limit; $watch; $session): queue_view($now; $limit; $watch; $session; {});
 
 # The pick: { verdict: running|run|idle, ticket, reason, detail, waiting, used, limit }, the first
 # of queue_view's `next`. A resumable ticket reads as running: a session may hold it.
-def attended($now; $limit; $watch):
-  queue_view($now; $limit; $watch; null) as $q
+def attended($now; $limit; $watch; $waits):
+  queue_view($now; $limit; $watch; null; $waits) as $q
   | ($q.table.before | map(.ticket + " input")) as $inputs
   | ($q.table.after | map(.ticket + (if .kind == "pr" then " PR" else " hand-offs" end))) as $after
   | { used: $q.limit.used, limit: $limit, waiting: ($inputs + $after) }
@@ -223,6 +275,7 @@ def attended($now; $limit; $watch):
          elif $n.reason == "resume" then { verdict: "running", ticket: $n.ticket, reason: "working", detail: $n.detail }
          else { verdict: "run", ticket: $n.ticket, reason: $n.reason, detail: $n.detail }
          end);
+def attended($now; $limit; $watch): attended($now; $limit; $watch; {});
 
 # One line for the attended pick object
 def attended_line:
