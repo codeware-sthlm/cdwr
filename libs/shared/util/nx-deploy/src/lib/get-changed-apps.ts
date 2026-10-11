@@ -4,8 +4,30 @@ import { getPackageManagerCommand } from '@nx/devkit';
 import { git } from './git';
 import { isIgnoredFile } from './ignored-files';
 
-/** Files per nx call: about 40 KB of paths at this repo's longest */
-const FILES_PER_CALL = 500;
+/**
+ * Bytes per `--files` argument. Linux refuses a single argument over 128 KiB
+ * (MAX_ARG_STRLEN), so stay well below it whatever the path lengths.
+ */
+const MAX_ARG_BYTES = 64 * 1024;
+
+/** Comma-joined lists, each at most `MAX_ARG_BYTES` long */
+export const chunkFiles = (files: string[]): string[] => {
+  const chunks: string[] = [];
+  let current = '';
+  for (const file of files) {
+    const next = current === '' ? file : `${current},${file}`;
+    if (current !== '' && Buffer.byteLength(next) > MAX_ARG_BYTES) {
+      chunks.push(current);
+      current = file;
+    } else {
+      current = next;
+    }
+  }
+  if (current !== '') {
+    chunks.push(current);
+  }
+  return chunks;
+};
 
 export type GetChangedAppsOptions = {
   /** Start of the range, exclusive */
@@ -53,18 +75,10 @@ export const getChangedApps = async ({
 
   // One `--files` argument per call stays far below Linux's 128 KiB limit on a
   // single argument; a range from the root commit lists thousands of files
-  for (let i = 0; i < files.length; i += FILES_PER_CALL) {
+  for (const list of chunkFiles(files)) {
     const { stdout } = await exec.getExecOutput(
       pmc.exec,
-      [
-        'nx',
-        'show',
-        'projects',
-        '--affected',
-        '--files',
-        files.slice(i, i + FILES_PER_CALL).join(','),
-        '--json'
-      ],
+      ['nx', 'show', 'projects', '--affected', '--files', list, '--json'],
       { silent: true }
     );
     for (const project of JSON.parse(stdout) as string[]) {
