@@ -115,7 +115,7 @@ def next_line:
 # { wait: copilot|ci, pr, sha, since } from a
 # "**Next:** Waiting: <copilot|CI> · PR #<n>[ @ <sha>] · since <time>" line: the ticket is parked
 # on an external wait. A CI wait names the pushed commit, so checks of the commit before it
-# don't count. Linear stores `PR #123` as `PR [owner/repo#123](url)` once the PR is attached, so
+# don't count; a CI marker without one resolves only by timing out. Linear stores `PR #123` as `PR [owner/repo#123](url)` once the PR is attached, so
 # both read. Else null.
 def parked:
   [ next_line // empty
@@ -137,7 +137,7 @@ def wait_state($now; $waits):
       else { resolved: false, outcome: null }
       end
     else
-      ($p.sha == null or (($w.oid // "") | startswith($p.sha))) as $head
+      ($p.sha != null and (($w.oid // "") | startswith($p.sha))) as $head
       | if $head and $w.rollup == "SUCCESS" then { resolved: true, outcome: "success" }
         elif $head and ($w.rollup == "FAILURE" or $w.rollup == "ERROR") then { resolved: true, outcome: "failure" }
         elif ($now - $p.since) >= 3600 then { resolved: true, outcome: "timeout" }

@@ -1116,8 +1116,9 @@ describe('attended picks', () => {
 
   describe('parked', () => {
     const since = (ago: number) => iso(ago).slice(0, 16) + 'Z';
+    const HEAD = 'abc1234def';
     const marker = (wait: string, ago: number, pr = 12) =>
-      `**Next:** Waiting: ${wait} · PR #${pr} · since ${since(ago)}`;
+      `**Next:** Waiting: ${wait} · PR #${pr}${wait.toLowerCase() === 'ci' ? ' @ abc1234' : ''} · since ${since(ago)}`;
     const parkedNode = (
       id: string,
       label: string,
@@ -1272,10 +1273,20 @@ describe('attended picks', () => {
         ['EXPECTED', false, null],
         [null, false, null]
       ])('ci: rollup %s', (rollup, resolved, outcome) => {
-        expect(state(ci, { 'COD-1': { reviewed: false, rollup } })).toEqual({
+        expect(
+          state(ci, { 'COD-1': { reviewed: false, rollup, oid: HEAD } })
+        ).toEqual({
           resolved,
           outcome
         });
+      });
+
+      it('ci: a marker without a commit waits for the timeout', () => {
+        const bare = node('COD-1', 'agent:working', {
+          description: `x\n**Next:** Waiting: CI · PR #12 · since ${since(60)}\n`
+        });
+        const waits = { 'COD-1': { rollup: 'SUCCESS', oid: HEAD } };
+        expect(state(bare, waits)).toEqual({ resolved: false, outcome: null });
       });
 
       it('ci: missing entry is pending', () => {
@@ -1321,7 +1332,7 @@ describe('attended picks', () => {
     });
 
     describe('queue_view', () => {
-      const CI = { 'COD-1': { reviewed: false, rollup: 'SUCCESS' } };
+      const CI = { 'COD-1': { reviewed: false, rollup: 'SUCCESS', oid: HEAD } };
 
       it('puts resolved waits first, oldest first, as run with its reason', () => {
         const issues = [
@@ -1333,8 +1344,8 @@ describe('attended picks', () => {
           parkedNode('COD-2', 'agent:review', 'ci', 1800)
         ];
         const waits = {
-          'COD-1': { rollup: 'SUCCESS' },
-          'COD-2': { rollup: 'FAILURE' }
+          'COD-1': { rollup: 'SUCCESS', oid: HEAD },
+          'COD-2': { rollup: 'FAILURE', oid: HEAD }
         };
         const r = view(issues, waits);
         expect(r.next).toEqual([
@@ -1392,7 +1403,7 @@ describe('attended picks', () => {
             description: claimed('ci', 5 * HOUR, 5 * HOUR)
           });
         const issues = [stale('COD-1'), stale('COD-2')];
-        const r = view(issues, { 'COD-1': { rollup: 'SUCCESS' } });
+        const r = view(issues, { 'COD-1': { rollup: 'SUCCESS', oid: HEAD } });
         expect(r.next).toEqual([
           { ticket: 'COD-1', reason: 'take over', detail: 'claim 5 h old' },
           { ticket: 'COD-2', reason: 'take over', detail: 'claim 5 h old' }
@@ -1453,7 +1464,10 @@ describe('attended picks', () => {
             parkedNode('COD-2', 'agent:review', 'copilot', 300),
             parkedNode('COD-1', 'agent:working', 'ci', 900)
           ],
-          { 'COD-1': { rollup: 'PENDING' }, 'COD-2': { reviewed: true } }
+          {
+            'COD-1': { rollup: 'PENDING', oid: HEAD },
+            'COD-2': { reviewed: true }
+          }
         );
         expect(r.parked).toEqual([
           {
