@@ -34,6 +34,12 @@ describe('run.sh', () => {
     expect(SCRIPT).toMatch(/note "fail: planned nothing/);
   });
 
+  // The watcher's liveness comes from <id>.watcher, not from the session JSON
+  it('reads the watcher pid from the .watcher file', () => {
+    expect(SCRIPT).toContain('"${f%.json}.watcher"');
+    expect(SCRIPT).not.toContain('watcherPid');
+  });
+
   // The documents are the only things run.sh writes to Linear
   it('sends no mutation but the documents', () => {
     const mutations = [...SCRIPT.matchAll(/mutation\b[^{]*\{\s*(\w+)/gi)].map(
@@ -83,6 +89,13 @@ describe('run.sh', () => {
     );
     expect(SCRIPT).toMatch(/^attended$/m);
     expect(SCRIPT).toContain('print -r -- "attended: $attended_line"');
+  });
+
+  it('notices a missing session without naming a ticket for /work-queue', () => {
+    expect(SCRIPT).toContain('no session running');
+    expect(SCRIPT).toContain('Start /work-queue.');
+    expect(SCRIPT).not.toMatch(/\/work-queue \$/);
+    expect(SCRIPT).not.toMatch(/\/work-queue \S*COD-/);
   });
 
   it('publishes the activity document from cdwr agent activity', () => {

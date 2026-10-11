@@ -1073,3 +1073,81 @@ describe('attended picks', () => {
     });
   });
 });
+
+describe('session_state and session_prefix', () => {
+  const NOW = 1_800_000_000;
+  const iso = (agoSeconds: number) =>
+    new Date((NOW - agoSeconds) * 1000).toISOString();
+  const sess = (over: Record<string, unknown> = {}) => ({
+    id: 's1',
+    state: 'working',
+    detail: null,
+    lastSeen: iso(60),
+    pidAlive: true,
+    watcherAlive: false,
+    ...over
+  });
+  const state = (sessions: unknown[]) => run(`session_state(${NOW})`, sessions);
+
+  it.each([
+    ['empty', [], { state: 'none', detail: null, id: null }],
+    [
+      'alive working',
+      [sess()],
+      { state: 'alive', detail: 'working', id: 's1' }
+    ],
+    [
+      'alive polling with an old heartbeat',
+      [sess({ lastSeen: iso(7200), watcherAlive: true })],
+      { state: 'alive', detail: 'polling', id: 's1' }
+    ],
+    [
+      'waiting for a permission prompt',
+      [sess({ state: 'waiting', detail: 'permission_prompt' })],
+      { state: 'waiting', detail: 'permission_prompt', id: 's1' }
+    ],
+    [
+      'stopped: process up, old heartbeat, no watcher',
+      [sess({ state: 'stopped', lastSeen: iso(7200) })],
+      { state: 'stopped', detail: null, id: null }
+    ],
+    [
+      'ended is none',
+      [sess({ state: 'ended' })],
+      { state: 'none', detail: null, id: null }
+    ],
+    [
+      'dead pid is none',
+      [sess({ pidAlive: false })],
+      { state: 'none', detail: null, id: null }
+    ],
+    [
+      'stopped: a turn that just ended without a watcher wakes no one',
+      [sess({ state: 'stopped', lastSeen: iso(30) })],
+      { state: 'stopped', detail: null, id: null }
+    ],
+    [
+      'the newest alive session wins',
+      [
+        sess({ id: 'old', lastSeen: iso(600) }),
+        sess({ id: 'new', lastSeen: iso(30) })
+      ],
+      { state: 'alive', detail: 'working', id: 'new' }
+    ]
+  ])('session_state: %s', (_name, sessions, expected) => {
+    expect(state(sessions)).toEqual(expected);
+  });
+
+  it.each([
+    [{ state: 'alive', detail: 'polling', id: 's' }, 'session polling'],
+    [{ state: 'alive', detail: 'working', id: 's' }, 'session working'],
+    [
+      { state: 'waiting', detail: 'permission_prompt', id: 's' },
+      'session waiting (permission_prompt)'
+    ],
+    [{ state: 'stopped', detail: null, id: null }, 'session stopped'],
+    [{ state: 'none', detail: null, id: null }, 'no session']
+  ])('session_prefix: %j', (input, expected) => {
+    expect(run('session_prefix', input)).toBe(expected);
+  });
+});
