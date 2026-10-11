@@ -1197,6 +1197,11 @@ describe('attended picks', () => {
           { wait: 'ci', pr: 606, sha: 'abc1234', since: 1791735600 }
         ],
         [
+          'a code span with a bare number',
+          '**Next:** `Waiting: CI · PR 607 @ 4535094 · since 2026-10-11T16:20Z`',
+          { wait: 'ci', pr: 607, sha: '4535094', since: 1791735600 }
+        ],
+        [
           'CI on a commit',
           '**Next:** Waiting: CI · PR #7 @ abc1234 · since 2026-10-11T16:20Z',
           { wait: 'ci', pr: 7, sha: 'abc1234', since: 1791735600 }
@@ -1212,6 +1217,10 @@ describe('attended picks', () => {
           '**Next:** Waiting: review · PR #7 · since 2026-10-11T16:20Z'
         ],
         ['no pr', '**Next:** Waiting: ci · since 2026-10-11T16:20Z'],
+        [
+          'a PR link titled with its name',
+          '**Next:** Waiting: CI · PR [feat: x](https://linear.app/codeware/review/x-1) @ abc1234 · since 2026-10-11T16:20Z'
+        ],
         ['a bad time', '**Next:** Waiting: ci · PR #7 · since yesterday'],
         [
           'a wrong separator',

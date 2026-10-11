@@ -117,9 +117,13 @@ def next_line:
 # on an external wait. A CI wait names the pushed commit, so checks of the commit before it
 # don't count; a CI marker without one resolves only by timing out. Linear stores `PR #123` as `PR [owner/repo#123](url)` once the PR is attached, so
 # both read. Else null.
+# Linear rewrites a bare `PR #123` once the PR is attached, into `[owner/repo#123](url)` or into
+# a link titled with the PR's name, which drops the number. The skill writes the marker as a code
+# span, which Linear leaves alone; the older forms still read where the number survived.
 def parked:
   [ next_line // empty
-    | capture("^Waiting: (?<wait>[A-Za-z]+) · PR (?:#|\\[[^\\]#]*#)(?<pr>[0-9]+)(?:\\]\\([^)]*\\))?(?: @ (?<sha>[0-9a-f]{7,40}))? · since (?<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z)$")
+    | ltrimstr("`") | rtrimstr("`")
+    | capture("^Waiting: (?<wait>[A-Za-z]+) · PR (?:#|\\[[^\\]#]*#)?(?<pr>[0-9]+)(?:\\]\\([^)]*\\))?(?: @ (?<sha>[0-9a-f]{7,40}))? · since (?<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z)$")
     | { wait: (.wait | ascii_downcase), pr: (.pr | tonumber), sha: (.sha // null), since: (.at | epoch) }
     | select(.wait == "copilot" or .wait == "ci") ]
   | first;
