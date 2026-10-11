@@ -11,7 +11,8 @@ source of truth for state. The conversation is not, so a fresh session can alway
 
 The session never blocks on a question in the terminal. When it doesn't know, it writes in
 Linear what it needs and moves on to work it can do. When Håkan has answered, the ticket
-resumes. One ticket is in flight at a time.
+resumes. One ticket is active at a time; others may be parked on a Copilot or CI wait (see
+**Parking**).
 
 ## Arguments
 
@@ -39,7 +40,7 @@ on: working, waiting on a prompt, stopped, polling or ended. The scheduler reads
 whether a session is alive, and only then stays quiet about work waiting for one.
 
 The file also names the ticket in hand. Run `tools/cdwr/agent-queue/session.sh ticket COD-123`
-when a ticket is claimed or resumed (**Per ticket** step 1, **What to take next** steps 1–3),
+when a ticket is claimed or resumed (**Per ticket** step 1, **What to take next** steps 1–4),
 and `tools/cdwr/agent-queue/session.sh ticket -` before going back to **What to take next**.
 
 Run both markers on their own or chained with commands that succeed: a Bash call that exits
@@ -63,36 +64,42 @@ Linear account, so the author can't tell an answer from a question. The marker c
 ## What to take next
 
 Check in this order, between tickets and never in the middle of a step. Take the first match.
+`tools/cdwr/agent-queue/wait.sh --now` prints the computed pick (the same code the watcher and
+the scheduler run), so start with it; it is what notices a parked wait that resolved.
 
-1. **An `agent:working` ticket you may resume.** Read the `**Claim:**` line under its Status
-   table. Resume it when the claim carries this session's id, or is older than 2 hours. A newer
-   claim with another id means another session holds it, even in the same worktree: leave it
-   alone. On a take-over, post `**Agent: took over**` with the old claim line, then
-   continue from the Status table and **Next:** line, checking the branch for commits beyond
-   them.
-2. **An answered `agent:needs-input` ticket**: its newest comment (or newest reply in the
+1. **A parked ticket whose wait resolved** (`run now: COD-1 parked wait resolved`), when its
+   claim carries this session's id or is older than 2 hours, as in step 2. Carry on where the
+   wait left off: see **Parking**.
+2. **An `agent:working` ticket you may resume.** Skip one that is parked on a pending wait.
+   Read the `**Claim:**` line under its Status table. Resume it when the claim carries this
+   session's id, or is older than 2 hours. A newer claim with another id means another session
+   holds it, even in the same worktree: leave it alone. On a take-over, post
+   `**Agent: took over**` with the old claim line, then continue from the Status table and
+   **Next:** line, checking the branch for commits beyond them.
+3. **An answered `agent:needs-input` ticket**: its newest comment (or newest reply in the
    agent's thread) does **not** start with `**Agent`. Read the answer. When it is enough,
    record it under **Decisions** and continue: an approved plan goes to **Per ticket** step 4.
    When it isn't, post a narrower follow-up question (see **How a gate asks**) and move on.
-3. **Håkan's review on an `agent:review` ticket** whose PR is still open: an unresolved review
+4. **Håkan's review on an `agent:review` ticket** whose PR is still open: an unresolved review
    thread on the PR by someone other than a bot, or a ticket comment not starting with
    `**Agent` that is newer than the agent's newest `**Agent: PR ready**` or
    `**Agent: review addressed**` comment. See **Review feedback**.
-4. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
+5. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
    removes anything. It only removes ticket worktrees whose PR merged or closed and that
    have nothing uncommitted. Then close each parent ticket whose sub-issues are all Done or
    Canceled: set it Done and post `**Agent: closed**` naming the sub-issues. Linear's own
    parent auto-close stays off, so nothing else closes it.
-5. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
+6. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
    starts: go to **Nothing workable**.
-6. **A new `agent:ready` ticket** by the queue rule.
+7. **A new `agent:ready` ticket** by the queue rule.
 
 Nothing matched: go to **Nothing workable**.
 
 ## The limit
 
 Counted from Linear: each `agent:review` ticket that is not Done or Canceled (an open PR)
-counts one. Nothing else does: plans waiting for approval, questions, and merged tickets with
+counts one, and so does each `agent:working` ticket parked on a wait (its PR reaches Håkan
+within the hour). Nothing else does: plans waiting for approval, questions, and merged tickets with
 unticked hand-offs stay on Håkan's table (the queue view lists them) but never hold new work
 back.
 
@@ -107,11 +114,17 @@ Everything waits on Håkan, or the limit is reached.
 2. With `once` or `plan-only`, stop here.
 3. Otherwise wait in the shell: start `tools/cdwr/agent-queue/wait.sh` as a background Bash
    command with a timeout of 7200000. It checks Linear every minute, without waking the session,
-   and exits only when the pick from **What to take next** changes (`changed: …`) or after 110
-   minutes (`timeout: …`). On `changed`, check **What to take next** again. On `timeout`, start it
+   and exits only when the pick from **What to take next** changes (`changed: …`, a parked wait
+   that resolved included) or after 110 minutes (`timeout: …`). On `changed`, check **What to take next** again. On `timeout`, start it
    again. Send no new notice while the waiting set is unchanged; send one when it changes.
    Without `once` or `plan-only`, never end a turn unless the watcher is running: an idle session
    with nothing to wake it stops answering Linear until Håkan types.
+
+The same holds for any turn that ends while a background task runs: an implementer, the
+affected run, `/code-review`, a forked skill. Start `wait.sh` beside it unless one already runs.
+The `Stop` hook reports `polling` only while a watcher is alive; without one a live session reads
+as stopped, and the scheduler may treat it as gone. Run `nx affected` in the foreground when it
+fits in the 10-minute limit.
 
 ## Labels (group "Agent", one at a time)
 
@@ -169,7 +182,7 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    One ticket, one PR, so every PR maps to a ticket of its own. Work that needs more than
    one PR becomes sub-issues of the ticket, one per PR, each on its own branch and worked
    as a ticket. The parent holds the overview and opens no PR; the agent closes it once all its
-   sub-issues are done (**What to take next**, step 4).
+   sub-issues are done (**What to take next**, step 5).
 
 3. **Plan approval, in Linear.** Post `**Agent: plan ready**` with the decisions most worth
    checking and any open questions as numbered options (the format in **How a gate asks**).
@@ -187,9 +200,10 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    folding its fixes into the commits they correct. Push and open the PR (plan summary in the
    body, ending with `Closes COD-123`). Never `Part of`, `Ref` or another contributing word:
    on merge Linear moves those tickets back to In Progress instead of Done. Notify `info`:
-   PR opened.
+   PR opened. Then park on `copilot` (see **Parking**) and go to **What to take next**.
 6. **Copilot round.** Copilot reviews every PR on its own; handle it before the gate. See
-   **Copilot review** below. Then set `agent:review` and status In Review, and add a comment
+   **Copilot review** below. Once CI is green after it, set `agent:review` and status In
+   Review, and add a comment
    that starts with `**Agent: PR ready**`. It holds the PR link, what the Copilot round
    fixed and dismissed, anything left open for Håkan, and the **hand-off checklist**.
    Notify `action`: PR ready for review.
@@ -213,6 +227,33 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    nothing that matters. Only Håkan can type `/clear`; the line is advice, not a stop.
    Continue in the same turn.
 
+## Parking
+
+A Copilot review or a CI run doesn't hold the session. The ticket is parked on it, and the
+session goes on to **What to take next**.
+
+To park, set the **Next:** line to exactly
+
+```md
+**Next:** Waiting: copilot · PR #123 · since 2026-10-11T16:20Z
+**Next:** Waiting: CI · PR #123 @ 1a2b3c4 · since 2026-10-11T16:20Z
+```
+
+with the current UTC time. A CI wait names the commit just pushed (`git rev-parse --short HEAD`),
+so the checks of the commit before it, still green on GitHub for a few seconds, don't count.
+
+Set the Status row of the step that pushed to `Waiting: copilot` or `Waiting: CI`, refresh the
+**Claim:** time, keep the label and the claim, and run `session.sh ticket -`. `watch.jq` reads the
+marker. A Copilot wait resolves when Copilot has reviewed, or 20 minutes after `since`
+(`no review`). A CI wait resolves when that commit's checks are `SUCCESS` or `FAILURE`/`ERROR`, or
+an hour after `since` (`timeout`: read `gh pr checks` and decide, as for a failure you can't
+fix). `wait.sh` exits on it, and **What to take next** puts it first.
+
+On resume, run `session.sh ticket COD-123`, set the **Next:** line back to what comes next, and
+carry on: after `copilot`, the Copilot round; after `CI`, the PR-ready gate or the
+`review addressed` comment, or a fix when it failed. A parked ticket whose claim grew 2 hours
+old is taken over like any other.
+
 ## Review feedback
 
 Håkan reviews after the PR-ready comment. Handle it between tickets.
@@ -222,17 +263,17 @@ Håkan reviews after the PR-ready comment. Handle it between tickets.
 3. Reply in each thread `**Agent:** Fixed in <sha>: <what changed>` and resolve it. A point
    you aren't sure about gets your reading and stays unresolved.
 4. A point raised as a ticket comment gets a reply comment starting `**Agent:**`.
-5. Run the narrow checks for what changed, push, and wait for CI to finish green.
-6. Post `**Agent: review addressed**` with what changed and what stays open. The ticket stays
+5. Run the narrow checks for what changed, push, park on `CI` (see **Parking**) and go to
+   **What to take next**. A failure on resume is fixed and parked again.
+6. Once CI is green, post `**Agent: review addressed**` with what changed and what stays open. The ticket stays
    `agent:review`; notify `action`: review addressed.
 
 Thread replies and resolving use the GraphQL calls in **Copilot review**.
 
 ## Copilot review
 
-1. Wait for a review by `copilot-pull-request-reviewer[bot]`. Poll
-   `gh api repos/{owner}/{repo}/pulls/<n>/reviews` every minute for up to 20 minutes. If none
-   arrives, say so in the PR-ready comment and go on.
+1. The ticket comes back from its `copilot` park with the outcome `reviewed`, or `no review`
+   after 20 minutes. With no review, say so in the PR-ready comment and go on to step 4.
 2. List unresolved threads by `copilot-pull-request-reviewer`:
 
    ```sh
@@ -246,8 +287,10 @@ Thread replies and resolving use the GraphQL calls in **Copilot review**.
      resolve the thread.
    - **A design question, or you aren't sure:** reply with your reading, leave the thread
      **unresolved**, and list it in the PR-ready comment for Håkan.
-4. Re-run the narrow checks for whatever you changed, push, and wait for CI to finish green.
-   One round only: don't wait for or act on a second Copilot review.
+4. Re-run the narrow checks for whatever you changed, push, and park on `CI`. Park on `CI`
+   even when nothing changed: it resolves on the next check if CI already finished. On
+   `success`, go on to the PR-ready gate (**Per ticket** step 6). On `failure`, fix and park
+   again. One round only: don't wait for or act on a second Copilot review.
 
 Reply and resolve through GraphQL:
 
