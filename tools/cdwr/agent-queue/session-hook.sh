@@ -28,14 +28,14 @@ patch() {
 main() {
   local payload id event tool cmd kind reason file wp state
   payload="$(cat)" || return 0
-  id="$(jq -r '.session_id // empty' <<<"$payload")" || return 0
-  event="$(jq -r '.hook_event_name // empty' <<<"$payload")" || return 0
+  # One jq for the scalars: this runs after every tool call in every session
+  # Unit separator, not tab: IFS whitespace would collapse an empty field
+  IFS=$'\x1f' read -r id event tool <<<"$(jq -r '[.session_id, .hook_event_name, .tool_name] | map(. // "" | tostring) | join("\u001f")' <<<"$payload")" || return 0
   # The id becomes a file name
   [[ -n "$id" && "$id" != *[^A-Za-z0-9_-]* ]] || return 0
   file="$DIR/$id.json"
 
-  if [[ "$event" == PostToolUse ]]; then
-    tool="$(jq -r '.tool_name // empty' <<<"$payload")"
+  if [[ "$event" == PostToolUse && "$tool" == Bash ]]; then
     cmd="$(jq -r '.tool_input.command // empty' <<<"$payload")"
     # Only the bare command registers: an optional path prefix, nothing else on the line
     cmd="${${cmd##[[:space:]]##}%%[[:space:]]##}"

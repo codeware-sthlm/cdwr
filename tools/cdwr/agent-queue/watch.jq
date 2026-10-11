@@ -202,12 +202,12 @@ def attended_line:
 # Input is an array of session files, each with pidAlive and watcherAlive added by run.sh.
 
 # { state: alive|waiting|stopped|none, detail, id } from the session files.
-# Alive: not ended, process up, and a watcher running or a recent heartbeat from a turn that
-# hasn't stopped. A stopped turn with no watcher wakes no one, however recent.
+# Alive: not ended, process up, and a watcher running, an open prompt (however old), or a
+# recent heartbeat from a turn that hasn't stopped. A stopped turn with no watcher wakes no one.
 def session_state($now):
   [ .[] | select(.state != "ended") ] as $open
   | [ $open[] | select(.pidAlive
-                       and (.watcherAlive
+                       and (.watcherAlive or .state == "waiting"
                             or (.state != "stopped" and ($now - (.lastSeen | epoch)) < 900))) ] as $alive
   | ($alive | sort_by(.lastSeen | epoch) | last) as $s
   | if $s != null then
