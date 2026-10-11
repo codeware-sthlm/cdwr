@@ -379,7 +379,7 @@ A host app reads `/apps/<app>` itself at boot, so the deploy pushes no folder se
 
 ### CI/CD
 
-GitHub Actions (`.github/workflows/ci.yml`) runs lint/test/build on PRs using Nx affected detection and Nx Cloud caching. Deployment selection is separate and **not** affected-based: the deployment workflow ships an app when `nx release` resolves a version bump for it from its conventional commits since the last release tag. Preview environments are created for each PR with temporary Postgres databases from a dedicated preview cluster.
+GitHub Actions (`.github/workflows/ci.yml`) runs lint/test/build on PRs using Nx affected detection and Nx Cloud caching. Deployment selection is separate and **not** affected-based: the deployment workflow ships an app when `nx release` resolves a version bump for it from its conventional commits since the last release tag. A bump alone is not enough: the app also needs a runtime change in its range, meaning a changed file outside the ignore list (`ignoredFiles` in `nx-deploy`: Markdown, `.claude/**`, specs, stories, snapshots) that makes it affected. A preview's range is its own PR (`merge-base(origin/main, PR head)..PR head`), so unreleased commits on main and docs-only PRs deploy nothing. Production's range runs from the app's last release tag. Every dropped app is logged as `Skip: <app> - bumped by nx release, but no runtime change in <range>`. A manual dispatch naming an app skips both checks. Preview environments are created for each PR with temporary Postgres databases from a dedicated preview cluster.
 
 ### Release Process
 
