@@ -197,3 +197,31 @@ def attended_line:
     "idle: " + (if (.waiting | length) > 0 then "waits on \(.waiting | join(", "))" else "nothing waiting" end)
     + "; limit \(.used)/\(.limit)"
   end;
+
+# --- Session heartbeat: is an attended /work-queue session running? ---
+# Input is an array of session files, each with pidAlive and watcherAlive added by run.sh.
+
+# { state: alive|waiting|stopped|none, detail, id } from the session files.
+# Alive: not ended, process up, and a watcher running or a recent heartbeat from a turn that
+# hasn't stopped. A stopped turn with no watcher wakes no one, however recent.
+def session_state($now):
+  [ .[] | select(.state != "ended") ] as $open
+  | [ $open[] | select(.pidAlive
+                       and (.watcherAlive
+                            or (.state != "stopped" and ($now - (.lastSeen | epoch)) < 900))) ] as $alive
+  | ($alive | sort_by(.lastSeen | epoch) | last) as $s
+  | if $s != null then
+      if $s.state == "waiting" then { state: "waiting", detail: $s.detail, id: $s.id }
+      else { state: "alive", detail: (if $s.watcherAlive then "polling" else $s.state end), id: $s.id }
+      end
+    elif any($open[]; .pidAlive) then { state: "stopped", detail: null, id: null }
+    else { state: "none", detail: null, id: null }
+    end;
+
+# Short text for the session_state object
+def session_prefix:
+  if .state == "alive" then "session \(.detail)"
+  elif .state == "waiting" then "session waiting (\(.detail))"
+  elif .state == "stopped" then "session stopped"
+  else "no session"
+  end;

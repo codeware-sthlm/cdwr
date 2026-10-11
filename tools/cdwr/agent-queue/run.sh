@@ -370,16 +370,46 @@ attended() {
     'include "watch"; .data.issues.nodes | attended($now; 5; $watch)' <<<"$resp")" ||
     { note "warn: attended: watch.jq failed"; return 0; }
   attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
+  # Session heartbeat files, with the process checks jq can't do. Never stops the run.
+  local SESSIONS="$HOME_DIR/sessions" f w pid wpid sessions_json="[]" session sstate=none
+  if [[ -d "$SESSIONS" ]]; then
+    local -a items=()
+    for f in "$SESSIONS"/*.json(N); do
+      pid="$(jq -r '.pid // empty' "$f" 2>/dev/null)"
+      wpid="$(cat "${f%.json}.watcher" 2>/dev/null)"
+      local pa=false wa=false
+      [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && pa=true
+      [[ "$wpid" == <-> ]] && kill -0 "$wpid" 2>/dev/null && wa=true
+      # Ended or dead for over 24 h: delete
+      if [[ "$pa" == false || "$(jq -r '.state' "$f" 2>/dev/null)" == ended ]] &&
+         (( $(date +%s) - $(jq -r '.lastSeen // empty | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$f" 2>/dev/null || echo 0) > 86400 )); then
+        rm -f "$f" "${f%.json}.watcher"; continue
+      fi
+      items+=("$(jq -c --argjson pa "$pa" --argjson wa "$wa" '. + {pidAlive: $pa, watcherAlive: $wa}' "$f" 2>/dev/null)")
+    done
+    # A watcher file whose pid is dead, with or without a session file
+    for w in "$SESSIONS"/*.watcher(N); do
+      wpid="$(cat "$w" 2>/dev/null)"
+      [[ "$wpid" == <-> ]] && kill -0 "$wpid" 2>/dev/null || rm -f "$w"
+    done
+    (( ${#items[@]} )) && sessions_json="$(printf '%s\n' "${items[@]}" | jq -cs '.' 2>/dev/null || echo '[]')"
+  fi
+  session="$(watch -c --argjson now "$(date +%s)" 'include "watch"; session_state($now)' <<<"$sessions_json" 2>/dev/null)" ||
+    session='{"state":"none","detail":null,"id":null}'
+  attended_line="$(watch -r 'include "watch"; session_prefix' <<<"$session") · $attended_line"
   $check && { print -r -- "attended: $attended_line"; return 0; }
-  # Once per change, and not for a fresh agent:ready ticket: this scheduler plans that itself
+  # Once per change, only with no live session (a live one picks the work up), and not for a
+  # fresh agent:ready ticket: this scheduler plans that itself
   local file="$HOME_DIR/attended.json" key prev
-  key="$(jq -c '{verdict, ticket, reason}' <<<"$verdict")"
+  key="$(jq -c --argjson s "$session" '{verdict, ticket, reason, session: $s.state}' <<<"$verdict")"
   prev="$(cat "$file" 2>/dev/null)"
   if [[ "$key" != "$prev" ]]; then
     print -r -- "$key" > "$file"
-    if [[ "$(jq -r '.verdict' <<<"$verdict")" == run && "$(jq -r '.reason' <<<"$verdict")" != ready ]]; then
+    sstate="$(jq -r '.state' <<<"$session")"
+    if [[ "$(jq -r '.verdict' <<<"$verdict")" == run && "$(jq -r '.reason' <<<"$verdict")" != ready &&
+          ( "$sstate" == none || "$sstate" == stopped ) ]]; then
       note "attended: $attended_line"
-      notice action "Agent queue: run /work-queue now: ${attended_line#run now: }"
+      notice action "Agent queue: no session running, ${attended_line#*run now: }. Start /work-queue."
     fi
   fi
 }
