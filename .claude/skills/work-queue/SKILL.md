@@ -38,6 +38,13 @@ The command itself does nothing. The repo's `PostToolUse` hook sees it and write
 on: working, waiting on a prompt, stopped, polling or ended. The scheduler reads it to tell
 whether a session is alive, and only then stays quiet about work waiting for one.
 
+The file also names the ticket in hand. Run `tools/cdwr/agent-queue/session.sh ticket COD-123`
+when a ticket is claimed or resumed (**Per ticket** step 1, **What to take next** steps 1–3),
+and `tools/cdwr/agent-queue/session.sh ticket -` before going back to **What to take next**.
+
+Run both markers on their own or chained with commands that succeed: a Bash call that exits
+non-zero ends in `PostToolUseFailure`, which the hook doesn't see, so nothing is recorded.
+
 ## The queue rule
 
 The scheduler computes the same order as `queue_view` in `tools/cdwr/agent-queue/watch.jq` (the computed form of **What to take next** and **The limit**; `attended` is its first item) and publishes it in the "Agent queue: runs" document, as the `Attended:` line and a `queue-view` JSON block that the Agent Desk renders. A change to either is made in both.
@@ -151,8 +158,8 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
 ## Per ticket
 
 1. **Claim.** Set `agent:working` and status In Progress. Create or reuse the ticket's
-   worktree, and set the **Claim:** line. Keep the branch independent of open PRs. Notify
-   `info`: claimed.
+   worktree, and set the **Claim:** line. Run `session.sh ticket COD-123`. Keep the branch
+   independent of open PRs. Notify `info`: claimed.
 2. **Plan (Opus).** Investigate, then write the plan into the ticket **description**: keep
    the original report under its own heading, then `## Plan` with **Decisions**, a
    **Status** table (`| Step | What | Status |`, one row per step), the **Claim:** line, and
@@ -200,10 +207,11 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    is an alias for `rg`: write `rg` with its own flags (`rg -i 'a|b'`, never `grep -iE`),
    and the same for any other tool that an alias would reinterpret.
 
-7. **Next.** Don't ask. With `once`, stop. Otherwise go to **What to take next**. After a big
-   ticket, say in one line that `/clear` is a good idea before the next one, without waiting
-   for it: Linear holds the state, so compaction loses nothing that matters. Only Håkan can
-   type `/clear`; the line is advice, not a stop. Continue in the same turn.
+7. **Next.** Don't ask. Run `session.sh ticket -`. With `once`, stop. Otherwise go to
+   **What to take next**. After a big ticket, say in one line that `/clear` is a good idea
+   before the next one, without waiting for it: Linear holds the state, so compaction loses
+   nothing that matters. Only Håkan can type `/clear`; the line is advice, not a stop.
+   Continue in the same turn.
 
 ## Review feedback
 

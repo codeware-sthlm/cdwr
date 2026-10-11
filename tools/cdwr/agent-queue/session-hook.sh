@@ -26,7 +26,7 @@ patch() {
 }
 
 main() {
-  local payload id event tool cmd out kind reason file wp state
+  local payload id event tool cmd out line ticket kind reason file wp state
   payload="$(cat)" || return 0
   # One jq for the scalars: this runs after every tool call in every session
   # Unit separator, not tab: IFS whitespace would collapse an empty field
@@ -52,13 +52,25 @@ main() {
         mv "$file.tmp.$$" "$file" || rm -f "$file.tmp.$$"
       return 0
     fi
+    # `session.sh ticket COD-n` (or `-` to clear) names the ticket in hand, read the same way;
+    # the last such line wins
+    for line in "${(@f)out}"; do
+      [[ "$line" == work-queue\ ticket\ (COD-<->|-) ]] && ticket="${line#work-queue ticket }"
+    done
+    [[ -z "$ticket" && "$cmd" == (([^[:space:]\;\&\|\`\$\(\)\<\>]##/|))tools/cdwr/agent-queue/session.sh\ ticket\ (COD-<->|-) ]] &&
+      ticket="${cmd##* }"
   fi
 
   [[ -f "$file" ]] || return 0
 
   case "$event" in
     PostToolUse)
-      patch '.lastSeen = $now | .state = "working" | .detail = null' --arg now "$(now)" ;;
+      if [[ -n "$ticket" ]]; then
+        patch '.lastSeen = $now | .state = "working" | .detail = null
+          | .ticket = (if $ticket == "-" then null else $ticket end)' --arg now "$(now)" --arg ticket "$ticket"
+      else
+        patch '.lastSeen = $now | .state = "working" | .detail = null' --arg now "$(now)"
+      fi ;;
     Notification)
       kind="$(jq -r '.notification_type // empty' <<<"$payload")"
       case "$kind" in

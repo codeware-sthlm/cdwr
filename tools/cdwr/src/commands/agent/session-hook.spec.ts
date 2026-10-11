@@ -167,6 +167,66 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
       expect(existsSync(join(dir, 'abc.watcher'))).toBe(true);
     });
 
+    const bash = (command: string, stdout?: string) =>
+      run({
+        ...REGISTER,
+        tool_input: { command },
+        ...(stdout === undefined ? {} : { tool_response: { stdout } })
+      });
+
+    it.each([
+      [
+        'tools/cdwr/agent-queue/session.sh ticket COD-7',
+        'work-queue ticket COD-7\n'
+      ],
+      [
+        'tools/cdwr/agent-queue/session.sh ticket COD-7 && git status --short',
+        'work-queue ticket COD-7\n M a.ts\n'
+      ],
+      [
+        'cd /work/codeware-cod-7 && tools/cdwr/agent-queue/session.sh ticket COD-7',
+        'work-queue ticket COD-7\n'
+      ],
+      ['./tools/cdwr/agent-queue/session.sh ticket COD-7', undefined]
+    ])('records the ticket from %s', (command, stdout) => {
+      bash(command, stdout);
+      expect(read()).toMatchObject({ ticket: 'COD-7', state: 'working' });
+    });
+
+    it('keeps the ticket across other tool calls and clears it on -', () => {
+      bash(
+        'tools/cdwr/agent-queue/session.sh ticket COD-7',
+        'work-queue ticket COD-7\n'
+      );
+      bash('git log -1', 'abc123 fix\n');
+      expect(read().ticket).toBe('COD-7');
+      bash(
+        'tools/cdwr/agent-queue/session.sh ticket -',
+        'work-queue ticket -\n'
+      );
+      expect(read().ticket).toBeNull();
+    });
+
+    it('takes the last ticket line of a chained call', () => {
+      bash(
+        'session.sh ticket COD-7; session.sh ticket COD-8',
+        'work-queue ticket COD-7\nwork-queue ticket COD-8\n'
+      );
+      expect(read().ticket).toBe('COD-8');
+    });
+
+    it.each([
+      [
+        'grep -n ticket tools/cdwr/agent-queue/session.sh',
+        '10:      COD-<->|-) print -r -- "work-queue ticket $2" ;;\n'
+      ],
+      ['echo tools/cdwr/agent-queue/session.sh ticket COD-7', undefined],
+      ['tools/cdwr/agent-queue/session.sh ticket COD-x', '']
+    ])('records no ticket from %s', (command, stdout) => {
+      bash(command, stdout);
+      expect(read().ticket).toBeNull();
+    });
+
     it('SessionEnd ends with the reason', () => {
       run({
         session_id: 'abc',
@@ -175,6 +235,15 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
       });
       expect(read()).toMatchObject({ state: 'ended', detail: 'clear' });
     });
+  });
+
+  it('ignores a ticket line from an unregistered session', () => {
+    run({
+      ...REGISTER,
+      tool_input: { command: 'tools/cdwr/agent-queue/session.sh ticket COD-7' },
+      tool_response: { stdout: 'work-queue ticket COD-7\n' }
+    });
+    expect(readdirSync(dir)).toEqual([]);
   });
 
   it('exits 0 silently on garbage', () => {
