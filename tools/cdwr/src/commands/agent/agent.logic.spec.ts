@@ -27,6 +27,7 @@ import {
   parseNotifyLevel,
   parseQueueView,
   parseWatchState,
+  plistPath,
   queuePaths,
   renderPlist,
   serviceTarget,
@@ -617,17 +618,38 @@ describe('formatTable', () => {
 });
 
 describe('implement spend', () => {
-  const ledger = [
-    '{"day":"2026-10-11","ticket":"COD-1","cost":1.5}',
-    '{"day":"2026-10-10","ticket":"COD-2","cost":9}',
-    'not json',
-    '{"day":"2026-10-11","ticket":"COD-3","cost":"x"}',
-    '{"day":"2026-10-11","ticket":"COD-4","cost":1.7}'
-  ].join('\n');
+  const row = (day: string, cost: unknown) =>
+    JSON.stringify({ day, ticket: 'COD-1', cost });
 
-  it('sums only the given day and skips bad lines', () => {
+  it('sums only the given day', () => {
+    const ledger = [
+      row('2026-10-11', 1.5),
+      row('2026-10-10', 9),
+      row('2026-10-11', 1.7)
+    ].join('\n');
     expect(spendForDay(ledger, '2026-10-11')).toBeCloseTo(3.2);
+  });
+
+  it('sums a negative correction row', () => {
+    const ledger = [row('2026-10-11', 5), row('2026-10-11', -3.5)].join('\n');
+    expect(spendForDay(ledger, '2026-10-11')).toBeCloseTo(1.5);
+  });
+
+  it('is zero for a missing or empty ledger', () => {
     expect(spendForDay(undefined, '2026-10-11')).toBe(0);
+    expect(spendForDay('', '2026-10-11')).toBe(0);
+    expect(spendForDay('\n\n', '2026-10-11')).toBe(0);
+  });
+
+  it.each([
+    ['not json'],
+    ['[1]'],
+    [row('2026-10-11', 'x')],
+    [row('2026-10-11', null)],
+    ['{"day":"2026-10-11"}']
+  ])('is unreadable with the bad line %j', (bad) => {
+    const ledger = [row('2026-10-11', 1), bad].join('\n');
+    expect(spendForDay(ledger, '2026-10-11')).toBeUndefined();
   });
 
   it.each([
@@ -668,6 +690,33 @@ describe('implement spend', () => {
     expect(formatImplement(0, 40, undefined)).toBe(
       'implement spend today $0.00 of $40, no implementing session yet'
     );
+  });
+
+  it('warns when the ledger is unreadable', () => {
+    expect(formatImplement(undefined, 40, undefined)).toBe(
+      'implement spend unreadable: implement-spend.jsonl has a bad line; no launch until it is fixed'
+    );
+  });
+
+  it('reads the PATH from an installed plist', () => {
+    const plist = renderPlist({
+      script: '/h/run.sh',
+      home: '/h',
+      repo: '/r',
+      path: '/a&b/bin:/usr/bin'
+    });
+    expect(plistPath(plist)).toBe('/a&b/bin:/usr/bin');
+  });
+
+  it.each([
+    [undefined],
+    [''],
+    ['<plist><dict><key>Label</key><string>x</string></dict></plist>'],
+    [
+      '<key>EnvironmentVariables</key><dict><key>PATH</key><string> </string></dict>'
+    ]
+  ])('has no plist PATH in %j', (plist) => {
+    expect(plistPath(plist)).toBeUndefined();
   });
 
   it.each([

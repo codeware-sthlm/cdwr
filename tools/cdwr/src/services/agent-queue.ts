@@ -4,12 +4,10 @@ import { dirname, join } from 'node:path';
 
 import type { Context } from '../cli/context';
 import { CliError } from '../cli/errors';
-import { locate } from '../cli/preflight';
 import { cdwrHome } from '../cli/prefs';
 import {
   type JobState,
   KEYCHAIN_SERVICE,
-  QUEUE_BINARIES,
   QUEUE_FILES,
   QUEUE_SOURCE_DIR,
   type QueueFile,
@@ -19,9 +17,9 @@ import {
   filesDrift,
   implementCap,
   lastImplementRun,
-  launchPath,
   nodeMajor,
   parseLaunchctlPrint,
+  plistPath,
   queuePaths,
   serviceTarget,
   spendForDay
@@ -159,7 +157,7 @@ export function implementReport(
   env: NodeJS.ProcessEnv,
   now: Date = new Date()
 ): {
-  spent: number;
+  spent: number | undefined;
   cap: number;
   last: ReturnType<typeof lastImplementRun>;
 } {
@@ -172,12 +170,17 @@ export function implementReport(
   };
 }
 
-/** What the job sees: node 22, a logged-in gh and a claude that runs, on the job's own PATH */
+/**
+ * What the job sees: node 22, a logged-in gh and a claude that runs, on the PATH
+ * the installed plist gives it. Undefined when no plist PATH is installed.
+ */
 export async function jobPathChecks(
-  env: NodeJS.ProcessEnv
-): Promise<{ node: boolean; gh: boolean; claude: boolean }> {
-  const dirs = QUEUE_BINARIES.flatMap((binary) => locate(binary, env) ?? []);
-  const jobEnv = { ...env, PATH: launchPath(dirs) };
+  env: NodeJS.ProcessEnv,
+  queue: QueuePaths
+): Promise<{ node: boolean; gh: boolean; claude: boolean } | undefined> {
+  const path = plistPath(readText(queue.plist));
+  if (path === undefined) return undefined;
+  const jobEnv = { ...env, PATH: path };
   const ok = async (cmd: string, args: string[]): Promise<string | undefined> =>
     run(cmd, args, { env: jobEnv, timeout: 20_000 }).then(
       ({ stdout }) => stdout,

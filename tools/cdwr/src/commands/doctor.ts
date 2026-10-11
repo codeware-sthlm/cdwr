@@ -72,7 +72,7 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
     script,
     implement: implementReport(queue, ctx.env),
     ...(job.loaded || script !== 'missing'
-      ? { jobPath: await jobPathChecks(ctx.env) }
+      ? { jobPath: await jobPathChecks(ctx.env, queue) }
       : {})
   };
 }
@@ -234,6 +234,7 @@ export default defineCommand({
         !queue.worktree && 'no worktree',
         queue.script === 'missing' && 'script not installed',
         queue.script === 'stale' && 'script out of date',
+        queue.jobPath === undefined && 'job PATH unknown (plist not installed)',
         queue.jobPath?.node === false && 'node 22 not on the job PATH',
         queue.jobPath?.gh === false && 'gh not logged in',
         queue.jobPath?.claude === false && 'claude does not run'
@@ -248,17 +249,17 @@ export default defineCommand({
               theme.warn(`${problems.join(', ')}; \`cdwr agent install\``)
             ]
       );
-      rows.push([
-        symbols.ok,
-        'implement',
-        theme.muted(
-          formatImplement(
-            queue.implement.spent,
-            queue.implement.cap,
-            queue.implement.last
-          )
-        )
-      ]);
+      const implement = formatImplement(
+        queue.implement.spent,
+        queue.implement.cap,
+        queue.implement.last
+      );
+      if (queue.implement.spent === undefined) queueProblems += 1;
+      rows.push(
+        queue.implement.spent === undefined
+          ? [symbols.warn, 'implement', theme.warn(implement)]
+          : [symbols.ok, 'implement', theme.muted(implement)]
+      );
     }
     ctx.ui.table(['', 'check', 'detail'], rows);
 
