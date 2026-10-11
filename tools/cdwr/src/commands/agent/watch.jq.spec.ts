@@ -1122,6 +1122,17 @@ describe('session_state and session_prefix', () => {
       { state: 'none', detail: null, id: null }
     ],
     [
+      'waiting: a prompt open for an hour is still a live session',
+      [
+        sess({
+          state: 'waiting',
+          detail: 'permission_prompt',
+          lastSeen: iso(3600)
+        })
+      ],
+      { state: 'waiting', detail: 'permission_prompt', id: 's1' }
+    ],
+    [
       'stopped: a turn that just ended without a watcher wakes no one',
       [sess({ state: 'stopped', lastSeen: iso(30) })],
       { state: 'stopped', detail: null, id: null }
