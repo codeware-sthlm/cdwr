@@ -65,13 +65,15 @@ export async function keyPresent(): Promise<boolean> {
 
 /**
  * What the installed script would do now: its decision (the last line) and the
- * `attended:` verdict line when it printed one. Undefined when it is not installed
+ * `attended:` verdict and `queue-view:` lines when it printed them. Undefined when it is not installed
  */
 export async function checkRun(
   queue: QueuePaths,
   repo: string,
   env: NodeJS.ProcessEnv
-): Promise<{ decision: string; attended?: string } | undefined> {
+): Promise<
+  { decision: string; attended?: string; queueView?: string } | undefined
+> {
   if (!existsSync(queue.script)) return undefined;
   const { stdout } = await run('/bin/zsh', [queue.script, '--check'], {
     env: {
@@ -84,11 +86,17 @@ export async function checkRun(
   });
   const lines = stdout.trim().split('\n');
   const attended = lines.filter((line) => line.startsWith('attended: ')).at(-1);
+  const queueView = lines
+    .filter((line) => line.startsWith('queue-view: '))
+    .at(-1);
   return {
     decision: lines.at(-1) ?? '',
     ...(attended === undefined
       ? {}
-      : { attended: attended.slice('attended: '.length) })
+      : { attended: attended.slice('attended: '.length) }),
+    ...(queueView === undefined
+      ? {}
+      : { queueView: queueView.slice('queue-view: '.length) })
   };
 }
 

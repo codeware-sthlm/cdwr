@@ -3,10 +3,14 @@ import {
   LABEL,
   QUEUE_FILES,
   QUEUE_SOURCE_DIR,
+  type QueueView,
   STALE_LOCK_MS,
   domainTarget,
   drift,
   filesDrift,
+  formatHeld,
+  formatNext,
+  formatTable,
   formatWatching,
   lastSchedulerLine,
   latestRunLog,
@@ -16,6 +20,7 @@ import {
   parseCheck,
   parseLaunchctlPrint,
   parseNotifyLevel,
+  parseQueueView,
   parseWatchState,
   queuePaths,
   renderPlist,
@@ -402,5 +407,134 @@ describe('parseAttended', () => {
     expect(result.kind).toBe(kind);
     expect(result.ticket).toBe(ticket);
     expect(result.text).toBe(line.trim());
+  });
+});
+
+const EMPTY_VIEW: QueueView = {
+  at: '2026-10-11T17:04:38Z',
+  limit: { used: 0, max: 5 },
+  session: null,
+  next: [],
+  held: { tickets: [], free: [] },
+  table: { before: [], after: [] }
+};
+
+const FILLED_VIEW: QueueView = {
+  ...EMPTY_VIEW,
+  session: {
+    state: 'alive',
+    detail: 'working',
+    id: 'abc',
+    ticket: 'COD-1',
+    lastSeen: '2026-10-11T17:00:00Z'
+  },
+  next: [
+    { ticket: 'COD-1', reason: 'resume', detail: 'step 2' },
+    { ticket: 'COD-2', reason: 'answered', detail: null }
+  ],
+  held: {
+    tickets: ['COD-9', 'COD-8'],
+    free: [
+      { action: 'review', ticket: 'COD-1', pr: 5 },
+      { action: 'limit', value: 3 }
+    ]
+  },
+  table: {
+    before: [
+      { ticket: 'COD-4', kind: 'plan' },
+      { ticket: 'COD-5', kind: 'question' }
+    ],
+    after: [
+      { ticket: 'COD-3', kind: 'pr', pr: 7 },
+      { ticket: 'COD-2', kind: 'handoffs', items: ['a', 'b'] }
+    ]
+  }
+};
+
+describe('parseQueueView', () => {
+  it('reads a valid view', () => {
+    expect(parseQueueView(JSON.stringify(FILLED_VIEW))).toEqual(FILLED_VIEW);
+    expect(parseQueueView(JSON.stringify(EMPTY_VIEW))).toEqual(EMPTY_VIEW);
+  });
+
+  it('is undefined for malformed JSON', () => {
+    expect(parseQueueView('{"at": ')).toBeUndefined();
+    expect(parseQueueView('')).toBeUndefined();
+  });
+
+  it('is undefined for the wrong shape', () => {
+    expect(parseQueueView('[]')).toBeUndefined();
+    expect(parseQueueView('null')).toBeUndefined();
+    expect(parseQueueView(JSON.stringify({ ...EMPTY_VIEW, limit: 5 }))).toBe(
+      undefined
+    );
+    expect(
+      parseQueueView(
+        JSON.stringify({
+          ...EMPTY_VIEW,
+          held: { tickets: [], free: [{ action: 'nap' }] }
+        })
+      )
+    ).toBeUndefined();
+  });
+});
+
+describe('formatNext', () => {
+  it('lists ticket, reason and detail', () => {
+    expect(formatNext(FILLED_VIEW)).toBe(
+      'COD-1 resume (step 2), COD-2 answered'
+    );
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatNext(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('formatHeld', () => {
+  it('lists held tickets and what frees a slot', () => {
+    expect(formatHeld(FILLED_VIEW)).toBe(
+      'COD-9, COD-8; free a slot: review COD-1 (#5), limit=3'
+    );
+  });
+
+  it('leaves out the PR when unknown and the slots when none', () => {
+    expect(
+      formatHeld({
+        ...EMPTY_VIEW,
+        held: {
+          tickets: ['COD-9'],
+          free: [{ action: 'review', ticket: 'COD-3', pr: null }]
+        }
+      })
+    ).toBe('COD-9; free a slot: review COD-3');
+    expect(
+      formatHeld({ ...EMPTY_VIEW, held: { tickets: ['COD-9'], free: [] } })
+    ).toBe('COD-9');
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatHeld(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('formatTable', () => {
+  it('lists what waits before and after', () => {
+    expect(formatTable(FILLED_VIEW)).toBe(
+      'before: COD-4 plan, COD-5 question · after: COD-3 PR #7, COD-2 hand-offs (2)'
+    );
+  });
+
+  it('leaves out an empty side', () => {
+    expect(
+      formatTable({
+        ...EMPTY_VIEW,
+        table: { before: [{ ticket: 'COD-4', kind: 'plan' }], after: [] }
+      })
+    ).toBe('before: COD-4 plan');
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatTable(EMPTY_VIEW)).toBe('nothing');
   });
 });
