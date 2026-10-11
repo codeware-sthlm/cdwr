@@ -51,6 +51,7 @@ describe('resolveRanges', () => {
       expect(gitCalls()[0]).toEqual([
         'fetch',
         '--no-tags',
+        '--',
         'origin',
         '+refs/pull/466/head'
       ]);
