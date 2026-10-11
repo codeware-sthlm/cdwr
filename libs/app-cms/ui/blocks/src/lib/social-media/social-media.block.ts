@@ -6,6 +6,8 @@ import { enumName } from '@codeware/app-cms/util/db';
 import type { SocialMediaBlock } from '@codeware/shared/util/payload-types';
 import type { Block, Condition, TypeWithID } from 'payload';
 
+import { blockImages } from '../block-images';
+
 // Whether the block has multiple social
 const multipleIcons: Condition<TypeWithID, SocialMediaBlock> = (
   _,
@@ -17,6 +19,9 @@ const multipleIcons: Condition<TypeWithID, SocialMediaBlock> = (
  */
 export const socialMediaBlock: Block = {
   slug: 'social-media',
+  admin: {
+    images: blockImages('social-media', 'A row of five round social icons')
+  },
   interfaceName: 'SocialMediaBlock',
   labels: {
     plural: { en: 'Social Media', sv: 'Sociala Medier' },

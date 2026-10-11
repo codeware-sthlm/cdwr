@@ -2,6 +2,8 @@ import { linkGroupField, sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { TestimonialBlock } from '@codeware/shared/util/payload-types';
 import type { Block, Condition, TypeWithID } from 'payload';
 
+import { blockImages } from '../block-images';
+
 const isLinkEnabled: Condition<TypeWithID, TestimonialBlock> = (
   _,
   siblingData
@@ -18,6 +20,12 @@ const isLinkEnabled: Condition<TypeWithID, TestimonialBlock> = (
  */
 export const testimonialBlock: Block = {
   slug: 'testimonial',
+  admin: {
+    images: blockImages(
+      'testimonial',
+      'A panel with a quote mark, quoted text and an author'
+    )
+  },
   interfaceName: 'TestimonialBlock',
   labels: {
     singular: { en: 'Testimonial', sv: 'Omdöme' },

@@ -1,6 +1,8 @@
 import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Image block for displaying an image from media collection.
  *
@@ -8,6 +10,7 @@ import type { Block } from 'payload';
  */
 export const imageBlock: Block = {
   slug: 'image',
+  admin: { images: blockImages('image', 'A large image with a caption line') },
   interfaceName: 'ImageBlock',
   labels: {
     plural: { en: 'Images', sv: 'Bilder' },

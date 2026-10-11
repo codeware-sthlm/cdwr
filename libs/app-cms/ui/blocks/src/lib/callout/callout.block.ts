@@ -5,6 +5,8 @@ import {
 } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Callout block — a compact, centered call-to-action band ("mini hero").
  *
@@ -14,6 +16,12 @@ import type { Block } from 'payload';
  */
 export const calloutBlock: Block = {
   slug: 'callout',
+  admin: {
+    images: blockImages(
+      'callout',
+      'A centered panel with an icon, a heading, a line of text and a button'
+    )
+  },
   interfaceName: 'CalloutBlock',
   labels: {
     singular: { en: 'Callout', sv: 'Callout' },

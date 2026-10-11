@@ -1,6 +1,8 @@
 import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * About block — renders the running app's deployment details
  * (`name@version+sha`, environment, build time).
@@ -11,6 +13,12 @@ import type { Block } from 'payload';
  */
 export const aboutBlock: Block = {
   slug: 'about',
+  admin: {
+    images: blockImages(
+      'about',
+      'A heading above a panel of label and value rows'
+    )
+  },
   interfaceName: 'AboutBlock',
   labels: {
     plural: { en: 'About', sv: 'Om' },

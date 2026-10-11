@@ -7,6 +7,8 @@ import {
 import type { TechBrand } from '@codeware/shared/ui/primitives';
 import type { Block, Condition, TypeWithID } from 'payload';
 
+import { blockImages } from '../block-images';
+
 type PillRow = { icon?: TechBrand | null };
 
 // An own logo is only asked for when no mark from the list is chosen
@@ -20,6 +22,7 @@ const withoutIcon: Condition<TypeWithID, PillRow> = (_, siblingData) =>
  */
 export const pillListBlock: Block = {
   slug: 'pill-list',
+  admin: { images: blockImages('pill-list', 'Three rows of rounded pills') },
   interfaceName: 'PillListBlock',
   labels: {
     singular: { en: 'Pill list', sv: 'Etikettlista' },

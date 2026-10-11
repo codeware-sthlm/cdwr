@@ -10,6 +10,8 @@ import { enumName } from '@codeware/app-cms/util/db';
 import type { TechBrand } from '@codeware/shared/ui/primitives';
 import type { Block, Condition, TypeWithID } from 'payload';
 
+import { blockImages } from '../block-images';
+
 // An own logo is only asked for when no technology from the list is chosen
 const withoutTech: Condition<TypeWithID, { tech?: TechBrand | null }> = (
   _,
@@ -26,6 +28,12 @@ const withoutTech: Condition<TypeWithID, { tech?: TechBrand | null }> = (
  */
 export const featureCardsBlock: Block = {
   slug: 'feature-cards',
+  admin: {
+    images: blockImages(
+      'feature-cards',
+      'An intro heading above four cards with an icon and text'
+    )
+  },
   interfaceName: 'FeatureCardsBlock',
   labels: {
     singular: { en: 'Feature cards', sv: 'Funktionskort' },

@@ -6,6 +6,8 @@ import {
 import { enumName } from '@codeware/app-cms/util/db';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Hero block — the opening section of a landing page.
  *
@@ -15,6 +17,12 @@ import type { Block } from 'payload';
  */
 export const heroBlock: Block = {
   slug: 'hero',
+  admin: {
+    images: blockImages(
+      'hero',
+      'A pill, a large headline, text and two buttons'
+    )
+  },
   interfaceName: 'HeroBlock',
   labels: {
     singular: { en: 'Hero', sv: 'Hero' },

@@ -6,11 +6,19 @@ import {
 } from '@codeware/app-cms/util/definitions';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Code block for editing code with a language selector
  */
 export const codeBlock: Block = {
   slug: 'code',
+  admin: {
+    images: blockImages(
+      'code',
+      'A code panel with window dots and lines of code'
+    )
+  },
   interfaceName: 'CodeBlock',
   labels: {
     plural: { en: 'Code', sv: 'Kod' },

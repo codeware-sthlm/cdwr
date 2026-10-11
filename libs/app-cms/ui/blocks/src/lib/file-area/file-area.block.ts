@@ -4,6 +4,8 @@ import {
 } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 import { composeFilesHook } from './compose-files-field.hook';
 
 /**
@@ -11,6 +13,7 @@ import { composeFilesHook } from './compose-files-field.hook';
  */
 export const fileAreaBlock: Block = {
   slug: 'file-area',
+  admin: { images: blockImages('file-area', 'Four rows of files') },
   interfaceName: 'FileAreaBlock',
   labels: {
     plural: { en: 'File Areas', sv: 'Filytor' },

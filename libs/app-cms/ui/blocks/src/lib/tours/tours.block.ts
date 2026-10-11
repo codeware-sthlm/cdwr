@@ -1,6 +1,8 @@
 import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Tours block for rendering a listing of tours on a page.
  *
@@ -8,6 +10,12 @@ import type { Block } from 'payload';
  */
 export const toursBlock: Block = {
   slug: 'tours',
+  admin: {
+    images: blockImages(
+      'tours',
+      'A heading above three tour cards with a badge, facts and a price'
+    )
+  },
   interfaceName: 'ToursBlock',
   labels: {
     plural: { en: 'Tour Listings', sv: 'Reslistor' },
