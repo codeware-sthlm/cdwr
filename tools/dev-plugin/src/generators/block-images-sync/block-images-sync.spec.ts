@@ -78,4 +78,13 @@ describe('block-images-sync generator', () => {
       expect(svg.endsWith('\n'), name).toBe(true);
     }
   });
+
+  it('draws no path with a doubled sign', async () => {
+    const tree = createTreeWithEmptyWorkspace();
+    await blockImagesSyncGenerator(tree);
+
+    for (const name of tree.children(DIR)) {
+      expect(tree.read(`${DIR}/${name}`, 'utf-8'), name).not.toMatch(/--/);
+    }
+  });
 });
