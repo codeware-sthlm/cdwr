@@ -167,7 +167,7 @@ cat "${dir}/${name}-answer-$n.json"
       [rollup('PENDING'), rollup('SUCCESS')]
     );
     expect(result.stdout).toBe(
-      'changed: run now: COD-1 parked wait resolved\n'
+      'changed: run now: COD-1 parked wait resolved (success)\n'
     );
   });
 

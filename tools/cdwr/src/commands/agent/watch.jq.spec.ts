@@ -1379,7 +1379,7 @@ describe('attended picks', () => {
             `attended(${NOW}; 5; {}; ${JSON.stringify(CI)}) | attended_line`,
             issues
           )
-        ).toBe('run now: COD-1 parked wait resolved');
+        ).toBe('run now: COD-1 parked wait resolved (success)');
       });
 
       it('keeps a pending parked working ticket out of next and not running', () => {

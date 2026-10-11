@@ -282,7 +282,10 @@ def attended($now; $limit; $watch): attended($now; $limit; $watch; {});
 def attended_line:
   if .verdict == "running" then "running: \(.ticket)" + (if .detail != null then " · \(.detail)" else "" end)
   elif .verdict == "run" then
-    if .reason == "take over" then "run now: take over \(.ticket) (\(.detail))" else "run now: \(.ticket) \(.reason)" end
+    if .reason == "take over" then "run now: take over \(.ticket) (\(.detail))"
+    # The outcome decides what the session does next: advance, fix CI, or read a timeout
+    elif .reason == "parked wait resolved" then "run now: \(.ticket) parked wait resolved (\(.detail))"
+    else "run now: \(.ticket) \(.reason)" end
   else
     "idle: " + (if (.waiting | length) > 0 then "waits on \(.waiting | join(", "))" else "nothing waiting" end)
     + "; limit \(.used)/\(.limit)"
