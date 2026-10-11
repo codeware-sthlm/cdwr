@@ -40,6 +40,16 @@ describe('run.sh', () => {
     expect(SCRIPT).not.toContain('watcherPid');
   });
 
+  // `cdwr agent status` and the Desk read the queue view by these markers
+  it('prints and publishes the queue view', () => {
+    expect(SCRIPT).toContain('print -r -- "queue-view: $queue_view"');
+    expect(SCRIPT).toContain('```json queue-view\\n');
+    // A heartbeat alone (lastSeen, detail) is no change to publish
+    expect(SCRIPT).toContain(
+      `session: (.session | if . == null then null else {state, ticket} end)`
+    );
+  });
+
   // The documents are the only things run.sh writes to Linear
   it('sends no mutation but the documents', () => {
     const mutations = [...SCRIPT.matchAll(/mutation\b[^{]*\{\s*(\w+)/gi)].map(
