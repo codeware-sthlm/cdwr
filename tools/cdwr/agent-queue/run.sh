@@ -422,10 +422,16 @@ attended() {
     { note "warn: queue view: watch.jq failed"; queue_view=""; }
   # Should an implement-only session start? watch.jq `launch` decides from the pick and the
   # guards; implement.sh holds implement.lock while its session runs and writes the spend ledger.
-  # A lock left by a killed session (no EXIT trap) is cleared after 6 h, longer than any session.
-  local lockdir="$HOME_DIR/implement.lock" locked=false spent cap last decision
-  [[ -d "$lockdir" && -n "$(find "$lockdir" -maxdepth 0 -mmin +360 2>/dev/null)" ]] &&
-    { rmdir "$lockdir" 2>/dev/null && note "warn: cleared a stale implement.lock"; }
+  # The lock holds its owner's pid; it is cleared only when that process is gone (a kill skips the
+  # EXIT trap). A lock without a pid older than a minute lost its owner between mkdir and write.
+  local lockdir="$HOME_DIR/implement.lock" locked=false spent cap last decision owner
+  if [[ -d "$lockdir" ]]; then
+    owner="$(cat "$lockdir/pid" 2>/dev/null)"
+    if [[ "$owner" == <-> ]] && ! kill -0 "$owner" 2>/dev/null ||
+       [[ "$owner" != <-> && -n "$(find "$lockdir" -maxdepth 0 -mmin +1 2>/dev/null)" ]]; then
+      rm -rf "$lockdir" && note "warn: cleared implement.lock; its session ${owner:-?} is gone"
+    fi
+  fi
   [[ -d "$lockdir" ]] && locked=true
   # jq prints `0` and still fails on a missing file, so check for it first
   spent=0

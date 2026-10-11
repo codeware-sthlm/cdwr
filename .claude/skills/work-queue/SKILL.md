@@ -368,12 +368,16 @@ listed.
 2. Edit and Write work only inside the ticket worktrees. Read reaches anything.
 3. Never `cd`: a `cd … && git …` compound is denied. Use `git -C <worktree> …` and
    `pnpm -C <worktree> nx …` with absolute paths. Every implementer prompt must say the same.
-4. Notify through Slack only; there is no PushNotification in `-p`.
-5. A turn that ends, ends the run. Run every wait in the foreground, as repeated Bash calls of
+4. GitHub through `gh pr …`, REST reads (`gh api repos/codeware-sthlm/cdwr/…`) and
+   `tools/cdwr/agent-queue/gh-review.sh threads <pr>`, `reply <thread id> <body>` and
+   `resolve <thread id>` for review threads. Raw `gh api graphql` and any `gh api` write are
+   denied.
+5. Notify through Slack only; there is no PushNotification in `-p`.
+6. A turn that ends, ends the run. Run every wait in the foreground, as repeated Bash calls of
    at most 10 minutes each, never as a background task.
-6. When a tool is denied, or the work needs a production action, money or Håkan's judgement,
+7. When a tool is denied, or the work needs a production action, money or Håkan's judgement,
    post it as a needs-input gate (see **How a gate asks**) and stop.
-7. With `once`, stop when the ticket reaches review or a gate. Don't go to **Nothing workable**,
+8. With `once`, stop when the ticket reaches review or a gate. Don't go to **Nothing workable**,
    and don't start `wait.sh`.
 
 ## Plan-only runs
