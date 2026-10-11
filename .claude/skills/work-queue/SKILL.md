@@ -25,6 +25,19 @@ resumes. One ticket is in flight at a time.
 - `plan-only` (scheduled runs): investigate one ticket and write its plan, nothing else.
   See **Plan-only runs** below.
 
+## Start
+
+Unless the run is `plan-only`, the first Bash call registers the session:
+
+```sh
+tools/cdwr/agent-queue/session.sh register
+```
+
+The command itself does nothing. The repo's `PostToolUse` hook sees it and writes
+`~/.cdwr/agent-queue/sessions/<session id>.json`, and the hooks keep that file current from then
+on: working, waiting on a prompt, stopped, polling or ended. The scheduler reads it to tell
+whether a session is alive, and only then stays quiet about work waiting for one.
+
 ## The queue rule
 
 The Agent Desk (the "cdwr Agent Desk" artifact) computes the same order, so keep the two in step.
@@ -93,10 +106,12 @@ Everything waits on Håkan, or the limit is reached.
 1. Send one `action` notice naming what waits, e.g.
    `Queue waiting on you: COD-1 plan, COD-2 PR, COD-3 hand-offs (limit 5/5)`.
 2. With `once` or `plan-only`, stop here.
-3. Otherwise poll: start `sleep 300` as a background Bash command (foreground `sleep` is
-   blocked). When it finishes the session is woken; check **What to take next** again. Send no
-   new notice while the waiting set is unchanged; send one when it changes.
-   Without `once` or `plan-only`, never end a turn unless that sleep is running: an idle session
+3. Otherwise wait in the shell: start `tools/cdwr/agent-queue/wait.sh` as a background Bash
+   command with a timeout of 7200000. It checks Linear every minute, without waking the session,
+   and exits only when the pick from **What to take next** changes (`changed: …`) or after 110
+   minutes (`timeout: …`). On `changed`, check **What to take next** again. On `timeout`, start it
+   again. Send no new notice while the waiting set is unchanged; send one when it changes.
+   Without `once` or `plan-only`, never end a turn unless the watcher is running: an idle session
    with nothing to wake it stops answering Linear until Håkan types.
 
 ## Labels (group "Agent", one at a time)
@@ -136,6 +151,10 @@ The session id tells two sessions apart; the worktree path doesn't, since every 
 the same path for a ticket. Use the id in the `Claude-Session` commit attribution when there is
 one, else make one at the first claim (`uuidgen | cut -c1-8`) and keep using it. Set the line
 on claim and refresh it with every Status row update.
+
+The claim has one job: handing a ticket over between sessions or machines. Whether this
+machine's session is still alive comes from its heartbeat file (see **Start**), not from the
+claim's age. The 2-hour take-over rule stays for a session that left no heartbeat.
 
 ## Per ticket
 
