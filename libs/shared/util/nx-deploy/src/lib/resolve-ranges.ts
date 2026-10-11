@@ -71,9 +71,11 @@ export const resolveRanges = async ({
     }
     let head = 'HEAD';
     if (prNumber) {
+      // `--` ends the options, so nothing after it can become one (`--upload-pack`)
       await git([
         'fetch',
         '--no-tags',
+        '--',
         'origin',
         `+refs/pull/${prNumber}/head`
       ]);
