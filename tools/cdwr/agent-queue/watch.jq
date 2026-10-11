@@ -131,10 +131,13 @@ def answered:
   ((.comments.nodes // []) | sort_by(.createdAt) | last) as $c
   | $c != null and (($c.body | trim | startswith("**Agent")) | not);
 
-# True when a human commented after the newest PR-ready comment, or review threads are unresolved.
+# True when a human commented after the newest PR-ready or review-addressed comment, or review
+# threads are unresolved.
 # Only while the PR is open: once the watch has seen it merged or closed there is nothing to address.
 def review_feedback($watch):
-  ((.comments.nodes // []) | map(select(.body | startswith("**Agent: PR ready**"))) | sort_by(.createdAt) | last) as $ready
+  ((.comments.nodes // [])
+   | map(select(.body | startswith("**Agent: PR ready**") or startswith("**Agent: review addressed**")))
+   | sort_by(.createdAt) | last) as $ready
   | ($watch[.identifier].state // "open") as $pr
   | ($pr != "merged" and $pr != "closed")
     and (( $ready != null

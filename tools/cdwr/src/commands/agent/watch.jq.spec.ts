@@ -778,6 +778,34 @@ describe('attended picks', () => {
       expect(r.verdict).toBe('idle');
     });
 
+    it('human comment answered by review addressed is not feedback', () => {
+      const r = attended([
+        rev(
+          prReady(false),
+          { body: 'fix this', createdAt: '2026-09-02T00:00:00Z' },
+          {
+            body: '**Agent: review addressed**',
+            createdAt: '2026-09-03T00:00:00Z'
+          }
+        )
+      ]);
+      expect(r.verdict).toBe('idle');
+    });
+
+    it('human comment after review addressed', () => {
+      const r = attended([
+        rev(
+          prReady(false),
+          {
+            body: '**Agent: review addressed**',
+            createdAt: '2026-09-03T00:00:00Z'
+          },
+          { body: 'one more', createdAt: '2026-09-04T00:00:00Z' }
+        )
+      ]);
+      expect(r.reason).toBe('review feedback');
+    });
+
     it('agent comment after PR ready is not feedback', () => {
       const r = attended([
         rev(prReady(false), {
