@@ -40,8 +40,7 @@ whether a session is alive, and only then stays quiet about work waiting for one
 
 ## The queue rule
 
-The Agent Desk (the "cdwr Agent Desk" artifact) computes the same order, so keep the two in step.
-The scheduler computes the same order as `attended` in `tools/cdwr/agent-queue/watch.jq` (the computed form of **What to take next** and **The limit**) and publishes it as the `Attended:` line of the "Agent queue: runs" document, so a change to either is made in both.
+The scheduler computes the same order as `queue_view` in `tools/cdwr/agent-queue/watch.jq` (the computed form of **What to take next** and **The limit**; `attended` is its first item) and publishes it in the "Agent queue: runs" document, as the `Attended:` line and a `queue-view` JSON block that the Agent Desk renders. A change to either is made in both.
 
 1. Team **Codeware**, label **agent:ready**, status not Done or Canceled. Skip tickets whose
    **Repo** label names another repo (`nx-plugins`, `enjinex`). No Repo label, or `codeware`,
@@ -77,7 +76,7 @@ Check in this order, between tickets and never in the middle of a step. Take the
    have nothing uncommitted. Then close each parent ticket whose sub-issues are all Done or
    Canceled: set it Done and post `**Agent: closed**` naming the sub-issues. Linear's own
    parent auto-close stays off, so nothing else closes it.
-5. **The limit.** Count what waits on Håkan (below). At or over the limit, no new ticket
+5. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
    starts: go to **Nothing workable**.
 6. **A new `agent:ready` ticket** by the queue rule.
 
@@ -85,19 +84,12 @@ Nothing matched: go to **Nothing workable**.
 
 ## The limit
 
-What waits on Håkan after implementation, counted from Linear:
+Counted from Linear: each `agent:review` ticket that is not Done or Canceled (an open PR)
+counts one. Nothing else does: plans waiting for approval, questions, and merged tickets with
+unticked hand-offs stay on Håkan's table (the queue view lists them) but never hold new work
+back.
 
-- each `agent:review` ticket that is not Done or Canceled (an open PR) counts one
-- each `agent:review` ticket completed within the last 14 days whose newest
-  `**Agent: PR ready**` comment still has an unticked hand-off counts one, however many
-  items are left, but together they count at most `limit − 3`: hand-offs that need weeks of
-  observation never take the last 3 slots, so new work always has room
-
-Read hand-offs the way the scheduler's PR watch does, so both agree. Put the ticket's comments
-in a file as `{"comments":{"nodes":[{"body":…,"createdAt":…}]}}` and run
-`jq -L tools/cdwr/agent-queue 'include "watch"; handoffs | length' <file>`.
-
-Default limit 5, `limit=N` overrides it for the run (at least 3). Plans waiting for approval don't count.
+Default limit 5, `limit=N` overrides it for the run.
 
 ## Nothing workable
 
