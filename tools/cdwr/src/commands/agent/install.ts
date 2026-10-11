@@ -29,6 +29,7 @@ import { childEnv, run, sleep } from '../../services/shell';
 import {
   ENV_COPIES,
   KEYCHAIN_SERVICE,
+  QUEUE_BINARIES,
   QUEUE_FILES,
   WORKTREE_PREF,
   byFile,
@@ -39,8 +40,6 @@ import {
   serviceTarget
 } from './agent.logic';
 
-/** What the queue script calls; their directories make up the job's PATH */
-const BINARIES = ['node', 'claude', 'jq', 'git', 'gh'];
 const LEGACY_HOME = join(homedir(), '.claude', 'agent-queue');
 
 const expand = (path: string): string =>
@@ -85,7 +84,7 @@ export default defineCommand({
     }
     const { source } = sources;
 
-    const dirs = BINARIES.map((binary) => {
+    const dirs = QUEUE_BINARIES.map((binary) => {
       const dir = locate(binary, ctx.env);
       if (!dir) throw new CliError(`${binary} is not on PATH`);
       return dir;

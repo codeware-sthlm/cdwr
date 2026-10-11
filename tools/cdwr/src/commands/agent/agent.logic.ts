@@ -15,6 +15,7 @@ export const QUEUE_SOURCE_DIR = 'tools/cdwr/agent-queue';
 /** The files install puts in the queue home; run.sh loads the rest from beside it */
 export const QUEUE_FILES = [
   'run.sh',
+  'implement.sh',
   'lib.sh',
   'waits.sh',
   'watch.jq'
@@ -26,10 +27,15 @@ export const byFile = <T>(
   fn: (file: QueueFile) => T
 ): Record<QueueFile, T> => ({
   'run.sh': fn('run.sh'),
+  'implement.sh': fn('implement.sh'),
   'lib.sh': fn('lib.sh'),
   'waits.sh': fn('waits.sh'),
   'watch.jq': fn('watch.jq')
 });
+/** What the queue scripts call; their directories make up the job's PATH */
+export const QUEUE_BINARIES = ['node', 'claude', 'jq', 'git', 'gh', 'pnpm'];
+/** Daily API-equivalent spend cap for implementing sessions, in USD */
+export const IMPLEMENT_CAP_USD = 40;
 /** Files a worktree needs but git does not carry, relative to the workspace root */
 export const ENV_COPIES = ['apps/cms/.env.local', 'tools/cdwr/.env'];
 /** Pref holding the worktree the queue plans in */
@@ -43,6 +49,9 @@ export interface QueuePaths {
   paused: string;
   notifyLevel: string;
   lock: string;
+  implementLock: string;
+  implementSpend: string;
+  runs: string;
   logs: string;
   schedulerLog: string;
   launchdLog: string;
@@ -63,6 +72,9 @@ export const queuePaths = (
     paused: join(home, 'paused'),
     notifyLevel: join(home, 'notify-level'),
     lock: join(home, 'lock'),
+    implementLock: join(home, 'implement.lock'),
+    implementSpend: join(home, 'implement-spend.jsonl'),
+    runs: join(home, 'runs.jsonl'),
     logs,
     schedulerLog: join(logs, 'scheduler.log'),
     launchdLog: join(logs, 'launchd.log'),
@@ -137,7 +149,11 @@ export const renderPlist = ({
     <string>${e(home)}</string>
     <key>AGENT_QUEUE_REPO</key>
     <string>${e(repo)}</string>
+    <key>AGENT_QUEUE_IMPLEMENT_CAP_USD</key>
+    <string>${IMPLEMENT_CAP_USD}</string>
   </dict>
+  <key>AbandonProcessGroup</key>
+  <true/>
   <key>StartInterval</key>
   <integer>${RUN_INTERVAL_SECONDS}</integer>
   <key>RunAtLoad</key>
@@ -239,6 +255,88 @@ const SYSTEM_PATH = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
 /** PATH for the job: the given dirs first, then the system ones, no repeats */
 export const launchPath = (binaryDirs: string[]): string =>
   [...new Set([...binaryDirs, ...SYSTEM_PATH])].join(':');
+
+/** The daily cap: the env value when it is a positive number, else the default */
+export const implementCap = (value: string | undefined): number => {
+  const n = Number(value);
+  return value?.trim() && Number.isFinite(n) && n > 0 ? n : IMPLEMENT_CAP_USD;
+};
+
+const jsonLines = (text: string | undefined): Record<string, unknown>[] =>
+  (text ?? '').split('\n').flatMap((line) => {
+    try {
+      const row: unknown = JSON.parse(line);
+      return typeof row === 'object' && row !== null && !Array.isArray(row)
+        ? [row as Record<string, unknown>]
+        : [];
+    } catch {
+      return [];
+    }
+  });
+
+/** Sum of the ledger's costs for one day (YYYY-MM-DD); bad lines count for nothing */
+export const spendForDay = (ledger: string | undefined, day: string): number =>
+  jsonLines(ledger).reduce(
+    (sum, row) =>
+      row['day'] === day &&
+      typeof row['cost'] === 'number' &&
+      Number.isFinite(row['cost'])
+        ? sum + row['cost']
+        : sum,
+    0
+  );
+
+export const IMPLEMENT_OUTCOMES = [
+  'launched',
+  'implemented',
+  'cap',
+  'failed'
+] as const;
+
+export interface ImplementRun {
+  when: string;
+  outcome: (typeof IMPLEMENT_OUTCOMES)[number];
+  ticket: string;
+}
+
+/** The last runs.jsonl row an implementing session wrote */
+export const lastImplementRun = (
+  runs: string | undefined
+): ImplementRun | undefined => {
+  const row = jsonLines(runs)
+    // Planning runs write cap and failed rows too, without a ticket
+    .filter(
+      (r) =>
+        IMPLEMENT_OUTCOMES.some((o) => o === r['outcome']) &&
+        typeof r['ticket'] === 'string' &&
+        r['ticket'] !== ''
+    )
+    .at(-1);
+  if (!row) return undefined;
+  return {
+    when: String(row['when'] ?? ''),
+    outcome: row['outcome'] as ImplementRun['outcome'],
+    ticket: String(row['ticket'] ?? '')
+  };
+};
+
+export const formatImplement = (
+  spent: number,
+  cap: number,
+  last: ImplementRun | undefined
+): string =>
+  [
+    `implement spend today $${spent.toFixed(2)} of $${cap}`,
+    last
+      ? `last ${last.outcome}${last.ticket ? ` ${last.ticket}` : ''}${last.when ? ` (${last.when})` : ''}`
+      : 'no implementing session yet'
+  ].join(', ');
+
+/** The major version in `node --version` output, e.g. `v22.3.0` */
+export const nodeMajor = (version: string): number | undefined => {
+  const major = /^v?(\d+)\./.exec(version.trim())?.[1];
+  return major === undefined ? undefined : Number(major);
+};
 
 export const drift = (
   installed: string | undefined,
