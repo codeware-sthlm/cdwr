@@ -61,7 +61,9 @@ Check in this order, between tickets and never in the middle of a step. Take the
    feedback**.
 4. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
    removes anything. It only removes ticket worktrees whose PR merged or closed and that
-   have nothing uncommitted.
+   have nothing uncommitted. Then close each parent ticket whose sub-issues are all Done or
+   Canceled: set it Done and post `**Agent: closed**` naming the sub-issues. Linear's own
+   parent auto-close stays off, so nothing else closes it.
 5. **The limit.** Count what waits on Håkan (below). At or over the limit, no new ticket
    starts: go to **Nothing workable**.
 6. **A new `agent:ready` ticket** by the queue rule.
@@ -148,7 +150,8 @@ on claim and refresh it with every Status row update.
 
    One ticket, one PR, so every PR maps to a ticket of its own. Work that needs more than
    one PR becomes sub-issues of the ticket, one per PR, each on its own branch and worked
-   as a ticket. The parent holds the overview and closes when all its sub-issues are done.
+   as a ticket. The parent holds the overview and opens no PR; the agent closes it once all its
+   sub-issues are done (**What to take next**, step 4).
 
 3. **Plan approval, in Linear.** Post `**Agent: plan ready**` with the decisions most worth
    checking and any open questions as numbered options (the format in **How a gate asks**).
