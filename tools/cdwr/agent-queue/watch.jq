@@ -115,10 +115,11 @@ def next_line:
 # { wait: copilot|ci, pr, sha, since } from a
 # "**Next:** Waiting: <copilot|CI> · PR #<n>[ @ <sha>] · since <time>" line: the ticket is parked
 # on an external wait. A CI wait names the pushed commit, so checks of the commit before it
-# don't count. Else null.
+# don't count. Linear stores `PR #123` as `PR [owner/repo#123](url)` once the PR is attached, so
+# both read. Else null.
 def parked:
   [ next_line // empty
-    | capture("^Waiting: (?<wait>[A-Za-z]+) · PR #(?<pr>[0-9]+)(?: @ (?<sha>[0-9a-f]{7,40}))? · since (?<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z)$")
+    | capture("^Waiting: (?<wait>[A-Za-z]+) · PR (?:#|\\[[^\\]#]*#)(?<pr>[0-9]+)(?:\\]\\([^)]*\\))?(?: @ (?<sha>[0-9a-f]{7,40}))? · since (?<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z)$")
     | { wait: (.wait | ascii_downcase), pr: (.pr | tonumber), sha: (.sha // null), since: (.at | epoch) }
     | select(.wait == "copilot" or .wait == "ci") ]
   | first;
