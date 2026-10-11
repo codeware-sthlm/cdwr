@@ -107,10 +107,10 @@ def claim:
   | first
   | if . == null then null else { id, at: (.at | epoch) } end;
 
-# Text after the first "**Next:** " of the description, trimmed, else null
+# Text of the first description line that starts with "**Next:** ", trimmed, else null
 def next_line:
-  (.description // "")
-  | if contains("**Next:** ") then split("**Next:** ")[1] | split("\n")[0] | trim else null end;
+  [ (.description // "") | split("\n")[] | select(startswith("**Next:** ")) | ltrimstr("**Next:** ") | trim ]
+  | first;
 
 # The issue's agent:* label name, else null
 def agent_label:
@@ -149,7 +149,8 @@ def queue_order:
 
 def is_open: .state.type != "completed" and .state.type != "canceled";
 
-# What waits on Håkan: open reviews and hand-off tickets completed within 14 days, the latter capped at limit - 3
+# What waits on Håkan after implementation: open reviews count toward the limit; hand-off
+# tickets completed within 14 days are listed but don't count
 def limit_used($now; $limit):
   [ .[] | select(agent_label == "agent:review") ] as $reviews
   | [ $reviews[] | select(is_open) | .identifier ] as $open
@@ -158,35 +159,67 @@ def limit_used($now; $limit):
                and ($now - (.completedAt | epoch)) <= 14 * 86400
                and (handoffs | length) > 0)
       | .identifier ] as $hand
-  | { used: (($open | length) + ([ ($hand | length), ($limit - 3) ] | min)), open: $open, handoffs: $hand };
+  | { used: ($open | length), open: $open, handoffs: $hand };
 
-# The pick: { verdict: running|run|idle, ticket, reason, detail, waiting, used, limit }
-def attended($now; $limit; $watch):
+# The whole queue: { at, limit, session, next, held, table }. `next` is every actionable item in
+# the order the skill takes them; `held` is what the limit keeps from starting; `table` is what
+# waits on Håkan, before and after implementation. $session comes from session_state, or null.
+def queue_view($now; $limit; $watch; $session):
   map(select(other_repo | not)) as $all
   | ($all | limit_used($now; $limit)) as $lu
-  | ([ $all[] | select(agent_label == "agent:needs-input" and is_open and (answered | not)) ] | sort_by(queue_order) | map(.identifier + " input")) as $inputs
-  | ($inputs + ($lu.open | map(. + " PR")) + ($lu.handoffs | map(. + " hand-offs"))) as $waiting
-  | { used: $lu.used, limit: $limit, waiting: $waiting } as $base
   | ([ $all[] | select(agent_label == "agent:working") | . + { claim: claim } ]) as $working
-  | ([ $working[] | select(.claim != null and ($now - .claim.at) < 7200) ] | sort_by(.claim.at) | last) as $fresh
+  | ([ $working[] | select(.claim != null and ($now - .claim.at) < 7200) ] | sort_by(.claim.at) | reverse
+     | map({ ticket: .identifier, reason: "resume", detail: next_line })) as $fresh
   # No readable claim is no proof the session is gone: the skill takes over only a claim 2 h old
-  | ([ $working[] | select(.claim == null) ] | sort_by(queue_order) | first) as $unclaimed
-  | ([ $working[] | select(.claim != null and ($now - .claim.at) >= 7200) ] | sort_by(queue_order) | first) as $stale
-  | ([ $all[] | select(agent_label == "agent:needs-input" and is_open and answered) ] | sort_by(queue_order) | first) as $ans
-  | ([ $all[] | select(agent_label == "agent:review" and is_open and review_feedback($watch)) ] | sort_by(queue_order) | first) as $fb
-  | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not)) ] | sort_by(queue_order) | first) as $rdy
-  | $base + (
-      if $fresh != null then { verdict: "running", ticket: $fresh.identifier, reason: "working", detail: ($fresh | next_line) }
-      elif $unclaimed != null then { verdict: "running", ticket: $unclaimed.identifier, reason: "working", detail: "no claim line" }
-      elif $stale != null then
-        { verdict: "run", ticket: $stale.identifier, reason: "take over",
-          detail: "claim \((($now - $stale.claim.at) / 3600 | floor)) h old" }
-      elif $ans != null then { verdict: "run", ticket: $ans.identifier, reason: "answered", detail: null }
-      elif $fb != null then { verdict: "run", ticket: $fb.identifier, reason: "review feedback", detail: null }
-      elif $lu.used >= $limit then { verdict: "idle", ticket: null, reason: null, detail: null }
-      elif $rdy != null then { verdict: "run", ticket: $rdy.identifier, reason: "ready", detail: null }
-      else { verdict: "idle", ticket: null, reason: null, detail: null }
-      end);
+  | ([ $working[] | select(.claim == null) ] | sort_by(queue_order)
+     | map({ ticket: .identifier, reason: "resume", detail: "no claim line" })) as $unclaimed
+  | ([ $working[] | select(.claim != null and ($now - .claim.at) >= 7200) ] | sort_by(queue_order)
+     | map({ ticket: .identifier, reason: "take over",
+             detail: "claim \((($now - .claim.at) / 3600 | floor)) h old" })) as $stale
+  | ([ $all[] | select(agent_label == "agent:needs-input" and is_open and answered) ] | sort_by(queue_order)
+     | map({ ticket: .identifier, reason: "answered", detail: null })) as $ans
+  | ([ $all[] | select(agent_label == "agent:review" and is_open and review_feedback($watch)) ] | sort_by(queue_order)
+     | map({ ticket: .identifier, reason: "review feedback", detail: null })) as $fb
+  | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not)) ] | sort_by(queue_order)
+     | map(.identifier)) as $rdy
+  | ($lu.used >= $limit) as $full
+  | ([ $all[] | select(agent_label == "agent:needs-input" and is_open and (answered | not)) ] | sort_by(queue_order)
+     | map({ ticket: .identifier,
+             kind: (if ((.comments.nodes // []) | sort_by(.createdAt) | last | .body // "" | trim
+                        | startswith("**Agent: plan ready**")) then "plan" else "question" end) })) as $before
+  | ($all | map({ key: .identifier, value: . }) | from_entries) as $by
+  | {
+      at: ($now | todateiso8601),
+      limit: { used: $lu.used, max: $limit },
+      session: $session,
+      next: ($fresh + $unclaimed + $stale + $ans + $fb
+             + (if $full then [] else $rdy | map({ ticket: ., reason: "ready", detail: null }) end)),
+      held: {
+        tickets: (if $full then $rdy else [] end),
+        free: (if $full and ($rdy | length) > 0
+               then ($lu.open | map({ action: "review", ticket: ., pr: ($watch[.].pr // null) }))
+                    + [ { action: "limit", value: ($lu.used + 1) } ]
+               else [] end)
+      },
+      table: {
+        before: $before,
+        after: (($lu.open | map({ ticket: ., kind: "pr", pr: ($watch[.].pr // null) }))
+                + ($lu.handoffs | map({ ticket: ., kind: "handoffs", items: ($by[.] | handoffs) })))
+      }
+    };
+
+# The pick: { verdict: running|run|idle, ticket, reason, detail, waiting, used, limit }, the first
+# of queue_view's `next`. A resumable ticket reads as running: a session may hold it.
+def attended($now; $limit; $watch):
+  queue_view($now; $limit; $watch; null) as $q
+  | ($q.table.before | map(.ticket + " input")) as $inputs
+  | ($q.table.after | map(.ticket + (if .kind == "pr" then " PR" else " hand-offs" end))) as $after
+  | { used: $q.limit.used, limit: $limit, waiting: ($inputs + $after) }
+    + ($q.next[0] as $n
+       | if $n == null then { verdict: "idle", ticket: null, reason: null, detail: null }
+         elif $n.reason == "resume" then { verdict: "running", ticket: $n.ticket, reason: "working", detail: $n.detail }
+         else { verdict: "run", ticket: $n.ticket, reason: $n.reason, detail: $n.detail }
+         end);
 
 # One line for the attended pick object
 def attended_line:
@@ -201,7 +234,7 @@ def attended_line:
 # --- Session heartbeat: is an attended /work-queue session running? ---
 # Input is an array of session files, each with pidAlive and watcherAlive added by run.sh.
 
-# { state: alive|waiting|stopped|none, detail, id } from the session files.
+# { state: alive|waiting|stopped|none, detail, id, ticket, lastSeen } from the session files.
 # Alive: not ended, process up, and a watcher running, an open prompt (however old), or a
 # recent heartbeat from a turn that hasn't stopped. A stopped turn with no watcher wakes no one.
 def session_state($now):
@@ -211,11 +244,12 @@ def session_state($now):
                             or (.state != "stopped" and ($now - (.lastSeen | epoch)) < 900))) ] as $alive
   | ($alive | sort_by(.lastSeen | epoch) | last) as $s
   | if $s != null then
-      if $s.state == "waiting" then { state: "waiting", detail: $s.detail, id: $s.id }
-      else { state: "alive", detail: (if $s.watcherAlive then "polling" else $s.state end), id: $s.id }
-      end
-    elif any($open[]; .pidAlive) then { state: "stopped", detail: null, id: null }
-    else { state: "none", detail: null, id: null }
+      { id: $s.id, ticket: ($s.ticket // null), lastSeen: ($s.lastSeen // null) }
+      + if $s.state == "waiting" then { state: "waiting", detail: $s.detail }
+        else { state: "alive", detail: (if $s.watcherAlive then "polling" else $s.state end) }
+        end
+    elif any($open[]; .pidAlive) then { state: "stopped", detail: null, id: null, ticket: null, lastSeen: null }
+    else { state: "none", detail: null, id: null, ticket: null, lastSeen: null }
     end;
 
 # Short text for the session_state object

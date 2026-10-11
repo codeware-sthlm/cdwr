@@ -636,6 +636,18 @@ describe('attended picks', () => {
     expect(run('next_line', node('A', null))).toBeNull();
   });
 
+  // A plan may mention the marker mid-sentence; only a line that starts with it counts
+  it('next_line skips the marker inside a line', () => {
+    expect(
+      run(
+        'next_line',
+        node('A', null, {
+          description: 'its **Next:** line is read\n**Next:** step 3\n'
+        })
+      )
+    ).toBe('step 3');
+  });
+
   describe('running and take over', () => {
     it('fresh claim is running with next line', () => {
       const r = attended([
@@ -832,7 +844,7 @@ describe('attended picks', () => {
         handoffs: string[];
       };
 
-    it('caps hand-off tickets at limit - 3', () => {
+    it('lists hand-off tickets but does not count them', () => {
       const r = used([
         review('COD-1'),
         done('COD-2', 1),
@@ -841,7 +853,7 @@ describe('attended picks', () => {
         done('COD-5', 4)
       ]);
       expect(r).toEqual({
-        used: 3,
+        used: 1,
         open: ['COD-1'],
         handoffs: ['COD-2', 'COD-3', 'COD-4', 'COD-5']
       });
@@ -852,14 +864,15 @@ describe('attended picks', () => {
     });
 
     it('ignores hand-offs completed over 14 days ago', () => {
-      expect(used([done('A', 15)]).used).toBe(0);
-      expect(used([done('A', 13)]).used).toBe(1);
+      expect(used([done('A', 15)]).handoffs).toEqual([]);
+      expect(used([done('A', 13)]).handoffs).toEqual(['A']);
+      expect(used([done('A', 13)]).used).toBe(0);
     });
 
     it('ignores completed tickets without hand-offs', () => {
       const n = done('A', 1);
       n.comments.nodes = [prReady(false)];
-      expect(used([n]).used).toBe(0);
+      expect(used([n]).handoffs).toEqual([]);
     });
 
     it('ignores non-review tickets', () => {
@@ -1055,7 +1068,7 @@ describe('attended picks', () => {
       expect(
         line([handoffTicket('COD-3'), review('COD-2'), waitingTicket('COD-1')])
       ).toBe(
-        'idle: waits on COD-1 input, COD-2 PR, COD-3 hand-offs; limit 2/5'
+        'idle: waits on COD-1 input, COD-2 PR, COD-3 hand-offs; limit 1/5'
       );
     });
 
@@ -1070,6 +1083,148 @@ describe('attended picks', () => {
           3
         )
       ).toBe('idle: waits on COD-1 PR, COD-2 PR, COD-3 PR; limit 3/3');
+    });
+  });
+
+  describe('queue_view', () => {
+    type Item = { ticket: string; reason: string; detail: string | null };
+    type View = {
+      at: string;
+      limit: { used: number; max: number };
+      session: unknown;
+      next: Item[];
+      held: {
+        tickets: string[];
+        free: Array<Record<string, unknown>>;
+      };
+      table: {
+        before: Array<{ ticket: string; kind: string }>;
+        after: Array<Record<string, unknown>>;
+      };
+    };
+    const view = (
+      issues: Node[],
+      limit = 5,
+      watch: Record<string, unknown> = {},
+      session: unknown = null
+    ) =>
+      run(
+        `queue_view(${NOW}; ${limit}; ${JSON.stringify(watch)}; ${JSON.stringify(session)})`,
+        issues
+      ) as View;
+    const human = [{ body: 'yes', createdAt: '2026-10-01T00:00:00Z' }];
+    const agent = (body: string) => [
+      { body, createdAt: '2026-10-01T00:00:00Z' }
+    ];
+    const needsInput = (id: string, comments: typeof human) =>
+      node(id, 'agent:needs-input', { comments: { nodes: comments } });
+    const done = (id: string) =>
+      review(id, {
+        state: { type: 'completed' },
+        completedAt: iso(DAY),
+        comments: { nodes: [prReady()] }
+      });
+
+    it('carries at, limit and session', () => {
+      const session = { state: 'alive', detail: 'working', id: 's1' };
+      const r = view([review('COD-1'), review('COD-2')], 4, {}, session);
+      expect(r.at).toBe('2026-10-11T12:00:00Z');
+      expect(r.limit).toEqual({ used: 2, max: 4 });
+      expect(r.session).toEqual(session);
+      expect(view([]).session).toBeNull();
+    });
+
+    it('orders next by what the skill takes first', () => {
+      const r = view(
+        [
+          ready('COD-16'),
+          review('COD-15'),
+          needsInput('COD-14', human),
+          node('COD-13', 'agent:working', { description: claimLine(5 * HOUR) }),
+          node('COD-12', 'agent:working'),
+          node('COD-10', 'agent:working', { description: claimLine(HOUR) }),
+          node('COD-11', 'agent:working', {
+            description: claimLine(HOUR / 2).replace('step 2', 'step 3')
+          })
+        ],
+        5,
+        { 'COD-15': { unresolved: 1 } }
+      );
+      expect(r.next).toEqual([
+        { ticket: 'COD-11', reason: 'resume', detail: 'step 3' },
+        { ticket: 'COD-10', reason: 'resume', detail: 'step 2' },
+        { ticket: 'COD-12', reason: 'resume', detail: 'no claim line' },
+        { ticket: 'COD-13', reason: 'take over', detail: 'claim 5 h old' },
+        { ticket: 'COD-14', reason: 'answered', detail: null },
+        { ticket: 'COD-15', reason: 'review feedback', detail: null },
+        { ticket: 'COD-16', reason: 'ready', detail: null }
+      ]);
+    });
+
+    it('holds ready tickets when the limit is full', () => {
+      const r = view(
+        [review('COD-1'), review('COD-2'), ready('COD-9'), ready('COD-8')],
+        2,
+        { 'COD-1': { pr: 5 } }
+      );
+      expect(r.next).toEqual([]);
+      expect(r.held.tickets).toEqual(['COD-9', 'COD-8']);
+      expect(r.held.free).toEqual([
+        { action: 'review', ticket: 'COD-1', pr: 5 },
+        { action: 'review', ticket: 'COD-2', pr: null },
+        { action: 'limit', value: 3 }
+      ]);
+    });
+
+    it('holds nothing when the limit is not full', () => {
+      const r = view([review('COD-1'), ready('COD-9')], 2);
+      expect(r.next.map((n) => n.ticket)).toEqual(['COD-9']);
+      expect(r.held).toEqual({ tickets: [], free: [] });
+    });
+
+    it('frees nothing when the limit is full without a ready ticket', () => {
+      const r = view([review('COD-1'), review('COD-2')], 2);
+      expect(r.held).toEqual({ tickets: [], free: [] });
+    });
+
+    it('lists unanswered input as plan or question, not answered ones', () => {
+      const r = view([
+        needsInput('COD-1', agent('**Agent: plan ready**\n\nPlan')),
+        needsInput('COD-2', agent('**Agent: question**\n\nWhich?')),
+        needsInput('COD-3', human)
+      ]);
+      expect(r.table.before).toEqual([
+        { ticket: 'COD-1', kind: 'plan' },
+        { ticket: 'COD-2', kind: 'question' }
+      ]);
+    });
+
+    it('lists open reviews, then hand-off tickets with unticked items', () => {
+      const r = view([done('COD-3'), review('COD-2')], 5, {
+        'COD-2': { pr: 7 }
+      });
+      expect(r.table.after).toEqual([
+        { ticket: 'COD-2', kind: 'pr', pr: 7 },
+        { ticket: 'COD-3', kind: 'handoffs', items: ['check'] }
+      ]);
+    });
+
+    it('ignores tickets of other repos', () => {
+      const other = (label: string, repo: string, over = {}) =>
+        node('COD-1', label, {
+          labels: { nodes: [{ name: label }, { name: repo }] },
+          ...over
+        });
+      const r = view([
+        other('agent:ready', 'nx-plugins'),
+        other('agent:review', 'enjinex'),
+        other('agent:needs-input', 'enjinex', {
+          comments: { nodes: human }
+        })
+      ]);
+      expect(r.next).toEqual([]);
+      expect(r.limit.used).toBe(0);
+      expect(r.table).toEqual({ before: [], after: [] });
     });
   });
 });
@@ -1090,36 +1245,58 @@ describe('session_state and session_prefix', () => {
   const state = (sessions: unknown[]) => run(`session_state(${NOW})`, sessions);
 
   it.each([
-    ['empty', [], { state: 'none', detail: null, id: null }],
+    [
+      'empty',
+      [],
+      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+    ],
     [
       'alive working',
       [sess()],
-      { state: 'alive', detail: 'working', id: 's1' }
+      {
+        state: 'alive',
+        detail: 'working',
+        id: 's1',
+        ticket: null,
+        lastSeen: iso(60)
+      }
     ],
     [
       'alive polling with an old heartbeat',
       [sess({ lastSeen: iso(7200), watcherAlive: true })],
-      { state: 'alive', detail: 'polling', id: 's1' }
+      {
+        state: 'alive',
+        detail: 'polling',
+        id: 's1',
+        ticket: null,
+        lastSeen: iso(7200)
+      }
     ],
     [
       'waiting for a permission prompt',
       [sess({ state: 'waiting', detail: 'permission_prompt' })],
-      { state: 'waiting', detail: 'permission_prompt', id: 's1' }
+      {
+        state: 'waiting',
+        detail: 'permission_prompt',
+        id: 's1',
+        ticket: null,
+        lastSeen: iso(60)
+      }
     ],
     [
       'stopped: process up, old heartbeat, no watcher',
       [sess({ state: 'stopped', lastSeen: iso(7200) })],
-      { state: 'stopped', detail: null, id: null }
+      { state: 'stopped', detail: null, id: null, ticket: null, lastSeen: null }
     ],
     [
       'ended is none',
       [sess({ state: 'ended' })],
-      { state: 'none', detail: null, id: null }
+      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
     ],
     [
       'dead pid is none',
       [sess({ pidAlive: false })],
-      { state: 'none', detail: null, id: null }
+      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
     ],
     [
       'waiting: a prompt open for an hour is still a live session',
@@ -1130,12 +1307,18 @@ describe('session_state and session_prefix', () => {
           lastSeen: iso(3600)
         })
       ],
-      { state: 'waiting', detail: 'permission_prompt', id: 's1' }
+      {
+        state: 'waiting',
+        detail: 'permission_prompt',
+        id: 's1',
+        ticket: null,
+        lastSeen: iso(3600)
+      }
     ],
     [
       'stopped: a turn that just ended without a watcher wakes no one',
       [sess({ state: 'stopped', lastSeen: iso(30) })],
-      { state: 'stopped', detail: null, id: null }
+      { state: 'stopped', detail: null, id: null, ticket: null, lastSeen: null }
     ],
     [
       'the newest alive session wins',
@@ -1143,7 +1326,24 @@ describe('session_state and session_prefix', () => {
         sess({ id: 'old', lastSeen: iso(600) }),
         sess({ id: 'new', lastSeen: iso(30) })
       ],
-      { state: 'alive', detail: 'working', id: 'new' }
+      {
+        state: 'alive',
+        detail: 'working',
+        id: 'new',
+        ticket: null,
+        lastSeen: iso(30)
+      }
+    ],
+    [
+      'the ticket is passed through',
+      [sess({ ticket: 'COD-556' })],
+      {
+        state: 'alive',
+        detail: 'working',
+        id: 's1',
+        ticket: 'COD-556',
+        lastSeen: iso(60)
+      }
     ]
   ])('session_state: %s', (_name, sessions, expected) => {
     expect(state(sessions)).toEqual(expected);
@@ -1156,8 +1356,20 @@ describe('session_state and session_prefix', () => {
       { state: 'waiting', detail: 'permission_prompt', id: 's' },
       'session waiting (permission_prompt)'
     ],
-    [{ state: 'stopped', detail: null, id: null }, 'session stopped'],
-    [{ state: 'none', detail: null, id: null }, 'no session']
+    [
+      {
+        state: 'stopped',
+        detail: null,
+        id: null,
+        ticket: null,
+        lastSeen: null
+      },
+      'session stopped'
+    ],
+    [
+      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null },
+      'no session'
+    ]
   ])('session_prefix: %j', (input, expected) => {
     expect(run('session_prefix', input)).toBe(expected);
   });
