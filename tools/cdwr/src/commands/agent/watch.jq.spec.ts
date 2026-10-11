@@ -1800,3 +1800,141 @@ describe('session_state and session_prefix', () => {
     expect(run('session_prefix', input)).toBe(expected);
   });
 });
+
+describe('launch', () => {
+  const pick = (over: Record<string, unknown> = {}) => ({
+    verdict: 'run',
+    ticket: 'COD-1',
+    reason: 'answered',
+    ...over
+  });
+  const guards = (over: Record<string, unknown> = {}) => ({
+    session: null,
+    locked: false,
+    spent: 0,
+    cap: 40,
+    last: null,
+    ...over
+  });
+  const launch = (p: unknown, g: unknown) =>
+    run(`launch(${JSON.stringify(g)})`, p) as {
+      key: string | null;
+      last: { key: string | null; launches: number };
+      action: string;
+      reason: string | null;
+    };
+
+  it.each([
+    ['answered', 'answered', null],
+    ['review feedback', 'review feedback', null],
+    ['take over', 'take over', null],
+    ['answered, session state none', 'answered', { state: 'none' }],
+    ['answered, session state stopped', 'answered', { state: 'stopped' }]
+  ])('launches: %s', (_name, reason, session) => {
+    const res = launch(pick({ reason }), guards({ session }));
+    expect(res).toEqual({
+      key: `COD-1 ${reason}`,
+      last: { key: `COD-1 ${reason}`, launches: 1 },
+      action: 'launch',
+      reason: null
+    });
+  });
+
+  it.each([
+    ['verdict running', pick({ verdict: 'running' }), 'COD-1 answered'],
+    [
+      'verdict idle without a ticket',
+      pick({ verdict: 'idle', ticket: null, reason: null }),
+      null
+    ],
+    ['reason ready', pick({ reason: 'ready' }), 'COD-1 ready']
+  ])('skips, nothing to implement: %s', (_name, p, key) => {
+    const res = launch(p, guards());
+    expect(res.action).toBe('skip');
+    expect(res.reason).toBe('nothing to implement');
+    expect(res.key).toBe(key);
+  });
+
+  it.each(['alive', 'waiting'])('skips when a session is %s', (state) => {
+    const res = launch(pick(), guards({ session: { state } }));
+    expect(res.action).toBe('skip');
+    expect(res.reason).toBe('a session is alive');
+  });
+
+  it('skips while a launched session is still running', () => {
+    const res = launch(pick(), guards({ locked: true }));
+    expect(res.action).toBe('skip');
+    expect(res.reason).toBe('a launched session is still running');
+  });
+
+  it.each([
+    ['equal to the cap', 40],
+    ['above the cap', 52]
+  ])('notifies when spend is %s', (_name, spent) => {
+    const res = launch(pick(), guards({ spent }));
+    expect(res.action).toBe('notify');
+    expect(res.reason).toBe(`daily implement cap reached ($${spent} of $40)`);
+  });
+
+  describe('back-off', () => {
+    it.each([
+      [{ key: 'COD-1 answered', launches: 1 }, 'launch', 2],
+      [{ key: 'COD-9 answered', launches: 5 }, 'launch', 1]
+    ])('last %j gives %s', (last, action, launches) => {
+      const res = launch(pick(), guards({ last }));
+      expect(res.action).toBe(action);
+      expect(res.last).toEqual({ key: 'COD-1 answered', launches });
+    });
+
+    it('counts a take-over after a dead session as the same ticket', () => {
+      const res = launch(
+        pick({ reason: 'take over' }),
+        guards({ last: { key: 'COD-1 answered', launches: 2 } })
+      );
+      expect(res.action).toBe('notify');
+    });
+
+    // Only a launch carries state to store
+    it('two misses on one key notify and carry no state', () => {
+      const res = launch(
+        pick(),
+        guards({ last: { key: 'COD-1 answered', launches: 2 } })
+      );
+      expect(res).toMatchObject({
+        action: 'notify',
+        reason: '2 launches changed nothing'
+      });
+      expect(res.last).toBeUndefined();
+    });
+  });
+
+  it('a missing cap notifies instead of launching', () => {
+    const res = launch(pick(), guards({ cap: null }));
+    expect(res).toMatchObject({
+      action: 'notify',
+      reason: 'no daily implement cap set'
+    });
+  });
+
+  describe('precedence', () => {
+    it('a live session wins over the cap', () => {
+      const res = launch(
+        pick(),
+        guards({ session: { state: 'alive' }, spent: 99 })
+      );
+      expect(res.reason).toBe('a session is alive');
+    });
+
+    it('the cap wins over back-off', () => {
+      const res = launch(
+        pick(),
+        guards({
+          spent: 40,
+          last: { key: 'COD-1 answered', launches: 2 }
+        })
+      );
+      expect(res.action).toBe('notify');
+      expect(res.reason).toMatch(/^daily implement cap/);
+    });
+  });
+});

@@ -323,3 +323,28 @@ def session_prefix:
   elif .state == "stopped" then "session stopped"
   else "no session"
   end;
+
+# --- Implementing launch: should the scheduler start a /work-queue implement-only session? ---
+# Input: the attended pick. $guards: { session (session_state), locked (implement.lock held),
+# spent and cap (today's implement spend and the daily cap, USD), last ({ key, launches } of the
+# previous launch, or null) }. Output: { action: launch|notify|skip, reason, key }, plus `last`,
+# the state to store, only when the action is launch.
+def launch($guards):
+  (if .ticket == null then null else "\(.ticket) \(.reason)" end) as $key
+  | ($guards.last // {}) as $prev
+  # Counted per ticket, not per reason: a launched session that dies turns `answered` into
+  # `take over` two hours later, and that is the same miss
+  | (if ($prev.key // "" | split(" ")[0]) == .ticket then ($prev.launches // 0) else 0 end) as $done
+  | { key: $key }
+    + if .verdict != "run" or .reason == "ready" or $key == null then { action: "skip", reason: "nothing to implement" }
+      elif ($guards.session.state // "none") == "alive" or ($guards.session.state // "none") == "waiting"
+        then { action: "skip", reason: "a session is alive" }
+      elif $guards.locked then { action: "skip", reason: "a launched session is still running" }
+      # No cap is no licence to spend: fail safe
+      elif ($guards.cap | type) != "number" then { action: "notify", reason: "no daily implement cap set" }
+      elif ($guards.spent // 0) >= $guards.cap
+        then { action: "notify", reason: "daily implement cap reached ($\($guards.spent) of $\($guards.cap))" }
+      # A launch that ended without moving the pick is a miss; two misses on one key stop launching
+      elif $done >= 2 then { action: "notify", reason: "\($done) launches changed nothing" }
+      else { action: "launch", reason: null, last: { key: $key, launches: ($done + 1) } }
+      end;
