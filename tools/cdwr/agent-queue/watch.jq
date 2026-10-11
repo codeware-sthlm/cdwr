@@ -332,9 +332,11 @@ def session_prefix:
 def launch($guards):
   (if .ticket == null then null else "\(.ticket) \(.reason)" end) as $key
   | ($guards.last // {}) as $prev
-  # Counted per ticket, not per reason: a launched session that dies turns `answered` into
-  # `take over` two hours later, and that is the same miss
-  | (if ($prev.key // "" | split(" ")[0]) == .ticket then ($prev.launches // 0) else 0 end) as $done
+  # Counted per ticket and reason, so new work on a ticket starts fresh. A `take over` of the
+  # ticket last launched is the same miss: a launched session that dies turns its pick into one.
+  | (if $prev.key == $key
+        or (.reason == "take over" and ($prev.key // "" | split(" ")[0]) == .ticket)
+     then ($prev.launches // 0) else 0 end) as $done
   | { key: $key }
     + if .verdict != "run" or .reason == "ready" or $key == null then { action: "skip", reason: "nothing to implement" }
       elif ($guards.session.state // "none") == "alive" or ($guards.session.state // "none") == "waiting"
