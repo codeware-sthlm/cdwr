@@ -23,6 +23,8 @@ resumes. One ticket is active at a time; others may be parked on a Copilot or CI
 - `once`: stop after one ticket reaches review or a gate, so each ticket gets a fresh context
 - `limit=N`: how much may wait on Håkan before no new ticket starts (default 5). See
   **The limit** below.
+- `implement-only` (launched by the scheduler, with `once`): resume approved, answered or
+  reviewed work only, never a new ticket. See **Implement-only runs** below.
 - `plan-only` (scheduled runs): investigate one ticket and write its plan, nothing else.
   See **Plan-only runs** below.
 
@@ -352,6 +354,27 @@ Reply with a number or your own answer. Context: <the Status row it blocks>
 ```
 
 A plan approval uses the same numbered options under `**Agent: plan ready**`.
+
+## Implement-only runs
+
+The scheduler starts `claude -p "/work-queue implement-only once"` when work that only an
+implementing session can do waits (an approved plan, an answer, review feedback, a stale claim)
+and no session is alive. Nobody is at the terminal, and the permissions deny anything not
+listed.
+
+1. Start and claim as usual. In **What to take next**, take only the steps before **The limit**:
+   never a new `agent:ready` ticket. An unanswered plan stays a gate; this mode never approves
+   its own plan, even though no one is watching.
+2. Edit and Write work only inside the ticket worktrees. Read reaches anything.
+3. Never `cd`: a `cd … && git …` compound is denied. Use `git -C <worktree> …` and
+   `pnpm -C <worktree> nx …` with absolute paths. Every implementer prompt must say the same.
+4. Notify through Slack only; there is no PushNotification in `-p`.
+5. A turn that ends, ends the run. Run every wait in the foreground, as repeated Bash calls of
+   at most 10 minutes each, never as a background task.
+6. When a tool is denied, or the work needs a production action, money or Håkan's judgement,
+   post it as a needs-input gate (see **How a gate asks**) and stop.
+7. With `once`, stop when the ticket reaches review or a gate. Don't go to **Nothing workable**,
+   and don't start `wait.sh`.
 
 ## Plan-only runs
 

@@ -53,12 +53,20 @@ of what waits on Håkan. The skill holds the queue order, the labels and how a g
 
 A launchd job runs it plan-only every 10 minutes on this machine; `cdwr agent install` sets that up
 and `cdwr agent status` says what it would take next. Launchd runs an installed copy of
-`tools/cdwr/agent-queue/run.sh` (and its `watch.jq` and `waits.sh`), so a merged change to its guardrails
+`tools/cdwr/agent-queue/run.sh` (and its `watch.jq`, `waits.sh` and `implement.sh`), so a merged change to its guardrails
 waits for the next `install`. Before planning, the same job watches the PRs of `agent:review`
 tickets and sends a notice when one leaves the merge queue, fails, or merges with hand-offs left.
 Each run also keeps three Linear documents up to date: "Agent queue: runs", "Agent queue: usage" (`cdwr agent usage`)
 and "Agent queue: activity" (`cdwr agent activity`, from Linear's issue history), which the Agent Desk reads.
 The runs document also carries an `Attended:` line saying whether an attended `/work-queue` has something to do, and `cdwr agent status` shows it too.
+
+When that work waits and no session is alive, the job starts one itself: `implement.sh` runs
+`claude -p "/work-queue implement-only once"` detached, with deny-by-default permissions, a
+per-run budget (`AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, $15) and a daily cap
+(`AGENT_QUEUE_IMPLEMENT_CAP_USD`, $40) kept in `implement-spend.jsonl`. It resumes approved,
+answered or reviewed work only, and never starts a new ticket. After two launches that change
+nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
+launching too.
 
 ## Nx-generated projects cleanup
 
