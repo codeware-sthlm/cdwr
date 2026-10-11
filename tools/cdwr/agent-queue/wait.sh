@@ -3,20 +3,25 @@
 # attended pick changes, or after --max seconds so the session can re-arm it.
 # Runs from the repo, not installed. While it runs, <id>.watcher holds its pid and the hook reports `polling` on Stop.
 #   wait.sh [--interval 60] [--max 6600]
-# AGENT_QUEUE_LINEAR_CMD replaces the Linear call with a command that prints a response.
+#   wait.sh --now        print the current pick once and exit
+# AGENT_QUEUE_LINEAR_CMD replaces the Linear call with a command that prints a response, and
+# AGENT_QUEUE_GH_CMD the gh call that reads parked tickets' PRs (the query is its $1).
 INTERVAL=60
 MAX=6600
+NOW=false
 while (( $# )); do
   case "$1" in
     --interval) INTERVAL="${2:?--interval needs seconds}"; shift 2 ;;
     --max) MAX="${2:?--max needs seconds}"; shift 2 ;;
-    *) print -ru2 -- "usage: wait.sh [--interval <s>] [--max <s>]"; exit 2 ;;
+    --now) NOW=true; shift ;;
+    *) print -ru2 -- "usage: wait.sh [--interval <s>] [--max <s>] [--now]"; exit 2 ;;
   esac
 done
 [[ "$INTERVAL" == <-> && "$MAX" == <-> ]] || { print -ru2 -- "wait.sh: seconds must be whole numbers"; exit 2; }
 
 HERE="${0:A:h}"
 source "$HERE/lib.sh"
+source "$HERE/waits.sh"
 if [[ -n "${AGENT_QUEUE_LINEAR_CMD:-}" ]]; then
   linear() { eval "$AGENT_QUEUE_LINEAR_CMD"; }
 elif [[ -z "$key" ]]; then
@@ -59,16 +64,23 @@ remove_watcher() {
 
 # pick: the attended verdict as JSON; fails on a Linear or jq error
 pick() {
-  local resp watch
+  local resp watch waits
   resp="$(linear "$ATTENDED_QUERY")" || return 1
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null || return 1
   watch="$(jq -c 'if type == "object" then . else {} end' "$WATCH_FILE" 2>/dev/null || print '{}')"
   [[ -n "$watch" ]] || watch='{}'
-  jq -L "$HERE" -c --argjson now "$(date +%s)" --argjson watch "$watch" \
-    'include "watch"; .data.issues.nodes | attended($now; 5; $watch)' <<<"$resp"
+  waits="$(parked_waits <<<"$resp")"
+  jq -L "$HERE" -c --argjson now "$(date +%s)" --argjson watch "$watch" --argjson waits "$waits" \
+    'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)' <<<"$resp"
 }
 key_of() { jq -c '{verdict, ticket, reason, waiting}' <<<"$1"; }
 line_of() { jq -r -L "$HERE" 'include "watch"; attended_line' <<<"$1"; }
+
+if $NOW; then
+  now="$(pick)" || { print -r -- "wait: Linear did not answer"; exit 0; }
+  line_of "$now"
+  exit 0
+fi
 
 find_session
 write_watcher

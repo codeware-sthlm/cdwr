@@ -13,7 +13,12 @@ export const KEYCHAIN_SERVICE = 'linear-agent-queue';
 /** Where the queue's files live in the repo, relative to the workspace root */
 export const QUEUE_SOURCE_DIR = 'tools/cdwr/agent-queue';
 /** The files install puts in the queue home; run.sh loads the rest from beside it */
-export const QUEUE_FILES = ['run.sh', 'lib.sh', 'watch.jq'] as const;
+export const QUEUE_FILES = [
+  'run.sh',
+  'lib.sh',
+  'waits.sh',
+  'watch.jq'
+] as const;
 export type QueueFile = (typeof QUEUE_FILES)[number];
 
 /** One value per queue file; the return type keeps it exhaustive */
@@ -22,6 +27,7 @@ export const byFile = <T>(
 ): Record<QueueFile, T> => ({
   'run.sh': fn('run.sh'),
   'lib.sh': fn('lib.sh'),
+  'waits.sh': fn('waits.sh'),
   'watch.jq': fn('watch.jq')
 });
 /** Files a worktree needs but git does not carry, relative to the workspace root */
@@ -362,6 +368,7 @@ export const queueViewSchema = z.object({
         'take over',
         'answered',
         'review feedback',
+        'parked wait resolved',
         'ready'
       ]),
       detail: z.string().nullable()
@@ -376,10 +383,28 @@ export const queueViewSchema = z.object({
           ticket: ticketSchema,
           pr: prSchema
         }),
+        z.object({
+          action: z.literal('wait'),
+          ticket: ticketSchema,
+          pr: z.number()
+        }),
         z.object({ action: z.literal('limit'), value: z.number() })
       ])
     )
   }),
+  // Older runs documents have no parked
+  parked: z
+    .array(
+      z.object({
+        ticket: ticketSchema,
+        wait: z.enum(['copilot', 'ci']),
+        pr: z.number(),
+        since: z.string(),
+        resolved: z.boolean(),
+        outcome: z.string().nullable()
+      })
+    )
+    .default([]),
   table: z.object({
     before: z.array(
       z.object({ ticket: ticketSchema, kind: z.enum(['plan', 'question']) })
@@ -421,7 +446,9 @@ export const formatHeld = (view: QueueView): string => {
   const slots = free.map((f) =>
     f.action === 'review'
       ? `review ${f.ticket}${f.pr === null ? '' : ` (#${f.pr})`}`
-      : `limit=${f.value}`
+      : f.action === 'wait'
+        ? `wait ${f.ticket} (#${f.pr})`
+        : `limit=${f.value}`
   );
   const held = tickets.join(', ');
   return held === ''
@@ -430,6 +457,15 @@ export const formatHeld = (view: QueueView): string => {
       ? `${held}; free a slot: ${slots.join(', ')}`
       : held;
 };
+
+export const formatParked = (view: QueueView): string =>
+  view.parked
+    .map(
+      (p) =>
+        `${p.ticket} ${p.wait} PR #${p.pr} since ${p.since.slice(11, 16)}Z` +
+        (p.resolved ? ` (resolved: ${p.outcome})` : '')
+    )
+    .join(', ') || 'nothing';
 
 export const formatTable = (view: QueueView): string => {
   const { before, after } = view.table;

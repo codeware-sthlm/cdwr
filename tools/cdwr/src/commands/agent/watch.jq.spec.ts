@@ -1114,6 +1114,371 @@ describe('attended picks', () => {
     });
   });
 
+  describe('parked', () => {
+    const since = (ago: number) => iso(ago).slice(0, 16) + 'Z';
+    const marker = (wait: string, ago: number, pr = 12) =>
+      `**Next:** Waiting: ${wait} · PR #${pr} · since ${since(ago)}`;
+    const parkedNode = (
+      id: string,
+      label: string,
+      wait: string,
+      ago: number,
+      over: Record<string, unknown> = {}
+    ) =>
+      node(id, label, {
+        description: `Status\n\n${marker(wait, ago)}\n`,
+        ...over
+      });
+    const claimed = (wait: string, ago: number, claimAgo = 60) =>
+      `${claimLine(claimAgo).replace(/\*\*Next:\*\*.*\n/, '')}${marker(wait, ago)}\n`;
+    const parkedOf = (n: Node) => run('parked', n);
+    const state = (n: Node, waits: Record<string, unknown> = {}) =>
+      run(`wait_state(${NOW}; ${JSON.stringify(waits)})`, n);
+    type Item = { ticket: string; reason: string; detail: string | null };
+    type View = {
+      limit: { used: number; max: number };
+      next: Item[];
+      held: { tickets: string[]; free: Array<Record<string, unknown>> };
+      parked: Array<Record<string, unknown>>;
+    };
+    const view = (
+      issues: Node[],
+      waits: Record<string, unknown> = {},
+      limit = 5,
+      watch: Record<string, unknown> = {}
+    ) =>
+      run(
+        `queue_view(${NOW}; ${limit}; ${JSON.stringify(watch)}; null; ${JSON.stringify(waits)})`,
+        issues
+      ) as View;
+    const pick = (issues: Node[], waits: Record<string, unknown> = {}) =>
+      run(`attended(${NOW}; 5; {}; ${JSON.stringify(waits)})`, issues) as {
+        verdict: string;
+        ticket: string | null;
+        reason: string | null;
+      };
+
+    describe('marker', () => {
+      const withNext = (next: string | null) =>
+        node('COD-1', 'agent:working', {
+          description: next === null ? null : `x\n${next}\n`
+        });
+
+      it.each([
+        [
+          'copilot',
+          '**Next:** Waiting: copilot · PR #123 · since 2026-10-11T16:20Z',
+          { wait: 'copilot', pr: 123, sha: null, since: 1791735600 }
+        ],
+        [
+          'CI',
+          '**Next:** Waiting: CI · PR #7 · since 2026-10-11T16:20Z',
+          { wait: 'ci', pr: 7, sha: null, since: 1791735600 }
+        ],
+        [
+          'lowercase ci',
+          '**Next:** Waiting: ci · PR #7 · since 2026-10-11T16:20Z',
+          { wait: 'ci', pr: 7, sha: null, since: 1791735600 }
+        ],
+        [
+          'Copilot',
+          '**Next:** Waiting: Copilot · PR #7 · since 2026-10-11T16:20Z',
+          { wait: 'copilot', pr: 7, sha: null, since: 1791735600 }
+        ],
+        [
+          'CI on a commit',
+          '**Next:** Waiting: CI · PR #7 @ abc1234 · since 2026-10-11T16:20Z',
+          { wait: 'ci', pr: 7, sha: 'abc1234', since: 1791735600 }
+        ]
+      ])('parses %s', (_name, next, expected) => {
+        expect(parkedOf(withNext(next))).toEqual(expected);
+      });
+
+      it.each([
+        ['an ordinary next line', '**Next:** step 2'],
+        [
+          'an unknown wait',
+          '**Next:** Waiting: review · PR #7 · since 2026-10-11T16:20Z'
+        ],
+        ['no pr', '**Next:** Waiting: ci · since 2026-10-11T16:20Z'],
+        ['a bad time', '**Next:** Waiting: ci · PR #7 · since yesterday'],
+        [
+          'a wrong separator',
+          '**Next:** Waiting: ci - PR #7 - since 2026-10-11T16:20Z'
+        ],
+        [
+          'trailing text',
+          '**Next:** Waiting: ci · PR #7 · since 2026-10-11T16:20Z soon'
+        ]
+      ])('is null for %s', (_name, next) => {
+        expect(parkedOf(withNext(next))).toBeNull();
+      });
+
+      it('is null without a description', () => {
+        expect(parkedOf(withNext(null))).toBeNull();
+      });
+    });
+
+    describe('wait_state', () => {
+      const copilot = (ago: number) =>
+        parkedNode('COD-1', 'agent:working', 'copilot', ago);
+      const ci = parkedNode('COD-1', 'agent:working', 'CI', 60);
+
+      it.each([
+        [
+          'reviewed inside the window',
+          60,
+          { reviewed: true },
+          true,
+          'reviewed'
+        ],
+        [
+          'reviewed after the window',
+          3000,
+          { reviewed: true },
+          true,
+          'reviewed'
+        ],
+        [
+          '20 minutes without a review',
+          1200,
+          { reviewed: false },
+          true,
+          'no review'
+        ],
+        ['20 minutes with no entry', 4000, undefined, true, 'no review'],
+        ['pending inside the window', 1140, { reviewed: false }, false, null],
+        ['pending with no entry', 60, undefined, false, null]
+      ])('copilot: %s', (_name, ago, entry, resolved, outcome) => {
+        const waits = entry ? { 'COD-1': entry } : {};
+        expect(state(copilot(ago), waits)).toEqual({ resolved, outcome });
+      });
+
+      it.each([
+        ['SUCCESS', true, 'success'],
+        ['FAILURE', true, 'failure'],
+        ['ERROR', true, 'failure'],
+        ['PENDING', false, null],
+        ['EXPECTED', false, null],
+        [null, false, null]
+      ])('ci: rollup %s', (rollup, resolved, outcome) => {
+        expect(state(ci, { 'COD-1': { reviewed: false, rollup } })).toEqual({
+          resolved,
+          outcome
+        });
+      });
+
+      it('ci: missing entry is pending', () => {
+        expect(state(ci)).toEqual({ resolved: false, outcome: null });
+      });
+
+      describe('ci on a named commit', () => {
+        const onSha = (ago: number) =>
+          node('COD-1', 'agent:working', {
+            description: `x\n**Next:** Waiting: CI · PR #12 @ abc1234 · since ${since(ago)}\n`
+          });
+
+        it.each([
+          ['the pushed head', 'abc1234def', 'SUCCESS', true, 'success'],
+          ['the pushed head failing', 'abc1234def', 'FAILURE', true, 'failure'],
+          ['the commit before it', 'fff0000aaa', 'SUCCESS', false, null],
+          ['no head yet', null, 'SUCCESS', false, null]
+        ])('%s', (_name, oid, rollup, resolved, outcome) => {
+          expect(
+            state(onSha(60), { 'COD-1': { reviewed: false, rollup, oid } })
+          ).toEqual({ resolved, outcome });
+        });
+
+        it('times out after an hour on the commit before it', () => {
+          expect(
+            state(onSha(3600), {
+              'COD-1': { reviewed: false, rollup: 'SUCCESS', oid: 'fff0000' }
+            })
+          ).toEqual({ resolved: true, outcome: 'timeout' });
+        });
+      });
+
+      it.each([
+        ['no checks', null],
+        ['a check that never starts', 'EXPECTED']
+      ])('ci: %s times out after an hour', (_name, rollup) => {
+        const late = parkedNode('COD-1', 'agent:working', 'CI', 3600);
+        expect(state(late, { 'COD-1': { reviewed: false, rollup } })).toEqual({
+          resolved: true,
+          outcome: 'timeout'
+        });
+      });
+    });
+
+    describe('queue_view', () => {
+      const CI = { 'COD-1': { reviewed: false, rollup: 'SUCCESS' } };
+
+      it('puts resolved waits first, oldest first, as run with its reason', () => {
+        const issues = [
+          ready('COD-9'),
+          node('COD-5', 'agent:working', { description: claimLine(HOUR) }),
+          parkedNode('COD-1', 'agent:working', 'ci', 600, {
+            description: claimed('ci', 600, 60)
+          }),
+          parkedNode('COD-2', 'agent:review', 'ci', 1800)
+        ];
+        const waits = {
+          'COD-1': { rollup: 'SUCCESS' },
+          'COD-2': { rollup: 'FAILURE' }
+        };
+        const r = view(issues, waits);
+        expect(r.next).toEqual([
+          {
+            ticket: 'COD-2',
+            reason: 'parked wait resolved',
+            detail: 'failure'
+          },
+          {
+            ticket: 'COD-1',
+            reason: 'parked wait resolved',
+            detail: 'success'
+          },
+          { ticket: 'COD-5', reason: 'resume', detail: 'step 2' },
+          { ticket: 'COD-9', reason: 'ready', detail: null }
+        ]);
+        expect(pick(issues, waits)).toMatchObject({
+          verdict: 'run',
+          ticket: 'COD-2',
+          reason: 'parked wait resolved'
+        });
+        expect(
+          line(issues.slice(0, 1).concat(issues.slice(2, 3)), 5, {})
+        ).toBeTypeOf('string');
+      });
+
+      it('reads the pick as a run line', () => {
+        const issues = [parkedNode('COD-1', 'agent:working', 'ci', 60)];
+        expect(
+          run(
+            `attended(${NOW}; 5; {}; ${JSON.stringify(CI)}) | attended_line`,
+            issues
+          )
+        ).toBe('run now: COD-1 parked wait resolved');
+      });
+
+      it('keeps a pending parked working ticket out of next and not running', () => {
+        const issues = [
+          parkedNode('COD-1', 'agent:working', 'ci', 600, {
+            description: claimed('ci', 600, 60)
+          })
+        ];
+        expect(view(issues).next).toEqual([]);
+        expect(pick(issues)).toMatchObject({ verdict: 'idle', ticket: null });
+      });
+
+      it('keeps a parked working ticket without a claim out of resume', () => {
+        const issues = [parkedNode('COD-1', 'agent:working', 'ci', 60)];
+        expect(view(issues).next).toEqual([]);
+      });
+
+      it('takes over a stale parked ticket once, resolved or not', () => {
+        const stale = (id: string) =>
+          parkedNode(id, 'agent:working', 'ci', 5 * HOUR, {
+            description: claimed('ci', 5 * HOUR, 5 * HOUR)
+          });
+        const issues = [stale('COD-1'), stale('COD-2')];
+        const r = view(issues, { 'COD-1': { rollup: 'SUCCESS' } });
+        expect(r.next).toEqual([
+          { ticket: 'COD-1', reason: 'take over', detail: 'claim 5 h old' },
+          { ticket: 'COD-2', reason: 'take over', detail: 'claim 5 h old' }
+        ]);
+      });
+
+      it('does not treat a parked review ticket as review feedback', () => {
+        const issues = [parkedNode('COD-1', 'agent:review', 'copilot', 60)];
+        const watch = { 'COD-1': { unresolved: 2 } };
+        expect(view(issues, {}, 5, watch).next).toEqual([]);
+        expect(
+          view(issues, { 'COD-1': { reviewed: true } }, 5, watch).next
+        ).toEqual([
+          {
+            ticket: 'COD-1',
+            reason: 'parked wait resolved',
+            detail: 'reviewed'
+          }
+        ]);
+      });
+
+      it('counts parked working tickets in the limit, parked reviews once', () => {
+        const issues = [
+          parkedNode('COD-1', 'agent:working', 'ci', 60, {
+            description: claimed('ci', 60, 60)
+          }),
+          parkedNode('COD-2', 'agent:review', 'copilot', 60),
+          review('COD-3'),
+          ready('COD-9')
+        ];
+        const r = view(issues, {}, 3, { 'COD-3': { pr: 5 } });
+        expect(r.limit).toEqual({ used: 3, max: 3 });
+        expect(r.next).toEqual([]);
+        expect(r.held.tickets).toEqual(['COD-9']);
+        expect(r.held.free).toEqual([
+          { action: 'review', ticket: 'COD-2', pr: null },
+          { action: 'review', ticket: 'COD-3', pr: 5 },
+          { action: 'wait', ticket: 'COD-1', pr: 12 },
+          { action: 'limit', value: 4 }
+        ]);
+      });
+
+      it('ignores parked tickets that are closed or of another label', () => {
+        const issues = [
+          parkedNode('COD-1', 'agent:review', 'ci', 60, {
+            state: { type: 'completed' }
+          }),
+          parkedNode('COD-2', 'agent:needs-input', 'ci', 60)
+        ];
+        const r = view(issues, CI);
+        expect(r.parked).toEqual([]);
+        expect(r.limit.used).toBe(0);
+      });
+
+      it('lists parked, oldest first', () => {
+        const r = view(
+          [
+            parkedNode('COD-2', 'agent:review', 'copilot', 300),
+            parkedNode('COD-1', 'agent:working', 'ci', 900)
+          ],
+          { 'COD-1': { rollup: 'PENDING' }, 'COD-2': { reviewed: true } }
+        );
+        expect(r.parked).toEqual([
+          {
+            ticket: 'COD-1',
+            wait: 'ci',
+            pr: 12,
+            since: '2026-10-11T11:45:00Z',
+            resolved: false,
+            outcome: null
+          },
+          {
+            ticket: 'COD-2',
+            wait: 'copilot',
+            pr: 12,
+            since: '2026-10-11T11:55:00Z',
+            resolved: true,
+            outcome: 'reviewed'
+          }
+        ]);
+      });
+
+      it('keeps the older arities working', () => {
+        const issues = [review('COD-1')];
+        expect(run(`queue_view(${NOW}; 5; {}; null)`, issues)).toMatchObject({
+          limit: { used: 1, max: 5 },
+          parked: []
+        });
+        expect(run(`attended(${NOW}; 5; {})`, issues)).toMatchObject({
+          verdict: 'idle',
+          used: 1
+        });
+      });
+    });
+  });
+
   describe('queue_view', () => {
     type Item = { ticket: string; reason: string; detail: string | null };
     type View = {

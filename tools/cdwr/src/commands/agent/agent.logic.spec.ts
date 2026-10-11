@@ -10,6 +10,7 @@ import {
   filesDrift,
   formatHeld,
   formatNext,
+  formatParked,
   formatTable,
   formatWatching,
   lastSchedulerLine,
@@ -97,7 +98,7 @@ describe('constants', () => {
     expect(LABEL).toBe('se.codeware.agent-queue');
     expect(KEYCHAIN_SERVICE).toBe('linear-agent-queue');
     expect(QUEUE_SOURCE_DIR).toBe('tools/cdwr/agent-queue');
-    expect(QUEUE_FILES).toEqual(['run.sh', 'lib.sh', 'watch.jq']);
+    expect(QUEUE_FILES).toEqual(['run.sh', 'lib.sh', 'waits.sh', 'watch.jq']);
   });
 });
 
@@ -109,6 +110,7 @@ describe('queuePaths', () => {
       files: {
         'run.sh': '/h/.cdwr/agent-queue/run.sh',
         'lib.sh': '/h/.cdwr/agent-queue/lib.sh',
+        'waits.sh': '/h/.cdwr/agent-queue/waits.sh',
         'watch.jq': '/h/.cdwr/agent-queue/watch.jq'
       },
       watchState: '/h/.cdwr/agent-queue/watch.json',
@@ -300,16 +302,50 @@ describe('drift', () => {
 });
 
 describe('filesDrift', () => {
-  const source = { 'run.sh': 'a', 'lib.sh': 'c', 'watch.jq': 'b' };
+  const source = {
+    'run.sh': 'a',
+    'lib.sh': 'c',
+    'waits.sh': 'd',
+    'watch.jq': 'b'
+  };
 
   it.each([
-    [{ 'run.sh': 'a', 'lib.sh': 'c', 'watch.jq': 'b' }, 'current'],
-    [{ 'run.sh': 'a', 'lib.sh': 'c', 'watch.jq': undefined }, 'missing'],
-    [{ 'run.sh': 'a', 'lib.sh': undefined, 'watch.jq': 'b' }, 'missing'],
-    [{ 'run.sh': undefined, 'lib.sh': 'c', 'watch.jq': 'x' }, 'missing'],
-    [{ 'run.sh': 'a', 'lib.sh': 'c', 'watch.jq': 'x' }, 'stale'],
-    [{ 'run.sh': 'a', 'lib.sh': 'x', 'watch.jq': 'b' }, 'stale'],
-    [{ 'run.sh': 'x', 'lib.sh': 'c', 'watch.jq': undefined }, 'missing']
+    [
+      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': 'b' },
+      'current'
+    ],
+    [
+      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': undefined },
+      'missing'
+    ],
+    [
+      { 'run.sh': 'a', 'lib.sh': undefined, 'waits.sh': 'd', 'watch.jq': 'b' },
+      'missing'
+    ],
+    [
+      { 'run.sh': undefined, 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': 'x' },
+      'missing'
+    ],
+    [
+      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': 'x' },
+      'stale'
+    ],
+    [
+      { 'run.sh': 'a', 'lib.sh': 'x', 'waits.sh': 'd', 'watch.jq': 'b' },
+      'stale'
+    ],
+    [
+      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': undefined, 'watch.jq': 'b' },
+      'missing'
+    ],
+    [
+      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': 'x', 'watch.jq': 'b' },
+      'stale'
+    ],
+    [
+      { 'run.sh': 'x', 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': undefined },
+      'missing'
+    ]
   ] as const)('%j -> %s', (installed, expected) => {
     expect(filesDrift(installed, source)).toBe(expected);
   });
@@ -416,6 +452,7 @@ const EMPTY_VIEW: QueueView = {
   session: null,
   next: [],
   held: { tickets: [], free: [] },
+  parked: [],
   table: { before: [], after: [] }
 };
 
@@ -436,9 +473,28 @@ const FILLED_VIEW: QueueView = {
     tickets: ['COD-9', 'COD-8'],
     free: [
       { action: 'review', ticket: 'COD-1', pr: 5 },
+      { action: 'wait', ticket: 'COD-6', pr: 9 },
       { action: 'limit', value: 3 }
     ]
   },
+  parked: [
+    {
+      ticket: 'COD-6',
+      wait: 'ci',
+      pr: 9,
+      since: '2026-10-11T16:20:00Z',
+      resolved: true,
+      outcome: 'success'
+    },
+    {
+      ticket: 'COD-7',
+      wait: 'copilot',
+      pr: 12,
+      since: '2026-10-11T16:40:00Z',
+      resolved: false,
+      outcome: null
+    }
+  ],
   table: {
     before: [
       { ticket: 'COD-4', kind: 'plan' },
@@ -455,6 +511,11 @@ describe('parseQueueView', () => {
   it('reads a valid view', () => {
     expect(parseQueueView(JSON.stringify(FILLED_VIEW))).toEqual(FILLED_VIEW);
     expect(parseQueueView(JSON.stringify(EMPTY_VIEW))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads a view from before parked existed', () => {
+    const { parked: _parked, ...old } = EMPTY_VIEW;
+    expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
   });
 
   it('is undefined for malformed JSON', () => {
@@ -494,7 +555,7 @@ describe('formatNext', () => {
 describe('formatHeld', () => {
   it('lists held tickets and what frees a slot', () => {
     expect(formatHeld(FILLED_VIEW)).toBe(
-      'COD-9, COD-8; free a slot: review COD-1 (#5), limit=3'
+      'COD-9, COD-8; free a slot: review COD-1 (#5), wait COD-6 (#9), limit=3'
     );
   });
 
@@ -515,6 +576,18 @@ describe('formatHeld', () => {
 
   it('says nothing when empty', () => {
     expect(formatHeld(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('formatParked', () => {
+  it('lists the waits, marking resolved ones', () => {
+    expect(formatParked(FILLED_VIEW)).toBe(
+      'COD-6 ci PR #9 since 16:20Z (resolved: success), COD-7 copilot PR #12 since 16:40Z'
+    );
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatParked(EMPTY_VIEW)).toBe('nothing');
   });
 });
 

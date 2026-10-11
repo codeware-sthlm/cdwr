@@ -57,6 +57,7 @@ if ! mkdir "$HOME_DIR/lock" 2>/dev/null; then say "busy: a run is in progress"; 
 trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
 
 source "${0:A:h}/lib.sh"
+source "${0:A:h}/waits.sh"
 [[ -z "$key" ]] && { say "skip: no Linear API key in Keychain (service linear-agent-queue)"; exit 0; }
 
 # The only writes run.sh makes: the runs, usage and activity documents, each created once
@@ -112,7 +113,7 @@ publish_runs() {
   local seen_view="$HOME_DIR/queue-view-published" view_key=""
   # The view without its timestamp and heartbeat, so an unchanged queue is no change
   [[ -n "$queue_view" ]] &&
-    view_key="$(jq -c '{limit, next, held, table, session: (.session | if . == null then null else {state, ticket} end)}' <<<"$queue_view" 2>/dev/null)"
+    view_key="$(jq -c '{limit, next, held, parked, table, session: (.session | if . == null then null else {state, ticket} end)}' <<<"$queue_view" 2>/dev/null)"
   # A changed Attended line or queue view publishes at once, so it is never more than one run old
   # (empty means no verdict this run, which is no change)
   if (( $(rows) <= rows_at_start )) &&
@@ -376,14 +377,15 @@ attended_line=""
 queue_view=""
 attended() {
   setopt local_options no_err_exit
-  local resp state verdict
+  local resp state verdict waits
   resp="$(linear "$ATTENDED_QUERY")"
   if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then
     note "warn: attended: Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
   fi
   state="$(jq -c 'if type == "object" then . else {} end' "$HOME_DIR/watch.json" 2>/dev/null || print '{}')"
-  verdict="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" \
-    'include "watch"; .data.issues.nodes | attended($now; 5; $watch)' <<<"$resp")" ||
+  waits="$(parked_waits <<<"$resp")"
+  verdict="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson waits "$waits" \
+    'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)' <<<"$resp")" ||
     { note "warn: attended: watch.jq failed"; return 0; }
   attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
   # Session heartbeat files, with the process checks jq can't do. Never stops the run.
@@ -415,8 +417,8 @@ attended() {
   attended_line="$(watch -r 'include "watch"; session_prefix' <<<"$session") · $attended_line"
   # The whole queue for the runs document and `cdwr agent status`; the pick above stays the
   # line and the notice
-  queue_view="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson session "$session" \
-    'include "watch"; .data.issues.nodes | queue_view($now; 5; $watch; $session)' <<<"$resp")" ||
+  queue_view="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson session "$session" --argjson waits "$waits" \
+    'include "watch"; .data.issues.nodes | queue_view($now; 5; $watch; $session; $waits)' <<<"$resp")" ||
     { note "warn: queue view: watch.jq failed"; queue_view=""; }
   if $check; then
     print -r -- "attended: $attended_line"
