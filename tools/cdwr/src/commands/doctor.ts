@@ -9,6 +9,8 @@ import { type Check, check, onPath } from '../cli/preflight';
 import { cdwrHome } from '../cli/prefs';
 import { ENV_FILE, LEGACY_ENV_FILE } from '../cli/workspace';
 import {
+  implementReport,
+  jobPathChecks,
   jobState,
   keyPresent,
   paths,
@@ -17,6 +19,7 @@ import {
 } from '../services/agent-queue';
 import { symbols, theme } from '../ui/theme';
 
+import { formatImplement } from './agent/agent.logic';
 import { shellOf } from './completion';
 import { completionFile, completionState } from './completion.logic';
 import { ENTRIES, GROUPS } from './index';
@@ -50,6 +53,9 @@ interface Report {
     keyPresent: boolean;
     worktree: boolean;
     script: 'missing' | 'current' | 'stale';
+    implement: ReturnType<typeof implementReport>;
+    /** The job's PATH; undefined when the queue is not set up */
+    jobPath?: Awaited<ReturnType<typeof jobPathChecks>>;
   };
 }
 
@@ -58,11 +64,16 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
   if (process.platform !== 'darwin') return undefined;
   const queue = paths(ctx.env);
   const [job, key] = await Promise.all([jobState(), keyPresent()]);
+  const script = queueDrift(queue, ctx.root);
   return {
     loaded: job.loaded,
     keyPresent: key,
     worktree: existsSync(worktreeOf(ctx)),
-    script: queueDrift(queue, ctx.root)
+    script,
+    implement: implementReport(queue, ctx.env),
+    ...(job.loaded || script !== 'missing'
+      ? { jobPath: await jobPathChecks(ctx.env) }
+      : {})
   };
 }
 
@@ -222,7 +233,10 @@ export default defineCommand({
         !queue.keyPresent && 'no Linear key',
         !queue.worktree && 'no worktree',
         queue.script === 'missing' && 'script not installed',
-        queue.script === 'stale' && 'script out of date'
+        queue.script === 'stale' && 'script out of date',
+        queue.jobPath?.node === false && 'node 22 not on the job PATH',
+        queue.jobPath?.gh === false && 'gh not logged in',
+        queue.jobPath?.claude === false && 'claude does not run'
       ].filter((p) => p !== false);
       queueProblems = problems.length;
       rows.push(
@@ -234,6 +248,17 @@ export default defineCommand({
               theme.warn(`${problems.join(', ')}; \`cdwr agent install\``)
             ]
       );
+      rows.push([
+        symbols.ok,
+        'implement',
+        theme.muted(
+          formatImplement(
+            queue.implement.spent,
+            queue.implement.cap,
+            queue.implement.last
+          )
+        )
+      ]);
     }
     ctx.ui.table(['', 'check', 'detail'], rows);
 

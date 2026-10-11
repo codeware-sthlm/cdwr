@@ -4,10 +4,12 @@ import { dirname, join } from 'node:path';
 
 import type { Context } from '../cli/context';
 import { CliError } from '../cli/errors';
+import { locate } from '../cli/preflight';
 import { cdwrHome } from '../cli/prefs';
 import {
   type JobState,
   KEYCHAIN_SERVICE,
+  QUEUE_BINARIES,
   QUEUE_FILES,
   QUEUE_SOURCE_DIR,
   type QueueFile,
@@ -15,9 +17,14 @@ import {
   WORKTREE_PREF,
   byFile,
   filesDrift,
+  implementCap,
+  lastImplementRun,
+  launchPath,
+  nodeMajor,
   parseLaunchctlPrint,
   queuePaths,
-  serviceTarget
+  serviceTarget,
+  spendForDay
 } from '../commands/agent/agent.logic';
 
 import { run } from './shell';
@@ -144,4 +151,46 @@ export function queueDrift(
         sources.source
       )
     : 'missing';
+}
+
+/** Today's implementing spend against the daily cap, and the last implementing row of the runs log */
+export function implementReport(
+  queue: QueuePaths,
+  env: NodeJS.ProcessEnv,
+  now: Date = new Date()
+): {
+  spent: number;
+  cap: number;
+  last: ReturnType<typeof lastImplementRun>;
+} {
+  // The day implement.sh stamps: local date
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return {
+    spent: spendForDay(readText(queue.implementSpend), day),
+    cap: implementCap(env['AGENT_QUEUE_IMPLEMENT_CAP_USD']),
+    last: lastImplementRun(readText(queue.runs))
+  };
+}
+
+/** What the job sees: node 22, a logged-in gh and a claude that runs, on the job's own PATH */
+export async function jobPathChecks(
+  env: NodeJS.ProcessEnv
+): Promise<{ node: boolean; gh: boolean; claude: boolean }> {
+  const dirs = QUEUE_BINARIES.flatMap((binary) => locate(binary, env) ?? []);
+  const jobEnv = { ...env, PATH: launchPath(dirs) };
+  const ok = async (cmd: string, args: string[]): Promise<string | undefined> =>
+    run(cmd, args, { env: jobEnv, timeout: 20_000 }).then(
+      ({ stdout }) => stdout,
+      () => undefined
+    );
+  const [node, gh, claude] = await Promise.all([
+    ok('node', ['--version']),
+    ok('gh', ['auth', 'status']),
+    ok('claude', ['--version'])
+  ]);
+  return {
+    node: node !== undefined && nodeMajor(node) === 22,
+    gh: gh !== undefined,
+    claude: claude !== undefined
+  };
 }
