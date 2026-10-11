@@ -41,6 +41,18 @@ describe('run.sh', () => {
   });
 
   // `cdwr agent status` and the Desk read the queue view by these markers
+  it('launches through watch.jq and implement.sh, detached', () => {
+    expect(SCRIPT).toContain('\'include "watch"; launch($g)\'');
+    expect(SCRIPT).toContain('nohup "$HOME_DIR/implement.sh"');
+    expect(SCRIPT).toContain('print -r -- "launch: ');
+    expect(SCRIPT).toContain('AGENT_QUEUE_IMPLEMENT_CAP_USD:-40');
+  });
+
+  it('keeps the start notice as the fallback when a guard refuses', () => {
+    expect(SCRIPT).toContain('Not launched: ');
+    expect(SCRIPT).toContain('Start /work-queue.');
+  });
+
   it('prints and publishes the queue view', () => {
     expect(SCRIPT).toContain('print -r -- "queue-view: $queue_view"');
     expect(SCRIPT).toContain('```json queue-view\\n');
