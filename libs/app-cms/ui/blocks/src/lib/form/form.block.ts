@@ -1,11 +1,16 @@
 import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Form block for building a custom form.
  */
 export const formBlock: Block = {
   slug: 'form',
+  admin: {
+    images: blockImages('form', 'A form with three fields and a button')
+  },
   interfaceName: 'FormBlock',
   labels: {
     plural: { en: 'Form', sv: 'Formulär' },

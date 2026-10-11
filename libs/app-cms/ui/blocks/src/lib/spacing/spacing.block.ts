@@ -3,6 +3,8 @@ import { enumName } from '@codeware/app-cms/util/db';
 import type { SpacingBlock } from '@codeware/shared/util/payload-types';
 import type { Block, Condition, TypeWithID } from 'payload';
 
+import { blockImages } from '../block-images';
+
 const isDivider: Condition<TypeWithID, SpacingBlock> = (_, siblingData) =>
   siblingData?.divider === true;
 
@@ -13,6 +15,12 @@ const isDivider: Condition<TypeWithID, SpacingBlock> = (_, siblingData) =>
  */
 export const spacingBlock: Block = {
   slug: 'spacing',
+  admin: {
+    images: blockImages(
+      'spacing',
+      'Two text sections with a vertical gap between them'
+    )
+  },
   interfaceName: 'SpacingBlock',
   labels: {
     plural: { en: 'Empty Spacing', sv: 'Tomrum' },

@@ -1,6 +1,8 @@
 import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Posts block for rendering a listing of posts on a page.
  *
@@ -8,6 +10,12 @@ import type { Block } from 'payload';
  */
 export const postsBlock: Block = {
   slug: 'posts',
+  admin: {
+    images: blockImages(
+      'posts',
+      'Three post rows with a date, a heading and text'
+    )
+  },
   interfaceName: 'PostsBlock',
   labels: {
     plural: { en: 'Posts Listings', sv: 'Inlägglistor' },

@@ -1,6 +1,8 @@
 import { sectionHeaderFields } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Block gallery — every block the platform registers, drawn by the renderer
  * that serves it.
@@ -14,6 +16,9 @@ import type { Block } from 'payload';
  */
 export const blockGalleryBlock: Block = {
   slug: 'block-gallery',
+  admin: {
+    images: blockImages('block-gallery', 'A grid of nine small example panels')
+  },
   interfaceName: 'BlockGalleryBlock',
   labels: {
     singular: { en: 'Block gallery', sv: 'Blockgalleri' },

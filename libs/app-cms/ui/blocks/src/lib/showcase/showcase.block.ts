@@ -6,6 +6,8 @@ import {
 import type { ShowcaseBlock } from '@codeware/shared/util/payload-types';
 import type { Block, Condition, TypeWithID } from 'payload';
 
+import { blockImages } from '../block-images';
+
 const isHeaderLinkEnabled: Condition<TypeWithID, ShowcaseBlock> = (
   _,
   siblingData
@@ -19,6 +21,12 @@ const isHeaderLinkEnabled: Condition<TypeWithID, ShowcaseBlock> = (
  */
 export const showcaseBlock: Block = {
   slug: 'showcase',
+  admin: {
+    images: blockImages(
+      'showcase',
+      'A heading above three rows with a title, text, tags and a link'
+    )
+  },
   interfaceName: 'ShowcaseBlock',
   labels: {
     singular: { en: 'Showcase', sv: 'Showcase' },

@@ -6,6 +6,8 @@ import { getActiveKeys } from '@codeware/shared/util/pure';
 import { BlocksFeature, lexicalEditor } from '@payloadcms/richtext-lexical';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Define which blocks are available as rich text plugins.
  */
@@ -68,6 +70,12 @@ const inlineBlocks: Record<BlockSlug, boolean> = {
  */
 export const contentBlock: Block = {
   slug: 'content',
+  admin: {
+    images: blockImages(
+      'content',
+      'Three columns, each with a heading and a block of text'
+    )
+  },
   interfaceName: 'ContentBlock',
   labels: {
     singular: { en: 'Content', sv: 'Innehåll' },

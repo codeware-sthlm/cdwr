@@ -7,6 +7,8 @@ import {
 import type { FeatureSectionBlock } from '@codeware/shared/util/payload-types';
 import type { Block, Condition, TypeWithID } from 'payload';
 
+import { blockImages } from '../block-images';
+
 const isLinkEnabled: Condition<TypeWithID, FeatureSectionBlock> = (
   _,
   siblingData
@@ -26,6 +28,12 @@ const isLinkEnabled: Condition<TypeWithID, FeatureSectionBlock> = (
  */
 export const featureSectionBlock: Block = {
   slug: 'feature-section',
+  admin: {
+    images: blockImages(
+      'feature-section',
+      'A headline, text and a button beside an image, above three short columns'
+    )
+  },
   interfaceName: 'FeatureSectionBlock',
   labels: {
     singular: { en: 'Feature section', sv: 'Funktionssektion' },

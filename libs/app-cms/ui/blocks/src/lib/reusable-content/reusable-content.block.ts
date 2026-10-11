@@ -1,10 +1,18 @@
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Reusable content block for selecting the reusable content to render
  */
 export const reusableContentBlock: Block = {
   slug: 'reusable-content',
+  admin: {
+    images: blockImages(
+      'reusable-content',
+      'Three stacked panels, the middle one marked as shared'
+    )
+  },
   interfaceName: 'ReusableContentBlock',
   labels: {
     plural: { en: 'Reusable Content', sv: 'Delat Innehåll' },

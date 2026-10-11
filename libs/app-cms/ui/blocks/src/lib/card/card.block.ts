@@ -11,6 +11,8 @@ import type {
 } from '@codeware/shared/util/payload-types';
 import type { Block, Condition, TypeWithID } from 'payload';
 
+import { blockImages } from '../block-images';
+
 const isLinkEnabled: Condition<TypeWithID, CardBlockCard> = (_, siblingData) =>
   siblingData?.enableLink === true;
 
@@ -26,6 +28,12 @@ const isNavTrigger =
  */
 export const cardBlock: Block = {
   slug: 'card',
+  admin: {
+    images: blockImages(
+      'card',
+      'Three cards in a row with an icon, text and a link'
+    )
+  },
   interfaceName: 'CardBlock',
   labels: {
     plural: { en: 'Cards', sv: 'Kort' },

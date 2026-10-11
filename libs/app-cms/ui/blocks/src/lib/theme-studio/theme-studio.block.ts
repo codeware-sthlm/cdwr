@@ -5,6 +5,8 @@ import {
 import { SITE_THEMES, themeLabel } from '@codeware/shared/theme';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Theme studio block — the real studio, in a page.
  *
@@ -19,6 +21,12 @@ import type { Block } from 'payload';
  */
 export const themeStudioBlock: Block = {
   slug: 'theme-studio',
+  admin: {
+    images: blockImages(
+      'theme-studio',
+      'A grid of color swatches beside a preview panel'
+    )
+  },
   interfaceName: 'ThemeStudioBlock',
   labels: {
     singular: { en: 'Theme studio', sv: 'Temastudio' },

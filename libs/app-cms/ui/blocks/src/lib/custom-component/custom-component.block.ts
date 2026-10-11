@@ -4,11 +4,19 @@ import {
 } from '@codeware/app-cms/ui/fields';
 import type { Block } from 'payload';
 
+import { blockImages } from '../block-images';
+
 /**
  * Places a custom component, with the values for the inputs it declares
  */
 export const customComponentBlock: Block = {
   slug: 'custom-component',
+  admin: {
+    images: blockImages(
+      'custom-component',
+      'A component panel framed by code brackets'
+    )
+  },
   interfaceName: 'CustomComponentBlock',
   labels: {
     plural: { en: 'Custom components', sv: 'Egna komponenter' },
