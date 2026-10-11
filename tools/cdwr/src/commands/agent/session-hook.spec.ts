@@ -86,6 +86,33 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
     expect(read()).toMatchObject({ id: 'abc', state: 'working' });
   });
 
+  it.each([
+    [
+      'tools/cdwr/agent-queue/session.sh register; cat ~/.cdwr/agent-queue/notify-level || echo all',
+      'registered work-queue session\nall\n'
+    ],
+    [
+      'cd /work/codeware-cod-1 && tools/cdwr/agent-queue/session.sh register',
+      'registered work-queue session\n'
+    ]
+  ])('registers on the printed line from %s', (command, stdout) => {
+    run({ ...REGISTER, tool_input: { command }, tool_response: { stdout } });
+    expect(read()).toMatchObject({ id: 'abc', state: 'working' });
+  });
+
+  it('does not register on output that only mentions the line', () => {
+    run({
+      ...REGISTER,
+      tool_input: {
+        command: 'grep -n registered tools/cdwr/agent-queue/session.sh'
+      },
+      tool_response: {
+        stdout: '6:  register) print -r -- "registered work-queue session" ;;\n'
+      }
+    });
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
   describe('once registered', () => {
     beforeEach(() => {
       run(REGISTER);
