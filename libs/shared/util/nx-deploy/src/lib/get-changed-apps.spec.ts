@@ -1,6 +1,6 @@
 import * as exec from '@actions/exec';
 
-import { getChangedApps } from './get-changed-apps';
+import { chunkFiles, getChangedApps } from './get-changed-apps';
 
 vi.mock('@actions/exec');
 
@@ -8,12 +8,11 @@ describe('getChangedApps', () => {
   const mockGetExecOutput = vi.mocked(exec.getExecOutput);
 
   const mockExec = (diff: string, affected: string[] = []) => {
-    mockGetExecOutput.mockImplementation(async (command, args) => ({
+    mockGetExecOutput.mockImplementation(async (command) => ({
       exitCode: 0,
       stdout: command === 'git' ? diff : JSON.stringify(affected),
       stderr: ''
     }));
-    return args;
   };
   const args = { base: 'aaa', head: 'bbb', apps: ['web', 'cms'] };
 
@@ -75,20 +74,24 @@ describe('getChangedApps', () => {
   });
 
   describe('a long diff', () => {
+    // 1200 paths of ~200 bytes: about 240 KB, far over one argument's limit
     const files = (n: number) =>
-      Array.from({ length: n }, (_, i) => `libs/a/src/f${i}.ts`).join('\n');
+      Array.from(
+        { length: n },
+        (_, i) => `libs/a/src/${'deep/'.repeat(38)}f${i}.ts`
+      ).join('\n');
     const nxCalls = () =>
       mockGetExecOutput.mock.calls.filter(([command]) => command !== 'git');
 
-    it('asks Nx in chunks that keep each argument short', async () => {
+    it('asks Nx in chunks that keep each argument under 64 KiB', async () => {
       mockExec(files(1200), []);
 
       await getChangedApps(args);
 
-      expect(nxCalls()).toHaveLength(3);
+      expect(nxCalls().length).toBeGreaterThan(3);
       for (const [, argv] of nxCalls()) {
         const list = argv?.[(argv?.indexOf('--files') ?? 0) + 1] ?? '';
-        expect(list.split(',').length).toBeLessThanOrEqual(500);
+        expect(Buffer.byteLength(list)).toBeLessThanOrEqual(64 * 1024);
       }
     });
 
@@ -112,5 +115,25 @@ describe('getChangedApps', () => {
       expect(await getChangedApps(args)).toEqual(['web', 'cms']);
       expect(nxCalls()).toHaveLength(1);
     });
+  });
+});
+
+describe('chunkFiles', () => {
+  it('keeps every file, in order, across the chunks', () => {
+    const files = Array.from({ length: 5000 }, (_, i) => `apps/x/f${i}.ts`);
+    expect(chunkFiles(files).join(',').split(',')).toEqual(files);
+  });
+
+  it('measures bytes, not characters', () => {
+    const wide = 'å'.repeat(1000); // 2000 bytes in UTF-8
+    const chunks = chunkFiles(Array.from({ length: 100 }, () => wide));
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(Buffer.byteLength(chunk)).toBeLessThanOrEqual(64 * 1024);
+    }
+  });
+
+  it('gives nothing for no files', () => {
+    expect(chunkFiles([])).toEqual([]);
   });
 });
