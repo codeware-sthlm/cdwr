@@ -35,7 +35,7 @@ const ticket = (identifier: string, state: string) => ({
 const parkedTicket = (identifier: string, wait: string, label: string) => ({
   ...ticket(identifier, 'started'),
   labels: { nodes: [{ name: label }] },
-  description: `**Next:** Waiting: ${wait} · PR #12 · since ${new Date().toISOString().slice(0, 16)}Z`
+  description: `**Next:** Waiting: ${wait} · PR #12${wait.toLowerCase() === 'ci' ? ' @ abc1234' : ''} · since ${new Date().toISOString().slice(0, 16)}Z`
 });
 const rollup = (state: string) =>
   JSON.stringify({
@@ -43,7 +43,11 @@ const rollup = (state: string) =>
       repository: {
         t0: {
           reviews: { nodes: [] },
-          commits: { nodes: [{ commit: { statusCheckRollup: { state } } }] }
+          commits: {
+            nodes: [
+              { commit: { oid: 'abc1234def', statusCheckRollup: { state } } }
+            ]
+          }
         }
       }
     }
