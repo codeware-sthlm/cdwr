@@ -302,7 +302,8 @@ describe('preDeploy', () => {
         'production',
         undefined,
         undefined,
-        undefined
+        undefined,
+        'main'
       );
     });
   });
@@ -317,7 +318,8 @@ describe('preDeploy', () => {
         'preview',
         'preview.467',
         undefined,
-        467
+        467,
+        'main'
       );
     });
 
@@ -333,7 +335,8 @@ describe('preDeploy', () => {
         'preview',
         'preview.0',
         undefined,
-        undefined
+        undefined,
+        'main'
       );
     });
 
@@ -346,7 +349,8 @@ describe('preDeploy', () => {
         'production',
         undefined,
         undefined,
-        467
+        467,
+        'main'
       );
     });
   });
@@ -725,7 +729,8 @@ describe('preDeploy', () => {
         'production',
         undefined,
         ['cms'],
-        undefined
+        undefined,
+        'main'
       );
     });
 
@@ -798,7 +803,8 @@ describe('preDeploy', () => {
         'production',
         undefined,
         ['web'],
-        undefined
+        undefined,
+        'main'
       );
     });
 
@@ -821,7 +827,8 @@ describe('preDeploy', () => {
         'preview',
         'preview.0',
         ['web'],
-        undefined
+        undefined,
+        'main'
       );
     });
 
@@ -833,7 +840,8 @@ describe('preDeploy', () => {
         'production',
         undefined,
         undefined,
-        undefined
+        undefined,
+        'main'
       );
     });
   });
