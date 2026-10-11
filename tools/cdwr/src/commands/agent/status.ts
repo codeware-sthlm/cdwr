@@ -189,7 +189,7 @@ export default defineCommand({
           ]
         : []),
       row(
-        true,
+        report.implement.spent === undefined ? 'warn' : true,
         'implement',
         formatImplement(
           report.implement.spent,

@@ -274,17 +274,32 @@ const jsonLines = (text: string | undefined): Record<string, unknown>[] =>
     }
   });
 
-/** Sum of the ledger's costs for one day (YYYY-MM-DD); bad lines count for nothing */
-export const spendForDay = (ledger: string | undefined, day: string): number =>
-  jsonLines(ledger).reduce(
-    (sum, row) =>
-      row['day'] === day &&
-      typeof row['cost'] === 'number' &&
-      Number.isFinite(row['cost'])
-        ? sum + row['cost']
-        : sum,
-    0
-  );
+/**
+ * Sum of the ledger's costs for one day (YYYY-MM-DD). Correction rows may be
+ * negative. Undefined when any line is unreadable: a bad line is not zero spend.
+ */
+export const spendForDay = (
+  ledger: string | undefined,
+  day: string
+): number | undefined => {
+  let sum = 0;
+  for (const line of (ledger ?? '').split('\n')) {
+    if (line.trim() === '') continue;
+    let row: unknown;
+    try {
+      row = JSON.parse(line);
+    } catch {
+      return undefined;
+    }
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+      return undefined;
+    }
+    const cost = (row as Record<string, unknown>)['cost'];
+    if (typeof cost !== 'number' || !Number.isFinite(cost)) return undefined;
+    if ((row as Record<string, unknown>)['day'] === day) sum += cost;
+  }
+  return sum;
+};
 
 export const IMPLEMENT_OUTCOMES = [
   'launched',
@@ -321,16 +336,34 @@ export const lastImplementRun = (
 };
 
 export const formatImplement = (
-  spent: number,
+  spent: number | undefined,
   cap: number,
   last: ImplementRun | undefined
 ): string =>
-  [
-    `implement spend today $${spent.toFixed(2)} of $${cap}`,
-    last
-      ? `last ${last.outcome}${last.ticket ? ` ${last.ticket}` : ''}${last.when ? ` (${last.when})` : ''}`
-      : 'no implementing session yet'
-  ].join(', ');
+  spent === undefined
+    ? 'implement spend unreadable: implement-spend.jsonl has a bad line; no launch until it is fixed'
+    : [
+        `implement spend today $${spent.toFixed(2)} of $${cap}`,
+        last
+          ? `last ${last.outcome}${last.ticket ? ` ${last.ticket}` : ''}${last.when ? ` (${last.when})` : ''}`
+          : 'no implementing session yet'
+      ].join(', ');
+
+/** The PATH in the installed job plist's EnvironmentVariables; undefined when absent or empty */
+export const plistPath = (plist: string | undefined): string | undefined => {
+  const value =
+    /<key>EnvironmentVariables<\/key>\s*<dict>[\s\S]*?<key>PATH<\/key>\s*<string>([^<]*)<\/string>/.exec(
+      plist ?? ''
+    )?.[1];
+  const path = value
+    ?.replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+    .trim();
+  return path ? path : undefined;
+};
 
 /** The major version in `node --version` output, e.g. `v22.3.0` */
 export const nodeMajor = (version: string): number | undefined => {
