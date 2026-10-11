@@ -133,7 +133,10 @@ publish_runs() {
     + "| When | Outcome | Ticket | Detail |\n| -- | -- | -- | -- |\n"
     + (reverse | map("| \(.when | cell) | \(.outcome | cell) | \(.ticket | cell) | \(.detail | cell) |") | join("\n"))
   ')" || { note "warn: runs document: could not render"; return 0; }
+  local before="$(cat "$stamp" 2>/dev/null)"
   publish_doc "$DOC_TITLE" "$HOME_DIR/runs-doc-id" "$stamp" "$content"
+  # publish_doc tells success only by moving the stamp; a failed publish stays unseen
+  [[ "$(cat "$stamp" 2>/dev/null)" != "$before" ]] || return 0
   [[ -n "$attended_line" ]] && print -r -- "$attended_line" > "$seen"
   if [[ -n "$view_key" ]]; then
     print -r -- "$view_key" > "$seen_view"
