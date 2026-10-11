@@ -67,9 +67,9 @@ Check in this order, between tickets and never in the middle of a step. Take the
 `tools/cdwr/agent-queue/wait.sh --now` prints the computed pick (the same code the watcher and
 the scheduler run), so start with it; it is what notices a parked wait that resolved.
 
-1. **A parked ticket whose wait resolved** (`run now: COD-1 parked wait resolved`), when its
-   claim carries this session's id or is older than 2 hours, as in step 2. Carry on where the
-   wait left off: see **Parking**.
+1. **A parked ticket whose wait resolved** (`run now: COD-1 parked wait resolved (success)`;
+   the outcome in brackets), when its claim carries this session's id or is older than 2 hours,
+   as in step 2. Carry on where the wait left off: see **Parking**.
 2. **An `agent:working` ticket you may resume.** Skip one that is parked on a pending wait.
    Read the `**Claim:**` line under its Status table. Resume it when the claim carries this
    session's id, or is older than 2 hours. A newer claim with another id means another session
