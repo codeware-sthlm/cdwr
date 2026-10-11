@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320">
+  <rect x="28" y="38" width="424" height="52" rx="10" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="46" y="50" width="22" height="28" rx="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="86" y1="56" x2="258" y2="56" stroke="#8a8a8a" stroke-width="8" stroke-linecap="round"/>
+  <rect x="82" y="71.5" width="110" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <path d="M424 56V70M417 64L424 71L431 64" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="28" y="102" width="424" height="52" rx="10" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="46" y="114" width="22" height="28" rx="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="86" y1="120" x2="258" y2="120" stroke="#8a8a8a" stroke-width="8" stroke-linecap="round"/>
+  <rect x="82" y="135.5" width="110" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <path d="M424 120V134M417 128L424 135L431 128" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="28" y="166" width="424" height="52" rx="10" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="46" y="178" width="22" height="28" rx="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="86" y1="184" x2="258" y2="184" stroke="#8a8a8a" stroke-width="8" stroke-linecap="round"/>
+  <rect x="82" y="199.5" width="110" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <path d="M424 184V198M417 192L424 199L431 192" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="28" y="230" width="424" height="52" rx="10" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="46" y="242" width="22" height="28" rx="4" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="86" y1="248" x2="258" y2="248" stroke="#8a8a8a" stroke-width="8" stroke-linecap="round"/>
+  <rect x="82" y="263.5" width="110" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+  <path d="M424 248V262M417 256L424 263L431 256" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

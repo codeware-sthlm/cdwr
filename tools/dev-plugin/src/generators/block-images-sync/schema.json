@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "BlockImagesSync",
+  "title": "Sync the block images the admin shows",
+  "description": "Draws a schematic thumbnail and a small icon for every Payload block from shared shapes, in one grey that reads on light and dark, and writes them to apps/cms/public/blocks. Removes images whose block is no longer drawn.",
+  "type": "object",
+  "properties": {},
+  "required": []
+}

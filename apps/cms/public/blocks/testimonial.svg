@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320">
+  <rect x="28" y="44" width="424" height="232" rx="16" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="64" cy="92" r="7" fill="#8a8a8a" fill-opacity="0.3"/>
+  <circle cx="88" cy="92" r="7" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="66" y1="94" x2="60" y2="110" stroke="#8a8a8a" stroke-width="4" stroke-linecap="round"/>
+  <line x1="90" y1="94" x2="84" y2="110" stroke="#8a8a8a" stroke-width="4" stroke-linecap="round"/>
+  <rect x="56" y="137" width="340" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="56" y="159" width="340" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <rect x="56" y="181" width="204" height="6" rx="3" fill="#8a8a8a" fill-opacity="0.3"/>
+  <circle cx="76" cy="232" r="18" fill="#8a8a8a" fill-opacity="0.3"/>
+  <line x1="114" y1="224" x2="198" y2="224" stroke="#8a8a8a" stroke-width="12" stroke-linecap="round"/>
+  <rect x="108" y="241.5" width="68" height="5" rx="2.5" fill="#8a8a8a" fill-opacity="0.3"/>
+</svg>
