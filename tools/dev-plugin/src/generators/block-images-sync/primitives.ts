@@ -344,8 +344,10 @@ export function roundRect(
   y: number,
   width: number,
   height: number,
-  r: number
+  radius: number
 ): string {
+  // A radius past half a side would draw a negative edge
+  const r = Math.min(radius, width / 2, height / 2);
   return `M${x + r} ${y}h${width - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${height - 2 * r}a${r} ${r} 0 0 1-${r} ${r}h-${width - 2 * r}a${r} ${r} 0 0 1-${r}-${r}v-${height - 2 * r}a${r} ${r} 0 0 1 ${r}-${r}z`;
 }
 
