@@ -24,7 +24,10 @@ const REGISTER = {
   cwd: '/work'
 };
 
-describe('session-hook.sh', () => {
+// The queue scripts run on macOS only; a CI runner without zsh skips them
+const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+
+describe.skipIf(!hasZsh)('session-hook.sh', () => {
   let dir: string;
 
   const run = (payload: unknown, sessions = dir) =>
