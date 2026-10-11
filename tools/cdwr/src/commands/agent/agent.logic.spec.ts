@@ -9,14 +9,18 @@ import {
   drift,
   filesDrift,
   formatHeld,
+  formatImplement,
   formatNext,
   formatParked,
   formatTable,
   formatWatching,
+  implementCap,
+  lastImplementRun,
   lastSchedulerLine,
   latestRunLog,
   launchPath,
   lockState,
+  nodeMajor,
   parseAttended,
   parseCheck,
   parseLaunchctlPrint,
@@ -26,6 +30,7 @@ import {
   queuePaths,
   renderPlist,
   serviceTarget,
+  spendForDay,
   tailLines
 } from './agent.logic';
 
@@ -98,7 +103,13 @@ describe('constants', () => {
     expect(LABEL).toBe('se.codeware.agent-queue');
     expect(KEYCHAIN_SERVICE).toBe('linear-agent-queue');
     expect(QUEUE_SOURCE_DIR).toBe('tools/cdwr/agent-queue');
-    expect(QUEUE_FILES).toEqual(['run.sh', 'lib.sh', 'waits.sh', 'watch.jq']);
+    expect(QUEUE_FILES).toEqual([
+      'run.sh',
+      'implement.sh',
+      'lib.sh',
+      'waits.sh',
+      'watch.jq'
+    ]);
   });
 });
 
@@ -109,6 +120,7 @@ describe('queuePaths', () => {
       script: '/h/.cdwr/agent-queue/run.sh',
       files: {
         'run.sh': '/h/.cdwr/agent-queue/run.sh',
+        'implement.sh': '/h/.cdwr/agent-queue/implement.sh',
         'lib.sh': '/h/.cdwr/agent-queue/lib.sh',
         'waits.sh': '/h/.cdwr/agent-queue/waits.sh',
         'watch.jq': '/h/.cdwr/agent-queue/watch.jq'
@@ -117,6 +129,9 @@ describe('queuePaths', () => {
       paused: '/h/.cdwr/agent-queue/paused',
       notifyLevel: '/h/.cdwr/agent-queue/notify-level',
       lock: '/h/.cdwr/agent-queue/lock',
+      implementLock: '/h/.cdwr/agent-queue/implement.lock',
+      implementSpend: '/h/.cdwr/agent-queue/implement-spend.jsonl',
+      runs: '/h/.cdwr/agent-queue/runs.jsonl',
       logs: '/h/.cdwr/agent-queue/logs',
       schedulerLog: '/h/.cdwr/agent-queue/logs/scheduler.log',
       launchdLog: '/h/.cdwr/agent-queue/logs/launchd.log',
@@ -170,6 +185,11 @@ describe('renderPlist', () => {
     expect(plist).toContain('<string>/bin/zsh</string>');
     expect(plist).toContain('<string>/h/.cdwr/agent-queue/run.sh</string>');
     expect(plist).toContain('<integer>600</integer>');
+    // The backgrounded implement session outlives run.sh
+    expect(plist).toContain('<key>AbandonProcessGroup</key>\n  <true/>');
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_IMPLEMENT_CAP_USD</key>\n    <string>40</string>'
+    );
     expect(plist).toContain('<key>RunAtLoad</key>\n  <false/>');
     expect(plist).toContain(
       '<key>AGENT_QUEUE_HOME</key>\n    <string>/h/.cdwr/agent-queue</string>'
@@ -304,48 +324,32 @@ describe('drift', () => {
 describe('filesDrift', () => {
   const source = {
     'run.sh': 'a',
+    'implement.sh': 'i',
+    'lib.sh': 'c',
+    'waits.sh': 'd',
+    'watch.jq': 'b'
+  };
+
+  const all = {
+    'run.sh': 'a',
+    'implement.sh': 'i',
     'lib.sh': 'c',
     'waits.sh': 'd',
     'watch.jq': 'b'
   };
 
   it.each([
-    [
-      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': 'b' },
-      'current'
-    ],
-    [
-      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': undefined },
-      'missing'
-    ],
-    [
-      { 'run.sh': 'a', 'lib.sh': undefined, 'waits.sh': 'd', 'watch.jq': 'b' },
-      'missing'
-    ],
-    [
-      { 'run.sh': undefined, 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': 'x' },
-      'missing'
-    ],
-    [
-      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': 'x' },
-      'stale'
-    ],
-    [
-      { 'run.sh': 'a', 'lib.sh': 'x', 'waits.sh': 'd', 'watch.jq': 'b' },
-      'stale'
-    ],
-    [
-      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': undefined, 'watch.jq': 'b' },
-      'missing'
-    ],
-    [
-      { 'run.sh': 'a', 'lib.sh': 'c', 'waits.sh': 'x', 'watch.jq': 'b' },
-      'stale'
-    ],
-    [
-      { 'run.sh': 'x', 'lib.sh': 'c', 'waits.sh': 'd', 'watch.jq': undefined },
-      'missing'
-    ]
+    [all, 'current'],
+    [{ ...all, 'watch.jq': undefined }, 'missing'],
+    [{ ...all, 'lib.sh': undefined }, 'missing'],
+    [{ ...all, 'implement.sh': undefined }, 'missing'],
+    [{ ...all, 'waits.sh': undefined }, 'missing'],
+    [{ ...all, 'run.sh': undefined, 'watch.jq': 'x' }, 'missing'],
+    [{ ...all, 'watch.jq': 'x' }, 'stale'],
+    [{ ...all, 'implement.sh': 'x' }, 'stale'],
+    [{ ...all, 'waits.sh': 'x' }, 'stale'],
+    [{ ...all, 'lib.sh': 'x' }, 'stale'],
+    [{ ...all, 'run.sh': 'x', 'watch.jq': undefined }, 'missing']
   ] as const)('%j -> %s', (installed, expected) => {
     expect(filesDrift(installed, source)).toBe(expected);
   });
@@ -609,5 +613,68 @@ describe('formatTable', () => {
 
   it('says nothing when empty', () => {
     expect(formatTable(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('implement spend', () => {
+  const ledger = [
+    '{"day":"2026-10-11","ticket":"COD-1","cost":1.5}',
+    '{"day":"2026-10-10","ticket":"COD-2","cost":9}',
+    'not json',
+    '{"day":"2026-10-11","ticket":"COD-3","cost":"x"}',
+    '{"day":"2026-10-11","ticket":"COD-4","cost":1.7}'
+  ].join('\n');
+
+  it('sums only the given day and skips bad lines', () => {
+    expect(spendForDay(ledger, '2026-10-11')).toBeCloseTo(3.2);
+    expect(spendForDay(undefined, '2026-10-11')).toBe(0);
+  });
+
+  it.each([
+    [undefined, 40],
+    ['', 40],
+    ['abc', 40],
+    ['-5', 40],
+    ['25', 25]
+  ])('cap %j is %i', (value, expected) => {
+    expect(implementCap(value)).toBe(expected);
+  });
+
+  it('reads the last implementing row', () => {
+    const runs = [
+      '{"when":"a","outcome":"implemented","ticket":"COD-1"}',
+      '{"when":"b","outcome":"skip","ticket":""}',
+      '{"when":"c","outcome":"cap","ticket":"COD-2"}',
+      '{"when":"d","outcome":"planned","ticket":"COD-3"}'
+    ].join('\n');
+    expect(lastImplementRun(runs)).toEqual({
+      when: 'c',
+      outcome: 'cap',
+      ticket: 'COD-2'
+    });
+    expect(lastImplementRun('')).toBeUndefined();
+  });
+
+  it('formats the line', () => {
+    expect(
+      formatImplement(3.2, 40, {
+        when: '2026-10-11 09:00',
+        outcome: 'implemented',
+        ticket: 'COD-1'
+      })
+    ).toBe(
+      'implement spend today $3.20 of $40, last implemented COD-1 (2026-10-11 09:00)'
+    );
+    expect(formatImplement(0, 40, undefined)).toBe(
+      'implement spend today $0.00 of $40, no implementing session yet'
+    );
+  });
+
+  it.each([
+    ['v22.3.0\n', 22],
+    ['v20.1.0', 20],
+    ['nope', undefined]
+  ])('reads node major from %j', (text, expected) => {
+    expect(nodeMajor(text)).toBe(expected);
   });
 });
