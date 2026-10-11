@@ -92,7 +92,7 @@ describe('constants', () => {
     expect(LABEL).toBe('se.codeware.agent-queue');
     expect(KEYCHAIN_SERVICE).toBe('linear-agent-queue');
     expect(QUEUE_SOURCE_DIR).toBe('tools/cdwr/agent-queue');
-    expect(QUEUE_FILES).toEqual(['run.sh', 'watch.jq']);
+    expect(QUEUE_FILES).toEqual(['run.sh', 'lib.sh', 'watch.jq']);
   });
 });
 
@@ -103,6 +103,7 @@ describe('queuePaths', () => {
       script: '/h/.cdwr/agent-queue/run.sh',
       files: {
         'run.sh': '/h/.cdwr/agent-queue/run.sh',
+        'lib.sh': '/h/.cdwr/agent-queue/lib.sh',
         'watch.jq': '/h/.cdwr/agent-queue/watch.jq'
       },
       watchState: '/h/.cdwr/agent-queue/watch.json',
@@ -294,14 +295,16 @@ describe('drift', () => {
 });
 
 describe('filesDrift', () => {
-  const source = { 'run.sh': 'a', 'watch.jq': 'b' };
+  const source = { 'run.sh': 'a', 'lib.sh': 'c', 'watch.jq': 'b' };
 
   it.each([
-    [{ 'run.sh': 'a', 'watch.jq': 'b' }, 'current'],
-    [{ 'run.sh': 'a', 'watch.jq': undefined }, 'missing'],
-    [{ 'run.sh': undefined, 'watch.jq': 'x' }, 'missing'],
-    [{ 'run.sh': 'a', 'watch.jq': 'x' }, 'stale'],
-    [{ 'run.sh': 'x', 'watch.jq': undefined }, 'missing']
+    [{ 'run.sh': 'a', 'lib.sh': 'c', 'watch.jq': 'b' }, 'current'],
+    [{ 'run.sh': 'a', 'lib.sh': 'c', 'watch.jq': undefined }, 'missing'],
+    [{ 'run.sh': 'a', 'lib.sh': undefined, 'watch.jq': 'b' }, 'missing'],
+    [{ 'run.sh': undefined, 'lib.sh': 'c', 'watch.jq': 'x' }, 'missing'],
+    [{ 'run.sh': 'a', 'lib.sh': 'c', 'watch.jq': 'x' }, 'stale'],
+    [{ 'run.sh': 'a', 'lib.sh': 'x', 'watch.jq': 'b' }, 'stale'],
+    [{ 'run.sh': 'x', 'lib.sh': 'c', 'watch.jq': undefined }, 'missing']
   ] as const)('%j -> %s', (installed, expected) => {
     expect(filesDrift(installed, source)).toBe(expected);
   });
