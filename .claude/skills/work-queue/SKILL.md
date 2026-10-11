@@ -175,7 +175,9 @@ on claim and refresh it with every Status row update.
 
    Check every command in the checklist before posting: run it with `--help`, or with
    `--dry-run` where it has one, and fix the flags until it parses. A guessed command
-   costs Håkan a failed production step.
+   costs Håkan a failed production step. The checklist runs in Håkan's zsh, where `grep`
+   is an alias for `rg`: write `rg` with its own flags (`rg -i 'a|b'`, never `grep -iE`),
+   and the same for any other tool that an alias would reinterpret.
 
 7. **Next.** Don't ask. With `once`, stop. Otherwise go to **What to take next**. After a big
    ticket, say in one line that `/clear` is a good idea before the next one, without waiting
