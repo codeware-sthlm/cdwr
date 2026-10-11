@@ -1894,6 +1894,15 @@ describe('launch', () => {
       expect(res.action).toBe('notify');
     });
 
+    it('starts fresh for new work on the same ticket', () => {
+      const res = launch(
+        pick({ reason: 'review feedback' }),
+        guards({ last: { key: 'COD-1 answered', launches: 2 } })
+      );
+      expect(res.action).toBe('launch');
+      expect(res.last).toEqual({ key: 'COD-1 review feedback', launches: 1 });
+    });
+
     // Only a launch carries state to store
     it('two misses on one key notify and carry no state', () => {
       const res = launch(
