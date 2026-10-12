@@ -73,6 +73,7 @@ import { userOnlyAccess } from './security/user-only-access';
 import { userOrApiKeyAccess } from './security/user-or-api-key-access';
 import { adoptPlatformDomains } from './utils/adopt-platform-domains';
 import { adoptTenantDomains } from './utils/adopt-tenant-domains';
+import { isRefusedByCsrf } from './utils/is-refused-by-csrf';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -452,13 +453,25 @@ export default buildConfig({
             ? error.status
             : 500;
 
-        // Capture server errors (500+)
-        if (status >= 500) {
+        const refusedByCsrf = isRefusedByCsrf({
+          status,
+          headers,
+          csrf: payload.config.csrf,
+          cookiePrefix: payload.config.cookiePrefix
+        });
+
+        // Capture server errors (500+) and session cookies refused by the CSRF check
+        if (status >= 500 || refusedByCsrf) {
           const email = isUser(user) ? user.email : 'n/a';
           const tenant_slug = isTenant(user) ? user.slug : '';
           const context: Sentry.ExclusiveEventHintOrCaptureContext = {
+            ...(refusedByCsrf && { tags: { refusal: 'csrf-origin' } }),
             extra: {
-              errorCollectionSlug: collection?.slug
+              errorCollectionSlug: collection?.slug,
+              ...(refusedByCsrf && {
+                refusedOrigin: headers?.get('Origin') ?? '(none)',
+                secFetchSite: headers?.get('Sec-Fetch-Site') ?? '(none)'
+              })
             },
             ...(user && {
               user: {
