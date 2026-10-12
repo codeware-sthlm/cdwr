@@ -172,6 +172,23 @@ without the file the editor is syntax-only and the build still decides.
 Rotating the token is `cdwr builder rotate-token`: the service accepts the previous token
 (`BUILDER_TOKEN_PREVIOUS`) while the cms switches over, so nothing is refused on the way.
 
+#### Site statistics (Umami)
+
+`apps/umami` wraps the upstream Umami image; bump the pinned tag in its Dockerfile, via PR, to upgrade.
+It runs as `cdwr-umami` on Fly, production only: only `/apps/umami` in production has `DEPLOY_ENABLED`.
+Its `DATABASE_URL` (Supabase, `?schema=umami`) and `APP_SECRET` are Fly secrets set by hand, since the
+image cannot read Infisical, and the app receives no shared secrets (`sharedSecrets: false` in its
+`github.json`). The first deploy needs the app and secrets to exist first, in this order:
+
+```sh
+fly apps create cdwr-umami
+fly secrets set DATABASE_URL=… APP_SECRET=… -a cdwr-umami --stage
+```
+
+Add `DIRECT_DATABASE_URL` too when `DATABASE_URL` is Supabase's transaction pooler, since migrations
+run at every boot. Then set `DEPLOY_ENABLED=true` in production `/apps/umami`.
+The API token the cms uses lives in Infisical `/integrations/umami`.
+
 #### CMS admin components + import map
 
 Payload resolves custom admin components (`admin.components.*` in `payload.config.ts`) through the

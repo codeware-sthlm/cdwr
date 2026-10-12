@@ -19,6 +19,7 @@ on:
       - "!builder-*"
       - "!cms-*"
       - "!web-*"
+      - "!umami-*"
 
   # Fall back if tag push doesn't fire, since tags and releases are created together by `nx release-cli`
   release:
