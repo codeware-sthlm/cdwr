@@ -74,7 +74,7 @@ export const svgDataUri = (svg: string): string =>
 
 const ICON_SIZE = { min: 16, max: 256, fallback: 32 } as const;
 
-/** The `?size=` of a bitmap icon: a whole number in range, else the default */
+/** The `?size=` of a bitmap icon: a whole number clamped to 16..256, else the default */
 export function parseIconSize(raw: string | null): number {
   const size = raw !== null && /^\d+$/.test(raw) ? Number(raw) : NaN;
 
