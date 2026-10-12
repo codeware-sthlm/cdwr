@@ -212,6 +212,10 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    line, with nothing else in between. The scheduler watches the PR after the gate and, on
    merge, sends the unticked items as a notice, so keep each item to one line.
 
+   The checklist holds what Håkan does after the merge, nothing else. A question or an open
+   review thread goes under what is left open for him: once answered, the agent handles it,
+   so it never belongs on his checklist.
+
    A production apply of one of our own sites (cdwr.io, codeware.se) is two items: the
    `cdwr tenant apply-site … --fresh --dry-run`, then the same without `--dry-run`.
 
@@ -268,6 +272,9 @@ Håkan reviews after the PR-ready comment. Handle it between tickets.
    **What to take next**. A failure on resume is fixed and parked again.
 6. Once CI is green, post `**Agent: review addressed**` with what changed and what stays open. The ticket stays
    `agent:review`; notify `action`: review addressed.
+7. Tick each hand-off item this round completed in the PR-ready comment (`- [x]`, edited in
+   place). The Desk and the merge notice read that comment, so an item done but left
+   unticked shows as still waiting on Håkan.
 
 Thread replies and resolving use the GraphQL calls in **Copilot review**.
 
