@@ -17,9 +17,9 @@ Object.assign(process.env, e2eEnv);
 const baseURL = process.env['BASE_URL'] || 'http://localhost:3000';
 
 export default defineConfig({
-  ...nxE2EPreset(__dirname, { testDir: './src' }),
-  globalSetup: require.resolve('./global-setup.cts'),
-  globalTeardown: require.resolve('./global-teardown.cts'),
+  ...nxE2EPreset(import.meta.dirname, { testDir: './src' }),
+  globalSetup: resolve(import.meta.dirname, 'global-setup.ts'),
+  globalTeardown: resolve(import.meta.dirname, 'global-teardown.ts'),
   // Ensure tests run serially to avoid
   fullyParallel: false,
   workers: 1,
