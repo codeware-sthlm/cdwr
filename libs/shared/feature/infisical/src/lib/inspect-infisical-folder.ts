@@ -64,7 +64,8 @@ export const inspectInfisicalFolder = async <TEnv = Environment>({
             environment: env,
             secretPath: folder,
             recursive: false,
-            includeImports: false
+            includeImports: false,
+            viewSecretValue: false
           })
         ).secrets.length
       }))
