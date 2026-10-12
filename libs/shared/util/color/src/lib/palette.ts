@@ -143,3 +143,20 @@ export const brandRamp = (
         : shade(family, step)
     ])
   );
+
+/**
+ * The whole palette as `--color-*` tokens, what a theme's `var(--color-…)`
+ * aliases point at.
+ */
+export const paletteTokens = (): Record<string, string> => {
+  const tokens: Record<string, string> = {};
+  for (const family of COLOR_FAMILIES) {
+    for (const step of COLOR_SHADES) {
+      tokens[`--color-${family}-${step}`] = shade(family, step);
+    }
+  }
+  for (const name of ['white', 'black'] as const) {
+    tokens[`--color-${name}`] = paletteColor(name);
+  }
+  return tokens;
+};
