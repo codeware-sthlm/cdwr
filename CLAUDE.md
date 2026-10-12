@@ -186,7 +186,14 @@ fly secrets set DATABASE_URL=… APP_SECRET=… -a cdwr-umami --stage
 ```
 
 Add `DIRECT_DATABASE_URL` too when `DATABASE_URL` is Supabase's transaction pooler, since migrations
-run at every boot. Then set `DEPLOY_ENABLED=true` in production `/apps/umami`.
+run at every boot. Umami's migrations create an `admin` / `umami` account, so change that password
+before the app is ever public: run the same image locally against the same database, sign in on
+`localhost:3000` and change it there. Only then set `DEPLOY_ENABLED=true` in production `/apps/umami`.
+
+```sh
+docker run --rm -p 3000:3000 -e DATABASE_URL=… -e APP_SECRET=… ghcr.io/umami-software/umami:<tag>
+```
+
 The API token the cms uses lives in Infisical `/integrations/umami`.
 
 #### CMS admin components + import map
