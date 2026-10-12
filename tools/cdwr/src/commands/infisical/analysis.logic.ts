@@ -4,7 +4,7 @@ import type { Environment } from '../../services/infisical';
 import type { DeploymentsMap, SkippedDeployment } from '../../services/tenancy';
 
 /** Apps analyzed on every run */
-export const APPS = ['cms', 'web', 'builder'] as const;
+export const APPS = ['cms', 'web', 'builder', 'umami'] as const;
 
 /** State of a folder's `DEPLOY_ENABLED` secret */
 export type FlagState = 'on' | 'off' | 'no flag' | 'invalid name';

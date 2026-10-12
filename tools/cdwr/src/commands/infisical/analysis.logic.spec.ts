@@ -65,7 +65,8 @@ describe('summarize', () => {
         secrets: { DATABASE_URL: 'postgres://x' }
       },
       { app: 'web', host: 'off', tenants: [], secrets: {} },
-      { app: 'builder', host: 'no flag', tenants: [], secrets: {} }
+      { app: 'builder', host: 'no flag', tenants: [], secrets: {} },
+      { app: 'umami', host: 'no flag', tenants: [], secrets: {} }
     ]);
   });
 });

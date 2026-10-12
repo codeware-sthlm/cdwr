@@ -72,7 +72,8 @@ describe('infisical analysis', () => {
     expect(payload.result[0]?.apps.map(({ app }) => app)).toEqual([
       'cms',
       'web',
-      'builder'
+      'builder',
+      'umami'
     ]);
     expect(payload.result[0]?.apps[0]).toMatchObject({
       host: 'on',
