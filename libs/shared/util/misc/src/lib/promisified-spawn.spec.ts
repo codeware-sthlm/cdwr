@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 
 import { MockInstance, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type SpawnOptions, spawn } from './promisified-spawn';
+import { SpawnError, type SpawnOptions, spawn } from './promisified-spawn';
 
 // Create types for our mocked process
 type MockProcess = EventEmitter & {
@@ -257,6 +257,79 @@ describe('spawn', () => {
         cwd: '/test/dir',
         stdio: 'pipe'
       });
+    });
+  });
+
+  describe('SpawnError', () => {
+    const lines = (n: number) =>
+      Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n');
+
+    let stdoutWriteSpy: MockInstance;
+    let stderrWriteSpy: MockInstance;
+
+    beforeEach(() => {
+      stdoutWriteSpy = vi
+        .spyOn(global.process.stdout, 'write')
+        .mockImplementation(() => true);
+      stderrWriteSpy = vi
+        .spyOn(global.process.stderr, 'write')
+        .mockImplementation(() => true);
+    });
+
+    afterEach(() => {
+      stdoutWriteSpy.mockRestore();
+      stderrWriteSpy.mockRestore();
+    });
+
+    const fail = async (stderr: string, options?: SpawnOptions) => {
+      const spawnPromise = invokeSpawn('test-command', [], options);
+      mockProcess.stdout.emit('data', Buffer.from('out'));
+      mockProcess.stderr.emit('data', Buffer.from(stderr));
+      mockProcess.emit('close', 3);
+      return (await spawnPromise.catch((e) => e)) as SpawnError;
+    };
+
+    it('should keep the full message when not streaming', async () => {
+      const stderr = `${lines(30)}\n`;
+      const error = await fail(stderr);
+
+      expect(error).toBeInstanceOf(SpawnError);
+      expect(error.name).toBe('SpawnError');
+      expect(error.message).toBe(
+        `Process exited with code 3\nError: ${stderr}`
+      );
+      expect(error.exitCode).toBe(3);
+      expect(error.stdout).toBe('out');
+      expect(error.stderr).toBe(stderr);
+    });
+
+    it('should keep only the last lines in the message when streaming', async () => {
+      const stderr = `${lines(30)}\n`;
+      const error = await fail(stderr, { streamToConsole: true });
+
+      expect(error).toBeInstanceOf(SpawnError);
+      expect(error.message).toBe(
+        `Process exited with code 3\nError (last 20 lines; the full output is above):\n${lines(
+          30
+        )
+          .split('\n')
+          .slice(-20)
+          .join('\n')}`
+      );
+      expect(error.message).not.toContain('line 10\n');
+      expect(error.message).toContain('line 30');
+      expect(error.stderr).toBe(stderr);
+      expect(stderrWriteSpy).toHaveBeenCalled();
+    });
+
+    it('should keep the full message without marker for short stderr when streaming', async () => {
+      const stderr = `${lines(5)}\n`;
+      const error = await fail(stderr, { streamToConsole: true });
+
+      expect(error.message).toBe(
+        `Process exited with code 3\nError: ${stderr}`
+      );
+      expect(error.message).not.toContain('last 20 lines');
     });
   });
 });

@@ -14,5 +14,5 @@ export {
   logWarning
 } from './lib/log-utils';
 export { exec } from './lib/promisified-exec';
-export { type SpawnOptions, spawn } from './lib/promisified-spawn';
+export { SpawnError, type SpawnOptions, spawn } from './lib/promisified-spawn';
 export { spawnPty, type SpawnPtyOptions } from './lib/spawn-pty';

@@ -12,6 +12,30 @@ export type SpawnOptions = Exclude<SpawnOptionsChildProcess, 'stdio'> & {
   streamToConsole?: boolean;
 };
 
+/** Lines of stderr kept in the rejection message when output is streamed. */
+export const STREAMED_STDERR_TAIL_LINES = 20;
+
+/**
+ * Rejection of `spawn` on a non-zero exit code.
+ * The full output is kept on the error, the message may only carry a tail of it.
+ */
+export class SpawnError extends Error {
+  readonly exitCode: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+
+  constructor(
+    message: string,
+    details: { exitCode: number | null; stdout: string; stderr: string }
+  ) {
+    super(message);
+    this.name = 'SpawnError';
+    this.exitCode = details.exitCode;
+    this.stdout = details.stdout;
+    this.stderr = details.stderr;
+  }
+}
+
 /**
  * Promisified version of the `spawn` function from the `child_process` module.
  *
@@ -19,7 +43,8 @@ export type SpawnOptions = Exclude<SpawnOptionsChildProcess, 'stdio'> & {
  *
  * The process is considered successful if it resolves, no matter the output of `stdout` or `stderr`.
  *
- * In case of a non-zero exit code, the promise will be rejected as `Error` with message containing the exit code and stderr output.
+ * In case of a non-zero exit code, the promise will be rejected as `SpawnError` with message containing the exit code and stderr output.
+ * When `streamToConsole` is on the stderr is already printed, so the message carries only its last lines.
  *
  * @param command - The command to spawn.
  * @param args - The arguments to pass to the command.
@@ -68,7 +93,14 @@ export function spawn(
         resolve({ stdout, stderr });
       } else {
         // Reject with error to be consistent with 'error' event
-        reject(new Error(`Process exited with code ${code}\nError: ${stderr}`));
+        const lines = stderr.replace(/\r?\n$/, '').split(/\r?\n/);
+        const message =
+          streamToConsole && lines.length > STREAMED_STDERR_TAIL_LINES
+            ? `Process exited with code ${code}\nError (last ${STREAMED_STDERR_TAIL_LINES} lines; the full output is above):\n${lines
+                .slice(-STREAMED_STDERR_TAIL_LINES)
+                .join('\n')}`
+            : `Process exited with code ${code}\nError: ${stderr}`;
+        reject(new SpawnError(message, { exitCode: code, stdout, stderr }));
       }
     });
 
