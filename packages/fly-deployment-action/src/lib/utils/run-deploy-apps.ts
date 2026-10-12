@@ -115,9 +115,14 @@ export const runDeployApps = async (options: {
         core.info(`Using pre-built image: ${preBuiltImage}`);
       }
 
-      // Merge secrets: global -> deployment-specific (deployment wins)
+      // Merge secrets: global -> deployment-specific (deployment wins).
+      // An app that runs third-party code opts out of the global ones.
+      const withholdShared = githubConfig.sharedSecrets === false;
+      if (withholdShared) {
+        core.info('Shared secrets withheld: sharedSecrets is false');
+      }
       const mergedSecrets = {
-        ...config.secrets,
+        ...(!withholdShared && config.secrets),
         ...deploymentDetails.secrets
       };
 

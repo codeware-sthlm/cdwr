@@ -3,7 +3,8 @@ import { z } from 'zod';
 const ResolvedGithubConfigSchema = z.object({
   flyPostgresPreview: z.string().nullish(),
   flyPostgresProduction: z.string().nullish(),
-  flyPostgresDatabaseName: z.string().nullish()
+  flyPostgresDatabaseName: z.string().nullish(),
+  sharedSecrets: z.boolean().nullish()
 });
 
 /**
