@@ -6,9 +6,8 @@ type Options<TEnv> = Credentials & {
   /**
    * The environment to delete the folder from.
    *
-   * Defaults to `'development'`.
+   * Required: a destructive call never falls back to a default environment.
    */
-  /** Required: a destructive call never falls back to a default environment */
   environment: TEnv;
 
   /**
