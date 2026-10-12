@@ -1,4 +1,4 @@
-import { faviconSvg, fitMark, svgMark } from './site-icon';
+import { faviconSvg, fitMark, parseIconSize, svgMark } from './site-icon';
 
 const mark =
   '<svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 20 10" fill="currentColor"><path d="M0 0h1"></path></svg>';
@@ -62,5 +62,22 @@ describe('svgMark', () => {
     expect(svgMark({ source: 'svg', svgCode: mark })).toBe(mark);
     expect(svgMark({ source: 'upload', fileUrl: '/m.png' })).toBeNull();
     expect(svgMark(null)).toBeNull();
+  });
+});
+
+describe('parseIconSize', () => {
+  it.each([
+    [null, 32],
+    ['', 32],
+    ['abc', 32],
+    ['1.5', 32],
+    ['-5', 32],
+    ['64', 64],
+    ['16', 16],
+    ['256', 256],
+    ['4', 16],
+    ['9999', 256]
+  ])('%p gives %p', (raw, expected) => {
+    expect(parseIconSize(raw)).toBe(expected);
   });
 });

@@ -71,3 +71,14 @@ export function fitMark(
 /** An SVG as a data URI, for drawing it into a bitmap */
 export const svgDataUri = (svg: string): string =>
   `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+
+const ICON_SIZE = { min: 16, max: 256, fallback: 32 } as const;
+
+/** The `?size=` of a bitmap icon: a whole number in range, else the default */
+export function parseIconSize(raw: string | null): number {
+  const size = raw !== null && /^\d+$/.test(raw) ? Number(raw) : NaN;
+
+  return Number.isFinite(size)
+    ? Math.min(Math.max(size, ICON_SIZE.min), ICON_SIZE.max)
+    : ICON_SIZE.fallback;
+}
