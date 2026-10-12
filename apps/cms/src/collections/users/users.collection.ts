@@ -17,6 +17,7 @@ import { CollectionConfig, Condition } from 'payload';
 
 import { adminAccessToAllDocTenants } from './access/admin-access-to-all-doc-tenants';
 import { tenantsArrayField } from './fields/tenants-array.field';
+import { forgotPasswordMail } from './forgot-password-email';
 import { applyTenantLocaleHook } from './hooks/apply-tenant-locale.hook';
 import { ensureTenantHook } from './hooks/ensure-tenant.hook';
 import { validateTenantsArrayAccessHook } from './hooks/validate-tenants-array-access.hook';
@@ -50,7 +51,20 @@ const showWorkspacesTab: Condition<User> = (data, _, { user }) => {
  */
 const users: CollectionConfig<'users'> = {
   slug: 'users',
-  auth: { maxLoginAttempts: 5, lockTime: 1000 * 60 * 60 * 24 },
+  auth: {
+    maxLoginAttempts: 5,
+    lockTime: 1000 * 60 * 60 * 24,
+    forgotPassword: {
+      generateEmailHTML: async ({ req, token, user } = {}) =>
+        req && token && user
+          ? (await forgotPasswordMail({ req, token, user })).html
+          : '',
+      generateEmailSubject: async ({ req, token, user } = {}) =>
+        req && token && user
+          ? (await forgotPasswordMail({ req, token, user })).subject
+          : ''
+    }
+  },
   admin: {
     group: adminGroups.settings,
     useAsTitle: 'name',
