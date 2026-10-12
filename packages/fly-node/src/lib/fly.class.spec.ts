@@ -1373,6 +1373,11 @@ describe('Fly', () => {
         expect(message).toContain('last 20 lines; the full output is above');
         expect(message).toContain('line 30');
         expect(message).not.toContain('line 1\n');
+        // The full output stays on the SpawnError behind both wrappers
+        const spawnError = (error as Error & { cause?: { cause?: unknown } })
+          .cause?.cause as { stderr?: string } | undefined;
+        expect(spawnError?.stderr).toContain('line 1\n');
+        expect(spawnError?.stderr).toContain('line 30');
       } finally {
         stderrWrite.mockRestore();
       }
