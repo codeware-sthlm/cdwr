@@ -1,5 +1,10 @@
 export { type Environment, EnvironmentSchema } from './lib/infisical.schemas';
 export { type Credentials, createClient } from './lib/create-client';
+export { deleteInfisicalFolder } from './lib/delete-infisical-folder';
+export {
+  type FolderInspection,
+  inspectInfisicalFolder
+} from './lib/inspect-infisical-folder';
 export { deleteInfisicalSecret } from './lib/delete-infisical-secret';
 export { isNotFound, statusOf } from './lib/error-status';
 export {

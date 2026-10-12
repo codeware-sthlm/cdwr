@@ -46,7 +46,11 @@ export const createClient = async ({
   clientSecret,
   projectId,
   site
-}: Credentials): Promise<{ client: InfisicalSDK; projectId: string }> => {
+}: Credentials): Promise<{
+  client: InfisicalSDK;
+  projectId: string;
+  siteUrl: string;
+}> => {
   const optionsWithEnv: Client = {
     INFISICAL_CLIENT_ID: clientId || process.env['INFISICAL_CLIENT_ID'] || '',
     INFISICAL_CLIENT_SECRET:
@@ -70,6 +74,10 @@ export const createClient = async ({
     siteUrl:
       data.INFISICAL_SITE === 'eu' ? 'https://eu.infisical.com' : undefined
   });
+  const siteUrl =
+    data.INFISICAL_SITE === 'eu'
+      ? 'https://eu.infisical.com'
+      : 'https://app.infisical.com';
 
   if ('INFISICAL_SERVICE_TOKEN' in data) {
     client.auth().accessToken(data.INFISICAL_SERVICE_TOKEN);
@@ -80,5 +88,5 @@ export const createClient = async ({
     });
   }
 
-  return { client, projectId: data.INFISICAL_PROJECT_ID };
+  return { client, projectId: data.INFISICAL_PROJECT_ID, siteUrl };
 };
