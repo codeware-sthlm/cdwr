@@ -9,21 +9,45 @@ const decodeEntities = (value: string): string =>
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&');
 
-const stripTags = (value: string): string => value.replace(/<[^>]*>/g, '');
+/** Replace until nothing matches, so removing one match cannot assemble another */
+const replaceUntilStable = (
+  input: string,
+  pattern: RegExp,
+  replacement: string
+): string => {
+  let current = input;
+  for (;;) {
+    const next = current.replace(pattern, replacement);
+    if (next === current) return current;
+    current = next;
+  }
+};
+
+const stripTags = (value: string): string =>
+  replaceUntilStable(value, /<[^>]*>/g, '');
 
 /**
  * A plain text rendering of an html mail.
  *
  * Meant for markup this codebase writes or Payload's own mails, not for
  * arbitrary html: block ends become line breaks, a link becomes `label: url`
- * and every other tag is dropped.
+ * and every other tag is dropped. Whatever sits between `<!--text:skip-->`
+ * and `<!--/text:skip-->` is left out.
  */
 export const htmlToText = (html: string): string =>
   decodeEntities(
     stripTags(
-      html
-        .replace(/<head[\s\S]*?<\/head>/gi, '')
-        .replace(/<style[\s\S]*?<\/style>/gi, '')
+      [
+        [/<!--text:skip-->[\s\S]*?<!--\/text:skip-->/g, ''],
+        [/<head[\s\S]*?<\/head>/gi, ''],
+        [/<style[\s\S]*?<\/style>/gi, ''],
+        [/<script[\s\S]*?<\/script>/gi, '']
+      ]
+        .reduce(
+          (acc, [pattern, replacement]) =>
+            replaceUntilStable(acc, pattern as RegExp, replacement as string),
+          html
+        )
         .replace(
           /<a\b[^>]*?href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
           (_match, url: string, label: string) => {

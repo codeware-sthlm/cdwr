@@ -42,7 +42,7 @@ describe('renderEmailLayout', () => {
       const { html, text } = renderEmailLayout({ ...input, brand });
 
       expect(html).toContain(
-        '<img src="https://titan.example/site-icon.png?size=64" alt="Titan Tours" width="32" height="32"'
+        '<img src="https://titan.example/site-icon.png?size=64" alt="" width="32" height="32"'
       );
       expect(html).toContain('>Titan Tours</td>');
       expect(text.startsWith('Titan Tours\n\n')).toBe(true);
