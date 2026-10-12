@@ -29,6 +29,33 @@ describe('isRefusedByCsrf', () => {
       false
     ],
     [
+      'an empty duplicate after the token',
+      401,
+      {
+        cookie: 'payload-token=jwt; payload-token=',
+        origin: 'https://x.example.com'
+      },
+      csrf,
+      false
+    ],
+    [
+      'a malformed duplicate after the token',
+      401,
+      {
+        cookie: 'payload-token=jwt; payload-token=%E0%A4%A',
+        origin: 'https://x.example.com'
+      },
+      csrf,
+      true
+    ],
+    [
+      'another cookie only',
+      401,
+      { cookie: 'other=1', origin: 'https://x.example.com' },
+      csrf,
+      false
+    ],
+    [
       'no cookie (a failed login)',
       401,
       { origin: 'https://x.example.com' },
