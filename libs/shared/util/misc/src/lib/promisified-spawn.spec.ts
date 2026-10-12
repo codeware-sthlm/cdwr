@@ -294,7 +294,8 @@ describe('spawn', () => {
       const error = await fail(stderr);
 
       expect(error).toBeInstanceOf(SpawnError);
-      expect(error.name).toBe('SpawnError');
+      // `name` stays 'Error', so `${error}` reads as before
+      expect(error.name).toBe('Error');
       expect(error.message).toBe(
         `Process exited with code 3\nError: ${stderr}`
       );

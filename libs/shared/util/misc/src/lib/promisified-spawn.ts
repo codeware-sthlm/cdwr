@@ -29,7 +29,6 @@ export class SpawnError extends Error {
     details: { exitCode: number | null; stdout: string; stderr: string }
   ) {
     super(message);
-    this.name = 'SpawnError';
     this.exitCode = details.exitCode;
     this.stdout = details.stdout;
     this.stderr = details.stderr;
