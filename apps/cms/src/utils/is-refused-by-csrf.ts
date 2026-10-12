@@ -1,8 +1,21 @@
-const hasCookie = (headers: Headers, name: string) =>
-  (headers.get('Cookie') ?? '').split(';').some((pair) => {
-    const [key, ...value] = pair.trim().split('=');
-    return key === name && value.join('=') !== '';
-  });
+/** A cookie's value as Payload's `parseCookies` reads it: the last decodable one wins */
+const cookieValue = (headers: Headers, name: string): string | undefined => {
+  let value: string | undefined;
+  for (const pair of (headers.get('Cookie') ?? '').split(/; */)) {
+    const splitAt = pair.indexOf('=');
+    if (splitAt === -1) {
+      if (pair === name) value = 'true';
+      continue;
+    }
+    if (pair.slice(0, splitAt) !== name) continue;
+    try {
+      value = decodeURIComponent(pair.slice(splitAt + 1));
+    } catch {
+      // Payload ignores an invalid encoded value too
+    }
+  }
+  return value;
+};
 
 /**
  * Whether a 401 or 403 came from Payload refusing the session cookie under its
@@ -32,7 +45,7 @@ export const isRefusedByCsrf = ({
   if (headers.get('Authorization')) {
     return false;
   }
-  if (!hasCookie(headers, `${cookiePrefix}-token`)) {
+  if (!cookieValue(headers, `${cookiePrefix}-token`)) {
     return false;
   }
 
