@@ -95,7 +95,7 @@ export function emailBrandFromSettings(
     name: general.appName || options.fallbackName,
     logoUrl:
       options.serverURL && icon?.source === 'svg' && icon.svgCode?.trim()
-        ? `${options.serverURL}/site-icon.png?size=64`
+        ? `${options.serverURL.replace(/\/+$/, '')}/site-icon.png?size=64`
         : undefined,
     accent: themeAccent(general, options.builtInTokens) ?? NEUTRAL_ACCENT
   };

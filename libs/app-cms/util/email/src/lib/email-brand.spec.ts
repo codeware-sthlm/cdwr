@@ -108,6 +108,17 @@ describe('emailBrandFromSettings', () => {
     expect(brand.logoUrl).toBe('https://titan.example/site-icon.png?size=64');
   });
 
+  it('ignores trailing slashes on the server url', () => {
+    const brand = emailBrandFromSettings(
+      settings({
+        icon: { source: 'svg', svgCode: '<svg viewBox="0 0 1 1"/>' }
+      }),
+      { ...options, serverURL: 'https://titan.example/' }
+    );
+
+    expect(brand.logoUrl).toBe('https://titan.example/site-icon.png?size=64');
+  });
+
   it('has no logo without an icon', () => {
     expect(
       emailBrandFromSettings(settings({}), options).logoUrl
