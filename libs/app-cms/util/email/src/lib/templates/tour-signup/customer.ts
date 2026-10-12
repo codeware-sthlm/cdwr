@@ -1,6 +1,6 @@
 import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
 
-import { renderEmailLayout } from '../layout';
+import { type EmailBrand, renderEmailLayout } from '../layout';
 
 /** Which of the three things that can happen to a customer's signup */
 export type CustomerMailKind = 'booked' | 'waiting' | 'promoted';
@@ -17,7 +17,8 @@ export type CustomerMailInput = {
   privacyUrl?: string | null;
   termsUrl?: string | null;
   /** Workspace name, used as the sign-off */
-  from: string;
+  from: string; /** Header with logo and accent; omitted for a plain mail */
+  brand?: EmailBrand;
 };
 
 /**
@@ -38,6 +39,7 @@ export function renderCustomerMail(input: CustomerMailInput): {
   text: string;
 } {
   const {
+    brand,
     customerName,
     departureLabel,
     from,
@@ -103,7 +105,8 @@ export function renderCustomerMail(input: CustomerMailInput): {
         ? [{ label: t(locale, 'tourSignupEmail.termsLink'), url: termsUrl }]
         : [])
     ],
-    from
+    from,
+    brand
   });
 
   return { subject, html, text };

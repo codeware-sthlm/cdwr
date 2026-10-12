@@ -21,6 +21,7 @@ export {
 export { renderNotificationMail } from './lib/templates/tour-signup/notification';
 export { renderSeatsFreedMail } from './lib/templates/tour-signup/seats-freed';
 export {
+  type BuiltInThemes,
   PLATFORM_EMAIL_BRAND,
   emailBrandFromSettings
 } from './lib/email-brand';

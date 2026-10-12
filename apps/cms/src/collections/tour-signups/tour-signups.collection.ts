@@ -1,16 +1,18 @@
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { enumName } from '@codeware/app-cms/util/db';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
 import { filterByTenantScope } from '@codeware/app-cms/util/filters';
 import { canEdit, ensureTenantFromApiKey } from '@codeware/app-cms/util/misc';
 import {
   assignCapacityStatus,
+  createNotifySignup,
   guardStatusChange,
-  notifySignup,
   renumberQueueOnChange,
   signupCreateAccess,
   stampStatusChange,
   verifyTourTenant
 } from '@codeware/app-cms/util/tour-signups';
+import { BUILT_IN_TOKENS } from '@codeware/shared/theme';
 import type { TourSignup } from '@codeware/shared/util/payload-types';
 import type { CollectionConfig, FieldAccess } from 'payload';
 
@@ -233,7 +235,13 @@ const tourSignups: CollectionConfig<'tour-signups'> = {
     beforeChange: [assignCapacityStatus, guardStatusChange, stampStatusChange],
     // Renumber before notifying, so a promotion mail is sent against a queue
     // that already reads 1, 2, 3
-    afterChange: [renumberQueueOnChange, notifySignup]
+    afterChange: [
+      renumberQueueOnChange,
+      createNotifySignup({
+        builtInTokens: BUILT_IN_TOKENS,
+        servesTenantSite: () => getEnv().APP_MODE.type === 'tenant'
+      })
+    ]
   }
 };
 

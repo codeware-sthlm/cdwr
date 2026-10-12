@@ -1,6 +1,6 @@
 import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
 
-import { renderEmailLayout } from '../layout';
+import { type EmailBrand, renderEmailLayout } from '../layout';
 
 export type SeatsFreedMailInput = {
   locale: SupportedLocale;
@@ -14,7 +14,8 @@ export type SeatsFreedMailInput = {
   /** Absolute link to the tour in the admin, so the guide can act from the mail */
   tourUrl?: string | null;
   /** Workspace name, used as the sign-off */
-  from: string;
+  from: string; /** Header with logo and accent; omitted for a plain mail */
+  brand?: EmailBrand;
 };
 
 /**
@@ -34,6 +35,7 @@ export function renderSeatsFreedMail(input: SeatsFreedMailInput): {
   text: string;
 } {
   const {
+    brand,
     firstInQueue,
     firstInQueuePeople,
     from,
@@ -70,7 +72,8 @@ export function renderSeatsFreedMail(input: SeatsFreedMailInput): {
     links: tourUrl
       ? [{ label: t(locale, 'tourSignupEmail.openTour'), url: tourUrl }]
       : [],
-    from
+    from,
+    brand
   });
 
   return { subject, html, text };
