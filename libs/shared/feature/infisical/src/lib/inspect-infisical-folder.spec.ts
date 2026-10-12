@@ -111,7 +111,8 @@ describe('inspectInfisicalFolder', () => {
         projectId: 'project-1',
         environment: 'preview',
         recursive: false,
-        includeImports: false
+        includeImports: false,
+        viewSecretValue: false
       });
     }
     expect(listSecrets).toHaveBeenCalledTimes(2);
