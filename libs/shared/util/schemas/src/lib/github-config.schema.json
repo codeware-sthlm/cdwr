@@ -33,6 +33,11 @@
       "pattern": "^[a-zA-Z0-9_-]*(\\$\\{[A-Z][A-Z0-9_]*\\}[a-zA-Z0-9_-]*)*$",
       "default": "",
       "examples": ["cdwr_cms_shared", "app_shared_db", "${APP_NAME}_shared"]
+    },
+    "sharedSecrets": {
+      "description": "Whether the deploy passes the workflow's shared secrets (Infisical credentials, Sentry token) to this app. Set false for an app that runs third-party code and must not hold them.",
+      "type": "boolean",
+      "default": true
     }
   },
   "required": []

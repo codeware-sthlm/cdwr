@@ -1313,6 +1313,30 @@ describe('flyDeployment', () => {
       );
     });
 
+    it('should withhold the shared secrets from an app with sharedSecrets false', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+      const config = setupTest({
+        apps: getDefaultApps().map((app) =>
+          app.name === 'app-two'
+            ? { ...app, githubConfig: { sharedSecrets: false } }
+            : app
+        ),
+        secrets: ['INFISICAL_CLIENT_ID=client-id']
+      });
+      await flyDeployment(config, true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          app: 'app-one-config',
+          secrets: { INFISICAL_CLIENT_ID: 'client-id' }
+        })
+      );
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-two-config', secrets: {} })
+      );
+    });
+
     it('should use the same pre-built image for all tenant deployments of an app', async () => {
       setContext('push-main-branch');
       setupMocks();
