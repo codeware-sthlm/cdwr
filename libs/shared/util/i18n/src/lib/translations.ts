@@ -170,6 +170,12 @@ export type TranslationKey =
   | 'tourSignupEmail.termsLink'
   | 'tourSignupEmail.tourLabel'
   | 'tourSignupEmail.waitingBody'
+  | 'forgotPasswordEmail.body'
+  | 'forgotPasswordEmail.button'
+  | 'forgotPasswordEmail.greeting'
+  | 'forgotPasswordEmail.greetingNamed'
+  | 'forgotPasswordEmail.ignore'
+  | 'forgotPasswordEmail.subject'
   | 'tourSignup.acceptTerms'
   | 'tourSignup.acceptTermsRequired'
   | 'tourSignup.dataNotice'
@@ -403,6 +409,14 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignupEmail.tourLabel': 'Tour',
     'tourSignupEmail.waitingBody':
       '{{tour}} is fully booked, so you are on the waiting list. We will be in touch as soon as a place opens up — nothing is charged and you are free to change your mind.',
+    'forgotPasswordEmail.body':
+      'Someone asked to reset the password for your account at {{brand}}.',
+    'forgotPasswordEmail.button': 'Choose a new password',
+    'forgotPasswordEmail.greeting': 'Hi,',
+    'forgotPasswordEmail.greetingNamed': 'Hi {{name}},',
+    'forgotPasswordEmail.ignore':
+      'If you did not ask for this, you can ignore this email. Your password stays unchanged.',
+    'forgotPasswordEmail.subject': 'Reset your password',
     'tourSignup.acceptTerms': 'I accept the terms',
     'tourSignup.acceptTermsRequired': 'Please accept the terms to sign up',
     'tourSignup.dataNotice':
@@ -642,6 +656,14 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignupEmail.tourLabel': 'Resa',
     'tourSignupEmail.waitingBody':
       '{{tour}} är fullbokad, så du står i kön. Vi hör av oss så snart en plats blir ledig — inget debiteras och du kan ändra dig när du vill.',
+    'forgotPasswordEmail.body':
+      'Någon har bett om att återställa lösenordet för ditt konto hos {{brand}}.',
+    'forgotPasswordEmail.button': 'Välj ett nytt lösenord',
+    'forgotPasswordEmail.greeting': 'Hej,',
+    'forgotPasswordEmail.greetingNamed': 'Hej {{name}},',
+    'forgotPasswordEmail.ignore':
+      'Om det inte var du kan du bortse från det här mejlet. Ditt lösenord ändras inte.',
+    'forgotPasswordEmail.subject': 'Återställ ditt lösenord',
     'tourSignup.acceptTerms': 'Jag godkänner villkoren',
     'tourSignup.acceptTermsRequired': 'Godkänn villkoren för att anmäla dig',
     'tourSignup.dataNotice':
