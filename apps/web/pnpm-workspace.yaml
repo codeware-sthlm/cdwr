@@ -8,15 +8,26 @@ overrides:
   # Mirrored from the root
   postcss: ">=8.5.23 <9"
   "@remix-run/server-runtime": ">=2.17.5 <3"
+  # GHSA-3pq3-5fj3-cg6v and eleven more, all fixed in 1.20.0
+  axios: ">=1.20.0 <2"
 
   # `apps/web` only
   next: ">=16.3.6 <17"
   "@remix-run/router": ">=1.23.4 <2"
   react-router: ">=6.30.6 <7"
   react-router-dom: ">=6.30.6 <7"
-  sharp: ">=0.35.4 <0.36"
+  # GHSA-wq5f-xc86-pv6w
+  sharp: ">=0.35.5 <0.36"
   "@babel/runtime": ">=7.26.10 <8"
-  dompurify: ">=3.4.13 <4"
+  # GHSA-6688-9rhm-gjv2, GHSA-p98j-92pf-mc4p
+  dompurify: ">=3.4.16 <4"
+  # GHSA-jggr-w7fw-pc2j
+  fast-copy: ">=3.1.0 <4"
+  # GHSA-3v7f-55p6-f55p, GHSA-c2c7-rcm5-vvqj; one line per major, both are in the tree
+  picomatch@2: ">=2.3.2 <3"
+  picomatch@4: ">=4.0.4 <5"
+  # GHSA-68fv-2mgg-jv7q
+  source-map-js: ">=1.2.2 <2"
   fast-uri: ">=3.1.6 <4"
   js-yaml: ">=4.3.2 <5"
   lodash: ">=4.18.0 <5"
