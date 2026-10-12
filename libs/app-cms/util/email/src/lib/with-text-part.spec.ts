@@ -1,7 +1,7 @@
 import type { EmailAdapter } from 'payload';
 import { describe, expect, it, vi } from 'vitest';
 
-import { escape } from './templates/layout';
+import { escape, renderEmailLayout } from './templates/layout';
 import { htmlToText, withTextPart } from './with-text-part';
 
 const payload = {} as Parameters<EmailAdapter>[0]['payload'];
@@ -23,6 +23,28 @@ const send = async (message: Parameters<EmailAdapter['sendEmail']>[0]) => {
 };
 
 describe('htmlToText', () => {
+  it('leaves no script or style behind nested input', () => {
+    const script = htmlToText('<scr<script>x</script>ipt>alert(1)</script>');
+    const style = htmlToText('<sty<style>a</style>le>b</style>');
+
+    expect(script).not.toMatch(/<script/i);
+    expect(style).not.toMatch(/<style/i);
+  });
+
+  it('keeps the reset url once when the button is skipped', () => {
+    const url = 'https://titan.example/reset?token=abc';
+    const { html } = renderEmailLayout({
+      title: 'Reset',
+      paragraphs: ['Reset your password.'],
+      from: 'Titan',
+      cta: { label: 'Reset password', url }
+    });
+    const text = htmlToText(html);
+
+    expect(text.split(url)).toHaveLength(2);
+    expect(text).not.toContain('text:skip');
+  });
+
   it('turns block ends into line breaks', () => {
     expect(
       htmlToText('<h1>Title</h1><p>One</p><p>Two<br>three</p><div>Four</div>')

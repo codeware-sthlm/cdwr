@@ -81,9 +81,7 @@ export function renderEmailLayout(layout: EmailLayout): {
         brand.logoUrl
           ? `<td style="padding:0 12px 0 0"><img src="${escape(
               brand.logoUrl
-            )}" alt="${escape(
-              brand.name
-            )}" width="32" height="32" style="display:block;border:0"></td>`
+            )}" alt="" width="32" height="32" style="display:block;border:0"></td>`
           : ''
       }<td style="font-size:16px;font-weight:600">${escape(
         brand.name
@@ -91,13 +89,13 @@ export function renderEmailLayout(layout: EmailLayout): {
     : '';
 
   const htmlCta = cta
-    ? `<table style="border-collapse:collapse;margin:8px 0 16px" role="presentation"><tr><td style="background:${escape(
+    ? `<!--text:skip--><table style="border-collapse:collapse;margin:8px 0 16px" role="presentation"><tr><td style="background:${escape(
         accent
       )};border-radius:6px"><a href="${escape(
         cta.url
       )}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-weight:600">${escape(
         cta.label
-      )}</a></td></tr></table><p style="margin:0 0 16px;font-size:12px;color:#666">${escape(
+      )}</a></td></tr></table><!--/text:skip--><p style="margin:0 0 16px;font-size:12px;color:#666">${escape(
         cta.label
       )}: <a href="${escape(cta.url)}" style="color:${escape(
         linkColor
