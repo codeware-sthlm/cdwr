@@ -14,9 +14,14 @@ export {
   type CustomerMailKind,
   renderCustomerMail
 } from './lib/templates/tour-signup/customer';
+export {
+  type ForgotPasswordMailInput,
+  renderForgotPasswordMail
+} from './lib/templates/forgot-password/forgot-password';
 export { renderNotificationMail } from './lib/templates/tour-signup/notification';
 export { renderSeatsFreedMail } from './lib/templates/tour-signup/seats-freed';
 export {
   PLATFORM_EMAIL_BRAND,
   emailBrandFromSettings
 } from './lib/email-brand';
+export { withTextPart } from './lib/with-text-part';

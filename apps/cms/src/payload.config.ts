@@ -28,7 +28,7 @@ import {
   toursBlock
 } from '@codeware/app-cms/ui/blocks';
 import { defaultLexical } from '@codeware/app-cms/ui/fields';
-import { getEmailAdapter } from '@codeware/app-cms/util/email';
+import { getEmailAdapter, withTextPart } from '@codeware/app-cms/util/email';
 import { customTranslations } from '@codeware/app-cms/util/i18n';
 import { isTenant, isUser } from '@codeware/app-cms/util/misc';
 import {
@@ -211,7 +211,9 @@ export default buildConfig({
     ...(env.DEPLOY_ENV === 'development' ? { logger: queryStatsLogger } : {})
   }),
   editor: defaultLexical,
-  email: emailAdapter && withSubmissionDeliveryTracking(emailAdapter),
+  // Outermost, so the text part is on the message every wrapper below sees
+  email:
+    emailAdapter && withTextPart(withSubmissionDeliveryTracking(emailAdapter)),
   endpoints: [
     createLegalPageEndpoint,
     domainDnsComparisonEndpoint,
