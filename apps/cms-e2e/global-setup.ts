@@ -11,7 +11,7 @@ const INTERVAL_MS = 2_000;
 const EMAIL = 'system@local.dev';
 const PASSWORD = 'dev';
 /** Where the cookie that gets every other spec through the gate is kept */
-const GATE_COOKIE_FILE = resolve(__dirname, '.auth/site-gate.json');
+const GATE_COOKIE_FILE = resolve(import.meta.dirname, '.auth/site-gate.json');
 
 /**
  * Playwright global setup — waits until the CMS is fully ready.
@@ -21,7 +21,7 @@ const GATE_COOKIE_FILE = resolve(__dirname, '.auth/site-gate.json');
  * /api/users/login until a valid JWT token is returned, which proves the
  * server, database, and seed user are all functional.
  */
-module.exports = async function globalSetup() {
+export default async function globalSetup() {
   const ctx = await request.newContext({ baseURL: BASE_URL });
 
   console.log(`[setup] Waiting for CMS to be ready at ${BASE_URL}…`);
@@ -114,4 +114,4 @@ module.exports = async function globalSetup() {
   console.log('[setup] Route warmup complete');
 
   await ctx.dispose();
-};
+}
