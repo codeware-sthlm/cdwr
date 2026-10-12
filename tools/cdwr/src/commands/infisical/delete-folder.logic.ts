@@ -8,3 +8,19 @@ export const pathProblem = (path: string): string | undefined => {
   }
   return undefined;
 };
+
+interface PlannedFolder {
+  path: string;
+  secrets: number;
+}
+
+/** Whether two folder listings hold the same folders with the same counts */
+export const sameFolders = (
+  a: ReadonlyArray<PlannedFolder>,
+  b: ReadonlyArray<PlannedFolder>
+): boolean =>
+  a.length === b.length &&
+  a.every(
+    (folder, i) =>
+      folder.path === b[i]?.path && folder.secrets === b[i]?.secrets
+  );

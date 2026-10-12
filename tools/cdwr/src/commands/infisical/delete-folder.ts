@@ -7,7 +7,7 @@ import {
   inspectInfisicalFolder
 } from '../../services/infisical';
 
-import { pathProblem } from './delete-folder.logic';
+import { pathProblem, sameFolders } from './delete-folder.logic';
 
 export default defineCommand({
   summary: 'Delete one Infisical folder in one environment',
@@ -57,6 +57,22 @@ export default defineCommand({
   },
 
   async apply(ctx, { environment, path, folders }) {
+    // The delete removes whatever is there now, so check it is still what was confirmed
+    const current = await ctx.ui.task(
+      `Re-reading ${path} for ${environment}`,
+      () => inspectInfisicalFolder({ environment, path })
+    );
+    if (!current) {
+      throw new Error(
+        `${path} was removed from ${environment} since the plan; nothing deleted`
+      );
+    }
+    if (!sameFolders(folders, current)) {
+      throw new Error(
+        `${path} changed in ${environment} since the plan; nothing deleted. Re-run to see the new plan`
+      );
+    }
+
     const deleted = await ctx.ui.task(
       `Deleting ${path} in ${environment}`,
       () => deleteInfisicalFolder({ environment, path }),
