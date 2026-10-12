@@ -160,6 +160,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./infisical/resolve').then((m) => m.default)
   },
   {
+    path: ['infisical', 'delete-folder'],
+    summary: 'Delete one Infisical folder in one environment',
+    danger: 'destructive',
+    load: () => import('./infisical/delete-folder').then((m) => m.default)
+  },
+  {
     path: ['infisical', 'session'],
     summary: 'Whether the Infisical CLI is installed and logged in',
     danger: 'read',

@@ -4,7 +4,9 @@ import {
   type Environment,
   type Folder,
   type Secret,
+  deleteInfisicalFolder as deleteFolder,
   deleteInfisicalSecret as deleteSecret,
+  inspectInfisicalFolder as inspectFolder,
   withInfisical as readInfisical,
   setInfisicalSecret as setSecret
 } from '@codeware/shared/feature/infisical';
@@ -23,6 +25,14 @@ export const setInfisicalSecret = (
 export const deleteInfisicalSecret = (
   ...args: Parameters<typeof deleteSecret>
 ): ReturnType<typeof deleteSecret> => muted(() => deleteSecret(...args));
+
+export const deleteInfisicalFolder = (
+  ...args: Parameters<typeof deleteFolder>
+): ReturnType<typeof deleteFolder> => muted(() => deleteFolder(...args));
+
+export const inspectInfisicalFolder = (
+  ...args: Parameters<typeof inspectFolder>
+): ReturnType<typeof inspectFolder> => muted(() => inspectFolder(...args));
 
 /** Secrets at one path as a record */
 export async function readSecrets(
