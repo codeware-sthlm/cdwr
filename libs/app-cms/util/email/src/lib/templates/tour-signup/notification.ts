@@ -1,6 +1,6 @@
 import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
 
-import { renderEmailLayout } from '../layout';
+import { type EmailBrand, renderEmailLayout } from '../layout';
 
 export type NotificationMailInput = {
   locale: SupportedLocale;
@@ -12,7 +12,8 @@ export type NotificationMailInput = {
   /** Whether capacity put this signup on the waiting list */
   queued: boolean;
   /** Workspace name, used as the sign-off */
-  from: string;
+  from: string; /** Header with logo and accent; omitted for a plain mail */
+  brand?: EmailBrand;
 };
 
 /**
@@ -32,6 +33,7 @@ export function renderNotificationMail(input: NotificationMailInput): {
   text: string;
 } {
   const {
+    brand,
     customerEmail,
     customerName,
     customerPhone,
@@ -73,7 +75,8 @@ export function renderNotificationMail(input: NotificationMailInput): {
         ? ([['Phone', customerPhone]] as Array<[string, string]>)
         : [])
     ],
-    from
+    from,
+    brand
   });
 
   return { subject, html, text };

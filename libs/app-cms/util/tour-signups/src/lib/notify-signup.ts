@@ -1,4 +1,7 @@
 import {
+  type BuiltInThemes,
+  type EmailBrand,
+  emailBrandFromSettings,
   renderSeatsFreedMail,
   sendTourSignupEmails
 } from '@codeware/app-cms/util/email';
@@ -17,6 +20,7 @@ import type { CollectionAfterChangeHook, PayloadRequest } from 'payload';
  * that needs a person, and it is invisible unless somebody opens the tour.
  */
 async function notifySeatsFreed({
+  brand,
   from,
   locale,
   recipients,
@@ -24,6 +28,7 @@ async function notifySeatsFreed({
   tour,
   tourId
 }: {
+  brand: EmailBrand | undefined;
   from: string;
   locale: SupportedLocale;
   recipients: Array<string>;
@@ -69,6 +74,7 @@ async function notifySeatsFreed({
     locale,
     tourTitle: tour.title,
     seatsFree,
+    brand,
     firstInQueue: first.name,
     firstInQueuePeople: first.people,
     tourUrl: serverURL
@@ -100,123 +106,136 @@ async function notifySeatsFreed({
  * reach the guide when they free seats on a tour with a queue, because signups
  * are served in order and nobody but the guide can fill those seats.
  */
-export const notifySignup: CollectionAfterChangeHook<TourSignup> = async ({
-  context,
-  doc,
-  operation,
-  previousDoc,
-  req
-}) => {
-  // Seed data is not a real signup — nobody should be mailed about it
-  if (context?.['seedAction']) {
-    return doc;
-  }
-
-  const promoted =
-    operation === 'update' &&
-    previousDoc?.status === 'waiting' &&
-    doc.status === 'booked';
-
-  // Cancelled, or moved back to the queue: seats this signup held are now free
-  const releasedSeats =
-    operation === 'update' &&
-    previousDoc?.status === 'booked' &&
-    doc.status !== 'booked';
-
-  if (operation !== 'create' && !promoted && !releasedSeats) {
-    return doc;
-  }
-
-  // A cancelled signup created by hand has nothing to confirm
-  if (operation === 'create' && doc.status === 'cancelled') {
-    return doc;
-  }
-
-  const { payload } = req;
-
-  try {
-    const tourId = getId(doc.tour);
-    const tenantId = getId(doc.tenant);
-
-    // Settings first: they carry the workspace's locale, and the tour's title
-    // only exists in that locale — read in another one it comes back empty
-    const { docs } = await payload.find({
-      collection: 'site-settings',
-      where: { tenant: { equals: tenantId } },
-      depth: 1,
-      limit: 1,
-      overrideAccess: true,
-      disableErrors: true,
-      req
-    });
-    const settings = docs[0] ?? null;
-    const locale =
-      (settings?.general?.defaultLocale as SupportedLocale) ?? 'en';
-
-    const tour = await payload.findByID({
-      collection: 'tours',
-      id: tourId,
-      depth: 0,
-      locale,
-      overrideAccess: true,
-      disableErrors: true,
-      req
-    });
-
-    if (!tour) {
+export const createNotifySignup =
+  (options: {
+    /** Pass `BUILT_IN_TOKENS`; a util lib cannot import the theme lib itself */
+    builtInTokens: BuiltInThemes;
+    /** Whether this app serves the tenant's site, and so its `/site-icon.png` */
+    servesTenantSite: () => boolean;
+  }): CollectionAfterChangeHook<TourSignup> =>
+  async ({ context, doc, operation, previousDoc, req }) => {
+    // Seed data is not a real signup — nobody should be mailed about it
+    if (context?.['seedAction']) {
       return doc;
     }
 
-    const recipients = (settings?.tourSignups?.notificationRecipients ?? [])
-      .map((entry) => entry.email)
-      .filter(Boolean);
+    const promoted =
+      operation === 'update' &&
+      previousDoc?.status === 'waiting' &&
+      doc.status === 'booked';
 
-    if (releasedSeats) {
-      await notifySeatsFreed({
-        from: settings?.general?.appName ?? '',
-        locale,
-        recipients,
-        req,
-        tour,
-        tourId
+    // Cancelled, or moved back to the queue: seats this signup held are now free
+    const releasedSeats =
+      operation === 'update' &&
+      previousDoc?.status === 'booked' &&
+      doc.status !== 'booked';
+
+    if (operation !== 'create' && !promoted && !releasedSeats) {
+      return doc;
+    }
+
+    // A cancelled signup created by hand has nothing to confirm
+    if (operation === 'create' && doc.status === 'cancelled') {
+      return doc;
+    }
+
+    const { payload } = req;
+
+    try {
+      const tourId = getId(doc.tour);
+      const tenantId = getId(doc.tenant);
+
+      // Settings first: they carry the workspace's locale, and the tour's title
+      // only exists in that locale — read in another one it comes back empty
+      const { docs } = await payload.find({
+        collection: 'site-settings',
+        where: { tenant: { equals: tenantId } },
+        depth: 1,
+        limit: 1,
+        overrideAccess: true,
+        disableErrors: true,
+        req
       });
-      return doc;
+      const settings = docs[0] ?? null;
+      const locale =
+        (settings?.general?.defaultLocale as SupportedLocale) ?? 'en';
+
+      const tour = await payload.findByID({
+        collection: 'tours',
+        id: tourId,
+        depth: 0,
+        locale,
+        overrideAccess: true,
+        disableErrors: true,
+        req
+      });
+
+      if (!tour) {
+        return doc;
+      }
+
+      const brand = settings
+        ? emailBrandFromSettings(settings, {
+            serverURL: options.servesTenantSite()
+              ? (payload.config.serverURL ?? undefined)
+              : undefined,
+            fallbackName: '',
+            builtInTokens: options.builtInTokens
+          })
+        : undefined;
+
+      const recipients = (settings?.tourSignups?.notificationRecipients ?? [])
+        .map((entry) => entry.email)
+        .filter(Boolean);
+
+      if (releasedSeats) {
+        await notifySeatsFreed({
+          brand,
+          from: settings?.general?.appName ?? '',
+          locale,
+          recipients,
+          req,
+          tour,
+          tourId
+        });
+        return doc;
+      }
+
+      const policy = resolveSignupPolicy(settings);
+      const serverURL = payload.config.serverURL ?? '';
+      const absolute = (path: string | null) =>
+        path ? `${serverURL}${path}` : null;
+
+      await sendTourSignupEmails({
+        payload,
+        brand,
+        kind: promoted ? 'promoted' : (doc.status as 'booked' | 'waiting'),
+        locale,
+        from: settings?.general?.appName ?? '',
+        customer: { name: doc.name, email: doc.email, phone: doc.phone },
+        tour: {
+          title: tour.title,
+          // Readable in the workspace's own language, not the stored timestamp.
+          // A tour with no confirmed date falls back to whatever the editor
+          // wrote instead, which is already prose.
+          departureLabel:
+            formatDayOnlyDate(tour.departureDate, locale) ||
+            tour.departureNote ||
+            null
+        },
+        people: doc.people,
+        notificationRecipients: (
+          settings?.tourSignups?.notificationRecipients ?? []
+        )
+          .map((entry) => entry.email)
+          .filter(Boolean),
+        privacyUrl: absolute(policy.privacyUrl),
+        termsUrl: absolute(policy.termsUrl)
+      });
+    } catch (error) {
+      // Never fail the write for a mail — the place on the tour is the thing
+      payload.logger.error(`[notifySignup] Could not notify: ${String(error)}`);
     }
 
-    const policy = resolveSignupPolicy(settings);
-    const serverURL = payload.config.serverURL ?? '';
-    const absolute = (path: string | null) =>
-      path ? `${serverURL}${path}` : null;
-
-    await sendTourSignupEmails({
-      payload,
-      kind: promoted ? 'promoted' : (doc.status as 'booked' | 'waiting'),
-      locale,
-      from: settings?.general?.appName ?? '',
-      customer: { name: doc.name, email: doc.email, phone: doc.phone },
-      tour: {
-        title: tour.title,
-        // Readable in the workspace's own language, not the stored timestamp.
-        // A tour with no confirmed date falls back to whatever the editor
-        // wrote instead, which is already prose.
-        departureLabel:
-          formatDayOnlyDate(tour.departureDate, locale) ||
-          tour.departureNote ||
-          null
-      },
-      people: doc.people,
-      notificationRecipients: (
-        settings?.tourSignups?.notificationRecipients ?? []
-      )
-        .map((entry) => entry.email)
-        .filter(Boolean),
-      privacyUrl: absolute(policy.privacyUrl),
-      termsUrl: absolute(policy.termsUrl)
-    });
-  } catch (error) {
-    // Never fail the write for a mail — the place on the tour is the thing
-    payload.logger.error(`[notifySignup] Could not notify: ${String(error)}`);
-  }
-
-  return doc;
-};
+    return doc;
+  };
