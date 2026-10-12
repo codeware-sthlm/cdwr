@@ -73,10 +73,9 @@ export const assignCapacityStatus: CollectionBeforeChangeHook<
   await lockTour(req, tourId);
 
   const people = data.people ?? 1;
-  const [taken, waiting] = await Promise.all([
-    sumBookedPeople(req, tourId),
-    sumWaitingPeople(req, tourId)
-  ]);
+  // One after the other: both share the transaction's single pg client
+  const taken = await sumBookedPeople(req, tourId);
+  const waiting = await sumWaitingPeople(req, tourId);
   const status = decideSignupStatus({
     maxCustomers: tour.maxCustomers,
     people,
