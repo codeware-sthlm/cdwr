@@ -162,7 +162,9 @@ export class Fly {
       try {
         return await this.version();
       } catch (error) {
-        throw new Error(`[version] something broke\n${error}`);
+        throw new Error(`[version] something broke\n${error}`, {
+          cause: error
+        });
       }
     }
   };
@@ -190,7 +192,8 @@ export class Fly {
         return response;
       } catch (error) {
         throw new Error(
-          `[create app] something broke, check your apps\n${error}`
+          `[create app] something broke, check your apps\n${error}`,
+          { cause: error }
         );
       }
     },
@@ -217,7 +220,8 @@ export class Fly {
         this.logger.info(`Application '${app}' was destroyed`);
       } catch (error) {
         throw new Error(
-          `[destroy app] something broke, check your apps\n${error}`
+          `[destroy app] something broke, check your apps\n${error}`,
+          { cause: error }
         );
       }
     },
@@ -231,7 +235,7 @@ export class Fly {
       try {
         return await this.fetchAllApps('throwOnError');
       } catch (error) {
-        throw new Error(`[list] something broke\n${error}`);
+        throw new Error(`[list] something broke\n${error}`, { cause: error });
       }
     }
   };
@@ -255,7 +259,8 @@ export class Fly {
         );
       } catch (error) {
         throw new Error(
-          `[add certificate] something broke, check your app certificates\n${error}`
+          `[add certificate] something broke, check your app certificates\n${error}`,
+          { cause: error }
         );
       }
     },
@@ -286,7 +291,9 @@ export class Fly {
           ? ListCertForAllResponse
           : ListCertForAppResponse;
       } catch (error) {
-        throw new Error(`[list certificates] something broke\n${error}`);
+        throw new Error(`[list certificates] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -305,7 +312,8 @@ export class Fly {
         );
       } catch (error) {
         throw new Error(
-          `[remove certificate] something broke, check your app certificates\n${error}`
+          `[remove certificate] something broke, check your app certificates\n${error}`,
+          { cause: error }
         );
       }
     }
@@ -331,7 +339,9 @@ export class Fly {
           `Configuration for '${options.app}' was saved to '${options.config}'`
         );
       } catch (error) {
-        throw new Error(`[save config] something broke\n${error}`);
+        throw new Error(`[save config] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -346,7 +356,9 @@ export class Fly {
         await this.ensureInitialized();
         return await this.showConfig('throwOnError', options);
       } catch (error) {
-        throw new Error(`[show config] something broke\n${error}`);
+        throw new Error(`[show config] something broke\n${error}`, {
+          cause: error
+        });
       }
     }
   };
@@ -415,7 +427,8 @@ export class Fly {
       }) as T extends { buildOnly: true } ? BuildResponse : DeployResponse;
     } catch (error) {
       throw new Error(
-        `[deploy] something broke, check your ${isBuildOnly ? 'builds' : 'deployments'}\n${error}`
+        `[deploy] something broke, check your ${isBuildOnly ? 'builds' : 'deployments'}\n${error}`,
+        { cause: error }
       );
     }
   };
@@ -436,7 +449,9 @@ export class Fly {
         await this.ensureInitialized();
         return await this.fetchAppIps('throwOnError', options);
       } catch (error) {
-        throw new Error(`[list ips] something broke\n${error}`);
+        throw new Error(`[list ips] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -473,7 +488,8 @@ export class Fly {
         return await this.fetchAppIps('throwOnError', options);
       } catch (error) {
         throw new Error(
-          `[ensure ips] something broke, check your app addresses\n${error}`
+          `[ensure ips] something broke, check your app addresses\n${error}`,
+          { cause: error }
         );
       }
     }
@@ -496,7 +512,9 @@ export class Fly {
         await this.startMachine(app, machineId);
         this.logger.info(`Machine '${machineId}' in app '${app}' was started`);
       } catch (error) {
-        throw new Error(`[start machine] something broke\n${error}`);
+        throw new Error(`[start machine] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -512,7 +530,9 @@ export class Fly {
         await this.stopMachine(app, machineId);
         this.logger.info(`Machine '${machineId}' in app '${app}' was stopped`);
       } catch (error) {
-        throw new Error(`[stop machine] something broke\n${error}`);
+        throw new Error(`[stop machine] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -534,7 +554,9 @@ export class Fly {
           `Machine '${machineId}' in app '${app}' was restarted`
         );
       } catch (error) {
-        throw new Error(`[restart machine] something broke\n${error}`);
+        throw new Error(`[restart machine] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -558,7 +580,9 @@ export class Fly {
         await this.updateMachine(app, machineId, options);
         this.logger.info(`Machine '${machineId}' in app '${app}' was updated`);
       } catch (error) {
-        throw new Error(`[update machine] something broke\n${error}`);
+        throw new Error(`[update machine] something broke\n${error}`, {
+          cause: error
+        });
       }
     }
   };
@@ -591,7 +615,9 @@ export class Fly {
         await this.ensureInitialized();
         return await this.sshExec(app, command);
       } catch (error) {
-        throw new Error(`[ssh exec] something broke\n${error}`);
+        throw new Error(`[ssh exec] something broke\n${error}`, {
+          cause: error
+        });
       }
     }
   };
@@ -619,7 +645,8 @@ export class Fly {
         );
       } catch (error) {
         throw new Error(
-          `[set secrets] something broke, check your app secrets\n${error}`
+          `[set secrets] something broke, check your app secrets\n${error}`,
+          { cause: error }
         );
       }
     },
@@ -641,7 +668,9 @@ export class Fly {
         await this.deployStagedSecrets(app);
         this.logger.info(`Staged secrets were deployed for '${app}'`);
       } catch (error) {
-        throw new Error(`[deploy secrets] something broke\n${error}`);
+        throw new Error(`[deploy secrets] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -668,7 +697,9 @@ export class Fly {
           ? ListSecretForAllResponse
           : ListSecretForAppResponse;
       } catch (error) {
-        throw new Error(`[list secrets] something broke\n${error}`);
+        throw new Error(`[list secrets] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -693,7 +724,8 @@ export class Fly {
         );
       } catch (error) {
         throw new Error(
-          `[unset secrets] something broke, check your app secrets\n${error}`
+          `[unset secrets] something broke, check your app secrets\n${error}`,
+          { cause: error }
         );
       }
     }
@@ -1795,8 +1827,9 @@ ${JSON.stringify(response, null, 2)}`);
       const errorMsg = (error as Error).message;
       this.traceCLI('RESULT', errorMsg);
       if (onError === 'throwOnError') {
-        throw new Error(`Command failed: ${toLogCmd}
-${errorMsg}`);
+        throw new Error(`Command failed: ${toLogCmd}\n${errorMsg}`, {
+          cause: error
+        });
       }
       return null as T;
     }

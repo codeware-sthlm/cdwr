@@ -1336,6 +1336,48 @@ describe('Fly', () => {
       assertSpawn('not', ['postgres', 'attach']);
     });
 
+    it('should keep the tail of a long streamed deploy failure with the command context', async () => {
+      // Run the real spawn so the rejection is the one the build action sees
+      const actual = await vi.importActual<
+        typeof import('@codeware/shared/util/misc')
+      >('@codeware/shared/util/misc');
+      const base = mockSpawn.getMockImplementation();
+      mockSpawn.mockImplementation((command, args, options) =>
+        args[0] === 'deploy'
+          ? actual.spawn(
+              process.execPath,
+              [
+                '-e',
+                "for (let i = 1; i <= 30; i++) console.error('line ' + i); process.exit(3);"
+              ],
+              options
+            )
+          : base!(command, args, options)
+      );
+      const stderrWrite = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation(() => true);
+
+      try {
+        const fly = new Fly({
+          ...mockFlyConfig,
+          logger: { ...mockFlyConfig.logger, streamToConsole: true }
+        });
+        const error = await fly
+          .deploy({ app: mockDefs.testApp, config: mockDefs.testConfig })
+          .catch((e: Error) => e);
+
+        expect(error).toBeInstanceOf(Error);
+        const { message } = error as Error;
+        expect(message).toContain('Command failed: flyctl deploy');
+        expect(message).toContain('last 20 lines; the full output is above');
+        expect(message).toContain('line 30');
+        expect(message).not.toContain('line 1\n');
+      } finally {
+        stderrWrite.mockRestore();
+      }
+    });
+
     it('should not automatically deploy when secrets are set for the app', async () => {
       const fly = new Fly(mockFlyConfig);
       await fly.deploy({
