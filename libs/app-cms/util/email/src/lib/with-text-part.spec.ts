@@ -100,4 +100,12 @@ describe('withTextPart', () => {
 
     expect(await send(message)).toBe(message);
   });
+  it('strips script and style blocks whose end tags carry spaces or attributes', () => {
+    const text = htmlToText(
+      '<p>a</p><script>x()</script ><style>b{}</style foo="1"><p>c</p>'
+    );
+    expect(text).not.toMatch(/x\(\)|b\{\}|<script|<style/);
+    expect(text).toContain('a');
+    expect(text).toContain('c');
+  });
 });

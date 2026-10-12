@@ -39,9 +39,9 @@ export const htmlToText = (html: string): string =>
     stripTags(
       [
         [/<!--text:skip-->[\s\S]*?<!--\/text:skip-->/g, ''],
-        [/<head[\s\S]*?<\/head>/gi, ''],
-        [/<style[\s\S]*?<\/style>/gi, ''],
-        [/<script[\s\S]*?<\/script>/gi, '']
+        [/<head\b[\s\S]*?<\/head\b[^>]*>/gi, ''],
+        [/<style\b[\s\S]*?<\/style\b[^>]*>/gi, ''],
+        [/<script\b[\s\S]*?<\/script\b[^>]*>/gi, '']
       ]
         .reduce(
           (acc, [pattern, replacement]) =>
