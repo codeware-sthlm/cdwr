@@ -9,6 +9,8 @@ import { type Check, check, onPath } from '../cli/preflight';
 import { cdwrHome } from '../cli/prefs';
 import { ENV_FILE, LEGACY_ENV_FILE } from '../cli/workspace';
 import {
+  envCopyDrift,
+  githubAppCheck,
   implementReport,
   jobPathChecks,
   jobState,
@@ -54,8 +56,12 @@ interface Report {
     worktree: boolean;
     script: 'missing' | 'current' | 'stale';
     implement: ReturnType<typeof implementReport>;
+    /** The agent checkout's copy of the env file against this checkout's */
+    envCopy: ReturnType<typeof envCopyDrift>;
     /** The job's PATH; undefined when the queue is not set up */
     jobPath?: Awaited<ReturnType<typeof jobPathChecks>>;
+    /** The GitHub App a launched session acts as; undefined when the queue is not set up */
+    githubApp?: Awaited<ReturnType<typeof githubAppCheck>>;
   };
 }
 
@@ -65,15 +71,24 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
   const queue = paths(ctx.env);
   const [job, key] = await Promise.all([jobState(), keyPresent()]);
   const script = queueDrift(queue, ctx.root);
+  const worktree = worktreeOf(ctx);
+  // Both mint nothing lasting: a token lives an hour and is dropped with the check
+  const [jobPath, githubApp] =
+    job.loaded || script !== 'missing'
+      ? await Promise.all([
+          jobPathChecks(ctx.env, queue),
+          githubAppCheck(ctx.root, ctx.env)
+        ])
+      : [undefined, undefined];
   return {
     loaded: job.loaded,
     keyPresent: key,
-    worktree: existsSync(worktreeOf(ctx)),
+    worktree: existsSync(worktree),
     script,
     implement: implementReport(queue, ctx.env),
-    ...(job.loaded || script !== 'missing'
-      ? { jobPath: await jobPathChecks(ctx.env, queue) }
-      : {})
+    envCopy: envCopyDrift(ctx.root, worktree),
+    ...(jobPath === undefined ? {} : { jobPath }),
+    ...(githubApp === undefined ? {} : { githubApp })
   };
 }
 
@@ -234,6 +249,8 @@ export default defineCommand({
         !queue.worktree && 'no worktree',
         queue.script === 'missing' && 'script not installed',
         queue.script === 'stale' && 'script out of date',
+        queue.envCopy === 'stale' && 'env copy out of date',
+        queue.envCopy === 'missing' && 'env file not copied',
         queue.jobPath === undefined && 'job PATH unknown (plist not installed)',
         queue.jobPath?.node === false && 'node 22 not on the job PATH',
         queue.jobPath?.gh === false && 'gh not logged in',
@@ -260,6 +277,33 @@ export default defineCommand({
           ? [symbols.warn, 'implement', theme.warn(implement)]
           : [symbols.ok, 'implement', theme.muted(implement)]
       );
+      const app = queue.githubApp;
+      if (app) {
+        const onlyCdwr =
+          app.ok && app.repos.join(',') === 'codeware-sthlm/cdwr';
+        if (!onlyCdwr) queueProblems += 1;
+        rows.push(
+          !app.ok
+            ? [
+                symbols.warn,
+                'github app',
+                theme.warn(`${app.reason}; no session starts`)
+              ]
+            : onlyCdwr
+              ? [
+                  symbols.ok,
+                  'github app',
+                  theme.muted(`${app.bot} reaches ${app.repos.join(', ')}`)
+                ]
+              : [
+                  symbols.warn,
+                  'github app',
+                  theme.warn(
+                    `${app.bot} reaches ${app.repos.join(', ')}; install it on cdwr only`
+                  )
+                ]
+        );
+      }
     }
     ctx.ui.table(['', 'check', 'detail'], rows);
 

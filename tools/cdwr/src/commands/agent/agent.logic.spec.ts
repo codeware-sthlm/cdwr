@@ -107,6 +107,7 @@ describe('constants', () => {
     expect(QUEUE_FILES).toEqual([
       'run.sh',
       'implement.sh',
+      'github-app.sh',
       'lib.sh',
       'waits.sh',
       'watch.jq'
@@ -122,6 +123,7 @@ describe('queuePaths', () => {
       files: {
         'run.sh': '/h/.cdwr/agent-queue/run.sh',
         'implement.sh': '/h/.cdwr/agent-queue/implement.sh',
+        'github-app.sh': '/h/.cdwr/agent-queue/github-app.sh',
         'lib.sh': '/h/.cdwr/agent-queue/lib.sh',
         'waits.sh': '/h/.cdwr/agent-queue/waits.sh',
         'watch.jq': '/h/.cdwr/agent-queue/watch.jq'
@@ -326,6 +328,7 @@ describe('filesDrift', () => {
   const source = {
     'run.sh': 'a',
     'implement.sh': 'i',
+    'github-app.sh': 'g',
     'lib.sh': 'c',
     'waits.sh': 'd',
     'watch.jq': 'b'
@@ -334,6 +337,7 @@ describe('filesDrift', () => {
   const all = {
     'run.sh': 'a',
     'implement.sh': 'i',
+    'github-app.sh': 'g',
     'lib.sh': 'c',
     'waits.sh': 'd',
     'watch.jq': 'b'
@@ -345,10 +349,12 @@ describe('filesDrift', () => {
     [{ ...all, 'lib.sh': undefined }, 'missing'],
     [{ ...all, 'implement.sh': undefined }, 'missing'],
     [{ ...all, 'waits.sh': undefined }, 'missing'],
+    [{ ...all, 'github-app.sh': undefined }, 'missing'],
     [{ ...all, 'run.sh': undefined, 'watch.jq': 'x' }, 'missing'],
     [{ ...all, 'watch.jq': 'x' }, 'stale'],
     [{ ...all, 'implement.sh': 'x' }, 'stale'],
     [{ ...all, 'waits.sh': 'x' }, 'stale'],
+    [{ ...all, 'github-app.sh': 'x' }, 'stale'],
     [{ ...all, 'lib.sh': 'x' }, 'stale'],
     [{ ...all, 'run.sh': 'x', 'watch.jq': undefined }, 'missing']
   ] as const)('%j -> %s', (installed, expected) => {

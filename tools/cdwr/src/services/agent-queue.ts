@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import type { Context } from '../cli/context';
 import { CliError } from '../cli/errors';
 import { cdwrHome } from '../cli/prefs';
+import { ENV_FILE } from '../cli/workspace';
 import {
   type JobState,
   KEYCHAIN_SERVICE,
@@ -25,7 +26,7 @@ import {
   spendForDay
 } from '../commands/agent/agent.logic';
 
-import { run } from './shell';
+import { CommandError, run } from './shell';
 
 export function requireMac(): void {
   if (process.platform !== 'darwin') {
@@ -196,4 +197,63 @@ export async function jobPathChecks(
     gh: gh !== undefined,
     claude: claude !== undefined
   };
+}
+
+/**
+ * Whether the agent checkout's copy of an env file still matches this checkout's; install
+ * refreshes it. Undefined when this checkout has none to compare with
+ */
+export function envCopyDrift(
+  root: string,
+  worktree: string,
+  file: string = ENV_FILE
+): 'current' | 'stale' | 'missing' | undefined {
+  const ours = readText(join(root, file));
+  if (ours === undefined) return undefined;
+  const theirs = readText(join(worktree, file));
+  if (theirs === undefined) return 'missing';
+  return ours === theirs ? 'current' : 'stale';
+}
+
+export type GithubAppCheck =
+  { ok: true; bot: string; repos: string[] } | { ok: false; reason: string };
+
+/**
+ * The GitHub App a launched session acts as, through the script's own code path: the env
+ * file, the key file and its mode, the token exchange, and the repositories that token reaches
+ */
+export async function githubAppCheck(
+  root: string,
+  env: NodeJS.ProcessEnv
+): Promise<GithubAppCheck> {
+  const script = join(root, QUEUE_SOURCE_DIR, 'github-app.sh');
+  try {
+    const { stdout } = await run(
+      '/bin/zsh',
+      [
+        '-c',
+        [
+          'source "$1" && app_env "$2" && app_session || exit 1',
+          `repos="$(gh api /installation/repositories --jq '[.repositories[].full_name]')" || exit 1`,
+          `jq -nc --arg bot "$GIT_AUTHOR_NAME" --argjson repos "$repos" '{bot: $bot, repos: $repos}'`
+        ].join('\n'),
+        'zsh',
+        script,
+        join(root, ENV_FILE)
+      ],
+      { env, timeout: 30_000 }
+    );
+    return {
+      ok: true,
+      ...(JSON.parse(stdout) as { bot: string; repos: string[] })
+    };
+  } catch (error) {
+    const text = error instanceof CommandError ? error.stderr : String(error);
+    const reason = text
+      .trim()
+      .split('\n')
+      .at(-1)
+      ?.replace(/^github app: /, '');
+    return { ok: false, reason: reason || 'the token check failed' };
+  }
 }

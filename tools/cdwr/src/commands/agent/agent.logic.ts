@@ -16,6 +16,7 @@ export const QUEUE_SOURCE_DIR = 'tools/cdwr/agent-queue';
 export const QUEUE_FILES = [
   'run.sh',
   'implement.sh',
+  'github-app.sh',
   'lib.sh',
   'waits.sh',
   'watch.jq'
@@ -28,6 +29,7 @@ export const byFile = <T>(
 ): Record<QueueFile, T> => ({
   'run.sh': fn('run.sh'),
   'implement.sh': fn('implement.sh'),
+  'github-app.sh': fn('github-app.sh'),
   'lib.sh': fn('lib.sh'),
   'waits.sh': fn('waits.sh'),
   'watch.jq': fn('watch.jq')
