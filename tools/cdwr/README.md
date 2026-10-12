@@ -62,6 +62,12 @@ cdwr infisical resolve --path=/apps/cms    # per key: inherited, vault, or vault
 cdwr infisical cache --path=/apps/cms      # refresh apps/cms/.env.offline for OFFLINE=1; counts only, never values
 ```
 
+`cdwr infisical delete-folder` deletes one folder, subfolders included, in one environment (the Infisical UI deletes it in every one). It lists each subfolder with its secret count first, never values, and refuses a path less than two levels deep:
+
+```sh
+cdwr infisical delete-folder --env preview --path /tenants/moon --dry-run   # the plan, nothing deleted
+```
+
 `--path` defaults to `/apps/cms`. `resolve` follows `OFFLINE` and `CI` as `nx dev` does. `cache`
 writes a local file (mode 600, gitignored) so it asks first; `--dry-run` lists the folders it
 would read and fetches no value. `nx dx:secrets <app>` runs it.
