@@ -371,7 +371,8 @@ listed.
 4. GitHub through `gh pr …`, REST reads (`gh api repos/codeware-sthlm/cdwr/…`) and
    `tools/cdwr/agent-queue/gh-review.sh threads <pr>`, `reply <thread id> <body>` and
    `resolve <thread id>` for review threads. Raw `gh api graphql` and any `gh api` write are
-   denied.
+   denied. The session acts as the `codeware-agent` GitHub App: `gh` and `git push` carry its
+   token, commits are the bot's, and main's rulesets apply to it with no bypass.
 5. Notify through Slack only; there is no PushNotification in `-p`.
 6. A turn that ends, ends the run. Run every wait in the foreground, as repeated Bash calls of
    at most 10 minutes each, never as a background task.

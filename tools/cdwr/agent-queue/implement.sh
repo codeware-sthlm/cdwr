@@ -7,6 +7,8 @@
 # dontAsk turns into a denial, so the skill uses `git -C` and `pnpm -C` in this mode.
 # It runs from $AGENT_QUEUE_REPO; a planning run may move that checkout forward to a newer
 # origin/main under it, which is accepted.
+# On GitHub it acts as the codeware-agent app (github-app.sh beside this script), never as
+# Håkan, whose release team bypasses main's rulesets. No app identity, no session.
 #   implement.sh <key>   started by run.sh with nohup; <key> is the launch key, for the records
 set -euo pipefail
 
@@ -40,6 +42,21 @@ LOCK="$HOME_DIR/implement.lock"
 if ! mkdir "$LOCK" 2>/dev/null; then note "busy: a session is running"; exit 0; fi
 print -r -- "$$" > "$LOCK/pid"
 trap '[[ "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]] && rm -rf "$LOCK"' EXIT
+
+# The app identity, read from the agent checkout's tools/cdwr/.env (install refreshes that
+# copy). It fails closed, with the reason on stderr, and comes before the reservation so a
+# session that never starts costs nothing.
+source "${0:A:h}/github-app.sh"
+errf="$LOGS/github-app.err"
+if ! { app_env "$REPO/tools/cdwr/.env" && app_session; } 2> "$errf"; then
+  reason="$(tr '\n' ' ' < "$errf" | sed 's/ *$//')"
+  rm -f "$errf"
+  note "fail: $reason; not starting"
+  notify "Agent queue: nothing launched for $TICKET. $reason."
+  record failed "$KEY · $reason"
+  exit 1
+fi
+rm -f "$errf"
 
 # Reserve the whole budget before the session starts, so a machine that dies mid-session still
 # counts it against the daily cap; the actual cost settles it afterwards. No reservation, no start.

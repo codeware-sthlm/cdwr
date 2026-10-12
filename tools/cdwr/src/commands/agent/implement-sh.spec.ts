@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -51,6 +52,16 @@ describe('implement.sh', () => {
     expect(code).not.toMatch(/\b(Edit|Write)\((?!\$WT\))/);
   });
 
+  // The identity comes from github-app.sh beside the script, and before the budget reservation
+  it('acts as the GitHub App, read from the agent checkout, or does not start', () => {
+    expect(code).toContain('source "${0:A:h}/github-app.sh"');
+    expect(code).toContain('app_env "$REPO/tools/cdwr/.env" && app_session');
+    expect(code.indexOf('app_session')).toBeLessThan(
+      code.indexOf('ledger "$BUDGET_USD" reserve')
+    );
+    expect(code).not.toContain('gh auth');
+  });
+
   it('allows no bare Bash', () => {
     expect(code).not.toMatch(/"Bash"/);
     expect(code).not.toMatch(/\bBash(\(\*\))?(\s|"|$)/m);
@@ -96,16 +107,28 @@ describe('implement.sh', () => {
     let queueHome: string;
     let calls: string;
 
+    let scripts: string;
+
     const fakeClaude = (exit: number, output: string): void => {
       writeFileSync(
         join(bin, 'claude'),
-        `#!/bin/sh\necho called >> "${calls}"\nprintf '%s' '${output}'\nexit ${exit}\n`
+        `#!/bin/sh\necho "called $GH_TOKEN $GIT_AUTHOR_NAME" >> "${calls}"\nprintf '%s' '${output}'\nexit ${exit}\n`
       );
       chmodSync(join(bin, 'claude'), 0o755);
     };
 
+    // github-app.sh beside the script, stubbed: the real one has its own spec
+    const fakeApp = (refusal?: string): void => {
+      writeFileSync(
+        join(scripts, 'github-app.sh'),
+        refusal === undefined
+          ? `app_env() { [[ -r "$1" ]]; }\napp_session() { export GH_TOKEN=ghs_stub GIT_AUTHOR_NAME='codeware-agent[bot]'; }\n`
+          : `app_env() { [[ -r "$1" ]]; }\napp_session() { print -ru2 -- "github app: ${refusal}"; return 1; }\n`
+      );
+    };
+
     const start = () =>
-      spawnSync('zsh', [SCRIPT_PATH, 'COD-1 answered'], {
+      spawnSync('zsh', [join(scripts, 'implement.sh'), 'COD-1 answered'], {
         encoding: 'utf8',
         env: {
           PATH: `${bin}:${process.env['PATH'] ?? ''}`,
@@ -130,9 +153,19 @@ describe('implement.sh', () => {
       bin = join(dir, 'bin');
       queueHome = join(dir, 'queue');
       calls = join(dir, 'calls');
+      scripts = join(dir, 'scripts');
       mkdirSync(bin);
+      mkdirSync(scripts);
       mkdirSync(join(dir, 'home'));
-      mkdirSync(join(dir, 'ws', 'codeware-agent'), { recursive: true });
+      mkdirSync(join(dir, 'ws', 'codeware-agent', 'tools', 'cdwr'), {
+        recursive: true
+      });
+      writeFileSync(
+        join(dir, 'ws', 'codeware-agent', 'tools', 'cdwr', '.env'),
+        ''
+      );
+      copyFileSync(SCRIPT_PATH, join(scripts, 'implement.sh'));
+      fakeApp();
     });
 
     afterEach(() => {
@@ -143,6 +176,10 @@ describe('implement.sh', () => {
       fakeClaude(0, '{"total_cost_usd":1.5,"num_turns":3,"result":"ok"}');
       const result = start();
       expect(result.status).toBe(0);
+      // The session gets the app's token and commits as the bot
+      expect(readFileSync(calls, 'utf8')).toBe(
+        'called ghs_stub codeware-agent[bot]\n'
+      );
       expect(rows('implement-spend.jsonl')).toEqual([
         { day: today(), ticket: 'COD-1', cost: 15, kind: 'reserve' },
         { day: today(), ticket: 'COD-1', cost: -13.5, kind: 'settle' }
@@ -150,6 +187,24 @@ describe('implement.sh', () => {
       expect(rows('runs.jsonl').map((r) => r['outcome'])).toEqual([
         'launched',
         'implemented'
+      ]);
+      expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+    });
+
+    it('does not start without the app identity, and reserves nothing', () => {
+      fakeClaude(0, '{}');
+      fakeApp('AGENT_GITHUB_APP_ID missing or not a number');
+      const result = start();
+      expect(result.status).toBe(1);
+      expect(existsSync(calls)).toBe(false);
+      expect(existsSync(join(queueHome, 'implement-spend.jsonl'))).toBe(false);
+      expect(rows('runs.jsonl')).toEqual([
+        expect.objectContaining({
+          outcome: 'failed',
+          ticket: 'COD-1',
+          detail:
+            'COD-1 answered · github app: AGENT_GITHUB_APP_ID missing or not a number'
+        })
       ]);
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
     });

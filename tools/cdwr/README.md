@@ -131,6 +131,19 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 (missing means `all`), while the scheduler's own notices (a planned ticket, a failed or capped
 run) always go out.
 
+A launched implementing session acts on GitHub as the `codeware-agent` GitHub App, never as you:
+you sit in the `release` team that bypasses main's rulesets, and an app in no bypass list gets
+the branch rules from GitHub itself. `implement.sh` sources `agent-queue/github-app.sh`, which
+signs a JWT with `openssl`, exchanges it for an installation token that reaches only `cdwr`, and
+hands the session `GH_TOKEN`, an env-only git credential helper (GitHub over SSH is rewritten to
+HTTPS, so your key is never offered) and the bot's commit identity. It reads three variables
+from `tools/cdwr/.env`, the copy `install` keeps in the agent worktree: `AGENT_GITHUB_APP_ID`,
+`AGENT_GITHUB_APP_INSTALLATION_ID` and `AGENT_GITHUB_APP_KEY_PATH`, a `.pem` outside every
+checkout with mode 600. One of them missing or wrong, or a refused exchange, means no session
+and a notice saying why; it never falls back to your `gh` login. `doctor` runs the same exchange
+and shows what the token reaches. The app's permissions: Contents and Pull requests read and
+write, Metadata, Checks and Actions read; installed on `cdwr` only, in no ruleset bypass list.
+
 Before it plans, the scheduler watches the PRs of `agent:review` tickets (open, or done within 14
 days) without starting Claude. It sends one notice per change: a PR that left the merge queue
 or has failing checks (`action`), a merge with the hand-offs still unticked in the agent's
