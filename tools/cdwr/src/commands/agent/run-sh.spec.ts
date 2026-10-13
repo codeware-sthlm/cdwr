@@ -41,6 +41,14 @@ describe('run.sh', () => {
     expect(SCRIPT).toMatch(/note "fail: planned nothing/);
   });
 
+  // wait.sh keeps <id>.seen per session; it goes with the session, and an orphan is swept
+  it('removes the .seen file with its session, and orphans', () => {
+    expect(SCRIPT).toContain(
+      'rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen"'
+    );
+    expect(SCRIPT).toContain('[[ -f "${w%.seen}.json" ]] || rm -f "$w"');
+  });
+
   // The watcher's liveness comes from <id>.watcher, not from the session JSON
   it('reads the watcher pid from the .watcher file', () => {
     expect(SCRIPT).toContain('"${f%.json}.watcher"');
