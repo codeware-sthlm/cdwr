@@ -403,7 +403,7 @@ attended() {
       # Ended or dead for over 24 h: delete
       if [[ "$pa" == false || "$(jq -r '.state' "$f" 2>/dev/null)" == ended ]] &&
          (( $(date +%s) - $(jq -r '.lastSeen // empty | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$f" 2>/dev/null || echo 0) > 86400 )); then
-        rm -f "$f" "${f%.json}.watcher"; continue
+        rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen"; continue
       fi
       items+=("$(jq -c --argjson pa "$pa" --argjson wa "$wa" '. + {pidAlive: $pa, watcherAlive: $wa}' "$f" 2>/dev/null)")
     done
@@ -411,6 +411,10 @@ attended() {
     for w in "$SESSIONS"/*.watcher(N); do
       wpid="$(cat "$w" 2>/dev/null)"
       [[ "$wpid" == <-> ]] && kill -0 "$wpid" 2>/dev/null || rm -f "$w"
+    done
+    # What wait.sh last reported to a session that no longer exists
+    for w in "$SESSIONS"/*.seen(N); do
+      [[ -f "${w%.seen}.json" ]] || rm -f "$w"
     done
     (( ${#items[@]} )) && sessions_json="$(printf '%s\n' "${items[@]}" | jq -cs '.' 2>/dev/null || echo '[]')"
   fi
