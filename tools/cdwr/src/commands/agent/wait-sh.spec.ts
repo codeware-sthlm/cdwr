@@ -112,10 +112,7 @@ cat "${dir}/${name}-answer-$n.json"
 
   it('exits on a changed pick', () => {
     const result = run(
-      [
-        response(ticket('COD-1', 'backlog')),
-        response(ticket('COD-2', 'started'))
-      ],
+      [response(), response(ticket('COD-2', 'started'))],
       ['--interval', '1', '--max', '20']
     );
     expect(result.status).toBe(0);
@@ -124,11 +121,7 @@ cat "${dir}/${name}-answer-$n.json"
 
   it('counts an error as unchanged and tries again', () => {
     const result = run(
-      [
-        response(ticket('COD-1', 'backlog')),
-        'not json',
-        response(ticket('COD-2', 'started'))
-      ],
+      [response(), 'not json', response(ticket('COD-2', 'started'))],
       ['--interval', '1', '--max', '20']
     );
     expect(result.status).toBe(0);
@@ -136,13 +129,48 @@ cat "${dir}/${name}-answer-$n.json"
     expect(readFileSync(join(dir, 'linear-counter'), 'utf8').trim()).toBe('3');
   });
 
-  it('times out on a constant pick', () => {
-    const result = run(
-      [response(ticket('COD-1', 'backlog'))],
-      ['--interval', '1', '--max', '2']
-    );
+  it('times out on a constant idle pick', () => {
+    const result = run([response()], ['--interval', '1', '--max', '2']);
     expect(result.status).toBe(0);
-    expect(result.stdout).toBe('timeout: run now: COD-1 ready\n');
+    expect(result.stdout).toMatch(/^timeout: idle/);
+  });
+
+  describe('a run pick at start', () => {
+    const register = () => {
+      mkdirSync(join(dir, 'sessions'));
+      writeFileSync(
+        join(dir, 'sessions', 'cur.json'),
+        JSON.stringify(session('cur', 'stopped', '2026-10-11T10:00:00Z'))
+      );
+    };
+
+    it('exits at once when not reported yet', () => {
+      const result = run(
+        [response(ticket('COD-1', 'backlog'))],
+        ['--interval', '1', '--max', '20']
+      );
+      expect(result.stdout).toBe('changed: run now: COD-1 ready\n');
+      expect(readFileSync(join(dir, 'linear-counter'), 'utf8').trim()).toBe(
+        '1'
+      );
+    });
+
+    it('waits for a change once the session has seen it', () => {
+      register();
+      const args = ['--interval', '1', '--max', '2'];
+      const answers = [response(ticket('COD-1', 'backlog'))];
+      expect(run(answers, args).stdout).toBe('changed: run now: COD-1 ready\n');
+      expect(run(answers, args).stdout).toBe('timeout: run now: COD-1 ready\n');
+    });
+
+    it('exits at once when it differs from the one seen', () => {
+      register();
+      const args = ['--interval', '1', '--max', '2'];
+      run([response(ticket('COD-1', 'backlog'))], args);
+      expect(run([response(ticket('COD-2', 'backlog'))], args).stdout).toBe(
+        'changed: run now: COD-2 ready\n'
+      );
+    });
   });
 
   it('wakes when only the waiting set changes', () => {

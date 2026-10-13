@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Background watcher for an attended /work-queue session: polls Linear and exits when the
-# attended pick changes, or after --max seconds so the session can re-arm it.
+# attended pick changes, or after --max seconds so the session can re-arm it. A `run` pick it has
+# not reported to this session yet (<id>.seen) exits at once, so work that landed before it started is not missed.
 # Runs from the repo, not installed. While it runs, <id>.watcher holds its pid and the hook reports `polling` on Stop.
 #   wait.sh [--interval 60] [--max 6600]
 #   wait.sh --now        print the current pick once and exit
@@ -62,6 +63,15 @@ remove_watcher() {
   return 0
 }
 
+# The last pick reported to the session; without a session nothing is remembered
+seen_key() { [[ -n "$file" ]] && cat "${file%.json}.seen" 2>/dev/null; return 0; }
+remember() {
+  [[ -n "$file" ]] || return 0
+  local seen="${file%.json}.seen"
+  print -r -- "$1" > "$seen.tmp.$$" && mv "$seen.tmp.$$" "$seen" || rm -f "$seen.tmp.$$"
+  return 0
+}
+
 # pick: the attended verdict as JSON; fails on a Linear or jq error
 pick() {
   local resp watch waits
@@ -93,6 +103,11 @@ until start="$(pick)"; do
   sleep "$INTERVAL"
 done
 start_key="$(key_of "$start")"
+if [[ "$(jq -r '.verdict' <<<"$start")" == run && "$start_key" != "$(seen_key)" ]]; then
+  remember "$start_key"
+  print -r -- "changed: $(line_of "$start")"
+  exit 0
+fi
 
 while true; do
   (( SECONDS >= MAX )) && break
@@ -100,10 +115,12 @@ while true; do
   # An error counts as unchanged; the next tick tries again
   now="$(pick)" || { (( SECONDS >= MAX )) && break; continue; }
   if [[ "$(key_of "$now")" != "$start_key" ]]; then
+    remember "$(key_of "$now")"
     print -r -- "changed: $(line_of "$now")"
     exit 0
   fi
   last="$now"
 done
+remember "$(key_of "${last:-$start}")"
 print -r -- "timeout: $(line_of "${last:-$start}")"
 exit 0
