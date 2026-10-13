@@ -199,6 +199,9 @@
       "@codeware/shared/util/signature": [
         "./libs/shared/util/signature/src/index.ts"
       ],
+      "@codeware/shared/util/invite-code": [
+        "./libs/shared/util/invite-code/src/index.ts"
+      ],
       "@codeware/shared/util/site-gate": [
         "./libs/shared/util/site-gate/src/index.ts"
       ],

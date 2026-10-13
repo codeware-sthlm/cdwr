@@ -1,0 +1,8 @@
+{
+  "name": "shared-util-invite-code",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/util/invite-code/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:util", "domain:invite-code"],
+  "targets": {}
+}
