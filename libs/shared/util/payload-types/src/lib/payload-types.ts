@@ -188,6 +188,7 @@ export interface Config {
     'custom-components': CustomComponent;
     'custom-themes': CustomTheme;
     faq: Faq;
+    'invite-codes': InviteCode;
     media: Media;
     navigation: Navigation;
     pages: Page;
@@ -232,6 +233,7 @@ export interface Config {
       CustomComponentsSelect<false> | CustomComponentsSelect<true>;
     'custom-themes': CustomThemesSelect<false> | CustomThemesSelect<true>;
     faq: FaqSelect<false> | FaqSelect<true>;
+    'invite-codes': InviteCodesSelect<false> | InviteCodesSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     navigation: NavigationSelect<false> | NavigationSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
@@ -2049,6 +2051,39 @@ export interface Faq {
   createdAt: string;
 }
 /**
+ * Codes that let someone sign up when self-serve signup is open. A code is shown once, when it is created.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "invite-codes".
+ */
+export interface InviteCode {
+  id: number;
+  /**
+   * Generate a code or type your own, in the form XXXX-XXXX-XXXX-XXXX.
+   */
+  code?: string | null;
+  /**
+   * The first half of the code, which is not secret. Identifies the code in this list.
+   */
+  lookup?: string | null;
+  codeHash: string;
+  /**
+   * How many times the code can be used.
+   */
+  maxUses: number;
+  uses?: number | null;
+  /**
+   * Leave empty for a code that does not expire.
+   */
+  expiresAt?: string | null;
+  /**
+   * Who the code is for.
+   */
+  note: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Decide what appears in your website's menu and in what order.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2125,6 +2160,10 @@ export interface PlatformLabel {
  */
 export interface PlatformSetting {
   id: number;
+  /**
+   * Self-serve signup accepts invite codes.
+   */
+  signupOpen?: boolean | null;
   /**
    * Domains the host application is reachable on, in addition to its .fly.dev address — which keeps working and stays useful for support. Add the domain here first, then create the DNS records shown after saving. Takes effect after a restart.
    */
@@ -2822,6 +2861,10 @@ export interface PayloadLockedDocument {
         value: number | Faq;
       } | null)
     | ({
+        relationTo: 'invite-codes';
+        value: number | InviteCode;
+      } | null)
+    | ({
         relationTo: 'media';
         value: number | Media;
       } | null)
@@ -3019,6 +3062,21 @@ export interface FaqSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "invite-codes_select".
+ */
+export interface InviteCodesSelect<T extends boolean = true> {
+  code?: T;
+  lookup?: T;
+  codeHash?: T;
+  maxUses?: T;
+  uses?: T;
+  expiresAt?: T;
+  note?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "media_select".
  */
 export interface MediaSelect<T extends boolean = true> {
@@ -3185,6 +3243,7 @@ export interface PlatformLabelsSelect<T extends boolean = true> {
  * via the `definition` "platform-settings_select".
  */
 export interface PlatformSettingsSelect<T extends boolean = true> {
+  signupOpen?: T;
   domains?:
     | T
     | {
