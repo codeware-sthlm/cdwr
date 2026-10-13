@@ -144,6 +144,12 @@ const customTranslationsSchema = z.object({
     manageFaq: z.string(),
     openHelp: z.string()
   }),
+  inviteCodes: z.object({
+    codeCopy: z.string(),
+    codeHint: z.string(),
+    generate: z.string(),
+    regenerate: z.string()
+  }),
   media: z.object({
     calloutDescriptions: z.string(),
     calloutTitle: z.string()
@@ -348,6 +354,8 @@ const customTranslationsSchema = z.object({
     domainTaken: z.string(),
     fontRestricted: z.string(),
     formNeedsRecipient: z.string(),
+    inviteCodeImmutable: z.string(),
+    inviteCodeInvalid: z.string(),
     labelNameTaken: z.string(),
     labelNotFound: z.string(),
     labelWrongType: z.string(),
@@ -539,6 +547,13 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       loading: 'Loading…',
       manageFaq: 'Manage FAQ',
       openHelp: 'Help'
+    },
+    inviteCodes: {
+      codeCopy: 'Copy invite code',
+      codeHint:
+        'Copy it now. Only its hash is stored, so it cannot be shown again.',
+      generate: 'Generate code',
+      regenerate: 'Generate another'
     },
     media: {
       calloutDescriptions: `Tags can be used to organize your files and be displayed in the web site file area.
@@ -771,6 +786,10 @@ You can assign multiple tags to a file.`,
         '{{fonts}} is licensed to the platform and can only be set by a system administrator.',
       formNeedsRecipient:
         'One of the notification emails has no "Email To", and this workspace has no generic recipient set. Add one here, set a generic recipient in Site Settings → Forms, or remove this notification email if none is wanted.',
+      inviteCodeImmutable:
+        'An invite code cannot be changed. Create a new one instead.',
+      inviteCodeInvalid:
+        'Enter a valid invite code, such as ABCD-EFGH-JKMN-PQRS.',
       labelNameTaken: 'A "{{type}}" label named "{{name}}" already exists.',
       labelNotFound: 'The selected label no longer exists.',
       labelWrongType: 'Expected a "{{expected}}" label but got "{{actual}}".',
@@ -969,6 +988,13 @@ Supported locales: {{locales}}`,
       loading: 'Laddar…',
       manageFaq: 'Hantera vanliga frågor',
       openHelp: 'Hjälp'
+    },
+    inviteCodes: {
+      codeCopy: 'Kopiera inbjudningskod',
+      codeHint:
+        'Kopiera den nu. Bara dess hash sparas, så den kan inte visas igen.',
+      generate: 'Skapa kod',
+      regenerate: 'Skapa en annan'
     },
     media: {
       calloutDescriptions: `Använd etiketter för att organisera dina filer och då kunna visa dem på webbplatsens filyta.
@@ -1201,6 +1227,10 @@ Du kan tilldela flera etiketter till en fil.`,
         '{{fonts}} är licensierat till plattformen och kan bara väljas av en systemadministratör.',
       formNeedsRecipient:
         'Ett av notismejlen saknar "E-post till", och arbetsytan har ingen allmän mottagare inställd. Ange en här, ange en allmän mottagare i Webbplatsinställningar → Formulär, eller ta bort det här notismejlet om inget behövs.',
+      inviteCodeImmutable:
+        'En inbjudningskod kan inte ändras. Skapa en ny istället.',
+      inviteCodeInvalid:
+        'Ange en giltig inbjudningskod, till exempel ABCD-EFGH-JKMN-PQRS.',
       labelNameTaken:
         'Det finns redan en etikett av typen "{{type}}" med namnet "{{name}}".',
       labelNotFound: 'Den valda etiketten finns inte längre.',

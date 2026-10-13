@@ -12,6 +12,7 @@
 
 import {
   platformCollectionSlugs,
+  systemCollectionSlugs,
   tenantCollectionSlugs
 } from '@codeware/app-cms/util/definitions';
 import type { CollectionSlug } from '@codeware/shared/util/payload-types';
@@ -32,6 +33,11 @@ const tenantOwned: ReadonlyArray<string> = tenantCollectionSlugs;
 const platformOwned: ReadonlyArray<string> = platformCollectionSlugs;
 
 /**
+ * Visible to system users only, not even readable by anyone else.
+ */
+const systemOnly: ReadonlyArray<string> = systemCollectionSlugs;
+
+/**
  * Identities rather than content — they carry their own access model.
  * Covered by `users-management.spec.ts` and `tenants.spec.ts`.
  */
@@ -40,7 +46,12 @@ const identities = [
   'users'
 ] as const satisfies readonly CollectionSlug[];
 
-const classified = new Set([...tenantOwned, ...platformOwned, ...identities]);
+const classified = new Set([
+  ...tenantOwned,
+  ...platformOwned,
+  ...systemOnly,
+  ...identities
+]);
 
 test.describe('Permission coverage', () => {
   test.use({ storageState: { cookies: [], origins: [] } });

@@ -19,8 +19,10 @@ export {
 export { type MimeTypeSlug, getMimeTypes } from './lib/mime-types';
 export {
   type PlatformCollectionSlug,
+  type SystemCollectionSlug,
   isPlatformCollectionSlug,
-  platformCollectionSlugs
+  platformCollectionSlugs,
+  systemCollectionSlugs
 } from './lib/platform-collections';
 export {
   type TenantCollectionSlug,

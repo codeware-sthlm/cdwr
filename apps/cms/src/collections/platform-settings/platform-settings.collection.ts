@@ -53,6 +53,18 @@ const platformSettings: CollectionConfig<'platform-settings'> = {
     beforeChange: [guardDomainConflicts]
   },
   fields: [
+    {
+      name: 'signupOpen',
+      type: 'checkbox',
+      defaultValue: false,
+      label: { en: 'Signup open', sv: 'Registrering öppen' },
+      admin: {
+        description: {
+          en: 'Self-serve signup accepts invite codes.',
+          sv: 'Egen registrering tar emot inbjudningskoder.'
+        }
+      }
+    },
     domainsField({
       override: {
         admin: {
