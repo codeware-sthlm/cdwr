@@ -22,7 +22,7 @@ export class InviteCodeRefused extends Error {
   }
 }
 
-/** Wrong guesses per address before the check refuses outright, as the site gate */
+/** Attempts per address, right or wrong, before the check refuses outright */
 const ATTEMPTS_PER_ADDRESS = 10;
 
 type Runtime = PayloadRuntime | BasePayload;
