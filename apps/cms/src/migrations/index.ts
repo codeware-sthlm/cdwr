@@ -81,6 +81,7 @@ import * as migration_20261004_135735_cod_518_nested_navigation from './20261004
 import * as migration_20261006_232639_cod_534_payload_3_90 from './20261006_232639_cod_534_payload_3_90';
 import * as migration_20261010_154752_cod_541_apex_addresses from './20261010_154752_cod_541_apex_addresses';
 import * as migration_20261013_223952_cod_567_stats_website_id from './20261013_223952_cod_567_stats_website_id';
+import * as migration_20261015_053116_cod_561_invite_codes from './20261015_053116_cod_561_invite_codes';
 
 export const migrations = [
   {
@@ -497,5 +498,10 @@ export const migrations = [
     up: migration_20261013_223952_cod_567_stats_website_id.up,
     down: migration_20261013_223952_cod_567_stats_website_id.down,
     name: '20261013_223952_cod_567_stats_website_id'
+  },
+  {
+    up: migration_20261015_053116_cod_561_invite_codes.up,
+    down: migration_20261015_053116_cod_561_invite_codes.down,
+    name: '20261015_053116_cod_561_invite_codes'
   }
 ];
