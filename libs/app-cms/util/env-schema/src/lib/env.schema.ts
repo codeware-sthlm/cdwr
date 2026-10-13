@@ -152,6 +152,14 @@ export const EnvSchema = withEnvVars(
         .min(1)
         .optional(),
 
+      // Site statistics are collected only when set
+      UMAMI_URL: z
+        .string({
+          description: 'Base URL of the Umami instance site statistics go to'
+        })
+        .url()
+        .optional(),
+
       // A separate build service takes over component builds when set; the
       // local toolchain is used when absent
       BUILDER_URL: z

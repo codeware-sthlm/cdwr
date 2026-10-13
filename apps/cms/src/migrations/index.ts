@@ -80,6 +80,7 @@ import * as migration_20261004_120624_cod_522_rebuild_components from './2026100
 import * as migration_20261004_135735_cod_518_nested_navigation from './20261004_135735_cod_518_nested_navigation';
 import * as migration_20261006_232639_cod_534_payload_3_90 from './20261006_232639_cod_534_payload_3_90';
 import * as migration_20261010_154752_cod_541_apex_addresses from './20261010_154752_cod_541_apex_addresses';
+import * as migration_20261013_223952_cod_567_stats_website_id from './20261013_223952_cod_567_stats_website_id';
 
 export const migrations = [
   {
@@ -491,5 +492,10 @@ export const migrations = [
     up: migration_20261010_154752_cod_541_apex_addresses.up,
     down: migration_20261010_154752_cod_541_apex_addresses.down,
     name: '20261010_154752_cod_541_apex_addresses'
+  },
+  {
+    up: migration_20261013_223952_cod_567_stats_website_id.up,
+    down: migration_20261013_223952_cod_567_stats_website_id.down,
+    name: '20261013_223952_cod_567_stats_website_id'
   }
 ];
