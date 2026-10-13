@@ -39,7 +39,7 @@ export const protectInviteCode: CollectionBeforeChangeHook<
   }
 
   const changed =
-    (data.lookup !== undefined && data.lookup !== originalDoc.lookup) ||
+    (data.lookup !== undefined && data.lookup !== originalDoc?.lookup) ||
     data.codeHash !== undefined ||
     Boolean(data.code);
 

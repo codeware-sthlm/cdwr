@@ -356,6 +356,7 @@ const customTranslationsSchema = z.object({
     formNeedsRecipient: z.string(),
     inviteCodeImmutable: z.string(),
     inviteCodeInvalid: z.string(),
+    inviteCodeWholeNumber: z.string(),
     labelNameTaken: z.string(),
     labelNotFound: z.string(),
     labelWrongType: z.string(),
@@ -790,6 +791,7 @@ You can assign multiple tags to a file.`,
         'An invite code cannot be changed. Create a new one instead.',
       inviteCodeInvalid:
         'Enter a valid invite code, such as ABCD-EFGH-JKMN-PQRS.',
+      inviteCodeWholeNumber: 'Enter a whole number, 1 or more.',
       labelNameTaken: 'A "{{type}}" label named "{{name}}" already exists.',
       labelNotFound: 'The selected label no longer exists.',
       labelWrongType: 'Expected a "{{expected}}" label but got "{{actual}}".',
@@ -1231,6 +1233,7 @@ Du kan tilldela flera etiketter till en fil.`,
         'En inbjudningskod kan inte ändras. Skapa en ny istället.',
       inviteCodeInvalid:
         'Ange en giltig inbjudningskod, till exempel ABCD-EFGH-JKMN-PQRS.',
+      inviteCodeWholeNumber: 'Ange ett heltal, 1 eller mer.',
       labelNameTaken:
         'Det finns redan en etikett av typen "{{type}}" med namnet "{{name}}".',
       labelNotFound: 'Den valda etiketten finns inte längre.',
