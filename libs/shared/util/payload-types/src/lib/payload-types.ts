@@ -562,6 +562,10 @@ export interface Tenant {
         id?: string | null;
       }[]
     | null;
+  /**
+   * The site's id in Umami. Set by provisioning; leave empty to collect no statistics.
+   */
+  statsWebsiteId?: string | null;
   relations?: {
     relatedUsers?: {
       docs?: (number | User)[];
@@ -3511,6 +3515,7 @@ export interface TenantsSelect<T extends boolean = true> {
             };
         id?: T;
       };
+  statsWebsiteId?: T;
   relations?:
     | T
     | {
