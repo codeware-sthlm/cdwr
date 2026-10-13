@@ -59,6 +59,8 @@ trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
 source "${0:A:h}/lib.sh"
 source "${0:A:h}/waits.sh"
 [[ -z "$key" ]] && { say "skip: no Linear API key in Keychain (service linear-agent-queue)"; exit 0; }
+# No network is not a Linear failure: no record, no warn rows, the next run catches up
+if offline; then say "skip: offline (Mac asleep?)"; exit 0; fi
 
 # The only writes run.sh makes: the runs, usage and activity documents, each created once
 # on the Codeware team and then updated in place.

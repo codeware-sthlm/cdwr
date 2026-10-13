@@ -87,7 +87,7 @@ key_of() { jq -c '{verdict, ticket, reason, waiting}' <<<"$1"; }
 line_of() { jq -r -L "$HERE" 'include "watch"; attended_line' <<<"$1"; }
 
 if $NOW; then
-  now="$(pick)" || { print -r -- "wait: Linear did not answer"; exit 0; }
+  now="$(pick)" || { offline && print -r -- "wait: offline" || print -r -- "wait: Linear did not answer"; exit 0; }
   line_of "$now"
   exit 0
 fi

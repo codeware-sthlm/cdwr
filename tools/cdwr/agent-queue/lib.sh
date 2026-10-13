@@ -12,6 +12,13 @@ linear() {
       -H "Authorization: $key" -H 'Content-Type: application/json' --data @-
 }
 
+# offline: Linear's host does not resolve, as on a dark wake from sleep; Linear itself is not down
+offline() {
+  [[ -z "${AGENT_QUEUE_LINEAR_CMD:-}" ]] || return 1
+  curl -sS -m 5 -o /dev/null -I https://api.linear.app 2>/dev/null
+  (( $? == 6 ))
+}
+
 # The queue the attended pick is computed from (see watch.jq `attended`)
 read -r -d '' ATTENDED_QUERY <<'GQL' || true
 query {
