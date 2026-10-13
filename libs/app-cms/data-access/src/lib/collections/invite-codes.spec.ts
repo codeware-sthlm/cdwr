@@ -159,7 +159,8 @@ describe('consumeInviteCode', () => {
     const { payload, execute } = fakePayload({ doc: await codeDoc() });
     await expect(
       consumeInviteCode(payload, 'ABCD-EFGH-JKMN-PQRT', {
-        transactionID: 'tx1'
+        transactionID: 'tx1',
+        attemptsKey: key()
       })
     ).rejects.toEqual(new InviteCodeRefused('unknown'));
     expect(execute).not.toHaveBeenCalled();
