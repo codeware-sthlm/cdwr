@@ -19,6 +19,7 @@ export default defineCommand({
     environment: environmentInput(),
     path: input.string({
       prompt: 'Which Infisical folder?',
+      short: 'p',
       description: 'The folder to delete, e.g. /tenants/moon'
     })
   },

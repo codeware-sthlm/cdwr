@@ -243,7 +243,7 @@ export async function resolveInputs<I extends Inputs>(
       } else {
         throw new UsageError(
           `Missing --${flag}`,
-          `${spec.prompt} Pass it as a flag, or run without --non-interactive`
+          `${spec.prompt} Pass it as a flag, or add --interactive`
         );
       }
     } else {

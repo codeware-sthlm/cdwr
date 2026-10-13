@@ -56,6 +56,7 @@ export default defineCommand({
       input.string({
         flag: 'worktree',
         prompt: 'Where should the agent worktree live?',
+        short: 'w',
         description:
           'Checkout the queue plans in; defaults to codeware-agent beside this one, remembered once given',
         flagOnly: true
@@ -122,7 +123,7 @@ export default defineCommand({
     if (work.key && (!ctx.ui.interactive || ctx.flags.nonInteractive)) {
       throw new UsageError(
         `The Linear API key is not in the Keychain (service ${KEYCHAIN_SERVICE})`,
-        'Run `cdwr agent install` in a terminal to be asked for it'
+        'Run `cdwr agent install -i` (or with no arguments) in a terminal to be asked for it'
       );
     }
 

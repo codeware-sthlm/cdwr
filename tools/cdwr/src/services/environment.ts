@@ -21,12 +21,13 @@ export const environmentInput = <
   const V extends ReadonlyArray<string> = typeof ENVIRONMENTS
 >(
   values: V = ENVIRONMENTS as unknown as V,
-  overrides: Partial<Parameters<typeof input.enum>[1]> = {}
+  overrides: { description?: string } = {}
 ) =>
   input.enum(values, {
     prompt: 'Which environment?',
     flag: 'env',
     short: 'e',
+    description: 'Environment to act on',
     remember: true,
     hints: HINTS,
     ...overrides
@@ -41,6 +42,7 @@ export const previewAppInput = (): InputSpec<string | undefined> =>
     input.select<string>({
       prompt: 'Which cms app holds the preview database?',
       description: 'Preview cms host app, such as cdwr-cms-pr-123',
+      short: 'p',
       choices: async (ctx) => {
         const apps = await listPreviewCmsApps();
         const mine = await currentPullRequest(ctx.root);

@@ -32,7 +32,7 @@ describe('signature rotate', () => {
     const exit = await runCommand({
       name: 'signature rotate',
       command,
-      argv: ['--env', 'production'],
+      argv: ['--env', 'production', '--interactive'],
       root: '/repo',
       env: {},
       prefs: memoryPrefs(),

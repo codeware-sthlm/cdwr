@@ -12,6 +12,8 @@ export interface Completable {
   summary: string;
   flags: Array<{
     name: string;
+    /** Single-letter alias, without the dash */
+    short?: string;
     description: string;
     values?: ReadonlyArray<string>;
   }>;
@@ -21,6 +23,7 @@ export interface Completable {
 export async function collect(entries: Entry[]): Promise<Completable[]> {
   const globals = Object.entries(GLOBAL_FLAGS).map(([name, spec]) => ({
     name,
+    short: spec.short,
     description: spec.description
   }));
   return Promise.all(
@@ -29,7 +32,8 @@ export async function collect(entries: Entry[]): Promise<Completable[]> {
       const own = Object.entries(command.inputs as Inputs).map(
         ([key, spec]) => ({
           name: flagOf(key, spec),
-          description: spec.description ?? spec.prompt,
+          short: spec.short,
+          description: spec.description,
           values: spec.values
         })
       );
@@ -48,6 +52,12 @@ const subcommands = (own: Completable[]): Completable[] =>
     (c, i) => own.findIndex((other) => other.path[1] === c.path[1]) === i
   );
 
+/** The words a flag completes to: the short form first, then the long */
+const wordsOf = (c: Completable): string =>
+  c.flags
+    .map((f) => (f.short ? `-${f.short} --${f.name}` : `--${f.name}`))
+    .join(' ');
+
 const q = (text: string): string => text.replace(/'/g, "'\\''");
 const zshEscape = (text: string): string =>
   text.replace(/[:\\]/g, '\\$&').replace(/'/g, "'\\''");
@@ -59,11 +69,12 @@ export function zsh(groups: Group[], commands: Completable[]): string {
   );
   const flagsOf = (c: Completable) =>
     c.flags
-      .map((f) =>
-        f.values
-          ? `'--${f.name}[${zshEscape(f.description)}]:value:(${f.values.join(' ')})'`
-          : `'--${f.name}[${zshEscape(f.description)}]'`
-      )
+      .map((f) => {
+        const spec = `[${zshEscape(f.description)}]${f.values ? `:value:(${f.values.join(' ')})` : ''}`;
+        return f.short
+          ? `'(-${f.short} --${f.name})'{-${f.short},--${f.name}}'${spec}'`
+          : `'--${f.name}${spec}'`;
+      })
       .join(' ');
   const lines = [
     '#compdef cdwr',
@@ -140,20 +151,14 @@ export function bash(groups: Group[], commands: Completable[]): string {
     );
   }
   for (const c of commands.filter((c) => c.path.length === 1)) {
-    lines.push(
-      `      ${c.path[0]}) words="${c.flags.map((f) => `--${f.name}`).join(' ')}" ;;`
-    );
+    lines.push(`      ${c.path[0]}) words="${wordsOf(c)}" ;;`);
   }
   lines.push('    esac', '  else', '    case "$first $second" in');
   for (const c of commands.filter((c) => c.path.length > 1)) {
-    lines.push(
-      `      '${c.path.join(' ')}') words="${c.flags.map((f) => `--${f.name}`).join(' ')}" ;;`
-    );
+    lines.push(`      '${c.path.join(' ')}') words="${wordsOf(c)}" ;;`);
   }
   for (const c of commands.filter((c) => c.path.length === 1)) {
-    lines.push(
-      `      '${c.path[0]} '*) words="${c.flags.map((f) => `--${f.name}`).join(' ')}" ;;`
-    );
+    lines.push(`      '${c.path[0]} '*) words="${wordsOf(c)}" ;;`);
   }
   lines.push(
     '    esac',
@@ -195,7 +200,7 @@ export function fish(groups: Group[], commands: Completable[]): string {
     for (const f of c.flags) {
       const values = f.values ? ` -x -a '${f.values.join(' ')}'` : '';
       lines.push(
-        `complete -c cdwr -n '__fish_seen_subcommand_from ${leaf}' -l ${f.name} -d '${q(f.description)}'${values}`
+        `complete -c cdwr -n '__fish_seen_subcommand_from ${leaf}' ${f.short ? `-s ${f.short} ` : ''}-l ${f.name} -d '${q(f.description)}'${values}`
       );
     }
   }

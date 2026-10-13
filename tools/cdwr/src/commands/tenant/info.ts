@@ -83,6 +83,7 @@ export default defineCommand<
     previewApp: previewAppInput(),
     tenant: input.string({
       prompt: 'Which workspace? Leave empty for all of them',
+      short: 't',
       description: 'A slug for one workspace in full; empty for the overview',
       placeholder: 'all',
       optional: true

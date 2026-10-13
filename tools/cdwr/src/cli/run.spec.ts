@@ -10,12 +10,20 @@ import { runCommand } from './run';
 const command = (danger: Danger, applied: string[] = [], planDanger?: Danger) =>
   defineCommand({
     summary: 'Test command',
+    description: 'Test command',
     danger,
     inputs: {
       environment: input.enum(['preview', 'production'], {
-        prompt: 'Which environment?'
+        prompt: 'Which environment?',
+        description: 'Test input',
+        short: 'a'
       }),
-      note: input.string({ prompt: 'Note?', default: '' })
+      note: input.string({
+        prompt: 'Note?',
+        description: 'Test input',
+        short: 'b',
+        default: ''
+      })
     },
     plan: async (_ctx, inputs) => ({
       steps: ['Do the thing'],
@@ -68,34 +76,46 @@ describe('runCommand', () => {
   it('confirms a mutating command wherever it runs', async () => {
     // It prints a plan first, and a plan reads as a question — applying one
     // unasked in development surprised someone into writing a site
-    const preview = run('mutate', ['--environment', 'preview'], [true]);
+    const preview = run('mutate', ['--environment', 'preview', '-i'], [true]);
     expect(await preview.exit).toBe(EXIT.ok);
     expect(preview.ui.asked).toEqual(['Continue?']);
 
-    const production = run('mutate', ['--environment', 'production'], [true]);
+    const production = run(
+      'mutate',
+      ['--environment', 'production', '-i'],
+      [true]
+    );
     expect(await production.exit).toBe(EXIT.ok);
     expect(production.ui.asked).toEqual(['Continue on production?']);
   });
 
   it('applies nothing when a mutating command is declined', async () => {
-    const r = run('mutate', ['--environment', 'preview'], [false]);
+    const r = run('mutate', ['--environment', 'preview', '-i'], [false]);
     expect(await r.exit).toBe(EXIT.cancelled);
     expect(r.applied).toEqual([]);
   });
 
   it('asks for the typed name before a destructive production change', async () => {
-    const wrong = run('destructive', ['--environment', 'production'], ['nope']);
+    const wrong = run(
+      'destructive',
+      ['--environment', 'production', '-i'],
+      ['nope']
+    );
     expect(await wrong.exit).toBe(EXIT.cancelled);
     expect(wrong.applied).toEqual([]);
 
-    const right = run('destructive', ['--environment', 'production'], ['demo']);
+    const right = run(
+      'destructive',
+      ['--environment', 'production', '-i'],
+      ['demo']
+    );
     expect(await right.exit).toBe(EXIT.ok);
     expect(right.ui.asked[0]).toContain('Type');
     expect(right.applied).toEqual(['production']);
   });
 
   it('confirms destructive changes elsewhere with a plain question', async () => {
-    const r = run('destructive', ['--environment', 'preview'], [false]);
+    const r = run('destructive', ['--environment', 'preview', '-i'], [false]);
     expect(await r.exit).toBe(EXIT.cancelled);
     expect(r.ui.asked).toEqual(['This cannot be undone. Continue?']);
   });
@@ -103,7 +123,7 @@ describe('runCommand', () => {
   it('lets a plan raise a mutating command to destructive', async () => {
     const production = run(
       'mutate',
-      ['--environment', 'production'],
+      ['--environment', 'production', '-i'],
       ['demo'],
       true,
       'destructive'
@@ -113,7 +133,7 @@ describe('runCommand', () => {
 
     const preview = run(
       'mutate',
-      ['--environment', 'preview'],
+      ['--environment', 'preview', '-i'],
       [true],
       true,
       'destructive'
@@ -125,7 +145,7 @@ describe('runCommand', () => {
   it('never lets a plan lower the danger its command declares', async () => {
     const r = run(
       'destructive',
-      ['--environment', 'production'],
+      ['--environment', 'production', '-i'],
       ['demo'],
       true,
       'mutate'
@@ -146,10 +166,31 @@ describe('runCommand', () => {
     expect(r.applied).toEqual([]);
   });
 
-  it('never prompts for a confirmation under --non-interactive', async () => {
+  it('never prompts for a confirmation once arguments are given', async () => {
+    const r = run('destructive', ['--environment', 'preview'], [true]);
+    expect(await r.exit).toBe(EXIT.usage);
+    expect(r.ui.asked).toEqual([]);
+  });
+
+  it('still prompts for a missing input with only global flags', async () => {
+    const dry = run('read', ['--dry-run'], ['preview']);
+    expect(await dry.exit).toBe(EXIT.ok);
+    expect(dry.ui.asked).toEqual(['Which environment?']);
+    const verbose = run('read', ['--verbose'], ['preview']);
+    expect(await verbose.exit).toBe(EXIT.ok);
+    expect(verbose.ui.asked).toEqual(['Which environment?']);
+  });
+
+  it('prompts again with --interactive', async () => {
+    const r = run('destructive', ['--environment', 'preview', '-i'], [true]);
+    expect(await r.exit).toBe(EXIT.ok);
+    expect(r.ui.asked).not.toEqual([]);
+  });
+
+  it('never prompts under --json, even with --interactive', async () => {
     const r = run(
       'destructive',
-      ['--environment', 'preview', '--non-interactive'],
+      ['--environment', 'preview', '-i', '-j'],
       [true]
     );
     expect(await r.exit).toBe(EXIT.usage);
@@ -167,7 +208,7 @@ describe('runCommand', () => {
   it('records history for anything that changes something', async () => {
     const r = run(
       'mutate',
-      ['--environment', 'preview', '--note', 'hi'],
+      ['--environment', 'preview', '--note', 'hi', '-i'],
       [true]
     );
     await r.exit;
@@ -216,6 +257,7 @@ describe('runCommand', () => {
       name: 'noop',
       command: defineCommand({
         summary: '',
+        description: 'Test command',
         danger: 'mutate',
         inputs: {},
         plan: async () => ({ steps: [], nothing: 'Already done', data: null }),

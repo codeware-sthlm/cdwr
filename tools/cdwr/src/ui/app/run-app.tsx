@@ -1,11 +1,4 @@
-import { appendFileSync } from 'node:fs';
-
 import { render } from 'ink';
-
-const dbg = (m: string) => appendFileSync('/tmp/cdwr-exit.log', m + '\n');
-process.on('exit', (c) => dbg('process exit ' + c));
-process.on('uncaughtException', (e) => dbg('uncaught ' + String(e)));
-process.on('unhandledRejection', (e) => dbg('unhandled ' + String(e)));
 
 import { unmutedWrite } from '../../cli/muted';
 import type { Entry, Group } from '../../cli/registry';
@@ -19,7 +12,6 @@ export interface LaunchOptions {
   groups: Group[];
   entries: Entry[];
   root: string;
-  initial?: { entry: Entry; argv: string[] };
 }
 
 const ALT_SCREEN_ON = '\u001b[?1049h\u001b[H';
@@ -47,9 +39,7 @@ export async function launchApp(options: LaunchOptions): Promise<number> {
       store={store}
       run={(entry, argv) => bridge.run(entry, argv, options.root)}
       abort={() => bridge.abort()}
-      initial={options.initial}
       onExit={(c) => {
-        dbg('onExit ' + c);
         code = c;
       }}
     />,
@@ -61,12 +51,9 @@ export async function launchApp(options: LaunchOptions): Promise<number> {
       kittyKeyboard: { mode: 'disabled' }
     }
   );
-  dbg('rendered');
   try {
     await instance.waitUntilExit();
-    dbg('after waitUntilExit');
   } finally {
-    dbg('finally');
     bridge.abort();
     process.stdout.write(ALT_SCREEN_OFF);
     // Ink leaves stdin flowing, which keeps the process alive after the app is gone

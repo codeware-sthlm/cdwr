@@ -12,6 +12,7 @@ export default defineCommand({
   inputs: {
     limit: input.number({
       prompt: 'How many entries?',
+      short: 'l',
       description: 'Newest entries to show',
       default: 20
     })

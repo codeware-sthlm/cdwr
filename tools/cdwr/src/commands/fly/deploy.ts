@@ -43,11 +43,12 @@ export default defineCommand({
         ).map((value) => ({ value }))
     }),
     environment: environmentInput(DEPLOYED, {
-      description: 'preview needs a pull request'
+      description: 'Where to deploy; preview needs a pull request'
     }),
     pr: input.optional(
       input.number({
         prompt: 'Which pull request?',
+        short: 'p',
         description:
           'Preview only; defaults to the pull request of the current branch',
         flagOnly: true
@@ -57,6 +58,7 @@ export default defineCommand({
     ),
     tenant: input.string({
       prompt: 'Which tenant?',
+      short: 't',
       description: 'Only that tenant; every tenant of the app by default',
       flagOnly: true,
       default: ''

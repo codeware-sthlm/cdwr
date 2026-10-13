@@ -173,6 +173,7 @@ export default defineCommand({
     previewApp: previewAppInput(),
     workspace: input.select<string>({
       prompt: 'Which workspace?',
+      short: 'w',
       description: 'Deployment name of the workspace to provision',
       // The plan reads the same rows again; loading them here only to check a flag would double the tunnel
       trustFlag: true,
@@ -199,6 +200,8 @@ export default defineCommand({
     }),
     apps: input.multiselect<AppKind>({
       prompt: 'Which apps?',
+      description: 'Apps to provision for the workspace',
+      short: 'a',
       initial: ['cms'],
       min: 1,
       choices: () => TENANT_APPS.map((app) => ({ value: app }))

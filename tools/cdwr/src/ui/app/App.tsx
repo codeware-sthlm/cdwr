@@ -31,8 +31,6 @@ export interface AppProps {
   store: RunStore;
   /** Runs a command through the runtime with the app UI; resolves to its exit code */
   run: (entry: Entry, argv: string[]) => Promise<number>;
-  /** Open straight on a command, as `cdwr db backup` does */
-  initial?: { entry: Entry; argv: string[] };
   /** Stop a running command and whatever it spawned */
   abort?: () => void;
   onExit: (code: number) => void;
@@ -98,22 +96,19 @@ export function App({
   entries,
   store,
   run,
-  initial,
   abort,
   onExit
 }: AppProps) {
   const { exit } = useApp();
   const { columns, rows: height } = useSize();
   const runState = useSyncExternalStore(store.subscribe, store.snapshot);
-  const [screen, setScreen] = useState<'home' | 'run'>(
-    initial ? 'run' : 'home'
-  );
+  const [screen, setScreen] = useState<'home' | 'run'>('home');
   const [filter, setFilter] = useState('');
   const [filtering, setFiltering] = useState(false);
   const [help, setHelp] = useState(false);
   const [cursor, setCursor] = useState(0);
   const [lastCode, setLastCode] = useState(0);
-  const [current, setCurrent] = useState<Entry | undefined>(initial?.entry);
+  const [current, setCurrent] = useState<Entry | undefined>();
 
   const rows = useMemo(
     () => buildRows(groups, entries, filter),
@@ -156,11 +151,6 @@ export function App({
     },
     [run, store]
   );
-
-  useEffect(() => {
-    if (initial) start(initial.entry, initial.argv);
-    // Only on mount: the initial command opens once
-  }, []);
 
   const move = (delta: number) => {
     if (!commandIndexes.length) return;
@@ -213,8 +203,6 @@ export function App({
     (input, key) => {
       if (!runState?.result) return;
       if (isEnter(input, key) || key.escape || input === 'h' || key.leftArrow) {
-        if (initial && current === initial.entry && !filter)
-          return leave(lastCode);
         store.clear();
         setScreen('home');
       } else if (input === 'q') leave(lastCode);

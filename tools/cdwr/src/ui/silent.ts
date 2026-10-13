@@ -5,7 +5,7 @@ import type { Ui } from './ui';
 const noPrompt = (what: string) => async () => {
   throw new UsageError(
     `Cannot ask "${what}" without a terminal`,
-    'Pass the value as a flag, or drop --json / --non-interactive'
+    'Pass the value as a flag, or drop --json'
   );
 };
 

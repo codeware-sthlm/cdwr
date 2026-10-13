@@ -72,6 +72,7 @@ export default defineCommand({
   inputs: {
     days: input.number({
       prompt: 'How many days?',
+      short: 'D',
       description: 'Days back from now to include',
       default: 30
     })

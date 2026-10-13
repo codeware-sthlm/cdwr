@@ -54,6 +54,7 @@ async function press(stdin: { write: (data: string) => void }, key: string) {
 
 const command = defineCommand({
   summary: 'Say hello',
+  description: 'Test command',
   danger: 'read',
   inputs: {},
   plan: async () => ({ steps: [], data: null }),
@@ -85,7 +86,7 @@ const entries: Entry[] = [
   }
 ];
 
-const mount = (initial?: { entry: Entry; argv: string[] }) => {
+const mount = () => {
   const store = new RunStore();
   const ui = createAppUi(store);
   const ran: string[] = [];
@@ -96,7 +97,6 @@ const mount = (initial?: { entry: Entry; argv: string[] }) => {
       groups={groups}
       entries={entries}
       store={store}
-      initial={initial}
       run={async (entry) => {
         ran.push(entry.path.join(' '));
         ui.intro(`cdwr ${entry.path.join(' ')}`);
@@ -166,16 +166,4 @@ describe('App', () => {
     await waitFor(() => exits.length > 0);
     expect(exits).toEqual([0]);
   }, 90000);
-
-  it('opens on the initial command and leaves when it is dismissed', async () => {
-    const { stdin, lastFrame, exits, ran } = mount({
-      entry: entries[2] as Entry,
-      argv: []
-    });
-    await waitFor(() => (lastFrame() ?? '').includes('Done'));
-    expect(ran).toEqual(['doctor']);
-    await press(stdin, ENTER);
-    await waitFor(() => exits.length > 0);
-    expect(exits).toEqual([0]);
-  }, 25000);
 });

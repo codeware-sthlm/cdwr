@@ -11,10 +11,11 @@ const commands: Completable[] = [
     flags: [
       {
         name: 'env',
+        short: 'e',
         description: 'Which environment?',
         values: ['preview', 'production']
       },
-      { name: 'yes', description: 'Skip confirmations' }
+      { name: 'yes', short: 'y', description: 'Skip confirmations' }
     ]
   },
   {
@@ -30,7 +31,7 @@ describe('completion scripts', () => {
     expect(script).toContain("'db:CMS database\\: it'\\''s here'");
     expect(script).toContain("'backup:Back up'");
     expect(script).toContain(
-      "'db backup') _arguments '--env[Which environment?]:value:(preview production)' '--yes[Skip confirmations]'"
+      "'db backup') _arguments '(-e --env)'{-e,--env}'[Which environment?]:value:(preview production)' '(-y --yes)'{-y,--yes}'[Skip confirmations]'"
     );
     expect(script).toContain("doctor) _arguments '--json[Machine output]'");
     expect(script.endsWith('compdef _cdwr cdwr\n')).toBe(true);
@@ -40,7 +41,7 @@ describe('completion scripts', () => {
     const script = bash(groups, commands);
     expect(script).toContain('words="db doctor"');
     expect(script).toContain('db) words="backup"');
-    expect(script).toContain(`'db backup') words="--env --yes"`);
+    expect(script).toContain(`'db backup') words="-e --env -y --yes"`);
     expect(script).toContain('complete -F _cdwr cdwr');
   });
 
@@ -53,7 +54,7 @@ describe('completion scripts', () => {
       "-n '__fish_seen_subcommand_from db; and not __fish_seen_subcommand_from backup' -a backup"
     );
     expect(script).toContain(
-      "-n '__fish_seen_subcommand_from backup' -l env -d 'Which environment?' -x -a 'preview production'"
+      "-n '__fish_seen_subcommand_from backup' -s e -l env -d 'Which environment?' -x -a 'preview production'"
     );
   });
 });
@@ -68,13 +69,20 @@ describe('collect', () => {
         load: async () =>
           defineCommand({
             summary: 'X',
+            description: 'Test command',
             danger: 'read',
             inputs: {
               environment: input.enum(['a', 'b'], {
                 prompt: 'Env?',
+                description: 'Test input',
+                short: 'a',
                 flag: 'env'
               }),
-              dryThing: input.boolean({ prompt: 'Dry?' })
+              dryThing: input.boolean({
+                prompt: 'Dry?',
+                description: 'Test input',
+                short: 'b'
+              })
             },
             plan: async () => ({ steps: [], data: null }),
             apply: async () => ({ summary: '' })
@@ -88,10 +96,20 @@ describe('collect', () => {
       'yes',
       'dry-run',
       'json',
-      'non-interactive',
+      'interactive',
       'verbose',
       'help'
     ]);
     expect(x?.flags[0]?.values).toEqual(['a', 'b']);
+    expect(x?.flags.map((f) => f.short)).toEqual([
+      'a',
+      'b',
+      'y',
+      'd',
+      'j',
+      'i',
+      'v',
+      'h'
+    ]);
   });
 });

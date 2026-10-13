@@ -58,12 +58,14 @@ export default defineCommand({
   inputs: {
     action: input.enum(['open', 'close'] as const, {
       prompt: 'Open or close the site?',
+      description: 'Open or close the site',
       positional: true
     }),
     environment: environmentInput(DEPLOYED),
     pullRequest: input.optional(
       input.select<string>({
         prompt: 'Which pull request?',
+        short: 'p',
         description: 'Preview only; picks which deployment to gate',
         choices: async (ctx) => {
           const apps = await listPreviewCmsApps();
@@ -76,6 +78,8 @@ export default defineCommand({
     ),
     tenant: input.select<string>({
       prompt: 'Which tenant?',
+      description: 'Tenant whose site to gate',
+      short: 't',
       choices: async (ctx, resolved) => {
         const environment = resolved['environment'] as Environment;
         const deployments = await readTenantDeployments(environment);
@@ -87,11 +91,15 @@ export default defineCommand({
     }),
     generate: input.boolean({
       prompt: 'Generate a password?',
+      description: 'Generate a password for visitors',
+      short: 'g',
       when: (r) => r['action'] === 'close'
     }),
     password: input.optional(
       input.secret({
         prompt: 'Password visitors will be given:',
+        description: 'Password visitors will be given',
+        short: 'P',
         schema: z
           .string()
           .min(

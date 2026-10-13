@@ -43,11 +43,14 @@ export default defineCommand({
   inputs: {
     dir: input.string({
       prompt: 'Where should the cdwr command live?',
+      short: 'D',
       description: 'A directory on PATH',
       default: '~/.local/bin'
     }),
     shell: input.enum(SHELLS, {
       prompt: 'Which shell?',
+      description: 'Shell to add completion for',
+      short: 's',
       default: () => shellOf(process.env['SHELL'])
     })
   },

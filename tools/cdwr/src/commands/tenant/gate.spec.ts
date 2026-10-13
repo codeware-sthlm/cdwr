@@ -41,7 +41,7 @@ describe('tenant gate', () => {
     const exit = await runCommand({
       name: 'tenant gate',
       command,
-      argv: ['close', '--env', 'production'],
+      argv: ['close', '--env', 'production', '--interactive'],
       root: '/repo',
       env: {},
       prefs: memoryPrefs(),

@@ -51,7 +51,7 @@ async function run(
   const exit = await runCommand({
     name: 'builder rotate-token',
     command,
-    argv: ['--env', 'production', ...argv],
+    argv: ['--env', 'production', '--interactive', ...argv],
     root: '/repo',
     env: {},
     prefs: memoryPrefs(),

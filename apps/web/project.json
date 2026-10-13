@@ -84,7 +84,7 @@
       },
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm cdwr infisical cache --path=/apps/web --yes --non-interactive"
+        "command": "pnpm cdwr infisical cache --path=/apps/web --yes"
       }
     }
   }
