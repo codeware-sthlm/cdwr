@@ -18,7 +18,7 @@ export const GLOBAL_FLAGS = {
   interactive: {
     type: 'boolean',
     short: 'i',
-    description: 'Ask for what is missing, even with arguments given'
+    description: 'Ask for what is missing, even with inputs given'
   },
   verbose: { type: 'boolean', short: 'v', description: 'Show more' },
   help: { type: 'boolean', short: 'h', description: 'Show help' }
