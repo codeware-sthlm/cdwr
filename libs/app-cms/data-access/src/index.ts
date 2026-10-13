@@ -19,6 +19,12 @@ export type {
 } from './lib/collections/types';
 
 export { countDocs } from './lib/collections/count-docs';
+export {
+  type InviteCodeVerdict,
+  InviteCodeRefused,
+  checkInviteCode,
+  consumeInviteCode
+} from './lib/collections/invite-codes';
 export { countUnreadSubmissions } from './lib/collections/count-unread-submissions';
 export { getCollectionCounts } from './lib/collections/get-collection-counts';
 export { getCountableSlugs } from './lib/collections/get-countable-slugs';
