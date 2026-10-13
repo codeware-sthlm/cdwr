@@ -30,6 +30,13 @@ describe('run.sh', () => {
     expect(SCRIPT).toMatch(/^ENABLE_TOOL_SEARCH=false claude -p /m);
   });
 
+  // A dark wake has no network; that is not a Linear failure worth a record
+  it('skips offline before the first Linear call', () => {
+    const offline = SCRIPT.indexOf('if offline; then');
+    expect(offline).toBeGreaterThan(0);
+    expect(offline).toBeLessThan(SCRIPT.search(/\$\(linear "/));
+  });
+
   it('fails a clean run that planned nothing', () => {
     expect(SCRIPT).toMatch(/note "fail: planned nothing/);
   });
