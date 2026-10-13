@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import {
+  CACHE_HEADER,
   CLIENT_IP_HEADER,
   MAX_BODY_BYTES,
   proxyStats,
@@ -61,6 +62,30 @@ describe('proxyStats', () => {
       'user-agent': 'Firefox',
       [CLIENT_IP_HEADER]: '203.0.113.7'
     });
+  });
+
+  it('passes the tracker session token on, but not an oversized one', async () => {
+    const forwarded = upstream();
+    await proxyStats({
+      request: send('{}', { [CACHE_HEADER]: 'eyJ.token' }),
+      path: ['api', 'send'],
+      umamiUrl: UMAMI,
+      fetchImpl: forwarded
+    });
+    expect(forwarded.mock.calls[0]?.[1]?.headers).toMatchObject({
+      [CACHE_HEADER]: 'eyJ.token'
+    });
+
+    const dropped = upstream();
+    await proxyStats({
+      request: send('{}', { [CACHE_HEADER]: 'x'.repeat(4096) }),
+      path: ['api', 'send'],
+      umamiUrl: UMAMI,
+      fetchImpl: dropped
+    });
+    expect(dropped.mock.calls[0]?.[1]?.headers).not.toHaveProperty(
+      CACHE_HEADER
+    );
   });
 
   it.each([

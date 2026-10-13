@@ -12,6 +12,10 @@ const TARGETS = {
 /** A page view or event is a few hundred bytes; anything near this is not one */
 export const MAX_BODY_BYTES = 16 * 1024;
 
+/** The tracker's session token, sent back on every beacon after the first */
+export const CACHE_HEADER = 'x-umami-cache';
+const MAX_CACHE_LENGTH = 2048;
+
 /** The header Umami reads the visitor's address from (its `CLIENT_IP_HEADER`) */
 export const CLIENT_IP_HEADER = 'x-cdwr-client-ip';
 
@@ -106,12 +110,17 @@ export async function proxyStats(options: {
     }
 
     const ip = clientIp(request.headers);
+    // The tracker returns the token from its first beacon on the next ones,
+    // which keeps one visit together; a token is a short JWT, never kilobytes
+    const cache = request.headers.get(CACHE_HEADER);
+    const cacheOk = cache !== null && cache.length <= MAX_CACHE_LENGTH;
     const upstream = await fetchImpl(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         'user-agent': request.headers.get('user-agent') ?? '',
-        ...(ip ? { [CLIENT_IP_HEADER]: ip } : {})
+        ...(ip ? { [CLIENT_IP_HEADER]: ip } : {}),
+        ...(cache && cacheOk ? { [CACHE_HEADER]: cache } : {})
       },
       body
     });
