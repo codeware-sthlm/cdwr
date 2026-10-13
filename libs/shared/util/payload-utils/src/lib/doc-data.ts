@@ -21,6 +21,7 @@ const renderable = {
   'custom-themes': false,
   'form-submissions': false,
   forms: false,
+  'invite-codes': false,
   media: false,
   navigation: false,
   pages: true,

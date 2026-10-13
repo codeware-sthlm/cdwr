@@ -4,6 +4,7 @@ import categories from './categories/categories.collection';
 import customComponents from './custom-components/custom-components.collection';
 import customThemes from './custom-themes/custom-themes.collection';
 import faq from './faq/faq.collection';
+import inviteCodes from './invite-codes/invite-codes.collection';
 import media from './media/media.collection';
 import navigation from './navigation/navigation.collection';
 import pages from './pages/pages.collection';
@@ -32,6 +33,7 @@ export const collections: Array<CollectionConfig> = [
   customComponents,
   customThemes,
   faq,
+  inviteCodes,
   media,
   navigation,
   pages,
