@@ -1,9 +1,24 @@
 import { systemUserAccess } from '@codeware/app-cms/util/access';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
+import { customT } from '@codeware/app-cms/util/i18n';
 import { hasRole } from '@codeware/app-cms/util/misc';
-import type { CollectionConfig } from 'payload';
+import type {
+  CollectionConfig,
+  NumberFieldSingleValidation,
+  TextFieldSingleValidation
+} from 'payload';
 
 import { protectInviteCode } from './hooks/protect-invite-code.hook';
+
+/** Set by the hook, so a required check before it would always fail */
+const setByHook: TextFieldSingleValidation = () => true;
+
+/** A fraction would let the conditional consume admit one use too many */
+const wholeNumber: NumberFieldSingleValidation = (value, { req }) =>
+  value === null ||
+  value === undefined ||
+  (Number.isInteger(value) && value >= 1) ||
+  customT(req.t)('validation:inviteCodeWholeNumber');
 
 /** Only an existing document has an id, so only it can be edited */
 const isNew = (data: { id?: unknown }) => !data.id;
@@ -74,8 +89,7 @@ const inviteCodes: CollectionConfig<'invite-codes'> = {
       unique: true,
       index: true,
       label: { en: 'Lookup', sv: 'Uppslag' },
-      // Set by the hook, so a required check before it would always fail
-      validate: () => true,
+      validate: setByHook,
       admin: {
         readOnly: true,
         condition: (data) => !isNew(data),
@@ -89,7 +103,7 @@ const inviteCodes: CollectionConfig<'invite-codes'> = {
       name: 'codeHash',
       type: 'text',
       required: true,
-      validate: () => true,
+      validate: setByHook,
       // Never leaves the server, not even to a system user
       access: { read: () => false },
       admin: { hidden: true }
@@ -100,6 +114,7 @@ const inviteCodes: CollectionConfig<'invite-codes'> = {
       required: true,
       defaultValue: 1,
       min: 1,
+      validate: wholeNumber,
       label: { en: 'Max uses', sv: 'Högsta antal användningar' },
       admin: {
         description: {
