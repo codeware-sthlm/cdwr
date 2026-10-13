@@ -249,7 +249,9 @@ cdwr tenant gate close --dry-run  # the plan, nothing applied
 
 `tools/cdwr` holds it; see [tools/cdwr/README.md](tools/cdwr/README.md) for the command
 contract. Every command takes `-d/--dry-run`, `-y/--yes`, `-j/--json` and `-i/--interactive`. Only a bare
-`cdwr` opens the app; with arguments a command never prompts unless `-i` asks it to. Danger
+`cdwr` opens the app. A command prompts for what is missing until one of its own inputs is given;
+global flags such as `-d` or `-v` don't count. Once an input is given it never prompts unless `-i`
+asks it to. Danger
 levels decide confirmations: destructive commands make you type the target's name on
 production. Credentials go in `tools/cdwr/.env`; `cdwr doctor` says what is missing.
 

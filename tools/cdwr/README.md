@@ -38,6 +38,7 @@ drawn and nothing is asked.
 | `-y`, `--yes`         | Skip confirmations.                                     |
 | `-j`, `--json`        | One JSON document on stdout, no prompts, no spinners.   |
 | `-i`, `--interactive` | Ask for what is missing, even with inputs given.        |
+| `-v`, `--verbose`     | Show more, such as the full error behind a failure.     |
 | `-h`, `--help`        | Flags, what the command needs, and how dangerous it is. |
 
 Every flag has a short alias, shown in `--help` next to the long form.
