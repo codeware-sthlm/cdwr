@@ -34,6 +34,7 @@ import {
   MEMBER_LOGOUT_SUBMIT_PATH
 } from '../../utils/member-login';
 import { siteOrigin } from '../../utils/page-metadata';
+import { statsScript } from '../../utils/stats-proxy';
 
 import { Providers } from './providers';
 
@@ -78,6 +79,13 @@ export default async function RootLayout({
 
   // Set by the proxy for the inline theme script
   const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
+
+  // Cookieless statistics, first-party through /stats; off without both settings
+  const stats = statsScript({
+    umamiUrl: env.UMAMI_URL,
+    websiteId: runtime.tenantConfig?.tenant.statsWebsiteId,
+    nonce
+  });
 
   // Theme is resolved server-side so the first paint is already correct.
   // A tenant without theme settings falls back to what sites rendered before
@@ -143,6 +151,7 @@ export default async function RootLayout({
         */}
         {fontFaces && <style>{fontFaces}</style>}
         {customCss && <style>{customCss}</style>}
+        {stats && <script defer {...stats} />}
       </head>
       <body>
         <Providers
