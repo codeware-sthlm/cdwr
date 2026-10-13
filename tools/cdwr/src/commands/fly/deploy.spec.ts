@@ -59,13 +59,7 @@ describe('fly deploy', () => {
   });
 
   it('needs a pull request for preview', async () => {
-    const { exit } = await runDeploy([
-      'builder',
-      '--env',
-      'preview',
-      '--yes',
-      '--non-interactive'
-    ]);
+    const { exit } = await runDeploy(['builder', '--env', 'preview', '--yes']);
     expect(exit).toBe(EXIT.usage);
     expect(runWorkflow).not.toHaveBeenCalled();
   });
@@ -77,8 +71,7 @@ describe('fly deploy', () => {
       'production',
       '--pr',
       '5',
-      '--yes',
-      '--non-interactive'
+      '--yes'
     ]);
     expect(exit).toBe(EXIT.usage);
     expect(runWorkflow).not.toHaveBeenCalled();
@@ -115,13 +108,7 @@ describe('fly deploy', () => {
 
   it('defaults to the pull request of the current branch', async () => {
     currentPullRequest.mockResolvedValue(42);
-    const { exit } = await runDeploy([
-      'builder',
-      '--env',
-      'preview',
-      '--yes',
-      '--non-interactive'
-    ]);
+    const { exit } = await runDeploy(['builder', '--env', 'preview', '--yes']);
     expect(exit).toBe(EXIT.ok);
     expect(runWorkflow).toHaveBeenCalledWith(
       root,
@@ -132,13 +119,7 @@ describe('fly deploy', () => {
   });
 
   it('runs production from main', async () => {
-    await runDeploy([
-      'web',
-      '--env',
-      'production',
-      '--yes',
-      '--non-interactive'
-    ]);
+    await runDeploy(['web', '--env', 'production', '--yes']);
     expect(runWorkflow).toHaveBeenCalledWith(
       root,
       'fly-deployment.yml',
@@ -154,8 +135,7 @@ describe('fly deploy', () => {
       'preview',
       '--pr',
       '566',
-      '--dry-run',
-      '--non-interactive'
+      '--dry-run'
     ]);
     expect(exit).toBe(EXIT.ok);
     expect(runWorkflow).not.toHaveBeenCalled();

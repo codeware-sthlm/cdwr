@@ -1,5 +1,6 @@
 import { EXIT, messageOf } from './cli/errors';
 import { renderGroupHelp, renderTopHelp } from './cli/help';
+import { opensApp } from './cli/mode';
 import { loadPrefs } from './cli/prefs';
 import { type Entry, lookup, nameOf, suggest } from './cli/registry';
 import { fail, runCommand } from './cli/run';
@@ -10,9 +11,6 @@ import { theme } from './ui/theme';
 import type { Ui } from './ui/ui';
 
 const out = (text: string) => process.stdout.write(`${text}\n`);
-
-/** Flags that mean "no prompts" or "text only", so the app stays out of the way */
-const PLAIN_FLAGS = ['--json', '--non-interactive', '--help', '-h'];
 
 const unknown = (word: string, near: string[]): number => {
   const hint = near.length
@@ -25,7 +23,7 @@ const unknown = (word: string, near: string[]): number => {
 async function main(argv: string[]): Promise<number> {
   const workspace = loadWorkspace();
   const tty = Boolean(process.stdout.isTTY && process.stdin.isTTY);
-  const useApp = tty && !argv.some((a) => PLAIN_FLAGS.includes(a));
+  const useApp = opensApp(argv, tty);
 
   if (argv[0] === '--version' || argv[0] === '-V') {
     out(workspace.version);
@@ -35,13 +33,12 @@ async function main(argv: string[]): Promise<number> {
   const found = lookup(argv, GROUPS, ENTRIES);
   const wantsHelp = argv.includes('--help') || argv.includes('-h');
 
-  const runInApp = (initial?: { entry: Entry; argv: string[] }) =>
+  const runInApp = () =>
     launchApp({
       version: workspace.version,
       groups: GROUPS,
       entries: ENTRIES,
-      root: workspace.root,
-      initial
+      root: workspace.root
     });
 
   if (found.kind === 'none') {
@@ -64,7 +61,6 @@ async function main(argv: string[]): Promise<number> {
     return wantsHelp ? EXIT.ok : EXIT.usage;
   }
 
-  if (useApp) return runInApp({ entry: found.entry, argv: found.rest });
   return runEntry(found.entry, found.rest, workspace.root, tty);
 }
 

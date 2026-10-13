@@ -22,25 +22,29 @@ Credentials live in `tools/cdwr/.env` (copy `.env.example`). `pnpm cdwr` works w
 
 ## The app
 
-On a terminal, `cdwr` opens a full-screen app: commands on the left, the selected command's card on
-the right, and the run itself in the same pane: prompts, plan, log, result. `cdwr db backup` opens
-the app straight on that command. Keys: `↑↓` move, `⏎` run, `d` dry run, `/` filter, `?` keys,
-`esc` back, `q` quit. Without a terminal, or with `--json` or `--non-interactive`, nothing is drawn
-and nothing is asked.
+A bare `cdwr` on a terminal opens a full-screen app: commands on the left, the selected command's
+card on the right, and the run itself in the same pane: prompts, plan, log, result. Keys: `↑↓` move,
+`⏎` run, `d` dry run, `/` filter, `?` keys, `esc` back, `q` quit. Only a bare `cdwr` opens it.
+A command path alone, such as `cdwr db backup`, prompts in the terminal for what it needs, and so
+does one with only global flags (`-d`, `-y`, `-v`); once an input is given it never prompts unless
+`-i` is given. Without a terminal, or with `--json`, nothing is
+drawn and nothing is asked.
 
 ## Every command
 
-| Flag                | Effect                                                          |
-| ------------------- | --------------------------------------------------------------- |
-| `--dry-run`         | Print the plan and stop. Safe on any command.                   |
-| `--yes`             | Skip confirmations.                                             |
-| `--json`            | One JSON document on stdout, no prompts, no spinners.           |
-| `--non-interactive` | Never prompt; a missing input is a usage error naming the flag. |
-| `--help`            | Flags, what the command needs, and how dangerous it is.         |
+| Flag                  | Effect                                                  |
+| --------------------- | ------------------------------------------------------- |
+| `-d`, `--dry-run`     | Print the plan and stop. Safe on any command.           |
+| `-y`, `--yes`         | Skip confirmations.                                     |
+| `-j`, `--json`        | One JSON document on stdout, no prompts, no spinners.   |
+| `-i`, `--interactive` | Ask for what is missing, even with inputs given.        |
+| `-h`, `--help`        | Flags, what the command needs, and how dangerous it is. |
+
+Every flag has a short alias, shown in `--help` next to the long form.
 
 Flags come first; anything missing is asked for. An input is required unless it is optional or
 declares a default, and an empty answer to a required prompt is refused rather than passed along. Without a terminal (CI, an agent) nothing is
-asked. Exit codes: 0 ok, 1 failed, 2 usage, 130 cancelled.
+asked, and a missing input is a usage error naming the flag. Exit codes: 0 ok, 1 failed, 2 usage, 130 cancelled.
 
 Confirmation follows the command's danger level: read-only commands never ask, everything else
 asks wherever it runs, and destructive ones also make you type the target's name on production.
@@ -173,7 +177,8 @@ export default defineCommand({
 });
 ```
 
-The runtime parses flags, prompts for the rest, prints the plan, confirms, runs `apply`, prints
+The runtime parses flags and runs with what it was given; a command path alone (or with only global
+flags) prompts for the rest, as does `-i`. It then prints the plan, confirms, runs `apply`, prints
 the outro, writes `--json` and records history. Commands never call `process.exit`, `console`,
 `dotenv` or clack directly. `src/commands/db/backup.ts` and `src/commands/fly/restart.ts` are the
 templates; `src/services/` holds the shared I/O (Fly, Infisical, database tunnels, backups, shell,

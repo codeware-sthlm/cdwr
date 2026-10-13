@@ -51,7 +51,7 @@ export interface Result {
 
 export interface CommandDef<I extends Inputs, D> {
   summary: string;
-  description?: string;
+  description: string;
   danger: Danger;
   confirm?: Confirm;
   needs?: Need[];

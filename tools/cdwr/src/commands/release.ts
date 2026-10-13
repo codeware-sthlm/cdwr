@@ -72,17 +72,23 @@ export default defineCommand({
   inputs: {
     mode: input.enum(['release', 'publish'], {
       prompt: 'What parts of the release process do you want to run?',
+      description: 'Run the whole release process or only the publish step',
+      short: 'm',
       initial: 'release',
       hints: MODE_HINTS
     }),
     postponePublish: input.boolean({
       prompt: 'Let GitHub Actions publish to npm?',
+      description: 'Leave publishing to GitHub Actions',
+      short: 'p',
       initial: true,
       default: (r) => (r['mode'] === 'publish' ? false : undefined)
     }),
     otp: input.optional(
       input.secret({
         prompt: 'NPM OTP code from your 2FA app',
+        description: 'One-time code from your npm 2FA app',
+        short: 'o',
         schema: z.string().regex(/^\d{6}$/, 'OTP code must be a 6-digit number')
       }),
       (r) => r['mode'] === 'publish' || r['postponePublish'] === false,

@@ -242,13 +242,14 @@ nx seed cms
 ```sh
 pnpm cdwr                         # the app; `cdwr` after `pnpm cdwr setup`
 cdwr <group> <command> --help     # db, fly, tenant, infisical, signature, media, agent, release
-cdwr db backup --env production   # flags first, prompts for the rest
+cdwr db backup -i --env production   # flags first, -i asks for the rest
 cdwr fly info --json              # machine output, never prompts
 cdwr tenant gate close --dry-run  # the plan, nothing applied
 ```
 
 `tools/cdwr` holds it; see [tools/cdwr/README.md](tools/cdwr/README.md) for the command
-contract. Every command takes `--dry-run`, `--yes`, `--json` and `--non-interactive`. Danger
+contract. Every command takes `-d/--dry-run`, `-y/--yes`, `-j/--json` and `-i/--interactive`. Only a bare
+`cdwr` opens the app; with arguments a command never prompts unless `-i` asks it to. Danger
 levels decide confirmations: destructive commands make you type the target's name on
 production. Credentials go in `tools/cdwr/.env`; `cdwr doctor` says what is missing.
 

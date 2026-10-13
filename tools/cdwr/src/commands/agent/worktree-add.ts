@@ -55,6 +55,7 @@ export default defineCommand({
     }),
     branch: input.string({
       prompt: 'Which branch?',
+      short: 'b',
       description: "The ticket's git branch name"
     })
   },

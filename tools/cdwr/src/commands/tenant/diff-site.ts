@@ -46,6 +46,7 @@ export default defineCommand<
     previewApp: previewAppInput(),
     tenant: input.string({
       prompt: 'Which tenant?',
+      short: 't',
       description: 'The workspace to compare. It must already exist'
     }),
     definition: definitionInput('Compare it against which definition?')

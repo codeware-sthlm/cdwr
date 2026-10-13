@@ -32,15 +32,21 @@ export default defineCommand({
   inputs: {
     cluster: input.string({
       prompt: 'Which Postgres cluster?',
+      description: 'Fly Postgres cluster holding the databases',
+      short: 'c',
       default: 'pg-preview',
       remember: true
     }),
     password: input.secret({
       prompt: 'Password for the cluster?',
+      description: 'Password of the cluster database user',
+      short: 'p',
       schema: z.string().min(8, 'Password seems too short')
     }),
     databases: input.multiselect<string>({
       prompt: 'Which databases to drop?',
+      description: 'Databases to drop',
+      short: 'D',
       min: 1,
       choices: async (_ctx, resolved) => {
         const cluster = resolved['cluster'] as string;

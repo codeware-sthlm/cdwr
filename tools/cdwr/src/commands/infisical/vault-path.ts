@@ -6,5 +6,6 @@ export const vaultPathInput = () =>
     prompt: 'Which Infisical path?',
     description: 'The app folder, sub-folders included, e.g. /apps/cms',
     default: '/apps/cms',
+    short: 'p',
     remember: true
   });

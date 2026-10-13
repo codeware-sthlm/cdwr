@@ -62,7 +62,8 @@ describe('db restore', () => {
         '--mode',
         'full',
         '--env',
-        'production'
+        'production',
+        '--interactive'
       ],
       root: '/repo',
       env: {},

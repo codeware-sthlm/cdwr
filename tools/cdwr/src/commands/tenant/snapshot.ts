@@ -120,12 +120,14 @@ export default defineCommand<
   inputs: {
     url: input.string({
       prompt: 'Which site?',
+      short: 'u',
       description: 'Where the site is served',
       default: 'http://localhost:3000'
     }),
     // Before the definition, which is only needed when this is not given
     routes: input.string({
       prompt: 'Which routes?',
+      short: 'r',
       description: "Comma-separated paths instead of a definition's pages",
       optional: true,
       flagOnly: true
@@ -137,6 +139,7 @@ export default defineCommand<
     ),
     themes: input.multiselect<SnapshotTheme>({
       prompt: 'In which themes?',
+      short: 'T',
       description:
         "Only the ones the site offers are drawn; 'default' is what a first visit shows",
       choices: () =>
@@ -150,12 +153,16 @@ export default defineCommand<
     colorSchemes: input.multiselect<ColorScheme>({
       flag: 'schemes',
       prompt: 'In which colour schemes?',
+      description: 'Colour schemes to draw',
+      short: 's',
       choices: () => COLOR_SCHEMES.map((value) => ({ value })),
       default: [...COLOR_SCHEMES],
       min: 1
     }),
     viewports: input.multiselect<ViewportName>({
       prompt: 'On which screens?',
+      description: 'Screen sizes to draw',
+      short: 'V',
       choices: () =>
         VIEWPORT_NAMES.map((value) => ({
           value,

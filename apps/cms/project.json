@@ -132,7 +132,7 @@
       },
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm cdwr infisical cache --path=/apps/cms --yes --non-interactive"
+        "command": "pnpm cdwr infisical cache --path=/apps/cms --yes"
       }
     }
   }

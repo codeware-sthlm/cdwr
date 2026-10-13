@@ -16,7 +16,12 @@ export default defineCommand({
   danger: 'read',
   needs: ['infisical'],
   inputs: {
-    reveal: input.boolean({ prompt: 'Show secret values', flagOnly: true })
+    reveal: input.boolean({
+      prompt: 'Show secret values',
+      description: 'Print secret values instead of hiding them',
+      short: 'r',
+      flagOnly: true
+    })
   },
 
   async plan(ctx) {

@@ -98,6 +98,7 @@ export default defineCommand<
     previewApp: previewAppInput(),
     tenant: input.string({
       prompt: 'Which tenant slug?',
+      short: 't',
       description: 'The workspace to fill. It must already exist'
     }),
     definition: definitionInput('Which definition should fill it?'),
@@ -105,6 +106,7 @@ export default defineCommand<
     fresh: input.boolean({
       prompt:
         'Start fresh? Removes what this definition created, then applies it again',
+      short: 'f',
       description:
         'Remove what this definition created first, so the site matches it — including edits made to those documents in the admin',
       default: (resolved) =>

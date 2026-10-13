@@ -6,12 +6,32 @@ import { input } from './inputs';
 
 const inputs = {
   environment: input.enum(['preview', 'production'], {
-    prompt: 'Which environment?'
+    prompt: 'Which environment?',
+    description: 'Test input',
+    short: 'e'
   }),
-  force: input.boolean({ prompt: 'Force?' }),
-  apps: input.multiselect({ prompt: 'Which apps?', choices: () => [] }),
-  name: input.string({ prompt: 'Name?', positional: true, schema: z.string() }),
-  camelCase: input.string({ prompt: 'Camel?' })
+  force: input.boolean({
+    prompt: 'Force?',
+    description: 'Test input',
+    short: 'f'
+  }),
+  apps: input.multiselect({
+    prompt: 'Which apps?',
+    description: 'Test input',
+    short: 'a',
+    choices: () => []
+  }),
+  name: input.string({
+    prompt: 'Name?',
+    description: 'Test input',
+    positional: true,
+    schema: z.string()
+  }),
+  camelCase: input.string({
+    prompt: 'Camel?',
+    description: 'Test input',
+    short: 'c'
+  })
 };
 
 describe('parseCommandArgs', () => {
@@ -61,7 +81,7 @@ describe('parseCommandArgs', () => {
       parseCommandArgs(['--camel-case', 'x'], inputs).values['camelCase']
     ).toBe('x');
     expect(flagUsage('camelCase', inputs.camelCase)).toBe(
-      '--camel-case <value>'
+      '-c, --camel-case <value>'
     );
   });
 
@@ -74,7 +94,13 @@ describe('parseCommandArgs', () => {
 
   it('refuses an input that shadows a global flag', () => {
     expect(() =>
-      parseCommandArgs([], { yes: input.boolean({ prompt: '' }) })
+      parseCommandArgs([], {
+        yes: input.boolean({
+          prompt: '',
+          description: 'Test input',
+          short: 'f'
+        })
+      })
     ).toThrow(/collides/);
   });
 });
@@ -89,9 +115,25 @@ describe('splitMulti', () => {
 describe('flagUsage', () => {
   it('shows enum values and multiselect shape', () => {
     expect(flagUsage('environment', inputs.environment)).toBe(
-      '--environment <preview|production>'
+      '-e, --environment <preview|production>'
     );
-    expect(flagUsage('apps', inputs.apps)).toBe('--apps <a,b,...>');
-    expect(flagUsage('force', inputs.force)).toBe('--force');
+    expect(flagUsage('apps', inputs.apps)).toBe('-a, --apps <a,b,...>');
+    expect(flagUsage('force', inputs.force)).toBe('-f, --force');
+  });
+});
+
+describe('input shorts', () => {
+  it('refuses two inputs that take the same short', () => {
+    expect(() =>
+      parseCommandArgs([], {
+        first: input.boolean({ prompt: '', description: 'One', short: 'x' }),
+        second: input.boolean({ prompt: '', description: 'Two', short: 'x' })
+      })
+    ).toThrow(/-x/);
+  });
+
+  it('cannot give an input a global short', () => {
+    // @ts-expect-error -d belongs to --dry-run
+    input.boolean({ prompt: '', description: 'Clashes', short: 'd' });
   });
 });

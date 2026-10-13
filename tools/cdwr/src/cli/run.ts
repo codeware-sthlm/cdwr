@@ -1,5 +1,6 @@
 import { createPlainUi } from '../ui/plain';
 import { createSilentUi } from '../ui/silent';
+import { createTerminalUi } from '../ui/terminal';
 import { symbols, theme } from '../ui/theme';
 import type { Ui } from '../ui/ui';
 
@@ -9,6 +10,7 @@ import type { Context, Flags } from './context';
 import { Cancelled, CliError, EXIT, UsageError, messageOf } from './errors';
 import { renderCommandHelp } from './help';
 import { type HistoryEntry, recordHistory } from './history';
+import { wantsPrompts } from './mode';
 import { preflight } from './preflight';
 import type { Prefs } from './prefs';
 import { publicInputs, resolveInputs } from './resolve';
@@ -52,7 +54,7 @@ async function confirmPlan(
   if (!ctx.ui.interactive || ctx.flags.nonInteractive) {
     throw new UsageError(
       'This command needs a confirmation',
-      'Pass --yes to confirm it up front'
+      'Add -i to be asked here, or pass --yes to confirm it up front'
     );
   }
 
@@ -96,17 +98,21 @@ export async function runCommand(options: RunOptions): Promise<number> {
     yes: parsed.globals.yes,
     dryRun: parsed.globals['dry-run'],
     json: parsed.globals.json,
-    nonInteractive:
-      parsed.globals['non-interactive'] ||
-      parsed.globals.json ||
-      !options.interactive,
+    nonInteractive: !wantsPrompts({
+      tty: options.interactive,
+      hasArgs: Object.keys(parsed.values).length > 0,
+      interactive: parsed.globals.interactive,
+      json: parsed.globals.json
+    }),
     verbose: parsed.globals.verbose
   };
   const ui =
     options.ui ??
     (flags.json
       ? createSilentUi((line) => process.stderr.write(`${line}\n`))
-      : createPlainUi(stdout));
+      : flags.nonInteractive
+        ? createPlainUi(stdout)
+        : createTerminalUi());
   const ctx: Context = { root, env, prefs, ui, flags, command: name };
   const record = options.history ?? recordHistory;
   const started = Date.now();

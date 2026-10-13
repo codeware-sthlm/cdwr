@@ -145,6 +145,7 @@ export const definitionInput = (
   input.select<string>({
     prompt,
     description: 'A module exporting a SiteDefinition as its default',
+    short: 'D',
     trustFlag: true,
     choices: async (ctx) => {
       const entries = await listSiteDefinitions(ctx.root);

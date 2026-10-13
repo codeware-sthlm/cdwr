@@ -50,6 +50,7 @@ export default defineCommand({
     runs: input.optional(
       input.string({
         prompt: 'Path to runs.jsonl?',
+        short: 'r',
         description:
           "The scheduler's runs file; left out, only Linear's events",
         flagOnly: true
@@ -58,12 +59,14 @@ export default defineCommand({
     ),
     days: input.number({
       prompt: 'How many days?',
+      short: 'D',
       description: 'Days back from now to include',
       default: 7,
       schema: z.number().int().positive()
     }),
     limit: input.number({
       prompt: 'How many events?',
+      short: 'l',
       description: 'Newest events to keep, at most 200',
       default: 200,
       schema: z.number().int().min(1).max(200)

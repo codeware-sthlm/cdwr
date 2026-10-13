@@ -63,7 +63,7 @@ export function renderCommandHelp(name: string, command: AnyCommand): string {
       column(
         inputs.map(([key, spec]) => [
           theme.code(flagUsage(key, spec)),
-          (spec.description ?? spec.prompt) +
+          spec.description +
             (spec.optional ? theme.muted('  (optional)') : '') +
             (spec.remember ? theme.muted('  (remembered)') : '')
         ])

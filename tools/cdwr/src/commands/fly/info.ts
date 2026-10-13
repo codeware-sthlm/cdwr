@@ -54,11 +54,14 @@ export default defineCommand({
   inputs: {
     prefix: input.string({
       prompt: 'Filter apps by prefix?',
+      description: 'Only apps whose name starts with this',
+      short: 'p',
       flagOnly: true,
       default: ''
     }),
     apps: input.multiselect<string>({
       prompt: 'Which apps?',
+      short: 'a',
       description: 'Fly apps to inspect; leave empty for all',
       trustFlag: true,
       optional: true,

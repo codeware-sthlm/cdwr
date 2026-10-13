@@ -12,6 +12,7 @@ export default defineCommand({
   inputs: {
     shell: input.enum(SHELLS, {
       prompt: 'Which shell?',
+      description: 'Shell to print the completion script for',
       positional: true,
       default: () => shellOf(process.env['SHELL'])
     })

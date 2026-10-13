@@ -16,12 +16,14 @@ export default defineCommand({
   inputs: {
     run: input.boolean({
       prompt: 'Show the latest run?',
+      short: 'r',
       description:
         "Show the latest run's full log instead of the scheduler log",
       default: false
     }),
     lines: input.number({
       prompt: 'How many lines?',
+      short: 'l',
       description: 'Lines from the end; 0 for the whole file',
       default: 40
     })

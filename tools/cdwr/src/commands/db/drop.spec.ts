@@ -33,7 +33,8 @@ describe('db drop', () => {
         '--password',
         'super-secret',
         '--databases',
-        'pr-123'
+        'pr-123',
+        '--interactive'
       ],
       root: '/repo',
       env: {},
