@@ -33,6 +33,12 @@ yarn.lock
 # Other apps
 /apps/*
 !/apps/cms
+# Only Umami's fly.toml, which next.config reads for the heatmap view's
+# origin. The directory is let back in and emptied, since excluding it would
+# take the file with it; its project.json stays out of the image's Nx graph
+!/apps/umami
+/apps/umami/*
+!/apps/umami/fly.toml
 
 # Local-only env overrides. `apps/cms/.env` is deliberately NOT excluded — the
 # in-image build reads it; the runner stage deletes it again
