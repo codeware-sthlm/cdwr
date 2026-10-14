@@ -92,6 +92,28 @@ describe('cspForRequest', () => {
   });
 
   it.each([
+    ['/', true],
+    ['/tours/moon', true],
+    ['/admin', false],
+    ['/admin/collections/pages', false],
+    ['/api/site-stats', false]
+  ])('%s may be framed by the Umami dashboard: %s', (pathname, allowed) => {
+    const { requestPolicy } = cspForRequest(pathname, {
+      UMAMI_URL: 'https://cdwr-umami.fly.dev/'
+    });
+
+    expect(sourcesOf(requestPolicy, 'frame-ancestors')).toEqual(
+      allowed ? ["'self'", 'https://cdwr-umami.fly.dev'] : ["'self'"]
+    );
+  });
+
+  it('lets only itself frame a site without Umami', () => {
+    expect(
+      sourcesOf(cspForRequest('/', {}).requestPolicy, 'frame-ancestors')
+    ).toEqual(["'self'"]);
+  });
+
+  it.each([
     ['development', true],
     ['production', false]
   ])('NODE_ENV=%s allows eval: %s', (NODE_ENV, allowed) => {
