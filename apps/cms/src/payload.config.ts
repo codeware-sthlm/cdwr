@@ -54,6 +54,7 @@ import { paletteSearchEndpoint } from './endpoints/palette-search';
 import { perfStatsEndpoint } from './endpoints/perf-stats';
 import { platformDomainCertificateEndpoint } from './endpoints/platform-domain-certificate';
 import { platformMachineRestartEndpoint } from './endpoints/platform-machine-restart';
+import { siteStatsEndpoint } from './endpoints/site-stats';
 import { tenantConfigEndpoint } from './endpoints/tenant-config';
 import { tenantDomainCertificateEndpoint } from './endpoints/tenant-domain-certificate';
 import { tenantInfisicalStatusEndpoint } from './endpoints/tenant-infisical-status';
@@ -223,6 +224,7 @@ export default buildConfig({
     perfStatsEndpoint,
     platformDomainCertificateEndpoint,
     platformMachineRestartEndpoint,
+    siteStatsEndpoint,
     tenantConfigEndpoint,
     tenantDomainCertificateEndpoint,
     tenantInfisicalStatusEndpoint,
