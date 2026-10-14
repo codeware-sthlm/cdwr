@@ -94,6 +94,47 @@ const dayIn = (timezone: string) => {
   return (instant: number) => format.format(instant);
 };
 
+/** The calendar date `offset` days from `date`; plain date arithmetic, so no daylight saving change can skip a day */
+const shiftDate = (date: string, offset: number) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + offset * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+
+/** How far the time zone's wall clock is ahead of UTC at an instant, in ms */
+const offsetAt = (instant: number, timezone: string) => {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric'
+    })
+      .formatToParts(instant)
+      .map(({ type, value }) => [type, Number(value)])
+  );
+  const wallClock = Date.UTC(
+    parts['year'] ?? 0,
+    (parts['month'] ?? 1) - 1,
+    parts['day'] ?? 1,
+    parts['hour'] ?? 0,
+    parts['minute'] ?? 0,
+    parts['second'] ?? 0
+  );
+  return wallClock - Math.floor(instant / 1000) * 1000;
+};
+
+/** The instant a calendar date starts in the time zone */
+const startOfDay = (date: string, timezone: string) => {
+  const utcMidnight = Date.parse(`${date}T00:00:00Z`);
+  // Corrected once more with the offset at the result, for a day that starts on a change
+  const guess = utcMidnight - offsetAt(utcMidnight, timezone);
+  return utcMidnight - offsetAt(guess, timezone);
+};
+
 /**
  * The day a bucket of Umami's series belongs to. A bucket with an offset is an
  * instant and is read in the time zone; one without is already a local time.
@@ -102,15 +143,15 @@ const bucketDay = (x: string, day: (instant: number) => string) =>
   /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(x) ? day(Date.parse(x)) : x.slice(0, 10);
 
 /**
- * One point for each of the last `days` days, oldest first. Umami leaves out
- * days without traffic, so those are filled in as zero.
+ * One point for each date, oldest first. Umami leaves out days without
+ * traffic, so those are filled in as zero.
  */
 const toDaily = (
   series: {
     pageviews: UmamiPageviews['pageviews'];
     sessions: UmamiPageviews['sessions'];
   },
-  { now, days, timezone }: { now: number; days: number; timezone: string }
+  { dates, timezone }: { dates: ReadonlyArray<string>; timezone: string }
 ): SiteStats['daily'] => {
   const day = dayIn(timezone);
   const sum = (points: UmamiPageviews['pageviews']) => {
@@ -123,15 +164,6 @@ const toDaily = (
   };
   const pageviews = sum(series.pageviews);
   const visitors = sum(series.sessions);
-
-  // Counted back from today, so a daylight saving change cannot skip or repeat a day
-  const dates = [
-    ...new Set(
-      Array.from({ length: days + 1 }, (_, i) => day(now - i * DAY_MS))
-    )
-  ]
-    .slice(0, days)
-    .reverse();
 
   return dates.map((date) => ({
     date,
@@ -152,8 +184,12 @@ export const fetchSiteStats = async (
     timezone = 'UTC'
   }: { now?: number; timezone?: string } = {}
 ): Promise<SiteStats> => {
+  // Whole calendar days in the time zone, today included, so the totals
+  // cover exactly the days the chart shows
+  const today = dayIn(timezone)(now);
+  const dates = Array.from({ length: 30 }, (_, i) => shiftDate(today, i - 29));
   const range = (days: number) => ({
-    startAt: now - days * DAY_MS,
+    startAt: startOfDay(shiftDate(today, 1 - days), timezone),
     endAt: now
   });
   const top = (type: UmamiMetricType) =>
@@ -173,7 +209,7 @@ export const fetchSiteStats = async (
   return {
     week: toPeriod(week, week.comparison),
     month: toPeriod(month, month.comparison),
-    daily: toDaily(series, { now, days: 30, timezone }),
+    daily: toDaily(series, { dates, timezone }),
     top: {
       pages: toTop(pages),
       referrers: toTop(referrers),

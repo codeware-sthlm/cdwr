@@ -10,6 +10,7 @@ import type { UmamiClient } from './umami-client';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 9, 14);
+const HOUR = 60 * 60 * 1000;
 
 const totals = (
   pageviews: number,
@@ -20,7 +21,7 @@ const totals = (
 
 const fakeClient = (overrides: Partial<UmamiClient> = {}) => {
   const stats = vi.fn<UmamiClient['stats']>(async (_id, { endAt, startAt }) =>
-    endAt - startAt === 7 * DAY
+    endAt - startAt < 10 * DAY
       ? { ...totals(20, 10, 12, 6), comparison: totals(10, 8, 10, 5) }
       : { ...totals(100, 40, 50, 10), comparison: totals(200, 0, 0, 0) }
   );
@@ -156,29 +157,54 @@ describe('fetchSiteStats', () => {
       timezone: 'Europe/Stockholm'
     });
 
+    // Calendar days in Stockholm (UTC+2 in October), today included
+    const week = NOW - 6 * DAY - 2 * HOUR;
+    const month = NOW - 29 * DAY - 2 * HOUR;
     expect(client.stats).toHaveBeenCalledWith('site-1', {
-      startAt: NOW - 7 * DAY,
+      startAt: week,
       endAt: NOW
     });
     expect(client.stats).toHaveBeenCalledWith('site-1', {
-      startAt: NOW - 30 * DAY,
+      startAt: month,
       endAt: NOW
     });
     expect(client.pageviews).toHaveBeenCalledWith('site-1', {
-      startAt: NOW - 30 * DAY,
+      startAt: month,
       endAt: NOW,
       unit: 'day',
       timezone: 'Europe/Stockholm'
     });
     for (const type of ['path', 'referrer', 'device', 'country']) {
       expect(client.metrics).toHaveBeenCalledWith('site-1', {
-        startAt: NOW - 30 * DAY,
+        startAt: month,
         endAt: NOW,
         type,
         limit: 5
       });
     }
     expect(client.metrics).toHaveBeenCalledTimes(4);
+  });
+
+  it('keeps every calendar day across the spring daylight saving change', async () => {
+    const client = fakeClient();
+    const now = Date.parse('2026-03-30T00:30:00+02:00');
+
+    const { daily } = await fetchSiteStats(client, 'site-1', {
+      now,
+      timezone: 'Europe/Stockholm'
+    });
+
+    expect(daily).toHaveLength(30);
+    expect(daily.slice(-3).map(({ date }) => date)).toEqual([
+      '2026-03-28',
+      '2026-03-29',
+      '2026-03-30'
+    ]);
+    // The week starts at midnight on 24 March, still winter time (UTC+1)
+    expect(client.stats).toHaveBeenCalledWith('site-1', {
+      startAt: Date.parse('2026-03-24T00:00:00+01:00'),
+      endAt: now
+    });
   });
 
   it('defaults the timezone to UTC', async () => {
