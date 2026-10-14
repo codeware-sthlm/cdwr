@@ -1,0 +1,59 @@
+import { getIntegrationCredentials } from '@codeware/shared/feature/infisical';
+
+import { type UmamiClient, createUmamiClient } from './umami-client';
+
+/** Infisical folder holding the Umami credentials */
+const PROVIDER = 'umami';
+
+/** Secret that authenticates every Umami api call */
+const KEY = 'API_KEY';
+
+/** An Umami client, or why there is none */
+export type UmamiApiResult =
+  | { status: 'ready'; umami: UmamiClient }
+  | { status: 'unconfigured' }
+  | { status: 'unreachable'; error: string };
+
+const readKey = async (): Promise<string | undefined> => {
+  const credentials = await getIntegrationCredentials(PROVIDER, {
+    environment: process.env['DEPLOY_ENV']
+  });
+
+  return credentials[KEY];
+};
+
+/**
+ * An Umami client for reading site statistics, or the reason there is none.
+ *
+ * Statistics are optional: without an Umami url the dashboard simply has
+ * nothing to show, and the secret store is not even asked.
+ *
+ * The key is read from Infisical on demand, see `getIntegrationCredentials`.
+ * Unlike Fly's token this runs on every dashboard load, so a missing key is
+ * not read again from fresh: its cached empty answer expires on its own.
+ *
+ * Never throws: a broken secret store is `unreachable`, never `unconfigured`.
+ */
+export const getUmamiApi = async (
+  umamiUrl: string | undefined
+): Promise<UmamiApiResult> => {
+  if (!umamiUrl) {
+    return { status: 'unconfigured' };
+  }
+
+  try {
+    const apiKey = await readKey();
+
+    return apiKey
+      ? {
+          status: 'ready',
+          umami: createUmamiClient({ baseUrl: umamiUrl, apiKey })
+        }
+      : { status: 'unconfigured' };
+  } catch (error) {
+    return {
+      status: 'unreachable',
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+};
