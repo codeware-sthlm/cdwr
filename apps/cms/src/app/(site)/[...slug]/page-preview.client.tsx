@@ -9,11 +9,12 @@ import { LivePreview } from '../../../components/LivePreview.client';
 type Props = {
   page: Page;
   blocksData?: BlocksData;
+  live: boolean;
 };
 
-export function PagePreview({ page, blocksData }: Props) {
+export function PagePreview({ page, blocksData, live }: Props) {
   return (
-    <LivePreview initialData={page}>
+    <LivePreview initialData={page} enabled={live}>
       {(data) => <RenderPage page={data} blocksData={blocksData} />}
     </LivePreview>
   );

@@ -40,5 +40,5 @@ export default async function Tour({ params }: Props) {
     notFound();
   }
 
-  return <TourPreview tour={tour} />;
+  return <TourPreview tour={tour} live={draft} />;
 }

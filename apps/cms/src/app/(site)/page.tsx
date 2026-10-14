@@ -46,6 +46,10 @@ export default async function SiteIndexPage() {
   }
 
   return (
-    <LandingPagePreview landingPage={data.page} blocksData={data.blocksData} />
+    <LandingPagePreview
+      landingPage={data.page}
+      blocksData={data.blocksData}
+      live={draft}
+    />
   );
 }
