@@ -1,5 +1,8 @@
 export { buildTenantConfig } from './lib/build-tenant-config';
-export type { AuthenticatedPayloadOptions } from './lib/get-authenticated-payload';
+export {
+  type AuthenticatedPayloadOptions,
+  getAuthenticatedPayload
+} from './lib/get-authenticated-payload';
 export { getPayloadRuntime } from './lib/get-payload-runtime';
 export { hasMembersContent } from './lib/collections/has-members-content';
 export { loginMember } from './lib/login-member';
