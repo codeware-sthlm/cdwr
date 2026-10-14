@@ -21,7 +21,7 @@ import {
 import type { User } from '@codeware/shared/util/payload-types';
 import { ChartBarIcon } from '@heroicons/react/24/outline';
 import { useAuth, useTranslation } from '@payloadcms/ui';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useSiteStats } from './use-site-stats';
 
@@ -38,6 +38,9 @@ export function SiteStatsWidget() {
   const { i18n, t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const [open, setOpen] = useState(false);
   const [period, setPeriod] = useState<SiteStatsPeriod>('week');
+  // The tile's button opens the sheet from outside it, so Radix has no
+  // trigger to give focus back to; the sheet returns it here instead
+  const tile = useRef<HTMLDivElement>(null);
 
   const locale = i18n.language;
   const title = t('statistics:title');
@@ -98,11 +101,20 @@ export function SiteStatsWidget() {
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {widget}
+      <div ref={tile} className="contents">
+        {widget}
+      </div>
 
       {answer.status === 'ready' && (
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent size="lg" className="codeware-admin twp gap-0">
+          <SheetContent
+            size="lg"
+            className="codeware-admin twp gap-0"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              tile.current?.querySelector('button')?.focus();
+            }}
+          >
             <SheetHeader>
               <SheetTitle>{title}</SheetTitle>
               <SheetDescription>{t('statistics:sheetSub')}</SheetDescription>
