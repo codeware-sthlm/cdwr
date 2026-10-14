@@ -1,0 +1,8 @@
+{
+  "name": "app-cms-feature-site-stats",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/app-cms/feature/site-stats/src",
+  "projectType": "library",
+  "tags": ["scope:app-cms", "type:feature"],
+  "targets": {}
+}

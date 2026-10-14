@@ -35,6 +35,9 @@
       "@codeware/app-cms/feature/seed": [
         "./libs/app-cms/feature/seed/src/index.ts"
       ],
+      "@codeware/app-cms/feature/site-stats": [
+        "./libs/app-cms/feature/site-stats/src/index.ts"
+      ],
       "@codeware/app-cms/ui/blocks": ["./libs/app-cms/ui/blocks/src/index.ts"],
       "@codeware/app-cms/ui/blocks/*": ["./libs/app-cms/ui/blocks/src/lib/*"],
       "@codeware/app-cms/ui/components": [
