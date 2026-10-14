@@ -18,6 +18,7 @@ const vars = (
   sendgrid: true,
   errorMonitoring: true,
   errorMonitoringEu: true,
+  analytics: true,
   ...overrides
 });
 
@@ -26,7 +27,8 @@ const flags = [
   'humanCheck',
   'sendgrid',
   'errorMonitoring',
-  'errorMonitoringEu'
+  'errorMonitoringEu',
+  'analytics'
 ] as const;
 
 describe('renderLegalTemplate', () => {
@@ -55,6 +57,22 @@ describe('renderLegalTemplate', () => {
     expect(markdown).not.toContain('Turnstile');
     expect(markdown).not.toContain('Sentry');
   });
+
+  it.each(['en', 'sv'] as const)(
+    'describes visitor statistics only when they are on (%s)',
+    (locale) => {
+      const on = renderLegalTemplate('privacy', locale, vars()).markdown;
+      const off = renderLegalTemplate(
+        'privacy',
+        locale,
+        vars({ analytics: false })
+      ).markdown;
+
+      expect(on).toContain('Umami');
+      expect(on).toMatch(/region|ort\)/);
+      expect(off).not.toContain('Umami');
+    }
+  );
 
   it('asks for a period when form submissions are kept until deleted', () => {
     const kept = renderLegalTemplate('privacy', 'en', vars());

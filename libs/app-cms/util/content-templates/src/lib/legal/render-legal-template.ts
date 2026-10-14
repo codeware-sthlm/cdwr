@@ -24,6 +24,8 @@ export type LegalTemplateVars = {
   errorMonitoring: boolean;
   /** Sentry keeps the reports in its EU region */
   errorMonitoringEu: boolean;
+  /** Visits are counted with Umami, heatmaps included */
+  analytics: boolean;
 };
 
 const templates: Record<LegalTemplateKind, Record<'en' | 'sv', string>> = {

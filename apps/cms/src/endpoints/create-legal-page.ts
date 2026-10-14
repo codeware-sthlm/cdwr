@@ -103,7 +103,18 @@ export const createLegalPageEndpoint: Endpoint = {
         user,
         req
       });
-      const { EMAIL, HUMAN_CHECK, SENTRY } = getEnv();
+      // Statistics run only with both set, the same rule as the site's script
+      const tenant = await payload.findByID({
+        collection: 'tenants',
+        id: tenantId,
+        depth: 0,
+        select: { statsWebsiteId: true },
+        overrideAccess: false,
+        user,
+        disableErrors: true,
+        req
+      });
+      const { EMAIL, HUMAN_CHECK, SENTRY, UMAMI_URL } = getEnv();
       const contactEmail = settings?.footer?.contact?.find(
         (entry) => entry.platform === 'email'
       )?.email;
@@ -123,7 +134,8 @@ export const createLegalPageEndpoint: Endpoint = {
         humanCheck: Boolean(HUMAN_CHECK),
         sendgrid: Boolean(EMAIL && 'sendgrid' in EMAIL),
         errorMonitoring: Boolean(SENTRY),
-        errorMonitoringEu: isEuSentryHost(SENTRY?.dsn)
+        errorMonitoringEu: isEuSentryHost(SENTRY?.dsn),
+        analytics: Boolean(UMAMI_URL && tenant?.statsWebsiteId)
       });
 
       const page = await payload.create({
