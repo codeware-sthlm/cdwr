@@ -151,7 +151,8 @@ export default async function RootLayout({
         */}
         {fontFaces && <style>{fontFaces}</style>}
         {customCss && <style>{customCss}</style>}
-        {stats && <script defer {...stats} />}
+        {stats && <script defer {...stats.tracker} />}
+        {stats && <script defer {...stats.recorder} />}
       </head>
       <body>
         <Providers
