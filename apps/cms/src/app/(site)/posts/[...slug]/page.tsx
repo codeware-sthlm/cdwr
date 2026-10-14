@@ -43,5 +43,5 @@ export default async function Post({ params }: Props) {
     notFound();
   }
 
-  return <PostPreview post={post} listingPath={listingPath} />;
+  return <PostPreview post={post} listingPath={listingPath} live={draft} />;
 }

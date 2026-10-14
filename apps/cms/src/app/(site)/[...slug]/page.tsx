@@ -37,5 +37,7 @@ export default async function Page({ params }: Props) {
     notFound();
   }
 
-  return <PagePreview page={data.page} blocksData={data.blocksData} />;
+  return (
+    <PagePreview page={data.page} blocksData={data.blocksData} live={draft} />
+  );
 }
