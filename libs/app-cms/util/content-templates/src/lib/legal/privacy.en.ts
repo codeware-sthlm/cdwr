@@ -65,10 +65,18 @@ We send email through a service that delivers the messages on our behalf. **Fill
 {{#errorMonitoring}}
 ## Error monitoring
 
-When something goes wrong on this website, an error report is sent to Sentry, a service that helps us find and fix errors. A report shows which page you were on and which browser you use{{#errorMonitoringEu}}, and it is stored in the EU{{/errorMonitoringEu}}. It does not include your IP address or anything you entered on the page. We do not record what you do on the page, and we use the reports only to fix errors.
+When something goes wrong on this website, an error report is sent to Sentry, a service that helps us find and fix errors. A report shows which page you were on and which browser you use{{#errorMonitoringEu}}, and it is stored in the EU{{/errorMonitoringEu}}. It does not include your IP address or anything you entered on the page. The reports are not used to follow what you do on the page, only to fix errors.
 
 The legal basis is our legitimate interest in keeping the website working.
 {{/errorMonitoring}}
+
+{{#analytics}}
+## Visitor statistics
+
+We count visits to this website with Umami, a statistics service that is run on our behalf. It sets no cookies and stores nothing in your browser. For each page view it records the page, the website you came from, your browser, operating system, device type, screen size and language, and your approximate location (country, region and city). On some visits it also records where on the page you click and how far you scroll. Your IP address is used to work out that location and, together with your browser details, to recognise visits from the same browser during the current month. The IP address itself is not stored. We use the statistics to see which pages people read and how the website is used, not to find out who you are.
+
+The legal basis is our legitimate interest in knowing how the website is used.
+{{/analytics}}
 
 {{#humanCheck}}
 ## Spam protection
