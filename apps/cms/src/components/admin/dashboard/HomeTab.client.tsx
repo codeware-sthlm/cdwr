@@ -36,6 +36,7 @@ import { useCollectionLabel } from '../utils/use-collection-label';
 
 import { hasCreatePermission } from './has-create-permission';
 import { PANEL_LIMIT_OPTIONS } from './panel-limits';
+import { SiteStatsWidget } from './SiteStatsWidget.client';
 import { TASKS } from './tasks';
 import { useGettingStarted } from './use-getting-started';
 import { usePanelLimits } from './use-panel-limits';
@@ -115,6 +116,8 @@ export function HomeTab({
           linkComponent={Link}
         />
       )}
+
+      <SiteStatsWidget />
 
       {/* Task grid — create tasks are hidden without create permission */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

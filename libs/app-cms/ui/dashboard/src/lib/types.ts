@@ -74,3 +74,38 @@ export type DashboardData = {
    */
   platform: PlatformData | null;
 };
+
+/** Which window the statistics figures cover. */
+export type SiteStatsPeriod = 'week' | 'month';
+
+/** One period's headline figures, with trends against the previous period. */
+export type SiteStatsFigures = {
+  visitors: number;
+  pageviews: number;
+  visits: number;
+  /** 0..1, null when there were no visits */
+  bounceRate: number | null;
+  /** Signed whole percentages, null when there is nothing to compare with */
+  trend: {
+    visitors: number | null;
+    pageviews: number | null;
+    visits: number | null;
+    bounceRate: number | null;
+  };
+};
+
+export type SiteStatsTopEntry = { label: string; count: number };
+
+/** What the statistics sheet renders; structurally the site-stats feature's `SiteStats`. */
+export type SiteStatsData = {
+  week: SiteStatsFigures;
+  month: SiteStatsFigures;
+  /** One point per day, oldest first */
+  daily: { date: string; visitors: number; pageviews: number }[];
+  top: {
+    pages: SiteStatsTopEntry[];
+    referrers: SiteStatsTopEntry[];
+    devices: SiteStatsTopEntry[];
+    countries: SiteStatsTopEntry[];
+  };
+};
