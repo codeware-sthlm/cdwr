@@ -3,6 +3,7 @@ import {
   deploymentNameIssue,
   isDeployEnabled
 } from '@codeware/shared/util/pure';
+import { z } from 'zod';
 
 import type { Environment } from '../../services/infisical';
 
@@ -15,13 +16,23 @@ export const TENANT_APPS = ['cms', 'web'] as const;
 export type AppKind = (typeof TENANT_APPS)[number];
 
 /** One workspace, as the listing script reports it */
-export interface TenantRow {
-  id: number;
-  name: string;
-  slug: string;
-  deployment: string | null;
-  apiKey: string | null;
-}
+export const tenantRowSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  deployment: z.string().nullable(),
+  apiKey: z.string().nullable(),
+  statsWebsiteId: z.string().nullable(),
+  domains: z.array(
+    z.object({
+      hostname: z.string(),
+      app: z.string(),
+      isPrimary: z.boolean()
+    })
+  )
+});
+
+export type TenantRow = z.infer<typeof tenantRowSchema>;
 
 /** A folder to create, named by its parent path */
 export interface Folder {
@@ -108,12 +119,67 @@ export const flagActionOf = (stored: string | undefined): FlagAction =>
       ? 'enabled'
       : 'paused';
 
+/** A domain as Umami and the workspace's domains list it: lowercase, no scheme, path or trailing dot */
+export const normalizeDomain = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/[/?#].*$/, '')
+    .replace(/\.+$/, '');
+
+/**
+ * The domain the workspace's statistics website is registered under: the
+ * primary domain of its cms app, otherwise that app's Fly hostname.
+ */
+export const statsDomain = (row: TenantRow, cmsFlyApp: string): string => {
+  const primary = row.domains.find(
+    ({ app, isPrimary }) => isPrimary && app === cmsFlyApp
+  );
+  return normalizeDomain(primary?.hostname ?? `${cmsFlyApp}.fly.dev`);
+};
+
+export type StatsSkipReason =
+  'preview' | 'unconfigured' | 'no-cms' | 'unreachable';
+
+/** What to do about the workspace's Umami website */
+export type StatsPlan =
+  | { action: 'skip'; reason: StatsSkipReason }
+  | { action: 'keep'; id: string }
+  | { action: 'adopt'; id: string; domain: string }
+  | { action: 'create'; name: string; domain: string }
+  | { action: 'unknown'; id: string };
+
+const SKIP_TEXT: Record<StatsSkipReason, string> = {
+  preview: 'preview',
+  unconfigured: 'Umami not configured',
+  'no-cms': 'the cms is not among the apps',
+  unreachable: 'Umami did not answer'
+};
+
+/** The plan line for the statistics website */
+export const statsStep = (plan: StatsPlan): string => {
+  switch (plan.action) {
+    case 'skip':
+      return `Statistics skipped: ${SKIP_TEXT[plan.reason]}`;
+    case 'keep':
+      return `Keep statistics website ${plan.id}`;
+    case 'adopt':
+      return `Adopt statistics website ${plan.domain} (${plan.id})`;
+    case 'create':
+      return `Create statistics website ${plan.domain} in Umami`;
+    case 'unknown':
+      return `Statistics website ${plan.id} is unknown to Umami; left as it is`;
+  }
+};
+
 /** The plan step lines shown before a provisioning write is confirmed */
 export function provisionSteps(
   deployment: string,
   folders: ReadonlyArray<Folder>,
   keys: ReadonlyArray<KeyPlan>,
-  flags: ReadonlyArray<FlagPlan> = []
+  flags: ReadonlyArray<FlagPlan> = [],
+  stats?: StatsPlan
 ): string[] {
   return [
     ...folders.map((folder) => `Create folder ${folderPath(folder)}`),
@@ -129,7 +195,8 @@ export function provisionSteps(
       return action === 'enabled'
         ? `Keep ${DEPLOY_ENABLED_KEY} in ${path} (already true)`
         : `Keep ${DEPLOY_ENABLED_KEY}=${value} in ${path} (paused)`;
-    })
+    }),
+    ...(stats ? [statsStep(stats)] : [])
   ];
 }
 
