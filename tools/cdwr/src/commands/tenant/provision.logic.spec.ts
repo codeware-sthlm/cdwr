@@ -6,11 +6,14 @@ import {
   deployArgs,
   flagActionOf,
   folderPath,
+  normalizeDomain,
   pausedMessage,
   planFlyAppsToDeploy,
   planFolders,
   provisionSteps,
-  reasonSkipped
+  reasonSkipped,
+  statsDomain,
+  statsStep
 } from './provision.logic';
 
 describe('folderPath', () => {
@@ -31,7 +34,9 @@ describe('reasonSkipped', () => {
     name: 'Acme',
     slug: 'acme',
     deployment: 'acme',
-    apiKey: 'key'
+    apiKey: 'key',
+    statsWebsiteId: null,
+    domains: []
   };
 
   it('is null when a row is ready', () => {
@@ -257,5 +262,97 @@ describe('conflictMessage', () => {
         "If this workspace's key is the one to keep, use `cdwr tenant rotate-key`."
       ].join('\n')
     );
+  });
+});
+
+describe('normalizeDomain', () => {
+  it.each([
+    ['Acme.SE', 'acme.se'],
+    ['https://www.acme.se/path?x=1', 'www.acme.se'],
+    ['acme.se.', 'acme.se'],
+    [' http://acme.se/ ', 'acme.se']
+  ])('turns %s into %s', (input, expected) => {
+    expect(normalizeDomain(input)).toBe(expected);
+  });
+});
+
+describe('statsDomain', () => {
+  const row: TenantRow = {
+    id: 1,
+    name: 'Acme',
+    slug: 'acme',
+    deployment: 'acme',
+    apiKey: 'key',
+    statsWebsiteId: null,
+    domains: []
+  };
+
+  it('prefers the primary domain of the cms app', () => {
+    expect(
+      statsDomain(
+        {
+          ...row,
+          domains: [
+            { hostname: 'other.se', app: 'cdwr-cms-acme', isPrimary: false },
+            { hostname: 'Acme.SE', app: 'cdwr-cms-acme', isPrimary: true }
+          ]
+        },
+        'cdwr-cms-acme'
+      )
+    ).toBe('acme.se');
+  });
+
+  it('ignores a primary domain of another app', () => {
+    expect(
+      statsDomain(
+        {
+          ...row,
+          domains: [
+            { hostname: 'web.acme.se', app: 'cdwr-web-acme', isPrimary: true }
+          ]
+        },
+        'cdwr-cms-acme'
+      )
+    ).toBe('cdwr-cms-acme.fly.dev');
+  });
+
+  it('falls back to the Fly hostname', () => {
+    expect(statsDomain(row, 'cdwr-cms-acme')).toBe('cdwr-cms-acme.fly.dev');
+  });
+});
+
+describe('statsStep', () => {
+  it.each([
+    [
+      { action: 'create', name: 'Acme', domain: 'acme.se' } as const,
+      'Create statistics website acme.se in Umami'
+    ],
+    [
+      { action: 'adopt', id: 'w1', domain: 'acme.se' } as const,
+      'Adopt statistics website acme.se (w1)'
+    ],
+    [{ action: 'keep', id: 'w1' } as const, 'Keep statistics website w1'],
+    [
+      { action: 'skip', reason: 'preview' } as const,
+      'Statistics skipped: preview'
+    ],
+    [
+      { action: 'skip', reason: 'unconfigured' } as const,
+      'Statistics skipped: Umami not configured'
+    ],
+    [
+      { action: 'unknown', id: 'w1' } as const,
+      'Statistics website w1 is unknown to Umami; left as it is'
+    ]
+  ])('describes %j', (plan, line) => {
+    expect(statsStep(plan)).toBe(line);
+  });
+
+  it('is appended after the flags by provisionSteps', () => {
+    const steps = provisionSteps('acme', [], [], [], {
+      action: 'keep',
+      id: 'w1'
+    });
+    expect(steps).toEqual(['Keep statistics website w1']);
   });
 });

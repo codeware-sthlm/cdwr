@@ -8,6 +8,7 @@ export type CmsReportKey =
   | 'CREATED_TENANT'
   | 'RESOLVED_TENANT'
   | 'ROTATED_API_KEY'
+  | 'STATS_WEBSITE_SET'
   | 'TENANT_DEPLOYMENTS'
   | 'TENANT_DETAILS';
 
@@ -15,10 +16,11 @@ export type CmsReportKey =
  * The reports whose script may be run again when its report went missing.
  *
  * Reading is safe to repeat, and so is applying a definition, which converges
- * on the same result. Creating a tenant or rotating a key is not: a lost report
+ * on the same result, or setting a tenant's statistics website, which only
+ * fills an empty field and reports `unchanged` the second time. Creating a tenant or rotating a key is not: a lost report
  * does not prove nothing happened, and a second run would do it twice.
  */
 export type RetryableCmsReportKey = Extract<
   CmsReportKey,
-  'APPLY_REPORT' | 'TENANT_DEPLOYMENTS' | 'TENANT_DETAILS'
+  'APPLY_REPORT' | 'STATS_WEBSITE_SET' | 'TENANT_DEPLOYMENTS' | 'TENANT_DETAILS'
 >;

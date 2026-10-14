@@ -1,7 +1,9 @@
 import { createClient, isNotFound } from '@codeware/shared/feature/infisical';
 import { DEPLOY_ENABLED_KEY } from '@codeware/shared/util/pure';
+import { z } from 'zod';
 
 import { defineCommand } from '../../cli/command';
+import type { Context } from '../../cli/context';
 import { CliError, EXIT, messageOf } from '../../cli/errors';
 import { input } from '../../cli/inputs';
 import {
@@ -29,6 +31,13 @@ import {
   setInfisicalSecret
 } from '../../services/infisical';
 import { sleep } from '../../services/shell';
+import {
+  type UmamiConnection,
+  createWebsite,
+  getWebsite,
+  listTeamWebsites,
+  readUmamiProvisioning
+} from '../../services/umami';
 
 import {
   type AppKind,
@@ -36,17 +45,22 @@ import {
   type FlagPlan,
   type Folder,
   type KeyPlan,
+  type StatsPlan,
   TENANT_APPS,
   type TenantRow,
   conflictMessage,
   deployArgs,
   flagActionOf,
   folderPath,
+  normalizeDomain,
   pausedMessage,
   planFlyAppsToDeploy,
   planFolders,
   provisionSteps,
-  reasonSkipped
+  reasonSkipped,
+  statsDomain,
+  statsStep,
+  tenantRowSchema
 } from './provision.logic';
 
 type Connection = Awaited<ReturnType<typeof createClient>>;
@@ -84,7 +98,7 @@ async function listTenantRows(
       ].join('\n')
     );
   }
-  return JSON.parse(json) as TenantRow[];
+  return z.array(tenantRowSchema).parse(JSON.parse(json));
 }
 
 /** Folder names directly under a path, cached per plan */
@@ -143,6 +157,67 @@ async function waitUntilRunning(
   return false;
 }
 
+/** What the write-back script reports */
+const statsReportSchema = z.object({
+  outcome: z.enum(['set', 'unchanged', 'conflict']),
+  current: z.string().optional()
+});
+
+type StatsConnection = UmamiConnection & { teamId: string };
+
+/**
+ * Looks up the workspace's Umami website without writing anything. A Umami
+ * failure skips the step rather than failing the plan.
+ */
+async function planStats(
+  environment: Environment,
+  apps: ReadonlyArray<AppKind>,
+  tenant: TenantRow,
+  cmsFlyApp: string
+): Promise<{
+  plan: StatsPlan;
+  connection?: StatsConnection;
+  error?: string;
+}> {
+  if (environment !== 'production')
+    return { plan: { action: 'skip', reason: 'preview' } };
+  if (!apps.includes('cms'))
+    return { plan: { action: 'skip', reason: 'no-cms' } };
+
+  try {
+    const provisioning = await readUmamiProvisioning(environment);
+    if (provisioning.status === 'unconfigured')
+      return { plan: { action: 'skip', reason: 'unconfigured' } };
+    const connection = provisioning;
+
+    if (tenant.statsWebsiteId) {
+      const known = await getWebsite(connection, tenant.statsWebsiteId);
+      return {
+        plan: known
+          ? { action: 'keep', id: known.id }
+          : { action: 'unknown', id: tenant.statsWebsiteId },
+        connection
+      };
+    }
+
+    const domain = statsDomain(tenant, cmsFlyApp);
+    const match = (await listTeamWebsites(connection, connection.teamId)).find(
+      (site) => normalizeDomain(site.domain) === domain
+    );
+    return {
+      plan: match
+        ? { action: 'adopt', id: match.id, domain }
+        : { action: 'create', name: tenant.name, domain },
+      connection
+    };
+  } catch (error) {
+    return {
+      plan: { action: 'skip', reason: 'unreachable' },
+      error: messageOf(error)
+    };
+  }
+}
+
 interface PlanData {
   environment: Environment;
   previewApp: string | undefined;
@@ -153,7 +228,102 @@ interface PlanData {
   folders: Folder[];
   keysToWrite: AppKind[];
   flags: FlagPlan[];
+  databaseUrl: string;
+  tenantId: number;
+  stats: StatsPlan;
+  statsConnection: StatsConnection | undefined;
   changes: number;
+}
+
+/**
+ * Creates or adopts the workspace's Umami website and writes its id back.
+ * Never throws: a failure is a warning with a retry hint. Statistics are
+ * optional, so it never fails the provision itself.
+ */
+async function applyStats(
+  ctx: Pick<Context, 'ui'>,
+  {
+    root,
+    environment,
+    databaseUrl,
+    tenantId,
+    stats,
+    connection
+  }: {
+    root: string;
+    environment: Environment;
+    databaseUrl: string;
+    tenantId: number;
+    stats: StatsPlan;
+    connection: StatsConnection | undefined;
+  }
+): Promise<{ action: StatsPlan['action']; id?: string; failed: boolean }> {
+  if (!connection || (stats.action !== 'adopt' && stats.action !== 'create')) {
+    return {
+      action: stats.action,
+      ...('id' in stats ? { id: stats.id } : {}),
+      failed: false
+    };
+  }
+
+  try {
+    const done = await ctx.ui.task(
+      'Setting up the statistics website',
+      async () => {
+        let action: 'adopt' | 'create' = 'adopt';
+        let id: string;
+        if (stats.action === 'adopt') {
+          id = stats.id;
+        } else {
+          // Checked again right before creating: the site may have appeared since the plan
+          const existing = (
+            await listTeamWebsites(connection, connection.teamId)
+          ).find((site) => normalizeDomain(site.domain) === stats.domain);
+          if (existing) {
+            id = existing.id;
+          } else {
+            action = 'create';
+            id = (
+              await createWebsite(connection, {
+                name: stats.name,
+                domain: stats.domain,
+                teamId: connection.teamId
+              })
+            ).id;
+          }
+        }
+
+        const { stdout } = await withDatabase(databaseUrl, (url) =>
+          runCmsScript(
+            root,
+            'set-tenant-stats-website.ts',
+            environment,
+            {
+              PROVISION_DATABASE_URL: url,
+              STATS_TENANT_ID: String(tenantId),
+              STATS_WEBSITE_ID: id
+            },
+            // Safe to repeat: a second run finds the same id and reports `unchanged`
+            { reports: 'STATS_WEBSITE_SET' }
+          )
+        );
+        const json = reported(stdout, 'STATS_WEBSITE_SET');
+        if (!json) throw new Error('The write-back script reported no result');
+        const result = statsReportSchema.parse(JSON.parse(json));
+        if (result.outcome === 'conflict') {
+          throw new Error(
+            `The workspace already holds statistics website ${result.current}, so ${id} was not written`
+          );
+        }
+        return { action, id };
+      },
+      ({ id }) => `Statistics website ${id} ready`
+    );
+    return { ...done, failed: false };
+  } catch (error) {
+    ctx.ui.warn(`Statistics website not set up: ${messageOf(error)}`);
+    return { action: stats.action, failed: true };
+  }
 }
 
 /**
@@ -286,8 +456,36 @@ export default defineCommand({
       .filter(({ action }) => action === 'create')
       .map(({ app }) => app);
 
+    const pullRequest = previewApp ? pullRequestOf(previewApp) : undefined;
+    const {
+      plan: stats,
+      connection: statsConnection,
+      error
+    } = await ctx.ui.task(
+      'Looking up the statistics website in Umami',
+      () =>
+        planStats(
+          environment,
+          apps,
+          tenant,
+          flyAppName(ctx.root, 'cms', deployment, pullRequest)
+        ),
+      ({ plan }) => statsStep(plan)
+    );
+    const notes = [
+      ...(stats.action === 'unknown'
+        ? [
+            `Statistics website ${stats.id} is unknown to Umami. ${tenant.name} keeps it as it is; check the id in the workspace or in Umami.`
+          ]
+        : []),
+      ...(error
+        ? [`Statistics skipped, Umami could not be read: ${error}`]
+        : [])
+    ];
+
     return {
-      steps: provisionSteps(deployment, folders, keys, flags),
+      steps: provisionSteps(deployment, folders, keys, flags, stats),
+      notes,
       target: { environment, name: deployment },
       data: {
         environment,
@@ -299,10 +497,15 @@ export default defineCommand({
         folders,
         keysToWrite,
         flags,
+        databaseUrl,
+        tenantId: tenant.id,
+        stats,
+        statsConnection,
         changes:
           folders.length +
           keysToWrite.length +
-          flags.filter(({ action }) => action === 'create').length
+          flags.filter(({ action }) => action === 'create').length +
+          (stats.action === 'adopt' || stats.action === 'create' ? 1 : 0)
       } satisfies PlanData
     };
   },
@@ -318,6 +521,10 @@ export default defineCommand({
       folders,
       keysToWrite,
       flags,
+      databaseUrl,
+      tenantId,
+      stats,
+      statsConnection,
       changes
     } = data;
     const { client, projectId } = connection;
@@ -398,6 +605,15 @@ export default defineCommand({
       ctx.ui.warn(pausedMessage(environment, deployment, paused));
     }
     const pausedApps = new Set(paused.map(({ app }) => app));
+
+    const statistics = await applyStats(ctx, {
+      root: ctx.root,
+      environment,
+      databaseUrl,
+      tenantId,
+      stats,
+      connection: statsConnection
+    });
 
     const pullRequest = previewApp ? pullRequestOf(previewApp) : undefined;
     const flyApps = apps
@@ -514,6 +730,7 @@ export default defineCommand({
       ...(started.length
         ? [`Follow the deployment: gh run list --workflow=${DEPLOY_WORKFLOW}`]
         : []),
+      ...(statistics.failed ? [RETRY_HINT] : []),
       "Add the workspace's domains and request certificates in its Domains panel.",
       "Confirm the result in the workspace's Infisical setup panel."
     ];
@@ -521,6 +738,7 @@ export default defineCommand({
     // Provisioning can succeed while the app is still not deployed; the
     // summary says which, rather than a plain success for half the job
     const notDeployed = toDeploy.length > started.length;
+    const partial = notDeployed;
     const done = changes
       ? `Provisioned '${deployment}' in ${environment}`
       : `'${deployment}' was already provisioned in ${environment}`;
@@ -531,7 +749,7 @@ export default defineCommand({
         : started.length
           ? `${done}, and its deployment has started`
           : done,
-      partial: notDeployed,
+      partial,
       next,
       json: {
         deployment,
@@ -543,7 +761,11 @@ export default defineCommand({
         flagsWritten: flags
           .filter(({ action }) => action === 'create')
           .map(({ app }) => app),
-        paused: paused.map(({ app }) => app)
+        paused: paused.map(({ app }) => app),
+        statistics: {
+          action: statistics.action,
+          ...(statistics.id ? { id: statistics.id } : {})
+        }
       }
     };
   }
