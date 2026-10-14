@@ -47,6 +47,9 @@ export function cspForRequest(pathname: string, env: Env): CspForRequest {
   // through Payload, so the site needs no other origin than fonts
   const fonts = toOrigin(env.FONT_ASSETS_BASE_URL);
   const admin = surface === 'admin';
+  // Umami's heatmap view frames site pages to draw the clicks over them
+  const api = pathname === '/api' || pathname.startsWith('/api/');
+  const umami = admin || api ? undefined : toOrigin(env.UMAMI_URL);
 
   const options = {
     nonce,
@@ -59,6 +62,7 @@ export function cspForRequest(pathname: string, env: Env): CspForRequest {
       // Payload's default account avatar
       img: admin ? [GRAVATAR] : []
     },
+    frameAncestors: umami ? [umami] : [],
     reportUri: sentryCspReportUri(env.SENTRY_DSN, env.DEPLOY_ENV),
     development: env.NODE_ENV === 'development'
   };

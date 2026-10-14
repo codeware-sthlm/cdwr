@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -10,6 +11,24 @@ import isCI from 'is-ci';
 import { cspBaseline } from '../../libs/shared/util/csp/src/lib/csp.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Umami's dashboard, which frames site pages to draw heatmaps over them. Read
+ * from its fly.toml, since these headers are fixed at build time; the proxy's
+ * full policy follows `UMAMI_URL` at runtime instead
+ */
+const umamiDashboard = (() => {
+  try {
+    const toml = readFileSync(
+      path.join(__dirname, '../umami/fly.toml'),
+      'utf8'
+    );
+    const app = toml.match(/^app\s*=\s*['"]([\w-]+)['"]/m)?.[1];
+    return app ? `https://${app}.fly.dev` : undefined;
+  } catch {
+    return undefined;
+  }
+})();
 
 // Log build-time environment for debugging
 if (process.env.NX_TASK_TARGET_TARGET === 'build') {
@@ -87,7 +106,22 @@ const nextConfig = {
       {
         source: '/:path*',
         headers: [{ key: 'content-security-policy', value: cspBaseline() }]
-      }
+      },
+      // Site pages may also be framed by the heatmap view; admin and api never.
+      // The later rule wins for the same header
+      ...(umamiDashboard
+        ? [
+            {
+              source: '/((?!admin|api).*)',
+              headers: [
+                {
+                  key: 'content-security-policy',
+                  value: cspBaseline([umamiDashboard])
+                }
+              ]
+            }
+          ]
+        : [])
     ];
   },
 
