@@ -17,14 +17,54 @@ import {
   addDataAndFileToRequest
 } from 'payload';
 
-import { firstSiteTenantId } from '../security/first-site-tenant';
+import {
+  firstSiteTenantId,
+  workspaceHasPages
+} from '../security/first-site-tenant';
 import { deploymentPrivacyFacts } from '../utils/deployment-privacy-facts';
 
-/** Quoted in the privacy text; a new workspace has not set its own */
+/** Quoted in the privacy text when the workspace has not set its own */
 const TOUR_RETENTION_DAYS = 365;
 
 /** Workspaces with an apply in flight, so a double submit cannot apply twice */
 const applying = new Set<number>();
+
+/**
+ * What the workspace itself does with a visitor's details. Having no pages
+ * says nothing about tours or retention, which may be set up already.
+ */
+async function workspacePrivacyFacts(
+  payload: PayloadRequest['payload'],
+  tenantId: number,
+  req: PayloadRequest
+) {
+  const tenantWhere = { tenant: { equals: tenantId } };
+  const [tours, { docs }] = await Promise.all([
+    payload.count({
+      collection: 'tours',
+      where: tenantWhere,
+      overrideAccess: true,
+      req
+    }),
+    payload.find({
+      collection: 'site-settings',
+      where: tenantWhere,
+      depth: 0,
+      limit: 1,
+      select: { tourSignups: true, forms: true },
+      overrideAccess: true,
+      req
+    })
+  ]);
+  const settings = docs[0];
+
+  return {
+    tourSignups: tours.totalDocs > 0,
+    tourRetentionDays:
+      settings?.tourSignups?.retentionDays ?? TOUR_RETENTION_DAYS,
+    formsRetentionDays: settings?.forms?.retentionDays ?? null
+  };
+}
 
 export type FirstSiteAnswers = {
   purpose: StarterPurpose;
@@ -91,14 +131,8 @@ export const firstSiteEndpoint: Endpoint = {
     applying.add(tenantId);
 
     try {
-      // Drafts count too: any page means the editor has started on their own
-      const { totalDocs } = await payload.count({
-        collection: 'pages',
-        where: { tenant: { equals: tenantId } },
-        overrideAccess: true,
-        req
-      });
-      if (totalDocs > 0) {
+      // Any page means the editor has started on their own
+      if (await workspaceHasPages(payload, tenantId, req)) {
         return refuse(StatusCodes.CONFLICT, 'The site already has pages');
       }
 
@@ -129,9 +163,7 @@ export const firstSiteEndpoint: Endpoint = {
         email: user.email,
         locale,
         privacy: {
-          tourSignups: false,
-          tourRetentionDays: TOUR_RETENTION_DAYS,
-          formsRetentionDays: null,
+          ...(await workspacePrivacyFacts(payload, tenantId, req)),
           ...deploymentPrivacyFacts(tenant.statsWebsiteId)
         }
       });

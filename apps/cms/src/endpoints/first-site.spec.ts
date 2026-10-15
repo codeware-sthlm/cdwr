@@ -38,6 +38,8 @@ jest.mock('../utils/deployment-privacy-facts', () => ({
 }));
 
 const count = jest.fn();
+let pages: Array<unknown> = [];
+let settings: Array<unknown> = [];
 const find = jest.fn();
 const findByID = jest.fn();
 const logger = { error: jest.fn(), info: jest.fn() };
@@ -76,13 +78,23 @@ beforeEach(() => {
   } as ReturnType<typeof getEnv>);
   jest.mocked(getSingleTenantIdFromHeaders).mockReturnValue(5);
   count.mockResolvedValue({ totalDocs: 0 });
+  pages = [];
+  settings = [];
   findByID.mockResolvedValue({
     name: 'Acme',
     slug: 'acme',
     supportedLocales: ['sv'],
     statsWebsiteId: null
   });
-  find.mockResolvedValue({ docs: [{ id: 42 }] });
+  find.mockImplementation(
+    async ({ collection, draft }: { collection: string; draft?: boolean }) => {
+      if (collection === 'site-settings') {
+        return { docs: settings };
+      }
+      // The existence check reads newest versions; the home lookup follows the apply
+      return { docs: draft ? pages : [{ id: 42 }] };
+    }
+  );
   jest.mocked(buildStarterDefinition).mockReturnValue({
     name: 'starter:business',
     pages: []
@@ -146,12 +158,60 @@ describe('firstSiteEndpoint', () => {
   });
 
   it('refuses a workspace that already has pages', async () => {
-    count.mockResolvedValue({ totalDocs: 1 });
+    pages = [{ id: 7 }];
 
     const response = await call(adminOf(5));
 
     expect(response.status).toBe(409);
     expect(applySiteDefinition).not.toHaveBeenCalled();
+  });
+
+  it('counts a page only its newest draft assigns to the workspace', async () => {
+    pages = [{ id: 7 }];
+
+    await call(adminOf(5));
+
+    expect(find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'pages',
+        draft: true,
+        where: { tenant: { equals: 5 } }
+      })
+    );
+    expect(applySiteDefinition).not.toHaveBeenCalled();
+  });
+
+  it("states the workspace's own tours and retention in the privacy text", async () => {
+    count.mockResolvedValue({ totalDocs: 2 });
+    settings = [
+      { tourSignups: { retentionDays: 30 }, forms: { retentionDays: 90 } }
+    ];
+
+    await call(adminOf(5));
+
+    expect(buildStarterDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        privacy: expect.objectContaining({
+          tourSignups: true,
+          tourRetentionDays: 30,
+          formsRetentionDays: 90
+        })
+      })
+    );
+  });
+
+  it('falls back to the default retention without settings', async () => {
+    await call(adminOf(5));
+
+    expect(buildStarterDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        privacy: expect.objectContaining({
+          tourSignups: false,
+          tourRetentionDays: 365,
+          formsRetentionDays: null
+        })
+      })
+    );
   });
 
   it('refuses a second submit while the first is applying', async () => {

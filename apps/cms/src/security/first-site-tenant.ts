@@ -4,7 +4,7 @@ import {
   getUserTenantIDs,
   hasRole
 } from '@codeware/app-cms/util/misc';
-import type { Payload, TypedUser } from 'payload';
+import type { Payload, PayloadRequest, TypedUser } from 'payload';
 
 import { getSingleTenantIdFromHeaders } from '../components/admin/utils/tenant-where';
 
@@ -39,4 +39,30 @@ export async function firstSiteTenantId(
   return getUserTenantIDs(user ?? null, ['admin']).includes(tenantId)
     ? tenantId
     : null;
+}
+
+/**
+ * Whether the workspace has any page at all, drafts included.
+ *
+ * Queried with `draft: true`: a page never published keeps its creation state
+ * in the main table, where `tenant` can still be empty after an autosave
+ * assigned it, so only its newest version says whose it is.
+ */
+export async function workspaceHasPages(
+  payload: Payload,
+  tenantId: number,
+  req?: PayloadRequest
+): Promise<boolean> {
+  const { docs } = await payload.find({
+    collection: 'pages',
+    where: { tenant: { equals: tenantId } },
+    draft: true,
+    depth: 0,
+    limit: 1,
+    select: {},
+    pagination: false,
+    overrideAccess: true,
+    req
+  });
+  return docs.length > 0;
 }
