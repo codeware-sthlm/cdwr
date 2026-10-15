@@ -35,3 +35,4 @@ export type {
 export { findPlatformTenant } from './lib/find-platform-tenant';
 export { platform } from './lib/platform/platform';
 export type { PlatformTenantSlug } from './lib/platform/platform';
+export { codewareHeroIllustration } from './lib/site-definitions/illustrations';

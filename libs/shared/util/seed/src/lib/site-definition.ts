@@ -302,6 +302,8 @@ export type PageDefinition = Pick<Page, 'name'> & {
   slug: string;
   header?: Page['header'];
   visibility?: Page['visibility'];
+  /** Created unpublished, so an editor reviews it before visitors see it */
+  draft?: boolean;
   layout: Array<BlockDefinition>;
 };
 
@@ -310,6 +312,8 @@ export type PostDefinition = Pick<Post, 'title'> & {
   /** Markdown, converted to Lexical on apply — as the seed already does */
   content: string;
   visibility?: Post['visibility'];
+  /** Created unpublished, so an editor reviews it before visitors see it */
+  draft?: boolean;
   categories?: Array<{ lookupSlug: string }>;
   heroImage?: MediaRef;
   /** Resolved against the tenant's users, who a definition never states */
