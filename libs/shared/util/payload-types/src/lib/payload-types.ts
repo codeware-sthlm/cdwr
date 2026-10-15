@@ -568,6 +568,10 @@ export interface Tenant {
    * The site's id in Umami. Set by provisioning; leave empty to collect no statistics.
    */
   statsWebsiteId?: string | null;
+  /**
+   * Pending workspaces come from self-serve signup and are not deployed until activated.
+   */
+  status: 'pending' | 'active';
   relations?: {
     relatedUsers?: {
       docs?: (number | User)[];
@@ -633,6 +637,8 @@ export interface User {
   salt?: string | null;
   hash?: string | null;
   resetPasswordRequestedAt?: string | null;
+  _verified?: boolean | null;
+  _verificationToken?: string | null;
   loginAttempts?: number | null;
   lockUntil?: string | null;
   sessions?:
@@ -2165,6 +2171,10 @@ export interface PlatformSetting {
    */
   signupOpen?: boolean | null;
   /**
+   * Gets a short notice for each self-serve signup; empty means the signup is only logged.
+   */
+  signupNotifyEmail?: string | null;
+  /**
    * Domains the host application is reachable on, in addition to its .fly.dev address — which keeps working and stays useful for support. Add the domain here first, then create the DNS records shown after saving. Takes effect after a restart.
    */
   domains?:
@@ -3244,6 +3254,7 @@ export interface PlatformLabelsSelect<T extends boolean = true> {
  */
 export interface PlatformSettingsSelect<T extends boolean = true> {
   signupOpen?: T;
+  signupNotifyEmail?: T;
   domains?:
     | T
     | {
@@ -3575,6 +3586,7 @@ export interface TenantsSelect<T extends boolean = true> {
         id?: T;
       };
   statsWebsiteId?: T;
+  status?: T;
   relations?:
     | T
     | {
@@ -3690,6 +3702,8 @@ export interface UsersSelect<T extends boolean = true> {
   salt?: T;
   hash?: T;
   resetPasswordRequestedAt?: T;
+  _verified?: T;
+  _verificationToken?: T;
   loginAttempts?: T;
   lockUntil?: T;
   sessions?:

@@ -79,6 +79,7 @@ async function createTenant() {
         supportedLocales: locales as Array<'en' | 'sv'>,
         apiKey,
         enableAPIKey: true,
+        status: 'active',
         ...(slug ? { slug } : {}),
         ...(deployment ? { deployment } : {})
       },
