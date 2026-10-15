@@ -1,18 +1,15 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
+import { t } from '@codeware/shared/util/i18n';
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
+
+import { getRequestLocale } from '../../../../utils/request-locale';
 
 import { ResendForm } from './ResendForm.client';
 
-const localeFromHeader = (accepted: string): SupportedLocale =>
-  accepted.toLowerCase().startsWith('sv') ? 'sv' : 'en';
-
 export async function generateMetadata(): Promise<Metadata> {
-  const accepted = (await headers()).get('accept-language') ?? '';
   return {
-    title: t(localeFromHeader(accepted), 'signup.resend.title'),
+    title: t(await getRequestLocale(), 'signup.resend.title'),
     robots: { index: false }
   };
 }
@@ -29,8 +26,7 @@ export default async function ResendPage() {
     notFound();
   }
 
-  const accepted = (await headers()).get('accept-language') ?? '';
-  const locale = localeFromHeader(accepted);
+  const locale = await getRequestLocale();
 
   return <ResendForm locale={locale} siteKey={env.HUMAN_CHECK?.siteKey} />;
 }

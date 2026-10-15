@@ -8,6 +8,10 @@ const config: StorybookConfig = {
     '../src/**/*.mdx',
     '../src/**/*.stories.@(ts|tsx)',
     {
+      directory: '../../../libs/app-cms/ui/auth/',
+      files: '**/*.@(mdx|stories.@(ts|tsx))'
+    },
+    {
       directory: '../../../libs/app-cms/ui/dashboard/',
       files: '**/*.@(mdx|stories.@(ts|tsx))'
     },

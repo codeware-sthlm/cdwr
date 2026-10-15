@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+
+/* Enter/exit animation utilities used by the shadcn overlay components */
+@import 'tw-animate-css';
+
+/* Use the Payload admin theme, so the auth pages match the admin login */
+@import '../../../../../libs/shared/theme/src/lib/payload-admin/tailwind-base.css';
+
+/* Let Tailwind know about shared components */
+@source '../../../../../libs/shared/ui';
+@source '../../../../../libs/app-cms/ui/auth';
