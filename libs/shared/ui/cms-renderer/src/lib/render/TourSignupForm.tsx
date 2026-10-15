@@ -55,13 +55,23 @@ export type TourSignupFormProps = {
  * why the confirmation is read from the response rather than predicted here.
  */
 export function TourSignupForm({ tour, onSuccess }: TourSignupFormProps) {
-  const { locale, signupPolicy, submitTourSignup } = usePayload();
+  const {
+    colorScheme,
+    humanCheckSiteKey,
+    locale,
+    signupPolicy,
+    submitTourSignup
+  } = usePayload();
   const [isLoading, setIsLoading] = useState(false);
   // Set the moment a signup starts, not on the next render — `handleSubmit`
   // validates asynchronously, so two quick presses of Enter can both arrive
   // before `isLoading` has re-rendered
   const submitting = useRef(false);
-  const humanCheck = useHumanCheck();
+  const humanCheck = useHumanCheck({
+    colorScheme,
+    locale,
+    siteKey: humanCheckSiteKey
+  });
 
   const form = useForm<Values>({
     defaultValues: {

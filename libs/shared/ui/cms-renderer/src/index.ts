@@ -22,6 +22,12 @@ export {
   usePayload
 } from './lib/providers/PayloadProvider';
 
+export { HumanCheck, type HumanCheckProps } from './lib/human-check/HumanCheck';
+export {
+  type UseHumanCheckOptions,
+  useHumanCheck
+} from './lib/human-check/use-human-check';
+
 export { ColorSchemeProvider } from './lib/providers/ColorSchemeProvider';
 
 export { DesktopNavigation } from './lib/navigation/DesktopNavigation';

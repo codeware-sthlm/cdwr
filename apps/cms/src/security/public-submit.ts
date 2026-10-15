@@ -50,11 +50,14 @@ const REFUSED = 'Could not accept this submission';
  * reads `message`, and an external caller reads `error`.
  *
  * @param scope - What is being posted to, for the allowance and the log line
+ * @param options.limit - Submissions allowed per window for this scope, in
+ *   place of `HUMAN_CHECK_RATE_LIMIT`
  */
 export async function refuseUnlessHuman(
   request: NextRequest,
   scope: string,
-  fields: HumanCheckFields | undefined
+  fields: HumanCheckFields | undefined,
+  options?: { limit?: number }
 ): Promise<NextResponse | null> {
   const env = getEnv(false);
   const forwarded = isForwardedByFirstParty(request, env);
@@ -82,7 +85,7 @@ export async function refuseUnlessHuman(
     fields: fields ?? {},
     forwarded,
     headers: request.headers,
-    rateLimit: { limit: env?.HUMAN_CHECK_RATE_LIMIT },
+    rateLimit: { limit: options?.limit ?? env?.HUMAN_CHECK_RATE_LIMIT },
     scope,
     secretKey: env?.HUMAN_CHECK?.secretKey
   });
