@@ -178,10 +178,13 @@ export async function consumeInviteCode(
     );
   }
 
+  // Postgres refuses a qualified column as the target of SET, so those two
+  // are named on their own; everywhere else the qualified form is fine
   const result = await adapter.execute({
     db,
     sql: sql`update ${codes}
-      set ${codes.uses} = coalesce(${codes.uses}, 0) + 1, ${codes.updatedAt} = now()
+      set ${sql.identifier(codes.uses.name)} = coalesce(${codes.uses}, 0) + 1,
+        ${sql.identifier(codes.updatedAt.name)} = now()
       where ${codes.id} = ${doc.id}
         and coalesce(${codes.uses}, 0) < ${codes.maxUses}
         and (${codes.expiresAt} is null or ${codes.expiresAt} > now())
