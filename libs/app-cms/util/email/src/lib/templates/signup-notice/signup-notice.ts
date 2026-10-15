@@ -9,6 +9,8 @@ export type SignupNoticeMailInput = {
   deployment: string;
   userName: string;
   userEmail: string;
+  /** Environment the platform runs in; anything but production is provisioned as a preview */
+  environment: 'development' | 'preview' | 'production';
   /** Absolute link to the new tenant in the admin */
   adminUrl: string;
   /** Header with logo and accent; omitted for a plain mail */
@@ -30,6 +32,7 @@ export function renderSignupNoticeMail(input: SignupNoticeMailInput): {
     adminUrl,
     brand,
     deployment,
+    environment,
     locale,
     tenantName,
     userEmail,
@@ -40,7 +43,12 @@ export function renderSignupNoticeMail(input: SignupNoticeMailInput): {
 
   const { html, text } = renderEmailLayout({
     title: subject,
-    paragraphs: [t(locale, 'signupNotice.body')],
+    paragraphs: [
+      t(locale, 'signupNotice.body'),
+      t(locale, 'signupNotice.nextStep', {
+        command: `cdwr tenant provision --env ${environment === 'production' ? 'production' : 'preview'} --workspace ${deployment} --apps cms`
+      })
+    ],
     detailsHeading: t(locale, 'signupNotice.detailsHeading'),
     details: [
       [t(locale, 'signupNotice.workspaceLabel'), tenantName],

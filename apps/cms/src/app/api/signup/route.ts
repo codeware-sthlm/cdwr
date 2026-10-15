@@ -195,6 +195,7 @@ async function sendMails(
               locale: 'en',
               tenantName: input.siteName,
               deployment: input.deployment,
+              environment: getEnv().DEPLOY_ENV,
               userName: input.name,
               userEmail: input.email,
               adminUrl: `${serverURL}${payload.config.routes.admin}/collections/tenants/${tenant.id}`

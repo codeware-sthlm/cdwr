@@ -233,6 +233,7 @@ export type TranslationKey =
   | 'signupNotice.detailsHeading'
   | 'signupNotice.emailLabel'
   | 'signupNotice.nameLabel'
+  | 'signupNotice.nextStep'
   | 'signupNotice.subject'
   | 'signupNotice.workspaceLabel'
   | 'tourSignup.acceptTerms'
@@ -546,6 +547,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signupNotice.detailsHeading': 'Signup',
     'signupNotice.emailLabel': 'Email',
     'signupNotice.nameLabel': 'Name',
+    'signupNotice.nextStep': 'To take it live, run: {{command}}',
     'signupNotice.subject': 'New self-serve signup: {{tenantName}}',
     'signupNotice.workspaceLabel': 'Workspace',
     'tourSignup.acceptTerms': 'I accept the terms',
@@ -868,6 +870,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signupNotice.detailsHeading': 'Registrering',
     'signupNotice.emailLabel': 'E-post',
     'signupNotice.nameLabel': 'Namn',
+    'signupNotice.nextStep': 'Kör detta för att sätta den i drift: {{command}}',
     'signupNotice.subject': 'Ny självregistrering: {{tenantName}}',
     'signupNotice.workspaceLabel': 'Arbetsyta',
     'tourSignup.acceptTerms': 'Jag godkänner villkoren',
