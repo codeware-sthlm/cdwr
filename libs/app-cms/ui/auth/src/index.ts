@@ -1,3 +1,4 @@
+export * from './lib/auth-brand';
 export * from './lib/auth-card';
 export * from './lib/resend-form-view';
 export * from './lib/signup-form-view';

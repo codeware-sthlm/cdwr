@@ -120,6 +120,7 @@ export default buildConfig({
       ],
       // The login screen is where a refused session lands, so it is the one
       // place the warning has to reach even when nothing else renders
+      afterLogin: ['@codeware/apps/cms/components/admin/AfterLogin'],
       beforeLogin: ['@codeware/apps/cms/components/admin/DomainMismatchNotice'],
       graphics: {
         Icon: '@codeware/apps/cms/components/Icon.client',

@@ -12,6 +12,7 @@
 
 /* Scan classes from libs not resolvable via path aliases */
 @source '../../../../../libs/shared/ui';
+@source '../../../../../libs/app-cms/ui/auth';
 @source '../../../../../libs/app-cms/ui/dashboard';
 @source '../../../../../libs/app-cms/ui/domains';
 @source '../../../../../libs/app-cms/ui/fields';
@@ -22,6 +23,9 @@
 
 /* Adapt Payload's native UI to the theme (one direction; never defines shadcn tokens) */
 @import '../../../../../libs/shared/theme/src/lib/payload-admin/payload-retheme.css';
+
+/* The login view as the auth pages' card */
+@import './login.css';
 
 /* Animation utilities used by shadcn components (animate-in/out, slide/fade,
  * accordion-up/down). The package was a declared dependency but never imported,
