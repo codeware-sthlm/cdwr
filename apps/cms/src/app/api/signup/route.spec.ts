@@ -98,11 +98,10 @@ const unique = (path: string) =>
 
 beforeEach(() => {
   jest.resetAllMocks();
-  jest
-    .mocked(getEnv)
-    .mockReturnValue({ APP_MODE: { type: 'host' } } as ReturnType<
-      typeof getEnv
-    >);
+  jest.mocked(getEnv).mockReturnValue({
+    APP_MODE: { type: 'host' },
+    DEPLOY_ENV: 'production'
+  } as ReturnType<typeof getEnv>);
   jest.mocked(refuseUnlessHuman).mockResolvedValue(null);
   jest.mocked(getPayload).mockResolvedValue(payload as never);
   jest.mocked(consumeInviteCode).mockResolvedValue(undefined as never);
@@ -234,6 +233,9 @@ describe('POST /api/signup', () => {
     expect(mails.notice?.to).toBe('owner@example.com');
     expect(mails.notice?.mail.text).toContain(
       'https://cms.example/admin/collections/tenants/11'
+    );
+    expect(mails.notice?.mail.text).toContain(
+      'cdwr tenant provision --env production --workspace'
     );
   });
 

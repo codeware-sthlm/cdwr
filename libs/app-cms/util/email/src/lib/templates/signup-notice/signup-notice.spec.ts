@@ -6,6 +6,7 @@ const base = {
   locale: 'en' as const,
   tenantName: 'Titan Tours',
   deployment: 'cdwr-cms-titan',
+  environment: 'production' as const,
   userName: 'Anna Berg',
   userEmail: 'anna@example.com',
   adminUrl: 'https://cms.example.com/admin/collections/tenants/1'
@@ -34,10 +35,28 @@ describe('renderSignupNoticeMail', () => {
     expect(mail.text).toContain(base.adminUrl);
   });
 
+  it('names the provision command for the deployment', () => {
+    const mail = renderSignupNoticeMail(base);
+    const command =
+      'cdwr tenant provision --env production --workspace cdwr-cms-titan --apps cms';
+
+    expect(mail.text).toContain(`To take it live, run: ${command}`);
+    expect(mail.html).toContain(command);
+  });
+
+  it('provisions in preview outside production', () => {
+    const mail = renderSignupNoticeMail({ ...base, environment: 'preview' });
+
+    expect(mail.text).toContain(
+      'cdwr tenant provision --env preview --workspace cdwr-cms-titan --apps cms'
+    );
+  });
+
   it('renders in Swedish', () => {
     const mail = renderSignupNoticeMail({ ...base, locale: 'sv' });
 
     expect(mail.subject).toBe('Ny självregistrering: Titan Tours');
+    expect(mail.text).toContain('Kör detta för att sätta den i drift: cdwr');
   });
 
   it('escapes user-provided values', () => {
