@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 
 import { NONCE_HEADER, cspForRequest } from './utils/csp';
 import { FORCE_LOGOUT_PATH, SESSION_COOKIES } from './utils/force-logout';
+import { signupRewrite } from './utils/platform-signup';
 import { isWellFormedActionId } from './utils/server-action';
 import { SITE_GATE_PATH, isGatedPath } from './utils/site-gate';
 
@@ -67,6 +68,15 @@ function route(request: NextRequest, requestHeaders: Headers) {
     pathname !== '/cdwr-cloud.png'
   ) {
     return NextResponse.rewrite(new URL('/maintenance', request.url), {
+      request: { headers: requestHeaders }
+    });
+  }
+
+  // The platform's signup page, on the host only; a tenant site's own
+  // `/signup` page is left to the site
+  const signup = signupRewrite(pathname, process.env);
+  if (signup) {
+    return NextResponse.rewrite(new URL(signup, request.url), {
       request: { headers: requestHeaders }
     });
   }
