@@ -87,9 +87,15 @@ const PopulatedFormBlock: React.FC<
   });
 
   // Payload context
-  const { navigate, submitForm, locale } = usePayload();
+  const { navigate, submitForm, locale, colorScheme, humanCheckSiteKey } =
+    usePayload();
 
-  const humanCheck = useHumanCheck({ disabled });
+  const humanCheck = useHumanCheck({
+    colorScheme,
+    disabled,
+    locale,
+    siteKey: humanCheckSiteKey
+  });
 
   // Control loading state and open confirmation dialog
   const [isLoading, setIsLoading] = useState(false);

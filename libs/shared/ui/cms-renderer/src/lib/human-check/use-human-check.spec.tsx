@@ -1,11 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import {
-  PayloadProvider,
-  type PayloadValue
-} from '../providers/PayloadProvider';
 
 import { useHumanCheck } from './use-human-check';
 
@@ -22,24 +16,23 @@ vi.mock('./turnstile', () => ({
 
 const { loadTurnstile } = await import('./turnstile');
 
-/** Only what the hook reads; the rest of the contract is not exercised here. */
-const withSite = (humanCheckSiteKey: PayloadValue['humanCheckSiteKey']) =>
-  function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <PayloadProvider
-        value={{ colorScheme: 'light', humanCheckSiteKey } as PayloadValue}
-      >
-        {children}
-      </PayloadProvider>
-    );
-  };
-
 type Probe = ReturnType<typeof useHumanCheck>;
 
 let latest: Probe;
 
-function Form({ disabled }: { disabled?: boolean } = {}) {
-  const humanCheck = useHumanCheck({ disabled });
+function Form({
+  disabled,
+  siteKey
+}: {
+  disabled?: boolean;
+  siteKey?: string | null;
+}) {
+  const humanCheck = useHumanCheck({
+    colorScheme: 'light',
+    disabled,
+    locale: 'en',
+    siteKey
+  });
   latest = humanCheck;
 
   return <form>{humanCheck.fields}</form>;
@@ -48,24 +41,8 @@ function Form({ disabled }: { disabled?: boolean } = {}) {
 const honeypot = () =>
   document.querySelector(String.raw`input[name="cdwr-hp"]`);
 
-// The provider brings a toaster along, which asks the browser about the
-// visitor's colour preference. jsdom has no answer to give
-const stubMatchMedia = () => {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn()
-  })) as unknown as typeof window.matchMedia;
-};
-
 describe('useHumanCheck', () => {
   beforeEach(() => {
-    stubMatchMedia();
     reset_.mockReset();
     render_.mockReset().mockReturnValue('widget-1');
     vi.mocked(loadTurnstile).mockClear();
@@ -77,7 +54,7 @@ describe('useHumanCheck', () => {
   });
 
   it('hides the honeypot from people without hiding it from a script', () => {
-    render(<Form />, { wrapper: withSite(null) });
+    render(<Form siteKey={null} />);
 
     const field = honeypot();
 
@@ -90,7 +67,7 @@ describe('useHumanCheck', () => {
   });
 
   it('draws no widget and asks Cloudflare for nothing without a key', () => {
-    render(<Form />, { wrapper: withSite(null) });
+    render(<Form siteKey={null} />);
 
     expect(loadTurnstile).not.toHaveBeenCalled();
     // Nothing to solve, so the form is free to send
@@ -98,7 +75,7 @@ describe('useHumanCheck', () => {
   });
 
   it('waits for a widget to be solved before the form may send', async () => {
-    render(<Form />, { wrapper: withSite('site-key') });
+    render(<Form siteKey="site-key" />);
 
     await vi.waitFor(() => expect(render_).toHaveBeenCalled());
 
@@ -113,7 +90,7 @@ describe('useHumanCheck', () => {
   });
 
   it('clears a token that expired, so a stale one is never sent', async () => {
-    render(<Form />, { wrapper: withSite('site-key') });
+    render(<Form siteKey="site-key" />);
 
     await vi.waitFor(() => expect(render_).toHaveBeenCalled());
 
@@ -127,7 +104,7 @@ describe('useHumanCheck', () => {
   });
 
   it('throws the spent token away and asks the widget for another', async () => {
-    render(<Form />, { wrapper: withSite('site-key') });
+    render(<Form siteKey="site-key" />);
 
     await vi.waitFor(() => expect(render_).toHaveBeenCalled());
 
@@ -144,7 +121,7 @@ describe('useHumanCheck', () => {
   });
 
   it('has nothing to reset where no widget is drawn', () => {
-    render(<Form />, { wrapper: withSite(null) });
+    render(<Form siteKey={null} />);
 
     latest.reset();
 
@@ -156,7 +133,7 @@ describe('useHumanCheck', () => {
     // What a content blocker refusing Cloudflare's script looks like from here
     vi.mocked(loadTurnstile).mockResolvedValueOnce(null);
 
-    render(<Form />, { wrapper: withSite('site-key') });
+    render(<Form siteKey="site-key" />);
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('could not load');
@@ -169,13 +146,13 @@ describe('useHumanCheck', () => {
       throw new Error('Invalid sitekey');
     });
 
-    render(<Form />, { wrapper: withSite('site-key') });
+    render(<Form siteKey="site-key" />);
 
     expect(await screen.findByRole('alert')).toBeTruthy();
   });
 
   it('takes the message away when an erroring widget recovers', async () => {
-    render(<Form />, { wrapper: withSite('site-key') });
+    render(<Form siteKey="site-key" />);
 
     await vi.waitFor(() => expect(render_).toHaveBeenCalled());
     const [, options] = render_.mock.calls[0];
@@ -190,7 +167,7 @@ describe('useHumanCheck', () => {
   });
 
   it('loads no third party into a form drawn as an example', () => {
-    render(<Form disabled />, { wrapper: withSite('site-key') });
+    render(<Form disabled siteKey="site-key" />);
 
     expect(loadTurnstile).not.toHaveBeenCalled();
     expect(latest.solved).toBe(true);
@@ -203,7 +180,7 @@ describe('useHumanCheck', () => {
     let clock = 1000;
     vi.spyOn(performance, 'now').mockImplementation(() => clock);
 
-    render(<Form />, { wrapper: withSite(null) });
+    render(<Form siteKey={null} />);
 
     const field = honeypot() as HTMLInputElement;
     field.value = 'https://buy-things.example';
@@ -220,7 +197,7 @@ describe('useHumanCheck', () => {
     let clock = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => clock);
 
-    render(<Form />, { wrapper: withSite(null) });
+    render(<Form siteKey={null} />);
 
     // The wall clock jumping backwards mid-form — a correction, a timezone
     // change, a laptop waking up — must not make the submission look instant

@@ -2,12 +2,18 @@
 
 import { useCallback, useRef, useState } from 'react';
 
-import { usePayload } from '../providers/PayloadProvider';
-import type { HumanCheckProof } from '../providers/PayloadProvider';
+import type {
+  HumanCheckProof,
+  PayloadValue
+} from '../providers/PayloadProvider';
 
 import { HumanCheck } from './HumanCheck';
 
-type Options = {
+export type UseHumanCheckOptions = {
+  /** Turnstile's site key; no key, no widget */
+  siteKey?: PayloadValue['humanCheckSiteKey'];
+  colorScheme?: PayloadValue['colorScheme'];
+  locale: PayloadValue['locale'];
   /**
    * A form drawn as an example posts nowhere, so it neither draws a widget nor
    * loads Cloudflare's script — which keeps a third party out of the gallery
@@ -23,8 +29,12 @@ type Options = {
  * and whether the check has been satisfied — so the submit button can wait for
  * a widget that has not been solved yet rather than posting into a refusal.
  */
-export function useHumanCheck({ disabled }: Options = {}) {
-  const { colorScheme, humanCheckSiteKey } = usePayload();
+export function useHumanCheck({
+  colorScheme,
+  disabled,
+  locale,
+  siteKey: configuredSiteKey
+}: UseHumanCheckOptions) {
   const honeypotRef = useRef<HTMLInputElement>(null);
   const [token, setToken] = useState('');
 
@@ -34,7 +44,7 @@ export function useHumanCheck({ disabled }: Options = {}) {
   // so the server only consults it where no Turnstile key is configured
   const drawnAt = useRef(performance.now());
 
-  const siteKey = disabled ? null : (humanCheckSiteKey ?? null);
+  const siteKey = disabled ? null : (configuredSiteKey ?? null);
 
   const onToken = useCallback((next: string) => setToken(next), []);
 
@@ -70,6 +80,7 @@ export function useHumanCheck({ disabled }: Options = {}) {
     fields: (
       <HumanCheck
         honeypotRef={honeypotRef}
+        locale={locale}
         registerReset={registerReset}
         siteKey={siteKey}
         theme={
