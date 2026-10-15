@@ -18,6 +18,18 @@ export {
   type ForgotPasswordMailInput,
   renderForgotPasswordMail
 } from './lib/templates/forgot-password/forgot-password';
+export {
+  type SignupEmailsInput,
+  sendSignupEmails
+} from './lib/send-signup-emails';
+export {
+  type SignupNoticeMailInput,
+  renderSignupNoticeMail
+} from './lib/templates/signup-notice/signup-notice';
+export {
+  type VerifyEmailMailInput,
+  renderVerifyEmailMail
+} from './lib/templates/verify-email/verify-email';
 export { renderNotificationMail } from './lib/templates/tour-signup/notification';
 export { renderSeatsFreedMail } from './lib/templates/tour-signup/seats-freed';
 export {
