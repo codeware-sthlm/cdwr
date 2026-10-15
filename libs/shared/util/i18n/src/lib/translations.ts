@@ -533,9 +533,9 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'accountExists.reset': 'Reset your password',
     'accountExists.ignore': "If it wasn't you, you can ignore this email.",
     'verifyEmail.afterConfirm':
-      'Once the address is confirmed, you can sign in to your new workspace.',
+      'Once the address is confirmed, you can sign in and start building your new site.',
     'verifyEmail.body':
-      'Welcome to {{brand}}! Confirm your email address to finish setting up your new workspace.',
+      'Welcome to {{brand}}! Confirm your email address to finish setting up your new site.',
     'verifyEmail.button': 'Confirm your email address',
     'verifyEmail.greeting': 'Hi,',
     'verifyEmail.greetingNamed': 'Hi {{name}},',
@@ -855,9 +855,9 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'accountExists.ignore':
       'Om det inte var du kan du bortse från det här mejlet.',
     'verifyEmail.afterConfirm':
-      'När e-postadressen är bekräftad kan du logga in på din nya arbetsyta.',
+      'När e-postadressen är bekräftad kan du logga in och börja bygga din nya webbplats.',
     'verifyEmail.body':
-      'Välkommen till {{brand}}! Bekräfta din e-postadress för att slutföra uppsättningen av din nya arbetsyta.',
+      'Välkommen till {{brand}}! Bekräfta din e-postadress för att slutföra uppsättningen av din nya webbplats.',
     'verifyEmail.button': 'Bekräfta din e-postadress',
     'verifyEmail.greeting': 'Hej,',
     'verifyEmail.greetingNamed': 'Hej {{name}},',
