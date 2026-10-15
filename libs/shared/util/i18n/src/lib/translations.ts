@@ -176,6 +176,21 @@ export type TranslationKey =
   | 'forgotPasswordEmail.greetingNamed'
   | 'forgotPasswordEmail.ignore'
   | 'forgotPasswordEmail.subject'
+  | 'verifyEmail.afterConfirm'
+  | 'verifyEmail.body'
+  | 'verifyEmail.button'
+  | 'verifyEmail.greeting'
+  | 'verifyEmail.greetingNamed'
+  | 'verifyEmail.ignore'
+  | 'verifyEmail.subject'
+  | 'signupNotice.body'
+  | 'signupNotice.button'
+  | 'signupNotice.deploymentLabel'
+  | 'signupNotice.detailsHeading'
+  | 'signupNotice.emailLabel'
+  | 'signupNotice.nameLabel'
+  | 'signupNotice.subject'
+  | 'signupNotice.workspaceLabel'
   | 'tourSignup.acceptTerms'
   | 'tourSignup.acceptTermsRequired'
   | 'tourSignup.dataNotice'
@@ -417,6 +432,23 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'forgotPasswordEmail.ignore':
       'If you did not ask for this, you can ignore this email. Your password stays unchanged.',
     'forgotPasswordEmail.subject': 'Reset your password',
+    'verifyEmail.afterConfirm':
+      'Once the address is confirmed, you can sign in to your new workspace.',
+    'verifyEmail.body':
+      'Welcome to {{brand}}! Confirm your email address to finish setting up your new workspace.',
+    'verifyEmail.button': 'Confirm your email address',
+    'verifyEmail.greeting': 'Hi,',
+    'verifyEmail.greetingNamed': 'Hi {{name}},',
+    'verifyEmail.ignore': 'If you did not sign up, you can ignore this email.',
+    'verifyEmail.subject': 'Confirm your email address',
+    'signupNotice.body': 'Someone signed up for a new workspace.',
+    'signupNotice.button': 'Open the workspace in the admin',
+    'signupNotice.deploymentLabel': 'Deployment',
+    'signupNotice.detailsHeading': 'Signup',
+    'signupNotice.emailLabel': 'Email',
+    'signupNotice.nameLabel': 'Name',
+    'signupNotice.subject': 'New self-serve signup: {{tenantName}}',
+    'signupNotice.workspaceLabel': 'Workspace',
     'tourSignup.acceptTerms': 'I accept the terms',
     'tourSignup.acceptTermsRequired': 'Please accept the terms to sign up',
     'tourSignup.dataNotice':
@@ -664,6 +696,24 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'forgotPasswordEmail.ignore':
       'Om det inte var du kan du bortse från det här mejlet. Ditt lösenord ändras inte.',
     'forgotPasswordEmail.subject': 'Återställ ditt lösenord',
+    'verifyEmail.afterConfirm':
+      'När e-postadressen är bekräftad kan du logga in på din nya arbetsyta.',
+    'verifyEmail.body':
+      'Välkommen till {{brand}}! Bekräfta din e-postadress för att slutföra uppsättningen av din nya arbetsyta.',
+    'verifyEmail.button': 'Bekräfta din e-postadress',
+    'verifyEmail.greeting': 'Hej,',
+    'verifyEmail.greetingNamed': 'Hej {{name}},',
+    'verifyEmail.ignore':
+      'Om du inte har registrerat dig kan du bortse från det här mejlet.',
+    'verifyEmail.subject': 'Bekräfta din e-postadress',
+    'signupNotice.body': 'Någon har registrerat en ny arbetsyta.',
+    'signupNotice.button': 'Öppna arbetsytan i admin',
+    'signupNotice.deploymentLabel': 'Driftsättning',
+    'signupNotice.detailsHeading': 'Registrering',
+    'signupNotice.emailLabel': 'E-post',
+    'signupNotice.nameLabel': 'Namn',
+    'signupNotice.subject': 'Ny självregistrering: {{tenantName}}',
+    'signupNotice.workspaceLabel': 'Arbetsyta',
     'tourSignup.acceptTerms': 'Jag godkänner villkoren',
     'tourSignup.acceptTermsRequired': 'Godkänn villkoren för att anmäla dig',
     'tourSignup.dataNotice':
