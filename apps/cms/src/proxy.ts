@@ -72,15 +72,6 @@ function route(request: NextRequest, requestHeaders: Headers) {
     });
   }
 
-  // The platform's signup page, on the host only; a tenant site's own
-  // `/signup` page is left to the site
-  const signup = signupRewrite(pathname, process.env);
-  if (signup) {
-    return NextResponse.rewrite(new URL(signup, request.url), {
-      request: { headers: requestHeaders }
-    });
-  }
-
   // Whole-site gate — a tenant site that is not open to the public yet.
   //
   // Read from `process.env` on every request rather than once at module scope:
@@ -109,6 +100,16 @@ function route(request: NextRequest, requestHeaders: Headers) {
         headers: { 'x-robots-tag': 'noindex' }
       });
     }
+  }
+
+  // The platform's signup page, on the host only; a tenant site's own
+  // `/signup` page is left to the site. After the gate, so a gated host
+  // asks for its password first
+  const signup = signupRewrite(pathname, process.env);
+  if (signup) {
+    return NextResponse.rewrite(new URL(signup, request.url), {
+      request: { headers: requestHeaders }
+    });
   }
 
   // Clear Next.js draft mode when the Payload session has expired or been cleared.
