@@ -1,12 +1,13 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
+import { AuthCard } from '@codeware/app-cms/ui/auth';
 import { Alert } from '@codeware/shared/ui/shadcn/components/alert';
-import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
+import { t } from '@codeware/shared/util/i18n';
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { getPayload } from 'payload';
 
 import config from '../../../payload.config';
+import { getRequestLocale } from '../../../utils/request-locale';
 
 import { SignupForm } from './SignupForm.client';
 
@@ -27,10 +28,7 @@ export default async function SignupPage() {
     notFound();
   }
 
-  const accepted = (await headers()).get('accept-language') ?? '';
-  const locale: SupportedLocale = accepted.toLowerCase().startsWith('sv')
-    ? 'sv'
-    : 'en';
+  const locale = await getRequestLocale();
 
   const payload = await getPayload({ config });
   const { docs } = await payload.find({
@@ -42,10 +40,9 @@ export default async function SignupPage() {
 
   if (docs[0]?.signupOpen !== true) {
     return (
-      <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold">{t(locale, 'signup.title')}</h1>
+      <AuthCard title={t(locale, 'signup.title')}>
         <Alert>{t(locale, 'signup.closed')}</Alert>
-      </div>
+      </AuthCard>
     );
   }
 

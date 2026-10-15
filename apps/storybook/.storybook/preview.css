@@ -2,6 +2,7 @@
 
 @layer theme, base, components, utilities;
 
+@source '../../../libs/app-cms/ui/auth/src';
 @source '../../../libs/app-cms/ui/dashboard/src';
 @source '../../../libs/app-cms/ui/domains/src';
 @source '../../../libs/app-cms/ui/submissions/src';
