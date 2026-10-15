@@ -43,14 +43,17 @@ import {
   type AppKind,
   DEPLOY_WORKFLOW,
   type FlagPlan,
+  type FlipOutcome,
   type Folder,
   type KeyPlan,
   type StatsPlan,
   TENANT_APPS,
   type TenantRow,
+  cmsPaused,
   conflictMessage,
   deployArgs,
   flagActionOf,
+  flipsStatus,
   folderPath,
   normalizeDomain,
   pausedMessage,
@@ -60,8 +63,11 @@ import {
   reasonSkipped,
   statsDomain,
   statsStep,
-  tenantRowSchema
+  statusReportSchema,
+  tenantRowSchema,
+  workspaceChoices
 } from './provision.logic';
+import { type Dispatch, awaitLive } from './provision.wait';
 
 type Connection = Awaited<ReturnType<typeof createClient>>;
 
@@ -232,6 +238,12 @@ interface PlanData {
   tenantId: number;
   stats: StatsPlan;
   statsConnection: StatsConnection | undefined;
+  /** The workspace is a new signup that gets activated once its site is up */
+  flip: boolean;
+  /** A new signup that `--no-wait` leaves pending */
+  skippedFlip: boolean;
+  /** A new signup whose cms deployment is switched off */
+  pausedFlip: boolean;
   changes: number;
 }
 
@@ -327,6 +339,68 @@ async function applyStats(
 }
 
 /**
+ * Flips a pending workspace to active. Never throws: a failure leaves the
+ * workspace pending with a warning.
+ */
+async function applyFlip(
+  ctx: Pick<Context, 'ui'>,
+  {
+    root,
+    environment,
+    databaseUrl,
+    tenantId
+  }: {
+    root: string;
+    environment: Environment;
+    databaseUrl: string;
+    tenantId: number;
+  }
+): Promise<'flipped' | 'unchanged' | 'left-pending'> {
+  try {
+    return await ctx.ui.task(
+      'Activating the workspace',
+      async () => {
+        const { stdout } = await withDatabase(databaseUrl, (url) =>
+          runCmsScript(
+            root,
+            'set-tenant-status.ts',
+            environment,
+            {
+              PROVISION_DATABASE_URL: url,
+              STATUS_TENANT_ID: String(tenantId)
+            },
+            // Safe to repeat: an active workspace reports `unchanged`
+            { reports: 'TENANT_STATUS_SET' }
+          )
+        );
+        const json = reported(stdout, 'TENANT_STATUS_SET');
+        if (!json) throw new Error('The status script reported no result');
+        const result = statusReportSchema.parse(JSON.parse(json));
+        switch (result.outcome) {
+          case 'set':
+            return 'flipped' as const;
+          case 'unchanged':
+            return 'unchanged' as const;
+          case 'conflict':
+            throw new Error(
+              `The workspace has status '${result.current}', so it was not changed`
+            );
+          case 'error':
+            throw new Error(result.message);
+        }
+      },
+      (result) =>
+        result === 'flipped'
+          ? 'Workspace is active'
+          : 'Workspace was already active'
+    );
+  } catch (error) {
+    ctx.ui.warn(`Workspace not activated: ${messageOf(error)}`);
+    return 'left-pending';
+  }
+}
+
+/**
  * Sets up a tenant in Infisical from what Payload already knows about it -
  * folders, then the API key its Fly apps authenticate with - and offers to
  * kick off the deployment. A new tenant folder is switched on with
@@ -360,12 +434,7 @@ export default defineCommand({
           if (reason)
             ctx.ui.warn(`Skipped ${row.name} (${row.slug}): ${reason}`);
         }
-        return rows
-          .filter((row) => !reasonSkipped(row))
-          .map((row) => ({
-            value: row.deployment as string,
-            hint: `${row.name} (${row.slug})`
-          }));
+        return workspaceChoices(rows);
       }
     }),
     apps: input.multiselect<AppKind>({
@@ -375,10 +444,18 @@ export default defineCommand({
       initial: ['cms'],
       min: 1,
       choices: () => TENANT_APPS.map((app) => ({ value: app }))
+    }),
+    wait: input.boolean({
+      prompt: 'Wait for the deployment and activate a new signup?',
+      description:
+        'Wait for the cms to be deployed and healthy, then activate a pending workspace; --no-wait skips both',
+      short: 'W',
+      flagOnly: true,
+      initial: true
     })
   },
 
-  async plan(ctx, { environment, previewApp, workspace, apps }) {
+  async plan(ctx, { environment, previewApp, workspace, apps, wait }) {
     const databaseUrl = await resolveDatabaseUrl(environment, previewApp);
     const cacheKey = `${environment}:${previewApp ?? ''}`;
     const rows =
@@ -472,7 +549,15 @@ export default defineCommand({
         ),
       ({ plan }) => statsStep(plan)
     );
+    const pendingCms = tenant.status === 'pending' && apps.includes('cms');
+    const paused = cmsPaused(flags);
+    const flip = flipsStatus(tenant, apps, wait, flags);
     const notes = [
+      ...(pendingCms && paused
+        ? [
+            `The cms is paused, so ${tenant.name} stays pending after provisioning.`
+          ]
+        : []),
       ...(stats.action === 'unknown'
         ? [
             `Statistics website ${stats.id} is unknown to Umami. ${tenant.name} keeps it as it is; check the id in the workspace or in Umami.`
@@ -484,7 +569,7 @@ export default defineCommand({
     ];
 
     return {
-      steps: provisionSteps(deployment, folders, keys, flags, stats),
+      steps: provisionSteps(deployment, folders, keys, flags, stats, flip),
       notes,
       target: { environment, name: deployment },
       data: {
@@ -501,6 +586,9 @@ export default defineCommand({
         tenantId: tenant.id,
         stats,
         statsConnection,
+        flip,
+        skippedFlip: !wait && pendingCms && !paused,
+        pausedFlip: pendingCms && paused,
         changes:
           folders.length +
           keysToWrite.length +
@@ -525,6 +613,9 @@ export default defineCommand({
       tenantId,
       stats,
       statsConnection,
+      flip,
+      skippedFlip,
+      pausedFlip,
       changes
     } = data;
     const { client, projectId } = connection;
@@ -639,6 +730,9 @@ export default defineCommand({
     const branch = ref ?? 'main';
 
     const started: string[] = [];
+    // How to recognise the cms run dispatched here; `blocked` when it cannot be
+    let cmsDispatch: Dispatch | undefined;
+    let flipBlocked: string | undefined;
     if (toDeploy.length && (!pullRequest || ref)) {
       const active = await listWorkflowRuns(
         ctx.root,
@@ -670,16 +764,14 @@ export default defineCommand({
 
       if (deploy) {
         for (const [index, { app, flyApp }] of toDeploy.entries()) {
-          const known = new Set(
-            (
-              await listWorkflowRuns(
-                ctx.root,
-                DEPLOY_WORKFLOW,
-                branch,
-                20
-              ).catch(() => [])
-            ).map(({ id }) => id)
-          );
+          const listed = await listWorkflowRuns(
+            ctx.root,
+            DEPLOY_WORKFLOW,
+            branch,
+            20
+          ).catch(() => null);
+          const known = new Set((listed ?? []).map(({ id }) => id));
+          const at = Date.now();
 
           try {
             await ctx.ui.task(`Starting the deployment of ${flyApp}`, () =>
@@ -691,6 +783,11 @@ export default defineCommand({
               })
             );
             started.push(flyApp);
+            if (app === 'cms') {
+              if (listed) cmsDispatch = { known, at };
+              else
+                flipBlocked = 'could not list deployment runs before dispatch';
+            }
           } catch (error) {
             ctx.ui.error(messageOf(error));
             continue;
@@ -711,6 +808,60 @@ export default defineCommand({
           );
           break;
         }
+      }
+    }
+
+    // A new signup goes live only after its cms is deployed and answering
+    let flipOutcome: FlipOutcome = 'not-applicable';
+    if (pausedFlip) {
+      flipOutcome = 'cms-paused';
+      ctx.ui.warn(
+        `The cms is paused, so '${deployment}' stays pending. Enable it and run provision again.`
+      );
+    } else if (skippedFlip) {
+      flipOutcome = 'no-wait';
+      ctx.ui.warn(
+        '--no-wait: the workspace stays pending. Run provision again once the site is up to activate it.'
+      );
+    } else if (flip) {
+      const cmsFlyApp = flyApps.find(({ app }) => app === 'cms')?.flyApp;
+      const cmsToDeploy = toDeploy.some(({ app }) => app === 'cms');
+      let reason: string | undefined;
+      if (!cmsFlyApp) {
+        reason = 'the cms is paused';
+      } else if (flipBlocked) {
+        reason = flipBlocked;
+      } else if (cmsToDeploy && !cmsDispatch) {
+        reason = 'the cms deployment was not started';
+      } else {
+        const live = await ctx.ui.task(
+          `Waiting for ${cmsFlyApp} to be deployed and healthy`,
+          () =>
+            awaitLive({
+              dispatch: cmsDispatch,
+              listRuns: () =>
+                listWorkflowRuns(ctx.root, DEPLOY_WORKFLOW, branch, 20),
+              healthUrl: `https://${cmsFlyApp}.fly.dev/api/health`
+            }),
+          (result) =>
+            result.live ? `${cmsFlyApp} is healthy` : 'Not healthy in time'
+        );
+        if (live.live) {
+          flipOutcome = await applyFlip(ctx, {
+            root: ctx.root,
+            environment,
+            databaseUrl,
+            tenantId
+          });
+        } else {
+          reason = live.reason;
+        }
+      }
+      if (reason) {
+        flipOutcome = 'left-pending';
+        ctx.ui.warn(
+          `Left pending: ${reason}. Run provision again once the site is up.`
+        );
       }
     }
 
@@ -738,17 +889,27 @@ export default defineCommand({
     // Provisioning can succeed while the app is still not deployed; the
     // summary says which, rather than a plain success for half the job
     const notDeployed = toDeploy.length > started.length;
-    const partial = notDeployed;
+    const partial = notDeployed || flipOutcome === 'left-pending';
     const done = changes
       ? `Provisioned '${deployment}' in ${environment}`
       : `'${deployment}' was already provisioned in ${environment}`;
 
+    const outcome = notDeployed
+      ? `${done} - not deployed yet, see the steps above`
+      : started.length
+        ? `${done}, and its deployment has started`
+        : done;
+    const activation =
+      flipOutcome === 'flipped'
+        ? ', workspace activated'
+        : flipOutcome === 'left-pending' ||
+            flipOutcome === 'no-wait' ||
+            flipOutcome === 'cms-paused'
+          ? ', workspace left pending'
+          : '';
+
     return {
-      summary: notDeployed
-        ? `${done} - not deployed yet, see the steps above`
-        : started.length
-          ? `${done}, and its deployment has started`
-          : done,
+      summary: outcome + activation,
       partial,
       next,
       json: {
@@ -765,7 +926,8 @@ export default defineCommand({
         statistics: {
           action: statistics.action,
           ...(statistics.id ? { id: statistics.id } : {})
-        }
+        },
+        statusFlip: flipOutcome
       }
     };
   }

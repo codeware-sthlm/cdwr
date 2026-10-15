@@ -39,6 +39,12 @@ export async function pullRequestBranch(
 export interface WorkflowRun {
   id: number;
   status: string;
+  /** Empty until the run has completed */
+  conclusion: string;
+  /** What started the run, such as `workflow_dispatch` or `push` */
+  event: string;
+  /** ISO time the run was created */
+  createdAt: string;
   url: string;
 }
 
@@ -80,7 +86,7 @@ export async function listWorkflowRuns(
       '--limit',
       String(limit),
       '--json',
-      'databaseId,status,url'
+      'databaseId,status,conclusion,event,createdAt,url'
     ],
     { cwd }
   );
@@ -88,11 +94,17 @@ export async function listWorkflowRuns(
     JSON.parse(stdout) as Array<{
       databaseId: number;
       status: string;
+      conclusion?: string | null;
+      event: string;
+      createdAt: string;
       url: string;
     }>
   ).map((r) => ({
     id: r.databaseId,
     status: r.status,
+    conclusion: r.conclusion ?? '',
+    event: r.event,
+    createdAt: r.createdAt,
     url: r.url
   }));
 }

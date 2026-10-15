@@ -58,7 +58,7 @@ Remembered inputs (environment, app) live in `~/.cdwr/prefs.json`.
 `cdwr infisical tenants|data|analysis` read what Infisical holds for tenants and apps, with values
 masked unless `--reveal` is given. A deployment ships when its folder holds `DEPLOY_ENABLED=true`
 (`/apps/<app>` for a host, `/tenants/<t>/apps/<app>` for a tenant); `tenants` and `analysis` show
-each folder as on, off or no flag, and `tenant provision` writes the flag for a new tenant. In production it also creates (or adopts, by domain) the tenant's Umami website in the team from `/integrations/umami` and stores its id as `statsWebsiteId`; without `PROVISION_API_KEY`, `TEAM_ID` and `UMAMI_URL` the step is skipped. Three more work on your own CLI session (`infisical login`, no
+each folder as on, off or no flag, and `tenant provision` writes the flag for a new tenant. In production it also creates (or adopts, by domain) the tenant's Umami website in the team from `/integrations/umami` and stores its id as `statsWebsiteId`; without `PROVISION_API_KEY`, `TEAM_ID` and `UMAMI_URL` the step is skipped. A workspace from self-serve signup (status `pending`, listed first in the choice) is activated once its cms deployment has succeeded and `/api/health` answers; a failure or timeout leaves it pending and a second run finishes the job. `--no-wait` skips the wait and the activation. Three more work on your own CLI session (`infisical login`, no
 token involved) and the same core as the `dev-plugin:infisical-run` executor:
 
 ```sh

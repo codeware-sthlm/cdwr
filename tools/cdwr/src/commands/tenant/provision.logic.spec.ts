@@ -1,10 +1,12 @@
 import {
   type AppKind,
+  FLIP_STEP,
   type Folder,
   type TenantRow,
   conflictMessage,
   deployArgs,
   flagActionOf,
+  flipsStatus,
   folderPath,
   normalizeDomain,
   pausedMessage,
@@ -13,7 +15,9 @@ import {
   provisionSteps,
   reasonSkipped,
   statsDomain,
-  statsStep
+  statsStep,
+  tenantRowSchema,
+  workspaceChoices
 } from './provision.logic';
 
 describe('folderPath', () => {
@@ -33,6 +37,7 @@ describe('reasonSkipped', () => {
     id: 1,
     name: 'Acme',
     slug: 'acme',
+    status: 'active',
     deployment: 'acme',
     apiKey: 'key',
     statsWebsiteId: null,
@@ -281,6 +286,7 @@ describe('statsDomain', () => {
     id: 1,
     name: 'Acme',
     slug: 'acme',
+    status: 'active',
     deployment: 'acme',
     apiKey: 'key',
     statsWebsiteId: null,
@@ -354,5 +360,109 @@ describe('statsStep', () => {
       id: 'w1'
     });
     expect(steps).toEqual(['Keep statistics website w1']);
+  });
+});
+
+describe('tenantRowSchema', () => {
+  const row = {
+    id: 1,
+    name: 'Acme',
+    slug: 'acme',
+    status: 'active',
+    deployment: 'acme',
+    apiKey: 'key',
+    statsWebsiteId: null,
+    domains: []
+  };
+
+  it('reads a row without a status as active', () => {
+    expect(tenantRowSchema.parse(row).status).toBe('active');
+  });
+
+  it('keeps a pending status', () => {
+    expect(tenantRowSchema.parse({ ...row, status: 'pending' }).status).toBe(
+      'pending'
+    );
+  });
+
+  it('refuses an unknown status', () => {
+    expect(() => tenantRowSchema.parse({ ...row, status: 'gone' })).toThrow();
+  });
+});
+
+describe('workspaceChoices', () => {
+  const row = (
+    slug: string,
+    status: TenantRow['status'],
+    over: Partial<TenantRow> = {}
+  ): TenantRow => ({
+    id: 1,
+    name: slug.toUpperCase(),
+    slug,
+    status,
+    deployment: `cdwr-${slug}`,
+    apiKey: 'key',
+    statsWebsiteId: null,
+    domains: [],
+    ...over
+  });
+
+  it('puts new signups first, each hinted, and keeps the rest in order', () => {
+    const choices = workspaceChoices([
+      row('a', 'active'),
+      row('b', 'pending'),
+      row('c', 'active'),
+      row('d', 'pending')
+    ]);
+
+    expect(choices).toEqual([
+      { value: 'cdwr-b', hint: 'B (b) · new signup' },
+      { value: 'cdwr-d', hint: 'D (d) · new signup' },
+      { value: 'cdwr-a', hint: 'A (a)' },
+      { value: 'cdwr-c', hint: 'C (c)' }
+    ]);
+  });
+
+  it('leaves out workspaces that cannot be provisioned', () => {
+    expect(
+      workspaceChoices([
+        row('a', 'pending', { apiKey: null }),
+        row('b', 'active', { deployment: null }),
+        row('c', 'active')
+      ])
+    ).toEqual([{ value: 'cdwr-c', hint: 'C (c)' }]);
+  });
+});
+
+describe('flipsStatus', () => {
+  it.each([
+    ['pending', ['cms'], true, true],
+    ['pending', ['cms', 'web'], true, true],
+    ['pending', ['web'], true, false],
+    ['pending', ['cms'], false, false],
+    ['active', ['cms'], true, false]
+  ] as const)('%s with %j, wait %s -> %s', (status, apps, wait, expected) => {
+    expect(flipsStatus({ status }, apps, wait)).toBe(expected);
+  });
+});
+
+describe('flipsStatus with a paused cms', () => {
+  it('does not flip', () => {
+    expect(
+      flipsStatus({ status: 'pending' }, ['cms'], true, [
+        { app: 'cms', action: 'paused', value: 'false' }
+      ])
+    ).toBe(false);
+  });
+});
+
+describe('provisionSteps flip', () => {
+  it('lists the flip only when asked', () => {
+    expect(provisionSteps('acme', [], [], [], undefined, true)).toContain(
+      FLIP_STEP
+    );
+    expect(provisionSteps('acme', [], [], [], undefined, false)).not.toContain(
+      FLIP_STEP
+    );
   });
 });
