@@ -12,7 +12,9 @@ const customTranslationsSchema = z.object({
   authentication: z.object({
     cannotAssignToWorkspace: z.string(),
     cannotRemoveFromWorkspace: z.string(),
-    crossTenantDenied: z.string()
+    createSite: z.string(),
+    crossTenantDenied: z.string(),
+    newHere: z.string()
   }),
   collection: z.object({
     cardWithSuffix: z.string(),
@@ -436,8 +438,10 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
         "You don't have permission to assign users to this workspace.",
       cannotRemoveFromWorkspace:
         "You don't have permission to remove users from this workspace.",
+      createSite: 'Create a site',
       crossTenantDenied:
-        'Access denied. This workspace is not accessible without proper tenant access.'
+        'Access denied. This workspace is not accessible without proper tenant access.',
+      newHere: 'New here?'
     },
     collection: {
       cardWithSuffix: 'Card {{suffix}}',
@@ -929,8 +933,10 @@ Supported locales: {{locales}}`,
         'Du har inte behörighet att tilldela användare till den här arbetsytan.',
       cannotRemoveFromWorkspace:
         'Du har inte behörighet att ta bort användare från den här arbetsytan.',
+      createSite: 'Skapa en webbplats',
       crossTenantDenied:
-        'Åtkomst nekad. Den här arbetsytan är inte tillgänglig utan rätt behörighet.'
+        'Åtkomst nekad. Den här arbetsytan är inte tillgänglig utan rätt behörighet.',
+      newHere: 'Ny här?'
     },
     collection: {
       cardWithSuffix: 'Kort {{suffix}}',

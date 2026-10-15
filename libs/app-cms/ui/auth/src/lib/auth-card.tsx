@@ -1,4 +1,3 @@
-import { CdwrCloud } from '@codeware/shared/ui/primitives';
 import {
   Card,
   CardContent,
@@ -7,6 +6,8 @@ import {
   CardTitle
 } from '@codeware/shared/ui/shadcn/components/card';
 import type { ReactNode } from 'react';
+
+import { AuthBrand } from './auth-brand';
 
 export type AuthCardProps = {
   title: string;
@@ -25,14 +26,7 @@ export function AuthCard({
 }: AuthCardProps) {
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-col items-center gap-2">
-        <div className="text-foreground opacity-80">
-          <CdwrCloud size={72} />
-        </div>
-        <span className="text-muted-foreground text-lg font-medium tracking-widest">
-          Codeware CMS
-        </span>
-      </div>
+      <AuthBrand />
       <Card>
         <CardHeader className="text-center">
           <CardTitle className="text-xl">{title}</CardTitle>
