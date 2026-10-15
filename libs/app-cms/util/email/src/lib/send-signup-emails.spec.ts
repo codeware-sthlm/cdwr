@@ -1,7 +1,7 @@
 import type { Payload } from 'payload';
 import { describe, expect, it, vi } from 'vitest';
 
-import { sendSignupEmails } from './send-signup-emails';
+import { sendPlatformMail, sendSignupEmails } from './send-signup-emails';
 
 const mail = (subject: string) => ({ subject, html: '<p>x</p>', text: 'x' });
 
@@ -51,5 +51,41 @@ describe('sendSignupEmails', () => {
     expect(error).toHaveBeenCalledTimes(2);
     expect(error.mock.calls[0][0]).toContain('verify');
     expect(error.mock.calls[1][0]).toContain('notice');
+  });
+});
+
+describe('sendPlatformMail', () => {
+  it('sends the mail', async () => {
+    const sendEmail = vi.fn().mockResolvedValue(undefined);
+    const { payload } = makePayload(sendEmail);
+
+    await sendPlatformMail(payload, {
+      to: 'anna@example.com',
+      mail: mail('Exists'),
+      label: 'account-exists'
+    });
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'anna@example.com', subject: 'Exists' })
+    );
+  });
+
+  it('never throws and logs the label', async () => {
+    const sendEmail = vi.fn().mockRejectedValue(new Error('smtp down'));
+    const { payload, error } = makePayload(sendEmail);
+
+    await expect(
+      sendPlatformMail(payload, {
+        to: 'anna@example.com',
+        mail: mail('Exists'),
+        label: 'account-exists'
+      })
+    ).resolves.toBeUndefined();
+
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '[signupEmails] Could not send the account-exists mail: Error: smtp down'
+      )
+    );
   });
 });

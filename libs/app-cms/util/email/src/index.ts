@@ -19,7 +19,13 @@ export {
   renderForgotPasswordMail
 } from './lib/templates/forgot-password/forgot-password';
 export {
+  type AccountExistsMailInput,
+  renderAccountExistsMail
+} from './lib/templates/account-exists/account-exists';
+export {
+  type PlatformMail,
   type SignupEmailsInput,
+  sendPlatformMail,
   sendSignupEmails
 } from './lib/send-signup-emails';
 export {

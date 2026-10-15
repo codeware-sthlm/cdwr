@@ -131,6 +131,12 @@ export type TranslationKey =
   | 'signup.submitting'
   | 'signup.successTitle'
   | 'signup.successBody'
+  | 'signup.resend.title'
+  | 'signup.resend.intro'
+  | 'signup.resend.submit'
+  | 'signup.resend.submitting'
+  | 'signup.resend.done'
+  | 'signup.resend.link'
   | 'signup.error.invalid'
   | 'signup.error.password'
   | 'signup.error.deployment'
@@ -206,6 +212,11 @@ export type TranslationKey =
   | 'forgotPasswordEmail.greetingNamed'
   | 'forgotPasswordEmail.ignore'
   | 'forgotPasswordEmail.subject'
+  | 'accountExists.subject'
+  | 'accountExists.body'
+  | 'accountExists.signIn'
+  | 'accountExists.reset'
+  | 'accountExists.ignore'
   | 'verifyEmail.afterConfirm'
   | 'verifyEmail.body'
   | 'verifyEmail.button'
@@ -406,6 +417,13 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.successTitle': 'Check your email to confirm your address',
     'signup.successBody':
       'We have sent a message to the address you gave. Open the link in it to confirm the address; your site is set up after that.',
+    'signup.resend.title': 'Send the confirmation email again',
+    'signup.resend.intro': 'Enter the email address you signed up with.',
+    'signup.resend.submit': 'Send again',
+    'signup.resend.submitting': 'Sending...',
+    'signup.resend.done':
+      "If this address has an account that still needs confirming, we've sent a new confirmation link.",
+    'signup.resend.link': "Didn't get the email? Send it again",
     'signup.error.invalid':
       'Some details are missing or not valid. Check the form and try again.',
     'signup.error.password':
@@ -500,6 +518,12 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'forgotPasswordEmail.ignore':
       'If you did not ask for this, you can ignore this email. Your password stays unchanged.',
     'forgotPasswordEmail.subject': 'Reset your password',
+    'accountExists.subject': 'You already have an account',
+    'accountExists.body':
+      'Someone tried to create a new account with this email address. You already have an account, so you can sign in, or reset your password if you have forgotten it.',
+    'accountExists.signIn': 'Sign in',
+    'accountExists.reset': 'Reset your password',
+    'accountExists.ignore': "If it wasn't you, you can ignore this email.",
     'verifyEmail.afterConfirm':
       'Once the address is confirmed, you can sign in to your new workspace.',
     'verifyEmail.body':
@@ -711,6 +735,13 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.successTitle': 'Kolla din e-post för att bekräfta adressen',
     'signup.successBody':
       'Vi har skickat ett meddelande till e-postadressen du angav. Öppna länken i meddelandet för att bekräfta adressen, så görs webbplatsen i ordning därefter.',
+    'signup.resend.title': 'Skicka bekräftelsemejlet igen',
+    'signup.resend.intro': 'Ange e-postadressen du registrerade dig med.',
+    'signup.resend.submit': 'Skicka igen',
+    'signup.resend.submitting': 'Skickar...',
+    'signup.resend.done':
+      'Om adressen har ett konto som ännu inte är bekräftat har vi skickat en ny bekräftelselänk.',
+    'signup.resend.link': 'Fick du inget mejl? Skicka det igen',
     'signup.error.invalid':
       'Några uppgifter saknas eller är ogiltiga. Kontrollera formuläret och försök igen.',
     'signup.error.password': 'Lösenordet måste vara mellan 10 och 128 tecken.',
@@ -803,6 +834,13 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'forgotPasswordEmail.ignore':
       'Om det inte var du kan du bortse från det här mejlet. Ditt lösenord ändras inte.',
     'forgotPasswordEmail.subject': 'Återställ ditt lösenord',
+    'accountExists.subject': 'Du har redan ett konto',
+    'accountExists.body':
+      'Någon försökte skapa ett nytt konto med den här e-postadressen. Du har redan ett konto, så du kan logga in eller återställa lösenordet om du har glömt det.',
+    'accountExists.signIn': 'Logga in',
+    'accountExists.reset': 'Återställ lösenordet',
+    'accountExists.ignore':
+      'Om det inte var du kan du bortse från det här mejlet.',
     'verifyEmail.afterConfirm':
       'När e-postadressen är bekräftad kan du logga in på din nya arbetsyta.',
     'verifyEmail.body':
