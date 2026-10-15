@@ -1,15 +1,21 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import { type SupportedLocale } from '@codeware/shared/util/i18n';
+import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { ResendForm } from './ResendForm.client';
 
-export const metadata: Metadata = {
-  title: 'Send the confirmation email again',
-  robots: { index: false }
-};
+const localeFromHeader = (accepted: string): SupportedLocale =>
+  accepted.toLowerCase().startsWith('sv') ? 'sv' : 'en';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const accepted = (await headers()).get('accept-language') ?? '';
+  return {
+    title: t(localeFromHeader(accepted), 'signup.resend.title'),
+    robots: { index: false }
+  };
+}
 
 /**
  * Where a new signup asks for the confirmation mail again.
@@ -24,9 +30,7 @@ export default async function ResendPage() {
   }
 
   const accepted = (await headers()).get('accept-language') ?? '';
-  const locale: SupportedLocale = accepted.toLowerCase().startsWith('sv')
-    ? 'sv'
-    : 'en';
+  const locale = localeFromHeader(accepted);
 
   return <ResendForm locale={locale} siteKey={env.HUMAN_CHECK?.siteKey} />;
 }

@@ -12,6 +12,7 @@ import {
 import { Input } from '@codeware/shared/ui/shadcn/components/input';
 import { Label } from '@codeware/shared/ui/shadcn/components/label';
 import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
+import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { type FormEvent, useRef, useState } from 'react';
 
@@ -85,6 +86,11 @@ export function ResendForm({ locale, siteKey }: Props) {
           <CardTitle>{t(locale, 'signup.resend.title')}</CardTitle>
           <CardDescription>{t(locale, 'signup.resend.done')}</CardDescription>
         </CardHeader>
+        <CardContent>
+          <Link href="/admin/login" className="text-sm underline">
+            {t(locale, 'signup.backToLogin')}
+          </Link>
+        </CardContent>
       </Card>
     );
   }
@@ -129,6 +135,10 @@ export function ResendForm({ locale, siteKey }: Props) {
               ? t(locale, 'signup.resend.submitting')
               : t(locale, 'signup.resend.submit')}
           </Button>
+
+          <Link href="/admin/login" className="text-sm underline">
+            {t(locale, 'signup.backToLogin')}
+          </Link>
         </form>
       </CardContent>
     </Card>
