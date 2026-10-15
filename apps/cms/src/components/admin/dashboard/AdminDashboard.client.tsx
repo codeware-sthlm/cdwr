@@ -43,7 +43,8 @@ export const AdminDashboard: React.FC<DashboardData> = ({
   drafts,
   initialActiveTab,
   platform,
-  showBuildSite
+  showBuildSite,
+  pendingSite
 }) => {
   const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const { activeTab, changeTab } = useActiveTab(initialActiveTab);
@@ -96,6 +97,7 @@ export const AdminDashboard: React.FC<DashboardData> = ({
             recentDocs={recentDocs}
             drafts={drafts}
             showBuildSite={showBuildSite}
+            pendingSite={pendingSite}
           />
         </TabsContent>
         <TabsContent

@@ -78,6 +78,8 @@ export type DashboardData = {
    * workspace has no pages. Replaces the greeting with a card linking to it.
    */
   showBuildSite: boolean;
+  /** True while the viewer's own site is awaiting activation. */
+  pendingSite: boolean;
 };
 
 /** Which window the statistics figures cover. */

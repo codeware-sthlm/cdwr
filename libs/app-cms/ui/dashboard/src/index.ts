@@ -6,6 +6,7 @@ export * from './lib/integration-row';
 export * from './lib/limit-toggle';
 export * from './lib/mail-failure-row';
 export * from './lib/palette-row';
+export * from './lib/pending-site-card';
 export * from './lib/platform-status';
 export * from './lib/site-stats-format';
 export * from './lib/site-stats-sheet-body';

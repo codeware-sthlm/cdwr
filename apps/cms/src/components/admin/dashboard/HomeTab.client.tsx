@@ -38,6 +38,7 @@ import { useCollectionLabel } from '../utils/use-collection-label';
 
 import { hasCreatePermission } from './has-create-permission';
 import { PANEL_LIMIT_OPTIONS } from './panel-limits';
+import { PendingSiteNotice } from './PendingSiteNotice.client';
 import { SiteStatsWidget } from './SiteStatsWidget.client';
 import { TASKS } from './tasks';
 import { useGettingStarted } from './use-getting-started';
@@ -71,7 +72,8 @@ export function HomeTab({
   taskCounts,
   recentDocs,
   drafts,
-  showBuildSite
+  showBuildSite,
+  pendingSite
 }: Pick<
   DashboardData,
   | 'userName'
@@ -80,6 +82,7 @@ export function HomeTab({
   | 'recentDocs'
   | 'drafts'
   | 'showBuildSite'
+  | 'pendingSite'
 >) {
   const { permissions } = useAuth<User>();
   const collectionLabel = useCollectionLabel();
@@ -104,6 +107,7 @@ export function HomeTab({
 
   return (
     <div className="flex flex-col gap-8">
+      {pendingSite && <PendingSiteNotice />}
       <div>
         <h1 className="text-foreground text-2xl leading-tight font-semibold tracking-tight">
           {t('dashboard:heading')}

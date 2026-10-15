@@ -32,6 +32,7 @@ import {
   isDashboardTab
 } from './dashboard-preferences';
 import { getPlatformData } from './get-platform-data';
+import { isSitePending } from './is-site-pending';
 import { PANEL_MAX_LIMIT } from './panel-limits';
 
 const SKIPPED_COUNT_SLUGS: Set<CollectionSlug> = new Set([
@@ -181,6 +182,7 @@ const AdminDashboardView: React.FC<ServerProps> = async ({
   const userName = user?.name ?? '';
   const showBuildSite =
     (await getFirstSiteState(payload, user)).kind === 'available';
+  const pendingSite = await isSitePending(payload, user);
 
   return (
     <AdminDashboard
@@ -192,6 +194,7 @@ const AdminDashboardView: React.FC<ServerProps> = async ({
       initialActiveTab={activeTab}
       platform={platform}
       showBuildSite={showBuildSite}
+      pendingSite={pendingSite}
     />
   );
 };
