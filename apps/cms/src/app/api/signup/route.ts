@@ -196,6 +196,7 @@ async function sendMails(
               tenantName: input.siteName,
               deployment: input.deployment,
               environment: getEnv().DEPLOY_ENV,
+              appName: process.env['FLY_APP_NAME'],
               userName: input.name,
               userEmail: input.email,
               adminUrl: `${serverURL}${payload.config.routes.admin}/collections/tenants/${tenant.id}`

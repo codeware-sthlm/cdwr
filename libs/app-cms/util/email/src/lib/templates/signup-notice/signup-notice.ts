@@ -11,11 +11,22 @@ export type SignupNoticeMailInput = {
   userEmail: string;
   /** Environment the platform runs in; anything but production is provisioned as a preview */
   environment: 'development' | 'preview' | 'production';
+  /** Fly app serving this platform, named in a preview command when known */
+  appName?: string;
   /** Absolute link to the new tenant in the admin */
   adminUrl: string;
   /** Header with logo and accent; omitted for a plain mail */
   brand?: EmailBrand;
 };
+
+/** The `--env` flag, with `--preview-app` where it is needed and known */
+const provisionTarget = (
+  environment: SignupNoticeMailInput['environment'],
+  appName: string | undefined
+): string =>
+  environment === 'production'
+    ? '--env production'
+    : `--env preview${appName ? ` --preview-app ${appName}` : ''}`;
 
 /**
  * The mail the platform owner gets when someone signs up on their own.
@@ -31,6 +42,7 @@ export function renderSignupNoticeMail(input: SignupNoticeMailInput): {
   const {
     adminUrl,
     brand,
+    appName,
     deployment,
     environment,
     locale,
@@ -46,7 +58,7 @@ export function renderSignupNoticeMail(input: SignupNoticeMailInput): {
     paragraphs: [
       t(locale, 'signupNotice.body'),
       t(locale, 'signupNotice.nextStep', {
-        command: `cdwr tenant provision --env ${environment === 'production' ? 'production' : 'preview'} --workspace ${deployment} --apps cms`
+        command: `cdwr tenant provision ${provisionTarget(environment, appName)} --workspace ${deployment} --apps cms`
       })
     ],
     detailsHeading: t(locale, 'signupNotice.detailsHeading'),
