@@ -48,6 +48,7 @@ import { getAppInfo } from './app-info';
 import { collections, users } from './collections';
 import { createLegalPageEndpoint } from './endpoints/create-legal-page';
 import { domainDnsComparisonEndpoint } from './endpoints/domain-dns-comparison';
+import { firstSiteEndpoint } from './endpoints/first-site';
 import { formSubmissionsExportEndpoint } from './endpoints/form-submissions-export';
 import { formSubmissionsReadEndpoint } from './endpoints/form-submissions-read';
 import { paletteSearchEndpoint } from './endpoints/palette-search';
@@ -217,6 +218,7 @@ export default buildConfig({
     emailAdapter && withTextPart(withSubmissionDeliveryTracking(emailAdapter)),
   endpoints: [
     createLegalPageEndpoint,
+    firstSiteEndpoint,
     domainDnsComparisonEndpoint,
     formSubmissionsExportEndpoint,
     formSubmissionsReadEndpoint,

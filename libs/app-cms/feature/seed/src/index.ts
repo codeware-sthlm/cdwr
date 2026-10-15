@@ -3,7 +3,10 @@ export type {
   ApplyPlatformOptions,
   PlatformApplyReport
 } from './lib/apply-platform-definition';
-export { applySiteDefinition } from './lib/apply-site-definition';
+export {
+  applySiteDefinition,
+  workspaceLocale
+} from './lib/apply-site-definition';
 export type { ExtraDocument } from './lib/find-extra-documents';
 export type {
   ApplyOptions,
