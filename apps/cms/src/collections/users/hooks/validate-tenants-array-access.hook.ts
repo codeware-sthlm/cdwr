@@ -18,8 +18,8 @@ export const validateTenantsArrayAccessHook: CollectionBeforeChangeHook<
     return data;
   }
 
-  // System users and seed operations can modify anything
-  if (hasRole(user, 'system-user') || context?.seedAction) {
+  // System users, seed operations and signups can modify anything
+  if (hasRole(user, 'system-user') || context?.seedAction || context?.signup) {
     return data;
   }
 

@@ -82,6 +82,7 @@ import * as migration_20261006_232639_cod_534_payload_3_90 from './20261006_2326
 import * as migration_20261010_154752_cod_541_apex_addresses from './20261010_154752_cod_541_apex_addresses';
 import * as migration_20261013_223952_cod_567_stats_website_id from './20261013_223952_cod_567_stats_website_id';
 import * as migration_20261015_053116_cod_561_invite_codes from './20261015_053116_cod_561_invite_codes';
+import * as migration_20261015_105327_cod_562_signup from './20261015_105327_cod_562_signup';
 
 export const migrations = [
   {
@@ -503,5 +504,10 @@ export const migrations = [
     up: migration_20261015_053116_cod_561_invite_codes.up,
     down: migration_20261015_053116_cod_561_invite_codes.down,
     name: '20261015_053116_cod_561_invite_codes'
+  },
+  {
+    up: migration_20261015_105327_cod_562_signup.up,
+    down: migration_20261015_105327_cod_562_signup.down,
+    name: '20261015_105327_cod_562_signup'
   }
 ];

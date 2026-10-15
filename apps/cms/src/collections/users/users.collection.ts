@@ -21,6 +21,7 @@ import { forgotPasswordMail } from './forgot-password-email';
 import { applyTenantLocaleHook } from './hooks/apply-tenant-locale.hook';
 import { ensureTenantHook } from './hooks/ensure-tenant.hook';
 import { validateTenantsArrayAccessHook } from './hooks/validate-tenants-array-access.hook';
+import { verifyOnlySelfServeHook } from './hooks/verify-only-self-serve.hook';
 import { verifyTenantModeAccessHook } from './hooks/verify-tenant-mode-access.hook';
 
 /**
@@ -54,6 +55,7 @@ const users: CollectionConfig<'users'> = {
   auth: {
     maxLoginAttempts: 5,
     lockTime: 1000 * 60 * 60 * 24,
+    verify: true,
     forgotPassword: {
       generateEmailHTML: async ({ req, token, user } = {}) =>
         req && token && user
@@ -94,6 +96,7 @@ const users: CollectionConfig<'users'> = {
     delete: adminAccessToAllDocTenants('denySelf')
   },
   hooks: {
+    beforeOperation: [verifyOnlySelfServeHook],
     beforeValidate: [ensureTenantHook],
     beforeChange: [validateTenantsArrayAccessHook],
     afterLogin: [verifyTenantModeAccessHook, applyTenantLocaleHook]

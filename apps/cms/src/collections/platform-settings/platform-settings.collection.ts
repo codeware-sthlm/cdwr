@@ -65,6 +65,20 @@ const platformSettings: CollectionConfig<'platform-settings'> = {
         }
       }
     },
+    {
+      name: 'signupNotifyEmail',
+      type: 'email',
+      label: {
+        en: 'Signup notice email',
+        sv: 'E-post för registreringsavisering'
+      },
+      admin: {
+        description: {
+          en: 'Gets a short notice for each self-serve signup; empty means the signup is only logged.',
+          sv: 'Får en kort avisering för varje egen registrering; tomt betyder att registreringen bara loggas.'
+        }
+      }
+    },
     domainsField({
       override: {
         admin: {
