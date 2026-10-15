@@ -1,4 +1,11 @@
 import { hashInviteSecret } from '@codeware/shared/util/invite-code';
+import {
+  PgDialect,
+  numeric,
+  pgSchema,
+  serial,
+  timestamp
+} from '@payloadcms/db-postgres/drizzle/pg-core';
 import type { BasePayload } from 'payload';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +16,19 @@ import {
 } from './invite-codes';
 
 const CODE = 'ABCD-EFGH-JKMN-PQRS';
+
+/** The real table shape, so the statement can be rendered as Postgres sees it */
+const inviteCodes = pgSchema('payload').table('invite_codes', {
+  id: serial('id').primaryKey(),
+  uses: numeric('uses'),
+  maxUses: numeric('max_uses'),
+  expiresAt: timestamp('expires_at'),
+  updatedAt: timestamp('updated_at')
+});
+
+/** The SQL text of the statement the spent use ran */
+const statementOf = (execute: ReturnType<typeof vi.fn>): string =>
+  new PgDialect().sqlToQuery(execute.mock.calls[0]?.[0]?.sql).sql;
 let attempt = 0;
 
 const codeDoc = async (overrides: Record<string, unknown> = {}) => ({
@@ -41,15 +61,7 @@ const fakePayload = (options: {
     find,
     db: {
       execute,
-      tables: {
-        invite_codes: {
-          id: 'id',
-          uses: 'uses',
-          maxUses: 'max_uses',
-          expiresAt: 'expires_at',
-          updatedAt: 'updated_at'
-        }
-      },
+      tables: { invite_codes: inviteCodes },
       sessions: options.transaction === false ? {} : { tx1: { db: {} } }
     }
   };
@@ -143,6 +155,21 @@ describe('consumeInviteCode', () => {
       })
     ).resolves.toBe(7);
     expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the SET columns unqualified, as Postgres requires', async () => {
+    const { payload, execute } = fakePayload({ doc: await codeDoc() });
+    await consumeInviteCode(payload, CODE, {
+      transactionID: 'tx1',
+      attemptsKey: key()
+    });
+
+    const statement = statementOf(execute);
+    expect(statement).toMatch(
+      /set "uses" = coalesce\("payload"\."invite_codes"\."uses", 0\) \+ 1/
+    );
+    expect(statement).toMatch(/"updated_at" = now\(\)/);
+    expect(statement).not.toMatch(/set "payload"\./);
   });
 
   it('refuses when the update touches no row, the last use already spent', async () => {

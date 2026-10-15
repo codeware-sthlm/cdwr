@@ -272,7 +272,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const reason = signupRefusal(error);
     if (reason === 'failed') {
-      payload.logger.error(`[signup] Signup failed: ${String(error)}`);
+      // Drizzle wraps the database's own message as the error's cause
+      const cause =
+        error instanceof Error && error.cause
+          ? ` (${String(error.cause)})`
+          : '';
+      payload.logger.error(`[signup] Signup failed: ${String(error)}${cause}`);
     }
     return refuse(reason);
   }
