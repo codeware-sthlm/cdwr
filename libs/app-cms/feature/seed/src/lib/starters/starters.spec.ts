@@ -7,7 +7,8 @@ import {
   STARTER_PAGES,
   STARTER_PURPOSES,
   type StarterAnswers,
-  type StarterPage
+  type StarterPage,
+  type StarterPrivacyFacts
 } from './starter-types';
 
 const privacy: StarterPrivacyFacts = {
