@@ -71,6 +71,10 @@ vi.mock('../../services/infisical', () => ({
   })
 }));
 
+vi.mock('./provision.wait', () => ({
+  awaitLive: vi.fn(async (): Promise<unknown> => ({ live: true }))
+}));
+
 vi.mock('../../services/umami', () => ({
   readUmamiProvisioning: vi.fn(async (): Promise<unknown> => ({
     status: 'unconfigured',
@@ -85,9 +89,14 @@ vi.mock('../../services/umami', () => ({
   }))
 }));
 
-const run = async (extra: string[] = [], environment = 'production') => {
+const run = async (
+  extra: string[] = [],
+  environment = 'production',
+  apps = 'cms'
+) => {
   const command = (await import('./provision')).default;
   const ui = fakeUi([]);
+  const out: string[] = [];
   const exit = await runCommand({
     name: 'tenant provision',
     command,
@@ -97,7 +106,7 @@ const run = async (extra: string[] = [], environment = 'production') => {
       '--workspace',
       'acme',
       '--apps',
-      'cms',
+      apps,
       '--yes',
       ...extra
     ],
@@ -107,9 +116,11 @@ const run = async (extra: string[] = [], environment = 'production') => {
     interactive: true,
     ui,
     history: () => undefined,
-    stdout: () => undefined
+    stdout: (text: string) => {
+      out.push(text);
+    }
   });
-  return { exit, ui };
+  return { exit, ui, out: out.join('') };
 };
 
 const EXISTING_FOLDERS: Record<string, Array<{ name: string }>> = {
@@ -484,6 +495,223 @@ describe('tenant provision', () => {
       const warned = ui.printed.warn.join('\n');
       expect(warned).toContain('other');
       expect(warned).toContain('new-id');
+    });
+  });
+
+  describe('status flip', () => {
+    /** The listing reports this status; the status script reports `report` */
+    const scripts = async (
+      status: 'pending' | 'active',
+      report: Record<string, unknown> = { outcome: 'set' }
+    ) => {
+      const { runCmsScript } = await import('../../services/database');
+      vi.mocked(runCmsScript).mockImplementation(async (_root, script) => ({
+        stdout:
+          script === 'set-tenant-status.ts'
+            ? `TENANT_STATUS_SET=${JSON.stringify(report)}\n`
+            : `TENANT_DEPLOYMENTS=${JSON.stringify([
+                {
+                  id: 1,
+                  name: 'Acme',
+                  slug: 'acme',
+                  status,
+                  deployment: 'acme',
+                  apiKey: 'the-key',
+                  statsWebsiteId: null,
+                  domains: []
+                }
+              ])}\n`,
+        stderr: ''
+      }));
+    };
+
+    const flips = async () => {
+      const { runCmsScript } = await import('../../services/database');
+      return vi
+        .mocked(runCmsScript)
+        .mock.calls.filter(([, script]) => script === 'set-tenant-status.ts');
+    };
+
+    it('waits for the deployment, then activates a pending workspace', async () => {
+      const { awaitLive } = await import('./provision.wait');
+      await scripts('pending');
+
+      const { exit, ui, out } = await run(['--json']);
+
+      expect(exit).toBe(EXIT.ok);
+      expect(awaitLive).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dispatch: { known: new Set(), at: expect.any(Number) },
+          healthUrl: 'https://cdwr-cms-acme.fly.dev/api/health'
+        })
+      );
+      const [call] = await flips();
+      expect(call?.[3]).toMatchObject({ STATUS_TENANT_ID: '1' });
+      expect(call?.[4]).toEqual({ reports: 'TENANT_STATUS_SET' });
+      expect(ui.printed.warn.join('\n')).not.toContain('pending');
+      expect(JSON.parse(out)).toMatchObject({
+        result: { statusFlip: 'flipped' }
+      });
+    });
+
+    it('checks the site only when no deployment was needed', async () => {
+      const { awaitLive } = await import('./provision.wait');
+      await scripts('pending');
+      await existingFolder('true');
+      const { listAppNames } = await import('../../services/fly');
+      vi.mocked(listAppNames).mockResolvedValueOnce(['cdwr-cms-acme']);
+
+      await run();
+
+      expect(awaitLive).toHaveBeenCalledWith(
+        expect.objectContaining({ dispatch: undefined })
+      );
+      expect(await flips()).toHaveLength(1);
+    });
+
+    it('does not touch an active workspace', async () => {
+      const { awaitLive } = await import('./provision.wait');
+      await scripts('active');
+
+      const { out } = await run(['--json']);
+
+      expect(awaitLive).not.toHaveBeenCalled();
+      expect(await flips()).toHaveLength(0);
+      expect(JSON.parse(out)).toMatchObject({
+        result: { statusFlip: 'not-applicable' }
+      });
+    });
+
+    it('does not touch a pending workspace without the cms', async () => {
+      const { awaitLive } = await import('./provision.wait');
+      await scripts('pending');
+
+      await run([], 'production', 'web');
+
+      expect(awaitLive).not.toHaveBeenCalled();
+      expect(await flips()).toHaveLength(0);
+    });
+
+    it('leaves the workspace pending when the runs could not be listed before dispatch', async () => {
+      const { awaitLive } = await import('./provision.wait');
+      const { listWorkflowRuns } = await import('../../services/github');
+      vi.mocked(listWorkflowRuns).mockRejectedValue(new Error('gh down'));
+      await scripts('pending');
+
+      const { ui, out } = await run(['--json']);
+
+      expect(awaitLive).not.toHaveBeenCalled();
+      expect(await flips()).toHaveLength(0);
+      expect(ui.printed.warn.join('\n')).toContain(
+        'could not list deployment runs before dispatch'
+      );
+      expect(JSON.parse(out)).toMatchObject({
+        result: { statusFlip: 'left-pending' }
+      });
+      vi.mocked(listWorkflowRuns).mockResolvedValue([]);
+    });
+
+    it('plans no flip and ends cleanly when the cms is paused', async () => {
+      const { awaitLive } = await import('./provision.wait');
+      await scripts('pending');
+      await existingFolder('false');
+
+      const plan = await run(['--dry-run']);
+      expect(plan.ui.printed.note.join('\n')).not.toContain('Flip status');
+      expect(plan.ui.printed.warn.join('\n')).toContain(
+        'The cms is paused, so Acme stays pending'
+      );
+
+      const { exit, out } = await run(['--json']);
+
+      expect(exit).toBe(EXIT.ok);
+      expect(awaitLive).not.toHaveBeenCalled();
+      expect(await flips()).toHaveLength(0);
+      expect(JSON.parse(out)).toMatchObject({
+        result: { statusFlip: 'cms-paused' }
+      });
+    });
+
+    it('skips the wait and the flip on --no-wait and says so', async () => {
+      const { awaitLive } = await import('./provision.wait');
+      await scripts('pending');
+
+      const { ui, out } = await run(['--no-wait', '--json']);
+
+      expect(awaitLive).not.toHaveBeenCalled();
+      expect(await flips()).toHaveLength(0);
+      expect(ui.printed.warn.join('\n')).toContain('--no-wait');
+      expect(JSON.parse(out)).toMatchObject({
+        result: { statusFlip: 'no-wait' }
+      });
+    });
+
+    it('lists the flip in the plan and calls nothing on a dry run', async () => {
+      const { awaitLive } = await import('./provision.wait');
+      await scripts('pending');
+
+      const { exit, ui } = await run(['--dry-run']);
+
+      expect(exit).toBe(EXIT.ok);
+      expect(ui.printed.note.join('\n')).toContain(
+        'Flip status pending → active after the deploy is healthy'
+      );
+      expect(awaitLive).not.toHaveBeenCalled();
+      expect(await flips()).toHaveLength(0);
+    });
+
+    it('leaves the workspace pending when the deployment or health fails', async () => {
+      const { awaitLive } = await import('./provision.wait');
+      vi.mocked(awaitLive).mockResolvedValueOnce({
+        live: false,
+        reason: 'the deployment run ended as failure (https://gh/run/2)'
+      });
+      await scripts('pending');
+
+      const { exit, ui, out } = await run(['--json']);
+
+      expect(exit).toBe(EXIT.failed);
+      expect(await flips()).toHaveLength(0);
+      const warned = ui.printed.warn.join('\n');
+      expect(warned).toContain('Left pending');
+      expect(warned).toContain('ended as failure');
+      expect(warned).toContain('Run provision again once the site is up');
+      expect(JSON.parse(out)).toMatchObject({
+        result: { statusFlip: 'left-pending' }
+      });
+    });
+
+    it('leaves the workspace pending when the script refuses', async () => {
+      await scripts('pending', { outcome: 'conflict', current: 'suspended' });
+
+      const { ui, out } = await run(['--json']);
+
+      expect(ui.printed.warn.join('\n')).toContain("status 'suspended'");
+      expect(JSON.parse(out)).toMatchObject({
+        result: { statusFlip: 'left-pending' }
+      });
+    });
+
+    it('reports an unknown tenant as a failed flip, not a crash', async () => {
+      await scripts('pending', {
+        outcome: 'error',
+        message: 'Tenant 1 not found'
+      });
+
+      const { exit, ui } = await run();
+
+      expect(exit).toBe(EXIT.failed);
+      expect(ui.printed.warn.join('\n')).toContain('Tenant 1 not found');
+    });
+
+    it('treats an already active workspace as unchanged', async () => {
+      await scripts('pending', { outcome: 'unchanged' });
+
+      const { out } = await run(['--json']);
+
+      expect(JSON.parse(out)).toMatchObject({
+        result: { statusFlip: 'unchanged' }
+      });
     });
   });
 });

@@ -20,6 +20,8 @@ export const tenantRowSchema = z.object({
   id: z.number(),
   name: z.string(),
   slug: z.string(),
+  // Older deployments answer without a status; their workspaces are live
+  status: z.enum(['pending', 'active']).default('active'),
   deployment: z.string().nullable(),
   apiKey: z.string().nullable(),
   statsWebsiteId: z.string().nullable(),
@@ -33,6 +35,66 @@ export const tenantRowSchema = z.object({
 });
 
 export type TenantRow = z.infer<typeof tenantRowSchema>;
+
+/** What the status write-back script reports */
+export const statusReportSchema = z.discriminatedUnion('outcome', [
+  z.object({ outcome: z.literal('set') }),
+  z.object({ outcome: z.literal('unchanged') }),
+  z.object({ outcome: z.literal('conflict'), current: z.string() }),
+  z.object({ outcome: z.literal('error'), message: z.string() })
+]);
+
+/**
+ * The workspaces that can be provisioned as choices: new signups first, since
+ * they are what waits for going live, then the rest in listed order.
+ */
+export function workspaceChoices(
+  rows: ReadonlyArray<TenantRow>
+): Array<{ value: string; hint: string }> {
+  const ready = rows.flatMap((row) =>
+    row.deployment && !reasonSkipped(row)
+      ? [{ row, deployment: row.deployment }]
+      : []
+  );
+  return [
+    ...ready.filter(({ row }) => row.status === 'pending'),
+    ...ready.filter(({ row }) => row.status !== 'pending')
+  ].map(({ row, deployment }) => ({
+    value: deployment,
+    hint:
+      row.status === 'pending'
+        ? `${row.name} (${row.slug}) · new signup`
+        : `${row.name} (${row.slug})`
+  }));
+}
+
+/** Whether going live also activates the workspace: a new signup that gets its cms */
+export const flipsStatus = (
+  tenant: Pick<TenantRow, 'status'>,
+  apps: ReadonlyArray<AppKind>,
+  wait: boolean,
+  flags: ReadonlyArray<FlagPlan> = []
+): boolean =>
+  tenant.status === 'pending' &&
+  apps.includes('cms') &&
+  wait &&
+  !cmsPaused(flags);
+
+/** Whether the plan leaves the cms deployment switched off */
+export const cmsPaused = (flags: ReadonlyArray<FlagPlan>): boolean =>
+  flags.some(({ app, action }) => app === 'cms' && action === 'paused');
+
+export const FLIP_STEP =
+  'Flip status pending → active after the deploy is healthy';
+
+/** How the status flip ended, for the summary and `--json` */
+export type FlipOutcome =
+  | 'not-applicable'
+  | 'no-wait'
+  | 'cms-paused'
+  | 'flipped'
+  | 'unchanged'
+  | 'left-pending';
 
 /** A folder to create, named by its parent path */
 export interface Folder {
@@ -179,7 +241,8 @@ export function provisionSteps(
   folders: ReadonlyArray<Folder>,
   keys: ReadonlyArray<KeyPlan>,
   flags: ReadonlyArray<FlagPlan> = [],
-  stats?: StatsPlan
+  stats?: StatsPlan,
+  flip = false
 ): string[] {
   return [
     ...folders.map((folder) => `Create folder ${folderPath(folder)}`),
@@ -196,7 +259,8 @@ export function provisionSteps(
         ? `Keep ${DEPLOY_ENABLED_KEY} in ${path} (already true)`
         : `Keep ${DEPLOY_ENABLED_KEY}=${value} in ${path} (paused)`;
     }),
-    ...(stats ? [statsStep(stats)] : [])
+    ...(stats ? [statsStep(stats)] : []),
+    ...(flip ? [FLIP_STEP] : [])
   ];
 }
 
