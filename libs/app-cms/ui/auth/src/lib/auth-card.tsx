@@ -29,7 +29,10 @@ export function AuthCard({
       <AuthBrand />
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">{title}</CardTitle>
+          {/* Each auth page's only heading; `CardTitle` alone is a div */}
+          <CardTitle className="text-xl">
+            <h1>{title}</h1>
+          </CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         {children && <CardContent>{children}</CardContent>}
