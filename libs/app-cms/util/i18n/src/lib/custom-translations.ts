@@ -150,6 +150,7 @@ const customTranslationsSchema = z.object({
     generate: z.string(),
     regenerate: z.string()
   }),
+  login: z.object({ resendConfirmation: z.string() }),
   media: z.object({
     calloutDescriptions: z.string(),
     calloutTitle: z.string()
@@ -555,6 +556,9 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
         'Copy it now. Only its hash is stored, so it cannot be shown again.',
       generate: 'Generate code',
       regenerate: 'Generate another'
+    },
+    login: {
+      resendConfirmation: "Didn't get your confirmation email? Send it again"
     },
     media: {
       calloutDescriptions: `Tags can be used to organize your files and be displayed in the web site file area.
@@ -997,6 +1001,9 @@ Supported locales: {{locales}}`,
         'Kopiera den nu. Bara dess hash sparas, så den kan inte visas igen.',
       generate: 'Skapa kod',
       regenerate: 'Skapa en annan'
+    },
+    login: {
+      resendConfirmation: 'Fick du inget bekräftelsemejl? Skicka det igen'
     },
     media: {
       calloutDescriptions: `Använd etiketter för att organisera dina filer och då kunna visa dem på webbplatsens filyta.

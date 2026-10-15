@@ -8,9 +8,19 @@ export const SIGNUP_PATH = '/signup';
  */
 export const PLATFORM_SIGNUP_PATH = '/platform-signup';
 
-/** The page to rewrite `/signup` to, or null when the request is not one */
+/** Where a new confirmation mail is asked for */
+export const SIGNUP_RESEND_PATH = '/signup/resend';
+
+/** Where the resend page actually lives */
+export const PLATFORM_SIGNUP_RESEND_PATH = '/platform-signup/resend';
+
+const REWRITES: Record<string, string> = {
+  [SIGNUP_PATH]: PLATFORM_SIGNUP_PATH,
+  [SIGNUP_RESEND_PATH]: PLATFORM_SIGNUP_RESEND_PATH
+};
+
+/** The page to rewrite a signup path to, or null when the request is not one */
 export const signupRewrite = (
   pathname: string,
   env: Record<string, string | undefined>
-): string | null =>
-  pathname === SIGNUP_PATH && !env['TENANT_ID'] ? PLATFORM_SIGNUP_PATH : null;
+): string | null => (env['TENANT_ID'] ? null : (REWRITES[pathname] ?? null));

@@ -120,6 +120,14 @@ export default buildConfig({
       // The login screen is where a refused session lands, so it is the one
       // place the warning has to reach even when nothing else renders
       beforeLogin: ['@codeware/apps/cms/components/admin/DomainMismatchNotice'],
+      // A new signup that never got its mail has no way in; the page behind
+      // the link exists on the host only
+      afterLogin: [
+        {
+          path: '@codeware/apps/cms/components/admin/ResendConfirmationLink.client',
+          clientProps: { enabled: env.APP_MODE.type === 'host' }
+        }
+      ],
       graphics: {
         Icon: '@codeware/apps/cms/components/Icon.client',
         Logo: '@codeware/apps/cms/components/Logo.client'

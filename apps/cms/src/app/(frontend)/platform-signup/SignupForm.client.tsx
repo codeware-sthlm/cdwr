@@ -1,4 +1,5 @@
 'use client';
+
 import { useHumanCheck } from '@codeware/shared/ui/cms-renderer';
 import { Alert } from '@codeware/shared/ui/shadcn/components/alert';
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
@@ -16,6 +17,7 @@ import {
   deploymentNameIssue,
   toDeploymentName
 } from '@codeware/shared/util/pure';
+import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { type FormEvent, useRef, useState } from 'react';
 
@@ -150,6 +152,11 @@ export function SignupForm({ locale, siteKey }: Props) {
           <CardTitle>{t(locale, 'signup.successTitle')}</CardTitle>
           <CardDescription>{t(locale, 'signup.successBody')}</CardDescription>
         </CardHeader>
+        <CardContent>
+          <Link href="/signup/resend" className="text-sm underline">
+            {t(locale, 'signup.resend.link')}
+          </Link>
+        </CardContent>
       </Card>
     );
   }
