@@ -153,9 +153,14 @@ export function SignupForm({ locale, siteKey }: Props) {
           <CardDescription>{t(locale, 'signup.successBody')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Link href="/signup/resend" className="text-sm underline">
-            {t(locale, 'signup.resend.link')}
-          </Link>
+          <div className="flex flex-col gap-2">
+            <Link href="/signup/resend" className="text-sm underline">
+              {t(locale, 'signup.resend.link')}
+            </Link>
+            <Link href="/admin/login" className="text-sm underline">
+              {t(locale, 'signup.backToLogin')}
+            </Link>
+          </div>
         </CardContent>
       </Card>
     );
@@ -293,6 +298,13 @@ export function SignupForm({ locale, siteKey }: Props) {
               ? t(locale, 'signup.submitting')
               : t(locale, 'signup.submit')}
           </Button>
+
+          <p className="text-muted-foreground text-sm">
+            {t(locale, 'signup.resend.formPrompt')}{' '}
+            <Link href="/signup/resend" className="underline">
+              {t(locale, 'signup.resend.formLink')}
+            </Link>
+          </p>
         </form>
       </CardContent>
     </Card>

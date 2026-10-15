@@ -73,7 +73,6 @@ import { default as default_221d51dba9c38b54ffc2c5a41546df9e } from '@codeware/a
 import { default as default_a700d0a80144b7c5d2f038a255456e2a } from '@codeware/apps/cms/components/admin/PerfStatsLink.client';
 import { default as default_c095f786e1e127492688aadc0a2d34be } from '@codeware/apps/cms/components/admin/AboutDialogHost.client';
 import { GlobalViewRedirect as GlobalViewRedirect_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
-import { default as default_d578e04faac05d98c37eb8abf9a58425 } from '@codeware/apps/cms/components/admin/ResendConfirmationLink.client';
 import { default as default_f1aa315e58788dc8980ed4850402b8bb } from '@codeware/apps/cms/components/admin/DomainMismatchNotice';
 import { TenantSelector as TenantSelector_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
 import { default as default_67bc1060da1a6ada71dd6ec10de05eed } from '@codeware/apps/cms/components/admin/palette/PaletteProvider.client';
@@ -235,8 +234,6 @@ export const importMap = {
     default_c095f786e1e127492688aadc0a2d34be,
   '@payloadcms/plugin-multi-tenant/rsc#GlobalViewRedirect':
     GlobalViewRedirect_d6d5f193a167989e2ee7d14202901e62,
-  '@codeware/apps/cms/components/admin/ResendConfirmationLink.client#default':
-    default_d578e04faac05d98c37eb8abf9a58425,
   '@codeware/apps/cms/components/admin/DomainMismatchNotice#default':
     default_f1aa315e58788dc8980ed4850402b8bb,
   '@payloadcms/plugin-multi-tenant/rsc#TenantSelector':

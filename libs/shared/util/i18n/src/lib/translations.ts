@@ -137,6 +137,9 @@ export type TranslationKey =
   | 'signup.resend.submitting'
   | 'signup.resend.done'
   | 'signup.resend.link'
+  | 'signup.resend.formPrompt'
+  | 'signup.resend.formLink'
+  | 'signup.backToLogin'
   | 'signup.error.invalid'
   | 'signup.error.password'
   | 'signup.error.deployment'
@@ -422,8 +425,12 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.resend.submit': 'Send again',
     'signup.resend.submitting': 'Sending...',
     'signup.resend.done':
-      "If this address has an account that still needs confirming, we've sent a new confirmation link.",
+      "If this address has an account that hasn't been confirmed yet, we've sent a new confirmation link.",
     'signup.resend.link': "Didn't get the email? Send it again",
+    'signup.resend.formPrompt':
+      "Already signed up but didn't get the confirmation email?",
+    'signup.resend.formLink': 'Send it again',
+    'signup.backToLogin': 'Back to sign in',
     'signup.error.invalid':
       'Some details are missing or not valid. Check the form and try again.',
     'signup.error.password':
@@ -742,6 +749,10 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.resend.done':
       'Om adressen har ett konto som ännu inte är bekräftat har vi skickat en ny bekräftelselänk.',
     'signup.resend.link': 'Fick du inget mejl? Skicka det igen',
+    'signup.resend.formPrompt':
+      'Har du redan registrerat dig men inte fått bekräftelsemejlet?',
+    'signup.resend.formLink': 'Skicka det igen',
+    'signup.backToLogin': 'Tillbaka till inloggningen',
     'signup.error.invalid':
       'Några uppgifter saknas eller är ogiltiga. Kontrollera formuläret och försök igen.',
     'signup.error.password': 'Lösenordet måste vara mellan 10 och 128 tecken.',
