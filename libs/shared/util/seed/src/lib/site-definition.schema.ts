@@ -176,6 +176,7 @@ export const SiteDefinitionSchema = z
         .object({
           name: z.string().min(1),
           slug: Slug,
+          draft: z.boolean().optional(),
           layout: z.array(BlockSchema)
         })
         .passthrough()
@@ -186,6 +187,7 @@ export const SiteDefinitionSchema = z
           .object({
             title: z.string().min(1),
             slug: Slug,
+            draft: z.boolean().optional(),
             content: z.string()
           })
           .passthrough()

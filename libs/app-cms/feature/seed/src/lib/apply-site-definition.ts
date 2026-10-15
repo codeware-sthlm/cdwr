@@ -664,7 +664,12 @@ export async function applySiteDefinition(
           page.slug,
           await ensurePage(
             payload,
-            { ...content, slug: page.slug, tenant: tenant.id },
+            {
+              ...content,
+              draft: page.draft,
+              slug: page.slug,
+              tenant: tenant.id
+            },
             owned
           )
         )
@@ -710,7 +715,8 @@ export async function applySiteDefinition(
               slug: post.slug,
               tenant: tenant.id,
               title: post.title,
-              visibility: post.visibility
+              visibility: post.visibility,
+              draft: post.draft
             },
             owned
           )
