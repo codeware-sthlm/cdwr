@@ -30,6 +30,9 @@ const customTranslationsSchema = z.object({
     badgeDraft: z.string(),
     badgeNew: z.string(),
     badgePublished: z.string(),
+    buildSiteBody: z.string(),
+    buildSiteCta: z.string(),
+    buildSiteTitle: z.string(),
     contentLead: z.string(),
     continueEditing: z.string(),
     emptyActivitySub: z.string(),
@@ -107,6 +110,48 @@ const customTranslationsSchema = z.object({
     restart: z.string(),
     restartHint: z.string(),
     saveFirst: z.string()
+  }),
+  firstSite: z.object({
+    back: z.string(),
+    backToDashboard: z.string(),
+    create: z.string(),
+    creating: z.string(),
+    errorBody: z.string(),
+    errorTitle: z.string(),
+    hasPagesBody: z.string(),
+    hasPagesTitle: z.string(),
+    heading: z.string(),
+    next: z.string(),
+    pageAbout: z.string(),
+    pageAboutHint: z.string(),
+    pageContact: z.string(),
+    pageContactHint: z.string(),
+    pageHome: z.string(),
+    pageHomeHint: z.string(),
+    pageNews: z.string(),
+    pageNewsHint: z.string(),
+    pagePrivacy: z.string(),
+    pagePrivacyHint: z.string(),
+    pagesTitle: z.string(),
+    purposeAssociation: z.string(),
+    purposeAssociationHint: z.string(),
+    purposeBusiness: z.string(),
+    purposeBusinessHint: z.string(),
+    purposePortfolio: z.string(),
+    purposePortfolioHint: z.string(),
+    purposeTitle: z.string(),
+    retry: z.string(),
+    siteName: z.string(),
+    stepOf: z.string(),
+    summaryNote: z.string(),
+    summaryPages: z.string(),
+    summaryPurpose: z.string(),
+    summarySite: z.string(),
+    summaryTheme: z.string(),
+    summaryTitle: z.string(),
+    themeTitle: z.string(),
+    unavailableBody: z.string(),
+    unavailableTitle: z.string()
   }),
   forms: z.object({
     notificationRecipient: z.string(),
@@ -412,6 +457,10 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       badgeDraft: 'Draft',
       badgeNew: 'New',
       badgePublished: 'Published',
+      buildSiteBody:
+        "Answer a few questions and we'll create a starter site you can edit.",
+      buildSiteCta: 'Start the guide',
+      buildSiteTitle: "Let's build your site",
       contentLead:
         'Everything on your site, grouped by what it does. Open a card to manage its content, or create something new right away.',
       continueEditing: 'Continue editing',
@@ -506,6 +555,54 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       restartHint:
         'A newly validated domain only takes effect after the app restarts.',
       saveFirst: 'Save to request a certificate for this domain.'
+    },
+    firstSite: {
+      back: 'Back',
+      backToDashboard: 'Back to the dashboard',
+      create: 'Create my site',
+      creating: 'Creating your site…',
+      errorBody:
+        'Nothing was lost. Try again, and if it keeps failing, contact support.',
+      errorTitle: 'Your site could not be created',
+      hasPagesBody:
+        'This guide only helps with an empty site. Open the pages from the dashboard to keep editing.',
+      hasPagesTitle: 'Your site already has pages',
+      heading: "Let's build your site",
+      next: 'Next',
+      pageAbout: 'About',
+      pageAboutHint: 'Tell visitors who you are',
+      pageContact: 'Contact',
+      pageContactHint: 'A form whose messages go to your email address',
+      pageHome: 'Home',
+      pageHomeHint: 'Always included',
+      pageNews: 'News',
+      pageNewsHint: 'A page that lists your posts',
+      pagePrivacy: 'Privacy',
+      pagePrivacyHint:
+        "From the platform's template. Review it before publishing",
+      pagesTitle: 'Which pages do you want?',
+      purposeAssociation: 'Association or club',
+      purposeAssociationHint: 'For members, activities and news',
+      purposeBusiness: 'Business',
+      purposeBusinessHint:
+        'Present what you offer and make it easy to get in touch',
+      purposePortfolio: 'Portfolio or personal',
+      purposePortfolioHint: 'Show your work or tell your own story',
+      purposeTitle: 'What is the site for?',
+      retry: 'Try again',
+      siteName: 'Site: {{name}}',
+      stepOf: 'Step {{step}} of {{total}}',
+      summaryNote:
+        'Everything is created as a draft you can edit. Nothing is published yet.',
+      summaryPages: 'Pages',
+      summaryPurpose: 'Purpose',
+      summarySite: 'Site',
+      summaryTheme: 'Theme',
+      summaryTitle: 'Here is what we will create',
+      themeTitle: 'Pick a theme',
+      unavailableBody:
+        'The guide is only available to the administrator of a site that has no pages.',
+      unavailableTitle: 'Not available'
     },
     forms: {
       notificationRecipient:
@@ -853,6 +950,10 @@ Supported locales: {{locales}}`,
       badgeDraft: 'Utkast',
       badgeNew: 'Ny',
       badgePublished: 'Publicerad',
+      buildSiteBody:
+        'Svara på några frågor så skapar vi en webbplats att utgå från som du kan redigera.',
+      buildSiteCta: 'Starta guiden',
+      buildSiteTitle: 'Låt oss bygga din webbplats',
       contentLead:
         'Allt på din webbplats, grupperat efter funktion. Öppna ett kort för att hantera innehållet, eller skapa något nytt direkt.',
       continueEditing: 'Fortsätt redigera',
@@ -947,6 +1048,56 @@ Supported locales: {{locales}}`,
       restartHint:
         'En nyligen validerad domän börjar gälla först efter att appen har startats om.',
       saveFirst: 'Spara för att begära ett certifikat för domänen.'
+    },
+    firstSite: {
+      back: 'Tillbaka',
+      backToDashboard: 'Tillbaka till startsidan',
+      create: 'Skapa min webbplats',
+      creating: 'Skapar din webbplats…',
+      errorBody:
+        'Inget gick förlorat. Försök igen, och kontakta supporten om det fortsätter att misslyckas.',
+      errorTitle: 'Din webbplats kunde inte skapas',
+      hasPagesBody:
+        'Den här guiden hjälper bara till med en tom webbplats. Öppna sidorna från startsidan för att fortsätta redigera.',
+      hasPagesTitle: 'Din webbplats har redan sidor',
+      heading: 'Låt oss bygga din webbplats',
+      next: 'Nästa',
+      pageAbout: 'Om oss',
+      pageAboutHint: 'Berätta för besökarna vem du är',
+      pageContact: 'Kontakt',
+      pageContactHint:
+        'Ett formulär vars meddelanden går till din e-postadress',
+      pageHome: 'Startsida',
+      pageHomeHint: 'Ingår alltid',
+      pageNews: 'Nyheter',
+      pageNewsHint: 'En sida som listar dina inlägg',
+      pagePrivacy: 'Integritet',
+      pagePrivacyHint:
+        'Från plattformens mall. Gå igenom texten innan du publicerar',
+      pagesTitle: 'Vilka sidor vill du ha?',
+      purposeAssociation: 'Förening eller klubb',
+      purposeAssociationHint: 'För medlemmar, aktiviteter och nyheter',
+      purposeBusiness: 'Företag',
+      purposeBusinessHint:
+        'Presentera vad du erbjuder och gör det enkelt att ta kontakt',
+      purposePortfolio: 'Portfolio eller personlig',
+      purposePortfolioHint:
+        'Visa upp ditt arbete eller berätta din egen historia',
+      purposeTitle: 'Vad ska webbplatsen användas till?',
+      retry: 'Försök igen',
+      siteName: 'Webbplats: {{name}}',
+      stepOf: 'Steg {{step}} av {{total}}',
+      summaryNote:
+        'Allt skapas som utkast som du kan redigera. Ingenting är publicerat ännu.',
+      summaryPages: 'Sidor',
+      summaryPurpose: 'Syfte',
+      summarySite: 'Webbplats',
+      summaryTheme: 'Tema',
+      summaryTitle: 'Det här skapar vi',
+      themeTitle: 'Välj ett tema',
+      unavailableBody:
+        'Guiden är bara tillgänglig för administratören av en webbplats som inte har några sidor.',
+      unavailableTitle: 'Inte tillgänglig'
     },
     forms: {
       notificationRecipient:

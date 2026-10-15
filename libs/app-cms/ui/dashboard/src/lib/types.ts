@@ -73,6 +73,11 @@ export type DashboardData = {
    * decides both and they cannot drift into a visible-but-empty tab.
    */
   platform: PlatformData | null;
+  /**
+   * Whether the first-site guide is on offer: a workspace admin whose
+   * workspace has no pages. Replaces the greeting with a card linking to it.
+   */
+  showBuildSite: boolean;
 };
 
 /** Which window the statistics figures cover. */

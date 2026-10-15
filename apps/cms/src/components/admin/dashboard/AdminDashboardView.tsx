@@ -20,6 +20,7 @@ import type {
 import type { ServerProps, Where } from 'payload';
 import React from 'react';
 
+import { getFirstSiteState } from '../first-site/first-site-access';
 import { formatRelativeTime } from '../utils/relative-time';
 import { getTenantWhere } from '../utils/tenant-where';
 
@@ -178,6 +179,8 @@ const AdminDashboardView: React.FC<ServerProps> = async ({
     .slice(0, PANEL_MAX_LIMIT);
 
   const userName = user?.name ?? '';
+  const showBuildSite =
+    (await getFirstSiteState(payload, user)).kind === 'available';
 
   return (
     <AdminDashboard
@@ -188,6 +191,7 @@ const AdminDashboardView: React.FC<ServerProps> = async ({
       drafts={drafts}
       initialActiveTab={activeTab}
       platform={platform}
+      showBuildSite={showBuildSite}
     />
   );
 };

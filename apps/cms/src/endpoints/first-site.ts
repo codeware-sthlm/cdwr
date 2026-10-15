@@ -1,4 +1,3 @@
-import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import {
   STARTER_PAGES,
   STARTER_PURPOSES,
@@ -9,7 +8,7 @@ import {
   buildStarterDefinition,
   workspaceLocale
 } from '@codeware/app-cms/feature/seed';
-import { getUserTenantIDs, hasRole, isUser } from '@codeware/app-cms/util/misc';
+import { canEdit } from '@codeware/app-cms/util/misc';
 import { SITE_THEMES, type SiteTheme } from '@codeware/shared/theme';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import {
@@ -18,8 +17,7 @@ import {
   addDataAndFileToRequest
 } from 'payload';
 
-import { getSingleTenantIdFromHeaders } from '../components/admin/utils/tenant-where';
-import { resolveScopedTenant } from '../security/resolve-scoped-tenant';
+import { firstSiteTenantId } from '../security/first-site-tenant';
 import { deploymentPrivacyFacts } from '../utils/deployment-privacy-facts';
 
 /** Quoted in the privacy text; a new workspace has not set its own */
@@ -63,32 +61,6 @@ const refuse = (status: StatusCodes, error = getReasonPhrase(status)) =>
   Response.json({ error }, { status });
 
 /**
- * The workspace a first site would be applied to, when this user may do it.
- *
- * Resolved on the server, never taken from the body. Only an admin of that
- * workspace qualifies; a platform system user applies sites from the CLI.
- */
-async function firstSiteTenantId(req: PayloadRequest): Promise<number | null> {
-  const { user, payload } = req;
-
-  // A tenant API key is logged in too, but is no person to build a site for
-  if (!isUser(user) || hasRole(user, 'system-user')) {
-    return null;
-  }
-
-  const tenantId =
-    getEnv().APP_MODE.type === 'tenant'
-      ? ((await resolveScopedTenant(payload))?.id ?? null)
-      : getSingleTenantIdFromHeaders(req.headers, user);
-
-  if (tenantId === null) {
-    return null;
-  }
-
-  return getUserTenantIDs(user, ['admin']).includes(tenantId) ? tenantId : null;
-}
-
-/**
  * Apply a starter site, built from the first-site guide's answers.
  *
  * The one place the admin applies a site definition. Kept narrow on purpose:
@@ -102,8 +74,8 @@ export const firstSiteEndpoint: Endpoint = {
   handler: async (req: PayloadRequest): Promise<Response> => {
     const { payload, user } = req;
 
-    const tenantId = await firstSiteTenantId(req);
-    if (tenantId === null || !isUser(user)) {
+    const tenantId = await firstSiteTenantId(payload, req.headers, user);
+    if (tenantId === null || !canEdit(user)) {
       return refuse(StatusCodes.FORBIDDEN);
     }
 
