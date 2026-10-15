@@ -116,6 +116,36 @@ export type TranslationKey =
   | 'notFound.goHome'
   | 'notFound.title'
   | 'posts.readMore'
+  | 'signup.title'
+  | 'signup.intro'
+  | 'signup.closed'
+  | 'signup.code'
+  | 'signup.name'
+  | 'signup.email'
+  | 'signup.password'
+  | 'signup.passwordHint'
+  | 'signup.siteName'
+  | 'signup.deployment'
+  | 'signup.deploymentHint'
+  | 'signup.submit'
+  | 'signup.submitting'
+  | 'signup.successTitle'
+  | 'signup.successBody'
+  | 'signup.error.invalid'
+  | 'signup.error.password'
+  | 'signup.error.deployment'
+  | 'signup.error.code'
+  | 'signup.error.closed'
+  | 'signup.error.throttled'
+  | 'signup.error.email-taken'
+  | 'signup.error.deployment-taken'
+  | 'signup.error.name-taken'
+  | 'signup.error.failed'
+  | 'signup.issue.empty'
+  | 'signup.issue.characters'
+  | 'signup.issue.hyphens'
+  | 'signup.issue.reserved'
+  | 'signup.issue.too-long'
   | 'siteGate.heading'
   | 'siteGate.intro'
   | 'siteGate.password'
@@ -359,6 +389,44 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'notFound.goHome': 'Go back home',
     'notFound.title': 'Page not found',
     'posts.readMore': 'Read more',
+    'signup.title': 'Create your site',
+    'signup.intro': 'Fill in the details below to get your own site.',
+    'signup.closed': 'Signup is not open right now. Please check back later.',
+    'signup.code': 'Invite code',
+    'signup.name': 'Your name',
+    'signup.email': 'Email address',
+    'signup.password': 'Password',
+    'signup.passwordHint': 'At least 10 characters.',
+    'signup.siteName': 'Site name',
+    'signup.deployment': 'Site address',
+    'signup.deploymentHint':
+      'Lowercase letters, digits and hyphens. Suggested from the site name.',
+    'signup.submit': 'Create site',
+    'signup.submitting': 'Creating site...',
+    'signup.successTitle': 'Check your email to confirm your address',
+    'signup.successBody':
+      'We have sent a message to the address you gave. Open the link in it to confirm the address; your site is set up after that.',
+    'signup.error.invalid':
+      'Some details are missing or not valid. Check the form and try again.',
+    'signup.error.password':
+      'The password must be between 10 and 128 characters.',
+    'signup.error.deployment': 'This site address cannot be used.',
+    'signup.error.code': "This invite code can't be used.",
+    'signup.error.closed': "Signup isn't open right now.",
+    'signup.error.throttled': 'Too many attempts. Try again later.',
+    'signup.error.email-taken':
+      'There is already an account with this email address.',
+    'signup.error.deployment-taken': 'This site address is already taken.',
+    'signup.error.name-taken': 'A site with this name already exists.',
+    'signup.error.failed': 'Something went wrong. Try again in a moment.',
+    'signup.issue.empty': 'Enter a site address.',
+    'signup.issue.characters':
+      'Use only lowercase letters, digits and hyphens.',
+    'signup.issue.hyphens':
+      'A hyphen cannot start or end the address, or come twice in a row.',
+    'signup.issue.reserved': 'This site address is reserved.',
+    'signup.issue.too-long':
+      'The site address is too long (40 characters at most).',
     'siteGate.heading': 'This site is not open',
     'siteGate.intro': 'Enter the password to continue.',
     'siteGate.password': 'Password',
@@ -625,6 +693,45 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'notFound.goHome': 'Gå tillbaka till startsidan',
     'notFound.title': 'Sidan hittades inte',
     'posts.readMore': 'Läs mer',
+    'signup.title': 'Skapa din webbplats',
+    'signup.intro': 'Fyll i uppgifterna nedan för att få din egen webbplats.',
+    'signup.closed':
+      'Registreringen är inte öppen just nu. Titta in igen senare.',
+    'signup.code': 'Inbjudningskod',
+    'signup.name': 'Ditt namn',
+    'signup.email': 'E-postadress',
+    'signup.password': 'Lösenord',
+    'signup.passwordHint': 'Minst 10 tecken.',
+    'signup.siteName': 'Webbplatsens namn',
+    'signup.deployment': 'Webbplatsens adress',
+    'signup.deploymentHint':
+      'Små bokstäver, siffror och bindestreck. Föreslås utifrån webbplatsens namn.',
+    'signup.submit': 'Skapa webbplats',
+    'signup.submitting': 'Skapar webbplatsen...',
+    'signup.successTitle': 'Kolla din e-post för att bekräfta adressen',
+    'signup.successBody':
+      'Vi har skickat ett meddelande till e-postadressen du angav. Öppna länken i meddelandet för att bekräfta adressen, så görs webbplatsen i ordning därefter.',
+    'signup.error.invalid':
+      'Några uppgifter saknas eller är ogiltiga. Kontrollera formuläret och försök igen.',
+    'signup.error.password': 'Lösenordet måste vara mellan 10 och 128 tecken.',
+    'signup.error.deployment': 'Den här webbplatsadressen kan inte användas.',
+    'signup.error.code': 'Den här inbjudningskoden kan inte användas.',
+    'signup.error.closed': 'Registreringen är inte öppen just nu.',
+    'signup.error.throttled': 'För många försök. Försök igen senare.',
+    'signup.error.email-taken':
+      'Det finns redan ett konto med den här e-postadressen.',
+    'signup.error.deployment-taken':
+      'Den här webbplatsadressen är redan upptagen.',
+    'signup.error.name-taken':
+      'Det finns redan en webbplats med det här namnet.',
+    'signup.error.failed': 'Något gick fel. Försök igen om en stund.',
+    'signup.issue.empty': 'Ange en webbplatsadress.',
+    'signup.issue.characters':
+      'Använd bara små bokstäver, siffror och bindestreck.',
+    'signup.issue.hyphens':
+      'Ett bindestreck får inte stå först eller sist i adressen, eller två gånger i rad.',
+    'signup.issue.reserved': 'Den här webbplatsadressen är reserverad.',
+    'signup.issue.too-long': 'Webbplatsadressen är för lång (högst 40 tecken).',
     'siteGate.heading': 'Webbplatsen är inte öppen',
     'siteGate.intro': 'Ange lösenordet för att fortsätta.',
     'siteGate.password': 'Lösenord',
