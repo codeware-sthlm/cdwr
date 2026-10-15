@@ -52,6 +52,24 @@ describe('renderSignupNoticeMail', () => {
     );
   });
 
+  it('names the preview app in a preview command', () => {
+    const mail = renderSignupNoticeMail({
+      ...base,
+      environment: 'preview',
+      appName: 'cdwr-cms-pr-123'
+    });
+
+    expect(mail.text).toContain(
+      'cdwr tenant provision --env preview --preview-app cdwr-cms-pr-123 --workspace cdwr-cms-titan --apps cms'
+    );
+  });
+
+  it('never names the app in a production command', () => {
+    const mail = renderSignupNoticeMail({ ...base, appName: 'cdwr-cms' });
+
+    expect(mail.text).not.toContain('--preview-app');
+  });
+
   it('renders in Swedish', () => {
     const mail = renderSignupNoticeMail({ ...base, locale: 'sv' });
 

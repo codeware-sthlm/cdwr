@@ -239,6 +239,29 @@ describe('POST /api/signup', () => {
     );
   });
 
+  it('names the preview app in the notice of a preview', async () => {
+    jest.mocked(getEnv).mockReturnValue({
+      APP_MODE: { type: 'host' },
+      DEPLOY_ENV: 'preview'
+    } as ReturnType<typeof getEnv>);
+    const previous = process.env['FLY_APP_NAME'];
+    process.env['FLY_APP_NAME'] = 'cdwr-cms-pr-123';
+
+    try {
+      const response = await post();
+      expect(response.status).toBe(201);
+      await flush();
+    } finally {
+      if (previous === undefined) delete process.env['FLY_APP_NAME'];
+      else process.env['FLY_APP_NAME'] = previous;
+    }
+
+    const [, mails] = jest.mocked(sendSignupEmails).mock.calls[0];
+    expect(mails.notice?.mail.text).toContain(
+      '--env preview --preview-app cdwr-cms-pr-123 --workspace'
+    );
+  });
+
   it('sends no notice when no address is set', async () => {
     payload.find.mockResolvedValue({ docs: [{ signupNotifyEmail: null }] });
 
