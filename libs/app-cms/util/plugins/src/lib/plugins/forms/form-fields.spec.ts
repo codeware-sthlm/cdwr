@@ -50,6 +50,28 @@ describe('formFields', () => {
     ).toBe(messageEditor);
   });
 
+  it.each([
+    ['nobody', null, false],
+    ['a tenant api key', { id: 1, slug: 'acme', apiKey: 'k' }, false],
+    [
+      'a reader',
+      { id: 2, role: 'user', tenants: [{ tenant: 1, role: 'reader' }] },
+      false
+    ],
+    [
+      'an editor',
+      { id: 3, role: 'user', tenants: [{ tenant: 1, role: 'user' }] },
+      true
+    ],
+    ['a system user', { id: 4, role: 'system-user', tenants: [] }, true]
+  ])('lets %s read the recipients: %s', (_, user, allowed) => {
+    formFields({ defaultFields });
+
+    const read =
+      emailsField.type === 'array' ? emailsField.access?.read : undefined;
+    expect(read?.({ req: { user } } as never)).toBe(allowed);
+  });
+
   it('leaves other array fields alone when there is no message field', () => {
     const noMessage: Field = {
       name: 'emails',

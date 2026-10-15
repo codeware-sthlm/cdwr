@@ -1,4 +1,5 @@
 import { managedByField } from '@codeware/app-cms/util/definitions';
+import { canEdit } from '@codeware/app-cms/util/misc';
 import type { Field } from 'payload';
 
 import { messageEditor } from './message-editor';
@@ -61,6 +62,24 @@ const restrictMessageEditor = (emailsField: Field): void => {
 };
 
 /**
+ * Keep notification recipients out of every read by someone who cannot edit.
+ *
+ * A form block populates its form into the page, and the site hands the page
+ * to the browser, so a recipient read through a tenant api key would reach
+ * every visitor. Sending the notification reads the form with override
+ * access and still sees them.
+ */
+const hideRecipients = (emailsField: Field): void => {
+  if (emailsField.type !== 'array') {
+    return;
+  }
+  emailsField.access = {
+    ...emailsField.access,
+    read: ({ req }) => canEdit(req.user)
+  };
+};
+
+/**
  * Extend the plugin's form fields with our own.
  */
 export const formFields = ({
@@ -76,6 +95,7 @@ export const formFields = ({
   if (emailsIndex >= 0) {
     fields.splice(emailsIndex, 0, notificationRecipientHint);
     restrictMessageEditor(defaultFields[emailsIndex]);
+    hideRecipients(defaultFields[emailsIndex]);
   }
 
   return fields;
