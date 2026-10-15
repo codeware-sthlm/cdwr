@@ -23,6 +23,7 @@ import { ensureTenantHook } from './hooks/ensure-tenant.hook';
 import { validateTenantsArrayAccessHook } from './hooks/validate-tenants-array-access.hook';
 import { verifyOnlySelfServeHook } from './hooks/verify-only-self-serve.hook';
 import { verifyTenantModeAccessHook } from './hooks/verify-tenant-mode-access.hook';
+import { verifyEmailMail } from './verify-email';
 
 /**
  * Condition function to determine whether the Workspaces tab should be shown in the admin UI for a user document.
@@ -55,7 +56,21 @@ const users: CollectionConfig<'users'> = {
   auth: {
     maxLoginAttempts: 5,
     lockTime: 1000 * 60 * 60 * 24,
-    verify: true,
+    // Only self-serve signups are left unverified; see verifyOnlySelfServeHook
+    verify: {
+      generateEmailHTML: ({ req, token, user }) =>
+        verifyEmailMail(req.payload, {
+          token,
+          name: user?.name,
+          locale: req.i18n.language === 'sv' ? 'sv' : 'en'
+        }).html,
+      generateEmailSubject: ({ req, token, user }) =>
+        verifyEmailMail(req.payload, {
+          token,
+          name: user?.name,
+          locale: req.i18n.language === 'sv' ? 'sv' : 'en'
+        }).subject
+    },
     forgotPassword: {
       generateEmailHTML: async ({ req, token, user } = {}) =>
         req && token && user
