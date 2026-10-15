@@ -68,6 +68,9 @@ async function createWorkspace(
       collection: 'tenants',
       data: {
         name: input.siteName,
+        // The formatter drops letters like å and ö, which can leave the slug
+        // empty; the validated site address is a safe slug already
+        slug: input.deployment,
         supportedLocales: [input.locale],
         deployment: input.deployment,
         status: 'pending'
