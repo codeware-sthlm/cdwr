@@ -185,6 +185,7 @@ describe('POST /api/signup', () => {
         collection: 'tenants',
         data: {
           name: 'Ada Engines',
+          slug: 'ada-engines',
           supportedLocales: ['sv'],
           deployment: 'ada-engines',
           status: 'pending'
