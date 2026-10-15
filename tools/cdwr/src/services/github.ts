@@ -41,11 +41,51 @@ export interface WorkflowRun {
   status: string;
   /** Empty until the run has completed */
   conclusion: string;
-  /** What started the run, such as `workflow_dispatch` or `push` */
-  event: string;
-  /** ISO time the run was created */
-  createdAt: string;
   url: string;
+}
+
+/**
+ * Trigger a workflow. `gh` prints the URL of the run it created when GitHub
+ * answers with it, which names the run exactly; `runId` is absent otherwise.
+ */
+export async function dispatchWorkflow(
+  cwd: string,
+  workflow: string,
+  ref: string,
+  inputs: Record<string, string>
+): Promise<{ args: string[]; runId?: number }> {
+  const args = [
+    'workflow',
+    'run',
+    workflow,
+    '--ref',
+    ref,
+    ...Object.entries(inputs).flatMap(([k, v]) => ['-f', `${k}=${v}`])
+  ];
+  const { stdout } = await run('gh', args, { cwd });
+  const match = stdout.match(/\/actions\/runs\/(\d+)/);
+  return match?.[1] ? { args, runId: Number(match[1]) } : { args };
+}
+
+/** One run by id */
+export async function viewRun(cwd: string, id: number): Promise<WorkflowRun> {
+  const { stdout } = await run(
+    'gh',
+    ['run', 'view', String(id), '--json', 'databaseId,status,conclusion,url'],
+    { cwd }
+  );
+  const r = JSON.parse(stdout) as {
+    databaseId: number;
+    status: string;
+    conclusion?: string | null;
+    url: string;
+  };
+  return {
+    id: r.databaseId,
+    status: r.status,
+    conclusion: r.conclusion ?? '',
+    url: r.url
+  };
 }
 
 /** Trigger a workflow and return the arguments used, for a copy-paste retry */
@@ -55,16 +95,7 @@ export async function runWorkflow(
   ref: string,
   inputs: Record<string, string>
 ): Promise<string[]> {
-  const args = [
-    'workflow',
-    'run',
-    workflow,
-    '--ref',
-    ref,
-    ...Object.entries(inputs).flatMap(([k, v]) => ['-f', `${k}=${v}`])
-  ];
-  await run('gh', args, { cwd });
-  return args;
+  return (await dispatchWorkflow(cwd, workflow, ref, inputs)).args;
 }
 
 /** Recent runs of a workflow on a branch */
@@ -86,7 +117,7 @@ export async function listWorkflowRuns(
       '--limit',
       String(limit),
       '--json',
-      'databaseId,status,conclusion,event,createdAt,url'
+      'databaseId,status,conclusion,url'
     ],
     { cwd }
   );
@@ -95,16 +126,12 @@ export async function listWorkflowRuns(
       databaseId: number;
       status: string;
       conclusion?: string | null;
-      event: string;
-      createdAt: string;
       url: string;
     }>
   ).map((r) => ({
     id: r.databaseId,
     status: r.status,
     conclusion: r.conclusion ?? '',
-    event: r.event,
-    createdAt: r.createdAt,
     url: r.url
   }));
 }

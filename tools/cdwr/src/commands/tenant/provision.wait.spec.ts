@@ -1,15 +1,11 @@
 import type { WorkflowRun } from '../../services/github';
 
-import { type Clock, awaitLive, dispatchedRun } from './provision.wait';
-
-const AT = Date.parse('2026-01-01T12:00:00Z');
+import { type Clock, awaitLive } from './provision.wait';
 
 const run = (over: Partial<WorkflowRun>): WorkflowRun => ({
   id: 2,
   status: 'completed',
   conclusion: 'success',
-  event: 'workflow_dispatch',
-  createdAt: new Date(AT + 1_000).toISOString(),
   url: 'https://gh/run/2',
   ...over
 });
@@ -26,44 +22,15 @@ const fakeClock = (): Clock => {
 };
 
 const base = {
-  dispatch: { known: new Set([1]), at: AT },
+  runId: 2,
   healthUrl: 'https://cdwr-cms-acme.fly.dev/api/health'
 };
 
-describe('dispatchedRun', () => {
-  const dispatch = { known: new Set([1]), at: AT };
-
-  it('ignores a push run, a run before the dispatch and a known run', () => {
-    const runs = [
-      run({ id: 1 }),
-      run({ id: 2, event: 'push' }),
-      run({ id: 3, createdAt: new Date(AT - 120_000).toISOString() }),
-      run({ id: 5 }),
-      run({ id: 4 })
-    ];
-    expect(dispatchedRun(runs, dispatch)?.id).toBe(4);
-  });
-
-  it('allows for clock skew', () => {
-    const early = run({
-      id: 2,
-      createdAt: new Date(AT - 10_000).toISOString()
-    });
-    expect(dispatchedRun([early], dispatch)?.id).toBe(2);
-  });
-
-  it('is undefined while the run has not appeared', () => {
-    expect(dispatchedRun([run({ id: 2, event: 'push' })], dispatch)).toBe(
-      undefined
-    );
-  });
-});
-
 describe('awaitLive', () => {
-  it('is live when the run succeeded and the site answers', async () => {
+  it('polls the named run and is live when it succeeded and the site answers', async () => {
     const result = await awaitLive({
       ...base,
-      listRuns: async () => [run({ id: 1, conclusion: 'failure' }), run({})],
+      getRun: async () => run({}),
       check: async () => true,
       clock: fakeClock()
     });
@@ -71,38 +38,38 @@ describe('awaitLive', () => {
   });
 
   it('waits for a running run to complete', async () => {
-    const listRuns = vi
-      .fn<() => Promise<WorkflowRun[]>>()
-      .mockResolvedValueOnce([run({ status: 'in_progress', conclusion: '' })])
-      .mockResolvedValue([run({})]);
+    const getRun = vi
+      .fn<() => Promise<WorkflowRun>>()
+      .mockResolvedValueOnce(run({ status: 'in_progress', conclusion: '' }))
+      .mockResolvedValue(run({}));
     const result = await awaitLive({
       ...base,
-      listRuns,
+      getRun,
       check: async () => true,
       clock: fakeClock()
     });
     expect(result).toEqual({ live: true });
-    expect(listRuns).toHaveBeenCalledTimes(2);
+    expect(getRun).toHaveBeenCalledTimes(2);
   });
 
   it('skips the run when nothing was dispatched', async () => {
-    const listRuns = vi.fn(async () => []);
+    const getRun = vi.fn(async () => run({}));
     const result = await awaitLive({
       ...base,
-      dispatch: undefined,
-      listRuns,
+      runId: undefined,
+      getRun,
       check: async () => true,
       clock: fakeClock()
     });
     expect(result).toEqual({ live: true });
-    expect(listRuns).not.toHaveBeenCalled();
+    expect(getRun).not.toHaveBeenCalled();
   });
 
   it('is not live when the run failed, and never checks the site', async () => {
     const check = vi.fn(async () => true);
     const result = await awaitLive({
       ...base,
-      listRuns: async () => [run({ conclusion: 'failure' })],
+      getRun: async () => run({ conclusion: 'failure' }),
       check,
       clock: fakeClock()
     });
@@ -116,7 +83,7 @@ describe('awaitLive', () => {
   it('gives up when the run never finishes', async () => {
     const result = await awaitLive({
       ...base,
-      listRuns: async () => [run({ status: 'in_progress', conclusion: '' })],
+      getRun: async () => run({ status: 'in_progress', conclusion: '' }),
       check: async () => true,
       deployTimeoutMs: 120_000,
       clock: fakeClock()
@@ -131,7 +98,7 @@ describe('awaitLive', () => {
     const check = vi.fn(async () => false);
     const result = await awaitLive({
       ...base,
-      listRuns: async () => [run({})],
+      getRun: async () => run({}),
       check,
       healthTimeoutMs: 60_000,
       clock: fakeClock()
@@ -147,7 +114,7 @@ describe('awaitLive', () => {
       .mockResolvedValue(true);
     const result = await awaitLive({
       ...base,
-      listRuns: async () => [run({})],
+      getRun: async () => run({}),
       check,
       clock: fakeClock()
     });
