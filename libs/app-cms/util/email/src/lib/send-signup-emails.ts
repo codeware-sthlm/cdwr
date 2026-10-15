@@ -1,12 +1,12 @@
 import type { Payload } from 'payload';
 
-type Mail = { subject: string; html: string; text: string };
+export type PlatformMail = { subject: string; html: string; text: string };
 
 export type SignupEmailsInput = {
   /** Confirmation mail to the new user */
-  verify: { to: string; mail: Mail };
+  verify: { to: string; mail: PlatformMail };
   /** Notice to the platform owner; omitted when nobody is to be told */
-  notice?: { to: string | Array<string>; mail: Mail };
+  notice?: { to: string | Array<string>; mail: PlatformMail };
 };
 
 /**
@@ -21,23 +21,38 @@ export async function sendSignupEmails(
   payload: Payload,
   { notice, verify }: SignupEmailsInput
 ): Promise<void> {
-  const send = async (
-    kind: 'verify' | 'notice',
-    to: string | Array<string>,
-    mail: Mail
-  ) => {
-    try {
-      await payload.sendEmail({ to, ...mail });
-    } catch (error) {
-      payload.logger.error(
-        `[signupEmails] Could not send the ${kind} mail: ${String(error)}`
-      );
-    }
-  };
-
-  await send('verify', verify.to, verify.mail);
+  await sendPlatformMail(payload, {
+    to: verify.to,
+    mail: verify.mail,
+    label: 'verify'
+  });
 
   if (notice) {
-    await send('notice', notice.to, notice.mail);
+    await sendPlatformMail(payload, {
+      to: notice.to,
+      mail: notice.mail,
+      label: 'notice'
+    });
+  }
+}
+
+/**
+ * Send one mail and never throw. A failure is logged with the mail's label,
+ * never its content, which may carry a token.
+ */
+export async function sendPlatformMail(
+  payload: Payload,
+  {
+    label,
+    mail,
+    to
+  }: { to: string | Array<string>; mail: PlatformMail; label: string }
+): Promise<void> {
+  try {
+    await payload.sendEmail({ to, ...mail });
+  } catch (error) {
+    payload.logger.error(
+      `[signupEmails] Could not send the ${label} mail: ${String(error)}`
+    );
   }
 }

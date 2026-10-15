@@ -1,7 +1,10 @@
 import { consumeInviteCode } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import {
+  PLATFORM_EMAIL_BRAND,
+  renderAccountExistsMail,
   renderSignupNoticeMail,
+  sendPlatformMail,
   sendSignupEmails
 } from '@codeware/app-cms/util/email';
 import { clientIp } from '@codeware/shared/util/human-check';
@@ -25,82 +28,109 @@ import {
 const refuse = (refusal: SignupRefusal) =>
   NextResponse.json({ error: refusal }, { status: REFUSAL_STATUS[refusal] });
 
+/** Run `work` in a transaction of its own, committed only when it returns */
+async function inTransaction<T>(
+  payload: BasePayload,
+  work: (transactionID: number | string) => Promise<T>
+): Promise<T> {
+  const transactionID = await payload.db.beginTransaction();
+  if (transactionID === null || transactionID === undefined) {
+    throw new Error('The database adapter started no transaction');
+  }
+  try {
+    const result = await work(transactionID);
+    await payload.db.commitTransaction(transactionID);
+    return result;
+  } catch (error) {
+    await payload.db.rollbackTransaction(transactionID);
+    throw error;
+  }
+}
+
 /**
  * The new workspace and its first user, in one transaction with the invite
  * code they spend. Any failure rolls all three back, so a refused or broken
  * signup leaves the code unspent and nothing half-made behind.
+ *
+ * An address that already has an account is the one exception, and it is
+ * found last, by the user insert itself: every other refusal comes first and
+ * reads the same whoever owns the address. The code is then spent on its own,
+ * so it cannot be tried again to learn that the address was taken.
  */
 async function createWorkspace(
   payload: BasePayload,
   input: SignupInput,
   attemptsKey: string
 ) {
-  const transactionID = await payload.db.beginTransaction();
-  if (transactionID === null || transactionID === undefined) {
-    throw new Error('The database adapter started no transaction');
-  }
-  const req = { transactionID };
-
   try {
-    await consumeInviteCode(payload, input.code, {
-      transactionID,
-      attemptsKey
-    });
+    return await inTransaction(payload, async (transactionID) => {
+      const req = { transactionID };
 
-    const { totalDocs } = await payload.count({
-      collection: 'tenants',
-      where: {
-        or: [
-          { deployment: { equals: input.deployment } },
-          { slug: { equals: input.deployment } }
-        ]
-      },
-      overrideAccess: true,
-      req
-    });
-    if (totalDocs > 0) {
-      throw new DeploymentTaken();
-    }
+      await consumeInviteCode(payload, input.code, {
+        transactionID,
+        attemptsKey
+      });
 
-    // Pending until it is provisioned by hand; the api key is minted by the
-    // collection's own hook
-    const tenant = await payload.create({
-      collection: 'tenants',
-      data: {
-        name: input.siteName,
-        // The formatter drops letters like å and ö, which can leave the slug
-        // empty; the validated site address is a safe slug already
-        slug: input.deployment,
-        supportedLocales: [input.locale],
-        deployment: input.deployment,
-        status: 'pending'
-      },
-      overrideAccess: true,
-      req
-    });
+      const { totalDocs } = await payload.count({
+        collection: 'tenants',
+        where: {
+          or: [
+            { deployment: { equals: input.deployment } },
+            { slug: { equals: input.deployment } }
+          ]
+        },
+        overrideAccess: true,
+        req
+      });
+      if (totalDocs > 0) {
+        throw new DeploymentTaken();
+      }
 
-    const user = await payload.create({
-      collection: 'users',
-      data: {
-        name: input.name,
-        email: input.email,
-        password: input.password,
-        role: 'user',
-        tenants: [{ tenant: tenant.id, role: 'admin' }]
-      },
-      // Unverified, and mailed only once the transaction has committed
-      context: { signup: true },
-      disableVerificationEmail: true,
-      overrideAccess: true,
-      req
-    });
+      // Pending until it is provisioned by hand; the api key is minted by the
+      // collection's own hook
+      const tenant = await payload.create({
+        collection: 'tenants',
+        data: {
+          name: input.siteName,
+          // The formatter drops letters like å and ö, which can leave the
+          // slug empty; the validated site address is a safe slug already
+          slug: input.deployment,
+          supportedLocales: [input.locale],
+          deployment: input.deployment,
+          status: 'pending'
+        },
+        overrideAccess: true,
+        req
+      });
 
-    await payload.db.commitTransaction(transactionID);
-    return { tenant, user };
+      const user = await payload.create({
+        collection: 'users',
+        data: {
+          name: input.name,
+          email: input.email,
+          password: input.password,
+          role: 'user',
+          tenants: [{ tenant: tenant.id, role: 'admin' }]
+        },
+        // Unverified, and mailed only once the transaction has committed
+        context: { signup: true },
+        disableVerificationEmail: true,
+        overrideAccess: true,
+        req
+      });
+
+      return { kind: 'created' as const, tenant, user };
+    });
   } catch (error) {
-    await payload.db.rollbackTransaction(transactionID);
-    throw error;
+    if (signupRefusal(error) !== 'email-taken') {
+      throw error;
+    }
   }
+
+  await inTransaction(payload, (transactionID) =>
+    consumeInviteCode(payload, input.code, { transactionID, attemptsKey })
+  );
+  return { kind: 'exists' as const };
 }
 
 /** The address that gets a notice of each signup, if one is set */
@@ -122,7 +152,10 @@ async function noticeAddress(payload: BasePayload): Promise<string | null> {
 async function sendMails(
   payload: BasePayload,
   input: SignupInput,
-  created: Awaited<ReturnType<typeof createWorkspace>>
+  created: Extract<
+    Awaited<ReturnType<typeof createWorkspace>>,
+    { kind: 'created' }
+  >
 ) {
   const { tenant, user } = created;
 
@@ -178,6 +211,23 @@ async function sendMails(
   }
 }
 
+/** Tells the owner of an address that already has an account about the attempt */
+async function sendAccountExists(payload: BasePayload, input: SignupInput) {
+  const serverURL = (payload.config.serverURL ?? '').replace(/\/+$/, '');
+  const admin = `${serverURL}${payload.config.routes.admin}`;
+
+  await sendPlatformMail(payload, {
+    to: input.email,
+    label: 'account exists',
+    mail: renderAccountExistsMail({
+      locale: input.locale,
+      brand: PLATFORM_EMAIL_BRAND,
+      loginUrl: `${admin}/login`,
+      resetUrl: `${admin}/forgot`
+    })
+  });
+}
+
 /**
  * Self-serve signup: an invite code, a person and a site name become a
  * pending workspace and its first admin.
@@ -227,7 +277,13 @@ export async function POST(request: NextRequest) {
     return refuse(reason);
   }
 
-  await sendMails(payload, parsed.input, created).catch((error) =>
+  // Both outcomes answer alike and at once; only the mail differs, and it is
+  // sent after the answer so its time cannot tell them apart
+  void (
+    created.kind === 'created'
+      ? sendMails(payload, parsed.input, created)
+      : sendAccountExists(payload, parsed.input)
+  ).catch((error) =>
     payload.logger.error(`[signup] Mails failed: ${String(error)}`)
   );
 

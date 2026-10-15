@@ -4,7 +4,10 @@ import {
   consumeInviteCode
 } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import { sendSignupEmails } from '@codeware/app-cms/util/email';
+import {
+  sendPlatformMail,
+  sendSignupEmails
+} from '@codeware/app-cms/util/email';
 import { NextRequest, NextResponse } from 'next/server';
 import { ValidationError, getPayload } from 'payload';
 
@@ -40,7 +43,8 @@ jest.mock('@codeware/app-cms/feature/env-loader', () => ({
 }));
 jest.mock('@codeware/app-cms/util/email', () => ({
   ...jest.requireActual('@codeware/app-cms/util/email'),
-  sendSignupEmails: jest.fn()
+  sendSignupEmails: jest.fn(),
+  sendPlatformMail: jest.fn()
 }));
 jest.mock('../../../security/public-submit', () => ({
   refuseUnlessHuman: jest.fn()
@@ -73,6 +77,9 @@ const payload = {
   logger: { error: jest.fn(), info: jest.fn() },
   config: { serverURL: 'https://cms.example/', routes: { admin: '/admin' } }
 };
+
+// Mails are sent after the response, so let them settle before asserting
+const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 const post = (data: unknown = body, raw?: string) =>
   POST(
@@ -213,6 +220,7 @@ describe('POST /api/signup', () => {
     expect(payload.db.commitTransaction).toHaveBeenCalledWith(TRANSACTION);
     expect(payload.db.rollbackTransaction).not.toHaveBeenCalled();
     // Mails go out only once the signup is committed
+    await flush();
     expect(
       payload.db.commitTransaction.mock.invocationCallOrder[0]
     ).toBeLessThan(jest.mocked(sendSignupEmails).mock.invocationCallOrder[0]);
@@ -235,6 +243,7 @@ describe('POST /api/signup', () => {
     const response = await post();
 
     expect(response.status).toBe(201);
+    await flush();
     const [, mails] = jest.mocked(sendSignupEmails).mock.calls[0];
     expect(mails.verify.to).toBe('ada@example.com');
     expect(mails.notice).toBeUndefined();
@@ -252,6 +261,7 @@ describe('POST /api/signup', () => {
     expect(payload.create).not.toHaveBeenCalled();
     expect(payload.db.rollbackTransaction).toHaveBeenCalledWith(TRANSACTION);
     expect(payload.db.commitTransaction).not.toHaveBeenCalled();
+    await flush();
     expect(sendSignupEmails).not.toHaveBeenCalled();
   });
 
@@ -264,6 +274,7 @@ describe('POST /api/signup', () => {
 
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual({ error: 'throttled' });
+    await flush();
     expect(sendSignupEmails).not.toHaveBeenCalled();
   });
 
@@ -276,6 +287,7 @@ describe('POST /api/signup', () => {
     expect(await response.json()).toEqual({ error: 'deployment-taken' });
     expect(payload.db.rollbackTransaction).toHaveBeenCalledWith(TRANSACTION);
     expect(payload.db.commitTransaction).not.toHaveBeenCalled();
+    await flush();
     expect(sendSignupEmails).not.toHaveBeenCalled();
   });
 
@@ -301,6 +313,60 @@ describe('POST /api/signup', () => {
     expect(payload.db.rollbackTransaction).toHaveBeenCalledWith(TRANSACTION);
   });
 
+  it('answers a taken site address with an existing email as taken, never reaching the user insert', async () => {
+    payload.count.mockResolvedValue({ totalDocs: 1 });
+    payload.create.mockRejectedValue(unique('email'));
+
+    const response = await post();
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'deployment-taken' });
+    expect(payload.create).not.toHaveBeenCalled();
+    expect(consumeInviteCode).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers a taken email like a success, rolls back and spends the code on its own', async () => {
+    payload.db.beginTransaction
+      .mockResolvedValueOnce('tx-1')
+      .mockResolvedValueOnce('tx-2');
+    payload.create
+      .mockResolvedValueOnce({ id: 11 })
+      .mockRejectedValueOnce(unique('email'));
+
+    const response = await post();
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(consumeInviteCode).toHaveBeenCalledTimes(2);
+    expect(consumeInviteCode).toHaveBeenNthCalledWith(
+      1,
+      payload,
+      'abcd-efgh',
+      expect.objectContaining({ transactionID: 'tx-1' })
+    );
+    expect(consumeInviteCode).toHaveBeenNthCalledWith(
+      2,
+      payload,
+      'abcd-efgh',
+      expect.objectContaining({ transactionID: 'tx-2' })
+    );
+    // The workspace is undone, the spent code is committed on its own
+    expect(payload.db.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(payload.db.rollbackTransaction).toHaveBeenCalledWith('tx-1');
+    expect(payload.db.commitTransaction).toHaveBeenCalledTimes(1);
+    expect(payload.db.commitTransaction).toHaveBeenCalledWith('tx-2');
+
+    await flush();
+    expect(sendSignupEmails).not.toHaveBeenCalled();
+    expect(sendPlatformMail).toHaveBeenCalledWith(
+      payload,
+      expect.objectContaining({
+        to: body.email.toLowerCase(),
+        label: 'account exists'
+      })
+    );
+  });
+
   it('answers an unexpected failure with 500 and logs it', async () => {
     payload.create.mockRejectedValue(new Error('boom'));
 
@@ -318,6 +384,7 @@ describe('POST /api/signup', () => {
     const response = await post();
 
     expect(response.status).toBe(201);
+    await flush();
     expect(payload.db.commitTransaction).toHaveBeenCalled();
     expect(payload.logger.error).toHaveBeenCalled();
   });
