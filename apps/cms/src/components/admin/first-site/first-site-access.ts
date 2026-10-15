@@ -1,7 +1,10 @@
 import { headers } from 'next/headers';
 import type { Payload, TypedUser } from 'payload';
 
-import { firstSiteTenantId } from '../../../security/first-site-tenant';
+import {
+  firstSiteTenantId,
+  workspaceHasPages
+} from '../../../security/first-site-tenant';
 
 export type FirstSiteState =
   | { kind: 'available'; tenantName: string }
@@ -18,13 +21,7 @@ export async function getFirstSiteState(
     return { kind: 'unavailable' };
   }
 
-  // Drafts count too, as in the endpoint that does the applying
-  const { totalDocs } = await payload.count({
-    collection: 'pages',
-    where: { tenant: { equals: tenantId } },
-    overrideAccess: true
-  });
-  if (totalDocs > 0) {
+  if (await workspaceHasPages(payload, tenantId)) {
     return { kind: 'has-pages' };
   }
 
