@@ -1,16 +1,14 @@
 import type { LegalTemplateVars } from '@codeware/app-cms/util/content-templates';
+import {
+  STARTER_PAGES,
+  STARTER_PURPOSES,
+  type StarterPage,
+  type StarterPurpose
+} from '@codeware/app-cms/util/definitions';
 import type { SiteTheme } from '@codeware/shared/theme';
 
-export const STARTER_PURPOSES = [
-  'business',
-  'portfolio',
-  'association'
-] as const;
-export type StarterPurpose = (typeof STARTER_PURPOSES)[number];
-
-/** Home is always included, so it is not a choice */
-export const STARTER_PAGES = ['about', 'contact', 'news', 'privacy'] as const;
-export type StarterPage = (typeof STARTER_PAGES)[number];
+export { STARTER_PAGES, STARTER_PURPOSES };
+export type { StarterPage, StarterPurpose };
 
 export const STARTER_LOCALES = ['en', 'sv'] as const;
 export type StarterLocale = (typeof STARTER_LOCALES)[number];

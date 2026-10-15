@@ -134,6 +134,12 @@ export default buildConfig({
           Component:
             '@codeware/apps/cms/components/admin/dashboard/AdminDashboardView'
         },
+        // The guide that applies a starter site to an empty workspace
+        firstSite: {
+          Component:
+            '@codeware/apps/cms/components/admin/first-site/FirstSiteView',
+          path: '/first-site'
+        },
         // Its own route rather than a field: a platform theme has no row to
         // hang one off, and what the view offers is a fork, not an edit
         themeLibrary: {

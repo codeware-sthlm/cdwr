@@ -79,6 +79,7 @@ import { default as default_67bc1060da1a6ada71dd6ec10de05eed } from '@codeware/a
 import { TenantSelectionProvider as TenantSelectionProvider_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
 import { default as default_7247ef290ed686d082a30d42a7adeb5b } from '@codeware/apps/cms/components/admin/dashboard/AdminDashboardView';
 import { default as default_0d7861e9c3757373aa6785fbf7fb933a } from '@codeware/apps/cms/components/admin/theme-library/ThemeLibraryView';
+import { default as default_1671ddc7d5e82791d22ef69829daca47 } from '@codeware/apps/cms/components/admin/first-site/FirstSiteView';
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc';
 import { S3ClientUploadHandler as S3ClientUploadHandler_f97aa6c64367fa259c5bc0567239ef24 } from '@payloadcms/storage-s3/client';
 
@@ -246,6 +247,8 @@ export const importMap = {
     default_7247ef290ed686d082a30d42a7adeb5b,
   '@codeware/apps/cms/components/admin/theme-library/ThemeLibraryView#default':
     default_0d7861e9c3757373aa6785fbf7fb933a,
+  '@codeware/apps/cms/components/admin/first-site/FirstSiteView#default':
+    default_1671ddc7d5e82791d22ef69829daca47,
   '@payloadcms/next/rsc#CollectionCards':
     CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1,
   '@payloadcms/storage-s3/client#S3ClientUploadHandler':

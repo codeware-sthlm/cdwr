@@ -29,3 +29,9 @@ export {
   isTenantCollectionSlug,
   tenantCollectionSlugs
 } from './lib/tenant-collections';
+export {
+  type StarterPage,
+  type StarterPurpose,
+  STARTER_PAGES,
+  STARTER_PURPOSES
+} from './lib/starter-choices';

@@ -19,6 +19,8 @@ import {
   Card,
   CardAction,
   CardContent,
+  CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle
 } from '@codeware/shared/ui/shadcn/components/card';
@@ -68,10 +70,16 @@ export function HomeTab({
   counts,
   taskCounts,
   recentDocs,
-  drafts
+  drafts,
+  showBuildSite
 }: Pick<
   DashboardData,
-  'userName' | 'counts' | 'taskCounts' | 'recentDocs' | 'drafts'
+  | 'userName'
+  | 'counts'
+  | 'taskCounts'
+  | 'recentDocs'
+  | 'drafts'
+  | 'showBuildSite'
 >) {
   const { permissions } = useAuth<User>();
   const collectionLabel = useCollectionLabel();
@@ -100,10 +108,29 @@ export function HomeTab({
         <h1 className="text-foreground text-2xl leading-tight font-semibold tracking-tight">
           {t('dashboard:heading')}
         </h1>
-        <p className="text-muted-foreground mt-2 max-w-prose text-sm leading-relaxed">
-          {t('dashboard:lead', { name: userName })}
-        </p>
+        {!showBuildSite && (
+          <p className="text-muted-foreground mt-2 max-w-prose text-sm leading-relaxed">
+            {t('dashboard:lead', { name: userName })}
+          </p>
+        )}
       </div>
+
+      {/* An empty site has nothing to greet the editor with yet */}
+      {showBuildSite && (
+        <Card variant="bordered">
+          <CardHeader>
+            <CardTitle>{t('dashboard:buildSiteTitle')}</CardTitle>
+            <CardDescription>{t('dashboard:buildSiteBody')}</CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button asChild>
+              <Link href="/admin/first-site">
+                {t('dashboard:buildSiteCta')}
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
 
       {/* First-time editor checklist */}
       {showChecklist && (
