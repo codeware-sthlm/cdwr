@@ -20,6 +20,7 @@ import { tenantsArrayField } from './fields/tenants-array.field';
 import { forgotPasswordMail } from './forgot-password-email';
 import { applyTenantLocaleHook } from './hooks/apply-tenant-locale.hook';
 import { ensureTenantHook } from './hooks/ensure-tenant.hook';
+import { mailVerificationAfterCreateHook } from './hooks/mail-verification-after-create.hook';
 import { validateTenantsArrayAccessHook } from './hooks/validate-tenants-array-access.hook';
 import { verifyOnlySelfServeHook } from './hooks/verify-only-self-serve.hook';
 import { verifyTenantModeAccessHook } from './hooks/verify-tenant-mode-access.hook';
@@ -114,9 +115,20 @@ const users: CollectionConfig<'users'> = {
     beforeOperation: [verifyOnlySelfServeHook],
     beforeValidate: [ensureTenantHook],
     beforeChange: [validateTenantsArrayAccessHook],
+    afterChange: [mailVerificationAfterCreateHook],
     afterLogin: [verifyTenantModeAccessHook, applyTenantLocaleHook]
   },
   fields: [
+    // Payload's own verification flag, which any signed-in user could set;
+    // merged over it so only system users can mark an address confirmed
+    {
+      name: '_verified',
+      type: 'checkbox',
+      access: {
+        create: systemUserAccess,
+        update: systemUserAccess
+      }
+    },
     {
       type: 'tabs',
       tabs: [
