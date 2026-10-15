@@ -20,9 +20,10 @@ import {
 } from '../../services/environment';
 import { flyAppName, listAppNames, pullRequestOf } from '../../services/fly';
 import {
+  dispatchWorkflow,
   listWorkflowRuns,
   pullRequestBranch,
-  runWorkflow
+  viewRun
 } from '../../services/github';
 import {
   type Environment,
@@ -67,7 +68,7 @@ import {
   tenantRowSchema,
   workspaceChoices
 } from './provision.logic';
-import { type Dispatch, awaitLive } from './provision.wait';
+import { awaitLive } from './provision.wait';
 
 type Connection = Awaited<ReturnType<typeof createClient>>;
 
@@ -452,10 +453,21 @@ export default defineCommand({
       short: 'W',
       flagOnly: true,
       initial: true
+    }),
+    skipWait: input.boolean({
+      prompt: 'Skip waiting for the deployment?',
+      description: 'Same as --no-wait',
+      short: 'S',
+      flagOnly: true,
+      initial: false
     })
   },
 
-  async plan(ctx, { environment, previewApp, workspace, apps, wait }) {
+  async plan(
+    ctx,
+    { environment, previewApp, workspace, apps, wait, skipWait }
+  ) {
+    const noWait = skipWait || !wait;
     const databaseUrl = await resolveDatabaseUrl(environment, previewApp);
     const cacheKey = `${environment}:${previewApp ?? ''}`;
     const rows =
@@ -551,7 +563,7 @@ export default defineCommand({
     );
     const pendingCms = tenant.status === 'pending' && apps.includes('cms');
     const paused = cmsPaused(flags);
-    const flip = flipsStatus(tenant, apps, wait, flags);
+    const flip = flipsStatus(tenant, apps, !noWait, flags);
     const notes = [
       ...(pendingCms && paused
         ? [
@@ -587,7 +599,7 @@ export default defineCommand({
         stats,
         statsConnection,
         flip,
-        skippedFlip: !wait && pendingCms && !paused,
+        skippedFlip: noWait && pendingCms && !paused,
         pausedFlip: pendingCms && paused,
         changes:
           folders.length +
@@ -730,9 +742,9 @@ export default defineCommand({
     const branch = ref ?? 'main';
 
     const started: string[] = [];
-    // How to recognise the cms run dispatched here; `blocked` when it cannot be
-    let cmsDispatch: Dispatch | undefined;
-    let flipBlocked: string | undefined;
+    // The cms run dispatched here, once dispatched and if GitHub named it
+    let cmsDispatched = false;
+    let cmsRunId: number | undefined;
     if (toDeploy.length && (!pullRequest || ref)) {
       const active = await listWorkflowRuns(
         ctx.root,
@@ -764,29 +776,32 @@ export default defineCommand({
 
       if (deploy) {
         for (const [index, { app, flyApp }] of toDeploy.entries()) {
-          const listed = await listWorkflowRuns(
-            ctx.root,
-            DEPLOY_WORKFLOW,
-            branch,
-            20
-          ).catch(() => null);
-          const known = new Set((listed ?? []).map(({ id }) => id));
-          const at = Date.now();
+          const known = new Set(
+            (
+              await listWorkflowRuns(
+                ctx.root,
+                DEPLOY_WORKFLOW,
+                branch,
+                20
+              ).catch(() => [])
+            ).map(({ id }) => id)
+          );
 
           try {
-            await ctx.ui.task(`Starting the deployment of ${flyApp}`, () =>
-              runWorkflow(ctx.root, DEPLOY_WORKFLOW, branch, {
-                app,
-                tenant: deployment,
-                environment,
-                ...(pullRequest ? { 'pr-number': String(pullRequest) } : {})
-              })
+            const dispatched = await ctx.ui.task(
+              `Starting the deployment of ${flyApp}`,
+              () =>
+                dispatchWorkflow(ctx.root, DEPLOY_WORKFLOW, branch, {
+                  app,
+                  tenant: deployment,
+                  environment,
+                  ...(pullRequest ? { 'pr-number': String(pullRequest) } : {})
+                })
             );
             started.push(flyApp);
             if (app === 'cms') {
-              if (listed) cmsDispatch = { known, at };
-              else
-                flipBlocked = 'could not list deployment runs before dispatch';
+              cmsDispatched = true;
+              cmsRunId = dispatched.runId;
             }
           } catch (error) {
             ctx.ui.error(messageOf(error));
@@ -829,18 +844,17 @@ export default defineCommand({
       let reason: string | undefined;
       if (!cmsFlyApp) {
         reason = 'the cms is paused';
-      } else if (flipBlocked) {
-        reason = flipBlocked;
-      } else if (cmsToDeploy && !cmsDispatch) {
+      } else if (cmsToDeploy && !cmsDispatched) {
         reason = 'the cms deployment was not started';
+      } else if (cmsDispatched && cmsRunId === undefined) {
+        reason = 'the dispatch returned no run id';
       } else {
         const live = await ctx.ui.task(
           `Waiting for ${cmsFlyApp} to be deployed and healthy`,
           () =>
             awaitLive({
-              dispatch: cmsDispatch,
-              listRuns: () =>
-                listWorkflowRuns(ctx.root, DEPLOY_WORKFLOW, branch, 20),
+              runId: cmsRunId,
+              getRun: (id) => viewRun(ctx.root, id),
               healthUrl: `https://${cmsFlyApp}.fly.dev/api/health`
             }),
           (result) =>

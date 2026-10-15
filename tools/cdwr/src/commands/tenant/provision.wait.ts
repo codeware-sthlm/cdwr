@@ -24,35 +24,10 @@ export const checkHealth = async (url: string): Promise<boolean> =>
 
 export type Liveness = { live: true } | { live: false; reason: string };
 
-/** What identifies the run a dispatch started */
-export interface Dispatch {
-  /** Runs that existed before it, by id */
-  known: ReadonlySet<number>;
-  /** Time just before the dispatch */
-  at: number;
-}
-
-/** Allowed difference between this machine's clock and GitHub's */
-export const CLOCK_SKEW_MS = 30_000;
-
-/** The earliest manually started run created at the dispatch, if it has appeared */
-export const dispatchedRun = (
-  runs: ReadonlyArray<WorkflowRun>,
-  { known, at }: Dispatch
-): WorkflowRun | undefined =>
-  runs
-    .filter(
-      ({ id, event, createdAt }) =>
-        !known.has(id) &&
-        event === 'workflow_dispatch' &&
-        Date.parse(createdAt) >= at - CLOCK_SKEW_MS
-    )
-    .sort((a, b) => a.id - b.id)[0];
-
 export interface AwaitLiveOptions {
-  /** The dispatch of the cms run; `undefined` when nothing was dispatched */
-  dispatch: Dispatch | undefined;
-  listRuns: () => Promise<WorkflowRun[]>;
+  /** The cms run the dispatch started; `undefined` when nothing was dispatched */
+  runId: number | undefined;
+  getRun: (id: number) => Promise<WorkflowRun>;
   healthUrl: string;
   deployTimeoutMs?: number;
   healthTimeoutMs?: number;
@@ -67,19 +42,18 @@ const minutes = (ms: number) => Math.round(ms / 60_000);
  * answers its health check. Never throws: any other end is a reason.
  */
 export async function awaitLive({
-  dispatch,
-  listRuns,
+  runId,
+  getRun,
   healthUrl,
   deployTimeoutMs = DEPLOY_TIMEOUT_MS,
   healthTimeoutMs = HEALTH_TIMEOUT_MS,
   clock = realClock,
   check = checkHealth
 }: AwaitLiveOptions): Promise<Liveness> {
-  if (dispatch) {
+  if (runId !== undefined) {
     const deadline = clock.now() + deployTimeoutMs;
     for (;;) {
-      const runs = await listRuns().catch(() => []);
-      const run = dispatchedRun(runs, dispatch);
+      const run = await getRun(runId).catch(() => undefined);
       if (run?.status === 'completed') {
         if (run.conclusion === 'success') break;
         return {

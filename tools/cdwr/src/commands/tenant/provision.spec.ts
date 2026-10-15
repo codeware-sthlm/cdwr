@@ -57,7 +57,13 @@ vi.mock('../../services/fly', () => ({
 vi.mock('../../services/github', () => ({
   listWorkflowRuns: vi.fn(async () => []),
   pullRequestBranch: vi.fn(async () => undefined),
-  runWorkflow: vi.fn(async () => ['workflow', 'run', 'fly-deployment.yml']),
+  dispatchWorkflow: vi.fn(
+    async (): Promise<{ args: string[]; runId?: number }> => ({
+      args: ['workflow', 'run', 'fly-deployment.yml'],
+      runId: 42
+    })
+  ),
+  viewRun: vi.fn(),
   currentPullRequest: vi.fn(async () => undefined)
 }));
 
@@ -156,7 +162,7 @@ describe('tenant provision', () => {
 
   it('creates the folders, key and flag, then triggers the deployment', async () => {
     const { setInfisicalSecret } = await import('../../services/infisical');
-    const { runWorkflow } = await import('../../services/github');
+    const { dispatchWorkflow } = await import('../../services/github');
 
     const { exit, ui } = await run();
 
@@ -175,7 +181,7 @@ describe('tenant provision', () => {
       key: 'DEPLOY_ENABLED',
       value: 'true'
     });
-    expect(runWorkflow).toHaveBeenCalledWith(
+    expect(dispatchWorkflow).toHaveBeenCalledWith(
       '/repo',
       'fly-deployment.yml',
       'main',
@@ -226,13 +232,13 @@ describe('tenant provision', () => {
 
   it('leaves a false flag alone, warns and does not deploy it', async () => {
     const { setInfisicalSecret } = await import('../../services/infisical');
-    const { runWorkflow } = await import('../../services/github');
+    const { dispatchWorkflow } = await import('../../services/github');
     await existingFolder('false');
 
     const { ui } = await run();
 
     expect(setInfisicalSecret).not.toHaveBeenCalled();
-    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(dispatchWorkflow).not.toHaveBeenCalled();
     expect(ui.printed.warn.join('\n')).toContain(
       "'acme' stays paused in production for cms"
     );
@@ -401,7 +407,7 @@ describe('tenant provision', () => {
 
     it('skips the step when Umami is not configured', async () => {
       const { createWebsite } = await import('../../services/umami');
-      const { runWorkflow } = await import('../../services/github');
+      const { dispatchWorkflow } = await import('../../services/github');
 
       const { exit, ui } = await run();
 
@@ -411,7 +417,7 @@ describe('tenant provision', () => {
       expect(ui.printed.note.join('\n')).toContain(
         'Statistics skipped: Umami not configured'
       );
-      expect(runWorkflow).toHaveBeenCalled();
+      expect(dispatchWorkflow).toHaveBeenCalled();
     });
 
     it('skips a preview without reading the Umami credentials', async () => {
@@ -456,7 +462,7 @@ describe('tenant provision', () => {
 
     it('warns but neither fails nor stops the deploy when Umami fails in apply', async () => {
       const { createWebsite } = await umami();
-      const { runWorkflow } = await import('../../services/github');
+      const { dispatchWorkflow } = await import('../../services/github');
       vi.mocked(createWebsite).mockRejectedValue(
         new Error('Umami refused the website creation: 500')
       );
@@ -468,7 +474,7 @@ describe('tenant provision', () => {
         'Umami refused the website creation: 500'
       );
       expect(await writes()).toHaveLength(0);
-      expect(runWorkflow).toHaveBeenCalled();
+      expect(dispatchWorkflow).toHaveBeenCalled();
     });
 
     it('does not fail the plan when Umami is unreachable', async () => {
@@ -541,7 +547,7 @@ describe('tenant provision', () => {
       expect(exit).toBe(EXIT.ok);
       expect(awaitLive).toHaveBeenCalledWith(
         expect.objectContaining({
-          dispatch: { known: new Set(), at: expect.any(Number) },
+          runId: 42,
           healthUrl: 'https://cdwr-cms-acme.fly.dev/api/health'
         })
       );
@@ -564,7 +570,7 @@ describe('tenant provision', () => {
       await run();
 
       expect(awaitLive).toHaveBeenCalledWith(
-        expect.objectContaining({ dispatch: undefined })
+        expect.objectContaining({ runId: undefined })
       );
       expect(await flips()).toHaveLength(1);
     });
@@ -592,10 +598,10 @@ describe('tenant provision', () => {
       expect(await flips()).toHaveLength(0);
     });
 
-    it('leaves the workspace pending when the runs could not be listed before dispatch', async () => {
+    it('leaves the workspace pending when the dispatch names no run', async () => {
       const { awaitLive } = await import('./provision.wait');
-      const { listWorkflowRuns } = await import('../../services/github');
-      vi.mocked(listWorkflowRuns).mockRejectedValue(new Error('gh down'));
+      const { dispatchWorkflow } = await import('../../services/github');
+      vi.mocked(dispatchWorkflow).mockResolvedValueOnce({ args: [] });
       await scripts('pending');
 
       const { ui, out } = await run(['--json']);
@@ -603,12 +609,11 @@ describe('tenant provision', () => {
       expect(awaitLive).not.toHaveBeenCalled();
       expect(await flips()).toHaveLength(0);
       expect(ui.printed.warn.join('\n')).toContain(
-        'could not list deployment runs before dispatch'
+        'the dispatch returned no run id'
       );
       expect(JSON.parse(out)).toMatchObject({
         result: { statusFlip: 'left-pending' }
       });
-      vi.mocked(listWorkflowRuns).mockResolvedValue([]);
     });
 
     it('plans no flip and ends cleanly when the cms is paused', async () => {
@@ -632,19 +637,22 @@ describe('tenant provision', () => {
       });
     });
 
-    it('skips the wait and the flip on --no-wait and says so', async () => {
-      const { awaitLive } = await import('./provision.wait');
-      await scripts('pending');
+    it.each(['--no-wait', '-S', '--skip-wait'])(
+      'skips the wait and the flip on %s and says so',
+      async (flag) => {
+        const { awaitLive } = await import('./provision.wait');
+        await scripts('pending');
 
-      const { ui, out } = await run(['--no-wait', '--json']);
+        const { ui, out } = await run([flag, '--json']);
 
-      expect(awaitLive).not.toHaveBeenCalled();
-      expect(await flips()).toHaveLength(0);
-      expect(ui.printed.warn.join('\n')).toContain('--no-wait');
-      expect(JSON.parse(out)).toMatchObject({
-        result: { statusFlip: 'no-wait' }
-      });
-    });
+        expect(awaitLive).not.toHaveBeenCalled();
+        expect(await flips()).toHaveLength(0);
+        expect(ui.printed.warn.join('\n')).toContain('--no-wait');
+        expect(JSON.parse(out)).toMatchObject({
+          result: { statusFlip: 'no-wait' }
+        });
+      }
+    );
 
     it('lists the flip in the plan and calls nothing on a dry run', async () => {
       const { awaitLive } = await import('./provision.wait');
