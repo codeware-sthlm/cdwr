@@ -1,5 +1,5 @@
 {
-  "enabledMcpjsonServers": ["linear", "sentry"],
+  "enabledMcpjsonServers": ["linear"],
   "extraKnownMarketplaces": {
     "nx-claude-plugins": {
       "source": {
