@@ -37,6 +37,7 @@ vi.mock('../../services/database', () => ({
               deployment: 'acme',
               apiKey: 'the-key',
               statsWebsiteId: null,
+              statsShareId: null,
               domains: []
             }
           ])}\n`,
@@ -88,6 +89,9 @@ vi.mock('../../services/umami', () => ({
   })),
   getWebsite: vi.fn(async (): Promise<unknown> => null),
   listTeamWebsites: vi.fn(async (): Promise<unknown[]> => []),
+  listShares: vi.fn(async (): Promise<string[]> => []),
+  setShare: vi.fn(async (_c: unknown, _id: string, slug: string) => slug),
+  newShareSlug: vi.fn(() => 'newslug'),
   createWebsite: vi.fn(async (): Promise<unknown> => ({
     id: 'new-id',
     name: 'Acme',
@@ -300,6 +304,7 @@ describe('tenant provision', () => {
                   deployment: 'acme',
                   apiKey: 'the-key',
                   statsWebsiteId: null,
+                  statsShareId: null,
                   domains: [],
                   ...overrides
                 }
@@ -317,6 +322,7 @@ describe('tenant provision', () => {
       });
       vi.mocked(mod.getWebsite).mockResolvedValue(null);
       vi.mocked(mod.listTeamWebsites).mockResolvedValue([]);
+      vi.mocked(mod.listShares).mockResolvedValue([]);
       vi.mocked(mod.createWebsite).mockResolvedValue({
         id: 'new-id',
         name: 'Acme',
@@ -337,11 +343,12 @@ describe('tenant provision', () => {
       const [call] = await writes();
       expect(call?.[3]).toMatchObject({
         STATS_TENANT_ID: '1',
-        STATS_WEBSITE_ID: 'new-id'
+        STATS_WEBSITE_ID: 'new-id',
+        STATS_SHARE_ID: 'newslug'
       });
       expect(call?.[4]).toEqual({ reports: 'STATS_WEBSITE_SET' });
       expect(ui.printed.note.join('\n')).toContain(
-        'Create statistics website cdwr-cms-acme.fly.dev in Umami'
+        'Create statistics website cdwr-cms-acme.fly.dev in Umami with a share link'
       );
     });
 
@@ -385,10 +392,53 @@ describe('tenant provision', () => {
       expect(getWebsite).toHaveBeenCalledWith(expect.anything(), 'w1');
       expect(listTeamWebsites).not.toHaveBeenCalled();
       expect(createWebsite).not.toHaveBeenCalled();
+      expect(await writes()).toHaveLength(1);
+      expect(ui.printed.note.join('\n')).toContain(
+        'Keep statistics website w1; add a share link'
+      );
+    });
+
+    it('keeps a website and its recorded share without writing', async () => {
+      const { getWebsite, listShares, setShare } = await umami();
+      await scripts({ statsWebsiteId: 'w1', statsShareId: 'abc' });
+      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se'));
+      vi.mocked(listShares).mockResolvedValue(['abc']);
+
+      const { ui } = await run();
+
+      expect(setShare).not.toHaveBeenCalled();
       expect(await writes()).toHaveLength(0);
       expect(ui.printed.note.join('\n')).toContain(
-        'Keep statistics website w1'
+        'Keep statistics website w1 and its share link'
       );
+    });
+
+    it('records a share Umami has that the workspace lacks', async () => {
+      const { getWebsite, listShares, setShare } = await umami();
+      await scripts({ statsWebsiteId: 'w1', statsShareId: null });
+      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se'));
+      vi.mocked(listShares).mockResolvedValue(['abc']);
+
+      await run();
+
+      expect(setShare).not.toHaveBeenCalled();
+      const written = await writes();
+      expect(written).toHaveLength(1);
+      expect(written[0]?.[3]).toMatchObject({
+        STATS_WEBSITE_ID: 'w1',
+        STATS_SHARE_ID: 'abc'
+      });
+    });
+
+    it('creates a recorded share Umami has lost under the same slug', async () => {
+      const { getWebsite, listShares, setShare } = await umami();
+      await scripts({ statsWebsiteId: 'w1', statsShareId: 'abc' });
+      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se'));
+      vi.mocked(listShares).mockResolvedValue([]);
+
+      await run();
+
+      expect(setShare).toHaveBeenCalledWith(expect.anything(), 'w1', 'abc');
     });
 
     it('warns about an id Umami does not know and writes nothing', async () => {
@@ -524,6 +574,7 @@ describe('tenant provision', () => {
                   deployment: 'acme',
                   apiKey: 'the-key',
                   statsWebsiteId: null,
+                  statsShareId: null,
                   domains: []
                 }
               ])}\n`,

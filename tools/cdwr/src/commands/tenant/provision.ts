@@ -36,8 +36,11 @@ import {
   type UmamiConnection,
   createWebsite,
   getWebsite,
+  listShares,
   listTeamWebsites,
-  readUmamiProvisioning
+  newShareSlug,
+  readUmamiProvisioning,
+  setShare
 } from '../../services/umami';
 
 import {
@@ -58,6 +61,7 @@ import {
   folderPath,
   normalizeDomain,
   pausedMessage,
+  pickShare,
   planFlyAppsToDeploy,
   planFolders,
   provisionSteps,
@@ -167,7 +171,9 @@ async function waitUntilRunning(
 /** What the write-back script reports */
 const statsReportSchema = z.object({
   outcome: z.enum(['set', 'unchanged', 'conflict']),
-  current: z.string().optional()
+  current: z.string().optional(),
+  share: z.enum(['set', 'unchanged', 'conflict']).optional(),
+  currentShare: z.string().optional()
 });
 
 type StatsConnection = UmamiConnection & { teamId: string };
@@ -201,7 +207,14 @@ async function planStats(
       const known = await getWebsite(connection, tenant.statsWebsiteId);
       return {
         plan: known
-          ? { action: 'keep', id: known.id }
+          ? {
+              action: 'keep',
+              id: known.id,
+              shareId: pickShare(
+                await listShares(connection, known.id),
+                tenant.statsShareId
+              )
+            }
           : { action: 'unknown', id: tenant.statsWebsiteId },
         connection
       };
@@ -213,7 +226,15 @@ async function planStats(
     );
     return {
       plan: match
-        ? { action: 'adopt', id: match.id, domain }
+        ? {
+            action: 'adopt',
+            id: match.id,
+            domain,
+            shareId: pickShare(
+              await listShares(connection, match.id),
+              tenant.statsShareId
+            )
+          }
         : { action: 'create', name: tenant.name, domain },
       connection
     };
@@ -239,6 +260,7 @@ interface PlanData {
   tenantId: number;
   stats: StatsPlan;
   statsConnection: StatsConnection | undefined;
+  currentShareId: string | null;
   /** The workspace is a new signup that gets activated once its site is up */
   flip: boolean;
   /** A new signup that `--no-wait` leaves pending */
@@ -261,7 +283,8 @@ async function applyStats(
     databaseUrl,
     tenantId,
     stats,
-    connection
+    connection,
+    currentShareId
   }: {
     root: string;
     environment: Environment;
@@ -269,9 +292,16 @@ async function applyStats(
     tenantId: number;
     stats: StatsPlan;
     connection: StatsConnection | undefined;
+    /** The share slug the workspace already records */
+    currentShareId: string | null;
   }
 ): Promise<{ action: StatsPlan['action']; id?: string; failed: boolean }> {
-  if (!connection || (stats.action !== 'adopt' && stats.action !== 'create')) {
+  if (
+    !connection ||
+    (stats.action !== 'keep' &&
+      stats.action !== 'adopt' &&
+      stats.action !== 'create')
+  ) {
     return {
       action: stats.action,
       ...('id' in stats ? { id: stats.id } : {}),
@@ -279,14 +309,29 @@ async function applyStats(
     };
   }
 
+  // Nothing to write: the workspace already records this website's share
+  if (
+    stats.action === 'keep' &&
+    stats.shareId &&
+    stats.shareId === currentShareId
+  ) {
+    return { action: 'keep', id: stats.id, failed: false };
+  }
+
   try {
     const done = await ctx.ui.task(
       'Setting up the statistics website',
       async () => {
-        let action: 'adopt' | 'create' = 'adopt';
+        let action: 'keep' | 'adopt' | 'create' = 'adopt';
         let id: string;
-        if (stats.action === 'adopt') {
+        let shareId: string | null = null;
+        if (stats.action === 'keep') {
+          action = 'keep';
           id = stats.id;
+          shareId = stats.shareId;
+        } else if (stats.action === 'adopt') {
+          id = stats.id;
+          shareId = stats.shareId;
         } else {
           // Checked again right before creating: the site may have appeared since the plan
           const existing = (
@@ -306,6 +351,13 @@ async function applyStats(
           }
         }
 
+        // A recorded slug Umami has lost is created again as it was
+        shareId ??= await setShare(
+          connection,
+          id,
+          currentShareId ?? newShareSlug()
+        );
+
         const { stdout } = await withDatabase(databaseUrl, (url) =>
           runCmsScript(
             root,
@@ -314,7 +366,8 @@ async function applyStats(
             {
               PROVISION_DATABASE_URL: url,
               STATS_TENANT_ID: String(tenantId),
-              STATS_WEBSITE_ID: id
+              STATS_WEBSITE_ID: id,
+              STATS_SHARE_ID: shareId
             },
             // Safe to repeat: a second run finds the same id and reports `unchanged`
             { reports: 'STATS_WEBSITE_SET' }
@@ -328,9 +381,14 @@ async function applyStats(
             `The workspace already holds statistics website ${result.current}, so ${id} was not written`
           );
         }
+        if (result.share === 'conflict') {
+          throw new Error(
+            `The workspace already holds share link ${result.currentShare}, so ${shareId} was not written`
+          );
+        }
         return { action, id };
       },
-      ({ id }) => `Statistics website ${id} ready`
+      ({ id }) => `Statistics website ${id} ready with a share link`
     );
     return { ...done, failed: false };
   } catch (error) {
@@ -598,6 +656,7 @@ export default defineCommand({
         tenantId: tenant.id,
         stats,
         statsConnection,
+        currentShareId: tenant.statsShareId,
         flip,
         skippedFlip: noWait && pendingCms && !paused,
         pausedFlip: pendingCms && paused,
@@ -605,7 +664,11 @@ export default defineCommand({
           folders.length +
           keysToWrite.length +
           flags.filter(({ action }) => action === 'create').length +
-          (stats.action === 'adopt' || stats.action === 'create' ? 1 : 0)
+          (stats.action === 'create' ||
+          ((stats.action === 'adopt' || stats.action === 'keep') &&
+            stats.shareId !== tenant.statsShareId)
+            ? 1
+            : 0)
       } satisfies PlanData
     };
   },
@@ -625,6 +688,7 @@ export default defineCommand({
       tenantId,
       stats,
       statsConnection,
+      currentShareId,
       flip,
       skippedFlip,
       pausedFlip,
@@ -715,7 +779,8 @@ export default defineCommand({
       databaseUrl,
       tenantId,
       stats,
-      connection: statsConnection
+      connection: statsConnection,
+      currentShareId
     });
 
     const pullRequest = previewApp ? pullRequestOf(previewApp) : undefined;

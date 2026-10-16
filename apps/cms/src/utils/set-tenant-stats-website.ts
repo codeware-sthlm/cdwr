@@ -5,22 +5,26 @@ import { report } from './report';
 import { getScriptPayload, runScript } from './script-payload';
 
 /**
- * Set a tenant's Umami website id, for `cdwr tenant provision`.
+ * Set a tenant's Umami website id and share slug, for `cdwr tenant provision`.
  *
- * Writes only `statsWebsiteId`, and only while the field is empty or already
- * holds the same id: a different id is reported as a conflict and left alone.
+ * Writes only `statsWebsiteId` and `statsShareId`, and each only while its
+ * field is empty or already holds the same value: a different value is
+ * reported as a conflict and left alone.
  *
  * Driven by env vars so the caller controls which database is targeted:
  * - `PROVISION_DATABASE_URL` - target database (required)
  * - `STATS_TENANT_ID` - the tenant's id (required)
  * - `STATS_WEBSITE_ID` - the website id to set (required)
+ * - `STATS_SHARE_ID` - the share slug to set (optional)
  *
- * The outcome is written to stdout as one `STATS_WEBSITE_SET=` JSON line.
+ * The outcome is written to stdout as one `STATS_WEBSITE_SET=` JSON line:
+ * `outcome` is the website id's result, `share` the slug's when one was given.
  */
 async function setStatsWebsite() {
   const databaseUrl = process.env['PROVISION_DATABASE_URL'];
   const tenantId = Number(process.env['STATS_TENANT_ID']);
   const websiteId = process.env['STATS_WEBSITE_ID'];
+  const shareId = process.env['STATS_SHARE_ID'] || undefined;
 
   if (!databaseUrl || !Number.isInteger(tenantId) || !websiteId) {
     console.error(
@@ -39,28 +43,40 @@ async function setStatsWebsite() {
   });
 
   const current = tenant.statsWebsiteId || undefined;
+  const currentShare = tenant.statsShareId || undefined;
 
-  if (current === websiteId) {
-    report('STATS_WEBSITE_SET', JSON.stringify({ outcome: 'unchanged' }));
-    process.exit(0);
+  const outcomeOf = (
+    present: string | undefined,
+    wanted: string
+  ): 'set' | 'unchanged' | 'conflict' =>
+    present === wanted ? 'unchanged' : present ? 'conflict' : 'set';
+
+  const outcome = outcomeOf(current, websiteId);
+  const share = shareId ? outcomeOf(currentShare, shareId) : undefined;
+
+  // A conflict on either field leaves both alone: a share belongs to its website
+  const conflict = outcome === 'conflict' || share === 'conflict';
+  if (!conflict && (outcome === 'set' || share === 'set')) {
+    await payload.update({
+      collection: 'tenants',
+      id: tenantId,
+      data: {
+        ...(outcome === 'set' ? { statsWebsiteId: websiteId } : {}),
+        ...(share === 'set' ? { statsShareId: shareId } : {})
+      },
+      overrideAccess: true
+    });
   }
 
-  if (current) {
-    report(
-      'STATS_WEBSITE_SET',
-      JSON.stringify({ outcome: 'conflict', current })
-    );
-    process.exit(0);
-  }
-
-  await payload.update({
-    collection: 'tenants',
-    id: tenantId,
-    data: { statsWebsiteId: websiteId },
-    overrideAccess: true
-  });
-
-  report('STATS_WEBSITE_SET', JSON.stringify({ outcome: 'set' }));
+  report(
+    'STATS_WEBSITE_SET',
+    JSON.stringify({
+      outcome,
+      ...(outcome === 'conflict' ? { current } : {}),
+      ...(share ? { share } : {}),
+      ...(share === 'conflict' ? { currentShare } : {})
+    })
+  );
   process.exit(0);
 }
 
