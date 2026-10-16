@@ -136,8 +136,6 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 (missing means `all`), while the scheduler's own notices (a planned ticket, a failed or capped
 run) always go out.
 
-The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
-
 A launched implementing session acts on GitHub as the `codeware-agent` GitHub App, never as you:
 you sit in the `release` team that bypasses main's rulesets, and an app in no bypass list gets
 the branch rules from GitHub itself. `implement.sh` sources `agent-queue/github-app.sh`, which

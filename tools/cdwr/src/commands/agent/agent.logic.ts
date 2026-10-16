@@ -2,8 +2,6 @@ import { join } from 'node:path';
 
 import { z } from 'zod';
 
-import { CliError } from '../../cli/errors';
-
 export const LABEL = 'se.codeware.agent-queue';
 /**
  * Seconds between scheduled runs; launchd's StartInterval.
@@ -40,49 +38,6 @@ export const byFile = <T>(
 export const QUEUE_BINARIES = ['node', 'claude', 'jq', 'git', 'gh', 'pnpm'];
 /** Daily API-equivalent spend cap for implementing sessions, in USD */
 export const IMPLEMENT_CAP_USD = 40;
-/** Daily suggest session: budget in USD, the local hour it may start after, days between runs */
-export const SUGGEST_BUDGET_USD = 5;
-export const SUGGEST_HOUR = 6;
-export const SUGGEST_DAYS = 1;
-
-export interface SuggestSettings {
-  budgetUsd: number;
-  hour: number;
-  days: number;
-}
-
-/** The suggest session's settings: the environment when set, the defaults otherwise */
-export const suggestSettings = (env: NodeJS.ProcessEnv): SuggestSettings => {
-  const read = (name: string, fallback: number, max?: number): number => {
-    const value = env[name];
-    if (value === undefined || value === '') return fallback;
-    if (!/^\d+$/.test(value)) {
-      throw new CliError(
-        `${name} must be a non-negative integer, got ${value}`
-      );
-    }
-    if (max !== undefined && Number(value) > max) {
-      throw new CliError(`${name} must be at most ${max}, got ${value}`);
-    }
-    return Number(value);
-  };
-  return {
-    budgetUsd: read('AGENT_QUEUE_SUGGEST_BUDGET_USD', SUGGEST_BUDGET_USD),
-    hour: read('AGENT_QUEUE_SUGGEST_HOUR', SUGGEST_HOUR, 23),
-    days: read('AGENT_QUEUE_SUGGEST_DAYS', SUGGEST_DAYS)
-  };
-};
-
-/** Claude Code names a project's directory after its path, every character but letters and digits becoming `-` */
-export const memoryDir = (userHome: string, repoRoot: string): string =>
-  join(
-    userHome,
-    '.claude',
-    'projects',
-    repoRoot.replace(/[^A-Za-z0-9]/g, '-'),
-    'memory'
-  );
-
 /** Files a worktree needs but git does not carry, relative to the workspace root */
 export const ENV_COPIES = ['apps/cms/.env.local', 'tools/cdwr/.env'];
 /** Pref holding the worktree the queue plans in */
@@ -168,18 +123,13 @@ export interface PlistInput {
   home: string;
   repo: string;
   path: string;
-  /** The dev checkout's Claude memory directory, where the suggest session may write */
-  memoryDir: string;
-  suggest: SuggestSettings;
 }
 
 export const renderPlist = ({
   script,
   home,
   repo,
-  path,
-  memoryDir,
-  suggest
+  path
 }: PlistInput): string => {
   const e = escapeXml;
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -203,14 +153,6 @@ export const renderPlist = ({
     <string>${e(repo)}</string>
     <key>AGENT_QUEUE_IMPLEMENT_CAP_USD</key>
     <string>${IMPLEMENT_CAP_USD}</string>
-    <key>AGENT_QUEUE_SUGGEST_BUDGET_USD</key>
-    <string>${suggest.budgetUsd}</string>
-    <key>AGENT_QUEUE_SUGGEST_HOUR</key>
-    <string>${suggest.hour}</string>
-    <key>AGENT_QUEUE_SUGGEST_DAYS</key>
-    <string>${suggest.days}</string>
-    <key>AGENT_QUEUE_MEMORY_DIR</key>
-    <string>${e(memoryDir)}</string>
   </dict>
   <key>AbandonProcessGroup</key>
   <true/>
@@ -425,27 +367,6 @@ export const plistPath = (plist: string | undefined): string | undefined => {
   return path ? path : undefined;
 };
 
-/** The `AGENT_QUEUE_*` entries in the installed job plist's EnvironmentVariables, as `renderPlist` wrote them */
-export const installedEnv = (plistText: string): Record<string, string> => {
-  const unescape = (value: string): string =>
-    value
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&amp;/g, '&');
-  const entries = [
-    ...plistText.matchAll(
-      /<key>(AGENT_QUEUE_[A-Z0-9_]+)<\/key>\s*<string>([^<]*)<\/string>/g
-    )
-  ].flatMap(([, name, value]) =>
-    name === undefined || value === undefined
-      ? []
-      : [[name, unescape(value)] as const]
-  );
-  return Object.fromEntries(entries);
-};
-
 /** The major version in `node --version` output, e.g. `v22.3.0` */
 export const nodeMajor = (version: string): number | undefined => {
   const major = /^v?(\d+)\./.exec(version.trim())?.[1];
@@ -554,26 +475,6 @@ export const parseAttended = (line: string): AttendedCheck => {
   if (text.startsWith('running:')) return { kind: 'running', ticket, text };
   if (text.startsWith('run now:')) return { kind: 'run', ticket, text };
   if (text.startsWith('idle:')) return { kind: 'idle', text };
-  return { kind: 'unknown', text };
-};
-
-export interface SuggestCheck {
-  kind: 'due' | 'done' | 'early' | 'skipped' | 'off' | 'unknown';
-  focus?: string;
-  ticket?: string;
-  text: string;
-}
-
-/** Reads the text after `suggest: ` in the `run.sh --check` output */
-export const parseSuggest = (line: string): SuggestCheck => {
-  const text = line.trim();
-  if (text === 'off') return { kind: 'off', text };
-  if (text === 'done today') return { kind: 'done', text };
-  if (text.startsWith('not before ')) return { kind: 'early', text };
-  const due = /^due \(focus (\S+)\)$/.exec(text);
-  if (due) return { kind: 'due', focus: due[1], text };
-  const skipped = /^skipped, ([A-Z][A-Z0-9]*-\d+) is open$/.exec(text);
-  if (skipped) return { kind: 'skipped', ticket: skipped[1], text };
   return { kind: 'unknown', text };
 };
 
