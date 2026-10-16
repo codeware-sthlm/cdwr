@@ -17,6 +17,7 @@ import {
   byFile,
   filesDrift,
   implementCap,
+  installedEnv,
   lastImplementRun,
   nodeMajor,
   parseLaunchctlPrint,
@@ -90,6 +91,8 @@ export async function checkRun(
   const { stdout } = await run('/bin/zsh', [queue.script, '--check'], {
     env: {
       ...env,
+      // The installed settings win over the shell's, as they do for the job
+      ...installedEnv(readText(queue.plist) ?? ''),
       AGENT_QUEUE_HOME: queue.home,
       AGENT_QUEUE_REPO: repo
     },

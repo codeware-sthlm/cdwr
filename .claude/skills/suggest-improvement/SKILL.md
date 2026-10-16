@@ -65,10 +65,11 @@ tells you to drop a candidate.
    Håkan has not decided yet. The scheduler normally stops before you in that
    case; if you see one, end with `nothing today`.
 4. **The repo** as checked out: `CLAUDE.md`, then the areas the focus names.
-   Use `Grep` and `Glob` for patterns; use `git log` for churn,
-   run in the checkout as it is, without `-C`
-   (`git log --since=30.days --name-only --format=`, counted by path, and
-   `git log --since=30.days --grep=fix --name-only --format=`).
+   Use `Grep` and `Glob` for patterns. For churn, run exactly these two
+   commands in the checkout as it is, without `-C`, pipes or other flags, and
+   count the paths by reading the output:
+   `git log --since=30.days --name-only --format=` and
+   `git log --since=30.days --grep=fix --name-only --format=`.
 5. **Pull requests**: `gh pr list --state merged --limit 20 --json number,title,mergedAt`
    and, for the ones in the focus, `tools/cdwr/agent-queue/gh-review.sh threads <n>`
    (read-only) for review threads (unresolved or repeated remarks), plus `gh pr view <n> --json body` for

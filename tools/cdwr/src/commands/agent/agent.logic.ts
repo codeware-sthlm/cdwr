@@ -53,7 +53,7 @@ export interface SuggestSettings {
 
 /** The suggest session's settings: the environment when set, the defaults otherwise */
 export const suggestSettings = (env: NodeJS.ProcessEnv): SuggestSettings => {
-  const read = (name: string, fallback: number): number => {
+  const read = (name: string, fallback: number, max?: number): number => {
     const value = env[name];
     if (value === undefined || value === '') return fallback;
     if (!/^\d+$/.test(value)) {
@@ -61,11 +61,14 @@ export const suggestSettings = (env: NodeJS.ProcessEnv): SuggestSettings => {
         `${name} must be a non-negative integer, got ${value}`
       );
     }
+    if (max !== undefined && Number(value) > max) {
+      throw new CliError(`${name} must be at most ${max}, got ${value}`);
+    }
     return Number(value);
   };
   return {
     budgetUsd: read('AGENT_QUEUE_SUGGEST_BUDGET_USD', SUGGEST_BUDGET_USD),
-    hour: read('AGENT_QUEUE_SUGGEST_HOUR', SUGGEST_HOUR),
+    hour: read('AGENT_QUEUE_SUGGEST_HOUR', SUGGEST_HOUR, 23),
     days: read('AGENT_QUEUE_SUGGEST_DAYS', SUGGEST_DAYS)
   };
 };
@@ -420,6 +423,27 @@ export const plistPath = (plist: string | undefined): string | undefined => {
     .replace(/&amp;/g, '&')
     .trim();
   return path ? path : undefined;
+};
+
+/** The `AGENT_QUEUE_*` entries in the installed job plist's EnvironmentVariables, as `renderPlist` wrote them */
+export const installedEnv = (plistText: string): Record<string, string> => {
+  const unescape = (value: string): string =>
+    value
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&');
+  const entries = [
+    ...plistText.matchAll(
+      /<key>(AGENT_QUEUE_[A-Z0-9_]+)<\/key>\s*<string>([^<]*)<\/string>/g
+    )
+  ].flatMap(([, name, value]) =>
+    name === undefined || value === undefined
+      ? []
+      : [[name, unescape(value)] as const]
+  );
+  return Object.fromEntries(entries);
 };
 
 /** The major version in `node --version` output, e.g. `v22.3.0` */
