@@ -195,6 +195,8 @@ describe('App', () => {
     await waitUntilReady(lastFrame);
     await press(stdin, DOWN);
     await press(stdin, DOWN);
+    // The cursor must have moved before Enter, or another command runs
+    await waitFor(() => (lastFrame() ?? '').includes('❯ spill'));
     await press(stdin, ENTER);
     await waitFor(() => (lastFrame() ?? '').includes('Done'));
 
