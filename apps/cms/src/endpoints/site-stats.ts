@@ -3,6 +3,7 @@ import {
   type SiteStatsAnswer,
   fetchSiteStats,
   getUmamiApi,
+  shareDashboardUrl,
   siteStatsCache
 } from '@codeware/app-cms/feature/site-stats';
 import { getUserTenantIDs, hasRole } from '@codeware/app-cms/util/misc';
@@ -57,7 +58,7 @@ export const siteStatsEndpoint: Endpoint = {
       collection: 'tenants',
       id: tenantId,
       depth: 0,
-      select: { statsWebsiteId: true },
+      select: { statsWebsiteId: true, statsShareId: true },
       overrideAccess: true,
       disableErrors: true,
       req
@@ -67,7 +68,11 @@ export const siteStatsEndpoint: Endpoint = {
       return answer({ status: 'none' });
     }
 
-    const umamiApi = await getUmamiApi(getEnv().UMAMI_URL);
+    const { UMAMI_URL: umamiUrl } = getEnv();
+    if (!umamiUrl) {
+      return answer({ status: 'unconfigured' });
+    }
+    const umamiApi = await getUmamiApi(umamiUrl);
     if (umamiApi.status === 'unconfigured') {
       return answer({ status: 'unconfigured' });
     }
@@ -82,7 +87,12 @@ export const siteStatsEndpoint: Endpoint = {
       const stats = await siteStatsCache.get(websiteId, () =>
         fetchSiteStats(umamiApi.umami, websiteId, { timezone: TIMEZONE })
       );
-      return answer({ status: 'ready', stats });
+      const dashboardUrl = shareDashboardUrl(umamiUrl, tenant.statsShareId);
+      return answer({
+        status: 'ready',
+        stats,
+        ...(dashboardUrl ? { dashboardUrl } : {})
+      });
     } catch (error) {
       req.payload.logger.error(
         `[siteStats] Umami did not answer for tenant ${tenantId}: ${String(error)}`

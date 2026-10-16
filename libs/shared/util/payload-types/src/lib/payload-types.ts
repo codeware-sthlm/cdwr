@@ -569,6 +569,10 @@ export interface Tenant {
    */
   statsWebsiteId?: string | null;
   /**
+   * The share slug of the site's Umami dashboard. Set by provisioning; empty means no link in the admin.
+   */
+  statsShareId?: string | null;
+  /**
    * Pending workspaces come from self-serve signup and are not deployed until activated.
    */
   status: 'pending' | 'active';
@@ -3586,6 +3590,7 @@ export interface TenantsSelect<T extends boolean = true> {
         id?: T;
       };
   statsWebsiteId?: T;
+  statsShareId?: T;
   status?: T;
   relations?:
     | T

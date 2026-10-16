@@ -11,6 +11,7 @@ import type {
   TranslationsObject
 } from '@codeware/app-cms/util/i18n';
 import { hasRole } from '@codeware/app-cms/util/misc';
+import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import {
   Sheet,
   SheetContent,
@@ -19,7 +20,10 @@ import {
   SheetTitle
 } from '@codeware/shared/ui/shadcn/components/sheet';
 import type { User } from '@codeware/shared/util/payload-types';
-import { ChartBarIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowTopRightOnSquareIcon,
+  ChartBarIcon
+} from '@heroicons/react/24/outline';
 import { useAuth, useTranslation } from '@payloadcms/ui';
 import { useRef, useState } from 'react';
 
@@ -118,6 +122,18 @@ export function SiteStatsWidget() {
             <SheetHeader>
               <SheetTitle>{title}</SheetTitle>
               <SheetDescription>{t('statistics:sheetSub')}</SheetDescription>
+              {answer.dashboardUrl && (
+                <Button asChild variant="outline" size="sm" className="w-fit">
+                  <a
+                    href={answer.dashboardUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t('statistics:openDashboard')}
+                    <ArrowTopRightOnSquareIcon aria-hidden />
+                  </a>
+                </Button>
+              )}
             </SheetHeader>
             <SiteStatsSheetBody
               stats={answer.stats}

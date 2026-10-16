@@ -67,6 +67,10 @@ type UmamiClientOptions = {
   timeoutMs?: number;
 };
 
+/** The base url without trailing slashes */
+export const umamiRoot = (baseUrl: string): string =>
+  baseUrl.replace(/\/+$/, '');
+
 /** A read-only Umami client; every call is parsed, so a bad answer throws */
 export const createUmamiClient = ({
   baseUrl,
@@ -74,7 +78,7 @@ export const createUmamiClient = ({
   fetchImpl = fetch,
   timeoutMs = 5000
 }: UmamiClientOptions): UmamiClient => {
-  const root = baseUrl.replace(/\/+$/, '');
+  const root = umamiRoot(baseUrl);
 
   const get = async <T extends z.ZodType>(
     websiteId: string,

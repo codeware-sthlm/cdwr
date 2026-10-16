@@ -12,6 +12,7 @@ import type { CollectionConfig } from 'payload';
 
 import { restrictToTenantInTenantMode } from './access/restrict-to-tenant-in-tenant-mode';
 import { deploymentField } from './fields/deployment.field';
+import { statsShareIdField } from './fields/stats-share-id.field';
 import { statsWebsiteIdField } from './fields/stats-website-id.field';
 import { statusField } from './fields/status.field';
 import { enforceApiKeyHook } from './hooks/enforce-api-key.hook';
@@ -142,6 +143,7 @@ const tenants: CollectionConfig = {
       }
     },
     statsWebsiteIdField,
+    statsShareIdField,
     statusField,
     {
       type: 'group',

@@ -4,6 +4,7 @@ import {
   type UmamiClient,
   fetchSiteStats,
   getUmamiApi,
+  shareDashboardUrl,
   siteStatsCache
 } from '@codeware/app-cms/feature/site-stats';
 import type { PayloadRequest } from 'payload';
@@ -15,6 +16,7 @@ import { siteStatsEndpoint } from './site-stats';
 jest.mock('@codeware/app-cms/feature/site-stats', () => ({
   getUmamiApi: jest.fn(),
   fetchSiteStats: jest.fn(),
+  shareDashboardUrl: jest.fn(),
   siteStatsCache: { get: jest.fn() }
 }));
 // The ESM-only helper is pulled in through the access utilities
@@ -106,7 +108,7 @@ describe('siteStatsEndpoint', () => {
       expect.objectContaining({
         id: 5,
         overrideAccess: true,
-        select: { statsWebsiteId: true }
+        select: { statsWebsiteId: true, statsShareId: true }
       })
     );
   });
@@ -156,5 +158,35 @@ describe('siteStatsEndpoint', () => {
 
     await expect(response.json()).resolves.toEqual({ status: 'ready', stats });
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('adds the dashboard url for a workspace with a share link', async () => {
+    findByID.mockResolvedValue({
+      statsWebsiteId: 'site-1',
+      statsShareId: 'abc'
+    });
+    jest
+      .mocked(shareDashboardUrl)
+      .mockReturnValue('https://umami.example/share/abc');
+
+    const response = await call(memberOf(5));
+
+    expect(shareDashboardUrl).toHaveBeenCalledWith(
+      'https://umami.example',
+      'abc'
+    );
+    await expect(response.json()).resolves.toEqual({
+      status: 'ready',
+      stats,
+      dashboardUrl: 'https://umami.example/share/abc'
+    });
+  });
+
+  it('leaves the dashboard url out without a share link', async () => {
+    jest.mocked(shareDashboardUrl).mockReturnValue(null);
+
+    const body = await (await call(memberOf(5))).json();
+
+    expect(body).not.toHaveProperty('dashboardUrl');
   });
 });

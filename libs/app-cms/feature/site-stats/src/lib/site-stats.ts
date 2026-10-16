@@ -44,7 +44,12 @@ export type SiteStatsAnswer =
   | { status: 'none' }
   | { status: 'unconfigured' }
   | { status: 'unreachable' }
-  | { status: 'ready'; stats: SiteStats };
+  | {
+      status: 'ready';
+      stats: SiteStats;
+      /** The tenant's public Umami dashboard, when it has a share link */
+      dashboardUrl?: string;
+    };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TOP_LIMIT = 5;
