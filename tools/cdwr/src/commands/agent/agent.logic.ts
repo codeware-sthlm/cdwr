@@ -537,7 +537,15 @@ export const formatWatching = (entries: WatchEntry[]): string => {
 const SUMMARY_MAX = 60;
 const SCHEDULER_TICKET = /\bCOD-\d+\b/;
 /** implement.sh's verdicts, which follow its `implement:` prefix */
-const IMPLEMENT_VERDICTS = ['fail', 'done', 'busy', 'launch', 'cap', 'skip'];
+const IMPLEMENT_VERDICTS = [
+  'fail',
+  'done',
+  'busy',
+  'launch',
+  'cap',
+  'skip',
+  'warn'
+];
 
 const cutAt = (text: string): string =>
   text.length > SUMMARY_MAX ? `${text.slice(0, SUMMARY_MAX - 1)}…` : text;
@@ -572,7 +580,11 @@ export const summarizeSchedulerLine = (message: string): string => {
   const first = segments[0];
   let detail = first ?? '';
   if (at >= 0) {
-    const ticket = withoutDanglingParen(segments[at] ?? '');
+    const outcome = segments[at + 1];
+    const ticketSegment = segments[at] ?? '';
+    const ticket = withoutDanglingParen(
+      outcome ? `${ticketSegment}: ${outcome}` : ticketSegment
+    );
     const joined = at > 0 && first ? `${first} · ${ticket}` : ticket;
     detail = joined.length <= SUMMARY_MAX ? joined : ticket;
   }

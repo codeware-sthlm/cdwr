@@ -444,7 +444,23 @@ describe('summarizeSchedulerLine', () => {
   it.each([
     [
       'watch: action COD-574 merged: hand-offs left: After deploy, run it',
-      'watch · action COD-574 merged'
+      'watch · action COD-574 merged: hand-offs left'
+    ],
+    [
+      'watch: action COD-524: PR #570 has failing checks',
+      'watch · action COD-524: PR #570 has failing checks'
+    ],
+    [
+      'watch: action COD-524: PR #570 left the merge queue (merge conflict)',
+      'watch · action COD-524: PR #570 left the merge queue (merge conflic…'
+    ],
+    [
+      'watch: info COD-524: PR #570 merged',
+      'watch · info COD-524: PR #570 merged'
+    ],
+    [
+      'implement: warn: could not settle the spend ledger',
+      'implement warn · could not settle the spend ledger'
     ],
     ['plan: COD-579 → /path/log', 'plan · COD-579 → /path/log'],
     [
