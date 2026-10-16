@@ -27,7 +27,9 @@ export { PlatformDefinitionSchema } from './lib/platform-definition.schema';
 export type {
   FaqDefinition,
   PlatformDefinition,
+  PlatformInviteCodeDefinition,
   PlatformLabelDefinition,
+  PlatformSignupDefinition,
   PlatformTenantDefinition,
   PlatformUserDefinition,
   StockMediaDefinition

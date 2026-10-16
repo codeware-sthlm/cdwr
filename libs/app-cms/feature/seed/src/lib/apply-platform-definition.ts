@@ -5,6 +5,7 @@ import type { Payload, TypedLocale } from 'payload';
 
 import type { ApplyOutcome } from './apply-site-definition';
 import { ensureFaq } from './local-api/ensure-faq';
+import { ensureInviteCode } from './local-api/ensure-invite-code';
 import { ensurePlatformLabel } from './local-api/ensure-platform-label';
 import { ensurePlatformSettings } from './local-api/ensure-platform-settings';
 import { ensureStockMedia } from './local-api/ensure-stock-media';
@@ -34,8 +35,8 @@ export type ApplyPlatformOptions = {
 
 /**
  * Applies the platform definition: the tenants, their users, the shared
- * label vocabularies, the stock media library and the FAQ — everything no
- * single site owns.
+ * label vocabularies, the platform settings and invite codes signup needs,
+ * the stock media library and the FAQ — everything no single site owns.
  *
  * Tenants commit in their own transaction, before anything else — Postgres
  * enforces the foreign keys the rest holds against them. Everything after
@@ -128,7 +129,8 @@ export async function applyPlatformDefinition(
     throw error;
   }
 
-  // USERS, LABELS, PLATFORM SETTINGS, STOCK MEDIA, FAQ — one transaction
+  // USERS, LABELS, PLATFORM SETTINGS, INVITE CODES, STOCK MEDIA, FAQ — one
+  // transaction
   const transactionID = await payload.db.beginTransaction();
   if (transactionID === null || transactionID === undefined) {
     throw new Error(
@@ -194,8 +196,24 @@ export async function applyPlatformDefinition(
     record(
       'platform-settings',
       'platform',
-      await ensurePlatformSettings(payload, { transactionID })
+      await ensurePlatformSettings(
+        payload,
+        {
+          signupOpen: definition.signup.open,
+          signupNotifyEmail: definition.signup.notifyEmail ?? null
+        },
+        { transactionID }
+      )
     );
+
+    for (const inviteCode of definition.signup.inviteCodes) {
+      record(
+        'invite-codes',
+        // The secret half stays out of the report, as it stays out of the database
+        inviteCode.code.slice(0, 9),
+        await ensureInviteCode(payload, inviteCode, { transactionID })
+      );
+    }
 
     for (const stock of definition.stockMedia) {
       const subject = stock.subject

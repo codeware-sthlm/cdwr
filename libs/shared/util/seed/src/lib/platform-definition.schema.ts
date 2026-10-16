@@ -12,8 +12,8 @@ import { BUNDLED_STOCK_MEDIA } from './bundled-media';
  * What TypeScript cannot check about the platform definition: that the
  * identity it carries is internally consistent — no two tenants share a slug
  * or an api key, no two users share an email, no two labels share a type and
- * name — and that every reference inside it resolves to something the same
- * definition states. Block-shaped validation has no place here; the platform
+ * name, no two invite codes share a lookup — and that every reference inside
+ * it resolves to something the same definition states. Block-shaped validation has no place here; the platform
  * definition states no content.
  */
 
@@ -71,6 +71,30 @@ const TenantSchema = z.object({
   supportedLocales: z.array(LocaleSchema).min(1)
 });
 
+/** `XXXX-XXXX-XXXX-XXXX` in Crockford base32, the form the collection takes */
+const INVITE_CODE = /^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){3}$/;
+
+/** The public half of a code, which the collection keeps unique */
+const inviteLookup = (code: string) => code.replace(/-/g, '').slice(0, 8);
+
+const InviteCodeSchema = z.object({
+  code: z
+    .string()
+    .regex(
+      INVITE_CODE,
+      'An invite code is XXXX-XXXX-XXXX-XXXX in Crockford base32 (no I, L, O or U)'
+    ),
+  note: z.string().min(1),
+  maxUses: z.number().int().min(1),
+  expiresAt: z.string().datetime().optional()
+});
+
+const SignupSchema = z.object({
+  open: z.boolean(),
+  notifyEmail: z.string().email().optional(),
+  inviteCodes: z.array(InviteCodeSchema)
+});
+
 const UserSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
@@ -92,7 +116,8 @@ export const PlatformDefinitionSchema = z
     stockMedia: z.array(StockMediaSchema),
     faq: z.array(FaqSchema),
     tenants: z.array(TenantSchema),
-    users: z.array(UserSchema)
+    users: z.array(UserSchema),
+    signup: SignupSchema
   })
   .superRefine((definition, ctx) => {
     const problem = (message: string, path: Array<string | number> = []) =>
@@ -118,6 +143,15 @@ export const PlatformDefinitionSchema = z
         problem(`Two stock media entries share the filename '${filename}'`, [
           'stockMedia'
         ])
+    );
+    // The collection keys a code on its first half alone
+    duplicates(
+      definition.signup.inviteCodes.map(({ code }) => inviteLookup(code))
+    ).forEach((lookup) =>
+      problem(`Two invite codes share the lookup '${lookup}'`, [
+        'signup',
+        'inviteCodes'
+      ])
     );
 
     // A membership names a tenant the same way navigation names a page: by
