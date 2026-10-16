@@ -248,9 +248,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright browser dependencies
+      # Browsers must match the installed Playwright version, so install them here
+      # rather than trusting a cache that can restore an older build
+      - name: Install Playwright Chromium
         if: matrix.name == 'Linux'
-        run: pnpm exec playwright install-deps
+        run: pnpm exec playwright install chromium --with-deps
 
       - name: Analyze affected projects
         uses: nrwl/nx-set-shas@v5
