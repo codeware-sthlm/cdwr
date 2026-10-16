@@ -626,7 +626,7 @@ suggest_run() {
     --allowedTools Skill Read Grep Glob \
       "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels "$L"__list_documents "$L"__get_document "$L"__save_issue \
       "$S"__find_organizations "$S"__find_projects "$S"__search_issues "$S"__get_sentry_resource \
-      "Bash(git log*)" "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(tools/cdwr/agent-queue/gh-review.sh threads *)" "Bash(node tools/cdwr/bin/cdwr.mjs agent usage*)" \
+      "Bash(git log --since=30.days --name-only --format=)" "Bash(git log --since=30.days --grep=fix --name-only --format=)" "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(tools/cdwr/agent-queue/gh-review.sh threads *)" "Bash(node tools/cdwr/bin/cdwr.mjs agent usage*)" \
       ${MEMORY_DIR:+"Write(/$MEMORY_DIR/feedback_suggestion_taste.md)" "Edit(/$MEMORY_DIR/feedback_suggestion_taste.md)"} \
     > "$result" 2> "$log" || rc=$?
 

@@ -15,6 +15,7 @@ import {
   formatTable,
   formatWatching,
   implementCap,
+  installedEnv,
   lastImplementRun,
   lastSchedulerLine,
   latestRunLog,
@@ -517,6 +518,37 @@ describe('suggestSettings', () => {
     expect(() => suggestSettings({ AGENT_QUEUE_SUGGEST_HOUR: '-1' })).toThrow(
       'AGENT_QUEUE_SUGGEST_HOUR'
     );
+  });
+
+  it('keeps the hour within a day', () => {
+    expect(() => suggestSettings({ AGENT_QUEUE_SUGGEST_HOUR: '24' })).toThrow(
+      'AGENT_QUEUE_SUGGEST_HOUR'
+    );
+    expect(suggestSettings({ AGENT_QUEUE_SUGGEST_HOUR: '23' }).hour).toBe(23);
+  });
+});
+
+describe('installedEnv', () => {
+  it('reads the suggest values and the memory directory the plist carries', () => {
+    const plist = renderPlist({
+      script: '/h/.cdwr/agent-queue/run.sh',
+      home: '/h/.cdwr/agent-queue',
+      repo: '/w/codeware-agent',
+      path: '/opt/homebrew/bin:/usr/bin',
+      memoryDir: '/h/.claude/projects/-w-dev/memory',
+      suggest: { budgetUsd: 3, hour: 7, days: 0 }
+    });
+    expect(installedEnv(plist)).toMatchObject({
+      AGENT_QUEUE_SUGGEST_BUDGET_USD: '3',
+      AGENT_QUEUE_SUGGEST_HOUR: '7',
+      AGENT_QUEUE_SUGGEST_DAYS: '0',
+      AGENT_QUEUE_MEMORY_DIR: '/h/.claude/projects/-w-dev/memory'
+    });
+    expect(Object.keys(installedEnv(plist))).not.toContain('PATH');
+  });
+
+  it('is empty for no plist', () => {
+    expect(installedEnv('')).toEqual({});
   });
 });
 
