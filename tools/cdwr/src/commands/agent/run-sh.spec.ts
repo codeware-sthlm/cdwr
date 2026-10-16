@@ -25,6 +25,14 @@ describe('run.sh', () => {
     expect(READS.some((read) => read.test(call))).toBe(true);
   });
 
+  // The suggest session reads review threads through the read-only wrapper, never raw GraphQL
+  it('allows the suggest session no raw gh api', () => {
+    expect(SCRIPT).toContain(
+      '"Bash(tools/cdwr/agent-queue/gh-review.sh threads *)"'
+    );
+    expect(SCRIPT).not.toContain('Bash(gh api');
+  });
+
   // Tool search hides the Linear tools from a run limited by --tools
   it('runs claude without tool search', () => {
     expect(SCRIPT).toMatch(/^ENABLE_TOOL_SEARCH=false claude -p /m);
