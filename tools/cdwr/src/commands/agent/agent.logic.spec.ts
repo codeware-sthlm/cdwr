@@ -36,6 +36,7 @@ import {
   serviceTarget,
   spendForDay,
   suggestSettings,
+  summarizeSchedulerLine,
   tailLines
 } from './agent.logic';
 
@@ -418,17 +419,67 @@ describe('parseWatchState', () => {
 });
 
 describe('formatWatching', () => {
-  it('lists ticket, PR and state', () => {
+  it('counts merged and lists open PRs', () => {
     expect(
       formatWatching([
-        { ticket: 'COD-524', pr: 570, state: 'merged' },
-        { ticket: 'COD-525', pr: 569, state: 'merged' }
+        { ticket: 'COD-524', pr: 570, state: 'open' },
+        { ticket: 'COD-525', pr: 569, state: 'open' },
+        { ticket: 'COD-526', pr: 568, state: 'merged' }
       ])
-    ).toBe('COD-524 #570 merged, COD-525 #569 merged');
+    ).toBe('3 PRs: 2 open (COD-524 #570, COD-525 #569), 1 merged');
+  });
+
+  it('lists every unfinished state with ticket and PR', () => {
+    expect(formatWatching([{ ticket: 'COD-9', pr: 4, state: 'failing' }])).toBe(
+      '1 PR: 1 failing (COD-9 #4)'
+    );
   });
 
   it('is empty for no entries', () => {
     expect(formatWatching([])).toBe('');
+  });
+});
+
+describe('summarizeSchedulerLine', () => {
+  it.each([
+    [
+      'watch: action COD-574 merged: hand-offs left: After deploy, run it',
+      'watch · action COD-574 merged'
+    ],
+    ['plan: COD-579 → /path/log', 'plan · COD-579 → /path/log'],
+    [
+      'attended: session polling · idle: waits on something',
+      'attended · session polling'
+    ],
+    [
+      'implement: fail: claude exited 1 (see /x.log)',
+      'implement fail · claude exited 1 (see /x.log)'
+    ],
+    ['implement: done: COD-579 ($2.10)', 'implement done · COD-579 ($2.10)'],
+    [
+      'plan: COD-579 COD-580 → /very/long/path/to/the/logs/2026-10-16_1200.log',
+      'plan · COD-579 COD-580 → /very/long/path/to/the/logs/2026-10-16_12…'
+    ],
+    [
+      'fail: SHA-256 mismatch for COD-579; not starting',
+      'fail · SHA-256 mismatch for COD-579; not starting'
+    ],
+    [
+      'warn: watch: could not read PR #570 (COD-524)',
+      'warn · watch · could not read PR #570 (COD-524)'
+    ],
+    [
+      'warn: watch: watch.jq failed on COD-524)',
+      'warn · watch · watch.jq failed on COD-524'
+    ],
+    ['', '']
+  ])('%j -> %j', (message, expected) => {
+    expect(summarizeSchedulerLine(message)).toBe(expected);
+  });
+
+  it('cuts a long detail', () => {
+    const out = summarizeSchedulerLine(`note: ${'x'.repeat(100)}`);
+    expect(out).toBe(`note · ${'x'.repeat(59)}…`);
   });
 });
 

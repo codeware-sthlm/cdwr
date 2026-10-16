@@ -520,8 +520,65 @@ export const parseWatchState = (text: string | undefined): WatchEntry[] => {
   );
 };
 
-export const formatWatching = (entries: WatchEntry[]): string =>
-  entries.map((e) => `${e.ticket} #${e.pr} ${e.state}`).join(', ');
+/** Counts per state; unfinished states are listed by ticket and PR */
+export const formatWatching = (entries: WatchEntry[]): string => {
+  if (entries.length === 0) return '';
+  const groups = WATCH_STATES.flatMap((state) => {
+    const of = entries.filter((e) => e.state === state);
+    if (of.length === 0) return [];
+    if (state === 'merged' || state === 'closed')
+      return [`${of.length} ${state}`];
+    const list = of.map((e) => `${e.ticket} #${e.pr}`).join(', ');
+    return [`${of.length} ${state} (${list})`];
+  });
+  return `${entries.length} PR${entries.length === 1 ? '' : 's'}: ${groups.join(', ')}`;
+};
+
+const SUMMARY_MAX = 60;
+const SCHEDULER_TICKET = /\bCOD-\d+\b/;
+/** implement.sh's verdicts, which follow its `implement:` prefix */
+const IMPLEMENT_VERDICTS = ['fail', 'done', 'busy', 'launch', 'cap', 'skip'];
+
+const cutAt = (text: string): string =>
+  text.length > SUMMARY_MAX ? `${text.slice(0, SUMMARY_MAX - 1)}…` : text;
+
+/** Drops a closing parenthesis the segment never opened */
+const withoutDanglingParen = (segment: string): string => {
+  const count = (char: string) => segment.split(char).length - 1;
+  return segment.endsWith(')') && count(')') > count('(')
+    ? segment.slice(0, -1).trimEnd()
+    : segment;
+};
+
+/** The kind and the ticket (or first detail) of a scheduler line, short enough for a table cell */
+export const summarizeSchedulerLine = (message: string): string => {
+  const [kindPart = '', ...restParts] = message.split(':');
+  let kind = kindPart.trim();
+  let rest = restParts.join(':');
+
+  if (kind === 'implement') {
+    const verdict = /^\s*(\w+):/.exec(rest);
+    if (verdict?.[1] && IMPLEMENT_VERDICTS.includes(verdict[1])) {
+      kind = `implement ${verdict[1]}`;
+      rest = rest.slice(verdict[0].length);
+    }
+  }
+
+  const segments = rest
+    .split(/:| · /)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment !== '');
+  const at = segments.findIndex((segment) => SCHEDULER_TICKET.test(segment));
+  const first = segments[0];
+  let detail = first ?? '';
+  if (at >= 0) {
+    const ticket = withoutDanglingParen(segments[at] ?? '');
+    const joined = at > 0 && first ? `${first} · ${ticket}` : ticket;
+    detail = joined.length <= SUMMARY_MAX ? joined : ticket;
+  }
+  const cut = cutAt(detail);
+  return cut ? `${kind} · ${cut}` : kind;
+};
 
 export interface QueueCheck {
   kind: 'idle' | 'ready' | 'busy' | 'skip' | 'unknown';

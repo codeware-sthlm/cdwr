@@ -34,7 +34,8 @@ import {
   parseNotifyLevel,
   parseQueueView,
   parseSuggest,
-  parseWatchState
+  parseWatchState,
+  summarizeSchedulerLine
 } from './agent.logic';
 
 export default defineCommand({
@@ -178,7 +179,7 @@ export default defineCommand({
         ? row(
             true,
             'last run',
-            `${report.lastScheduled.at} ${report.lastScheduled.message}`
+            `${report.lastScheduled.at} ${summarizeSchedulerLine(report.lastScheduled.message)}`
           )
         : row('warn', 'last run', 'nothing logged yet'),
       ...(report.watching.length > 0

@@ -11,11 +11,12 @@ import {
   spinner,
   text
 } from '@clack/prompts';
-import Table from 'cli-table3';
 
 import { Cancelled, messageOf } from '../cli/errors';
 import type { Choice } from '../cli/inputs';
 
+import { createTable } from './table';
+import { tableLayout } from './table-layout';
 import { symbols, theme } from './theme';
 import type {
   ConfirmOptions,
@@ -68,12 +69,11 @@ export function createTerminalUi(): Ui {
     },
 
     table(head, rows) {
-      const table = new Table({
-        head: head.map((h) => theme.title(h)),
-        style: { head: [], border: [] },
-        chars: { mid: '', 'left-mid': '', 'mid-mid': '', 'right-mid': '' }
+      const width = process.stdout.columns || 80;
+      const table = createTable(head, rows, {
+        colWidths: tableLayout(head, rows, width),
+        wordWrap: true
       });
-      for (const row of rows) table.push(row);
       process.stdout.write(`${table.toString()}\n`);
     },
 
