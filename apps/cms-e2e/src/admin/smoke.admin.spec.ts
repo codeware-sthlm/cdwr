@@ -58,8 +58,22 @@ const createViews = listViews.filter(
   (slug) => slug !== 'form-submissions' && !isAutosave(slug)
 );
 
-/** Platform-owned collections, visible to system users only */
-const platformViews = platformCollectionSlugs;
+/**
+ * Platform-owned collections that open their one document instead of a list.
+ *
+ * `platform-settings` holds a single row, so its list view redirects to it.
+ */
+const singleDocumentViews = [
+  'platform-settings'
+] as const satisfies readonly CollectionSlug[];
+
+const isSingleDocument = (slug: string) =>
+  (singleDocumentViews as ReadonlyArray<string>).includes(slug);
+
+/** Platform-owned collections with a list view, visible to system users only */
+const platformViews = platformCollectionSlugs.filter(
+  (slug) => !isSingleDocument(slug)
+);
 
 /** The collections an editor spends most of their time in */
 const coreCollections = [
@@ -155,6 +169,15 @@ test.describe('/admin — smoke', () => {
       await page.goto(`/admin/collections/${slug}`);
 
       await expect(listRendered(page), `list view for ${slug}`).toBeVisible();
+    }
+
+    for (const slug of singleDocumentViews) {
+      await page.goto(`/admin/collections/${slug}`);
+
+      await expect(
+        page.locator('.document-fields').first(),
+        `document view for ${slug}`
+      ).toBeVisible();
     }
   });
 
