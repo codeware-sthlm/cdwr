@@ -202,12 +202,16 @@ export const statsDomain = (row: TenantRow, cmsFlyApp: string): string => {
   return normalizeDomain(primary?.hostname ?? `${cmsFlyApp}.fly.dev`);
 };
 
-/** The recorded slug when Umami still lists it, otherwise the first listed */
+/**
+ * The recorded slug when Umami still lists it, `null` when it has lost it
+ * (it is created again under the same name). Without a recorded slug, the
+ * first listed.
+ */
 export const pickShare = (
   slugs: ReadonlyArray<string>,
   recorded: string | null
 ): string | null =>
-  recorded && slugs.includes(recorded) ? recorded : (slugs[0] ?? null);
+  recorded ? (slugs.includes(recorded) ? recorded : null) : (slugs[0] ?? null);
 
 export type StatsSkipReason =
   'preview' | 'unconfigured' | 'no-cms' | 'unreachable';
@@ -219,6 +223,25 @@ export type StatsPlan =
   | { action: 'adopt'; id: string; domain: string; shareId: string | null }
   | { action: 'create'; name: string; domain: string }
   | { action: 'unknown'; id: string };
+
+/**
+ * Writes the plan makes for the website: 1 when it creates the website or its
+ * share, or records an id or slug the workspace does not hold yet, otherwise 0
+ */
+export const statsWrites = (
+  plan: StatsPlan,
+  recorded: string | null
+): 0 | 1 => {
+  switch (plan.action) {
+    case 'create':
+    case 'adopt':
+      return 1;
+    case 'keep':
+      return plan.shareId && plan.shareId === recorded ? 0 : 1;
+    default:
+      return 0;
+  }
+};
 
 const SKIP_TEXT: Record<StatsSkipReason, string> = {
   preview: 'preview',

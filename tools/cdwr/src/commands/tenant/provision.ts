@@ -68,6 +68,7 @@ import {
   reasonSkipped,
   statsDomain,
   statsStep,
+  statsWrites,
   statusReportSchema,
   tenantRowSchema,
   workspaceChoices
@@ -310,11 +311,7 @@ async function applyStats(
   }
 
   // Nothing to write: the workspace already records this website's share
-  if (
-    stats.action === 'keep' &&
-    stats.shareId &&
-    stats.shareId === currentShareId
-  ) {
+  if (stats.action === 'keep' && statsWrites(stats, currentShareId) === 0) {
     return { action: 'keep', id: stats.id, failed: false };
   }
 
@@ -664,11 +661,7 @@ export default defineCommand({
           folders.length +
           keysToWrite.length +
           flags.filter(({ action }) => action === 'create').length +
-          (stats.action === 'create' ||
-          ((stats.action === 'adopt' || stats.action === 'keep') &&
-            stats.shareId !== tenant.statsShareId)
-            ? 1
-            : 0)
+          statsWrites(stats, tenant.statsShareId)
       } satisfies PlanData
     };
   },

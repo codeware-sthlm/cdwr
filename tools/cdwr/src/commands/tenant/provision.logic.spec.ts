@@ -17,6 +17,7 @@ import {
   reasonSkipped,
   statsDomain,
   statsStep,
+  statsWrites,
   tenantRowSchema,
   workspaceChoices
 } from './provision.logic';
@@ -495,16 +496,41 @@ describe('provisionSteps flip', () => {
 });
 
 describe('pickShare', () => {
-  it('prefers the recorded slug when Umami lists it', () => {
+  it('returns the recorded slug when Umami lists it', () => {
     expect(pickShare(['a', 'b'], 'b')).toBe('b');
   });
 
-  it('falls back to the first listed slug', () => {
-    expect(pickShare(['a', 'b'], 'x')).toBe('a');
+  it('answers null when Umami no longer lists the recorded slug', () => {
+    expect(pickShare(['a', 'b'], 'x')).toBeNull();
+    expect(pickShare([], 'x')).toBeNull();
+  });
+
+  it('takes the first listed slug when none is recorded', () => {
     expect(pickShare(['a', 'b'], null)).toBe('a');
   });
 
-  it('answers null for an empty list', () => {
-    expect(pickShare([], 'x')).toBeNull();
+  it('answers null for an empty list and no recorded slug', () => {
+    expect(pickShare([], null)).toBeNull();
+  });
+});
+
+describe('statsWrites', () => {
+  const keep = (shareId: string | null) =>
+    ({ action: 'keep', id: 'w', shareId }) as const;
+
+  it.each([
+    [{ action: 'create', name: 'n', domain: 'd' }, null, 1],
+    [{ action: 'create', name: 'n', domain: 'd' }, 's', 1],
+    [{ action: 'adopt', id: 'w', domain: 'd', shareId: 's' }, 's', 1],
+    [{ action: 'adopt', id: 'w', domain: 'd', shareId: null }, null, 1],
+    [keep(null), null, 1],
+    [keep(null), 's', 1],
+    [keep('s'), null, 1],
+    [keep('s'), 'x', 1],
+    [keep('s'), 's', 0],
+    [{ action: 'unknown', id: 'w' }, 's', 0],
+    [{ action: 'skip', reason: 'preview' }, null, 0]
+  ] as const)('%j with recorded %j writes %i', (plan, recorded, writes) => {
+    expect(statsWrites(plan, recorded)).toBe(writes);
   });
 });
