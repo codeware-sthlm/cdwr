@@ -230,11 +230,16 @@ nx dev cms
 nx dev web
 ```
 
-| View            | URL                    | Credentials                |
-| --------------- | ---------------------- | -------------------------- |
-| Tenant client   | `localhost:4200`       |                            |
-| Tenant admin UI | `localhost:3000/admin` | `titan@local.dev` / `dev`  |
-| CMS admin UI    | `localhost:3000/admin` | `system@local.dev` / `dev` |
+| View            | URL                     | Credentials                  |
+| --------------- | ----------------------- | ---------------------------- |
+| Tenant client   | `localhost:4200`        |                              |
+| Tenant admin UI | `localhost:3000/admin`  | `titan@local.dev` / `dev`    |
+| CMS admin UI    | `localhost:3000/admin`  | `system@local.dev` / `dev`   |
+| Signup          | `localhost:3000/signup` | invite `SEED-MANY-0000-0001` |
+
+The seed opens signup and creates that code (and a single-use `SEED-ONCE-0000-0001`),
+on a fresh database only; a preview is ready to take a signup as soon as it boots.
+The verification and notice mails go wherever the environment's SMTP points.
 
 #### CMS Tenant mode
 

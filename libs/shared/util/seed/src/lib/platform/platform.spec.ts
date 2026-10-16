@@ -46,4 +46,9 @@ describe('the platform definition', () => {
 
     expect(slugs).toEqual(['cdwr-io', 'codeware', 'moon', 'star']);
   });
+
+  it('opens signup with a code to spare, so a preview takes one as it boots', () => {
+    expect(platform.signup.open).toBe(true);
+    expect(platform.signup.inviteCodes.length).toBeGreaterThan(0);
+  });
 });

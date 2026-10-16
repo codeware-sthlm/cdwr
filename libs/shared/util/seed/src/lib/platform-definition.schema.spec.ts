@@ -15,7 +15,14 @@ const minimal = {
       supportedLocales: ['en']
     }
   ],
-  users: []
+  users: [],
+  signup: { open: false, inviteCodes: [] }
+};
+
+const inviteCode = {
+  code: 'SEED-MANY-0000-0001',
+  note: 'Seeded',
+  maxUses: 1
 };
 
 const errorsOf = (definition: unknown): Array<string> => {
@@ -162,5 +169,54 @@ describe('PlatformDefinitionSchema', () => {
     };
 
     expect(errorsOf(definition).join(' ')).toContain("'hut'");
+  });
+
+  it('accepts a well-formed invite code', () => {
+    const definition = {
+      ...minimal,
+      signup: { open: true, inviteCodes: [inviteCode] }
+    };
+
+    expect(errorsOf(definition)).toEqual([]);
+  });
+
+  it('refuses an invite code outside the Crockford alphabet or shape', () => {
+    for (const code of [
+      'SEED-ONCE-0000-0001',
+      'seed-many-0000-0001',
+      'SEEDMANY00000001',
+      'SEED-MANY-0000'
+    ]) {
+      const definition = {
+        ...minimal,
+        signup: { open: true, inviteCodes: [{ ...inviteCode, code }] }
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain('Crockford');
+    }
+  });
+
+  it('refuses two invite codes sharing a lookup', () => {
+    const definition = {
+      ...minimal,
+      signup: {
+        open: true,
+        inviteCodes: [
+          inviteCode,
+          { ...inviteCode, code: 'SEED-MANY-0000-0002' }
+        ]
+      }
+    };
+
+    expect(errorsOf(definition).join(' ')).toContain("'SEEDMANY'");
+  });
+
+  it('refuses an invite code with no whole use', () => {
+    const definition = {
+      ...minimal,
+      signup: { open: true, inviteCodes: [{ ...inviteCode, maxUses: 0.5 }] }
+    };
+
+    expect(errorsOf(definition).length).toBeGreaterThan(0);
   });
 });

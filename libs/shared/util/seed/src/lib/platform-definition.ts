@@ -10,9 +10,9 @@ import type { BundledStockMediaFile } from './bundled-media';
 /**
  * What no single site owns, stated as data and applied by
  * `applyPlatformDefinition`: the tenants, their users, the shared
- * vocabularies editors pick labels from, the stock photo library and the
- * FAQ. A site definition is applied afterwards, against the tenant this
- * created.
+ * vocabularies editors pick labels from, the stock photo library, the FAQ
+ * and what self-serve signup needs. A site definition is applied afterwards,
+ * against the tenant this created.
  */
 
 /** The locales a workspace can be seeded in. */
@@ -81,10 +81,38 @@ export type PlatformUserDefinition = {
   }>;
 };
 
+/**
+ * One invite code for self-serve signup.
+ *
+ * Stated in plain here, the only place it ever is: the apply hands it to the
+ * collection, which keeps the first half as a lookup and only a hash of the
+ * second. A seeded code is for development and preview; production is never
+ * seeded.
+ */
+export type PlatformInviteCodeDefinition = {
+  /** `XXXX-XXXX-XXXX-XXXX` in Crockford base32, so no I, L, O or U */
+  code: string;
+  /** Who the code is for */
+  note: string;
+  maxUses: number;
+  /** An ISO timestamp; omitted, the code never expires */
+  expiresAt?: string;
+};
+
+/** What self-serve signup on the host needs before anyone can use it */
+export type PlatformSignupDefinition = {
+  /** Whether the signup page accepts invite codes at all */
+  open: boolean;
+  /** Gets a notice for each signup; omitted, the signup is only logged */
+  notifyEmail?: string;
+  inviteCodes: ReadonlyArray<PlatformInviteCodeDefinition>;
+};
+
 export type PlatformDefinition = {
   labels: ReadonlyArray<PlatformLabelDefinition>;
   stockMedia: ReadonlyArray<StockMediaDefinition>;
   faq: ReadonlyArray<FaqDefinition>;
   tenants: ReadonlyArray<PlatformTenantDefinition>;
   users: ReadonlyArray<PlatformUserDefinition>;
+  signup: PlatformSignupDefinition;
 };

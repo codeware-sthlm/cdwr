@@ -4,7 +4,8 @@ import { faq } from './faq';
 
 /**
  * The platform: its tenants, their users, the shared vocabularies editors
- * pick labels from, the stock photo library and the FAQ.
+ * pick labels from, the stock photo library, the FAQ and what self-serve
+ * signup needs.
  *
  * One dataset for both development and preview — `seed()` applies it with
  * `applyPlatformDefinition`, then applies each tenant's own site definition.
@@ -231,7 +232,28 @@ export const platform = {
       locale: 'en',
       tenants: [{ lookupSlug: 'moon', role: 'user' }]
     }
-  ]
+  ],
+
+  // Open from the first boot, so a preview takes a signup without anyone
+  // first opening the admin. The notice lands in whatever inbox the
+  // environment's SMTP points at
+  signup: {
+    open: true,
+    notifyEmail: 'system@local.dev',
+    inviteCodes: [
+      {
+        code: 'SEED-MANY-0000-0001',
+        note: 'Seeded for development and preview; enough uses for a whole branch',
+        maxUses: 100
+      },
+      {
+        // Typed as ONCE it reads the same: the code treats O as 0
+        code: 'SEED-0NCE-0000-0001',
+        note: 'Seeded for development and preview; one use, to see a spent code refused',
+        maxUses: 1
+      }
+    ]
+  }
 } as const satisfies PlatformDefinition;
 
 /** A tenant slug the platform states. */

@@ -12,7 +12,8 @@ does not describe cdwr.io's database row.
 
 A site definition carries no identity on purpose — but something has to state
 the tenants, their users and memberships, the shared label vocabularies, the
-stock photo library and the FAQ. That's the **platform definition**,
+stock photo library, the FAQ and what self-serve signup needs. That's the
+**platform definition**,
 `platform/platform.ts`: the one thing in this package that does carry
 identity (tenant slugs, api keys, user emails), applied by
 `applyPlatformDefinition` before any site definition. `PlatformTenantSlug` —
@@ -22,6 +23,13 @@ compile.
 
 `findPlatformTenant` reads the platform definition directly; its
 runtime callers only ever read the `apiKey` it resolves to.
+
+Its `signup` section is what the host's `/signup` page checks before it takes
+anyone: the platform-settings switch, the notice address and the invite codes.
+A code is stated in plain here and nowhere else — the collection keeps its
+first half as a lookup and only a hash of the second — so `SEED-MANY-0000-0001`
+is what to type on a fresh development or preview database. The settings row
+and the codes are created once and then left alone, uses and all.
 
 ## Write one
 
