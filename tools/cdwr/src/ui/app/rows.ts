@@ -6,7 +6,7 @@ import { plain } from '../theme';
 import { colors } from './palette';
 import type { LogEntry } from './store';
 
-/** One screen row of the run pane, wrapped so Ink never has to */
+/** One terminal row of the run pane, wrapped so Ink never has to */
 export type Row =
   | {
       kind: 'text';
@@ -15,8 +15,7 @@ export type Row =
       dim?: boolean;
       bold?: boolean;
     }
-  | { kind: 'spinner'; text: string }
-  | { kind: 'note'; title?: string; lines: string[] };
+  | { kind: 'spinner'; text: string };
 
 /** Border and horizontal padding of a note card */
 const CARD_INSET = 4;
@@ -55,6 +54,31 @@ const tableRows = (head: string[], rows: string[][], width: number): Row[] => {
   ];
 };
 
+const border = chalk.hex(colors.border);
+
+/**
+ * A note as rows: a round border drawn by hand, so a card taller than the
+ * pane scrolls line by line like everything else.
+ */
+const noteRows = (
+  title: string | undefined,
+  lines: ReadonlyArray<string>,
+  width: number
+): Row[] => {
+  const inner = Math.max(1, width - CARD_INSET);
+  const frame = (content: string): Row => ({
+    kind: 'text',
+    text: `${border('│')} ${content}${' '.repeat(Math.max(0, inner - plain(content).length))} ${border('│')}`
+  });
+  const bar = '─'.repeat(Math.max(0, width - 2));
+  return [
+    { kind: 'text', text: border(`╭${bar}╮`) },
+    ...(title ? [frame(border.bold(title))] : []),
+    ...lines.flatMap((line) => wrapLines(line, inner)).map(frame),
+    { kind: 'text', text: border(`╰${bar}╯`) }
+  ];
+};
+
 const entryRows = (entry: LogEntry, width: number): Row[] => {
   switch (entry.kind) {
     case 'task': {
@@ -82,15 +106,7 @@ const entryRows = (entry: LogEntry, width: number): Row[] => {
     case 'table':
       return tableRows(entry.head, entry.rows, width);
     case 'note':
-      return [
-        {
-          kind: 'note',
-          title: entry.title,
-          lines: entry.lines.flatMap((line) =>
-            wrapLines(line, width - CARD_INSET)
-          )
-        }
-      ];
+      return noteRows(entry.title, entry.lines, width);
   }
 };
 
@@ -110,10 +126,6 @@ export const flattenLog = (
     return rows;
   });
 
-/** Terminal rows a row takes: a note is its lines, its border and its title */
-export const rowCount = (row: Row): number =>
-  row.kind === 'note' ? row.lines.length + 2 + (row.title ? 1 : 0) : 1;
-
 /** The slice of rows on screen and how far it can scroll */
 export interface Viewport {
   rows: Row[];
@@ -121,40 +133,28 @@ export interface Viewport {
   start: number;
   /** Largest `start`: the bottom, where the tail is followed */
   max: number;
-  /** Terminal rows hidden after the last visible row */
+  /** Rows hidden after the last visible one */
   below: number;
 }
 
 /**
- * Rows that fit in `budget` terminal rows from `scroll`, or from the bottom
- * when `scroll` is null. A number is clamped to what the log allows. The
- * first row always shows, even taller than the budget; Ink clips it. While
- * scrolled up, one row is left for the "more below" line.
+ * The `budget` rows from `scroll`, or the last ones when `scroll` is null.
+ * A number is clamped to what the log allows. While scrolled up, one row is
+ * left for the "more below" line.
  */
 export const viewport = (
   rows: ReadonlyArray<Row>,
   budget: number,
   scroll: number | null
 ): Viewport => {
-  let max = rows.length;
-  for (let used = 0; max > 0; max--) {
-    const row = rows[max - 1];
-    if (!row) break;
-    used += rowCount(row);
-    if (used > budget && max < rows.length) break;
-  }
+  const max = Math.max(0, rows.length - budget);
   const start = scroll === null ? max : Math.min(Math.max(0, scroll), max);
   const room = start < max ? budget - 1 : budget;
-  const visible: Row[] = [];
-  for (let i = start, used = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row) break;
-    used += rowCount(row);
-    if (used > room && visible.length > 0) break;
-    visible.push(row);
-  }
-  const below = rows
-    .slice(start + visible.length)
-    .reduce((sum, row) => sum + rowCount(row), 0);
-  return { rows: visible, start, max, below };
+  const visible = rows.slice(start, start + Math.max(1, room));
+  return {
+    rows: visible,
+    start,
+    max,
+    below: rows.length - start - visible.length
+  };
 };

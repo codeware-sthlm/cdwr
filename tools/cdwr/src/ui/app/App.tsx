@@ -226,7 +226,7 @@ export function App({
   const fixed =
     1 +
     (runState?.answered.length ?? 0) +
-    (runState?.prompt ? promptRows(runState.prompt) : 0) +
+    (runState?.prompt ? promptRows(runState.prompt, paneWidth) : 0) +
     (runState?.result ? RESULT_FRAME + resultLines.length : 0);
   const budget = Math.max(3, bodyHeight - fixed);
   // Scrolled to the bottom is the same as following
@@ -242,8 +242,9 @@ export function App({
           return to(Math.max(0, view.start - 1));
         if (key.downArrow || input === 'j') return to(view.start + 1);
         if (key.pageUp || input === 'u')
-          return to(Math.max(0, view.start - budget));
-        if (key.pageDown || input === 'd') return to(view.start + budget);
+          return to(Math.max(0, view.start - (budget - 1)));
+        if (key.pageDown || input === 'd')
+          return to(view.start + view.rows.length);
         if (input === 'g') return to(0);
         if (input === 'G') return setScroll(null);
       }
@@ -561,18 +562,22 @@ const CARD_INSET = 4;
 /** Margin, border, title and the closing line of the result card */
 const RESULT_FRAME = 5;
 
-/** Terminal rows an open prompt takes: margin, message and the widget's lines */
-const promptRows = (prompt: Prompt): number => {
+/**
+ * Terminal rows an open prompt takes: its margin, the message wrapped at the
+ * pane width, and the widget's own lines, one per choice.
+ */
+const promptRows = (prompt: Prompt, width: number): number => {
+  const head = 1 + wrapLines(prompt.message, width).length;
   switch (prompt.kind) {
     case 'select':
-      return 2 + prompt.choices.length;
+      return head + prompt.choices.length;
     case 'multiselect':
-      return 3 + prompt.choices.length;
+      return head + prompt.choices.length + 1;
     case 'text':
     case 'password':
-      return 3 + (prompt.error ? 1 : 0);
+      return head + 1 + (prompt.error ? 1 : 0);
     case 'confirm':
-      return 3;
+      return head + 1;
   }
 };
 
@@ -674,16 +679,6 @@ function LogRow({ row }: { row: LogRowData }) {
         <Text wrap="truncate-end">
           <Spinner /> {row.text}
         </Text>
-      );
-    case 'note':
-      return (
-        <Card title={row.title}>
-          {row.lines.map((line, i) => (
-            <Text key={i} wrap="truncate-end">
-              {line}
-            </Text>
-          ))}
-        </Card>
       );
   }
 }
