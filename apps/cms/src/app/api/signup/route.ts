@@ -20,6 +20,8 @@ import {
   SIGNUP_RATE_LIMIT,
   type SignupInput,
   type SignupRefusal,
+  hostAppName,
+  isDeploymentTaken,
   isSignupBody,
   parseSignup,
   signupRefusal
@@ -71,18 +73,7 @@ async function createWorkspace(
         attemptsKey
       });
 
-      const { totalDocs } = await payload.count({
-        collection: 'tenants',
-        where: {
-          or: [
-            { deployment: { equals: input.deployment } },
-            { slug: { equals: input.deployment } }
-          ]
-        },
-        overrideAccess: true,
-        req
-      });
-      if (totalDocs > 0) {
+      if (await isDeploymentTaken(payload, input.deployment, req)) {
         throw new DeploymentTaken();
       }
 
@@ -196,7 +187,7 @@ async function sendMails(
               tenantName: input.siteName,
               deployment: input.deployment,
               environment: getEnv().DEPLOY_ENV,
-              appName: process.env['FLY_APP_NAME'],
+              appName: hostAppName(),
               userName: input.name,
               userEmail: input.email,
               adminUrl: `${serverURL}${payload.config.routes.admin}/collections/tenants/${tenant.id}`

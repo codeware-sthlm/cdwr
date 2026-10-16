@@ -8,6 +8,7 @@ import { getPayload } from 'payload';
 
 import config from '../../../payload.config';
 import { getRequestLocale } from '../../../utils/request-locale';
+import { hostAppName, isSignupOpen } from '../../../utils/signup';
 
 import { SignupForm } from './SignupForm.client';
 
@@ -31,14 +32,8 @@ export default async function SignupPage() {
   const locale = await getRequestLocale();
 
   const payload = await getPayload({ config });
-  const { docs } = await payload.find({
-    collection: 'platform-settings',
-    depth: 0,
-    limit: 1,
-    overrideAccess: true
-  });
 
-  if (docs[0]?.signupOpen !== true) {
+  if (!(await isSignupOpen(payload))) {
     return (
       <AuthCard title={t(locale, 'signup.title')}>
         <Alert>{t(locale, 'signup.closed')}</Alert>
@@ -46,5 +41,11 @@ export default async function SignupPage() {
     );
   }
 
-  return <SignupForm locale={locale} siteKey={env.HUMAN_CHECK?.siteKey} />;
+  return (
+    <SignupForm
+      hostAppName={hostAppName()}
+      locale={locale}
+      siteKey={env.HUMAN_CHECK?.siteKey}
+    />
+  );
 }

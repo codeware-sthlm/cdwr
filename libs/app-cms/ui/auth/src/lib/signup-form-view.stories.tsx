@@ -34,6 +34,15 @@ const labels: SignupFormLabels = {
   siteName: 'Site name',
   deployment: 'Site address',
   deploymentHint: 'Lowercase letters, digits and hyphens.',
+  sectionInvite: 'Your invite',
+  sectionYou: 'You',
+  sectionSite: 'Your site',
+  inviteCodeHelp:
+    'Signup is by invitation. You get an invite code from Codeware; ask the person who pointed you here, or write to us.',
+  addressPreview: 'A custom domain can be connected later.',
+  availabilityChecking: 'Checking…',
+  availabilityAvailable: 'Available',
+  availabilityTaken: 'This site address is already taken.',
   submit: 'Create site',
   submitting: 'Creating site...',
   successTitle: 'Check your email to confirm your address',
@@ -88,6 +97,28 @@ export const Empty: StoryObj = {
 
 export const Filled: StoryObj = {
   render: () => <SignupFormView {...props} values={filled} />
+};
+
+const filledProps: SignupFormViewProps = {
+  ...props,
+  values: filled,
+  siteUrl: 'https://cdwr-cms-analytical-engines.fly.dev'
+};
+
+export const Sections: StoryObj = {
+  render: () => <SignupFormView {...filledProps} />
+};
+
+export const Checking: StoryObj = {
+  render: () => <SignupFormView {...filledProps} availability="checking" />
+};
+
+export const Available: StoryObj = {
+  render: () => <SignupFormView {...filledProps} availability="available" />
+};
+
+export const Taken: StoryObj = {
+  render: () => <SignupFormView {...filledProps} availability="taken" />
 };
 
 export const FieldErrors: StoryObj = {

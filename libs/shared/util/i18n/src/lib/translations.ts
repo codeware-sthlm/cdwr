@@ -140,6 +140,13 @@ export type TranslationKey =
   | 'signup.resend.formPrompt'
   | 'signup.resend.formLink'
   | 'signup.backToLogin'
+  | 'signup.section.invite'
+  | 'signup.section.you'
+  | 'signup.section.site'
+  | 'signup.inviteCodeHelp'
+  | 'signup.addressPreview'
+  | 'signup.availability.checking'
+  | 'signup.availability.available'
   | 'signup.error.invalid'
   | 'signup.error.password'
   | 'signup.error.deployment'
@@ -234,6 +241,7 @@ export type TranslationKey =
   | 'signupNotice.emailLabel'
   | 'signupNotice.nameLabel'
   | 'signupNotice.nextStep'
+  | 'signupNotice.siteLabel'
   | 'signupNotice.subject'
   | 'signupNotice.workspaceLabel'
   | 'tourSignup.acceptTerms'
@@ -432,6 +440,14 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
       "Already signed up but didn't get the confirmation email?",
     'signup.resend.formLink': 'Send it again',
     'signup.backToLogin': 'Back to sign in',
+    'signup.section.invite': 'Your invite',
+    'signup.section.you': 'You',
+    'signup.section.site': 'Your site',
+    'signup.inviteCodeHelp':
+      'Signup is by invitation. You get an invite code from Codeware; ask the person who pointed you here, or write to us.',
+    'signup.addressPreview': 'A custom domain can be connected later.',
+    'signup.availability.checking': 'Checking…',
+    'signup.availability.available': 'Available',
     'signup.error.invalid':
       'Some details are missing or not valid. Check the form and try again.',
     'signup.error.password':
@@ -548,6 +564,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signupNotice.emailLabel': 'Email',
     'signupNotice.nameLabel': 'Name',
     'signupNotice.nextStep': 'To take it live, run: {{command}}',
+    'signupNotice.siteLabel': 'Site address',
     'signupNotice.subject': 'New self-serve signup: {{tenantName}}',
     'signupNotice.workspaceLabel': 'Workspace',
     'tourSignup.acceptTerms': 'I accept the terms',
@@ -755,6 +772,15 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
       'Har du redan registrerat dig men inte fått bekräftelsemejlet?',
     'signup.resend.formLink': 'Skicka det igen',
     'signup.backToLogin': 'Tillbaka till inloggningen',
+    'signup.section.invite': 'Din inbjudan',
+    'signup.section.you': 'Du',
+    'signup.section.site': 'Din webbplats',
+    'signup.inviteCodeHelp':
+      'Registreringen sker via inbjudan. Inbjudningskoden får du av Codeware. Fråga den som hänvisade dig hit, eller skriv till oss.',
+    'signup.addressPreview':
+      'En egen domän kan kopplas till webbplatsen senare.',
+    'signup.availability.checking': 'Kontrollerar…',
+    'signup.availability.available': 'Ledig',
     'signup.error.invalid':
       'Några uppgifter saknas eller är ogiltiga. Kontrollera formuläret och försök igen.',
     'signup.error.password': 'Lösenordet måste vara mellan 10 och 128 tecken.',
@@ -871,6 +897,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signupNotice.emailLabel': 'E-post',
     'signupNotice.nameLabel': 'Namn',
     'signupNotice.nextStep': 'Kör detta för att sätta den i drift: {{command}}',
+    'signupNotice.siteLabel': 'Webbplatsadress',
     'signupNotice.subject': 'Ny självregistrering: {{tenantName}}',
     'signupNotice.workspaceLabel': 'Arbetsyta',
     'tourSignup.acceptTerms': 'Jag godkänner villkoren',

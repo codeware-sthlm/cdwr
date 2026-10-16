@@ -1,4 +1,5 @@
 import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
+import { tenantSiteUrl } from '@codeware/shared/util/pure';
 
 import { type EmailBrand, renderEmailLayout } from '../layout';
 
@@ -53,6 +54,15 @@ export function renderSignupNoticeMail(input: SignupNoticeMailInput): {
 
   const subject = t(locale, 'signupNotice.subject', { tenantName });
 
+  const siteDetail: Array<[string, string]> = appName
+    ? [
+        [
+          t(locale, 'signupNotice.siteLabel'),
+          tenantSiteUrl(appName, deployment)
+        ]
+      ]
+    : [];
+
   const { html, text } = renderEmailLayout({
     title: subject,
     paragraphs: [
@@ -65,6 +75,7 @@ export function renderSignupNoticeMail(input: SignupNoticeMailInput): {
     details: [
       [t(locale, 'signupNotice.workspaceLabel'), tenantName],
       [t(locale, 'signupNotice.deploymentLabel'), deployment],
+      ...siteDetail,
       [t(locale, 'signupNotice.nameLabel'), userName],
       [t(locale, 'signupNotice.emailLabel'), userEmail]
     ],
