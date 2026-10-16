@@ -36,10 +36,8 @@ import {
   domainTarget,
   filesDrift,
   launchPath,
-  memoryDir,
   renderPlist,
-  serviceTarget,
-  suggestSettings
+  serviceTarget
 } from './agent.logic';
 
 const LEGACY_HOME = join(homedir(), '.claude', 'agent-queue');
@@ -96,10 +94,7 @@ export default defineCommand({
       script: queue.script,
       home: queue.home,
       repo: worktree,
-      path: launchPath(dirs),
-      memoryDir:
-        ctx.env['AGENT_QUEUE_MEMORY_DIR'] || memoryDir(homedir(), ctx.root),
-      suggest: suggestSettings(ctx.env)
+      path: launchPath(dirs)
     });
 
     const worktreeExists = existsSync(worktree);
