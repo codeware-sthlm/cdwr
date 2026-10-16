@@ -1,6 +1,6 @@
 import { plain } from '../theme';
 
-import { flattenLog, rowCount, viewport } from './rows';
+import { flattenLog, viewport } from './rows';
 import type { LogEntry } from './store';
 
 const line = (text: string): LogEntry => ({
@@ -50,28 +50,22 @@ describe('flattenLog', () => {
     expect(flattenLog([entry], 50).length).toBeGreaterThan(2);
   });
 
-  it('wraps note lines inside the card', () => {
-    const [note] = flattenLog(
-      [{ kind: 'note', lines: ['n'.repeat(190)] }],
+  it('draws a note as bordered rows, its lines wrapped inside the card', () => {
+    const rows = flattenLog(
+      [{ kind: 'note', title: 'Plan', lines: ['n'.repeat(190)] }],
       100
     );
-    expect(note).toMatchObject({ kind: 'note' });
-    if (note?.kind !== 'note') return;
-    expect(note.lines).toHaveLength(2);
-    expect(rowCount(note)).toBe(4);
+    // Top border, title, two wrapped lines, bottom border
+    expect(rows).toHaveLength(5);
+    const texts = rows.map((r) => plain(r.kind === 'text' ? r.text : ''));
+    expect(texts[0]).toMatch(/^╭─+╮$/);
+    expect(texts[1]).toContain('Plan');
+    expect(texts.at(-1)).toMatch(/^╰─+╯$/);
+    expect(texts.every((t) => t.length === 100)).toBe(true);
   });
 
   it('leaves text unwrapped without a width', () => {
     expect(flattenLog([line('x'.repeat(300))], 0)).toHaveLength(1);
-  });
-});
-
-describe('rowCount', () => {
-  it('is one for text and lines plus frame for a note', () => {
-    expect(rowCount({ kind: 'text', text: 'a' })).toBe(1);
-    expect(rowCount({ kind: 'spinner', text: 'a' })).toBe(1);
-    expect(rowCount({ kind: 'note', lines: ['a', 'b'] })).toBe(4);
-    expect(rowCount({ kind: 'note', title: 'T', lines: ['a', 'b'] })).toBe(5);
   });
 });
 
@@ -100,32 +94,17 @@ describe('viewport', () => {
     expect(viewport(rows, 4, -3).start).toBe(0);
   });
 
-  it('counts a note by its height', () => {
-    const withNote = [
-      ...rows,
-      ...flattenLog([{ kind: 'note', lines: ['a', 'b'] }], 80)
-    ];
-    const v = viewport(withNote, 5, null);
-    expect(v.rows).toHaveLength(2);
-    expect(v.rows.at(-1)?.kind).toBe('note');
-  });
-
-  it('still shows a note taller than the budget', () => {
+  it('scrolls through a note taller than the budget', () => {
     const tall = flattenLog(
       [line('before'), { kind: 'note', lines: ['a', 'b', 'c', 'd', 'e', 'f'] }],
       80
     );
-    const v = viewport(tall, 5, null);
-    expect(v.rows).toHaveLength(1);
-    expect(v.rows[0]?.kind).toBe('note');
-    expect(viewport(tall, 5, 0).rows[0]?.kind).toBe('text');
-  });
-
-  it('counts hidden rows in terminal rows', () => {
-    const withNote = [
-      ...rows,
-      ...flattenLog([{ kind: 'note', lines: ['a', 'b'] }], 80)
-    ];
-    expect(viewport(withNote, 4, 0).below).toBe(7 + 4);
+    expect(tall).toHaveLength(9);
+    const bottom = viewport(tall, 5, null);
+    expect(bottom.rows).toHaveLength(5);
+    expect(plain(bottom.rows.at(-1)?.text ?? '')).toMatch(/^╰/);
+    const top = viewport(tall, 5, 0);
+    expect(top.rows).toHaveLength(4);
+    expect(top.below).toBe(5);
   });
 });
