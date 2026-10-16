@@ -33,7 +33,8 @@ const pageSchema = z.object({
 });
 
 const sharePageSchema = z.object({
-  data: z.array(z.object({ slug: z.string() }))
+  data: z.array(z.object({ slug: z.string() })),
+  count: z.number()
 });
 
 const PAGE_SIZE = 100;
@@ -156,19 +157,22 @@ export async function createWebsite(
   return toWebsite(websiteSchema.parse(await response.json()));
 }
 
-/** The slugs of a website's public shares, first page only */
+/** The slugs of a website's public shares, read page by page */
 export async function listShares(
   conn: UmamiConnection,
   websiteId: string
 ): Promise<string[]> {
-  const response = await request(
-    conn,
-    `/websites/${encodeURIComponent(websiteId)}/shares?page=1&pageSize=${PAGE_SIZE}`
-  );
-  if (!response.ok) throw await refused('the share list', response);
-  return sharePageSchema
-    .parse(await response.json())
-    .data.map(({ slug }) => slug);
+  const slugs: string[] = [];
+  for (let page = 1; ; page++) {
+    const response = await request(
+      conn,
+      `/websites/${encodeURIComponent(websiteId)}/shares?page=${page}&pageSize=${PAGE_SIZE}`
+    );
+    if (!response.ok) throw await refused('the share list', response);
+    const { data, count } = sharePageSchema.parse(await response.json());
+    slugs.push(...data.map(({ slug }) => slug));
+    if (!data.length || slugs.length >= count) return slugs;
+  }
 }
 
 /** Give a website a public share with this slug; answers the slug Umami kept */

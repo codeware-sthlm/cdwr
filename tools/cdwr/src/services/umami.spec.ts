@@ -1,3 +1,5 @@
+import { pickShare } from '../commands/tenant/provision.logic';
+
 import {
   createWebsite,
   getWebsite,
@@ -152,6 +154,22 @@ describe('Umami client', () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       'https://umami.test/api/websites/w1/shares?page=1&pageSize=100'
     );
+  });
+
+  it('reads every page of shares', async () => {
+    const first = Array.from({ length: 100 }, (_, i) => ({
+      id: `s${i}`,
+      slug: `slug${i}`
+    }));
+    fetchMock
+      .mockResolvedValueOnce(reply({ data: first, count: 101 }))
+      .mockResolvedValueOnce(
+        reply({ data: [{ id: 'last', slug: 'recorded' }], count: 101 })
+      );
+    const slugs = await listShares(conn, 'w1');
+    expect(slugs).toHaveLength(101);
+    expect(fetchMock.mock.calls[1][0]).toContain('page=2');
+    expect(pickShare(slugs, 'recorded')).toBe('recorded');
   });
 
   it('refuses a failed share list', async () => {
