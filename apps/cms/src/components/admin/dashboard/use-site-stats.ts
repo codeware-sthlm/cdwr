@@ -44,7 +44,8 @@ const answerSchema = z.discriminatedUnion('status', [
         devices: topSchema,
         countries: topSchema
       })
-    })
+    }),
+    dashboardUrl: z.string().url().optional()
   })
 ]) satisfies z.ZodType<SiteStatsAnswer>;
 
