@@ -24,7 +24,8 @@ Credentials live in `tools/cdwr/.env` (copy `.env.example`). `pnpm cdwr` works w
 
 A bare `cdwr` on a terminal opens a full-screen app: commands on the left, the selected command's
 card on the right, and the run itself in the same pane: prompts, plan, log, result. Keys: `↑↓` move,
-`⏎` run, `d` dry run, `/` filter, `?` keys, `esc` back, `q` quit. Only a bare `cdwr` opens it.
+`⏎` run, `d` dry run, `/` filter, `?` keys, `esc` back, `q` quit. A long run scrolls: `↑↓` a row,
+`u`/`d` a page, `g` top, `G` follows the end again. Only a bare `cdwr` opens it.
 A command path alone, such as `cdwr db backup`, prompts in the terminal for what it needs, and so
 does one with only global flags (`-d`, `-y`, `-v`); once an input is given it never prompts unless
 `-i` is given. Without a terminal, or with `--json`, nothing is

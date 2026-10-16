@@ -64,6 +64,19 @@ const command = defineCommand({
   }
 });
 
+const noisy = defineCommand({
+  summary: 'Log a lot',
+  description: 'Test command',
+  danger: 'read',
+  inputs: {},
+  plan: async () => ({ steps: [], data: null }),
+  apply: async (ctx) => {
+    for (let i = 1; i <= 40; i++) ctx.ui.info(`line ${i}`);
+    ctx.ui.info(`long ${'x'.repeat(300)}`);
+    return { summary: 'Said a lot' };
+  }
+});
+
 const groups: Group[] = [{ name: 'db', summary: 'Database' }];
 const entries: Entry[] = [
   {
@@ -79,6 +92,12 @@ const entries: Entry[] = [
     load: async () => command
   },
   {
+    path: ['db', 'spill'],
+    summary: 'Log a lot',
+    danger: 'read',
+    load: async () => noisy
+  },
+  {
     path: ['doctor'],
     summary: 'Check',
     danger: 'read',
@@ -86,7 +105,7 @@ const entries: Entry[] = [
   }
 ];
 
-const mount = () => {
+const mount = (size?: { rows: number }) => {
   const store = new RunStore();
   const ui = createAppUi(store);
   const ran: string[] = [];
@@ -108,6 +127,10 @@ const mount = () => {
       onExit={(code) => exits.push(code)}
     />
   );
+  if (size) {
+    Object.assign(app.stdout, { rows: size.rows });
+    app.stdout.emit('resize');
+  }
   return { ...app, store, ran, exits };
 };
 
@@ -165,5 +188,34 @@ describe('App', () => {
     await press(stdin, 'q');
     await waitFor(() => exits.length > 0);
     expect(exits).toEqual([0]);
+  }, 90000);
+
+  it('keeps a long run inside the pane, scrolls it and follows again with G', async () => {
+    const { stdin, lastFrame } = mount({ rows: 20 });
+    await waitUntilReady(lastFrame);
+    await press(stdin, DOWN);
+    await press(stdin, DOWN);
+    await press(stdin, ENTER);
+    await waitFor(() => (lastFrame() ?? '').includes('Done'));
+
+    const lines = (lastFrame() ?? '').split('\n');
+    expect(lines.length).toBeLessThanOrEqual(20);
+    const done = lines.findIndex((l) => l.includes('Done'));
+    expect(lines.slice(done).some((l) => /line \d|long x/.test(l))).toBe(false);
+    // The card's bottom border is drawn, so nothing was clipped
+    expect(lines.slice(done).some((l) => l.includes('╰'))).toBe(true);
+    expect(lastFrame()).toContain('long xxx');
+
+    await press(stdin, 'g');
+    await waitFor(() => (lastFrame() ?? '').includes('more below'));
+    expect(lastFrame()).toContain('line 1');
+    expect((lastFrame() ?? '').split('\n').length).toBeLessThanOrEqual(20);
+    expect(lastFrame()).not.toContain('long xxx');
+
+    await press(stdin, 'G');
+    await waitFor(() => !(lastFrame() ?? '').includes('more below'));
+    expect(lastFrame()).toContain('long xxx');
+    expect(lastFrame()).toContain('Done');
+    expect(lastFrame()).toContain('╰');
   }, 90000);
 });
