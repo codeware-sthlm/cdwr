@@ -10,6 +10,7 @@ import {
   folderPath,
   normalizeDomain,
   pausedMessage,
+  pickShare,
   planFlyAppsToDeploy,
   planFolders,
   provisionSteps,
@@ -41,6 +42,7 @@ describe('reasonSkipped', () => {
     deployment: 'acme',
     apiKey: 'key',
     statsWebsiteId: null,
+    statsShareId: null,
     domains: []
   };
 
@@ -290,6 +292,7 @@ describe('statsDomain', () => {
     deployment: 'acme',
     apiKey: 'key',
     statsWebsiteId: null,
+    statsShareId: null,
     domains: []
   };
 
@@ -331,13 +334,34 @@ describe('statsStep', () => {
   it.each([
     [
       { action: 'create', name: 'Acme', domain: 'acme.se' } as const,
-      'Create statistics website acme.se in Umami'
+      'Create statistics website acme.se in Umami with a share link'
     ],
     [
-      { action: 'adopt', id: 'w1', domain: 'acme.se' } as const,
-      'Adopt statistics website acme.se (w1)'
+      {
+        action: 'adopt',
+        id: 'w1',
+        domain: 'acme.se',
+        shareId: null
+      } as const,
+      'Adopt statistics website acme.se (w1) with a share link'
     ],
-    [{ action: 'keep', id: 'w1' } as const, 'Keep statistics website w1'],
+    [
+      {
+        action: 'adopt',
+        id: 'w1',
+        domain: 'acme.se',
+        shareId: 'abc'
+      } as const,
+      'Adopt statistics website acme.se (w1) and its share link'
+    ],
+    [
+      { action: 'keep', id: 'w1', shareId: 'abc' } as const,
+      'Keep statistics website w1 and its share link'
+    ],
+    [
+      { action: 'keep', id: 'w1', shareId: null } as const,
+      'Keep statistics website w1; add a share link'
+    ],
     [
       { action: 'skip', reason: 'preview' } as const,
       'Statistics skipped: preview'
@@ -357,9 +381,10 @@ describe('statsStep', () => {
   it('is appended after the flags by provisionSteps', () => {
     const steps = provisionSteps('acme', [], [], [], {
       action: 'keep',
-      id: 'w1'
+      id: 'w1',
+      shareId: 'abc'
     });
-    expect(steps).toEqual(['Keep statistics website w1']);
+    expect(steps).toEqual(['Keep statistics website w1 and its share link']);
   });
 });
 
@@ -372,6 +397,7 @@ describe('tenantRowSchema', () => {
     deployment: 'acme',
     apiKey: 'key',
     statsWebsiteId: null,
+    statsShareId: null,
     domains: []
   };
 
@@ -403,6 +429,7 @@ describe('workspaceChoices', () => {
     deployment: `cdwr-${slug}`,
     apiKey: 'key',
     statsWebsiteId: null,
+    statsShareId: null,
     domains: [],
     ...over
   });
@@ -464,5 +491,20 @@ describe('provisionSteps flip', () => {
     expect(provisionSteps('acme', [], [], [], undefined, false)).not.toContain(
       FLIP_STEP
     );
+  });
+});
+
+describe('pickShare', () => {
+  it('prefers the recorded slug when Umami lists it', () => {
+    expect(pickShare(['a', 'b'], 'b')).toBe('b');
+  });
+
+  it('falls back to the first listed slug', () => {
+    expect(pickShare(['a', 'b'], 'x')).toBe('a');
+    expect(pickShare(['a', 'b'], null)).toBe('a');
+  });
+
+  it('answers null for an empty list', () => {
+    expect(pickShare([], 'x')).toBeNull();
   });
 });

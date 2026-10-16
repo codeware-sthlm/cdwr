@@ -39,7 +39,16 @@ async function list() {
   const apiKeys = await readTenantApiKeys(payload);
 
   const tenants = docs.map(
-    ({ id, name, slug, status, deployment, statsWebsiteId, domains }) => ({
+    ({
+      id,
+      name,
+      slug,
+      status,
+      deployment,
+      statsWebsiteId,
+      statsShareId,
+      domains
+    }) => ({
       id,
       name,
       slug,
@@ -47,6 +56,7 @@ async function list() {
       deployment: deployment ?? null,
       apiKey: apiKeys.get(id) ?? null,
       statsWebsiteId: statsWebsiteId || null,
+      statsShareId: statsShareId || null,
       domains: (domains ?? []).map(({ hostname, app, isPrimary }) => ({
         hostname,
         app,

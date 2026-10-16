@@ -1,8 +1,11 @@
 import {
   createWebsite,
   getWebsite,
+  listShares,
   listTeamWebsites,
-  readUmamiProvisioning
+  newShareSlug,
+  readUmamiProvisioning,
+  setShare
 } from './umami';
 
 const state = vi.hoisted(() => ({
@@ -139,5 +142,51 @@ describe('Umami client', () => {
     }).catch((e: Error) => e);
     expect((error as Error).message).toContain('403');
     expect((error as Error).message).not.toContain('secret-key');
+  });
+
+  it('lists the slugs of a website', async () => {
+    fetchMock.mockResolvedValue(
+      reply({ data: [{ id: 's1', slug: 'abc' }], count: 1 })
+    );
+    expect(await listShares(conn, 'w1')).toEqual(['abc']);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://umami.test/api/websites/w1/shares?page=1&pageSize=100'
+    );
+  });
+
+  it('refuses a failed share list', async () => {
+    fetchMock.mockResolvedValue(reply({}, 500));
+    await expect(listShares(conn, 'w1')).rejects.toThrow('500');
+  });
+
+  it('sets a share and answers its slug', async () => {
+    fetchMock.mockResolvedValue(reply({ ...site, shareId: 'abc' }));
+    expect(await setShare(conn, 'w1', 'abc')).toBe('abc');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://umami.test/api/websites/w1');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ shareId: 'abc' });
+  });
+
+  it('surfaces a taken slug with its status', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('That share ID is already taken.', { status: 400 })
+    );
+    const error = await setShare(conn, 'w1', 'abc').catch((e: Error) => e);
+    expect((error as Error).message).toContain('400');
+    expect((error as Error).message).toContain('already taken');
+  });
+
+  it('fails on an answer without a share', async () => {
+    fetchMock.mockResolvedValue(reply({ ...site, shareId: null }));
+    await expect(setShare(conn, 'w1', 'abc')).rejects.toThrow(
+      'without a share'
+    );
+  });
+
+  it('makes 16 alphanumeric characters, differing per call', () => {
+    const slug = newShareSlug();
+    expect(slug).toMatch(/^[A-Za-z0-9]{16}$/);
+    expect(newShareSlug()).not.toBe(slug);
   });
 });

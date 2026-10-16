@@ -25,6 +25,7 @@ export const tenantRowSchema = z.object({
   deployment: z.string().nullable(),
   apiKey: z.string().nullable(),
   statsWebsiteId: z.string().nullable(),
+  statsShareId: z.string().nullable(),
   domains: z.array(
     z.object({
       hostname: z.string(),
@@ -201,14 +202,21 @@ export const statsDomain = (row: TenantRow, cmsFlyApp: string): string => {
   return normalizeDomain(primary?.hostname ?? `${cmsFlyApp}.fly.dev`);
 };
 
+/** The recorded slug when Umami still lists it, otherwise the first listed */
+export const pickShare = (
+  slugs: ReadonlyArray<string>,
+  recorded: string | null
+): string | null =>
+  recorded && slugs.includes(recorded) ? recorded : (slugs[0] ?? null);
+
 export type StatsSkipReason =
   'preview' | 'unconfigured' | 'no-cms' | 'unreachable';
 
 /** What to do about the workspace's Umami website */
 export type StatsPlan =
   | { action: 'skip'; reason: StatsSkipReason }
-  | { action: 'keep'; id: string }
-  | { action: 'adopt'; id: string; domain: string }
+  | { action: 'keep'; id: string; shareId: string | null }
+  | { action: 'adopt'; id: string; domain: string; shareId: string | null }
   | { action: 'create'; name: string; domain: string }
   | { action: 'unknown'; id: string };
 
@@ -225,11 +233,13 @@ export const statsStep = (plan: StatsPlan): string => {
     case 'skip':
       return `Statistics skipped: ${SKIP_TEXT[plan.reason]}`;
     case 'keep':
-      return `Keep statistics website ${plan.id}`;
+      return plan.shareId
+        ? `Keep statistics website ${plan.id} and its share link`
+        : `Keep statistics website ${plan.id}; add a share link`;
     case 'adopt':
-      return `Adopt statistics website ${plan.domain} (${plan.id})`;
+      return `Adopt statistics website ${plan.domain} (${plan.id}) ${plan.shareId ? 'and its' : 'with a'} share link`;
     case 'create':
-      return `Create statistics website ${plan.domain} in Umami`;
+      return `Create statistics website ${plan.domain} in Umami with a share link`;
     case 'unknown':
       return `Statistics website ${plan.id} is unknown to Umami; left as it is`;
   }

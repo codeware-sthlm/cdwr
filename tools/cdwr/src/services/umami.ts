@@ -1,3 +1,5 @@
+import { randomInt } from 'node:crypto';
+
 import { isNotFound } from '@codeware/shared/feature/infisical';
 import { z } from 'zod';
 
@@ -28,6 +30,10 @@ const websiteSchema = z.object({
 const pageSchema = z.object({
   data: z.array(websiteSchema),
   count: z.number()
+});
+
+const sharePageSchema = z.object({
+  data: z.array(z.object({ slug: z.string() }))
 });
 
 const PAGE_SIZE = 100;
@@ -148,4 +154,50 @@ export async function createWebsite(
   });
   if (!response.ok) throw await refused('the website creation', response);
   return toWebsite(websiteSchema.parse(await response.json()));
+}
+
+/** The slugs of a website's public shares, first page only */
+export async function listShares(
+  conn: UmamiConnection,
+  websiteId: string
+): Promise<string[]> {
+  const response = await request(
+    conn,
+    `/websites/${encodeURIComponent(websiteId)}/shares?page=1&pageSize=${PAGE_SIZE}`
+  );
+  if (!response.ok) throw await refused('the share list', response);
+  return sharePageSchema
+    .parse(await response.json())
+    .data.map(({ slug }) => slug);
+}
+
+/** Give a website a public share with this slug; answers the slug Umami kept */
+export async function setShare(
+  conn: UmamiConnection,
+  websiteId: string,
+  slug: string
+): Promise<string> {
+  const response = await request(
+    conn,
+    `/websites/${encodeURIComponent(websiteId)}`,
+    { method: 'POST', body: { shareId: slug } }
+  );
+  if (!response.ok) throw await refused('the share creation', response);
+  const { shareId } = z
+    .object({ shareId: z.string().nullable() })
+    .parse(await response.json());
+  if (!shareId)
+    throw new Error('Umami answered the share creation without a share');
+  return shareId;
+}
+
+const SLUG_ALPHABET =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+/** A random 16-character alphanumeric slug, the shape Umami's own UI makes */
+export function newShareSlug(): string {
+  return Array.from(
+    { length: 16 },
+    () => SLUG_ALPHABET[randomInt(SLUG_ALPHABET.length)]
+  ).join('');
 }
