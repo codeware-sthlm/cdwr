@@ -2,6 +2,7 @@
 
 import {
   type AuthFormStatus,
+  type SignupAvailability,
   type SignupField,
   SignupFormView
 } from '@codeware/app-cms/ui/auth';
@@ -9,19 +10,49 @@ import { useHumanCheck } from '@codeware/shared/ui/cms-renderer';
 import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
 import {
   deploymentNameIssue,
+  tenantSiteUrl,
   toDeploymentName
 } from '@codeware/shared/util/pure';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
-import { type FormEvent, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 
 import type { SignupRefusal } from '../../../utils/signup';
 
 type Props = {
+  /** The host app's name, which tenant sites are named after */
+  hostAppName: string;
   locale: SupportedLocale;
   /** Turnstile's site key; without one no widget is drawn */
   siteKey?: string;
 };
+
+/** Wait for the typing to pause before asking whether the address is free */
+const AVAILABILITY_DELAY_MS = 400;
+
+/** The address the answer was about, with the answer; null when none came */
+type Answer = { deployment: string; available: boolean | null };
+
+/** What the field says about the current address */
+const availabilityOf = (
+  deployment: string,
+  askable: boolean,
+  pending: string | null,
+  answer: Answer | null
+): SignupAvailability | undefined => {
+  if (!askable) return undefined;
+  if (answer?.deployment === deployment) {
+    if (answer.available === null) return undefined;
+    return answer.available ? 'available' : 'taken';
+  }
+  return pending === deployment ? 'checking' : undefined;
+};
+
+const isAnswer = (value: unknown): value is { available: boolean } =>
+  typeof value === 'object' &&
+  value !== null &&
+  'available' in value &&
+  typeof value.available === 'boolean';
 
 type Field = 'password' | 'email' | 'siteName' | 'deployment';
 
@@ -62,7 +93,7 @@ async function readRefusal(response: Response): Promise<SignupRefusal> {
 }
 
 /** The signup form, which turns an invite code into a pending site */
-export function SignupForm({ locale, siteKey }: Props) {
+export function SignupForm({ hostAppName, locale, siteKey }: Props) {
   const { theme } = useTheme();
   const humanCheck = useHumanCheck({
     colorScheme:
@@ -92,6 +123,48 @@ export function SignupForm({ locale, siteKey }: Props) {
       ? null
       : deploymentNameIssue(deployment);
 
+  // A well-formed address is worth a preview and a question to the server
+  const askable = deployment !== '' && issue === null;
+  const siteUrl = askable ? tenantSiteUrl(hostAppName, deployment) : undefined;
+
+  // The address being asked about, and the latest answer; neither says
+  // anything about a value typed since
+  const [pending, setPending] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<Answer | null>(null);
+  const availability = availabilityOf(deployment, askable, pending, answer);
+
+  useEffect(() => {
+    if (!askable) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setPending(deployment);
+      try {
+        const response = await fetch(
+          `/api/signup/available?deployment=${encodeURIComponent(deployment)}`,
+          { signal: controller.signal }
+        );
+        const body: unknown = await response.json();
+        if (controller.signal.aborted) return;
+        // Anything but an answer ends the check; the signup decides in the end
+        setAnswer({
+          deployment,
+          available: response.ok && isAnswer(body) ? body.available : null
+        });
+      } catch {
+        if (!controller.signal.aborted)
+          setAnswer({ deployment, available: null });
+      }
+    }, AVAILABILITY_DELAY_MS);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [deployment, askable]);
+
   const refusedField = refusal ? REFUSAL_FIELD[refusal] : undefined;
   const refusalMessage = refusal ? t(locale, `signup.error.${refusal}`) : null;
   const fieldError = (field: Field) =>
@@ -99,7 +172,12 @@ export function SignupForm({ locale, siteKey }: Props) {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (submitting.current || !humanCheck.solved || issue !== null) {
+    if (
+      submitting.current ||
+      !humanCheck.solved ||
+      issue !== null ||
+      availability === 'taken'
+    ) {
       return;
     }
 
@@ -182,6 +260,14 @@ export function SignupForm({ locale, siteKey }: Props) {
         siteName: t(locale, 'signup.siteName'),
         deployment: t(locale, 'signup.deployment'),
         deploymentHint: t(locale, 'signup.deploymentHint'),
+        sectionInvite: t(locale, 'signup.section.invite'),
+        sectionYou: t(locale, 'signup.section.you'),
+        sectionSite: t(locale, 'signup.section.site'),
+        inviteCodeHelp: t(locale, 'signup.inviteCodeHelp'),
+        addressPreview: t(locale, 'signup.addressPreview'),
+        availabilityChecking: t(locale, 'signup.availability.checking'),
+        availabilityAvailable: t(locale, 'signup.availability.available'),
+        availabilityTaken: t(locale, 'signup.error.deployment-taken'),
         submit: t(locale, 'signup.submit'),
         submitting: t(locale, 'signup.submitting'),
         successTitle: t(locale, 'signup.successTitle'),
@@ -194,17 +280,24 @@ export function SignupForm({ locale, siteKey }: Props) {
         siteName: fieldError('siteName') ?? undefined,
         deployment: deploymentError ?? undefined
       }}
+      siteUrl={siteUrl}
+      availability={availability}
       status={status}
       refusal={refusedField ? null : refusalMessage}
-      canSubmit={humanCheck.solved && issue === null}
+      canSubmit={
+        humanCheck.solved && issue === null && availability !== 'taken'
+      }
       humanCheck={humanCheck.fields}
       footer={
-        <p>
-          {t(locale, 'signup.resend.formPrompt')}{' '}
-          <Link href="/signup/resend">
-            {t(locale, 'signup.resend.formLink')}
-          </Link>
-        </p>
+        <>
+          <p>
+            {t(locale, 'signup.resend.formPrompt')}{' '}
+            <Link href="/signup/resend">
+              {t(locale, 'signup.resend.formLink')}
+            </Link>
+          </p>
+          <Link href="/admin/login">{t(locale, 'signup.backToLogin')}</Link>
+        </>
       }
       sentFooter={
         <>

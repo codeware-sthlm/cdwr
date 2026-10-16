@@ -31,13 +31,13 @@ export default async function AuthLayout({
           <header className="flex justify-end p-6 sm:p-8">
             <ColorSchemeToggle />
           </header>
-          <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center p-6 sm:p-8">
+          <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center p-6 sm:p-8">
             {children}
           </main>
           <footer className="text-muted-foreground p-6 text-center text-sm sm:p-8">
             <a
               className="hover:text-foreground"
-              href="https://github.com/codeware-sthlm/cdwr/tree/main/README.md"
+              href="https://cdwr.io"
               rel="noopener noreferrer"
               target="_blank"
             >

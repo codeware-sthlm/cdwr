@@ -44,6 +44,13 @@ describe('renderSignupNoticeMail', () => {
     expect(mail.html).toContain(command);
   });
 
+  it('lists the site address when the platform app is known', () => {
+    const withApp = renderSignupNoticeMail({ ...base, appName: 'cdwr-cms' });
+
+    expect(withApp.text).toContain('https://cdwr-cms-cdwr-cms-titan.fly.dev');
+    expect(renderSignupNoticeMail(base).text).not.toContain('fly.dev');
+  });
+
   it('provisions in preview outside production', () => {
     const mail = renderSignupNoticeMail({ ...base, environment: 'preview' });
 

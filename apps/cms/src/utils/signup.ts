@@ -1,7 +1,12 @@
 import { InviteCodeRefused } from '@codeware/app-cms/data-access';
+import { FLY_CONFIG_APP_NAMES } from '../provisioning/tenant-apps';
 import type { HumanCheckFields } from '@codeware/shared/util/human-check';
 import { deploymentNameIssue } from '@codeware/shared/util/pure';
-import { ValidationError } from 'payload';
+import {
+  type BasePayload,
+  type PayloadRequest,
+  ValidationError
+} from 'payload';
 
 /** Signups per address and window, far below the forms' shared limit */
 export const SIGNUP_RATE_LIMIT = 5;
@@ -52,6 +57,44 @@ export class DeploymentTaken extends Error {
     super('The site address is taken');
     this.name = 'DeploymentTaken';
   }
+}
+
+/** The host app's name, which tenant apps and their addresses are named after */
+export const hostAppName = (): string =>
+  process.env['FLY_APP_NAME'] ?? FLY_CONFIG_APP_NAMES.cms;
+
+/** Whether self-serve signup is switched on in the platform settings */
+export async function isSignupOpen(payload: BasePayload): Promise<boolean> {
+  const { docs } = await payload.find({
+    collection: 'platform-settings',
+    depth: 0,
+    limit: 1,
+    overrideAccess: true
+  });
+  return docs[0]?.signupOpen === true;
+}
+
+/**
+ * Whether a workspace already answers to this site address, by its
+ * deployment or its slug. Pass `req` to read inside a transaction.
+ */
+export async function isDeploymentTaken(
+  payload: BasePayload,
+  deployment: string,
+  req?: Partial<PayloadRequest>
+): Promise<boolean> {
+  const { totalDocs } = await payload.count({
+    collection: 'tenants',
+    where: {
+      or: [
+        { deployment: { equals: deployment } },
+        { slug: { equals: deployment } }
+      ]
+    },
+    overrideAccess: true,
+    ...(req ? { req } : {})
+  });
+  return totalDocs > 0;
 }
 
 const text = (value: unknown, max = MAX_TEXT): string | null => {
