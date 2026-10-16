@@ -20,18 +20,21 @@ import {
   latestRunLog,
   launchPath,
   lockState,
+  memoryDir,
   nodeMajor,
   parseAttended,
   parseCheck,
   parseLaunchctlPrint,
   parseNotifyLevel,
   parseQueueView,
+  parseSuggest,
   parseWatchState,
   plistPath,
   queuePaths,
   renderPlist,
   serviceTarget,
   spendForDay,
+  suggestSettings,
   tailLines
 } from './agent.logic';
 
@@ -179,7 +182,9 @@ describe('renderPlist', () => {
     script: '/h/.cdwr/agent-queue/run.sh',
     home: '/h/.cdwr/agent-queue',
     repo: '/w/codeware-agent',
-    path: '/opt/homebrew/bin:/usr/bin'
+    path: '/opt/homebrew/bin:/usr/bin',
+    memoryDir: '/h/.claude/projects/-w-dev/memory',
+    suggest: { budgetUsd: 5, hour: 6, days: 1 }
   };
 
   it('describes the job', () => {
@@ -192,6 +197,18 @@ describe('renderPlist', () => {
     expect(plist).toContain('<key>AbandonProcessGroup</key>\n  <true/>');
     expect(plist).toContain(
       '<key>AGENT_QUEUE_IMPLEMENT_CAP_USD</key>\n    <string>40</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_SUGGEST_BUDGET_USD</key>\n    <string>5</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_SUGGEST_HOUR</key>\n    <string>6</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_SUGGEST_DAYS</key>\n    <string>1</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_MEMORY_DIR</key>\n    <string>/h/.claude/projects/-w-dev/memory</string>'
     );
     expect(plist).toContain('<key>RunAtLoad</key>\n  <false/>');
     expect(plist).toContain(
@@ -219,7 +236,9 @@ describe('renderPlist', () => {
       script: '/a&b/run.sh',
       home: '/<h>',
       repo: '/"r"',
-      path: "/it's"
+      path: "/it's",
+      memoryDir: '/m',
+      suggest: { budgetUsd: 5, hour: 6, days: 1 }
     });
     expect(plist).toContain('/a&amp;b/run.sh');
     expect(plist).toContain('/&lt;h&gt;');
@@ -454,6 +473,64 @@ describe('parseAttended', () => {
     expect(result.kind).toBe(kind);
     expect(result.ticket).toBe(ticket);
     expect(result.text).toBe(line.trim());
+  });
+});
+
+describe('parseSuggest', () => {
+  it.each([
+    ['due (focus dx)', 'due', 'dx', undefined],
+    ['due (focus maintenance)', 'due', 'maintenance', undefined],
+    ['done today', 'done', undefined, undefined],
+    ['not before 06:00', 'early', undefined, undefined],
+    ['skipped, COD-580 is open', 'skipped', undefined, 'COD-580'],
+    ['off', 'off', undefined, undefined],
+    ['garbage', 'unknown', undefined, undefined],
+    ['', 'unknown', undefined, undefined]
+  ])('%j -> %s', (line, kind, focus, ticket) => {
+    const result = parseSuggest(line);
+    expect(result.kind).toBe(kind);
+    expect(result.focus).toBe(focus);
+    expect(result.ticket).toBe(ticket);
+    expect(result.text).toBe(line.trim());
+  });
+});
+
+describe('suggestSettings', () => {
+  it('defaults without the environment', () => {
+    expect(suggestSettings({})).toEqual({ budgetUsd: 5, hour: 6, days: 1 });
+  });
+
+  it('takes the environment, 0 days switching it off', () => {
+    expect(
+      suggestSettings({
+        AGENT_QUEUE_SUGGEST_BUDGET_USD: '3',
+        AGENT_QUEUE_SUGGEST_HOUR: '7',
+        AGENT_QUEUE_SUGGEST_DAYS: '0'
+      })
+    ).toEqual({ budgetUsd: 3, hour: 7, days: 0 });
+  });
+
+  it('names the variable that is not a non-negative integer', () => {
+    expect(() =>
+      suggestSettings({ AGENT_QUEUE_SUGGEST_DAYS: 'weekly' })
+    ).toThrow('AGENT_QUEUE_SUGGEST_DAYS');
+    expect(() => suggestSettings({ AGENT_QUEUE_SUGGEST_HOUR: '-1' })).toThrow(
+      'AGENT_QUEUE_SUGGEST_HOUR'
+    );
+  });
+});
+
+describe('memoryDir', () => {
+  it('names the project directory after the repo path', () => {
+    expect(memoryDir('/Users/h', '/Users/h/Work/gh-repos/codeware-dev')).toBe(
+      '/Users/h/.claude/projects/-Users-h-Work-gh-repos-codeware-dev/memory'
+    );
+  });
+
+  it('replaces every character that is not a letter or digit', () => {
+    expect(memoryDir('/Users/h', '/Users/h/Work/my.repo_x')).toBe(
+      '/Users/h/.claude/projects/-Users-h-Work-my-repo-x/memory'
+    );
   });
 });
 
@@ -709,7 +786,9 @@ describe('implement spend', () => {
       script: '/h/run.sh',
       home: '/h',
       repo: '/r',
-      path: '/a&b/bin:/usr/bin'
+      path: '/a&b/bin:/usr/bin',
+      memoryDir: '/m',
+      suggest: { budgetUsd: 5, hour: 6, days: 1 }
     });
     expect(plistPath(plist)).toBe('/a&b/bin:/usr/bin');
   });

@@ -71,14 +71,20 @@ export async function keyPresent(): Promise<boolean> {
 
 /**
  * What the installed script would do now: its decision (the last line) and the
- * `attended:` verdict and `queue-view:` lines when it printed them. Undefined when it is not installed
+ * `attended:` verdict, `queue-view:` and `suggest:` lines when it printed them. Undefined when it is not installed
  */
 export async function checkRun(
   queue: QueuePaths,
   repo: string,
   env: NodeJS.ProcessEnv
 ): Promise<
-  { decision: string; attended?: string; queueView?: string } | undefined
+  | {
+      decision: string;
+      attended?: string;
+      queueView?: string;
+      suggest?: string;
+    }
+  | undefined
 > {
   if (!existsSync(queue.script)) return undefined;
   const { stdout } = await run('/bin/zsh', [queue.script, '--check'], {
@@ -87,16 +93,20 @@ export async function checkRun(
       AGENT_QUEUE_HOME: queue.home,
       AGENT_QUEUE_REPO: repo
     },
-    // Two Linear reads of up to 20 s each (attended, then the plan query)
-    timeout: 60_000
+    // Three Linear reads of up to 20 s each (attended, the plan query, the suggest gate)
+    timeout: 90_000
   });
   const lines = stdout.trim().split('\n');
   const attended = lines.filter((line) => line.startsWith('attended: ')).at(-1);
   const queueView = lines
     .filter((line) => line.startsWith('queue-view: '))
     .at(-1);
+  const suggest = lines.filter((line) => line.startsWith('suggest: ')).at(-1);
   return {
     decision: lines.at(-1) ?? '',
+    ...(suggest === undefined
+      ? {}
+      : { suggest: suggest.slice('suggest: '.length) }),
     ...(attended === undefined
       ? {}
       : { attended: attended.slice('attended: '.length) }),

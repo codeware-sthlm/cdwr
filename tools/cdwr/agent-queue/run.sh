@@ -18,10 +18,20 @@ HOME_DIR="${AGENT_QUEUE_HOME:?set by cdwr agent install}"
 REPO="${AGENT_QUEUE_REPO:?set by cdwr agent install}"
 # API-equivalent cost cap per run; on Max it guards the usage allowance, nothing is billed.
 BUDGET_USD="${AGENT_QUEUE_BUDGET_USD:-5}"
+# Budget for the daily suggest session, same reading as above.
+SUGGEST_BUDGET_USD="${AGENT_QUEUE_SUGGEST_BUDGET_USD:-5}"
+# Local hour after which the suggest session may run.
+SUGGEST_HOUR="${AGENT_QUEUE_SUGGEST_HOUR:-6}"
+# Days between suggest sessions; 0 switches the feature off.
+SUGGEST_DAYS="${AGENT_QUEUE_SUGGEST_DAYS:-1}"
+# The dev checkout's Claude memory directory; empty means no memory file is writable.
+MEMORY_DIR="${AGENT_QUEUE_MEMORY_DIR:-}"
 OTHER_REPOS='["nx-plugins","enjinex"]'
 LOGS="$HOME_DIR/logs"
 mkdir -p "$LOGS"
 
+# The Suggested line of the runs document: today's date and what happened
+suggested_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/suggested-line"; }
 note() { print -r -- "$(date '+%F %T') $*" >> "$LOGS/scheduler.log"; }
 say() { note "$*"; $check && print -r -- "$*"; return 0; }
 # Always action-level: a run that planned something or went wrong needs Håkan. No webhook, no-op.
@@ -113,24 +123,28 @@ publish_runs() {
   setopt local_options no_err_exit
   local stamp="$HOME_DIR/runs-published-at" seen="$HOME_DIR/attended-published" last=0 content
   local seen_view="$HOME_DIR/queue-view-published" view_key=""
+  local seen_sug="$HOME_DIR/suggested-published" sug_line
+  sug_line="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
   # The view without its timestamp and heartbeat, so an unchanged queue is no change
   [[ -n "$queue_view" ]] &&
     view_key="$(jq -c '{limit, next, held, parked, table, session: (.session | if . == null then null else {state, ticket} end)}' <<<"$queue_view" 2>/dev/null)"
-  # A changed Attended line or queue view publishes at once, so it is never more than one run old
+  # A changed Attended or Suggested line or queue view publishes at once, so it is never more than one run old
   # (empty means no verdict this run, which is no change)
   if (( $(rows) <= rows_at_start )) &&
      [[ -z "$attended_line" || "$attended_line" == "$(cat "$seen" 2>/dev/null)" ]] &&
+     [[ "$sug_line" == "$(cat "$seen_sug" 2>/dev/null)" ]] &&
      [[ -z "$view_key" || "$view_key" == "$(cat "$seen_view" 2>/dev/null)" ]]; then
     last="$(cat "$stamp" 2>/dev/null)"
     [[ "$last" == <-> ]] || last=0
     (( $(date +%s) - last > 3600 )) || return 0
   fi
   [[ -f "$RUNS" ]] && tail -n 20 "$RUNS" > "$RUNS.tmp" && mv "$RUNS.tmp" "$RUNS"
-  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" --arg attended "${attended_line:-$(cat "$seen" 2>/dev/null)}" \
+  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" --arg attended "${attended_line:-$(cat "$seen" 2>/dev/null)}" --arg suggested "$sug_line" \
     --arg view "$(jq . <<<"${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}" 2>/dev/null)" '
     def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
     "Last run: \($last)\n\n"
     + (if $attended == "" then "" else "Attended: \($attended)\n\n" end)
+    + (if $suggested == "" then "" else "Suggested: \($suggested)\n\n" end)
     + (if $view == "" then "" else "```json queue-view\n\($view)\n```\n\n" end)
     + "\($job)\n\nWritten by the agent queue scheduler after every run. Idle runs update the lines above at most once an hour.\n\n"
     + "| When | Outcome | Ticket | Detail |\n| -- | -- | -- | -- |\n"
@@ -141,6 +155,7 @@ publish_runs() {
   # publish_doc tells success only by moving the stamp; a failed publish stays unseen
   [[ "$(cat "$stamp" 2>/dev/null)" != "$before" ]] || return 0
   [[ -n "$attended_line" ]] && print -r -- "$attended_line" > "$seen"
+  print -r -- "$sug_line" > "$seen_sug"
   if [[ -n "$view_key" ]]; then
     print -r -- "$view_key" > "$seen_view"
     print -r -- "$queue_view" > "$HOME_DIR/queue-view.json"
@@ -524,8 +539,143 @@ ready="$(jq -r --argjson other "$OTHER_REPOS" '
   | select([.inverseRelations.nodes[] | select(.type == "blocks" and (.issue.state.type | IN("completed","canceled") | not))] | length == 0)
   | .identifier' <<<"$resp")"
 
-if [[ -z "$ready" ]]; then $check && echo "idle: nothing to plan"; exit 0; fi
-if $check; then echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')"; exit 0; fi
+# The daily suggestion: team COD tickets labelled agent-idea still open, minus those the queue
+# has already taken up (any Agent-group label); one left means no new suggestion.
+read -r -d '' IDEAS <<'GQL' || true
+query {
+  issues(first: 50, filter: {
+    team: { key: { eq: "COD" } }
+    state: { type: { nin: ["completed", "canceled"] } }
+    labels: { some: { name: { eq: "agent-idea" } } }
+  }) {
+    nodes { identifier labels { nodes { name } } }
+  }
+}
+GQL
+
+# suggest_gate: prints due (focus <dx|maintenance|looks>), done today, not before HH:00,
+# skipped, COD-n is open, unavailable (Linear did not answer, so nothing runs), or off.
+suggest_gate() {
+  setopt local_options no_err_exit
+  local stamp="$HOME_DIR/suggest-ran-on" ran age open hour ideas
+  local -a focuses=(dx maintenance looks)
+  if [[ "$SUGGEST_DAYS" != <-> || "$SUGGEST_DAYS" == 0 ]]; then print off; return 0; fi
+  ran="$(cat "$stamp" 2>/dev/null)"
+  if [[ "$ran" == <->-<->-<-> ]]; then
+    age=$(( ( $(date +%s) - $(date -j -f %F "$ran" +%s 2>/dev/null || echo 0) ) / 86400 ))
+    if (( age < SUGGEST_DAYS )); then print "done today"; return 0; fi
+  fi
+  hour=$(( 10#$(date +%H) ))
+  if (( hour < SUGGEST_HOUR )); then printf 'not before %02d:00\n' "$SUGGEST_HOUR"; return 0; fi
+  ideas="$(linear "$IDEAS" 2>/dev/null)" && jq -e '.data.issues.nodes' >/dev/null 2>&1 <<<"$ideas" ||
+    { print "unavailable, Linear did not answer"; return 0; }
+  open="$(jq -r '
+    [.data.issues.nodes[]
+     | select([.labels.nodes[].name | IN("agent:ready","agent:working","agent:needs-input","agent:review")] | any | not)
+     | .identifier] | first // empty' <<<"$ideas" 2>/dev/null)"
+  if [[ -n "$open" ]]; then print "skipped, $open is open"; return 0; fi
+  print "due (focus ${focuses[$(( 10#$(date +%j) % 3 + 1 ))]})"
+}
+
+# The result handling both claude runs share: appends the readable result to the log, sets
+# `spent`, and on a nonzero exit notes, notifies and records a cap or a failure, setting `outcome`.
+#   run_outcome <a planning run|a suggest run> <log prefix> <budget> <log> <result> <rc>
+run_outcome() {
+  local label="$1" tag="$2" budget="$3" log="$4" result="$5" rc="$6" cost
+  outcome=ok
+  jq -r '.result // empty, (.errors // [])[]' "$result" >> "$log" 2>/dev/null || cat "$result" >> "$log"
+  cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
+  spent=""; [[ "$cost" == <->(|.<->) ]] && spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result") turns"
+  (( rc != 0 )) || return 0
+  if [[ "$(jq -r '.subtype // empty' "$result" 2>/dev/null)" == error_max_budget_usd ]]; then
+    outcome=cap
+    note "cap: ${tag:+$tag }stopped at the \$$budget budget (see $log)"
+    notify "Agent queue: $label hit the \$$budget cap and stopped. Log: $log"
+    record cap "" "${tag:+$tag: }stopped at the \$$budget budget, log $log"
+  else
+    outcome=failed
+    note "fail: ${tag:+$tag }claude exited $rc (see $log)"
+    notify "Agent queue: $label failed (exit $rc). Log: $log"
+    record failed "" "${tag:+$tag: }claude exited $rc, log $log$spent"
+  fi
+}
+
+# The once-a-day suggest session: read-only like the planning run, plus a taste file in memory.
+# It ends with `SUGGESTED COD-n <title>` or `nothing today`.
+suggest_run() {
+  local focus="$1" log result rc=0 spent="" outcome verdict id title line
+  local L=mcp__claude_ai_Linear S=mcp__claude_ai_Sentry
+  cd "$REPO"
+  git switch -q --detach origin/main 2>/dev/null ||
+    { note "warn: worktree not clean, suggesting against its current state"; record warn "" "worktree not clean"; }
+  log="$LOGS/$(date +%F_%H%M)-suggest.log"
+  result="${log%.log}.json"
+  note "suggest: focus $focus → $log"
+  # Stamped as soon as it starts, so a crash can't run it twice in a day
+  date +%F > "$HOME_DIR/suggest-ran-on"
+
+  # Tool search would defer the Linear tools behind ToolSearch, which --tools leaves out.
+  # The memory rules start with `//`: one leading slash is project-relative, two anchor at the root.
+  ENABLE_TOOL_SEARCH=false claude -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none}" \
+    --model opus \
+    --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
+    --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
+    --tools "Read,Grep,Glob,Skill,Bash,Write,Edit" \
+    --permission-mode dontAsk --permission-prompts none \
+    --max-budget-usd "$SUGGEST_BUDGET_USD" --output-format json \
+    --allowedTools Skill Read Grep Glob \
+      "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels "$L"__list_documents "$L"__get_document "$L"__save_issue \
+      "$S"__find_organizations "$S"__find_projects "$S"__search_issues "$S"__get_sentry_resource \
+      "Bash(git log*)" "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(tools/cdwr/agent-queue/gh-review.sh threads *)" "Bash(node tools/cdwr/bin/cdwr.mjs agent usage*)" \
+      ${MEMORY_DIR:+"Write(/$MEMORY_DIR/feedback_suggestion_taste.md)" "Edit(/$MEMORY_DIR/feedback_suggestion_taste.md)"} \
+    > "$result" 2> "$log" || rc=$?
+
+  run_outcome "a suggest run" suggest "$SUGGEST_BUDGET_USD" "$log" "$result" "$rc"
+  case "$outcome" in
+    cap) suggested_line "stopped at the budget"; return 0 ;;
+    failed) suggested_line "failed"; return 0 ;;
+  esac
+
+  # The last line that is a verdict, so a code fence or blank lines around it do not matter
+  line="$(jq -r '.result // empty' "$result" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
+    grep -E '^(SUGGESTED .+|nothing today)$' | tail -n 1 || true)"
+  if [[ "$line" == "SUGGESTED "* ]]; then
+    verdict="${line#SUGGESTED }"
+    id="${verdict%% *}"; title="${verdict#* }"
+    [[ "$title" == "$verdict" ]] && title=""
+    note "suggested: $id $title"
+    record suggested "$id" "$title$spent"
+    notice action "Agent idea: $id $title. Accept with agent:ready, or cancel with one word."
+    suggested_line "$id $title"
+  elif [[ "$line" == "nothing today" ]]; then
+    note "suggest: nothing today"
+    record nothing "" "suggest: nothing today$spent"
+    suggested_line "nothing today"
+  else
+    note "warn: suggest: no verdict (see $log)"
+    record warn "" "suggest: no verdict, see $log"
+    suggested_line "no verdict"
+  fi
+}
+
+if [[ -z "$ready" ]]; then
+  gate="$(suggest_gate)"
+  # The decision stays the last line: status reads it from there
+  if $check; then print -r -- "suggest: $gate"; echo "idle: nothing to plan"; exit 0; fi
+  case "$gate" in
+    due*) suggest_run "${${gate#*focus }%)}" ;;
+    skipped*)
+      date +%F > "$HOME_DIR/suggest-ran-on"
+      record skip "" "suggest: ${${gate#skipped, }%% *} still open"
+      suggested_line "${gate#skipped, }" ;;
+    unavailable*) note "suggest: $gate" ;;
+  esac
+  exit 0
+fi
+if $check; then
+  print -r -- "suggest: $(suggest_gate)"
+  echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')"; exit 0
+fi
 
 cd "$REPO"
 git switch -q --detach origin/main 2>/dev/null ||
@@ -553,22 +703,8 @@ ENABLE_TOOL_SEARCH=false claude -p "/work-queue unattended once plan-only" \
     "$L"__save_issue "$L"__save_comment \
   > "$result" 2> "$log" || rc=$?
 
-# The JSON carries the run's own cost; the log keeps the readable result.
-jq -r '.result // empty, (.errors // [])[]' "$result" >> "$log" 2>/dev/null || cat "$result" >> "$log"
-cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
-spent=""; [[ "$cost" == <->(|.<->) ]] && spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result") turns"
-
-if (( rc != 0 )); then
-  if [[ "$(jq -r '.subtype // empty' "$result" 2>/dev/null)" == error_max_budget_usd ]]; then
-    note "cap: stopped at the \$$BUDGET_USD budget (see $log)"
-    notify "Agent queue: a planning run hit the \$$BUDGET_USD cap and stopped. Log: $log"
-    record cap "" "stopped at the \$$BUDGET_USD budget, log $log"
-  else
-    note "fail: claude exited $rc (see $log)"
-    notify "Agent queue: a planning run failed (exit $rc). Log: $log"
-    record failed "" "claude exited $rc, log $log$spent"
-  fi
-fi
+spent="" outcome=""
+run_outcome "a planning run" "" "$BUDGET_USD" "$log" "$result" "$rc"
 
 # A ticket offered as agent:ready that now waits on needs-input was planned by this run.
 read -r -d '' PLANNED <<'GQL' || true

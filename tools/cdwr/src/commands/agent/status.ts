@@ -33,6 +33,7 @@ import {
   parseCheck,
   parseNotifyLevel,
   parseQueueView,
+  parseSuggest,
   parseWatchState
 } from './agent.logic';
 
@@ -90,6 +91,10 @@ export default defineCommand({
             checked?.attended === undefined
               ? null
               : parseAttended(checked.attended),
+          suggest:
+            checked?.suggest === undefined
+              ? null
+              : parseSuggest(checked.suggest),
           queueView:
             checked?.queueView === undefined
               ? null
@@ -206,6 +211,16 @@ export default defineCommand({
             report.next.text
           )
         : row('warn', 'next run', 'unknown; script not installed'),
+      report.suggest
+        ? row(
+            report.suggest.kind === 'skipped' ||
+              report.suggest.kind === 'unknown'
+              ? 'warn'
+              : true,
+            'suggest',
+            report.suggest.text
+          )
+        : row('warn', 'suggest', 'unknown; no verdict from the script'),
       report.attended
         ? row(
             report.attended.kind === 'run' || report.attended.kind === 'unknown'
