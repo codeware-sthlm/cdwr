@@ -31,6 +31,15 @@ const platformSettings: CollectionConfig<'platform-settings'> = {
   slug: 'platform-settings',
   admin: {
     group: adminGroups.settings,
+    components: {
+      views: {
+        // One row, so the list only ever delays the edit view
+        list: {
+          Component:
+            '@codeware/apps/cms/components/admin/single-doc/SingleDocListView'
+        }
+      }
+    },
     description: {
       en: "Non-secret configuration the platform needs once its database is reachable — such as the host application's own custom domain.",
       sv: 'Icke-hemlig konfiguration som plattformen behöver när dess databas är nåbar — till exempel värdapplikationens egen anpassade domän.'

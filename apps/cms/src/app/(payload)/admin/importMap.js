@@ -36,6 +36,7 @@ import { MetaDescriptionComponent as MetaDescriptionComponent_a8a977ebc872c5d5ea
 import { PreviewComponent as PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client';
 import { default as default_ae19db27eee762af26f037dd7af0b736 } from '@codeware/app-cms/ui/fields/icon-picker/IconPickerField.client';
 import { default as default_3ecb273768f8dd5ef812cc5c5d6c2630 } from '@codeware/apps/cms/components/admin/domains/PlatformDomainsField';
+import { default as default_6ce36d4866397d4b300a1e5f5ce3ac7d } from '@codeware/apps/cms/components/admin/single-doc/SingleDocListView';
 import { LinkFeatureClient as LinkFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client';
 import { BlocksFeatureClient as BlocksFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client';
 import { default as default_8586e6ac5ddd6a3f87ffe1dd472673f5 } from '@codeware/app-cms/ui/fields/color-picker/ColorPickerField.client';
@@ -79,8 +80,8 @@ import { TenantSelector as TenantSelector_d6d5f193a167989e2ee7d14202901e62 } fro
 import { default as default_67bc1060da1a6ada71dd6ec10de05eed } from '@codeware/apps/cms/components/admin/palette/PaletteProvider.client';
 import { TenantSelectionProvider as TenantSelectionProvider_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
 import { default as default_7247ef290ed686d082a30d42a7adeb5b } from '@codeware/apps/cms/components/admin/dashboard/AdminDashboardView';
-import { default as default_0d7861e9c3757373aa6785fbf7fb933a } from '@codeware/apps/cms/components/admin/theme-library/ThemeLibraryView';
 import { default as default_1671ddc7d5e82791d22ef69829daca47 } from '@codeware/apps/cms/components/admin/first-site/FirstSiteView';
+import { default as default_0d7861e9c3757373aa6785fbf7fb933a } from '@codeware/apps/cms/components/admin/theme-library/ThemeLibraryView';
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc';
 import { S3ClientUploadHandler as S3ClientUploadHandler_f97aa6c64367fa259c5bc0567239ef24 } from '@payloadcms/storage-s3/client';
 
@@ -162,6 +163,8 @@ export const importMap = {
     default_ae19db27eee762af26f037dd7af0b736,
   '@codeware/apps/cms/components/admin/domains/PlatformDomainsField#default':
     default_3ecb273768f8dd5ef812cc5c5d6c2630,
+  '@codeware/apps/cms/components/admin/single-doc/SingleDocListView#default':
+    default_6ce36d4866397d4b300a1e5f5ce3ac7d,
   '@payloadcms/richtext-lexical/client#LinkFeatureClient':
     LinkFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
   '@payloadcms/richtext-lexical/client#BlocksFeatureClient':
@@ -248,10 +251,10 @@ export const importMap = {
     TenantSelectionProvider_d6d5f193a167989e2ee7d14202901e62,
   '@codeware/apps/cms/components/admin/dashboard/AdminDashboardView#default':
     default_7247ef290ed686d082a30d42a7adeb5b,
-  '@codeware/apps/cms/components/admin/theme-library/ThemeLibraryView#default':
-    default_0d7861e9c3757373aa6785fbf7fb933a,
   '@codeware/apps/cms/components/admin/first-site/FirstSiteView#default':
     default_1671ddc7d5e82791d22ef69829daca47,
+  '@codeware/apps/cms/components/admin/theme-library/ThemeLibraryView#default':
+    default_0d7861e9c3757373aa6785fbf7fb933a,
   '@payloadcms/next/rsc#CollectionCards':
     CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1,
   '@payloadcms/storage-s3/client#S3ClientUploadHandler':

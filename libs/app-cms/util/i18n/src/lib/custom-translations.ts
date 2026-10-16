@@ -18,6 +18,7 @@ const customTranslationsSchema = z.object({
   }),
   collection: z.object({
     cardWithSuffix: z.string(),
+    singleDocMissing: z.string(),
     socialMediaWithSuffix: z.string()
   }),
   customComponents: z.object({
@@ -454,6 +455,8 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
     },
     collection: {
       cardWithSuffix: 'Card {{suffix}}',
+      singleDocMissing:
+        'This collection holds a single document, and it has not been created yet.',
       socialMediaWithSuffix: 'Social Media {{suffix}}'
     },
     customComponents: {
@@ -960,6 +963,8 @@ Supported locales: {{locales}}`,
     },
     collection: {
       cardWithSuffix: 'Kort {{suffix}}',
+      singleDocMissing:
+        'Den här samlingen har ett enda dokument, och det har inte skapats än.',
       socialMediaWithSuffix: 'Sociala Medier {{suffix}}'
     },
     customComponents: {
