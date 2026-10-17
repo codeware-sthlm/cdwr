@@ -10,6 +10,8 @@ export type SparklineProps = {
   values: readonly number[];
   /** Read by assistive tech in place of the drawing */
   label: string;
+  /** Tint the area under the line, faintly */
+  area?: boolean;
   className?: string;
 };
 
@@ -18,7 +20,8 @@ export type SparklineProps = {
  *
  * Stretches to whatever box it is given; the stroke keeps its width.
  */
-export function Sparkline({ values, label, className }: SparklineProps) {
+export function Sparkline({ values, label, area, className }: SparklineProps) {
+  const points = sparklinePoints(values);
   return (
     <svg
       role="img"
@@ -27,8 +30,15 @@ export function Sparkline({ values, label, className }: SparklineProps) {
       preserveAspectRatio="none"
       className={cn('h-12 w-full overflow-visible', className)}
     >
+      {area && points && (
+        <polygon
+          points={`0,${SPARKLINE_HEIGHT} ${points} ${SPARKLINE_WIDTH},${SPARKLINE_HEIGHT}`}
+          fill="currentColor"
+          className="opacity-10"
+        />
+      )}
       <polyline
-        points={sparklinePoints(values)}
+        points={points}
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
