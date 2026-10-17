@@ -102,26 +102,26 @@ export const guardDomainConflicts: CollectionBeforeChangeHook<
   // typed `docs` array when `TSlug` is a single literal, not a union - looping
   // over the union falls back to an index-signature type that hides real
   // shape mismatches instead of catching them.
-  const [{ docs: tenantDocs }, { docs: platformDocs }] = await Promise.all([
-    req.payload.find({
-      collection: 'tenants',
-      where,
-      depth: 0,
-      limit: 100,
-      pagination: false,
-      overrideAccess: true,
-      req
-    }),
-    req.payload.find({
-      collection: 'platform-settings',
-      where,
-      depth: 0,
-      limit: 100,
-      pagination: false,
-      overrideAccess: true,
-      req
-    })
-  ]);
+  // One after the other: with `req` both share the transaction's single pg
+  // client, and parallel queries on it are deprecated (removed in pg 9)
+  const { docs: tenantDocs } = await req.payload.find({
+    collection: 'tenants',
+    where,
+    depth: 0,
+    limit: 100,
+    pagination: false,
+    overrideAccess: true,
+    req
+  });
+  const { docs: platformDocs } = await req.payload.find({
+    collection: 'platform-settings',
+    where,
+    depth: 0,
+    limit: 100,
+    pagination: false,
+    overrideAccess: true,
+    req
+  });
 
   /**
    * `Tenant` and `PlatformSetting` are each structurally compatible with
