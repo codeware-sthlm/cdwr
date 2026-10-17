@@ -4,11 +4,14 @@ import { isNotFound } from '@codeware/shared/feature/infisical';
 import { z } from 'zod';
 
 import { type Environment, readSecrets } from './infisical';
+import { sleep } from './shell';
 
 /** Where to reach Umami and the key to do it with */
 export interface UmamiConnection {
   url: string;
   apiKey: string;
+  /** Called when Umami looks asleep, before a read is retried */
+  onWaking?: () => void;
 }
 
 export type UmamiProvisioning =
@@ -39,6 +42,8 @@ const sharePageSchema = z.object({
 
 const PAGE_SIZE = 100;
 const TIMEOUT_MS = 15_000;
+const WAKE_TIMEOUT_MS = 60_000;
+const WAKE_PAUSE_MS = 2_000;
 
 /** Secrets at a path, or none when the folder is not there */
 async function readOptional(
@@ -79,21 +84,48 @@ export async function readUmamiProvisioning(
 const endpoint = ({ url }: UmamiConnection, path: string) =>
   `${url.replace(/\/+$/, '')}/api${path}`;
 
+/** A suspended Umami times out, or the connection drops while it resumes */
+const looksAsleep = (error: unknown): boolean =>
+  error instanceof Error &&
+  (error.name === 'TimeoutError' || error instanceof TypeError);
+
+/** What Fly's proxy answers while the machine is not reachable */
+const WAKING_STATUSES: ReadonlyArray<number> = [502, 503, 504];
+
 async function request(
   conn: UmamiConnection,
   path: string,
   init: { method?: string; body?: unknown } = {}
 ): Promise<Response> {
-  return fetch(endpoint(conn, path), {
-    method: init.method ?? 'GET',
-    headers: {
-      Authorization: `Bearer ${conn.apiKey}`,
-      Accept: 'application/json',
-      ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' })
-    },
-    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-    signal: AbortSignal.timeout(TIMEOUT_MS)
-  });
+  const send = (timeoutMs: number) =>
+    fetch(endpoint(conn, path), {
+      method: init.method ?? 'GET',
+      headers: {
+        Authorization: `Bearer ${conn.apiKey}`,
+        Accept: 'application/json',
+        ...(init.body === undefined
+          ? {}
+          : { 'Content-Type': 'application/json' })
+      },
+      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+
+  // Only a read is retried: a write that timed out may well have landed
+  const retryable = (init.method ?? 'GET') === 'GET';
+  try {
+    const response = await send(TIMEOUT_MS);
+    if (!retryable || !WAKING_STATUSES.includes(response.status))
+      return response;
+    // The gateway's body is of no use; free the socket before waiting
+    await response.body?.cancel();
+  } catch (error) {
+    if (!retryable || !looksAsleep(error)) throw error;
+  }
+
+  conn.onWaking?.();
+  await sleep(WAKE_PAUSE_MS);
+  return send(WAKE_TIMEOUT_MS);
 }
 
 /** The error for a refused request; carries the status, never the key */

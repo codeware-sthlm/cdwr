@@ -187,7 +187,8 @@ async function planStats(
   environment: Environment,
   apps: ReadonlyArray<AppKind>,
   tenant: TenantRow,
-  cmsFlyApp: string
+  cmsFlyApp: string,
+  onWaking: () => void
 ): Promise<{
   plan: StatsPlan;
   connection?: StatsConnection;
@@ -202,7 +203,7 @@ async function planStats(
     const provisioning = await readUmamiProvisioning(environment);
     if (provisioning.status === 'unconfigured')
       return { plan: { action: 'skip', reason: 'unconfigured' } };
-    const connection = provisioning;
+    const connection = { ...provisioning, onWaking };
 
     if (tenant.statsWebsiteId) {
       const known = await getWebsite(connection, tenant.statsWebsiteId);
@@ -601,6 +602,8 @@ export default defineCommand({
       .map(({ app }) => app);
 
     const pullRequest = previewApp ? pullRequestOf(previewApp) : undefined;
+    // Set while the lookup waits for a suspended Umami; the task line says so
+    let woke = false;
     const {
       plan: stats,
       connection: statsConnection,
@@ -612,9 +615,13 @@ export default defineCommand({
           environment,
           apps,
           tenant,
-          flyAppName(ctx.root, 'cms', deployment, pullRequest)
+          flyAppName(ctx.root, 'cms', deployment, pullRequest),
+          () => {
+            woke = true;
+          }
         ),
-      ({ plan }) => statsStep(plan)
+      ({ plan }) =>
+        woke ? `${statsStep(plan)} (after waking Umami)` : statsStep(plan)
     );
     const pendingCms = tenant.status === 'pending' && apps.includes('cms');
     const paused = cmsPaused(flags);

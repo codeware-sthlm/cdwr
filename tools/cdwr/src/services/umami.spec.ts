@@ -10,6 +10,8 @@ import {
   setShare
 } from './umami';
 
+vi.mock('./shell', () => ({ sleep: () => Promise.resolve() }));
+
 const state = vi.hoisted(() => ({
   read: (
     _environment: string,
@@ -206,5 +208,59 @@ describe('Umami client', () => {
     const slug = newShareSlug();
     expect(slug).toMatch(/^[A-Za-z0-9]{16}$/);
     expect(newShareSlug()).not.toBe(slug);
+  });
+});
+
+describe('Umami client when the service is waking', () => {
+  const fetchMock = vi.fn();
+  const timeout = () =>
+    Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('retries once after a timeout', async () => {
+    const onWaking = vi.fn();
+    fetchMock
+      .mockRejectedValueOnce(timeout())
+      .mockResolvedValueOnce(reply(site));
+    expect(await getWebsite({ ...conn, onWaking }, 'w1')).toEqual(site);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(onWaking).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries once after a 503', async () => {
+    const onWaking = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce(reply({}, 503))
+      .mockResolvedValueOnce(reply(site));
+    expect(await getWebsite({ ...conn, onWaking }, 'w1')).toEqual(site);
+    expect(onWaking).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after a second timeout', async () => {
+    const onWaking = vi.fn();
+    fetchMock.mockRejectedValue(timeout());
+    await expect(getWebsite({ ...conn, onWaking }, 'w1')).rejects.toThrow(
+      'timed out'
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(onWaking).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a 401', async () => {
+    const onWaking = vi.fn();
+    fetchMock.mockResolvedValue(reply({}, 401));
+    expect(await getWebsite({ ...conn, onWaking }, 'w1')).toBeNull();
+    await expect(
+      createWebsite(
+        { ...conn, onWaking },
+        { name: 'A', domain: 'a.se', teamId: 't' }
+      )
+    ).rejects.toThrow('401');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(onWaking).not.toHaveBeenCalled();
   });
 });
