@@ -326,6 +326,17 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
       expect(mirrored()).toHaveLength(2);
     });
 
+    it('mirrors a tool call that changes the state back to working', () => {
+      hook(REGISTER);
+      hook({ session_id: 'abc', hook_event_name: 'Stop' });
+      expect(mirrored()).toHaveLength(2);
+      // Within the minute, but stopped → working is a change
+      hook(tool);
+      expect(mirrored()).toHaveLength(3);
+      hook(tool);
+      expect(mirrored()).toHaveLength(3);
+    });
+
     it('mirrors nothing without a mirror file', () => {
       rmSync(join(root, 'mirror'));
       hook(REGISTER);

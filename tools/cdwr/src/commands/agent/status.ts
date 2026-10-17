@@ -94,7 +94,11 @@ export default defineCommand({
           watching: parseWatchState(readText(queue.watchState)),
           worktree: { path: worktree, exists: existsSync(worktree) },
           lastScheduled,
-          lockState: lockState(lockAge(queue.lock), job.loaded && job.running),
+          // Without launchd the lock owner cannot be checked, so a held lock counts as a run
+          lockState: lockState(
+            lockAge(queue.lock),
+            host === 'container' || (job.loaded && job.running)
+          ),
           lock: queue.lock,
           implement: implementReport(queue, ctx.env),
           lastRunLog: runLog ? join(queue.logs, runLog) : null,
