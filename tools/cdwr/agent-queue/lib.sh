@@ -2,7 +2,11 @@
 # Shared by run.sh and wait.sh: the Linear key, the GraphQL call and the attended query.
 # Read-only on purpose: no gh call and no mutation belong here.
 
-key="$(security find-generic-password -s linear-agent-queue -w 2>/dev/null || true)"
+# The key comes from AGENT_QUEUE_LINEAR_KEY; on macOS the Keychain is the fallback
+key="${AGENT_QUEUE_LINEAR_KEY:-}"
+if [[ -z "$key" && "$(uname)" == Darwin ]]; then
+  key="$(security find-generic-password -s linear-agent-queue -w 2>/dev/null || true)"
+fi
 
 # linear <query> [variables as JSON]
 linear() {
@@ -38,3 +42,6 @@ query {
   }
 }
 GQL
+
+# host_id: the machine's stable name (a Mac's hostname follows the network); session-hook.sh has the twin
+host_id() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null || hostname -s; }

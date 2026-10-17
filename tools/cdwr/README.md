@@ -130,9 +130,12 @@ The script's source is `agent-queue/run.sh`. Launchd runs the copy `install` put
 `~/.cdwr/agent-queue/`, beside its pause flag and logs, so a merged change does nothing
 unattended until the next `install`; `status` and `doctor` say when that copy is out of date. The
 script holds the guardrails (read-only tools, Linear the only writable server, no API key), so
-review a change to it as one. The Linear key lives in the Keychain under `linear-agent-queue`;
-cdwr checks that it is there and never reads it. `install` asks for it when it is missing, and
-only does what differs, so run it again after the script changes. `--worktree` picks another
+review a change to it as one. The launchd job's Linear key is the Keychain's `linear-agent-queue`
+(a shell-exported `AGENT_QUEUE_LINEAR_KEY` never reaches the job; the container reads that variable
+instead); cdwr checks that it is there and never reads it. `install` asks for the key when it is
+missing, and only does what differs, so run it again after the script changes. Notices go
+through `agent-queue/notify.sh`, which posts to the webhook in `SLACK_WEBHOOK_URL` (or
+`CLAUDE_SLACK_WEBHOOK`, or `~/.claude/slack-webhook`) and does nothing without one. `--worktree` picks another
 checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/notify-level`
 (missing means `all`), while the scheduler's own notices (a planned ticket, a failed or capped
 run) always go out.

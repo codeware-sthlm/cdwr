@@ -36,7 +36,8 @@ note() { print -r -- "$(date '+%F %T') $*" >> "$LOGS/scheduler.log"; }
 say() { note "$*"; $check && print -r -- "$*"; return 0; }
 # Always action-level: a run that planned something or went wrong needs Håkan. No webhook, no-op.
 notify() {
-  local hook="$HOME/.claude/hooks/notify-slack.sh"
+  local hook="$HOME_DIR/notify.sh"
+  [[ -x "$hook" ]] || hook="$HOME/.claude/hooks/notify-slack.sh"
   [[ -x "$hook" ]] || return 0
   jq -n --arg m "$1" --arg c "$REPO" '{message: $m, cwd: $c}' | "$hook" || true
 }
@@ -68,7 +69,8 @@ trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
 
 source "${0:A:h}/lib.sh"
 source "${0:A:h}/waits.sh"
-[[ -z "$key" ]] && { say "skip: no Linear API key in Keychain (service linear-agent-queue)"; exit 0; }
+source "${0:A:h}/github-app.sh"
+[[ -z "$key" ]] && { say "skip: no Linear API key (AGENT_QUEUE_LINEAR_KEY or Keychain service linear-agent-queue)"; exit 0; }
 # No network is not a Linear failure: no record, no warn rows, the next run catches up
 if offline; then say "skip: offline (Mac asleep?)"; exit 0; fi
 
@@ -100,19 +102,26 @@ PLIST="$HOME/Library/LaunchAgents/se.codeware.agent-queue.plist"
 INTERVAL_SED='s/^export const RUN_INTERVAL_SECONDS = \([0-9][0-9]*\);$/\1/p'
 job_line() {
   setopt local_options no_err_exit
-  local dir=tools/cdwr/agent-queue secs want theirs f out
+  local dir=tools/cdwr/agent-queue secs want theirs f out kind=install
   local -a differs
-  secs="$(plutil -extract StartInterval raw -o - "$PLIST" 2>/dev/null)"
+  if [[ "${AGENT_QUEUE_HOST:-}" == container ]]; then
+    # The container's copies under $HOME_DIR are the baked ones
+    kind=image
+    secs="${RUN_INTERVAL_SECONDS:-}"
+  else
+    secs="$(plutil -extract StartInterval raw -o - "$PLIST" 2>/dev/null)"
+  fi
   if [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
-  if [[ -z "$want" ]]; then print -r -- "$out · install unknown"; return 0; fi
-  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh; do
+  if [[ -z "$want" ]]; then print -r -- "$out · $kind unknown"; return 0; fi
+  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh; do
     theirs="$(git -C "$REPO" show "origin/main:$dir/$f" 2>/dev/null)" ||
-      { print -r -- "$out · install unknown"; return 0; }
+      { print -r -- "$out · $kind unknown"; return 0; }
     [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")
   done
   [[ "$secs" == "$want" ]] || differs+=(interval)
-  if (( ${#differs} )); then print -r -- "$out · install out of date (${(j:, :)differs})"
+  if (( ${#differs} )); then print -r -- "$out · $kind out of date (${(j:, :)differs})"
+  elif [[ $kind == image ]]; then print -r -- "$out · image"
   else print -r -- "$out · install current"; fi
 }
 
@@ -282,6 +291,7 @@ publish_doc() {
 # Every handled outcome exits 0, so a non-zero exit is a failure nothing recorded.
 on_exit() {
   local st=$1
+  rm -f "$LOGS/gh-read-fallback.$$"
   if (( st != 0 )); then
     note "fail: run.sh exited $st"
     record failed "" "run.sh exited $st, see scheduler.log"
@@ -334,10 +344,32 @@ GQL
 
 watch() { jq -L "$HOME_DIR" "$@"; }
 
+# gh_identity: exports the GitHub App's token for the reads of the calling subshell, so call it
+# only inside a command substitution. On failure sets gh_reason and returns 1, leaving the reads
+# to the machine's own login.
+gh_reason=""
+gh_identity() {
+  # Its own file: implement.sh writes github-app.err and may run at the same time
+  local errf="$LOGS/github-app.run.$$.err"
+  if { app_env "$REPO/tools/cdwr/.env" && app_token; } 2> "$errf"; then
+    rm -f "$errf"; return 0
+  fi
+  gh_reason="$(tr '\n' ' ' < "$errf" | sed 's/ *$//')"
+  rm -f "$errf"
+  return 1
+}
+# Same, with the fallback noted; --check logs nothing
+gh_identity_or_note() {
+  gh_identity && return 0
+  $check || note "warn: GitHub reads as the signed-in user: ${gh_reason:-no reason given}"
+  return 0
+}
+
 watch_prs() {
   # One PR failing to read skips that PR, not the rest.
   setopt local_options no_err_exit
   local file="$HOME_DIR/watch.json" resp nodes state node id pr now out level msg
+  gh_identity_or_note
   resp="$(linear "$WATCHED")" || { print -r -- "Linear did not answer"; return 1; }
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
     { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
@@ -353,11 +385,11 @@ watch_prs() {
     id="$(jq -r '.identifier' <<<"$node")"
     pr="$(watch 'include "watch"; pr_number // empty' <<<"$node")"
     if [[ -z "$pr" ]]; then
-      pr="$(gh pr list --repo codeware-sthlm/cdwr --state all --search "\"$id\" in:title,body" \
+      pr="$(gh_read gh pr list --repo codeware-sthlm/cdwr --state all --search "\"$id\" in:title,body" \
         --json number --limit 1 --jq '.[0].number // empty')" || { note "warn: watch: no PR lookup for $id"; record warn "$id" "watch: no PR lookup"; continue; }
     fi
     [[ -z "$pr" ]] && continue
-    now="$(gh api graphql -f query="$PR_QUERY" -F n="$pr" --jq '.data.repository.pullRequest')"
+    now="$(gh_read gh api graphql -f query="$PR_QUERY" -F n="$pr" --jq '.data.repository.pullRequest')"
     if [[ $? -ne 0 || -z "$now" || "$now" == null ]]; then
       note "warn: watch: could not read PR #$pr ($id)"; record warn "$id" "watch: could not read PR #$pr"; continue
     fi
@@ -400,7 +432,8 @@ attended() {
     note "warn: attended: Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
   fi
   state="$(jq -c 'if type == "object" then . else {} end' "$HOME_DIR/watch.json" 2>/dev/null || print '{}')"
-  waits="$(parked_waits <<<"$resp")"
+  # The fallback was already noted by watch_prs, so this one stays quiet
+  waits="$(gh_identity || true; parked_waits <<<"$resp")"
   verdict="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson waits "$waits" \
     'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)' <<<"$resp")" ||
     { note "warn: attended: watch.jq failed"; return 0; }
@@ -412,15 +445,24 @@ attended() {
     for f in "$SESSIONS"/*.json(N); do
       pid="$(jq -r '.pid // empty' "$f" 2>/dev/null)"
       wpid="$(cat "${f%.json}.watcher" 2>/dev/null)"
-      local pa=false wa=false
-      [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && pa=true
-      [[ "$wpid" == <-> ]] && kill -0 "$wpid" 2>/dev/null && wa=true
+      local pa=false wa=false remote=false fhost
+      # A mirrored file from another host: its pids mean nothing here, so liveness is its age
+      fhost="$(jq -r '.host // empty' "$f" 2>/dev/null)"
+      [[ -n "$fhost" && "$fhost" != "$(host_id)" ]] && remote=true
+      if ! $remote; then
+        [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && pa=true
+        [[ "$wpid" == <-> ]] && kill -0 "$wpid" 2>/dev/null && wa=true
+      fi
       # Ended or dead for over 24 h: delete
       if [[ "$pa" == false || "$(jq -r '.state' "$f" 2>/dev/null)" == ended ]] &&
          (( $(date +%s) - $(jq -r '.lastSeen // empty | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$f" 2>/dev/null || echo 0) > 86400 )); then
-        rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen"; continue
+        rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen" "$f.mirrored"; continue
       fi
-      items+=("$(jq -c --argjson pa "$pa" --argjson wa "$wa" '. + {pidAlive: $pa, watcherAlive: $wa}' "$f" 2>/dev/null)")
+      if $remote; then
+        items+=("$(jq -c '. + {pidAlive: null, watcherAlive: null}' "$f" 2>/dev/null)")
+      else
+        items+=("$(jq -c --argjson pa "$pa" --argjson wa "$wa" '. + {pidAlive: $pa, watcherAlive: $wa}' "$f" 2>/dev/null)")
+      fi
     done
     # A watcher file whose pid is dead, with or without a session file
     for w in "$SESSIONS"/*.watcher(N); do

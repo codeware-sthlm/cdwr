@@ -14,12 +14,14 @@ import {
   formatParked,
   formatTable,
   formatWatching,
+  hostKind,
   implementCap,
   installedEnv,
   lastImplementRun,
   lastSchedulerLine,
   latestRunLog,
   launchPath,
+  linearKeySource,
   lockState,
   memoryDir,
   nodeMajor,
@@ -115,8 +117,34 @@ describe('constants', () => {
       'github-app.sh',
       'lib.sh',
       'waits.sh',
-      'watch.jq'
+      'watch.jq',
+      'notify.sh'
     ]);
+  });
+});
+
+describe('linearKeySource', () => {
+  it.each([
+    ['container', { AGENT_QUEUE_LINEAR_KEY: 'k' }, 'env'],
+    ['container', { AGENT_QUEUE_LINEAR_KEY: '' }, 'none'],
+    ['container', {}, 'none'],
+    ['launchd', {}, 'keychain-possible'],
+    ['launchd', { AGENT_QUEUE_LINEAR_KEY: 'k' }, 'keychain-possible'],
+    [null, { AGENT_QUEUE_LINEAR_KEY: 'k' }, 'none']
+  ] as const)('%s with %j -> %s', (host, env, expected) => {
+    expect(linearKeySource(host, env)).toBe(expected);
+  });
+});
+
+describe('hostKind', () => {
+  it.each([
+    ['darwin', {}, 'launchd'],
+    ['darwin', { AGENT_QUEUE_HOST: 'container' }, 'container'],
+    ['linux', { AGENT_QUEUE_HOST: 'container' }, 'container'],
+    ['linux', {}, null],
+    ['darwin', { AGENT_QUEUE_HOST: 'other' }, 'launchd']
+  ] as const)('%s with %j -> %s', (platform, env, expected) => {
+    expect(hostKind(platform, env)).toBe(expected);
   });
 });
 
@@ -131,11 +159,13 @@ describe('queuePaths', () => {
         'github-app.sh': '/h/.cdwr/agent-queue/github-app.sh',
         'lib.sh': '/h/.cdwr/agent-queue/lib.sh',
         'waits.sh': '/h/.cdwr/agent-queue/waits.sh',
-        'watch.jq': '/h/.cdwr/agent-queue/watch.jq'
+        'watch.jq': '/h/.cdwr/agent-queue/watch.jq',
+        'notify.sh': '/h/.cdwr/agent-queue/notify.sh'
       },
       watchState: '/h/.cdwr/agent-queue/watch.json',
       paused: '/h/.cdwr/agent-queue/paused',
       notifyLevel: '/h/.cdwr/agent-queue/notify-level',
+      mirror: '/h/.cdwr/agent-queue/mirror',
       lock: '/h/.cdwr/agent-queue/lock',
       implementLock: '/h/.cdwr/agent-queue/implement.lock',
       implementSpend: '/h/.cdwr/agent-queue/implement-spend.jsonl',
@@ -352,7 +382,8 @@ describe('filesDrift', () => {
     'github-app.sh': 'g',
     'lib.sh': 'c',
     'waits.sh': 'd',
-    'watch.jq': 'b'
+    'watch.jq': 'b',
+    'notify.sh': 'n'
   };
 
   const all = {
@@ -361,7 +392,8 @@ describe('filesDrift', () => {
     'github-app.sh': 'g',
     'lib.sh': 'c',
     'waits.sh': 'd',
-    'watch.jq': 'b'
+    'watch.jq': 'b',
+    'notify.sh': 'n'
   };
 
   it.each([
@@ -371,6 +403,8 @@ describe('filesDrift', () => {
     [{ ...all, 'implement.sh': undefined }, 'missing'],
     [{ ...all, 'waits.sh': undefined }, 'missing'],
     [{ ...all, 'github-app.sh': undefined }, 'missing'],
+    [{ ...all, 'notify.sh': undefined }, 'missing'],
+    [{ ...all, 'notify.sh': 'x' }, 'stale'],
     [{ ...all, 'run.sh': undefined, 'watch.jq': 'x' }, 'missing'],
     [{ ...all, 'watch.jq': 'x' }, 'stale'],
     [{ ...all, 'implement.sh': 'x' }, 'stale'],

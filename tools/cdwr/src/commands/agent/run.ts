@@ -8,7 +8,7 @@ import {
   jobState,
   lockAge,
   paths,
-  requireMac,
+  requireHost,
   worktreeOf
 } from '../../services/agent-queue';
 import { run } from '../../services/shell';
@@ -25,7 +25,14 @@ export default defineCommand({
   inputs: {},
 
   async plan(ctx) {
-    requireMac();
+    const host = requireHost(['launchd', 'container'], ctx.env);
+    if (host === 'container') {
+      return {
+        steps: [],
+        nothing: 'The container loop runs the queue on its own schedule',
+        data: { uid: currentUid() }
+      };
+    }
     const job = await jobState();
     if (!job.loaded) {
       throw new CliError(

@@ -11,12 +11,14 @@ import {
   paths,
   readQueueSources,
   readText,
-  requireMac,
+  requireHost,
   worktreeOf
 } from '../../services/agent-queue';
 import { symbols, theme } from '../../ui/theme';
 
 import {
+  KEYCHAIN_SERVICE,
+  LINEAR_KEY_ENV,
   RUN_INTERVAL_SECONDS,
   byFile,
   filesDrift,
@@ -28,6 +30,7 @@ import {
   formatWatching,
   lastSchedulerLine,
   latestRunLog,
+  linearKeySource,
   lockState,
   parseAttended,
   parseCheck,
@@ -47,14 +50,19 @@ export default defineCommand({
   inputs: {},
 
   async plan(ctx) {
-    requireMac();
+    const host = requireHost(['launchd', 'container'], ctx.env);
     const queue = paths(ctx.env);
     const worktree = worktreeOf(ctx);
 
     const report = await ctx.ui.task(
       'Reading the agent queue',
       async () => {
-        const [job, key] = await Promise.all([jobState(), keyPresent()]);
+        const [job, key] = await Promise.all([
+          host === 'container'
+            ? Promise.resolve({ loaded: false as const })
+            : jobState(),
+          keyPresent(ctx.env)
+        ]);
         const installed = byFile((file) => readText(queue.files[file]));
         const sources = readQueueSources(ctx.root);
         const runLog = latestRunLog(
@@ -72,7 +80,10 @@ export default defineCommand({
           job,
           paused: existsSync(queue.paused),
           notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
+          host,
+          keySource: linearKeySource(host, ctx.env),
           keyPresent: key,
+          mirror: readText(queue.mirror)?.split('\n')[0]?.trim() || null,
           script:
             'source' in sources
               ? filesDrift(installed, sources.source)
@@ -122,27 +133,33 @@ export default defineCommand({
         : undefined;
 
     const rows = [
-      job.loaded
+      report.host === 'container'
         ? row(
-            (job.lastExitCode === undefined || job.lastExitCode === 0) &&
-              staleInterval === undefined
-              ? true
-              : 'warn',
+            true,
             'job',
-            [
-              job.running ? 'running' : 'loaded',
-              job.runs === undefined ? undefined : `${job.runs} run(s)`,
-              job.lastExitCode === undefined
-                ? undefined
-                : `last exit ${job.lastExitCode}`,
-              staleInterval === undefined
-                ? undefined
-                : `every ${staleInterval} s; re-run \`cdwr agent install\``
-            ]
-              .filter(Boolean)
-              .join(', ')
+            `container loop, every ${RUN_INTERVAL_SECONDS / 60} min`
           )
-        : row(false, 'job', 'not loaded; `cdwr agent install`'),
+        : job.loaded
+          ? row(
+              (job.lastExitCode === undefined || job.lastExitCode === 0) &&
+                staleInterval === undefined
+                ? true
+                : 'warn',
+              'job',
+              [
+                job.running ? 'running' : 'loaded',
+                job.runs === undefined ? undefined : `${job.runs} run(s)`,
+                job.lastExitCode === undefined
+                  ? undefined
+                  : `last exit ${job.lastExitCode}`,
+                staleInterval === undefined
+                  ? undefined
+                  : `every ${staleInterval} s; re-run \`cdwr agent install\``
+              ]
+                .filter(Boolean)
+                .join(', ')
+            )
+          : row(false, 'job', 'not loaded; `cdwr agent install`'),
       report.paused
         ? row('warn', 'paused', 'yes; `cdwr agent resume`')
         : row(true, 'paused', 'no'),
@@ -154,12 +171,23 @@ export default defineCommand({
           : report.notifyLevel
       ),
       report.keyPresent
-        ? row(true, 'Linear key', 'in the Keychain')
+        ? row(
+            true,
+            'Linear key',
+            report.keySource === 'env'
+              ? `from ${LINEAR_KEY_ENV}`
+              : 'in the Keychain'
+          )
         : row(
             false,
             'Linear key',
-            'not in the Keychain (service linear-agent-queue)'
+            report.host === 'container'
+              ? `not set (${LINEAR_KEY_ENV})`
+              : `not set (the Keychain service ${KEYCHAIN_SERVICE})`
           ),
+      ...(report.mirror === null
+        ? []
+        : [row(true, 'Heartbeat mirror', report.mirror)]),
       report.script === 'current'
         ? row(true, 'scripts', 'current')
         : report.script === 'stale' ||

@@ -324,7 +324,7 @@ Read `~/.cdwr/agent-queue/notify-level`: `all` sends both levels, `action` sends
 Send each notice through the PushNotification tool, and to Slack when a shell is available:
 
 ```sh
-jq -n --arg m "COD-123: <one line>" --arg c "$PWD" '{message:$m,cwd:$c}' | ~/.claude/hooks/notify-slack.sh
+jq -n --arg m "COD-123: <one line>" --arg c "$PWD" '{message:$m,cwd:$c}' | tools/cdwr/agent-queue/notify.sh
 ```
 
 Keep each to one line: the ticket id, what happened, and what's needed from Håkan, if anything.

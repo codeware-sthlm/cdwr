@@ -7,6 +7,7 @@ import { CliError } from '../cli/errors';
 import { cdwrHome } from '../cli/prefs';
 import { ENV_FILE } from '../cli/workspace';
 import {
+  HOST_ENV,
   type JobState,
   KEYCHAIN_SERVICE,
   QUEUE_FILES,
@@ -16,9 +17,11 @@ import {
   WORKTREE_PREF,
   byFile,
   filesDrift,
+  hostKind,
   implementCap,
   installedEnv,
   lastImplementRun,
+  linearKeySource,
   nodeMajor,
   parseLaunchctlPrint,
   plistPath,
@@ -29,10 +32,23 @@ import {
 
 import { CommandError, run } from './shell';
 
-export function requireMac(): void {
-  if (process.platform !== 'darwin') {
-    throw new CliError('The agent queue runs on macOS only');
+/** The host this command runs on; throws unless it is one of `allowed` */
+export function requireHost(
+  allowed: ReadonlyArray<'launchd' | 'container'>,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): 'launchd' | 'container' {
+  const host = hostKind(platform, env);
+  if (host === null || !allowed.includes(host)) {
+    throw new CliError(
+      `The agent queue runs on macOS (launchd) or in the agent container (${HOST_ENV}=container)`,
+      undefined,
+      allowed.length === 1 && allowed[0] === 'launchd'
+        ? 'This command needs macOS; the container is installed as an image'
+        : undefined
+    );
   }
+  return host;
 }
 
 export const paths = (env: NodeJS.ProcessEnv): QueuePaths =>
@@ -60,8 +76,14 @@ export async function jobState(
   }
 }
 
-/** Whether the Linear key is in the Keychain; the secret itself is never read */
-export async function keyPresent(): Promise<boolean> {
+/** Whether the Linear key is in the container's env or the Keychain; the secret itself is never read */
+export async function keyPresent(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): Promise<boolean> {
+  const source = linearKeySource(hostKind(platform, env), env);
+  if (source === 'env') return true;
+  if (source === 'none') return false;
   try {
     await run('security', ['find-generic-password', '-s', KEYCHAIN_SERVICE]);
     return true;

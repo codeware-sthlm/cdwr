@@ -296,16 +296,23 @@ def attended_line:
   end;
 
 # --- Session heartbeat: is an attended /work-queue session running? ---
-# Input is an array of session files, each with pidAlive and watcherAlive added by run.sh.
+# Input is an array of session files, each with pidAlive and watcherAlive added by run.sh
+# (both null for a session mirrored from another host).
 
 # { state: alive|waiting|stopped|none, detail, id, ticket, lastSeen } from the session files.
 # Alive: not ended, process up, and a watcher running, an open prompt (however old), or a
 # recent heartbeat from a turn that hasn't stopped. A stopped turn with no watcher wakes no one.
 def session_state($now):
   [ .[] | select(.state != "ended") ] as $open
-  | [ $open[] | select(.pidAlive
-                       and (.watcherAlive or .state == "waiting"
-                            or (.state != "stopped" and ($now - (.lastSeen | epoch)) < 900))) ] as $alive
+  | [ $open[] | select(
+        # A mirrored session from another host has no pid to check: alive at a prompt or while polling
+        # (run.sh deletes day-old files), otherwise while its heartbeat is fresh
+        if .pidAlive == null then .state == "waiting" or .state == "polling"
+                                  or (.state != "stopped" and ($now - (.lastSeen | epoch)) < 900)
+        else .pidAlive
+             and (.watcherAlive or .state == "waiting"
+                  or (.state != "stopped" and ($now - (.lastSeen | epoch)) < 900))
+        end) ] as $alive
   | ($alive | sort_by(.lastSeen | epoch) | last) as $s
   | if $s != null then
       { id: $s.id, ticket: ($s.ticket // null), lastSeen: ($s.lastSeen // null) }
