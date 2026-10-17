@@ -16,7 +16,8 @@ const defined = (origins: Array<string | undefined>): Array<string> =>
  *
  * Report-only until `CSP_ENFORCE` is on. The nonce goes to Remix through the
  * load context, so the scripts it renders carry it. The cms serves media and
- * custom-component bundles; browser Sentry is not tunnelled, so its ingest
+ * custom-component bundles, and the shared policy adds the showcase imagery's
+ * storage; browser Sentry is not tunnelled, so its ingest
  * origin is allowed to connect. The cms never frames this app.
  */
 export const cspMiddleware = createMiddleware<{

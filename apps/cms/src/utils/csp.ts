@@ -43,8 +43,8 @@ export function cspForRequest(pathname: string, env: Env): CspForRequest {
   const surface: CspSurface =
     pathname === '/admin' || pathname.startsWith('/admin/') ? 'admin' : 'site';
 
-  // Browser Sentry is tunnelled through `/monitoring`, and media is served
-  // through Payload, so the site needs no other origin than fonts
+  // Browser Sentry is tunnelled through `/monitoring` and media is served
+  // through Payload; the shared policy adds the showcase imagery's storage
   const fonts = toOrigin(env.FONT_ASSETS_BASE_URL);
   const admin = surface === 'admin';
   // Umami's heatmap view frames site pages to draw the clicks over them
