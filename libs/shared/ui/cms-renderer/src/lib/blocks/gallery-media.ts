@@ -1,3 +1,4 @@
+import { SHOWCASE_STORAGE_ORIGIN } from '@codeware/shared/util/csp';
 import type { Media } from '@codeware/shared/util/payload-types';
 
 /**
@@ -14,11 +15,10 @@ import type { Media } from '@codeware/shared/util/payload-types';
  * which is what lets the same example render in Storybook, in Chromatic and on
  * a tenant site without any of them serving the files locally.
  *
- * Kept in one place so the project reference is a single line to change if the
- * storage ever moves.
+ * The origin lives with the CSP, which allows it on every site, so a move is
+ * one line there and the policy follows.
  */
-const STORAGE =
-  'https://tiuqdqnfadzjngucaatb.supabase.co/storage/v1/object/public';
+const STORAGE = `${SHOWCASE_STORAGE_ORIGIN}/storage/v1/object/public`;
 const SHOWCASE_BUCKET = `${STORAGE}/showcase`;
 
 /**
