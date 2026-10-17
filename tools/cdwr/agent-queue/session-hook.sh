@@ -25,11 +25,13 @@ host_id() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null
 
 # mirror <force>: copies the session file to the `user@host:dir` named on the first line of
 # ../mirror (the queue home's `mirror` file), at most once a minute per session unless forced.
-# One ssh writes a temp name and renames it, so a reader never sees half a file. The copy runs
-# detached and its failure is ignored. AGENT_QUEUE_MIRROR_CMD replaces ssh in specs, with the
+# Transfers run detached and one at a time per session: a copy that finds another in flight
+# leaves a `pending` mark, which the running one picks up, so the newest state is always the
+# last sent. Each copy writes its own temp name on the host and renames it, so a reader never
+# sees half a file. Failures are ignored. AGENT_QUEUE_MIRROR_CMD replaces ssh in specs, with the
 # file in $MIRROR_FILE and the target split into $MIRROR_HOST and $MIRROR_DIR.
 mirror() {
-  local target stamp="$file.mirrored" last now_s host dir name="${file:t}"
+  local target stamp="$file.mirrored" last now_s
   target="$(head -n 1 "$DIR/../mirror" 2>/dev/null | tr -d '[:space:]')"
   [[ -n "$target" ]] || return 0
   if [[ "$1" != force && -f "$stamp" ]]; then
@@ -37,12 +39,30 @@ mirror() {
     [[ "$last" == <-> ]] && (( now_s - last < 60 )) && return 0
   fi
   : > "$stamp"
+  ( mirror_send "$target" ) &!
+  return 0
+}
+
+# One transfer at a time per session; the lock is a directory, stale after a minute
+mirror_send() {
+  local target=$1 lock="$file.mirroring" host dir name="${file:t}" tmp
   host="${target%%:*}"; dir="${target#*:}"
-  if [[ -n "${AGENT_QUEUE_MIRROR_CMD:-}" ]]; then
-    ( export MIRROR_FILE="$file" MIRROR_HOST="$host" MIRROR_DIR="$dir"; eval "$AGENT_QUEUE_MIRROR_CMD" ) &!
-  else
-    ssh -q -o BatchMode=yes -o ConnectTimeout=3 "$host" "cat > '$dir/$name.tmp' && mv -f '$dir/$name.tmp' '$dir/$name'" < "$file" &!
-  fi
+  [[ -d "$lock" && "$(zstat +mtime "$lock" 2>/dev/null)" == <-> ]] &&
+    (( $(date +%s) - $(zstat +mtime "$lock") > 60 )) && rmdir "$lock" 2>/dev/null
+  if ! mkdir "$lock" 2>/dev/null; then : > "$file.pending"; return 0; fi
+  while :; do
+    rm -f "$file.pending"
+    tmp="$name.tmp.$$.$RANDOM"
+    if [[ -n "${AGENT_QUEUE_MIRROR_CMD:-}" ]]; then
+      ( export MIRROR_FILE="$file" MIRROR_HOST="$host" MIRROR_DIR="$dir"; eval "$AGENT_QUEUE_MIRROR_CMD" )
+    else
+      ssh -q -o BatchMode=yes -o ConnectTimeout=3 "$host" "cat > '$dir/$tmp' && mv -f '$dir/$tmp' '$dir/$name'" < "$file"
+    fi
+    [[ -e "$file.pending" ]] || break
+  done
+  rmdir "$lock" 2>/dev/null
+  # A mark left between the check and the unlock is sent by a fresh transfer
+  [[ -e "$file.pending" ]] && mirror_send "$target"
   return 0
 }
 
@@ -90,6 +110,9 @@ main() {
   fi
 
   [[ -f "$file" ]] || return 0
+  # The state before this event, so a change is mirrored at once
+  local before after
+  before="$(jq -r '.state // empty' "$file" 2>/dev/null)"
 
   case "$event" in
     PostToolUse)
@@ -116,11 +139,11 @@ main() {
       patch '.lastSeen = $now | .state = "ended" | .detail = ($reason | if . == "" then null else . end)' \
         --arg now "$(now)" --arg reason "$reason" ;;
   esac
-  # A state change always mirrors; same-state heartbeats at most once a minute
-  case "$event" in
-    Stop|SessionEnd|Notification) mirror force ;;
-    PostToolUse) [[ -n "$ticket" ]] && mirror force || mirror ;;
-  esac
+  # A state or ticket change always mirrors; same-state heartbeats at most once a minute
+  after="$(jq -r '.state // empty' "$file" 2>/dev/null)"
+  if [[ "$event" == (Stop|SessionEnd) || "$after" != "$before" || -n "$ticket" ]]; then mirror force
+  else mirror
+  fi
   return 0
 }
 
