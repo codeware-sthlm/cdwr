@@ -6,6 +6,7 @@
 exec >/dev/null 2>&1
 
 setopt extended_glob
+zmodload zsh/stat 2>/dev/null
 DIR="${AGENT_QUEUE_SESSIONS:-${CDWR_HOME:-$HOME/.cdwr}/agent-queue/sessions}"
 # The claude process: the nearest ancestor named claude, since a shell may sit in between
 claude_pid() {
@@ -18,6 +19,52 @@ claude_pid() {
 }
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# host_id: the machine's stable name; lib.sh has the twin (this script does not source it)
+host_id() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null || hostname -s; }
+
+# mirror <force>: copies the session file to the `user@host:dir` named on the first line of
+# ../mirror (the queue home's `mirror` file), at most once a minute per session unless forced.
+# Transfers run detached and one at a time per session: a copy that finds another in flight
+# leaves a `pending` mark, which the running one picks up, so the newest state is always the
+# last sent. Each copy writes its own temp name on the host and renames it, so a reader never
+# sees half a file. Failures are ignored. AGENT_QUEUE_MIRROR_CMD replaces ssh in specs, with the
+# file in $MIRROR_FILE and the target split into $MIRROR_HOST and $MIRROR_DIR.
+mirror() {
+  local target stamp="$file.mirrored" last now_s
+  target="$(head -n 1 "$DIR/../mirror" 2>/dev/null | tr -d '[:space:]')"
+  [[ -n "$target" ]] || return 0
+  if [[ "$1" != force && -f "$stamp" ]]; then
+    now_s="$(date +%s)"; last="$(zstat +mtime "$stamp" 2>/dev/null)"
+    [[ "$last" == <-> ]] && (( now_s - last < 60 )) && return 0
+  fi
+  : > "$stamp"
+  ( mirror_send "$target" ) &!
+  return 0
+}
+
+# One transfer at a time per session; the lock is a directory, stale after a minute
+mirror_send() {
+  local target=$1 lock="$file.mirroring" host dir name="${file:t}" tmp
+  host="${target%%:*}"; dir="${target#*:}"
+  [[ -d "$lock" && "$(zstat +mtime "$lock" 2>/dev/null)" == <-> ]] &&
+    (( $(date +%s) - $(zstat +mtime "$lock") > 60 )) && rmdir "$lock" 2>/dev/null
+  if ! mkdir "$lock" 2>/dev/null; then : > "$file.pending"; return 0; fi
+  while :; do
+    rm -f "$file.pending"
+    tmp="$name.tmp.$$.$RANDOM"
+    if [[ -n "${AGENT_QUEUE_MIRROR_CMD:-}" ]]; then
+      ( export MIRROR_FILE="$file" MIRROR_HOST="$host" MIRROR_DIR="$dir"; eval "$AGENT_QUEUE_MIRROR_CMD" )
+    else
+      ssh -q -o BatchMode=yes -o ConnectTimeout=3 "$host" "cat > '$dir/$tmp' && mv -f '$dir/$tmp' '$dir/$name'" < "$file"
+    fi
+    [[ -e "$file.pending" ]] || break
+  done
+  rmdir "$lock" 2>/dev/null
+  # A mark left between the check and the unlock is sent by a fresh transfer
+  [[ -e "$file.pending" ]] && mirror_send "$target"
+  return 0
+}
 
 # patch <jq filter> [jq args]: rewrites the session file atomically
 patch() {
@@ -46,10 +93,11 @@ main() {
           "$cmd" == (([^[:space:]\;\&\|\`\$\(\)\<\>]##/|))tools/cdwr/agent-queue/session.sh\ register ]]; then
       mkdir -p "$DIR" || return 0
       jq -n --arg id "$id" --argjson pid "$(claude_pid)" --arg now "$(now)" \
-        --arg cwd "$(jq -r '.cwd // empty' <<<"$payload")" \
+        --arg cwd "$(jq -r '.cwd // empty' <<<"$payload")" --arg host "$(host_id)" \
         '{id: $id, pid: $pid, startedAt: $now, lastSeen: $now, state: "working", ticket: null,
-          detail: null, cwd: $cwd}' > "$file.tmp.$$" &&
+          detail: null, cwd: $cwd, host: $host}' > "$file.tmp.$$" &&
         mv "$file.tmp.$$" "$file" || rm -f "$file.tmp.$$"
+      mirror force
       return 0
     fi
     # `session.sh ticket COD-n` (or `-` to clear) names the ticket in hand, read the same way;
@@ -62,6 +110,9 @@ main() {
   fi
 
   [[ -f "$file" ]] || return 0
+  # The state before this event, so a change is mirrored at once
+  local before after
+  before="$(jq -r '.state // empty' "$file" 2>/dev/null)"
 
   case "$event" in
     PostToolUse)
@@ -88,6 +139,11 @@ main() {
       patch '.lastSeen = $now | .state = "ended" | .detail = ($reason | if . == "" then null else . end)' \
         --arg now "$(now)" --arg reason "$reason" ;;
   esac
+  # A state or ticket change always mirrors; same-state heartbeats at most once a minute
+  after="$(jq -r '.state // empty' "$file" 2>/dev/null)"
+  if [[ "$event" == (Stop|SessionEnd) || "$after" != "$before" || -n "$ticket" ]]; then mirror force
+  else mirror
+  fi
   return 0
 }
 

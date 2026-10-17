@@ -1761,6 +1761,69 @@ describe('session_state and session_prefix', () => {
       }
     ],
     [
+      'a mirrored session with a fresh heartbeat is alive',
+      [sess({ pidAlive: null, watcherAlive: null, lastSeen: iso(300) })],
+      {
+        state: 'alive',
+        detail: 'working',
+        id: 's1',
+        ticket: null,
+        lastSeen: iso(300)
+      }
+    ],
+    [
+      'a mirrored working session with a stale heartbeat is none',
+      [sess({ pidAlive: null, watcherAlive: null, lastSeen: iso(1200) })],
+      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+    ],
+    [
+      'a mirrored session waiting at a prompt stays alive however old',
+      [
+        sess({
+          pidAlive: null,
+          watcherAlive: null,
+          state: 'waiting',
+          detail: 'permission_prompt',
+          lastSeen: iso(7200)
+        })
+      ],
+      {
+        state: 'waiting',
+        detail: 'permission_prompt',
+        id: 's1',
+        ticket: null,
+        lastSeen: iso(7200)
+      }
+    ],
+    [
+      'a mirrored polling session stays alive however old',
+      [
+        sess({
+          pidAlive: null,
+          watcherAlive: null,
+          state: 'polling',
+          lastSeen: iso(7200)
+        })
+      ],
+      {
+        state: 'alive',
+        detail: 'polling',
+        id: 's1',
+        ticket: null,
+        lastSeen: iso(7200)
+      }
+    ],
+    [
+      'a mirrored session that ended is none',
+      [sess({ pidAlive: null, watcherAlive: null, state: 'ended' })],
+      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+    ],
+    [
+      'a mirrored stopped session is never alive',
+      [sess({ pidAlive: null, watcherAlive: null, state: 'stopped' })],
+      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+    ],
+    [
       'the ticket is passed through',
       [sess({ ticket: 'COD-556' })],
       {

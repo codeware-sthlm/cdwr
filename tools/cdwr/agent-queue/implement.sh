@@ -26,7 +26,8 @@ mkdir -p "$LOGS"
 
 note() { print -r -- "$(date '+%F %T') implement: $*" >> "$LOGS/scheduler.log"; }
 notify() {
-  local hook="$HOME/.claude/hooks/notify-slack.sh"
+  local hook="$HOME_DIR/notify.sh"
+  [[ -x "$hook" ]] || hook="$HOME/.claude/hooks/notify-slack.sh"
   [[ -x "$hook" ]] || return 0
   jq -n --arg m "$1" --arg c "$REPO" '{message: $m, cwd: $c}' | "$hook" || true
 }
@@ -115,7 +116,7 @@ ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
     "Bash(jq *)" "Bash(uuidgen*)" "Bash(cut *)" "Bash(date *)" \
     "Bash(tools/cdwr/agent-queue/session.sh register)" "Bash(tools/cdwr/agent-queue/session.sh ticket *)" \
     "Bash(tools/cdwr/agent-queue/wait.sh*)" \
-    "Bash(~/.claude/hooks/notify-slack.sh)" "Bash($HOME/.claude/hooks/notify-slack.sh)" \
+    "Bash(tools/cdwr/agent-queue/notify.sh)" "Bash(~/.claude/hooks/notify-slack.sh)" "Bash($HOME/.claude/hooks/notify-slack.sh)" \
     "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels \
     "$L"__save_issue "$L"__save_comment \
   > "$result" 2> "$log" || rc=$?

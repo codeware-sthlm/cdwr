@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 
 import { defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
-import { paths, readText, requireMac } from '../../services/agent-queue';
+import { paths, readText, requireHost } from '../../services/agent-queue';
 
 import { NOTIFY_LEVELS, parseNotifyLevel } from './agent.logic';
 
@@ -25,7 +25,7 @@ export default defineCommand({
   },
 
   async plan(ctx, { level }) {
-    requireMac();
+    requireHost(['launchd', 'container'], ctx.env);
     const queue = paths(ctx.env);
     const current = parseNotifyLevel(readText(queue.notifyLevel));
     if (level === undefined) {

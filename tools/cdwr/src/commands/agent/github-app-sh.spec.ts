@@ -211,6 +211,18 @@ describe('github-app.sh', () => {
       expect(result.stderr.trim()).toBe(`github app: ${reason}`);
     });
 
+    it.each([
+      ['600', 0o600],
+      ['644', 0o644]
+    ])('mode_of reads a file with mode %s', async (expected, mode) => {
+      const file = join(dir, `mode-${expected}`);
+      writeFileSync(file, 'x');
+      chmodSync(file, mode);
+      const result = await zsh(`mode_of "${file}"`);
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim()).toBe(expected);
+    });
+
     it('refuses a key file anyone else can read', async () => {
       const loose = join(dir, 'loose.pem');
       writeFileSync(loose, readFileSync(key));
@@ -317,6 +329,25 @@ describe('github-app.sh', () => {
       // The bot lookup is the first call made with the installation token
       expect(user?.url).toBe('/users/codeware-agent%5Bbot%5D');
       expect(user?.auth).toBe(`Bearer ${TOKEN}`);
+    });
+
+    it('app_token makes one request and sets no git env', async () => {
+      const result = await zsh(
+        [
+          `app_env "${good()}" && app_token || exit 1`,
+          'print -r -- "token=$GH_TOKEN github=$GITHUB_TOKEN"',
+          'print -r -- "git=${GIT_CONFIG_COUNT:-unset} ${GIT_AUTHOR_NAME:-unset} ${GIT_SSH_COMMAND:-unset}"'
+        ].join('\n')
+      );
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim().split('\n')).toEqual([
+        `token=${TOKEN} github=${TOKEN}`,
+        'git=unset unset unset'
+      ]);
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url).toBe(
+        `/app/installations/${INSTALLATION_ID}/access_tokens`
+      );
     });
 
     it('fails closed when GitHub refuses the exchange, with the reason', async () => {

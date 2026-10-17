@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -67,6 +68,8 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
     });
     expect(read().startedAt).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
     expect(typeof read().pid).toBe('number');
+    expect(typeof read().host).toBe('string');
+    expect(read().host).not.toBe('');
   });
 
   it.each([
@@ -260,5 +263,85 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('');
     expect(existsSync(join(dir, 'nested'))).toBe(false);
+  });
+
+  describe('with a mirror target', () => {
+    let root: string;
+    let sessions: string;
+    let log: string;
+
+    const hook = (payload: unknown) =>
+      spawnSync('zsh', [SCRIPT], {
+        input: JSON.stringify(payload),
+        env: {
+          ...process.env,
+          AGENT_QUEUE_SESSIONS: sessions,
+          AGENT_QUEUE_MIRROR_CMD: `echo "$MIRROR_FILE" >> "${log}"`
+        },
+        encoding: 'utf8'
+      });
+    const mirrored = (): string[] => {
+      // The copy runs detached
+      spawnSync('sleep', ['0.5']);
+      return existsSync(log)
+        ? readFileSync(log, 'utf8').trim().split('\n')
+        : [];
+    };
+    const tool = {
+      session_id: 'abc',
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Read'
+    };
+
+    beforeEach(() => {
+      root = mkdtempSync(join(tmpdir(), 'session-hook-mirror-'));
+      sessions = join(root, 'sessions');
+      log = join(root, 'mirrored.log');
+      mkdirSync(sessions);
+      writeFileSync(join(root, 'mirror'), ' me@host:/queue/sessions \n');
+    });
+    afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+    it('mirrors on register, throttles tool calls, and always mirrors a Stop', () => {
+      hook(REGISTER);
+      expect(mirrored()).toHaveLength(1);
+      hook(tool);
+      hook(tool);
+      expect(mirrored()).toHaveLength(1);
+      hook({ session_id: 'abc', hook_event_name: 'Stop' });
+      const files = mirrored();
+      expect(files).toHaveLength(2);
+      expect(files[0]).toBe(join(sessions, 'abc.json'));
+    });
+
+    it('mirrors a Notification within the minute', () => {
+      hook(REGISTER);
+      hook(tool);
+      expect(mirrored()).toHaveLength(1);
+      hook({
+        session_id: 'abc',
+        hook_event_name: 'Notification',
+        notification_type: 'permission_prompt'
+      });
+      expect(mirrored()).toHaveLength(2);
+    });
+
+    it('mirrors a tool call that changes the state back to working', () => {
+      hook(REGISTER);
+      hook({ session_id: 'abc', hook_event_name: 'Stop' });
+      expect(mirrored()).toHaveLength(2);
+      // Within the minute, but stopped → working is a change
+      hook(tool);
+      expect(mirrored()).toHaveLength(3);
+      hook(tool);
+      expect(mirrored()).toHaveLength(3);
+    });
+
+    it('mirrors nothing without a mirror file', () => {
+      rmSync(join(root, 'mirror'));
+      hook(REGISTER);
+      hook({ session_id: 'abc', hook_event_name: 'SessionEnd' });
+      expect(mirrored()).toEqual([]);
+    });
   });
 });

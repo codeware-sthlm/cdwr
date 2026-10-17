@@ -12,6 +12,37 @@ export const LABEL = 'se.codeware.agent-queue';
  */
 export const RUN_INTERVAL_SECONDS = 600;
 export const KEYCHAIN_SERVICE = 'linear-agent-queue';
+/** Env var the Linear key comes from in the container */
+export const LINEAR_KEY_ENV = 'AGENT_QUEUE_LINEAR_KEY';
+/** Set to `container` where the queue runs in the agent container instead of launchd */
+export const HOST_ENV = 'AGENT_QUEUE_HOST';
+
+/** What runs the queue on this machine: launchd on a Mac, or the agent container */
+export const hostKind = (
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv
+): 'launchd' | 'container' | null =>
+  env[HOST_ENV] === 'container'
+    ? 'container'
+    : platform === 'darwin'
+      ? 'launchd'
+      : null;
+
+/**
+ * Where the Linear key would come from for the job on this host. Launchd never forwards a
+ * shell-exported key (its plist sets the job's env), so there only the Keychain counts.
+ */
+export const linearKeySource = (
+  host: 'launchd' | 'container' | null,
+  env: NodeJS.ProcessEnv
+): 'env' | 'keychain-possible' | 'none' =>
+  host === 'container'
+    ? env[LINEAR_KEY_ENV]
+      ? 'env'
+      : 'none'
+    : host === 'launchd'
+      ? 'keychain-possible'
+      : 'none';
 /** Where the queue's files live in the repo, relative to the workspace root */
 export const QUEUE_SOURCE_DIR = 'tools/cdwr/agent-queue';
 /** The files install puts in the queue home; run.sh loads the rest from beside it */
@@ -21,7 +52,8 @@ export const QUEUE_FILES = [
   'github-app.sh',
   'lib.sh',
   'waits.sh',
-  'watch.jq'
+  'watch.jq',
+  'notify.sh'
 ] as const;
 export type QueueFile = (typeof QUEUE_FILES)[number];
 
@@ -34,7 +66,8 @@ export const byFile = <T>(
   'github-app.sh': fn('github-app.sh'),
   'lib.sh': fn('lib.sh'),
   'waits.sh': fn('waits.sh'),
-  'watch.jq': fn('watch.jq')
+  'watch.jq': fn('watch.jq'),
+  'notify.sh': fn('notify.sh')
 });
 /** What the queue scripts call; their directories make up the job's PATH */
 export const QUEUE_BINARIES = ['node', 'claude', 'jq', 'git', 'gh', 'pnpm'];
@@ -95,6 +128,7 @@ export interface QueuePaths {
   watchState: string;
   paused: string;
   notifyLevel: string;
+  mirror: string;
   lock: string;
   implementLock: string;
   implementSpend: string;
@@ -118,6 +152,7 @@ export const queuePaths = (
     watchState: join(home, 'watch.json'),
     paused: join(home, 'paused'),
     notifyLevel: join(home, 'notify-level'),
+    mirror: join(home, 'mirror'),
     lock: join(home, 'lock'),
     implementLock: join(home, 'implement.lock'),
     implementSpend: join(home, 'implement-spend.jsonl'),

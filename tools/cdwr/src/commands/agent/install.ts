@@ -21,7 +21,7 @@ import {
   paths,
   readQueueSources,
   readText,
-  requireMac,
+  requireHost,
   worktreeOf
 } from '../../services/agent-queue';
 import { childEnv, run, sleep } from '../../services/shell';
@@ -29,6 +29,7 @@ import { childEnv, run, sleep } from '../../services/shell';
 import {
   ENV_COPIES,
   KEYCHAIN_SERVICE,
+  LINEAR_KEY_ENV,
   QUEUE_BINARIES,
   QUEUE_FILES,
   WORKTREE_PREF,
@@ -68,7 +69,7 @@ export default defineCommand({
   },
 
   async plan(ctx, { agentWorktree }) {
-    requireMac();
+    requireHost(['launchd'], ctx.env);
     const job = await jobState();
     // bootout would kill a session halfway through a plan
     if (job.loaded && job.running) {
@@ -121,13 +122,13 @@ export default defineCommand({
         ) !== 'current',
       plist: readText(queue.plist) !== plist,
       reload: false,
-      key: !(await keyPresent())
+      key: !(await keyPresent(ctx.env))
     };
     work.reload = work.plist || !job.loaded || job.script !== queue.script;
 
     if (work.key && (!ctx.ui.interactive || ctx.flags.nonInteractive)) {
       throw new UsageError(
-        `The Linear API key is not in the Keychain (service ${KEYCHAIN_SERVICE})`,
+        `The Linear API key is not in the Keychain (service ${KEYCHAIN_SERVICE}); the launchd job never sees ${LINEAR_KEY_ENV}`,
         'Run `cdwr agent install -i` (or with no arguments) in a terminal to be asked for it'
       );
     }
