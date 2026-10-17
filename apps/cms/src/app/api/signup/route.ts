@@ -8,6 +8,7 @@ import {
   sendSignupEmails
 } from '@codeware/app-cms/util/email';
 import { clientIp } from '@codeware/shared/util/human-check';
+import { tenantSiteUrl } from '@codeware/shared/util/pure';
 import { NextRequest, NextResponse } from 'next/server';
 import { type BasePayload, getPayload } from 'payload';
 
@@ -187,7 +188,8 @@ async function sendMails(
               tenantName: input.siteName,
               deployment: input.deployment,
               environment: getEnv().DEPLOY_ENV,
-              appName: hostAppName(),
+              appName: process.env['FLY_APP_NAME'],
+              siteUrl: tenantSiteUrl(hostAppName(), input.deployment),
               userName: input.name,
               userEmail: input.email,
               adminUrl: `${serverURL}${payload.config.routes.admin}/collections/tenants/${tenant.id}`

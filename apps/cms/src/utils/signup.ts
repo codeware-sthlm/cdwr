@@ -1,5 +1,4 @@
 import { InviteCodeRefused } from '@codeware/app-cms/data-access';
-import { FLY_CONFIG_APP_NAMES } from '../provisioning/tenant-apps';
 import type { HumanCheckFields } from '@codeware/shared/util/human-check';
 import { deploymentNameIssue } from '@codeware/shared/util/pure';
 import {
@@ -7,6 +6,8 @@ import {
   type PayloadRequest,
   ValidationError
 } from 'payload';
+
+import { FLY_CONFIG_APP_NAMES } from '../provisioning/tenant-apps';
 
 /** Signups per address and window, far below the forms' shared limit */
 export const SIGNUP_RATE_LIMIT = 5;
