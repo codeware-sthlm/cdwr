@@ -340,6 +340,7 @@ const customTranslationsSchema = z.object({
     unreachable: z.string(),
     visitors: z.string(),
     visits: z.string(),
+    waking: z.string(),
     week: z.string()
   }),
   tourSignups: z.object({
@@ -821,6 +822,7 @@ You can assign multiple tags to a file.`,
       unreachable: 'Statistics could not be loaded right now',
       visitors: 'Visitors',
       visits: 'Visits',
+      waking: 'Statistics are waking up…',
       week: 'Last 7 days'
     },
     tourSignups: {
@@ -1331,6 +1333,7 @@ Du kan tilldela flera etiketter till en fil.`,
       unreachable: 'Statistiken kunde inte hämtas just nu',
       visitors: 'Besökare',
       visits: 'Besök',
+      waking: 'Statistiktjänsten startar…',
       week: 'Senaste 7 dagarna'
     },
     tourSignups: {

@@ -4,6 +4,7 @@ import {
   type UmamiClient,
   fetchSiteStats,
   getUmamiApi,
+  isWaking,
   shareDashboardUrl,
   siteStatsCache
 } from '@codeware/app-cms/feature/site-stats';
@@ -16,6 +17,7 @@ import { siteStatsEndpoint } from './site-stats';
 jest.mock('@codeware/app-cms/feature/site-stats', () => ({
   getUmamiApi: jest.fn(),
   fetchSiteStats: jest.fn(),
+  isWaking: jest.fn(),
   shareDashboardUrl: jest.fn(),
   siteStatsCache: { get: jest.fn() }
 }));
@@ -39,6 +41,7 @@ const umami: UmamiClient = {
 
 const findByID = jest.fn();
 const logError = jest.fn();
+const logWarn = jest.fn();
 
 const systemUser = { id: 1, role: 'system-user', tenants: [] };
 const memberOf = (tenant: number) => ({
@@ -51,7 +54,7 @@ const call = (user: unknown) =>
   siteStatsEndpoint.handler({
     user,
     headers: new Headers(),
-    payload: { findByID, logger: { error: logError } }
+    payload: { findByID, logger: { error: logError, warn: logWarn } }
   } as unknown as PayloadRequest);
 
 beforeEach(() => {
@@ -151,6 +154,28 @@ describe('siteStatsEndpoint', () => {
 
     await expect(response.json()).resolves.toEqual({ status: 'unreachable' });
     expect(logError).toHaveBeenCalledWith(expect.stringContaining('boom'));
+  });
+
+  it('answers waking and logs at warn when Umami is waking up', async () => {
+    jest.mocked(fetchSiteStats).mockRejectedValue(new Error('timed out'));
+    jest.mocked(isWaking).mockReturnValue(true);
+
+    const response = await call(memberOf(5));
+
+    await expect(response.json()).resolves.toEqual({ status: 'waking' });
+    expect(logWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it('answers unreachable when Umami refuses', async () => {
+    jest.mocked(fetchSiteStats).mockRejectedValue(new Error('status 401'));
+    jest.mocked(isWaking).mockReturnValue(false);
+
+    const response = await call(memberOf(5));
+
+    await expect(response.json()).resolves.toEqual({ status: 'unreachable' });
+    expect(logError).toHaveBeenCalled();
+    expect(logWarn).not.toHaveBeenCalled();
   });
 
   it('returns the statistics without letting anything cache them', async () => {

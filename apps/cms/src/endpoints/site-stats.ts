@@ -3,6 +3,7 @@ import {
   type SiteStatsAnswer,
   fetchSiteStats,
   getUmamiApi,
+  isWaking,
   shareDashboardUrl,
   siteStatsCache
 } from '@codeware/app-cms/feature/site-stats';
@@ -94,6 +95,13 @@ export const siteStatsEndpoint: Endpoint = {
         ...(dashboardUrl ? { dashboardUrl } : {})
       });
     } catch (error) {
+      if (isWaking(error)) {
+        // Expected after idle; a warning so a long outage still shows in the log
+        req.payload.logger.warn(
+          `[siteStats] Umami is waking up for tenant ${tenantId}: ${String(error)}`
+        );
+        return answer({ status: 'waking' });
+      }
       req.payload.logger.error(
         `[siteStats] Umami did not answer for tenant ${tenantId}: ${String(error)}`
       );

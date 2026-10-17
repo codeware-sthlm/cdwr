@@ -3,7 +3,17 @@ import { z } from 'zod';
 /** A call to Umami that did not give a usable answer */
 export class UmamiError extends Error {
   override readonly name = 'UmamiError';
+
+  constructor(
+    message: string,
+    /** `timeout` and `unavailable` mean Umami is probably waking up */
+    readonly kind: 'timeout' | 'unavailable' | 'refused' | 'bad-answer'
+  ) {
+    super(message);
+  }
 }
+
+const WAKING_STATUSES: ReadonlyArray<number> = [502, 503, 504];
 
 const count = z.coerce.number();
 
@@ -101,27 +111,33 @@ export const createUmamiClient = ({
         signal: AbortSignal.timeout(timeoutMs)
       });
     } catch (error) {
-      const reason =
-        error instanceof Error && error.name === 'TimeoutError'
-          ? `timed out after ${timeoutMs} ms`
-          : 'request failed';
-      throw new UmamiError(`Umami ${path}: ${reason}`);
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        throw new UmamiError(
+          `Umami ${path}: timed out after ${timeoutMs} ms`,
+          'timeout'
+        );
+      }
+      // A dropped connection is what a resuming machine does, not a refusal
+      throw new UmamiError(`Umami ${path}: request failed`, 'unavailable');
     }
 
     if (!response.ok) {
-      throw new UmamiError(`Umami ${path}: status ${response.status}`);
+      throw new UmamiError(
+        `Umami ${path}: status ${response.status}`,
+        WAKING_STATUSES.includes(response.status) ? 'unavailable' : 'refused'
+      );
     }
 
     let body: unknown;
     try {
       body = await response.json();
     } catch {
-      throw new UmamiError(`Umami ${path}: answer is not JSON`);
+      throw new UmamiError(`Umami ${path}: answer is not JSON`, 'bad-answer');
     }
 
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      throw new UmamiError(`Umami ${path}: unexpected answer`);
+      throw new UmamiError(`Umami ${path}: unexpected answer`, 'bad-answer');
     }
 
     return parsed.data;
