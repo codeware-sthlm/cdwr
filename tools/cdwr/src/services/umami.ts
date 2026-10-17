@@ -42,7 +42,9 @@ const sharePageSchema = z.object({
 
 const PAGE_SIZE = 100;
 const TIMEOUT_MS = 15_000;
-const WAKE_TIMEOUT_MS = 60_000;
+/** How long a read keeps trying while Umami wakes up, and how often */
+const WAKE_DEADLINE_MS = 60_000;
+const WAKE_ATTEMPTS = 6;
 const WAKE_PAUSE_MS = 2_000;
 
 /** Secrets at a path, or none when the folder is not there */
@@ -87,7 +89,9 @@ const endpoint = ({ url }: UmamiConnection, path: string) =>
 /** A suspended Umami times out, or the connection drops while it resumes */
 const looksAsleep = (error: unknown): boolean =>
   error instanceof Error &&
-  (error.name === 'TimeoutError' || error instanceof TypeError);
+  (error.name === 'TimeoutError' ||
+    error.name === 'AbortError' ||
+    error instanceof TypeError);
 
 /** What Fly's proxy answers while the machine is not reachable */
 const WAKING_STATUSES: ReadonlyArray<number> = [502, 503, 504];
@@ -112,20 +116,36 @@ async function request(
     });
 
   // Only a read is retried: a write that timed out may well have landed
-  const retryable = (init.method ?? 'GET') === 'GET';
-  try {
-    const response = await send(TIMEOUT_MS);
-    if (!retryable || !WAKING_STATUSES.includes(response.status))
-      return response;
-    // The gateway's body is of no use; free the socket before waiting
-    await response.body?.cancel();
-  } catch (error) {
-    if (!retryable || !looksAsleep(error)) throw error;
-  }
+  if ((init.method ?? 'GET') !== 'GET') return send(TIMEOUT_MS);
 
-  conn.onWaking?.();
-  await sleep(WAKE_PAUSE_MS);
-  return send(WAKE_TIMEOUT_MS);
+  // A read keeps trying while Umami wakes up: after a cold boot the gateway
+  // answers 502-504 or drops the connection for up to half a minute. The body
+  // is read inside the loop, since a drop while reading is a wake too.
+  const started = Date.now();
+  for (let attempt = 1; ; attempt++) {
+    let asleep: unknown;
+    try {
+      const response = await send(TIMEOUT_MS);
+      if (!WAKING_STATUSES.includes(response.status)) {
+        const text = await response.text();
+        return new Response(text, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers
+        });
+      }
+      asleep = new Error(`Umami answered ${response.status} while waking up`);
+      await response.body?.cancel();
+    } catch (error) {
+      if (!looksAsleep(error)) throw error;
+      asleep = error;
+    }
+    if (attempt >= WAKE_ATTEMPTS || Date.now() - started >= WAKE_DEADLINE_MS) {
+      throw asleep;
+    }
+    if (attempt === 1) conn.onWaking?.();
+    await sleep(WAKE_PAUSE_MS);
+  }
 }
 
 /** The error for a refused request; carries the status, never the key */

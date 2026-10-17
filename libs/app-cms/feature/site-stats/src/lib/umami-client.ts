@@ -131,7 +131,16 @@ export const createUmamiClient = ({
     let body: unknown;
     try {
       body = await response.json();
-    } catch {
+    } catch (error) {
+      // The body can still time out or drop; only bad JSON is a bad answer
+      if (error instanceof Error && error.name !== 'SyntaxError') {
+        throw new UmamiError(
+          `Umami ${path}: ${error.name === 'TimeoutError' || error.name === 'AbortError' ? 'timed out' : 'dropped'} while reading the answer`,
+          error.name === 'TimeoutError' || error.name === 'AbortError'
+            ? 'timeout'
+            : 'unavailable'
+        );
+      }
       throw new UmamiError(`Umami ${path}: answer is not JSON`, 'bad-answer');
     }
 

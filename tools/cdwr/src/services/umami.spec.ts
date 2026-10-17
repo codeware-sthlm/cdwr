@@ -240,14 +240,36 @@ describe('Umami client when the service is waking', () => {
     expect(onWaking).toHaveBeenCalledTimes(1);
   });
 
-  it('gives up after a second timeout', async () => {
+  it('gives up after six timeouts, saying waking once', async () => {
     const onWaking = vi.fn();
     fetchMock.mockRejectedValue(timeout());
     await expect(getWebsite({ ...conn, onWaking }, 'w1')).rejects.toThrow(
       'timed out'
     );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(onWaking).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries when the body drops after the headers arrived', async () => {
+    const dropped = new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.error(new TypeError('terminated'));
+        }
+      }),
+      { status: 200 }
+    );
+    fetchMock.mockResolvedValueOnce(dropped).mockResolvedValueOnce(reply(site));
+    expect(await getWebsite(conn, 'w1')).toEqual(site);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a write', async () => {
+    fetchMock.mockRejectedValue(timeout());
+    await expect(setShare(conn, 'w1', 'abcdefghijklmnop')).rejects.toThrow(
+      'timed out'
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not retry a 401', async () => {
