@@ -9,6 +9,7 @@ export * from './lib/palette-row';
 export * from './lib/pending-site-card';
 export * from './lib/platform-status';
 export * from './lib/site-stats-format';
+export * from './lib/site-stats-period-toggle';
 export * from './lib/site-stats-sheet-body';
 export * from './lib/slug-icons';
 export * from './lib/sparkline';

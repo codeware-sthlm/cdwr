@@ -1,7 +1,9 @@
+import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
+import { SiteStatsPeriodToggle } from './site-stats-period-toggle';
 import {
   type SiteStatsLabels,
   SiteStatsSheetBody
@@ -14,21 +16,67 @@ const meta = {
 
 export default meta;
 
-const labels: SiteStatsLabels = {
+type Copy = {
+  title: string;
+  sub: string;
+  openDashboard: string;
+  period: string;
+  week: string;
+  month: string;
+  labels: Omit<SiteStatsLabels, 'periodName'>;
+};
+
+const en: Copy = {
+  title: 'Visitors',
+  sub: 'Visitors to your site, counted without cookies.',
+  openDashboard: 'Open in Umami',
   period: 'Period',
   week: 'Last 7 days',
   month: 'Last 30 days',
-  visitors: 'Visitors',
-  pageviews: 'Page views',
-  visits: 'Visits',
-  bounceRate: 'Bounce rate',
-  dailyVisitors: 'Visitors per day',
-  pages: 'Top pages',
-  referrers: 'Referrers',
-  devices: 'Devices',
-  countries: 'Countries',
-  topCaption: 'The lists cover the last 30 days.',
-  empty: 'Nothing yet'
+  labels: {
+    visitors: 'Visitors',
+    pageviews: 'Page views',
+    visits: 'Visits',
+    bounceRate: 'Bounce rate',
+    dailyVisitors: 'Visitors per day',
+    perDay: 'per day',
+    pages: 'Top pages',
+    referrers: 'Referrers',
+    devices: 'Devices',
+    countries: 'Countries',
+    listsTitle: 'Most visited',
+    listsPeriod: 'Last 30 days',
+    empty: 'Nothing to list yet',
+    emptyTitle: 'No visitors yet',
+    emptyBody: 'Figures appear here once the site has had its first visitors.'
+  }
+};
+
+const sv: Copy = {
+  title: 'Besökare',
+  sub: 'Besökare på er webbplats, räknade utan cookies.',
+  openDashboard: 'Öppna i Umami',
+  period: 'Period',
+  week: 'Senaste 7 dagarna',
+  month: 'Senaste 30 dagarna',
+  labels: {
+    visitors: 'Besökare',
+    pageviews: 'Sidvisningar',
+    visits: 'Besök',
+    bounceRate: 'Avvisningsfrekvens',
+    dailyVisitors: 'Besökare per dag',
+    perDay: 'per dag',
+    pages: 'Mest besökta sidor',
+    referrers: 'Hänvisningar',
+    devices: 'Enheter',
+    countries: 'Länder',
+    listsTitle: 'Mest besökt',
+    listsPeriod: 'Senaste 30 dagarna',
+    empty: 'Inget att lista ännu',
+    emptyTitle: 'Inga besökare ännu',
+    emptyBody:
+      'Siffror visas här när webbplatsen har fått sina första besökare.'
+  }
 };
 
 const daily = Array.from({ length: 30 }, (_, index) => ({
@@ -78,40 +126,89 @@ const withData: SiteStatsData = {
   }
 };
 
+const zero = {
+  visitors: 0,
+  pageviews: 0,
+  visits: 0,
+  bounceRate: null,
+  trend: { visitors: null, pageviews: null, visits: null, bounceRate: null }
+};
+
 const empty: SiteStatsData = {
-  week: {
-    visitors: 0,
-    pageviews: 0,
-    visits: 0,
-    bounceRate: null,
-    trend: { visitors: null, pageviews: null, visits: null, bounceRate: null }
-  },
-  month: {
-    visitors: 0,
-    pageviews: 0,
-    visits: 0,
-    bounceRate: null,
-    trend: { visitors: null, pageviews: null, visits: null, bounceRate: null }
-  },
+  week: zero,
+  month: zero,
   daily: daily.map((day) => ({ ...day, visitors: 0, pageviews: 0 })),
   top: { pages: [], referrers: [], devices: [], countries: [] }
 };
 
-const Controlled = ({
+/** A week old: a handful of visitors, three pages, nothing else to rank */
+const sparse: SiteStatsData = {
+  week: {
+    visitors: 9,
+    pageviews: 21,
+    visits: 11,
+    bounceRate: 0.55,
+    trend: { visitors: null, pageviews: null, visits: null, bounceRate: null }
+  },
+  month: {
+    visitors: 9,
+    pageviews: 21,
+    visits: 11,
+    bounceRate: 0.55,
+    trend: { visitors: null, pageviews: null, visits: null, bounceRate: null }
+  },
+  daily: daily.map((day, index) => ({
+    ...day,
+    visitors: index > 23 ? ([1, 3, 0, 2, 1, 2][index - 24] ?? 0) : 0,
+    pageviews: index > 23 ? 3 : 0
+  })),
+  top: {
+    pages: [
+      { label: '/', count: 14 },
+      { label: '/about', count: 5 },
+      { label: '/contact', count: 2 }
+    ],
+    referrers: [],
+    devices: [],
+    countries: []
+  }
+};
+
+/** The sheet as the admin shows it: header with the toggle and the link, then the body */
+const Frame = ({
   stats,
-  locale
+  locale,
+  copy
 }: {
   stats: SiteStatsData;
   locale: string;
+  copy: Copy;
 }) => {
   const [period, setPeriod] = useState<SiteStatsPeriod>('week');
   return (
-    <div className="w-full max-w-xl">
+    <div className="bg-background flex w-full max-w-2xl flex-col gap-4 py-4">
+      <div className="flex flex-col gap-3 px-4">
+        <div>
+          <h2 className="text-foreground text-base font-semibold">
+            {copy.title}
+          </h2>
+          <p className="text-muted-foreground text-sm">{copy.sub}</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <SiteStatsPeriodToggle
+            period={period}
+            onPeriodChange={setPeriod}
+            labels={copy}
+          />
+          <Button variant="outline" size="sm">
+            {copy.openDashboard}
+          </Button>
+        </div>
+      </div>
       <SiteStatsSheetBody
         stats={stats}
         period={period}
-        onPeriodChange={setPeriod}
-        labels={labels}
+        labels={{ ...copy.labels, periodName: copy[period] }}
         locale={locale}
       />
     </div>
@@ -119,16 +216,21 @@ const Controlled = ({
 };
 
 export const WithData: StoryObj = {
-  render: () => <Controlled stats={withData} locale="en" />
+  render: () => <Frame stats={withData} locale="en" copy={en} />
 };
 
 export const Swedish: StoryObj = {
-  render: () => <Controlled stats={withData} locale="sv" />
+  render: () => <Frame stats={withData} locale="sv" copy={sv} />
 };
 
 /** A site nobody has visited yet: zeros, no trends, empty lists */
 export const Empty: StoryObj = {
-  render: () => <Controlled stats={empty} locale="en" />
+  render: () => <Frame stats={empty} locale="en" copy={en} />
+};
+
+/** A week old: a handful of visitors, three pages, nothing else to rank */
+export const Sparse: StoryObj = {
+  render: () => <Frame stats={sparse} locale="en" copy={en} />
 };
 
 export const PayloadAdminLight = a11yStory(WithData, 'payload-admin', 'light');

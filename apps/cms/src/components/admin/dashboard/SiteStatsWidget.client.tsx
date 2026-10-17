@@ -2,6 +2,7 @@
 
 import {
   type SiteStatsPeriod,
+  SiteStatsPeriodToggle,
   SiteStatsSheetBody,
   StatusWidget,
   formatTrend
@@ -122,39 +123,53 @@ export function SiteStatsWidget() {
             <SheetHeader>
               <SheetTitle>{title}</SheetTitle>
               <SheetDescription>{t('statistics:sheetSub')}</SheetDescription>
-              {answer.dashboardUrl && (
-                <Button asChild variant="outline" size="sm" className="w-fit">
-                  <a
-                    href={answer.dashboardUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {t('statistics:openDashboard')}
-                    <ArrowTopRightOnSquareIcon aria-hidden />
-                  </a>
-                </Button>
-              )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <SiteStatsPeriodToggle
+                  period={period}
+                  onPeriodChange={setPeriod}
+                  labels={{
+                    period: t('statistics:period'),
+                    week: t('statistics:week'),
+                    month: t('statistics:month')
+                  }}
+                />
+                {answer.dashboardUrl && (
+                  <Button asChild variant="outline" size="sm" className="w-fit">
+                    <a
+                      href={answer.dashboardUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t('statistics:openDashboard')}
+                      <ArrowTopRightOnSquareIcon aria-hidden />
+                    </a>
+                  </Button>
+                )}
+              </div>
             </SheetHeader>
             <SiteStatsSheetBody
               stats={answer.stats}
               period={period}
-              onPeriodChange={setPeriod}
               locale={locale}
               labels={{
-                period: t('statistics:period'),
-                week: t('statistics:week'),
-                month: t('statistics:month'),
                 visitors: t('statistics:visitors'),
                 pageviews: t('statistics:pageviews'),
                 visits: t('statistics:visits'),
                 bounceRate: t('statistics:bounceRate'),
                 dailyVisitors: t('statistics:dailyVisitors'),
+                perDay: t('statistics:perDay'),
                 pages: t('statistics:pages'),
                 referrers: t('statistics:referrers'),
                 devices: t('statistics:devices'),
                 countries: t('statistics:countries'),
-                topCaption: t('statistics:topCaption'),
-                empty: t('statistics:empty')
+                listsTitle: t('statistics:listsTitle'),
+                listsPeriod: t('statistics:month'),
+                empty: t('statistics:empty'),
+                emptyTitle: t('statistics:emptyTitle'),
+                emptyBody: t('statistics:emptyBody'),
+                periodName: t(
+                  period === 'week' ? 'statistics:week' : 'statistics:month'
+                )
               }}
             />
           </SheetContent>
