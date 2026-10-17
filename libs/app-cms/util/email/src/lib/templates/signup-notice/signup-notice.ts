@@ -1,5 +1,4 @@
 import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
-import { tenantSiteUrl } from '@codeware/shared/util/pure';
 
 import { type EmailBrand, renderEmailLayout } from '../layout';
 
@@ -14,6 +13,8 @@ export type SignupNoticeMailInput = {
   environment: 'development' | 'preview' | 'production';
   /** Fly app serving this platform, named in a preview command when known */
   appName?: string;
+  /** The address the new site will answer on, listed when known */
+  siteUrl?: string;
   /** Absolute link to the new tenant in the admin */
   adminUrl: string;
   /** Header with logo and accent; omitted for a plain mail */
@@ -47,6 +48,7 @@ export function renderSignupNoticeMail(input: SignupNoticeMailInput): {
     deployment,
     environment,
     locale,
+    siteUrl,
     tenantName,
     userEmail,
     userName
@@ -54,13 +56,8 @@ export function renderSignupNoticeMail(input: SignupNoticeMailInput): {
 
   const subject = t(locale, 'signupNotice.subject', { tenantName });
 
-  const siteDetail: Array<[string, string]> = appName
-    ? [
-        [
-          t(locale, 'signupNotice.siteLabel'),
-          tenantSiteUrl(appName, deployment)
-        ]
-      ]
+  const siteDetail: Array<[string, string]> = siteUrl
+    ? [[t(locale, 'signupNotice.siteLabel'), siteUrl]]
     : [];
 
   const { html, text } = renderEmailLayout({

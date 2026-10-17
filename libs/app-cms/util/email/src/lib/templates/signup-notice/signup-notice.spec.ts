@@ -44,10 +44,18 @@ describe('renderSignupNoticeMail', () => {
     expect(mail.html).toContain(command);
   });
 
-  it('lists the site address when the platform app is known', () => {
-    const withApp = renderSignupNoticeMail({ ...base, appName: 'cdwr-cms' });
+  it('lists the site address when given, apart from the app name', () => {
+    const withSite = renderSignupNoticeMail({
+      ...base,
+      environment: 'preview',
+      siteUrl: 'https://cdwr-cms-cdwr-cms-titan.fly.dev'
+    });
 
-    expect(withApp.text).toContain('https://cdwr-cms-cdwr-cms-titan.fly.dev');
+    expect(withSite.text).toContain('https://cdwr-cms-cdwr-cms-titan.fly.dev');
+    // The address never leaks into the command: the app is unknown here
+    expect(withSite.text).toContain(
+      'cdwr tenant provision --env preview --workspace cdwr-cms-titan --apps cms'
+    );
     expect(renderSignupNoticeMail(base).text).not.toContain('fly.dev');
   });
 
