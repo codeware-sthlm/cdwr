@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { defineCommand, readOnly } from '../../cli/command';
 import { CliError } from '../../cli/errors';
 import { input } from '../../cli/inputs';
-import { paths, readText, requireMac } from '../../services/agent-queue';
+import { paths, readText, requireHost } from '../../services/agent-queue';
 
 import { latestRunLog, tailLines } from './agent.logic';
 
@@ -30,7 +30,7 @@ export default defineCommand({
   },
 
   async plan(ctx, { run, lines }) {
-    requireMac();
+    requireHost(['launchd', 'container'], ctx.env);
     const queue = paths(ctx.env);
     let file = queue.schedulerLog;
     if (run) {

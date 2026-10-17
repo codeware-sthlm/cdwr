@@ -4,10 +4,27 @@
 # Needs watch.jq beside it; AGENT_QUEUE_GH_CMD replaces the gh call with a command that prints a response.
 WAITS_DIR="${0:A:h}"
 
+# gh_read <gh command…>: runs a gh read; when it fails with an App token set (the App may lack a
+# permission), retries once as the signed-in user and notes it once per run (a file keyed on the
+# run's pid, since reads run in subshells; run.sh removes it on exit).
+gh_read() {
+  local flag="${LOGS:-}/gh-read-fallback.$$" out rc
+  out="$("$@")"; rc=$?
+  if (( rc != 0 )) && [[ -n "${GH_TOKEN:-}" ]]; then
+    out="$(GH_TOKEN= GITHUB_TOKEN= "$@")"; rc=$?
+    if [[ -n "${LOGS:-}" && ! -e "$flag" ]]; then
+      : > "$flag"
+      (( $+functions[note] )) && note "warn: GitHub read fell back to the signed-in user"
+    fi
+  fi
+  print -r -- "$out"
+  return $rc
+}
+
 # gh_query <graphql query>
 gh_query() {
   if [[ -n "${AGENT_QUEUE_GH_CMD:-}" ]]; then eval "$AGENT_QUEUE_GH_CMD"
-  else gh api graphql -f query="$1"
+  else gh_read gh api graphql -f query="$1"
   fi
 }
 

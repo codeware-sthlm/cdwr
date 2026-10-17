@@ -21,7 +21,7 @@ import {
 } from '../services/agent-queue';
 import { symbols, theme } from '../ui/theme';
 
-import { formatImplement } from './agent/agent.logic';
+import { formatImplement, hostKind } from './agent/agent.logic';
 import { shellOf } from './completion';
 import { completionFile, completionState } from './completion.logic';
 import { ENTRIES, GROUPS } from './index';
@@ -49,8 +49,10 @@ interface Report {
     file: string | null;
     state: 'current' | 'stale' | 'missing' | 'unsupported' | 'unknown';
   };
-  /** The scheduled agent queue; macOS only */
+  /** The agent queue, on a Mac or in the agent container */
   agentQueue?: {
+    host: 'launchd' | 'container';
+    /** Always true in the container, which has no launchd job to load */
     loaded: boolean;
     keyPresent: boolean;
     worktree: boolean;
@@ -67,20 +69,30 @@ interface Report {
 
 /** The agent queue at a glance; `cdwr agent status` has the detail */
 async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
-  if (process.platform !== 'darwin') return undefined;
+  const host = hostKind(process.platform, ctx.env);
+  if (host === null) return undefined;
   const queue = paths(ctx.env);
-  const [job, key] = await Promise.all([jobState(), keyPresent()]);
+  const [job, key] = await Promise.all([
+    host === 'container'
+      ? Promise.resolve({ loaded: true as const })
+      : jobState(),
+    keyPresent(ctx.env)
+  ]);
   const script = queueDrift(queue, ctx.root);
   const worktree = worktreeOf(ctx);
   // Both mint nothing lasting: a token lives an hour and is dropped with the check
   const [jobPath, githubApp] =
     job.loaded || script !== 'missing'
       ? await Promise.all([
-          jobPathChecks(ctx.env, queue),
+          // The job's PATH comes from the plist, which the container has none of
+          host === 'container'
+            ? Promise.resolve(undefined)
+            : jobPathChecks(ctx.env, queue),
           githubAppCheck(ctx.root, ctx.env)
         ])
       : [undefined, undefined];
   return {
+    host,
     loaded: job.loaded,
     keyPresent: key,
     worktree: existsSync(worktree),
@@ -251,7 +263,9 @@ export default defineCommand({
         queue.script === 'stale' && 'script out of date',
         queue.envCopy === 'stale' && 'env copy out of date',
         queue.envCopy === 'missing' && 'env file not copied',
-        queue.jobPath === undefined && 'job PATH unknown (plist not installed)',
+        queue.host === 'launchd' &&
+          queue.jobPath === undefined &&
+          'job PATH unknown (plist not installed)',
         queue.jobPath?.node === false && 'node 22 not on the job PATH',
         queue.jobPath?.gh === false && 'gh not logged in',
         queue.jobPath?.claude === false && 'claude does not run'
@@ -263,7 +277,11 @@ export default defineCommand({
           : [
               symbols.warn,
               'agent queue',
-              theme.warn(`${problems.join(', ')}; \`cdwr agent install\``)
+              theme.warn(
+                queue.host === 'launchd'
+                  ? `${problems.join(', ')}; \`cdwr agent install\``
+                  : problems.join(', ')
+              )
             ]
       );
       const implement = formatImplement(
