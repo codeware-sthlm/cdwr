@@ -1,4 +1,7 @@
-import { TURNSTILE_ORIGIN } from '@codeware/shared/util/csp';
+import {
+  SHOWCASE_STORAGE_ORIGIN,
+  TURNSTILE_ORIGIN
+} from '@codeware/shared/util/csp';
 
 import { cspForRequest } from './csp';
 
@@ -65,6 +68,17 @@ describe('cspForRequest', () => {
   ])('%s allows Turnstile: %s', (pathname, allowed) => {
     expect(
       cspForRequest(pathname, {}).requestPolicy.includes(TURNSTILE_ORIGIN)
+    ).toBe(allowed);
+  });
+
+  it.each([
+    ['/admin', false],
+    ['/', true]
+  ])('%s allows the showcase images: %s', (pathname, allowed) => {
+    const { requestPolicy } = cspForRequest(pathname, {});
+
+    expect(
+      sourcesOf(requestPolicy, 'img-src').includes(SHOWCASE_STORAGE_ORIGIN)
     ).toBe(allowed);
   });
 
