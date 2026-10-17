@@ -75,6 +75,8 @@ export function SiteStatsWidget() {
         );
       case 'unreachable':
         return placeholder(t('statistics:unreachable'));
+      case 'waking':
+        return placeholder(t('statistics:waking'));
       case 'ready': {
         const { week } = answer.stats;
         const trend = formatTrend(week.trend.visitors, locale);

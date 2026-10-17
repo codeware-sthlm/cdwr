@@ -26,6 +26,7 @@ const answerSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('none') }),
   z.object({ status: z.literal('unconfigured') }),
   z.object({ status: z.literal('unreachable') }),
+  z.object({ status: z.literal('waking') }),
   z.object({
     status: z.literal('ready'),
     stats: z.object({
@@ -49,6 +50,9 @@ const answerSchema = z.discriminatedUnion('status', [
   })
 ]) satisfies z.ZodType<SiteStatsAnswer>;
 
+/** Waits before asking again while Umami is waking up; the last answer stands after these */
+export const WAKING_RETRY_DELAYS_MS: ReadonlyArray<number> = [10_000, 20_000];
+
 export type SiteStatsState = { status: 'loading' } | SiteStatsAnswer;
 
 /**
@@ -56,7 +60,8 @@ export type SiteStatsState = { status: 'loading' } | SiteStatsAnswer;
  * slow statistics service never holds up the dashboard itself, and again
  * whenever another workspace is selected.
  *
- * A failed request or an unexpected answer counts as `unreachable`.
+ * A `waking` answer is asked again after the delays above. A failed request
+ * or an unexpected answer counts as `unreachable`.
  */
 export function useSiteStats(): SiteStatsState {
   const { selectedTenantID } = useTenantSelection();
@@ -69,17 +74,31 @@ export function useSiteStats(): SiteStatsState {
 
   useEffect(() => {
     const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const settle = (answer: SiteStatsAnswer) =>
       setResult({ tenant: selectedTenantID, answer });
 
-    const load = async () => {
+    const load = async (retry = 0): Promise<void> => {
       try {
         const response = await fetch('/api/site-stats', {
           credentials: 'include',
           signal: controller.signal
         });
         const parsed = answerSchema.safeParse(await response.json());
-        settle(parsed.success ? parsed.data : { status: 'unreachable' });
+        if (controller.signal.aborted) return;
+        const answer: SiteStatsAnswer = parsed.success
+          ? parsed.data
+          : { status: 'unreachable' };
+        const delay = WAKING_RETRY_DELAYS_MS[retry];
+        if (answer.status === 'waking' && delay !== undefined) {
+          settle(answer);
+          timer = setTimeout(() => void load(retry + 1), delay);
+        } else {
+          // Still waking after the last retry counts as down
+          settle(
+            answer.status === 'waking' ? { status: 'unreachable' } : answer
+          );
+        }
       } catch {
         if (!controller.signal.aborted) {
           settle({ status: 'unreachable' });
@@ -88,7 +107,10 @@ export function useSiteStats(): SiteStatsState {
     };
 
     void load();
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
   }, [selectedTenantID]);
 
   return result && result.tenant === selectedTenantID

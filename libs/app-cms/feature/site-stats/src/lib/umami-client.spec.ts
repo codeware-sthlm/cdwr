@@ -151,6 +151,7 @@ describe('createUmamiClient', () => {
     const call = client.stats('site-1', { startAt: 1, endAt: 2 });
 
     await expect(call).rejects.toBeInstanceOf(UmamiError);
+    await expect(call).rejects.toMatchObject({ kind: 'refused' });
     await expect(call).rejects.toMatchObject({
       message: expect.stringContaining('401')
     });
@@ -159,12 +160,20 @@ describe('createUmamiClient', () => {
     });
   });
 
+  it.each([502, 503, 504])('marks a %i as unavailable', async (status) => {
+    const { client } = setup(json({}, status));
+
+    await expect(
+      client.stats('site-1', { startAt: 1, endAt: 2 })
+    ).rejects.toMatchObject({ kind: 'unavailable' });
+  });
+
   it('throws UmamiError when the answer does not match', async () => {
     const { client } = setup(json({ pageviews: 'many' }));
 
     await expect(
       client.stats('site-1', { startAt: 1, endAt: 2 })
-    ).rejects.toBeInstanceOf(UmamiError);
+    ).rejects.toMatchObject({ kind: 'bad-answer' });
   });
 
   it('throws UmamiError when the answer is not JSON', async () => {
@@ -185,7 +194,7 @@ describe('createUmamiClient', () => {
 
     await expect(
       client.stats('site-1', { startAt: 1, endAt: 2 })
-    ).rejects.toBeInstanceOf(UmamiError);
+    ).rejects.toMatchObject({ kind: 'unavailable' });
   });
 
   it('throws UmamiError when the call times out', async () => {
@@ -206,6 +215,9 @@ describe('createUmamiClient', () => {
 
     await expect(
       client.stats('site-1', { startAt: 1, endAt: 2 })
-    ).rejects.toThrow(/timed out after 10 ms/);
+    ).rejects.toMatchObject({
+      kind: 'timeout',
+      message: expect.stringMatching(/timed out after 10 ms/)
+    });
   });
 });

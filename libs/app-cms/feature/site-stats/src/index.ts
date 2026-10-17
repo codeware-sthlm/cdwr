@@ -7,6 +7,7 @@ export {
   type TopEntry,
   createSiteStatsCache,
   fetchSiteStats,
+  isWaking,
   siteStatsCache
 } from './lib/site-stats';
 export {

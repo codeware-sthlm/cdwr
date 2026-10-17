@@ -5,6 +5,7 @@ import type {
   UmamiPageviews,
   UmamiPeriodStats
 } from './umami-client';
+import { UmamiError } from './umami-client';
 
 export type PeriodStats = {
   visitors: number;
@@ -44,12 +45,18 @@ export type SiteStatsAnswer =
   | { status: 'none' }
   | { status: 'unconfigured' }
   | { status: 'unreachable' }
+  | { status: 'waking' }
   | {
       status: 'ready';
       stats: SiteStats;
       /** The tenant's public Umami dashboard, when it has a share link */
       dashboardUrl?: string;
     };
+
+/** Umami did not answer in time, which is what a suspended service does while it resumes */
+export const isWaking = (error: unknown): boolean =>
+  error instanceof UmamiError &&
+  (error.kind === 'timeout' || error.kind === 'unavailable');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TOP_LIMIT = 5;
