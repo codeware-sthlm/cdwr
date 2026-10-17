@@ -18,6 +18,7 @@ export const GROUPS: Group[] = [
   { name: 'signature', summary: 'Request signing between web and cms' },
   { name: 'builder', summary: 'The component build service' },
   { name: 'media', summary: 'Showcase imagery' },
+  { name: 'storybook', summary: 'Storybook: story snapshots for review' },
   { name: 'agent', summary: 'The scheduled agent queue on this machine' }
 ];
 
@@ -188,6 +189,12 @@ export const ENTRIES: Entry[] = [
     summary: 'Generate showcase imagery with Replicate',
     danger: 'spends-money',
     load: () => import('./media/generate-images').then((m) => m.default)
+  },
+  {
+    path: ['storybook', 'snapshot'],
+    summary: 'Render Storybook stories to PNG for review',
+    danger: 'read',
+    load: () => import('./storybook/snapshot').then((m) => m.default)
   },
   {
     path: ['agent', 'status'],

@@ -1,5 +1,17 @@
 import { SITE_THEMES } from '@codeware/shared/theme';
 
+import {
+  COLOR_SCHEMES,
+  type ColorScheme,
+  VIEWPORTS,
+  VIEWPORT_NAMES,
+  type ViewportName
+} from '../../services/snapshot-matrix';
+
+// Re-exported so the command keeps importing everything from here
+export { COLOR_SCHEMES, VIEWPORTS, VIEWPORT_NAMES };
+export type { ColorScheme, ViewportName };
+
 /**
  * The part of a site definition this reads: its pages and its landing page.
  *
@@ -35,19 +47,6 @@ export const isRoutedDefinition = (value: unknown): value is RoutedDefinition =>
  */
 export const SNAPSHOT_THEMES = ['default', ...SITE_THEMES] as const;
 export type SnapshotTheme = (typeof SNAPSHOT_THEMES)[number];
-
-/** What `prefers-color-scheme` can be told, which is what the site follows */
-export const COLOR_SCHEMES = ['light', 'dark'] as const;
-export type ColorScheme = (typeof COLOR_SCHEMES)[number];
-
-/** The screens a page is drawn on; a new name fails to compile without a size */
-export const VIEWPORT_NAMES = ['phone', 'desktop'] as const;
-export type ViewportName = (typeof VIEWPORT_NAMES)[number];
-
-export const VIEWPORTS = {
-  phone: { width: 390, height: 844 },
-  desktop: { width: 1280, height: 900 }
-} as const satisfies Record<ViewportName, { width: number; height: number }>;
 
 /** One page, drawn one way */
 export type Shot = {
