@@ -84,6 +84,23 @@ preference. A theme the site does not offer, or a scheme it locks, is reported a
 than saved under a name that claims otherwise. With `--json`, each shot carries its path, the page's
 HTTP status and any console errors, which is what an agent reads first after changing something.
 
+## Seeing a story
+
+`cdwr storybook snapshot --story <id,…>` renders Storybook stories to PNG, so UI can be reviewed
+(by an agent, which reads the images) without opening Storybook. Each story is drawn on its own page
+in every combination of `--themes` (the toolbar's, default `payload-admin`), `--schemes` (`light`,
+`dark`) and `--viewports` (`phone`, `desktop`), at twice the pixel density, into the gitignored
+`.showcase-images/storybook/` (`--out` to change), named `<story-id>--<theme>-<scheme>-<viewport>.png`.
+
+It serves the static build in `dist/storybook`, building it first when it is missing or with
+`--build`. `--url http://localhost:6006` shoots a running Storybook instead, with no build and no
+server. A story that draws nothing within 15 seconds is reported and the rest carry on; the command
+then exits 1. Story ids are the ones in the story's URL (`?id=…`), or `dist/storybook/index.json`.
+
+```sh
+cdwr storybook snapshot --story app-cms-dashboard-sitestatssheetbody--with-data,app-cms-dashboard-sitestatssheetbody--empty
+```
+
 ## Deploying
 
 `cdwr fly deploy <app> --env preview --pr 566` dispatches the Fly Deployment workflow, so a pull
