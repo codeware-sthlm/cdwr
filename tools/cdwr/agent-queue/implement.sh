@@ -110,15 +110,15 @@ ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
     Skill Read Grep Glob Agent \
     "Edit($WT)" "Write($WT)" \
     "Bash(git *)" "Bash(gh pr *)" "Bash(gh api repos/codeware-sthlm/cdwr/*)" \
-    "Bash(tools/cdwr/agent-queue/gh-review.sh *)" \
+    "Bash(tools/cdwr/agent-queue/gh-review.sh *)" "Bash(tools/cdwr/agent-queue/linear-upload.sh *)" \
     "Bash(pnpm nx *)" "Bash(pnpm -C * nx *)" "Bash(pnpm -C * vitest *)" "Bash(pnpm -C * install*)" \
     "Bash(pnpm cdwr agent worktree *)" \
-    "Bash(jq *)" "Bash(uuidgen*)" "Bash(cut *)" "Bash(date *)" \
+    "Bash(jq *)" "Bash(uuidgen*)" "Bash(cut *)" "Bash(date *)" "Bash(wc -c *)" \
     "Bash(tools/cdwr/agent-queue/session.sh register)" "Bash(tools/cdwr/agent-queue/session.sh ticket *)" \
     "Bash(tools/cdwr/agent-queue/wait.sh*)" \
     "Bash(tools/cdwr/agent-queue/notify.sh)" "Bash(~/.claude/hooks/notify-slack.sh)" "Bash($HOME/.claude/hooks/notify-slack.sh)" \
     "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels \
-    "$L"__save_issue "$L"__save_comment \
+    "$L"__save_issue "$L"__save_comment "$L"__prepare_attachment_upload "$L"__create_attachment_from_upload \
   > "$result" 2> "$log" || rc=$?
 
 jq -r '.result // empty, (.errors // [])[]' "$result" >> "$log" 2>/dev/null || cat "$result" >> "$log"
