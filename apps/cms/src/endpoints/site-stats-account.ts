@@ -184,7 +184,7 @@ export const siteStatsAccountEndpoint: Endpoint = {
       return refuse(StatusCodes.FORBIDDEN);
     }
 
-    const username = user.email.toLowerCase();
+    let username = user.email.toLowerCase();
     const password = newPassword();
 
     try {
@@ -192,6 +192,8 @@ export const siteStatsAccountEndpoint: Endpoint = {
       let mode = action;
       if (mode === 'reset' && accountId) {
         try {
+          // The mail names the login Umami has, which may differ from the cms email
+          username = (await admin.umami.getUser(accountId)).username;
           await admin.umami.setPassword(accountId, password);
         } catch (error) {
           if (!(error instanceof UmamiNotFoundError)) {

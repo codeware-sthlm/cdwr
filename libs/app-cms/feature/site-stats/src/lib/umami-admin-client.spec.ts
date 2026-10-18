@@ -125,6 +125,47 @@ describe('createUmamiAdminClient', () => {
     });
   });
 
+  describe('getUser', () => {
+    it('reads the user', async () => {
+      const { fetchImpl, client } = setup(
+        json({ id: 'u-1', username: 'ada@b.test', role: 'view-only' })
+      );
+
+      await expect(client.getUser('u-1')).resolves.toEqual({
+        id: 'u-1',
+        username: 'ada@b.test'
+      });
+
+      const { url, init } = call(fetchImpl);
+      expect(url).toBe('https://umami.test/api/users/u-1');
+      expect(init?.method).toBe('GET');
+    });
+
+    it('throws a not-found error for an unknown user', async () => {
+      const { client } = setup(text('', 404));
+
+      await expect(client.getUser('u-1')).rejects.toBeInstanceOf(
+        UmamiNotFoundError
+      );
+    });
+
+    it('throws when the answer has no username', async () => {
+      const { client } = setup(json({ id: 'u-1' }));
+
+      await expect(client.getUser('u-1')).rejects.toMatchObject({
+        kind: 'bad-answer'
+      });
+    });
+
+    it('throws when Umami refuses', async () => {
+      const { client } = setup(text('', 401));
+
+      await expect(client.getUser('u-1')).rejects.toMatchObject({
+        kind: 'refused'
+      });
+    });
+  });
+
   describe('setPassword', () => {
     it('posts the password to the user', async () => {
       const { fetchImpl, client } = setup(json({ id: 'u-1' }));
