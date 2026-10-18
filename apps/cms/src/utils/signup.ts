@@ -1,6 +1,9 @@
 import { InviteCodeRefused } from '@codeware/app-cms/data-access';
 import type { HumanCheckFields } from '@codeware/shared/util/human-check';
-import { deploymentNameIssue } from '@codeware/shared/util/pure';
+import {
+  deploymentNameIssue,
+  toDeploymentName
+} from '@codeware/shared/util/pure';
 import {
   type BasePayload,
   type PayloadRequest,
@@ -48,15 +51,11 @@ export type SignupBody = {
 export const isSignupBody = (value: unknown): value is SignupBody =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/**
- * A site address that an existing workspace already answers to, by its
- * deployment or by its slug: older workspaces may predate the deployment
- * field, and their apps and folders are named after the slug.
- */
-export class DeploymentTaken extends Error {
-  constructor() {
-    super('The site address is taken');
-    this.name = 'DeploymentTaken';
+/** A site name or address that an existing workspace already answers to */
+export class SiteTaken extends Error {
+  constructor(readonly reason: 'name' | 'address') {
+    super('The site name is taken');
+    this.name = 'SiteTaken';
   }
 }
 
@@ -75,15 +74,22 @@ export async function isSignupOpen(payload: BasePayload): Promise<boolean> {
   return docs[0]?.signupOpen === true;
 }
 
+const sameName = (a: string, b: string): boolean =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
 /**
- * Whether a workspace already answers to this site address, by its
- * deployment or its slug. Pass `req` to read inside a transaction.
+ * Why a site name cannot be used, if it cannot: `address` when a workspace
+ * already answers to the derived deployment, by its deployment or its slug,
+ * `name` when one carries the same name, ignoring case and surrounding
+ * spaces. Pass `req` to read inside a transaction.
  */
-export async function isDeploymentTaken(
+export async function isSiteTaken(
   payload: BasePayload,
-  deployment: string,
+  { name, deployment }: { name: string; deployment: string },
   req?: Partial<PayloadRequest>
-): Promise<boolean> {
+): Promise<'name' | 'address' | null> {
+  const options = { overrideAccess: true, ...(req ? { req } : {}) };
+
   const { totalDocs } = await payload.count({
     collection: 'tenants',
     where: {
@@ -92,10 +98,22 @@ export async function isDeploymentTaken(
         { slug: { equals: deployment } }
       ]
     },
-    overrideAccess: true,
-    ...(req ? { req } : {})
+    ...options
   });
-  return totalDocs > 0;
+  if (totalDocs > 0) {
+    return 'address';
+  }
+
+  // `equals` is case-sensitive, so ask loosely and compare here
+  const { docs } = await payload.find({
+    collection: 'tenants',
+    where: { name: { contains: name.trim() } },
+    depth: 0,
+    pagination: false,
+    select: { name: true },
+    ...options
+  });
+  return docs.some((doc) => sameName(doc.name, name)) ? 'name' : null;
 }
 
 const text = (value: unknown, max = MAX_TEXT): string | null => {
@@ -117,7 +135,6 @@ export function parseSignup(
   const name = text(body['name']);
   const email = text(body['email'], 254)?.toLowerCase() ?? null;
   const siteName = text(body['siteName']);
-  const deployment = text(body['deployment'], 64);
   const password = typeof body['password'] === 'string' ? body['password'] : '';
 
   if (!code || !name || !email || !EMAIL.test(email) || !siteName) {
@@ -126,7 +143,9 @@ export function parseSignup(
   if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
     return { ok: false, refusal: 'password' };
   }
-  if (!deployment || deploymentNameIssue(deployment) !== null) {
+  // The address follows from the name; a posted one is ignored
+  const deployment = toDeploymentName(siteName);
+  if (deploymentNameIssue(deployment) !== null) {
     return { ok: false, refusal: 'deployment' };
   }
 
@@ -179,8 +198,8 @@ export function signupRefusal(error: unknown): SignupRefusal {
     }
   }
 
-  if (error instanceof DeploymentTaken) {
-    return 'deployment-taken';
+  if (error instanceof SiteTaken) {
+    return error.reason === 'address' ? 'deployment-taken' : 'name-taken';
   }
 
   if (error instanceof ValidationError) {

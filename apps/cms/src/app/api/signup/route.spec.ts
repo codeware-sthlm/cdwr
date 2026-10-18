@@ -59,10 +59,16 @@ const body = {
   email: 'Ada@Example.com',
   password: 'correct horse battery',
   siteName: 'Ada Engines',
-  deployment: 'ada-engines',
   locale: 'sv',
   humanCheck: { token: 't', honeypot: '', elapsedMs: 5000 }
 };
+
+/** Answers the settings read and the tenant name lookup apart */
+const findDocs =
+  (settings: Record<string, unknown>, tenants: Array<{ name: string }> = []) =>
+  async ({ collection }: { collection: string }) => ({
+    docs: collection === 'tenants' ? tenants : [settings]
+  });
 
 const payload = {
   db: {
@@ -111,9 +117,9 @@ beforeEach(() => {
     collection === 'tenants' ? { id: 11 } : { id: 21 }
   );
   payload.findByID.mockResolvedValue({ _verificationToken: 'verify-token' });
-  payload.find.mockResolvedValue({
-    docs: [{ signupNotifyEmail: 'owner@example.com' }]
-  });
+  payload.find.mockImplementation(
+    findDocs({ signupNotifyEmail: 'owner@example.com' })
+  );
   jest.mocked(sendSignupEmails).mockResolvedValue(undefined);
 });
 
@@ -263,7 +269,7 @@ describe('POST /api/signup', () => {
   });
 
   it('sends no notice when no address is set', async () => {
-    payload.find.mockResolvedValue({ docs: [{ signupNotifyEmail: null }] });
+    payload.find.mockImplementation(findDocs({ signupNotifyEmail: null }));
 
     const response = await post();
 
@@ -328,12 +334,25 @@ describe('POST /api/signup', () => {
         collection: 'tenants',
         where: {
           or: [
-            { deployment: { equals: body.deployment } },
-            { slug: { equals: body.deployment } }
+            { deployment: { equals: 'ada-engines' } },
+            { slug: { equals: 'ada-engines' } }
           ]
         }
       })
     );
+    expect(payload.create).not.toHaveBeenCalled();
+    expect(payload.db.rollbackTransaction).toHaveBeenCalledWith(TRANSACTION);
+  });
+
+  it('refuses a name an existing workspace has, ignoring case, before creating', async () => {
+    payload.find.mockImplementation(
+      findDocs({ signupOpen: true }, [{ name: ' ADA engines ' }])
+    );
+
+    const response = await post({ ...body, deployment: 'ignored' });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'name-taken' });
     expect(payload.create).not.toHaveBeenCalled();
     expect(payload.db.rollbackTransaction).toHaveBeenCalledWith(TRANSACTION);
   });

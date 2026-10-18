@@ -16,14 +16,14 @@ import { verifyEmailMail } from '../../../collections/users/verify-email';
 import config from '../../../payload.config';
 import { refuseUnlessHuman } from '../../../security/public-submit';
 import {
-  DeploymentTaken,
   REFUSAL_STATUS,
   SIGNUP_RATE_LIMIT,
   type SignupInput,
   type SignupRefusal,
+  SiteTaken,
   hostAppName,
-  isDeploymentTaken,
   isSignupBody,
+  isSiteTaken,
   parseSignup,
   signupRefusal
 } from '../../../utils/signup';
@@ -74,8 +74,13 @@ async function createWorkspace(
         attemptsKey
       });
 
-      if (await isDeploymentTaken(payload, input.deployment, req)) {
-        throw new DeploymentTaken();
+      const taken = await isSiteTaken(
+        payload,
+        { name: input.siteName, deployment: input.deployment },
+        req
+      );
+      if (taken) {
+        throw new SiteTaken(taken);
       }
 
       // Pending until it is provisioned by hand; the api key is minted by the

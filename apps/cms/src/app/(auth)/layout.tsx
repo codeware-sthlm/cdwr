@@ -1,3 +1,4 @@
+import { t } from '@codeware/shared/util/i18n';
 import { headers } from 'next/headers';
 import React from 'react';
 
@@ -5,7 +6,9 @@ import './globals.css';
 import { ColorSchemeToggle } from '../(frontend)/components/ColorSchemeToggle.client';
 import { ThemeProvider } from '../(frontend)/components/theme-provider';
 import { NONCE_HEADER } from '../../utils/csp';
-import { getRequestLocale } from '../../utils/request-locale';
+import { LANGUAGE_COOKIE, getRequestLocale } from '../../utils/request-locale';
+
+import { LanguageSwitch } from './LanguageSwitch.client';
 
 /** Shell for the platform's auth pages, themed like the admin */
 export default async function AuthLayout({
@@ -28,7 +31,12 @@ export default async function AuthLayout({
           disableTransitionOnChange
           nonce={nonce}
         >
-          <header className="flex justify-end p-6 sm:p-8">
+          <header className="flex items-center justify-end gap-3 p-6 sm:p-8">
+            <LanguageSwitch
+              current={locale}
+              cookieName={LANGUAGE_COOKIE}
+              label={t(locale, 'language.label')}
+            />
             <ColorSchemeToggle />
           </header>
           <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center p-6 sm:p-8">

@@ -32,17 +32,19 @@ const labels: SignupFormLabels = {
   password: 'Password',
   passwordHint: 'At least 10 characters.',
   siteName: 'Site name',
-  deployment: 'Site address',
-  deploymentHint: 'Lowercase letters, digits and hyphens.',
   sectionInvite: 'Your invite',
   sectionYou: 'You',
   sectionSite: 'Your site',
+  sectionInviteHelp: 'The code you were given decides that you may sign up.',
+  sectionYouHelp:
+    'Your own account; you sign in with this address and password.',
+  sectionSiteHelp: 'The name your visitors see; the address follows from it.',
   inviteCodeHelp:
     'Signup is by invitation. You get an invite code from Codeware; ask the person who pointed you here, or write to us.',
   addressPreview: 'A custom domain can be connected later.',
   availabilityChecking: 'Checking…',
   availabilityAvailable: 'Available',
-  availabilityTaken: 'This site address is already taken.',
+  availabilityTaken: 'That name is already taken. Try another.',
   submit: 'Create site',
   submitting: 'Creating site...',
   successTitle: 'Check your email to confirm your address',
@@ -54,8 +56,7 @@ const empty: SignupValues = {
   name: '',
   email: '',
   password: '',
-  siteName: '',
-  deployment: ''
+  siteName: ''
 };
 
 const filled: SignupValues = {
@@ -63,8 +64,7 @@ const filled: SignupValues = {
   name: 'Ada Lovelace',
   email: 'ada@example.com',
   password: 'correct horse battery',
-  siteName: 'Analytical Engines',
-  deployment: 'analytical-engines'
+  siteName: 'Analytical Engines'
 };
 
 const props: SignupFormViewProps = {
@@ -130,8 +130,7 @@ export const FieldErrors: StoryObj = {
       fieldErrors={{
         email: 'This address already has an account.',
         password: 'The password is too common.',
-        siteName: 'A site with this name already exists.',
-        deployment: 'This site address is already taken.'
+        siteName: 'That name is already taken. Try another.'
       }}
     />
   )
