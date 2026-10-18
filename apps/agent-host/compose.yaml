@@ -1,0 +1,28 @@
+# Run from this directory: docker compose up -d
+services:
+  agent:
+    image: ghcr.io/codeware-sthlm/cdwr-agent:${AGENT_IMAGE_TAG:-main}
+    container_name: cdwr-agent
+    init: true
+    # Lets a run finish its exit trap before the kill
+    stop_grace_period: 2m
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - agent-home:/home/agent/.cdwr/agent-queue
+      - worktrees:/work
+      - pnpm-store:/pnpm-store
+      - claude-home:/home/agent/.claude
+    tmpfs:
+      - /run/agent:mode=0700,uid=1000,gid=1000
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  agent-home:
+  worktrees:
+  pnpm-store:
+  claude-home:

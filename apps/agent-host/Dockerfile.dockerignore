@@ -1,0 +1,13 @@
+# Only what the image copies gets into the build context
+*
+!/tools/cdwr/agent-queue
+/tools/cdwr/agent-queue/*
+!/tools/cdwr/agent-queue/run.sh
+!/tools/cdwr/agent-queue/lib.sh
+!/tools/cdwr/agent-queue/waits.sh
+!/tools/cdwr/agent-queue/implement.sh
+!/tools/cdwr/agent-queue/github-app.sh
+!/tools/cdwr/agent-queue/notify.sh
+!/tools/cdwr/agent-queue/watch.jq
+!/apps/agent-host/entrypoint.sh
+!/apps/agent-host/git-credential-app.sh
