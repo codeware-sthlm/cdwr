@@ -190,12 +190,14 @@ fly secrets set DATABASE_URL=… DIRECT_DATABASE_URL=… APP_SECRET=… -a cdwr-
 Umami opens a pool of up to 10 connections per machine, and the session pooler's 15 clients run out
 (`EMAXCONNSESSION`), which takes every statistics read down. `DIRECT_DATABASE_URL` is the session
 pooler or the direct connection, since migrations run at every boot and need a session. Keep the app
-at one machine; `fly status -a cdwr-umami` should list exactly one. Umami's migrations create an `admin` / `umami` account, so change that password
+at one machine; `fly status -a cdwr-umami` should list exactly one. A deploy keeps the app's live Fly
+config, so a change to `apps/umami/fly.toml` reaches the app only through
+`cdwr fly patch --patch always-on-small --apps cdwr-umami`. Umami's migrations create an `admin` / `umami` account, so change that password
 before the app is ever public: run the same image locally against the same database, sign in on
 `localhost:3000` and change it there. Only then set `DEPLOY_ENABLED=true` in production `/apps/umami`.
 
 ```sh
-docker run --rm -p 3000:3000 -e DATABASE_URL=… -e APP_SECRET=… ghcr.io/umami-software/umami:<tag>
+docker run --rm -p 3000:3000 -e DATABASE_URL=… -e DIRECT_DATABASE_URL=… -e APP_SECRET=… ghcr.io/umami-software/umami:<tag>
 ```
 
 The API token the cms uses lives in Infisical `/integrations/umami`.
