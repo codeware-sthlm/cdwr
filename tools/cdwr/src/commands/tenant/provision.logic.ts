@@ -6,6 +6,7 @@ import {
 import { z } from 'zod';
 
 import type { Environment } from '../../services/infisical';
+import { TEAM_STEP_TEXT, type TeamStep } from '../../services/stats-team.logic';
 
 /** The workflow every deployment goes through, including one started here */
 export const DEPLOY_WORKFLOW = 'fly-deployment.yml';
@@ -277,7 +278,8 @@ export function provisionSteps(
   keys: ReadonlyArray<KeyPlan>,
   flags: ReadonlyArray<FlagPlan> = [],
   stats?: StatsPlan,
-  flip = false
+  flip = false,
+  team: ReadonlyArray<TeamStep> = []
 ): string[] {
   return [
     ...folders.map((folder) => `Create folder ${folderPath(folder)}`),
@@ -294,6 +296,7 @@ export function provisionSteps(
         ? `Keep ${DEPLOY_ENABLED_KEY} in ${path} (already true)`
         : `Keep ${DEPLOY_ENABLED_KEY}=${value} in ${path} (paused)`;
     }),
+    ...team.map((step) => `Statistics: ${TEAM_STEP_TEXT[step]}`),
     ...(stats ? [statsStep(stats)] : []),
     ...(flip ? [FLIP_STEP] : [])
   ];

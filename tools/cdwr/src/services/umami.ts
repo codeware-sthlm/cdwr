@@ -322,7 +322,12 @@ export async function createTeam(
     body: { name }
   });
   if (!response.ok) throw await refused('the team creation', response);
-  return teamSchema.parse(await response.json());
+  // Umami answers the transaction result: the team, then the owner's membership
+  const body = z
+    .union([teamSchema, z.tuple([teamSchema]).rest(z.unknown())])
+    .parse(await response.json());
+  const team = Array.isArray(body) ? body[0] : body;
+  return { id: team.id, name: team.name };
 }
 
 /** Add a user to a team with this role */
@@ -340,17 +345,18 @@ export async function addTeamUser(
   if (!response.ok) throw await refused('the team member', response);
 }
 
-/** Every member of a team, read page by page */
+/** Every member of a team, read page by page; `null` when Umami has no such team */
 export async function listTeamUsers(
   conn: UmamiConnection,
   teamId: string
-): Promise<UmamiTeamUser[]> {
+): Promise<UmamiTeamUser[] | null> {
   const users: UmamiTeamUser[] = [];
   for (let page = 1; ; page++) {
     const response = await request(
       conn,
       `/teams/${encodeURIComponent(teamId)}/users?page=${page}&pageSize=${PAGE_SIZE}`
     );
+    if (response.status === 404) return null;
     if (!response.ok) throw await refused('the team member list', response);
     const { data, count } = teamUserPageSchema.parse(await response.json());
     users.push(...data.map(({ userId, role }) => ({ userId, role })));

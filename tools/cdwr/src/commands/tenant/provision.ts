@@ -7,7 +7,6 @@ import type { Context } from '../../cli/context';
 import { CliError, EXIT, messageOf } from '../../cli/errors';
 import { input } from '../../cli/inputs';
 import {
-  redactReported,
   reported,
   resolveDatabaseUrl,
   runCmsScript,
@@ -32,6 +31,19 @@ import {
   setInfisicalSecret
 } from '../../services/infisical';
 import { sleep } from '../../services/shell';
+import {
+  applyTenantTeam,
+  gatherTenantTeam,
+  recordTeamId,
+  requireAdmin
+} from '../../services/stats-team';
+import {
+  type TenantTeamInput,
+  type TenantTeamPlan,
+  planTenantTeam,
+  teamMissingAdvice
+} from '../../services/stats-team.logic';
+import { listTenantRows } from '../../services/tenant-rows';
 import {
   type UmamiConnection,
   createWebsite,
@@ -70,7 +82,6 @@ import {
   statsStep,
   statsWrites,
   statusReportSchema,
-  tenantRowSchema,
   workspaceChoices
 } from './provision.logic';
 import { awaitLive } from './provision.wait';
@@ -80,38 +91,8 @@ type Connection = Awaited<ReturnType<typeof createClient>>;
 const RETRY_HINT =
   'Run `cdwr tenant provision` again to finish - it only writes what is still missing.';
 
-/** Read every workspace with its deployment name and key from Payload */
 /** Rows the choices loader read, so the plan need not tunnel again */
 let lastRows: { key: string; rows: TenantRow[] } | undefined;
-
-async function listTenantRows(
-  root: string,
-  environment: Environment,
-  databaseUrl: string
-): Promise<TenantRow[]> {
-  const { stdout, stderr } = await runCmsScript(
-    root,
-    'list-tenant-deployments.ts',
-    environment,
-    { PROVISION_DATABASE_URL: databaseUrl },
-    { reports: 'TENANT_DEPLOYMENTS' }
-  );
-  const json = reported(stdout, 'TENANT_DEPLOYMENTS');
-  if (!json) {
-    throw new Error(
-      [
-        'Listing script did not report a result.',
-        '',
-        '--- stdout ---',
-        redactReported(stdout, 'TENANT_DEPLOYMENTS').trim() || '<empty>',
-        '',
-        '--- stderr ---',
-        stderr.trim() || '<empty>'
-      ].join('\n')
-    );
-  }
-  return z.array(tenantRowSchema).parse(JSON.parse(json));
-}
 
 /** Folder names directly under a path, cached per plan */
 function namesInFactory(
@@ -171,17 +152,21 @@ async function waitUntilRunning(
 
 /** What the write-back script reports */
 const statsReportSchema = z.object({
-  outcome: z.enum(['set', 'unchanged', 'conflict']),
+  outcome: z.enum(['set', 'unchanged', 'conflict']).optional(),
   current: z.string().optional(),
   share: z.enum(['set', 'unchanged', 'conflict']).optional(),
   currentShare: z.string().optional()
 });
 
-type StatsConnection = UmamiConnection & { teamId: string };
+/** The workspace's team plan with what it was planned from */
+interface TeamWork {
+  input: TenantTeamInput;
+  plan: TenantTeamPlan;
+}
 
 /**
- * Looks up the workspace's Umami website without writing anything. A Umami
- * failure skips the step rather than failing the plan.
+ * Looks up the workspace's Umami team and website without writing anything.
+ * A Umami failure skips the step rather than failing the plan.
  */
 async function planStats(
   environment: Environment,
@@ -191,7 +176,8 @@ async function planStats(
   onWaking: () => void
 ): Promise<{
   plan: StatsPlan;
-  connection?: StatsConnection;
+  connection?: UmamiConnection;
+  team?: TeamWork;
   error?: string;
 }> {
   if (environment !== 'production')
@@ -203,34 +189,52 @@ async function planStats(
     const provisioning = await readUmamiProvisioning(environment);
     if (provisioning.status === 'unconfigured')
       return { plan: { action: 'skip', reason: 'unconfigured' } };
-    // COD-587 step 4: temporary, the shared team goes when teams are per tenant
-    const teamId = (await readSecrets(environment, '/integrations/umami'))[
-      'TEAM_ID'
-    ];
-    if (!teamId) return { plan: { action: 'skip', reason: 'unconfigured' } };
-    const connection = { ...provisioning, teamId, onWaking };
+    const connection: UmamiConnection = {
+      url: provisioning.url,
+      apiKey: provisioning.apiKey,
+      onWaking
+    };
+    const readerConnection = {
+      ...connection,
+      apiKey: provisioning.readApiKey
+    };
 
     if (tenant.statsWebsiteId) {
       const known = await getWebsite(connection, tenant.statsWebsiteId);
+      if (!known)
+        return {
+          plan: { action: 'unknown', id: tenant.statsWebsiteId },
+          connection
+        };
+      const input = await gatherTenantTeam(
+        connection,
+        readerConnection,
+        tenant
+      );
       return {
-        plan: known
-          ? {
-              action: 'keep',
-              id: known.id,
-              shareId: pickShare(
-                await listShares(connection, known.id),
-                tenant.statsShareId
-              )
-            }
-          : { action: 'unknown', id: tenant.statsWebsiteId },
-        connection
+        plan: {
+          action: 'keep',
+          id: known.id,
+          shareId: pickShare(
+            await listShares(connection, known.id),
+            tenant.statsShareId
+          )
+        },
+        connection,
+        team: { input, plan: planTenantTeam(input) }
       };
     }
 
+    const input = await gatherTenantTeam(connection, readerConnection, tenant);
+    const team = { input, plan: planTenantTeam(input) };
     const domain = statsDomain(tenant, cmsFlyApp);
-    const match = (await listTeamWebsites(connection, connection.teamId)).find(
-      (site) => normalizeDomain(site.domain) === domain
-    );
+    // Only the tenant's own team is searched; without one the website is new
+    const match =
+      input.statsTeamId && !team.plan.problem
+        ? (await listTeamWebsites(connection, input.statsTeamId)).find(
+            (site) => normalizeDomain(site.domain) === domain
+          )
+        : undefined;
     return {
       plan: match
         ? {
@@ -243,7 +247,8 @@ async function planStats(
             )
           }
         : { action: 'create', name: tenant.name, domain },
-      connection
+      connection,
+      team
     };
   } catch (error) {
     return {
@@ -266,7 +271,8 @@ interface PlanData {
   databaseUrl: string;
   tenantId: number;
   stats: StatsPlan;
-  statsConnection: StatsConnection | undefined;
+  statsConnection: UmamiConnection | undefined;
+  statsTeam: TeamWork | undefined;
   currentShareId: string | null;
   /** The workspace is a new signup that gets activated once its site is up */
   flip: boolean;
@@ -278,9 +284,9 @@ interface PlanData {
 }
 
 /**
- * Creates or adopts the workspace's Umami website and writes its id back.
- * Never throws: a failure is a warning with a retry hint. Statistics are
- * optional, so it never fails the provision itself.
+ * Sets up the workspace's Umami team, then creates or adopts its website in
+ * that team and writes the ids back. Never throws: a failure is a warning with
+ * a retry hint. Statistics are optional, so it never fails the provision itself.
  */
 async function applyStats(
   ctx: Pick<Context, 'ui'>,
@@ -289,16 +295,20 @@ async function applyStats(
     environment,
     databaseUrl,
     tenantId,
+    deployment,
     stats,
     connection,
+    team,
     currentShareId
   }: {
     root: string;
     environment: Environment;
     databaseUrl: string;
     tenantId: number;
+    deployment: string;
     stats: StatsPlan;
-    connection: StatsConnection | undefined;
+    connection: UmamiConnection | undefined;
+    team: TeamWork | undefined;
     /** The share slug the workspace already records */
     currentShareId: string | null;
   }
@@ -316,9 +326,49 @@ async function applyStats(
     };
   }
 
+  let failed = false;
+  // Updated the moment the team exists, so a later failure still knows it
+  let teamId = team?.input.statsTeamId ?? null;
+  if (team?.plan.problem === 'team-missing' && teamId) {
+    // The recorded id is never replaced here; a person clears it
+    ctx.ui.warn(`Statistics team: ${teamMissingAdvice(teamId)}`);
+    teamId = null;
+    failed = true;
+  } else if (team?.plan.steps.length) {
+    try {
+      // Checked before anything is created, so a refusal changes nothing
+      if (team.plan.needsAdmin) await requireAdmin(connection);
+      await ctx.ui.task(
+        'Setting up the statistics team',
+        () =>
+          applyTenantTeam(
+            connection,
+            { deployment },
+            team.plan,
+            team.input,
+            async (id) => {
+              await recordTeamId(root, environment, databaseUrl, tenantId, id);
+              teamId = id;
+            }
+          ),
+        ({ done }) =>
+          `Statistics team ready (${done.join(', ') || 'no changes'})`
+      );
+    } catch (error) {
+      ctx.ui.warn(
+        `Statistics team not set up: ${messageOf(error)} ${RETRY_HINT}`
+      );
+      failed = true;
+    }
+  }
+
+  // A new website needs its team; an existing one is kept whatever happened to the move
+  if (stats.action !== 'keep' && !teamId)
+    return { action: stats.action, failed: true };
+
   // Nothing to write: the workspace already records this website's share
   if (stats.action === 'keep' && statsWrites(stats, currentShareId) === 0) {
-    return { action: 'keep', id: stats.id, failed: false };
+    return { action: 'keep', id: stats.id, failed };
   }
 
   try {
@@ -338,7 +388,7 @@ async function applyStats(
         } else {
           // Checked again right before creating: the site may have appeared since the plan
           const existing = (
-            await listTeamWebsites(connection, connection.teamId)
+            await listTeamWebsites(connection, teamId as string)
           ).find((site) => normalizeDomain(site.domain) === stats.domain);
           if (existing) {
             id = existing.id;
@@ -348,7 +398,7 @@ async function applyStats(
               await createWebsite(connection, {
                 name: stats.name,
                 domain: stats.domain,
-                teamId: connection.teamId
+                teamId: teamId as string
               })
             ).id;
           }
@@ -393,7 +443,7 @@ async function applyStats(
       },
       ({ id }) => `Statistics website ${id} ready with a share link`
     );
-    return { ...done, failed: false };
+    return { ...done, failed };
   } catch (error) {
     ctx.ui.warn(`Statistics website not set up: ${messageOf(error)}`);
     return { action: stats.action, failed: true };
@@ -612,6 +662,7 @@ export default defineCommand({
     const {
       plan: stats,
       connection: statsConnection,
+      team: statsTeam,
       error
     } = await ctx.ui.task(
       'Looking up the statistics website in Umami',
@@ -648,7 +699,15 @@ export default defineCommand({
     ];
 
     return {
-      steps: provisionSteps(deployment, folders, keys, flags, stats, flip),
+      steps: provisionSteps(
+        deployment,
+        folders,
+        keys,
+        flags,
+        stats,
+        flip,
+        statsTeam?.plan.steps
+      ),
       notes,
       target: { environment, name: deployment },
       data: {
@@ -665,6 +724,7 @@ export default defineCommand({
         tenantId: tenant.id,
         stats,
         statsConnection,
+        statsTeam,
         currentShareId: tenant.statsShareId,
         flip,
         skippedFlip: noWait && pendingCms && !paused,
@@ -673,7 +733,8 @@ export default defineCommand({
           folders.length +
           keysToWrite.length +
           flags.filter(({ action }) => action === 'create').length +
-          statsWrites(stats, tenant.statsShareId)
+          statsWrites(stats, tenant.statsShareId) +
+          (statsTeam?.plan.steps.length ?? 0)
       } satisfies PlanData
     };
   },
@@ -693,6 +754,7 @@ export default defineCommand({
       tenantId,
       stats,
       statsConnection,
+      statsTeam,
       currentShareId,
       flip,
       skippedFlip,
@@ -783,8 +845,10 @@ export default defineCommand({
       environment,
       databaseUrl,
       tenantId,
+      deployment,
       stats,
       connection: statsConnection,
+      team: statsTeam,
       currentShareId
     });
 

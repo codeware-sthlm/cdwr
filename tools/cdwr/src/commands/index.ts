@@ -131,6 +131,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./tenant/gate').then((m) => m.default)
   },
   {
+    path: ['tenant', 'stats-teams'],
+    summary: "Give each workspace's statistics website its own Umami team",
+    danger: 'mutate',
+    load: () => import('./tenant/stats-teams').then((m) => m.default)
+  },
+  {
     path: ['infisical', 'tenants'],
     summary: 'Tenant folders per app and their deploy switch',
     danger: 'read',

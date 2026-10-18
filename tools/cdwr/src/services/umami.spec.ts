@@ -311,7 +311,21 @@ describe('Umami client when the service is waking', () => {
     expect(init.method).toBe('GET');
   });
 
-  it('creates a team', async () => {
+  it('creates a team from the team and membership Umami answers', async () => {
+    fetchMock.mockResolvedValue(
+      reply([
+        { id: 't1', name: 'Acme', extra: 1 },
+        { id: 'm1', teamId: 't1', userId: 'u1', role: 'team-owner' }
+      ])
+    );
+    expect(await createTeam(conn, 'Acme')).toEqual({ id: 't1', name: 'Acme' });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://umami.test/api/teams');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ name: 'Acme' });
+  });
+
+  it('creates a team from a plain object answer', async () => {
     fetchMock.mockResolvedValue(reply({ id: 't1', name: 'Acme', extra: 1 }));
     expect(await createTeam(conn, 'Acme')).toEqual({ id: 't1', name: 'Acme' });
     const [url, init] = fetchMock.mock.calls[0];
@@ -371,6 +385,16 @@ describe('Umami client when the service is waking', () => {
       'https://umami.test/api/teams/t1/users?page=1&pageSize=100'
     );
     expect(fetchMock.mock.calls[1][0]).toContain('page=2');
+  });
+
+  it('answers null for a team Umami does not know', async () => {
+    fetchMock.mockResolvedValue(reply({}, 404));
+    expect(await listTeamUsers(conn, 'gone')).toBeNull();
+  });
+
+  it('still refuses other failed member lists', async () => {
+    fetchMock.mockResolvedValue(reply({}, 403));
+    await expect(listTeamUsers(conn, 't1')).rejects.toThrow('403');
   });
 
   it('transfers a website to a team', async () => {
