@@ -8,6 +8,7 @@ export * from './lib/mail-failure-row';
 export * from './lib/palette-row';
 export * from './lib/pending-site-card';
 export * from './lib/platform-status';
+export * from './lib/site-stats-account-action';
 export * from './lib/site-stats-format';
 export * from './lib/site-stats-period-toggle';
 export * from './lib/site-stats-sheet-body';

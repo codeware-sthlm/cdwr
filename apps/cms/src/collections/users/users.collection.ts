@@ -22,6 +22,11 @@ import { forgotPasswordMail } from './forgot-password-email';
 import { applyTenantLocaleHook } from './hooks/apply-tenant-locale.hook';
 import { ensureTenantHook } from './hooks/ensure-tenant.hook';
 import { mailVerificationAfterCreateHook } from './hooks/mail-verification-after-create.hook';
+import {
+  deleteStatsAccountHook,
+  rememberStatsAccountHook,
+  removeStatsTeamMembershipHook
+} from './hooks/stats-account-lifecycle.hook';
 import { validateTenantsArrayAccessHook } from './hooks/validate-tenants-array-access.hook';
 import { verifyOnlySelfServeHook } from './hooks/verify-only-self-serve.hook';
 import { verifyTenantModeAccessHook } from './hooks/verify-tenant-mode-access.hook';
@@ -116,7 +121,12 @@ const users: CollectionConfig<'users'> = {
     beforeOperation: [verifyOnlySelfServeHook],
     beforeValidate: [ensureTenantHook],
     beforeChange: [validateTenantsArrayAccessHook],
-    afterChange: [mailVerificationAfterCreateHook],
+    beforeDelete: [rememberStatsAccountHook],
+    afterChange: [
+      mailVerificationAfterCreateHook,
+      removeStatsTeamMembershipHook
+    ],
+    afterDelete: [deleteStatsAccountHook],
     afterLogin: [verifyTenantModeAccessHook, applyTenantLocaleHook]
   },
   fields: [

@@ -46,7 +46,8 @@ const answerSchema = z.discriminatedUnion('status', [
         countries: topSchema
       })
     }),
-    dashboardUrl: z.string().url().optional()
+    dashboardUrl: z.string().url().optional(),
+    account: z.enum(['none', 'available', 'ready'])
   })
 ]) satisfies z.ZodType<SiteStatsAnswer>;
 
@@ -54,6 +55,12 @@ const answerSchema = z.discriminatedUnion('status', [
 export const WAKING_RETRY_DELAYS_MS: ReadonlyArray<number> = [10_000, 20_000];
 
 export type SiteStatsState = { status: 'loading' } | SiteStatsAnswer;
+
+export type UseSiteStats = {
+  answer: SiteStatsState;
+  /** Asks again, keeping the current answer on screen meanwhile */
+  reload: () => void;
+};
 
 /**
  * The selected workspace's visitor statistics, fetched after mount so a
@@ -63,10 +70,11 @@ export type SiteStatsState = { status: 'loading' } | SiteStatsAnswer;
  * A `waking` answer is asked again after the delays above. A failed request
  * or an unexpected answer counts as `unreachable`.
  */
-export function useSiteStats(): SiteStatsState {
+export function useSiteStats(): UseSiteStats {
   const { selectedTenantID } = useTenantSelection();
   // Each answer remembers the workspace it was fetched for, so a switch shows
   // loading rather than the previous workspace's numbers
+  const [reloads, setReloads] = useState(0);
   const [result, setResult] = useState<{
     tenant: typeof selectedTenantID;
     answer: SiteStatsAnswer;
@@ -111,9 +119,13 @@ export function useSiteStats(): SiteStatsState {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [selectedTenantID]);
+  }, [selectedTenantID, reloads]);
 
-  return result && result.tenant === selectedTenantID
-    ? result.answer
-    : { status: 'loading' };
+  return {
+    answer:
+      result && result.tenant === selectedTenantID
+        ? result.answer
+        : { status: 'loading' },
+    reload: () => setReloads((count) => count + 1)
+  };
 }
