@@ -61,6 +61,8 @@ export function SiteStatsWidget() {
       }
     } catch (error) {
       toast.error(t('statistics:loginFailed'));
+      // A half-done create leaves an account that now needs the reset action
+      reload();
       throw error;
     }
     toast.success(t('statistics:loginSent'));
