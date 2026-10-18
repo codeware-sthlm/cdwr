@@ -83,3 +83,19 @@ while (( ! stop )); do
   wait $sleeper || true
   sleeper=
 done
+
+# A detached implementing session is not run.sh's child, so the stop above does not reach it.
+# It is not a group leader (nohup in a script has no job control), so the pid itself gets TERM
+# and its EXIT trap frees implement.lock within the compose stop_grace_period.
+impl_pid="$(cat "$AGENT_QUEUE_HOME/implement.lock/pid" 2>/dev/null || true)"
+if [[ "$impl_pid" == <-> ]] && kill -0 "$impl_pid" 2>/dev/null; then
+  print -r -- "agent-host: stopping the implementing session $impl_pid, waiting up to 100s"
+  kill -TERM "$impl_pid" 2>/dev/null || true
+  for (( i = 0; i < 100; i++ )); do
+    kill -0 "$impl_pid" 2>/dev/null || break
+    sleep 1
+  done
+  if kill -0 "$impl_pid" 2>/dev/null; then
+    print -r -- "agent-host: the implementing session $impl_pid did not stop in 100s, giving up"
+  fi
+fi
