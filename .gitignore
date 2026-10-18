@@ -107,3 +107,6 @@ out
 
 # cdwr CLI credentials (see tools/cdwr/.env.example)
 tools/cdwr/.env
+
+# The agent host's secrets
+apps/agent-host/.env
