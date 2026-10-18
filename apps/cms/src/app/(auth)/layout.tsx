@@ -39,7 +39,7 @@ export default async function AuthLayout({
             />
             <ColorSchemeToggle />
           </header>
-          <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center p-6 sm:p-8">
+          <main className="mx-auto flex w-full flex-1 flex-col justify-center p-6 sm:p-8">
             {children}
           </main>
           <footer className="text-muted-foreground p-6 text-center text-sm sm:p-8">

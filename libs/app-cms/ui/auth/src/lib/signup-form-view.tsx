@@ -1,11 +1,7 @@
 import { Alert } from '@codeware/shared/ui/shadcn/components/alert';
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
-import {
-  FieldGroup,
-  FieldLegend,
-  FieldSet
-} from '@codeware/shared/ui/shadcn/components/field';
-import type { FormEvent, ReactNode } from 'react';
+import { FieldGroup } from '@codeware/shared/ui/shadcn/components/field';
+import { type FormEvent, type ReactNode, useId } from 'react';
 
 import { AuthCard } from './auth-card';
 import { InviteFields, SiteFields, YouFields } from './signup-fields';
@@ -104,41 +100,79 @@ export function SignupFormView({
 
   const submitting = status === 'submitting';
   const fields = { labels, values, fieldErrors, onChange };
+  const sections = [
+    {
+      title: labels.sectionInvite,
+      help: labels.sectionInviteHelp,
+      body: <InviteFields {...fields} />
+    },
+    {
+      title: labels.sectionYou,
+      help: labels.sectionYouHelp,
+      body: <YouFields {...fields} />
+    },
+    {
+      title: labels.sectionSite,
+      help: labels.sectionSiteHelp,
+      body: (
+        <SiteFields {...fields} siteUrl={siteUrl} availability={availability} />
+      )
+    }
+  ];
 
   return (
-    <AuthCard title={labels.title} description={labels.intro} footer={footer}>
-      <form onSubmit={onSubmit}>
-        <FieldGroup>
-          {status === 'refused' && refusal && (
-            <Alert variant="destructive">{refusal}</Alert>
-          )}
+    <AuthCard
+      title={labels.title}
+      description={labels.intro}
+      footer={footer}
+      size="wide"
+    >
+      <form onSubmit={onSubmit} className="flex flex-col gap-8">
+        {status === 'refused' && refusal && (
+          <Alert variant="destructive">{refusal}</Alert>
+        )}
 
-          <FieldSet>
-            <FieldLegend>{labels.sectionInvite}</FieldLegend>
-            <InviteFields {...fields} />
-          </FieldSet>
+        {sections.map(({ title, help, body }) => (
+          <SettingsRow key={title} title={title} help={help}>
+            {body}
+          </SettingsRow>
+        ))}
 
-          <FieldSet>
-            <FieldLegend>{labels.sectionYou}</FieldLegend>
-            <YouFields {...fields} />
-          </FieldSet>
-
-          <FieldSet>
-            <FieldLegend>{labels.sectionSite}</FieldLegend>
-            <SiteFields
-              {...fields}
-              siteUrl={siteUrl}
-              availability={availability}
-            />
-          </FieldSet>
-
+        <div className="flex flex-col gap-6">
           {humanCheck}
-
           <Button type="submit" disabled={submitting || !canSubmit}>
             {submitting ? labels.submitting : labels.submit}
           </Button>
-        </FieldGroup>
+        </div>
       </form>
     </AuthCard>
+  );
+}
+
+/** A section as a settings row: title and help left, fields right */
+function SettingsRow({
+  title,
+  help,
+  children
+}: {
+  title: string;
+  help: string;
+  children: ReactNode;
+}) {
+  const id = useId();
+
+  return (
+    <section
+      aria-labelledby={id}
+      className="grid gap-6 border-t pt-8 md:grid-cols-3"
+    >
+      <div className="flex flex-col gap-1">
+        <h2 id={id} className="font-semibold">
+          {title}
+        </h2>
+        <p className="text-muted-foreground text-sm">{help}</p>
+      </div>
+      <FieldGroup className="md:col-span-2">{children}</FieldGroup>
+    </section>
   );
 }
