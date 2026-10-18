@@ -604,7 +604,7 @@ suggest_gate() {
   if [[ "$SUGGEST_DAYS" != <-> || "$SUGGEST_DAYS" == 0 ]]; then print off; return 0; fi
   ran="$(cat "$stamp" 2>/dev/null)"
   if [[ "$ran" == <->-<->-<-> ]]; then
-    age=$(( ( $(date +%s) - $(date -j -f %F "$ran" +%s 2>/dev/null || echo 0) ) / 86400 ))
+    age=$(( ( $(date +%s) - $(date -j -f %F "$ran" +%s 2>/dev/null || date -d "$ran" +%s 2>/dev/null || echo 0) ) / 86400 ))
     if (( age < SUGGEST_DAYS )); then print "done today"; return 0; fi
   fi
   hour=$(( 10#$(date +%H) ))
