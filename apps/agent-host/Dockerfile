@@ -50,6 +50,7 @@ COPY --chmod=755 tools/cdwr/agent-queue/run.sh \
   tools/cdwr/agent-queue/implement.sh \
   tools/cdwr/agent-queue/github-app.sh \
   tools/cdwr/agent-queue/notify.sh \
+  tools/cdwr/agent-queue/checkin.sh \
   tools/cdwr/agent-queue/watch.jq \
   /opt/agent-queue/
 COPY --chmod=755 apps/agent-host/secrets.sh apps/agent-host/entrypoint.sh apps/agent-host/git-credential-app.sh /opt/agent-host/
