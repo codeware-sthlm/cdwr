@@ -8,6 +8,7 @@ export type CmsReportKey =
   | 'CREATED_TENANT'
   | 'RESOLVED_TENANT'
   | 'ROTATED_API_KEY'
+  | 'STATS_ACCOUNTS'
   | 'STATS_WEBSITE_SET'
   | 'TENANT_DEPLOYMENTS'
   | 'TENANT_DETAILS'
@@ -26,6 +27,7 @@ export type CmsReportKey =
 export type RetryableCmsReportKey = Extract<
   CmsReportKey,
   | 'APPLY_REPORT'
+  | 'STATS_ACCOUNTS'
   | 'STATS_WEBSITE_SET'
   | 'TENANT_DEPLOYMENTS'
   | 'TENANT_DETAILS'

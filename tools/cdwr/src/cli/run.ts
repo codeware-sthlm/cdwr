@@ -154,7 +154,7 @@ export async function runCommand(options: RunOptions): Promise<number> {
     const result = await command.apply(ctx, plan.data, inputs);
     prefs.save();
 
-    if (command.danger !== 'read') {
+    if (planDanger(command.danger, plan.danger) !== 'read') {
       record({
         at: new Date(started).toISOString(),
         command: name,
@@ -195,7 +195,11 @@ export async function runCommand(options: RunOptions): Promise<number> {
     }
     return result.partial ? EXIT.failed : EXIT.ok;
   } catch (error) {
-    if (plan && command.danger !== 'read' && !(error instanceof Cancelled)) {
+    if (
+      plan &&
+      planDanger(command.danger, plan.danger) !== 'read' &&
+      !(error instanceof Cancelled)
+    ) {
       record({
         at: new Date(started).toISOString(),
         command: name,

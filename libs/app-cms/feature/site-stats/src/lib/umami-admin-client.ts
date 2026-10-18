@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { UmamiError, umamiRoot } from './umami-client';
 
-/** Umami refused to create a user because the username is taken, also by a deleted user */
+/** Umami refused to create a user because the username is taken */
 export class UmamiUserExistsError extends Error {
   override readonly name = 'UmamiUserExistsError';
 
@@ -171,6 +171,13 @@ export const createUmamiAdminClient = ({
     removeTeamUser: async (teamId, userId) => {
       const path = `teams/${encodeURIComponent(teamId)}/users/${encodeURIComponent(userId)}`;
       const response = await send('DELETE', path);
+      // Umami answers 400 "does not exists on this team" for a non-member
+      if (
+        response.status === 400 &&
+        (await bodyText(response)).toLowerCase().includes('does not exist')
+      ) {
+        return;
+      }
       if (!response.ok && response.status !== 404) {
         throw refused(path, response);
       }

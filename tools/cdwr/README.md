@@ -64,6 +64,18 @@ member and moves the website into the team. It needs an admin user's key as `PRO
 or `acme  ok`). Applying continues past a failing workspace, ends with a done / ok / failed
 summary and exits non-zero if any failed. It is idempotent, so a rerun only does what is missing.
 
+## Statistics accounts
+
+`cdwr tenant stats-accounts` compares each statistics team's members with the admins of its workspace.
+Read-only by default: it prints one line per workspace (`acme  2 ok · stale bob@x.se · missing eve@x.se`),
+where a member is `ok` when an admin of that workspace with a stored Umami account stands behind it,
+`stale` when none does, and an admin with an account who is not in the team is `missing` (the next
+action in the stats sheet adds them). It also reports orphan teams (named `cdwr-…`, recorded by no
+workspace) and Umami users named like a workspace admin that the cms has no id for (`unlinked`);
+those are never changed. The read key's user and the provisioning user are not counted as members.
+`--prune` removes the stale members (`DELETE /api/teams/{team}/users/{user}`), and on production asks
+for the name to be typed. It needs the admin `PROVISION_API_KEY`, like `stats-teams`.
+
 ## Infisical
 
 `cdwr infisical tenants|data|analysis` read what Infisical holds for tenants and apps, with values

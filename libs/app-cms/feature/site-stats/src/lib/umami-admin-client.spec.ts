@@ -207,6 +207,27 @@ describe('createUmamiAdminClient', () => {
       ).resolves.toBeUndefined();
     });
 
+    it('treats a non-member as done, as Umami words it', async () => {
+      const { client } = setup(
+        text(
+          '{"error":{"message":"The User does not exists on this team."}}',
+          400
+        )
+      );
+
+      await expect(
+        client.removeTeamUser('t-1', 'u-1')
+      ).resolves.toBeUndefined();
+    });
+
+    it('throws on another 400', async () => {
+      const { client } = setup(text('{"error":{"message":"Bad"}}', 400));
+
+      await expect(client.removeTeamUser('t-1', 'u-1')).rejects.toBeInstanceOf(
+        UmamiError
+      );
+    });
+
     it('throws on other failures', async () => {
       const { client } = setup(text('', 500));
 
