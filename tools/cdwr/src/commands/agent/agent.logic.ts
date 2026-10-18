@@ -50,6 +50,7 @@ export const QUEUE_FILES = [
   'run.sh',
   'implement.sh',
   'github-app.sh',
+  'checkin.sh',
   'lib.sh',
   'waits.sh',
   'watch.jq',
@@ -64,6 +65,7 @@ export const byFile = <T>(
   'run.sh': fn('run.sh'),
   'implement.sh': fn('implement.sh'),
   'github-app.sh': fn('github-app.sh'),
+  'checkin.sh': fn('checkin.sh'),
   'lib.sh': fn('lib.sh'),
   'waits.sh': fn('waits.sh'),
   'watch.jq': fn('watch.jq'),
@@ -344,6 +346,44 @@ export const tailLines = (text: string, n: number): string[] => {
   const lines = nonEmptyLines(text);
   return n <= 0 ? [] : lines.slice(-n);
 };
+
+/** The agent container's name and its queue log folder, as `cdwr agent logs --host` reaches them */
+export const REMOTE_CONTAINER = 'cdwr-agent';
+export const REMOTE_LOGS = '/home/agent/.cdwr/agent-queue/logs';
+const REMOTE_SCHEDULER_LOG = `${REMOTE_LOGS}/scheduler.log`;
+
+/** ssh's arguments for a command in the agent container; each element is one argv entry, nothing is quoted */
+export const remoteExec = (host: string, command: string[]): string[] => [
+  host,
+  'docker',
+  'exec',
+  REMOTE_CONTAINER,
+  ...command
+];
+
+export const remoteListLogs = (host: string): string[] =>
+  remoteExec(host, ['ls', '-1', REMOTE_LOGS]);
+
+/** The file to read: the scheduler log, or the newest run log among `fileNames` (undefined when none) */
+export const remoteLogFile = (
+  run: boolean,
+  fileNames: string[]
+): string | undefined => {
+  if (!run) return REMOTE_SCHEDULER_LOG;
+  const latest = latestRunLog(fileNames);
+  return latest ? `${REMOTE_LOGS}/${latest}` : undefined;
+};
+
+/** `lines` from the end of `file`, or the whole file when `lines` is 0 */
+export const remoteReadLog = (
+  host: string,
+  file: string,
+  lines: number
+): string[] =>
+  remoteExec(
+    host,
+    lines > 0 ? ['tail', '-n', String(lines), file] : ['cat', file]
+  );
 
 const SYSTEM_PATH = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
 
