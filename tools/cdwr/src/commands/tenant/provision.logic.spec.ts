@@ -534,3 +534,23 @@ describe('statsWrites', () => {
     expect(statsWrites(plan, recorded)).toBe(writes);
   });
 });
+
+describe('provisionSteps team', () => {
+  it('lists the team steps before the website step', () => {
+    expect(
+      provisionSteps(
+        'acme',
+        [],
+        [],
+        [],
+        { action: 'unknown', id: 'w1' },
+        false,
+        ['create-team', 'add-reader']
+      )
+    ).toEqual([
+      'Statistics: create team',
+      'Statistics: add reader',
+      'Statistics website w1 is unknown to Umami; left as it is'
+    ]);
+  });
+});

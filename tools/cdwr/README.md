@@ -54,12 +54,22 @@ A command prints its plan before asking, so the question is about what you have 
 Commands that change something append to `~/.cdwr/history.jsonl`; `cdwr history` shows it.
 Remembered inputs (environment, app) live in `~/.cdwr/prefs.json`.
 
+## Statistics teams
+
+`cdwr tenant stats-teams` moves every workspace that has a statistics website into its own Umami
+team: it creates the team, stores its id as `statsTeamId`, adds the cms read key as a view-only
+member and moves the website into the team. It needs an admin user's key as `PROVISION_API_KEY` in
+`/integrations/umami` and checks that before anything else, also under `--dry-run`. Run
+`--dry-run` first: it prints one line per workspace (`acme  create team · move website · add reader`
+or `acme  ok`). Applying continues past a failing workspace, ends with a done / ok / failed
+summary and exits non-zero if any failed. It is idempotent, so a rerun only does what is missing.
+
 ## Infisical
 
 `cdwr infisical tenants|data|analysis` read what Infisical holds for tenants and apps, with values
 masked unless `--reveal` is given. A deployment ships when its folder holds `DEPLOY_ENABLED=true`
 (`/apps/<app>` for a host, `/tenants/<t>/apps/<app>` for a tenant); `tenants` and `analysis` show
-each folder as on, off or no flag, and `tenant provision` writes the flag for a new tenant. In production it also creates (or adopts, by domain) the tenant's Umami website in the team from `/integrations/umami` and stores its id as `statsWebsiteId`, and gives it a share link stored as `statsShareId`, which the admin's statistics sheet links to; without `PROVISION_API_KEY`, `TEAM_ID` and `UMAMI_URL` the step is skipped. A workspace from self-serve signup (status `pending`, listed first in the choice) is activated once its cms deployment has succeeded and `/api/health` answers; a failure or timeout leaves it pending and a second run finishes the job. `--no-wait` (or `-S`) skips the wait and the activation. Three more work on your own CLI session (`infisical login`, no
+each folder as on, off or no flag, and `tenant provision` writes the flag for a new tenant. In production it also gives the tenant its own Umami team (`cdwr-<deployment>`, id stored as `statsTeamId`, the read key added as a view-only member), then creates (or adopts, by domain, within that team) the tenant's Umami website in it and stores its id as `statsWebsiteId`, and gives it a share link stored as `statsShareId`, which the admin's statistics sheet links to; moving a legacy website out of another team needs an admin `PROVISION_API_KEY`, otherwise that part is a warning; without `PROVISION_API_KEY`, `API_KEY` and `UMAMI_URL` the step is skipped. A workspace from self-serve signup (status `pending`, listed first in the choice) is activated once its cms deployment has succeeded and `/api/health` answers; a failure or timeout leaves it pending and a second run finishes the job. `--no-wait` (or `-S`) skips the wait and the activation. Three more work on your own CLI session (`infisical login`, no
 token involved) and the same core as the `dev-plugin:infisical-run` executor:
 
 ```sh

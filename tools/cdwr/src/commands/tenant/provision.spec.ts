@@ -96,7 +96,12 @@ vi.mock('../../services/umami', () => ({
     id: 'new-id',
     name: 'Acme',
     domain: 'cdwr-cms-acme.fly.dev'
-  }))
+  })),
+  whoAmI: vi.fn(async (): Promise<unknown> => null),
+  createTeam: vi.fn(async (): Promise<unknown> => null),
+  addTeamUser: vi.fn(async (): Promise<undefined> => undefined),
+  listTeamUsers: vi.fn(async (): Promise<unknown[]> => []),
+  transferWebsite: vi.fn(async (): Promise<undefined> => undefined)
 }));
 
 const run = async (
@@ -268,19 +273,31 @@ describe('tenant provision', () => {
       apiKey: 'k',
       readApiKey: 'r'
     };
-    const site = (id: string, domain: string) => ({
+    const site = (
+      id: string,
+      domain: string,
+      teamId: string | null = null
+    ) => ({
       id,
       name: 'x',
       domain,
-      teamId: null
+      teamId
     });
 
     const umami = async () => {
       const mod = await import('../../services/umami');
       vi.mocked(mod.readUmamiProvisioning).mockResolvedValue(READY);
-      // COD-587 step 4: the shared team is still read from the folder
-      const { readSecrets } = await import('../../services/infisical');
-      vi.mocked(readSecrets).mockResolvedValue({ TEAM_ID: 'team' });
+      return mod;
+    };
+
+    /** The provisioning key is an admin and the read key a plain user */
+    const keys = async (provisioning: 'admin' | 'user' = 'admin') => {
+      const mod = await import('../../services/umami');
+      vi.mocked(mod.whoAmI).mockImplementation(async (conn) =>
+        conn.apiKey === 'k'
+          ? { id: 'u-prov', username: 'provisioner', role: provisioning }
+          : { id: 'u-reader', username: 'reader', role: 'user' }
+      );
       return mod;
     };
 
@@ -337,47 +354,111 @@ describe('tenant provision', () => {
         domain: 'cdwr-cms-acme.fly.dev',
         teamId: 'team'
       });
+      vi.mocked(mod.createTeam).mockResolvedValue({
+        id: 'team-new',
+        name: 'cdwr-acme'
+      });
+      vi.mocked(mod.listTeamUsers).mockResolvedValue([]);
+      vi.mocked(mod.addTeamUser).mockResolvedValue(undefined);
+      vi.mocked(mod.transferWebsite).mockResolvedValue(undefined);
+      await keys();
     });
 
-    it('creates the website and writes its id back', async () => {
-      const { createWebsite } = await umami();
+    it('creates the team, then the website in it, and writes both ids back', async () => {
+      const { createWebsite, createTeam, addTeamUser } = await umami();
 
       const { exit, ui } = await run();
 
       expect(exit).toBe(EXIT.ok);
-      expect(createWebsite).toHaveBeenCalledWith(
-        expect.objectContaining({ teamId: 'team' }),
-        { name: 'Acme', domain: 'cdwr-cms-acme.fly.dev', teamId: 'team' }
+      expect(createTeam).toHaveBeenCalledWith(expect.anything(), 'cdwr-acme');
+      expect(addTeamUser).toHaveBeenCalledWith(
+        expect.anything(),
+        'team-new',
+        'u-reader',
+        'team-view-only'
       );
-      const [call] = await writes();
-      expect(call?.[3]).toMatchObject({
+      expect(createWebsite).toHaveBeenCalledWith(
+        expect.objectContaining({ url: 'https://umami.test' }),
+        {
+          name: 'Acme',
+          domain: 'cdwr-cms-acme.fly.dev',
+          teamId: 'team-new'
+        }
+      );
+      const [team, website] = await writes();
+      expect(team?.[3]).toMatchObject({
+        STATS_TENANT_ID: '1',
+        STATS_TEAM_ID: 'team-new'
+      });
+      expect(team?.[3]).not.toHaveProperty('STATS_WEBSITE_ID');
+      expect(website?.[3]).toMatchObject({
         STATS_TENANT_ID: '1',
         STATS_WEBSITE_ID: 'new-id',
         STATS_SHARE_ID: 'newslug'
       });
-      expect(call?.[4]).toEqual({ reports: 'STATS_WEBSITE_SET' });
-      expect(ui.printed.note.join('\n')).toContain(
+      expect(website?.[4]).toEqual({ reports: 'STATS_WEBSITE_SET' });
+      const planned = ui.printed.note.join('\n');
+      expect(planned).toContain('Statistics: create team');
+      expect(planned).toContain('Statistics: add reader');
+      expect(planned).toContain(
         'Create statistics website cdwr-cms-acme.fly.dev in Umami with a share link'
       );
     });
 
+    it('stores the team id even when adding the reader fails', async () => {
+      const { createWebsite, addTeamUser } = await umami();
+      vi.mocked(addTeamUser).mockRejectedValue(new Error('no member'));
+
+      const { exit, ui } = await run();
+
+      expect(exit).toBe(EXIT.ok);
+      expect((await writes())[0]?.[3]).toMatchObject({
+        STATS_TEAM_ID: 'team-new'
+      });
+      expect(ui.printed.warn.join('\n')).toContain('no member');
+      expect(createWebsite).toHaveBeenCalled();
+    });
+
+    it('warns about a team that is gone and still keeps the website', async () => {
+      const { getWebsite, createTeam, listTeamUsers } = await umami();
+      await scripts({ statsWebsiteId: 'w1', statsTeamId: 'gone' });
+      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se', 'gone'));
+      vi.mocked(listTeamUsers).mockResolvedValue(null);
+
+      const { ui } = await run();
+
+      expect(ui.printed.warn.join('\n')).toContain(
+        'team gone is gone from Umami; clear "Statistics team ID" in the admin and run again'
+      );
+      expect(createTeam).not.toHaveBeenCalled();
+      expect(await writes()).toHaveLength(1);
+    });
+
     it('adopts a website that already has the domain', async () => {
-      const { createWebsite, listTeamWebsites } = await umami();
+      const { createWebsite, createTeam, listTeamWebsites, listTeamUsers } =
+        await umami();
+      await scripts({ statsTeamId: 'team' });
+      vi.mocked(listTeamUsers).mockResolvedValue([
+        { userId: 'u-reader', role: 'team-view-only' }
+      ]);
       vi.mocked(listTeamWebsites).mockResolvedValue([
-        site('found', 'CDWR-CMS-ACME.fly.dev')
+        site('found', 'CDWR-CMS-ACME.fly.dev', 'team')
       ]);
 
       await run();
 
+      expect(listTeamWebsites).toHaveBeenCalledWith(expect.anything(), 'team');
+      expect(createTeam).not.toHaveBeenCalled();
       expect(createWebsite).not.toHaveBeenCalled();
-      expect((await writes())[0]?.[3]).toMatchObject({
-        STATS_WEBSITE_ID: 'found'
-      });
+      const written = await writes();
+      expect(written).toHaveLength(1);
+      expect(written[0]?.[3]).toMatchObject({ STATS_WEBSITE_ID: 'found' });
     });
 
     it('uses the primary domain of the cms app', async () => {
       const { createWebsite } = await umami();
       await scripts({
+        statsTeamId: 'team',
         domains: [
           { hostname: 'acme.se', app: 'cdwr-cms-acme', isPrimary: true }
         ]
@@ -393,8 +474,8 @@ describe('tenant provision', () => {
 
     it('keeps a website Umami still knows', async () => {
       const { getWebsite, createWebsite, listTeamWebsites } = await umami();
-      await scripts({ statsWebsiteId: 'w1' });
-      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se'));
+      await scripts({ statsWebsiteId: 'w1', statsTeamId: 'team' });
+      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se', 'team'));
 
       const { ui } = await run();
 
@@ -409,9 +490,17 @@ describe('tenant provision', () => {
 
     it('keeps a website and its recorded share without writing', async () => {
       const { getWebsite, listShares, setShare } = await umami();
-      await scripts({ statsWebsiteId: 'w1', statsShareId: 'abc' });
-      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se'));
+      const { listTeamUsers } = await umami();
+      await scripts({
+        statsWebsiteId: 'w1',
+        statsShareId: 'abc',
+        statsTeamId: 'team'
+      });
+      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se', 'team'));
       vi.mocked(listShares).mockResolvedValue(['abc']);
+      vi.mocked(listTeamUsers).mockResolvedValue([
+        { userId: 'u-reader', role: 'team-view-only' }
+      ]);
 
       const { ui } = await run();
 
@@ -424,8 +513,12 @@ describe('tenant provision', () => {
 
     it('records a share Umami has that the workspace lacks', async () => {
       const { getWebsite, listShares, setShare } = await umami();
-      await scripts({ statsWebsiteId: 'w1', statsShareId: null });
-      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se'));
+      await scripts({
+        statsWebsiteId: 'w1',
+        statsShareId: null,
+        statsTeamId: 'team'
+      });
+      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se', 'team'));
       vi.mocked(listShares).mockResolvedValue(['abc']);
 
       await run();
@@ -441,8 +534,12 @@ describe('tenant provision', () => {
 
     it('creates a recorded share Umami has lost under the same slug', async () => {
       const { getWebsite, listShares, setShare } = await umami();
-      await scripts({ statsWebsiteId: 'w1', statsShareId: 'abc' });
-      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se'));
+      await scripts({
+        statsWebsiteId: 'w1',
+        statsShareId: 'abc',
+        statsTeamId: 'team'
+      });
+      vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se', 'team'));
       vi.mocked(listShares).mockResolvedValue([]);
 
       await run();
@@ -496,20 +593,27 @@ describe('tenant provision', () => {
     });
 
     it('creates nothing and writes nothing on a dry run', async () => {
-      const { createWebsite } = await umami();
+      const { createWebsite, createTeam } = await umami();
 
       const { ui } = await run(['--dry-run']);
 
+      expect(createTeam).not.toHaveBeenCalled();
       expect(createWebsite).not.toHaveBeenCalled();
       expect(await writes()).toHaveLength(0);
-      expect(ui.printed.note.join('\n')).toContain('Create statistics website');
+      const planned = ui.printed.note.join('\n');
+      expect(planned).toContain('Statistics: create team');
+      expect(planned).toContain('Create statistics website');
     });
 
     it('adopts at apply when the site appeared after the plan', async () => {
-      const { createWebsite, listTeamWebsites } = await umami();
+      const { createWebsite, listTeamWebsites, listTeamUsers } = await umami();
+      await scripts({ statsTeamId: 'team' });
+      vi.mocked(listTeamUsers).mockResolvedValue([
+        { userId: 'u-reader', role: 'team-view-only' }
+      ]);
       vi.mocked(listTeamWebsites)
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([site('late', 'cdwr-cms-acme.fly.dev')]);
+        .mockResolvedValueOnce([site('late', 'cdwr-cms-acme.fly.dev', 'team')]);
 
       await run();
 
@@ -532,12 +636,14 @@ describe('tenant provision', () => {
       expect(ui.printed.warn.join('\n')).toContain(
         'Umami refused the website creation: 500'
       );
-      expect(await writes()).toHaveLength(0);
+      // Only the team id was stored
+      expect(await writes()).toHaveLength(1);
       expect(dispatchWorkflow).toHaveBeenCalled();
     });
 
     it('does not fail the plan when Umami is unreachable', async () => {
       const { getWebsite, createWebsite, listTeamWebsites } = await umami();
+      await scripts({ statsTeamId: 'team' });
       vi.mocked(listTeamWebsites).mockRejectedValue(new Error('timeout'));
 
       const { exit, ui } = await run();
@@ -549,6 +655,70 @@ describe('tenant provision', () => {
       expect(ui.printed.note.join('\n')).toContain(
         'Statistics skipped: Umami did not answer'
       );
+    });
+
+    describe('teams', () => {
+      /** A legacy website that sits in the shared team */
+      const legacy = async () => {
+        const mod = await umami();
+        await scripts({
+          statsWebsiteId: 'w1',
+          statsShareId: 'abc',
+          statsTeamId: null
+        });
+        vi.mocked(mod.getWebsite).mockResolvedValue(
+          site('w1', 'acme.se', 'shared')
+        );
+        vi.mocked(mod.listShares).mockResolvedValue(['abc']);
+        return mod;
+      };
+
+      it('moves a legacy website into a new team with an admin key', async () => {
+        const { createTeam, addTeamUser, transferWebsite, createWebsite } =
+          await legacy();
+
+        const { exit, ui } = await run();
+
+        expect(exit).toBe(EXIT.ok);
+        expect(createTeam).toHaveBeenCalled();
+        expect(addTeamUser).toHaveBeenCalled();
+        expect(transferWebsite).toHaveBeenCalledWith(
+          expect.anything(),
+          'w1',
+          'team-new'
+        );
+        expect(createWebsite).not.toHaveBeenCalled();
+        const planned = ui.printed.note.join('\n');
+        expect(planned).toContain('Statistics: move website');
+        expect(planned).toContain('Keep statistics website w1');
+      });
+
+      it('warns and leaves the legacy website alone without an admin key', async () => {
+        const { createTeam, transferWebsite } = await legacy();
+        await keys('user');
+
+        const { exit, ui } = await run();
+
+        expect(exit).toBe(EXIT.ok);
+        expect(createTeam).not.toHaveBeenCalled();
+        expect(transferWebsite).not.toHaveBeenCalled();
+        const warned = ui.printed.warn.join('\n');
+        expect(warned).toContain('moving websites needs an admin key');
+        expect(warned).toContain('cdwr tenant provision');
+      });
+
+      it('adds no reader when the read key is an admin', async () => {
+        const { whoAmI, addTeamUser } = await umami();
+        vi.mocked(whoAmI).mockResolvedValue({
+          id: 'u-admin',
+          username: 'root',
+          role: 'admin'
+        });
+
+        await run();
+
+        expect(addTeamUser).not.toHaveBeenCalled();
+      });
     });
 
     it('warns when the workspace holds another website id', async () => {

@@ -14,12 +14,12 @@ import { getScriptPayload, runScript } from './script-payload';
  * Driven by env vars so the caller controls which database is targeted:
  * - `PROVISION_DATABASE_URL` - target database (required)
  * - `STATS_TENANT_ID` - the tenant's id (required)
- * - `STATS_WEBSITE_ID` - the website id to set (required)
+ * - `STATS_WEBSITE_ID` - the website id to set (required unless `STATS_TEAM_ID` is given)
  * - `STATS_SHARE_ID` - the share slug to set (optional)
  * - `STATS_TEAM_ID` - the team id to set (optional)
  *
  * The outcome is written to stdout as one `STATS_WEBSITE_SET=` JSON line:
- * `outcome` is the website id's result, `share` the slug's and `team` the team id's when one was given.
+ * `outcome` is the website id's result when one was given, `share` the slug's and `team` the team id's when one was given.
  */
 async function setStatsWebsite() {
   const databaseUrl = process.env['PROVISION_DATABASE_URL'];
@@ -28,9 +28,9 @@ async function setStatsWebsite() {
   const shareId = process.env['STATS_SHARE_ID'] || undefined;
   const teamId = process.env['STATS_TEAM_ID'] || undefined;
 
-  if (!databaseUrl || !Number.isInteger(tenantId) || !websiteId) {
+  if (!databaseUrl || !Number.isInteger(tenantId) || (!websiteId && !teamId)) {
     console.error(
-      'Error: PROVISION_DATABASE_URL, STATS_TENANT_ID and STATS_WEBSITE_ID are required'
+      'Error: PROVISION_DATABASE_URL, STATS_TENANT_ID and STATS_WEBSITE_ID or STATS_TEAM_ID are required'
     );
     process.exit(1);
   }
@@ -54,13 +54,13 @@ async function setStatsWebsite() {
   ): 'set' | 'unchanged' | 'conflict' =>
     present === wanted ? 'unchanged' : present ? 'conflict' : 'set';
 
-  const outcome = outcomeOf(current, websiteId);
+  const outcome = websiteId ? outcomeOf(current, websiteId) : undefined;
   const share = shareId ? outcomeOf(currentShare, shareId) : undefined;
   const team = teamId ? outcomeOf(currentTeam, teamId) : undefined;
 
   // A conflict on any field leaves all alone: share and team belong to the website
-  const conflict = [outcome, share, team].includes('conflict');
-  if (!conflict && [outcome, share, team].includes('set')) {
+  const outcomes = [outcome, share, team];
+  if (!outcomes.includes('conflict') && outcomes.includes('set')) {
     await payload.update({
       collection: 'tenants',
       id: tenantId,
@@ -76,7 +76,7 @@ async function setStatsWebsite() {
   report(
     'STATS_WEBSITE_SET',
     JSON.stringify({
-      outcome,
+      ...(outcome ? { outcome } : {}),
       ...(outcome === 'conflict' ? { current } : {}),
       ...(share ? { share } : {}),
       ...(share === 'conflict' ? { currentShare } : {}),
