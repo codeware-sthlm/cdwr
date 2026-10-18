@@ -32,6 +32,7 @@ vi.mock('../../services/umami', () => ({
   })),
   whoAmI: vi.fn(),
   getWebsite: vi.fn(),
+  getTeam: vi.fn(async (_conn: unknown, id: string) => ({ id, name: id })),
   listTeamUsers: vi.fn(async () => []),
   createTeam: vi.fn(),
   addTeamUser: vi.fn(async () => undefined),
@@ -140,8 +141,8 @@ describe('tenant stats-teams', () => {
 
   it('reports a team that is gone and skips it on apply', async () => {
     const umami = await import('../../services/umami');
-    vi.mocked(umami.listTeamUsers).mockImplementation(async (_conn, id) =>
-      id === 'gone' ? null : []
+    vi.mocked(umami.getTeam).mockImplementation(async (_conn, id) =>
+      id === 'gone' ? null : { id, name: id }
     );
     const { listTenantRows } = await import('../../services/tenant-rows');
     vi.mocked(listTenantRows).mockResolvedValueOnce([

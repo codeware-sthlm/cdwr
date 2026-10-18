@@ -4,6 +4,7 @@ import {
   addTeamUser,
   createTeam,
   createWebsite,
+  getTeam,
   getWebsite,
   listShares,
   listTeamUsers,
@@ -387,9 +388,27 @@ describe('Umami client when the service is waking', () => {
     expect(fetchMock.mock.calls[1][0]).toContain('page=2');
   });
 
+  it('reads a team by id and ignores its members', async () => {
+    fetchMock.mockResolvedValue(
+      reply({ id: 't1', name: 'cdwr-acme', teamUser: [{ userId: 'u1' }] })
+    );
+    expect(await getTeam(conn, 't1')).toEqual({ id: 't1', name: 'cdwr-acme' });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://umami.test/api/teams/t1');
+  });
+
   it('answers null for a team Umami does not know', async () => {
+    fetchMock.mockResolvedValue(reply({ error: 'Team not found.' }, 404));
+    expect(await getTeam(conn, 'gone')).toBeNull();
+  });
+
+  it('refuses other failed team lookups', async () => {
+    fetchMock.mockResolvedValue(reply({}, 500));
+    await expect(getTeam(conn, 't1')).rejects.toThrow('500');
+  });
+
+  it('refuses a failed member list, also a 404', async () => {
     fetchMock.mockResolvedValue(reply({}, 404));
-    expect(await listTeamUsers(conn, 'gone')).toBeNull();
+    await expect(listTeamUsers(conn, 'gone')).rejects.toThrow('404');
   });
 
   it('still refuses other failed member lists', async () => {

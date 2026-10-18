@@ -12,6 +12,7 @@ import {
   type UmamiConnection,
   addTeamUser,
   createTeam,
+  getTeam,
   getWebsite,
   listTeamUsers,
   transferWebsite,
@@ -25,6 +26,11 @@ export async function requireAdmin(conn: UmamiConnection): Promise<void> {
     throw new Error(
       `The Umami provisioning key belongs to "${me.username}" (${me.role}); moving websites needs an admin key. Create an admin user in Umami and put its API key in /integrations/umami as PROVISION_API_KEY.`
     );
+}
+
+/** The team's members, `null` when the team itself is gone from Umami */
+async function listMembers(conn: UmamiConnection, teamId: string) {
+  return (await getTeam(conn, teamId)) ? listTeamUsers(conn, teamId) : null;
 }
 
 /** Reads the planner's input: the website, the reader and the team's members */
@@ -48,10 +54,10 @@ export async function gatherTenantTeam(
         })
       : null,
     whoAmI(readerConn),
-    statsTeamId ? listTeamUsers(conn, statsTeamId) : []
+    statsTeamId ? listMembers(conn, statsTeamId) : []
   ]);
   return {
-    ...(statsTeamId && members === null ? { teamMissing: true } : {}),
+    ...(members === null ? { teamMissing: true } : {}),
     statsTeamId,
     website: website && { id: website.id, teamId: website.teamId },
     reader: { id: reader.id, role: reader.role },
