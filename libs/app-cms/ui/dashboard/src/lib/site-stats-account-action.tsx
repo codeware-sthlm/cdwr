@@ -7,7 +7,8 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
+  DialogTrigger
 } from '@codeware/shared/ui/shadcn/components/dialog';
 import { useState } from 'react';
 
@@ -54,35 +55,30 @@ export function SiteStatsAccountAction({
   };
 
   return (
-    <>
-      <Button
-        variant="secondary"
-        size="sm"
-        className="w-fit"
-        onClick={() => setOpen(true)}
-      >
-        {title}
-      </Button>
-      <Dialog open={open} onOpenChange={(next) => !busy && setOpen(next)}>
-        <DialogContent className="codeware-admin twp">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{body}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setOpen(false)}
-            >
-              {labels.cancel}
-            </Button>
-            <Button disabled={busy} onClick={() => void confirm()}>
-              {labels.confirm}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={open} onOpenChange={(next) => !busy && setOpen(next)}>
+      <DialogTrigger asChild>
+        <Button variant="secondary" size="sm" className="w-fit">
+          {title}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="codeware-admin twp">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{body}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => setOpen(false)}
+          >
+            {labels.cancel}
+          </Button>
+          <Button disabled={busy} onClick={() => void confirm()}>
+            {labels.confirm}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
