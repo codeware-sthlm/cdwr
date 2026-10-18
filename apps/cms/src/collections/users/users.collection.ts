@@ -16,6 +16,7 @@ import { User } from '@codeware/shared/util/payload-types';
 import { CollectionConfig, Condition } from 'payload';
 
 import { adminAccessToAllDocTenants } from './access/admin-access-to-all-doc-tenants';
+import { statsAccountField } from './fields/stats-account.field';
 import { tenantsArrayField } from './fields/tenants-array.field';
 import { forgotPasswordMail } from './forgot-password-email';
 import { applyTenantLocaleHook } from './hooks/apply-tenant-locale.hook';
@@ -190,7 +191,8 @@ const users: CollectionConfig<'users'> = {
         position: 'sidebar'
       },
       maxLength: 200
-    }
+    },
+    statsAccountField()
   ]
 };
 

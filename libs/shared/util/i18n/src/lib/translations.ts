@@ -233,6 +233,13 @@ export type TranslationKey =
   | 'forgotPasswordEmail.greetingNamed'
   | 'forgotPasswordEmail.ignore'
   | 'forgotPasswordEmail.subject'
+  | 'statsAccountEmail.body'
+  | 'statsAccountEmail.button'
+  | 'statsAccountEmail.changePassword'
+  | 'statsAccountEmail.heading'
+  | 'statsAccountEmail.passwordLabel'
+  | 'statsAccountEmail.subject'
+  | 'statsAccountEmail.usernameLabel'
   | 'accountExists.subject'
   | 'accountExists.body'
   | 'accountExists.signIn'
@@ -564,6 +571,15 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'forgotPasswordEmail.ignore':
       'If you did not ask for this, you can ignore this email. Your password stays unchanged.',
     'forgotPasswordEmail.subject': 'Reset your password',
+    'statsAccountEmail.body':
+      'Here is your login to the website statistics for {{brand}}.',
+    'statsAccountEmail.button': 'Log in',
+    'statsAccountEmail.changePassword':
+      'Change the password under your profile in Umami once you have signed in.',
+    'statsAccountEmail.heading': 'Your statistics login',
+    'statsAccountEmail.passwordLabel': 'Password',
+    'statsAccountEmail.subject': 'Your statistics login',
+    'statsAccountEmail.usernameLabel': 'Username',
     'accountExists.subject': 'You already have an account',
     'accountExists.body':
       'Someone tried to create a new account with this email address. You already have an account, so you can sign in, or reset your password if you have forgotten it.',
@@ -910,6 +926,15 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'forgotPasswordEmail.ignore':
       'Om det inte var du kan du bortse från det här mejlet. Ditt lösenord ändras inte.',
     'forgotPasswordEmail.subject': 'Återställ ditt lösenord',
+    'statsAccountEmail.body':
+      'Här är din inloggning till webbplatsstatistiken för {{brand}}.',
+    'statsAccountEmail.button': 'Logga in',
+    'statsAccountEmail.changePassword':
+      'Byt lösenord under din profil i Umami när du har loggat in.',
+    'statsAccountEmail.heading': 'Din inloggning till statistiken',
+    'statsAccountEmail.passwordLabel': 'Lösenord',
+    'statsAccountEmail.subject': 'Din inloggning till statistiken',
+    'statsAccountEmail.usernameLabel': 'Användarnamn',
     'accountExists.subject': 'Du har redan ett konto',
     'accountExists.body':
       'Någon försökte skapa ett nytt konto med den här e-postadressen. Du har redan ett konto, så du kan logga in eller återställa lösenordet om du har glömt det.',
