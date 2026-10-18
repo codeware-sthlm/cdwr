@@ -42,7 +42,9 @@ export function planTenantTeam({
     return { steps: [], needsAdmin: false, problem: 'team-missing' };
   const steps: TeamStep[] = [];
   if (!statsTeamId) steps.push('create-team');
-  if (website && website.teamId !== statsTeamId) steps.push('move-website');
+  // A team about to be created is new, so any website is outside it
+  if (website && (!statsTeamId || website.teamId !== statsTeamId))
+    steps.push('move-website');
   // An admin reads every website without being a member
   if (reader.role !== 'admin' && !teamUserIds.includes(reader.id))
     steps.push('add-reader');
