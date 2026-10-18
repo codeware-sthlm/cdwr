@@ -38,6 +38,8 @@ export type UmamiAdminClient = {
     role: UmamiUserRole;
   }) => Promise<UmamiUser>;
   /** Throws `UmamiNotFoundError` when the user does not exist */
+  getUser: (userId: string) => Promise<UmamiUser>;
+  /** Throws `UmamiNotFoundError` when the user does not exist */
   setPassword: (userId: string, password: string) => Promise<void>;
   /** Succeeds when the user is already a member */
   addTeamUser: (
@@ -72,7 +74,7 @@ export const createUmamiAdminClient = ({
 
   /** Sends the call; the response is returned for the caller to judge by status */
   const send = async (
-    method: 'POST' | 'DELETE',
+    method: 'GET' | 'POST' | 'DELETE',
     path: string,
     body?: Record<string, string>
   ): Promise<Response> => {
@@ -123,6 +125,29 @@ export const createUmamiAdminClient = ({
           throw new UmamiUserExistsError(username);
         }
         throw refused(path, response);
+      }
+      if (!response.ok) {
+        throw refused(path, response);
+      }
+
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        throw new UmamiError(`Umami ${path}: answer is not JSON`, 'bad-answer');
+      }
+      const parsed = UserSchema.safeParse(body);
+      if (!parsed.success) {
+        throw new UmamiError(`Umami ${path}: unexpected answer`, 'bad-answer');
+      }
+      return parsed.data;
+    },
+
+    getUser: async (userId) => {
+      const path = `users/${encodeURIComponent(userId)}`;
+      const response = await send('GET', path);
+      if (response.status === 404) {
+        throw new UmamiNotFoundError(userId);
       }
       if (!response.ok) {
         throw refused(path, response);

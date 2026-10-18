@@ -39,6 +39,7 @@ jest.mock('../components/admin/utils/tenant-where', () => ({
 }));
 
 const admin = {
+  getUser: jest.fn(),
   createUser: jest.fn(),
   setPassword: jest.fn(),
   addTeamUser: jest.fn(),
@@ -114,6 +115,7 @@ beforeEach(() => {
     id: 'u-1',
     username: 'ada@example.com'
   });
+  admin.getUser.mockResolvedValue({ id: 'u-9', username: 'ada@example.com' });
   admin.setPassword.mockResolvedValue(undefined);
   admin.addTeamUser.mockResolvedValue(undefined);
   update.mockResolvedValue({});
@@ -166,6 +168,34 @@ describe('siteStatsAccountEndpoint', () => {
     expect(mail.to).toBe('Ada@Example.com');
     expect(mail.text).toContain(created.password);
     expect(mail.text).toContain('https://umami.example/login');
+  });
+
+  it('mails the username Umami has on a reset', async () => {
+    givenAccount('u-9');
+    admin.getUser.mockResolvedValue({
+      id: 'u-9',
+      username: 'ada.old@example.com'
+    });
+
+    const response = await call(adminUser, { action: 'reset' });
+
+    expect(response.status).toBe(200);
+    const mail = sendEmail.mock.calls[0][0];
+    expect(mail.to).toBe('Ada@Example.com');
+    expect(mail.text).toContain('ada.old@example.com');
+    expect(mail.text).not.toContain('ada@example.com');
+  });
+
+  it('creates a new login when the stored user is gone when read', async () => {
+    givenAccount('u-9');
+    admin.getUser.mockRejectedValue(new UmamiNotFoundError('u-9'));
+
+    const response = await call(adminUser, { action: 'reset' });
+
+    expect(response.status).toBe(200);
+    expect(admin.setPassword).not.toHaveBeenCalled();
+    expect(admin.createUser).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
   });
 
   it('logs one line per action and never the password', async () => {
