@@ -11,6 +11,7 @@ export * from './lib/format-release-name';
 export * from './lib/get-active-keys';
 export * from './lib/get-app-name';
 export * from './lib/get-sentry-sample-rate';
+export * from './lib/guarded-no-op';
 export * from './lib/is-blank';
 export * from './lib/is-catcher-host';
 export * from './lib/is-object';

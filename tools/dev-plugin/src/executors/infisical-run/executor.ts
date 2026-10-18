@@ -12,6 +12,7 @@ import {
   secretsMode,
   taskEnvFiles
 } from '@codeware/shared/util/infisical-cli';
+import { isGuardedNoOpOutput } from '@codeware/shared/util/pure';
 import type { ExecutorContext } from '@nx/devkit';
 // Not devkit API, but the same code `nx:run-commands` runs: PATH, pty, signals and process trees on every OS
 import { runCommands } from 'nx/src/executors/run-commands/run-commands.impl';
@@ -25,14 +26,39 @@ const runAll = async (
   commands: string[],
   cwd: string,
   env: Record<string, string>,
-  context: ExecutorContext
+  context: ExecutorContext,
+  retries = 0
 ): Promise<{ success: boolean }> => {
-  const task = await runCommands(
-    { commands, cwd, parallel: false, env, __unparsed__: [] },
-    context
-  );
-  const { code } = await task.getResults();
-  return { success: code === 0 };
+  const run = async (list: string[]) => {
+    const task = await runCommands(
+      { commands: list, cwd, parallel: false, env, __unparsed__: [] },
+      context
+    );
+    return task.getResults();
+  };
+
+  if (retries <= 0) {
+    const { code } = await run(commands);
+    return { success: code === 0 };
+  }
+
+  for (const command of commands) {
+    for (let attempt = 0; ; attempt++) {
+      const { code, terminalOutput } = await run([command]);
+      if (code === 0) break;
+      if (!isGuardedNoOpOutput(terminalOutput)) return { success: false };
+      if (attempt >= retries) {
+        console.error(
+          `infisical-run: ${command} kept ending as a guarded no-op; nothing was changed — run it again`
+        );
+        return { success: false };
+      }
+      console.log(
+        `infisical-run: ${command} ended as a guarded no-op, retry ${attempt + 1}/${retries}`
+      );
+    }
+  }
+  return { success: true };
 };
 
 /** The parent target of an atomized target, which Nx also loads env files for */
@@ -62,7 +88,13 @@ export default async function infisicalRun(
 
   if (mode === 'ci') {
     console.log('[SECRETS] CI — using the environment the workflow provides');
-    return runAll(options.commands, cwd, options.env ?? {}, context);
+    return runAll(
+      options.commands,
+      cwd,
+      options.env ?? {},
+      context,
+      options.retryGuardedNoOp
+    );
   }
 
   const target = context.targetName ?? 'infisical-run';
@@ -112,5 +144,11 @@ export default async function infisicalRun(
     })
   );
 
-  return runAll(options.commands, cwd, { ...options.env, ...apply }, context);
+  return runAll(
+    options.commands,
+    cwd,
+    { ...options.env, ...apply },
+    context,
+    options.retryGuardedNoOp
+  );
 }
