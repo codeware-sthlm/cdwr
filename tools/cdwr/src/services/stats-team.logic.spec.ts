@@ -69,6 +69,20 @@ describe('planTenantTeam', () => {
     });
   });
 
+  it('moves a user-owned website into the team about to be created', () => {
+    expect(
+      planTenantTeam({
+        ...base,
+        statsTeamId: null,
+        website: { id: 'w1', teamId: null },
+        teamUserIds: []
+      })
+    ).toEqual({
+      steps: ['create-team', 'move-website', 'add-reader'],
+      needsAdmin: true
+    });
+  });
+
   it('moves a website that belongs to a user into an existing team', () => {
     expect(
       planTenantTeam({ ...base, website: { id: 'w1', teamId: null } })
