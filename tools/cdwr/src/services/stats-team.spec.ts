@@ -1,4 +1,4 @@
-import { applyTenantTeam, requireAdmin } from './stats-team';
+import { applyTenantTeam, gatherTenantTeam, requireAdmin } from './stats-team';
 import type { TenantTeamInput } from './stats-team.logic';
 
 vi.mock('./database', () => ({
@@ -10,6 +10,7 @@ vi.mock('./database', () => ({
 vi.mock('./umami', () => ({
   whoAmI: vi.fn(),
   getWebsite: vi.fn(),
+  getTeam: vi.fn(),
   listTeamUsers: vi.fn(),
   createTeam: vi.fn(async () => ({ id: 'team-new', name: 'cdwr-acme' })),
   addTeamUser: vi.fn(async () => undefined),
@@ -112,5 +113,66 @@ describe('applyTenantTeam', () => {
     ).rejects.toThrow('no');
     expect(write).toHaveBeenCalledWith('team-new');
     expect(transferWebsite).not.toHaveBeenCalled();
+  });
+});
+
+describe('gatherTenantTeam', () => {
+  const tenant = { statsWebsiteId: 'w1', statsTeamId: 'team' };
+
+  const setup = async () => {
+    const umami = await import('./umami');
+    vi.mocked(umami.whoAmI).mockResolvedValue({
+      id: 'r',
+      username: 'reader',
+      role: 'user'
+    });
+    vi.mocked(umami.getWebsite).mockResolvedValue({
+      id: 'w1',
+      name: 'Acme',
+      domain: 'acme.se',
+      teamId: 'team'
+    });
+    return umami;
+  };
+
+  it('lists the members of an existing team', async () => {
+    const umami = await setup();
+    vi.mocked(umami.getTeam).mockResolvedValue({ id: 'team', name: 'n' });
+    vi.mocked(umami.listTeamUsers).mockResolvedValue([
+      { userId: 'r', role: 'team-view-only' }
+    ]);
+
+    const result = await gatherTenantTeam(conn, conn, tenant);
+
+    expect(result.teamMissing).toBeUndefined();
+    expect(result.teamUserIds).toEqual(['r']);
+  });
+
+  it('marks a team Umami answers 404 for as missing, without listing members', async () => {
+    const umami = await setup();
+    vi.mocked(umami.getTeam).mockResolvedValue(null);
+    vi.mocked(umami.listTeamUsers).mockClear();
+
+    const result = await gatherTenantTeam(conn, conn, tenant);
+
+    expect(result.teamMissing).toBe(true);
+    expect(umami.listTeamUsers).not.toHaveBeenCalled();
+  });
+
+  it('finds a deleted team although its member list is an empty 200', async () => {
+    const umami = await setup();
+    vi.mocked(umami.getTeam).mockResolvedValue(null);
+    vi.mocked(umami.listTeamUsers).mockResolvedValue([]);
+
+    expect((await gatherTenantTeam(conn, conn, tenant)).teamMissing).toBe(true);
+  });
+
+  it('fails when the recorded website is not in Umami', async () => {
+    const umami = await setup();
+    vi.mocked(umami.getWebsite).mockResolvedValue(null);
+
+    await expect(gatherTenantTeam(conn, conn, tenant)).rejects.toThrow(
+      'website w1 is not in Umami; check "Statistics website ID" in the admin'
+    );
   });
 });

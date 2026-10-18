@@ -100,6 +100,7 @@ vi.mock('../../services/umami', () => ({
   whoAmI: vi.fn(async (): Promise<unknown> => null),
   createTeam: vi.fn(async (): Promise<unknown> => null),
   addTeamUser: vi.fn(async (): Promise<undefined> => undefined),
+  getTeam: vi.fn(async (): Promise<unknown> => ({ id: 't', name: 'n' })),
   listTeamUsers: vi.fn(async (): Promise<unknown[]> => []),
   transferWebsite: vi.fn(async (): Promise<undefined> => undefined)
 }));
@@ -358,6 +359,10 @@ describe('tenant provision', () => {
         id: 'team-new',
         name: 'cdwr-acme'
       });
+      vi.mocked(mod.getTeam).mockResolvedValue({
+        id: 'team',
+        name: 'cdwr-acme'
+      });
       vi.mocked(mod.listTeamUsers).mockResolvedValue([]);
       vi.mocked(mod.addTeamUser).mockResolvedValue(undefined);
       vi.mocked(mod.transferWebsite).mockResolvedValue(undefined);
@@ -420,10 +425,10 @@ describe('tenant provision', () => {
     });
 
     it('warns about a team that is gone and still keeps the website', async () => {
-      const { getWebsite, createTeam, listTeamUsers } = await umami();
+      const { getWebsite, createTeam, getTeam } = await umami();
       await scripts({ statsWebsiteId: 'w1', statsTeamId: 'gone' });
       vi.mocked(getWebsite).mockResolvedValue(site('w1', 'acme.se', 'gone'));
-      vi.mocked(listTeamUsers).mockResolvedValue(null);
+      vi.mocked(getTeam).mockResolvedValue(null);
 
       const { ui } = await run();
 

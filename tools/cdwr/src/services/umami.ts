@@ -345,18 +345,32 @@ export async function addTeamUser(
   if (!response.ok) throw await refused('the team member', response);
 }
 
-/** Every member of a team, read page by page; `null` when Umami has no such team */
+/**
+ * A team by id; `null` when Umami has no such team. Ask the team itself: its
+ * member list answers an admin with an empty page for a team that is gone.
+ */
+export async function getTeam(
+  conn: UmamiConnection,
+  teamId: string
+): Promise<UmamiTeam | null> {
+  const response = await request(conn, `/teams/${encodeURIComponent(teamId)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw await refused('the team lookup', response);
+  const { id, name } = teamSchema.parse(await response.json());
+  return { id, name };
+}
+
+/** Every member of a team, read page by page */
 export async function listTeamUsers(
   conn: UmamiConnection,
   teamId: string
-): Promise<UmamiTeamUser[] | null> {
+): Promise<UmamiTeamUser[]> {
   const users: UmamiTeamUser[] = [];
   for (let page = 1; ; page++) {
     const response = await request(
       conn,
       `/teams/${encodeURIComponent(teamId)}/users?page=${page}&pageSize=${PAGE_SIZE}`
     );
-    if (response.status === 404) return null;
     if (!response.ok) throw await refused('the team member list', response);
     const { data, count } = teamUserPageSchema.parse(await response.json());
     users.push(...data.map(({ userId, role }) => ({ userId, role })));
