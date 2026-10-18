@@ -19,6 +19,12 @@
       "type": "string",
       "description": "Working directory relative to the workspace root. Defaults to the project root."
     },
+    "retryGuardedNoOp": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Extra attempts for a command that ends as a cms exit-guard no-op; 0 is off"
+    },
     "env": {
       "type": "object",
       "additionalProperties": { "type": "string" },
