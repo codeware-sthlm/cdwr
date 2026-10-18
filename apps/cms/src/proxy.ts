@@ -107,7 +107,10 @@ function route(request: NextRequest, requestHeaders: Headers) {
   // asks for its password first
   const signup = signupRewrite(pathname, process.env);
   if (signup) {
-    return NextResponse.rewrite(new URL(signup, request.url), {
+    // Keep the query: the verify page reads its result from it
+    const target = new URL(signup, request.url);
+    target.search = request.nextUrl.search;
+    return NextResponse.rewrite(target, {
       request: { headers: requestHeaders }
     });
   }
