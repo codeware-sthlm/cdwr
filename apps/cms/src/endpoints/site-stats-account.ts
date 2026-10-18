@@ -37,6 +37,15 @@ const newPassword = () => randomBytes(15).toString('base64url');
 const refuse = (status: StatusCodes, error = getReasonPhrase(status)) =>
   Response.json({ error }, { status });
 
+/** A workspace admin; system users manage no statistics login */
+const isWorkspaceAdmin = (
+  user: Parameters<typeof hasRole>[0],
+  tenantId: number
+) =>
+  !!user &&
+  !hasRole(user, 'system-user') &&
+  getUserTenantIDs(user, 'admin').includes(tenantId);
+
 /**
  * The caller's statistics account state in a workspace, with what the state
  * was read from. `none` unless the caller is an admin of the workspace, the
@@ -50,8 +59,7 @@ export async function resolveStatsAccount(
   const { user } = req;
   if (
     !user ||
-    hasRole(user, 'system-user') ||
-    !getUserTenantIDs(user, 'admin').includes(tenantId) ||
+    !isWorkspaceAdmin(user, tenantId) ||
     !tenant.statsWebsiteId ||
     !tenant.statsTeamId
   ) {
@@ -245,6 +253,25 @@ export const siteStatsAccountEndpoint: Endpoint = {
         return refuse(StatusCodes.CONFLICT);
       }
       await admin.umami.addTeamUser(teamId, accountId, STATS_TEAM_ROLE);
+
+      // A downgrade that landed meanwhile must not leave the access restored
+      const current = await req.payload.findByID({
+        collection: 'users',
+        id: user.id,
+        depth: 0,
+        overrideAccess: true,
+        disableErrors: true
+      });
+      if (!isWorkspaceAdmin(current, tenantId)) {
+        try {
+          await admin.umami.removeTeamUser(teamId, accountId);
+        } catch (cleanupError) {
+          req.payload.logger.error(
+            `stats account ${mode}: removing Umami user ${accountId} from the team failed: ${String(cleanupError)}`
+          );
+        }
+        return refuse(StatusCodes.FORBIDDEN);
+      }
 
       const { brand, fallbackLocale } = await brandOf(req, tenantId);
       const requested = req.i18n?.language;

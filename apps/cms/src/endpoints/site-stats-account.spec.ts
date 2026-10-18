@@ -78,7 +78,10 @@ const givenAccount = (umamiUserId?: string) =>
   findByID.mockImplementation(async ({ collection }) =>
     collection === 'tenants'
       ? { statsWebsiteId: 'site-1', statsTeamId: 'team-1' }
-      : { statsAccount: umamiUserId ? { umamiUserId } : null }
+      : {
+          ...adminUser,
+          statsAccount: umamiUserId ? { umamiUserId } : null
+        }
   );
 
 const call = (user: unknown, data: unknown = { action: 'create' }) =>
@@ -285,5 +288,22 @@ describe('siteStatsAccountEndpoint', () => {
     );
     expect(sendEmail).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes the team membership and sends no mail when the caller was demoted meanwhile', async () => {
+    findByID.mockImplementation(async ({ collection, select }) =>
+      collection === 'tenants'
+        ? { statsWebsiteId: 'site-1', statsTeamId: 'team-1' }
+        : select
+          ? { statsAccount: null }
+          : { ...adminUser, tenants: [{ tenant: 5, role: 'reader' }] }
+    );
+
+    const response = await call(adminUser);
+
+    expect(response.status).toBe(403);
+    expect(admin.addTeamUser).toHaveBeenCalledTimes(1);
+    expect(admin.removeTeamUser).toHaveBeenCalledWith('team-1', 'u-1');
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 });
