@@ -4,6 +4,8 @@ import { ValidationError } from 'payload';
 import {
   REFUSAL_STATUS,
   type SignupBody,
+  SiteTaken,
+  isSiteTaken,
   parseSignup,
   signupRefusal
 } from './signup';
@@ -32,8 +34,7 @@ const valid: SignupBody = {
   name: 'Ada Lovelace',
   email: 'ada@example.com',
   password: 'correct horse battery',
-  siteName: 'Ada Engines',
-  deployment: 'ada-engines'
+  siteName: 'Ada Engines'
 };
 
 describe('parseSignup', () => {
@@ -43,13 +44,25 @@ describe('parseSignup', () => {
       code: '  abcd-efgh ',
       name: ' Ada Lovelace ',
       email: '  Ada@Example.COM ',
-      siteName: ' Ada Engines ',
-      deployment: ' ada-engines '
+      siteName: ' Ada Engines '
     });
 
     expect(result).toEqual({
       ok: true,
-      input: { ...valid, locale: 'en' }
+      input: { ...valid, deployment: 'ada-engines', locale: 'en' }
+    });
+  });
+
+  it('derives the address from the site name and ignores a posted one', () => {
+    const result = parseSignup({
+      ...valid,
+      siteName: 'Åsa Öström AB',
+      deployment: 'other'
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      input: { deployment: 'asa-ostrom-ab' }
     });
   });
 
@@ -85,10 +98,10 @@ describe('parseSignup', () => {
     });
   });
 
-  it.each(['Not Valid', 'under_score', '-leading', 'pr-12', ''])(
-    'refuses the deployment %p',
-    (deployment) => {
-      expect(parseSignup({ ...valid, deployment })).toEqual({
+  it.each(['!!!', '---'])(
+    'refuses the site name %p, which gives no usable address',
+    (siteName) => {
+      expect(parseSignup({ ...valid, siteName })).toEqual({
         ok: false,
         refusal: 'deployment'
       });
@@ -134,6 +147,11 @@ describe('signupRefusal', () => {
     expect(signupRefusal(error)).toBe(expected);
   });
 
+  it('answers a taken site by what clashed', () => {
+    expect(signupRefusal(new SiteTaken('name'))).toBe('name-taken');
+    expect(signupRefusal(new SiteTaken('address'))).toBe('deployment-taken');
+  });
+
   it('answers anything else with failed', () => {
     expect(signupRefusal(new Error('boom'))).toBe('failed');
     expect(signupRefusal('boom')).toBe('failed');
@@ -151,5 +169,79 @@ describe('signupRefusal', () => {
       403
     );
     expect(REFUSAL_STATUS[signupRefusal(new Error('boom'))]).toBe(500);
+  });
+});
+
+describe('isSiteTaken', () => {
+  const site = { name: 'Ada Engines', deployment: 'ada-engines' };
+
+  const payloadWith = (totalDocs: number, names: string[]) => {
+    const payload = {
+      count: jest.fn().mockResolvedValue({ totalDocs }),
+      find: jest
+        .fn()
+        .mockResolvedValue({ docs: names.map((name) => ({ name })) })
+    };
+    return payload as unknown as Parameters<typeof isSiteTaken>[0] &
+      typeof payload;
+  };
+
+  it('is free when nothing answers to the name or the address', async () => {
+    expect(await isSiteTaken(payloadWith(0, ['Other']), site)).toBeNull();
+  });
+
+  it('says address when a deployment or slug matches the derived address', async () => {
+    const payload = payloadWith(1, []);
+
+    expect(await isSiteTaken(payload, site)).toBe('address');
+    expect(payload.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          or: [
+            { deployment: { equals: 'ada-engines' } },
+            { slug: { equals: 'ada-engines' } }
+          ]
+        }
+      })
+    );
+    expect(payload.find).not.toHaveBeenCalled();
+  });
+
+  it('says name for the same name in any case and with spaces around it', async () => {
+    expect(
+      await isSiteTaken(payloadWith(0, ['  ADA engines ']), {
+        name: ' ada ENGINES',
+        deployment: 'ada-engines-2'
+      })
+    ).toBe('name');
+  });
+
+  it('does not take a name that only contains another', async () => {
+    expect(
+      await isSiteTaken(payloadWith(0, ['Ada Engines Ltd']), site)
+    ).toBeNull();
+  });
+
+  it('finds the exact name among more than a hundred that contain it', async () => {
+    const others = Array.from({ length: 150 }, (_, i) => `Ada Engines ${i}`);
+    const payload = payloadWith(0, [...others, 'ada engines']);
+
+    expect(await isSiteTaken(payload, site)).toBe('name');
+    expect(payload.find).toHaveBeenCalledWith(
+      expect.not.objectContaining({ limit: expect.anything() })
+    );
+  });
+
+  it('reads inside the transaction it is given', async () => {
+    const payload = payloadWith(0, []);
+
+    await isSiteTaken(payload, site, { transactionID: 'tx' });
+
+    expect(payload.count).toHaveBeenCalledWith(
+      expect.objectContaining({ req: { transactionID: 'tx' } })
+    );
+    expect(payload.find).toHaveBeenCalledWith(
+      expect.objectContaining({ req: { transactionID: 'tx' } })
+    );
   });
 });

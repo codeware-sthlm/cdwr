@@ -125,8 +125,6 @@ export type TranslationKey =
   | 'signup.password'
   | 'signup.passwordHint'
   | 'signup.siteName'
-  | 'signup.deployment'
-  | 'signup.deploymentHint'
   | 'signup.submit'
   | 'signup.submitting'
   | 'signup.successTitle'
@@ -143,6 +141,19 @@ export type TranslationKey =
   | 'signup.section.invite'
   | 'signup.section.you'
   | 'signup.section.site'
+  | 'signup.section.inviteHelp'
+  | 'signup.section.youHelp'
+  | 'signup.section.siteHelp'
+  | 'signup.verify.confirmTitle'
+  | 'signup.verify.confirmBody'
+  | 'signup.verify.confirm'
+  | 'signup.verify.verifiedTitle'
+  | 'signup.verify.verifiedBody'
+  | 'signup.verify.signIn'
+  | 'signup.verify.invalidTitle'
+  | 'signup.verify.invalidBody'
+  | 'signup.verify.newLink'
+  | 'language.label'
   | 'signup.inviteCodeHelp'
   | 'signup.addressPreview'
   | 'signup.availability.checking'
@@ -421,9 +432,6 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.password': 'Password',
     'signup.passwordHint': 'At least 10 characters.',
     'signup.siteName': 'Site name',
-    'signup.deployment': 'Site address',
-    'signup.deploymentHint':
-      'Lowercase letters, digits and hyphens. Suggested from the site name.',
     'signup.submit': 'Create site',
     'signup.submitting': 'Creating site...',
     'signup.successTitle': 'Check your email to confirm your address',
@@ -443,6 +451,22 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.section.invite': 'Your invite',
     'signup.section.you': 'You',
     'signup.section.site': 'Your site',
+    'signup.section.inviteHelp':
+      'The code you were given decides that you may sign up.',
+    'signup.section.youHelp':
+      'Your own account; you sign in with this address and password.',
+    'signup.section.siteHelp':
+      'The name your visitors see; the address follows from it.',
+    'signup.verify.confirmTitle': 'Confirm your email address',
+    'signup.verify.confirmBody': 'One click and your account is ready.',
+    'signup.verify.confirm': 'Confirm',
+    'signup.verify.verifiedTitle': 'Your address is confirmed',
+    'signup.verify.verifiedBody': 'Your account is ready. Sign in to continue.',
+    'signup.verify.signIn': 'Sign in',
+    'signup.verify.invalidTitle': 'The link is not valid',
+    'signup.verify.invalidBody': 'This link has expired or was already used.',
+    'signup.verify.newLink': 'Send a new link',
+    'language.label': 'Language',
     'signup.inviteCodeHelp':
       'Signup is by invitation. You get an invite code from Codeware; ask the person who pointed you here, or write to us.',
     'signup.addressPreview': 'A custom domain can be connected later.',
@@ -452,23 +476,21 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
       'Some details are missing or not valid. Check the form and try again.',
     'signup.error.password':
       'The password must be between 10 and 128 characters.',
-    'signup.error.deployment': 'This site address cannot be used.',
+    'signup.error.deployment': 'This name cannot be used.',
     'signup.error.code': "This invite code can't be used.",
     'signup.error.closed': "Signup isn't open right now.",
     'signup.error.throttled': 'Too many attempts. Try again later.',
     'signup.error.email-taken':
       'There is already an account with this email address.',
-    'signup.error.deployment-taken': 'This site address is already taken.',
-    'signup.error.name-taken': 'A site with this name already exists.',
+    'signup.error.deployment-taken':
+      'A site with a very similar name already exists. Try another name.',
+    'signup.error.name-taken': 'That name is already taken. Try another.',
     'signup.error.failed': 'Something went wrong. Try again in a moment.',
-    'signup.issue.empty': 'Enter a site address.',
-    'signup.issue.characters':
-      'Use only lowercase letters, digits and hyphens.',
-    'signup.issue.hyphens':
-      'A hyphen cannot start or end the address, or come twice in a row.',
-    'signup.issue.reserved': 'This site address is reserved.',
-    'signup.issue.too-long':
-      'The site address is too long (40 characters at most).',
+    'signup.issue.empty': 'The name needs at least one letter or digit.',
+    'signup.issue.characters': 'The name needs at least one letter or digit.',
+    'signup.issue.hyphens': 'The name needs at least one letter or digit.',
+    'signup.issue.reserved': 'This name is reserved. Try another.',
+    'signup.issue.too-long': 'The name is too long. Try a shorter one.',
     'siteGate.heading': 'This site is not open',
     'siteGate.intro': 'Enter the password to continue.',
     'siteGate.password': 'Password',
@@ -753,9 +775,6 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.password': 'Lösenord',
     'signup.passwordHint': 'Minst 10 tecken.',
     'signup.siteName': 'Webbplatsens namn',
-    'signup.deployment': 'Webbplatsens adress',
-    'signup.deploymentHint':
-      'Små bokstäver, siffror och bindestreck. Föreslås utifrån webbplatsens namn.',
     'signup.submit': 'Skapa webbplats',
     'signup.submitting': 'Skapar webbplatsen...',
     'signup.successTitle': 'Kolla din e-post för att bekräfta adressen',
@@ -775,6 +794,24 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.section.invite': 'Din inbjudan',
     'signup.section.you': 'Du',
     'signup.section.site': 'Din webbplats',
+    'signup.section.inviteHelp':
+      'Koden du har fått avgör att du får registrera dig.',
+    'signup.section.youHelp':
+      'Ditt eget konto. Du loggar in med den här adressen och det här lösenordet.',
+    'signup.section.siteHelp':
+      'Namnet som dina besökare ser. Adressen följer av namnet.',
+    'signup.verify.confirmTitle': 'Bekräfta din e-postadress',
+    'signup.verify.confirmBody': 'Ett klick så är kontot klart.',
+    'signup.verify.confirm': 'Bekräfta',
+    'signup.verify.verifiedTitle': 'Din e-postadress är bekräftad',
+    'signup.verify.verifiedBody':
+      'Ditt konto är klart. Logga in för att fortsätta.',
+    'signup.verify.signIn': 'Logga in',
+    'signup.verify.invalidTitle': 'Länken fungerar inte',
+    'signup.verify.invalidBody':
+      'Länken har slutat gälla eller har redan använts.',
+    'signup.verify.newLink': 'Skicka en ny länk',
+    'language.label': 'Språk',
     'signup.inviteCodeHelp':
       'Registreringen sker via inbjudan. Inbjudningskoden får du av Codeware. Fråga den som hänvisade dig hit, eller skriv till oss.',
     'signup.addressPreview':
@@ -784,24 +821,24 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.error.invalid':
       'Några uppgifter saknas eller är ogiltiga. Kontrollera formuläret och försök igen.',
     'signup.error.password': 'Lösenordet måste vara mellan 10 och 128 tecken.',
-    'signup.error.deployment': 'Den här webbplatsadressen kan inte användas.',
+    'signup.error.deployment': 'Det här namnet kan inte användas.',
     'signup.error.code': 'Den här inbjudningskoden kan inte användas.',
     'signup.error.closed': 'Registreringen är inte öppen just nu.',
     'signup.error.throttled': 'För många försök. Försök igen senare.',
     'signup.error.email-taken':
       'Det finns redan ett konto med den här e-postadressen.',
     'signup.error.deployment-taken':
-      'Den här webbplatsadressen är redan upptagen.',
-    'signup.error.name-taken':
-      'Det finns redan en webbplats med det här namnet.',
+      'Det finns redan en webbplats med ett mycket liknande namn. Prova ett annat namn.',
+    'signup.error.name-taken': 'Namnet är redan upptaget. Prova ett annat.',
     'signup.error.failed': 'Något gick fel. Försök igen om en stund.',
-    'signup.issue.empty': 'Ange en webbplatsadress.',
+    'signup.issue.empty':
+      'Namnet måste innehålla minst en bokstav eller siffra.',
     'signup.issue.characters':
-      'Använd bara små bokstäver, siffror och bindestreck.',
+      'Namnet måste innehålla minst en bokstav eller siffra.',
     'signup.issue.hyphens':
-      'Ett bindestreck får inte stå först eller sist i adressen, eller två gånger i rad.',
-    'signup.issue.reserved': 'Den här webbplatsadressen är reserverad.',
-    'signup.issue.too-long': 'Webbplatsadressen är för lång (högst 40 tecken).',
+      'Namnet måste innehålla minst en bokstav eller siffra.',
+    'signup.issue.reserved': 'Det här namnet är reserverat. Prova ett annat.',
+    'signup.issue.too-long': 'Namnet är för långt. Prova ett kortare.',
     'siteGate.heading': 'Webbplatsen är inte öppen',
     'siteGate.intro': 'Ange lösenordet för att fortsätta.',
     'siteGate.password': 'Lösenord',

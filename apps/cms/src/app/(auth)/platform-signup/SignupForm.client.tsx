@@ -27,42 +27,48 @@ type Props = {
   siteKey?: string;
 };
 
-/** Wait for the typing to pause before asking whether the address is free */
+/** Wait for the typing to pause before asking whether the name is free */
 const AVAILABILITY_DELAY_MS = 400;
 
-/** The address the answer was about, with the answer; null when none came */
-type Answer = { deployment: string; available: boolean | null };
+/** The name the answer was about, with the answer; null when none came */
+type Answer = {
+  name: string;
+  available: boolean | null;
+  reason?: 'name' | 'address';
+};
 
-/** What the field says about the current address */
+/** What the field says about the current name */
 const availabilityOf = (
-  deployment: string,
+  name: string,
   askable: boolean,
   pending: string | null,
   answer: Answer | null
 ): SignupAvailability | undefined => {
   if (!askable) return undefined;
-  if (answer?.deployment === deployment) {
+  if (answer?.name === name) {
     if (answer.available === null) return undefined;
     return answer.available ? 'available' : 'taken';
   }
-  return pending === deployment ? 'checking' : undefined;
+  return pending === name ? 'checking' : undefined;
 };
 
-const isAnswer = (value: unknown): value is { available: boolean } =>
+const isAnswer = (
+  value: unknown
+): value is { available: boolean; reason?: unknown } =>
   typeof value === 'object' &&
   value !== null &&
   'available' in value &&
   typeof value.available === 'boolean';
 
-type Field = 'password' | 'email' | 'siteName' | 'deployment';
+type Field = 'password' | 'email' | 'siteName';
 
 /** Refusals worded next to the field they are about; the rest sit above the form */
 const REFUSAL_FIELD: Partial<Record<SignupRefusal, Field>> = {
   password: 'password',
   'email-taken': 'email',
   'name-taken': 'siteName',
-  deployment: 'deployment',
-  'deployment-taken': 'deployment'
+  deployment: 'siteName',
+  'deployment-taken': 'siteName'
 };
 
 const isRefusal = (value: unknown): value is SignupRefusal =>
@@ -109,29 +115,26 @@ export function SignupForm({ hostAppName, locale, siteKey }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [siteName, setSiteName] = useState('');
-  // Null until the person edits the address; until then it follows the name
-  const [editedDeployment, setEditedDeployment] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<SignupRefusal | null>(null);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   // Set on the press itself, since state lags a second press of Enter
   const submitting = useRef(false);
 
-  const deployment = editedDeployment ?? toDeploymentName(siteName);
-  const issue =
-    deployment === '' && editedDeployment === null
-      ? null
-      : deploymentNameIssue(deployment);
+  // The address follows from the name and is never typed
+  const deployment = toDeploymentName(siteName);
+  const trimmedName = siteName.trim();
+  const issue = trimmedName === '' ? null : deploymentNameIssue(deployment);
 
-  // A well-formed address is worth a preview and a question to the server
-  const askable = deployment !== '' && issue === null;
+  // A name with a well-formed address is worth a preview and a question
+  const askable = trimmedName !== '' && issue === null;
   const siteUrl = askable ? tenantSiteUrl(hostAppName, deployment) : undefined;
 
-  // The address being asked about, and the latest answer; neither says
+  // The name being asked about, and the latest answer; neither says
   // anything about a value typed since
   const [pending, setPending] = useState<string | null>(null);
   const [answer, setAnswer] = useState<Answer | null>(null);
-  const availability = availabilityOf(deployment, askable, pending, answer);
+  const availability = availabilityOf(trimmedName, askable, pending, answer);
 
   useEffect(() => {
     if (!askable) {
@@ -140,22 +143,24 @@ export function SignupForm({ hostAppName, locale, siteKey }: Props) {
 
     const controller = new AbortController();
     const timer = setTimeout(async () => {
-      setPending(deployment);
+      setPending(trimmedName);
       try {
         const response = await fetch(
-          `/api/signup/available?deployment=${encodeURIComponent(deployment)}`,
+          `/api/signup/available?name=${encodeURIComponent(trimmedName)}`,
           { signal: controller.signal }
         );
         const body: unknown = await response.json();
         if (controller.signal.aborted) return;
         // Anything but an answer ends the check; the signup decides in the end
+        const answered = response.ok && isAnswer(body) ? body : null;
         setAnswer({
-          deployment,
-          available: response.ok && isAnswer(body) ? body.available : null
+          name: trimmedName,
+          available: answered ? answered.available : null,
+          reason: answered?.reason === 'address' ? 'address' : 'name'
         });
       } catch {
         if (!controller.signal.aborted)
-          setAnswer({ deployment, available: null });
+          setAnswer({ name: trimmedName, available: null });
       }
     }, AVAILABILITY_DELAY_MS);
 
@@ -163,7 +168,7 @@ export function SignupForm({ hostAppName, locale, siteKey }: Props) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [deployment, askable]);
+  }, [trimmedName, askable]);
 
   const refusedField = refusal ? REFUSAL_FIELD[refusal] : undefined;
   const refusalMessage = refusal ? t(locale, `signup.error.${refusal}`) : null;
@@ -195,7 +200,6 @@ export function SignupForm({ hostAppName, locale, siteKey }: Props) {
           email,
           password,
           siteName,
-          deployment,
           locale,
           humanCheck: humanCheck.proof()
         })
@@ -229,8 +233,6 @@ export function SignupForm({ hostAppName, locale, siteKey }: Props) {
         return setPassword(value);
       case 'siteName':
         return setSiteName(value);
-      case 'deployment':
-        return setEditedDeployment(value);
     }
   };
 
@@ -242,10 +244,10 @@ export function SignupForm({ hostAppName, locale, siteKey }: Props) {
         ? 'refused'
         : 'idle';
 
-  // A malformed address is worded before the server's own refusal
-  const deploymentError = issue
+  // A name that gives no address is worded before the server's own refusal
+  const siteNameError = issue
     ? t(locale, `signup.issue.${issue}`)
-    : fieldError('deployment');
+    : fieldError('siteName');
 
   return (
     <SignupFormView
@@ -258,27 +260,32 @@ export function SignupForm({ hostAppName, locale, siteKey }: Props) {
         password: t(locale, 'signup.password'),
         passwordHint: t(locale, 'signup.passwordHint'),
         siteName: t(locale, 'signup.siteName'),
-        deployment: t(locale, 'signup.deployment'),
-        deploymentHint: t(locale, 'signup.deploymentHint'),
         sectionInvite: t(locale, 'signup.section.invite'),
         sectionYou: t(locale, 'signup.section.you'),
         sectionSite: t(locale, 'signup.section.site'),
+        sectionInviteHelp: t(locale, 'signup.section.inviteHelp'),
+        sectionYouHelp: t(locale, 'signup.section.youHelp'),
+        sectionSiteHelp: t(locale, 'signup.section.siteHelp'),
         inviteCodeHelp: t(locale, 'signup.inviteCodeHelp'),
         addressPreview: t(locale, 'signup.addressPreview'),
         availabilityChecking: t(locale, 'signup.availability.checking'),
         availabilityAvailable: t(locale, 'signup.availability.available'),
-        availabilityTaken: t(locale, 'signup.error.deployment-taken'),
+        availabilityTaken: t(
+          locale,
+          answer?.name === trimmedName && answer.reason === 'address'
+            ? 'signup.error.deployment-taken'
+            : 'signup.error.name-taken'
+        ),
         submit: t(locale, 'signup.submit'),
         submitting: t(locale, 'signup.submitting'),
         successTitle: t(locale, 'signup.successTitle'),
         successBody: t(locale, 'signup.successBody')
       }}
-      values={{ code, name, email, password, siteName, deployment }}
+      values={{ code, name, email, password, siteName }}
       fieldErrors={{
         email: fieldError('email') ?? undefined,
         password: fieldError('password') ?? undefined,
-        siteName: fieldError('siteName') ?? undefined,
-        deployment: deploymentError ?? undefined
+        siteName: siteNameError ?? undefined
       }}
       siteUrl={siteUrl}
       availability={availability}

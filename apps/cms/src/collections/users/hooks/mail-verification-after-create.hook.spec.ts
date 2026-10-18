@@ -32,7 +32,15 @@ const run = (
 // The mail is sent without being awaited
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
+// The link depends on the app mode, which a developer's .env.local may set
+const tenantId = process.env['TENANT_ID'];
+afterAll(() => {
+  if (tenantId === undefined) delete process.env['TENANT_ID'];
+  else process.env['TENANT_ID'] = tenantId;
+});
+
 beforeEach(() => {
+  delete process.env['TENANT_ID'];
   jest.resetAllMocks();
   payload.findByID.mockResolvedValue({ _verificationToken: 'verify-token' });
   payload.sendEmail.mockResolvedValue(undefined);
@@ -54,8 +62,17 @@ describe('mailVerificationAfterCreateHook', () => {
     expect(payload.sendEmail).toHaveBeenCalledTimes(1);
     const [mail] = payload.sendEmail.mock.calls[0];
     expect(mail.to).toBe('ada@example.com');
+    expect(mail.text).toContain('/signup/verify/verify-token');
+    expect(mail.html).toContain('/signup/verify/verify-token');
+  });
+
+  it('keeps the admin verify link in tenant mode, which has no signup pages', async () => {
+    process.env['TENANT_ID'] = 'moon';
+    run('create');
+    await flush();
+
+    const [mail] = payload.sendEmail.mock.calls[0];
     expect(mail.text).toContain('/admin/users/verify/verify-token');
-    expect(mail.html).toContain('/admin/users/verify/verify-token');
   });
 
   it('sends nothing when not flagged', async () => {

@@ -5,6 +5,8 @@ import {
 import type { SupportedLocale } from '@codeware/shared/util/i18n';
 import type { BasePayload } from 'payload';
 
+import { SIGNUP_VERIFY_PATH } from '../../utils/platform-signup';
+
 /**
  * The mail that confirms a self-serve user's address, in the platform's brand.
  *
@@ -29,6 +31,11 @@ export function verifyEmailMail(
     locale,
     brand: PLATFORM_EMAIL_BRAND,
     name,
-    verifyUrl: `${serverURL}${config.routes.admin}/users/verify/${token}`
+    // The host has a page of its own; a tenant app has only the admin's view
+    verifyUrl: `${serverURL}${
+      process.env['TENANT_ID']
+        ? `${config.routes.admin}/users/verify`
+        : SIGNUP_VERIFY_PATH
+    }/${token}`
   });
 }

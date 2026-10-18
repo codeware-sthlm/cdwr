@@ -25,11 +25,18 @@ jest.mock('../../../../payload.config', () => ({}));
 
 const payload = { count: jest.fn(), find: jest.fn() };
 
-const get = (deployment?: string) =>
+/** The settings read and the tenant name lookup answer apart */
+const answer = (settings: Record<string, unknown>, names: string[] = []) =>
+  payload.find.mockImplementation(async ({ collection }) => ({
+    docs:
+      collection === 'tenants' ? names.map((name) => ({ name })) : [settings]
+  }));
+
+const get = (name?: string) =>
   GET(
     new NextRequest(
       `https://cms.example/api/signup/available${
-        deployment === undefined ? '' : `?deployment=${deployment}`
+        name === undefined ? '' : `?name=${encodeURIComponent(name)}`
       }`,
       { headers: { 'x-forwarded-for': '203.0.113.7' } }
     )
@@ -43,7 +50,7 @@ beforeEach(() => {
   } as ReturnType<typeof getEnv>);
   jest.mocked(getPayload).mockResolvedValue(payload as never);
   payload.count.mockResolvedValue({ totalDocs: 0 });
-  payload.find.mockResolvedValue({ docs: [{ signupOpen: true }] });
+  answer({ signupOpen: true });
 });
 
 describe('GET /api/signup/available', () => {
@@ -54,62 +61,92 @@ describe('GET /api/signup/available', () => {
         typeof getEnv
       >);
 
-    const response = await get('ada-engines');
+    const response = await get('Ada Engines');
 
     expect(response.status).toBe(404);
     expect(getPayload).not.toHaveBeenCalled();
   });
 
-  it('answers a malformed address without touching the database', async () => {
-    const response = await get('Not Valid!');
+  it('answers a name that gives no address without touching the database', async () => {
+    const response = await get('!!!');
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       available: false,
-      issue: 'characters'
+      issue: 'empty'
     });
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(getPayload).not.toHaveBeenCalled();
   });
 
-  it('answers a missing address as empty', async () => {
+  it('answers a missing name as empty', async () => {
     const response = await get();
 
     expect(await response.json()).toEqual({ available: false, issue: 'empty' });
   });
 
   it('is not found while signup is closed, before any lookup', async () => {
-    payload.find.mockResolvedValue({ docs: [{ signupOpen: false }] });
+    answer({ signupOpen: false });
 
-    const response = await get('ada-engines');
+    const response = await get('Ada Engines');
 
     expect(response.status).toBe(404);
     expect(payload.count).not.toHaveBeenCalled();
   });
 
   it('says a free address is available', async () => {
-    const response = await get('ada-engines');
+    const response = await get('Ada Engines');
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ available: true });
     expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 
-  it('says a taken address is not', async () => {
+  it('derives the address from the name, with Swedish letters folded', async () => {
+    await get('Åsa Öström');
+
+    expect(payload.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          or: [
+            { deployment: { equals: 'asa-ostrom' } },
+            { slug: { equals: 'asa-ostrom' } }
+          ]
+        }
+      })
+    );
+  });
+
+  it('says a taken address is not, and why', async () => {
     payload.count.mockResolvedValue({ totalDocs: 1 });
 
-    const response = await get('ada-engines');
+    const response = await get('ada engines');
 
-    expect(await response.json()).toEqual({ available: false });
+    expect(await response.json()).toEqual({
+      available: false,
+      reason: 'address'
+    });
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('says a name that differs only by case is taken', async () => {
+    answer({ signupOpen: true }, ['ADA Engines']);
+
+    const response = await get('Ada Engines');
+
+    expect(await response.json()).toEqual({
+      available: false,
+      reason: 'name'
+    });
     expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 
   it('throttles an address that asks too often', async () => {
     for (let i = 0; i < AVAILABLE_RATE_LIMIT; i++) {
-      expect((await get('ada-engines')).status).toBe(200);
+      expect((await get('Ada Engines')).status).toBe(200);
     }
 
-    const response = await get('ada-engines');
+    const response = await get('Ada Engines');
 
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual({ error: 'throttled' });
