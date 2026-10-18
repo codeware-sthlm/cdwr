@@ -139,6 +139,7 @@ cdwr agent status         # loaded, paused, key, scripts current, watched PRs, n
 cdwr agent run            # start a planning run now
 cdwr agent pause|resume   # hold or release the schedule
 cdwr agent logs [--run]   # the scheduler log, or the latest run
+cdwr agent logs --host <name> [--run]   # the same, from the agent container over ssh
 cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ticket, from local transcripts
 … | cdwr agent activity [--runs <file>]   # the activity document from a Linear history response on stdin
 cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
@@ -191,6 +192,21 @@ it. `gh` runs as you here, so the script only lists and queries; a spec fails on
 else. The watch's decisions live in `agent-queue/watch.jq`, installed beside `run.sh`, rather
 than in a `*.logic.ts`: what runs unattended stays behind `install`, and jq is already a
 dependency of the script. Its spec runs it through `jq`.
+
+A run reports to a Sentry cron monitor, `agent-queue`, when `SENTRY_DSN` is set (the agent
+container reads it from `/agent-queue` in Infisical; unset, as on the Mac, nothing is sent).
+`agent-queue/checkin.sh`, sourced by `run.sh`, posts to Sentry's HTTP check-in endpoint with curl:
+`in_progress` once the run holds its lock, `ok` or `error` by exit status when it ends. The first
+check-in carries the monitor's config, so Sentry creates the monitor itself: every 10 minutes, a
+15-minute margin, which makes a missed check-in alert after 25 minutes, and a 60-minute max
+runtime. A paused queue still sends an `ok` on each tick, since a pause is deliberate; a tick that
+finds a run in progress, a `--check`, and a run that skips for a missing Linear key or no network
+send nothing, so a key that stays missing alerts as missed check-ins. A failed check-in is logged once to
+`scheduler.log` and never fails the run.
+
+`cdwr agent logs --host <name>` reads the log of the agent container instead of a local file: it
+runs `ssh <name> docker exec cdwr-agent` to list `/home/agent/.cdwr/agent-queue/logs`, picks the
+scheduler log or, with `--run`, the latest run, and tails it. It needs no local launchd job.
 
 ## Writing a command
 

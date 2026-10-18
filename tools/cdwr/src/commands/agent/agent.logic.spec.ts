@@ -34,6 +34,9 @@ import {
   parseWatchState,
   plistPath,
   queuePaths,
+  remoteListLogs,
+  remoteLogFile,
+  remoteReadLog,
   renderPlist,
   serviceTarget,
   spendForDay,
@@ -115,6 +118,7 @@ describe('constants', () => {
       'run.sh',
       'implement.sh',
       'github-app.sh',
+      'checkin.sh',
       'lib.sh',
       'waits.sh',
       'watch.jq',
@@ -157,6 +161,7 @@ describe('queuePaths', () => {
         'run.sh': '/h/.cdwr/agent-queue/run.sh',
         'implement.sh': '/h/.cdwr/agent-queue/implement.sh',
         'github-app.sh': '/h/.cdwr/agent-queue/github-app.sh',
+        'checkin.sh': '/h/.cdwr/agent-queue/checkin.sh',
         'lib.sh': '/h/.cdwr/agent-queue/lib.sh',
         'waits.sh': '/h/.cdwr/agent-queue/waits.sh',
         'watch.jq': '/h/.cdwr/agent-queue/watch.jq',
@@ -380,6 +385,7 @@ describe('filesDrift', () => {
     'run.sh': 'a',
     'implement.sh': 'i',
     'github-app.sh': 'g',
+    'checkin.sh': 'k',
     'lib.sh': 'c',
     'waits.sh': 'd',
     'watch.jq': 'b',
@@ -390,6 +396,7 @@ describe('filesDrift', () => {
     'run.sh': 'a',
     'implement.sh': 'i',
     'github-app.sh': 'g',
+    'checkin.sh': 'k',
     'lib.sh': 'c',
     'waits.sh': 'd',
     'watch.jq': 'b',
@@ -943,5 +950,45 @@ describe('implement spend', () => {
     ['nope', undefined]
   ])('reads node major from %j', (text, expected) => {
     expect(nodeMajor(text)).toBe(expected);
+  });
+});
+
+describe('remote logs', () => {
+  it('lists the container log folder over ssh, one argv entry per word', () => {
+    expect(remoteListLogs('agent-host')).toEqual([
+      'agent-host',
+      'docker',
+      'exec',
+      'cdwr-agent',
+      'ls',
+      '-1',
+      '/home/agent/.cdwr/agent-queue/logs'
+    ]);
+  });
+
+  it('picks the scheduler log, or the newest run log', () => {
+    const names = [
+      '2026-10-18_0900.log',
+      '2026-10-19_0810.log',
+      'scheduler.log'
+    ];
+    expect(remoteLogFile(false, names)).toBe(
+      '/home/agent/.cdwr/agent-queue/logs/scheduler.log'
+    );
+    expect(remoteLogFile(true, names)).toBe(
+      '/home/agent/.cdwr/agent-queue/logs/2026-10-19_0810.log'
+    );
+    expect(remoteLogFile(true, ['scheduler.log'])).toBeUndefined();
+  });
+
+  it('tails, or cats for 0 lines', () => {
+    const file = '/f.log';
+    expect(remoteReadLog('h', file, 25).slice(4)).toEqual([
+      'tail',
+      '-n',
+      '25',
+      file
+    ]);
+    expect(remoteReadLog('h', file, 0).slice(4)).toEqual(['cat', file]);
   });
 });
