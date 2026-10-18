@@ -63,9 +63,12 @@ record() {
     '{when: $w, outcome: $o, ticket: $t, detail: $d}' >> "$RUNS" 2>/dev/null || true
 }
 
-if [[ -e "$HOME_DIR/paused" ]] && ! $check; then exit 0; fi
+source "${0:A:h}/checkin.sh"
+# A pause is deliberate: the tick still checks in ok, so the monitor does not alert
+if [[ -e "$HOME_DIR/paused" ]] && ! $check; then checkin ok; exit 0; fi
 if ! mkdir "$HOME_DIR/lock" 2>/dev/null; then say "busy: a run is in progress"; exit 0; fi
 trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
+CHECKIN_ID=""
 
 source "${0:A:h}/lib.sh"
 source "${0:A:h}/waits.sh"
@@ -114,7 +117,7 @@ job_line() {
   if [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
   if [[ -z "$want" ]]; then print -r -- "$out · $kind unknown"; return 0; fi
-  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh; do
+  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh checkin.sh; do
     theirs="$(git -C "$REPO" show "origin/main:$dir/$f" 2>/dev/null)" ||
       { print -r -- "$out · $kind unknown"; return 0; }
     [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")
@@ -301,9 +304,14 @@ on_exit() {
   publish_activity
   publish_runs
   rmdir "$HOME_DIR/lock" 2>/dev/null
+  if ! $check; then
+    if (( st == 0 )); then checkin ok "$CHECKIN_ID"; else checkin error "$CHECKIN_ID"; fi
+  fi
   return 0
 }
 trap 'st=$?; on_exit $st; exit $st' EXIT
+# Opened only once on_exit can close it; earlier skips send nothing, so a missing key shows as missed check-ins
+$check || CHECKIN_ID="$(checkin in_progress)"
 
 # PR watch: gh runs as Håkan, so only reads (gh pr list, gh api graphql with a query).
 # The decisions live in watch.jq, installed next to this file.

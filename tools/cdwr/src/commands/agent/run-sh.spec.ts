@@ -200,6 +200,29 @@ describe('run.sh', () => {
 
 const execAsync = promisify(execFile);
 
+describe('run.sh Sentry check-ins', () => {
+  it('sources checkin.sh from its own directory', () => {
+    expect(SCRIPT).toContain('source "${0:A:h}/checkin.sh"');
+  });
+
+  it('checks in once when paused, before the lock, and not on --check', () => {
+    expect(SCRIPT).toContain('then checkin ok; exit 0; fi');
+    expect(SCRIPT.indexOf('then checkin ok; exit 0; fi')).toBeLessThan(
+      SCRIPT.indexOf('mkdir "$HOME_DIR/lock"')
+    );
+    expect(SCRIPT).toContain('$check || CHECKIN_ID="$(checkin in_progress)"');
+    expect(SCRIPT).toContain('if ! $check; then');
+  });
+
+  it('opens after the lock and closes by exit status in on_exit', () => {
+    const lock = SCRIPT.indexOf('mkdir "$HOME_DIR/lock"');
+    expect(SCRIPT.indexOf('checkin in_progress')).toBeGreaterThan(lock);
+    const exit = SCRIPT.slice(SCRIPT.indexOf('on_exit() {'));
+    expect(exit).toContain('checkin ok "$CHECKIN_ID"');
+    expect(exit).toContain('checkin error "$CHECKIN_ID"');
+  });
+});
+
 describe('run.sh GitHub identity', () => {
   const APP_SH = fileURLToPath(
     new URL('../../../agent-queue/github-app.sh', import.meta.url)
