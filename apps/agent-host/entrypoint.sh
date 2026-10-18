@@ -52,9 +52,13 @@ if [[ ! -d "$AGENT_QUEUE_REPO/.git" ]]; then
   git clone https://github.com/codeware-sthlm/cdwr.git "$AGENT_QUEUE_REPO"
   git -C "$AGENT_QUEUE_REPO" checkout --detach origin/main
 fi
-# Apart from the clone, so an install that failed is tried again on the next start
-[[ -f "$AGENT_QUEUE_REPO/node_modules/.modules.yaml" ]] ||
+# Apart from the clone. The marker comes only after a finished install, so a failed or
+# interrupted one is tried again on the next start
+INSTALLED="$AGENT_QUEUE_REPO/node_modules/.agent-host-installed"
+if [[ ! -f "$INSTALLED" ]]; then
   (cd "$AGENT_QUEUE_REPO" && pnpm install --frozen-lockfile)
+  touch "$INSTALLED"
+fi
 write_env
 
 # One runner per container: a lock left by a killed run is stale
