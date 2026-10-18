@@ -26,6 +26,8 @@ export const tenantRowSchema = z.object({
   apiKey: z.string().nullable(),
   statsWebsiteId: z.string().nullable(),
   statsShareId: z.string().nullable(),
+  // Older deployments answer without a team
+  statsTeamId: z.string().nullable().optional(),
   domains: z.array(
     z.object({
       hostname: z.string(),

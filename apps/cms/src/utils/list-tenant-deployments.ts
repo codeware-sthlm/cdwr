@@ -47,6 +47,7 @@ async function list() {
       deployment,
       statsWebsiteId,
       statsShareId,
+      statsTeamId,
       domains
     }) => ({
       id,
@@ -57,6 +58,7 @@ async function list() {
       apiKey: apiKeys.get(id) ?? null,
       statsWebsiteId: statsWebsiteId || null,
       statsShareId: statsShareId || null,
+      statsTeamId: statsTeamId || null,
       domains: (domains ?? []).map(({ hostname, app, isPrimary }) => ({
         hostname,
         app,

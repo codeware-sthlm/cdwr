@@ -426,6 +426,7 @@ const customTranslationsSchema = z.object({
     platformSettingsSingleton: z.string(),
     signupWouldOverbook: z.string(),
     statsShareIdInvalid: z.string(),
+    statsTeamIdInvalid: z.string(),
     statsWebsiteIdInvalid: z.string(),
     svgCode: z.string(),
     componentSlugInvalid: z.string(),
@@ -936,6 +937,8 @@ Supported locales: {{locales}}`,
         'Only {{available}} of {{max}} places are left and this signup needs {{people}}. Cancel a booking or raise the maximum first.',
       statsShareIdInvalid:
         'The share link must be letters, digits, "-" and "_", at most 50 characters.',
+      statsTeamIdInvalid:
+        'The statistics team id must be a UUID, for example 123e4567-e89b-12d3-a456-426614174000.',
       statsWebsiteIdInvalid:
         'The statistics website id must be a UUID, for example 123e4567-e89b-12d3-a456-426614174000.',
       svgCode: 'Enter SVG code, starting with <svg>.',
@@ -1455,6 +1458,8 @@ Språk som stöds: {{locales}}`,
         'Endast {{available}} av {{max}} platser återstår och anmälan behöver {{people}}. Avboka någon eller höj maxantalet först.',
       statsShareIdInvalid:
         'Delningslänken får bara innehålla bokstäver, siffror, "-" och "_", högst 50 tecken.',
+      statsTeamIdInvalid:
+        'Statistik-team-id:t måste vara ett UUID, till exempel 123e4567-e89b-12d3-a456-426614174000.',
       statsWebsiteIdInvalid:
         'Statistik-id:t måste vara ett UUID, till exempel 123e4567-e89b-12d3-a456-426614174000.',
       svgCode: 'Ange SVG-kod som börjar med <svg>.',

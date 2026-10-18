@@ -266,13 +266,21 @@ describe('tenant provision', () => {
       status: 'ready' as const,
       url: 'https://umami.test',
       apiKey: 'k',
-      teamId: 'team'
+      readApiKey: 'r'
     };
-    const site = (id: string, domain: string) => ({ id, name: 'x', domain });
+    const site = (id: string, domain: string) => ({
+      id,
+      name: 'x',
+      domain,
+      teamId: null
+    });
 
     const umami = async () => {
       const mod = await import('../../services/umami');
       vi.mocked(mod.readUmamiProvisioning).mockResolvedValue(READY);
+      // COD-587 step 4: the shared team is still read from the folder
+      const { readSecrets } = await import('../../services/infisical');
+      vi.mocked(readSecrets).mockResolvedValue({ TEAM_ID: 'team' });
       return mod;
     };
 
@@ -326,7 +334,8 @@ describe('tenant provision', () => {
       vi.mocked(mod.createWebsite).mockResolvedValue({
         id: 'new-id',
         name: 'Acme',
-        domain: 'cdwr-cms-acme.fly.dev'
+        domain: 'cdwr-cms-acme.fly.dev',
+        teamId: 'team'
       });
     });
 

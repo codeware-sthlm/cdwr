@@ -573,6 +573,10 @@ export interface Tenant {
    */
   statsShareId?: string | null;
   /**
+   * The id of the workspace's team in Umami. Set by provisioning; leave empty when there is no team.
+   */
+  statsTeamId?: string | null;
+  /**
    * Pending workspaces come from self-serve signup and are not deployed until activated.
    */
   status: 'pending' | 'active';
@@ -3591,6 +3595,7 @@ export interface TenantsSelect<T extends boolean = true> {
       };
   statsWebsiteId?: T;
   statsShareId?: T;
+  statsTeamId?: T;
   status?: T;
   relations?:
     | T

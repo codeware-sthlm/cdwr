@@ -15,19 +15,53 @@ export interface UmamiConnection {
 }
 
 export type UmamiProvisioning =
-  | ({ status: 'ready'; teamId: string } & UmamiConnection)
+  | ({ status: 'ready'; readApiKey: string } & UmamiConnection)
   | { status: 'unconfigured'; missing: string[] };
 
 export interface UmamiWebsite {
   id: string;
   name: string;
   domain: string;
+  /** The team that owns the website, `null` while it belongs to a user */
+  teamId: string | null;
+}
+
+export type TeamRole = 'team-member' | 'team-view-only' | 'team-manager';
+
+export interface UmamiUser {
+  id: string;
+  username: string;
+  role: 'admin' | 'user' | 'view-only';
+}
+
+export interface UmamiTeam {
+  id: string;
+  name: string;
+}
+
+export interface UmamiTeamUser {
+  userId: string;
+  role: string;
 }
 
 const websiteSchema = z.object({
   id: z.string(),
   name: z.string(),
-  domain: z.string().nullable().optional()
+  domain: z.string().nullable().optional(),
+  teamId: z.string().nullable().optional()
+});
+
+const userSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  role: z.enum(['admin', 'user', 'view-only'])
+});
+
+const teamSchema = z.object({ id: z.string(), name: z.string() });
+
+const teamUserPageSchema = z.object({
+  data: z.array(z.object({ userId: z.string(), role: z.string() })),
+  count: z.number()
 });
 
 const pageSchema = z.object({
@@ -41,6 +75,8 @@ const sharePageSchema = z.object({
 });
 
 const PAGE_SIZE = 100;
+/** Umami refuses a longer team name */
+const TEAM_NAME_MAX = 50;
 const TIMEOUT_MS = 15_000;
 /** How long a read keeps trying while Umami wakes up, and how often */
 const WAKE_DEADLINE_MS = 60_000;
@@ -61,8 +97,9 @@ async function readOptional(
 }
 
 /**
- * The credentials provisioning needs: the url from the cms folder, the key
- * and team from the integration folder. Names the missing ones, never values.
+ * The credentials provisioning needs: the url from the cms folder, the
+ * provisioning key and the cms read key from the integration folder. Names
+ * the missing ones, never values.
  */
 export async function readUmamiProvisioning(
   environment: Environment
@@ -73,12 +110,13 @@ export async function readUmamiProvisioning(
   ]);
   const url = cms['UMAMI_URL'];
   const apiKey = umami['PROVISION_API_KEY'];
-  const teamId = umami['TEAM_ID'];
-  if (url && apiKey && teamId) return { status: 'ready', url, apiKey, teamId };
+  const readApiKey = umami['API_KEY'];
+  if (url && apiKey && readApiKey)
+    return { status: 'ready', url, apiKey, readApiKey };
   const missing = [
     ...(url ? [] : ['UMAMI_URL']),
     ...(apiKey ? [] : ['PROVISION_API_KEY']),
-    ...(teamId ? [] : ['TEAM_ID'])
+    ...(readApiKey ? [] : ['API_KEY'])
   ];
   return { status: 'unconfigured', missing };
 }
@@ -159,7 +197,8 @@ async function refused(what: string, response: Response): Promise<Error> {
 const toWebsite = (parsed: z.infer<typeof websiteSchema>): UmamiWebsite => ({
   id: parsed.id,
   name: parsed.name,
-  domain: parsed.domain ?? ''
+  domain: parsed.domain ?? '',
+  teamId: parsed.teamId ?? null
 });
 
 /**
@@ -256,4 +295,79 @@ export function newShareSlug(): string {
     { length: 16 },
     () => SLUG_ALPHABET[randomInt(SLUG_ALPHABET.length)]
   ).join('');
+}
+
+/** The user the key belongs to; Umami may nest it under `user` */
+export async function whoAmI(conn: UmamiConnection): Promise<UmamiUser> {
+  const response = await request(conn, '/me');
+  if (!response.ok) throw await refused('the identity lookup', response);
+  const body = z
+    .object({ user: userSchema.optional() })
+    .passthrough()
+    .parse(await response.json());
+  return body.user ?? userSchema.parse(body);
+}
+
+/** Create a team; the creator becomes its owner */
+export async function createTeam(
+  conn: UmamiConnection,
+  name: string
+): Promise<UmamiTeam> {
+  if (name.length > TEAM_NAME_MAX)
+    throw new Error(
+      `A team name is at most ${TEAM_NAME_MAX} characters, got ${name.length}`
+    );
+  const response = await request(conn, '/teams', {
+    method: 'POST',
+    body: { name }
+  });
+  if (!response.ok) throw await refused('the team creation', response);
+  return teamSchema.parse(await response.json());
+}
+
+/** Add a user to a team with this role */
+export async function addTeamUser(
+  conn: UmamiConnection,
+  teamId: string,
+  userId: string,
+  role: TeamRole
+): Promise<void> {
+  const response = await request(
+    conn,
+    `/teams/${encodeURIComponent(teamId)}/users`,
+    { method: 'POST', body: { userId, role } }
+  );
+  if (!response.ok) throw await refused('the team member', response);
+}
+
+/** Every member of a team, read page by page */
+export async function listTeamUsers(
+  conn: UmamiConnection,
+  teamId: string
+): Promise<UmamiTeamUser[]> {
+  const users: UmamiTeamUser[] = [];
+  for (let page = 1; ; page++) {
+    const response = await request(
+      conn,
+      `/teams/${encodeURIComponent(teamId)}/users?page=${page}&pageSize=${PAGE_SIZE}`
+    );
+    if (!response.ok) throw await refused('the team member list', response);
+    const { data, count } = teamUserPageSchema.parse(await response.json());
+    users.push(...data.map(({ userId, role }) => ({ userId, role })));
+    if (!data.length || users.length >= count) return users;
+  }
+}
+
+/** Move a website into a team */
+export async function transferWebsite(
+  conn: UmamiConnection,
+  websiteId: string,
+  teamId: string
+): Promise<void> {
+  const response = await request(
+    conn,
+    `/websites/${encodeURIComponent(websiteId)}/transfer`,
+    { method: 'POST', body: { teamId } }
+  );
+  if (!response.ok) throw await refused('the website transfer', response);
 }
