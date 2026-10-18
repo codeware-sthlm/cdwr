@@ -97,6 +97,9 @@ DENY=(
 # The ticket worktrees sit beside the agent worktree; `//` anchors the rule at the root
 WT="/${REPO:h}/codeware-cod-*/**"
 rc=0
+claude_pid=
+# A stop (the container shutting down) reaches claude; the ledger and the lock are settled below
+trap '[[ -n "$claude_pid" ]] && kill -TERM $claude_pid 2>/dev/null' TERM INT
 ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
   --model opus \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
@@ -119,7 +122,12 @@ ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
     "Bash(tools/cdwr/agent-queue/notify.sh)" "Bash(~/.claude/hooks/notify-slack.sh)" "Bash($HOME/.claude/hooks/notify-slack.sh)" \
     "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels \
     "$L"__save_issue "$L"__save_comment "$L"__prepare_attachment_upload "$L"__create_attachment_from_upload \
-  > "$result" 2> "$log" || rc=$?
+  > "$result" 2> "$log" &
+claude_pid=$!
+wait $claude_pid || rc=$?
+# wait returns early on a trapped signal; let claude finish
+kill -0 $claude_pid 2>/dev/null && { wait $claude_pid || rc=$?; }
+claude_pid=
 
 jq -r '.result // empty, (.errors // [])[]' "$result" >> "$log" 2>/dev/null || cat "$result" >> "$log"
 cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
