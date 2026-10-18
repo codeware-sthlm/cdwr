@@ -1,3 +1,4 @@
+import type { StatsAccountState } from './stats-account';
 import type {
   UmamiClient,
   UmamiMetricType,
@@ -51,6 +52,8 @@ export type SiteStatsAnswer =
       stats: SiteStats;
       /** The tenant's public Umami dashboard, when it has a share link */
       dashboardUrl?: string;
+      /** Whether the caller can get a login to Umami, see `StatsAccountState` */
+      account: StatsAccountState;
     };
 
 /** Umami did not answer in time, which is what a suspended service does while it resumes */

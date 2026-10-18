@@ -13,6 +13,8 @@ import type { Endpoint, PayloadRequest } from 'payload';
 
 import { getSingleTenantIdFromHeaders } from '../components/admin/utils/tenant-where';
 
+import { resolveStatsAccount } from './site-stats-account';
+
 /** Days are counted in the platform's own time zone */
 const TIMEZONE = 'Europe/Stockholm';
 
@@ -59,7 +61,11 @@ export const siteStatsEndpoint: Endpoint = {
       collection: 'tenants',
       id: tenantId,
       depth: 0,
-      select: { statsWebsiteId: true, statsShareId: true },
+      select: {
+        statsWebsiteId: true,
+        statsShareId: true,
+        statsTeamId: true
+      },
       overrideAccess: true,
       disableErrors: true,
       req
@@ -88,10 +94,16 @@ export const siteStatsEndpoint: Endpoint = {
       const stats = await siteStatsCache.get(websiteId, () =>
         fetchSiteStats(umamiApi.umami, websiteId, { timezone: TIMEZONE })
       );
+      const { state: account } = await resolveStatsAccount(
+        req,
+        tenantId,
+        tenant
+      );
       const dashboardUrl = shareDashboardUrl(umamiUrl, tenant.statsShareId);
       return answer({
         status: 'ready',
         stats,
+        account,
         ...(dashboardUrl ? { dashboardUrl } : {})
       });
     } catch (error) {

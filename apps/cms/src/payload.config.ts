@@ -56,6 +56,7 @@ import { perfStatsEndpoint } from './endpoints/perf-stats';
 import { platformDomainCertificateEndpoint } from './endpoints/platform-domain-certificate';
 import { platformMachineRestartEndpoint } from './endpoints/platform-machine-restart';
 import { siteStatsEndpoint } from './endpoints/site-stats';
+import { siteStatsAccountEndpoint } from './endpoints/site-stats-account';
 import { tenantConfigEndpoint } from './endpoints/tenant-config';
 import { tenantDomainCertificateEndpoint } from './endpoints/tenant-domain-certificate';
 import { tenantInfisicalStatusEndpoint } from './endpoints/tenant-infisical-status';
@@ -234,6 +235,7 @@ export default buildConfig({
     platformDomainCertificateEndpoint,
     platformMachineRestartEndpoint,
     siteStatsEndpoint,
+    siteStatsAccountEndpoint,
     tenantConfigEndpoint,
     tenantDomainCertificateEndpoint,
     tenantInfisicalStatusEndpoint,

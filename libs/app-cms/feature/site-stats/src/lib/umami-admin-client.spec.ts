@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  UmamiNotFoundError,
   UmamiUserExistsError,
   createUmamiAdminClient
 } from './umami-admin-client';
@@ -134,6 +135,14 @@ describe('createUmamiAdminClient', () => {
       expect(url).toBe('https://umami.test/api/users/u-1');
       expect(init?.method).toBe('POST');
       expect(body).toEqual({ password: 'new-password' });
+    });
+
+    it('throws a not-found error for an unknown user', async () => {
+      const { client } = setup(text('', 404));
+
+      await expect(
+        client.setPassword('u-1', 'x'.repeat(8))
+      ).rejects.toBeInstanceOf(UmamiNotFoundError);
     });
 
     it('throws when Umami refuses', async () => {

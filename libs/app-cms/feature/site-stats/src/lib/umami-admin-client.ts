@@ -11,6 +11,15 @@ export class UmamiUserExistsError extends Error {
   }
 }
 
+/** Umami has no user with the given id */
+export class UmamiNotFoundError extends Error {
+  override readonly name = 'UmamiNotFoundError';
+
+  constructor(readonly userId: string) {
+    super('Umami user not found');
+  }
+}
+
 const UserSchema = z.object({ id: z.string(), username: z.string() });
 
 /** An Umami user */
@@ -28,6 +37,7 @@ export type UmamiAdminClient = {
     password: string;
     role: UmamiUserRole;
   }) => Promise<UmamiUser>;
+  /** Throws `UmamiNotFoundError` when the user does not exist */
   setPassword: (userId: string, password: string) => Promise<void>;
   /** Succeeds when the user is already a member */
   addTeamUser: (
@@ -134,6 +144,9 @@ export const createUmamiAdminClient = ({
     setPassword: async (userId, password) => {
       const path = `users/${encodeURIComponent(userId)}`;
       const response = await send('POST', path, { password });
+      if (response.status === 404) {
+        throw new UmamiNotFoundError(userId);
+      }
       if (!response.ok) {
         throw refused(path, response);
       }

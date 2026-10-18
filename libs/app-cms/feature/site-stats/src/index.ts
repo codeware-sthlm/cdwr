@@ -25,6 +25,12 @@ export {
   type UmamiTeamRole,
   type UmamiUser,
   type UmamiUserRole,
+  UmamiNotFoundError,
   UmamiUserExistsError,
   createUmamiAdminClient
 } from './lib/umami-admin-client';
+export {
+  STATS_TEAM_ROLE,
+  STATS_USER_ROLE,
+  type StatsAccountState
+} from './lib/stats-account';

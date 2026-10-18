@@ -3,6 +3,7 @@ import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import {
   type UmamiClient,
   fetchSiteStats,
+  getUmamiAdminApi,
   getUmamiApi,
   isWaking,
   shareDashboardUrl,
@@ -16,6 +17,7 @@ import { siteStatsEndpoint } from './site-stats';
 
 jest.mock('@codeware/app-cms/feature/site-stats', () => ({
   getUmamiApi: jest.fn(),
+  getUmamiAdminApi: jest.fn(),
   fetchSiteStats: jest.fn(),
   isWaking: jest.fn(),
   shareDashboardUrl: jest.fn(),
@@ -28,6 +30,14 @@ jest.mock('@payloadcms/plugin-multi-tenant/utilities', () => ({
 jest.mock('@codeware/app-cms/feature/env-loader', () => ({
   getEnv: jest.fn()
 }));
+// The email barrel reaches the ESM-only mail transport, which rendering never uses
+jest.mock('@payloadcms/email-nodemailer', () => ({}));
+jest.mock('nodemailer', () => ({}));
+jest.mock('@sentry/nextjs', () => ({}));
+jest.mock('@codeware/app-cms/data-access', () => ({
+  getSiteSettingsForTenant: jest.fn()
+}));
+jest.mock('payload', () => ({ addDataAndFileToRequest: jest.fn() }));
 jest.mock('../components/admin/utils/tenant-where', () => ({
   getSingleTenantIdFromHeaders: jest.fn()
 }));
@@ -65,6 +75,10 @@ beforeEach(() => {
   jest.mocked(getSingleTenantIdFromHeaders).mockReturnValue(5);
   findByID.mockResolvedValue({ statsWebsiteId: 'site-1' });
   jest.mocked(getUmamiApi).mockResolvedValue({ status: 'ready', umami });
+  jest.mocked(getUmamiAdminApi).mockResolvedValue({
+    status: 'ready',
+    umami: {} as never
+  });
   jest.mocked(fetchSiteStats).mockResolvedValue(stats as never);
   jest
     .mocked(siteStatsCache.get)
@@ -111,7 +125,11 @@ describe('siteStatsEndpoint', () => {
       expect.objectContaining({
         id: 5,
         overrideAccess: true,
-        select: { statsWebsiteId: true, statsShareId: true }
+        select: {
+          statsWebsiteId: true,
+          statsShareId: true,
+          statsTeamId: true
+        }
       })
     );
   });
@@ -181,7 +199,11 @@ describe('siteStatsEndpoint', () => {
   it('returns the statistics without letting anything cache them', async () => {
     const response = await call(memberOf(5));
 
-    await expect(response.json()).resolves.toEqual({ status: 'ready', stats });
+    await expect(response.json()).resolves.toEqual({
+      status: 'ready',
+      stats,
+      account: 'none'
+    });
     expect(response.headers.get('cache-control')).toBe('private, no-store');
   });
 
@@ -203,6 +225,7 @@ describe('siteStatsEndpoint', () => {
     await expect(response.json()).resolves.toEqual({
       status: 'ready',
       stats,
+      account: 'none',
       dashboardUrl: 'https://umami.example/share/abc'
     });
   });
@@ -213,5 +236,56 @@ describe('siteStatsEndpoint', () => {
     const body = await (await call(memberOf(5))).json();
 
     expect(body).not.toHaveProperty('dashboardUrl');
+  });
+
+  describe('account', () => {
+    const adminOf = (tenant: number) => ({
+      id: 2,
+      role: 'user',
+      tenants: [{ tenant, role: 'admin' }]
+    });
+    const withTeam = { statsWebsiteId: 'site-1', statsTeamId: 'team-1' };
+
+    const accountOf = async (user: unknown) =>
+      ((await (await call(user)).json()) as { account?: string }).account;
+
+    /** The tenant read, then the caller's own record */
+    const givenUser = (statsAccount: { umamiUserId?: string } | null) =>
+      findByID.mockImplementation(async ({ collection }) =>
+        collection === 'tenants' ? withTeam : { statsAccount }
+      );
+
+    it('is none for a system user', async () => {
+      givenUser(null);
+      await expect(accountOf(systemUser)).resolves.toBe('none');
+    });
+
+    it('is none for a member who is not an admin of the workspace', async () => {
+      givenUser(null);
+      await expect(accountOf(memberOf(5))).resolves.toBe('none');
+    });
+
+    it('is none when the workspace has no team', async () => {
+      findByID.mockResolvedValue({ statsWebsiteId: 'site-1' });
+      await expect(accountOf(adminOf(5))).resolves.toBe('none');
+    });
+
+    it('is none when Umami cannot be managed', async () => {
+      givenUser(null);
+      jest
+        .mocked(getUmamiAdminApi)
+        .mockResolvedValue({ status: 'unconfigured' });
+      await expect(accountOf(adminOf(5))).resolves.toBe('none');
+    });
+
+    it('is available for an admin without an account', async () => {
+      givenUser(null);
+      await expect(accountOf(adminOf(5))).resolves.toBe('available');
+    });
+
+    it('is ready for an admin with an account', async () => {
+      givenUser({ umamiUserId: 'u-1' });
+      await expect(accountOf(adminOf(5))).resolves.toBe('ready');
+    });
   });
 });

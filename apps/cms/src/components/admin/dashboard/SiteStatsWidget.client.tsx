@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  SiteStatsAccountAction,
   type SiteStatsPeriod,
   SiteStatsPeriodToggle,
   SiteStatsSheetBody,
@@ -25,7 +26,7 @@ import {
   ArrowTopRightOnSquareIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline';
-import { useAuth, useTranslation } from '@payloadcms/ui';
+import { toast, useAuth, useTranslation } from '@payloadcms/ui';
 import { useRef, useState } from 'react';
 
 import { useSiteStats } from './use-site-stats';
@@ -38,7 +39,7 @@ import { useSiteStats } from './use-site-stats';
  * appears where there is something to say about it.
  */
 export function SiteStatsWidget() {
-  const answer = useSiteStats();
+  const { answer, reload } = useSiteStats();
   const { user } = useAuth<User>();
   const { i18n, t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const [open, setOpen] = useState(false);
@@ -46,6 +47,25 @@ export function SiteStatsWidget() {
   // The tile's button opens the sheet from outside it, so Radix has no
   // trigger to give focus back to; the sheet returns it here instead
   const tile = useRef<HTMLDivElement>(null);
+
+  const sendLogin = async (action: 'create' | 'reset') => {
+    try {
+      const response = await fetch('/api/site-stats/account', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+      if (!response.ok) {
+        throw new Error(String(response.status));
+      }
+    } catch (error) {
+      toast.error(t('statistics:loginFailed'));
+      throw error;
+    }
+    toast.success(t('statistics:loginSent'));
+    reload();
+  };
 
   const locale = i18n.language;
   const title = t('statistics:title');
@@ -135,18 +155,43 @@ export function SiteStatsWidget() {
                     month: t('statistics:month')
                   }}
                 />
-                {answer.dashboardUrl && (
-                  <Button asChild variant="outline" size="sm" className="w-fit">
-                    <a
-                      href={answer.dashboardUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                <div className="flex flex-wrap items-center gap-2">
+                  {answer.account !== 'none' && (
+                    <SiteStatsAccountAction
+                      account={answer.account}
+                      onConfirm={() =>
+                        sendLogin(
+                          answer.account === 'ready' ? 'reset' : 'create'
+                        )
+                      }
+                      labels={{
+                        get: t('statistics:getLogin'),
+                        getBody: t('statistics:getLoginBody'),
+                        reset: t('statistics:resetLogin'),
+                        resetBody: t('statistics:resetLoginBody'),
+                        cancel: t('statistics:loginCancel'),
+                        confirm: t('statistics:loginConfirm')
+                      }}
+                    />
+                  )}
+                  {answer.dashboardUrl && (
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="w-fit"
                     >
-                      {t('statistics:openDashboard')}
-                      <ArrowTopRightOnSquareIcon aria-hidden />
-                    </a>
-                  </Button>
-                )}
+                      <a
+                        href={answer.dashboardUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t('statistics:openDashboard')}
+                        <ArrowTopRightOnSquareIcon aria-hidden />
+                      </a>
+                    </Button>
+                  )}
+                </div>
               </div>
             </SheetHeader>
             <SiteStatsSheetBody

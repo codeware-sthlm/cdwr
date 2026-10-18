@@ -3,6 +3,7 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
+import { SiteStatsAccountAction } from './site-stats-account-action';
 import { SiteStatsPeriodToggle } from './site-stats-period-toggle';
 import {
   type SiteStatsLabels,
@@ -23,6 +24,7 @@ type Copy = {
   period: string;
   week: string;
   month: string;
+  account: React.ComponentProps<typeof SiteStatsAccountAction>['labels'];
   labels: Omit<SiteStatsLabels, 'periodName'>;
 };
 
@@ -33,6 +35,16 @@ const en: Copy = {
   period: 'Period',
   week: 'Last 7 days',
   month: 'Last 30 days',
+  account: {
+    get: 'Get a statistics login',
+    getBody:
+      'A login to the statistics in Umami is created for you. The username and password are emailed to your address.',
+    reset: 'Reset my statistics password',
+    resetBody:
+      'Your password to the statistics in Umami is replaced by a new one, emailed to your address. The old password stops working.',
+    cancel: 'Cancel',
+    confirm: 'Email me the login'
+  },
   labels: {
     visitors: 'Visitors',
     pageviews: 'Page views',
@@ -59,6 +71,16 @@ const sv: Copy = {
   period: 'Period',
   week: 'Senaste 7 dagarna',
   month: 'Senaste 30 dagarna',
+  account: {
+    get: 'Skaffa en inloggning till statistiken',
+    getBody:
+      'En inloggning till statistiken i Umami skapas åt dig. Användarnamn och lösenord mejlas till din e-postadress.',
+    reset: 'Återställ mitt lösenord till statistiken',
+    resetBody:
+      'Ditt lösenord till statistiken i Umami ersätts av ett nytt, som mejlas till din e-postadress. Det gamla lösenordet slutar fungera.',
+    cancel: 'Avbryt',
+    confirm: 'Mejla inloggningen till mig'
+  },
   labels: {
     visitors: 'Besökare',
     pageviews: 'Sidvisningar',
@@ -178,11 +200,13 @@ const sparse: SiteStatsData = {
 const Frame = ({
   stats,
   locale,
-  copy
+  copy,
+  account = 'none'
 }: {
   stats: SiteStatsData;
   locale: string;
   copy: Copy;
+  account?: 'none' | 'available' | 'ready';
 }) => {
   const [period, setPeriod] = useState<SiteStatsPeriod>('week');
   return (
@@ -200,9 +224,18 @@ const Frame = ({
             onPeriodChange={setPeriod}
             labels={copy}
           />
-          <Button variant="outline" size="sm">
-            {copy.openDashboard}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {account !== 'none' && (
+              <SiteStatsAccountAction
+                account={account}
+                onConfirm={async () => undefined}
+                labels={copy.account}
+              />
+            )}
+            <Button variant="outline" size="sm">
+              {copy.openDashboard}
+            </Button>
+          </div>
         </div>
       </div>
       <SiteStatsSheetBody
@@ -217,6 +250,18 @@ const Frame = ({
 
 export const WithData: StoryObj = {
   render: () => <Frame stats={withData} locale="en" copy={en} />
+};
+
+/** A tenant admin without a Umami login yet */
+export const AccountAvailable: StoryObj = {
+  render: () => (
+    <Frame stats={withData} locale="en" copy={en} account="available" />
+  )
+};
+
+/** A tenant admin who has a login and can ask for a new password */
+export const AccountReady: StoryObj = {
+  render: () => <Frame stats={withData} locale="sv" copy={sv} account="ready" />
 };
 
 export const Swedish: StoryObj = {
