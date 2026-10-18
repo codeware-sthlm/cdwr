@@ -176,6 +176,24 @@ describe('tenant stats-teams', () => {
     expect(ui.printed.outro[0]).toContain('1 done, 0 ok, 1 failed');
   });
 
+  it('fails a workspace whose website is gone and goes on', async () => {
+    const umami = await import('../../services/umami');
+    vi.mocked(umami.getWebsite).mockImplementation(async (_conn, id) =>
+      id === 'w1'
+        ? null
+        : { id, name: id, domain: `${id}.se`, teamId: 'shared' }
+    );
+
+    const { exit, ui } = await run();
+
+    expect(exit).toBe(EXIT.failed);
+    expect(ui.printed.note.join('\n')).toContain(
+      'acme  could not read: website w1 is not in Umami; check "Statistics website ID" in the admin'
+    );
+    expect(umami.createTeam).toHaveBeenCalledTimes(1);
+    expect(ui.printed.outro[0]).toContain('1 done, 0 ok, 1 failed');
+  });
+
   it('continues past a failing workspace and exits non-zero', async () => {
     const umami = await import('../../services/umami');
     vi.mocked(umami.createTeam).mockRejectedValueOnce(new Error('boom'));

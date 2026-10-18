@@ -38,7 +38,15 @@ export async function gatherTenantTeam(
 ): Promise<TenantTeamInput> {
   const statsTeamId = tenant.statsTeamId || null;
   const [website, reader, members] = await Promise.all([
-    tenant.statsWebsiteId ? getWebsite(conn, tenant.statsWebsiteId) : null,
+    tenant.statsWebsiteId
+      ? getWebsite(conn, tenant.statsWebsiteId).then((found) => {
+          if (!found)
+            throw new Error(
+              `website ${tenant.statsWebsiteId} is not in Umami; check "Statistics website ID" in the admin`
+            );
+          return found;
+        })
+      : null,
     whoAmI(readerConn),
     statsTeamId ? listTeamUsers(conn, statsTeamId) : []
   ]);
