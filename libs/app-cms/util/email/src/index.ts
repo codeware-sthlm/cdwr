@@ -19,6 +19,10 @@ export {
   renderForgotPasswordMail
 } from './lib/templates/forgot-password/forgot-password';
 export {
+  type StatsAccountMailInput,
+  renderStatsAccountMail
+} from './lib/templates/stats-account/stats-account';
+export {
   type AccountExistsMailInput,
   renderAccountExistsMail
 } from './lib/templates/account-exists/account-exists';

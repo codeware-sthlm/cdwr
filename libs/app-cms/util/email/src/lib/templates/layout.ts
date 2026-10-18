@@ -21,6 +21,8 @@ export type EmailLayout = {
   /** Optional labelled details, rendered as a simple table */
   detailsHeading?: string;
   details?: Array<DetailRow>;
+  /** Optional value to copy, e.g. a password, set in a monospace block */
+  code?: DetailRow;
   /** Optional closing links, e.g. privacy and terms */
   links?: Array<{ label: string; url: string }>;
   /** Sender name, shown as the sign-off */
@@ -65,6 +67,7 @@ export function renderEmailLayout(layout: EmailLayout): {
 } {
   const {
     brand,
+    code,
     cta,
     details,
     detailsHeading,
@@ -125,6 +128,14 @@ export function renderEmailLayout(layout: EmailLayout): {
         .join('')}</table>`
     : '';
 
+  const htmlCode = code
+    ? `<p style="margin:0 0 4px;color:#666">${escape(
+        code[0]
+      )}</p><p style="margin:0 0 16px;padding:12px 16px;background:#f2f2f2;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;word-break:break-all">${escape(
+        code[1]
+      )}</p>`
+    : '';
+
   const htmlLinks = links?.length
     ? `<p style="margin:24px 0 0;font-size:12px;color:#666">${links
         .map(
@@ -138,7 +149,7 @@ export function renderEmailLayout(layout: EmailLayout): {
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escape(
     title
-  )}</title></head><body style="margin:0;padding:24px;background:#f7f7f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1a1a1a"><div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;padding:32px">${htmlBrand}${htmlParagraphs}${htmlCta}${htmlDetails}<p style="margin:24px 0 0">${escape(
+  )}</title></head><body style="margin:0;padding:24px;background:#f7f7f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1a1a1a"><div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;padding:32px">${htmlBrand}${htmlParagraphs}${htmlCta}${htmlDetails}${htmlCode}<p style="margin:24px 0 0">${escape(
     from
   )}</p>${htmlLinks}</div></body></html>`;
 
@@ -153,6 +164,7 @@ export function renderEmailLayout(layout: EmailLayout): {
           ...details.map(([label, value]) => `${label}: ${value}`)
         ]
       : []),
+    ...(code ? ['', `${code[0]}: ${code[1]}`] : []),
     '',
     from,
     ...(links?.length ? ['', ...links.map((l) => `${l.label}: ${l.url}`)] : [])

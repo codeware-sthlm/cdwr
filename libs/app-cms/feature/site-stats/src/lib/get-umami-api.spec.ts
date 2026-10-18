@@ -4,7 +4,7 @@ import {
 } from '@codeware/shared/feature/infisical';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getUmamiApi } from './get-umami-api';
+import { getUmamiAdminApi, getUmamiApi } from './get-umami-api';
 
 vi.mock('@codeware/shared/feature/infisical');
 
@@ -71,6 +71,40 @@ describe('getUmamiApi', () => {
     expect(await getUmamiApi(URL)).toEqual({
       status: 'unreachable',
       error: 'boom'
+    });
+  });
+});
+
+describe('getUmamiAdminApi', () => {
+  beforeEach(() => {
+    credentials.mockReset();
+  });
+
+  it('builds a client from ADMIN_API_KEY', async () => {
+    credentials.mockResolvedValue({ ADMIN_API_KEY: 'admin_key' });
+
+    expect((await getUmamiAdminApi(URL)).status).toBe('ready');
+  });
+
+  it('never falls back to the read key', async () => {
+    credentials.mockResolvedValue({ API_KEY: 'umami_key' });
+
+    expect(await getUmamiAdminApi(URL)).toEqual({ status: 'unconfigured' });
+  });
+
+  it('is unconfigured without a url, and does not read the vault', async () => {
+    expect(await getUmamiAdminApi(undefined)).toEqual({
+      status: 'unconfigured'
+    });
+    expect(credentials).not.toHaveBeenCalled();
+  });
+
+  it('is unreachable when the secret store fails', async () => {
+    credentials.mockRejectedValue(new Error('vault down'));
+
+    expect(await getUmamiAdminApi(URL)).toEqual({
+      status: 'unreachable',
+      error: 'vault down'
     });
   });
 });

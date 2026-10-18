@@ -637,6 +637,10 @@ export interface User {
    * Short description of the user.
    */
   description?: string | null;
+  statsAccount?: {
+    umamiUserId?: string | null;
+    createdAt?: string | null;
+  };
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -3704,6 +3708,12 @@ export interface UsersSelect<T extends boolean = true> {
   role?: T;
   tenants?: T | TenantsArrayFieldSelect<T>;
   description?: T;
+  statsAccount?:
+    | T
+    | {
+        umamiUserId?: T;
+        createdAt?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
   email?: T;
