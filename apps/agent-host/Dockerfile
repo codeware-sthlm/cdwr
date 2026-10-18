@@ -18,6 +18,7 @@ RUN apt-get update -qq \
     git \
     jq \
     openssl \
+    procps \
     python3 \
     zsh \
   && rm -rf /var/lib/apt/lists/*
