@@ -137,6 +137,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./tenant/stats-teams').then((m) => m.default)
   },
   {
+    path: ['tenant', 'stats-accounts'],
+    summary: "Compare the statistics teams' members with the workspace admins",
+    danger: 'read',
+    load: () => import('./tenant/stats-accounts').then((m) => m.default)
+  },
+  {
     path: ['infisical', 'tenants'],
     summary: 'Tenant folders per app and their deploy switch',
     danger: 'read',

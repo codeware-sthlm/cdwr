@@ -9,8 +9,11 @@ import {
   listShares,
   listTeamUsers,
   listTeamWebsites,
+  listTeams,
+  listUsers,
   newShareSlug,
   readUmamiProvisioning,
+  removeTeamUser,
   setShare,
   transferWebsite,
   whoAmI
@@ -428,5 +431,46 @@ describe('Umami client when the service is waking', () => {
   it('refuses a failed transfer', async () => {
     fetchMock.mockResolvedValue(reply({}, 401));
     await expect(transferWebsite(conn, 'w1', 't1')).rejects.toThrow('401');
+  });
+
+  it('removes a team member and counts an unknown one as removed', async () => {
+    fetchMock.mockResolvedValueOnce(reply({ ok: true }));
+    await removeTeamUser(conn, 't1', 'u1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://umami.test/api/teams/t1/users/u1');
+    expect(init.method).toBe('DELETE');
+
+    fetchMock.mockResolvedValueOnce(reply({}, 404));
+    await expect(removeTeamUser(conn, 't1', 'u1')).resolves.toBeUndefined();
+  });
+
+  it('counts a non-member as removed, as Umami words it', async () => {
+    fetchMock.mockResolvedValue(
+      reply(
+        { error: { message: 'The User does not exists on this team.' } },
+        400
+      )
+    );
+    await expect(removeTeamUser(conn, 't1', 'u1')).resolves.toBeUndefined();
+  });
+
+  it('refuses another failed removal', async () => {
+    fetchMock.mockResolvedValue(reply({}, 403));
+    await expect(removeTeamUser(conn, 't1', 'u1')).rejects.toThrow('403');
+  });
+
+  it('lists users and teams', async () => {
+    fetchMock.mockResolvedValueOnce(
+      reply({ data: [{ id: 'u1', username: 'ann', role: 'user' }], count: 1 })
+    );
+    expect(await listUsers(conn)).toEqual([{ id: 'u1', username: 'ann' }]);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://umami.test/api/admin/users?page=1&pageSize=100'
+    );
+
+    fetchMock.mockResolvedValueOnce(
+      reply({ data: [{ id: 't1', name: 'cdwr-acme' }], count: 1 })
+    );
+    expect(await listTeams(conn)).toEqual([{ id: 't1', name: 'cdwr-acme' }]);
   });
 });

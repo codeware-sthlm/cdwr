@@ -391,3 +391,63 @@ export async function transferWebsite(
   );
   if (!response.ok) throw await refused('the website transfer', response);
 }
+
+/** Take a user out of a team; a user who is not a member counts as removed */
+export async function removeTeamUser(
+  conn: UmamiConnection,
+  teamId: string,
+  userId: string
+): Promise<void> {
+  const response = await request(
+    conn,
+    `/teams/${encodeURIComponent(teamId)}/users/${encodeURIComponent(userId)}`,
+    { method: 'DELETE' }
+  );
+  if (response.status === 404) return;
+  // Umami answers 400 "does not exists on this team" for a non-member
+  if (response.status === 400) {
+    const detail = await refused('the team member removal', response);
+    if (detail.message.toLowerCase().includes('does not exist')) return;
+    throw detail;
+  }
+  if (!response.ok) throw await refused('the team member removal', response);
+}
+
+const userPageSchema = z.object({
+  data: z.array(z.object({ id: z.string(), username: z.string() })),
+  count: z.number()
+});
+
+/** Every Umami user, read page by page; needs an admin key */
+export async function listUsers(
+  conn: UmamiConnection
+): Promise<Array<Pick<UmamiUser, 'id' | 'username'>>> {
+  const users: Array<Pick<UmamiUser, 'id' | 'username'>> = [];
+  for (let page = 1; ; page++) {
+    const response = await request(
+      conn,
+      `/admin/users?page=${page}&pageSize=${PAGE_SIZE}`
+    );
+    if (!response.ok) throw await refused('the user list', response);
+    const { data, count } = userPageSchema.parse(await response.json());
+    users.push(...data.map(({ id, username }) => ({ id, username })));
+    if (!data.length || users.length >= count) return users;
+  }
+}
+
+/** Every team the key is a member of, read page by page */
+export async function listTeams(conn: UmamiConnection): Promise<UmamiTeam[]> {
+  const teams: UmamiTeam[] = [];
+  for (let page = 1; ; page++) {
+    const response = await request(
+      conn,
+      `/teams?page=${page}&pageSize=${PAGE_SIZE}`
+    );
+    if (!response.ok) throw await refused('the team list', response);
+    const { data, count } = z
+      .object({ data: z.array(teamSchema), count: z.number() })
+      .parse(await response.json());
+    teams.push(...data.map(({ id, name }) => ({ id, name })));
+    if (!data.length || teams.length >= count) return teams;
+  }
+}
