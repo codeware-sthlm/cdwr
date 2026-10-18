@@ -4,7 +4,7 @@
 # only; it never approves a plan and never claims a new ticket.
 # Deny by default: dontAsk denies anything not listed. Edit and Write reach only the ticket
 # worktrees beside the agent worktree. No `cd`: a `cd … && git …` compound always prompts, which
-# dontAsk turns into a denial, so the skill uses `git -C` and `pnpm -C` in this mode.
+# dontAsk turns into a denial, so the skill uses `git -C` and `pnpm -C … exec` in this mode.
 # It runs from $AGENT_QUEUE_REPO; a planning run may move that checkout forward to a newer
 # origin/main under it, which is accepted.
 # On GitHub it acts as the codeware-agent app (github-app.sh beside this script), never as

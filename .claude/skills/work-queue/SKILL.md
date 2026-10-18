@@ -375,18 +375,23 @@ listed.
    its own plan, even though no one is watching.
 2. Edit and Write work only inside the ticket worktrees. Read reaches anything.
 3. Never `cd`: a `cd … && git …` compound is denied. Use `git -C <worktree> …` and
-   `pnpm -C <worktree> nx …` with absolute paths. Every implementer prompt must say the same.
+   `pnpm -C <worktree> exec nx …` with absolute paths; without `exec`, pnpm runs the directory
+   as a command and fails. Every implementer prompt must say the same.
 4. GitHub through `gh pr …`, REST reads (`gh api repos/codeware-sthlm/cdwr/…`) and
    `tools/cdwr/agent-queue/gh-review.sh threads <pr>`, `reply <thread id> <body>` and
    `resolve <thread id>` for review threads. Raw `gh api graphql` and any `gh api` write are
    denied. The session acts as the `codeware-agent` GitHub App: `gh` and `git push` carry its
    token, commits are the bot's, and main's rulesets apply to it with no bypass.
-5. Notify through Slack only; there is no PushNotification in `-p`.
-6. A turn that ends, ends the run. Run every wait in the foreground, as repeated Bash calls of
+5. Snapshot images reach a ticket through `prepare_attachment_upload` (size from `wc -c`),
+   `tools/cdwr/agent-queue/linear-upload.sh <png> <signed url> <header>...` with every signed
+   header verbatim, then `create_attachment_from_upload`; one file at a time, since a signed URL
+   lasts 60 seconds. Raw `curl` is denied.
+6. Notify through Slack only; there is no PushNotification in `-p`.
+7. A turn that ends, ends the run. Run every wait in the foreground, as repeated Bash calls of
    at most 10 minutes each, never as a background task.
-7. When a tool is denied, or the work needs a production action, money or Håkan's judgement,
+8. When a tool is denied, or the work needs a production action, money or Håkan's judgement,
    post it as a needs-input gate (see **How a gate asks**) and stop.
-8. With `once`, stop when the ticket reaches review or a gate. Don't go to **Nothing workable**,
+9. With `once`, stop when the ticket reaches review or a gate. Don't go to **Nothing workable**,
    and don't start `wait.sh`.
 
 ## Plan-only runs
