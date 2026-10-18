@@ -183,11 +183,14 @@ image cannot read Infisical, and the app receives no shared secrets (`sharedSecr
 
 ```sh
 fly apps create cdwr-umami
-fly secrets set DATABASE_URL=… APP_SECRET=… -a cdwr-umami --stage
+fly secrets set DATABASE_URL=… DIRECT_DATABASE_URL=… APP_SECRET=… -a cdwr-umami --stage
 ```
 
-Add `DIRECT_DATABASE_URL` too when `DATABASE_URL` is Supabase's transaction pooler, since migrations
-run at every boot. Umami's migrations create an `admin` / `umami` account, so change that password
+`DATABASE_URL` is Supabase's **transaction** pooler (port 6543), never the session pooler (5432):
+Umami opens a pool of up to 10 connections per machine, and the session pooler's 15 clients run out
+(`EMAXCONNSESSION`), which takes every statistics read down. `DIRECT_DATABASE_URL` is the session
+pooler or the direct connection, since migrations run at every boot and need a session. Keep the app
+at one machine; `fly status -a cdwr-umami` should list exactly one. Umami's migrations create an `admin` / `umami` account, so change that password
 before the app is ever public: run the same image locally against the same database, sign in on
 `localhost:3000` and change it there. Only then set `DEPLOY_ENABLED=true` in production `/apps/umami`.
 
