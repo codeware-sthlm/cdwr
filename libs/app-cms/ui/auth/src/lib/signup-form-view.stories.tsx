@@ -10,11 +10,11 @@ import {
 
 const meta = {
   title: 'App CMS/Auth/SignupFormView',
-  parameters: { layout: 'centered' },
+  parameters: { layout: 'fullscreen' },
   globals: { theme: 'payload-admin' },
   decorators: [
     (Story) => (
-      <div className="w-96">
+      <div className="bg-background text-foreground flex min-h-screen justify-center p-6 sm:p-8">
         <Story />
       </div>
     )
