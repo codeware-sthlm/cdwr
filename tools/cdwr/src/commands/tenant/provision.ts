@@ -203,7 +203,12 @@ async function planStats(
     const provisioning = await readUmamiProvisioning(environment);
     if (provisioning.status === 'unconfigured')
       return { plan: { action: 'skip', reason: 'unconfigured' } };
-    const connection = { ...provisioning, onWaking };
+    // COD-587 step 4: temporary, the shared team goes when teams are per tenant
+    const teamId = (await readSecrets(environment, '/integrations/umami'))[
+      'TEAM_ID'
+    ];
+    if (!teamId) return { plan: { action: 'skip', reason: 'unconfigured' } };
+    const connection = { ...provisioning, teamId, onWaking };
 
     if (tenant.statsWebsiteId) {
       const known = await getWebsite(connection, tenant.statsWebsiteId);
