@@ -3,7 +3,7 @@
 setopt err_exit pipe_fail no_unset
 
 typeset -a missing
-for v in AGENT_GITHUB_APP_ID AGENT_GITHUB_APP_INSTALLATION_ID AGENT_GITHUB_APP_KEY AGENT_QUEUE_LINEAR_KEY; do
+for v in AGENT_GITHUB_APP_ID AGENT_GITHUB_APP_INSTALLATION_ID AGENT_GITHUB_APP_KEY AGENT_QUEUE_LINEAR_KEY CLAUDE_CODE_OAUTH_TOKEN; do
   [[ -n "${(P)v:-}" ]] || missing+=("$v")
 done
 if (( ${#missing} )); then

@@ -52,7 +52,7 @@ COPY --chmod=755 tools/cdwr/agent-queue/run.sh \
   tools/cdwr/agent-queue/notify.sh \
   tools/cdwr/agent-queue/watch.jq \
   /opt/agent-queue/
-COPY --chmod=755 apps/agent-host/entrypoint.sh apps/agent-host/git-credential-app.sh /opt/agent-host/
+COPY --chmod=755 apps/agent-host/secrets.sh apps/agent-host/entrypoint.sh apps/agent-host/git-credential-app.sh /opt/agent-host/
 
 ENV AGENT_QUEUE_HOST=container \
     AGENT_QUEUE_HOME=/home/agent/.cdwr/agent-queue \
@@ -63,4 +63,4 @@ ENV AGENT_QUEUE_HOST=container \
 USER agent
 WORKDIR /work
 
-ENTRYPOINT ["/opt/agent-host/entrypoint.sh"]
+ENTRYPOINT ["/opt/agent-host/secrets.sh"]
