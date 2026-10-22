@@ -24,7 +24,7 @@
     "@actions/core": "^3.0.1",
     "@actions/exec": "^3.0.0",
     "@actions/github": "^9.1.1",
-    "@nx/devkit": "^20.0.0 || ^21.0.0 || ^22.0.2 || ^23.0.0",
+    "@nx/devkit": "^20.0.0 || ^21.0.0 || ^22.0.2 || ^23.0.0 || ^24.0.0",
     "@octokit/graphql-schema": "^15.25.0",
     "replace-in-file": "^7.2.0",
     "zod": "^3.23.8"

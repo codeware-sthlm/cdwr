@@ -21,11 +21,6 @@
     "e2e-ci--**/*": {
       "dependsOn": ["^build"]
     },
-    "@nx/webpack:webpack": {
-      "cache": true,
-      "dependsOn": ["^build"],
-      "inputs": ["production", "^production"]
-    },
     "@nx/js:tsc": {
       "cache": true,
       "dependsOn": ["^build"],
@@ -177,61 +172,61 @@
         "feat": {
           "semverBump": "minor",
           "changelog": {
-            "title": "\u2728 Features"
+            "title": "✨ Features"
           }
         },
         "fix": {
           "semverBump": "patch",
           "changelog": {
-            "title": "\ud83d\udc1e Bug Fixes"
+            "title": "🐞 Bug Fixes"
           }
         },
         "perf": {
           "semverBump": "patch",
           "changelog": {
-            "title": "\u26a1\ufe0f Performance Improvements"
+            "title": "⚡️ Performance Improvements"
           }
         },
         "revert": {
           "semverBump": "patch",
           "changelog": {
-            "title": "\ud83d\udd19 Revert Code Changes"
+            "title": "🔙 Revert Code Changes"
           }
         },
         "docs": {
           "semverBump": "patch",
           "changelog": {
-            "title": "\ud83d\udcc4 Documentation"
+            "title": "📄 Documentation"
           }
         },
         "chore": {
           "semverBump": "patch",
           "changelog": {
-            "title": "\u2699\ufe0f Miscellaneous Chores"
+            "title": "⚙️ Miscellaneous Chores"
           }
         },
         "refactor": {
           "semverBump": "patch",
           "changelog": {
-            "title": "\ud83e\uddf9 Code Refactoring"
+            "title": "🧹 Code Refactoring"
           }
         },
         "style": {
           "semverBump": "patch",
           "changelog": {
-            "title": "\ud83c\udfa8 Code Style"
+            "title": "🎨 Code Style"
           }
         },
         "test": {
           "semverBump": "none",
           "changelog": {
-            "title": "\u2705 Tests"
+            "title": "✅ Tests"
           }
         },
         "ci": {
           "semverBump": "none",
           "changelog": {
-            "title": "\ud83e\udd16 Continuous Integration"
+            "title": "🤖 Continuous Integration"
           }
         },
         "deps": {
@@ -267,9 +262,16 @@
         "startTargetName": "start",
         "buildTargetName": "build",
         "devTargetName": "dev",
-        "typecheckTargetName": "typecheck",
         "serveStaticTargetName": "serve-static",
         "staticServeTargetName": "static-serve"
+      }
+    },
+    {
+      "plugin": "@nx/js/typescript",
+      "options": {
+        "typecheck": {
+          "targetName": "typecheck"
+        }
       }
     },
     {
@@ -316,6 +318,13 @@
         "buildDepsTargetName": "build-deps",
         "watchDepsTargetName": "watch-deps"
       }
+    },
+    {
+      "plugin": "@nx/jest/plugin",
+      "options": {
+        "targetName": "e2e"
+      },
+      "include": ["e2e/nx-payload-e2e/**/*"]
     }
   ],
   "sync": {
@@ -330,5 +339,8 @@
   "analytics": true,
   "migrate": {
     "agentic": true
+  },
+  "affected": {
+    "legacy": true
   }
 }
