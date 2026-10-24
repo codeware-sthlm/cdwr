@@ -61,12 +61,14 @@ export function SiteStatsAccountAction({
           {title}
         </Button>
       </DialogTrigger>
-      <DialogContent className="codeware-admin twp">
+      <DialogContent className="codeware-admin twp gap-5 p-6 sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{body}</DialogDescription>
+          <DialogTitle className="pr-8 leading-snug">{title}</DialogTitle>
+          <DialogDescription className="leading-relaxed">
+            {body}
+          </DialogDescription>
         </DialogHeader>
-        <DialogFooter>
+        <DialogFooter className="-mx-6 -mb-6 px-6">
           <Button
             variant="outline"
             disabled={busy}
