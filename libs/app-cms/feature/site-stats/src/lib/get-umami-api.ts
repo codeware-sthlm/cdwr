@@ -12,8 +12,9 @@ const PROVIDER = 'umami';
 /** Secret that authenticates every Umami api call */
 const KEY = 'API_KEY';
 
-/** Secret that manages users and teams; never used to read statistics */
-const ADMIN_KEY = 'ADMIN_API_KEY';
+/** Secrets of the Umami admin user that manages users and teams; never used to read statistics */
+const ADMIN_USERNAME = 'UMAMI_ADMIN_USERNAME';
+const ADMIN_PASSWORD = 'UMAMI_ADMIN_PASSWORD';
 
 /** An Umami client, or why there is none */
 export type UmamiApiResult =
@@ -74,8 +75,9 @@ export type UmamiAdminApiResult =
 /**
  * An Umami client for managing users and team members, or the reason there is none.
  *
- * Reads `ADMIN_API_KEY`, which is kept apart from the read key so a statistics
- * call can never manage users. Never throws, like `getUmamiApi`.
+ * Signs in with `UMAMI_ADMIN_USERNAME` and `UMAMI_ADMIN_PASSWORD` (Umami
+ * refuses API keys on user routes), kept apart from the read key so a
+ * statistics call can never manage users. Never throws, like `getUmamiApi`.
  */
 export const getUmamiAdminApi = async (
   umamiUrl: string | undefined
@@ -85,12 +87,17 @@ export const getUmamiAdminApi = async (
   }
 
   try {
-    const apiKey = await readKey(ADMIN_KEY);
+    const username = await readKey(ADMIN_USERNAME);
+    const password = await readKey(ADMIN_PASSWORD);
 
-    return apiKey
+    return username && password
       ? {
           status: 'ready',
-          umami: createUmamiAdminClient({ baseUrl: umamiUrl, apiKey })
+          umami: createUmamiAdminClient({
+            baseUrl: umamiUrl,
+            username,
+            password
+          })
         }
       : { status: 'unconfigured' };
   } catch (error) {

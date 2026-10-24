@@ -41,8 +41,10 @@ vi.mock('../../services/umami', () => ({
     status: 'ready',
     url: 'https://umami.test',
     apiKey: 'k',
-    readApiKey: 'r'
+    readApiKey: 'r',
+    adminLogin: { username: 'admin', password: 'pw' }
   })),
+  loginToken: vi.fn(async () => 'login-token'),
   whoAmI: vi.fn(),
   getTeam: vi.fn(async (_conn: unknown, id: string) => ({ id, name: id })),
   listTeamUsers: vi.fn(async () => [
@@ -131,6 +133,40 @@ describe('tenant stats-accounts', () => {
     expect(umami.removeTeamUser).not.toHaveBeenCalled();
     expect(ui.printed.outro[0]).toContain('1 stale, 1 missing');
     expect(history).not.toHaveBeenCalled();
+  });
+
+  it('lists the users with the login token', async () => {
+    const umami = await import('../../services/umami');
+
+    await run();
+
+    expect(umami.loginToken).toHaveBeenCalledWith(
+      'https://umami.test',
+      'admin',
+      'pw'
+    );
+    expect(umami.listUsers).toHaveBeenCalledWith(
+      expect.anything(),
+      'login-token'
+    );
+  });
+
+  it('skips the user list with one note when the login secrets are missing', async () => {
+    const umami = await import('../../services/umami');
+    vi.mocked(umami.readUmamiProvisioning).mockResolvedValueOnce({
+      status: 'ready',
+      url: 'https://umami.test',
+      apiKey: 'k',
+      readApiKey: 'r'
+    });
+
+    const { exit, ui } = await run();
+
+    expect(exit).toBe(EXIT.ok);
+    expect(umami.listUsers).not.toHaveBeenCalled();
+    expect(
+      ui.printed.info.filter((line) => line.includes('Skipping'))
+    ).toHaveLength(1);
   });
 
   it('removes only the stale members with --prune', async () => {

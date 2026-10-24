@@ -15,7 +15,12 @@ export interface UmamiConnection {
 }
 
 export type UmamiProvisioning =
-  | ({ status: 'ready'; readApiKey: string } & UmamiConnection)
+  | ({
+      status: 'ready';
+      readApiKey: string;
+      /** The admin user whose login lists users; Umami refuses API keys there */
+      adminLogin?: { username: string; password: string };
+    } & UmamiConnection)
   | { status: 'unconfigured'; missing: string[] };
 
 export interface UmamiWebsite {
@@ -111,8 +116,16 @@ export async function readUmamiProvisioning(
   const url = cms['UMAMI_URL'];
   const apiKey = umami['PROVISION_API_KEY'];
   const readApiKey = umami['API_KEY'];
+  const username = umami['UMAMI_ADMIN_USERNAME'];
+  const password = umami['UMAMI_ADMIN_PASSWORD'];
   if (url && apiKey && readApiKey)
-    return { status: 'ready', url, apiKey, readApiKey };
+    return {
+      status: 'ready',
+      url,
+      apiKey,
+      readApiKey,
+      ...(username && password ? { adminLogin: { username, password } } : {})
+    };
   const missing = [
     ...(url ? [] : ['UMAMI_URL']),
     ...(apiKey ? [] : ['PROVISION_API_KEY']),
@@ -137,13 +150,13 @@ const WAKING_STATUSES: ReadonlyArray<number> = [502, 503, 504];
 async function request(
   conn: UmamiConnection,
   path: string,
-  init: { method?: string; body?: unknown } = {}
+  init: { method?: string; body?: unknown; token?: string } = {}
 ): Promise<Response> {
   const send = (timeoutMs: number) =>
     fetch(endpoint(conn, path), {
       method: init.method ?? 'GET',
       headers: {
-        Authorization: `Bearer ${conn.apiKey}`,
+        Authorization: `Bearer ${init.token ?? conn.apiKey}`,
         Accept: 'application/json',
         ...(init.body === undefined
           ? {}
@@ -418,15 +431,46 @@ const userPageSchema = z.object({
   count: z.number()
 });
 
-/** Every Umami user, read page by page; needs an admin key */
+/**
+ * A login token for an Umami user. Umami refuses API keys on its user routes,
+ * so reading users takes a login. Throws without echoing the password, and
+ * for a user with 2FA, whose login yields no usable token.
+ */
+export async function loginToken(
+  url: string,
+  username: string,
+  password: string
+): Promise<string> {
+  const response = await request({ url, apiKey: '' }, '/auth/login', {
+    method: 'POST',
+    body: { username, password }
+  });
+  if (!response.ok) throw await refused('the login', response);
+  const body = z
+    .object({
+      token: z.string().optional(),
+      requiresTwoFactor: z.boolean().optional()
+    })
+    .parse(await response.json());
+  if (body.requiresTwoFactor)
+    throw new Error(
+      'The Umami admin user has 2FA; stats-accounts needs a user without it'
+    );
+  if (!body.token) throw new Error('Umami answered the login without a token');
+  return body.token;
+}
+
+/** Every Umami user, read page by page; needs an admin user's login token */
 export async function listUsers(
-  conn: UmamiConnection
+  conn: UmamiConnection,
+  token: string
 ): Promise<Array<Pick<UmamiUser, 'id' | 'username'>>> {
   const users: Array<Pick<UmamiUser, 'id' | 'username'>> = [];
   for (let page = 1; ; page++) {
     const response = await request(
       conn,
-      `/admin/users?page=${page}&pageSize=${PAGE_SIZE}`
+      `/admin/users?page=${page}&pageSize=${PAGE_SIZE}`,
+      { token }
     );
     if (!response.ok) throw await refused('the user list', response);
     const { data, count } = userPageSchema.parse(await response.json());

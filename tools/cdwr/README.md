@@ -74,7 +74,9 @@ action in the stats sheet adds them). It also reports orphan teams (named `cdwr-
 workspace) and Umami users named like a workspace admin that the cms has no id for (`unlinked`);
 those are never changed. The read key's user and the provisioning user are not counted as members.
 `--prune` removes the stale members (`DELETE /api/teams/{team}/users/{user}`), and on production asks
-for the name to be typed. It needs the admin `PROVISION_API_KEY`, like `stats-teams`.
+for the name to be typed. It needs the admin `PROVISION_API_KEY`, like `stats-teams`. The `unlinked` check
+reads Umami's user list, which refuses API keys, so it signs in with `UMAMI_ADMIN_USERNAME` and
+`UMAMI_ADMIN_PASSWORD` (a user without 2FA) from `/integrations/umami`; without them it prints a note and skips that check.
 
 ## Infisical
 

@@ -11,6 +11,7 @@ import {
   listTeamWebsites,
   listTeams,
   listUsers,
+  loginToken,
   newShareSlug,
   readUmamiProvisioning,
   removeTeamUser,
@@ -463,14 +464,59 @@ describe('Umami client when the service is waking', () => {
     fetchMock.mockResolvedValueOnce(
       reply({ data: [{ id: 'u1', username: 'ann', role: 'user' }], count: 1 })
     );
-    expect(await listUsers(conn)).toEqual([{ id: 'u1', username: 'ann' }]);
+    expect(await listUsers(conn, 'login-token')).toEqual([
+      { id: 'u1', username: 'ann' }
+    ]);
     expect(fetchMock.mock.calls[0][0]).toBe(
       'https://umami.test/api/admin/users?page=1&pageSize=100'
+    );
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe(
+      'Bearer login-token'
     );
 
     fetchMock.mockResolvedValueOnce(
       reply({ data: [{ id: 't1', name: 'cdwr-acme' }], count: 1 })
     );
     expect(await listTeams(conn)).toEqual([{ id: 't1', name: 'cdwr-acme' }]);
+  });
+});
+
+describe('loginToken', () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('posts the credentials and returns the token', async () => {
+    fetchMock.mockResolvedValue(reply({ token: 'tok', user: { id: 'a' } }));
+
+    expect(await loginToken('https://umami.test/', 'admin', 'pw')).toBe('tok');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://umami.test/api/auth/login');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({
+      username: 'admin',
+      password: 'pw'
+    });
+  });
+
+  it('says so for a user with 2FA', async () => {
+    fetchMock.mockResolvedValue(
+      reply({ requiresTwoFactor: true, partialToken: 'p' })
+    );
+
+    await expect(loginToken('https://umami.test', 'a', 'pw')).rejects.toThrow(
+      /has 2FA/
+    );
+  });
+
+  it('fails with the status and never the password', async () => {
+    fetchMock.mockResolvedValue(reply({}, 401));
+
+    const attempt = loginToken('https://umami.test', 'a', 'pw-secret');
+    await expect(attempt).rejects.toThrow(/401/);
+    await expect(attempt).rejects.not.toThrow(/pw-secret/);
   });
 });
