@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@nx/devkit": "23.3.0",
-    "nx": "23.3.0"
+    "@nx/devkit": "24.0.1",
+    "nx": "24.0.1"
   }
 }
