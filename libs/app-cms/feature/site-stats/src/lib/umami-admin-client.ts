@@ -55,38 +55,42 @@ export type UmamiAdminClient = {
 
 type UmamiAdminClientOptions = {
   baseUrl: string;
-  /** The admin key, never the one that reads statistics */
-  apiKey: string;
+  /** An Umami admin user without 2FA: Umami refuses API keys on user routes */
+  username: string;
+  password: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 };
 
 const WAKING_STATUSES: ReadonlyArray<number> = [502, 503, 504];
 
+/** How long a login token is reused before the next call signs in again */
+const TOKEN_TTL_MS = 10 * 60 * 1000;
+
+const tokens = new Map<string, { token: string; expires: number }>();
+
+/** Forgets every cached login token */
+export const clearUmamiAdminTokens = (): void => tokens.clear();
+
 /** An Umami client that manages users and team members; every answer is checked */
 export const createUmamiAdminClient = ({
   baseUrl,
-  apiKey,
+  username,
+  password,
   fetchImpl = fetch,
   timeoutMs = 5000
 }: UmamiAdminClientOptions): UmamiAdminClient => {
   const root = umamiRoot(baseUrl);
+  const cacheKey = `${root}\n${username}`;
 
-  /** Sends the call; the response is returned for the caller to judge by status */
-  const send = async (
-    method: 'GET' | 'POST' | 'DELETE',
+  /** Reaches Umami; a network failure or timeout becomes an `UmamiError` */
+  const fetchOrThrow = async (
     path: string,
-    body?: Record<string, string>
+    init: RequestInit
   ): Promise<Response> => {
     try {
       return await fetchImpl(`${root}/api/${path}`, {
-        method,
-        headers: {
-          authorization: `Bearer ${apiKey}`,
-          accept: 'application/json',
-          ...(body ? { 'content-type': 'application/json' } : {})
-        },
-        body: body ? JSON.stringify(body) : undefined,
+        ...init,
         signal: AbortSignal.timeout(timeoutMs)
       });
     } catch (error) {
@@ -98,6 +102,89 @@ export const createUmamiAdminClient = ({
       }
       throw new UmamiError(`Umami ${path}: request failed`, 'unavailable');
     }
+  };
+
+  /** A login token, from the cache while it is fresh; never logged */
+  const login = async (fresh: boolean): Promise<string> => {
+    const cached = tokens.get(cacheKey);
+    if (!fresh && cached && cached.expires > Date.now()) {
+      return cached.token;
+    }
+
+    const path = 'auth/login';
+    const response = await fetchOrThrow(path, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({ username, password })
+    });
+    if (!response.ok) {
+      throw new UmamiError(
+        `Umami ${path}: status ${response.status}`,
+        WAKING_STATUSES.includes(response.status) ? 'unavailable' : 'refused'
+      );
+    }
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      throw new UmamiError(`Umami ${path}: answer is not JSON`, 'bad-answer');
+    }
+    const parsed = z
+      .object({
+        token: z.string().optional(),
+        requiresTwoFactor: z.boolean().optional()
+      })
+      .safeParse(body);
+    if (parsed.success && parsed.data.requiresTwoFactor) {
+      throw new UmamiError(
+        'The Umami admin user has 2FA; the cms needs a user without it',
+        'refused'
+      );
+    }
+    if (!parsed.success || !parsed.data.token) {
+      throw new UmamiError(`Umami ${path}: unexpected answer`, 'bad-answer');
+    }
+
+    tokens.set(cacheKey, {
+      token: parsed.data.token,
+      expires: Date.now() + TOKEN_TTL_MS
+    });
+    return parsed.data.token;
+  };
+
+  /** One call with a token; a 401 signs in once more and retries once */
+  const sendWith = (
+    token: string,
+    method: 'GET' | 'POST' | 'DELETE',
+    path: string,
+    body?: Record<string, string>
+  ): Promise<Response> =>
+    fetchOrThrow(path, {
+      method,
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: 'application/json',
+        ...(body ? { 'content-type': 'application/json' } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+
+  /** Sends the call; the response is returned for the caller to judge by status */
+  const send = async (
+    method: 'GET' | 'POST' | 'DELETE',
+    path: string,
+    body?: Record<string, string>
+  ): Promise<Response> => {
+    const response = await sendWith(await login(false), method, path, body);
+    if (response.status !== 401) {
+      return response;
+    }
+    tokens.delete(cacheKey);
+    return sendWith(await login(true), method, path, body);
   };
 
   const refused = (path: string, response: Response) =>

@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   UmamiNotFoundError,
   UmamiUserExistsError,
+  clearUmamiAdminTokens,
   createUmamiAdminClient
 } from './umami-admin-client';
 import { UmamiError } from './umami-client';
@@ -12,23 +13,30 @@ const json = (body: unknown, status = 200) =>
 
 const text = (body: string, status: number) => new Response(body, { status });
 
+const isLogin = (url: unknown) => String(url).endsWith('/api/auth/login');
+
 const setup = (response: Response | Error) => {
-  const fetchImpl = vi.fn<typeof fetch>(async () => {
+  const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+    if (isLogin(url)) {
+      return json({ token: 'login-token', user: { id: 'admin' } });
+    }
     if (response instanceof Error) {
       throw response;
     }
-    return response;
+    return response.clone();
   });
   const client = createUmamiAdminClient({
     baseUrl: 'https://umami.test/',
-    apiKey: 'admin-key',
+    username: 'admin',
+    password: 'admin-password',
     fetchImpl
   });
   return { fetchImpl, client };
 };
 
 const call = (fetchImpl: ReturnType<typeof setup>['fetchImpl']) => {
-  const [url, init] = fetchImpl.mock.calls[0] ?? [];
+  const [url, init] =
+    fetchImpl.mock.calls.find(([called]) => !isLogin(called)) ?? [];
   return {
     url: String(url),
     init,
@@ -37,8 +45,110 @@ const call = (fetchImpl: ReturnType<typeof setup>['fetchImpl']) => {
 };
 
 describe('createUmamiAdminClient', () => {
+  beforeEach(() => {
+    clearUmamiAdminTokens();
+  });
+
+  describe('login', () => {
+    const loginCalls = (f: ReturnType<typeof setup>['fetchImpl']) =>
+      f.mock.calls.filter(([url]) => isLogin(url));
+
+    it('signs in with the credentials, then makes the call with the token', async () => {
+      const { fetchImpl, client } = setup(json({ id: 'u-1', username: 'a' }));
+
+      await client.getUser('u-1');
+
+      const [first, second] = fetchImpl.mock.calls;
+      expect(String(first?.[0])).toBe('https://umami.test/api/auth/login');
+      expect(first?.[1]?.method).toBe('POST');
+      expect(JSON.parse(String(first?.[1]?.body))).toEqual({
+        username: 'admin',
+        password: 'admin-password'
+      });
+      expect(String(second?.[0])).toBe('https://umami.test/api/users/u-1');
+      expect(second?.[1]?.headers).toMatchObject({
+        authorization: 'Bearer login-token'
+      });
+    });
+
+    it('reuses the token within the cache time', async () => {
+      const { fetchImpl, client } = setup(json({ id: 'u-1', username: 'a' }));
+
+      await client.getUser('u-1');
+      await client.getUser('u-1');
+
+      expect(loginCalls(fetchImpl)).toHaveLength(1);
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    });
+
+    it('signs in again on a 401 and retries the call once', async () => {
+      const replies = [
+        json({ token: 'old' }),
+        text('', 401),
+        json({ token: 'new' }),
+        json({ id: 'u-1', username: 'a' })
+      ];
+      const fetchImpl = vi.fn<typeof fetch>(async () => replies.shift()!);
+      const client = createUmamiAdminClient({
+        baseUrl: 'https://umami.test/',
+        username: 'admin',
+        password: 'admin-password',
+        fetchImpl
+      });
+
+      await expect(client.getUser('u-1')).resolves.toEqual({
+        id: 'u-1',
+        username: 'a'
+      });
+      expect(fetchImpl.mock.calls[3]?.[1]?.headers).toMatchObject({
+        authorization: 'Bearer new'
+      });
+    });
+
+    it('surfaces a second 401 without trying again', async () => {
+      const { fetchImpl, client } = setup(text('', 401));
+
+      await expect(client.getUser('u-1')).rejects.toMatchObject({
+        name: 'UmamiError',
+        kind: 'refused'
+      });
+      // login, call, login, call
+      expect(fetchImpl).toHaveBeenCalledTimes(4);
+    });
+
+    it('fails clearly for a user with 2FA', async () => {
+      const fetchImpl = vi.fn<typeof fetch>(async () =>
+        json({ requiresTwoFactor: true, partialToken: 'partial' })
+      );
+      const client = createUmamiAdminClient({
+        baseUrl: 'https://umami.test/',
+        username: 'admin',
+        password: 'admin-password',
+        fetchImpl
+      });
+
+      await expect(client.getUser('u-1')).rejects.toThrow(/has 2FA/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws an UmamiError with the status when the login fails', async () => {
+      const fetchImpl = vi.fn<typeof fetch>(async () => text('', 401));
+      const client = createUmamiAdminClient({
+        baseUrl: 'https://umami.test/',
+        username: 'admin',
+        password: 'admin-password',
+        fetchImpl
+      });
+
+      const error = await client.getUser('u-1').catch((e: unknown) => e);
+      expect(error).toMatchObject({ name: 'UmamiError', kind: 'refused' });
+      expect((error as Error).message).toBe('Umami auth/login: status 401');
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('createUser', () => {
-    it('posts the user with the admin key and returns it', async () => {
+    it('posts the user with the login token and returns it', async () => {
       const { fetchImpl, client } = setup(
         json({ id: 'u-1', username: 'anna@titan.test', role: 'view-only' })
       );
@@ -53,7 +163,7 @@ describe('createUmamiAdminClient', () => {
       expect(url).toBe('https://umami.test/api/users');
       expect(init?.method).toBe('POST');
       expect(init?.headers).toMatchObject({
-        authorization: 'Bearer admin-key',
+        authorization: 'Bearer login-token',
         'content-type': 'application/json'
       });
       expect(body).toEqual({

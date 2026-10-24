@@ -80,10 +80,21 @@ describe('getUmamiAdminApi', () => {
     credentials.mockReset();
   });
 
-  it('builds a client from ADMIN_API_KEY', async () => {
-    credentials.mockResolvedValue({ ADMIN_API_KEY: 'admin_key' });
+  it('builds a client from the admin username and password', async () => {
+    credentials.mockResolvedValue({
+      UMAMI_ADMIN_USERNAME: 'admin',
+      UMAMI_ADMIN_PASSWORD: 'secret'
+    });
 
     expect((await getUmamiAdminApi(URL)).status).toBe('ready');
+  });
+
+  it('is unconfigured when either the username or the password is missing', async () => {
+    credentials.mockResolvedValue({ UMAMI_ADMIN_USERNAME: 'admin' });
+    expect(await getUmamiAdminApi(URL)).toEqual({ status: 'unconfigured' });
+
+    credentials.mockResolvedValue({ UMAMI_ADMIN_PASSWORD: 'secret' });
+    expect(await getUmamiAdminApi(URL)).toEqual({ status: 'unconfigured' });
   });
 
   it('never falls back to the read key', async () => {

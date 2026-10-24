@@ -11,6 +11,7 @@ import {
   listTeamUsers,
   listTeams,
   listUsers,
+  loginToken,
   readUmamiProvisioning,
   removeTeamUser,
   whoAmI
@@ -71,6 +72,12 @@ export default defineCommand<
 
     await requireAdmin(connection);
 
+    const { adminLogin } = provisioning;
+    if (!adminLogin)
+      ctx.ui.info(
+        'Skipping the unlinked-users check: UMAMI_ADMIN_USERNAME and UMAMI_ADMIN_PASSWORD are not set in /integrations/umami'
+      );
+
     const databaseUrl = await resolveDatabaseUrl(environment, undefined);
     const { rows, users } = await ctx.ui.task(
       'Reading workspaces and users from Payload',
@@ -89,7 +96,13 @@ export default defineCommand<
         const [me, reader, umamiUsers, umamiTeams] = await Promise.all([
           whoAmI(connection),
           whoAmI(readerConnection),
-          listUsers(connection),
+          adminLogin
+            ? loginToken(
+                connection.url,
+                adminLogin.username,
+                adminLogin.password
+              ).then((token) => listUsers(connection, token))
+            : Promise.resolve([]),
           listTeams(connection)
         ]);
         const teams: TeamAccounts[] = await Promise.all(
