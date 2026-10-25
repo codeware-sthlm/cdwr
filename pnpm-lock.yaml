@@ -247,7 +247,7 @@ importers:
         version: 0.4.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       nodemailer:
         specifier: ^10.0.0
-        version: 10.1.0
+        version: 10.1.4
       payload:
         specifier: 3.90.2
         version: 3.90.2(graphql@16.14.2)(supports-color@5.5.0)(typescript@6.0.3)
@@ -12793,8 +12793,8 @@ packages:
   nodeify-ts@1.0.6:
     resolution: {integrity: sha512-jq+8sqVG1aLqy5maMTceL8NUJ1CvarWztlxvrYh3G0aao9BsVeoVmVedUnrUSBLetP7oLIAJrPrw4+iIo7v3GA==}
 
-  nodemailer@10.1.0:
-    resolution: {integrity: sha512-fXW8AulB25aOTuwfRYV6lqHyfz2VM4rr4SGXH03mE7x5znEUpzL5mu6anARUpZN7744Ziwkmr4AxSLPJsBQspg==}
+  nodemailer@10.1.4:
+    resolution: {integrity: sha512-EsMnOR2oRv4LGnWvHgcVYkkQ4O2j8KO4WTw6l+PHR4sOXo8SAgIraxtEnGDmotjbhv0hDsu3IuDIFZm8iXwO4A==}
     engines: {node: '>=20.0.0'}
 
   nodemon@3.1.14:
@@ -21319,7 +21319,7 @@ snapshots:
 
   '@payloadcms/email-nodemailer@3.90.2(payload@3.90.2(graphql@16.14.2)(supports-color@5.5.0)(typescript@6.0.3))':
     dependencies:
-      nodemailer: 10.1.0
+      nodemailer: 10.1.4
       payload: 3.90.2(graphql@16.14.2)(supports-color@5.5.0)(typescript@6.0.3)
 
   '@payloadcms/graphql@3.90.2(graphql@16.14.2)(payload@3.90.2(graphql@16.14.2)(supports-color@5.5.0)(typescript@6.0.3))(typescript@6.0.3)':
@@ -30897,7 +30897,7 @@ snapshots:
 
   nodeify-ts@1.0.6: {}
 
-  nodemailer@10.1.0: {}
+  nodemailer@10.1.4: {}
 
   nodemon@3.1.14:
     dependencies:
