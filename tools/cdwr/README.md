@@ -203,7 +203,7 @@ loop, so the loop is still the process `docker compose stop` signals. The folder
 Infisical project, `agent-nuc`, which holds nothing else, and the identity is a Viewer there and a
 member of no other project: the free plan cannot limit an identity to a folder, so the project is
 the limit. The NUC holds only the identity (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`,
-`INFISICAL_PROJECT_ID` of that project, `INFISICAL_SITE`) in a root-only `.env`; a key set there
+`INFISICAL_PROJECT_ID` of that project, `INFISICAL_SITE`) in a `.env` only the deploy user can read; a key set there
 wins over the vault, and the log names which keys came from where, never their values. The identity
 is unset before the loop starts, but PID 1 keeps it in its environment, readable by the agent's own
 sessions; that is why it must stay a Viewer of that one project. Without the identity the container
@@ -235,6 +235,78 @@ send nothing, so a key that stays missing alerts as missed check-ins. A failed c
 `cdwr agent logs --host <name>` reads the log of the agent container instead of a local file: it
 runs `ssh <name> docker exec cdwr-agent` to list `/home/agent/.cdwr/agent-queue/logs`, picks the
 scheduler log or, with `--run`, the latest run, and tails it. It needs no local launchd job.
+
+## The NUC
+
+The agent container runs on a NUC. Everything below is done once; after that `cdwr agent deploy`
+updates it.
+
+1. Install Ubuntu Server 24.04 LTS.
+2. Install Docker Engine from Docker's apt repository, following
+   [the official guide](https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository).
+3. Keep the host patched: `apt install unattended-upgrades`, then in
+   `/etc/apt/apt.conf.d/50unattended-upgrades`:
+
+   ```txt
+   Unattended-Upgrade::Automatic-Reboot "true";
+   Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+   ```
+
+4. In the BIOS, set power on after AC loss.
+5. Join the tailnet with Tailscale SSH and forward no router ports:
+
+   ```sh
+   sudo tailscale up --ssh
+   ```
+
+6. Create the deploy user `cdwr`, in the `docker` group, and its directory:
+
+   ```sh
+   sudo adduser --disabled-password cdwr
+   sudo usermod -aG docker cdwr
+   sudo install -d -o cdwr -g cdwr /opt/cdwr-agent
+   ```
+
+   Tailscale SSH needs an ACL rule letting you in as `cdwr`.
+
+7. Write `/opt/cdwr-agent/.env` from `apps/agent-host/.env.example`, with the Infisical identity
+   (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`, `INFISICAL_SITE=eu`).
+   It is owned by `cdwr`, not root, with mode 600, since `docker compose` reads `env_file` as
+   the user who runs it:
+
+   ```sh
+   sudo install -m 600 -o cdwr -g cdwr /dev/null /opt/cdwr-agent/.env
+   ```
+
+8. Install the nightly backup of the `agent-home` volume (03:30, the newest 14 tarballs kept in
+   `/var/backups/cdwr-agent`), from `apps/agent-host/nuc` in this repo:
+
+   ```sh
+   sudo install -m 755 backup-agent-home.sh /usr/local/sbin/
+   sudo install -m 644 cdwr-agent-backup.service cdwr-agent-backup.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now cdwr-agent-backup.timer
+   ```
+
+9. From the Mac, the first deploy. The image is public, so the NUC pulls without a login:
+
+   ```sh
+   cdwr agent deploy --host <tailscale name>
+   ```
+
+10. Check it. `cdwr agent logs --host <tailscale name>` lands with COD-592; until then, on the NUC:
+
+    ```sh
+    docker logs cdwr-agent
+    cd /opt/cdwr-agent && docker compose --env-file image.env run --rm agent claude -p 'say ok'
+    ```
+
+    The second answers without a login prompt.
+
+`cdwr agent deploy` ships `apps/agent-host/compose.yaml`, pauses the queue, waits up to `--wait`
+minutes (default 30) for the running job to finish, writes the tag to `image.env`, pulls,
+restarts and resumes. Without `--tag` it takes the latest image built on main; `--dry-run` prints
+the plan with the resolved tag. When the queue stays busy it resumes and changes nothing.
 
 ## Writing a command
 

@@ -253,6 +253,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/resume').then((m) => m.default)
   },
   {
+    path: ['agent', 'deploy'],
+    summary: 'Update the agent container on a host to a new image',
+    danger: 'mutate',
+    load: () => import('./agent/deploy').then((m) => m.default)
+  },
+  {
     path: ['agent', 'notify'],
     summary: 'Which notices the queue sends: all, or only what needs you',
     danger: 'mutate',
