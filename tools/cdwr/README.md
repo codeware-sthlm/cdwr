@@ -224,8 +224,9 @@ dependency of the script. Its spec runs it through `jq`.
 A run reports to a Sentry cron monitor, `agent-queue`, when `SENTRY_DSN` is set (the agent
 container reads it from `/agent-queue` in Infisical; unset, as on the Mac, nothing is sent).
 `agent-queue/checkin.sh`, sourced by `run.sh`, posts to Sentry's HTTP check-in endpoint with curl:
-`in_progress` once the run holds its lock, `ok` or `error` by exit status when it ends. The first
-check-in carries the monitor's config, so Sentry creates the monitor itself: every 10 minutes, a
+`in_progress` once the run holds its lock, `ok` or `error` by exit status when it ends. Every
+check-in carries the monitor's config, so whichever reaches Sentry first creates the monitor and
+the rest keep it in step (upsert): every 10 minutes, a
 15-minute margin, which makes a missed check-in alert after 25 minutes, and a 60-minute max
 runtime. A paused queue still sends an `ok` on each tick, since a pause is deliberate; a tick that
 finds a run in progress, a `--check`, and a run that skips for a missing Linear key or no network
