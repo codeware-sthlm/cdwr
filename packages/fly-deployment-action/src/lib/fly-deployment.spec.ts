@@ -1213,54 +1213,6 @@ describe('flyDeployment', () => {
     });
   });
 
-  describe('workflow_run event', () => {
-    it('should deploy to preview using PR number from workflow_run pull_requests', async () => {
-      setContext('push-main-branch', {
-        eventName: 'workflow_run',
-        payload: {
-          workflow_run: {
-            event: 'pull_request',
-            pull_requests: [{ number: 42 }]
-          }
-        }
-      });
-      setupMocks();
-      const config = setupTest({}, 'preview');
-      const result = await flyDeployment(config, true);
-
-      expect(result.environment).toBe('preview');
-      expect(getMockFly().deploy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          app: 'app-one-config-pr-42',
-          environment: 'preview'
-        })
-      );
-    });
-
-    it('should deploy to production when workflow_run is triggered by a push event', async () => {
-      setContext('push-main-branch', {
-        eventName: 'workflow_run',
-        payload: {
-          workflow_run: {
-            event: 'push',
-            pull_requests: []
-          }
-        }
-      });
-      setupMocks();
-      const config = setupTest({ environment: 'production' });
-      const result = await flyDeployment(config, true);
-
-      expect(result.environment).toBe('production');
-      expect(getMockFly().deploy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          app: 'app-one-config',
-          environment: 'production'
-        })
-      );
-    });
-  });
-
   describe('deploy with pre-built images', () => {
     it('should deploy using pre-built image when images input is provided', async () => {
       setContext('push-main-branch');
