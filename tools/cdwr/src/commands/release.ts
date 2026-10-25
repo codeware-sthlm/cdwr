@@ -67,7 +67,7 @@ interface ReleaseData {
 export default defineCommand({
   summary: 'Version, changelog, tag and publish the npm packages',
   description:
-    'Bumps versions from conventional commits, writes changelogs, and either publishes the npm packages directly or leaves that to GitHub Actions.',
+    'Bumps versions from conventional commits, writes changelogs, and either publishes the npm packages directly or leaves that to GitHub Actions, which stages them on npm for approval.',
   danger: 'destructive',
   inputs: {
     mode: input.enum(['release', 'publish'], {
@@ -78,7 +78,7 @@ export default defineCommand({
       hints: MODE_HINTS
     }),
     postponePublish: input.boolean({
-      prompt: 'Let GitHub Actions publish to npm?',
+      prompt: 'Let GitHub Actions stage the release on npm?',
       description: 'Leave publishing to GitHub Actions',
       short: 'p',
       initial: true,
@@ -103,7 +103,7 @@ export default defineCommand({
       if (!otp) {
         throw new UsageError(
           '--otp is required to publish from here',
-          'Pass --otp, or leave --postpone-publish on to let GitHub Actions publish instead'
+          'Pass --otp, or leave --postpone-publish on to let GitHub Actions stage it instead'
         );
       }
       const user = await ctx.ui.task(
@@ -173,7 +173,7 @@ export default defineCommand({
         ...bumpSteps(preview.projectsVersionData),
         'Generate changelogs',
         decision === 'deferred'
-          ? 'Let GitHub Actions publish the packages to npm'
+          ? 'Let GitHub Actions stage the packages on npm'
           : 'Publish the packages to npm'
       ],
       target: { environment: 'production', name: 'release' },
@@ -216,7 +216,8 @@ export default defineCommand({
 
       if (!publishDirectly) {
         return {
-          summary: 'The new release will be published by GitHub Actions'
+          summary:
+            'The new release will be staged on npm by GitHub Actions, approve it there to publish'
         };
       }
     }
