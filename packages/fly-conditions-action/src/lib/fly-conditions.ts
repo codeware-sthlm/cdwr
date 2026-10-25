@@ -5,13 +5,6 @@ import type { ActionInputs } from './schemas/action-inputs.schema';
 
 const BLOCKED_PREFIXES = ['renovate', 'update-nx-workspace'];
 
-type WorkflowRun = {
-  conclusion: string;
-  head_branch: string;
-  event: string;
-  pull_requests: Array<{ number: number; head: { ref: string } }>;
-};
-
 type Result = {
   skip: boolean;
 };
@@ -24,8 +17,7 @@ export async function flyConditions({
   const { eventName, ref, payload } = context;
 
   const pr = payload['pull_request'] as
-    | { number: number; head: { ref: string } }
-    | undefined;
+    { number: number; head: { ref: string } } | undefined;
 
   const branchName = pr?.head?.ref ?? ref.replace('refs/heads/', '');
   const action = payload['action'] as string | undefined;
@@ -46,14 +38,6 @@ export async function flyConditions({
   if (eventName === 'workflow_dispatch') {
     core.info('Manual workflow dispatch -> continue');
     return { skip: false };
-  }
-
-  if (eventName === 'workflow_run') {
-    return handleWorkflowRun(payload['workflow_run'] as WorkflowRun, {
-      previewLabel,
-      token,
-      context
-    });
   }
 
   if (BLOCKED_PREFIXES.some((prefix) => branchName.startsWith(prefix))) {
@@ -109,70 +93,28 @@ export async function flyConditions({
     return { skip: false };
   }
 
-  core.info(`Preview label '${previewLabel}' not found -> skip`);
-  return { skip: true };
-}
-
-async function handleWorkflowRun(
-  workflowRun: WorkflowRun,
-  opts: {
-    previewLabel: string;
-    token: string;
-    context: typeof github.context;
-  }
-): Promise<Result> {
-  const { previewLabel, token, context } = opts;
-  const { conclusion, head_branch, event, pull_requests } = workflowRun;
-
-  core.info(
-    [
-      'CI workflow_run context:',
-      `  Conclusion:  ${conclusion}`,
-      `  Branch:      ${head_branch}`,
-      `  Trigger:     ${event}`
-    ].join('\n')
+  // A newer push cancels the run that opened the PR, possibly before it added
+  // the label. Add it here unless someone removed it on purpose.
+  const events = await octokit.paginate(octokit.rest.issues.listEvents, {
+    ...context.repo,
+    issue_number: prNumber,
+    per_page: 100
+  });
+  const removed = events.some(
+    (e) =>
+      e.event === 'unlabeled' && 'label' in e && e.label?.name === previewLabel
   );
 
-  if (conclusion !== 'success') {
-    core.info(`CI checks did not pass (conclusion: '${conclusion}') -> skip`);
+  if (removed) {
+    core.info(`Preview label '${previewLabel}' was removed -> skip`);
     return { skip: true };
   }
 
-  if (BLOCKED_PREFIXES.some((prefix) => head_branch.startsWith(prefix))) {
-    core.info(`Blocked branch prefix '${head_branch}' -> skip`);
-    return { skip: true };
-  }
-
-  if (event !== 'pull_request') {
-    core.info(`CI triggered by '${event}' (non-PR) -> continue`);
-    return { skip: false };
-  }
-
-  const prInfo = pull_requests[0];
-  if (!prInfo) {
-    core.info('No PR associated with CI run -> skip');
-    return { skip: true };
-  }
-
-  core.info(`PR number: ${prInfo.number}`);
-
-  const octokit = github.getOctokit(token);
-  const { data: labels } = await octokit.rest.issues.listLabelsOnIssue({
+  await octokit.rest.issues.addLabels({
     ...context.repo,
-    issue_number: prInfo.number
+    issue_number: prNumber,
+    labels: [previewLabel]
   });
-
-  if (!labels.some((l) => l.name === previewLabel)) {
-    // First successful CI run for this PR — add the preview label
-    await octokit.rest.issues.addLabels({
-      ...context.repo,
-      issue_number: prInfo.number,
-      labels: [previewLabel]
-    });
-    core.info(`Added preview label '${previewLabel}' -> continue`);
-  } else {
-    core.info(`Preview label '${previewLabel}' present -> continue`);
-  }
-
+  core.info(`Added missing preview label '${previewLabel}' -> continue`);
   return { skip: false };
 }

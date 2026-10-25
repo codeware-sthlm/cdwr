@@ -1,8 +1,9 @@
 name: Fly Deployment
 
-# This workflow is triggered by a pull request or push to the main branch.
+# Deploys come from a pull request (preview, gated on the preview label that opening the PR adds)
+# or a push to main (production), and start without waiting for CI.
+# Closing a pull request tears its preview down.
 # Renovate and Nx migrations are ignored.
-# Deployments run when the preview label is present (auto-added on PR open) or when closing PRs for cleanup.
 # Can also be triggered manually for re-deployments.
 
 on:
@@ -41,11 +42,6 @@ on:
         required: false
         type: boolean
         default: false
-  # Primary trigger once this workflow is on the default branch:
-  # deployment only starts after CI checks pass.
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
   pull_request:
     types:
       - opened
@@ -68,11 +64,11 @@ permissions:
   pull-requests: write
 
 concurrency:
-  # Normalize the branch name across all trigger types so push and workflow_run
-  # on the same branch share one concurrency slot and cannot run simultaneously.
-  # github.ref is refs/heads/main for push; workflow_run gives head_branch=main.
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.head_ref || github.ref_name }}
-  cancel-in-progress: false
+  # One deployment per pull request, and one per branch otherwise. A newer push to a pull request
+  # cancels the preview deploy in flight, so the latest commit wins; a production deploy on main is
+  # never cut off. Keyed on the PR number: a fork's PR from its own `main` must not share main's group.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze-conditions:
@@ -137,16 +133,14 @@ jobs:
           main-branch-name: main
           set-environment-variables-for-job: true
 
-      # workflow_run payload, then pull_request event, then manual dispatch input
+      # pull_request event, then manual dispatch input
       - name: Resolve PR number
         id: resolve-pr
         env:
-          WR_PRS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
           DIRECT_PR: ${{ github.event.number }}
           MANUAL_PR: ${{ github.event.inputs.pr-number }}
         run: |
-          PR=$(echo "$WR_PRS" | jq -r 'first | .number // empty')
-          PR="${PR:-${DIRECT_PR:-$MANUAL_PR}}"
+          PR="${DIRECT_PR:-$MANUAL_PR}"
           # Drop non-numeric input before it can reach tagging
           [[ "$PR" =~ ^[0-9]+$ ]] || PR=""
           echo "number=$PR" >> "$GITHUB_OUTPUT"
@@ -570,8 +564,8 @@ jobs:
     needs: [pre-deploy, deploy]
     if: >-
       always() &&
-      (github.event_name == 'pull_request' && github.event.action != 'closed' ||
-       github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request') &&
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed' &&
       needs.deploy.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
@@ -581,16 +575,14 @@ jobs:
           client-id: ${{ secrets.CDWR_ACTIONS_BOT_ID }}
           private-key: ${{ secrets.CDWR_ACTIONS_BOT_PRIVATE_KEY }}
 
-      # workflow_run payload, then pull_request event, then manual dispatch input
+      # pull_request event, then manual dispatch input
       - name: Resolve PR number
         id: resolve-pr
         env:
-          WR_PRS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
           DIRECT_PR: ${{ github.event.number }}
           MANUAL_PR: ${{ github.event.inputs.pr-number }}
         run: |
-          PR=$(echo "$WR_PRS" | jq -r 'first | .number // empty')
-          PR="${PR:-${DIRECT_PR:-$MANUAL_PR}}"
+          PR="${DIRECT_PR:-$MANUAL_PR}"
           # Drop non-numeric input before it can reach tagging
           [[ "$PR" =~ ^[0-9]+$ ]] || PR=""
           echo "number=$PR" >> "$GITHUB_OUTPUT"
@@ -642,16 +634,14 @@ jobs:
       needs.build.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
-      # workflow_run payload, then pull_request event, then manual dispatch input
+      # pull_request event, then manual dispatch input
       - name: Resolve PR number
         id: resolve-pr
         env:
-          WR_PRS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
           DIRECT_PR: ${{ github.event.number }}
           MANUAL_PR: ${{ github.event.inputs.pr-number }}
         run: |
-          PR=$(echo "$WR_PRS" | jq -r 'first | .number // empty')
-          PR="${PR:-${DIRECT_PR:-$MANUAL_PR}}"
+          PR="${DIRECT_PR:-$MANUAL_PR}"
           # Drop non-numeric input before it can reach tagging
           [[ "$PR" =~ ^[0-9]+$ ]] || PR=""
           echo "number=$PR" >> "$GITHUB_OUTPUT"

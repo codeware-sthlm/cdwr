@@ -93,7 +93,7 @@ export async function flyBuild(inputs: ActionInputs): Promise<ActionOutputs> {
     }
   }
 
-  // Explicit input wins; workflow_dispatch and workflow_run carry no usable PR
+  // Explicit input wins; workflow_dispatch carries no usable PR
   if (inputs.prNumber) {
     pullRequest = inputs.prNumber;
   }

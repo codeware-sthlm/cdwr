@@ -82,24 +82,6 @@ export async function flyDeployment(
         case 'push':
           context.action = 'deploy';
           break;
-
-        case 'workflow_run':
-          {
-            const wr = payload['workflow_run'] as
-              | {
-                  event: string;
-                  pull_requests: Array<{ number: number }>;
-                }
-              | undefined;
-            context.action = 'deploy';
-            if (wr?.event === 'pull_request') {
-              const prNumber = wr.pull_requests?.[0]?.number;
-              if (prNumber) {
-                context.pullRequest = prNumber;
-              }
-            }
-          }
-          break;
       }
     }
 
