@@ -13,6 +13,7 @@ import type { CollectionConfig } from 'payload';
 
 import { restrictToTenantInTenantMode } from './access/restrict-to-tenant-in-tenant-mode';
 import { deploymentField } from './fields/deployment.field';
+import { idleWarnedAtField } from './fields/idle-warned-at.field';
 import { statsShareIdField } from './fields/stats-share-id.field';
 import { statsTeamIdField } from './fields/stats-team-id.field';
 import { statsWebsiteIdField } from './fields/stats-website-id.field';
@@ -147,7 +148,8 @@ const tenants: CollectionConfig = {
               required: true
             },
             slugField({ sourceField: 'name', position: undefined }),
-            statusField
+            statusField,
+            idleWarnedAtField
           ]
         },
         {
