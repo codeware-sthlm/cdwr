@@ -249,11 +249,11 @@ export default buildConfig({
     tasks: [
       anonymizeTourSignupsTask,
       buildCustomComponentTask,
-      // Only the host schedules it: tenant apps would repeat the sweep
+      // Only the host schedules it, on a queue only the host runs
       env.APP_MODE.type === 'host'
         ? {
             ...cleanUpIdleWorkspacesTask,
-            schedule: [{ cron: '0 3 * * *', queue: 'nightly' }]
+            schedule: [{ cron: '0 3 * * *', queue: 'host-nightly' }]
           }
         : cleanUpIdleWorkspacesTask,
       deleteExpiredFormSubmissionsTask
@@ -262,7 +262,16 @@ export default buildConfig({
     // component queue has one consumer, the recovery pass in `onInit`, which
     // runs builds one at a time in the build turn: a cron here would run a
     // second build beside it, and each holds a few hundred MB
-    autoRun: serves ? [{ cron: '5 3 * * *', queue: 'nightly', limit: 10 }] : [],
+    // `host-nightly` holds jobs only the host may run, so a tenant app on the
+    // shared `nightly` queue can never claim them
+    autoRun: serves
+      ? [
+          { cron: '5 3 * * *', queue: 'nightly', limit: 10 },
+          ...(env.APP_MODE.type === 'host'
+            ? [{ cron: '10 3 * * *', queue: 'host-nightly', limit: 10 }]
+            : [])
+        ]
+      : [],
     deleteJobOnComplete: true
   },
   plugins: getPlugins(env, {
