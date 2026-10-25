@@ -63,6 +63,8 @@ export function run(
   options: RunOptions = {}
 ): Promise<Output> {
   return new Promise((resolve, reject) => {
+    // A child that exits without reading its stdin makes the write fail with EPIPE
+    let stdinError: NodeJS.ErrnoException | undefined;
     const child = execFile(
       binary,
       args,
@@ -74,17 +76,18 @@ export function run(
         encoding: 'utf8'
       },
       (error, stdout, stderr) => {
-        if (error) {
+        const failure = error ?? stdinError;
+        if (failure) {
           const code =
-            'code' in error && error.code !== undefined
-              ? (error.code as number | string)
+            'code' in failure && failure.code !== undefined
+              ? (failure.code as number | string)
               : null;
           reject(
             new CommandError(
               [binary, ...args].join(' '),
               stdout,
               stderr,
-              error.killed ? 'killed' : code
+              error?.killed ? 'killed' : code
             )
           );
           return;
@@ -92,7 +95,12 @@ export function run(
         resolve({ stdout, stderr });
       }
     );
-    if (options.input !== undefined) child.stdin?.end(options.input);
+    if (options.input !== undefined) {
+      child.stdin?.on('error', (error: NodeJS.ErrnoException) => {
+        stdinError ??= error;
+      });
+      child.stdin?.end(options.input);
+    }
     track(child);
   });
 }

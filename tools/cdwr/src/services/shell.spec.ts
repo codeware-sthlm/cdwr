@@ -69,3 +69,18 @@ describe('runStreaming', () => {
     await expect(done).rejects.toThrow('x failed (1): boom');
   });
 });
+
+describe('run', () => {
+  it('rejects with the diagnostics when the child exits without reading its input', async () => {
+    const { run } = await vi.importActual<typeof import('./shell')>('./shell');
+    const error = await run(
+      process.execPath,
+      ['-e', 'console.error("nope"); process.exit(1)'],
+      { input: 'x'.repeat(8 * 1024 * 1024) }
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).name).toBe('CommandError');
+    expect((error as { stderr: string }).stderr).toContain('nope');
+    expect((error as { code: unknown }).code).toBe(1);
+  });
+});
