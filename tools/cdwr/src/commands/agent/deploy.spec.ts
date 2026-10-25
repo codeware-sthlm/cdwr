@@ -212,6 +212,41 @@ describe('agent deploy', () => {
     expect(JSON.stringify(ui.printed)).toContain('connection lost');
   });
 
+  it('says the queue may still be paused when the unpause fails after a busy timeout', async () => {
+    run.mockImplementation(async (_bin, a) => {
+      const cmd = a.slice(3).join(' ');
+      if (cmd.includes('State.Running')) return ok('true\n');
+      if (cmd.endsWith('test -e /home/agent/.cdwr/agent-queue/paused')) {
+        throw fail(1);
+      }
+      if (cmd.includes('rm -f')) throw fail(255);
+      return ok();
+    });
+    const exit = await deploy([...args.slice(0, -1), '--wait', '0', '--yes']);
+    expect(exit).toBe(EXIT.failed);
+    const printed = JSON.stringify(ui.printed);
+    expect(printed).toContain('may still be paused');
+    expect(printed).toContain(
+      'ssh nuc docker exec cdwr-agent rm -f /home/agent/.cdwr/agent-queue/paused'
+    );
+  });
+
+  it('says the queue may still be paused when the unpause fails after a failed pull', async () => {
+    run.mockImplementation(async (_bin, a) => {
+      const cmd = a.slice(3).join(' ');
+      if (cmd.includes('State.Running')) return ok('true\n');
+      if (cmd.includes('test -e')) throw fail(1);
+      if (cmd.includes('pull')) throw fail(5);
+      if (cmd.includes('rm -f')) throw fail(255);
+      return ok();
+    });
+    const exit = await deploy(args);
+    expect(exit).toBe(EXIT.failed);
+    const printed = JSON.stringify(ui.printed);
+    expect(printed).toContain('may still be paused');
+    expect(printed).not.toContain('the queue was resumed');
+  });
+
   const implementLock = (pidFile: () => ReturnType<typeof ok>) => {
     run.mockImplementation(async (_bin, a) => {
       const cmd = a.slice(3).join(' ');
