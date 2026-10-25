@@ -5,7 +5,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../../../node_modules/.vite/libs/app-cms/ui/tour-signups',
-  plugins: [react(), tsconfigPaths()],
+  plugins: [
+    react(),
+    tsconfigPaths({ projects: ['../../../../tsconfig.base.json'] })
+  ],
   test: {
     name: 'app-cms-ui-tour-signups',
     watch: false,

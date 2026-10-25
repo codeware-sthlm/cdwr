@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/packages/nx-pre-deploy-action',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../tsconfig.base.json'] })],
   test: {
     name: 'packages-nx-pre-deploy-action',
     watch: false,

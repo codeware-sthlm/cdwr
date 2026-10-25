@@ -5,7 +5,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../../../node_modules/.vite/libs/shared/util/ui',
-  plugins: [react(), tsconfigPaths()],
+  plugins: [
+    react(),
+    tsconfigPaths({ projects: ['../../../../tsconfig.base.json'] })
+  ],
 
   test: {
     name: 'shared-util-ui',

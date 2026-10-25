@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../../../node_modules/.vite/libs/shared/util/github',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../../../tsconfig.base.json'] })],
   test: {
     name: 'shared-util-github',
     watch: false,

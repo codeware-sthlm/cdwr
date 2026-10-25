@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/packages/fly-conditions-action',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../tsconfig.base.json'] })],
   test: {
     name: 'packages-fly-conditions-action',
     watch: false,
