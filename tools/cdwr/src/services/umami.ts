@@ -233,10 +233,10 @@ export async function createWebsite(
   conn: UmamiConnection,
   site: { name: string; domain: string; teamId: string }
 ): Promise<UmamiWebsite> {
-  const response = await request(conn, '/websites', {
-    method: 'POST',
-    body: site
-  });
+  const response = await worded(
+    'the website creation',
+    request(conn, '/websites', { method: 'POST', body: site })
+  );
   if (!response.ok) throw refused('the website creation', response);
   return toWebsite(
     websiteSchema.parse(parseUmamiJson('websites', response.text))
@@ -269,10 +269,12 @@ export async function setShare(
   websiteId: string,
   slug: string
 ): Promise<string> {
-  const response = await request(
-    conn,
-    `/websites/${encodeURIComponent(websiteId)}`,
-    { method: 'POST', body: { shareId: slug } }
+  const response = await worded(
+    'the share creation',
+    request(conn, `/websites/${encodeURIComponent(websiteId)}`, {
+      method: 'POST',
+      body: { shareId: slug }
+    })
   );
   if (!response.ok) throw refused('the share creation', response);
   const { shareId } = z
