@@ -51,7 +51,6 @@ describe('generateAppChangelogs', () => {
       releases: new Map([
         ['api', { version: '0.0.1', previousVersion: '0.0.0' }]
       ]),
-      createRelease: false,
       firstRef
     });
 
@@ -65,7 +64,7 @@ describe('generateAppChangelogs', () => {
     // given one. The workflow tags before generating, so that tag is this very
     // release and every range comes back empty. `from` is also a single global
     // option, hence one call per app.
-    await generateAppChangelogs({ releases, createRelease: false });
+    await generateAppChangelogs({ releases });
 
     expect(mockReleaseChangelog).toHaveBeenCalledTimes(2);
     expect(mockReleaseChangelog).toHaveBeenCalledWith(
@@ -83,7 +82,7 @@ describe('generateAppChangelogs', () => {
   });
 
   it('should never write files, commit, tag or push', async () => {
-    await generateAppChangelogs({ releases, createRelease: false });
+    await generateAppChangelogs({ releases });
 
     expect(mockReleaseChangelog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -98,27 +97,25 @@ describe('generateAppChangelogs', () => {
   it('should drop apps whose range produced nothing', async () => {
     withContents({ web: '### Fixes\n- a' });
 
-    const result = await generateAppChangelogs({
-      releases,
-      createRelease: false
-    });
+    const result = await generateAppChangelogs({ releases });
 
     expect([...result.keys()]).toEqual(['web']);
   });
 
-  it('should create GitHub releases without forcing generation', async () => {
-    await generateAppChangelogs({ releases, createRelease: true });
+  it('should return version, tag and markdown per app', async () => {
+    withContents({ web: ' ### Fixes\n- a ' });
 
-    expect(mockReleaseChangelog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        createRelease: 'github',
-        forceChangelogGeneration: false
-      })
-    );
+    const result = await generateAppChangelogs({ releases });
+
+    expect(result.get('web')).toEqual({
+      version: '1.1.5-preview.467.3',
+      tag: 'web-1.1.5-preview.467.3',
+      markdown: '### Fixes\n- a'
+    });
   });
 
-  it('should render without a release when previewing', async () => {
-    await generateAppChangelogs({ releases, createRelease: false });
+  it('should always render without creating a release', async () => {
+    await generateAppChangelogs({ releases });
 
     expect(mockReleaseChangelog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -129,10 +126,7 @@ describe('generateAppChangelogs', () => {
   });
 
   it('should do nothing when there is nothing to release', async () => {
-    const result = await generateAppChangelogs({
-      releases: new Map(),
-      createRelease: false
-    });
+    const result = await generateAppChangelogs({ releases: new Map() });
 
     expect(result.size).toBe(0);
     expect(mockReleaseChangelog).not.toHaveBeenCalled();

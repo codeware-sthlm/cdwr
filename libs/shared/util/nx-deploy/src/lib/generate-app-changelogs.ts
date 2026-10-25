@@ -13,18 +13,21 @@ export type AppChangelogOptions = {
   /** Release range per app, keyed by project name */
   releases: Map<string, AppChangelogRange>;
   /**
-   * Create a GitHub release per app. Production only — a release per preview
-   * push would bury the real ones. Previews surface the same contents as a
-   * pull request comment instead.
-   */
-  createRelease: boolean;
-  /**
    * Where an app's range starts when its previous release tag does not exist,
    * which is the case for an app released for the first time. Defaults to the
    * repository's root commit, so the first changelog lists everything that
    * ever touched the app.
    */
   firstRef?: () => string;
+};
+
+export type AppChangelog = {
+  /** Version the app was released as */
+  version: string;
+  /** Release tag, mirroring `releaseTag.pattern` of the `apps` group */
+  tag: string;
+  /** Rendered markdown */
+  markdown: string;
 };
 
 const tagExists = (tag: string): boolean => {
@@ -52,7 +55,8 @@ const rootCommit = (): string =>
  * committed changelog file has no audience and the branch is deliberately left
  * untouched by the release process. The contents are returned instead, and
  * `forceChangelogGeneration` is what lets nx render them without a file or a
- * remote release to write to.
+ * remote release to write to. Creating a GitHub release is left to the caller:
+ * nx skips the remote release when the apps group writes no changelog file.
  *
  * The range is nx's default: the app's last release tag up to `HEAD`. In a
  * preview lane that tag is the previous preview deploy, so the result reads as
@@ -63,15 +67,15 @@ const rootCommit = (): string =>
  * — so a shared lib or workspace config change deploys the app and renders an
  * empty changelog. Those are dropped rather than reported as "no changes".
  *
- * @param options - Released versions and whether to create GitHub releases
- * @returns Map of app project name to rendered markdown, skipping empty entries
+ * @param options - Released versions per app
+ * @returns Map of app project name to version, tag and rendered markdown,
+ * skipping empty entries
  */
 export const generateAppChangelogs = async ({
   releases,
-  createRelease,
   firstRef = rootCommit
-}: AppChangelogOptions): Promise<Map<string, string>> => {
-  const changelogs = new Map<string, string>();
+}: AppChangelogOptions): Promise<Map<string, AppChangelog>> => {
+  const changelogs = new Map<string, AppChangelog>();
 
   // One call per app: `from` is a single global option, but every app starts
   // from its own tag. Without it nx resolves `from` as the newest matching tag
@@ -95,8 +99,8 @@ export const generateAppChangelogs = async ({
           dependentProjects: []
         }
       },
-      createRelease: createRelease ? 'github' : false,
-      forceChangelogGeneration: !createRelease,
+      createRelease: false,
+      forceChangelogGeneration: true,
       // The workflow runs on a detached HEAD and owns tagging itself. Any git
       // write here fails the step outright, so all of them stay off.
       gitCommit: false,
@@ -107,7 +111,11 @@ export const generateAppChangelogs = async ({
 
     const contents = projectChangelogs?.[projectName]?.contents?.trim();
     if (contents) {
-      changelogs.set(projectName, contents);
+      changelogs.set(projectName, {
+        version,
+        tag: `${projectName}-${version}`,
+        markdown: contents
+      });
     }
   }
 
