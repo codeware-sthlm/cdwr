@@ -192,6 +192,26 @@ describe('agent deploy', () => {
     expect(JSON.stringify(ui.printed)).toContain('--tag');
   });
 
+  it('unpauses and rethrows when the idle wait itself fails', async () => {
+    run.mockImplementation(async (_bin, a) => {
+      const cmd = a.slice(3).join(' ');
+      if (cmd.includes('State.Running')) return ok('true\n');
+      if (cmd.endsWith('test -e /home/agent/.cdwr/agent-queue/paused')) {
+        throw fail(1);
+      }
+      if (cmd.endsWith('test -e /home/agent/.cdwr/agent-queue/lock')) {
+        throw new CommandError('ssh', '', 'connection lost', 255);
+      }
+      return ok();
+    });
+    const exit = await deploy(args);
+    expect(exit).toBe(EXIT.failed);
+    const steps = calls();
+    expect(steps.at(-1)).toContain('rm -f');
+    expect(steps.some((s) => s.includes('pull'))).toBe(false);
+    expect(JSON.stringify(ui.printed)).toContain('connection lost');
+  });
+
   const implementLock = (pidFile: () => ReturnType<typeof ok>) => {
     run.mockImplementation(async (_bin, a) => {
       const cmd = a.slice(3).join(' ');
