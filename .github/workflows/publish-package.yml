@@ -1,6 +1,12 @@
 # Semi-automated Nx releases where pre-created tags gets published to NPM.
 # The tags has been created locally using `nx release-cli`.
 #
+# `nx release-cli` creates the GitHub release together with its tag through the
+# API, which fires only `release: published`, not a tag push. The release event
+# is therefore the real trigger; the tag push covers tags pushed by hand.
+# Both resolve to the same tag, so the concurrency group keeps them from
+# publishing twice.
+#
 # This workflow will publish to NPM:
 #  - a single package identified by a pushed tag
 #  - a single package identified by a tag given when manually triggered
@@ -21,7 +27,7 @@ on:
       - "!web-*"
       - "!umami-*"
 
-  # Fall back if tag push doesn't fire, since tags and releases are created together by `nx release-cli`
+  # The trigger for `nx release-cli`, which creates tag and release together
   release:
     types: [published]
 
@@ -46,14 +52,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # Apps are versioned by the deployment workflow and never published, but their
+    # releases fire this event too; keep in step with the `apps` release group in nx.json
+    if: >-
+      github.event_name != 'release' ||
+      !(startsWith(github.event.release.tag_name, 'builder-') ||
+      startsWith(github.event.release.tag_name, 'cms-') ||
+      startsWith(github.event.release.tag_name, 'web-') ||
+      startsWith(github.event.release.tag_name, 'umami-'))
+
     permissions:
       contents: read
       id-token: write # npm provenance
 
-    # Avoid duplicate runs if both push and release fire
+    # Avoid duplicate runs if both push and release fire for the same tag
     concurrency:
-      group: publish-${{ github.event.release.tag_name || github.ref || github.run_id }}
-      cancel-in-progress: true
+      group: publish-${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name || github.run_id }}
+      # Queue, never cancel: a publish cut off midway is worse than a duplicate run, which nx skips
+      cancel-in-progress: false
 
     steps:
       - name: Resolve context (tag or pending)
@@ -142,27 +158,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Verify a package by tag is actually configured for publishing
+      # Verify a package by tag is actually configured for publishing;
+      # the steps that follow only run when it is
       - name: Verify publishable package by tag
-        if: steps.ctx.outputs.mode == 'tag'
+        id: verify
         run: |
-          if [ "${{ steps.group.outputs.is_group }}" = "true" ]; then
+          if [ "${{ steps.ctx.outputs.mode }}" != "tag" ]; then
+            echo "publishable=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.group.outputs.is_group }}" = "true" ]; then
             echo "'${{ steps.ctx.outputs.package }}' belongs to fixed release group '${{ steps.group.outputs.group }}' - will publish: ${{ steps.group.outputs.projects }}"
+            echo "publishable=true" >> "$GITHUB_OUTPUT"
           else
             PROJECTS=$(pnpm nx show projects --with-target nx-release-publish)
             if echo "$PROJECTS" | grep -qx "^${{ steps.ctx.outputs.package }}$"; then
               echo "Package '${{ steps.ctx.outputs.package }}' is valid for publishing"
+              echo "publishable=true" >> "$GITHUB_OUTPUT"
             else
               echo "'${{ steps.ctx.outputs.package }}' is not a project configured for publishing"
               echo "Publishable projects:"
               echo "$PROJECTS"
               echo "Skipping publish"
-              exit 0
+              echo "publishable=false" >> "$GITHUB_OUTPUT"
             fi
           fi
 
       # Build package (or all group members) by tag, or all publishable packages
       - name: Build
+        if: steps.verify.outputs.publishable == 'true'
         run: |
           if [ "${{ steps.ctx.outputs.mode }}" = "tag" ]; then
             pnpm nx run-many -t build -p "${{ steps.group.outputs.projects }}"
@@ -170,10 +192,12 @@ jobs:
             pnpm nx show projects --with-target nx-release-publish | xargs -t pnpm nx run-many -t build -p
           fi
 
+      # Trusted publishing (OIDC) needs npm >= 11.5.1, newer than the one bundled with Node 22
       # Publish package (or fixed group) by tag, or pending packages if any
       # Auth is via npm Trusted Publishing (OIDC) - no NODE_AUTH_TOKEN needed,
       # relies on the id-token: write permission above.
       - name: Publish
+        if: steps.verify.outputs.publishable == 'true'
         run: |
           if [ "${{ steps.ctx.outputs.mode }}" = "tag" ]; then
             if [ "${{ steps.group.outputs.is_group }}" = "true" ]; then
