@@ -39,6 +39,8 @@ export async function sendSignupEmails(
 /**
  * Send one mail and never throw. A failure is logged with the mail's label,
  * never its content, which may carry a token.
+ *
+ * @returns Whether the mail was sent
  */
 export async function sendPlatformMail(
   payload: Payload,
@@ -47,12 +49,14 @@ export async function sendPlatformMail(
     mail,
     to
   }: { to: string | Array<string>; mail: PlatformMail; label: string }
-): Promise<void> {
+): Promise<boolean> {
   try {
     await payload.sendEmail({ to, ...mail });
+    return true;
   } catch (error) {
     payload.logger.error(
       `[signupEmails] Could not send the ${label} mail: ${String(error)}`
     );
+    return false;
   }
 }

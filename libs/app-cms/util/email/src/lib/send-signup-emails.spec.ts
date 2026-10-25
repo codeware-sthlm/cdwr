@@ -80,7 +80,7 @@ describe('sendPlatformMail', () => {
         mail: mail('Exists'),
         label: 'account-exists'
       })
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
 
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining(
