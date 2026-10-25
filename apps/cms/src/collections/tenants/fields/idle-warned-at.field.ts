@@ -2,8 +2,8 @@ import { systemUserAccess } from '@codeware/app-cms/util/access';
 import type { DateField } from 'payload';
 
 /**
- * When the workspace's admins were warned, or the platform was told it needs
- * deprovisioning by hand. Written by the nightly cleanup, editable by system users only.
+ * When the workspace's admins were warned that it will be deleted. Written by
+ * the nightly cleanup, editable by system users only.
  */
 export const idleWarnedAtField: DateField = {
   name: 'idleWarnedAt',
@@ -20,8 +20,8 @@ export const idleWarnedAtField: DateField = {
     readOnly: true,
     date: { pickerAppearance: 'dayAndTime' },
     description: {
-      en: "When the workspace's admins were warned, or the platform was told it needs deprovisioning by hand. Set by the nightly cleanup.",
-      sv: 'När arbetsytans administratörer varnades, eller plattformen fick veta att den behöver avvecklas för hand. Sätts av den nattliga städningen.'
+      en: "When the workspace's admins were warned that it will be deleted for never having a page. Set by the nightly cleanup.",
+      sv: 'När arbetsytans administratörer varnades för att den tas bort eftersom den aldrig fått någon sida. Sätts av den nattliga städningen.'
     }
   }
 };

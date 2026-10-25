@@ -6,7 +6,13 @@ import {
   sendPlatformMail
 } from '@codeware/app-cms/util/email';
 import type { Tenant, User } from '@codeware/shared/util/payload-types';
-import type { BasePayload, TaskConfig } from 'payload';
+import {
+  commitTransaction,
+  createLocalReq,
+  initTransaction,
+  killTransaction
+} from 'payload';
+import type { BasePayload, PayloadRequest, TaskConfig } from 'payload';
 
 import { workspaceHasPages } from '../security/first-site-tenant';
 
@@ -22,13 +28,18 @@ const tenantIdOf = (tenant: number | Tenant) =>
   typeof tenant === 'number' ? tenant : tenant.id;
 
 /** The users that belong to the workspace, with their other workspaces */
-async function workspaceUsers(payload: BasePayload, tenantId: number) {
+async function workspaceUsers(
+  payload: BasePayload,
+  tenantId: number,
+  req?: PayloadRequest
+) {
   const { docs } = await payload.find({
     collection: 'users',
     where: { 'tenants.tenant': { equals: tenantId } },
     depth: 0,
     pagination: false,
-    overrideAccess: true
+    overrideAccess: true,
+    req
   });
 
   return docs.map((user) => {
@@ -80,41 +91,77 @@ async function warnAdmins(
 }
 
 /**
- * Remove the workspace, then the users who belonged to nothing else.
+ * Remove the workspace, then the users who belonged to nothing else, in one
+ * transaction: a failure part way leaves everything as it was.
  *
- * The users are collected first: deleting the workspace makes the
- * multi-tenant plugin strip it from their memberships, after which a user who
- * only had this workspace can no longer be told from any other.
+ * The tenant is read again first, since it may have got a page or been
+ * activated since the sweep queried it. The users are collected before the
+ * delete: deleting the workspace makes the multi-tenant plugin strip it from
+ * their memberships, after which a user who only had this workspace can no
+ * longer be told from any other.
  *
- * @returns Number of users deleted
+ * @returns Number of users deleted, or `null` when the workspace should stay
  */
 async function deleteWorkspace(
   payload: BasePayload,
-  tenantId: number
-): Promise<number> {
-  const orphans = (await workspaceUsers(payload, tenantId))
-    .filter(({ hasOtherWorkspace, user }) => {
-      return !hasOtherWorkspace && user.role !== 'system-user';
-    })
-    .map(({ user }) => user.id);
+  tenantId: number,
+  idleDays: number,
+  now: Date
+): Promise<number | null> {
+  const req = await createLocalReq({ context: CONTEXT }, payload);
+  await initTransaction(req);
 
-  await payload.delete({
-    collection: 'tenants',
-    id: tenantId,
-    overrideAccess: true,
-    context: CONTEXT
-  });
-
-  for (const id of orphans) {
-    await payload.delete({
-      collection: 'users',
-      id,
+  try {
+    const fresh = await payload.findByID({
+      collection: 'tenants',
+      id: tenantId,
+      depth: 0,
       overrideAccess: true,
-      context: CONTEXT
+      req
     });
-  }
+    const hasPages = await workspaceHasPages(payload, tenantId, req);
 
-  return orphans.length;
+    if (
+      decideIdleWorkspace({ ...fresh, hasPages }, idleDays, now).action !==
+      'delete'
+    ) {
+      await commitTransaction(req);
+      payload.logger.info(
+        `[cleanUpIdleWorkspaces] Workspace ${tenantId} changed since it was selected, not deleted`
+      );
+      return null;
+    }
+
+    const orphans = (await workspaceUsers(payload, tenantId, req))
+      .filter(({ hasOtherWorkspace, user }) => {
+        return !hasOtherWorkspace && user.role !== 'system-user';
+      })
+      .map(({ user }) => user.id);
+
+    await payload.delete({
+      collection: 'tenants',
+      id: tenantId,
+      overrideAccess: true,
+      context: CONTEXT,
+      req
+    });
+
+    for (const id of orphans) {
+      await payload.delete({
+        collection: 'users',
+        id,
+        overrideAccess: true,
+        context: CONTEXT,
+        req
+      });
+    }
+
+    await commitTransaction(req);
+    return orphans.length;
+  } catch (error) {
+    await killTransaction(req);
+    throw error;
+  }
 }
 
 /**
@@ -155,11 +202,11 @@ export async function sweepIdleWorkspaces(
   const unwarned: Array<{ name: string; reason: 'no-admin' | 'mail-failed' }> =
     [];
 
-  const markHandled = (id: number) =>
+  const mark = (id: number, field: 'idleWarnedAt' | 'idleReportedAt') =>
     payload.update({
       collection: 'tenants',
       id,
-      data: { idleWarnedAt: now.toISOString() },
+      data: { [field]: now.toISOString() },
       overrideAccess: true,
       context: CONTEXT
     });
@@ -168,11 +215,11 @@ export async function sweepIdleWorkspaces(
     try {
       const hasPages = await workspaceHasPages(payload, tenant.id);
 
-      if (hasPages && tenant.idleWarnedAt) {
+      if (hasPages && (tenant.idleWarnedAt || tenant.idleReportedAt)) {
         await payload.update({
           collection: 'tenants',
           id: tenant.id,
-          data: { idleWarnedAt: null },
+          data: { idleWarnedAt: null, idleReportedAt: null },
           overrideAccess: true,
           context: CONTEXT
         });
@@ -192,7 +239,7 @@ export async function sweepIdleWorkspaces(
           decision.deleteOn
         );
         if (sent) {
-          await markHandled(tenant.id);
+          await mark(tenant.id, 'idleWarnedAt');
           warned.push({ name: tenant.name, deleteOn: decision.deleteOn });
         } else {
           // Never marked, so it can never reach the delete branch
@@ -205,10 +252,17 @@ export async function sweepIdleWorkspaces(
           });
         }
       } else if (decision.action === 'delete') {
-        const usersDeleted = await deleteWorkspace(payload, tenant.id);
-        deleted.push({ name: tenant.name, usersDeleted });
+        const usersDeleted = await deleteWorkspace(
+          payload,
+          tenant.id,
+          idleDays,
+          now
+        );
+        if (usersDeleted !== null) {
+          deleted.push({ name: tenant.name, usersDeleted });
+        }
       } else if (decision.action === 'report') {
-        await markHandled(tenant.id);
+        await mark(tenant.id, 'idleReportedAt');
         provisioned.push({ name: tenant.name });
       }
     } catch (error) {
@@ -251,9 +305,8 @@ export async function sweepIdleWorkspaces(
 /**
  * Nightly cleanup of self-serve workspaces that never got a page.
  *
- * Runs through the nightly queue like the other sweeps. Only the host
- * schedules it, so tenant apps never queue a second run and the links in the
- * mails are the host's.
+ * Runs on the `host-nightly` queue, which only the host schedules and runs, so
+ * a tenant app never claims it and the links in the mails are the host's.
  */
 export const cleanUpIdleWorkspacesTask: TaskConfig<{
   input: Record<string, never>;
@@ -267,7 +320,7 @@ export const cleanUpIdleWorkspacesTask: TaskConfig<{
 }> = {
   slug: 'clean-up-idle-workspaces',
   label: 'Warn and delete idle workspaces',
-  // Scheduled by the host only, in `payload.config.ts`
+  // Scheduled and run by the host only, in `payload.config.ts`
   handler: async ({ req }) => {
     if (getEnv().APP_MODE.type !== 'host') {
       return { output: { skipped: 'tenant-mode' as const } };
