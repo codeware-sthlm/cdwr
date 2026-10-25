@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../node_modules/.vite/libs/shared/theme',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../../tsconfig.base.json'] })],
   test: {
     name: 'shared-theme',
     watch: false,
