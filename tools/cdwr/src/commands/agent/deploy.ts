@@ -9,6 +9,7 @@ import { CommandError, run, sleep } from '../../services/shell';
 
 import {
   COMPOSE_SOURCE,
+  CONTAINER,
   DEFAULT_WAIT_MINUTES,
   IMAGE_WORKFLOW,
   IMPLEMENT_LOCK,
@@ -170,17 +171,21 @@ export default defineCommand({
     const created = runs && !alreadyPaused;
     if (created) await ssh(pause(host));
 
-    const failed = (error: unknown) => {
+    // Only a pause made here is lifted again; false when the unpause did not go through
+    const lift = async (): Promise<boolean> => {
+      if (!created) return true;
+      return succeeds(unpause(host)).catch(() => false);
+    };
+    const stillPaused = `The queue may still be paused: run \`ssh ${host} docker exec ${CONTAINER} rm -f ${PAUSED}\``;
+    const failed = (error: unknown, resumed: boolean) => {
       const reason = error instanceof Error ? error.message : String(error);
       return new CliError(
         `Deploy of ${tag} failed: ${reason}`,
         EXIT.failed,
-        `Run the same deploy again, or pass --tag with the previous tag${created ? '; the queue was resumed' : ''}`
+        resumed
+          ? `Run the same deploy again, or pass --tag with the previous tag${created ? '; the queue was resumed' : ''}`
+          : `${stillPaused}, then run the same deploy again or pass --tag with the previous tag`
       );
-    };
-    // Only a pause made here is lifted again
-    const lift = async () => {
-      if (created) await ssh(unpause(host)).catch(() => undefined);
     };
 
     if (runs) {
@@ -199,15 +204,16 @@ export default defineCommand({
           (ok) => (ok ? 'The queue is idle' : 'The queue stayed busy')
         );
       } catch (error) {
-        await lift();
-        throw failed(error);
+        throw failed(error, await lift());
       }
       if (!idle) {
-        await lift();
+        const resumed = await lift();
         throw new CliError(
           `The queue was still busy after ${wait} minutes; nothing was changed`,
           EXIT.failed,
-          'Try again later, or raise --wait'
+          resumed
+            ? 'Try again later, or raise --wait'
+            : `${stillPaused}, then try again later or raise --wait`
         );
       }
     }
@@ -231,8 +237,7 @@ export default defineCommand({
       );
     } catch (error) {
       // The old container if up never ran, else the new one; either way the queue must not stay paused
-      await lift();
-      throw failed(error);
+      throw failed(error, await lift());
     }
 
     let resumed = !created;
