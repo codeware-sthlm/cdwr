@@ -280,9 +280,6 @@ jobs:
           # With a custom cache directory the daemon fails to record task runs
           # (SQLite FOREIGN KEY error, nrwl/nx#37118) and exits 1 after a green run
           NX_DAEMON: false
-          # Plugins in-process: without the daemon each plugin worker opens its config files in
-          # parallel, which runs out of file handles (EMFILE) on macOS and Windows runners
-          NX_ISOLATE_PLUGINS: false
           NX_PERF_LOGGING: false
           # Fix out-of-memory issue on macOS runners
           NODE_OPTIONS: --max_old_space_size=4096
