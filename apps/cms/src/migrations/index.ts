@@ -86,6 +86,7 @@ import * as migration_20261015_105327_cod_562_signup from './20261015_105327_cod
 import * as migration_20261016_190522_cod_577_stats_share_id from './20261016_190522_cod_577_stats_share_id';
 import * as migration_20261018_194351_tenants_stats_team_id from './20261018_194351_tenants_stats_team_id';
 import * as migration_20261018_224435_users_stats_account from './20261018_224435_users_stats_account';
+import * as migration_20261025_215835_idle_workspace_cleanup from './20261025_215835_idle_workspace_cleanup';
 
 export const migrations = [
   {
@@ -527,5 +528,10 @@ export const migrations = [
     up: migration_20261018_224435_users_stats_account.up,
     down: migration_20261018_224435_users_stats_account.down,
     name: '20261018_224435_users_stats_account'
+  },
+  {
+    up: migration_20261025_215835_idle_workspace_cleanup.up,
+    down: migration_20261025_215835_idle_workspace_cleanup.down,
+    name: '20261025_215835_idle_workspace_cleanup'
   }
 ];

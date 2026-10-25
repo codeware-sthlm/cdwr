@@ -516,6 +516,10 @@ export interface Tenant {
    */
   status: 'pending' | 'active';
   /**
+   * When the workspace's admins were warned that it will be deleted for never having a page. Set by the nightly cleanup.
+   */
+  idleWarnedAt?: string | null;
+  /**
    * The name this workspace is deployed under: its folder in Infisical and the end of its Fly app names, so "demo" deploys as "cdwr-cms-demo". Lowercase letters, digits and hyphens. It cannot be changed once saved, because a new name would leave the old apps and settings behind.
    */
   deployment?: string | null;
@@ -2153,6 +2157,10 @@ export interface PlatformSetting {
    */
   signupNotifyEmail?: string | null;
   /**
+   * Self-serve workspaces that still have no page this many days after signup are deleted, after a warning to their admins a week before. Leave empty to turn the cleanup off.
+   */
+  idleWorkspaceDays?: number | null;
+  /**
    * Domains the host application is reachable on, in addition to its .fly.dev address — which keeps working and stays useful for support. Add the domain here first, then create the DNS records shown after saving. Takes effect after a restart.
    */
   domains?:
@@ -3233,6 +3241,7 @@ export interface PlatformLabelsSelect<T extends boolean = true> {
 export interface PlatformSettingsSelect<T extends boolean = true> {
   signupOpen?: T;
   signupNotifyEmail?: T;
+  idleWorkspaceDays?: T;
   domains?:
     | T
     | {
@@ -3528,6 +3537,7 @@ export interface TenantsSelect<T extends boolean = true> {
   supportedLocales?: T;
   slug?: T;
   status?: T;
+  idleWarnedAt?: T;
   deployment?: T;
   domains?:
     | T
