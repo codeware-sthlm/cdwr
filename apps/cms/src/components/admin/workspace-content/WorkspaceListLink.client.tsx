@@ -14,8 +14,9 @@ type Props = {
 
 /**
  * A link to a list filtered on a workspace. The list also keeps to the
- * workspace picked in the selector, so a plain click selects this one first;
- * otherwise the list could come up empty next to a count that says otherwise.
+ * workspace picked in the selector, so following the link selects this one
+ * first; otherwise the list could come up empty next to a count that says
+ * otherwise. The selection is a cookie, so a new tab gets it too.
  */
 export const WorkspaceListLink: React.FC<Props> = ({
   ariaLabel,
@@ -27,8 +28,11 @@ export const WorkspaceListLink: React.FC<Props> = ({
   const router = useRouter();
   const { setTenant } = useTenantSelection();
 
+  const select = () => setTenant({ id: tenantId, refresh: false });
+
   const onClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    // Leave new-tab and other modified clicks to the browser
+    select();
+    // New-tab and other modified clicks stay with the browser
     if (
       event.button !== 0 ||
       event.metaKey ||
@@ -39,7 +43,6 @@ export const WorkspaceListLink: React.FC<Props> = ({
       return;
     }
     event.preventDefault();
-    setTenant({ id: tenantId, refresh: false });
     router.push(href);
   };
 
@@ -49,6 +52,9 @@ export const WorkspaceListLink: React.FC<Props> = ({
       className={className}
       aria-label={ariaLabel}
       onClick={onClick}
+      // Middle-click and "Open in new tab" never reach onClick
+      onAuxClick={select}
+      onContextMenu={select}
     >
       {children}
     </a>
