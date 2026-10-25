@@ -263,7 +263,15 @@ jobs:
 
       - name: Run affected e2e tests
         id: e2e-run
-        run: pnpm nx run-many -t e2e --projects ${{ env.projects }} -c ${{ matrix.configuration }} --exclude "${{ matrix.skip-projects }}"
+        # bash on every OS, so the macOS open-file limit can be raised in the same shell
+        shell: bash
+        run: |
+          # macOS allows 256 open files per process, which Nx's project graph can exceed
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            ulimit -n 65536
+            echo "Open-file limit: $(ulimit -n)"
+          fi
+          pnpm nx run-many -t e2e --projects ${{ env.projects }} -c ${{ matrix.configuration }} --exclude "${{ matrix.skip-projects }}"
         timeout-minutes: ${{ matrix.timeout }}
         env:
           CDWR_E2E_PACKAGE_MANAGER: ${{ matrix.pm }}
@@ -272,6 +280,9 @@ jobs:
           # With a custom cache directory the daemon fails to record task runs
           # (SQLite FOREIGN KEY error, nrwl/nx#37118) and exits 1 after a green run
           NX_DAEMON: false
+          # Plugins in-process: without the daemon each plugin worker opens its config files in
+          # parallel, which runs out of file handles (EMFILE) on macOS and Windows runners
+          NX_ISOLATE_PLUGINS: false
           NX_PERF_LOGGING: false
           # Fix out-of-memory issue on macOS runners
           NODE_OPTIONS: --max_old_space_size=4096
@@ -325,6 +336,10 @@ jobs:
         run: |
           echo "# E2E Test Results Summary" > summary.md
           echo "" >> summary.md
+          if [ "$E2E_RESULT" = "failure" ]; then
+            echo "❌ **At least one E2E job failed**" >> summary.md
+            echo "" >> summary.md
+          fi
           echo "**Trigger:** \`$REASON\`" >> summary.md
 
           if [ "$E2E_ENABLED" != "true" ]; then
@@ -386,3 +401,10 @@ jobs:
 
       - name: Output summary
         run: cat summary.md >> $GITHUB_STEP_SUMMARY
+
+      # The summary is the run's last word, so a failed matrix job must fail it too
+      - name: Fail on a failed E2E job
+        if: needs.e2e.result == 'failure'
+        run: |
+          echo "::error::At least one E2E job failed"
+          exit 1
