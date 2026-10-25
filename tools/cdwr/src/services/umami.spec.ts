@@ -320,6 +320,12 @@ describe('Umami client when the service is waking', () => {
     await expect(addTeamUser(conn, 't1', 'u1', 'team-member')).rejects.toThrow(
       'Umami refused the team member: 502 Bad gateway'
     );
+    await expect(
+      createWebsite(conn, { name: 'A', domain: 'a.se', teamId: 't' })
+    ).rejects.toThrow('Umami refused the website creation: 502 Bad gateway');
+    await expect(setShare(conn, 'w1', 'abc')).rejects.toThrow(
+      'Umami refused the share creation: 502 Bad gateway'
+    );
   });
 
   it('says Umami kept answering while waking when a read runs out of retries', async () => {
