@@ -66,8 +66,9 @@ permissions:
 concurrency:
   # One deployment per pull request, and one per branch otherwise. A newer push to a pull request
   # cancels the preview deploy in flight, so the latest commit wins; a production deploy on main is
-  # never cut off. Keyed on the PR number: a fork's PR from its own `main` must not share main's group.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}
+  # never cut off. Keyed on the PR number, a manual preview dispatch's too: a fork's PR from its own
+  # `main` must not share main's group, and a manual preview must not overlap that PR's own runs.
+  group: ${{ github.workflow }}-${{ (github.event.pull_request.number || github.event.inputs.environment == 'preview' && github.event.inputs.pr-number) && format('pr-{0}', github.event.pull_request.number || github.event.inputs.pr-number) || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
