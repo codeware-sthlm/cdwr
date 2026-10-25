@@ -49,11 +49,9 @@ export const formatSlug =
       return value;
     }
 
-    // Catch developer field name typos
+    // Catch developer field name typos; flattened so fields in unnamed tabs count
     if (
-      !collection.fields.find(
-        (field) => 'name' in field && field.name === fallbackField
-      )
+      !collection.flattenedFields.some((field) => field.name === fallbackField)
     ) {
       throw new Error(
         `formatSlug hook called with fallback field '${fallbackField}' that does not exist`
