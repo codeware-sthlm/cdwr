@@ -58,9 +58,15 @@ const createAppRelease = async (
     core.info(`Created release ${tag}`);
     return true;
   } catch (error) {
+    // 422 also covers validation failures; only a release that is there now counts
     if (hasStatus(error, 422)) {
-      core.info(`Release ${tag} exists`);
-      return true;
+      try {
+        await octokit.rest.repos.getReleaseByTag({ owner, repo, tag });
+        core.info(`Release ${tag} exists`);
+        return true;
+      } catch {
+        // Fall through to the warning below
+      }
     }
     core.warning(`Could not create release ${tag}: ${String(error)}`);
     return false;
