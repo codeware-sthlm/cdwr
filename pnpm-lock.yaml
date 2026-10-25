@@ -52,7 +52,7 @@ importers:
         version: 1.21.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@conform-to/zod':
         specifier: ^1.2.2
-        version: 1.21.1(zod@3.25.76)
+        version: 1.21.1(zod@4.6.7)
       '@epic-web/client-hints':
         specifier: ^1.3.5
         version: 1.3.9
@@ -283,10 +283,10 @@ importers:
         version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react-is@19.3.0)(react@19.3.0)(redux@5.0.1)
       remix-hono:
         specifier: ^0.0.16
-        version: 0.0.16(typescript@6.0.3)(zod@3.25.76)
+        version: 0.0.16(typescript@6.0.3)(zod@4.6.7)
       remix-utils:
         specifier: ^8.4.0
-        version: 8.8.0(@standard-schema/spec@1.1.0)(react-router@6.30.6(react@19.3.0))(react@19.3.0)(zod@3.25.76)
+        version: 8.8.0(@standard-schema/spec@1.1.0)(react-router@6.30.6(react@19.3.0))(react@19.3.0)(zod@4.6.7)
       replace-in-file:
         specifier: ^7.2.0
         version: 7.2.0
@@ -315,8 +315,8 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod:
-        specifier: ^3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.6.7
     devDependencies:
       '@babel/core':
         specifier: ^7.14.5
@@ -16339,6 +16339,9 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
+
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
@@ -18050,10 +18053,10 @@ snapshots:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
 
-  '@conform-to/zod@1.21.1(zod@3.25.76)':
+  '@conform-to/zod@1.21.1(zod@4.6.7)':
     dependencies:
       '@conform-to/dom': 1.21.1
-      zod: 3.25.76
+      zod: 4.6.7
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -27100,8 +27103,8 @@ snapshots:
       '@babel/parser': 7.29.9
       eslint: 9.20.1(jiti@2.7.0)(supports-color@5.5.0)
       hermes-parser: 0.25.1
-      zod: 3.25.76
-      zod-validation-error: 4.0.2(zod@3.25.76)
+      zod: 4.6.7
+      zod-validation-error: 4.0.2(zod@4.6.7)
     transitivePeerDependencies:
       - supports-color
 
@@ -32512,24 +32515,24 @@ snapshots:
       mdast-util-to-markdown: 2.2.0
       unified: 11.0.5
 
-  remix-hono@0.0.16(typescript@6.0.3)(zod@3.25.76):
+  remix-hono@0.0.16(typescript@6.0.3)(zod@4.6.7):
     dependencies:
       '@remix-run/server-runtime': 2.17.5(typescript@6.0.3)
       hono: 4.13.13
       pretty-cache-header: 1.0.0
     optionalDependencies:
-      zod: 3.25.76
+      zod: 4.6.7
     transitivePeerDependencies:
       - typescript
 
-  remix-utils@8.8.0(@standard-schema/spec@1.1.0)(react-router@6.30.6(react@19.3.0))(react@19.3.0)(zod@3.25.76):
+  remix-utils@8.8.0(@standard-schema/spec@1.1.0)(react-router@6.30.6(react@19.3.0))(react@19.3.0)(zod@4.6.7):
     dependencies:
       type-fest: 4.41.0
     optionalDependencies:
       '@standard-schema/spec': 1.1.0
       react: 19.3.0
       react-router: 6.30.6(react@19.3.0)
-      zod: 3.25.76
+      zod: 4.6.7
 
   remove-trailing-separator@1.1.0: {}
 
@@ -34933,10 +34936,12 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
-  zod-validation-error@4.0.2(zod@3.25.76):
+  zod-validation-error@4.0.2(zod@4.6.7):
     dependencies:
-      zod: 3.25.76
+      zod: 4.6.7
 
   zod@3.25.76: {}
+
+  zod@4.6.7: {}
 
   zwitch@2.0.4: {}
