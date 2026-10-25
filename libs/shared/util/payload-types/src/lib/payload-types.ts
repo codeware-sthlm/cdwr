@@ -281,6 +281,7 @@ export interface Config {
     tasks: {
       'anonymize-tour-signups': TaskAnonymizeTourSignups;
       'build-custom-component': TaskBuildCustomComponent;
+      'clean-up-idle-workspaces': TaskCleanUpIdleWorkspaces;
       'delete-expired-form-submissions': TaskDeleteExpiredFormSubmissions;
       inline: {
         input: unknown;
@@ -519,6 +520,10 @@ export interface Tenant {
    * When the workspace's admins were warned that it will be deleted for never having a page. Set by the nightly cleanup.
    */
   idleWarnedAt?: string | null;
+  /**
+   * When the platform was told this idle workspace has provisioning traces and needs deprovisioning by hand. Set by the nightly cleanup.
+   */
+  idleReportedAt?: string | null;
   /**
    * The name this workspace is deployed under: its folder in Infisical and the end of its Fly app names, so "demo" deploys as "cdwr-cms-demo". Lowercase letters, digits and hyphens. It cannot be changed once saved, because a new name would leave the old apps and settings behind.
    */
@@ -2777,6 +2782,7 @@ export interface PayloadJob {
           | 'inline'
           | 'anonymize-tour-signups'
           | 'build-custom-component'
+          | 'clean-up-idle-workspaces'
           | 'delete-expired-form-submissions';
         taskID: string;
         input?:
@@ -2815,6 +2821,7 @@ export interface PayloadJob {
         | 'inline'
         | 'anonymize-tour-signups'
         | 'build-custom-component'
+        | 'clean-up-idle-workspaces'
         | 'delete-expired-form-submissions'
       )
     | null;
@@ -3538,6 +3545,7 @@ export interface TenantsSelect<T extends boolean = true> {
   slug?: T;
   status?: T;
   idleWarnedAt?: T;
+  idleReportedAt?: T;
   deployment?: T;
   domains?:
     | T
@@ -4020,6 +4028,14 @@ export interface TaskBuildCustomComponent {
   input: {
     id: number;
   };
+  output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskClean-up-idle-workspaces".
+ */
+export interface TaskCleanUpIdleWorkspaces {
+  input?: unknown;
   output?: unknown;
 }
 /**
