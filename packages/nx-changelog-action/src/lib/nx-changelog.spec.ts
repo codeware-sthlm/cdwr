@@ -142,13 +142,28 @@ describe('nxChangelog', () => {
       expect(result.failedReleases).toEqual([]);
     });
 
-    it('should treat an already-exists conflict as existing', async () => {
-      createReleaseMock.mockRejectedValue({ status: 422 });
+    it('should treat a 422 as existing when the release is there on a second look', async () => {
+      getReleaseByTag
+        .mockRejectedValueOnce({ status: 404 })
+        .mockResolvedValueOnce({});
+      createReleaseMock.mockRejectedValueOnce({ status: 422 });
 
       const result = await nxChangelog(inputs({ createRelease: true }));
 
       expect(core.info).toHaveBeenCalledWith('Release cms-1.1.0 exists');
       expect(result.failedReleases).toEqual([]);
+    });
+
+    it('should report a 422 as failed when no release turns up', async () => {
+      getReleaseByTag.mockRejectedValue({ status: 404 });
+      createReleaseMock.mockRejectedValueOnce({ status: 422 });
+
+      const result = await nxChangelog(inputs({ createRelease: true }));
+
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining('cms-1.1.0')
+      );
+      expect(result.failedReleases).toEqual(['cms-1.1.0']);
     });
 
     it('should warn on a failing app and still create the others', async () => {
