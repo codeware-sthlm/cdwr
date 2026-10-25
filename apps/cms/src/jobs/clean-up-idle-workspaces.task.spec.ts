@@ -3,6 +3,12 @@ import {
   renderIdleWorkspaceSummaryMail,
   sendPlatformMail
 } from '@codeware/app-cms/util/email';
+import {
+  commitTransaction,
+  createLocalReq,
+  initTransaction,
+  killTransaction
+} from 'payload';
 import type { BasePayload } from 'payload';
 
 import { workspaceHasPages } from '../security/first-site-tenant';
@@ -23,6 +29,13 @@ jest.mock('@codeware/app-cms/util/email', () => ({
   sendPlatformMail: jest.fn()
 }));
 
+jest.mock('payload', () => ({
+  commitTransaction: jest.fn(),
+  createLocalReq: jest.fn(async () => ({ transactionID: 'tx' })),
+  initTransaction: jest.fn(),
+  killTransaction: jest.fn()
+}));
+
 jest.mock('../security/first-site-tenant', () => ({
   workspaceHasPages: jest.fn()
 }));
@@ -37,11 +50,13 @@ const send = jest.mocked(sendPlatformMail);
 const renderSummary = jest.mocked(renderIdleWorkspaceSummaryMail);
 
 const find = jest.fn();
+const findByID = jest.fn();
 const update = jest.fn();
 const remove = jest.fn();
 const logger = { error: jest.fn(), warn: jest.fn(), info: jest.fn() };
 const payload = {
   find,
+  findByID,
   update,
   delete: remove,
   logger,
@@ -84,6 +99,9 @@ describe('sweepIdleWorkspaces', () => {
     tenants = [];
     users = [];
     hasPages.mockResolvedValue(false);
+    findByID.mockImplementation(async ({ id }) =>
+      tenants.find((t) => t.id === id)
+    );
     send.mockResolvedValue(true);
     find.mockImplementation(async ({ collection }) => ({
       docs:
@@ -200,6 +218,56 @@ describe('sweepIdleWorkspaces', () => {
       expect.objectContaining({ collection: 'users', id: 11 })
     );
     expect(remove).toHaveBeenCalledTimes(2);
+    expect(initTransaction).toHaveBeenCalledTimes(1);
+    expect(commitTransaction).toHaveBeenCalledTimes(1);
+    expect(killTransaction).not.toHaveBeenCalled();
+    expect(createLocalReq).toHaveBeenCalledWith(
+      { context: { idleCleanup: true } },
+      payload
+    );
+    for (const [args] of remove.mock.calls) {
+      expect(args.req).toEqual({ transactionID: 'tx' });
+    }
+  });
+
+  it('does not delete a workspace that got a page after the query', async () => {
+    tenants = [tenant(1, { createdAt: ago(40), idleWarnedAt: ago(10) })];
+    users = [admin(10, [1])];
+    hasPages.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    const result = await sweepIdleWorkspaces(payload, NOW);
+
+    expect(result).toEqual({
+      warned: 0,
+      deleted: 0,
+      reported: 0,
+      unwarned: 0
+    });
+    expect(remove).not.toHaveBeenCalled();
+    expect(commitTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not delete a workspace activated after the query', async () => {
+    tenants = [tenant(1, { createdAt: ago(40), idleWarnedAt: ago(10) })];
+    findByID.mockResolvedValueOnce({ ...tenants[0], status: 'active' });
+
+    const result = await sweepIdleWorkspaces(payload, NOW);
+
+    expect(result).toMatchObject({ deleted: 0 });
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('rolls back when deleting a user fails', async () => {
+    tenants = [tenant(1, { createdAt: ago(40), idleWarnedAt: ago(10) })];
+    users = [admin(10, [1])];
+    remove.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('boom'));
+
+    const result = await sweepIdleWorkspaces(payload, NOW);
+
+    expect(result).toMatchObject({ deleted: 0 });
+    expect(killTransaction).toHaveBeenCalledTimes(1);
+    expect(commitTransaction).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledTimes(1);
   });
 
   it('reports a provisioned workspace to the summary only', async () => {
@@ -217,14 +285,14 @@ describe('sweepIdleWorkspaces', () => {
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 1,
-        data: { idleWarnedAt: NOW.toISOString() }
+        data: { idleReportedAt: NOW.toISOString() }
       })
     );
     expect(send).toHaveBeenCalledTimes(1);
   });
 
   it('reports a provisioned workspace once', async () => {
-    tenants = [tenant(1, { statsTeamId: 'team', idleWarnedAt: ago(1) })];
+    tenants = [tenant(1, { statsTeamId: 'team', idleReportedAt: ago(1) })];
 
     const result = await sweepIdleWorkspaces(payload, NOW);
 
@@ -238,7 +306,7 @@ describe('sweepIdleWorkspaces', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('clears the warning once the workspace has a page', async () => {
+  it('clears the markers once the workspace has a page', async () => {
     tenants = [tenant(1, { idleWarnedAt: ago(3) })];
     hasPages.mockResolvedValue(true);
 
@@ -251,7 +319,10 @@ describe('sweepIdleWorkspaces', () => {
       unwarned: 0
     });
     expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 1, data: { idleWarnedAt: null } })
+      expect.objectContaining({
+        id: 1,
+        data: { idleWarnedAt: null, idleReportedAt: null }
+      })
     );
     expect(send).not.toHaveBeenCalled();
   });

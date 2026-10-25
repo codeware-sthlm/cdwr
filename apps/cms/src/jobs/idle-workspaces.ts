@@ -4,6 +4,7 @@ export type IdleWorkspaceInput = {
   status: 'pending' | 'active';
   createdAt: string;
   idleWarnedAt?: string | null;
+  idleReportedAt?: string | null;
   statsTeamId?: string | null;
   statsWebsiteId?: string | null;
   hasPages: boolean;
@@ -47,7 +48,7 @@ export function decideIdleWorkspace(
 
   // Reported once; the task marks it so the next night stays quiet
   if (t.statsTeamId || t.statsWebsiteId) {
-    return t.idleWarnedAt
+    return t.idleReportedAt
       ? { action: 'none' }
       : { action: 'report', reason: 'provisioned' };
   }

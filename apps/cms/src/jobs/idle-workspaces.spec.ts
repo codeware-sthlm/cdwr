@@ -88,10 +88,19 @@ describe('decideIdleWorkspace', () => {
       'provisioned with a website, already reported',
       tenant({
         createdAt: daysAgo(40),
-        idleWarnedAt: daysAgo(10),
+        idleReportedAt: daysAgo(10),
         statsWebsiteId: 'site'
       }),
       { action: 'none' }
+    ],
+    [
+      'provisioned and warned but never reported',
+      tenant({
+        createdAt: daysAgo(40),
+        idleWarnedAt: daysAgo(10),
+        statsTeamId: 'team'
+      }),
+      { action: 'report', reason: 'provisioned' }
     ],
     [
       'warned a week minus a few seconds ago still deletes',
