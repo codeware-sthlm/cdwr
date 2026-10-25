@@ -7,7 +7,7 @@
 # Both resolve to the same tag, so the concurrency group keeps them from
 # publishing twice.
 #
-# This workflow will publish to NPM:
+# This workflow will stage on NPM, awaiting approval:
 #  - a single package identified by a pushed tag
 #  - a single package identified by a tag given when manually triggered
 #  - all pending packages when manually triggered without a tag
@@ -39,7 +39,7 @@ on:
         required: false
         type: string
       dry-run:
-        description: Do not publish anything, just see what would be published.
+        description: Do not stage anything, just see what would be staged.
         required: false
         default: false
         type: boolean
@@ -192,25 +192,54 @@ jobs:
             pnpm nx show projects --with-target nx-release-publish | xargs -t pnpm nx run-many -t build -p
           fi
 
-      # Trusted publishing (OIDC) needs npm >= 11.5.1, newer than the one bundled with Node 22
-      # Publish package (or fixed group) by tag, or pending packages if any
+      # Trusted publishers only allow staging: the package waits on npm until a
+      # human approves it with 2FA (`pnpm stage approve <id>`, or on npmjs.com).
       # Auth is via npm Trusted Publishing (OIDC) - no NODE_AUTH_TOKEN needed,
       # relies on the id-token: write permission above.
-      - name: Publish
+      - name: Stage
         if: steps.verify.outputs.publishable == 'true'
         run: |
+          set -euo pipefail
+
           if [ "${{ steps.ctx.outputs.mode }}" = "tag" ]; then
-            if [ "${{ steps.group.outputs.is_group }}" = "true" ]; then
-              pnpm nx release publish --groups "${{ steps.group.outputs.group }}" ${{ steps.ctx.outputs.dry_flag }}
-            else
-              pnpm nx release publish -p "${{ steps.ctx.outputs.package }}" ${{ steps.ctx.outputs.dry_flag }}
-            fi
+            PROJECTS=$(echo "${{ steps.group.outputs.projects }}" | tr ',' ' ')
           else
-            # Filter to publishable projects - an unfiltered `nx release publish`
-            # also matches the "apps" release group (cms, web), which is versioned
-            # for the deployment workflow but has no nx-release-publish target.
-            pnpm nx show projects --with-target nx-release-publish | xargs -t pnpm nx release publish ${{ steps.ctx.outputs.dry_flag }} -p
+            # Only projects with an nx-release-publish target - the "apps" release
+            # group (cms, web) is versioned for deployment and never published.
+            PROJECTS=$(pnpm nx show projects --with-target nx-release-publish)
           fi
+
+          for PROJECT in $PROJECTS; do
+            DIR=$(pnpm nx show project "$PROJECT" --json | jq -r '.targets["nx-release-publish"].options.packageRoot')
+            NAME=$(jq -r .name "$DIR/package.json")
+            VERSION=$(jq -r .version "$DIR/package.json")
+            # Skip a version npm already has, published or staged awaiting approval
+            if [ -n "$(npm view "$NAME@$VERSION" version 2>/dev/null || true)" ]; then
+              echo "$NAME@$VERSION is already on npm, skipping"
+              continue
+            fi
+            if pnpm stage list "$NAME" --json 2>/dev/null | grep -q "\"$VERSION\""; then
+              echo "$NAME@$VERSION is already staged, skipping"
+              continue
+            fi
+            # Prereleases never take the latest tag
+            DIST_TAG=latest
+            case "$VERSION" in *-*) DIST_TAG=next ;; esac
+            echo "Staging $PROJECT ($NAME@$VERSION) from $DIR"
+            pnpm stage publish "$DIR" --access public --tag "$DIST_TAG" --no-git-checks ${{ steps.ctx.outputs.dry_flag }} --json | tee "$RUNNER_TEMP/stage-$PROJECT.json"
+            {
+              if [ -n "${{ steps.ctx.outputs.dry_flag }}" ]; then
+                echo "### Dry run: would stage $PROJECT ($NAME@$VERSION, tag $DIST_TAG)"
+              else
+                echo "### Staged $PROJECT ($NAME@$VERSION, tag $DIST_TAG)"
+              fi
+              echo '```json'
+              cat "$RUNNER_TEMP/stage-$PROJECT.json"
+              echo '```'
+              if [ -z "${{ steps.ctx.outputs.dry_flag }}" ]; then
+                echo "Approve with \`pnpm stage approve <stage-id> --otp <code>\` or on npmjs.com; in a group, approve dependencies first (nx-payload before create-nx-payload)."
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
         env:
-          GH_TOKEN: ${{ github.token }}
           NPM_CONFIG_PROVENANCE: true

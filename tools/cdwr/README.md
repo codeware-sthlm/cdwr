@@ -133,6 +133,19 @@ request can get an app it did not change. The apps offered are the `apps` releas
 production runs from `main` and asks for confirmation. `--tenant` limits it to one tenant. The run's
 URL is reported, and is in the `--json` result.
 
+## Releasing packages
+
+`cdwr release` bumps versions, writes changelogs and tags. The publish itself is left to CI by
+default: the workflow stages each package on npm (`pnpm stage publish`) instead of publishing it,
+and the release waits there until you approve it with 2FA:
+
+```sh
+pnpm stage list                           # what is waiting
+pnpm stage approve <stage-id> --otp 123456
+```
+
+The stage ids are in the workflow's run summary. Approving is also a button on npmjs.com.
+
 ## Rotating the builder token
 
 `cdwr builder rotate-token --env production` rolls over the token the cms sends to the builder
