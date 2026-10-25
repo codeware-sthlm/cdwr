@@ -449,6 +449,12 @@ const customTranslationsSchema = z.object({
     themesRequired: z.string(),
     tourClosedForSignups: z.string(),
     urlInvalid: z.string()
+  }),
+  workspaceContent: z.object({
+    description: z.string(),
+    open: z.string(),
+    tab: z.string(),
+    unsaved: z.string()
   })
 });
 
@@ -978,6 +984,13 @@ Supported locales: {{locales}}`,
         'Select at least one theme, either a built-in one or one of your own.',
       tourClosedForSignups: 'This tour is closed for signups.',
       urlInvalid: 'Please enter a valid URL'
+    },
+    workspaceContent: {
+      description:
+        'Documents that belong to this workspace. Each count opens the list filtered on it.',
+      open: 'Open list',
+      tab: 'Content',
+      unsaved: 'Save the workspace to see its content.'
     }
   },
   sv: {
@@ -1510,6 +1523,13 @@ Språk som stöds: {{locales}}`,
         'Välj minst ett tema, antingen ett inbyggt eller ett eget.',
       tourClosedForSignups: 'Resan är stängd för anmälan.',
       urlInvalid: 'Ange en giltig webbadress'
+    },
+    workspaceContent: {
+      description:
+        'Dokument som hör till den här arbetsytan. Varje antal öppnar listan filtrerad på den.',
+      open: 'Öppna listan',
+      tab: 'Innehåll',
+      unsaved: 'Spara arbetsytan för att se dess innehåll.'
     }
   }
 };

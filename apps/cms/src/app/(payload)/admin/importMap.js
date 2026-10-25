@@ -52,6 +52,7 @@ import { default as default_771cb2e65e9273cda2ffcd43d25ab990 } from '@codeware/a
 import { default as default_9065a5455c84dbd8ae8166c5fe123c4e } from '@codeware/apps/cms/components/admin/provisioning/InfisicalField';
 import { default as default_ffad2613f85c06fc034f71b32fc48271 } from '@codeware/apps/cms/components/admin/domains/DomainsField';
 import { WatchTenantCollection as WatchTenantCollection_1d0591e3cf4f332c83a86da13a0de59a } from '@payloadcms/plugin-multi-tenant/client';
+import { default as default_2dd172341f33da56ab5ff8f8d4ed03c3 } from '@codeware/apps/cms/components/admin/workspace-content/WorkspaceContentView';
 import { default as default_bf7300e11b2198b95b954ecadbd3c445 } from '@codeware/apps/cms/components/admin/tour-signups/TourFilterField';
 import { default as default_c09482d250ab6d202838d64026b532c8 } from '@codeware/apps/cms/components/TourItineraryRowLabel';
 import { default as default_684605a40f01e98600c1b5e22bd87007 } from '@codeware/apps/cms/components/admin/tour-signups/TourSignupsField';
@@ -74,8 +75,8 @@ import { default as default_221d51dba9c38b54ffc2c5a41546df9e } from '@codeware/a
 import { default as default_a700d0a80144b7c5d2f038a255456e2a } from '@codeware/apps/cms/components/admin/PerfStatsLink.client';
 import { default as default_c095f786e1e127492688aadc0a2d34be } from '@codeware/apps/cms/components/admin/AboutDialogHost.client';
 import { GlobalViewRedirect as GlobalViewRedirect_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
-import { default as default_f1aa315e58788dc8980ed4850402b8bb } from '@codeware/apps/cms/components/admin/DomainMismatchNotice';
 import { default as default_8fe5ada615ff9a31e77d123d0245a9e6 } from '@codeware/apps/cms/components/admin/AfterLogin';
+import { default as default_f1aa315e58788dc8980ed4850402b8bb } from '@codeware/apps/cms/components/admin/DomainMismatchNotice';
 import { TenantSelector as TenantSelector_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
 import { default as default_67bc1060da1a6ada71dd6ec10de05eed } from '@codeware/apps/cms/components/admin/palette/PaletteProvider.client';
 import { TenantSelectionProvider as TenantSelectionProvider_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
@@ -195,6 +196,8 @@ export const importMap = {
     default_ffad2613f85c06fc034f71b32fc48271,
   '@payloadcms/plugin-multi-tenant/client#WatchTenantCollection':
     WatchTenantCollection_1d0591e3cf4f332c83a86da13a0de59a,
+  '@codeware/apps/cms/components/admin/workspace-content/WorkspaceContentView#default':
+    default_2dd172341f33da56ab5ff8f8d4ed03c3,
   '@codeware/apps/cms/components/admin/tour-signups/TourFilterField#default':
     default_bf7300e11b2198b95b954ecadbd3c445,
   '@codeware/apps/cms/components/TourItineraryRowLabel#default':
@@ -239,10 +242,10 @@ export const importMap = {
     default_c095f786e1e127492688aadc0a2d34be,
   '@payloadcms/plugin-multi-tenant/rsc#GlobalViewRedirect':
     GlobalViewRedirect_d6d5f193a167989e2ee7d14202901e62,
-  '@codeware/apps/cms/components/admin/DomainMismatchNotice#default':
-    default_f1aa315e58788dc8980ed4850402b8bb,
   '@codeware/apps/cms/components/admin/AfterLogin#default':
     default_8fe5ada615ff9a31e77d123d0245a9e6,
+  '@codeware/apps/cms/components/admin/DomainMismatchNotice#default':
+    default_f1aa315e58788dc8980ed4850402b8bb,
   '@payloadcms/plugin-multi-tenant/rsc#TenantSelector':
     TenantSelector_d6d5f193a167989e2ee7d14202901e62,
   '@codeware/apps/cms/components/admin/palette/PaletteProvider.client#default':
