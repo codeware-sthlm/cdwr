@@ -13,6 +13,7 @@ export {
 } from './lib/app-deployment-details.schema';
 export { getAppName } from '@codeware/shared/util/pure';
 export {
+  type AppChangelog,
   type AppChangelogRange,
   generateAppChangelogs
 } from './lib/generate-app-changelogs';
