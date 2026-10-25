@@ -69,6 +69,6 @@ print -r -- "secrets: $environment $folder: ${#from_vault} from the vault${from_
 (( ${#kept} )) && print -r -- "secrets: kept from the environment: ${(j:, :)kept}"
 
 # Out of the loop's own environment. PID 1 (tini) still holds it in /proc/1/environ, readable by
-# the same uid; accepted because the identity is read-only and scoped to this one folder.
+# the same uid; accepted because the identity is a Viewer of a project that holds only this folder.
 unset token vault pairs pair INFISICAL_CLIENT_SECRET INFISICAL_CLIENT_ID INFISICAL_TOKEN
 exec "${run[@]}"
