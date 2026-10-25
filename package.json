@@ -152,7 +152,7 @@
     "@sentry/vite-plugin": "^5.4.0",
     "@storybook/addon-a11y": "10.6.1",
     "@storybook/addon-docs": "10.6.1",
-    "@storybook/addon-vitest": "10.6.1",
+    "@storybook/addon-vitest": "10.6.2",
     "@storybook/react-vite": "10.6.1",
     "@svgr/webpack": "^8.0.1",
     "@swc-node/register": "1.12.1",
