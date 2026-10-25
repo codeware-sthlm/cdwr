@@ -170,21 +170,40 @@ export default defineCommand({
     const created = runs && !alreadyPaused;
     if (created) await ssh(pause(host));
 
+    const failed = (error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      return new CliError(
+        `Deploy of ${tag} failed: ${reason}`,
+        EXIT.failed,
+        `Run the same deploy again, or pass --tag with the previous tag${created ? '; the queue was resumed' : ''}`
+      );
+    };
+    // Only a pause made here is lifted again
+    const lift = async () => {
+      if (created) await ssh(unpause(host)).catch(() => undefined);
+    };
+
     if (runs) {
       const { intervalMs, checks } = waitPlan(wait);
-      const idle = await ctx.ui.task(
-        'Waiting for the queue to be idle',
-        async () => {
-          for (let i = 0; i < checks; i++) {
-            if (i > 0) await sleep(intervalMs);
-            if (!(await busy(host))) return true;
-          }
-          return false;
-        },
-        (ok) => (ok ? 'The queue is idle' : 'The queue stayed busy')
-      );
+      let idle: boolean;
+      try {
+        idle = await ctx.ui.task(
+          'Waiting for the queue to be idle',
+          async () => {
+            for (let i = 0; i < checks; i++) {
+              if (i > 0) await sleep(intervalMs);
+              if (!(await busy(host))) return true;
+            }
+            return false;
+          },
+          (ok) => (ok ? 'The queue is idle' : 'The queue stayed busy')
+        );
+      } catch (error) {
+        await lift();
+        throw failed(error);
+      }
       if (!idle) {
-        if (created) await ssh(unpause(host)).catch(() => undefined);
+        await lift();
         throw new CliError(
           `The queue was still busy after ${wait} minutes; nothing was changed`,
           EXIT.failed,
@@ -212,13 +231,8 @@ export default defineCommand({
       );
     } catch (error) {
       // The old container if up never ran, else the new one; either way the queue must not stay paused
-      if (created) await ssh(unpause(host)).catch(() => undefined);
-      const reason = error instanceof Error ? error.message : String(error);
-      throw new CliError(
-        `Deploy of ${tag} failed: ${reason}`,
-        EXIT.failed,
-        `Run the same deploy again, or pass --tag with the previous tag${created ? '; the queue was resumed' : ''}`
-      );
+      await lift();
+      throw failed(error);
     }
 
     let resumed = !created;
