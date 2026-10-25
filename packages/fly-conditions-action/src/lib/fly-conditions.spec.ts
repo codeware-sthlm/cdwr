@@ -154,6 +154,23 @@ describe('flyConditions', () => {
       expect(result.skip).toBe(false);
     });
 
+    it('should add the preview label for synchronize when it was removed before the PR was reopened', async () => {
+      mockContext.payload = { ...mockContext.payload, action: 'synchronize' };
+      listLabelsMock.mockResolvedValue({ data: [] });
+      paginateMock.mockResolvedValue([
+        { event: 'unlabeled', label: { name: 'preview-deploy' } },
+        { event: 'closed' },
+        { event: 'reopened' }
+      ]);
+
+      const result = await flyConditions(defaultInputs);
+
+      expect(addLabelsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ labels: ['preview-deploy'] })
+      );
+      expect(result.skip).toBe(false);
+    });
+
     it('should skip for synchronize when the preview label was removed', async () => {
       mockContext.payload = { ...mockContext.payload, action: 'synchronize' };
       listLabelsMock.mockResolvedValue({ data: [{ name: 'other' }] });

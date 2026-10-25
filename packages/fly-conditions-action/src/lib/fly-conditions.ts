@@ -93,17 +93,23 @@ export async function flyConditions({
     return { skip: false };
   }
 
-  // A newer push cancels the run that opened the PR, possibly before it added
-  // the label. Add it here unless someone removed it on purpose.
+  // A newer push cancels the run that opened or reopened the PR, possibly
+  // before it added the label. Add it here unless someone removed it on
+  // purpose since then; reopening turns previews back on.
   const events = await octokit.paginate(octokit.rest.issues.listEvents, {
     ...context.repo,
     issue_number: prNumber,
     per_page: 100
   });
-  const removed = events.some(
-    (e) =>
-      e.event === 'unlabeled' && 'label' in e && e.label?.name === previewLabel
-  );
+  const lastReopen = events.map((e) => e.event).lastIndexOf('reopened');
+  const removed = events
+    .slice(lastReopen + 1)
+    .some(
+      (e) =>
+        e.event === 'unlabeled' &&
+        'label' in e &&
+        e.label?.name === previewLabel
+    );
 
   if (removed) {
     core.info(`Preview label '${previewLabel}' was removed -> skip`);
