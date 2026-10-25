@@ -20,7 +20,7 @@ describe('main', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    nxChangelogMock.mockResolvedValue({});
+    nxChangelogMock.mockResolvedValue({ changelogs: {}, failedReleases: [] });
     vi.mocked(core.getBooleanInput).mockReturnValue(false);
   });
 
