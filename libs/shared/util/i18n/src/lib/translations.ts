@@ -262,6 +262,19 @@ export type TranslationKey =
   | 'signupNotice.siteLabel'
   | 'signupNotice.subject'
   | 'signupNotice.workspaceLabel'
+  | 'idleWorkspaceSummary.body'
+  | 'idleWorkspaceSummary.button'
+  | 'idleWorkspaceSummary.deleted'
+  | 'idleWorkspaceSummary.detailsHeading'
+  | 'idleWorkspaceSummary.provisioned'
+  | 'idleWorkspaceSummary.subject'
+  | 'idleWorkspaceSummary.unwarnedMailFailed'
+  | 'idleWorkspaceSummary.unwarnedNoAdmin'
+  | 'idleWorkspaceSummary.warned'
+  | 'idleWorkspaceWarning.body'
+  | 'idleWorkspaceWarning.button'
+  | 'idleWorkspaceWarning.ignore'
+  | 'idleWorkspaceWarning.subject'
   | 'tourSignup.acceptTerms'
   | 'tourSignup.acceptTermsRequired'
   | 'tourSignup.dataNotice'
@@ -605,6 +618,26 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signupNotice.siteLabel': 'Site address',
     'signupNotice.subject': 'New self-serve signup: {{tenantName}}',
     'signupNotice.workspaceLabel': 'Workspace',
+    'idleWorkspaceSummary.body':
+      'The nightly cleanup of workspaces that never got a page found the following.',
+    'idleWorkspaceSummary.button': 'Open the admin',
+    'idleWorkspaceSummary.deleted': 'Deleted, with {{users}} user(s) removed',
+    'idleWorkspaceSummary.detailsHeading': 'Workspaces',
+    'idleWorkspaceSummary.provisioned':
+      'Has provisioning traces; deprovision by hand',
+    'idleWorkspaceSummary.subject': 'Idle workspace cleanup',
+    'idleWorkspaceSummary.unwarnedMailFailed':
+      'Could not warn: the warning mail failed; will retry tomorrow',
+    'idleWorkspaceSummary.unwarnedNoAdmin':
+      'Could not warn: no verified admin; handle by hand',
+    'idleWorkspaceSummary.warned': 'Warned, deletes on {{date}}',
+    'idleWorkspaceWarning.body':
+      'Your workspace {{name}} has no pages yet. It will be deleted on {{date}} unless a page is added before then.',
+    'idleWorkspaceWarning.button': 'Open the admin',
+    'idleWorkspaceWarning.ignore':
+      'If you no longer want the workspace, there is nothing you need to do.',
+    'idleWorkspaceWarning.subject':
+      'Your workspace {{name}} will be deleted on {{date}}',
     'tourSignup.acceptTerms': 'I accept the terms',
     'tourSignup.acceptTermsRequired': 'Please accept the terms to sign up',
     'tourSignup.dataNotice':
@@ -962,6 +995,27 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signupNotice.siteLabel': 'Webbplatsadress',
     'signupNotice.subject': 'Ny självregistrering: {{tenantName}}',
     'signupNotice.workspaceLabel': 'Arbetsyta',
+    'idleWorkspaceSummary.body':
+      'Den nattliga städningen av arbetsytor som aldrig fick någon sida hittade följande.',
+    'idleWorkspaceSummary.button': 'Öppna administrationen',
+    'idleWorkspaceSummary.deleted':
+      'Borttagen, med {{users}} användare borttagna',
+    'idleWorkspaceSummary.detailsHeading': 'Arbetsytor',
+    'idleWorkspaceSummary.provisioned':
+      'Har spår av driftsättning; avetablera för hand',
+    'idleWorkspaceSummary.subject': 'Städning av overksamma arbetsytor',
+    'idleWorkspaceSummary.unwarnedMailFailed':
+      'Kunde inte varnas: varningsmejlet misslyckades; försöker igen i morgon',
+    'idleWorkspaceSummary.unwarnedNoAdmin':
+      'Kunde inte varnas: ingen verifierad administratör; hantera för hand',
+    'idleWorkspaceSummary.warned': 'Varnad, tas bort den {{date}}',
+    'idleWorkspaceWarning.body':
+      'Din arbetsyta {{name}} har inga sidor ännu. Arbetsytan tas bort den {{date}} om ingen sida har lagts till före dess.',
+    'idleWorkspaceWarning.button': 'Öppna administrationen',
+    'idleWorkspaceWarning.ignore':
+      'Om du inte längre vill ha arbetsytan behöver du inte göra något.',
+    'idleWorkspaceWarning.subject':
+      'Din arbetsyta {{name}} tas bort den {{date}}',
     'tourSignup.acceptTerms': 'Jag godkänner villkoren',
     'tourSignup.acceptTermsRequired': 'Godkänn villkoren för att anmäla dig',
     'tourSignup.dataNotice':

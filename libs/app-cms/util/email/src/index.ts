@@ -33,6 +33,14 @@ export {
   sendSignupEmails
 } from './lib/send-signup-emails';
 export {
+  type IdleWorkspaceSummaryMailInput,
+  renderIdleWorkspaceSummaryMail
+} from './lib/templates/idle-workspace-summary/idle-workspace-summary';
+export {
+  type IdleWorkspaceWarningMailInput,
+  renderIdleWorkspaceWarningMail
+} from './lib/templates/idle-workspace-warning/idle-workspace-warning';
+export {
   type SignupNoticeMailInput,
   renderSignupNoticeMail
 } from './lib/templates/signup-notice/signup-notice';
