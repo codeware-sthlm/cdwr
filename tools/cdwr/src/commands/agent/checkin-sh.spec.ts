@@ -94,6 +94,13 @@ describe.skipIf(!hasZsh || !hasJq)('checkin.sh', () => {
     expect(hits).toEqual([]);
   });
 
+  const monitorConfig = {
+    schedule: { type: 'interval', value: 10, unit: 'minute' },
+    checkin_margin: 15,
+    max_runtime: 60,
+    timezone: 'UTC'
+  };
+
   it('opens with an id and the monitor config', async () => {
     const out = await zsh(dsn(), 'checkin in_progress');
     expect(out.stdout).toMatch(/^[0-9a-f-]{36}$/);
@@ -103,25 +110,26 @@ describe.skipIf(!hasZsh || !hasJq)('checkin.sh', () => {
     expect(hits[0].body).toEqual({
       check_in_id: out.stdout,
       status: 'in_progress',
-      monitor_config: {
-        schedule: { type: 'interval', value: 10, unit: 'minute' },
-        checkin_margin: 15,
-        max_runtime: 60,
-        timezone: 'UTC'
-      }
+      monitor_config: monitorConfig
     });
   });
 
-  it.each(['ok', 'error'])('closes with %s and the same id', async (state) => {
-    await zsh(dsn(), `checkin ${state} the-id`);
-    expect(hits.map((hit) => hit.body)).toEqual([
-      { status: state, check_in_id: 'the-id' }
-    ]);
-  });
+  // Upsert on every check-in: whichever reaches Sentry first creates the monitor
+  it.each(['ok', 'error'])(
+    'closes with %s, the same id and the monitor config',
+    async (state) => {
+      await zsh(dsn(), `checkin ${state} the-id`);
+      expect(hits.map((hit) => hit.body)).toEqual([
+        { status: state, check_in_id: 'the-id', monitor_config: monitorConfig }
+      ]);
+    }
+  );
 
-  it('sends a one-shot ok without an id', async () => {
+  it('sends a one-shot ok without an id, with the monitor config', async () => {
     await zsh(dsn(), 'checkin ok');
-    expect(hits.map((hit) => hit.body)).toEqual([{ status: 'ok' }]);
+    expect(hits.map((hit) => hit.body)).toEqual([
+      { status: 'ok', monitor_config: monitorConfig }
+    ]);
   });
 
   it('notes a server error and returns 0', async () => {

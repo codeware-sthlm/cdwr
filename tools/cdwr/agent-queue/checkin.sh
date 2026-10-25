@@ -2,7 +2,8 @@
 # Sentry cron monitor check-ins for run.sh. Sourced; a failed or unconfigured check-in never fails a run.
 #   checkin_url              the monitor's HTTP check-in URL from SENTRY_DSN; empty when unset or malformed
 #   checkin <status> [id]    in_progress prints a new check-in id; ok and error send with the given id
-# The first in_progress carries the monitor config, so Sentry creates the monitor `agent-queue` itself.
+# Every check-in carries the monitor config (upsert), so whichever arrives first creates the monitor
+# `agent-queue`: a paused queue's lone ok, or an ok processed before its in_progress.
 # https://docs.sentry.io/product/crons/getting-started/http/
 
 CHECKIN_SLUG=agent-queue
@@ -30,16 +31,14 @@ checkin() {
   if [[ "$state" == in_progress ]]; then
     id="$(checkin_uuid)" || id=""
     print -r -- "$id"
-    body="$(jq -cn --arg s "$state" --arg id "$id" '{
-      check_in_id: $id, status: $s,
-      monitor_config: {
-        schedule: {type: "interval", value: 10, unit: "minute"},
-        checkin_margin: 15, max_runtime: 60, timezone: "UTC"
-      }
-    }')" || return 0
-  else
-    body="$(jq -cn --arg s "$state" --arg id "$id" '{status: $s} + (if $id == "" then {} else {check_in_id: $id} end)')" || return 0
   fi
+  body="$(jq -cn --arg s "$state" --arg id "$id" '{
+    status: $s,
+    monitor_config: {
+      schedule: {type: "interval", value: 10, unit: "minute"},
+      checkin_margin: 15, max_runtime: 60, timezone: "UTC"
+    }
+  } + (if $id == "" then {} else {check_in_id: $id} end)')" || return 0
   if ! msg="$(curl --max-time 5 -fsS -X POST -H 'Content-Type: application/json' -d "$body" "$url" 2>&1 >/dev/null)"; then
     msg="warn: sentry check-in $state failed: ${msg//$'\n'/ }"
     if (( $+functions[note] )); then note "$msg"; else print -ru2 -- "$msg"; fi
