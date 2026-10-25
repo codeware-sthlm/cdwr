@@ -89,113 +89,87 @@ const tenants: CollectionConfig = {
       }
     },
     {
-      name: 'name',
-      type: 'text',
-      label: { en: 'Name', sv: 'Namn' },
-      required: true,
-      admin: {
-        components: {
-          Cell: '@codeware/apps/cms/components/TenantIconNameCell'
-        }
-      }
-    },
-    {
-      name: 'description',
-      type: 'textarea',
-      label: { en: 'Description', sv: 'Beskrivning' }
-    },
-    {
-      name: 'supportedLocales',
-      type: 'select',
-      label: { en: 'Supported locales', sv: 'Språk som stöds' },
-      admin: {
-        description: {
-          en: 'Select the locales your web client should support. Multiple locales will enable the language selector in the admin UI.',
-          sv: 'Välj de språk som din webbklient ska stödja. Vid flera språk aktiveras språkvalet i administrationsgränssnittet.'
-        }
-      },
-      enumName: enumName('tenant_supported_locales'),
-      options: [
-        { label: { en: 'English', sv: 'Engelska' }, value: 'en' },
-        { label: { en: 'Swedish', sv: 'Svenska' }, value: 'sv' }
-      ],
-      hasMany: true,
-      required: true
-    },
-    deploymentField,
-    {
-      name: 'infisicalPanel',
-      type: 'ui',
-      admin: {
-        components: {
-          Field:
-            '@codeware/apps/cms/components/admin/provisioning/InfisicalField'
-        }
-      }
-    },
-    domainsField(),
-    {
-      name: 'domainsPanel',
-      type: 'ui',
-      admin: {
-        components: {
-          Field: '@codeware/apps/cms/components/admin/domains/DomainsField'
-        }
-      }
-    },
-    statsWebsiteIdField,
-    statsShareIdField,
-    statsTeamIdField,
-    statusField,
-    {
-      type: 'group',
-      name: 'relations',
-      virtual: true,
-      label: { en: 'Related Documents', sv: 'Relaterade dokument' },
-      fields: [
+      type: 'tabs',
+      tabs: [
         {
-          name: 'relatedUsers',
-          label: { en: 'Users', sv: 'Användare' },
-          type: 'join',
-          collection: 'users',
-          on: 'tenants.tenant',
-          admin: { allowCreate: false, disableListColumn: true }
+          label: { en: 'General', sv: 'Allmänt' },
+          fields: [
+            {
+              name: 'name',
+              type: 'text',
+              label: { en: 'Name', sv: 'Namn' },
+              required: true,
+              admin: {
+                components: {
+                  Cell: '@codeware/apps/cms/components/TenantIconNameCell'
+                }
+              }
+            },
+            {
+              name: 'description',
+              type: 'textarea',
+              label: { en: 'Description', sv: 'Beskrivning' }
+            },
+            {
+              name: 'supportedLocales',
+              type: 'select',
+              label: { en: 'Supported locales', sv: 'Språk som stöds' },
+              admin: {
+                description: {
+                  en: 'Select the locales your web client should support. Multiple locales will enable the language selector in the admin UI.',
+                  sv: 'Välj de språk som din webbklient ska stödja. Vid flera språk aktiveras språkvalet i administrationsgränssnittet.'
+                }
+              },
+              enumName: enumName('tenant_supported_locales'),
+              options: [
+                { label: { en: 'English', sv: 'Engelska' }, value: 'en' },
+                { label: { en: 'Swedish', sv: 'Svenska' }, value: 'sv' }
+              ],
+              hasMany: true,
+              required: true
+            },
+            slugField({ sourceField: 'name', position: undefined }),
+            statusField
+          ]
         },
         {
-          name: 'relatedPages',
-          label: { en: 'Pages', sv: 'Sidor' },
-          type: 'join',
-          collection: 'pages',
-          on: 'tenant',
-          admin: { allowCreate: false, disableListColumn: true }
+          label: { en: 'Deployment', sv: 'Driftsättning' },
+          fields: [
+            deploymentField,
+            {
+              name: 'infisicalPanel',
+              type: 'ui',
+              admin: {
+                components: {
+                  Field:
+                    '@codeware/apps/cms/components/admin/provisioning/InfisicalField'
+                }
+              }
+            }
+          ]
         },
         {
-          name: 'relatedPosts',
-          label: { en: 'Posts', sv: 'Inlägg' },
-          type: 'join',
-          collection: 'posts',
-          on: 'tenant',
-          admin: { allowCreate: false, disableListColumn: true }
+          label: { en: 'Domains', sv: 'Domäner' },
+          fields: [
+            domainsField(),
+            {
+              name: 'domainsPanel',
+              type: 'ui',
+              admin: {
+                components: {
+                  Field:
+                    '@codeware/apps/cms/components/admin/domains/DomainsField'
+                }
+              }
+            }
+          ]
         },
         {
-          name: 'relatedCategories',
-          label: { en: 'Categories', sv: 'Kategorier' },
-          type: 'join',
-          collection: 'categories',
-          on: 'tenant',
-          admin: { allowCreate: false, disableListColumn: true }
-        },
-        {
-          name: 'relatedMedia',
-          label: { en: 'Media', sv: 'Media' },
-          type: 'join',
-          collection: 'media',
-          on: 'tenant',
-          admin: { allowCreate: false, disableListColumn: true }
+          label: { en: 'Statistics', sv: 'Statistik' },
+          fields: [statsWebsiteIdField, statsShareIdField, statsTeamIdField]
         }
       ]
-    },
-    slugField({ sourceField: 'name' })
+    }
   ]
 };
 

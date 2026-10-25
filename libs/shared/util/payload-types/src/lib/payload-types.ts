@@ -219,13 +219,6 @@ export interface Config {
     tags: {
       'relations.relatedMedia': 'media';
     };
-    tenants: {
-      'relations.relatedUsers': 'users';
-      'relations.relatedPages': 'pages';
-      'relations.relatedPosts': 'posts';
-      'relations.relatedCategories': 'categories';
-      'relations.relatedMedia': 'media';
-    };
   };
   collectionsSelect: {
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
@@ -515,6 +508,14 @@ export interface Tenant {
    */
   supportedLocales: ('en' | 'sv')[];
   /**
+   * Used for url paths. Will be automatically generated from name if left empty.
+   */
+  slug?: string | null;
+  /**
+   * Pending workspaces come from self-serve signup and are not deployed until activated.
+   */
+  status: 'pending' | 'active';
+  /**
    * The name this workspace is deployed under: its folder in Infisical and the end of its Fly app names, so "demo" deploys as "cdwr-cms-demo". Lowercase letters, digits and hyphens. It cannot be changed once saved, because a new name would leave the old apps and settings behind.
    */
   deployment?: string | null;
@@ -576,31 +577,33 @@ export interface Tenant {
    * The id of the workspace's team in Umami. Set by provisioning; leave empty when there is no team.
    */
   statsTeamId?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  enableAPIKey?: boolean | null;
+  apiKey?: string | null;
+  apiKeyIndex?: string | null;
+  hasAPIKey?: boolean | null;
+  collection: 'tenants';
+}
+/**
+ * Labels are used to organize photos and files so they are easy to find and select.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "tags".
+ */
+export interface Tag {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
+  name: string;
   /**
-   * Pending workspaces come from self-serve signup and are not deployed until activated.
+   * Select an icon and color that represent the tag.
    */
-  status: 'pending' | 'active';
+  brand?: {
+    icon?: string | null;
+    color?: string | null;
+  };
   relations?: {
-    relatedUsers?: {
-      docs?: (number | User)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-    relatedPages?: {
-      docs?: (number | Page)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-    relatedPosts?: {
-      docs?: (number | Post)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-    relatedCategories?: {
-      docs?: (number | Category)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
     relatedMedia?: {
       docs?: (number | Media)[];
       hasNextPage?: boolean;
@@ -613,55 +616,28 @@ export interface Tenant {
   slug?: string | null;
   updatedAt: string;
   createdAt: string;
-  enableAPIKey?: boolean | null;
-  apiKey?: string | null;
-  apiKeyIndex?: string | null;
-  hasAPIKey?: boolean | null;
-  collection: 'tenants';
 }
 /**
- * Manage users and their access to workspaces.
- *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users".
+ * via the `definition` "CalloutLink".
  */
-export interface User {
-  id: number;
-  name: string;
+export interface CalloutLink {
+  type?: ('reference' | 'custom') | null;
+  newTab?: boolean | null;
+  reference?:
+    | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'posts';
+        value: number | Post;
+      } | null);
   /**
-   * System users have access to manage the whole system and do not need to be members of a workspace. For normal users, it is a requirement to be members of a workspace.
+   * Add protocol (http:// or https://) if the link is external
    */
-  role: 'user' | 'system-user';
-  tenants?: TenantsArrayField;
-  /**
-   * Short description of the user.
-   */
-  description?: string | null;
-  statsAccount?: {
-    umamiUserId?: string | null;
-    createdAt?: string | null;
-  };
-  updatedAt: string;
-  createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  resetPasswordRequestedAt?: string | null;
-  _verified?: boolean | null;
-  _verificationToken?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  sessions?:
-    | {
-        id: string;
-        createdAt?: string | null;
-        expiresAt: string;
-      }[]
-    | null;
-  password?: string | null;
-  collection: 'users';
+  url?: string | null;
+  label: string;
 }
 /**
  * Pages are the foundation of the system and are used to build your website. Work with drafts and publish when ready.
@@ -870,6 +846,50 @@ export interface Category {
   slug?: string | null;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * Manage users and their access to workspaces.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users".
+ */
+export interface User {
+  id: number;
+  name: string;
+  /**
+   * System users have access to manage the whole system and do not need to be members of a workspace. For normal users, it is a requirement to be members of a workspace.
+   */
+  role: 'user' | 'system-user';
+  tenants?: TenantsArrayField;
+  /**
+   * Short description of the user.
+   */
+  description?: string | null;
+  statsAccount?: {
+    umamiUserId?: string | null;
+    createdAt?: string | null;
+  };
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  resetPasswordRequestedAt?: string | null;
+  _verified?: boolean | null;
+  _verificationToken?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
+    | null;
+  password?: string | null;
+  collection: 'users';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1367,38 +1387,6 @@ export interface FileAreaBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'file-area';
-}
-/**
- * Labels are used to organize photos and files so they are easy to find and select.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "tags".
- */
-export interface Tag {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  managedBy?: string | null;
-  name: string;
-  /**
-   * Select an icon and color that represent the tag.
-   */
-  brand?: {
-    icon?: string | null;
-    color?: string | null;
-  };
-  relations?: {
-    relatedMedia?: {
-      docs?: (number | Media)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-  };
-  /**
-   * Used for url paths. Will be automatically generated from name if left empty.
-   */
-  slug?: string | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1962,28 +1950,6 @@ export interface ToursBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'tours';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "CalloutLink".
- */
-export interface CalloutLink {
-  type?: ('reference' | 'custom') | null;
-  newTab?: boolean | null;
-  reference?:
-    | ({
-        relationTo: 'pages';
-        value: number | Page;
-      } | null)
-    | ({
-        relationTo: 'posts';
-        value: number | Post;
-      } | null);
-  /**
-   * Add protocol (http:// or https://) if the link is external
-   */
-  url?: string | null;
-  label: string;
 }
 /**
  * Your own themes. Select them in Site Settings to make them available on the site.
@@ -3560,6 +3526,8 @@ export interface TenantsSelect<T extends boolean = true> {
   name?: T;
   description?: T;
   supportedLocales?: T;
+  slug?: T;
+  status?: T;
   deployment?: T;
   domains?:
     | T
@@ -3600,17 +3568,6 @@ export interface TenantsSelect<T extends boolean = true> {
   statsWebsiteId?: T;
   statsShareId?: T;
   statsTeamId?: T;
-  status?: T;
-  relations?:
-    | T
-    | {
-        relatedUsers?: T;
-        relatedPages?: T;
-        relatedPosts?: T;
-        relatedCategories?: T;
-        relatedMedia?: T;
-      };
-  slug?: T;
   updatedAt?: T;
   createdAt?: T;
   enableAPIKey?: T;

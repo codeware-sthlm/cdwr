@@ -22,7 +22,6 @@ export const statusField: SelectField = {
     update: systemUserAccess
   },
   admin: {
-    position: 'sidebar',
     description: {
       en: 'Pending workspaces come from self-serve signup and are not deployed until activated.',
       sv: 'Väntande arbetsytor kommer från egen registrering och driftsätts inte förrän de aktiveras.'
