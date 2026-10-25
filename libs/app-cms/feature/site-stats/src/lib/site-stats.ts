@@ -6,7 +6,6 @@ import type {
   UmamiPageviews,
   UmamiPeriodStats
 } from './umami-client';
-import { UmamiError } from './umami-client';
 
 export type PeriodStats = {
   visitors: number;
@@ -55,11 +54,6 @@ export type SiteStatsAnswer =
       /** Whether the caller can get a login to Umami, see `StatsAccountState` */
       account: StatsAccountState;
     };
-
-/** Umami did not answer in time, which is what a suspended service does while it resumes */
-export const isWaking = (error: unknown): boolean =>
-  error instanceof UmamiError &&
-  (error.kind === 'timeout' || error.kind === 'unavailable');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TOP_LIMIT = 5;

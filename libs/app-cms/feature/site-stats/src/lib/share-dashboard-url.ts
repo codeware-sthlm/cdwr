@@ -1,4 +1,4 @@
-import { umamiRoot } from './umami-client';
+import { umamiRoot } from '@codeware/shared/util/umami';
 
 /** The public Umami dashboard for a share slug, or null without a slug */
 export const shareDashboardUrl = (

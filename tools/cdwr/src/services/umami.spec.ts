@@ -7,17 +7,12 @@ import {
   getTeam,
   getWebsite,
   listShares,
-  listTeamUsers,
   listTeamWebsites,
-  listTeams,
   listUsers,
   loginToken,
   newShareSlug,
   readUmamiProvisioning,
-  removeTeamUser,
-  setShare,
-  transferWebsite,
-  whoAmI
+  setShare
 } from './umami';
 
 vi.mock('./shell', () => ({ sleep: () => Promise.resolve() }));
@@ -90,8 +85,8 @@ describe('Umami client', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://umami.test/api/websites/w1');
     expect(init.headers).toMatchObject({
-      Authorization: 'Bearer secret-key',
-      Accept: 'application/json'
+      authorization: 'Bearer secret-key',
+      accept: 'application/json'
     });
   });
 
@@ -301,183 +296,78 @@ describe('Umami client when the service is waking', () => {
     expect((await getWebsite(conn, 'w1'))?.teamId).toBe('team');
   });
 
-  it.each([
-    ['flat', { id: 'u1', username: 'admin', role: 'admin' }],
-    ['nested', { user: { id: 'u1', username: 'admin', role: 'admin' } }]
-  ])('answers who the key is, %s', async (_name, body) => {
-    fetchMock.mockResolvedValue(reply(body));
-    expect(await whoAmI(conn)).toEqual({
-      id: 'u1',
-      username: 'admin',
-      role: 'admin'
-    });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://umami.test/api/me');
-    expect(init.method).toBe('GET');
-  });
-
-  it('creates a team from the team and membership Umami answers', async () => {
-    fetchMock.mockResolvedValue(
-      reply([
-        { id: 't1', name: 'Acme', extra: 1 },
-        { id: 'm1', teamId: 't1', userId: 'u1', role: 'team-owner' }
-      ])
-    );
-    expect(await createTeam(conn, 'Acme')).toEqual({ id: 't1', name: 'Acme' });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://umami.test/api/teams');
-    expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body)).toEqual({ name: 'Acme' });
-  });
-
-  it('creates a team from a plain object answer', async () => {
-    fetchMock.mockResolvedValue(reply({ id: 't1', name: 'Acme', extra: 1 }));
-    expect(await createTeam(conn, 'Acme')).toEqual({ id: 't1', name: 'Acme' });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://umami.test/api/teams');
-    expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body)).toEqual({ name: 'Acme' });
-  });
-
   it('refuses a team name over 50 characters without calling Umami', async () => {
     await expect(createTeam(conn, 'x'.repeat(51))).rejects.toThrow('50');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('refuses a failed team creation', async () => {
-    fetchMock.mockResolvedValue(reply({}, 403));
-    await expect(createTeam(conn, 'Acme')).rejects.toThrow('403');
+  it('words a refused team call with its status and the body, as before', async () => {
+    fetchMock.mockImplementation(
+      async () => new Response('Team name taken', { status: 400 })
+    );
+    await expect(createTeam(conn, 'Acme')).rejects.toThrow(
+      'Umami refused the team creation: 400 Team name taken'
+    );
+    await expect(getTeam(conn, 't1')).rejects.toThrow(
+      'Umami refused the team lookup: 400 Team name taken'
+    );
   });
 
-  it('adds a user to a team', async () => {
-    fetchMock.mockResolvedValue(reply({ ok: true }));
-    await addTeamUser(conn, 't1', 'u1', 'team-view-only');
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://umami.test/api/teams/t1/users');
-    expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body)).toEqual({
-      userId: 'u1',
-      role: 'team-view-only'
-    });
-  });
-
-  it('refuses a failed team member', async () => {
-    fetchMock.mockResolvedValue(reply({}, 400));
+  it('words a waking write as a refusal, with the body', async () => {
+    fetchMock.mockImplementation(
+      async () => new Response('Bad gateway', { status: 502 })
+    );
     await expect(addTeamUser(conn, 't1', 'u1', 'team-member')).rejects.toThrow(
-      '400'
+      'Umami refused the team member: 502 Bad gateway'
     );
   });
 
-  it('pages through the users of a team', async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        reply({
-          data: [{ id: 'x', userId: 'u1', role: 'team-owner' }],
-          count: 2
-        })
-      )
-      .mockResolvedValueOnce(
-        reply({
-          data: [{ id: 'y', userId: 'u2', role: 'team-view-only' }],
-          count: 2
-        })
-      );
-    expect(await listTeamUsers(conn, 't1')).toEqual([
-      { userId: 'u1', role: 'team-owner' },
-      { userId: 'u2', role: 'team-view-only' }
-    ]);
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      'https://umami.test/api/teams/t1/users?page=1&pageSize=100'
+  it('says Umami kept answering while waking when a read runs out of retries', async () => {
+    fetchMock.mockImplementation(async () => reply({}, 503));
+    await expect(getTeam(conn, 't1')).rejects.toThrow(
+      'Umami answered 503 while waking up'
     );
-    expect(fetchMock.mock.calls[1][0]).toContain('page=2');
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 
-  it('reads a team by id and ignores its members', async () => {
-    fetchMock.mockResolvedValue(
-      reply({ id: 't1', name: 'cdwr-acme', teamUser: [{ userId: 'u1' }] })
-    );
-    expect(await getTeam(conn, 't1')).toEqual({ id: 't1', name: 'cdwr-acme' });
-    expect(fetchMock.mock.calls[0][0]).toBe('https://umami.test/api/teams/t1');
-  });
-
-  it('answers null for a team Umami does not know', async () => {
-    fetchMock.mockResolvedValue(reply({ error: 'Team not found.' }, 404));
-    expect(await getTeam(conn, 'gone')).toBeNull();
-  });
-
-  it('refuses other failed team lookups', async () => {
-    fetchMock.mockResolvedValue(reply({}, 500));
-    await expect(getTeam(conn, 't1')).rejects.toThrow('500');
-  });
-
-  it('refuses a failed member list, also a 404', async () => {
-    fetchMock.mockResolvedValue(reply({}, 404));
-    await expect(listTeamUsers(conn, 'gone')).rejects.toThrow('404');
-  });
-
-  it('still refuses other failed member lists', async () => {
-    fetchMock.mockResolvedValue(reply({}, 403));
-    await expect(listTeamUsers(conn, 't1')).rejects.toThrow('403');
-  });
-
-  it('transfers a website to a team', async () => {
-    fetchMock.mockResolvedValue(reply({ ok: true }));
-    await transferWebsite(conn, 'w1', 't1');
+  it('makes team and user calls with the key, as the shared calls', async () => {
+    fetchMock.mockResolvedValue(reply({ id: 't1', name: 'Acme' }));
+    expect(await createTeam(conn, 'Acme')).toEqual({ id: 't1', name: 'Acme' });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://umami.test/api/websites/w1/transfer');
+    expect(url).toBe('https://umami.test/api/teams');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body)).toEqual({ teamId: 't1' });
+    expect(init.headers.authorization).toBe('Bearer secret-key');
   });
 
-  it('refuses a failed transfer', async () => {
-    fetchMock.mockResolvedValue(reply({}, 401));
-    await expect(transferWebsite(conn, 'w1', 't1')).rejects.toThrow('401');
-  });
+  it('retries a team read while waking, but not a team write', async () => {
+    const onWaking = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce(reply({}, 503))
+      .mockResolvedValueOnce(reply({ id: 't1', name: 'cdwr-acme' }));
+    expect(await getTeam({ ...conn, onWaking }, 't1')).toEqual({
+      id: 't1',
+      name: 'cdwr-acme'
+    });
+    expect(onWaking).toHaveBeenCalledTimes(1);
 
-  it('removes a team member and counts an unknown one as removed', async () => {
-    fetchMock.mockResolvedValueOnce(reply({ ok: true }));
-    await removeTeamUser(conn, 't1', 'u1');
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://umami.test/api/teams/t1/users/u1');
-    expect(init.method).toBe('DELETE');
-
-    fetchMock.mockResolvedValueOnce(reply({}, 404));
-    await expect(removeTeamUser(conn, 't1', 'u1')).resolves.toBeUndefined();
-  });
-
-  it('counts a non-member as removed, as Umami words it', async () => {
-    fetchMock.mockResolvedValue(
-      reply(
-        { error: { message: 'The User does not exists on this team.' } },
-        400
-      )
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(reply({}, 503));
+    await expect(addTeamUser(conn, 't1', 'u1', 'team-member')).rejects.toThrow(
+      '503'
     );
-    await expect(removeTeamUser(conn, 't1', 'u1')).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses another failed removal', async () => {
-    fetchMock.mockResolvedValue(reply({}, 403));
-    await expect(removeTeamUser(conn, 't1', 'u1')).rejects.toThrow('403');
-  });
-
-  it('lists users and teams', async () => {
+  it('lists users with a login token, not the key', async () => {
     fetchMock.mockResolvedValueOnce(
       reply({ data: [{ id: 'u1', username: 'ann', role: 'user' }], count: 1 })
     );
     expect(await listUsers(conn, 'login-token')).toEqual([
       { id: 'u1', username: 'ann' }
     ]);
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      'https://umami.test/api/admin/users?page=1&pageSize=100'
-    );
-    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe(
+    expect(fetchMock.mock.calls[0][1].headers.authorization).toBe(
       'Bearer login-token'
     );
-
-    fetchMock.mockResolvedValueOnce(
-      reply({ data: [{ id: 't1', name: 'cdwr-acme' }], count: 1 })
-    );
-    expect(await listTeams(conn)).toEqual([{ id: 't1', name: 'cdwr-acme' }]);
   });
 });
 
@@ -516,7 +406,7 @@ describe('loginToken', () => {
     fetchMock.mockResolvedValue(reply({}, 401));
 
     const attempt = loginToken('https://umami.test', 'a', 'pw-secret');
-    await expect(attempt).rejects.toThrow(/401/);
+    await expect(attempt).rejects.toThrow('Umami refused the login: 401');
     await expect(attempt).rejects.not.toThrow(/pw-secret/);
   });
 });

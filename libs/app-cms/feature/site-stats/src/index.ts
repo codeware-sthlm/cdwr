@@ -12,21 +12,20 @@ export {
   type TopEntry,
   createSiteStatsCache,
   fetchSiteStats,
-  isWaking,
   siteStatsCache
 } from './lib/site-stats';
 export {
-  type UmamiClient,
   UmamiError,
-  createUmamiClient
-} from './lib/umami-client';
+  UmamiNotFoundError,
+  UmamiUserExistsError,
+  isWaking
+} from '@codeware/shared/util/umami';
+export { type UmamiClient, createUmamiClient } from './lib/umami-client';
 export {
   type UmamiAdminClient,
   type UmamiTeamRole,
   type UmamiUser,
   type UmamiUserRole,
-  UmamiNotFoundError,
-  UmamiUserExistsError,
   createUmamiAdminClient
 } from './lib/umami-admin-client';
 export {
