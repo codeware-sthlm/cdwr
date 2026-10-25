@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up the cdwr agent-home volume
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/backup-agent-home.sh

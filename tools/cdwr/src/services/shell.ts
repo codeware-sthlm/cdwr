@@ -35,6 +35,8 @@ export interface RunOptions {
   timeout?: number;
   /** Bytes of output to keep; commands that dump SQL need more than the default */
   maxBuffer?: number;
+  /** Written to the child's stdin, which is then closed */
+  input?: string;
 }
 
 /** An exec failure that keeps both streams, so the caller can show them */
@@ -90,6 +92,7 @@ export function run(
         resolve({ stdout, stderr });
       }
     );
+    if (options.input !== undefined) child.stdin?.end(options.input);
     track(child);
   });
 }
