@@ -1,6 +1,7 @@
+import { UmamiError } from '@codeware/shared/util/umami';
 import { describe, expect, it, vi } from 'vitest';
 
-import { UmamiError, createUmamiClient } from './umami-client';
+import { createUmamiClient } from './umami-client';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
@@ -160,14 +161,6 @@ describe('createUmamiClient', () => {
     });
   });
 
-  it.each([502, 503, 504])('marks a %i as unavailable', async (status) => {
-    const { client } = setup(json({}, status));
-
-    await expect(
-      client.stats('site-1', { startAt: 1, endAt: 2 })
-    ).rejects.toMatchObject({ kind: 'unavailable' });
-  });
-
   it('throws UmamiError when the answer does not match', async () => {
     const { client } = setup(json({ pageviews: 'many' }));
 
@@ -187,37 +180,5 @@ describe('createUmamiClient', () => {
         limit: 5
       })
     ).rejects.toBeInstanceOf(UmamiError);
-  });
-
-  it('throws UmamiError when the request fails', async () => {
-    const { client } = setup(new TypeError('fetch failed'));
-
-    await expect(
-      client.stats('site-1', { startAt: 1, endAt: 2 })
-    ).rejects.toMatchObject({ kind: 'unavailable' });
-  });
-
-  it('throws UmamiError when the call times out', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(
-      (_url, init) =>
-        new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () =>
-            reject(init.signal?.reason)
-          );
-        })
-    );
-    const client = createUmamiClient({
-      baseUrl: 'https://umami.test',
-      apiKey: 'secret-key',
-      fetchImpl,
-      timeoutMs: 10
-    });
-
-    await expect(
-      client.stats('site-1', { startAt: 1, endAt: 2 })
-    ).rejects.toMatchObject({
-      kind: 'timeout',
-      message: expect.stringMatching(/timed out after 10 ms/)
-    });
   });
 });

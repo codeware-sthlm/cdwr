@@ -1,19 +1,10 @@
+import {
+  UmamiError,
+  parseUmamiJson,
+  umamiFetch,
+  umamiRefused
+} from '@codeware/shared/util/umami';
 import { z } from 'zod';
-
-/** A call to Umami that did not give a usable answer */
-export class UmamiError extends Error {
-  override readonly name = 'UmamiError';
-
-  constructor(
-    message: string,
-    /** `timeout` and `unavailable` mean Umami is probably waking up */
-    readonly kind: 'timeout' | 'unavailable' | 'refused' | 'bad-answer'
-  ) {
-    super(message);
-  }
-}
-
-const WAKING_STATUSES: ReadonlyArray<number> = [502, 503, 504];
 
 const count = z.coerce.number();
 
@@ -77,10 +68,6 @@ type UmamiClientOptions = {
   timeoutMs?: number;
 };
 
-/** The base url without trailing slashes */
-export const umamiRoot = (baseUrl: string): string =>
-  baseUrl.replace(/\/+$/, '');
-
 /** A read-only Umami client; every call is parsed, so a bad answer throws */
 export const createUmamiClient = ({
   baseUrl,
@@ -88,8 +75,6 @@ export const createUmamiClient = ({
   fetchImpl = fetch,
   timeoutMs = 5000
 }: UmamiClientOptions): UmamiClient => {
-  const root = umamiRoot(baseUrl);
-
   const get = async <T extends z.ZodType>(
     websiteId: string,
     path: string,
@@ -99,50 +84,17 @@ export const createUmamiClient = ({
     const params = new URLSearchParams(
       Object.entries(query).map(([key, value]) => [key, String(value)])
     );
-    const url = `${root}/api/websites/${encodeURIComponent(websiteId)}/${path}?${params}`;
+    const answer = await umamiFetch({
+      url: baseUrl,
+      path: `websites/${encodeURIComponent(websiteId)}/${path}?${params}`,
+      label: path,
+      auth: { apiKey },
+      timeoutMs,
+      fetchImpl
+    });
+    if (!answer.ok) throw umamiRefused(path, answer);
 
-    let response: Response;
-    try {
-      response = await fetchImpl(url, {
-        headers: {
-          authorization: `Bearer ${apiKey}`,
-          accept: 'application/json'
-        },
-        signal: AbortSignal.timeout(timeoutMs)
-      });
-    } catch (error) {
-      if (error instanceof Error && error.name === 'TimeoutError') {
-        throw new UmamiError(
-          `Umami ${path}: timed out after ${timeoutMs} ms`,
-          'timeout'
-        );
-      }
-      // A dropped connection is what a resuming machine does, not a refusal
-      throw new UmamiError(`Umami ${path}: request failed`, 'unavailable');
-    }
-
-    if (!response.ok) {
-      throw new UmamiError(
-        `Umami ${path}: status ${response.status}`,
-        WAKING_STATUSES.includes(response.status) ? 'unavailable' : 'refused'
-      );
-    }
-
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch (error) {
-      // The body can still time out or drop; only bad JSON is a bad answer
-      if (error instanceof Error && error.name !== 'SyntaxError') {
-        throw new UmamiError(
-          `Umami ${path}: ${error.name === 'TimeoutError' || error.name === 'AbortError' ? 'timed out' : 'dropped'} while reading the answer`,
-          error.name === 'TimeoutError' || error.name === 'AbortError'
-            ? 'timeout'
-            : 'unavailable'
-        );
-      }
-      throw new UmamiError(`Umami ${path}: answer is not JSON`, 'bad-answer');
-    }
+    const body = parseUmamiJson(path, answer.text);
 
     const parsed = schema.safeParse(body);
     if (!parsed.success) {

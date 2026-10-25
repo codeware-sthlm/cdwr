@@ -1,6 +1,19 @@
 import { randomInt } from 'node:crypto';
 
 import { isNotFound } from '@codeware/shared/feature/infisical';
+import {
+  type UmamiAnswer,
+  UmamiError,
+  type UmamiIdentity,
+  type UmamiTeam,
+  type UmamiTeamRole,
+  type UmamiTeamUser,
+  createUmamiCalls,
+  isWaking,
+  parseUmamiJson,
+  umamiFetch,
+  umamiLogin
+} from '@codeware/shared/util/umami';
 import { z } from 'zod';
 
 import { type Environment, readSecrets } from './infisical';
@@ -31,42 +44,17 @@ export interface UmamiWebsite {
   teamId: string | null;
 }
 
-export type TeamRole = 'team-member' | 'team-view-only' | 'team-manager';
+export type TeamRole = UmamiTeamRole;
 
-export interface UmamiUser {
-  id: string;
-  username: string;
-  role: 'admin' | 'user' | 'view-only';
-}
+export type UmamiUser = UmamiIdentity;
 
-export interface UmamiTeam {
-  id: string;
-  name: string;
-}
-
-export interface UmamiTeamUser {
-  userId: string;
-  role: string;
-}
+export type { UmamiTeam, UmamiTeamUser };
 
 const websiteSchema = z.object({
   id: z.string(),
   name: z.string(),
   domain: z.string().nullable().optional(),
   teamId: z.string().nullable().optional()
-});
-
-const userSchema = z.object({
-  id: z.string(),
-  username: z.string(),
-  role: z.enum(['admin', 'user', 'view-only'])
-});
-
-const teamSchema = z.object({ id: z.string(), name: z.string() });
-
-const teamUserPageSchema = z.object({
-  data: z.array(z.object({ userId: z.string(), role: z.string() })),
-  count: z.number()
 });
 
 const pageSchema = z.object({
@@ -134,74 +122,64 @@ export async function readUmamiProvisioning(
   return { status: 'unconfigured', missing };
 }
 
-const endpoint = ({ url }: UmamiConnection, path: string) =>
-  `${url.replace(/\/+$/, '')}/api${path}`;
-
-/** A suspended Umami times out, or the connection drops while it resumes */
-const looksAsleep = (error: unknown): boolean =>
-  error instanceof Error &&
-  (error.name === 'TimeoutError' ||
-    error.name === 'AbortError' ||
-    error instanceof TypeError);
-
-/** What Fly's proxy answers while the machine is not reachable */
-const WAKING_STATUSES: ReadonlyArray<number> = [502, 503, 504];
-
+/**
+ * One request. A read keeps trying while Umami wakes up: after a cold boot the
+ * gateway answers 502-504 or drops the connection for up to half a minute, and
+ * a body that drops while it is read is a wake too. Only a read is retried: a
+ * write that timed out may well have landed.
+ */
 async function request(
   conn: UmamiConnection,
   path: string,
-  init: { method?: string; body?: unknown; token?: string } = {}
-): Promise<Response> {
-  const send = (timeoutMs: number) =>
-    fetch(endpoint(conn, path), {
-      method: init.method ?? 'GET',
-      headers: {
-        Authorization: `Bearer ${init.token ?? conn.apiKey}`,
-        Accept: 'application/json',
-        ...(init.body === undefined
-          ? {}
-          : { 'Content-Type': 'application/json' })
-      },
-      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-      signal: AbortSignal.timeout(timeoutMs)
+  init: {
+    method?: 'GET' | 'POST' | 'DELETE';
+    body?: unknown;
+    readBody?: boolean;
+    token?: string;
+  } = {}
+): Promise<UmamiAnswer> {
+  const send = () =>
+    umamiFetch({
+      url: conn.url,
+      path,
+      method: init.method,
+      body: init.body,
+      readBody: init.readBody,
+      auth:
+        init.token === undefined
+          ? { apiKey: conn.apiKey }
+          : { token: init.token },
+      timeoutMs: TIMEOUT_MS
     });
 
-  // Only a read is retried: a write that timed out may well have landed
-  if ((init.method ?? 'GET') !== 'GET') return send(TIMEOUT_MS);
+  if ((init.method ?? 'GET') !== 'GET') return send();
 
-  // A read keeps trying while Umami wakes up: after a cold boot the gateway
-  // answers 502-504 or drops the connection for up to half a minute. The body
-  // is read inside the loop, since a drop while reading is a wake too.
   const started = Date.now();
   for (let attempt = 1; ; attempt++) {
     let asleep: unknown;
     try {
-      const response = await send(TIMEOUT_MS);
-      if (!WAKING_STATUSES.includes(response.status)) {
-        const text = await response.text();
-        return new Response(text, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers
-        });
-      }
-      asleep = new Error(`Umami answered ${response.status} while waking up`);
-      await response.body?.cancel();
+      return await send();
     } catch (error) {
-      if (!looksAsleep(error)) throw error;
+      if (!isWaking(error)) throw error;
       asleep = error;
     }
     if (attempt >= WAKE_ATTEMPTS || Date.now() - started >= WAKE_DEADLINE_MS) {
-      throw asleep;
+      throw wakingError(asleep);
     }
     if (attempt === 1) conn.onWaking?.();
     await sleep(WAKE_PAUSE_MS);
   }
 }
 
+/** The user and team calls as the key of a connection, or as a login token */
+const umami = (conn: UmamiConnection, token?: string) =>
+  createUmamiCalls(({ path, method, body, readBody }) =>
+    request(conn, path, { method, body, readBody, token })
+  );
+
 /** The error for a refused request; carries the status, never the key */
-async function refused(what: string, response: Response): Promise<Error> {
-  const detail = (await response.text().catch(() => '')).slice(0, 200);
+function refused(what: string, response: UmamiAnswer): Error {
+  const detail = response.text.slice(0, 200);
   return new Error(
     `Umami refused ${what}: ${response.status}${detail ? ` ${detail}` : ''}`
   );
@@ -225,8 +203,8 @@ export async function getWebsite(
 ): Promise<UmamiWebsite | null> {
   const response = await request(conn, `/websites/${encodeURIComponent(id)}`);
   if ([401, 403, 404].includes(response.status)) return null;
-  if (!response.ok) throw await refused('the website lookup', response);
-  const body: unknown = await response.json();
+  if (!response.ok) throw refused('the website lookup', response);
+  const body = parseUmamiJson('websites', response.text);
   return body === null ? null : toWebsite(websiteSchema.parse(body));
 }
 
@@ -241,8 +219,10 @@ export async function listTeamWebsites(
       conn,
       `/teams/${encodeURIComponent(teamId)}/websites?page=${page}&pageSize=${PAGE_SIZE}`
     );
-    if (!response.ok) throw await refused('the website list', response);
-    const { data, count } = pageSchema.parse(await response.json());
+    if (!response.ok) throw refused('the website list', response);
+    const { data, count } = pageSchema.parse(
+      parseUmamiJson('websites', response.text)
+    );
     websites.push(...data.map(toWebsite));
     if (!data.length || websites.length >= count) return websites;
   }
@@ -257,8 +237,10 @@ export async function createWebsite(
     method: 'POST',
     body: site
   });
-  if (!response.ok) throw await refused('the website creation', response);
-  return toWebsite(websiteSchema.parse(await response.json()));
+  if (!response.ok) throw refused('the website creation', response);
+  return toWebsite(
+    websiteSchema.parse(parseUmamiJson('websites', response.text))
+  );
 }
 
 /** The slugs of a website's public shares, read page by page */
@@ -272,8 +254,10 @@ export async function listShares(
       conn,
       `/websites/${encodeURIComponent(websiteId)}/shares?page=${page}&pageSize=${PAGE_SIZE}`
     );
-    if (!response.ok) throw await refused('the share list', response);
-    const { data, count } = sharePageSchema.parse(await response.json());
+    if (!response.ok) throw refused('the share list', response);
+    const { data, count } = sharePageSchema.parse(
+      parseUmamiJson('shares', response.text)
+    );
     slugs.push(...data.map(({ slug }) => slug));
     if (!data.length || slugs.length >= count) return slugs;
   }
@@ -290,10 +274,10 @@ export async function setShare(
     `/websites/${encodeURIComponent(websiteId)}`,
     { method: 'POST', body: { shareId: slug } }
   );
-  if (!response.ok) throw await refused('the share creation', response);
+  if (!response.ok) throw refused('the share creation', response);
   const { shareId } = z
     .object({ shareId: z.string().nullable() })
-    .parse(await response.json());
+    .parse(parseUmamiJson('websites', response.text));
   if (!shareId)
     throw new Error('Umami answered the share creation without a share');
   return shareId;
@@ -310,16 +294,34 @@ export function newShareSlug(): string {
   ).join('');
 }
 
-/** The user the key belongs to; Umami may nest it under `user` */
-export async function whoAmI(conn: UmamiConnection): Promise<UmamiUser> {
-  const response = await request(conn, '/me');
-  if (!response.ok) throw await refused('the identity lookup', response);
-  const body = z
-    .object({ user: userSchema.optional() })
-    .passthrough()
-    .parse(await response.json());
-  return body.user ?? userSchema.parse(body);
+/** What a read that never got an answer says: the status Umami kept answering, else the failure itself */
+const wakingError = (error: unknown): unknown =>
+  error instanceof UmamiError && error.status !== undefined
+    ? new Error(`Umami answered ${error.status} while waking up`)
+    : error;
+
+/** A refusal worded as cdwr always has: what was asked, the status and the start of the body */
+async function worded<T>(what: string, call: Promise<T>): Promise<T> {
+  try {
+    return await call;
+  } catch (error) {
+    if (
+      error instanceof UmamiError &&
+      (error.kind === 'refused' || error.kind === 'unavailable') &&
+      error.status !== undefined
+    ) {
+      const detail = error.detail?.slice(0, 200);
+      throw new Error(
+        `Umami refused ${what}: ${error.status}${detail ? ` ${detail}` : ''}`
+      );
+    }
+    throw error;
+  }
 }
+
+/** The user the key belongs to; Umami may nest it under `user` */
+export const whoAmI = (conn: UmamiConnection): Promise<UmamiUser> =>
+  worded('the identity lookup', umami(conn).whoAmI());
 
 /** Create a team; the creator becomes its owner */
 export async function createTeam(
@@ -330,168 +332,79 @@ export async function createTeam(
     throw new Error(
       `A team name is at most ${TEAM_NAME_MAX} characters, got ${name.length}`
     );
-  const response = await request(conn, '/teams', {
-    method: 'POST',
-    body: { name }
-  });
-  if (!response.ok) throw await refused('the team creation', response);
-  // Umami answers the transaction result: the team, then the owner's membership
-  const body = z
-    .union([teamSchema, z.tuple([teamSchema]).rest(z.unknown())])
-    .parse(await response.json());
-  const team = Array.isArray(body) ? body[0] : body;
-  return { id: team.id, name: team.name };
+  return worded('the team creation', umami(conn).createTeam(name));
 }
 
-/** Add a user to a team with this role */
-export async function addTeamUser(
+/** Add a user to a team with this role; a user who is a member counts as added */
+export const addTeamUser = (
   conn: UmamiConnection,
   teamId: string,
   userId: string,
   role: TeamRole
-): Promise<void> {
-  const response = await request(
-    conn,
-    `/teams/${encodeURIComponent(teamId)}/users`,
-    { method: 'POST', body: { userId, role } }
-  );
-  if (!response.ok) throw await refused('the team member', response);
-}
+): Promise<void> =>
+  worded('the team member', umami(conn).addTeamUser(teamId, userId, role));
 
-/**
- * A team by id; `null` when Umami has no such team. Ask the team itself: its
- * member list answers an admin with an empty page for a team that is gone.
- */
-export async function getTeam(
+/** A team by id; `null` when Umami has no such team */
+export const getTeam = (
   conn: UmamiConnection,
   teamId: string
-): Promise<UmamiTeam | null> {
-  const response = await request(conn, `/teams/${encodeURIComponent(teamId)}`);
-  if (response.status === 404) return null;
-  if (!response.ok) throw await refused('the team lookup', response);
-  const { id, name } = teamSchema.parse(await response.json());
-  return { id, name };
-}
+): Promise<UmamiTeam | null> =>
+  worded('the team lookup', umami(conn).getTeam(teamId));
 
 /** Every member of a team, read page by page */
-export async function listTeamUsers(
+export const listTeamUsers = (
   conn: UmamiConnection,
   teamId: string
-): Promise<UmamiTeamUser[]> {
-  const users: UmamiTeamUser[] = [];
-  for (let page = 1; ; page++) {
-    const response = await request(
-      conn,
-      `/teams/${encodeURIComponent(teamId)}/users?page=${page}&pageSize=${PAGE_SIZE}`
-    );
-    if (!response.ok) throw await refused('the team member list', response);
-    const { data, count } = teamUserPageSchema.parse(await response.json());
-    users.push(...data.map(({ userId, role }) => ({ userId, role })));
-    if (!data.length || users.length >= count) return users;
-  }
-}
+): Promise<UmamiTeamUser[]> =>
+  worded('the team member list', umami(conn).listTeamUsers(teamId));
 
 /** Move a website into a team */
-export async function transferWebsite(
+export const transferWebsite = (
   conn: UmamiConnection,
   websiteId: string,
   teamId: string
-): Promise<void> {
-  const response = await request(
-    conn,
-    `/websites/${encodeURIComponent(websiteId)}/transfer`,
-    { method: 'POST', body: { teamId } }
+): Promise<void> =>
+  worded(
+    'the website transfer',
+    umami(conn).transferWebsite(websiteId, teamId)
   );
-  if (!response.ok) throw await refused('the website transfer', response);
-}
 
 /** Take a user out of a team; a user who is not a member counts as removed */
-export async function removeTeamUser(
+export const removeTeamUser = (
   conn: UmamiConnection,
   teamId: string,
   userId: string
-): Promise<void> {
-  const response = await request(
-    conn,
-    `/teams/${encodeURIComponent(teamId)}/users/${encodeURIComponent(userId)}`,
-    { method: 'DELETE' }
-  );
-  if (response.status === 404) return;
-  // Umami answers 400 "does not exists on this team" for a non-member
-  if (response.status === 400) {
-    const detail = await refused('the team member removal', response);
-    if (detail.message.toLowerCase().includes('does not exist')) return;
-    throw detail;
-  }
-  if (!response.ok) throw await refused('the team member removal', response);
-}
-
-const userPageSchema = z.object({
-  data: z.array(z.object({ id: z.string(), username: z.string() })),
-  count: z.number()
-});
+): Promise<void> =>
+  worded('the team member removal', umami(conn).removeTeamUser(teamId, userId));
 
 /**
  * A login token for an Umami user. Umami refuses API keys on its user routes,
  * so reading users takes a login. Throws without echoing the password, and
  * for a user with 2FA, whose login yields no usable token.
  */
-export async function loginToken(
+export const loginToken = (
   url: string,
   username: string,
   password: string
-): Promise<string> {
-  const response = await request({ url, apiKey: '' }, '/auth/login', {
-    method: 'POST',
-    body: { username, password }
-  });
-  if (!response.ok) throw await refused('the login', response);
-  const body = z
-    .object({
-      token: z.string().optional(),
-      requiresTwoFactor: z.boolean().optional()
+): Promise<string> =>
+  worded(
+    'the login',
+    umamiLogin({
+      url,
+      username,
+      password,
+      timeoutMs: TIMEOUT_MS,
+      consumer: 'stats-accounts'
     })
-    .parse(await response.json());
-  if (body.requiresTwoFactor)
-    throw new Error(
-      'The Umami admin user has 2FA; stats-accounts needs a user without it'
-    );
-  if (!body.token) throw new Error('Umami answered the login without a token');
-  return body.token;
-}
+  );
 
 /** Every Umami user, read page by page; needs an admin user's login token */
-export async function listUsers(
+export const listUsers = (
   conn: UmamiConnection,
   token: string
-): Promise<Array<Pick<UmamiUser, 'id' | 'username'>>> {
-  const users: Array<Pick<UmamiUser, 'id' | 'username'>> = [];
-  for (let page = 1; ; page++) {
-    const response = await request(
-      conn,
-      `/admin/users?page=${page}&pageSize=${PAGE_SIZE}`,
-      { token }
-    );
-    if (!response.ok) throw await refused('the user list', response);
-    const { data, count } = userPageSchema.parse(await response.json());
-    users.push(...data.map(({ id, username }) => ({ id, username })));
-    if (!data.length || users.length >= count) return users;
-  }
-}
+): Promise<Array<Pick<UmamiUser, 'id' | 'username'>>> =>
+  worded('the user list', umami(conn, token).listUsers());
 
 /** Every team the key is a member of, read page by page */
-export async function listTeams(conn: UmamiConnection): Promise<UmamiTeam[]> {
-  const teams: UmamiTeam[] = [];
-  for (let page = 1; ; page++) {
-    const response = await request(
-      conn,
-      `/teams?page=${page}&pageSize=${PAGE_SIZE}`
-    );
-    if (!response.ok) throw await refused('the team list', response);
-    const { data, count } = z
-      .object({ data: z.array(teamSchema), count: z.number() })
-      .parse(await response.json());
-    teams.push(...data.map(({ id, name }) => ({ id, name })));
-    if (!data.length || teams.length >= count) return teams;
-  }
-}
+export const listTeams = (conn: UmamiConnection): Promise<UmamiTeam[]> =>
+  worded('the team list', umami(conn).listTeams());

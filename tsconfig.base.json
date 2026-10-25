@@ -214,6 +214,7 @@
         "./libs/shared/util/typesafe/src/index.ts"
       ],
       "@codeware/shared/util/ui": ["./libs/shared/util/ui/src/index.ts"],
+      "@codeware/shared/util/umami": ["./libs/shared/util/umami/src/index.ts"],
       "@codeware/shared/util/zod": ["./libs/shared/util/zod/src/index.ts"],
       "@payload-config": ["./apps/cms/src/payload.config.ts"],
       "dev-plugin": ["./tools/dev-plugin/src/index.ts"]
