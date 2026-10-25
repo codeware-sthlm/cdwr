@@ -13,12 +13,13 @@ export const ensureTenantHook: CollectionBeforeValidateHook<User> = ({
   data,
   req: { t, user }
 }) => {
-  // Providing a tenant is not required for system users, seeding or signup
+  // Providing a tenant is not required for system users, seeding, signup or the idle workspace cleanup
   if (
     hasRole(user, 'system-user') ||
     context?.seedAction ||
     context?.signup ||
-    context?.statsAccountWrite
+    context?.statsAccountWrite ||
+    context?.idleCleanup
   ) {
     return data;
   }

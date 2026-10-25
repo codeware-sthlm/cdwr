@@ -36,4 +36,8 @@ describe('validateTenantsArrayAccessHook', () => {
   it('lets a signup create through', () => {
     expect(run({ signup: true })).toBe(data);
   });
+
+  it('lets the idle cleanup through', () => {
+    expect(run({ idleCleanup: true })).toBe(data);
+  });
 });

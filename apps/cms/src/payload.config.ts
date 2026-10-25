@@ -66,6 +66,7 @@ import { tourSignupsExportEndpoint } from './endpoints/tour-signups-export';
 import { tourSignupsReorderEndpoint } from './endpoints/tour-signups-reorder';
 import { anonymizeTourSignupsTask } from './jobs/anonymize-tour-signups.task';
 import { buildCustomComponentTask } from './jobs/build-custom-component.task';
+import { cleanUpIdleWorkspacesTask } from './jobs/clean-up-idle-workspaces.task';
 import { deleteExpiredFormSubmissionsTask } from './jobs/delete-expired-form-submissions.task';
 import {
   REQUEUE_INTERVAL_MS,
@@ -248,6 +249,13 @@ export default buildConfig({
     tasks: [
       anonymizeTourSignupsTask,
       buildCustomComponentTask,
+      // Only the host schedules it: tenant apps would repeat the sweep
+      env.APP_MODE.type === 'host'
+        ? {
+            ...cleanUpIdleWorkspacesTask,
+            schedule: [{ cron: '0 3 * * *', queue: 'nightly' }]
+          }
+        : cleanUpIdleWorkspacesTask,
       deleteExpiredFormSubmissionsTask
     ],
     // Scheduling only queues the job; something has to run the queue. The

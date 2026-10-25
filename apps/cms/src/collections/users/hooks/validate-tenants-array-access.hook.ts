@@ -18,12 +18,13 @@ export const validateTenantsArrayAccessHook: CollectionBeforeChangeHook<
     return data;
   }
 
-  // System users, seed operations and signups can modify anything
+  // System users, seed operations, signups and the idle cleanup can modify anything
   if (
     hasRole(user, 'system-user') ||
     context?.seedAction ||
     context?.signup ||
-    context?.statsAccountWrite
+    context?.statsAccountWrite ||
+    context?.idleCleanup
   ) {
     return data;
   }
