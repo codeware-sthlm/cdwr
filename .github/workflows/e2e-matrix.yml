@@ -263,13 +263,18 @@ jobs:
 
       - name: Run affected e2e tests
         id: e2e-run
-        # bash on every OS, so the macOS open-file limit can be raised in the same shell
+        # bash on every OS, so the per-OS settings below apply to the nx command in the same shell
         shell: bash
         run: |
-          # macOS allows 256 open files per process, which Nx's project graph can exceed
+          # Building the project graph can run out of file handles (EMFILE) on macOS and Windows
           if [ "$RUNNER_OS" = "macOS" ]; then
-            ulimit -n 65536
-            echo "Open-file limit: $(ulimit -n)"
+            # ulimit alone is capped by the kernel's per-process limit
+            sudo sysctl -w kern.maxfiles=524288 kern.maxfilesperproc=524288
+            ulimit -n 524288
+            echo "Open-file limit: $(ulimit -n) ($(sysctl -n kern.maxfilesperproc) per process)"
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            # No limit to raise on Windows; run the plugins in-process instead of in parallel workers
+            export NX_ISOLATE_PLUGINS=false
           fi
           pnpm nx run-many -t e2e --projects ${{ env.projects }} -c ${{ matrix.configuration }} --exclude "${{ matrix.skip-projects }}"
         timeout-minutes: ${{ matrix.timeout }}
@@ -280,9 +285,6 @@ jobs:
           # With a custom cache directory the daemon fails to record task runs
           # (SQLite FOREIGN KEY error, nrwl/nx#37118) and exits 1 after a green run
           NX_DAEMON: false
-          # Plugins in-process: without the daemon each plugin worker opens its config files in
-          # parallel, which runs out of file handles (EMFILE) on macOS and Windows runners
-          NX_ISOLATE_PLUGINS: false
           NX_PERF_LOGGING: false
           # Fix out-of-memory issue on macOS runners
           NODE_OPTIONS: --max_old_space_size=4096
