@@ -198,13 +198,15 @@ and shows what the token reaches. The app's permissions: Contents and Pull reque
 write, Metadata, Checks and Actions read; installed on `cdwr` only, in no ruleset bypass list.
 
 The agent container (`apps/agent-host`) reads its secrets from Infisical at start: `secrets.sh`, its
-entrypoint, logs in with a read-only machine identity scoped to production `/agent-queue`, exports that
-folder's keys and then execs the run loop, so the loop is still the process `docker compose stop`
-signals. The NUC holds only the identity (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`,
-`INFISICAL_PROJECT_ID`, `INFISICAL_SITE`) in a root-only `.env`; a key set there wins over the vault,
-and the log names which keys came from where, never their values. The identity is unset before the
-loop starts, but PID 1 keeps it in its environment, readable by the agent's own sessions; that is
-why it must stay read-only and scoped to `/agent-queue`. Without the identity the container
+entrypoint, logs in with a machine identity, exports production `/agent-queue` and then execs the run
+loop, so the loop is still the process `docker compose stop` signals. The folder lives in its own
+Infisical project, `agent-nuc`, which holds nothing else, and the identity is a Viewer there and a
+member of no other project: the free plan cannot limit an identity to a folder, so the project is
+the limit. The NUC holds only the identity (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`,
+`INFISICAL_PROJECT_ID` of that project, `INFISICAL_SITE`) in a root-only `.env`; a key set there
+wins over the vault, and the log names which keys came from where, never their values. The identity
+is unset before the loop starts, but PID 1 keeps it in its environment, readable by the agent's own
+sessions; that is why it must stay a Viewer of that one project. Without the identity the container
 uses its environment as given. Secrets are read once per start, so a rotated one takes a
 `docker compose restart`. Claude runs on `CLAUDE_CODE_OAUTH_TOKEN`, a long-lived token from
 `claude setup-token` on the Mac, which keeps billing on the subscription.
