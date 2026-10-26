@@ -1,0 +1,5 @@
+# .env is committed public configuration; the tenant api key goes in .env.local
+.env.local
+
+# Nitro build output
+.output
