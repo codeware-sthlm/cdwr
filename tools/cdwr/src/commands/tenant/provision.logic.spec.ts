@@ -98,15 +98,14 @@ describe('planFolders', () => {
     expect(namesIn).not.toHaveBeenCalledWith('/tenants/demo/apps');
   });
 
-  it('does not repeat a folder shared by two apps', async () => {
+  it('plans each parent folder once, down to the app', async () => {
     const namesIn = vi.fn(async () => []);
-    const folders = await planFolders('demo', ['cms', 'web'], namesIn);
+    const folders = await planFolders('demo', ['cms'], namesIn);
     expect(folders.map(folderPath)).toEqual([
       '/tenants',
       '/tenants/demo',
       '/tenants/demo/apps',
-      '/tenants/demo/apps/cms',
-      '/tenants/demo/apps/web'
+      '/tenants/demo/apps/cms'
     ]);
   });
 
@@ -143,19 +142,16 @@ describe('flagActionOf', () => {
 describe('provisionSteps flags', () => {
   it('shows the flag write, keep and pause', () => {
     expect(
+      provisionSteps('demo', [], [], [{ app: 'cms', action: 'create' }])
+    ).toEqual(['Set DEPLOY_ENABLED=true in /tenants/demo/apps/cms']);
+    expect(
       provisionSteps(
         'demo',
         [],
         [],
-        [
-          { app: 'cms', action: 'create' },
-          { app: 'web', action: 'paused', value: 'false' }
-        ]
+        [{ app: 'cms', action: 'paused', value: 'false' }]
       )
-    ).toEqual([
-      'Set DEPLOY_ENABLED=true in /tenants/demo/apps/cms',
-      'Keep DEPLOY_ENABLED=false in /tenants/demo/apps/web (paused)'
-    ]);
+    ).toEqual(['Keep DEPLOY_ENABLED=false in /tenants/demo/apps/cms (paused)']);
     expect(
       provisionSteps('demo', [], [], [{ app: 'cms', action: 'enabled' }])
     ).toEqual(['Keep DEPLOY_ENABLED in /tenants/demo/apps/cms (already true)']);
@@ -175,34 +171,27 @@ describe('pausedMessage', () => {
 });
 
 describe('planFlyAppsToDeploy', () => {
-  const apps = [
-    { app: 'cms' as AppKind, flyApp: 'cdwr-cms-demo' },
-    { app: 'web' as AppKind, flyApp: 'cdwr-web-demo' }
-  ];
+  const apps = [{ app: 'cms' as AppKind, flyApp: 'cdwr-cms-demo' }];
 
   it('includes apps that do not exist yet', () => {
     expect(planFlyAppsToDeploy(apps, [], [])).toEqual([
-      { app: 'cms', flyApp: 'cdwr-cms-demo', exists: false },
-      { app: 'web', flyApp: 'cdwr-web-demo', exists: false }
+      { app: 'cms', flyApp: 'cdwr-cms-demo', exists: false }
     ]);
   });
 
   it('excludes an existing app whose key was not just written', () => {
-    expect(planFlyAppsToDeploy(apps, ['cdwr-cms-demo'], [])).toEqual([
-      { app: 'web', flyApp: 'cdwr-web-demo', exists: false }
-    ]);
+    expect(planFlyAppsToDeploy(apps, ['cdwr-cms-demo'], [])).toEqual([]);
   });
 
   it('keeps an existing app whose key was just written', () => {
-    expect(
-      planFlyAppsToDeploy(apps, ['cdwr-cms-demo', 'cdwr-web-demo'], ['cms'])
-    ).toEqual([{ app: 'cms', flyApp: 'cdwr-cms-demo', exists: true }]);
+    expect(planFlyAppsToDeploy(apps, ['cdwr-cms-demo'], ['cms'])).toEqual([
+      { app: 'cms', flyApp: 'cdwr-cms-demo', exists: true }
+    ]);
   });
 
   it('treats every app as new when the Fly list could not be read', () => {
     expect(planFlyAppsToDeploy(apps, null, [])).toEqual([
-      { app: 'cms', flyApp: 'cdwr-cms-demo', exists: false },
-      { app: 'web', flyApp: 'cdwr-web-demo', exists: false }
+      { app: 'cms', flyApp: 'cdwr-cms-demo', exists: false }
     ]);
   });
 });
@@ -225,14 +214,14 @@ describe('deployArgs', () => {
   });
 
   it('adds --ref and pr-number for a preview run', () => {
-    expect(deployArgs('preview', 'demo', 'web', 12, 'feature/x')).toEqual([
+    expect(deployArgs('preview', 'demo', 'cms', 12, 'feature/x')).toEqual([
       'workflow',
       'run',
       'fly-deployment.yml',
       '--ref',
       'feature/x',
       '-f',
-      'app=web',
+      'app=cms',
       '-f',
       'tenant=demo',
       '-f',
@@ -246,25 +235,25 @@ describe('deployArgs', () => {
 describe('provisionSteps', () => {
   it('describes folders then keys', () => {
     const folders: Folder[] = [{ parent: '/', name: 'tenants' }];
-    const keys = [
-      { app: 'cms' as AppKind, action: 'create' as const },
-      { app: 'web' as AppKind, action: 'matches' as const }
-    ];
+    const keys = [{ app: 'cms' as AppKind, action: 'create' as const }];
     expect(provisionSteps('demo', folders, keys)).toEqual([
       'Create folder /tenants',
-      'Set PAYLOAD_API_KEY in /tenants/demo/apps/cms',
-      'Keep PAYLOAD_API_KEY in /tenants/demo/apps/web (already matches)'
+      'Set PAYLOAD_API_KEY in /tenants/demo/apps/cms'
+    ]);
+    expect(
+      provisionSteps('demo', [], [{ app: 'cms', action: 'matches' }])
+    ).toEqual([
+      'Keep PAYLOAD_API_KEY in /tenants/demo/apps/cms (already matches)'
     ]);
   });
 });
 
 describe('conflictMessage', () => {
   it('names every conflicting app', () => {
-    expect(conflictMessage('demo', ['cms', 'web'])).toBe(
+    expect(conflictMessage('demo', ['cms'])).toBe(
       [
         'These folders already hold a different PAYLOAD_API_KEY:',
         '  /tenants/demo/apps/cms',
-        '  /tenants/demo/apps/web',
         '',
         'A running app may authenticate with it, so nothing was written.',
         "If this workspace's key is the one to keep, use `cdwr tenant rotate-key`."
@@ -465,8 +454,6 @@ describe('workspaceChoices', () => {
 describe('flipsStatus', () => {
   it.each([
     ['pending', ['cms'], true, true],
-    ['pending', ['cms', 'web'], true, true],
-    ['pending', ['web'], true, false],
     ['pending', ['cms'], false, false],
     ['active', ['cms'], true, false]
   ] as const)('%s with %j, wait %s -> %s', (status, apps, wait, expected) => {

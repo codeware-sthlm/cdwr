@@ -59,10 +59,8 @@ migrations.json
 vite.config.*.timestamp*
 vitest.config.*.timestamp*
 
-# No nested lockfiles, except apps/web which ships a standalone runtime
-# lockfile for a reproducible Docker install (kept in sync by `nx sync`).
+# No nested lockfiles
 apps/**/pnpm-lock.yaml
-!apps/web/pnpm-lock.yaml
 
 # TypeScript
 **/*.tsbuildinfo

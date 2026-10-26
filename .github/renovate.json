@@ -28,23 +28,13 @@
   "rangeStrategy": "auto",
   "dependencyDashboard": true,
 
-  "ignorePaths": [
-    "**/node_modules/**",
-    "**/bower_components/**",
-    "apps/web/package.json"
-  ],
+  "ignorePaths": ["**/node_modules/**", "**/bower_components/**"],
 
   "lockFileMaintenance": {
     "enabled": true
   },
 
   "packageRules": [
-    {
-      "description": "Leave the generated 'apps/web' lockfile to nx sync",
-      "matchFileNames": ["apps/web/**"],
-      "matchUpdateTypes": ["lockFileMaintenance"],
-      "enabled": false
-    },
     {
       "description": "Security updates configuration",
       "matchUpdateTypes": ["patch", "minor", "major"],
@@ -84,11 +74,8 @@
       "matchPackageNames": [
         "@hono/*",
         "@radix-ui/react-*",
-        "@remix-run/*",
         "prism-react-renderer",
-        "react*",
-        "remix-hono",
-        "remix-utils"
+        "react*"
       ],
       "enabled": false
     },

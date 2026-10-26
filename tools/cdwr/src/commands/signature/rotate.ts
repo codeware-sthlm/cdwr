@@ -18,6 +18,7 @@ import {
   ACTIVE,
   type AffectedApps,
   PREVIOUS,
+  RETIRED_SIGNER_BASE_NAME,
   SECRET_PATH,
   type Stage,
   classifyApps,
@@ -42,7 +43,7 @@ async function fetchAffectedApps(
   return classifyApps(
     names,
     configAppName(root, 'cms'),
-    configAppName(root, 'web'),
+    RETIRED_SIGNER_BASE_NAME,
     environment
   );
 }
@@ -79,10 +80,12 @@ export default defineCommand({
       (a) => `${a.verifiers.length} verifier(s), ${a.signers.length} signer(s)`
     );
 
-    if (!apps.verifiers.length || !apps.signers.length) {
+    // No signer is fine: previews no longer deploy one, and production has none
+    // between the old web apps going and headless arriving
+    if (!apps.verifiers.length) {
       throw new Error(
-        `Expected both cms and web apps in ${environment}, found ` +
-          `verifiers=[${apps.verifiers.join(', ')}] signers=[${apps.signers.join(', ')}]`
+        `Expected a cms app in ${environment}, found none ` +
+          `(signers=[${apps.signers.join(', ')}])`
       );
     }
 

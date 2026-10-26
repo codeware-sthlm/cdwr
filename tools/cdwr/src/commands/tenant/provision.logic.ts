@@ -12,7 +12,7 @@ import { TEAM_STEP_TEXT, type TeamStep } from '../../services/stats-team.logic';
 export const DEPLOY_WORKFLOW = 'fly-deployment.yml';
 
 /** Apps a workspace can be deployed with, named as their Infisical folders */
-export const TENANT_APPS = ['cms', 'web'] as const;
+export const TENANT_APPS = ['cms'] as const;
 
 export type AppKind = (typeof TENANT_APPS)[number];
 

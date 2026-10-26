@@ -44,11 +44,11 @@ describe('summarize', () => {
   it('combines host, tenant flags and secrets per app', () => {
     const result = summarize(
       'preview',
-      { cms: [{}, { tenant: 'globex' }, { tenant: 'acme' }], web: [] },
+      { cms: [{}, { tenant: 'globex' }, { tenant: 'acme' }], builder: [] },
       [
         { app: 'cms', tenant: 'initech', reason: 'flag-off' },
         { app: 'cms', tenant: 'umbrella', reason: 'no-flag' },
-        { app: 'web', reason: 'flag-off' }
+        { app: 'builder', reason: 'flag-off' }
       ],
       { cms: { DATABASE_URL: 'postgres://x' } }
     );
@@ -64,8 +64,7 @@ describe('summarize', () => {
         ],
         secrets: { DATABASE_URL: 'postgres://x' }
       },
-      { app: 'web', host: 'off', tenants: [], secrets: {} },
-      { app: 'builder', host: 'no flag', tenants: [], secrets: {} },
+      { app: 'builder', host: 'off', tenants: [], secrets: {} },
       { app: 'umami', host: 'no flag', tenants: [], secrets: {} }
     ]);
   });

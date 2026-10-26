@@ -215,8 +215,7 @@ nx payload cms generate:importmap
 
 #### Content Security Policy
 
-Both apps send one, built by `@codeware/shared/util/csp`: the cms from `apps/cms/src/proxy.ts`,
-`apps/web` from `middlewares/csp.ts`. Framing, plugins, `base-uri` and form targets are always
+The cms sends one, built by `@codeware/shared/util/csp` in `apps/cms/src/proxy.ts`. Framing, plugins, `base-uri` and form targets are always
 enforced. The full policy — a per-request nonce with `'strict-dynamic'` for scripts — goes out
 `Content-Security-Policy-Report-Only` until `CSP_ENFORCE=true`. A new third-party origin has to be
 added there, or it breaks the site once enforcement is on.
@@ -224,21 +223,17 @@ added there, or it breaks the site once enforcement is on.
 Violations go to Sentry's security endpoint, derived from `SENTRY_DSN`. In Sentry they are
 issues of type _CSP_; without a DSN, locally, they appear only in the browser console.
 
-#### CMS Host mode + external web client
+#### CMS Host mode
 
 Ensure `TENANT_ID` has no value in `apps/cms/.env.local`.
 
 ```sh
 # Terminal 1: Serve the Payload admin UI (auto-seeds on start)
 nx dev cms
-
-# Terminal 2: Serve web client
-nx dev web
 ```
 
 | View            | URL                     | Credentials                  |
 | --------------- | ----------------------- | ---------------------------- |
-| Tenant client   | `localhost:4200`        |                              |
 | Tenant admin UI | `localhost:3000/admin`  | `titan@local.dev` / `dev`    |
 | CMS admin UI    | `localhost:3000/admin`  | `system@local.dev` / `dev`   |
 | Signup          | `localhost:3000/signup` | invite `SEED-MANY-0000-0001` |
@@ -324,7 +319,7 @@ e2e/         # End-to-end tests
 
 **`apps/cms`** — the platform itself: Payload CMS v3 on Next.js 16, serving the admin UI and the tenant-facing site from one app (`(payload)` and `(site)` route groups). **This is the preferred client for a tenant** — deployed in tenant mode it serves that tenant's site with its admin pages scoped to it. Uses PostgreSQL, S3 storage, Lexical rich text, and Sentry for error tracking.
 
-**`apps/web`** — a technical showcase, not the default client. A Remix v2 + Hono app (Hono wraps Remix for a unified Node server) proving a second React framework can consume the headless API and render the same content through the shared `cms-renderer` components. Reach for `apps/cms` when serving a real tenant.
+The Remix showcase `apps/web` is retired; a TanStack Start client, `apps/headless`, replaces it (COD-611).
 
 ### Publishable Packages (`packages/`)
 

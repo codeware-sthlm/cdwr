@@ -108,18 +108,11 @@ describe('readInfisicalStatus', () => {
           { secretKey: 'PAYLOAD_API_KEY', secretValue: 'own-key' },
           { secretKey: 'RESTRICTED_FONTS', secretValue: 'x' }
         ],
-        'production|/tenants/demo/apps/web': [
-          enabled(' TRUE '),
-          { secretKey: 'PAYLOAD_API_KEY', secretValue: 'other-key' }
-        ],
-        'preview|/tenants/demo/apps/cms': [enabled('false')],
-        'preview|/tenants/demo/apps/web': [
-          { secretKey: 'PAYLOAD_API_KEY', secretValue: 'own-key' }
-        ]
+        'preview|/tenants/demo/apps/cms': [enabled('false')]
       },
       {
-        'production|/tenants/demo/apps': ['cms', 'web', 'unknown'],
-        'preview|/tenants/demo/apps': ['cms', 'web']
+        'production|/tenants/demo/apps': ['cms', 'unknown'],
+        'preview|/tenants/demo/apps': ['cms']
       }
     );
 
@@ -136,13 +129,6 @@ describe('readInfisicalStatus', () => {
             included: true,
             apiKey: 'matches',
             optionalKeys: ['RESTRICTED_FONTS']
-          },
-          {
-            app: 'web',
-            flyApp: 'cdwr-web-demo',
-            included: true,
-            apiKey: 'mismatch',
-            optionalKeys: []
           }
         ]
       },
@@ -156,17 +142,30 @@ describe('readInfisicalStatus', () => {
             included: false,
             apiKey: 'missing',
             optionalKeys: []
-          },
-          {
-            app: 'web',
-            flyApp: 'cdwr-web-pr-<n>-demo',
-            included: false,
-            apiKey: 'matches',
-            optionalKeys: []
           }
         ]
       }
     ]);
+  });
+
+  it('flags a key that differs from the workspace key', async () => {
+    const client = fakeClient(
+      {
+        'production|/tenants/demo/apps/cms': [
+          enabled(' TRUE '),
+          { secretKey: 'PAYLOAD_API_KEY', secretValue: 'other-key' }
+        ]
+      },
+      { 'production|/tenants/demo/apps': ['cms'] }
+    );
+
+    const { environments } = await read(client, 'demo', 'own-key', [
+      'production'
+    ]);
+
+    expect(environments[0]).toMatchObject({
+      apps: [{ app: 'cms', included: true, apiKey: 'mismatch' }]
+    });
   });
 
   it('reports no apps when the workspace has no folder', async () => {

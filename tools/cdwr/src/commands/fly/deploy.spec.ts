@@ -119,12 +119,12 @@ describe('fly deploy', () => {
   });
 
   it('runs production from main', async () => {
-    await runDeploy(['web', '--env', 'production', '--yes']);
+    await runDeploy(['umami', '--env', 'production', '--yes']);
     expect(runWorkflow).toHaveBeenCalledWith(
       root,
       'fly-deployment.yml',
       'main',
-      { app: 'web', environment: 'production' }
+      { app: 'umami', environment: 'production' }
     );
   });
 
