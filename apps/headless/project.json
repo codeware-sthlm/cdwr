@@ -1,0 +1,25 @@
+{
+  "name": "headless",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/headless/src",
+  "projectType": "application",
+  "tags": ["scope:headless", "type:app"],
+  "targets": {
+    "build": {
+      "outputs": ["{projectRoot}/.output"]
+    },
+    "start": {
+      "metadata": {
+        "description": "Runs the built Node server from .output",
+        "help": { "command": "nx start headless" }
+      },
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["build"],
+      "options": {
+        "command": "node .output/server/index.mjs",
+        "cwd": "apps/headless"
+      }
+    }
+  }
+}

@@ -139,6 +139,14 @@ export default [
               ]
             },
             {
+              sourceTag: 'scope:headless',
+              onlyDependOnLibsWithTags: [
+                'scope:headless',
+                'scope:shared',
+                'domain:signature'
+              ]
+            },
+            {
               sourceTag: 'scope:create-nx-payload',
               onlyDependOnLibsWithTags: [
                 'scope:create-nx-payload',

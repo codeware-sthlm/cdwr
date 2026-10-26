@@ -1,0 +1,15 @@
+@import 'tailwindcss';
+
+/* Enter/exit animation utilities used by the shadcn overlay components */
+@import 'tw-animate-css';
+
+/* Every selectable site theme — the active one is picked by `data-theme` on
+   <html>, set server-side from the tenant's configuration */
+@import '../../../libs/shared/theme/src/lib/_core/site-base.css';
+
+/* Tailwind only scans the app by default; the renderer lives in shared libs */
+@source '../../../libs/shared/ui';
+
+/* Enable prose for custom Payload renderer components */
+@plugin '@tailwindcss/typography';
+@config '../../../libs/shared/theme/src/lib/_core/tailwind-typography.cjs';
