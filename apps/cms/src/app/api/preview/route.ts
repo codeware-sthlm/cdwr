@@ -1,3 +1,4 @@
+import { isSecondFactorPending } from '@codeware/app-cms/util/access';
 import { canEdit } from '@codeware/app-cms/util/misc';
 import { draftMode } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     const payload = await getPayload({ config: await config });
     const { user } = await payload.auth({ headers: request.headers });
 
-    if (!canEdit(user)) {
+    if (!canEdit(user) || isSecondFactorPending(user)) {
       return new Response('Unauthorized', { status: 401 });
     }
   } catch {

@@ -28,9 +28,10 @@ import {
   toursBlock
 } from '@codeware/app-cms/ui/blocks';
 import { defaultLexical } from '@codeware/app-cms/ui/fields';
+import { isSecondFactorPending } from '@codeware/app-cms/util/access';
 import { getEmailAdapter, withTextPart } from '@codeware/app-cms/util/email';
 import { customTranslations } from '@codeware/app-cms/util/i18n';
-import { isTenant, isUser } from '@codeware/app-cms/util/misc';
+import { hasRole, isTenant, isUser } from '@codeware/app-cms/util/misc';
 import {
   getPlugins,
   withSubmissionDeliveryTracking
@@ -73,6 +74,7 @@ import {
   recoverComponentBuilds
 } from './jobs/recover-component-builds';
 import { queryStatsLogger } from './perf/query-stats';
+import { getTotpPlugins } from './security/totp/get-totp-plugins';
 import { userOnlyAccess } from './security/user-only-access';
 import { userOrApiKeyAccess } from './security/user-or-api-key-access';
 import { adoptPlatformDomains } from './utils/adopt-platform-domains';
@@ -246,6 +248,14 @@ export default buildConfig({
     tourSignupsReorderEndpoint
   ],
   jobs: {
+    // `/api/payload-jobs/run` and `handle-schedules` run every queue with
+    // access overridden, and Payload adds them after every plugin, so neither
+    // TOTP wrapper sees them. The deployment runs its own queues; a person
+    // running them is a system user who has completed the second factor
+    access: {
+      run: ({ req: { user } }) =>
+        hasRole(user, 'system-user') && !isSecondFactorPending(user)
+    },
     tasks: [
       anonymizeTourSignupsTask,
       buildCustomComponentTask,
@@ -274,13 +284,17 @@ export default buildConfig({
       : [],
     deleteJobOnComplete: true
   },
-  plugins: getPlugins(env, {
-    access: {
-      read: userOrApiKeyAccess(),
-      readEditorsOnly: userOrApiKeyAccess({ editorsOnly: true }),
-      write: userOnlyAccess()
-    }
-  }),
+  plugins: [
+    ...getPlugins(env, {
+      access: {
+        read: userOrApiKeyAccess(),
+        readEditorsOnly: userOrApiKeyAccess({ editorsOnly: true }),
+        write: userOnlyAccess()
+      }
+    }),
+    // Last: both wrap the access of every collection before them
+    ...getTotpPlugins()
+  ],
   // A refused signup is an answer, not a fault: log the message and skip the
   // stack. The key is `SignupRefusedError`'s own name, so every other
   // `APIError` still logs in full.
