@@ -1,5 +1,20 @@
 import type { Metadata } from 'next';
 
+/** The generated card a page without an image of its own is shared with */
+export const DEFAULT_OG_IMAGE_PATH = '/og-image.png';
+
+/** Open Graph locale for each language a site can be written in */
+const OG_LOCALES = { en: 'en_US', sv: 'sv_SE' } as const;
+
+/** The Open Graph form of a tenant locale, when one is known */
+export function ogLocale(
+  locale: string | null | undefined
+): string | undefined {
+  return locale && locale in OG_LOCALES
+    ? OG_LOCALES[locale as keyof typeof OG_LOCALES]
+    : undefined;
+}
+
 /** What a document states about itself for a search result or a shared link */
 export type DocumentMeta = {
   /** The document's own name: a page's, a post's or a tour's title */
@@ -26,10 +41,30 @@ export type DocumentMeta = {
  *   unless an SEO title was set for it
  * @param options.siteName - Restated for a shared link: a page's Open Graph
  *   block replaces the layout's rather than adding to it
+ * @param options.path - The page's address on the site, for its canonical link
+ * @param options.origin - The address the site calls its own (`serverURL`:
+ *   the workspace's primary domain once adopted), so the canonical link names
+ *   one host whichever one the visitor came in on
+ * @param options.kind - `article` for a post, `website` otherwise
+ * @param options.locale - The site's language, as a tenant locale
  */
 export function documentMetadata(
   doc: DocumentMeta,
-  { landing = false, siteName }: { landing?: boolean; siteName?: string } = {}
+  {
+    landing = false,
+    siteName,
+    path,
+    origin,
+    kind = 'website',
+    locale
+  }: {
+    landing?: boolean;
+    siteName?: string;
+    path?: string;
+    origin?: string;
+    kind?: 'website' | 'article';
+    locale?: string | null;
+  } = {}
 ): Metadata {
   const seoTitle = doc.meta?.title?.trim() || null;
   const description =
@@ -43,15 +78,25 @@ export function documentMetadata(
       : undefined
     : (seoTitle ?? doc.name);
 
+  const openGraphLocale = ogLocale(locale);
+
   return {
     ...(title && { title }),
     ...(description && { description }),
+    ...(path && {
+      alternates: {
+        canonical: origin ? new URL(path, origin).toString() : path
+      }
+    }),
     openGraph: {
+      type: kind,
       ...(siteName && { siteName }),
+      ...(openGraphLocale && { locale: openGraphLocale }),
       ...(typeof title === 'string' && { title }),
       ...(description && { description }),
-      ...(image && { images: [{ url: image }] })
-    }
+      images: [{ url: image ?? DEFAULT_OG_IMAGE_PATH }]
+    },
+    twitter: { card: 'summary_large_image' }
   };
 }
 

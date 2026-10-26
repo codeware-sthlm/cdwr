@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 
+import { isSiteGated } from '../utils/site-gated';
+
 /**
  * Answered per request, not baked at build time.
  *
@@ -16,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * Answers for `/admin` too, which no site wants indexed either way.
  */
 export default function robots(): MetadataRoute.Robots {
-  if (process.env.SITE_GATE_PASSWORD) {
+  if (isSiteGated()) {
     return { rules: { userAgent: '*', disallow: '/' } };
   }
 
