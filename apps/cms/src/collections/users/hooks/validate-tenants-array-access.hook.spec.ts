@@ -40,4 +40,19 @@ describe('validateTenantsArrayAccessHook', () => {
   it('lets the idle cleanup through', () => {
     expect(run({ idleCleanup: true })).toBe(data);
   });
+
+  it('leaves an update that does not touch the workspaces alone', () => {
+    // payload-totp saves a secret this way; read as an empty list it would
+    // look like every workspace being removed
+    const partial = { totpSecret: 'secret' };
+    expect(
+      validateTenantsArrayAccessHook({
+        context: {},
+        data: partial,
+        operation: 'update',
+        originalDoc: { tenants: [{ id: 'row', tenant: 7, role: 'admin' }] },
+        req: { t: jest.fn(), user: undefined }
+      } as unknown as Args)
+    ).toBe(partial);
+  });
 });

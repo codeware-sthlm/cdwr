@@ -17,6 +17,12 @@ export const validateTenantsArrayAccessHook: CollectionBeforeChangeHook<
   if ((operation !== 'create' && operation !== 'update') || !data) {
     return data;
   }
+  // Nothing to check when the update does not touch the workspaces, as when
+  // payload-totp saves a secret with no request; read as an empty list it
+  // would look like every workspace being removed
+  if (operation === 'update' && data.tenants === undefined) {
+    return data;
+  }
 
   // System users, seed operations, signups and the idle cleanup can modify anything
   if (
