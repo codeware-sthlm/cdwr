@@ -32,7 +32,7 @@ export const Code: React.FC<Props> = ({
           // The code scrolls inside the gutter kept for the copy button, so a
           // long line never runs underneath it
           <pre
-            className={`${className} rounded-lg border border-slate-100 py-4 pr-12 pl-4 text-xs dark:border-slate-800`}
+            className={`${className} border-border rounded-lg border py-4 pr-12 pl-4 text-xs`}
             style={style}
           >
             <div className="overflow-x-auto">
@@ -41,7 +41,7 @@ export const Code: React.FC<Props> = ({
                   key={i}
                   {...getLineProps({ className: 'table-row', line })}
                 >
-                  <span className="table-cell text-right text-slate-500 select-none">
+                  <span className="text-muted-foreground table-cell text-right select-none">
                     {i + 1}
                   </span>
                   <span className="table-cell pl-4">

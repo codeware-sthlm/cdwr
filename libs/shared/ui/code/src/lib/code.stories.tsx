@@ -1,4 +1,3 @@
-import { CopyButton } from '@codeware/shared/ui/copy-button';
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -55,27 +54,17 @@ export const NightOwl: StoryObj = {
   render: () => <Code code={tsSnippet} language="typescript" theme="nightOwl" />
 };
 
-export const CopyButtonStory: StoryObj = {
-  name: 'CopyButton (standalone)',
-  render: () => (
-    <div className="relative inline-block">
-      <pre className="rounded-lg border border-slate-100 p-4 pr-12 text-xs">
-        {'const greeting = "Hello, world!";'}
-      </pre>
-      <CopyButton code={'const greeting = "Hello, world!";'} />
-    </div>
-  )
-};
-
+// A dark scheme pairs with vsDark, as CodeBlock renders it; the line numbers and
+// copy button take theme tokens, so they must sit on the matching Prism surface
 export const FrostLight = a11yStory(TypeScript, 'frost', 'light');
-export const FrostDark = a11yStory(TypeScript, 'frost', 'dark');
+export const FrostDark = a11yStory(DarkTheme, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory(
   TypeScript,
   'payload-admin',
   'light'
 );
-export const PayloadAdminDark = a11yStory(TypeScript, 'payload-admin', 'dark');
+export const PayloadAdminDark = a11yStory(DarkTheme, 'payload-admin', 'dark');
 export const SpotlightLight = a11yStory(TypeScript, 'spotlight', 'light');
-export const SpotlightDark = a11yStory(TypeScript, 'spotlight', 'dark');
+export const SpotlightDark = a11yStory(DarkTheme, 'spotlight', 'dark');
 export const CodewareLight = a11yStory(TypeScript, 'codeware', 'light');
-export const CodewareDark = a11yStory(TypeScript, 'codeware', 'dark');
+export const CodewareDark = a11yStory(DarkTheme, 'codeware', 'dark');
