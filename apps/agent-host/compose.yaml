@@ -3,6 +3,8 @@ services:
   agent:
     image: ghcr.io/codeware-sthlm/cdwr-agent:${AGENT_IMAGE_TAG:-main}
     container_name: cdwr-agent
+    # The queue's host_id; without it every deploy gets a new container id
+    hostname: agent-host
     init: true
     # Lets a run finish its exit trap before the kill
     stop_grace_period: 2m

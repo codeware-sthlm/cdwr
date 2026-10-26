@@ -213,7 +213,7 @@ write, Metadata, Checks and Actions read; installed on `cdwr` only, in no rulese
 The agent container (`apps/agent-host`) reads its secrets from Infisical at start: `secrets.sh`, its
 entrypoint, logs in with a machine identity, exports production `/agent-queue` and then execs the run
 loop, so the loop is still the process `docker compose stop` signals. The folder lives in its own
-Infisical project, `agent-nuc`, which holds nothing else, and the identity is a Viewer there and a
+Infisical project, `agent-host`, which holds nothing else, and the identity is a Viewer there and a
 member of no other project: the free plan cannot limit an identity to a folder, so the project is
 the limit. The NUC holds only the identity (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`,
 `INFISICAL_PROJECT_ID` of that project, `INFISICAL_SITE`) in a `.env` only the deploy user can read; a key set there
@@ -253,7 +253,8 @@ scheduler log or, with `--run`, the latest run, and tails it. It needs no local 
 ## The NUC
 
 The agent container runs on a NUC. Everything below is done once; after that `cdwr agent deploy`
-updates it.
+updates it. The machine is named after its hardware (`cdwr-nuc`); everything the queue reaches it by
+is named after its role, `agent-host`, so moving to another box changes only the machine.
 
 1. Install Ubuntu Server 24.04 LTS.
 2. Install Docker Engine from Docker's apt repository, following
@@ -267,11 +268,14 @@ updates it.
    ```
 
 4. In the BIOS, set power on after AC loss.
-5. Join the tailnet with Tailscale SSH and forward no router ports:
+5. Join the tailnet with Tailscale SSH and the role's tag, and forward no router ports:
 
    ```sh
-   sudo tailscale up --ssh
+   sudo tailscale up --ssh --advertise-tags=tag:agent-host
    ```
+
+   The tailnet policy needs `"tagOwners": {"tag:agent-host": ["autogroup:admin"]}` first. A tagged
+   device has key expiry off.
 
 6. Create the deploy user `cdwr`, in the `docker` group, and its directory:
 
@@ -281,7 +285,19 @@ updates it.
    sudo install -d -o cdwr -g cdwr /opt/cdwr-agent
    ```
 
-   Tailscale SSH needs an ACL rule letting you in as `cdwr`.
+   Tailscale SSH needs a rule letting you in as `cdwr`, aimed at the tag rather than the machine:
+
+   ```json
+   { "action": "accept", "src": ["autogroup:admin"], "dst": ["tag:agent-host"], "users": ["cdwr"] }
+   ```
+
+   On the Mac, an ssh alias names the role, so `--host agent-host` outlives the hardware:
+
+   ```txt
+   Host agent-host
+     HostName cdwr-nuc
+     User cdwr
+   ```
 
 7. Write `/opt/cdwr-agent/.env` from `apps/agent-host/.env.example`, with the Infisical identity
    (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`, `INFISICAL_SITE=eu`).
@@ -305,10 +321,10 @@ updates it.
 9. From the Mac, the first deploy. The image is public, so the NUC pulls without a login:
 
    ```sh
-   cdwr agent deploy --host <tailscale name>
+   cdwr agent deploy --host agent-host
    ```
 
-10. Check it. `cdwr agent logs --host <tailscale name>` lands with COD-592; until then, on the NUC:
+10. Check it. `cdwr agent logs --host agent-host` lands with COD-592; until then, on the NUC:
 
     ```sh
     docker logs cdwr-agent
