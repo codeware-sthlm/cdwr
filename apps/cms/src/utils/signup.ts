@@ -1,4 +1,8 @@
 import { InviteCodeRefused } from '@codeware/app-cms/data-access';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH
+} from '@codeware/app-cms/util/definitions';
 import type { HumanCheckFields } from '@codeware/shared/util/human-check';
 import {
   deploymentNameIssue,
@@ -15,8 +19,6 @@ import { FLY_CONFIG_APP_NAMES } from '../provisioning/tenant-apps';
 /** Signups per address and window, far below the forms' shared limit */
 export const SIGNUP_RATE_LIMIT = 5;
 
-const MIN_PASSWORD = 10;
-const MAX_PASSWORD = 128;
 const MAX_TEXT = 100;
 
 /** A signup that passed the shape checks; the code is checked in the transaction */
@@ -34,6 +36,7 @@ export type SignupInput = {
 export type SignupRefusal =
   | 'invalid'
   | 'password'
+  | 'password-breached'
   | 'deployment'
   | 'code'
   | 'closed'
@@ -140,7 +143,10 @@ export function parseSignup(
   if (!code || !name || !email || !EMAIL.test(email) || !siteName) {
     return { ok: false, refusal: 'invalid' };
   }
-  if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
+  if (
+    password.length < PASSWORD_MIN_LENGTH ||
+    password.length > PASSWORD_MAX_LENGTH
+  ) {
     return { ok: false, refusal: 'password' };
   }
   // The address follows from the name; a posted one is ignored
@@ -167,6 +173,7 @@ export function parseSignup(
 export const REFUSAL_STATUS = {
   invalid: 400,
   password: 400,
+  'password-breached': 400,
   deployment: 400,
   code: 400,
   closed: 403,
@@ -205,6 +212,9 @@ export function signupRefusal(error: unknown): SignupRefusal {
   if (error instanceof ValidationError) {
     const paths = error.data.errors.map(({ path }) => path);
     if (paths.includes('email')) return 'email-taken';
+    // Length is checked before the create, so a password refused there is a
+    // breached one
+    if (paths.includes('password')) return 'password-breached';
     if (paths.includes('deployment')) return 'deployment-taken';
     if (paths.includes('slug') || paths.includes('name')) return 'name-taken';
   }

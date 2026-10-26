@@ -38,7 +38,7 @@ test.describe('Tenant assignment — create [U-02]', () => {
       data: {
         name: 'E2E Own Tenant Create',
         email: `e2e-own-${Date.now()}@test.dev`,
-        password: 'test1234',
+        password: 'e2e-quiet-lantern-4817',
         tenants: [{ tenant: moonTenantId, role: 'user' }]
       }
     });
@@ -54,7 +54,7 @@ test.describe('Tenant assignment — create [U-02]', () => {
       data: {
         name: 'E2E Foreign Tenant Create',
         email: `e2e-foreign-${Date.now()}@test.dev`,
-        password: 'test1234',
+        password: 'e2e-quiet-lantern-4817',
         tenants: [{ tenant: FOREIGN_TENANT_ID, role: 'user' }]
       }
     });
@@ -69,7 +69,7 @@ test.describe('Tenant assignment — create [U-02]', () => {
       data: {
         name: 'E2E Mixed Tenant Create',
         email: `e2e-mixed-${Date.now()}@test.dev`,
-        password: 'test1234',
+        password: 'e2e-quiet-lantern-4817',
         tenants: [
           { tenant: moonTenantId, role: 'user' },
           { tenant: FOREIGN_TENANT_ID, role: 'user' }

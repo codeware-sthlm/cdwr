@@ -21,7 +21,9 @@ import { tenantsArrayField } from './fields/tenants-array.field';
 import { forgotPasswordMail } from './forgot-password-email';
 import { applyTenantLocaleHook } from './hooks/apply-tenant-locale.hook';
 import { ensureTenantHook } from './hooks/ensure-tenant.hook';
+import { loginThrottleHook } from './hooks/login-throttle.hook';
 import { mailVerificationAfterCreateHook } from './hooks/mail-verification-after-create.hook';
+import { passwordPolicyHook } from './hooks/password-policy.hook';
 import {
   deleteStatsAccountHook,
   rememberStatsAccountHook,
@@ -63,6 +65,9 @@ const users: CollectionConfig<'users'> = {
   auth: {
     maxLoginAttempts: 5,
     lockTime: 1000 * 60 * 60 * 24,
+    // Payload's default, stated so a change to it is a deliberate one. The
+    // site's members share this cookie, so it bounds their session too
+    tokenExpiration: 60 * 60 * 2,
     // Only self-serve signups are left unverified; see verifyOnlySelfServeHook
     verify: {
       generateEmailHTML: ({ req, token, user }) =>
@@ -118,7 +123,11 @@ const users: CollectionConfig<'users'> = {
     delete: adminAccessToAllDocTenants('denySelf')
   },
   hooks: {
-    beforeOperation: [verifyOnlySelfServeHook],
+    beforeOperation: [
+      loginThrottleHook,
+      passwordPolicyHook,
+      verifyOnlySelfServeHook
+    ],
     beforeValidate: [ensureTenantHook],
     beforeChange: [validateTenantsArrayAccessHook],
     beforeDelete: [rememberStatsAccountHook],

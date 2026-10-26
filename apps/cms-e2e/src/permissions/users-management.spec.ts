@@ -30,7 +30,7 @@ test.describe('Users — create [U-01]', () => {
       data: {
         name: 'E2E System Created',
         email: `e2e-sys-${Date.now()}@test.dev`,
-        password: 'test1234',
+        password: 'e2e-quiet-lantern-4817',
         role: 'user',
         tenants: [{ tenant: moonTenantId, role: 'user' }]
       }
@@ -44,7 +44,7 @@ test.describe('Users — create [U-01]', () => {
       data: {
         name: 'E2E Admin Created',
         email: `e2e-adm-${Date.now()}@test.dev`,
-        password: 'test1234',
+        password: 'e2e-quiet-lantern-4817',
         tenants: [{ tenant: moonTenantId, role: 'user' }]
       }
     });
@@ -57,7 +57,7 @@ test.describe('Users — create [U-01]', () => {
       data: {
         name: 'E2E Denied Create',
         email: `e2e-deny-${Date.now()}@test.dev`,
-        password: 'test1234',
+        password: 'e2e-quiet-lantern-4817',
         tenants: [{ tenant: moonTenantId, role: 'user' }]
       }
     });

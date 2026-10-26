@@ -88,7 +88,7 @@ describe('parseSignup', () => {
   });
 
   it.each([
-    ['short', 'x'.repeat(9)],
+    ['short', 'x'.repeat(11)],
     ['long', 'x'.repeat(129)],
     ['missing', undefined]
   ])('refuses a %s password', (_, password) => {

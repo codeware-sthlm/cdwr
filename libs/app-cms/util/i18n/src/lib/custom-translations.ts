@@ -14,7 +14,11 @@ const customTranslationsSchema = z.object({
     cannotRemoveFromWorkspace: z.string(),
     createSite: z.string(),
     crossTenantDenied: z.string(),
-    newHere: z.string()
+    newHere: z.string(),
+    passwordBreached: z.string(),
+    passwordTooLong: z.string(),
+    passwordTooShort: z.string(),
+    tooManyLoginAttempts: z.string()
   }),
   collection: z.object({
     cardWithSuffix: z.string(),
@@ -470,7 +474,13 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       createSite: 'Create a site',
       crossTenantDenied:
         'Access denied. This workspace is not accessible without proper tenant access.',
-      newHere: 'New here?'
+      newHere: 'New here?',
+      passwordBreached:
+        'This password has appeared in a data breach elsewhere. Choose another one.',
+      passwordTooLong: 'Use at most {{count}} characters.',
+      passwordTooShort: 'Use at least {{count}} characters.',
+      tooManyLoginAttempts:
+        'Too many sign-in attempts from your network. Try again in a few minutes.'
     },
     collection: {
       cardWithSuffix: 'Card {{suffix}}',
@@ -1002,7 +1012,13 @@ Supported locales: {{locales}}`,
       createSite: 'Skapa en webbplats',
       crossTenantDenied:
         'Åtkomst nekad. Den här arbetsytan är inte tillgänglig utan rätt behörighet.',
-      newHere: 'Ny här?'
+      newHere: 'Ny här?',
+      passwordBreached:
+        'Lösenordet finns med i en dataläcka någon annanstans. Välj ett annat lösenord.',
+      passwordTooLong: 'Använd högst {{count}} tecken.',
+      passwordTooShort: 'Använd minst {{count}} tecken.',
+      tooManyLoginAttempts:
+        'För många inloggningsförsök från ditt nätverk. Försök igen om några minuter.'
     },
     collection: {
       cardWithSuffix: 'Kort {{suffix}}',

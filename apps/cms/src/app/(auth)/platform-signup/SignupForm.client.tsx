@@ -65,6 +65,7 @@ type Field = 'password' | 'email' | 'siteName';
 /** Refusals worded next to the field they are about; the rest sit above the form */
 const REFUSAL_FIELD: Partial<Record<SignupRefusal, Field>> = {
   password: 'password',
+  'password-breached': 'password',
   'email-taken': 'email',
   'name-taken': 'siteName',
   deployment: 'siteName',
@@ -76,6 +77,7 @@ const isRefusal = (value: unknown): value is SignupRefusal =>
   [
     'invalid',
     'password',
+    'password-breached',
     'deployment',
     'code',
     'closed',
