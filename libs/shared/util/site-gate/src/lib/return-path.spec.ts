@@ -15,6 +15,18 @@ describe('resolveReturnPath', () => {
     expect(resolveReturnPath('javascript:alert(1)')).toBe('/');
   });
 
+  it.each([
+    '/\t/elsewhere.test',
+    '/\n/elsewhere.test',
+    '/\r/elsewhere.test',
+    '/a\u0000b'
+  ])(
+    'refuses a control character, which a browser drops on the way out (%j)',
+    (raw) => {
+      expect(resolveReturnPath(raw)).toBe('/');
+    }
+  );
+
   it('falls back to the site root when nothing was carried', () => {
     expect(resolveReturnPath(undefined)).toBe('/');
     expect(resolveReturnPath('')).toBe('/');
