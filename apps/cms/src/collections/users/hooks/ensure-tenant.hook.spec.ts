@@ -35,4 +35,30 @@ describe('ensureTenantHook', () => {
   it('lets a signup create through', () => {
     expect(run({ signup: true })).toEqual({ name: 'No workspace' });
   });
+
+  it('leaves an update that does not touch the workspaces alone', () => {
+    // payload-totp saves a secret this way, with no request and no user
+    const data = { totpSecret: 'secret' };
+    expect(
+      ensureTenantHook({
+        collection: { slug: 'users' },
+        context: {},
+        data,
+        operation: 'update',
+        req: { t: jest.fn(), user: undefined }
+      } as unknown as Args)
+    ).toBe(data);
+  });
+
+  it('still refuses an update that empties the workspaces', () => {
+    expect(() =>
+      ensureTenantHook({
+        collection: { slug: 'users' },
+        context: {},
+        data: { tenants: [] },
+        operation: 'update',
+        req: { t: jest.fn(), user: undefined }
+      } as unknown as Args)
+    ).toThrow();
+  });
 });

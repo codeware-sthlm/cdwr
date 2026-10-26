@@ -11,8 +11,15 @@ export const ensureTenantHook: CollectionBeforeValidateHook<User> = ({
   collection,
   context,
   data,
+  operation,
   req: { t, user }
 }) => {
+  // An update that leaves the workspaces alone, such as payload-totp saving a
+  // secret with no request, keeps the ones the user already has
+  if (operation === 'update' && data?.tenants === undefined) {
+    return data;
+  }
+
   // Providing a tenant is not required for system users, seeding, signup or the idle workspace cleanup
   if (
     hasRole(user, 'system-user') ||
