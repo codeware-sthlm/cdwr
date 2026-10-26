@@ -12,6 +12,8 @@ import { APIError, type CollectionBeforeOperationHook } from 'payload';
  */
 const LOGINS_PER_ADDRESS = 20;
 
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
 /**
  * Throttle REST and GraphQL logins per address.
  *
@@ -31,8 +33,10 @@ export const loginThrottleHook: CollectionBeforeOperationHook<'users'> = ({
   const address = req.headers ? clientIp(req.headers) : undefined;
 
   // Without an address every caller would share one bucket, and ten typos
-  // anywhere would lock the whole admin out
-  if (!address) {
+  // anywhere would lock the whole admin out. A loopback address is this
+  // machine itself (dev, the e2e suite); on Fly the edge's `Fly-Client-IP`
+  // names the real caller, which a client cannot set
+  if (!address || LOOPBACK.has(address)) {
     return args;
   }
 

@@ -67,6 +67,15 @@ describe('loginThrottleHook', () => {
     }
   });
 
+  it.each(['127.0.0.1', '::1'])(
+    'does not count this machine itself (%s)',
+    (address) => {
+      for (let i = 0; i < 30; i++) {
+        expect(run('login', address)).not.toThrow();
+      }
+    }
+  );
+
   it('does not count other operations', () => {
     for (let i = 0; i < 30; i++) {
       expect(run('update', '203.0.113.7')).not.toThrow();
