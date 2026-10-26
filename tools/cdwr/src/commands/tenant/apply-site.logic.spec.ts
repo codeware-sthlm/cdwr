@@ -59,8 +59,8 @@ describe('countByCollection', () => {
     ]);
 
     expect(counts).toEqual([
-      { collection: 'pages', created: 2, existed: 1 },
-      { collection: 'tags', created: 0, existed: 1 }
+      { collection: 'pages', created: 2, existed: 1, updated: 0 },
+      { collection: 'tags', created: 0, existed: 1, updated: 0 }
     ]);
   });
 });
@@ -79,12 +79,43 @@ describe('planSteps', () => {
     expect(steps).toEqual(['pages: 1 to create, 1 already there']);
   });
 
+  it('counts the kept landing page as an update', () => {
+    const steps = planSteps(
+      report({
+        outcomes: [
+          { collection: 'pages', identifier: 'home', action: 'updated' }
+        ]
+      })
+    );
+
+    expect(steps).toEqual(['pages: 1 to update']);
+  });
+
   it('says so rather than showing an empty plan', () => {
     expect(planSteps(report())).toEqual(['Nothing to apply']);
   });
 });
 
 describe('planNotes', () => {
+  it('names the meta a rewritten landing page gets', () => {
+    const notes = planNotes(
+      report({
+        outcomes: [
+          {
+            collection: 'pages',
+            identifier: 'home',
+            action: 'updated',
+            meta: { stated: { title: 'Home' }, current: { title: 'Old' } }
+          }
+        ]
+      })
+    );
+
+    expect(notes).toContain(
+      "SEO meta, pages/home: will write title 'Home' over title 'Old'"
+    );
+  });
+
   it('lists every reference that leads nowhere', () => {
     const notes = planNotes(
       report({
@@ -107,6 +138,18 @@ describe('planNotes', () => {
 });
 
 describe('nothingToApply', () => {
+  it('is false when a fresh apply rewrites the kept landing page', () => {
+    expect(
+      nothingToApply(
+        report({
+          outcomes: [
+            { collection: 'pages', identifier: 'home', action: 'updated' }
+          ]
+        })
+      )
+    ).toBe(false);
+  });
+
   it('is true when every document is already there', () => {
     expect(
       nothingToApply(

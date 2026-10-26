@@ -81,8 +81,9 @@ export default defineCommand<
     const missing = report.outcomes.filter(
       ({ action }) => action === 'created'
     );
+    // The landing page a fresh apply would rewrite is in the tenant too
     const present = report.outcomes.filter(
-      ({ action }) => action === 'existed'
+      ({ action }) => action !== 'created'
     );
     const { extra } = report;
 

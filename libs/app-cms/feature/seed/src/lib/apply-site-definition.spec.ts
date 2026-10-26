@@ -485,6 +485,22 @@ describe('applySiteDefinition', () => {
       });
     });
 
+    it('reports the kept landing page as updated, not existed', async () => {
+      world.found['site-settings'] = [{ id: 5, general: { landingPage: 9 } }];
+      world.pages[9] = { id: 9, slug: 'home', managedBy: 'acme' };
+
+      const report = await apply(definitionWith(), { fresh: true });
+
+      // Rewritten in place, so the plan must count it as work to do
+      expect(report.outcomes).toContainEqual(
+        expect.objectContaining({
+          collection: 'pages',
+          identifier: 'home',
+          action: 'updated'
+        })
+      );
+    });
+
     it('excepts no page when there is no handover', async () => {
       await apply(definitionWith(), { fresh: true });
 
@@ -861,10 +877,10 @@ describe('applySiteDefinition', () => {
       expect(dataOf(mocks.ensurePage)).toMatchObject({ slug: 'about' });
       expect(writes('delete', 'pages')).toHaveLength(0);
       expect(report.removed).toEqual([]);
-      // COD-508 reworks this report: a landing page refreshed in place is
-      // recorded as found, so it still shows up as kept
+      // Refreshed in place: kept rather than recreated, and reported as an
+      // update so the plan counts it as work
       expect(report.kept).toEqual([
-        { collection: 'pages', identifier: 'home', action: 'existed' }
+        { collection: 'pages', identifier: 'home', action: 'updated' }
       ]);
     });
 

@@ -55,7 +55,11 @@ export type ApplyOutcome = {
   collection: string;
   /** The slug, filename or title the definition named it by */
   identifier: string;
-  action: 'created' | 'existed';
+  /**
+   * `updated` is the landing page a fresh apply keeps and rewrites in place,
+   * which neither creates it nor leaves it as it was
+   */
+  action: 'created' | 'existed' | 'updated';
   /**
    * The SEO meta the definition states for a page or post, when it is news.
    *
@@ -292,14 +296,15 @@ export async function applySiteDefinition(
     collection: string,
     identifier: string,
     result: { id: number } | number,
-    meta?: ApplyOutcome['meta']
+    meta?: ApplyOutcome['meta'],
+    action?: ApplyOutcome['action']
   ) => {
     outcomes.push({
       collection,
       identifier,
       // Every ensure helper returns the document when it created one, and a
       // bare id when it found one already there
-      action: typeof result === 'number' ? 'existed' : 'created',
+      action: action ?? (typeof result === 'number' ? 'existed' : 'created'),
       ...(meta ? { meta } : {})
     });
     return idOf(result);
@@ -741,7 +746,10 @@ export async function applySiteDefinition(
           locale: ctx.locale,
           req: { transactionID }
         });
-        pages.set(page.slug, record('pages', page.slug, handover.id, meta));
+        pages.set(
+          page.slug,
+          record('pages', page.slug, handover.id, meta, 'updated')
+        );
         continue;
       }
 
@@ -1035,7 +1043,8 @@ export async function applySiteDefinition(
       kept: fresh
         ? outcomes.filter(
             ({ action, collection }) =>
-              action === 'existed' &&
+              // The landing page rewritten in place was kept, too
+              action !== 'created' &&
               (managedCollectionSlugs as ReadonlyArray<string>).includes(
                 collection
               ) &&
