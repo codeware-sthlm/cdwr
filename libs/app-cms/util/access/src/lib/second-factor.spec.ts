@@ -1,5 +1,5 @@
 import type { UserAny } from '@codeware/shared/util/payload-types';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   isSecondFactorPending,
@@ -153,4 +153,35 @@ describe('isSecondFactorPending', () => {
       )
     ).toBe(true);
   });
+});
+
+describe('seeded user exemption', () => {
+  const seeded = (email: string) =>
+    ({
+      id: 1,
+      email,
+      role: 'system-user',
+      tenants: [],
+      _strategy: 'local-jwt'
+    }) as unknown as UserAny;
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    { flag: undefined, email: 'system@local.dev', mustEnrol: true },
+    { flag: 'false', email: 'system@local.dev', mustEnrol: true },
+    { flag: 'true', email: 'system@local.dev', mustEnrol: false },
+    { flag: 'true', email: 'admin@codeware.se', mustEnrol: true }
+  ])(
+    'flag $flag, $email: must enrol $mustEnrol',
+    ({ flag, email, mustEnrol }) => {
+      if (flag !== undefined) {
+        vi.stubEnv('TOTP_EXEMPT_SEEDED_USERS', flag);
+      }
+      expect(mustEnrolTotp(seeded(email))).toBe(mustEnrol);
+      expect(isTotpSetupPending(seeded(email))).toBe(mustEnrol);
+    }
+  );
 });
