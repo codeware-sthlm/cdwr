@@ -138,7 +138,8 @@ function RootComponent() {
           data: { error: 'Tour signups are not available yet' }
         }),
         theme: site.theme,
-        themes: site.themes
+        // The selector shows from two themes up; switching is not built yet
+        themes: site.themes.filter(({ value }) => value === site.theme)
       }}
     >
       <RenderLayout footer={data.footer} navigationTree={data.navigationTree}>
