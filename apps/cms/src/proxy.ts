@@ -19,6 +19,8 @@ export function proxy(request: NextRequest) {
   requestHeaders.set('content-security-policy', csp.requestPolicy);
   // ...and the theme script the layouts render reads it from this
   requestHeaders.set(NONCE_HEADER, csp.nonce);
+  // ...and the TOTP redirects, which a server component can't read otherwise
+  requestHeaders.set('x-pathname', request.nextUrl.pathname);
 
   const response = route(request, requestHeaders);
   for (const [name, value] of Object.entries(csp.responseHeaders)) {

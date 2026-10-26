@@ -30,9 +30,11 @@ import type {
 /** Custom Payload API endpoints */
 export type CustomApiEndpoint = 'palette-search' | 'tenant-config';
 
+/** Content collections: Payload's own and plugin bookkeeping (`payload-totp`'s code attempts) left out */
 export type CollectionWithoutPayload = {
   [
-    key in keyof Config['collections'] as key extends `payload${string}`
+    key in keyof Config['collections'] as key extends
+      `payload${string}` | 'totp-attempts'
       ? never
       : key
   ]: Config['collections'][key];

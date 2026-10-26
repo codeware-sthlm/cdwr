@@ -59,6 +59,7 @@ import { default as default_684605a40f01e98600c1b5e22bd87007 } from '@codeware/a
 import { default as default_83b1e477403db97f7c64cd4eca1f0fbb } from '@codeware/apps/cms/components/TourSignupsCell';
 import { default as default_4a3552dc4f000a1797b4eb36166f8ff8 } from '@codeware/apps/cms/components/TenantsArrayField';
 import { default as default_dec1059b7bb8eb8da3a9f0fc400fffbd } from '@codeware/apps/cms/components/TenantsArrayRowLabel';
+import { TOTPField as TOTPField_4eaf6cb33cfb75be01716613e3c9a512 } from 'payload-totp/rsc';
 import { default as default_5c4721952cea6137a5b655132d82172f } from '@codeware/apps/cms/components/admin/forms/FormNotificationRecipientField';
 import { default as default_aa577ffa11e4f1931cf9142a4eed30a6 } from '@codeware/apps/cms/components/SubmissionCountCell';
 import { default as default_b8bb6bd04eccdbda47b5169ea620714a } from '@codeware/apps/cms/components/admin/submissions/SubmissionDetailView';
@@ -80,6 +81,10 @@ import { default as default_f1aa315e58788dc8980ed4850402b8bb } from '@codeware/a
 import { TenantSelector as TenantSelector_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
 import { default as default_67bc1060da1a6ada71dd6ec10de05eed } from '@codeware/apps/cms/components/admin/palette/PaletteProvider.client';
 import { TenantSelectionProvider as TenantSelectionProvider_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
+import { TotpEnrolmentRedirect as TotpEnrolmentRedirect_c1e80e642755ba0bdf1b09237145d9bb } from '@codeware/apps/cms/components/admin/totp/TotpEnrolmentRedirect';
+import { TOTPProvider as TOTPProvider_4eaf6cb33cfb75be01716613e3c9a512 } from 'payload-totp/rsc';
+import { TOTPSetup as TOTPSetup_4eaf6cb33cfb75be01716613e3c9a512 } from 'payload-totp/rsc';
+import { TOTPVerify as TOTPVerify_4eaf6cb33cfb75be01716613e3c9a512 } from 'payload-totp/rsc';
 import { default as default_7247ef290ed686d082a30d42a7adeb5b } from '@codeware/apps/cms/components/admin/dashboard/AdminDashboardView';
 import { default as default_1671ddc7d5e82791d22ef69829daca47 } from '@codeware/apps/cms/components/admin/first-site/FirstSiteView';
 import { default as default_0d7861e9c3757373aa6785fbf7fb933a } from '@codeware/apps/cms/components/admin/theme-library/ThemeLibraryView';
@@ -210,6 +215,7 @@ export const importMap = {
     default_4a3552dc4f000a1797b4eb36166f8ff8,
   '@codeware/apps/cms/components/TenantsArrayRowLabel#default':
     default_dec1059b7bb8eb8da3a9f0fc400fffbd,
+  'payload-totp/rsc#TOTPField': TOTPField_4eaf6cb33cfb75be01716613e3c9a512,
   '@codeware/apps/cms/components/admin/forms/FormNotificationRecipientField#default':
     default_5c4721952cea6137a5b655132d82172f,
   '@codeware/apps/cms/components/SubmissionCountCell#default':
@@ -252,6 +258,12 @@ export const importMap = {
     default_67bc1060da1a6ada71dd6ec10de05eed,
   '@payloadcms/plugin-multi-tenant/rsc#TenantSelectionProvider':
     TenantSelectionProvider_d6d5f193a167989e2ee7d14202901e62,
+  '@codeware/apps/cms/components/admin/totp/TotpEnrolmentRedirect#TotpEnrolmentRedirect':
+    TotpEnrolmentRedirect_c1e80e642755ba0bdf1b09237145d9bb,
+  'payload-totp/rsc#TOTPProvider':
+    TOTPProvider_4eaf6cb33cfb75be01716613e3c9a512,
+  'payload-totp/rsc#TOTPSetup': TOTPSetup_4eaf6cb33cfb75be01716613e3c9a512,
+  'payload-totp/rsc#TOTPVerify': TOTPVerify_4eaf6cb33cfb75be01716613e3c9a512,
   '@codeware/apps/cms/components/admin/dashboard/AdminDashboardView#default':
     default_7247ef290ed686d082a30d42a7adeb5b,
   '@codeware/apps/cms/components/admin/first-site/FirstSiteView#default':
