@@ -1,4 +1,5 @@
 import { getTour } from '@codeware/app-cms/data-access';
+import { sitePath } from '@codeware/app-cms/util/misc';
 import type { Metadata } from 'next';
 import { draftMode } from 'next/headers';
 import { notFound } from 'next/navigation';
@@ -23,7 +24,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return tour
     ? documentMetadata(
         { name: tour.title, summary: tour.summary },
-        { siteName: runtime.tenantConfig?.appName }
+        {
+          siteName: runtime.tenantConfig?.appName,
+          origin: runtime.payload.config.serverURL,
+          path: sitePath('tours', tour),
+          locale: runtime.tenantConfig?.locale
+        }
       )
     : {};
 }

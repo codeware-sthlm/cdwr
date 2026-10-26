@@ -33,7 +33,11 @@ import {
   MEMBER_LOGIN_PATH,
   MEMBER_LOGOUT_SUBMIT_PATH
 } from '../../utils/member-login';
-import { siteOrigin } from '../../utils/page-metadata';
+import {
+  DEFAULT_OG_IMAGE_PATH,
+  ogLocale,
+  siteOrigin
+} from '../../utils/page-metadata';
 import { statsScript } from '../../utils/stats-proxy';
 
 import { Providers } from './providers';
@@ -206,7 +210,13 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s · ${config?.appName ?? 'Codeware CMS'}`
     },
     // For a page stating no Open Graph of its own
-    openGraph: { siteName: config?.appName ?? 'Codeware CMS' },
+    openGraph: {
+      type: 'website',
+      siteName: config?.appName ?? 'Codeware CMS',
+      ...(ogLocale(config?.locale) && { locale: ogLocale(config?.locale) }),
+      images: [{ url: DEFAULT_OG_IMAGE_PATH }]
+    },
+    twitter: { card: 'summary_large_image' },
     ...(icon?.source === 'svg' && {
       icons: {
         icon: [

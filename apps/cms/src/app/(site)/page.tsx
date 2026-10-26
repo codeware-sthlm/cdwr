@@ -24,7 +24,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return page
     ? documentMetadata(page, {
         landing: true,
-        siteName: runtime.tenantConfig?.appName
+        siteName: runtime.tenantConfig?.appName,
+        origin: runtime.payload.config.serverURL,
+        path: '/',
+        locale: runtime.tenantConfig?.locale
       })
     : {};
 }

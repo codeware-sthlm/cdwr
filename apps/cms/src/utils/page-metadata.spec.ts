@@ -1,4 +1,8 @@
-import { documentMetadata, siteOrigin } from './page-metadata';
+import {
+  DEFAULT_OG_IMAGE_PATH,
+  documentMetadata,
+  siteOrigin
+} from './page-metadata';
 
 describe('documentMetadata', () => {
   it('titles a page by its name, for the layout to follow with the site', () => {
@@ -43,9 +47,42 @@ describe('documentMetadata', () => {
     expect(withImage.openGraph).toMatchObject({
       images: [{ url: '/media/a.png' }]
     });
+    // An id is not an address, so the generated card stands in
     expect(
       documentMetadata({ name: 'A', meta: { image: 12 } }).openGraph
-    ).not.toHaveProperty('images');
+    ).toMatchObject({ images: [{ url: DEFAULT_OG_IMAGE_PATH }] });
+  });
+
+  it('falls back to the generated card when a page has no image', () => {
+    expect(documentMetadata({ name: 'A' }).openGraph).toMatchObject({
+      images: [{ url: '/og-image.png' }]
+    });
+  });
+
+  it('names one host in the canonical link, whichever one served the page', () => {
+    const page = documentMetadata(
+      { name: 'Om' },
+      { path: '/om', origin: 'https://codeware.se' }
+    );
+    expect(page.alternates).toEqual({ canonical: 'https://codeware.se/om' });
+  });
+
+  it('sets the canonical path, card type and Open Graph type and locale', () => {
+    const page = documentMetadata(
+      { name: 'Om' },
+      { path: '/om', locale: 'sv' }
+    );
+    expect(page.alternates).toEqual({ canonical: '/om' });
+    expect(page.twitter).toMatchObject({ card: 'summary_large_image' });
+    expect(page.openGraph).toMatchObject({
+      type: 'website',
+      locale: 'sv_SE'
+    });
+    expect(
+      documentMetadata({ name: 'P' }, { kind: 'article', locale: 'en' })
+        .openGraph
+    ).toMatchObject({ type: 'article', locale: 'en_US' });
+    expect(documentMetadata({ name: 'A' }).alternates).toBeUndefined();
   });
 
   it('names the site in a shared link', () => {

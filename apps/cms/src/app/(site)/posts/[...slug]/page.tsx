@@ -1,4 +1,5 @@
 import { getPost, getPostsListingPath } from '@codeware/app-cms/data-access';
+import { sitePath } from '@codeware/app-cms/util/misc';
 import type { Metadata } from 'next';
 import { draftMode } from 'next/headers';
 import { notFound } from 'next/navigation';
@@ -23,7 +24,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return post
     ? documentMetadata(
         { name: post.title, meta: post.meta },
-        { siteName: runtime.tenantConfig?.appName }
+        {
+          siteName: runtime.tenantConfig?.appName,
+          origin: runtime.payload.config.serverURL,
+          path: sitePath('posts', post),
+          kind: 'article',
+          locale: runtime.tenantConfig?.locale
+        }
       )
     : {};
 }
