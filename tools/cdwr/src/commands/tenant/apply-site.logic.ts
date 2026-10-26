@@ -12,7 +12,8 @@ export type SeoMeta = { title?: string; description?: string; image?: string };
 export type AppliedOutcome = {
   collection: string;
   identifier: string;
-  action: 'created' | 'existed';
+  /** `updated`: the landing page a fresh apply keeps and rewrites in place */
+  action: 'created' | 'existed' | 'updated';
   /** What the definition states for the document's SEO, when it is news */
   meta?: { stated: SeoMeta; current?: SeoMeta };
 };
@@ -31,12 +32,13 @@ export function metaLines(
 ): Array<{ collection: string; identifier: string; text: string }> {
   return outcomes.flatMap(({ collection, identifier, action, meta }) => {
     if (!meta) return [];
+    const held = describeMeta(meta.current ?? {}) || 'none';
     const text =
       action === 'created'
         ? `will write ${describeMeta(meta.stated)}`
-        : `definition says ${describeMeta(meta.stated)}; tenant has ${
-            describeMeta(meta.current ?? {}) || 'none'
-          }`;
+        : action === 'updated'
+          ? `will write ${describeMeta(meta.stated)} over ${held}`
+          : `definition says ${describeMeta(meta.stated)}; tenant has ${held}`;
     return [{ collection, identifier, text }];
   });
 }
@@ -119,13 +121,23 @@ export function parseApplyReport(stdout: string): ApplyReport {
 }
 
 /** How many of each collection would be created, and how many already exist. */
-export function countByCollection(
-  outcomes: Array<AppliedOutcome>
-): Array<{ collection: string; created: number; existed: number }> {
-  const counts = new Map<string, { created: number; existed: number }>();
+export function countByCollection(outcomes: Array<AppliedOutcome>): Array<{
+  collection: string;
+  created: number;
+  existed: number;
+  updated: number;
+}> {
+  const counts = new Map<
+    string,
+    { created: number; existed: number; updated: number }
+  >();
 
   for (const { collection, action } of outcomes) {
-    const entry = counts.get(collection) ?? { created: 0, existed: 0 };
+    const entry = counts.get(collection) ?? {
+      created: 0,
+      existed: 0,
+      updated: 0
+    };
     entry[action] += 1;
     counts.set(collection, entry);
   }
@@ -147,15 +159,16 @@ export function planSteps(report: ApplyReport): Array<string> {
   // A collection the fresh apply only emptied still has to show up
   for (const collection of removedBy.keys()) {
     if (!counted.some((entry) => entry.collection === collection)) {
-      counted.push({ collection, created: 0, existed: 0 });
+      counted.push({ collection, created: 0, existed: 0, updated: 0 });
     }
   }
 
-  const steps = counted.map(({ collection, created, existed }) => {
+  const steps = counted.map(({ collection, created, existed, updated }) => {
     const parts: Array<string> = [];
     const removed = removedBy.get(collection);
     if (removed) parts.push(`${removed} to remove`);
     if (created) parts.push(`${created} to create`);
+    if (updated) parts.push(`${updated} to update`);
     if (existed) parts.push(`${existed} already there`);
     return `${collection}: ${parts.join(', ')}`;
   });
@@ -183,7 +196,9 @@ export function planNotes(report: ApplyReport): Array<string> {
   }
 
   for (const { collection, identifier, text } of metaLines(
-    report.outcomes.filter(({ action }) => action === 'created')
+    // What this apply writes; drift on a document it leaves alone is
+    // `diff-site`'s to report
+    report.outcomes.filter(({ action }) => action !== 'existed')
   )) {
     notes.push(`SEO meta, ${collection}/${identifier}: ${text}`);
   }
