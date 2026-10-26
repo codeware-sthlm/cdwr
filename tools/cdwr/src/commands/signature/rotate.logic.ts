@@ -71,7 +71,8 @@ export function classifyApps(
     signers: names
       .filter(
         (name) =>
-          belongsToEnvironment(name) && name.startsWith(`${webBaseName}-`)
+          belongsToEnvironment(name) &&
+          (name === webBaseName || name.startsWith(`${webBaseName}-`))
       )
       .sort()
   };

@@ -56,6 +56,16 @@ describe('classifyApps', () => {
     expect(result.signers).toEqual(['cdwr-web-pr-12-acme']);
   });
 
+  it('picks the bare web host as a signer', () => {
+    const result = classifyApps(
+      ['cdwr-cms', 'cdwr-web', 'cdwr-web-acme', 'cdwr-web-pr-12'],
+      'cdwr-cms',
+      'cdwr-web',
+      'production'
+    );
+    expect(result.signers).toEqual(['cdwr-web', 'cdwr-web-acme']);
+  });
+
   it('treats development like production, matching the bare app names', () => {
     const result = classifyApps(names, 'cdwr-cms', 'cdwr-web', 'development');
     expect(result.verifiers).toEqual(['cdwr-cms']);
