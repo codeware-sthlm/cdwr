@@ -96,11 +96,14 @@ describe('publicFileAccess', () => {
 });
 
 describe('getTotpPlugins', () => {
-  it('returns three plugins with payloadTotp last', () => {
+  it('runs the enrolment wrapper first, public files next and payloadTotp last', () => {
     const plugins = getTotpPlugins();
 
+    // A visitor's file read must skip the enrolment wrapper too, so public
+    // files wraps it rather than the other way round
     expect(plugins).toHaveLength(3);
-    expect(plugins[1]).toBe('enrolment-plugin');
+    expect(plugins[0]).toBe('enrolment-plugin');
+    expect(plugins[1]).toEqual(expect.any(Function));
     expect(plugins[2]).toBe('payload-totp-plugin');
     expect(payloadTotp).toHaveBeenCalledWith(
       expect.objectContaining({ collection: 'users', forceSetup: false })
@@ -108,7 +111,7 @@ describe('getTotpPlugins', () => {
   });
 
   it('makes media and stock-media skip the totp read wrapper', async () => {
-    const [publicFiles] = getTotpPlugins();
+    const [, publicFiles] = getTotpPlugins();
     const read = jest.fn();
     const config = {
       collections: [

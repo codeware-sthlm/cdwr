@@ -65,8 +65,10 @@ const publicFiles: Plugin = (config) => ({
  * system users and workspace admins, optional for everyone else.
  */
 export const getTotpPlugins = (): Array<Plugin> => [
-  publicFiles,
+  // Before publicFiles, so a visitor's file read skips the enrolment check
+  // as well as payload-totp's, while every other read keeps both
   totpEnrolmentPlugin({ collection: 'users' }),
+  publicFiles,
   payloadTotp({
     collection: 'users',
     forceSetup: false,
