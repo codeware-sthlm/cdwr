@@ -1,3 +1,4 @@
+import { isSecondFactorPending } from '@codeware/app-cms/util/access';
 import { getUserTenantIDs, isUser } from '@codeware/app-cms/util/misc';
 import type { Tenant } from '@codeware/shared/util/payload-types';
 import { headers } from 'next/headers';
@@ -101,9 +102,13 @@ export async function getAuthenticatedPayload(
         //
         // An editor identity carries no `_status` filter in access control, so
         // `asVisitor` on the runtime is what keeps drafts off the public site.
+        //
+        // A member who still owes the TOTP code reads as a visitor until they
+        // enter it; as themselves, access control would refuse them everything.
         if (
           sessionUser &&
           isUser(sessionUser) &&
+          !isSecondFactorPending(sessionUser) &&
           getUserTenantIDs(sessionUser).includes(tenant.id)
         ) {
           return asRuntime(payload, {

@@ -11,6 +11,7 @@ import { generatePayloadCookie } from 'payload/shared';
 import configPromise from '../../../payload.config';
 import { payloadRuntime } from '../../../security/payload-runtime';
 import {
+  MEMBER_LOGIN_CODE_STEP,
   MEMBER_LOGIN_PATH,
   type MemberLoginError,
   isSameOriginPost,
@@ -82,8 +83,20 @@ export async function POST(request: NextRequest) {
     return backToLogin(from, attempt.ok ? 'failed' : 'throttled');
   }
 
+  // An account that must use TOTP but has not set it up reads nothing on the
+  // site until it has, so it gets no session here, only the reason
+  if (session.secondFactor === 'setup') {
+    return backToLogin(from, 'setup');
+  }
+
   const config = await configPromise;
-  const response = redirectTo(from);
+  // An enrolled member is signed in but reads nothing members-only until the
+  // code is entered, so the code step comes before the page they asked for
+  const response = redirectTo(
+    session.secondFactor === 'code'
+      ? `${MEMBER_LOGIN_PATH}?${new URLSearchParams({ from, step: MEMBER_LOGIN_CODE_STEP })}`
+      : from
+  );
 
   response.headers.append(
     'Set-Cookie',

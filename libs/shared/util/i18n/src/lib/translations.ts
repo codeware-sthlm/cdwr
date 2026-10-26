@@ -102,11 +102,16 @@ export type TranslationKey =
   | 'navigation.close'
   | 'navigation.footer'
   | 'navigation.menu'
+  | 'memberLogin.code'
+  | 'memberLogin.codeFailed'
+  | 'memberLogin.codeIntro'
+  | 'memberLogin.codeSubmit'
   | 'memberLogin.email'
   | 'memberLogin.failed'
   | 'memberLogin.heading'
   | 'memberLogin.intro'
   | 'memberLogin.password'
+  | 'memberLogin.setupRequired'
   | 'memberLogin.signOut'
   | 'memberLogin.submit'
   | 'memberLogin.tooManyAttempts'
@@ -427,12 +432,20 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'navigation.close': 'Close menu',
     'navigation.footer': 'Footer',
     'navigation.menu': 'Menu',
+    'memberLogin.code': 'Code',
+    'memberLogin.codeFailed':
+      'That code did not work. Enter the current one from your authenticator app.',
+    'memberLogin.codeIntro':
+      'Enter the six-digit code from your authenticator app.',
+    'memberLogin.codeSubmit': 'Continue',
     'memberLogin.email': 'Email',
     'memberLogin.failed': 'Check your email and password, then try again.',
     'memberLogin.heading': 'Sign in',
     'memberLogin.intro':
       'Sign in to read the parts of this site kept for members.',
     'memberLogin.password': 'Password',
+    'memberLogin.setupRequired':
+      'Your account needs an authenticator app. Set it up in the admin, then sign in here.',
     'memberLogin.signOut': 'Sign out',
     'memberLogin.submit': 'Sign in',
     'memberLogin.tooManyAttempts':
@@ -800,6 +813,12 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'navigation.close': 'Stäng menyn',
     'navigation.footer': 'Sidfot',
     'navigation.menu': 'Meny',
+    'memberLogin.code': 'Kod',
+    'memberLogin.codeFailed':
+      'Koden fungerade inte. Ange den aktuella koden från din autentiseringsapp.',
+    'memberLogin.codeIntro':
+      'Ange den sexsiffriga koden från din autentiseringsapp.',
+    'memberLogin.codeSubmit': 'Fortsätt',
     'memberLogin.email': 'E-post',
     'memberLogin.failed':
       'Kontrollera e-postadressen och lösenordet och försök igen.',
@@ -807,6 +826,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'memberLogin.intro':
       'Logga in för att läsa de delar av webbplatsen som är till för medlemmar.',
     'memberLogin.password': 'Lösenord',
+    'memberLogin.setupRequired':
+      'Ditt konto behöver en autentiseringsapp. Lägg till den i administrationen och logga sedan in här.',
     'memberLogin.signOut': 'Logga ut',
     'memberLogin.submit': 'Logga in',
     'memberLogin.tooManyAttempts':

@@ -5,7 +5,7 @@ export {
 } from './lib/get-authenticated-payload';
 export { getPayloadRuntime } from './lib/get-payload-runtime';
 export { hasMembersContent } from './lib/collections/has-members-content';
-export { loginMember } from './lib/login-member';
+export { type SecondFactor, loginMember } from './lib/login-member';
 export { getTenantContext } from './lib/get-tenant-context';
 export { mapToRuntime } from './lib/map-to-runtime';
 export type {
