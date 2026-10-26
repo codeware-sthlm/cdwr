@@ -40,8 +40,12 @@ export const CopyButton = ({
       variant="ghost"
       size="icon"
       onClick={handleCopy}
-      // The ghost hover is bg-muted, invisible on the muted surfaces it often sits on
-      className={cn('hover:bg-foreground/10 absolute top-2 right-2', className)}
+      // The ghost hover is bg-muted (and muted/50 in dark), invisible on the muted
+      // surfaces it often sits on
+      className={cn(
+        'hover:bg-foreground/10 dark:hover:bg-foreground/10 absolute top-2 right-2',
+        className
+      )}
       aria-label={label}
     >
       {copied ? (
