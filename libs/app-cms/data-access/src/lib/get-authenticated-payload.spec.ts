@@ -89,6 +89,19 @@ describe('getAuthenticatedPayload', () => {
     expect((await run()).asVisitor).toBe(false);
   });
 
+  it('reads as the visitor while an enrolled member owes the code', async () => {
+    withSession({ ...member, _strategy: 'local-jwt', hasTotp: true });
+    const payload = await run({ asVisitor: true });
+    expect(payload.authenticatedUser).toBe(tenantDoc);
+  });
+
+  it('authenticates as the member once the code is entered', async () => {
+    const verified = { ...member, _strategy: 'totp', hasTotp: true };
+    withSession(verified);
+    const payload = await run({ asVisitor: true });
+    expect(payload.authenticatedUser).toBe(verified);
+  });
+
   it('refuses a member of another workspace', async () => {
     // Signed in, but not here — no more entitled than a stranger
     withSession(outsider);
