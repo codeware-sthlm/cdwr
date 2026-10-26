@@ -30,7 +30,7 @@ const labels: SignupFormLabels = {
   name: 'Your name',
   email: 'Email address',
   password: 'Password',
-  passwordHint: 'At least 10 characters.',
+  passwordHint: 'At least 12 characters.',
   siteName: 'Site name',
   sectionInvite: 'Your invite',
   sectionYou: 'You',

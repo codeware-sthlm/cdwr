@@ -160,6 +160,7 @@ export type TranslationKey =
   | 'signup.availability.available'
   | 'signup.error.invalid'
   | 'signup.error.password'
+  | 'signup.error.password-breached'
   | 'signup.error.deployment'
   | 'signup.error.code'
   | 'signup.error.closed'
@@ -450,7 +451,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.name': 'Your name',
     'signup.email': 'Email address',
     'signup.password': 'Password',
-    'signup.passwordHint': 'At least 10 characters.',
+    'signup.passwordHint': 'At least 12 characters.',
     'signup.siteName': 'Site name',
     'signup.submit': 'Create site',
     'signup.submitting': 'Creating site...',
@@ -495,7 +496,9 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.error.invalid':
       'Some details are missing or not valid. Check the form and try again.',
     'signup.error.password':
-      'The password must be between 10 and 128 characters.',
+      'The password must be between 12 and 128 characters.',
+    'signup.error.password-breached':
+      'This password has appeared in a data breach elsewhere. Choose another one.',
     'signup.error.deployment': 'This name cannot be used.',
     'signup.error.code': "This invite code can't be used.",
     'signup.error.closed': "Signup isn't open right now.",
@@ -822,7 +825,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.name': 'Ditt namn',
     'signup.email': 'E-postadress',
     'signup.password': 'Lösenord',
-    'signup.passwordHint': 'Minst 10 tecken.',
+    'signup.passwordHint': 'Minst 12 tecken.',
     'signup.siteName': 'Webbplatsens namn',
     'signup.submit': 'Skapa webbplats',
     'signup.submitting': 'Skapar webbplatsen...',
@@ -869,7 +872,9 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'signup.availability.available': 'Ledig',
     'signup.error.invalid':
       'Några uppgifter saknas eller är ogiltiga. Kontrollera formuläret och försök igen.',
-    'signup.error.password': 'Lösenordet måste vara mellan 10 och 128 tecken.',
+    'signup.error.password': 'Lösenordet måste vara mellan 12 och 128 tecken.',
+    'signup.error.password-breached':
+      'Lösenordet finns med i en dataläcka någon annanstans. Välj ett annat lösenord.',
     'signup.error.deployment': 'Det här namnet kan inte användas.',
     'signup.error.code': 'Den här inbjudningskoden kan inte användas.',
     'signup.error.closed': 'Registreringen är inte öppen just nu.',

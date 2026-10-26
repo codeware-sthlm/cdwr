@@ -35,3 +35,7 @@ export {
   STARTER_PAGES,
   STARTER_PURPOSES
 } from './lib/starter-choices';
+export {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH
+} from './lib/password-policy';
