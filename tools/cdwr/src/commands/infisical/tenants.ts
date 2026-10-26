@@ -5,7 +5,7 @@ import { readTenantDeployments } from '../../services/infisical';
 import { type TenantFlag, flagStateOf } from './analysis.logic';
 
 /** Apps a tenant can be deployed with */
-const APPS = ['cms', 'web'];
+const APPS = ['cms'];
 
 export default defineCommand({
   summary: 'Tenant folders per app and their deploy switch',

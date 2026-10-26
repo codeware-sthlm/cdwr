@@ -9,6 +9,12 @@ export const ACTIVE = 'SIGNATURE_SECRET';
 export const PREVIOUS = 'SIGNATURE_SECRET_PREVIOUS';
 
 /**
+ * The retired Remix web app, still signing in production until its Fly apps are
+ * destroyed; restarted like any signer so a rollover never strands it
+ */
+export const RETIRED_SIGNER_BASE_NAME = 'cdwr-web';
+
+/**
  * Where the rollover stands, derived from what exists in Infisical.
  *
  * There is no stored progress marker - the two secrets are the state:

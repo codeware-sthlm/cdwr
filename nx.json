@@ -135,7 +135,7 @@
         }
       },
       "apps": {
-        "projects": ["cms", "builder", "web", "umami"],
+        "projects": ["cms", "builder", "umami"],
         "projectsRelationship": "independent",
         "version": {
           "updateDependents": "never"
@@ -262,17 +262,6 @@
       }
     },
     {
-      "plugin": "@nx/remix/plugin",
-      "options": {
-        "startTargetName": "start",
-        "buildTargetName": "build",
-        "devTargetName": "dev",
-        "typecheckTargetName": "typecheck",
-        "serveStaticTargetName": "serve-static",
-        "staticServeTargetName": "static-serve"
-      }
-    },
-    {
       "plugin": "@nx/vite/plugin",
       "options": {
         "buildTargetName": "build",
@@ -299,7 +288,6 @@
     },
     {
       "plugin": "@nx/playwright/plugin",
-      "exclude": ["apps/web-e2e/**"],
       "options": {
         "targetName": "e2e",
         "ciTargetName": "e2e-ci"
@@ -323,8 +311,7 @@
       "dev-plugin:block-images-sync",
       "dev-plugin:block-meta-sync",
       "dev-plugin:externalize-deps-sync",
-      "dev-plugin:theme-sync",
-      "dev-plugin:web-package-sync"
+      "dev-plugin:theme-sync"
     ]
   },
   "analytics": true,

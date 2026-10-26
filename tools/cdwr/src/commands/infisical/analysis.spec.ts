@@ -11,8 +11,8 @@ vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
 vi.mock('@codeware/shared/feature/tenancy', () => ({
   fetchDeployments: vi.fn().mockResolvedValue({
-    deployments: { cms: [{}, { tenant: 'acme' }], web: [], builder: [] },
-    skipped: [{ app: 'web', tenant: 'acme', reason: 'flag-off' }]
+    deployments: { cms: [{}, { tenant: 'acme' }], builder: [] },
+    skipped: [{ app: 'builder', tenant: 'acme', reason: 'flag-off' }]
   })
 }));
 
@@ -71,7 +71,6 @@ describe('infisical analysis', () => {
     expect(payload.result[0]?.apps[0]?.secrets['DATABASE_URL']).toBe('••••');
     expect(payload.result[0]?.apps.map(({ app }) => app)).toEqual([
       'cms',
-      'web',
       'builder',
       'umami'
     ]);
@@ -118,7 +117,7 @@ describe('infisical analysis', () => {
       result: Array<{ apps: Array<{ app: string; host: string }> }>;
     };
     expect(payload.result[0]?.apps[2]).toMatchObject({
-      app: 'builder',
+      app: 'umami',
       host: 'no flag'
     });
   });

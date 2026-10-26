@@ -59,4 +59,28 @@ describe('signature rotate', () => {
     expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-web-production');
     expect(ui.asked[0]).toContain('Type');
   });
+
+  it('rolls over with no signer left, restarting only cms', async () => {
+    const fly = await import('../../services/fly');
+    vi.mocked(fly.listAppNames).mockResolvedValueOnce(['cdwr-cms']);
+    vi.mocked(fly.restartMachines).mockClear();
+    const command = (await import('./rotate')).default;
+
+    const exit = await runCommand({
+      name: 'signature rotate',
+      command,
+      argv: ['--env', 'production', '--interactive'],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: true,
+      ui: fakeUi(['signature'])
+    });
+
+    expect(exit).toBe(EXIT.ok);
+    expect(fly.restartMachines).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^cdwr-web/)
+    );
+    expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-cms');
+  });
 });

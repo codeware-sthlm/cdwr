@@ -823,16 +823,6 @@ describe('tenant provision', () => {
       });
     });
 
-    it('does not touch a pending workspace without the cms', async () => {
-      const { awaitLive } = await import('./provision.wait');
-      await scripts('pending');
-
-      await run([], 'production', 'web');
-
-      expect(awaitLive).not.toHaveBeenCalled();
-      expect(await flips()).toHaveLength(0);
-    });
-
     it('leaves the workspace pending when the dispatch names no run', async () => {
       const { awaitLive } = await import('./provision.wait');
       const { dispatchWorkflow } = await import('../../services/github');
