@@ -561,6 +561,72 @@ describe('applySiteDefinition', () => {
     });
   });
 
+  describe('seo meta', () => {
+    const meta = { title: 'Home', description: 'Welcome' };
+    const withMeta = () =>
+      definitionWith({
+        pages: [{ name: 'Home', slug: 'home', layout: [], meta }]
+      });
+
+    it('hands a page its meta, and reports it as written', async () => {
+      const report = await apply(withMeta());
+
+      expect(dataOf(mocks.ensurePage)).toMatchObject({ meta });
+      expect(report.outcomes).toContainEqual({
+        collection: 'pages',
+        identifier: 'home',
+        action: 'created',
+        meta: { stated: meta }
+      });
+    });
+
+    it('hands a post its meta too', async () => {
+      await apply(
+        definitionWith({
+          posts: [{ title: 'Hi', slug: 'hi', content: '', meta }]
+        })
+      );
+
+      expect(dataOf(mocks.ensurePost)).toMatchObject({ meta });
+    });
+
+    it('leaves meta out when the definition states none', async () => {
+      const report = await apply(definitionWith());
+
+      expect(dataOf(mocks.ensurePage).meta).toBeUndefined();
+      expect(report.outcomes[0]).not.toHaveProperty('meta');
+    });
+
+    it('reports a page that exists with other meta, without overwriting it', async () => {
+      mocks.ensurePage.mockResolvedValue(7);
+      world.pages[7] = {
+        id: 7,
+        meta: { title: 'Old', description: 'Welcome' }
+      };
+
+      const report = await apply(withMeta());
+
+      expect(report.outcomes).toContainEqual({
+        collection: 'pages',
+        identifier: 'home',
+        action: 'existed',
+        meta: {
+          stated: meta,
+          current: { title: 'Old', description: 'Welcome' }
+        }
+      });
+    });
+
+    it('says nothing about a page that exists with the same meta', async () => {
+      mocks.ensurePage.mockResolvedValue(7);
+      world.pages[7] = { id: 7, meta };
+
+      const report = await apply(withMeta());
+
+      expect(report.outcomes[0]).not.toHaveProperty('meta');
+    });
+  });
+
   describe('navigation', () => {
     const home = { reference: { relationTo: 'pages', lookupSlug: 'home' } };
 

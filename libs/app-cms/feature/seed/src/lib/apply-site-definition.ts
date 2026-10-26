@@ -14,7 +14,10 @@ import type {
   BundledMediaFile,
   NavigationLinkDefinition
 } from '@codeware/shared/util/seed';
-import type { SiteDefinition } from '@codeware/shared/util/seed';
+import type {
+  MetaDefinition,
+  SiteDefinition
+} from '@codeware/shared/util/seed';
 import { bundledMediaPath } from '@codeware/shared/util/seed/site-definitions';
 import type { Payload, TypedLocale } from 'payload';
 
@@ -53,6 +56,23 @@ export type ApplyOutcome = {
   /** The slug, filename or title the definition named it by */
   identifier: string;
   action: 'created' | 'existed';
+  /**
+   * The SEO meta the definition states for a page or post, when it is news.
+   *
+   * A created document gets `stated`; one that already existed is left as it
+   * is, so `current` says what it holds instead — set only when the two differ.
+   */
+  meta?: {
+    stated: SeoMeta;
+    current?: SeoMeta;
+  };
+};
+
+/** The SEO fields a report can say something about; the image by filename. */
+export type SeoMeta = {
+  title?: string;
+  description?: string;
+  image?: string;
 };
 
 export type ApplyReport = {
@@ -271,16 +291,81 @@ export async function applySiteDefinition(
   const record = (
     collection: string,
     identifier: string,
-    result: { id: number } | number
+    result: { id: number } | number,
+    meta?: ApplyOutcome['meta']
   ) => {
     outcomes.push({
       collection,
       identifier,
       // Every ensure helper returns the document when it created one, and a
       // bare id when it found one already there
-      action: typeof result === 'number' ? 'existed' : 'created'
+      action: typeof result === 'number' ? 'existed' : 'created',
+      ...(meta ? { meta } : {})
     });
     return idOf(result);
+  };
+
+  /** The definition's meta as Payload stores it; images resolve to media ids */
+  const toPayloadMeta = (meta: MetaDefinition | undefined) =>
+    meta
+      ? {
+          title: meta.title,
+          description: meta.description,
+          image: meta.image
+            ? (media.get(meta.image.lookupFilename) ?? null)
+            : undefined
+        }
+      : undefined;
+
+  /**
+   * What a report says about a document's meta. Created documents carry the
+   * meta they were given; one that already existed is not overwritten, so it
+   * is reported only when it holds something else.
+   */
+  const metaOutcome = async (
+    collection: 'pages' | 'posts',
+    result: { id: number } | number,
+    stated: MetaDefinition | undefined
+  ): Promise<ApplyOutcome['meta']> => {
+    if (!stated) return undefined;
+    const report: SeoMeta = {
+      ...(stated.title !== undefined ? { title: stated.title } : {}),
+      ...(stated.description !== undefined
+        ? { description: stated.description }
+        : {}),
+      ...(stated.image ? { image: stated.image.lookupFilename } : {})
+    };
+    if (typeof result !== 'number') return { stated: report };
+
+    const doc = await payload.findByID({
+      collection,
+      id: result,
+      depth: 0,
+      locale: ctx.locale,
+      req: { transactionID: ctx.transactionID }
+    });
+    const held = doc?.meta;
+    const heldImage =
+      typeof held?.image === 'object' ? held.image?.id : held?.image;
+    const differs =
+      (stated.title !== undefined && stated.title !== held?.title) ||
+      (stated.description !== undefined &&
+        stated.description !== held?.description) ||
+      (stated.image !== undefined &&
+        (media.get(stated.image.lookupFilename) ?? null) !==
+          (heldImage ?? null));
+    if (!differs) return undefined;
+
+    return {
+      stated: report,
+      current: {
+        ...(held?.title ? { title: held.title } : {}),
+        ...(held?.description ? { description: held.description } : {}),
+        // The tenant's image by media id; the definition names files, the
+        // tenant holds documents
+        ...(heldImage ? { image: `media #${heldImage}` } : {})
+      }
+    };
   };
 
   const transactionID = await payload.db.beginTransaction();
@@ -638,6 +723,7 @@ export async function applySiteDefinition(
         // Payload validates the blocks on the way in, inside this
         // transaction — which is what makes a dry run exact
         layout: layout as unknown as Page['layout'],
+        meta: toPayloadMeta(page.meta),
         name: page.name,
         visibility: page.visibility ?? 'public'
       };
@@ -646,6 +732,8 @@ export async function applySiteDefinition(
       // What it points at was recreated with the rest, so it takes the
       // definition's content again instead of keeping ids that are now gone
       if (handover && !handover.replaced && page.slug === handover.slug) {
+        // Read before the update overwrites it, so the plan says what changes
+        const meta = await metaOutcome('pages', handover.id, page.meta);
         await payload.update({
           collection: 'pages',
           id: handover.id,
@@ -653,73 +741,78 @@ export async function applySiteDefinition(
           locale: ctx.locale,
           req: { transactionID }
         });
-        pages.set(page.slug, record('pages', page.slug, handover.id));
+        pages.set(page.slug, record('pages', page.slug, handover.id, meta));
         continue;
       }
 
+      const ensured = await ensurePage(
+        payload,
+        {
+          ...content,
+          draft: page.draft,
+          slug: page.slug,
+          tenant: tenant.id
+        },
+        owned
+      );
       pages.set(
         page.slug,
         record(
           'pages',
           page.slug,
-          await ensurePage(
-            payload,
-            {
-              ...content,
-              draft: page.draft,
-              slug: page.slug,
-              tenant: tenant.id
-            },
-            owned
-          )
+          ensured,
+          await metaOutcome('pages', ensured, page.meta)
         )
       );
     }
 
     for (const post of definition.posts ?? []) {
+      const ensured = await ensurePost(
+        payload,
+        {
+          authors: await resolveAuthors(payload, post.authors, {
+            transactionID,
+            unresolved
+          }),
+          categories: (post.categories ?? []).flatMap(({ lookupSlug }) => {
+            const id = categories.get(lookupSlug);
+            if (id === undefined) {
+              unresolved.push({
+                blockType: 'post',
+                field: 'categories',
+                lookup: lookupSlug
+              });
+              return [];
+            }
+            return [id];
+          }),
+          // Markdown, like a page's body. The cast that used to stand
+          // here put the raw string where Payload expects Lexical
+          content: (await convertMarkdownToLexical(
+            payload.config,
+            post.content
+          )) as unknown as Post['content'],
+          // A stated date keeps the listing order stable between applies
+          createdAt: post.createdAt ?? new Date().toISOString(),
+          heroImage: post.heroImage
+            ? (media.get(post.heroImage.lookupFilename) ?? null)
+            : undefined,
+          meta: toPayloadMeta(post.meta),
+          slug: post.slug,
+          tenant: tenant.id,
+          title: post.title,
+          visibility: post.visibility,
+          draft: post.draft
+        },
+        owned
+      );
       posts.set(
         post.slug,
         record(
           'posts',
           post.slug,
-          await ensurePost(
-            payload,
-            {
-              authors: await resolveAuthors(payload, post.authors, {
-                transactionID,
-                unresolved
-              }),
-              categories: (post.categories ?? []).flatMap(({ lookupSlug }) => {
-                const id = categories.get(lookupSlug);
-                if (id === undefined) {
-                  unresolved.push({
-                    blockType: 'post',
-                    field: 'categories',
-                    lookup: lookupSlug
-                  });
-                  return [];
-                }
-                return [id];
-              }),
-              // Markdown, like a page's body. The cast that used to stand
-              // here put the raw string where Payload expects Lexical
-              content: (await convertMarkdownToLexical(
-                payload.config,
-                post.content
-              )) as unknown as Post['content'],
-              // A stated date keeps the listing order stable between applies
-              createdAt: post.createdAt ?? new Date().toISOString(),
-              heroImage: post.heroImage
-                ? (media.get(post.heroImage.lookupFilename) ?? null)
-                : undefined,
-              slug: post.slug,
-              tenant: tenant.id,
-              title: post.title,
-              visibility: post.visibility,
-              draft: post.draft
-            },
-            owned
-          )
+          ensured,
+          await metaOutcome('posts', ensured, post.meta)
         )
       );
     }

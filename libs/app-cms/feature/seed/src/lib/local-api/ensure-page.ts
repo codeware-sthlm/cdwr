@@ -9,6 +9,8 @@ export type PageData = Pick<
   slug: string;
   /** Defaults to `public` — seeded content is demo content */
   visibility?: Page['visibility'];
+  /** The SEO fields; left unset when the definition states none */
+  meta?: Page['meta'];
   /** Defaults to published, for the same reason */
   draft?: boolean;
 };
@@ -32,7 +34,7 @@ export async function ensurePage(
   }
 ): Promise<Page | number> {
   const { locale, transactionID, managedBy } = options;
-  const { draft, header, layout, name, slug, tenant, visibility } = data;
+  const { draft, header, layout, meta, name, slug, tenant, visibility } = data;
 
   // Check if the page exists with the given slug and tenant
   const pages = await payload.find({
@@ -60,6 +62,7 @@ export async function ensurePage(
       ...(managedBy ? { managedBy } : {}),
       header,
       layout,
+      ...(meta ? { meta } : {}),
       name,
       slug,
       tenant,

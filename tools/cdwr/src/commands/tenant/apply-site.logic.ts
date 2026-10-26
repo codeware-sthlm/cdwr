@@ -6,11 +6,40 @@
  * CLI, which is the very thing running the work in a subprocess avoids.
  */
 
+/** The SEO fields a report speaks of; the image by filename. */
+export type SeoMeta = { title?: string; description?: string; image?: string };
+
 export type AppliedOutcome = {
   collection: string;
   identifier: string;
   action: 'created' | 'existed';
+  /** What the definition states for the document's SEO, when it is news */
+  meta?: { stated: SeoMeta; current?: SeoMeta };
 };
+
+const describeMeta = (meta: SeoMeta): string =>
+  (['title', 'description', 'image'] as const)
+    .flatMap((key) => (meta[key] ? [`${key} '${meta[key]}'`] : []))
+    .join(', ');
+
+/**
+ * One line per page or post whose SEO meta an apply would write, or that
+ * differs from what the definition states — as `diff-site` and the plan say it.
+ */
+export function metaLines(
+  outcomes: Array<AppliedOutcome>
+): Array<{ collection: string; identifier: string; text: string }> {
+  return outcomes.flatMap(({ collection, identifier, action, meta }) => {
+    if (!meta) return [];
+    const text =
+      action === 'created'
+        ? `will write ${describeMeta(meta.stated)}`
+        : `definition says ${describeMeta(meta.stated)}; tenant has ${
+            describeMeta(meta.current ?? {}) || 'none'
+          }`;
+    return [{ collection, identifier, text }];
+  });
+}
 
 export type UnresolvedReference = {
   blockType: string;
@@ -151,6 +180,12 @@ export function planNotes(report: ApplyReport): Array<string> {
     for (const { blockType, field, lookup } of report.unresolved) {
       notes.push(`  ${blockType}.${field} → '${lookup}'`);
     }
+  }
+
+  for (const { collection, identifier, text } of metaLines(
+    report.outcomes.filter(({ action }) => action === 'created')
+  )) {
+    notes.push(`SEO meta, ${collection}/${identifier}: ${text}`);
   }
 
   // A fresh apply removes only what this definition created, so anything

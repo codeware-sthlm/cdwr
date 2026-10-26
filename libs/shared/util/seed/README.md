@@ -194,7 +194,7 @@ safe answer.
 
 The same list rides along in the apply report as `extra`, so a plan shows it too.
 
-**Field-level drift is not detected.** A page that exists counts as present
+**Field-level drift is not detected,** SEO meta (`meta` on a page or post) apart: `diff-site` lists a `meta` row when a missing page will get meta or an existing one holds other. A page that exists counts as present
 however far its contents have wandered, so this answers "is it there", not "is
 it the same". Nor does it look at navigation or site settings, which are one
 document per tenant. Transcribing a site into a definition therefore needs the

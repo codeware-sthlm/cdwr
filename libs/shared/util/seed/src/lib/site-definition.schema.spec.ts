@@ -243,6 +243,54 @@ describe('SiteDefinitionSchema', () => {
     });
   });
 
+  describe('meta', () => {
+    const withMeta = (meta: unknown) => ({
+      ...minimal,
+      pages: [{ name: 'Home', slug: 'home', layout: [], meta }]
+    });
+
+    it('accepts a title and description on a page and a post', () => {
+      expect(
+        errorsOf({
+          ...withMeta({ title: 'Home', description: 'Welcome' }),
+          posts: [
+            {
+              title: 'Hi',
+              slug: 'hi',
+              content: '',
+              meta: { title: 'Hi', description: 'A post' }
+            }
+          ]
+        })
+      ).toEqual([]);
+    });
+
+    it('refuses a key it does not know', () => {
+      expect(errorsOf(withMeta({ descripton: 'typo' })).length).toBeGreaterThan(
+        0
+      );
+    });
+
+    it('refuses an empty title', () => {
+      expect(errorsOf(withMeta({ title: '' })).length).toBeGreaterThan(0);
+    });
+
+    it('refuses an image the definition does not state', () => {
+      expect(
+        errorsOf(withMeta({ image: { lookupFilename: 'x.png' } }))
+      ).toEqual(["No media named 'x.png' in this definition"]);
+    });
+
+    it('accepts an image the definition states', () => {
+      expect(
+        errorsOf({
+          ...withMeta({ image: { lookupFilename: 'x.png' } }),
+          media: [{ filename: 'x.png', alt: 'x', filePath: 'x.png' }]
+        })
+      ).toEqual([]);
+    });
+  });
+
   describe('slugs', () => {
     it('refuses two pages with the same slug', () => {
       const definition = {

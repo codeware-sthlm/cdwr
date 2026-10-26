@@ -27,6 +27,11 @@ export const codewareSe: SiteDefinition = {
     {
       name: 'Hem',
       slug: 'hem',
+      meta: {
+        title: 'Mjukvara som fungerar. Även om fem år.',
+        description:
+          'Codeware utvecklar system och leder tekniskt arbete i verksamheter där systemen inte får stanna. Det som byggs ska fungera länge.'
+      },
       layout: [
         {
           blockType: 'hero',

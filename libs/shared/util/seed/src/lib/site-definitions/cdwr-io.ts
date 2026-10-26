@@ -79,6 +79,11 @@ export const cdwrIo: SiteDefinition = {
     {
       name: 'Home',
       slug: 'home',
+      meta: {
+        title: 'Every site its own. One platform underneath.',
+        description:
+          'A content platform built on Payload and Next.js. Each site gets its own domain, its own theme and its own editors.'
+      },
       layout: [
         {
           blockType: 'hero',
@@ -292,6 +297,11 @@ export const cdwrIo: SiteDefinition = {
     {
       name: 'Blocks',
       slug: 'blocks',
+      meta: {
+        title: 'Every block, rendered by the renderer that serves it',
+        description:
+          'Not a gallery of screenshots. Each example is the production component, drawing from the same content API a site uses.'
+      },
       layout: [
         {
           blockType: 'block-gallery',
@@ -308,6 +318,11 @@ export const cdwrIo: SiteDefinition = {
     {
       name: 'Studio',
       slug: 'studio',
+      meta: {
+        title: 'A theme you cannot save until it is readable',
+        description:
+          'Pick a brand colour. The studio derives every other colour from it and checks each pairing for readability while you work.'
+      },
       layout: [
         {
           blockType: 'hero',
@@ -373,6 +388,11 @@ export const cdwrIo: SiteDefinition = {
     {
       name: 'Components',
       slug: 'components',
+      meta: {
+        title: 'A component written in the admin',
+        description:
+          'When no block does what a page needs, a developer writes one in the component studio. Saving it builds it, and an editor places it on a page.'
+      },
       layout: [
         {
           blockType: 'hero',
@@ -449,6 +469,11 @@ export const cdwrIo: SiteDefinition = {
     {
       name: 'Architecture',
       slug: 'architecture',
+      meta: {
+        title: 'Every site is its own deployment',
+        description:
+          'A site is an app of its own, on its own domain, with its own certificate and its own secrets, built once and run many times.'
+      },
       layout: [
         {
           blockType: 'hero',
@@ -572,6 +597,11 @@ export const cdwrIo: SiteDefinition = {
     {
       name: 'Devlog',
       slug: 'devlog',
+      meta: {
+        title: 'What shipped, and why',
+        description:
+          'Short entries when something lands. Written once, dated, and not edited afterwards.'
+      },
       layout: [
         {
           blockType: 'hero',
@@ -590,6 +620,11 @@ export const cdwrIo: SiteDefinition = {
     {
       name: 'Get started',
       slug: 'start',
+      meta: {
+        title: 'Start from the same setup',
+        description:
+          'The plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace.'
+      },
       layout: [
         {
           blockType: 'hero',
@@ -665,6 +700,11 @@ export const cdwrIo: SiteDefinition = {
     {
       title: 'The Codeware blue finally has a name',
       slug: 'codeware-blue-has-a-name',
+      meta: {
+        title: 'The Codeware blue finally has a name',
+        description:
+          "The admin's brand ramp was eleven hand-cut hex values that no palette shipped. It is now a named family, so the studio shows the real brand."
+      },
       createdAt: '2026-09-06T09:00:00.000Z',
       categories: [{ lookupSlug: 'themes' }, { lookupSlug: 'palette' }],
       content:
@@ -673,6 +713,11 @@ export const cdwrIo: SiteDefinition = {
     {
       title: 'Naming the variants the admin had been copying by hand',
       slug: 'naming-the-variants',
+      meta: {
+        title: 'Naming the variants the admin had been copying by hand',
+        description:
+          'Eight cards, three toolbar buttons and four status badges carried the same pasted class lists. Each is now a named variant.'
+      },
       createdAt: '2026-09-06T08:00:00.000Z',
       categories: [
         { lookupSlug: 'design-system' },
@@ -684,6 +729,11 @@ export const cdwrIo: SiteDefinition = {
     {
       title: 'Pick a colour instead of typing one',
       slug: 'pick-a-colour-instead-of-typing-one',
+      meta: {
+        title: 'Pick a colour instead of typing one',
+        description:
+          "The theme studio's fine-tuning panel edited ninety CSS values through a text field. It now has a real colour picker."
+      },
       createdAt: '2026-09-05T09:00:00.000Z',
       categories: [{ lookupSlug: 'studio' }],
       content:
@@ -692,6 +742,11 @@ export const cdwrIo: SiteDefinition = {
     {
       title: 'Platform themes can be forked from the admin',
       slug: 'platform-themes-can-be-forked',
+      meta: {
+        title: 'Platform themes can be forked from the admin',
+        description:
+          'The studio could export a theme but never open one. A system administrator can now fork a built-in and change what they need.'
+      },
       createdAt: '2026-09-03T09:00:00.000Z',
       categories: [{ lookupSlug: 'studio' }, { lookupSlug: 'themes' }],
       content:
@@ -700,6 +755,11 @@ export const cdwrIo: SiteDefinition = {
     {
       title: 'A site picks its own themes',
       slug: 'a-site-picks-its-own-themes',
+      meta: {
+        title: 'A site picks its own themes',
+        description:
+          'Theme was a build-time import, so every site compiled to the same stylesheet. It is now a setting: each site chooses the themes it offers.'
+      },
       createdAt: '2026-08-28T09:00:00.000Z',
       categories: [{ lookupSlug: 'themes' }, { lookupSlug: 'multi-tenancy' }],
       content:
