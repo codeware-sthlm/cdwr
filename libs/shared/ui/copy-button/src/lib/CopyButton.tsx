@@ -1,4 +1,6 @@
 'use client';
+import { Button } from '@codeware/shared/ui/shadcn/components/button';
+import { cn } from '@codeware/shared/util/ui';
 import { CheckIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 
@@ -19,7 +21,7 @@ interface CopyButtonProps {
  */
 export const CopyButton = ({
   code,
-  className = '',
+  className,
   label = 'Copy code'
 }: CopyButtonProps) => {
   const [copied, setCopied] = useState(false);
@@ -31,20 +33,23 @@ export const CopyButton = ({
   };
 
   return (
-    <button
+    <Button
       // Without this it submits any form it is rendered inside — in the
       // Payload admin that saves the document on a copy
       type="button"
+      variant="ghost"
+      size="icon"
       onClick={handleCopy}
-      className={`absolute top-2 right-2 rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${className}`}
+      // The ghost hover is bg-muted, invisible on the muted surfaces it often sits on
+      className={cn('hover:bg-foreground/10 absolute top-2 right-2', className)}
       aria-label={label}
     >
-      <div className="relative h-4 w-4">
-        {(copied && (
-          <CheckIcon className="h-4 w-4 text-green-800 dark:text-green-700" />
-        )) || <ClipboardDocumentIcon className="h-4 w-4" />}
-      </div>
-    </button>
+      {copied ? (
+        <CheckIcon className="text-(--success-subtle)" />
+      ) : (
+        <ClipboardDocumentIcon />
+      )}
+    </Button>
   );
 };
 
