@@ -179,6 +179,12 @@ export const EnvSchema = withEnvVars(
         'Enforce the full Content Security Policy instead of reporting it'
       ),
 
+      // Lets the seeded `@local.dev` users skip TOTP enrolment, so `nx dev cms`
+      // and the e2e suite start signed in. Development only
+      TOTP_EXEMPT_SEEDED_USERS: coerceBoolean(false).describe(
+        'Exempt the seeded @local.dev users from TOTP enrolment (development only)'
+      ),
+
       // Internal
       DISABLE_DB_PUSH: coerceBoolean(false).describe(
         'Disable database schema push in development'
@@ -234,6 +240,15 @@ export const EnvSchema = withEnvVars(
         message:
           'SIGNATURE_SECRET is required for CMS host (TENANT_ID is not specified)',
         path: ['SIGNATURE_SECRET']
+      }
+    )
+    // A seeded password is public, so the exemption never leaves development
+    .refine(
+      (data) =>
+        !data.TOTP_EXEMPT_SEEDED_USERS || data.DEPLOY_ENV === 'development',
+      {
+        message: 'TOTP_EXEMPT_SEEDED_USERS is only allowed in development',
+        path: ['TOTP_EXEMPT_SEEDED_USERS']
       }
     )
     // The build service refuses every request without its token

@@ -33,7 +33,8 @@
         ],
         "env": {
           "SEED_SOURCE": "local",
-          "SEED_STRATEGY": "delta"
+          "SEED_STRATEGY": "delta",
+          "TOTP_EXEMPT_SEEDED_USERS": "true"
         }
       },
       "configurations": {
@@ -41,7 +42,8 @@
           "env": {
             "SEED_SOURCE": "local",
             "SEED_STRATEGY": "delta",
-            "TENANT_ID": ""
+            "TENANT_ID": "",
+            "TOTP_EXEMPT_SEEDED_USERS": "true"
           }
         }
       }

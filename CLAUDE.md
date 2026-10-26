@@ -249,6 +249,11 @@ The seed opens signup and creates that code (and a single-use `SEED-ONCE-0000-00
 on a fresh database only; a preview is ready to take a signup as soon as it boots.
 The verification and notice mails go wherever the environment's SMTP points.
 
+System users and workspace admins must set up a TOTP authenticator at their first
+sign-in. `nx dev cms` (and so `cms-e2e`) sets `TOTP_EXEMPT_SEEDED_USERS=true`, which
+lets the seeded `@local.dev` users skip it; the env schema refuses the flag outside
+development.
+
 #### CMS Tenant mode
 
 Ensure `TENANT_ID` is set to `'moon'` in `apps/cms/.env.local`.

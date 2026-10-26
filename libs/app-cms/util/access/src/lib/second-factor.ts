@@ -11,10 +11,20 @@ type SessionUser = UserAny & { _strategy?: string; hasTotp?: boolean };
 const verifiedStrategies: ReadonlyArray<string> = ['totp', 'api-key'];
 
 /**
+ * The seeded users, when development asks for it. The env schema refuses the
+ * flag outside development.
+ */
+const isExemptSeededUser = (user: UserAny | null): boolean =>
+  process.env['TOTP_EXEMPT_SEEDED_USERS'] === 'true' &&
+  isUser(user) &&
+  user.email.endsWith('@local.dev');
+
+/**
  * System users and workspace admins must enrol in TOTP; members may.
  */
 export const mustEnrolTotp = (user: UserAny | null): boolean =>
-  hasRole(user, 'system-user') || getUserTenantIDs(user, 'admin').length > 0;
+  !isExemptSeededUser(user) &&
+  (hasRole(user, 'system-user') || getUserTenantIDs(user, 'admin').length > 0);
 
 /**
  * Whether a signed-in user still owes TOTP setup before using the cms.
