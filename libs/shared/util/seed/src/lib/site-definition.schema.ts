@@ -57,6 +57,18 @@ export type AssertEveryKeyKnown<
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const Slug = z.string().regex(slugPattern, 'Expected a lowercase-dashed slug');
 
+/** Strict: a misspelled `descripton` would otherwise be stored and never used */
+const MetaSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    description: z.string().min(1).optional(),
+    image: z
+      .object({ lookupFilename: z.string().min(1) })
+      .strict()
+      .optional()
+  })
+  .strict();
+
 const SlugRefSchema = z.object({ lookupSlug: Slug });
 
 /** A block, judged only on being a block. Payload judges the rest. */
@@ -177,6 +189,7 @@ export const SiteDefinitionSchema = z
           name: z.string().min(1),
           slug: Slug,
           draft: z.boolean().optional(),
+          meta: MetaSchema.optional(),
           layout: z.array(BlockSchema)
         })
         .passthrough()
@@ -188,6 +201,7 @@ export const SiteDefinitionSchema = z
             title: z.string().min(1),
             slug: Slug,
             draft: z.boolean().optional(),
+            meta: MetaSchema.optional(),
             content: z.string()
           })
           .passthrough()

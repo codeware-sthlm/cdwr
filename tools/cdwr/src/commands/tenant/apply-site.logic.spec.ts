@@ -5,6 +5,7 @@ import {
   countByCollection,
   extraMeaning,
   freshDanger,
+  metaLines,
   nothingToApply,
   parseApplyReport,
   planNotes,
@@ -275,5 +276,64 @@ describe('a fresh apply', () => {
     expect(resultSummary({ ...fresh, dryRun: false }).summary).toBe(
       "Applied to 'moon': 3 removed, 1 document(s) created"
     );
+  });
+});
+
+describe('metaLines', () => {
+  it('says what a created page will get', () => {
+    expect(
+      metaLines([
+        {
+          collection: 'pages',
+          identifier: 'home',
+          action: 'created',
+          meta: { stated: { title: 'Home', description: 'Welcome' } }
+        }
+      ])
+    ).toEqual([
+      {
+        collection: 'pages',
+        identifier: 'home',
+        text: "will write title 'Home', description 'Welcome'"
+      }
+    ]);
+  });
+
+  it('says how an existing page differs from the definition', () => {
+    expect(
+      metaLines([
+        {
+          collection: 'pages',
+          identifier: 'home',
+          action: 'existed',
+          meta: { stated: { title: 'Home' }, current: { title: 'Old' } }
+        }
+      ])[0].text
+    ).toBe("definition says title 'Home'; tenant has title 'Old'");
+  });
+
+  it('skips outcomes without meta news', () => {
+    expect(
+      metaLines([
+        { collection: 'pages', identifier: 'home', action: 'existed' }
+      ])
+    ).toEqual([]);
+  });
+
+  it('puts the meta a fresh apply writes in the plan notes', () => {
+    const notes = planNotes(
+      report({
+        outcomes: [
+          {
+            collection: 'pages',
+            identifier: 'home',
+            action: 'created',
+            meta: { stated: { title: 'Home' } }
+          }
+        ]
+      })
+    );
+
+    expect(notes).toContain("SEO meta, pages/home: will write title 'Home'");
   });
 });

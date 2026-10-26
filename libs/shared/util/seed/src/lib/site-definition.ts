@@ -298,10 +298,23 @@ export type TagDefinition = {
 };
 export type CategoryDefinition = { name: string; slug: string };
 
+/**
+ * What search engines and link previews show for a page or post.
+ *
+ * Lives in the definition, not in the admin, so a fresh apply that recreates
+ * the document never loses it. Written to the SEO fields `meta.*`.
+ */
+export type MetaDefinition = {
+  title?: string;
+  description?: string;
+  image?: MediaRef;
+};
+
 export type PageDefinition = Pick<Page, 'name'> & {
   slug: string;
   header?: Page['header'];
   visibility?: Page['visibility'];
+  meta?: MetaDefinition;
   /** Created unpublished, so an editor reviews it before visitors see it */
   draft?: boolean;
   layout: Array<BlockDefinition>;
@@ -312,6 +325,7 @@ export type PostDefinition = Pick<Post, 'title'> & {
   /** Markdown, converted to Lexical on apply — as the seed already does */
   content: string;
   visibility?: Post['visibility'];
+  meta?: MetaDefinition;
   /** Created unpublished, so an editor reviews it before visitors see it */
   draft?: boolean;
   categories?: Array<{ lookupSlug: string }>;

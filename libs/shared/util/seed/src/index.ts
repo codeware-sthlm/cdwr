@@ -12,6 +12,7 @@ export type {
   NavigationGroupDefinition,
   NavigationItemDefinition,
   NavigationLinkDefinition,
+  MetaDefinition,
   PageDefinition,
   PlaceDefinition,
   PostDefinition,

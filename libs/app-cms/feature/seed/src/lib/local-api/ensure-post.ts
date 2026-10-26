@@ -10,6 +10,8 @@ export type PostData = Pick<
   /** Optional, unlike on the document, so existing callers state neither */
   heroImage?: Post['heroImage'];
   visibility?: Post['visibility'];
+  /** The SEO fields; left unset when the definition states none */
+  meta?: Post['meta'];
   /** Defaults to published, like the demo content */
   draft?: boolean;
 };
@@ -40,6 +42,7 @@ export async function ensurePost(
     content,
     createdAt,
     heroImage,
+    meta,
     slug,
     tenant,
     title,
@@ -77,6 +80,7 @@ export async function ensurePost(
       content,
       createdAt,
       heroImage,
+      ...(meta ? { meta } : {}),
       slug,
       tenant,
       title,
