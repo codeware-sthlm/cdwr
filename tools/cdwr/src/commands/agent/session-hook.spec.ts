@@ -283,6 +283,8 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
         env: {
           ...process.env,
           AGENT_QUEUE_SESSIONS: sessions,
+          AGENT_QUEUE_ENV_FILE: '/dev/null',
+          CLAUDE_PROJECT_DIR: root,
           AGENT_QUEUE_MIRROR_CMD: `echo "$MIRROR_FILE" >> "${log}"`
         },
         encoding: 'utf8'
