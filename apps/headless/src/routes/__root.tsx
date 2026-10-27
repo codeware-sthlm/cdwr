@@ -1,23 +1,30 @@
 import {
+  ErrorContainer,
   PayloadProvider,
   type PayloadValue,
   RenderLayout
 } from '@codeware/shared/ui/cms-renderer';
+import { NotFound } from '@codeware/shared/ui/primitives';
 import {
+  type ErrorComponentProps,
   HeadContent,
   Outlet,
   Scripts,
   createRootRoute,
-  useLocation
+  useLocation,
+  useRouter
 } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useState } from 'react';
 
+import { isClientPath } from '../navigate';
 import { readSearchParam } from '../search-param';
 import { loadSite } from '../server/load-site';
 import appCss from '../styles.css?url';
 
 export const Route = createRootRoute({
   loader: () => loadSite(),
+  // The tenant chrome rarely changes; do not refetch it on every navigation
+  staleTime: 60_000,
   head: ({ loaderData }) => ({
     meta: [
       { charSet: 'utf-8' },
@@ -27,6 +34,8 @@ export const Route = createRootRoute({
     links: [{ rel: 'stylesheet', href: appCss }]
   }),
   component: RootComponent,
+  notFoundComponent: RootNotFound,
+  errorComponent: RootError,
   shellComponent: RootDocument
 });
 
@@ -61,6 +70,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 function RootComponent() {
   const data = Route.useLoaderData();
   const location = useLocation();
+  const router = useRouter();
   const [colorScheme, setColorScheme] =
     useState<NonNullable<PayloadValue['colorScheme']>>('system');
   const [systemDark, setSystemDark] = useState(false);
@@ -118,6 +128,8 @@ function RootComponent() {
         navigate: (path, newTab) => {
           if (newTab) {
             window.open(path, '_blank');
+          } else if (isClientPath(path)) {
+            void router.navigate({ href: path });
           } else {
             window.location.assign(path);
           }
@@ -146,5 +158,28 @@ function RootComponent() {
         <Outlet />
       </RenderLayout>
     </PayloadProvider>
+  );
+}
+
+function RootNotFound() {
+  const router = useRouter();
+  const data = Route.useLoaderData();
+
+  return (
+    <NotFound
+      locale={data?.ok ? data.site.locale : 'en'}
+      onGoHome={() => void router.navigate({ to: '/' })}
+    />
+  );
+}
+
+function RootError({ error }: ErrorComponentProps) {
+  // The message can carry internals; the server log has them
+  console.error('Route failed:', error);
+
+  return (
+    <ErrorContainer severity="error">
+      Something went wrong. Please try again later.
+    </ErrorContainer>
   );
 }

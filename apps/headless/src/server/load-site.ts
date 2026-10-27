@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import {
   customThemeCss,
   resolveTheme,
@@ -23,6 +21,8 @@ import { setResponseStatus } from '@tanstack/react-start/server';
 
 import pkg from '../../package.json';
 import { getEnv } from '../env.server';
+
+import { payloadRequestOptions } from './payload-request';
 
 /** What the document needs from the tenant, with nothing that is secret */
 export type SiteChrome = {
@@ -63,20 +63,7 @@ export const loadSite = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Site> => {
     try {
       const env = getEnv();
-      const base: RequestBaseOptions = {
-        apiUrl: env.PAYLOAD_URL,
-        debug: env.DEBUG,
-        locale: 'en',
-        // The cms refuses a tenant api key request without a valid signature
-        signatureVertification: {
-          deployEnv: env.DEPLOY_ENV,
-          deviceId: randomUUID(),
-          secret: env.SIGNATURE_SECRET,
-          tenantId: env.TENANT_ID,
-          userAgent: null
-        },
-        tenantApiKey: env.PAYLOAD_API_KEY
-      };
+      const base = payloadRequestOptions(env);
 
       const tenantConfig = await getTenantConfig(base);
       if (!tenantConfig) {
