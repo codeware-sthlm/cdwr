@@ -215,7 +215,7 @@ nx payload cms generate:importmap
 
 #### Content Security Policy
 
-The cms sends one, built by `@codeware/shared/util/csp` in `apps/cms/src/proxy.ts`. Framing, plugins, `base-uri` and form targets are always
+The cms sends one, built by `@codeware/shared/util/csp` in `apps/cms/src/proxy.ts`; `apps/headless` builds its own in `src/server/csp.ts`, from its global request middleware. Framing, plugins, `base-uri` and form targets are always
 enforced. The full policy — a per-request nonce with `'strict-dynamic'` for scripts — goes out
 `Content-Security-Policy-Report-Only` until `CSP_ENFORCE=true`. A new third-party origin has to be
 added there, or it breaks the site once enforcement is on.

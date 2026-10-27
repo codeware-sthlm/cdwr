@@ -1,4 +1,4 @@
-import { withEnvVars } from '@codeware/shared/util/zod';
+import { coerceBoolean, withEnvVars } from '@codeware/shared/util/zod';
 import { z } from 'zod';
 
 /** Server-side configuration, one deployment per tenant */
@@ -23,6 +23,13 @@ export const EnvSchema = z.object({
   APP_SHA: z.string({ description: 'Commit sha of the build' }).optional(),
   APP_BUILD_TIME: z
     .string({ description: 'ISO timestamp when the image was built' })
+    .optional(),
+  SENTRY_DSN: z
+    .string({ description: 'Sentry DSN, where CSP violations are reported' })
+    .optional(),
+  CSP_ENFORCE: coerceBoolean(false),
+  SITE_GATE_PASSWORD: z
+    .string({ description: 'Closes the whole site behind this password' })
     .optional(),
   DEBUG: z
     .string({ description: 'Debug mode' })

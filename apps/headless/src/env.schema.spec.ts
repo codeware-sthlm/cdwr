@@ -12,6 +12,7 @@ describe('EnvSchema', () => {
     expect(EnvSchema.parse(valid)).toEqual({
       ...valid,
       DEPLOY_ENV: 'development',
+      CSP_ENFORCE: false,
       DEBUG: false
     });
   });
