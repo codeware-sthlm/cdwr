@@ -1,6 +1,7 @@
 import { SiteDefinitionSchema } from '../site-definition.schema';
 
 import { codewareSe } from './codeware-se';
+import { codewareSePrivacyMarkdown } from './codeware-se-legal';
 
 /**
  * Checked against the envelope rules, and held to the decisions that shaped
@@ -29,7 +30,10 @@ describe('the codeware.se definition', () => {
 
   // Decided 2026-09-28: a front for the company, not a pitch or a shorter CV
   it('is one page with no client, service pitch or form', () => {
-    expect(codewareSe.pages.map(({ slug }) => slug)).toEqual(['hem']);
+    expect(codewareSe.pages.map(({ slug }) => slug)).toEqual([
+      'hem',
+      'privacy'
+    ]);
     expect(codewareSe.forms ?? []).toEqual([]);
     expect(text).not.toMatch(/Handelsbanken|RCO|Alfred Berg|Epsilon|HSB|CV\b/i);
   });
@@ -65,5 +69,36 @@ describe('the codeware.se definition', () => {
   it('names no framework, and links the platform', () => {
     expect(text).not.toMatch(/Payload|Next\.js|Nx\b/);
     expect(text).toContain('https://cdwr.io');
+  });
+
+  // The platform's defaults are placeholders: they must never reach a live site
+  it('states its own footer, with none of the default placeholders', () => {
+    const footer = codewareSe.siteSettings?.footer;
+
+    expect(footer?.variant).toBe('expanded');
+    expect(JSON.stringify(footer)).not.toMatch(/\.dev|46 70 123 45 67/);
+    expect(footer?.contact?.some(({ platform }) => platform === 'phone')).toBe(
+      false
+    );
+  });
+
+  it('wires the legal pages, which the footer links from the settings', () => {
+    const slugs = codewareSe.pages.map(({ slug }) => slug);
+
+    expect(codewareSe.siteSettings?.legal).toEqual({
+      privacyPage: { lookupSlug: 'privacy' }
+    });
+    expect(slugs).toContain('privacy');
+    expect(slugs).not.toContain('terms');
+    expect(codewareSe.navigation ?? []).toEqual([]);
+  });
+
+  it('leaves no placeholder or draft marker anywhere in the definition', () => {
+    expect(JSON.stringify(codewareSe)).not.toMatch(
+      /\[fill in|\[fyll i|\*\*Fill in:\*\*|\*\*Fyll i:\*\*|Draft — review before publishing|Utkast — läs igenom/
+    );
+    // Template markers are checked on the text only: component source has `{{`
+    expect(codewareSePrivacyMarkdown).not.toMatch(/\{\{/);
+    expect(codewareSePrivacyMarkdown).toContain('hello@codeware.se');
   });
 });

@@ -13,6 +13,14 @@ export {
   bundledStockMediaPath
 } from './lib/bundled-media-path';
 export { cdwrIo } from './lib/site-definitions/cdwr-io';
+export {
+  cdwrIoLegalVars,
+  cdwrIoPrivacyMarkdown
+} from './lib/site-definitions/cdwr-io-legal';
 export { codewareSe } from './lib/site-definitions/codeware-se';
+export {
+  codewareSeLegalVars,
+  codewareSePrivacyMarkdown
+} from './lib/site-definitions/codeware-se-legal';
 export { moon } from './lib/site-definitions/moon';
 export { star } from './lib/site-definitions/star';

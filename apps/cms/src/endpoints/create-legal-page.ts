@@ -108,6 +108,8 @@ export const createLegalPageEndpoint: Endpoint = {
       const locale = req.locale === 'sv' ? 'sv' : 'en';
 
       const { markdown, title } = renderLegalTemplate(body.kind, locale, {
+        published: false,
+        forms: true,
         tenantName: settings?.general?.appName ?? '',
         // The published page must not carry an editor's own address, so the
         // public contact from the footer is used, or none at all

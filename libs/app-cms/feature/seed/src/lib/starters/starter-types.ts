@@ -16,7 +16,7 @@ export type StarterLocale = (typeof STARTER_LOCALES)[number];
 /** What the privacy text must be truthful about; the rest it fills in itself */
 export type StarterPrivacyFacts = Omit<
   LegalTemplateVars,
-  'tenantName' | 'contactEmail'
+  'tenantName' | 'contactEmail' | 'published' | 'forms'
 >;
 
 export type StarterAnswers = {

@@ -1,6 +1,7 @@
 import { SiteDefinitionSchema } from '../site-definition.schema';
 
 import { cdwrIo } from './cdwr-io';
+import { cdwrIoPrivacyMarkdown } from './cdwr-io-legal';
 
 /**
  * The definition is checked by the compiler against Payload's block types, and
@@ -51,7 +52,8 @@ describe('the cdwr.io definition', () => {
       'components',
       'architecture',
       'devlog',
-      'start'
+      'start',
+      'privacy'
     ]);
   });
 
@@ -74,7 +76,11 @@ describe('the cdwr.io definition', () => {
   it('navigates only to pages it states', () => {
     const slugs = cdwrIo.pages.map(({ slug }) => slug);
 
-    for (const { reference } of cdwrIo.navigation ?? []) {
+    const links = (cdwrIo.navigation ?? []).flatMap((item) =>
+      'children' in item ? item.children : [item]
+    );
+
+    for (const { reference } of links) {
       expect(slugs).toContain(reference.lookupSlug);
     }
   });
@@ -111,5 +117,66 @@ describe('the cdwr.io definition', () => {
     for (const slug of placed) {
       expect(declared).toContain(slug);
     }
+  });
+
+  // The platform's defaults are placeholders: they must never reach a live site
+  it('states its own footer, with none of the default placeholders', () => {
+    const footer = cdwrIo.siteSettings?.footer;
+
+    expect(footer?.variant).toBe('expanded');
+    expect(footer?.contact).toContainEqual(
+      expect.objectContaining({ platform: 'email', email: 'hello@codeware.se' })
+    );
+    expect(JSON.stringify(footer)).not.toMatch(/\.dev|46 70 123 45 67/);
+    expect(footer?.contact?.some(({ platform }) => platform === 'phone')).toBe(
+      false
+    );
+    expect(footer?.links).toContainEqual({
+      link: expect.objectContaining({
+        type: 'custom',
+        url: 'https://github.com/codeware-sthlm/cdwr/blob/main/LICENSING.md'
+      })
+    });
+  });
+
+  it('wires the legal pages, which the footer links from the settings', () => {
+    const slugs = cdwrIo.pages.map(({ slug }) => slug);
+
+    expect(cdwrIo.siteSettings?.legal).toEqual({
+      privacyPage: { lookupSlug: 'privacy' }
+    });
+    expect(slugs).toContain('privacy');
+    expect(slugs).not.toContain('terms');
+    expect(JSON.stringify(cdwrIo.navigation)).not.toMatch(/privacy|terms/);
+  });
+
+  it('leaves no placeholder or draft marker anywhere in the definition', () => {
+    expect(JSON.stringify(cdwrIo)).not.toMatch(
+      /\[fill in|\[fyll i|\*\*Fill in:\*\*|\*\*Fyll i:\*\*|Draft — review before publishing|Utkast — läs igenom/
+    );
+    // Template markers are checked on the text only: component source has `{{`
+    expect(cdwrIoPrivacyMarkdown).not.toMatch(/\{\{/);
+    expect(cdwrIoPrivacyMarkdown).toContain('hello@codeware.se');
+  });
+
+  it('groups the platform pages in the menu, with Get started as the button', () => {
+    expect(cdwrIo.navigation).toEqual([
+      {
+        label: 'Platform',
+        children: ['blocks', 'studio', 'components', 'architecture'].map(
+          (lookupSlug) =>
+            expect.objectContaining({
+              reference: { relationTo: 'pages', lookupSlug }
+            })
+        )
+      },
+      expect.objectContaining({
+        reference: { relationTo: 'pages', lookupSlug: 'devlog' }
+      }),
+      expect.objectContaining({
+        reference: { relationTo: 'pages', lookupSlug: 'start' },
+        appearance: 'button'
+      })
+    ]);
   });
 });

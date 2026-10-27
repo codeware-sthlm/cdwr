@@ -4,15 +4,18 @@
  * Describes what this platform actually does with a visitor's details, so the
  * editor is correcting and extending real text rather than starting from
  * nothing. Sections for what the workspace does not use are left out when the
- * page is created. It is not legal advice, and the draft says so in its first
- * line — the page is created unpublished precisely so nobody ships it unread.
+ * page is created. It is not legal advice, and an unpublished draft says so in its
+ * first line — the page is created unpublished precisely so nobody ships it unread.
  */
-export const privacyEn = `> **Draft — review before publishing.** This text describes what this website collects and why. It is a starting point, not legal advice. Check it against how you actually work, fill in what is marked, add anything else you collect, and have it reviewed if you are unsure.
+export const privacyEn = `{{^published}}
+> **Draft — review before publishing.** This text describes what this website collects and why. It is a starting point, not legal advice. Check it against how you actually work, fill in what is marked, add anything else you collect, and have it reviewed if you are unsure.
+{{/published}}
 
 # Privacy
 
 {{tenantName}} is responsible for the personal data you give us on this website. This page explains what we collect, why, how long we keep it, and which services help us run the website.
 
+{{#forms}}
 ## Forms
 
 When you send a message through a form on this website, we store what you wrote in the form and when you sent it. Which details that is depends on the form — usually your name, your email address and your message.
@@ -27,6 +30,7 @@ Messages are deleted {{formsRetentionDays}} days after they were sent.
 {{^formsRetentionDays}}
 We keep messages until we delete them. **Fill in:** how long that is, or set a retention period under Forms in the site settings so messages are deleted automatically.
 {{/formsRetentionDays}}
+{{/forms}}
 
 {{#tourSignups}}
 ## Tour signups
