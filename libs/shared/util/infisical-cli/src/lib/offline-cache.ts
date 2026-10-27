@@ -15,17 +15,26 @@ import { parseDotenv } from './parse-dotenv';
  * cannot overwrite the public configuration living there.
  *
  * `/apps/web` and its sub-folders all cache to `apps/web/.env.offline`;
- * a path outside `/apps/<app>` has no cache and throws.
+ * a path outside `/apps/<app>` has no cache and throws. `app` names the app
+ * that runs when it reads another app's folder; it must exist under `apps/`.
  */
 export const offlineCacheFile = (
   workspaceRoot: string,
-  path: string
+  path: string,
+  app?: string
 ): string => {
-  const app = /^\/apps\/([^/.][^/]*)(?:\/|$)/.exec(path)?.[1];
-  if (!app || !existsSync(join(workspaceRoot, 'apps', app))) {
+  const isApp = (name: string | undefined): name is string =>
+    !!name &&
+    /^[^/.][^/]*$/.test(name) &&
+    existsSync(join(workspaceRoot, 'apps', name));
+  const pathApp = /^\/apps\/([^/]+)(?:\/|$)/.exec(path)?.[1];
+  if (!isApp(pathApp)) {
     throw new Error(`Infisical path must be under /apps/<app>: ${path}`);
   }
-  return join(workspaceRoot, 'apps', app, '.env.offline');
+  if (app !== undefined && !isApp(app)) {
+    throw new Error(`Unknown app: ${app}`);
+  }
+  return join(workspaceRoot, 'apps', app ?? pathApp, '.env.offline');
 };
 
 export const writeOfflineCache = (

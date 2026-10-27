@@ -19,7 +19,8 @@ vi.mock('@codeware/shared/util/infisical-cli', async (importOriginal) => ({
     paths: ['/apps/cms']
   }),
   readOfflineCache: vi.fn().mockReturnValue({ LOG_LEVEL: 'cached-value' }),
-  offlineCacheFile: (root: string) => `${root}/apps/cms/.env.offline`,
+  offlineCacheFile: (root: string, _path: string, app = 'cms') =>
+    `${root}/apps/${app}/.env.offline`,
   taskEnvFiles: vi.fn().mockReturnValue({
     all: ['/repo/apps/cms/.env'],
     committed: ['/repo/apps/cms/.env'],
@@ -29,13 +30,13 @@ vi.mock('@codeware/shared/util/infisical-cli', async (importOriginal) => ({
   readCommittedEnv: vi.fn().mockReturnValue({ LOG_LEVEL: 'info' })
 }));
 
-const run = async (env: NodeJS.ProcessEnv) => {
+const run = async (env: NodeJS.ProcessEnv, extra: string[] = []) => {
   const stdout: string[] = [];
   const command = (await import('./resolve')).default;
   const code = await runCommand({
     name: 'infisical resolve',
     command,
-    argv: ['--path', '/apps/cms', '--json'],
+    argv: ['--path', '/apps/cms', '--json', ...extra],
     root: '/repo',
     env,
     prefs: memoryPrefs(),
@@ -99,5 +100,16 @@ describe('infisical resolve', () => {
     const { code } = await run({ CI: 'true' });
     expect(code).toBe(EXIT.ok);
     expect(lib.fetchVault).not.toHaveBeenCalled();
+  });
+
+  it('uses the given app offline cache and committed .env', async () => {
+    const { code } = await run({ OFFLINE: '1' }, ['--app', 'headless']);
+    expect(code).toBe(EXIT.ok);
+    expect(lib.readOfflineCache).toHaveBeenCalledWith(
+      '/repo/apps/headless/.env.offline'
+    );
+    expect(lib.taskEnvFiles).toHaveBeenCalledWith(
+      expect.objectContaining({ projectRoot: 'apps/headless' })
+    );
   });
 });

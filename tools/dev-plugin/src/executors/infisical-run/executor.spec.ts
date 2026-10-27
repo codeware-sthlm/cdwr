@@ -176,6 +176,34 @@ describe('infisicalRun', () => {
       expect(childSaw()).toMatchObject({ PAYLOAD_SECRET_KEY: 'cached-secret' });
     });
 
+    it('reads the running app cache when it reads another app folder', async () => {
+      mkdirSync(join(root, 'apps/headless'), { recursive: true });
+      writeOfflineCache(join(root, 'apps/headless/.env.offline'), {
+        environment: 'development',
+        paths: ['/apps/cms'],
+        values: { PAYLOAD_SECRET_KEY: 'headless-secret' }
+      });
+      writeOfflineCache(join(root, 'apps/cms/.env.offline'), {
+        environment: 'development',
+        paths: ['/apps/cms'],
+        values: { PAYLOAD_SECRET_KEY: 'cms-secret' }
+      });
+
+      const result = await infisicalRun(options(), {
+        ...context(),
+        projectName: 'headless',
+        projectsConfigurations: {
+          version: 2,
+          projects: { headless: { root: 'apps/headless' } }
+        }
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(
+        JSON.parse(readFileSync(join(root, 'apps/headless/out.json'), 'utf8'))
+      ).toMatchObject({ PAYLOAD_SECRET_KEY: 'headless-secret' });
+    });
+
     it('fails when there is no cache', async () => {
       const result = await infisicalRun(options(), context());
 

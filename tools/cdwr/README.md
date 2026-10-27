@@ -92,7 +92,8 @@ cdwr infisical resolve --path=/apps/cms    # per key: inherited, vault, or vault
 cdwr infisical cache --path=/apps/cms      # refresh apps/cms/.env.offline for OFFLINE=1; counts only, never values
 ```
 
-`--path` defaults to `/apps/cms`. `resolve` follows `OFFLINE` and `CI` as `nx dev` does. `cache`
+`--path` defaults to `/apps/cms`. `--app` names the app that runs when it reads another app's folder
+(`--path=/apps/cms --app=headless` uses `apps/headless/.env.offline` and `.env`); it defaults to the path's app. `resolve` follows `OFFLINE` and `CI` as `nx dev` does. `cache`
 writes a local file (mode 600, gitignored) so it asks first; `--dry-run` lists the folders it
 would read and fetches no value. `nx dx:secrets <app>` runs it.
 
