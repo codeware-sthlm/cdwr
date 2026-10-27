@@ -577,8 +577,9 @@ attended() {
   [[ "$(jq -r '.verdict' <<<"$verdict")" == idle ]] && rm -f "$HOME_DIR/launch.json"
   if [[ "$action" == launch ]]; then
     jq -c '.last' <<<"$decision" > "$HOME_DIR/launch.json"
-    # nohup and the plist's AbandonProcessGroup keep the session alive after this job exits
-    nohup "$HOME_DIR/implement.sh" "$(jq -r '.key' <<<"$decision")" >/dev/null 2>&1 &
+    # nohup and the plist's AbandonProcessGroup keep the session alive after this job exits.
+    # The key goes to the launcher alone; implement.sh un-exports it before claude starts.
+    AGENT_SUPABASE_SERVICE_KEY="${AGENT_SUPABASE_SERVICE_KEY:-}" nohup "$HOME_DIR/implement.sh" "$(jq -r '.key' <<<"$decision")" >/dev/null 2>&1 &
     note "launch: $(jq -r '.key' <<<"$decision") (pid $!)"
     notice info "Agent queue: started an implementing session, ${attended_line#*run now: }."
     return 0
