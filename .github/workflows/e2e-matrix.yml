@@ -28,6 +28,7 @@ env:
   NX_VERBOSE_LOGGING: ${{ vars.NX_VERBOSE_LOGGING }}
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -36,10 +37,6 @@ concurrency:
 
 jobs:
   init:
-    # nx-set-shas looks up the last successful run through the Actions API
-    permissions:
-      actions: read
-      contents: read
     runs-on: ubuntu-latest
     outputs:
       e2e-enabled: ${{ steps.gate.outputs.run_status == 'true' && (steps.gate.outputs.reason == 'manual' || steps.affected.outputs.affected == 'true') }}
@@ -193,8 +190,6 @@ jobs:
     if: needs.init.outputs.e2e-enabled == 'true'
     env:
       projects: ${{ needs.init.outputs.projects }}
-    permissions:
-      contents: read
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
