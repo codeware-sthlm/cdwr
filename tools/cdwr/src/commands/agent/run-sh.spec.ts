@@ -200,6 +200,38 @@ describe('run.sh', () => {
 
 const execAsync = promisify(execFile);
 
+describe('run.sh telemetry', () => {
+  const exit = SCRIPT.slice(SCRIPT.indexOf('on_exit() {'));
+
+  it('sources telemetry.sh and reads its env from the checkout', () => {
+    expect(SCRIPT).toContain('source "${0:A:h}/telemetry.sh"');
+    expect(SCRIPT).toContain('telemetry_env "$REPO/tools/cdwr/.env"');
+  });
+
+  it('sends one runs row on exit, detached, never on --check', () => {
+    expect(exit).toContain('  record_run "$st"');
+    expect(SCRIPT).toMatch(/^record_run\(\) \{\n {2}\$check && return 0/m);
+    expect(SCRIPT).toMatch(/\( telemetry_run "\$RUN_STARTED" [^)]*\) &!/s);
+  });
+
+  it('records the outcome apart from its ticket and detail', () => {
+    expect(SCRIPT).toContain(
+      'outcome_name="$1" outcome_ticket="${2:-}" outcome_detail="${3:-}"'
+    );
+    expect(SCRIPT).toContain('run_kind=suggest');
+  });
+
+  it('upserts the activity rows by event id, merging edits, and records usage detached', () => {
+    expect(SCRIPT).toContain(
+      'supabase_upsert activity event_id "$rows_json" merge'
+    );
+    expect(SCRIPT).toContain('agent usage-record --yes --json');
+    expect(exit.indexOf('  record_usage')).toBeGreaterThan(
+      exit.indexOf('  publish_usage')
+    );
+  });
+});
+
 describe('run.sh Sentry check-ins', () => {
   it('sources checkin.sh from its own directory', () => {
     expect(SCRIPT).toContain('source "${0:A:h}/checkin.sh"');

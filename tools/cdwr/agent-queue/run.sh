@@ -52,13 +52,17 @@ check=false; [[ "${1:-}" == "--check" ]] && check=true
 # Run history for the "Agent queue: runs" Linear document, newest last. Idle adds no row.
 RUNS="$HOME_DIR/runs.jsonl"
 last_outcome=idle
+# What telemetry_run sends: the last real outcome apart from its ticket and detail
+RUN_STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+run_kind=plan outcome_name=idle outcome_ticket="" outcome_detail=""
+attended_work=""
 # Rows at the start; watch_prs records from a subshell, so a flag would miss its rows
 rows() { [[ -f "$RUNS" ]] && wc -l < "$RUNS" | tr -d ' ' || print 0; }
 rows_at_start="$(rows)"
 # record <outcome> [ticket] [detail]: a warn is a row, never the run's outcome.
 record() {
   $check && return 0
-  [[ "$1" == warn ]] || last_outcome="$1${2:+ $2}"
+  [[ "$1" == warn ]] || { last_outcome="$1${2:+ $2}"; outcome_name="$1" outcome_ticket="${2:-}" outcome_detail="${3:-}"; }
   jq -nc --arg w "$(date '+%F %H:%M')" --arg o "$1" --arg t "${2:-}" --arg d "${3:-}" \
     '{when: $w, outcome: $o, ticket: $t, detail: $d}' >> "$RUNS" 2>/dev/null || true
 }
@@ -73,6 +77,10 @@ CHECKIN_ID=""
 source "${0:A:h}/lib.sh"
 source "${0:A:h}/waits.sh"
 source "${0:A:h}/github-app.sh"
+source "${0:A:h}/telemetry.sh"
+telemetry_env "$REPO/tools/cdwr/.env"
+# Where session-hook.sh finds the key: the path goes to the sessions, never the key
+[[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
 [[ -z "$key" ]] && { say "skip: no Linear API key (AGENT_QUEUE_LINEAR_KEY or Keychain service linear-agent-queue)"; exit 0; }
 # No network is not a Linear failure: no record, no warn rows, the next run catches up
 if offline; then say "skip: offline (Mac asleep?)"; exit 0; fi
@@ -175,6 +183,21 @@ publish_runs() {
   return 0
 }
 
+# The same usage as rows in the telemetry database, at most once an hour. Detached, so it can't
+# hold up the run; the command bounds itself with a 60 s deadline of its own. Without the env vars
+# it does nothing.
+record_usage() {
+  $check && return 0
+  setopt local_options no_err_exit
+  telemetry_on || return 0
+  local stamp="$HOME_DIR/usage-recorded-at" last
+  last="$(cat "$stamp" 2>/dev/null)"
+  [[ "$last" == <-> ]] || last=0
+  (( $(date +%s) - last > 3600 )) || return 0
+  date +%s > "$stamp"
+  ( cd "$REPO" && AGENT_SUPABASE_SERVICE_KEY="$AGENT_SUPABASE_SERVICE_KEY" node tools/cdwr/bin/cdwr.mjs agent usage-record --yes --json >/dev/null 2>&1 </dev/null ||
+    note "warn: usage rows: cdwr agent usage-record failed" ) &!
+}
 # The usage document from `cdwr agent usage`, at most once an hour. The CLI runs from $REPO,
 # which follows origin/main, so it needs that checkout's install; when it can't start, that
 # is a warn row. Only numbers, model names and ticket ids leave the machine.
@@ -209,12 +232,12 @@ query($after: String) {
       identifier
       history(first: 100) {
         nodes {
-          createdAt actor { name } botActor { name type }
+          id createdAt actor { name } botActor { name type }
           fromState { name } toState { name }
           addedLabels { name } removedLabels { name } updatedDescription
         }
       }
-      comments(first: 50) { nodes { createdAt body user { name } botActor { name type } } }
+      comments(first: 50) { nodes { id createdAt body user { name } botActor { name type } } }
     }
   }
 }
@@ -233,7 +256,7 @@ publish_activity() {
   $check && return 0
   setopt local_options no_err_exit
   local stamp="$HOME_DIR/activity-published-at" hashfile="$HOME_DIR/activity-hash" pages="$HOME_DIR/activity-pages.jsonl"
-  local resp content hash before after=null page
+  local resp content hash before after=null page out rows_json
   # Every page, so a ticket past the first can't hide one of the newest events; pages go
   # through a file, since all of them together can outgrow a command line.
   : > "$pages"
@@ -248,8 +271,11 @@ publish_activity() {
     (( page == 8 )) && note "warn: activity document: more than 8 pages of tickets, the rest left out"
   done
   resp="$(jq -cs '{data: {issues: {nodes: add}}}' "$pages")"
-  content="$(cd "$REPO" && node tools/cdwr/bin/cdwr.mjs agent activity --runs "$RUNS" --json 2>/dev/null <<<"$resp" |
-    jq -er '.result.document')" || { activity_warn "cdwr agent activity failed"; return 0; }
+  out="$(cd "$REPO" && node tools/cdwr/bin/cdwr.mjs agent activity --runs "$RUNS" --json 2>/dev/null <<<"$resp")"
+  content="$(jq -er '.result.document' <<<"$out")" || { activity_warn "cdwr agent activity failed"; return 0; }
+  # Rows for the telemetry table, the same events; duplicates are ignored. Never waited for.
+  rows_json="$(jq -c '.result.rows // empty' <<<"$out" 2>/dev/null)"
+  [[ -z "$rows_json" ]] || ( supabase_upsert activity event_id "$rows_json" merge ) &!
   hash="$(print -r -- "$content" | sed 1d | shasum | cut -d' ' -f1)"
   [[ "$hash" == "$(cat "$hashfile" 2>/dev/null)" ]] && return 0
   before="$(cat "$stamp" 2>/dev/null)"
@@ -291,6 +317,20 @@ publish_doc() {
     date +%s > "$stamp"
   fi
 }
+# One row for this run in the telemetry database, detached so it can't slow the exit.
+# --check starts nothing and sends nothing.
+record_run() {
+  $check && return 0
+  telemetry_on || return 0
+  setopt local_options no_err_exit
+  local jl interval="" version="" limit
+  jl="$(job_line)"
+  [[ "$jl" =~ 'every ([0-9]+) min' ]] && interval=$(( match[1] * 60 ))
+  [[ "$jl" == *' · '* ]] && version="${jl#* · }"
+  limit="$(jq -r '.limit.max // empty' <<<"${queue_view:-null}" 2>/dev/null)"
+  ( telemetry_run "$RUN_STARTED" "$outcome_name" "$outcome_ticket" "$outcome_detail" "$attended_work" \
+      "$run_kind" "$interval" "$limit" "$version" ) &!
+}
 # Every handled outcome exits 0, so a non-zero exit is a failure nothing recorded.
 on_exit() {
   local st=$1
@@ -301,8 +341,10 @@ on_exit() {
   fi
   # Usage and activity first: their warn rows belong in this run's runs document
   publish_usage
+  record_usage
   publish_activity
   publish_runs
+  record_run "$st"
   rmdir "$HOME_DIR/lock" 2>/dev/null
   if ! $check; then
     if (( st == 0 )); then checkin ok "$CHECKIN_ID"; else checkin error "$CHECKIN_ID"; fi
@@ -446,6 +488,7 @@ attended() {
     'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)' <<<"$resp")" ||
     { note "warn: attended: watch.jq failed"; return 0; }
   attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
+  [[ "$(jq -r '.verdict' <<<"$verdict" 2>/dev/null)" == idle ]] && attended_work=false || attended_work=true
   # Session heartbeat files, with the process checks jq can't do. Never stops the run.
   local SESSIONS="$HOME_DIR/sessions" f w pid wpid sessions_json="[]" session sstate=none
   if [[ -d "$SESSIONS" ]]; then
@@ -464,7 +507,7 @@ attended() {
       # Ended or dead for over 24 h: delete
       if [[ "$pa" == false || "$(jq -r '.state' "$f" 2>/dev/null)" == ended ]] &&
          (( $(date +%s) - $(jq -r '.lastSeen // empty | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$f" 2>/dev/null || echo 0) > 86400 )); then
-        rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen" "$f.mirrored"; continue
+        rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen" "$f.mirrored" "$f.beat"; continue
       fi
       if $remote; then
         items+=("$(jq -c '. + {pidAlive: null, watcherAlive: null}' "$f" 2>/dev/null)")
@@ -655,6 +698,7 @@ run_outcome() {
 suggest_run() {
   local focus="$1" log result rc=0 spent="" outcome verdict id title line
   local L=mcp__claude_ai_Linear S=mcp__claude_ai_Sentry
+  run_kind=suggest
   cd "$REPO"
   git switch -q --detach origin/main 2>/dev/null ||
     { note "warn: worktree not clean, suggesting against its current state"; record warn "" "worktree not clean"; }

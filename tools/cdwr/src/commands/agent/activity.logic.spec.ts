@@ -2,6 +2,7 @@ import {
   type HistoryNode,
   type IssueNode,
   type RunRow,
+  activityRows,
   actorOf,
   collectEvents,
   commentEvents,
@@ -72,6 +73,7 @@ describe('historyEvents', () => {
       history([{ toState: { name: 'Done' }, actor: { name: 'Håkan' } }])
     );
     expect(event).toEqual({
+      id: 'history:COD-1:2026-10-10T10:00:00.000Z',
       at: new Date('2026-10-10T10:00:00.000Z'),
       ticket: 'COD-1',
       actor: 'Håkan',
@@ -249,6 +251,7 @@ describe('renderActivityDocument', () => {
   const event = (
     over: Partial<Parameters<typeof renderActivityDocument>[0][0]> = {}
   ) => ({
+    id: 'e1',
     at: new Date(2026, 9, 10, 20, 1),
     ticket: 'COD-540',
     actor: 'Håkan Ströberg',
@@ -305,5 +308,111 @@ describe('renderActivityDocument', () => {
     expect(
       doc.endsWith('| When | Ticket | Actor | Change |\n| -- | -- | -- | -- |')
     ).toBe(true);
+  });
+});
+
+describe('activityRows', () => {
+  const at = new Date('2026-10-10T10:00:00.000Z');
+  const ev = (id: string, over = {}) => ({
+    id,
+    at,
+    ticket: 'COD-1',
+    actor: 'agent',
+    change: 'a',
+    ...over
+  });
+
+  it('maps actors to the three kinds and the scheduler dash to no ticket', () => {
+    expect(
+      activityRows([
+        ev('1'),
+        ev('2', { ticket: '—', actor: 'scheduler', change: 'b' }),
+        ev('3', { ticket: 'COD-2', actor: 'Håkan', change: 'c' }),
+        ev('4', { ticket: 'COD-3', actor: 'Linear', change: 'd' })
+      ])
+    ).toEqual([
+      {
+        event_id: '1',
+        at: at.toISOString(),
+        ticket: 'COD-1',
+        actor: 'agent',
+        change: 'a'
+      },
+      {
+        event_id: '2',
+        at: at.toISOString(),
+        ticket: null,
+        actor: 'scheduler',
+        change: 'b'
+      },
+      {
+        event_id: '3',
+        at: at.toISOString(),
+        ticket: 'COD-2',
+        actor: 'human',
+        change: 'c'
+      },
+      {
+        event_id: '4',
+        at: at.toISOString(),
+        ticket: 'COD-3',
+        actor: 'human',
+        change: 'd'
+      }
+    ]);
+  });
+
+  it('keeps one row per id, the last seen', () => {
+    const rows = activityRows([ev('1'), ev('1', { change: 'b' })]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.change).toBe('b');
+  });
+});
+
+describe('event ids', () => {
+  it('keys history and comments on Linear ids, which an edit keeps', () => {
+    const node = { createdAt: '2026-10-10T10:00:00.000Z' };
+    const withBody = (id: string, body: string): IssueNode =>
+      issue({
+        history: { nodes: [{ ...node, id: 'h1', updatedDescription: true }] },
+        comments: { nodes: [{ ...node, id, body }] }
+      });
+    const before = collectEvents(
+      { data: { issues: { nodes: [withBody('c1', 'old')] } } },
+      [],
+      { now: new Date('2026-10-11T00:00:00Z'), windowDays: 7, limit: 50 }
+    );
+    const after = collectEvents(
+      { data: { issues: { nodes: [withBody('c1', 'new')] } } },
+      [],
+      { now: new Date('2026-10-11T00:00:00Z'), windowDays: 7, limit: 50 }
+    );
+    const ids = (r: typeof before) => r.events.map((e) => e.id).sort();
+    expect(ids(before)).toEqual(['comment:c1', 'history:h1']);
+    expect(ids(after)).toEqual(ids(before));
+    expect(before.events.map((e) => e.change)).not.toEqual(
+      after.events.map((e) => e.change)
+    );
+  });
+
+  it('derives a deterministic id without one, and for scheduler runs', () => {
+    const [h] = historyEvents(history([{ updatedDescription: true }]));
+    expect(h?.id).toBe('history:COD-1:2026-10-10T10:00:00.000Z');
+    const [c] = commentEvents(
+      issue({
+        comments: {
+          nodes: [{ createdAt: '2026-10-10T10:00:00.000Z', body: 'x' }]
+        }
+      })
+    );
+    expect(c?.id).toBe('comment:COD-1:2026-10-10T10:00:00.000Z');
+    const row: RunRow = {
+      when: '2026-10-10 10:00',
+      outcome: 'planned',
+      ticket: 'COD-1',
+      detail: 'd'
+    };
+    expect(runEvents([row])[0]?.id).toBe(runEvents([row])[0]?.id);
+    expect(runEvents([row])[0]?.id).toMatch(/^run:.*:COD-1:run: planned — d$/);
   });
 });

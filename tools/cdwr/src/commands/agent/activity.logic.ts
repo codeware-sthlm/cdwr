@@ -8,6 +8,7 @@ export type BotActor =
   { name?: string | null; type?: string | null } | null | undefined;
 
 export interface HistoryNode {
+  id?: string | null;
   createdAt: string;
   actor?: Named;
   botActor?: BotActor;
@@ -19,6 +20,7 @@ export interface HistoryNode {
 }
 
 export interface CommentNode {
+  id?: string | null;
   createdAt: string;
   body?: string | null;
   user?: Named;
@@ -45,6 +47,8 @@ export interface RunRow {
 }
 
 export interface ActivityEvent {
+  /** Stable across edits: Linear's own id where it has one, else derived from the kind, ticket and time */
+  id: string;
   at: Date;
   ticket: string;
   actor: string;
@@ -96,6 +100,9 @@ export const historyEvents = (issue: IssueNode): ActivityEvent[] =>
     if (parts.length === 0) return [];
     return [
       {
+        id: node.id
+          ? `history:${node.id}`
+          : `history:${issue.identifier}:${node.createdAt}`,
         at: new Date(node.createdAt),
         ticket: issue.identifier,
         actor: actorOf(node),
@@ -118,6 +125,9 @@ const firstLine = (body: string | null | undefined): string => {
 /** One event per comment, as its first line */
 export const commentEvents = (issue: IssueNode): ActivityEvent[] =>
   (issue.comments?.nodes ?? []).map((node) => ({
+    id: node.id
+      ? `comment:${node.id}`
+      : `comment:${issue.identifier}:${node.createdAt}`,
     at: new Date(node.createdAt),
     ticket: issue.identifier,
     actor: actorOf(node),
@@ -129,12 +139,16 @@ export const runEvents = (rows: RunRow[]): ActivityEvent[] =>
   rows.flatMap((row) => {
     const at = new Date(row.when.replace(' ', 'T'));
     if (Number.isNaN(at.getTime())) return [];
+    const change = `run: ${row.outcome}${row.detail === '' ? '' : ` — ${row.detail}`}`;
+    const ticket = row.ticket === '' ? '—' : row.ticket;
     return [
       {
+        // A runs row never changes once written, so its own text is a stable key
+        id: `run:${at.toISOString()}:${ticket}:${change}`,
         at,
-        ticket: row.ticket === '' ? '—' : row.ticket,
+        ticket,
         actor: 'scheduler',
-        change: `run: ${row.outcome}${row.detail === '' ? '' : ` — ${row.detail}`}`
+        change
       }
     ];
   });
@@ -160,6 +174,35 @@ export const collectEvents = (
     events: inWindow.slice(0, limit),
     dropped: Math.max(0, inWindow.length - limit)
   };
+};
+
+/** One row of the telemetry `activity` table */
+export interface ActivityRow {
+  event_id: string;
+  at: string;
+  ticket: string | null;
+  actor: 'agent' | 'scheduler' | 'human';
+  change: string;
+}
+
+/** The table keeps three kinds of actor: the agent, the scheduler and everyone else */
+const actorKind = (actor: string): ActivityRow['actor'] =>
+  actor === 'agent' || actor === 'scheduler' ? actor : 'human';
+
+/** The same events as the document, shaped for the `activity` table; the scheduler's `—` ticket is none */
+export const activityRows = (events: ActivityEvent[]): ActivityRow[] => {
+  // One row per id: a merge upsert refuses to touch the same row twice in a batch
+  const byId = new Map<string, ActivityRow>();
+  for (const e of events) {
+    byId.set(e.id, {
+      event_id: e.id,
+      at: e.at.toISOString(),
+      ticket: e.ticket === '—' ? null : e.ticket,
+      actor: actorKind(e.actor),
+      change: e.change
+    });
+  }
+  return [...byId.values()];
 };
 
 /** Backslash first, so a cell ending in `\` can't swallow the delimiter after it */

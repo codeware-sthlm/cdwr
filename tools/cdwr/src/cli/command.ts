@@ -54,6 +54,8 @@ export interface CommandDef<I extends Inputs, D> {
   description: string;
   danger: Danger;
   confirm?: Confirm;
+  /** `false` keeps the command out of `cdwr history`, for one a script runs on a schedule */
+  history?: false;
   needs?: Need[];
   inputs: I;
   /** Reads what it needs and describes the work; must not write anything */

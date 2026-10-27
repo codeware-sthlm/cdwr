@@ -154,7 +154,10 @@ export async function runCommand(options: RunOptions): Promise<number> {
     const result = await command.apply(ctx, plan.data, inputs);
     prefs.save();
 
-    if (planDanger(command.danger, plan.danger) !== 'read') {
+    if (
+      command.history !== false &&
+      planDanger(command.danger, plan.danger) !== 'read'
+    ) {
       record({
         at: new Date(started).toISOString(),
         command: name,
@@ -197,6 +200,7 @@ export async function runCommand(options: RunOptions): Promise<number> {
   } catch (error) {
     if (
       plan &&
+      command.history !== false &&
       planDanger(command.danger, plan.danger) !== 'read' &&
       !(error instanceof Cancelled)
     ) {

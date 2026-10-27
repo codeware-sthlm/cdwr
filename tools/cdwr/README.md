@@ -51,7 +51,7 @@ asked, and a missing input is a usage error naming the flag. Exit codes: 0 ok, 1
 Confirmation follows the command's danger level: read-only commands never ask, everything else
 asks wherever it runs, and destructive ones also make you type the target's name on production.
 A command prints its plan before asking, so the question is about what you have just read.
-Commands that change something append to `~/.cdwr/history.jsonl`; `cdwr history` shows it.
+Commands that change something append to `~/.cdwr/history.jsonl`; `cdwr history` shows it. A command a script runs on a schedule sets `history: false` in its definition and stays out of it.
 Remembered inputs (environment, app) live in `~/.cdwr/prefs.json`.
 
 ## Statistics teams
@@ -168,6 +168,7 @@ cdwr agent pause|resume   # hold or release the schedule
 cdwr agent logs [--run]   # the scheduler log, or the latest run
 cdwr agent logs --host <name> [--run]   # the same, from the agent container over ssh
 cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ticket, from local transcripts
+cdwr agent usage-record [--days 3]   # upsert that spend into the telemetry database; --dry-run prints the rows
 … | cdwr agent activity [--runs <file>]   # the activity document from a Linear history response on stdin
 cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
 cdwr agent worktree add COD-529 --branch <name>   # codeware-cod-529 beside this checkout
@@ -194,6 +195,13 @@ through `agent-queue/notify.sh`, which posts to the webhook in `SLACK_WEBHOOK_UR
 checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/notify-level`
 (missing means `all`), while the scheduler's own notices (a planned ticket, a failed or capped
 run) always go out.
+
+The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
+`activity` and `sessions`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
+`AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
+optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
+Linear documents are still published alongside.
 
 The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
 

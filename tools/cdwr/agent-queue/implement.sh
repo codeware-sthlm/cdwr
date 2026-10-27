@@ -37,6 +37,13 @@ record() {
     '{when: $w, outcome: $o, ticket: $t, detail: $d}' >> "$HOME_DIR/runs.jsonl" 2>/dev/null || true
 }
 
+STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# One row for the launch in the telemetry database; a no-op without the env vars. attended is false:
+# nobody sits at this session. It runs detached from the scheduler, so waiting on the call is fine.
+telemetry() {
+  telemetry_run "$STARTED" "$1" "$TICKET" "$2" false implement "" "" "" || true
+}
+
 # One session at a time; run.sh reads this lock as `locked`. It holds this script's pid, so
 # run.sh clears it only when its owner is gone, and only the owner removes it.
 LOCK="$HOME_DIR/implement.lock"
@@ -48,6 +55,10 @@ trap '[[ "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]] && rm -rf "$LOCK"' EXIT
 # copy). It fails closed, with the reason on stderr, and comes before the reservation so a
 # session that never starts costs nothing.
 source "${0:A:h}/github-app.sh"
+source "${0:A:h}/telemetry.sh"
+telemetry_env "$REPO/tools/cdwr/.env"
+# Where session-hook.sh finds the key: the path goes to the session, never the key
+[[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
 errf="$LOGS/github-app.err"
 if ! { app_env "$REPO/tools/cdwr/.env" && app_session; } 2> "$errf"; then
   reason="$(tr '\n' ' ' < "$errf" | sed 's/ *$//')"
@@ -55,6 +66,7 @@ if ! { app_env "$REPO/tools/cdwr/.env" && app_session; } 2> "$errf"; then
   note "fail: $reason; not starting"
   notify "Agent queue: nothing launched for $TICKET. $reason."
   record failed "$KEY · $reason"
+  telemetry failed "$KEY · $reason"
   exit 1
 fi
 rm -f "$errf"
@@ -68,6 +80,7 @@ ledger() {
 if ! ledger "$BUDGET_USD" reserve 2>/dev/null; then
   note "fail: could not reserve the budget in the spend ledger; not starting"
   record failed "$KEY · spend ledger not writable"
+  telemetry failed "$KEY · spend ledger not writable"
   exit 1
 fi
 
@@ -100,6 +113,8 @@ rc=0
 claude_pid=
 # A stop (the container shutting down) reaches claude; the ledger and the lock are settled below
 trap '[[ -n "$claude_pid" ]] && kill -TERM $claude_pid 2>/dev/null' TERM INT
+# The session hook tells the sessions table what kind this is
+export AGENT_QUEUE_SESSION_KIND=implement
 ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
   --model opus \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
@@ -142,12 +157,15 @@ spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result" 2
 if (( rc == 0 )); then
   note "done: $KEY$spent"
   record implemented "$KEY$spent · log $log"
+  telemetry implemented "$KEY$spent · log $log"
 elif [[ "$(jq -r '.subtype // empty' "$result" 2>/dev/null)" == error_max_budget_usd ]]; then
   note "cap: stopped at the \$$BUDGET_USD budget (see $log)"
   notify "Agent queue: an implementing session on $TICKET hit the \$$BUDGET_USD cap and stopped. Log: $log"
   record cap "$KEY · stopped at the \$$BUDGET_USD budget, log $log"
+  telemetry cap "$KEY · stopped at the \$$BUDGET_USD budget, log $log"
 else
   note "fail: claude exited $rc (see $log)"
   notify "Agent queue: an implementing session on $TICKET failed (exit $rc). Log: $log"
   record failed "$KEY · claude exited $rc, log $log$spent"
+  telemetry failed "$KEY · claude exited $rc, log $log$spent"
 fi

@@ -59,6 +59,7 @@ tickets and sends a notice when one leaves the merge queue, fails, or merges wit
 Each run also keeps three Linear documents up to date: "Agent queue: runs", "Agent queue: usage" (`cdwr agent usage`)
 and "Agent queue: activity" (`cdwr agent activity`, from Linear's issue history), which the Agent Desk reads.
 The runs document also carries an `Attended:` line saying whether an attended `/work-queue` has something to do, and `cdwr agent status` shows it too.
+The same telemetry also goes to the `agent-queue` Supabase project (tables `runs`, `usage`, `activity`, `sessions`; env `AGENT_SUPABASE_URL` and `AGENT_SUPABASE_SERVICE_KEY`); the documents stay until the desk reads the tables.
 Once a day, in the first idle run after 06:00, the job runs `/suggest-improvement`, which proposes one evidence-led improvement as a `Source: agent-idea` ticket or records "nothing today"; the runs document's `Suggested:` line and `cdwr agent status` show it. Accept it with `agent:ready`, discard it by cancelling with one word in a comment.
 
 When that work waits and no session is alive, the job starts one itself: `implement.sh` runs

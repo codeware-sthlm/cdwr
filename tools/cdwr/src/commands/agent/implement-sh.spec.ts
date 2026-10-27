@@ -127,10 +127,11 @@ describe('implement.sh', () => {
       );
     };
 
-    const start = () =>
+    const start = (extraEnv: Record<string, string> = {}) =>
       spawnSync('zsh', [join(scripts, 'implement.sh'), 'COD-1 answered'], {
         encoding: 'utf8',
         env: {
+          ...extraEnv,
           PATH: `${bin}:${process.env['PATH'] ?? ''}`,
           // No Slack hook under this home
           HOME: join(dir, 'home'),
@@ -165,6 +166,12 @@ describe('implement.sh', () => {
         ''
       );
       copyFileSync(SCRIPT_PATH, join(scripts, 'implement.sh'));
+      copyFileSync(
+        fileURLToPath(
+          new URL('../../../agent-queue/telemetry.sh', import.meta.url)
+        ),
+        join(scripts, 'telemetry.sh')
+      );
       fakeApp();
     });
 
@@ -218,6 +225,82 @@ describe('implement.sh', () => {
       expect(existsSync(join(queueHome, 'implement-spend.jsonl'))).toBe(false);
       // Not ours to remove
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(true);
+    });
+
+    describe('telemetry', () => {
+      // A curl that records one line of arguments per call
+      const fakeCurl = (): string => {
+        const log = join(dir, 'curl.log');
+        writeFileSync(
+          join(bin, 'curl'),
+          `#!/bin/sh\ncat > /dev/null\nprintf '%s\\n' "$*" >> "${log}"\nfor a in "$@"; do last="$a"; done\nprintf '%s\\n' "$@" | grep -A1 -x -- '-d' | tail -1 >> "${log}.body"\n`
+        );
+        chmodSync(join(bin, 'curl'), 0o755);
+        return log;
+      };
+      const env = {
+        AGENT_SUPABASE_URL: 'https://x.supabase.co',
+        AGENT_SUPABASE_SERVICE_KEY: 'sb_secret_abc'
+      };
+
+      it('posts one runs row for the launch', () => {
+        const log = fakeCurl();
+        fakeClaude(0, '{"total_cost_usd":1.5,"num_turns":3,"result":"ok"}');
+        expect(start(env).status).toBe(0);
+        const calls = readFileSync(log, 'utf8').trim().split('\n');
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toContain('https://x.supabase.co/rest/v1/runs');
+        expect(calls[0]).not.toContain('sb_secret_abc');
+        const body = JSON.parse(
+          readFileSync(`${log}.body`, 'utf8').trim()
+        ) as Record<string, unknown>;
+        expect(body).toMatchObject({
+          outcome: 'implemented',
+          ticket: 'COD-1',
+          attended: false,
+          job: { kind: 'implement', interval: null, limit: null }
+        });
+        expect(typeof body['host']).toBe('string');
+        expect(body['started_at']).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+        expect(body['finished_at']).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+      });
+
+      it('keeps the key out of the session, handing it only the path of the env file', () => {
+        fakeCurl();
+        const envLog = join(dir, 'claude-env');
+        writeFileSync(
+          join(bin, 'claude'),
+          `#!/bin/sh\nenv > "${envLog}"\nprintf '%s' '{}'\n`
+        );
+        chmodSync(join(bin, 'claude'), 0o755);
+        const envFile = join(
+          dir,
+          'ws',
+          'codeware-agent',
+          'tools',
+          'cdwr',
+          '.env'
+        );
+        writeFileSync(
+          envFile,
+          'AGENT_SUPABASE_URL=https://x.supabase.co\nAGENT_SUPABASE_SERVICE_KEY=filekey\n'
+        );
+        start();
+        // Exported by the caller too: still not inherited
+        start({ AGENT_SUPABASE_SERVICE_KEY: 'envkey' });
+        const seen = readFileSync(envLog, 'utf8');
+        expect(seen).not.toContain('AGENT_SUPABASE_SERVICE_KEY');
+        expect(seen).not.toContain('filekey');
+        expect(seen).not.toContain('envkey');
+        expect(seen).toContain(`AGENT_QUEUE_ENV_FILE=${envFile}`);
+      });
+
+      it('sends nothing without the env vars', () => {
+        const log = fakeCurl();
+        fakeClaude(0, '{}');
+        expect(start().status).toBe(0);
+        expect(existsSync(log)).toBe(false);
+      });
     });
 
     it('records a cap when the session hits its budget', () => {
