@@ -27,12 +27,19 @@ env:
   NX_PARALLEL: ${{ vars.NX_PARALLEL }}
   NX_VERBOSE_LOGGING: ${{ vars.NX_VERBOSE_LOGGING }}
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   init:
+    # nx-set-shas looks up the last successful run through the Actions API
+    permissions:
+      actions: read
+      contents: read
     runs-on: ubuntu-latest
     outputs:
       e2e-enabled: ${{ steps.gate.outputs.run_status == 'true' && (steps.gate.outputs.reason == 'manual' || steps.affected.outputs.affected == 'true') }}
