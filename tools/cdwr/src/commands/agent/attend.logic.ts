@@ -1,5 +1,7 @@
 import { dirname, join } from 'node:path';
 
+import { shellQuote } from '../../services/shell';
+
 /** What git and the disk say about the checkout an attended session runs from */
 export interface AttendState {
   exists: boolean;
@@ -9,11 +11,10 @@ export interface AttendState {
   dirty: boolean;
   detached: boolean;
   head: string;
-  /** `origin/main` after the fetch */
+  /** `origin/main` as `git ls-remote` reports it */
   main: string;
-  /** pnpm-lock.yaml differs between head and origin/main */
-  lockfileChanged: boolean;
-  hasNodeModules: boolean;
+  /** node_modules was installed from the current pnpm-lock.yaml */
+  markerMatches: boolean;
 }
 
 export type AttendStep = 'switch' | 'install';
@@ -29,7 +30,7 @@ export const attendPath = (root: string): string =>
 
 /** The line that starts the session in the checkout */
 export const startLine = (path: string): string =>
-  `cd ${path} && claude "/work-queue"`;
+  `cd ${shellQuote(path)} && claude "/work-queue"`;
 
 /** Refuses a checkout that is not safe to move, else lists what brings it to origin/main */
 export function planAttend(state: AttendState, path: string): AttendPlan {
@@ -43,7 +44,7 @@ export function planAttend(state: AttendState, path: string): AttendPlan {
   }
   const steps: AttendStep[] = [
     ...(state.head === state.main ? [] : (['switch'] as const)),
-    ...(state.lockfileChanged || !state.hasNodeModules
+    ...(state.head !== state.main || !state.markerMatches
       ? (['install'] as const)
       : [])
   ];
@@ -54,7 +55,7 @@ export function planAttend(state: AttendState, path: string): AttendPlan {
 export const describeStep = (step: AttendStep, main: string): string =>
   step === 'switch'
     ? `Switch to origin/main ${short(main)}`
-    : 'Install dependencies';
+    : 'Install dependencies when the lockfile changed';
 
 export const upToDate = (main: string): string =>
   `Already at origin/main ${short(main)}`;

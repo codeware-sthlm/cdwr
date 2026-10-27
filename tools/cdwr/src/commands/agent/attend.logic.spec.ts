@@ -18,8 +18,7 @@ const state = (over: Partial<AttendState> = {}): AttendState => ({
   detached: true,
   head: OLD,
   main: NEW,
-  lockfileChanged: false,
-  hasNodeModules: true,
+  markerMatches: true,
   ...over
 });
 
@@ -45,21 +44,16 @@ describe('planAttend', () => {
   });
 
   it.each([
-    ['behind', {}, ['switch']],
+    ['behind', {}, ['switch', 'install']],
     [
-      'behind with a new lockfile',
-      { lockfileChanged: true },
-      ['switch', 'install']
-    ],
-    [
-      'behind without node_modules',
-      { hasNodeModules: false },
+      'behind, install not current',
+      { markerMatches: false },
       ['switch', 'install']
     ],
     ['current', { head: NEW }, []],
     [
-      'current without node_modules',
-      { head: NEW, hasNodeModules: false },
+      'current, install not current',
+      { head: NEW, markerMatches: false },
       ['install']
     ]
   ] satisfies [string, Partial<AttendState>, string[]][])(
@@ -76,12 +70,21 @@ describe('texts', () => {
   });
 
   it('prints the start line', () => {
-    expect(startLine('/w/q')).toBe('cd /w/q && claude "/work-queue"');
+    expect(startLine('/w/q')).toBe('cd \'/w/q\' && claude "/work-queue"');
+  });
+
+  it.each([
+    ['a space', '/w/my q', `cd '/w/my q' && claude "/work-queue"`],
+    ['an apostrophe', "/w/it's", `cd '/w/it'\\''s' && claude "/work-queue"`]
+  ])('quotes a path with %s', (_name, path, line) => {
+    expect(startLine(path)).toBe(line);
   });
 
   it('shortens the sha', () => {
     expect(describeStep('switch', NEW)).toBe('Switch to origin/main bbbbbbbb');
-    expect(describeStep('install', NEW)).toBe('Install dependencies');
+    expect(describeStep('install', NEW)).toBe(
+      'Install dependencies when the lockfile changed'
+    );
     expect(ready(NEW)).toBe('The checkout is at origin/main bbbbbbbb');
     expect(upToDate(NEW)).toBe('Already at origin/main bbbbbbbb');
   });
