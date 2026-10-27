@@ -69,8 +69,18 @@ describe.skipIf(!hasZsh)('session-start.sh', () => {
     expect(result.status).toBe(0);
     const out = JSON.parse(result.stdout);
     expect(out.systemMessage).toContain('2 commits behind origin/main');
+    expect(out.systemMessage).toContain(`cdwr agent attend --path '${work}'`);
     expect(out.hookSpecificOutput.hookEventName).toBe('SessionStart');
     expect(out.hookSpecificOutput.additionalContext).toContain('2 commits');
+  });
+
+  it('quotes a checkout directory with a space', () => {
+    const spaced = join(root, 'my work');
+    renameSync(work, spaced);
+    const result = run({ CLAUDE_PROJECT_DIR: spaced });
+    expect(JSON.parse(result.stdout).systemMessage).toContain(
+      `--path '${spaced}'`
+    );
   });
 
   it.each<Record<string, string>>([
