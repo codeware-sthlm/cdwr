@@ -73,6 +73,12 @@ const nonAtomizedTarget = (
   return project?.targets?.[target]?.metadata?.nonAtomizedTarget;
 };
 
+/** The app name when the project lives at `apps/<app>` */
+const appOfRoot = (projectRoot: string | undefined): string | undefined =>
+  projectRoot === undefined
+    ? undefined
+    : /^apps\/([^/]+)$/.exec(projectRoot)?.[1];
+
 export default async function infisicalRun(
   options: InfisicalRunExecutorSchema,
   context: ExecutorContext
@@ -107,7 +113,12 @@ export default async function infisicalRun(
   });
   const committed = readCommittedEnv(committedFiles);
   const environment = deployEnvironment(inherited);
-  const cacheFile = offlineCacheFile(context.root, options.path);
+  // The running app owns its cache, even when it reads another app's folder
+  const cacheFile = offlineCacheFile(
+    context.root,
+    options.path,
+    appOfRoot(projectRoot)
+  );
   const cacheName = relative(context.root, cacheFile);
 
   let vault: Record<string, string>;
