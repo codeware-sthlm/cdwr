@@ -67,6 +67,23 @@ record() {
     '{when: $w, outcome: $o, ticket: $t, detail: $d}' >> "$RUNS" 2>/dev/null || true
 }
 
+# to_main <what>: moves the checkout to origin/main and installs when its lockfile is not the one
+# node_modules was last installed from, so the next run retries a failed install.
+# A failed install is a warn; the run goes on.
+to_main() {
+  local lock marker=node_modules/.cdwr-lockfile
+  git switch -q --detach origin/main 2>/dev/null ||
+    { note "warn: worktree not clean, $1 against its current state"; record warn "" "worktree not clean"; return 0; }
+  lock="$(git hash-object pnpm-lock.yaml 2>/dev/null)" || return 0
+  [[ -r "$marker" && "$(<"$marker")" == "$lock" ]] && return 0
+  if pnpm install --frozen-lockfile >> "$LOGS/scheduler.log" 2>&1; then
+    print -r -- "$lock" > "$marker" 2>/dev/null || true
+  else
+    note "warn: install failed after a lockfile change"; record warn "" "install failed after a lockfile change"
+  fi
+  return 0
+}
+
 source "${0:A:h}/checkin.sh"
 # A pause is deliberate: the tick still checks in ok, so the monitor does not alert
 if [[ -e "$HOME_DIR/paused" ]] && ! $check; then checkin ok; exit 0; fi
@@ -701,8 +718,7 @@ suggest_run() {
   local L=mcp__claude_ai_Linear S=mcp__claude_ai_Sentry
   run_kind=suggest
   cd "$REPO"
-  git switch -q --detach origin/main 2>/dev/null ||
-    { note "warn: worktree not clean, suggesting against its current state"; record warn "" "worktree not clean"; }
+  to_main suggesting
   log="$LOGS/$(date +%F_%H%M)-suggest.log"
   result="${log%.log}.json"
   note "suggest: focus $focus → $log"
@@ -775,8 +791,7 @@ if $check; then
 fi
 
 cd "$REPO"
-git switch -q --detach origin/main 2>/dev/null ||
-  { note "warn: worktree not clean, planning against its current state"; record warn "" "worktree not clean"; }
+to_main planning
 
 log="$LOGS/$(date +%F_%H%M).log"
 result="${log%.log}.json"

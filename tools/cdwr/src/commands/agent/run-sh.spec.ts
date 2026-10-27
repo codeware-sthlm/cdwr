@@ -446,3 +446,121 @@ describe('run.sh GitHub identity', () => {
     });
   });
 });
+
+describe('run.sh to_main', () => {
+  const fn = SCRIPT.match(/^to_main\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  let root: string;
+
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+    ).trim();
+
+  // A checkout one commit behind origin/main; the new commit changes the lockfile or not
+  const setup = (lockChanged: boolean) => {
+    const origin = join(root, 'origin');
+    mkdirSync(origin);
+    git(origin, 'init', '-q', '-b', 'main');
+    writeFileSync(join(origin, 'pnpm-lock.yaml'), 'a\n');
+    git(origin, 'add', 'pnpm-lock.yaml');
+    git(origin, 'commit', '-q', '-m', 'one');
+    git(root, 'clone', '-q', origin, join(root, 'work'));
+    if (lockChanged) writeFileSync(join(origin, 'pnpm-lock.yaml'), 'b\n');
+    git(origin, 'commit', '-q', '--allow-empty', '-am', 'two');
+    git(join(root, 'work'), 'fetch', '-q', 'origin');
+  };
+
+  // A stub pnpm that logs its arguments and exits with the given status
+  const stub = (status: number) => {
+    const bin = join(root, 'bin');
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, 'pnpm'),
+      `#!/bin/sh\necho "$@" >> "${root}/pnpm.calls"\nexit ${status}\n`
+    );
+    chmodSync(join(bin, 'pnpm'), 0o755);
+  };
+
+  const run = () => {
+    const script = [
+      'set -euo pipefail',
+      `LOGS="${root}"`,
+      `note() { print -r -- "$*" >> "$LOGS/notes"; }`,
+      `record() { print -r -- "$*" >> "$LOGS/records"; }`,
+      fn,
+      `cd "${root}/work"`,
+      'to_main planning',
+      'print done >> "$LOGS/notes"'
+    ].join('\n');
+    return spawnSync('zsh', ['-c', script], {
+      env: { ...process.env, PATH: `${root}/bin:${process.env['PATH']}` },
+      encoding: 'utf8'
+    });
+  };
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'to-main-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    expect(fn).toContain('to_main()');
+  });
+
+  // node_modules as installed from the lockfile with the given content
+  const installedFrom = (content: string) => {
+    const modules = join(root, 'work', 'node_modules');
+    mkdirSync(modules, { recursive: true });
+    const hash = execFileSync('git', ['hash-object', '--stdin'], {
+      input: content,
+      encoding: 'utf8'
+    }).trim();
+    writeFileSync(join(modules, '.cdwr-lockfile'), `${hash}\n`);
+  };
+  const marker = () => read('work/node_modules/.cdwr-lockfile').trim();
+  const lockHash = () =>
+    git(join(root, 'work'), 'hash-object', 'pnpm-lock.yaml');
+
+  it.skipIf(!hasZsh)('installs when the lockfile changed', () => {
+    setup(true);
+    installedFrom('a\n');
+    stub(0);
+    expect(run().status).toBe(0);
+    expect(read('pnpm.calls')).toBe('install --frozen-lockfile\n');
+    expect(read('records')).toBe('');
+    expect(marker()).toBe(lockHash());
+  });
+
+  it.skipIf(!hasZsh)('does not install when node_modules matches', () => {
+    setup(false);
+    installedFrom('a\n');
+    stub(0);
+    expect(run().status).toBe(0);
+    expect(read('pnpm.calls')).toBe('');
+  });
+
+  it.skipIf(!hasZsh)('installs when nothing says what node_modules has', () => {
+    setup(false);
+    stub(0);
+    expect(run().status).toBe(0);
+    expect(read('pnpm.calls')).toBe('install --frozen-lockfile\n');
+  });
+
+  it.skipIf(!hasZsh)('warns, carries on, and retries on the next run', () => {
+    setup(true);
+    installedFrom('a\n');
+    stub(1);
+    expect(run().status).toBe(0);
+    expect(read('records')).toContain('install failed after a lockfile change');
+    expect(read('notes')).toContain('done');
+    expect(run().status).toBe(0);
+    expect(read('pnpm.calls')).toBe(
+      'install --frozen-lockfile\ninstall --frozen-lockfile\n'
+    );
+  });
+});
