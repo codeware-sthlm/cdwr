@@ -277,6 +277,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/install').then((m) => m.default)
   },
   {
+    path: ['agent', 'attend'],
+    summary: 'Refresh the checkout an attended session runs from',
+    danger: 'mutate',
+    load: () => import('./agent/attend').then((m) => m.default)
+  },
+  {
     path: ['agent', 'worktree', 'add'],
     summary: 'Create the checkout for a ticket, beside this one',
     danger: 'mutate',
