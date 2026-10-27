@@ -53,6 +53,8 @@ export interface ActivityEvent {
   ticket: string;
   actor: string;
   change: string;
+  /** The machine that wrote it; Linear's events are shared by every host and carry none */
+  host?: string;
 }
 
 const COMMENT_LENGTH = 80;
@@ -135,7 +137,7 @@ export const commentEvents = (issue: IssueNode): ActivityEvent[] =>
   }));
 
 /** The scheduler's own runs; `when` is local time and rows with an unreadable one are skipped */
-export const runEvents = (rows: RunRow[]): ActivityEvent[] =>
+export const runEvents = (rows: RunRow[], host: string): ActivityEvent[] =>
   rows.flatMap((row) => {
     const at = new Date(row.when.replace(' ', 'T'));
     if (Number.isNaN(at.getTime())) return [];
@@ -143,12 +145,13 @@ export const runEvents = (rows: RunRow[]): ActivityEvent[] =>
     const ticket = row.ticket === '' ? '—' : row.ticket;
     return [
       {
-        // A runs row never changes once written, so its own text is a stable key
-        id: `run:${at.toISOString()}:${ticket}:${change}`,
+        // A runs row never changes once written, so its own text is a stable key; the host keeps machines apart
+        id: `run:${host}:${at.toISOString()}:${ticket}:${change}`,
         at,
         ticket,
         actor: 'scheduler',
-        change
+        change,
+        host
       }
     ];
   });
@@ -157,7 +160,12 @@ export const runEvents = (rows: RunRow[]): ActivityEvent[] =>
 export const collectEvents = (
   response: LinearActivityResponse,
   rows: RunRow[],
-  { now, windowDays, limit }: { now: Date; windowDays: number; limit: number }
+  {
+    now,
+    windowDays,
+    limit,
+    host
+  }: { now: Date; windowDays: number; limit: number; host: string }
 ): { events: ActivityEvent[]; dropped: number } => {
   const since = now.getTime() - windowDays * DAY_MS;
   const issues = response.data?.issues?.nodes ?? [];
@@ -166,7 +174,7 @@ export const collectEvents = (
       ...historyEvents(issue),
       ...commentEvents(issue)
     ]),
-    ...runEvents(rows)
+    ...runEvents(rows, host)
   ]
     .filter((e) => e.at.getTime() >= since)
     .sort((a, b) => b.at.getTime() - a.at.getTime());
@@ -183,6 +191,7 @@ export interface ActivityRow {
   ticket: string | null;
   actor: 'agent' | 'scheduler' | 'human';
   change: string;
+  host: string | null;
 }
 
 /** The table keeps three kinds of actor: the agent, the scheduler and everyone else */
@@ -199,7 +208,8 @@ export const activityRows = (events: ActivityEvent[]): ActivityRow[] => {
       at: e.at.toISOString(),
       ticket: e.ticket === '—' ? null : e.ticket,
       actor: actorKind(e.actor),
-      change: e.change
+      change: e.change,
+      host: e.host ?? null
     });
   }
   return [...byId.values()];

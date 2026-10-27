@@ -14,6 +14,7 @@ import {
   plural,
   renderActivityDocument
 } from './activity.logic';
+import { hostId } from './host-id';
 import { localMinute } from './usage.logic';
 
 const SHOWN = 20;
@@ -107,7 +108,8 @@ export default defineCommand({
     const { events, dropped } = collectEvents(response, rows, {
       now,
       windowDays: days,
-      limit
+      limit,
+      host: hostId()
     });
 
     if (events.length > 0) {

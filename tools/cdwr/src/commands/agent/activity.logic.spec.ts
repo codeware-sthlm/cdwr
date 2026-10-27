@@ -154,7 +154,7 @@ describe('runEvents', () => {
   });
 
   it('reads when as local time', () => {
-    const [event] = runEvents([row()]);
+    const [event] = runEvents([row()], 'mac');
     expect(localMinute(event.at)).toBe('2026-10-10 08:05');
     expect(event.at).toEqual(new Date(2026, 9, 10, 8, 5));
   });
@@ -164,13 +164,22 @@ describe('runEvents', () => {
     [row({ detail: 'two steps' }), 'COD-2', 'run: planned — two steps'],
     [row({ ticket: '' }), '—', 'run: planned']
   ])('%j', (r, ticket, change) => {
-    expect(runEvents([r])).toMatchObject([
+    expect(runEvents([r], 'mac')).toMatchObject([
       { actor: 'scheduler', ticket, change }
     ]);
   });
 
+  it('keeps the same run on two hosts apart', () => {
+    const [a] = runEvents([row()], 'mac');
+    const [b] = runEvents([row()], 'linux');
+    expect(a?.id).not.toBe(b?.id);
+    expect(b?.host).toBe('linux');
+  });
+
   it('skips rows with an invalid date', () => {
-    expect(runEvents([row({ when: 'soon' }), row({ when: '' })])).toEqual([]);
+    expect(
+      runEvents([row({ when: 'soon' }), row({ when: '' })], 'mac')
+    ).toEqual([]);
   });
 });
 
@@ -203,7 +212,8 @@ describe('collectEvents', () => {
     const { events, dropped } = collectEvents(response, rows, {
       now,
       windowDays: 7,
-      limit: 10
+      limit: 10,
+      host: 'mac'
     });
     expect(events.map((e) => e.change)).toEqual([
       'comment: hi',
@@ -223,7 +233,8 @@ describe('collectEvents', () => {
     const { events } = collectEvents({}, [edge], {
       now,
       windowDays: 7,
-      limit: 10
+      limit: 10,
+      host: 'mac'
     });
     expect(events).toHaveLength(1);
   });
@@ -232,14 +243,15 @@ describe('collectEvents', () => {
     const { events, dropped } = collectEvents(response, rows, {
       now,
       windowDays: 7,
-      limit: 2
+      limit: 2,
+      host: 'mac'
     });
     expect(events.map((e) => e.change)).toEqual(['comment: hi', 'status → A']);
     expect(dropped).toBe(1);
   });
 
   it('copes with an empty or null response', () => {
-    const opts = { now, windowDays: 7, limit: 5 };
+    const opts = { now, windowDays: 7, limit: 5, host: 'mac' };
     expect(collectEvents({}, [], opts)).toEqual({ events: [], dropped: 0 });
     expect(collectEvents({ data: { issues: null } }, [], opts).events).toEqual(
       []
@@ -326,7 +338,12 @@ describe('activityRows', () => {
     expect(
       activityRows([
         ev('1'),
-        ev('2', { ticket: '—', actor: 'scheduler', change: 'b' }),
+        ev('2', {
+          ticket: '—',
+          actor: 'scheduler',
+          change: 'b',
+          host: 'mac'
+        }),
         ev('3', { ticket: 'COD-2', actor: 'Håkan', change: 'c' }),
         ev('4', { ticket: 'COD-3', actor: 'Linear', change: 'd' })
       ])
@@ -336,28 +353,32 @@ describe('activityRows', () => {
         at: at.toISOString(),
         ticket: 'COD-1',
         actor: 'agent',
-        change: 'a'
+        change: 'a',
+        host: null
       },
       {
         event_id: '2',
         at: at.toISOString(),
         ticket: null,
         actor: 'scheduler',
-        change: 'b'
+        change: 'b',
+        host: 'mac'
       },
       {
         event_id: '3',
         at: at.toISOString(),
         ticket: 'COD-2',
         actor: 'human',
-        change: 'c'
+        change: 'c',
+        host: null
       },
       {
         event_id: '4',
         at: at.toISOString(),
         ticket: 'COD-3',
         actor: 'human',
-        change: 'd'
+        change: 'd',
+        host: null
       }
     ]);
   });
@@ -380,12 +401,22 @@ describe('event ids', () => {
     const before = collectEvents(
       { data: { issues: { nodes: [withBody('c1', 'old')] } } },
       [],
-      { now: new Date('2026-10-11T00:00:00Z'), windowDays: 7, limit: 50 }
+      {
+        now: new Date('2026-10-11T00:00:00Z'),
+        windowDays: 7,
+        limit: 50,
+        host: 'mac'
+      }
     );
     const after = collectEvents(
       { data: { issues: { nodes: [withBody('c1', 'new')] } } },
       [],
-      { now: new Date('2026-10-11T00:00:00Z'), windowDays: 7, limit: 50 }
+      {
+        now: new Date('2026-10-11T00:00:00Z'),
+        windowDays: 7,
+        limit: 50,
+        host: 'mac'
+      }
     );
     const ids = (r: typeof before) => r.events.map((e) => e.id).sort();
     expect(ids(before)).toEqual(['comment:c1', 'history:h1']);
@@ -412,7 +443,9 @@ describe('event ids', () => {
       ticket: 'COD-1',
       detail: 'd'
     };
-    expect(runEvents([row])[0]?.id).toBe(runEvents([row])[0]?.id);
-    expect(runEvents([row])[0]?.id).toMatch(/^run:.*:COD-1:run: planned — d$/);
+    expect(runEvents([row], 'mac')[0]?.id).toBe(runEvents([row], 'mac')[0]?.id);
+    expect(runEvents([row], 'mac')[0]?.id).toMatch(
+      /^run:mac:.*:COD-1:run: planned — d$/
+    );
   });
 });
