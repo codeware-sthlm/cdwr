@@ -7,6 +7,7 @@ exec >/dev/null 2>&1
 
 setopt extended_glob
 zmodload zsh/stat 2>/dev/null
+HOOK_DIR="${0:A:h}"
 DIR="${AGENT_QUEUE_SESSIONS:-${CDWR_HOME:-$HOME/.cdwr}/agent-queue/sessions}"
 # The claude process: the nearest ancestor named claude, since a shell may sit in between
 claude_pid() {
@@ -66,6 +67,30 @@ mirror_send() {
   return 0
 }
 
+# heartbeat: upserts the session into the telemetry database, at most once a minute per session.
+# The stamp is written first and the call runs detached, so a tool call never waits on the network.
+# kind is `implement` for a launched session (implement.sh exports it), `attended` otherwise.
+heartbeat() {
+  local stamp="$file.beat" last now_s
+  if [[ -f "$stamp" ]]; then
+    now_s="$(date +%s)"; last="$(zstat +mtime "$stamp" 2>/dev/null)"
+    [[ "$last" == <-> ]] && (( now_s - last < 60 )) && return 0
+  fi
+  source "$HOOK_DIR/telemetry.sh" 2>/dev/null || return 0
+  # The file a launched session was told, else this checkout's, else the installed agent checkout's,
+  # which sits beside it as `cdwr agent install` makes it
+  local env_file
+  for env_file in "${AGENT_QUEUE_ENV_FILE:-}" "${CLAUDE_PROJECT_DIR:-$HOOK_DIR/../../..}/tools/cdwr/.env" \
+      "${CLAUDE_PROJECT_DIR:-$HOOK_DIR/../../..}/../codeware-agent/tools/cdwr/.env"; do
+    [[ -n "$env_file" ]] && telemetry_env "$env_file"
+    telemetry_on && break
+  done
+  telemetry_on || return 0
+  : > "$stamp"
+  ( telemetry_session "$id" "${AGENT_QUEUE_SESSION_KIND:-attended}" ) &!
+  return 0
+}
+
 # patch <jq filter> [jq args]: rewrites the session file atomically
 patch() {
   local filter=$1; shift
@@ -98,6 +123,7 @@ main() {
           detail: null, cwd: $cwd, host: $host}' > "$file.tmp.$$" &&
         mv "$file.tmp.$$" "$file" || rm -f "$file.tmp.$$"
       mirror force
+      heartbeat
       return 0
     fi
     # `session.sh ticket COD-n` (or `-` to clear) names the ticket in hand, read the same way;
@@ -144,6 +170,7 @@ main() {
   if [[ "$event" == (Stop|SessionEnd) || "$after" != "$before" || -n "$ticket" ]]; then mirror force
   else mirror
   fi
+  heartbeat
   return 0
 }
 

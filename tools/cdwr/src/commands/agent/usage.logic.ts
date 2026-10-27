@@ -372,3 +372,59 @@ export const renderUsageDocument = (
     `## Tickets\n\n${tickets}`
   ].join('\n\n');
 };
+
+/** One row of the telemetry `usage` table */
+export interface UsageTelemetryRow {
+  day: string;
+  ticket: string | null;
+  model: string;
+  role: Role;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  host: string;
+}
+
+/**
+ * Day, ticket, model and role rows for the telemetry table. `aggregate` sums by day and
+ * by ticket separately, so each ticket's replies go through it on their own. Input counts
+ * everything the model read (fresh, cached and cache writes); an unpriced model costs 0.
+ */
+export const usageRows = (
+  replies: Reply[],
+  {
+    since,
+    host,
+    dayOf = (timestamp) => timestamp.slice(0, 10)
+  }: { since: Date; host: string; dayOf?: (timestamp: string) => string }
+): UsageTelemetryRow[] => {
+  const byTicket = new Map<string, Reply[]>();
+  for (const reply of replies) {
+    byTicket.set(reply.ticket, [...(byTicket.get(reply.ticket) ?? []), reply]);
+  }
+  return [...byTicket.entries()]
+    .sort(([a], [b]) => byText(a, b))
+    .flatMap(([ticket, list]) =>
+      aggregate(list, { since, dayOf }).days.map((d) => ({
+        day: d.day,
+        ticket: ticket === 'unattributed' ? null : ticket,
+        model: d.model,
+        role: d.role,
+        input_tokens:
+          d.tokens.input +
+          d.tokens.cacheRead +
+          d.tokens.cacheWrite5m +
+          d.tokens.cacheWrite1h,
+        output_tokens: d.tokens.output,
+        cost_usd: d.cost ?? 0,
+        host
+      }))
+    );
+};
+
+/**
+ * Local midnight `days` days back. Rows are upserted by day, so the window must start on a
+ * day boundary: a start mid-day would overwrite its first day with a partial sum.
+ */
+export const wholeDaysSince = (now: Date, days: number): Date =>
+  new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);

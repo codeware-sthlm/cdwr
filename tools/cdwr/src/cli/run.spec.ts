@@ -221,6 +221,37 @@ describe('runCommand', () => {
     });
   });
 
+  it('keeps a command with history: false out of the history, applied or failed', async () => {
+    for (const fail of [false, true]) {
+      const history: HistoryEntry[] = [];
+      const exit = await runCommand({
+        name: 'test quiet',
+        command: defineCommand({
+          summary: 'Quiet',
+          description: 'Quiet',
+          danger: 'mutate',
+          history: false,
+          inputs: {},
+          plan: async () => ({ steps: ['x'], data: {} }),
+          apply: async () => {
+            if (fail) throw new Error('boom');
+            return { summary: 'done' };
+          }
+        }),
+        argv: ['--yes'],
+        root: '/repo',
+        env: {},
+        prefs: memoryPrefs(),
+        interactive: false,
+        ui: fakeUi([], false),
+        history: (entry) => history.push(entry),
+        stdout: () => undefined
+      });
+      expect(exit).toBe(fail ? EXIT.failed : EXIT.ok);
+      expect(history).toEqual([]);
+    }
+  });
+
   it('prints one JSON document with --json', async () => {
     const r = run('read', ['--environment', 'preview', '--json'], [], false);
     expect(await r.exit).toBe(EXIT.ok);

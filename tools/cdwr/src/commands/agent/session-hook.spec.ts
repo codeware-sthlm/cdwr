@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -7,8 +7,10 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs';
+import { type Server, createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +36,12 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
   const run = (payload: unknown, sessions = dir) =>
     spawnSync('zsh', [SCRIPT], {
       input: typeof payload === 'string' ? payload : JSON.stringify(payload),
-      env: { ...process.env, AGENT_QUEUE_SESSIONS: sessions },
+      env: {
+        ...process.env,
+        AGENT_QUEUE_SESSIONS: sessions,
+        AGENT_QUEUE_ENV_FILE: '/dev/null',
+        CLAUDE_PROJECT_DIR: sessions
+      },
       encoding: 'utf8'
     });
   const read = () => JSON.parse(readFileSync(join(dir, 'abc.json'), 'utf8'));
@@ -343,5 +350,156 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
       hook({ session_id: 'abc', hook_event_name: 'SessionEnd' });
       expect(mirrored()).toEqual([]);
     });
+  });
+});
+
+describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
+  let dir: string;
+  let server: Server;
+  let origin: string;
+  let hits: { url?: string; body: string }[];
+
+  // Async, so the in-process server can answer while the hook runs
+  const hook = (payload: unknown, extra: Record<string, string> = {}) =>
+    new Promise<number | null>((resolve) => {
+      const child = spawn('zsh', [SCRIPT], {
+        env: {
+          ...process.env,
+          AGENT_QUEUE_SESSIONS: dir,
+          AGENT_QUEUE_ENV_FILE: '/dev/null',
+          CLAUDE_PROJECT_DIR: dir,
+          ...extra
+        },
+        stdio: ['pipe', 'ignore', 'ignore']
+      });
+      child.on('close', resolve);
+      child.stdin.end(JSON.stringify(payload));
+    });
+
+  const configured = () => ({
+    AGENT_SUPABASE_URL: origin,
+    AGENT_SUPABASE_SERVICE_KEY: 'sb_secret_x'
+  });
+  const tool = { ...REGISTER, tool_name: 'Read', tool_input: {} };
+  const settle = () => new Promise((r) => setTimeout(r, 700));
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        hits.push({ url: req.url, body: raw });
+        res.writeHead(201);
+        res.end();
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error();
+    origin = `http://127.0.0.1:${address.port}`;
+  });
+  afterAll(async () => {
+    await new Promise<void>((r) => server.close(() => r()));
+  });
+  beforeEach(() => {
+    hits = [];
+    dir = mkdtempSync(join(tmpdir(), 'session-hook-beat-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('upserts the session once a minute, detached', async () => {
+    await hook(REGISTER, configured());
+    await hook(tool, configured());
+    await hook(tool, configured());
+    await settle();
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.url).toBe('/rest/v1/sessions?on_conflict=id');
+    expect(JSON.parse(hits[0]?.body ?? '')).toMatchObject({
+      id: 'abc',
+      kind: 'attended'
+    });
+    expect(existsSync(join(dir, 'abc.json.beat'))).toBe(true);
+  });
+
+  it('beats again once the minute is up, with the launched kind', async () => {
+    await hook(REGISTER, configured());
+    await settle();
+    // Age the stamp
+    const old = new Date(Date.now() - 120_000);
+    utimesSync(join(dir, 'abc.json.beat'), old, old);
+    await hook(tool, {
+      ...configured(),
+      AGENT_QUEUE_SESSION_KIND: 'implement'
+    });
+    await settle();
+    expect(hits).toHaveLength(2);
+    expect(JSON.parse(hits[1]?.body ?? '')).toMatchObject({
+      kind: 'implement'
+    });
+  });
+
+  describe('where the key comes from', () => {
+    let root: string;
+    const envText = () =>
+      `AGENT_SUPABASE_URL=${origin}\nAGENT_SUPABASE_SERVICE_KEY=filekey\n`;
+    const put = (path: string) => {
+      mkdirSync(join(path, '..'), { recursive: true });
+      writeFileSync(path, envText());
+    };
+    const env = (extra: Record<string, string>) => ({
+      AGENT_QUEUE_ENV_FILE: '',
+      ...extra
+    });
+    beforeEach(() => {
+      root = mkdtempSync(join(tmpdir(), 'session-hook-root-'));
+      mkdirSync(join(root, 'codeware-queue'), { recursive: true });
+    });
+    afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+    it('reads the file a launched session was told, with no key in its environment', async () => {
+      put(join(root, 'elsewhere', '.env'));
+      await hook(
+        REGISTER,
+        env({ AGENT_QUEUE_ENV_FILE: join(root, 'elsewhere', '.env') })
+      );
+      await settle();
+      expect(hits).toHaveLength(1);
+    });
+
+    it('falls back to the checkout the hook runs in', async () => {
+      put(join(root, 'codeware-queue', 'tools', 'cdwr', '.env'));
+      await hook(
+        REGISTER,
+        env({ CLAUDE_PROJECT_DIR: join(root, 'codeware-queue') })
+      );
+      await settle();
+      expect(hits).toHaveLength(1);
+    });
+
+    it('then to the installed agent checkout beside it', async () => {
+      put(join(root, 'codeware-agent', 'tools', 'cdwr', '.env'));
+      await hook(
+        REGISTER,
+        env({ CLAUDE_PROJECT_DIR: join(root, 'codeware-queue') })
+      );
+      await settle();
+      expect(hits).toHaveLength(1);
+    });
+
+    it('sends nothing when none has the key', async () => {
+      await hook(
+        REGISTER,
+        env({ CLAUDE_PROJECT_DIR: join(root, 'codeware-queue') })
+      );
+      await settle();
+      expect(hits).toEqual([]);
+    });
+  });
+
+  it('sends nothing without the env vars, and never for an unregistered session', async () => {
+    await hook(REGISTER);
+    await hook({ ...tool, session_id: 'zzz' }, configured());
+    await settle();
+    expect(hits).toEqual([]);
   });
 });

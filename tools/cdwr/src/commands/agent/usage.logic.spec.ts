@@ -7,10 +7,13 @@ import {
   dedupeReplies,
   encodeProjectPath,
   familyBase,
+  localDay,
   normaliseModel,
   renderUsageDocument,
   roleOf,
-  ticketOf
+  ticketOf,
+  usageRows,
+  wholeDaysSince
 } from './usage.logic';
 
 const tokens = (over: Partial<Tokens> = {}): Tokens => ({
@@ -301,5 +304,61 @@ describe('renderUsageDocument', () => {
       'Prices: 2026-09-25 · not priced: claude-mystery'
     );
     expect(unpriced).toContain('| claude-mystery | 0 | 1000000 | 0 | 0 | ? |');
+  });
+});
+
+describe('usageRows', () => {
+  it('splits by day, ticket, model and role, with input as everything read', () => {
+    const since = new Date('2026-10-01T00:00:00.000Z');
+    const rows = usageRows(
+      [
+        reply({
+          ticket: 'COD-1',
+          tokens: tokens({ input: 1, cacheRead: 2, cacheWrite5m: 3, output: 4 })
+        }),
+        reply({ ticket: 'COD-1', tokens: tokens({ input: 10, output: 1 }) }),
+        reply({
+          ticket: 'COD-2',
+          timestamp: '2026-10-07T12:00:00.000Z',
+          tokens: tokens({ output: 5 })
+        }),
+        reply({ ticket: 'unattributed', model: 'mystery' })
+      ],
+      { since, host: 'mac' }
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({
+      day: '2026-10-06',
+      ticket: 'COD-1',
+      input_tokens: 16,
+      output_tokens: 5,
+      host: 'mac'
+    });
+    expect(rows[1]).toMatchObject({ ticket: 'COD-2', day: '2026-10-07' });
+    expect(rows[2]).toMatchObject({
+      ticket: null,
+      model: 'mystery',
+      cost_usd: 0
+    });
+  });
+});
+
+describe('wholeDaysSince', () => {
+  it('starts on local midnight, so the oldest day is never partial', () => {
+    const now = new Date(2026, 9, 27, 14, 0);
+    const since = wholeDaysSince(now, 3);
+    expect(since).toEqual(new Date(2026, 9, 24, 0, 0));
+    const at = (day: number, hour: number) =>
+      new Date(2026, 9, day, hour).toISOString();
+    const rows = usageRows(
+      [
+        reply({ timestamp: at(23, 20) }),
+        reply({ timestamp: at(24, 9) }),
+        reply({ timestamp: at(27, 13) })
+      ],
+      { since, host: 'mac', dayOf: localDay }
+    );
+    // Oct 24 09:00 is before now-3d (14:00) yet its day is whole
+    expect(rows.map((r) => r.day)).toEqual(['2026-10-24', '2026-10-27']);
   });
 });

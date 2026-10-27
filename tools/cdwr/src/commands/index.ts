@@ -228,6 +228,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/usage').then((m) => m.default)
   },
   {
+    path: ['agent', 'usage-record'],
+    summary: 'Send the agent workflow spend to the telemetry database',
+    danger: 'mutate',
+    load: () => import('./agent/usage-record').then((m) => m.default)
+  },
+  {
     path: ['agent', 'activity'],
     summary:
       "The activity document from Linear's issue history and the runs file",

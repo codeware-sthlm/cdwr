@@ -1,5 +1,8 @@
 import { execFile, spawnSync } from 'node:child_process';
+import { rmSync, writeFileSync } from 'node:fs';
 import { type Server, createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
@@ -154,5 +157,122 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
     expect(out.stdout).toBe('rc=0');
     expect(out.stderr).toContain('warn: supabase runs failed');
     expect(out.stderr).not.toContain(KEY);
+  });
+
+  describe('telemetry_run', () => {
+    it('posts one runs row with the job as jsonb', async () => {
+      const out = await zsh(
+        configured(),
+        `telemetry_run 2026-10-27T10:00:00Z 'planned' COD-9 'log x' true plan 600 5 'install current'`
+      );
+      expect(out.stdout).toBe('rc=0');
+      expect(hits).toHaveLength(1);
+      expect(hits[0]?.url).toBe('/rest/v1/runs');
+      const body = JSON.parse(hits[0]?.body ?? '') as Record<string, unknown>;
+      expect(body).toMatchObject({
+        started_at: '2026-10-27T10:00:00Z',
+        outcome: 'planned',
+        ticket: 'COD-9',
+        detail: 'log x',
+        attended: true,
+        job: {
+          kind: 'plan',
+          interval: 600,
+          limit: 5,
+          version: 'install current'
+        }
+      });
+      expect(typeof body['host']).toBe('string');
+      expect(body['finished_at']).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+    });
+
+    it('turns empty fields into null and survives quotes in the detail', async () => {
+      await zsh(
+        configured(),
+        `telemetry_run 2026-10-27T10:00:00Z idle '' 'say "hi" \\ there' '' suggest '' '' ''`
+      );
+      expect(JSON.parse(hits[0]?.body ?? '')).toMatchObject({
+        ticket: null,
+        detail: 'say "hi" \\ there',
+        attended: null,
+        job: { kind: 'suggest', interval: null, limit: null, version: null }
+      });
+    });
+
+    it('sends nothing without the env vars', async () => {
+      const out = await zsh(
+        {},
+        `telemetry_run 2026-10-27T10:00:00Z idle '' '' '' plan '' '' ''`
+      );
+      expect(out.stdout).toBe('rc=0');
+      expect(hits).toEqual([]);
+    });
+  });
+
+  describe('telemetry_session', () => {
+    it('upserts the heartbeat on id', async () => {
+      await zsh(configured(), `telemetry_session abc attended`);
+      expect(hits[0]?.url).toBe('/rest/v1/sessions?on_conflict=id');
+      expect(JSON.parse(hits[0]?.body ?? '')).toMatchObject({
+        id: 'abc',
+        kind: 'attended'
+      });
+    });
+  });
+
+  describe('telemetry_env and children', () => {
+    const file = join(tmpdir(), `telemetry-env-child-${process.pid}`);
+    afterEach(() => rmSync(file, { force: true }));
+
+    it('keeps the key out of a child environment, read from a file or already exported', async () => {
+      writeFileSync(
+        file,
+        'AGENT_SUPABASE_URL=https://x.supabase.co\nAGENT_SUPABASE_SERVICE_KEY=filekey\n'
+      );
+      const fromFile = await zsh(
+        {},
+        `telemetry_env "${file}"\nenv | grep -c AGENT_SUPABASE_SERVICE_KEY`
+      );
+      expect(fromFile.stdout.split('\n')[0]).toBe('0');
+      const exported = await zsh(
+        {
+          AGENT_SUPABASE_URL: 'https://u',
+          AGENT_SUPABASE_SERVICE_KEY: 'envkey'
+        },
+        `telemetry_env "${file}"\nenv | grep -c AGENT_SUPABASE_SERVICE_KEY\nprint -r -- "$AGENT_SUPABASE_SERVICE_KEY"`
+      );
+      expect(exported.stdout.split('\n').slice(0, 2)).toEqual(['0', 'envkey']);
+      // The shell itself still sends with it
+      status = 201;
+      await zsh(
+        { AGENT_SUPABASE_URL: origin, AGENT_SUPABASE_SERVICE_KEY: KEY },
+        `telemetry_env "${file}"\nsupabase_insert runs '{}'`
+      );
+      expect(hits[0]?.headers['apikey']).toBe(KEY);
+    });
+  });
+
+  describe('telemetry_env', () => {
+    const file = join(tmpdir(), `telemetry-env-${process.pid}`);
+    afterEach(() => rmSync(file, { force: true }));
+
+    it('reads the two variables as text and lets the environment win', async () => {
+      writeFileSync(
+        file,
+        `OTHER=1\nAGENT_SUPABASE_URL="https://x.supabase.co"\nAGENT_SUPABASE_SERVICE_KEY='k$(touch ${file}.pwned)'\n`
+      );
+      const out = await zsh(
+        {},
+        `telemetry_env "${file}"\nprint -r -- "$AGENT_SUPABASE_URL|$AGENT_SUPABASE_SERVICE_KEY|\${OTHER:-}"`
+      );
+      expect(out.stdout.split('\n')[0]).toBe(
+        'https://x.supabase.co|k$(touch ' + file + '.pwned)|'
+      );
+      const kept = await zsh(
+        { AGENT_SUPABASE_URL: 'https://set', AGENT_SUPABASE_SERVICE_KEY: 'kk' },
+        `telemetry_env "${file}"\nprint -r -- "$AGENT_SUPABASE_URL"`
+      );
+      expect(kept.stdout.split('\n')[0]).toBe('https://set');
+    });
   });
 });

@@ -9,6 +9,7 @@ import { input } from '../../cli/inputs';
 import {
   type LinearActivityResponse,
   type RunRow,
+  activityRows,
   collectEvents,
   plural,
   renderActivityDocument
@@ -126,6 +127,8 @@ export default defineCommand({
         events: events.map((e) => ({ ...e, at: e.at.toISOString() })),
         dropped,
         skippedLines,
+        // For the telemetry table, built from the same events
+        rows: activityRows(events),
         // Ready for the Linear document the scheduler publishes
         document: renderActivityDocument(events, {
           updated: localMinute(now),
