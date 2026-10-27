@@ -172,6 +172,7 @@ cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ti
 cdwr agent usage-record [--days 3]   # upsert that spend into the telemetry database; --dry-run prints the rows
 … | cdwr agent activity [--runs <file>]   # the activity document from a Linear history response on stdin
 cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
+cdwr agent attend [--path <dir>]   # refresh codeware-queue to origin/main, print the line that starts /work-queue
 cdwr agent worktree add COD-529 --branch <name>   # codeware-cod-529 beside this checkout
 cdwr agent worktree prune          # remove ticket worktrees whose PR is merged or closed
 ```
