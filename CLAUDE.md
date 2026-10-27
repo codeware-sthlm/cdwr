@@ -128,6 +128,8 @@ executor, which reads the app's Infisical folder with your CLI session. Preceden
 purpose (target env, `.env.local`, the shell). `OFFLINE=1` uses `apps/<app>/.env.offline`
 instead, refreshed with `nx dx:secrets <app>`; `CI` skips the vault. `cdwr infisical resolve`
 shows where each key comes from, `cdwr infisical session` whether you are logged in.
+headless's `dev` reads only the cms's `/apps/cms/signature`, so it signs as the cms verifies; its
+offline copy is still its own `apps/headless/.env.offline` (`--app=headless`).
 
 #### Custom component builds
 
@@ -231,6 +233,9 @@ Ensure `TENANT_ID` has no value in `apps/cms/.env.local`.
 ```sh
 # Terminal 1: Serve the Payload admin UI (auto-seeds on start)
 nx dev cms
+
+# Terminal 2 (optional): the headless client, as tenant moon
+nx dev headless
 ```
 
 | View            | URL                     | Credentials                  |
@@ -238,6 +243,7 @@ nx dev cms
 | Tenant admin UI | `localhost:3000/admin`  | `titan@local.dev` / `dev`    |
 | CMS admin UI    | `localhost:3000/admin`  | `system@local.dev` / `dev`   |
 | Signup          | `localhost:3000/signup` | invite `SEED-MANY-0000-0001` |
+| Headless client | `localhost:4300`        |                              |
 
 The seed opens signup and creates that code (and a single-use `SEED-ONCE-0000-0001`),
 on a fresh database only; a preview is ready to take a signup as soon as it boots.
