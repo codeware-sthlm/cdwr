@@ -81,6 +81,25 @@ describe('ensureTenantHook', () => {
     ).toThrow();
   });
 
+  it('refuses a workspace user who claims the system-user role to drop their workspaces', () => {
+    // Field access discards the role change later, which would leave a user
+    // with no workspace
+    expect(() =>
+      ensureTenantHook({
+        collection: { slug: 'users' },
+        context: {},
+        data: { id: 2, role: 'system-user', tenants: [] },
+        operation: 'update',
+        originalDoc: {
+          id: 2,
+          role: 'user',
+          tenants: [{ id: 'row', tenant: 7, role: 'admin' }]
+        },
+        req: { t: jest.fn(), user: { id: 2, role: 'user' } }
+      } as unknown as Args)
+    ).toThrow();
+  });
+
   it('still refuses an update that empties the workspaces', () => {
     expect(() =>
       ensureTenantHook({

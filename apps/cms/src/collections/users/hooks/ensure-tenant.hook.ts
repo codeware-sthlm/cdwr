@@ -24,9 +24,10 @@ export const ensureTenantHook: CollectionBeforeValidateHook<User> = ({
   originalDoc,
   req: { t, user }
 }) => {
-  // A system user has no workspaces by design, whoever saves it; payload-totp
-  // saves the secret with no request, so there is no logged in user to check
-  if (data?.role === 'system-user') {
+  // A stored system user has no workspaces by design, whoever saves it;
+  // payload-totp saves the secret with no request, so there is no logged in
+  // user to check. The stored role, since field access hasn't filtered `data` yet
+  if (operation === 'update' && originalDoc?.role === 'system-user') {
     return data;
   }
 
