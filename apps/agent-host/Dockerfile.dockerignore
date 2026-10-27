@@ -9,6 +9,7 @@
 !/tools/cdwr/agent-queue/github-app.sh
 !/tools/cdwr/agent-queue/notify.sh
 !/tools/cdwr/agent-queue/checkin.sh
+!/tools/cdwr/agent-queue/telemetry.sh
 !/tools/cdwr/agent-queue/watch.jq
 !/apps/agent-host/secrets.sh
 !/apps/agent-host/entrypoint.sh

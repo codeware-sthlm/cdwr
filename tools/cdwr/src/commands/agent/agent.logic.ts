@@ -54,7 +54,8 @@ export const QUEUE_FILES = [
   'lib.sh',
   'waits.sh',
   'watch.jq',
-  'notify.sh'
+  'notify.sh',
+  'telemetry.sh'
 ] as const;
 export type QueueFile = (typeof QUEUE_FILES)[number];
 
@@ -69,7 +70,8 @@ export const byFile = <T>(
   'lib.sh': fn('lib.sh'),
   'waits.sh': fn('waits.sh'),
   'watch.jq': fn('watch.jq'),
-  'notify.sh': fn('notify.sh')
+  'notify.sh': fn('notify.sh'),
+  'telemetry.sh': fn('telemetry.sh')
 });
 /** What the queue scripts call; their directories make up the job's PATH */
 export const QUEUE_BINARIES = ['node', 'claude', 'jq', 'git', 'gh', 'pnpm'];
