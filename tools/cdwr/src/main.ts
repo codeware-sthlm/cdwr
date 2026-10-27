@@ -86,10 +86,15 @@ async function runEntry(
   });
 }
 
+/** Exits once stdout and stderr have handed everything over: a pipe takes writes asynchronously */
+const exitWhenFlushed = (code: number): void => {
+  process.stdout.write('', () =>
+    process.stderr.write('', () => process.exit(code))
+  );
+};
+
 main(process.argv.slice(2))
-  .then((code) => {
-    process.exit(code);
-  })
+  .then(exitWhenFlushed)
   .catch((error: unknown) => {
     process.exitCode = fail(
       error,
