@@ -36,18 +36,49 @@ describe('ensureTenantHook', () => {
     expect(run({ signup: true })).toEqual({ name: 'No workspace' });
   });
 
-  it('leaves an update that does not touch the workspaces alone', () => {
-    // payload-totp saves a secret this way, with no request and no user
-    const data = { totpSecret: 'secret' };
-    expect(
+  // payload-totp saves `{ totpSecret }` with no request and no user; Payload has
+  // filled the rest of `data` from the stored document by the time the hook runs
+  const totpWrite = (stored: Record<string, unknown>) =>
+    ensureTenantHook({
+      collection: { slug: 'users' },
+      context: {},
+      data: { ...stored, totpSecret: 'secret' },
+      operation: 'update',
+      originalDoc: stored,
+      req: { t: jest.fn(), user: undefined }
+    } as unknown as Args);
+
+  it('lets payload-totp save the secret of a system user', () => {
+    expect(() =>
+      totpWrite({ id: 1, role: 'system-user', tenants: [] })
+    ).not.toThrow();
+  });
+
+  it('lets payload-totp save the secret of a workspace user', () => {
+    expect(() =>
+      totpWrite({
+        id: 2,
+        role: 'user',
+        tenants: [{ id: 'row', tenant: 7, role: 'admin' }]
+      })
+    ).not.toThrow();
+  });
+
+  it('refuses an update that removes the last workspace', () => {
+    expect(() =>
       ensureTenantHook({
         collection: { slug: 'users' },
         context: {},
-        data,
+        data: { id: 2, role: 'user', tenants: [] },
         operation: 'update',
+        originalDoc: {
+          id: 2,
+          role: 'user',
+          tenants: [{ id: 'row', tenant: 7, role: 'admin' }]
+        },
         req: { t: jest.fn(), user: undefined }
       } as unknown as Args)
-    ).toBe(data);
+    ).toThrow();
   });
 
   it('still refuses an update that empties the workspaces', () => {
