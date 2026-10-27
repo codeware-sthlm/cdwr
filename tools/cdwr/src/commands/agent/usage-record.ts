@@ -1,11 +1,9 @@
-import { execFileSync } from 'node:child_process';
-import { hostname } from 'node:os';
-
 import { z } from 'zod';
 
 import { defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
 
+import { hostId } from './host-id';
 import { findTranscripts, readReplies } from './usage.collect';
 import {
   type UsageTelemetryRow,
@@ -20,22 +18,6 @@ const KEY_ENV = 'AGENT_SUPABASE_SERVICE_KEY';
 const CONFLICT = 'day,ticket,model,role,host';
 const BATCH = 500;
 const DEADLINE_MS = 60_000;
-
-/** The machine's stable name, as the queue scripts' host_id: a Mac's hostname follows the network */
-const hostId = (): string => {
-  if (process.platform === 'darwin') {
-    try {
-      const name = execFileSync('scutil', ['--get', 'LocalHostName'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore']
-      }).trim();
-      if (name) return name;
-    } catch {
-      // fall through to the hostname
-    }
-  }
-  return hostname().split('.')[0] ?? 'unknown';
-};
 
 export default defineCommand({
   summary: 'Send the agent workflow spend to the telemetry database',
