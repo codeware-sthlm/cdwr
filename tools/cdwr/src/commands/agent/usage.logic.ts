@@ -400,7 +400,9 @@ export const usageRows = (
 ): UsageTelemetryRow[] => {
   const byTicket = new Map<string, Reply[]>();
   for (const reply of replies) {
-    byTicket.set(reply.ticket, [...(byTicket.get(reply.ticket) ?? []), reply]);
+    const bucket = byTicket.get(reply.ticket);
+    if (bucket) bucket.push(reply);
+    else byTicket.set(reply.ticket, [reply]);
   }
   return [...byTicket.entries()]
     .sort(([a], [b]) => byText(a, b))
