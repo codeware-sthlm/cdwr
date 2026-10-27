@@ -21,6 +21,13 @@ export const SITE_GATE_PATH = '/site-gate';
 const ATTEMPTS_PER_ADDRESS = 10;
 
 /**
+ * Guesses per address still being checked. The comparison is slow on purpose,
+ * so parallel submissions would all pass the limit before any failure is
+ * counted; holding a place for each one keeps the limit at ten.
+ */
+const inFlight = new Map<string, number>();
+
+/**
  * Whether the gate stands in front of this path: all of them but its own.
  *
  * Not the cms's `isGatedPath`, which exempts `/api` and anything with a file
@@ -150,14 +157,30 @@ async function handleSubmit(request: Request, password: string) {
 
   // Refuse a caller who is already over the limit before deriving anything:
   // the comparison is deliberately slow, and that cost is what a flood buys
-  if (isRateLimited(attempts, { limit: ATTEMPTS_PER_ADDRESS })) {
+  const pending = inFlight.get(attempts) ?? 0;
+  if (
+    pending >= ATTEMPTS_PER_ADDRESS ||
+    isRateLimited(attempts, { limit: ATTEMPTS_PER_ADDRESS - pending })
+  ) {
     return refuse('throttled');
   }
 
-  if (
-    typeof submitted !== 'string' ||
-    !(await matchesSiteGatePassword(submitted, password))
-  ) {
+  inFlight.set(attempts, pending + 1);
+  let matches: boolean;
+  try {
+    matches =
+      typeof submitted === 'string' &&
+      (await matchesSiteGatePassword(submitted, password));
+  } finally {
+    const left = (inFlight.get(attempts) ?? 1) - 1;
+    if (left > 0) {
+      inFlight.set(attempts, left);
+    } else {
+      inFlight.delete(attempts);
+    }
+  }
+
+  if (!matches) {
     // Only a wrong guess costs an attempt, so an office behind one address is
     // not throttled for knowing the password
     const attempt = rateLimit(attempts, { limit: ATTEMPTS_PER_ADDRESS });

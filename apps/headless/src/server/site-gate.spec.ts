@@ -1,10 +1,21 @@
 import { resetRateLimits } from '@codeware/shared/util/human-check';
 import {
   SITE_GATE_COOKIE,
-  createSiteGateToken
+  createSiteGateToken,
+  matchesSiteGatePassword
 } from '@codeware/shared/util/site-gate';
 
 import { isGatedPath, siteGate } from './site-gate';
+
+// The real comparison, observed: how many slow checks a burst can start
+vi.mock('@codeware/shared/util/site-gate', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@codeware/shared/util/site-gate')>();
+  return {
+    ...actual,
+    matchesSiteGatePassword: vi.fn(actual.matchesSiteGatePassword)
+  };
+});
 
 const PASSWORD = 'hunter2';
 const page = { accept: 'text/html' };
@@ -109,6 +120,24 @@ describe('siteGate', () => {
 
     expect(response?.headers.get('location')).toContain('error=wrong');
     expect(response?.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('holds the limit for guesses sent at the same time', async () => {
+    vi.mocked(matchesSiteGatePassword).mockClear();
+    const responses = await Promise.all(
+      Array.from({ length: 15 }, () => siteGate(post('nope'), PASSWORD))
+    );
+    const errors = responses.map((response) =>
+      new URL(
+        response?.headers.get('location') ?? '',
+        'http://localhost'
+      ).searchParams.get('error')
+    );
+
+    // Without a place held per guess in flight, all fifteen would pass the
+    // limit check and start the slow comparison before any failed
+    expect(vi.mocked(matchesSiteGatePassword)).toHaveBeenCalledTimes(10);
+    expect(errors.filter((error) => error === 'throttled')).toHaveLength(5);
   });
 
   it('throttles an address after ten wrong guesses', async () => {
