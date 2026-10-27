@@ -8,10 +8,33 @@
     "build": {
       "outputs": ["{projectRoot}/.output"]
     },
+    "dev": {
+      "metadata": {
+        "description": "Starts the Vite dev server, signing with the cms dev vault signature secret"
+      },
+      "executor": "dev-plugin:infisical-run",
+      "continuous": true,
+      "options": {
+        "path": "/apps/cms/signature",
+        "cwd": "apps/headless",
+        "commands": ["vite"]
+      }
+    },
+    "dx:secrets": {
+      "metadata": {
+        "description": "Refresh the offline copy of the signature secret, for working without a session."
+      },
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm cdwr infisical cache --path=/apps/cms/signature --app=headless --yes"
+      }
+    },
     "start": {
       "metadata": {
         "description": "Runs the built Node server from .output",
-        "help": { "command": "nx start headless" }
+        "help": {
+          "command": "nx start headless"
+        }
       },
       "executor": "nx:run-commands",
       "continuous": true,
