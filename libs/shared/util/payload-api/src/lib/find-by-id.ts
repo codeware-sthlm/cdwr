@@ -23,7 +23,7 @@ export const findById = async <T extends CollectionSlug>(
   const response = await invokeRequest(collection, {
     ...options,
     method: 'GET',
-    query: `where[id][equals]=${id}`
+    query: `where[id][equals]=${encodeURIComponent(id)}`
   });
 
   if ('error' in response) {
