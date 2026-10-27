@@ -51,3 +51,36 @@ allowBuilds:
   nx: true
   sharp: true
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - "@nx/cypress@24.0.2"
+  - "@nx/devkit@24.0.2"
+  - "@nx/docker@24.0.2"
+  - "@nx/esbuild@24.0.2"
+  - "@nx/eslint-plugin@24.0.2"
+  - "@nx/eslint@24.0.2"
+  - "@nx/jest@24.0.2"
+  - "@nx/js@24.0.2"
+  - "@nx/next@24.0.2"
+  - "@nx/node@24.0.2"
+  - "@nx/nx-darwin-arm64@24.0.2"
+  - "@nx/nx-darwin-x64@24.0.2"
+  - "@nx/nx-freebsd-x64@24.0.2"
+  - "@nx/nx-linux-arm-gnueabihf@24.0.2"
+  - "@nx/nx-linux-arm64-gnu@24.0.2"
+  - "@nx/nx-linux-arm64-musl@24.0.2"
+  - "@nx/nx-linux-x64-gnu@24.0.2"
+  - "@nx/nx-linux-x64-musl@24.0.2"
+  - "@nx/nx-win32-arm64-msvc@24.0.2"
+  - "@nx/nx-win32-x64-msvc@24.0.2"
+  - "@nx/playwright@24.0.2"
+  - "@nx/plugin@24.0.2"
+  - "@nx/react@24.0.2"
+  - "@nx/storybook@24.0.2"
+  - "@nx/vite@24.0.2"
+  - "@nx/vitest@24.0.2"
+  - "@nx/web@24.0.2"
+  - "@nx/webpack@24.0.2"
+  - "@nx/workspace@24.0.2"
+  - create-nx-workspace@24.0.2
+  - nx@24.0.2

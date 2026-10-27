@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 import { defineConfig, loadEnv } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { nxReadySignal } from '@nx/vite/plugins/nx-ready-signal.plugin';
 
 export default defineConfig(({ mode }) => {
   // Server functions read `process.env`, which Vite does not fill from `.env`;
@@ -23,7 +24,8 @@ export default defineConfig(({ mode }) => {
       tanstackStart(),
       nitro(),
       // React's plugin after Start's, as its docs say
-      react()
+      react(),
+      nxReadySignal()
     ]
   };
 });
