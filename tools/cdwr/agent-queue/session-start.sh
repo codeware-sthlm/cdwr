@@ -26,7 +26,7 @@ behind="$(git rev-list --count HEAD..origin/main 2>/dev/null)"
 
 jq -n --arg dir "$dir" --arg n "$behind" '
   (if $n == "1" then "1 commit" else "\($n) commits" end) as $count
-  | "This checkout is \($count) behind origin/main. Refresh it with: git -C \($dir) fetch origin main && git -C \($dir) switch --detach origin/main (or run cdwr agent attend from a current checkout)." as $how
+  | "This checkout is \($count) behind origin/main. From a current checkout, run: cdwr agent attend --path \($dir | @sh)" as $how
   | {
       systemMessage: $how,
       hookSpecificOutput: {
