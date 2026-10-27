@@ -31,8 +31,6 @@ import { infisicalLogo, playwrightLogo } from './tech-logos';
  * headings may hook; eyebrows and the small titles under them say exactly
  * what the visitor is looking at.
  *
- * **Draft copy.** Close to final in structure, not in wording.
- *
  * **Illustrations, not screenshots:** a site whose point is that it renders
  * live should not argue with pictures of an admin. The drawings are drawn in
  * the theme's own colours (`./illustrations`), so they recolour with it.
@@ -189,6 +187,18 @@ export const cdwrIo: SiteDefinition = {
             {
               title: 'The randomiser cannot fail',
               body: 'It re-rolls until the result passes, so it never hands you an unreadable theme.'
+            }
+          ]
+        },
+        {
+          blockType: 'content',
+          columns: [
+            {
+              size: 'full',
+              richText: {
+                markdown:
+                  'An inaccessible colour theme cannot be published on this platform. Each site runs on its own app, isolated from the others, and every app is hosted in Stockholm, in the EU.'
+              }
             }
           ]
         },
@@ -622,17 +632,70 @@ export const cdwrIo: SiteDefinition = {
       name: 'Get started',
       slug: 'start',
       meta: {
-        title: 'Start from the same setup',
+        title: 'Get a site on the platform',
         description:
-          'The plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace.'
+          'The platform hosts sites now, by invitation. Sign up with an invite code, or start a workspace of your own from the published packages.'
       },
       layout: [
         {
           blockType: 'hero',
           badge: 'Get started',
-          heading: 'Start from the same setup',
-          lede: 'The plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace with Payload, Postgres and the deployment wiring already connected.',
+          heading: 'Get a site on the platform',
+          lede: 'The platform hosts sites now. Signup is by invitation: with an invite code you can create a workspace, choose a starter and have a site live without running anything yourself.',
           illustration: startIllustration
+        },
+        {
+          blockType: 'feature-cards',
+          eyebrow: 'Hosted, by invitation',
+          band: 'subtle',
+          heading: 'From invite code to live site',
+          columns: '2',
+          items: [
+            {
+              title: '1. Get an invite code',
+              description:
+                'Signup is by invitation for now. A code lets you create an account.'
+            },
+            {
+              title: '2. Sign up',
+              description:
+                'Enter the code on the signup page and create your account.'
+            },
+            {
+              title: '3. Follow the first-site guide',
+              description:
+                'The guide applies a starter to your workspace: pages, theme and footer you can edit afterwards.'
+            },
+            {
+              title: '4. We set it up, and it goes live',
+              description:
+                'We provision the site. It runs as its own app, apart from every other site.'
+            }
+          ]
+        },
+        {
+          blockType: 'content',
+          columns: [
+            {
+              size: 'full',
+              richText: {
+                markdown:
+                  'Signup is by invitation for now. To ask for a code, write to [hello@codeware.se](mailto:hello@codeware.se).'
+              }
+            }
+          ]
+        },
+        {
+          blockType: 'content',
+          columns: [
+            {
+              size: 'full',
+              richText: {
+                markdown:
+                  '## Or build your own\n\nThe plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace with Payload, Postgres and the deployment wiring already connected.'
+              }
+            }
+          ]
         },
         {
           blockType: 'code',
@@ -710,6 +773,32 @@ export const cdwrIo: SiteDefinition = {
   ],
 
   posts: [
+    {
+      title: 'The queue that works while I sleep',
+      slug: 'the-queue-that-works-while-i-sleep',
+      draft: true,
+      meta: {
+        title: 'The queue that works while I sleep',
+        description:
+          'An AI agent works through a ticket queue on a small machine at home. A human approves each plan. What that changed about working alone.'
+      },
+      categories: [{ lookupSlug: 'multi-tenancy' }],
+      content:
+        'Most of this platform is built by one person, so the work waits when that person is asleep. A small machine at home now takes tickets from the queue and works on them in the meantime.\n\nThe tickets live in Linear. The agent reads one, writes its plan into the ticket and stops. A human reads the plan and approves it, or changes it. Nothing is built before that.\n\nOnce the plan is approved, the agent implements it and opens a pull request on GitHub. The pull request is reviewed by Copilot and then by a second pass of the agent itself, before it reaches a person.\n\nWhat changed is mostly the plan. Writing it down in the ticket, in words someone else can check, turned out to be the useful part, whoever carries it out. The morning starts with pull requests to read instead of a blank page.'
+    },
+    {
+      title: 'Every app releases itself',
+      slug: 'every-app-releases-itself',
+      draft: true,
+      meta: {
+        title: 'Every app releases itself',
+        description:
+          'Conventional commits decide versions, every pull request gets a preview, and production deploys when an app has actually changed.'
+      },
+      categories: [{ lookupSlug: 'multi-tenancy' }],
+      content:
+        'Nobody decides when an app is released. The commit messages do.\n\nEvery commit follows the conventional commit format. Nx release reads them and works out the next version for each app: a fix is a patch, a feature is a minor, a breaking change is a major.\n\nEvery pull request gets a preview of its own, with its own database, so a change is used before it is merged.\n\nProduction is deployed when an app gets a new version and its code has actually changed since the last release. A bump from a documentation edit alone deploys nothing. Each release is also published as a GitHub release for that app, with its changelog.'
+    },
     {
       title: 'The Codeware blue finally has a name',
       slug: 'codeware-blue-has-a-name',
