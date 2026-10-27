@@ -90,23 +90,27 @@ export default defineCommand({
     const guard = setTimeout(() => process.exit(1), DEADLINE_MS + 2000);
     guard.unref();
     const endpoint = `${url.replace(/\/$/, '')}/rest/v1/usage?on_conflict=${CONFLICT}`;
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          apikey: key,
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates,return=minimal'
-        },
-        body: JSON.stringify(rows.slice(i, i + BATCH)),
-        signal: AbortSignal.any([deadline, AbortSignal.timeout(10_000)])
-      });
-      if (!response.ok) {
-        throw new Error(
-          `Supabase answered ${response.status} for the usage rows: ${(await response.text()).slice(0, 200)}`
-        );
+    try {
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/json',
+            Prefer: 'resolution=merge-duplicates,return=minimal'
+          },
+          body: JSON.stringify(rows.slice(i, i + BATCH)),
+          signal: AbortSignal.any([deadline, AbortSignal.timeout(10_000)])
+        });
+        if (!response.ok) {
+          throw new Error(
+            `Supabase answered ${response.status} for the usage rows: ${(await response.text()).slice(0, 200)}`
+          );
+        }
       }
+    } finally {
+      clearTimeout(guard);
     }
     return {
       summary: `Sent ${rows.length} usage rows`,
