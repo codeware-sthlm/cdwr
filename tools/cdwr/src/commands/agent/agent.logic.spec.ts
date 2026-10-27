@@ -122,7 +122,8 @@ describe('constants', () => {
       'lib.sh',
       'waits.sh',
       'watch.jq',
-      'notify.sh'
+      'notify.sh',
+      'telemetry.sh'
     ]);
   });
 });
@@ -165,7 +166,8 @@ describe('queuePaths', () => {
         'lib.sh': '/h/.cdwr/agent-queue/lib.sh',
         'waits.sh': '/h/.cdwr/agent-queue/waits.sh',
         'watch.jq': '/h/.cdwr/agent-queue/watch.jq',
-        'notify.sh': '/h/.cdwr/agent-queue/notify.sh'
+        'notify.sh': '/h/.cdwr/agent-queue/notify.sh',
+        'telemetry.sh': '/h/.cdwr/agent-queue/telemetry.sh'
       },
       watchState: '/h/.cdwr/agent-queue/watch.json',
       paused: '/h/.cdwr/agent-queue/paused',
@@ -389,7 +391,8 @@ describe('filesDrift', () => {
     'lib.sh': 'c',
     'waits.sh': 'd',
     'watch.jq': 'b',
-    'notify.sh': 'n'
+    'notify.sh': 'n',
+    'telemetry.sh': 't'
   };
 
   const all = {
@@ -400,7 +403,8 @@ describe('filesDrift', () => {
     'lib.sh': 'c',
     'waits.sh': 'd',
     'watch.jq': 'b',
-    'notify.sh': 'n'
+    'notify.sh': 'n',
+    'telemetry.sh': 't'
   };
 
   it.each([
@@ -411,7 +415,9 @@ describe('filesDrift', () => {
     [{ ...all, 'waits.sh': undefined }, 'missing'],
     [{ ...all, 'github-app.sh': undefined }, 'missing'],
     [{ ...all, 'notify.sh': undefined }, 'missing'],
+    [{ ...all, 'telemetry.sh': undefined }, 'missing'],
     [{ ...all, 'notify.sh': 'x' }, 'stale'],
+    [{ ...all, 'telemetry.sh': 'x' }, 'stale'],
     [{ ...all, 'run.sh': undefined, 'watch.jq': 'x' }, 'missing'],
     [{ ...all, 'watch.jq': 'x' }, 'stale'],
     [{ ...all, 'implement.sh': 'x' }, 'stale'],
