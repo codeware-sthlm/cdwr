@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -478,12 +478,27 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
       expect(hits).toHaveLength(1);
     });
 
-    it('then to the installed agent checkout beside it', async () => {
-      put(join(root, 'codeware-agent', 'tools', 'cdwr', '.env'));
-      await hook(
-        REGISTER,
-        env({ CLAUDE_PROJECT_DIR: join(root, 'codeware-queue') })
+    it('then to the main checkout, from a linked worktree', async () => {
+      const main = join(root, 'main');
+      const git = (...args: string[]) =>
+        execFileSync('git', args, { cwd: main, stdio: 'ignore' });
+      mkdirSync(main, { recursive: true });
+      git('init', '-q');
+      git(
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@t',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'init'
       );
+      const tree = join(root, 'tree');
+      git('worktree', 'add', '-q', '--detach', tree);
+      put(join(main, 'tools', 'cdwr', '.env'));
+      await hook(REGISTER, env({ CLAUDE_PROJECT_DIR: tree }));
       await settle();
       expect(hits).toHaveLength(1);
     });

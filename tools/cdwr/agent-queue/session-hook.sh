@@ -77,11 +77,12 @@ heartbeat() {
     [[ "$last" == <-> ]] && (( now_s - last < 60 )) && return 0
   fi
   source "$HOOK_DIR/telemetry.sh" 2>/dev/null || return 0
-  # The file a launched session was told, else this checkout's, else the installed agent checkout's,
-  # which sits beside it as `cdwr agent install` makes it
-  local env_file
-  for env_file in "${AGENT_QUEUE_ENV_FILE:-}" "${CLAUDE_PROJECT_DIR:-$HOOK_DIR/../../..}/tools/cdwr/.env" \
-      "${CLAUDE_PROJECT_DIR:-$HOOK_DIR/../../..}/../codeware-agent/tools/cdwr/.env"; do
+  # The file a launched session was told, else this checkout's, else the main checkout's,
+  # which is where a linked worktree finds the credentials
+  local env_file proj="${CLAUDE_PROJECT_DIR:-$HOOK_DIR/../../..}" common main_env=""
+  common="$(git -C "$proj" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" &&
+    main_env="${common:h}/tools/cdwr/.env"
+  for env_file in "${AGENT_QUEUE_ENV_FILE:-}" "$proj/tools/cdwr/.env" "$main_env"; do
     [[ -n "$env_file" ]] && telemetry_env "$env_file"
     telemetry_on && break
   done
