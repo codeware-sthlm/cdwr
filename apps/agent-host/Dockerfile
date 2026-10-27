@@ -23,13 +23,11 @@ RUN apt-get update -qq \
     zsh \
   && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
-  && echo "deb [arch=${TARGETARCH} signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    > /etc/apt/sources.list.d/github-cli.list \
-  && apt-get update -qq \
-  && apt-get install -y --no-install-recommends gh=${GH_VERSION} \
-  && rm -rf /var/lib/apt/lists/*
+# From the release, not GitHub's apt repo: that keeps only the latest gh, so a pin breaks on the next release
+RUN curl -fsSL -o /tmp/gh.deb \
+    "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.deb" \
+  && dpkg -i /tmp/gh.deb \
+  && rm /tmp/gh.deb
 
 RUN curl -fsSL -o /tmp/infisical.deb \
     "https://github.com/Infisical/cli/releases/download/v${INFISICAL_VERSION}/infisical_${INFISICAL_VERSION}_linux_${TARGETARCH}.deb" \
