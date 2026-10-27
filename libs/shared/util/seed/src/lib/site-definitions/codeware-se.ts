@@ -2,6 +2,7 @@ import { cdwrCloudSvg } from '@codeware/shared/util/ui';
 
 import type { SiteDefinition } from '../site-definition';
 
+import { codewareSePrivacyMarkdown } from './codeware-se-legal';
 import {
   codewareHeroIllustration,
   codewarePlatformIllustration
@@ -99,6 +100,18 @@ export const codewareSe: SiteDefinition = {
           ]
         }
       ]
+    },
+    {
+      name: 'Integritet',
+      slug: 'privacy',
+      layout: [
+        {
+          blockType: 'content',
+          columns: [
+            { size: 'full', richText: { markdown: codewareSePrivacyMarkdown } }
+          ]
+        }
+      ]
     }
   ],
 
@@ -133,6 +146,10 @@ export const codewareSe: SiteDefinition = {
       copyright: '© {year} Codeware Sthlm AB',
       // A business site; the release line belongs to the platform's own
       showVersion: false
+    },
+    // The footer links the legal pages from these settings
+    legal: {
+      privacyPage: { lookupSlug: 'privacy' }
     }
   }
 };

@@ -3,6 +3,7 @@ import { cdwrCloudSvg } from '@codeware/shared/util/ui';
 import type { SiteDefinition } from '../site-definition';
 
 import { cdwrIoThemeSwatchSource } from './cdwr-io-components';
+import { cdwrIoPrivacyMarkdown } from './cdwr-io-legal';
 import {
   blocksIllustration,
   contrastIllustration,
@@ -680,6 +681,18 @@ export const cdwrIo: SiteDefinition = {
           }
         }
       ]
+    },
+    {
+      name: 'Privacy',
+      slug: 'privacy',
+      layout: [
+        {
+          blockType: 'content',
+          columns: [
+            { size: 'full', richText: { markdown: cdwrIoPrivacyMarkdown } }
+          ]
+        }
+      ]
     }
   ],
 
@@ -769,20 +782,25 @@ export const cdwrIo: SiteDefinition = {
 
   navigation: [
     {
-      reference: { relationTo: 'pages', lookupSlug: 'blocks' },
-      label: 'Blocks'
-    },
-    {
-      reference: { relationTo: 'pages', lookupSlug: 'studio' },
-      label: 'Studio'
-    },
-    {
-      reference: { relationTo: 'pages', lookupSlug: 'components' },
-      label: 'Components'
-    },
-    {
-      reference: { relationTo: 'pages', lookupSlug: 'architecture' },
-      label: 'Architecture'
+      label: 'Platform',
+      children: [
+        {
+          reference: { relationTo: 'pages', lookupSlug: 'blocks' },
+          label: 'Blocks'
+        },
+        {
+          reference: { relationTo: 'pages', lookupSlug: 'studio' },
+          label: 'Studio'
+        },
+        {
+          reference: { relationTo: 'pages', lookupSlug: 'components' },
+          label: 'Components'
+        },
+        {
+          reference: { relationTo: 'pages', lookupSlug: 'architecture' },
+          label: 'Architecture'
+        }
+      ]
     },
     {
       reference: { relationTo: 'pages', lookupSlug: 'devlog' },
@@ -815,6 +833,33 @@ export const cdwrIo: SiteDefinition = {
       ],
       customThemes: [{ lookupSlug: 'cdwr' }],
       defaultTheme: 'cdwr'
+    },
+    // The legal pages are linked by the legal settings, not listed here
+    footer: {
+      variant: 'expanded',
+      linkSource: 'custom',
+      links: [
+        {
+          link: {
+            type: 'custom',
+            newTab: true,
+            url: 'https://github.com/codeware-sthlm/cdwr/blob/main/LICENSING.md',
+            label: 'Source-available under FSL-1.1-MIT, MIT after two years'
+          }
+        }
+      ],
+      contact: [
+        { platform: 'email', email: 'hello@codeware.se' },
+        { platform: 'github', url: 'https://github.com/codeware-sthlm' },
+        { platform: 'npm', url: 'https://www.npmjs.com/org/cdwr' }
+      ],
+      showCopyright: true,
+      copyright: '© {year} Codeware Sthlm AB',
+      // The platform shows its own release line
+      showVersion: true
+    },
+    legal: {
+      privacyPage: { lookupSlug: 'privacy' }
     }
   }
 };

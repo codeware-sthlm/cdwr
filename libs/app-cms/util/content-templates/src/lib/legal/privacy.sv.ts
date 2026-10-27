@@ -1,10 +1,13 @@
 /** Swedish counterpart of {@link privacyEn} */
-export const privacySv = `> **Utkast — läs igenom innan du publicerar.** Texten beskriver vilka uppgifter den här webbplatsen samlar in och varför. Den är en utgångspunkt, inte juridisk rådgivning. Stäm av den mot hur ni faktiskt arbetar, fyll i det som är markerat, lägg till annat ni samlar in och låt någon granska texten om du är osäker.
+export const privacySv = `{{^published}}
+> **Utkast — läs igenom innan du publicerar.** Texten beskriver vilka uppgifter den här webbplatsen samlar in och varför. Den är en utgångspunkt, inte juridisk rådgivning. Stäm av den mot hur ni faktiskt arbetar, fyll i det som är markerat, lägg till annat ni samlar in och låt någon granska texten om du är osäker.
+{{/published}}
 
 # Integritet
 
 {{tenantName}} ansvarar för de personuppgifter du lämnar på den här webbplatsen. Här förklarar vi vad vi samlar in, varför, hur länge vi sparar uppgifterna och vilka tjänster vi tar hjälp av för att driva webbplatsen.
 
+{{#forms}}
 ## Formulär
 
 När du skickar ett meddelande via ett formulär på webbplatsen sparar vi det du har skrivit och när du skickade meddelandet. Vilka uppgifter det gäller beror på formuläret — oftast ditt namn, din e-postadress och själva meddelandet.
@@ -19,6 +22,7 @@ Meddelanden raderas {{formsRetentionDays}} dagar efter att de skickades.
 {{^formsRetentionDays}}
 Vi sparar meddelanden tills vi raderar dem. **Fyll i:** hur länge det är, eller ange en sparandetid under Formulär i webbplatsens inställningar så att meddelandena raderas automatiskt.
 {{/formsRetentionDays}}
+{{/forms}}
 
 {{#tourSignups}}
 ## Reseanmälningar

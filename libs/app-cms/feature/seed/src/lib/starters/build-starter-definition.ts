@@ -136,6 +136,8 @@ export function buildStarterDefinition(
     // No public address is known, so the template's fill-in marker stands
     const { markdown, title } = renderLegalTemplate('privacy', locale, {
       ...answers.privacy,
+      published: false,
+      forms: true,
       tenantName: appName,
       contactEmail: ''
     });

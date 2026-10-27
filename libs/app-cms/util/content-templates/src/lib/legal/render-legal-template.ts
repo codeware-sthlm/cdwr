@@ -6,6 +6,10 @@ import { termsSv } from './terms.sv';
 export type LegalTemplateKind = 'privacy' | 'terms';
 
 export type LegalTemplateVars = {
+  /** The page is published as is, so it carries no draft banner */
+  published: boolean;
+  /** The website has forms that store messages */
+  forms: boolean;
   /** Workspace name, as the customer knows it */
   tenantName: string;
   /** Public contact address; empty renders a visible fill-in marker */
@@ -83,7 +87,9 @@ export function renderLegalTemplate(
       text
     )
     // A dropped section leaves its blank lines behind
-    .replace(/\n{3,}/g, '\n\n');
+    .replace(/\n{3,}/g, '\n\n')
+    // The banner's section tags leave a line break ahead of the first line
+    .replace(/^\n+/, '');
 
   return { markdown, title: titles[kind][lang] };
 }

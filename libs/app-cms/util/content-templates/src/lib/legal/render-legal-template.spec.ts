@@ -9,6 +9,8 @@ import {
 const vars = (
   overrides: Partial<LegalTemplateVars> = {}
 ): LegalTemplateVars => ({
+  published: false,
+  forms: true,
   tenantName: 'Moon Tours',
   contactEmail: 'hello@moon.test',
   tourSignups: true,
@@ -23,6 +25,8 @@ const vars = (
 });
 
 const flags = [
+  'published',
+  'forms',
   'tourSignups',
   'humanCheck',
   'sendgrid',
@@ -116,6 +120,47 @@ describe('renderLegalTemplate', () => {
     expect(withoutEu).toContain('Sentry');
     expect(withoutEu).not.toContain('stored in the EU');
   });
+
+  it.each(
+    (['privacy', 'terms'] as const).flatMap((kind) =>
+      (['en', 'sv'] as const).map((locale) => [kind, locale] as const)
+    )
+  )('drops the draft banner when published (%s, %s)', (kind, locale) => {
+    const draft = renderLegalTemplate(kind, locale, vars()).markdown;
+    const published = renderLegalTemplate(
+      kind,
+      locale,
+      vars({ published: true })
+    ).markdown;
+
+    expect(draft).toMatch(/Draft — review|Utkast — läs igenom/);
+    expect(published).not.toMatch(/Draft — review|Utkast — läs igenom/);
+    expect(published).toMatch(/^# /);
+  });
+
+  it.each([
+    ['en', '## Forms', '**Fill in:** how long'],
+    ['sv', '## Formulär', '**Fyll i:** hur länge']
+  ] as const)(
+    'drops the forms section when there are no forms (%s)',
+    (locale, heading, prompt) => {
+      const withForms = renderLegalTemplate(
+        'privacy',
+        locale,
+        vars({ formsRetentionDays: null })
+      ).markdown;
+      const without = renderLegalTemplate(
+        'privacy',
+        locale,
+        vars({ forms: false, formsRetentionDays: null })
+      ).markdown;
+
+      expect(withForms).toContain(heading);
+      expect(withForms).toContain(prompt);
+      expect(without).not.toContain(heading);
+      expect(without).not.toContain(prompt);
+    }
+  );
 
   // Every combination of the flags, so no template can leave a marker behind
   const combinations = Array.from({ length: 2 ** flags.length }, (_, bits) =>
