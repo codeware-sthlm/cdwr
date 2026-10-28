@@ -1,7 +1,9 @@
-import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 
 import { defineCommand, readOnly } from '../../cli/command';
+import type { Context } from '../../cli/context';
+import { CliError } from '../../cli/errors';
+import { input } from '../../cli/inputs';
 import {
   checkRun,
   implementReport,
@@ -14,6 +16,7 @@ import {
   requireHost,
   worktreeOf
 } from '../../services/agent-queue';
+import { CommandError, run as exec } from '../../services/shell';
 import { symbols, theme } from '../../ui/theme';
 
 import {
@@ -29,7 +32,6 @@ import {
   formatTable,
   formatWatching,
   lastSchedulerLine,
-  latestRunLog,
   linearKeySource,
   lockState,
   parseAttended,
@@ -40,6 +42,15 @@ import {
   parseWatchState,
   summarizeSchedulerLine
 } from './agent.logic';
+import {
+  type RemoteReport,
+  parseRemoteStatus,
+  remoteStatus,
+  rmLockCommand,
+  skewedStatus,
+  staleScriptsHint,
+  unreadableStatus
+} from './status.logic';
 
 export default defineCommand({
   summary:
@@ -47,82 +58,29 @@ export default defineCommand({
   description:
     'Reads the launchd job, the pause flag, the Keychain item, the installed script, the worktree and the logs. Nothing is changed and no secret is read.',
   danger: 'read',
-  inputs: {},
-
-  async plan(ctx) {
-    const host = requireHost(['launchd', 'container'], ctx.env);
-    const queue = paths(ctx.env);
-    const worktree = worktreeOf(ctx);
-
-    const report = await ctx.ui.task(
-      'Reading the agent queue',
-      async () => {
-        const [job, key] = await Promise.all([
-          host === 'container'
-            ? Promise.resolve({ loaded: false as const })
-            : jobState(),
-          keyPresent(ctx.env)
-        ]);
-        const installed = byFile((file) => readText(queue.files[file]));
-        const sources = readQueueSources(ctx.root);
-        const runLog = latestRunLog(
-          existsSync(queue.logs) ? readdirSync(queue.logs) : []
-        );
-        // Before the check, which logs its own skip and busy lines
-        const lastScheduled =
-          lastSchedulerLine(readText(queue.schedulerLog) ?? '') ?? null;
-        const checked = await checkRun(queue, worktree, ctx.env).catch(
-          (error: unknown): Awaited<ReturnType<typeof checkRun>> => ({
-            decision: `skip: check failed (${error instanceof Error ? error.message : String(error)})`
-          })
-        );
-        return {
-          job,
-          paused: existsSync(queue.paused),
-          notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
-          host,
-          keySource: linearKeySource(host, ctx.env),
-          keyPresent: key,
-          mirror: readText(queue.mirror)?.split('\n')[0]?.trim() || null,
-          script:
-            'source' in sources
-              ? filesDrift(installed, sources.source)
-              : ('no-source' as const),
-          installedAny: Object.values(installed).some(
-            (text) => text !== undefined
-          ),
-          watching: parseWatchState(readText(queue.watchState)),
-          worktree: { path: worktree, exists: existsSync(worktree) },
-          lastScheduled,
-          // Without launchd the lock owner cannot be checked, so a held lock counts as a run
-          lockState: lockState(
-            lockAge(queue.lock),
-            host === 'container' || (job.loaded && job.running)
-          ),
-          lock: queue.lock,
-          implement: implementReport(queue, ctx.env),
-          lastRunLog: runLog ? join(queue.logs, runLog) : null,
-          next: checked === undefined ? null : parseCheck(checked.decision),
-          attended:
-            checked?.attended === undefined
-              ? null
-              : parseAttended(checked.attended),
-          suggest:
-            checked?.suggest === undefined
-              ? null
-              : parseSuggest(checked.suggest),
-          queueView:
-            checked?.queueView === undefined
-              ? null
-              : (parseQueueView(checked.queueView) ?? ('malformed' as const))
-        };
-      },
-      () => 'Read the agent queue'
-    );
-    return readOnly(report);
+  inputs: {
+    host: input.string({
+      prompt: 'Which host runs the agent container?',
+      short: 'H',
+      description:
+        'Read the status of the queue in the agent container over ssh on this host instead of locally',
+      default: ''
+    })
   },
 
-  async apply(ctx, report) {
+  async plan(ctx, { host: sshHost }) {
+    if (sshHost) {
+      const remote = await ctx.ui.task(
+        `Reading the agent queue on ${sshHost}`,
+        () => remoteReport(sshHost),
+        () => `Read the agent queue on ${sshHost}`
+      );
+      return readOnly(remote);
+    }
+    return readOnly(await localReport(ctx));
+  },
+
+  async apply(ctx, report, { host: sshHost }) {
     const { job } = report;
     const row = (ok: boolean | 'warn', check: string, detail: string) => [
       ok === 'warn' ? symbols.warn : ok ? symbols.ok : symbols.fail,
@@ -196,7 +154,7 @@ export default defineCommand({
         ? row(true, 'scripts', 'current')
         : report.script === 'stale' ||
             (report.script === 'missing' && report.installedAny)
-          ? row('warn', 'scripts', 're-run `cdwr agent install`')
+          ? row('warn', 'scripts', staleScriptsHint(report.host))
           : row(
               false,
               'scripts',
@@ -222,7 +180,7 @@ export default defineCommand({
             row(
               false,
               'lock',
-              `left by a run that did not finish; \`rmdir ${report.lock}\``
+              `left by a run that did not finish; \`${rmLockCommand(report.lock, sshHost || undefined)}\``
             )
           ]
         : []),
@@ -291,3 +249,104 @@ export default defineCommand({
     return { summary, partial: problems > 0, json: report };
   }
 });
+
+/** The report of the queue on this machine */
+async function localReport(ctx: Context): Promise<RemoteReport> {
+  const host = requireHost(['launchd', 'container'], ctx.env);
+  const queue = paths(ctx.env);
+  const worktree = worktreeOf(ctx);
+
+  return ctx.ui.task(
+    'Reading the agent queue',
+    async () => {
+      const [job, key] = await Promise.all([
+        host === 'container'
+          ? Promise.resolve({ loaded: false as const })
+          : jobState(),
+        keyPresent(ctx.env)
+      ]);
+      const installed = byFile((file) => readText(queue.files[file]));
+      const sources = readQueueSources(ctx.root);
+      // Before the check, which logs its own skip and busy lines
+      const lastScheduled =
+        lastSchedulerLine(readText(queue.schedulerLog) ?? '') ?? null;
+      const checked = await checkRun(queue, worktree, ctx.env).catch(
+        (error: unknown): Awaited<ReturnType<typeof checkRun>> => ({
+          decision: `skip: check failed (${error instanceof Error ? error.message : String(error)})`
+        })
+      );
+      return {
+        job,
+        paused: existsSync(queue.paused),
+        notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
+        host,
+        keySource: linearKeySource(host, ctx.env),
+        keyPresent: key,
+        mirror: readText(queue.mirror)?.split('\n')[0]?.trim() || null,
+        script:
+          'source' in sources
+            ? filesDrift(installed, sources.source)
+            : ('no-source' as const),
+        installedAny: Object.values(installed).some(
+          (text) => text !== undefined
+        ),
+        watching: parseWatchState(readText(queue.watchState)),
+        worktree: { path: worktree, exists: existsSync(worktree) },
+        lastScheduled,
+        // Without launchd the lock owner cannot be checked, so a held lock counts as a run
+        lockState: lockState(
+          lockAge(queue.lock),
+          host === 'container' || (job.loaded && job.running)
+        ),
+        lock: queue.lock,
+        implement: implementReport(queue, ctx.env),
+        next: checked === undefined ? null : parseCheck(checked.decision),
+        attended:
+          checked?.attended === undefined
+            ? null
+            : parseAttended(checked.attended),
+        suggest:
+          checked?.suggest === undefined ? null : parseSuggest(checked.suggest),
+        queueView:
+          checked?.queueView === undefined
+            ? null
+            : (parseQueueView(checked.queueView) ?? ('malformed' as const))
+      };
+    },
+    () => 'Read the agent queue'
+  );
+}
+
+/** The report of the queue in the agent container on `host`, over ssh */
+async function remoteReport(host: string): Promise<RemoteReport> {
+  let stdout: string;
+  try {
+    stdout = (await exec('ssh', remoteStatus(host), { timeout: 60_000 }))
+      .stdout;
+  } catch (error) {
+    if (error instanceof CommandError) {
+      // A queue with problems exits non-zero but still answers
+      const answer = parseRemoteStatus(error.stdout);
+      if (answer.kind === 'report') return answer.report;
+      if (answer.kind === 'failed')
+        throw new CliError(
+          `${host}: ${answer.message}`,
+          undefined,
+          answer.hint
+        );
+      throw new CliError(
+        `Could not read the status over ssh on ${host}: ${error.stderr.trim() || error.message}`,
+        undefined,
+        'Check that the host is reachable and the container cdwr-agent runs'
+      );
+    }
+    throw error;
+  }
+  const answer = parseRemoteStatus(stdout);
+  if (answer.kind === 'report') return answer.report;
+  if (answer.kind === 'failed')
+    throw new CliError(`${host}: ${answer.message}`, undefined, answer.hint);
+  if (answer.kind === 'skew')
+    throw new CliError(skewedStatus(host, answer.paths, answer.line));
+  throw new CliError(unreadableStatus(host, stdout));
+}
