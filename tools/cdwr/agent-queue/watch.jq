@@ -306,8 +306,10 @@ def session_state($now):
   [ .[] | select(.state != "ended") ] as $open
   | [ $open[] | select(
         # A mirrored session from another host has no pid to check: alive at a prompt or while polling
-        # (run.sh deletes day-old files), otherwise while its heartbeat is fresh
-        if .pidAlive == null then .state == "waiting" or .state == "polling"
+        # for three hours (a polling session re-mirrors whenever its watcher restarts, at most 110
+        # minutes apart), so a host that died there holds the queue no longer; otherwise while its
+        # heartbeat is fresh
+        if .pidAlive == null then ((.state == "waiting" or .state == "polling") and ($now - (.lastSeen | epoch)) < 10800)
                                   or (.state != "stopped" and ($now - (.lastSeen | epoch)) < 900)
         else .pidAlive
              and (.watcherAlive or .state == "waiting"
