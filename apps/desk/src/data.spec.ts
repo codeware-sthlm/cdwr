@@ -708,21 +708,21 @@ describe('createAdapter', () => {
     });
   });
 
-  it('refreshes the watched Linear lists on a rejoin, not on the first join', async () => {
+  it('refreshes the watched Linear lists on every join', async () => {
     const { adapter, linear, fireStatus } = setup();
     watchOpen(adapter);
     await vi.advanceTimersByTimeAsync(0);
 
     fireStatus(true);
     await vi.advanceTimersByTimeAsync(0);
-    expect(linear.listOpen).toHaveBeenCalledTimes(1);
+    expect(linear.listOpen).toHaveBeenCalledTimes(2);
 
     fireStatus(false);
     await vi.advanceTimersByTimeAsync(0);
-    expect(linear.listOpen).toHaveBeenCalledTimes(1);
+    expect(linear.listOpen).toHaveBeenCalledTimes(2);
     fireStatus(true);
     await vi.advanceTimersByTimeAsync(0);
-    expect(linear.listOpen).toHaveBeenCalledTimes(2);
+    expect(linear.listOpen).toHaveBeenCalledTimes(3);
   });
 
   it('reports the channel health through onLive', async () => {
