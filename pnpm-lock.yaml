@@ -55,6 +55,9 @@ importers:
       '@fontsource-variable/sora':
         specifier: ^5.3.0
         version: 5.3.0
+      '@fontsource/hanken-grotesk':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fontsource/space-mono':
         specifier: ^5.3.0
         version: 5.3.0
@@ -2526,6 +2529,9 @@ packages:
 
   '@fontsource-variable/sora@5.3.0':
     resolution: {integrity: sha512-h8kHta4Z8SkfUGeI82TUy1n3rbrKpBRGwuk4t4qCwto5oEHxlbOFD2yGP+Df5fbmTXwKGn+o667vYp0E4K8Whw==}
+
+  '@fontsource/hanken-grotesk@5.3.0':
+    resolution: {integrity: sha512-eiqAvcMT88tCMCBzn6qKgMHGLJKq3NEXO3+0y9JXqzyty2U6KZnaGtbfiQgzRAXfwFp559hJQ0zBgJ6d89AuTA==}
 
   '@fontsource/space-mono@5.3.0':
     resolution: {integrity: sha512-FrpBMOVWn3PRdRHlrZWC55X3kZG/2BTH7SM5ZyS/bky3iKya2BturI5lk+t0RoDQL2JyHzURsVq/EisCsxpI5A==}
@@ -18095,6 +18101,8 @@ snapshots:
   '@fontsource-variable/jetbrains-mono@5.3.0': {}
 
   '@fontsource-variable/sora@5.3.0': {}
+
+  '@fontsource/hanken-grotesk@5.3.0': {}
 
   '@fontsource/space-mono@5.3.0': {}
 
