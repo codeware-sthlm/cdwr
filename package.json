@@ -58,6 +58,7 @@
     "@radix-ui/react-slot": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@sentry/nextjs": "^10.32.1",
+    "@supabase/supabase-js": "^2.118.0",
     "@tailwindcss/node": "4.3.3",
     "@tailwindcss/oxide": "4.3.3",
     "@tanstack/react-router": "1.170.46",
