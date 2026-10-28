@@ -147,6 +147,10 @@ export default [
               ]
             },
             {
+              sourceTag: 'scope:desk',
+              onlyDependOnLibsWithTags: ['scope:desk', 'scope:shared']
+            },
+            {
               sourceTag: 'scope:create-nx-payload',
               onlyDependOnLibsWithTags: [
                 'scope:create-nx-payload',
