@@ -16,6 +16,7 @@
     "vite.config.mts",
     "src/**/*.spec.ts",
     "src/**/*.spec.tsx",
-    "src/**/*.d.ts"
+    "src/**/*.d.ts",
+    "agent-queue/supabase/functions/**/*.spec.ts"
   ]
 }
