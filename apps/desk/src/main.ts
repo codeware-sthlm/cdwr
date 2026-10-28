@@ -2,11 +2,31 @@ import '@fontsource/hanken-grotesk/400.css';
 import '@fontsource/hanken-grotesk/500.css';
 import '@fontsource/hanken-grotesk/600.css';
 import '@fontsource/hanken-grotesk/700.css';
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { openUrl } from '@tauri-apps/plugin-opener';
+
+import { type Adapter, createAdapter } from './data';
+import {
+  parseAttended,
+  parseJob,
+  parseSuggested,
+  start,
+  validateQueueView
+} from './desk.js';
+import { LinearError, createLinear } from './linear';
+import {
+  type KeyValueStore,
+  type Settings,
+  type SettingsIssue,
+  loadSettings,
+  saveSettings
+} from './settings';
+import { openSettingsSheet } from './settings-sheet';
+import { openSettingsStore } from './settings-store';
+import { SupabaseError, createSupabase } from './supabase';
 
 import './fonts.css';
 import './desk.css';
-import './desk.js';
 
 // Links open in the system browser, not in the webview
 document.addEventListener('click', (event) => {
@@ -18,4 +38,95 @@ document.addEventListener('click', (event) => {
   void openUrl(link.href);
 });
 
-// step 5: start(adapter)
+const parsers = { parseAttended, parseJob, parseSuggested, validateQueueView };
+
+const supabaseFor = ({ supabaseUrl, supabaseAnonKey }: Settings) =>
+  createSupabase({ url: supabaseUrl, anonKey: supabaseAnonKey }, parsers);
+
+const linearFor = ({ linearKey }: Settings) =>
+  createLinear({ key: linearKey, fetch: tauriFetch });
+
+const linearMessage = (error: LinearError): string =>
+  error.code === 'unauthorized'
+    ? 'Linear rejected this key.'
+    : error.code === 'network'
+      ? "Can't reach Linear. Check the connection."
+      : error.message;
+
+const supabaseIssue = (error: SupabaseError): SettingsIssue =>
+  error.code === 'unauthorized'
+    ? { field: 'supabaseAnonKey', message: 'Supabase rejected this key.' }
+    : error.code === 'network'
+      ? {
+          field: 'supabaseUrl',
+          message: "Can't reach Supabase at this URL."
+        }
+      : {
+          field: 'supabaseUrl',
+          message: `Supabase answered, but the queue could not be read: ${error.message}`
+        };
+
+/** Tries both connections with the entered values; anything but a known failure propagates. */
+const verify = async (settings: Settings): Promise<SettingsIssue[]> => {
+  const issues: SettingsIssue[] = [];
+  try {
+    await linearFor(settings).viewer();
+  } catch (error) {
+    if (!(error instanceof LinearError)) throw error;
+    issues.push({ field: 'linearKey', message: linearMessage(error) });
+  }
+  try {
+    await supabaseFor(settings).check();
+  } catch (error) {
+    if (!(error instanceof SupabaseError)) throw error;
+    issues.push(supabaseIssue(error));
+  }
+  return issues;
+};
+
+const memoryStore = (): KeyValueStore => {
+  const values = new Map<string, unknown>();
+  return {
+    get: (key) => Promise.resolve(values.get(key)),
+    set: (key, value) => {
+      values.set(key, value);
+      return Promise.resolve();
+    },
+    save: () => Promise.resolve()
+  };
+};
+
+let adapter: Adapter | undefined;
+
+const startDesk = (settings: Settings): void => {
+  adapter?.stop();
+  adapter = createAdapter({
+    linear: linearFor(settings),
+    supabase: supabaseFor(settings)
+  });
+  start(adapter);
+};
+
+const boot = async (): Promise<void> => {
+  // Outside Tauri there is no store; the settings then last until the page reloads
+  const store = await openSettingsStore().catch(memoryStore);
+  let current = await loadSettings(store).catch(() => null);
+
+  const openSettings = (): void =>
+    openSettingsSheet({
+      current,
+      verify,
+      onSaved: async (settings) => {
+        await saveSettings(store, settings);
+        current = settings;
+        startDesk(settings);
+      }
+    });
+
+  document.getElementById('settings')?.addEventListener('click', openSettings);
+
+  if (current) startDesk(current);
+  else openSettings();
+};
+
+void boot();

@@ -1440,3 +1440,52 @@ ul {
   font-size: 0.8rem;
   color: var(--muted);
 }
+
+/* Settings sheet */
+.settings {
+  display: grid;
+  gap: 14px;
+}
+.settings-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.settings-field {
+  display: grid;
+  gap: 4px;
+}
+.settings-field label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.settings-field input {
+  font: 0.85rem var(--font-mono);
+  color: var(--fg);
+  background: var(--sunk);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.settings-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.settings-error {
+  margin: 0;
+  color: var(--block);
+  font-size: 0.82rem;
+}
+.settings-actions {
+  display: flex;
+  gap: 10px;
+}
+.settings-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
