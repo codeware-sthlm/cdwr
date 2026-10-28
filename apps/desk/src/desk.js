@@ -173,19 +173,33 @@ const byCreated = (a, b) =>
 
 // Suggested (COD-579): run.sh `suggested_line`, "YYYY-MM-DD · COD-123 <title>", "nothing today",
 // "COD-123 still open", "stopped at the budget", "failed" or "no verdict". Linear may wrap ids in mention tags.
+// The rest of the first line that starts with `prefix`, trimmed, or null. Lines are split on fixed
+// separators rather than matched with `\s*…(.*)` patterns, which backtrack polynomially (CodeQL)
+const lineAfter = (text, prefix) => {
+  for (const raw of String(text ?? '').split('\n'))
+    if (raw.startsWith(prefix)) return raw.slice(prefix.length).trim();
+  return null;
+};
+// Linear's mention tags out of a line, and any stray angle bracket with them; the text is escaped
+// again wherever it is rendered
+const stripTags = (s) => s.replace(/<[^>]*>/g, '').replace(/[<>]/g, '');
+
 export function parseSuggested(text) {
-  const sm = text.match(/^Suggested:\s*(\d{4}-\d\d-\d\d)\s*·\s*(.*)$/m);
-  if (!sm) return null;
-  const rest = sm[2].replace(/<[^>]+>/g, '').trim();
-  const t = rest.match(/^([A-Z]+-\d+)\s*(.*)$/);
-  if (t && /still open$/.test(rest))
-    return { date: sm[1], kind: 'open', ticket: t[1], text: rest };
-  if (t)
+  const after = lineAfter(text, 'Suggested:');
+  const dot = after === null ? -1 : after.indexOf('·');
+  if (dot < 0) return null;
+  const date = after.slice(0, dot).trim();
+  if (!/^\d{4}-\d\d-\d\d$/.test(date)) return null;
+  const rest = stripTags(after.slice(dot + 1)).trim();
+  const id = /^[A-Z]+-\d+/.exec(rest)?.[0];
+  if (id && /still open$/.test(rest))
+    return { date, kind: 'open', ticket: id, text: rest };
+  if (id)
     return {
-      date: sm[1],
+      date,
       kind: 'suggested',
-      ticket: t[1],
-      title: t[2],
+      ticket: id,
+      title: rest.slice(id.length).trim(),
       text: rest
     };
   const kind =
@@ -196,7 +210,7 @@ export function parseSuggested(text) {
         : rest === 'failed'
           ? 'failed'
           : 'other';
-  return { date: sm[1], kind, text: rest };
+  return { date, kind, text: rest };
 }
 // A suggestion's description, as the suggest-improvement skill writes it: Evidence bullets, What changes, Cost, Focus, Why now
 function parseIdea(desc) {
@@ -268,9 +282,8 @@ function parseHandoffs(comments) {
 // in the agent-host container "· image sha-9c7a20d", "· image sha-9c7a20d out of date (run.sh, …)", or "· image" with no
 // commit for a local build (the commit arrives with the ticket that bakes it into the image)
 export function parseJob(text) {
-  const jm = text.match(/^Job:\s*(.+)$/m);
-  if (!jm) return null;
-  const line = jm[1].trim();
+  const line = lineAfter(text, 'Job:');
+  if (!line) return null;
   const minutes = Number(line.match(/every (\d+) min/)?.[1]) || null;
   const host = /·\s*image\b/.test(line)
     ? 'container'
@@ -290,8 +303,15 @@ export function parseJob(text) {
     host,
     rev,
     install,
-    items: line.match(/out of date \(([^)]*)\)/)?.[1] || ''
+    items: between(line, 'out of date (', ')')
   };
+}
+// The text between `open` and the next `close`, or '' when either is missing
+function between(line, open, close) {
+  const start = line.indexOf(open);
+  if (start < 0) return '';
+  const end = line.indexOf(close, start + open.length);
+  return end < 0 ? '' : line.slice(start + open.length, end);
 }
 const HOST = { container: 'Container', launchd: 'Mac · launchd' };
 const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
@@ -326,9 +346,16 @@ export function validateQueueView(v) {
 // "running: COD-1 · <Next line>", "run now: COD-2 answered" (or review feedback, ready, take over COD-3 …),
 // "idle: waits on …; limit 3/5". Missing when the scheduler couldn't compute one. Linear may wrap ids in mention tags.
 export function parseAttended(text) {
-  const am = text.match(/^Attended:\s*(running|run now|idle):\s*(.*)$/m);
-  if (!am) return null;
-  return { verdict: am[1], text: am[2].replace(/<[^>]+>/g, '').trim() };
+  const after = lineAfter(text, 'Attended:');
+  if (after === null) return null;
+  const verdict = ['running', 'run now', 'idle'].find((v) =>
+    after.startsWith(`${v}:`)
+  );
+  if (!verdict) return null;
+  return {
+    verdict,
+    text: stripTags(after.slice(verdict.length + 1)).trim()
+  };
 }
 const withIds = (s) =>
   inline(s).replace(
