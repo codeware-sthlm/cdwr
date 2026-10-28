@@ -74,7 +74,7 @@ main's rulesets apply to it; without the app it does not start. After two launch
 nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
 launching too.
 
-An attended Mac session stays visible to the NUC because its session hook copies each session file into the NUC's container (`cdwr agent mirror set --host agent-host`, once). So the NUC starts no implementing session while one is alive on the Mac.
+An attended Mac session stays visible to the NUC because its session hook copies each session file into the NUC's container (`cdwr agent mirror set --host agent-host`, once). So the NUC starts no implementing session while one is alive on the Mac. The hook runs from the checkout the session started in, which must be on a main that includes the mirror support: `cdwr agent attend` does that.
 
 ## Nx-generated projects cleanup
 

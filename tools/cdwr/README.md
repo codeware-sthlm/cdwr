@@ -348,10 +348,16 @@ minutes (default 30) for the running job to finish, writes the tag to `image.env
 restarts and resumes. Without `--tag` it takes the latest image built on main; `--dry-run` prints
 the plan with the resolved tag. When the queue stays busy it resumes and changes nothing.
 
+`cdwr agent status --host agent-host` reads the queue's status from the Mac: it runs `agent status`
+in the container over ssh, through `/opt/agent-host/secrets.sh` so the report sees the vault's
+secrets, and renders the answer as a local run would.
+
 An attended `/work-queue` on the Mac stays visible to the NUC through its session file, which the
 Mac's session hook copies into the container at every change and at least once a minute. That way
-the NUC launches no implementing session while one is alive on the Mac. Set the target once on
-the Mac, after `cdwr agent install`:
+the NUC launches no implementing session while one is alive on the Mac. The hook runs from the
+checkout the session was started in (`$CLAUDE_PROJECT_DIR`), so that checkout must be on a main
+that includes the mirror support; `cdwr agent attend` moves it there. Set the target once on the
+Mac:
 
 ```sh
 cdwr agent mirror set --host agent-host   # checks over ssh that the container's sessions directory is writable
