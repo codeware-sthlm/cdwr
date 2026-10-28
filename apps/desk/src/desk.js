@@ -182,7 +182,24 @@ const lineAfter = (text, prefix) => {
 };
 // Linear's mention tags out of a line, and any stray angle bracket with them; the text is escaped
 // again wherever it is rendered
-const stripTags = (s) => s.replace(/<[^>]*>/g, '').replace(/[<>]/g, '');
+const stripTags = (s) => {
+  // A character scan, not a regex: a tag is everything from `<` to the next `>`; an unclosed
+  // `<` keeps the text after it, and no bracket survives
+  let out = '';
+  let tag = null;
+  for (const ch of s) {
+    if (ch === '<') {
+      if (tag === null) tag = '';
+    } else if (ch === '>') {
+      tag = null;
+    } else if (tag !== null) {
+      tag += ch;
+    } else {
+      out += ch;
+    }
+  }
+  return tag === null ? out : out + tag;
+};
 
 export function parseSuggested(text) {
   const after = lineAfter(text, 'Suggested:');
