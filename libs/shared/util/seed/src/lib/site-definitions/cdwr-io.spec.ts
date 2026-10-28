@@ -67,10 +67,11 @@ describe('the cdwr.io definition', () => {
     }
   });
 
-  it('still carries the placeholder the testimonial is waiting on', () => {
-    // A bracket left in production is the failure this guards against; it
-    // fails loudly here first, when the real quote arrives and this is updated
-    expect(JSON.stringify(cdwrIo)).toMatch(/\[A CLIENT SENTENCE/);
+  it('has no testimonial until a real quote exists', () => {
+    const blocks = cdwrIo.pages.flatMap((page) => page.layout ?? []);
+    expect(blocks.some((block) => block.blockType === 'testimonial')).toBe(
+      false
+    );
   });
 
   it('navigates only to pages it states', () => {
@@ -152,7 +153,7 @@ describe('the cdwr.io definition', () => {
 
   it('leaves no placeholder or draft marker anywhere in the definition', () => {
     expect(JSON.stringify(cdwrIo)).not.toMatch(
-      /\[fill in|\[fyll i|\*\*Fill in:\*\*|\*\*Fyll i:\*\*|Draft — review before publishing|Utkast — läs igenom/
+      /\[fill in|\[fyll i|\[A CLIENT SENTENCE|\[NAME\]|\[ROLE, COMPANY\]|\*\*Fill in:\*\*|\*\*Fyll i:\*\*|Draft — review before publishing|Utkast — läs igenom/
     );
     // Template markers are checked on the text only: component source has `{{`
     expect(cdwrIoPrivacyMarkdown).not.toMatch(/\{\{/);

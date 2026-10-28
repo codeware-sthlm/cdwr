@@ -234,16 +234,6 @@ export const cdwrIo: SiteDefinition = {
           link: { type: 'custom', url: '/blocks', label: 'Browse the gallery' }
         },
         {
-          // Placeholder copy, deliberately. A quote is the one thing on this
-          // site that cannot be written by the person who built it.
-          blockType: 'testimonial',
-          quote:
-            '[A CLIENT SENTENCE — the thing they say when they describe the work to someone else. One or two lines, in their words.]',
-          author: { name: '[NAME]', role: '[ROLE, COMPANY]' },
-          enableLink: true,
-          link: { type: 'custom', url: '/start', label: 'Read the story' }
-        },
-        {
           blockType: 'pill-list',
           eyebrow: 'Built on',
           heading: 'Nothing exotic, and nothing hidden',
