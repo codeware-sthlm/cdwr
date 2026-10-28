@@ -19,7 +19,7 @@
     },
     "tauri-build": {
       "metadata": {
-        "description": "Builds the desktop app bundle for this machine"
+        "description": "Builds the desktop app for this machine, the .app only; --configuration release adds the .dmg, as CI does"
       },
       "executor": "nx:run-commands",
       "dependsOn": ["build"],
@@ -30,8 +30,13 @@
       ],
       "outputs": ["{projectRoot}/src-tauri/target/*/bundle/**/*"],
       "options": {
-        "command": "tauri build",
+        "command": "tauri build --bundles app",
         "cwd": "apps/desk"
+      },
+      "configurations": {
+        "release": {
+          "command": "tauri build --bundles app,dmg"
+        }
       }
     }
   }
