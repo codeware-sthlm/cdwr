@@ -7,6 +7,7 @@ export type QueueStateRow = Tables['queue_state']['Row'];
 export type RunRow = Tables['runs']['Row'];
 export type UsageRow = Tables['usage']['Row'];
 export type ActivityRow = Tables['activity']['Row'];
+export type IssueEventRow = Tables['issue_events']['Row'];
 
 export type SupabaseErrorCode = 'unauthorized' | 'network' | 'bad_response';
 
@@ -265,6 +266,25 @@ export const readAllPages = async <T>(
   );
 };
 
+/** The row of a Realtime payload, or undefined when it is not an issue event. */
+export const toIssueEvent = (row: unknown): IssueEventRow | undefined => {
+  if (typeof row !== 'object' || row === null) return undefined;
+  if (!('issue_id' in row) || typeof row.issue_id !== 'string')
+    return undefined;
+  return {
+    issue_id: row.issue_id,
+    identifier:
+      'identifier' in row && typeof row.identifier === 'string'
+        ? row.identifier
+        : null,
+    action: 'action' in row && typeof row.action === 'string' ? row.action : '',
+    updated_at:
+      'updated_at' in row && typeof row.updated_at === 'string'
+        ? row.updated_at
+        : ''
+  };
+};
+
 export type SupabaseConfig = { url: string; anonKey: string };
 
 type Failure = { message: string; code?: string; status: number };
@@ -353,11 +373,13 @@ export const createSupabase = (
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
    * catch up on what was missed. `onStatus` gets false on a channel error, a
-   * timeout or a close, and true on (re)joining.
+   * timeout or a close, and true on (re)joining. `onIssue` gets each
+   * `issue_events` row as it arrives, without debounce.
    */
   const subscribe = (
     onChange: () => void,
-    onStatus?: (healthy: boolean) => void
+    onStatus?: (healthy: boolean) => void,
+    onIssue?: (row: IssueEventRow) => void
   ): (() => void) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const changed = (): void => {
@@ -379,6 +401,16 @@ export const createSupabase = (
           changed
         );
       }
+    }
+    for (const event of ['INSERT', 'UPDATE'] as const) {
+      channel = channel.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'issue_events' },
+        (payload) => {
+          const row = toIssueEvent(payload.new);
+          if (row) onIssue?.(row);
+        }
+      );
     }
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {

@@ -9,6 +9,7 @@ import {
   localStamp,
   readAllPages,
   toActivity,
+  toIssueEvent,
   toRuns,
   toUsage
 } from './supabase';
@@ -350,6 +351,35 @@ describe('readAllPages', () => {
     await expect(readAllPages(async () => rows(1000))).rejects.toMatchObject({
       code: 'bad_response'
     });
+  });
+});
+
+describe('toIssueEvent', () => {
+  it('keeps a row with an issue id', () => {
+    expect(
+      toIssueEvent({
+        issue_id: 'u-1',
+        identifier: 'COD-1',
+        action: 'issue:update',
+        updated_at: '2026-10-28T10:00:00.000Z'
+      })
+    ).toEqual({
+      issue_id: 'u-1',
+      identifier: 'COD-1',
+      action: 'issue:update',
+      updated_at: '2026-10-28T10:00:00.000Z'
+    });
+  });
+
+  it('turns a missing identifier into null', () => {
+    expect(toIssueEvent({ issue_id: 'u-1', identifier: null })).toMatchObject({
+      issue_id: 'u-1',
+      identifier: null
+    });
+  });
+
+  it.each([null, undefined, 'x', {}, { issue_id: 1 }])('rejects %j', (row) => {
+    expect(toIssueEvent(row)).toBeUndefined();
   });
 });
 
