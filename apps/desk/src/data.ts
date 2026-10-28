@@ -99,6 +99,14 @@ const createSource = <T>(
   const watchers = new Set<Watcher<T>>();
   let cache: Entry<T> | undefined;
   let inflight: Promise<Entry<T>> | undefined;
+  /** A refresh was requested while a fetch was in flight */
+  let dirty = false;
+
+  const followUp = (): void => {
+    if (!dirty) return;
+    dirty = false;
+    void load().catch(() => undefined);
+  };
 
   const run = async (): Promise<Entry<T>> => {
     let entry: Entry<T>;
@@ -106,6 +114,7 @@ const createSource = <T>(
       entry = { value: await Promise.resolve().then(fetch), storedAt: now() };
     } catch (error) {
       inflight = undefined;
+      followUp();
       const failure = toFailure(error);
       for (const w of [...watchers])
         w.callback({ type: 'error', error: failure });
@@ -121,6 +130,7 @@ const createSource = <T>(
           cache: { storedAt: entry.storedAt }
         }
       });
+    followUp();
     return entry;
   };
 
@@ -133,11 +143,13 @@ const createSource = <T>(
       cache = undefined;
     },
     /** Never rejects: failures reach the watchers. */
-    refresh: (): Promise<void> =>
-      load().then(
+    refresh: (): Promise<void> => {
+      if (inflight) dirty = true;
+      return load().then(
         () => undefined,
         () => undefined
-      ),
+      );
+    },
     read: (staleTime: number): Promise<Entry<T>> =>
       cache && now() - cache.storedAt < staleTime
         ? Promise.resolve(cache)
