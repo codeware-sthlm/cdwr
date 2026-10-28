@@ -352,6 +352,84 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
       hook({ session_id: 'abc', hook_event_name: 'SessionEnd' });
       expect(mirrored()).toEqual([]);
     });
+
+    describe('the target', () => {
+      const parts = (target: string): string[] => {
+        writeFileSync(join(root, 'mirror'), `${target}\n`);
+        spawnSync('zsh', [SCRIPT], {
+          input: JSON.stringify(REGISTER),
+          env: {
+            ...process.env,
+            AGENT_QUEUE_SESSIONS: sessions,
+            AGENT_QUEUE_ENV_FILE: '/dev/null',
+            CLAUDE_PROJECT_DIR: root,
+            AGENT_QUEUE_MIRROR_CMD: `echo "$MIRROR_HOST|$MIRROR_CONTAINER|$MIRROR_DIR" >> "${log}"`
+          },
+          encoding: 'utf8'
+        });
+        return mirrored();
+      };
+
+      it.each([
+        ['me@host:/queue/sessions', 'me@host||/queue/sessions'],
+        [
+          'agent-host:docker:cdwr-agent:/home/agent/.cdwr/agent-queue/sessions',
+          'agent-host|cdwr-agent|/home/agent/.cdwr/agent-queue/sessions'
+        ]
+      ])('splits %s', (target, split) => {
+        expect(parts(target)).toEqual([split]);
+      });
+
+      it.each([
+        "host:/dir';touch x'",
+        'host:/dir;touch x',
+        'host:$(touch x)',
+        'host:docker:c&d:/dir',
+        '-F/tmp/x:/dir',
+        'host:docker:-u0:/dir'
+      ])('ignores %s, which would reach a remote shell', (target) => {
+        expect(parts(target)).toEqual([]);
+      });
+    });
+
+    it('writes inside the container through ssh and docker exec', () => {
+      // ssh runs its remote command line in a shell, docker exec drops into the container: both
+      // stand-ins do the same here, so the quoting is what is tested
+      const bin = join(root, 'bin');
+      const inside = join(root, 'container-sessions');
+      mkdirSync(bin);
+      mkdirSync(inside);
+      writeFileSync(
+        join(bin, 'ssh'),
+        '#!/bin/sh\nwhile [ "${1#-}" != "$1" ]; do [ "$1" = -o ] && shift; shift; done\nshift\nexec sh -c "$*"\n'
+      );
+      writeFileSync(
+        join(bin, 'docker'),
+        '#!/bin/sh\n[ "$1" = exec ] && shift\n[ "$1" = -i ] && shift\nshift\nexec "$@"\n'
+      );
+      chmodSync(join(bin, 'ssh'), 0o755);
+      chmodSync(join(bin, 'docker'), 0o755);
+      writeFileSync(
+        join(root, 'mirror'),
+        `agent-host:docker:cdwr-agent:${inside}\n`
+      );
+      spawnSync('zsh', [SCRIPT], {
+        input: JSON.stringify(REGISTER),
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env['PATH']}`,
+          AGENT_QUEUE_SESSIONS: sessions,
+          AGENT_QUEUE_ENV_FILE: '/dev/null',
+          CLAUDE_PROJECT_DIR: root
+        },
+        encoding: 'utf8'
+      });
+      spawnSync('sleep', ['0.5']);
+      expect(readdirSync(inside)).toEqual(['abc.json']);
+      expect(readFileSync(join(inside, 'abc.json'), 'utf8')).toBe(
+        readFileSync(join(sessions, 'abc.json'), 'utf8')
+      );
+    });
   });
 });
 
