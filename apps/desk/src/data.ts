@@ -237,9 +237,26 @@ export const createAdapter = ({
     return source;
   };
 
-  const open = track(LINEAR, () => linear.listOpen());
-  const ideas = track(LINEAR, () => linear.listIdeas());
-  const closed = track(LINEAR, () => linear.listClosed());
+  // Counts list fetches, so a single-issue lookup can tell a newer full list overtook it
+  let listFetches = 0;
+  const listed =
+    <T>(fetch: () => Promise<T>) =>
+    () => {
+      listFetches += 1;
+      return fetch();
+    };
+  const open = track(
+    LINEAR,
+    listed(() => linear.listOpen())
+  );
+  const ideas = track(
+    LINEAR,
+    listed(() => linear.listIdeas())
+  );
+  const closed = track(
+    LINEAR,
+    listed(() => linear.listClosed())
+  );
   const queue = track(SUPABASE, () => supabase.read());
   const details = new Map<string, Source<IssueDetail>>();
   const comments = new Map<string, Source<{ comments: Comment[] }>>();
@@ -343,6 +360,7 @@ export const createAdapter = ({
   ): Promise<void> => {
     const lookup = ++lookups;
     latest.set(issueId, lookup);
+    const listsAtStart = listFetches;
     let summary: Issue | null;
     try {
       // A removed issue is still readable from Linear, with its last state
@@ -359,6 +377,13 @@ export const createAdapter = ({
       refreshLists();
       return;
     }
+    // The page also reads these through cached calls, so the cache goes whether or not anyone watches
+    for (const source of [details.get(id), comments.get(id)]) {
+      source?.clear();
+      if (source?.watching()) void source.refresh();
+    }
+    // A list fetch that started after this lookup began already holds the change
+    if (listFetches !== listsAtStart) return;
     const without = (list: Issue[]): Issue[] => list.filter((i) => i.id !== id);
     const place = (list: Issue[], type: Issue['statusType']): Issue[] =>
       found?.statusType === type ? [...without(list), found] : without(list);
@@ -374,11 +399,6 @@ export const createAdapter = ({
         : without(list)
     );
     closed.patch((list) => place(list, 'completed'));
-    // The page also reads these through cached calls, so the cache goes whether or not anyone watches
-    for (const source of [details.get(id), comments.get(id)]) {
-      source?.clear();
-      if (source?.watching()) void source.refresh();
-    }
   };
 
   const queueIssue = ({
