@@ -173,7 +173,7 @@ const byCreated = (a, b) =>
 
 // Suggested (COD-579): run.sh `suggested_line`, "YYYY-MM-DD · COD-123 <title>", "nothing today",
 // "COD-123 still open", "stopped at the budget", "failed" or "no verdict". Linear may wrap ids in mention tags.
-function parseSuggested(text) {
+export function parseSuggested(text) {
   const sm = text.match(/^Suggested:\s*(\d{4}-\d\d-\d\d)\s*·\s*(.*)$/m);
   if (!sm) return null;
   const rest = sm[2].replace(/<[^>]+>/g, '').trim();
@@ -267,7 +267,7 @@ function parseHandoffs(comments) {
 // Job: on launchd "every 10 min · install current", "· install out of date (run.sh, interval)" or "· install unknown";
 // in the agent-host container "· image sha-9c7a20d", "· image sha-9c7a20d out of date (run.sh, …)", or "· image" with no
 // commit for a local build (the commit arrives with the ticket that bakes it into the image)
-function parseJob(text) {
+export function parseJob(text) {
   const jm = text.match(/^Job:\s*(.+)$/m);
   if (!jm) return null;
   const line = jm[1].trim();
@@ -325,7 +325,7 @@ export function validateQueueView(v) {
 // Attended (COD-545): watch.jq `attended_line`, what an attended /work-queue would take now.
 // "running: COD-1 · <Next line>", "run now: COD-2 answered" (or review feedback, ready, take over COD-3 …),
 // "idle: waits on …; limit 3/5". Missing when the scheduler couldn't compute one. Linear may wrap ids in mention tags.
-function parseAttended(text) {
+export function parseAttended(text) {
   const am = text.match(/^Attended:\s*(running|run now|idle):\s*(.*)$/m);
   if (!am) return null;
   return { verdict: am[1], text: am[2].replace(/<[^>]+>/g, '').trim() };
@@ -1901,29 +1901,51 @@ document.addEventListener('keydown', (e) => {
 
 // ---------- Render and load ----------
 
-function errorCopy(e) {
+const SUPABASE_ERRORS = ['runs', 'usage', 'activity'];
+function errorCopy(e, key) {
+  const source = SUPABASE_ERRORS.includes(key) ? 'Supabase' : 'Linear';
   switch (e?.code) {
+    case 'unauthorized':
+      return source === 'Supabase'
+        ? 'Supabase rejected the anon key. Check it in Settings.'
+        : 'Linear rejected the API key. Check it in Settings.';
+    case 'network':
+      return (
+        "Can't reach " +
+        source +
+        '. Showing the last data; it refreshes when the connection is back.'
+      );
+    case 'bad_response':
+      return "Got an answer that couldn't be read.";
     case 'needs_reauth':
-      return 'Linear needs reconnecting. Reconnect it in claude.ai Settings → Connectors, then refresh.';
+      return 'Linear needs reconnecting. Check the key in Settings, then refresh.';
     case 'server_not_connected':
     case 'selection_required':
-      return "Linear isn't connected for you. Add it in claude.ai Settings → Connectors, then refresh.";
+      return "Linear isn't connected for you. Add the key in Settings, then refresh.";
     case 'not_in_manifest':
     case 'consent_required':
-      return "Linear is turned off for this page. Allow it from the page's Permissions menu.";
+      return 'Linear is turned off for this page. Check the key in Settings.';
     case 'blocked_by_policy':
     case 'approval_required':
       return "Your organization's policy blocks this page from reading Linear.";
     case 'server_unavailable':
     case 'rate_limited':
-      return "Linear didn't answer. Showing the last data; refresh to try again.";
+      return (
+        source + " didn't answer. Showing the last data; refresh to try again."
+      );
     case 'tool_error':
-      return 'Linear refused the request: ' + (e.message || 'no reason given');
+      return (
+        source + ' refused the request: ' + (e.message || 'no reason given')
+      );
     default:
-      return "Couldn't load from Linear: " + (e?.message || 'unknown error');
+      return (
+        "Couldn't load from " + source + ': ' + (e?.message || 'unknown error')
+      );
   }
 }
 const RETRACT = [
+  'unauthorized',
+  'bad_response',
   'needs_reauth',
   'server_not_connected',
   'selection_required',
@@ -1949,7 +1971,9 @@ function renderNotice() {
   n.hidden = false;
   n.className =
     'notice' + (errs.some((e) => RETRACT.includes(e.code)) ? ' err' : '');
-  n.textContent = [...new Set(errs.map(errorCopy))].join(' ');
+  n.textContent = [
+    ...new Set(Object.entries(errors).map(([k, e]) => errorCopy(e, k)))
+  ].join(' ');
 }
 
 function render() {
@@ -2203,7 +2227,7 @@ $('refresh').onclick = async () => {
   if (!mcp) return;
   $('fresh').textContent = 'Refreshing…';
   try {
-    await mcp.invalidate(SERVER);
+    await Promise.all([mcp.invalidate(SERVER), mcp.invalidate('Supabase')]);
   } catch {}
   for (const k of Object.keys(details)) delete details[k];
   for (const k of Object.keys(liveHandoffs)) delete liveHandoffs[k];

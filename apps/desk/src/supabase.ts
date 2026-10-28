@@ -25,8 +25,7 @@ const WINDOW_DAYS = 30;
 const RUNS_LIMIT = 500;
 const ACTIVITY_LIMIT = 300;
 const DEBOUNCE_MS = 500;
-const ROLES = ['planning', 'orchestrating', 'implementing'] as const;
-type Role = (typeof ROLES)[number];
+type Role = 'planning' | 'orchestrating' | 'implementing';
 
 /** The page's own parsers, injected so `desk.js` stays untouched. They take the text of a document line. */
 export type Parsers = {
