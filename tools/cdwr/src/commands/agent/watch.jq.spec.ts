@@ -1777,7 +1777,7 @@ describe('session_state and session_prefix', () => {
       { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
     ],
     [
-      'a mirrored session waiting at a prompt stays alive however old',
+      'a mirrored session waiting at a prompt stays alive for three hours',
       [
         sess({
           pidAlive: null,
@@ -1796,7 +1796,32 @@ describe('session_state and session_prefix', () => {
       }
     ],
     [
-      'a mirrored polling session stays alive however old',
+      'a mirrored session waiting at a prompt for over three hours is none',
+      [
+        sess({
+          pidAlive: null,
+          watcherAlive: null,
+          state: 'waiting',
+          detail: 'permission_prompt',
+          lastSeen: iso(10900)
+        })
+      ],
+      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+    ],
+    [
+      'a mirrored polling session that has not re-mirrored for three hours is none',
+      [
+        sess({
+          pidAlive: null,
+          watcherAlive: null,
+          state: 'polling',
+          lastSeen: iso(10900)
+        })
+      ],
+      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+    ],
+    [
+      'a mirrored polling session stays alive for three hours',
       [
         sess({
           pidAlive: null,
