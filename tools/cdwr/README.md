@@ -199,11 +199,24 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 run) always go out.
 
 The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
-`activity` and `sessions`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`activity`, `sessions`, `queue_state` and `issue_events`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
 Linear documents are still published alongside.
+
+Linear changes reach the desk through the same project. A Linear webhook (team Codeware, Issue and
+Comment events) calls the Edge Function `linear-webhook` (`agent-queue/supabase/functions`). The function
+checks the `Linear-Signature` HMAC against `LINEAR_WEBHOOK_SECRET` and refuses a `webhookTimestamp` more
+than 60 s off. It then upserts one row per issue into `issue_events`: the issue's UUID, its identifier
+when the event carries it, and the action, never the payload, since anon can read the table. The desk
+hears the row through Realtime and refetches that one issue from Linear. Without the webhook, the desk
+reloads every 5 minutes, on focus and on Refresh. Deploy the function after a change to it, with JWT
+verification off, since Linear sends no Supabase JWT:
+
+```sh
+supabase functions deploy linear-webhook --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
+```
 
 The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
 
