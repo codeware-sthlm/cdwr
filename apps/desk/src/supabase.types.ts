@@ -152,6 +152,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      issue_events: {
+        Row: {
+          issue_id: string;
+          identifier: string | null;
+          action: string;
+          updated_at: string;
+        };
+        Insert: {
+          issue_id: string;
+          identifier?: string | null;
+          action: string;
+          updated_at: string;
+        };
+        Update: {
+          issue_id?: string;
+          identifier?: string | null;
+          action?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       sessions: {
         Row: {
           id: string;
