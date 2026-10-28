@@ -122,7 +122,11 @@ describe('toRuns', () => {
   it.each([
     [
       '2026-10-28 09:50 · planned COD-1',
-      { when: '2026-10-28 09:50', outcome: 'planned COD-1' }
+      { when: '2026-10-28 10:00', outcome: 'planned COD-1' }
+    ],
+    [
+      '2026-10-28 23:15 · planned COD-2',
+      { when: '2026-10-28 10:00', outcome: 'planned COD-2' }
     ],
     ['not a run', null],
     [null, null]
