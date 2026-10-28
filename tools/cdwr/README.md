@@ -348,6 +348,19 @@ minutes (default 30) for the running job to finish, writes the tag to `image.env
 restarts and resumes. Without `--tag` it takes the latest image built on main; `--dry-run` prints
 the plan with the resolved tag. When the queue stays busy it resumes and changes nothing.
 
+An attended `/work-queue` on the Mac stays visible to the NUC through its session file, which the
+Mac's session hook copies into the container at every change and at least once a minute. That way
+the NUC launches no implementing session while one is alive on the Mac. Set the target once on
+the Mac, after `cdwr agent install`:
+
+```sh
+cdwr agent mirror set --host agent-host   # checks over ssh that the container's sessions directory is writable
+cdwr agent mirror clear                   # stop mirroring
+```
+
+The NUC treats a file from another host as alive for three hours while it waits at a prompt or
+polls, and otherwise while its heartbeat is under 15 minutes old. It deletes the file after a day.
+
 ## Writing a command
 
 One file under `src/commands/<group>/`, one entry in `src/commands/index.ts`:
