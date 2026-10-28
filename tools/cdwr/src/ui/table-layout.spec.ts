@@ -1,4 +1,4 @@
-import { tableLayout } from './table-layout';
+import { outputWidth, tableLayout } from './table-layout';
 
 const chrome = (columns: number) => 3 * columns + 1;
 const sum = (widths: number[]) => widths.reduce((a, b) => a + b, 0);
@@ -68,5 +68,26 @@ describe('tableLayout', () => {
     expect(tableLayout(['key'], [['\u001b[31mred\u001b[39m']], 80)).toEqual([
       3
     ]);
+  });
+});
+
+describe('outputWidth', () => {
+  it('prefers the terminal columns', () => {
+    expect(outputWidth(100, { columns: 120 }, { COLUMNS: '90' })).toBe(120);
+  });
+
+  it('falls back to COLUMNS', () => {
+    expect(outputWidth(100, {}, { COLUMNS: '90' })).toBe(90);
+    expect(outputWidth(100, { columns: 0 }, { COLUMNS: '90' })).toBe(90);
+  });
+
+  it('falls back to the default', () => {
+    expect(outputWidth(100, {}, {})).toBe(100);
+  });
+
+  it('ignores a non-numeric or zero COLUMNS', () => {
+    expect(outputWidth(100, {}, { COLUMNS: 'abc' })).toBe(100);
+    expect(outputWidth(100, {}, { COLUMNS: '0' })).toBe(100);
+    expect(outputWidth(100, {}, { COLUMNS: '-5' })).toBe(100);
   });
 });

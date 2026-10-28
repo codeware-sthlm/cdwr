@@ -16,7 +16,7 @@ import { Cancelled, messageOf } from '../cli/errors';
 import type { Choice } from '../cli/inputs';
 
 import { createTable } from './table';
-import { tableLayout } from './table-layout';
+import { outputWidth, tableLayout } from './table-layout';
 import { symbols, theme } from './theme';
 import type {
   ConfirmOptions,
@@ -69,7 +69,7 @@ export function createTerminalUi(): Ui {
     },
 
     table(head, rows) {
-      const width = process.stdout.columns || 80;
+      const width = outputWidth(80);
       const table = createTable(head, rows, {
         colWidths: tableLayout(head, rows, width),
         wordWrap: true
