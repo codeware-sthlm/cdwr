@@ -332,6 +332,8 @@ describe('usageRows', () => {
       ticket: 'COD-1',
       input_tokens: 16,
       output_tokens: 5,
+      cache_read_tokens: 2,
+      cache_write_tokens: 3,
       host: 'mac'
     });
     expect(rows[1]).toMatchObject({ ticket: 'COD-2', day: '2026-10-07' });
