@@ -25,6 +25,8 @@ const WINDOW_DAYS = 30;
 const RUNS_LIMIT = 500;
 const ACTIVITY_LIMIT = 300;
 const DEBOUNCE_MS = 500;
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 20;
 type Role = 'planning' | 'orchestrating' | 'implementing';
 
 /** The page's own parsers, injected so `desk.js` stays untouched. They take the text of a document line. */
@@ -242,6 +244,26 @@ export const toActivity = (
   };
 };
 
+/**
+ * Reads every row through pages of `PAGE_SIZE`, since PostgREST caps a reply
+ * and truncates silently. Fails rather than return partial data.
+ */
+export const readAllPages = async <T>(
+  fetchPage: (from: number, to: number) => PromiseLike<T[]>
+): Promise<T[]> => {
+  const rows: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const from = page * PAGE_SIZE;
+    const chunk = await fetchPage(from, from + PAGE_SIZE - 1);
+    rows.push(...chunk);
+    if (chunk.length < PAGE_SIZE) return rows;
+  }
+  throw new SupabaseError(
+    'bad_response',
+    `The usage read needs more than ${MAX_PAGES} pages`
+  );
+};
+
 export type SupabaseConfig = { url: string; anonKey: string };
 
 type Failure = { message: string; code?: string; status: number };
@@ -294,7 +316,7 @@ export const createSupabase = (
     attempt(async () => {
       const now = new Date();
       const since = new Date(now.getTime() - WINDOW_DAYS * DAY_MS);
-      const [states, runs, usage, activity] = await Promise.all([
+      const [states, runs, usageRows, activity] = await Promise.all([
         client.from('queue_state').select('*'),
         client
           .from('runs')
@@ -303,7 +325,16 @@ export const createSupabase = (
           .gte('started_at', since.toISOString())
           .order('started_at', { ascending: false })
           .limit(RUNS_LIMIT),
-        client.from('usage').select('*').gte('day', localDay(since)),
+        readAllPages(async (from, to) =>
+          settle(
+            await client
+              .from('usage')
+              .select('*')
+              .gte('day', localDay(since))
+              .order('id', { ascending: true })
+              .range(from, to)
+          )
+        ),
         client
           .from('activity')
           .select('*')
@@ -313,7 +344,7 @@ export const createSupabase = (
       const queueStates = settle(states);
       return {
         runs: toRuns(queueStates, settle(runs), parsers),
-        usage: toUsage(settle(usage), now),
+        usage: toUsage(usageRows, now),
         activity: toActivity(settle(activity), newest(queueStates)?.at ?? null)
       };
     });

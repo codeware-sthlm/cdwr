@@ -7,6 +7,7 @@ import {
   type RunRow,
   type UsageRow,
   localStamp,
+  readAllPages,
   toActivity,
   toRuns,
   toUsage
@@ -319,6 +320,31 @@ describe('toActivity', () => {
           change: 'Moved to Done'
         }
       ]
+    });
+  });
+});
+
+describe('readAllPages', () => {
+  const rows = (n: number): number[] => Array.from({ length: n }, (_, i) => i);
+
+  it('pages until a short page', async () => {
+    const sizes = [1000, 1000, 3];
+    const ranges: [number, number][] = [];
+    const all = await readAllPages(async (from, to) => {
+      ranges.push([from, to]);
+      return rows(sizes[ranges.length - 1]);
+    });
+    expect(all).toHaveLength(2003);
+    expect(ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+      [2000, 2999]
+    ]);
+  });
+
+  it('fails instead of returning partial data at the page limit', async () => {
+    await expect(readAllPages(async () => rows(1000))).rejects.toMatchObject({
+      code: 'bad_response'
     });
   });
 });
