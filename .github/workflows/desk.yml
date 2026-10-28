@@ -51,7 +51,7 @@ jobs:
 
       # Unsigned and not notarized; the target builds the frontend first
       - name: Build the app
-        run: pnpm nx tauri-build desk -- --target aarch64-apple-darwin
+        run: pnpm nx tauri-build desk --configuration release -- --target aarch64-apple-darwin
 
       - name: Collect the bundle
         run: |
