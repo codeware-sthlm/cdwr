@@ -270,6 +270,36 @@ describe('createAdapter', () => {
     expect(linear.listOpen).toHaveBeenCalledTimes(1);
   });
 
+  it('runs one follow-up read for changes during a read', async () => {
+    const { adapter, supabase, fireChange } = setup();
+    const payload = await supabase.read();
+    supabase.read.mockClear();
+    let finish: () => void = () => undefined;
+    supabase.read.mockImplementationOnce(
+      () =>
+        new Promise<typeof payload>((resolve) => {
+          finish = () => resolve(payload);
+        })
+    );
+    adapter.watchTool('Supabase', 'usage', {}, () => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(supabase.read).toHaveBeenCalledTimes(1);
+
+    fireChange();
+    fireChange();
+    const pending = adapter.invalidate('Supabase');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(supabase.read).toHaveBeenCalledTimes(1);
+
+    finish();
+    await pending;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(supabase.read).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(supabase.read).toHaveBeenCalledTimes(2);
+  });
+
   it('maps errors to codes and keeps going', async () => {
     const { adapter, linear, supabase } = setup();
     linear.listOpen.mockRejectedValueOnce(
