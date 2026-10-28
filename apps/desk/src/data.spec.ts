@@ -595,6 +595,26 @@ describe('createAdapter', () => {
       expect(h.linear.listOpen).toHaveBeenCalledTimes(1);
     });
 
+    it('drops a lookup that a newer full list fetch overtook', async () => {
+      const h = setup();
+      const { lists, state } = await watchAll(h);
+      let answer: (issue: Issue) => void = () => undefined;
+      h.linear.getIssueSummary.mockImplementationOnce(
+        () => new Promise<Issue>((resolve) => (answer = resolve))
+      );
+      h.fireIssue('uuid-1');
+      await settle();
+
+      await h.adapter.invalidate('Linear');
+      const listed = h.linear.listOpen.mock.calls.length;
+      answer(summaryOf('COD-1', 'started'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(h.linear.listOpen).toHaveBeenCalledTimes(listed);
+      expect(lists.started).toEqual(['COD-4']);
+      expect(lists.triage).toEqual(['COD-1']);
+      expect(state.closed).toEqual(['COD-6']);
+    });
+
     it('drops an issue on a remove event without looking it up', async () => {
       const h = setup();
       const { lists } = await watchAll(h);
