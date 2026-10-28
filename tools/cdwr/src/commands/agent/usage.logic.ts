@@ -381,6 +381,8 @@ export interface UsageTelemetryRow {
   role: Role;
   input_tokens: number;
   output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
   cost_usd: number;
   host: string;
 }
@@ -418,6 +420,8 @@ export const usageRows = (
           d.tokens.cacheWrite5m +
           d.tokens.cacheWrite1h,
         output_tokens: d.tokens.output,
+        cache_read_tokens: d.tokens.cacheRead,
+        cache_write_tokens: d.tokens.cacheWrite5m + d.tokens.cacheWrite1h,
         cost_usd: d.cost ?? 0,
         host
       }))

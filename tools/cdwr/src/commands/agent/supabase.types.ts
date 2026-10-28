@@ -58,6 +58,8 @@ export type Database = {
           role: 'planning' | 'orchestrating' | 'implementing';
           input_tokens: number;
           output_tokens: number;
+          cache_read_tokens: number;
+          cache_write_tokens: number;
           cost_usd: number;
           host: string;
         };
@@ -69,6 +71,8 @@ export type Database = {
           role: 'planning' | 'orchestrating' | 'implementing';
           input_tokens?: number;
           output_tokens?: number;
+          cache_read_tokens?: number;
+          cache_write_tokens?: number;
           cost_usd?: number;
           host: string;
         };
@@ -80,6 +84,8 @@ export type Database = {
           role?: 'planning' | 'orchestrating' | 'implementing';
           input_tokens?: number;
           output_tokens?: number;
+          cache_read_tokens?: number;
+          cache_write_tokens?: number;
           cost_usd?: number;
           host?: string;
         };
@@ -112,6 +118,36 @@ export type Database = {
           actor?: 'agent' | 'scheduler' | 'human';
           change?: string;
           host?: string | null;
+        };
+        Relationships: [];
+      };
+      queue_state: {
+        Row: {
+          host: string;
+          at: string;
+          last_run: string | null;
+          attended: string | null;
+          suggested: string | null;
+          job: string | null;
+          view: Json | null;
+        };
+        Insert: {
+          host: string;
+          at: string;
+          last_run?: string | null;
+          attended?: string | null;
+          suggested?: string | null;
+          job?: string | null;
+          view?: Json | null;
+        };
+        Update: {
+          host?: string;
+          at?: string;
+          last_run?: string | null;
+          attended?: string | null;
+          suggested?: string | null;
+          job?: string | null;
+          view?: Json | null;
         };
         Relationships: [];
       };

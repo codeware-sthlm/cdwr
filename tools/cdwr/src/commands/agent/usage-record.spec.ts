@@ -10,8 +10,8 @@ const tokens = (input: number, output: number) => ({
   input,
   output,
   cacheRead: 10,
-  cacheWrite5m: 0,
-  cacheWrite1h: 0
+  cacheWrite5m: 4,
+  cacheWrite1h: 1
 });
 
 vi.mock('./usage.collect', () => ({
@@ -120,11 +120,13 @@ describe('agent usage-record', () => {
       ticket: 'COD-1',
       model: 'claude-opus-4-7',
       role: 'orchestrating',
-      input_tokens: 110,
-      output_tokens: 5
+      input_tokens: 115,
+      output_tokens: 5,
+      cache_read_tokens: 10,
+      cache_write_tokens: 5
     });
     expect(rows[0]?.['day']).toMatch(/^\d{4}-\d\d-\d\d$/);
-    expect(rows[1]).toMatchObject({ ticket: null, input_tokens: 210 });
+    expect(rows[1]).toMatchObject({ ticket: null, input_tokens: 215 });
     expect(JSON.stringify(ui.printed)).not.toContain(KEY);
   });
 
