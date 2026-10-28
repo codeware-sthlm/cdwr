@@ -295,6 +295,18 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/worktree-prune').then((m) => m.default)
   },
   {
+    path: ['agent', 'mirror', 'set'],
+    summary: 'Mirror attended session files into the agent container',
+    danger: 'mutate',
+    load: () => import('./agent/mirror-set').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'mirror', 'clear'],
+    summary: 'Stop mirroring attended session files',
+    danger: 'mutate',
+    load: () => import('./agent/mirror-clear').then((m) => m.default)
+  },
+  {
     path: ['release'],
     summary: 'Version, changelog, tag and publish the npm packages',
     danger: 'destructive',

@@ -564,3 +564,70 @@ describe('run.sh to_main', () => {
     );
   });
 });
+
+describe('run.sh session files from another host', () => {
+  const loop =
+    SCRIPT.match(
+      /^ {4}for f in "\$SESSIONS"\/\*\.json\(N\); do\n[\s\S]*?\n {4}done\n/m
+    )?.[0] ?? '';
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  let root: string;
+
+  // A session file as the Mac mirrors it: its pid belongs to the other machine
+  const session = (id: string, ageSeconds: number, host = 'mac') => {
+    const lastSeen = new Date(Date.now() - ageSeconds * 1000).toISOString();
+    writeFileSync(
+      join(root, `${id}.json`),
+      JSON.stringify({ host, pid: 1, state: 'waiting', lastSeen })
+    );
+  };
+
+  // Runs the file loop with this machine called `agent`; prints the kept items
+  const sweep = () => {
+    const script = [
+      'set -uo pipefail',
+      'host_id() { print agent; }',
+      'sweep() {',
+      `  local SESSIONS="${root}" f w pid wpid`,
+      '  local -a items=()',
+      loop,
+      '  print -r -- "${(j:|:)items}"',
+      '}',
+      'sweep'
+    ].join('\n');
+    return spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+  };
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'remote-session-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    expect(loop).toContain('remote=true');
+  });
+
+  it.skipIf(!canRun)(
+    'keeps a fresh waiting file, with unknown liveness',
+    () => {
+      session('fresh', 60);
+      const result = sweep();
+      expect(existsSync(join(root, 'fresh.json'))).toBe(true);
+      const item = JSON.parse(result.stdout.trim());
+      expect(item).toMatchObject({
+        state: 'waiting',
+        pidAlive: null,
+        watcherAlive: null
+      });
+    }
+  );
+
+  it.skipIf(!canRun)('deletes a file older than 24 h', () => {
+    session('stale', 86400 + 3600);
+    const result = sweep();
+    expect(existsSync(join(root, 'stale.json'))).toBe(false);
+    expect(result.stdout.trim()).toBe('');
+  });
+});
