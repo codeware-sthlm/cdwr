@@ -58,23 +58,40 @@ export default defineCommand({
         data: { queue, target }
       };
     }
-    try {
-      await run('ssh', checkArgs(host, container, dir), { timeout: 20_000 });
-    } catch (error) {
-      if (!(error instanceof CommandError)) throw error;
-      throw new CliError(
-        checkFailure(error.code, error.stderr, host, container, dir)
-      );
-    }
+    // Read only, so a dry run or a cancelled run leaves nothing behind in the container
+    await check(host, container, dir, false);
     return {
-      steps: [{ label: 'Set the mirror target', detail: target }],
+      steps: [
+        { label: 'Create the directory in the container', detail: dir },
+        { label: 'Set the mirror target', detail: target }
+      ],
       data: { queue, target }
     };
   },
 
-  async apply(_ctx, { queue, target }) {
+  async apply(_ctx, { queue, target }, { host, container, dir }) {
+    await check(host, container, dir, true);
     mkdirSync(queue.home, { recursive: true });
     writeFileSync(queue.mirror, `${target}\n`);
     return { summary: `Mirroring to ${target}`, json: { target } };
   }
 });
+
+/** One round trip to the container; a failure says why, and nothing is written */
+const check = async (
+  host: string,
+  container: string,
+  dir: string,
+  create: boolean
+): Promise<void> => {
+  try {
+    await run('ssh', checkArgs(host, container, dir, { create }), {
+      timeout: 20_000
+    });
+  } catch (error) {
+    if (!(error instanceof CommandError)) throw error;
+    throw new CliError(
+      checkFailure(error.code, error.stderr, host, container, dir)
+    );
+  }
+};

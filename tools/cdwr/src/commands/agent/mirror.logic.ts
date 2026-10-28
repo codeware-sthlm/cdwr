@@ -16,11 +16,16 @@ export const mirrorTarget = (
   dir: string
 ): string => `${host}:docker:${container}:${dir}`;
 
-/** The ssh arguments that check the target is reachable and writable in one round trip */
+/**
+ * The ssh arguments that check the target in one round trip. Read only by default: the directory,
+ * or the nearest part of it that exists, must be writable. With `create` the directory is made
+ * first, since a fresh volume has none until the first copy.
+ */
 export const checkArgs = (
   host: string,
   container: string,
-  dir: string
+  dir: string,
+  { create = false }: { create?: boolean } = {}
 ): string[] => [
   '-q',
   '-o',
@@ -33,9 +38,10 @@ export const checkArgs = (
   container,
   'sh',
   '-c',
-  // ssh joins its arguments into one remote command line, so the script is quoted for that shell;
-  // a fresh volume has no sessions directory until the first copy makes one
-  `'mkdir -p "$1" && test -w "$1"'`,
+  // ssh joins its arguments into one remote command line, so the script is quoted for that shell
+  create
+    ? `'mkdir -p "$1" && test -w "$1"'`
+    : `'d=$1; while [ ! -e "$d" ]; do d=$(dirname "$d"); done; test -d "$d" && test -w "$d"'`,
   '_',
   dir
 ];

@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -37,7 +37,7 @@ describe('invalidPart', () => {
 
 describe('checkArgs', () => {
   it('runs one docker exec through ssh, making the directory before testing it', () => {
-    expect(checkArgs('h', 'c', '/d')).toEqual([
+    expect(checkArgs('h', 'c', '/d', { create: true })).toEqual([
       '-q',
       '-o',
       'BatchMode=yes',
@@ -55,12 +55,26 @@ describe('checkArgs', () => {
     ]);
   });
 
-  it('survives the remote shell that ssh hands the joined line to', () => {
+  // What ssh does on the far side, minus ssh and docker: one shell parses the joined arguments
+  const remote = (args: string[]) =>
+    spawnSync('sh', ['-c', args.slice(9).join(' ')]).status;
+
+  it('creates the directory only when asked to', () => {
     const dir = mkdtempSync(join(tmpdir(), 'mirror-check-'));
-    const nested = join(dir, 'sessions');
-    // What ssh does on the far side, minus ssh and docker: one shell parses the joined arguments
-    execFileSync('sh', ['-c', checkArgs('h', 'c', nested).slice(9).join(' ')]);
+    const nested = join(dir, 'a', 'sessions');
+    expect(remote(checkArgs('h', 'c', nested))).toBe(0);
+    expect(existsSync(nested)).toBe(false);
+    expect(remote(checkArgs('h', 'c', nested, { create: true }))).toBe(0);
     expect(existsSync(nested)).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('fails the read-only check when the nearest existing part is a file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mirror-check-'));
+    writeFileSync(join(dir, 'file'), '');
+    expect(remote(checkArgs('h', 'c', join(dir, 'file', 'sessions')))).not.toBe(
+      0
+    );
     rmSync(dir, { recursive: true, force: true });
   });
 });
