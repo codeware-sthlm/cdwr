@@ -1,0 +1,70 @@
+name: Agent Desk
+
+on:
+  pull_request:
+    paths:
+      - "apps/desk/**"
+      - ".github/workflows/desk.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/desk/**"
+      - ".github/workflows/desk.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install pnpm package manager
+        uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desk/src-tauri -> target
+
+      # Unsigned and not notarized; the target builds the frontend first
+      - name: Build the app
+        run: pnpm nx tauri-build desk -- --target aarch64-apple-darwin
+
+      - name: Collect the bundle
+        run: |
+          bundle=apps/desk/src-tauri/target/aarch64-apple-darwin/release/bundle
+          mkdir -p out
+          cp "$bundle"/dmg/*.dmg out/
+          for app in "$bundle"/macos/*.app; do
+            ditto -c -k --keepParent "$app" "out/$(basename "$app").zip"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-desk-macos-arm64
+          path: out/*
+          if-no-files-found: error
+          retention-days: 14
