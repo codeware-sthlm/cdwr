@@ -404,7 +404,6 @@ export const createAdapter = ({
 
   // Realtime refetches on its own while healthy; the timer covers only the gaps.
   let subscribed = false;
-  let joined = false;
   let backoffStep = 0;
   let backoffTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -443,9 +442,8 @@ export const createAdapter = ({
         if (healthy !== subscribed) onLive?.(healthy);
         subscribed = healthy;
         if (healthy) {
-          // Events may have been missed while the channel was down; the first join follows the initial load
-          if (joined) refreshLinear();
-          joined = true;
+          // Events may have been missed before the channel joined or while it was down
+          refreshLinear();
           backoffStep = 0;
           clearTimeout(backoffTimer);
           backoffTimer = undefined;
