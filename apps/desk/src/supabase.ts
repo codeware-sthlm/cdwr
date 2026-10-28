@@ -103,7 +103,8 @@ const byTimeDesc = (a: string, b: string): number =>
 const newest = (rows: QueueStateRow[]): QueueStateRow | undefined =>
   [...rows].sort((a, b) => byTimeDesc(a.at, b.at))[0];
 
-const LAST_RUN = /^(\d{4}-\d\d-\d\d \d\d:\d\d)\s*·\s*(.+)$/;
+// The text's clock time is the scheduler host's local time; the row's `at` carries the zone
+const LAST_RUN = /^\d{4}-\d\d-\d\d \d\d:\d\d\s*·\s*(.+)$/;
 
 export const toRuns = (
   queueStates: QueueStateRow[],
@@ -115,7 +116,7 @@ export const toRuns = (
   const lastMatch = state.last_run?.match(LAST_RUN);
   return {
     last: lastMatch
-      ? { when: lastMatch[1], outcome: lastMatch[2].trim() }
+      ? { when: localStamp(state.at), outcome: lastMatch[1].trim() }
       : null,
     attended: state.attended
       ? parsers.parseAttended(`Attended: ${state.attended}`)
