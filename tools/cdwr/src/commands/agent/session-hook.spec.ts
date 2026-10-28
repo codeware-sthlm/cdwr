@@ -424,7 +424,11 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
         },
         encoding: 'utf8'
       });
-      spawnSync('sleep', ['0.5']);
+      // The copy runs detached, through two stand-in processes: wait for it, up to 5 s
+      const landed = join(inside, 'abc.json');
+      for (let i = 0; i < 50 && !existsSync(landed); i++) {
+        spawnSync('sleep', ['0.1']);
+      }
       expect(readdirSync(inside)).toEqual(['abc.json']);
       expect(readFileSync(join(inside, 'abc.json'), 'utf8')).toBe(
         readFileSync(join(sessions, 'abc.json'), 'utf8')

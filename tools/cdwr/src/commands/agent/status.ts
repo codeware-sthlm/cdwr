@@ -22,6 +22,7 @@ import { symbols, theme } from '../../ui/theme';
 import {
   KEYCHAIN_SERVICE,
   LINEAR_KEY_ENV,
+  REMOTE_CONTAINER,
   RUN_INTERVAL_SECONDS,
   byFile,
   filesDrift,
@@ -317,36 +318,44 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
   );
 }
 
+/** The remote check alone may take 90 s (`checkRun`); ssh and the vault fetch come on top */
+const REMOTE_TIMEOUT_MS = 150_000;
+
 /** The report of the queue in the agent container on `host`, over ssh */
 async function remoteReport(host: string): Promise<RemoteReport> {
   let stdout: string;
   try {
-    stdout = (await exec('ssh', remoteStatus(host), { timeout: 60_000 }))
-      .stdout;
+    stdout = (
+      await exec('ssh', remoteStatus(host), { timeout: REMOTE_TIMEOUT_MS })
+    ).stdout;
   } catch (error) {
-    if (error instanceof CommandError) {
-      // A queue with problems exits non-zero but still answers
-      const answer = parseRemoteStatus(error.stdout);
-      if (answer.kind === 'report') return answer.report;
-      if (answer.kind === 'failed')
-        throw new CliError(
-          `${host}: ${answer.message}`,
-          undefined,
-          answer.hint
-        );
-      throw new CliError(
-        `Could not read the status over ssh on ${host}: ${error.stderr.trim() || error.message}`,
-        undefined,
-        'Check that the host is reachable and the container cdwr-agent runs'
-      );
-    }
-    throw error;
+    if (!(error instanceof CommandError)) throw error;
+    // A queue with problems exits non-zero but still answers
+    const answer = parseRemoteStatus(error.stdout);
+    if (answer.kind !== 'none') return fromAnswer(host, answer, error.stdout);
+    throw new CliError(
+      `Could not read the status over ssh on ${host}: ${error.stderr.trim() || error.message}`,
+      undefined,
+      `Check that the host is reachable and the container ${REMOTE_CONTAINER} runs`
+    );
   }
-  const answer = parseRemoteStatus(stdout);
-  if (answer.kind === 'report') return answer.report;
-  if (answer.kind === 'failed')
-    throw new CliError(`${host}: ${answer.message}`, undefined, answer.hint);
-  if (answer.kind === 'skew')
-    throw new CliError(skewedStatus(host, answer.paths, answer.line));
-  throw new CliError(unreadableStatus(host, stdout));
+  return fromAnswer(host, parseRemoteStatus(stdout), stdout);
+}
+
+/** The report, or the error the remote's answer explains, whatever ssh exited with */
+function fromAnswer(
+  host: string,
+  answer: ReturnType<typeof parseRemoteStatus>,
+  stdout: string
+): RemoteReport {
+  switch (answer.kind) {
+    case 'report':
+      return answer.report;
+    case 'failed':
+      throw new CliError(`${host}: ${answer.message}`, undefined, answer.hint);
+    case 'skew':
+      throw new CliError(skewedStatus(host, answer.paths, answer.line));
+    case 'none':
+      throw new CliError(unreadableStatus(host, stdout));
+  }
 }
