@@ -687,6 +687,32 @@ describe('createAdapter', () => {
       expect(h.linear.listComments).toHaveBeenCalledTimes(2);
     });
 
+    it('drops the cached details and comments that cached calls read', async () => {
+      const h = setup();
+      await watchAll(h);
+      const staleTime = { cache: { staleTime: 60_000 } };
+      const read = () =>
+        Promise.all([
+          h.adapter.callTool('Linear', 'get_issue', { id: 'COD-1' }, staleTime),
+          h.adapter.callTool(
+            'Linear',
+            'list_comments',
+            { issueId: 'COD-1' },
+            staleTime
+          )
+        ]);
+      await read();
+      await read();
+      expect(h.linear.getIssue).toHaveBeenCalledTimes(1);
+
+      h.linear.getIssueSummary.mockResolvedValue(summaryOf('COD-1', 'started'));
+      h.fireIssue('uuid-1');
+      await settle();
+      await read();
+      expect(h.linear.getIssue).toHaveBeenCalledTimes(2);
+      expect(h.linear.listComments).toHaveBeenCalledTimes(2);
+    });
+
     it('follows up a list fetch that was in flight during the patch', async () => {
       const h = setup();
       await watchAll(h);

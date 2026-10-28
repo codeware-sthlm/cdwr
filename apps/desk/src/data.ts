@@ -374,8 +374,11 @@ export const createAdapter = ({
         : without(list)
     );
     closed.patch((list) => place(list, 'completed'));
-    for (const source of [details.get(id), comments.get(id)])
+    // The page also reads these through cached calls, so the cache goes whether or not anyone watches
+    for (const source of [details.get(id), comments.get(id)]) {
+      source?.clear();
       if (source?.watching()) void source.refresh();
+    }
   };
 
   const queueIssue = ({
