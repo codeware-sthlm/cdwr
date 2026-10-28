@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type WatchEvent, createAdapter } from './data';
 import type { Issue } from './linear';
 import { LinearError } from './linear';
-import { SupabaseError } from './supabase';
+import { type IssueEventRow, SupabaseError } from './supabase';
 
 const issue = (id: string, statusType: Issue['statusType']): Issue => ({
   id,
@@ -17,6 +17,12 @@ const issue = (id: string, statusType: Issue['statusType']): Issue => ({
   completedAt: null,
   canceledAt: null
 });
+
+const summaryOf = (
+  id: string,
+  statusType: Issue['statusType'],
+  labels: string[] = []
+): Issue => ({ ...issue(id, statusType), labels });
 
 const setup = () => {
   const linear = {
@@ -36,6 +42,9 @@ const setup = () => {
         relations: { blockedBy: [] },
         attachments: []
       })
+    ),
+    getIssueSummary: vi.fn<(id: string) => Promise<Issue | null>>(() =>
+      Promise.resolve(null)
     ),
     listComments: vi.fn(() => Promise.resolve({ comments: [] }))
   };
@@ -58,12 +67,18 @@ const setup = () => {
   let changed: () => void = () => undefined;
   let status: (healthy: boolean) => void = () => undefined;
   const unsubscribe = vi.fn();
+  let issueEvent: (row: IssueEventRow) => void = () => undefined;
   const supabase = {
     read: supabaseRead,
     subscribe: vi.fn(
-      (onChange: () => void, onStatus?: (healthy: boolean) => void) => {
+      (
+        onChange: () => void,
+        onStatus?: (healthy: boolean) => void,
+        onIssue?: (row: IssueEventRow) => void
+      ) => {
         changed = onChange;
         if (onStatus) status = onStatus;
+        if (onIssue) issueEvent = onIssue;
         return unsubscribe;
       }
     )
@@ -76,12 +91,25 @@ const setup = () => {
       return stopFocus;
     }
   };
-  const adapter = createAdapter({ linear, supabase, events });
+  const onLive = vi.fn();
+  const adapter = createAdapter({ linear, supabase, events, onLive });
   return {
     adapter,
     linear,
     supabase,
     unsubscribe,
+    onLive,
+    fireIssue: (
+      issueId: string,
+      identifier: string | null = null,
+      action = 'issue:update'
+    ) =>
+      issueEvent({
+        issue_id: issueId,
+        identifier,
+        action,
+        updated_at: '2026-10-28T12:00:00.000Z'
+      }),
     stopFocus,
     fireChange: () => changed(),
     fireStatus: (healthy: boolean) => status(healthy),
@@ -242,18 +270,18 @@ describe('createAdapter', () => {
     expect(linear.listOpen).toHaveBeenCalledTimes(3);
   });
 
-  it('refetches Linear every 2 minutes, not Supabase while Realtime is healthy', async () => {
+  it('refetches Linear every 5 minutes, not Supabase while Realtime is healthy', async () => {
     const { adapter, linear, supabase, fireStatus } = setup();
     fireStatus(true);
     watchOpen(adapter);
     adapter.watchTool('Supabase', 'usage', {}, () => undefined);
     await vi.advanceTimersByTimeAsync(0);
 
-    await vi.advanceTimersByTimeAsync(119000);
+    await vi.advanceTimersByTimeAsync(299000);
     expect(linear.listOpen).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1000);
     expect(linear.listOpen).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(120000);
+    await vi.advanceTimersByTimeAsync(300000);
     expect(linear.listOpen).toHaveBeenCalledTimes(3);
     expect(supabase.read).toHaveBeenCalledTimes(1);
   });
@@ -432,7 +460,7 @@ describe('createAdapter', () => {
   it('polls Supabase on the fallback timer while the channel is down', async () => {
     const { adapter, supabase } = setup();
     adapter.watchTool('Supabase', 'runs', {}, () => undefined);
-    await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
     expect(supabase.read).toHaveBeenCalledTimes(2);
   });
 
@@ -448,5 +476,261 @@ describe('createAdapter', () => {
     ]);
     expect(linear.listOpen).toHaveBeenCalledTimes(2);
     expect(supabase.read).toHaveBeenCalledTimes(2);
+  });
+
+  describe('issue events', () => {
+    type Harness = ReturnType<typeof setup>;
+    type Lists = Record<
+      'triage' | 'backlog' | 'unstarted' | 'started',
+      string[]
+    >;
+
+    const watchAll = async (h: Harness) => {
+      const lists: Lists = {
+        triage: [],
+        backlog: [],
+        unstarted: [],
+        started: []
+      };
+      const state: { ideas: string[]; closed: string[]; emits: number } = {
+        ideas: [],
+        closed: [],
+        emits: 0
+      };
+      const ids = (e: WatchEvent): string[] => {
+        if (e.type !== 'data') return [];
+        const p = e.result.payload;
+        if (typeof p !== 'object' || p === null || !('issues' in p)) return [];
+        return Array.isArray(p.issues)
+          ? p.issues.flatMap((i: unknown) =>
+              typeof i === 'object' &&
+              i !== null &&
+              'id' in i &&
+              typeof i.id === 'string'
+                ? [i.id]
+                : []
+            )
+          : [];
+      };
+      for (const s of OPEN)
+        h.adapter.watchTool(
+          'Linear',
+          'list_issues',
+          { ...FIELDS, state: s },
+          (e) => {
+            lists[s] = ids(e);
+            state.emits += 1;
+          }
+        );
+      h.adapter.watchTool(
+        'Linear',
+        'list_issues',
+        { ...FIELDS, label: 'agent-idea' },
+        (e) => (state.ideas = ids(e))
+      );
+      h.adapter.watchTool(
+        'Linear',
+        'list_issues',
+        { ...FIELDS, state: 'completed' },
+        (e) => (state.closed = ids(e))
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      return { lists, state };
+    };
+
+    const settle = () => vi.advanceTimersByTimeAsync(500);
+
+    it('patches an issue into its new bucket without refetching', async () => {
+      const h = setup();
+      const { lists } = await watchAll(h);
+      h.linear.getIssueSummary.mockResolvedValue(summaryOf('COD-1', 'started'));
+      h.fireIssue('uuid-1');
+      await settle();
+
+      expect(h.linear.getIssueSummary).toHaveBeenCalledWith('uuid-1');
+      expect(lists.triage).toEqual([]);
+      expect(lists.started.sort()).toEqual(['COD-1', 'COD-4']);
+      expect(h.linear.listOpen).toHaveBeenCalledTimes(1);
+    });
+
+    it('adds a new open issue to its bucket', async () => {
+      const h = setup();
+      const { lists } = await watchAll(h);
+      h.linear.getIssueSummary.mockResolvedValue(summaryOf('COD-9', 'backlog'));
+      h.fireIssue('uuid-9');
+      await settle();
+      expect(lists.backlog.sort()).toEqual(['COD-2', 'COD-9']);
+    });
+
+    it('keeps idea and closed membership by label and state', async () => {
+      const h = setup();
+      const { lists, state } = await watchAll(h);
+      h.linear.getIssueSummary.mockResolvedValue(
+        summaryOf('COD-1', 'completed', ['agent-idea'])
+      );
+      h.fireIssue('uuid-1');
+      await settle();
+
+      expect(lists.triage).toEqual([]);
+      expect(state.ideas.sort()).toEqual(['COD-1', 'COD-5']);
+      expect(state.closed.sort()).toEqual(['COD-1', 'COD-6']);
+
+      h.linear.getIssueSummary.mockResolvedValue(summaryOf('COD-1', 'started'));
+      h.fireIssue('uuid-1');
+      await settle();
+      expect(state.ideas).toEqual(['COD-5']);
+      expect(state.closed).toEqual(['COD-6']);
+      expect(lists.started.sort()).toEqual(['COD-1', 'COD-4']);
+    });
+
+    it('drops a removed issue everywhere, matching on the row identifier', async () => {
+      const h = setup();
+      const { lists, state } = await watchAll(h);
+      h.linear.getIssueSummary.mockResolvedValue(null);
+      h.fireIssue('uuid-6', 'COD-6');
+      h.fireIssue('uuid-3', 'COD-3');
+      await settle();
+      expect(state.closed).toEqual([]);
+      expect(lists.unstarted).toEqual([]);
+      expect(h.linear.listOpen).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops an issue on a remove event without looking it up', async () => {
+      const h = setup();
+      const { lists } = await watchAll(h);
+      h.fireIssue('uuid-3', 'COD-3', 'issue:remove');
+      await settle();
+      expect(h.linear.getIssueSummary).not.toHaveBeenCalled();
+      expect(lists.unstarted).toEqual([]);
+    });
+
+    it('ignores a reply older than the newest lookup of the issue', async () => {
+      const h = setup();
+      const { lists, state } = await watchAll(h);
+      let answerOld: (issue: Issue) => void = () => undefined;
+      h.linear.getIssueSummary
+        .mockImplementationOnce(
+          () => new Promise<Issue>((resolve) => (answerOld = resolve))
+        )
+        .mockResolvedValueOnce(summaryOf('COD-1', 'completed'));
+      h.fireIssue('uuid-1');
+      await settle();
+      h.fireIssue('uuid-1');
+      await settle();
+      expect(state.closed.sort()).toEqual(['COD-1', 'COD-6']);
+
+      answerOld(summaryOf('COD-1', 'started'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.closed.sort()).toEqual(['COD-1', 'COD-6']);
+      expect(lists.started).toEqual(['COD-4']);
+    });
+
+    it('refreshes the lists when the issue cannot be matched', async () => {
+      const h = setup();
+      await watchAll(h);
+      h.linear.getIssueSummary.mockResolvedValue(null);
+      h.fireIssue('uuid-x');
+      await settle();
+      expect(h.linear.listOpen).toHaveBeenCalledTimes(2);
+      expect(h.linear.listIdeas).toHaveBeenCalledTimes(2);
+      expect(h.linear.listClosed).toHaveBeenCalledTimes(2);
+    });
+
+    it('falls back to a full Linear refresh when the lookup throws', async () => {
+      const h = setup();
+      await watchAll(h);
+      h.linear.getIssueSummary.mockRejectedValue(
+        new LinearError('network', 'offline')
+      );
+      h.fireIssue('uuid-1', 'COD-1');
+      await settle();
+      expect(h.linear.listOpen).toHaveBeenCalledTimes(2);
+    });
+
+    it('coalesces events of one issue into one lookup', async () => {
+      const h = setup();
+      await watchAll(h);
+      h.linear.getIssueSummary.mockResolvedValue(summaryOf('COD-1', 'started'));
+      h.fireIssue('uuid-1');
+      await vi.advanceTimersByTimeAsync(300);
+      h.fireIssue('uuid-1');
+      await vi.advanceTimersByTimeAsync(300);
+      expect(h.linear.getIssueSummary).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(200);
+      expect(h.linear.getIssueSummary).toHaveBeenCalledTimes(1);
+
+      h.fireIssue('uuid-2');
+      await settle();
+      expect(h.linear.getIssueSummary).toHaveBeenCalledTimes(2);
+    });
+
+    it('refreshes the details and comments of the issue when watched', async () => {
+      const h = setup();
+      await watchAll(h);
+      h.adapter.watchTool(
+        'Linear',
+        'get_issue',
+        { id: 'COD-1' },
+        () => undefined
+      );
+      h.adapter.watchTool(
+        'Linear',
+        'list_comments',
+        { issueId: 'COD-1' },
+        () => undefined
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      h.linear.getIssueSummary.mockResolvedValue(summaryOf('COD-1', 'started'));
+      h.fireIssue('uuid-1');
+      await settle();
+      expect(h.linear.getIssue).toHaveBeenCalledTimes(2);
+      expect(h.linear.listComments).toHaveBeenCalledTimes(2);
+    });
+
+    it('follows up a list fetch that was in flight during the patch', async () => {
+      const h = setup();
+      await watchAll(h);
+      h.linear.getIssueSummary.mockResolvedValue(summaryOf('COD-1', 'started'));
+      const refreshing = h.adapter.invalidate('Linear');
+      h.fireIssue('uuid-1');
+      await settle();
+      await refreshing;
+      expect(h.linear.listOpen.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('does nothing after stop', async () => {
+      const h = setup();
+      await watchAll(h);
+      h.fireIssue('uuid-1');
+      h.adapter.stop();
+      await settle();
+      expect(h.linear.getIssueSummary).not.toHaveBeenCalled();
+    });
+  });
+
+  it('refreshes the watched Linear lists on a rejoin, not on the first join', async () => {
+    const { adapter, linear, fireStatus } = setup();
+    watchOpen(adapter);
+    await vi.advanceTimersByTimeAsync(0);
+
+    fireStatus(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(linear.listOpen).toHaveBeenCalledTimes(1);
+
+    fireStatus(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(linear.listOpen).toHaveBeenCalledTimes(1);
+    fireStatus(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(linear.listOpen).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports the channel health through onLive', async () => {
+    const { onLive, fireStatus } = setup();
+    expect(onLive.mock.calls).toEqual([[false]]);
+    fireStatus(true);
+    fireStatus(true);
+    fireStatus(false);
+    expect(onLive.mock.calls).toEqual([[false], [true], [false]]);
   });
 });

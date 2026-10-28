@@ -6,7 +6,12 @@ import {
   LinearError,
   type OpenStatusType
 } from './linear';
-import { type Payloads, SupabaseError, type createSupabase } from './supabase';
+import {
+  type IssueEventRow,
+  type Payloads,
+  SupabaseError,
+  type createSupabase
+} from './supabase';
 
 const LINEAR = 'Linear';
 const SUPABASE = 'Supabase';
@@ -17,7 +22,8 @@ const OPEN_STATES: readonly OpenStatusType[] = [
   'unstarted',
   'started'
 ];
-const REFRESH_MS = 2 * 60 * 1000;
+const REFRESH_MS = 5 * 60 * 1000;
+const ISSUE_COALESCE_MS = 500;
 const FOCUS_DEBOUNCE_MS = 10 * 1000;
 const BACKOFF_MS = [15 * 1000, 30 * 1000, 60 * 1000];
 
@@ -54,11 +60,18 @@ export type DataEvents = {
 export type AdapterOptions = {
   linear: Pick<
     Linear,
-    'listOpen' | 'listIdeas' | 'listClosed' | 'getIssue' | 'listComments'
+    | 'listOpen'
+    | 'listIdeas'
+    | 'listClosed'
+    | 'getIssue'
+    | 'getIssueSummary'
+    | 'listComments'
   >;
   supabase: Pick<ReturnType<typeof createSupabase>, 'read' | 'subscribe'>;
   now?: () => number;
   events?: DataEvents;
+  /** Called with the Realtime channel health when it changes, and once with false at start. */
+  onLive?: (live: boolean) => void;
 };
 
 const browserEvents: DataEvents = {
@@ -108,6 +121,17 @@ const createSource = <T>(
     void load().catch(() => undefined);
   };
 
+  const notify = (entry: Entry<T>): void => {
+    for (const w of [...watchers])
+      w.callback({
+        type: 'data',
+        result: {
+          payload: w.pick(entry.value),
+          cache: { storedAt: entry.storedAt }
+        }
+      });
+  };
+
   const run = async (): Promise<Entry<T>> => {
     let entry: Entry<T>;
     try {
@@ -122,14 +146,7 @@ const createSource = <T>(
     }
     cache = entry;
     inflight = undefined;
-    for (const w of [...watchers])
-      w.callback({
-        type: 'data',
-        result: {
-          payload: w.pick(entry.value),
-          cache: { storedAt: entry.storedAt }
-        }
-      });
+    notify(entry);
     followUp();
     return entry;
   };
@@ -149,6 +166,16 @@ const createSource = <T>(
         () => undefined,
         () => undefined
       );
+    },
+    /** Edits the cached value in place; a fetch in flight is followed up instead. */
+    patch: (fn: (value: T) => T): void => {
+      if (inflight) {
+        dirty = true;
+        return;
+      }
+      if (!cache) return;
+      cache = { value: fn(cache.value), storedAt: now() };
+      notify(cache);
     },
     read: (staleTime: number): Promise<Entry<T>> =>
       cache && now() - cache.storedAt < staleTime
@@ -200,7 +227,8 @@ export const createAdapter = ({
   linear,
   supabase,
   now = () => Date.now(),
-  events = browserEvents
+  events = browserEvents,
+  onLive
 }: AdapterOptions) => {
   const sources: Tracked[] = [];
   const track = <T>(server: Server, fetch: () => Promise<T>): Source<T> => {
@@ -286,8 +314,97 @@ export const createAdapter = ({
     if (!stopped) void refreshWatched(SUPABASE);
   };
 
+  onLive?.(false);
+
+  const pending = new Map<
+    string,
+    {
+      timer: ReturnType<typeof setTimeout>;
+      identifier: string | null;
+      removed: boolean;
+    }
+  >();
+  // The newest lookup per issue; an older reply that lands later is dropped
+  const latest = new Map<string, number>();
+  let lookups = 0;
+  stopFns.push(() => {
+    for (const { timer } of pending.values()) clearTimeout(timer);
+    pending.clear();
+  });
+
+  const refreshLists = (): void => {
+    for (const s of [open, ideas, closed]) if (s.watching()) void s.refresh();
+  };
+
+  const applyIssue = async (
+    issueId: string,
+    identifier: string | null,
+    removed: boolean
+  ): Promise<void> => {
+    const lookup = ++lookups;
+    latest.set(issueId, lookup);
+    let summary: Issue | null;
+    try {
+      // A removed issue is still readable from Linear, with its last state
+      summary = removed ? null : await linear.getIssueSummary(issueId);
+    } catch {
+      if (!stopped && latest.get(issueId) === lookup)
+        void refreshWatched(LINEAR);
+      return;
+    }
+    if (stopped || latest.get(issueId) !== lookup) return;
+    const found = summary;
+    const id = found?.id ?? identifier;
+    if (!id) {
+      refreshLists();
+      return;
+    }
+    const without = (list: Issue[]): Issue[] => list.filter((i) => i.id !== id);
+    const place = (list: Issue[], type: Issue['statusType']): Issue[] =>
+      found?.statusType === type ? [...without(list), found] : without(list);
+    open.patch((b) => ({
+      triage: place(b.triage, 'triage'),
+      backlog: place(b.backlog, 'backlog'),
+      unstarted: place(b.unstarted, 'unstarted'),
+      started: place(b.started, 'started')
+    }));
+    ideas.patch((list) =>
+      found?.labels.includes(IDEA_LABEL)
+        ? [...without(list), found]
+        : without(list)
+    );
+    closed.patch((list) => place(list, 'completed'));
+    for (const source of [details.get(id), comments.get(id)])
+      if (source?.watching()) void source.refresh();
+  };
+
+  const queueIssue = ({
+    issue_id,
+    identifier,
+    action
+  }: IssueEventRow): void => {
+    if (stopped) return;
+    const previous = pending.get(issue_id);
+    clearTimeout(previous?.timer);
+    const timer = setTimeout(() => {
+      const entry = pending.get(issue_id);
+      pending.delete(issue_id);
+      void applyIssue(
+        issue_id,
+        entry?.identifier ?? null,
+        entry?.removed ?? false
+      );
+    }, ISSUE_COALESCE_MS);
+    pending.set(issue_id, {
+      timer,
+      identifier: identifier ?? previous?.identifier ?? null,
+      removed: action === 'issue:remove'
+    });
+  };
+
   // Realtime refetches on its own while healthy; the timer covers only the gaps.
   let subscribed = false;
+  let joined = false;
   let backoffStep = 0;
   let backoffTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -320,16 +437,24 @@ export const createAdapter = ({
   );
 
   stopFns.push(
-    supabase.subscribe(refreshSupabase, (healthy) => {
-      subscribed = healthy;
-      if (healthy) {
-        backoffStep = 0;
-        clearTimeout(backoffTimer);
-        backoffTimer = undefined;
-      } else {
-        scheduleBackoff();
-      }
-    })
+    supabase.subscribe(
+      refreshSupabase,
+      (healthy) => {
+        if (healthy !== subscribed) onLive?.(healthy);
+        subscribed = healthy;
+        if (healthy) {
+          // Events may have been missed while the channel was down; the first join follows the initial load
+          if (joined) refreshLinear();
+          joined = true;
+          backoffStep = 0;
+          clearTimeout(backoffTimer);
+          backoffTimer = undefined;
+        } else {
+          scheduleBackoff();
+        }
+      },
+      queueIssue
+    )
   );
 
   return {

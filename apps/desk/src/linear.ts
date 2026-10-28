@@ -52,6 +52,15 @@ const issuePageSchema = z.object({
   })
 });
 
+const issueSummarySchema = z.object({
+  issue: issueNodeSchema
+    .extend({
+      archivedAt: z.string().nullish(),
+      trashed: z.boolean().nullish()
+    })
+    .nullable()
+});
+
 const issueDetailSchema = z.object({
   issue: z.object({
     description: z.string().nullable(),
@@ -161,6 +170,12 @@ const ISSUE_QUERY = `
       inverseRelations(first: 50) { nodes { type issue { identifier } } }
       attachments(first: 20) { nodes { url } }
     }
+  }
+`;
+
+const SUMMARY_QUERY = `
+  query IssueSummary($id: String!) {
+    issue(id: $id) { ${ISSUE_FIELDS} archivedAt trashed }
   }
 `;
 
@@ -318,6 +333,29 @@ export const createLinear = ({
         state: { type: { eq: 'completed' } },
         updatedAt: { gt: since(CLOSED_WINDOW_DAYS) }
       });
+    },
+
+    /** One issue by UUID or identifier; null when Linear has no such issue. */
+    async getIssueSummary(id: string): Promise<Issue | null> {
+      try {
+        const { issue } = await request(
+          SUMMARY_QUERY,
+          { id },
+          issueSummarySchema
+        );
+        // Linear still returns an archived or trashed issue, which no list shows
+        return issue && !issue.archivedAt && !issue.trashed
+          ? toIssue(issue)
+          : null;
+      } catch (e) {
+        if (
+          e instanceof LinearError &&
+          e.code === 'tool_error' &&
+          /not found/i.test(e.message)
+        )
+          return null;
+        throw e;
+      }
     },
 
     async getIssue(identifier: string): Promise<IssueDetail> {

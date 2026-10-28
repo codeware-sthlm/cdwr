@@ -98,11 +98,22 @@ const memoryStore = (): KeyValueStore => {
 
 let adapter: Adapter | undefined;
 
+const setLive = (live: boolean): void => {
+  const el = document.getElementById('live');
+  if (!el) return;
+  el.dataset.live = String(live);
+  el.textContent = live ? 'Live' : 'Refreshing every 5 min';
+  el.title = live
+    ? 'Linear and the queue push changes as they happen. Focus and Refresh still reload everything.'
+    : 'Live updates are not connected. The desk reloads every 5 minutes, on focus and on Refresh.';
+};
+
 const startDesk = (settings: Settings): void => {
   adapter?.stop();
   adapter = createAdapter({
     linear: linearFor(settings),
-    supabase: supabaseFor(settings)
+    supabase: supabaseFor(settings),
+    onLive: setLive
   });
   start(adapter);
 };

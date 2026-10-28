@@ -158,6 +158,25 @@ h1 {
   color: var(--muted);
   font-size: 0.85rem;
 }
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.live::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--wait);
+}
+.live[data-live='true'] {
+  color: var(--ok);
+}
+.live[data-live='true']::before {
+  background: var(--ok);
+}
 button {
   font: 600 0.85rem var(--font-ui);
   color: var(--accent);

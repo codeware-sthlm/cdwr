@@ -246,6 +246,61 @@ describe('getIssue', () => {
   });
 });
 
+describe('getIssueSummary', () => {
+  it('queries by id and maps the node', async () => {
+    const { linear, sent } = setup(json({ data: { issue: node() } }));
+    const issue = await linear.getIssueSummary('uuid-1');
+    expect(sent[0].body.variables).toEqual({ id: 'uuid-1' });
+    expect(issue).toMatchObject({
+      id: 'COD-1',
+      statusType: 'unstarted',
+      labels: ['agent:ready', 'Bug']
+    });
+  });
+
+  it('returns null when the issue is null', async () => {
+    const { linear } = setup(json({ data: { issue: null } }));
+    expect(await linear.getIssueSummary('COD-9')).toBeNull();
+  });
+
+  it.each([
+    ['archived', { archivedAt: '2026-10-28T12:00:00.000Z' }],
+    ['trashed', { trashed: true }]
+  ])('returns null for an %s issue', async (_name, extra) => {
+    const { linear } = setup(
+      json({ data: { issue: { ...node(), ...extra } } })
+    );
+    expect(await linear.getIssueSummary('uuid-1')).toBeNull();
+  });
+
+  it('returns null on an entity-not-found error', async () => {
+    const { linear } = setup(
+      json({
+        errors: [
+          {
+            message: 'Entity not found: Issue',
+            extensions: { code: 'INPUT_ERROR' }
+          }
+        ]
+      })
+    );
+    expect(await linear.getIssueSummary('COD-9')).toBeNull();
+  });
+
+  it('throws other failures', async () => {
+    const { linear } = setup(
+      json({ errors: [{ message: 'boom', extensions: { code: 'X' } }] }),
+      json({}, 401)
+    );
+    await expect(linear.getIssueSummary('COD-9')).rejects.toMatchObject({
+      code: 'tool_error'
+    });
+    await expect(linear.getIssueSummary('COD-9')).rejects.toMatchObject({
+      code: 'unauthorized'
+    });
+  });
+});
+
 describe('listComments', () => {
   it('orders by createdAt ascending', async () => {
     const { linear } = setup(
