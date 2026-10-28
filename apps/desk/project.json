@@ -1,0 +1,38 @@
+{
+  "name": "desk",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/desk/src",
+  "projectType": "application",
+  "tags": ["scope:desk", "type:app"],
+  "targets": {
+    "tauri-dev": {
+      "metadata": {
+        "description": "Opens the desktop app in development, starting the Vite dev server first"
+      },
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["serve"],
+      "options": {
+        "command": "tauri dev",
+        "cwd": "apps/desk"
+      }
+    },
+    "tauri-build": {
+      "metadata": {
+        "description": "Builds the desktop app bundle for this machine"
+      },
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "inputs": [
+        "default",
+        "{projectRoot}/src-tauri/**/*",
+        "!{projectRoot}/src-tauri/target/**/*"
+      ],
+      "outputs": ["{projectRoot}/src-tauri/target/*/bundle/**/*"],
+      "options": {
+        "command": "tauri build",
+        "cwd": "apps/desk"
+      }
+    }
+  }
+}
