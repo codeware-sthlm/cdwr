@@ -6,6 +6,9 @@
 #   telemetry_on                                             succeeds when both are set
 #   telemetry_run <started_at> <outcome> <ticket> <detail> <attended> <kind> <interval> <limit> <version>
 #                                                            one row in `runs`; empty fields become null
+#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json>
+#                                                            upserts this host's row in `queue_state`; empty fields become null,
+#                                                            a view that isn't JSON too
 #   telemetry_session <id> <kind>                            upserts the session's heartbeat in `sessions`
 # Needs AGENT_SUPABASE_URL and AGENT_SUPABASE_SERVICE_KEY; without both it does nothing.
 # The key travels on curl's stdin, never in its arguments, and is never printed.
@@ -71,6 +74,17 @@ telemetry_run() {
      job: {kind: $kind, interval: ($interval | tonumber? // null), limit: ($limit | tonumber? // null),
            version: ($version | orNull)}}')" || return 0
   supabase_insert runs "$body"
+}
+
+telemetry_queue_state() {
+  telemetry_on || return 0
+  local body
+  body="$(jq -nc --arg last_run "$1" --arg attended "$2" --arg suggested "$3" --arg job "$4" --arg view "$5" \
+    --arg host "$(telemetry_host)" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    def orNull: if . == "" then null else . end;
+    {host: $host, at: $now, last_run: ($last_run | orNull), attended: ($attended | orNull),
+     suggested: ($suggested | orNull), job: ($job | orNull), view: ($view | try fromjson catch null)}')" || return 0
+  supabase_upsert queue_state host "$body" merge
 }
 
 telemetry_session() {

@@ -209,6 +209,56 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
     });
   });
 
+  describe('telemetry_queue_state', () => {
+    it('upserts the host row on host, with the view as jsonb', async () => {
+      const view = JSON.stringify({ next: 'COD-9', limit: { max: 5 } });
+      const out = await zsh(
+        configured(),
+        `telemetry_queue_state '2026-10-28 10:00 · idle' 'Attended: yes' 'Suggested: nothing' 'Job: every 10 min' '${view}'`
+      );
+      expect(out.stdout).toBe('rc=0');
+      expect(hits).toHaveLength(1);
+      expect(hits[0]?.url).toBe('/rest/v1/queue_state?on_conflict=host');
+      expect(hits[0]?.headers['prefer']).toContain(
+        'resolution=merge-duplicates'
+      );
+      const body = JSON.parse(hits[0]?.body ?? '') as Record<string, unknown>;
+      expect(body).toMatchObject({
+        last_run: '2026-10-28 10:00 · idle',
+        attended: 'Attended: yes',
+        suggested: 'Suggested: nothing',
+        job: 'Job: every 10 min',
+        view: { next: 'COD-9', limit: { max: 5 } }
+      });
+      expect(typeof body['host']).toBe('string');
+      expect(body['at']).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+    });
+
+    it('turns empty fields and an invalid view into null', async () => {
+      await zsh(configured(), `telemetry_queue_state 'x' '' '' '' ''`);
+      await zsh(
+        configured(),
+        `telemetry_queue_state 'x' '' '' '' 'not json {'`
+      );
+      expect(hits).toHaveLength(2);
+      for (const hit of hits) {
+        expect(JSON.parse(hit.body)).toMatchObject({
+          last_run: 'x',
+          attended: null,
+          suggested: null,
+          job: null,
+          view: null
+        });
+      }
+    });
+
+    it('sends nothing without the env vars', async () => {
+      const out = await zsh({}, `telemetry_queue_state x '' '' '' ''`);
+      expect(out.stdout).toBe('rc=0');
+      expect(hits).toEqual([]);
+    });
+  });
+
   describe('telemetry_session', () => {
     it('upserts the heartbeat on id', async () => {
       await zsh(configured(), `telemetry_session abc attended`);

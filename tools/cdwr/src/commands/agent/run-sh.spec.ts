@@ -214,6 +214,14 @@ describe('run.sh telemetry', () => {
     expect(SCRIPT).toMatch(/\( telemetry_run "\$RUN_STARTED" [^)]*\) &!/s);
   });
 
+  it('sends the queue state on exit, detached, never on --check', () => {
+    expect(exit).toContain('  record_queue_state\n');
+    expect(SCRIPT).toMatch(
+      /^record_queue_state\(\) \{\n {2}\$check && return 0\n {2}telemetry_on \|\| return 0/m
+    );
+    expect(SCRIPT).toMatch(/\( telemetry_queue_state "\$last" [^)]*\) &!/s);
+  });
+
   it('records the outcome apart from its ticket and detail', () => {
     expect(SCRIPT).toContain(
       'outcome_name="$1" outcome_ticket="${2:-}" outcome_detail="${3:-}"'

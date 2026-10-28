@@ -348,6 +348,19 @@ record_run() {
   ( telemetry_run "$RUN_STARTED" "$outcome_name" "$outcome_ticket" "$outcome_detail" "$attended_work" \
       "$run_kind" "$interval" "$limit" "$version" ) &!
 }
+# This host's queue state as one row, the same lines the runs document carries. Detached like record_run.
+record_queue_state() {
+  $check && return 0
+  telemetry_on || return 0
+  setopt local_options no_err_exit
+  local last attended suggested job view
+  last="$(date '+%F %H:%M') · $last_outcome"
+  attended="${attended_line:-$(cat "$HOME_DIR/attended-published" 2>/dev/null)}"
+  suggested="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
+  job="$(job_line)"
+  view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$job" "$view" ) &!
+}
 # Every handled outcome exits 0, so a non-zero exit is a failure nothing recorded.
 on_exit() {
   local st=$1
@@ -361,6 +374,7 @@ on_exit() {
   record_usage
   publish_activity
   publish_runs
+  record_queue_state
   record_run "$st"
   rmdir "$HOME_DIR/lock" 2>/dev/null
   if ! $check; then
