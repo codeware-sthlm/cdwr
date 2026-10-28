@@ -24,17 +24,23 @@ now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 # host_id: the machine's stable name; lib.sh has the twin (this script does not source it)
 host_id() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null || hostname -s; }
 
-# mirror <force>: copies the session file to the `user@host:dir` named on the first line of
-# ../mirror (the queue home's `mirror` file), at most once a minute per session unless forced.
+# mirror <force>: copies the session file to the target named on the first line of ../mirror
+# (the queue home's `mirror` file, written by `cdwr agent mirror set`), at most once a minute per
+# session unless forced. A target is `host:dir`, or `host:docker:container:dir` to write inside a
+# container on that host; one with any character outside [A-Za-z0-9._@/:-] is ignored, since it
+# ends up in a remote command line.
 # Transfers run detached and one at a time per session: a copy that finds another in flight
 # leaves a `pending` mark, which the running one picks up, so the newest state is always the
 # last sent. Each copy writes its own temp name on the host and renames it, so a reader never
 # sees half a file. Failures are ignored. AGENT_QUEUE_MIRROR_CMD replaces ssh in specs, with the
-# file in $MIRROR_FILE and the target split into $MIRROR_HOST and $MIRROR_DIR.
+# file in $MIRROR_FILE and the target split into $MIRROR_HOST, $MIRROR_CONTAINER (empty for a
+# plain target) and $MIRROR_DIR.
 mirror() {
   local target stamp="$file.mirrored" last now_s
   target="$(head -n 1 "$DIR/../mirror" 2>/dev/null | tr -d '[:space:]')"
-  [[ -n "$target" ]] || return 0
+  [[ "$target" =~ '^[A-Za-z0-9._@/:-]+$' && "${file:t}" =~ '^[A-Za-z0-9._-]+$' ]] || return 0
+  # Nor may the host or a container start like an ssh or docker option
+  [[ "$target" != -* && "$target" != *:docker:-* ]] || return 0
   if [[ "$1" != force && -f "$stamp" ]]; then
     now_s="$(date +%s)"; last="$(zstat +mtime "$stamp" 2>/dev/null)"
     [[ "$last" == <-> ]] && (( now_s - last < 60 )) && return 0
@@ -46,8 +52,9 @@ mirror() {
 
 # One transfer at a time per session; the lock is a directory, stale after a minute
 mirror_send() {
-  local target=$1 lock="$file.mirroring" host dir name="${file:t}" tmp
+  local target=$1 lock="$file.mirroring" host dir container="" name="${file:t}" tmp
   host="${target%%:*}"; dir="${target#*:}"
+  if [[ "$dir" =~ '^docker:([^:]+):(.+)$' ]]; then container=$match[1]; dir=$match[2]; fi
   [[ -d "$lock" && "$(zstat +mtime "$lock" 2>/dev/null)" == <-> ]] &&
     (( $(date +%s) - $(zstat +mtime "$lock") > 60 )) && rmdir "$lock" 2>/dev/null
   if ! mkdir "$lock" 2>/dev/null; then : > "$file.pending"; return 0; fi
@@ -55,7 +62,12 @@ mirror_send() {
     rm -f "$file.pending"
     tmp="$name.tmp.$$.$RANDOM"
     if [[ -n "${AGENT_QUEUE_MIRROR_CMD:-}" ]]; then
-      ( export MIRROR_FILE="$file" MIRROR_HOST="$host" MIRROR_DIR="$dir"; eval "$AGENT_QUEUE_MIRROR_CMD" )
+      ( export MIRROR_FILE="$file" MIRROR_HOST="$host" MIRROR_CONTAINER="$container" MIRROR_DIR="$dir"
+        eval "$AGENT_QUEUE_MIRROR_CMD" )
+    elif [[ -n "$container" ]]; then
+      # As the image's user, so the file lands where the container's run.sh reads it
+      ssh -q -o BatchMode=yes -o ConnectTimeout=3 "$host" \
+        "docker exec -i '$container' sh -c 'mkdir -p \"\$1\" && cat > \"\$1/\$2\" && mv -f \"\$1/\$2\" \"\$1/\$3\"' _ '$dir' '$tmp' '$name'" < "$file"
     else
       ssh -q -o BatchMode=yes -o ConnectTimeout=3 "$host" "cat > '$dir/$tmp' && mv -f '$dir/$tmp' '$dir/$name'" < "$file"
     fi
