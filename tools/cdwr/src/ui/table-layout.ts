@@ -37,3 +37,14 @@ export function tableLayout(
   const remainder = Math.max(reserve, budget - sum());
   return [...fixed, Math.min(lastNatural, remainder)];
 }
+
+/** Output width: the terminal's columns, else `COLUMNS`, else `fallback` */
+export function outputWidth(
+  fallback: number,
+  stdout: { columns?: number } = process.stdout,
+  env: Record<string, string | undefined> = process.env
+): number {
+  if (stdout.columns !== undefined && stdout.columns > 0) return stdout.columns;
+  const fromEnv = Number(env['COLUMNS']);
+  return Number.isInteger(fromEnv) && fromEnv > 0 ? fromEnv : fallback;
+}
