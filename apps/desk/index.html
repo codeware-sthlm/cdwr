@@ -2,11 +2,65 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Agent Desk</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Desk</title>
   </head>
   <body>
-    <div id="app">Agent Desk</div>
+    <div class="wrap">
+      <header>
+        <div>
+          <h1>Agent Desk</h1>
+          <div class="sub">
+            cdwr repo · what <code>/work-queue</code> does next, and what waits
+            on you
+          </div>
+          <a
+            class="who"
+            href="https://github.com/apps/codeware-agent"
+            target="_blank"
+            rel="noopener"
+            title="Commits, pull requests and review replies are made as this GitHub App"
+            ><img class="av" src="" data-agent-avatar alt="" />On GitHub as
+            <b>codeware-agent[bot]</b></a
+          >
+        </div>
+        <div class="tools">
+          <span id="fresh">Loading…</span
+          ><button id="refresh" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <div id="notice" hidden></div>
+
+      <section class="now" id="now" aria-label="What happens now"></section>
+
+      <section class="cols" aria-label="The queue">
+        <article class="col wait" id="col-before" data-w="before"></article>
+        <article class="col" id="col-next" data-w="next"></article>
+        <article class="col" id="col-after" data-w="after"></article>
+      </section>
+
+      <nav class="more" id="more" aria-label="More detail"></nav>
+    </div>
+
+    <div class="scrim" id="scrim" hidden></div>
+    <aside
+      class="sheet"
+      id="sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sheet-title"
+      hidden
+    >
+      <div class="sheet-head">
+        <div>
+          <h2 id="sheet-title"></h2>
+          <p id="sheet-sub"></p>
+        </div>
+        <button type="button" id="sheet-close">Close</button>
+      </div>
+      <div class="sheet-body" id="sheet-body"></div>
+    </aside>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
