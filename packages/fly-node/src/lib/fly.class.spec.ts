@@ -16,6 +16,7 @@ import {
   mockListPostgresUsersResponse,
   mockListSecretForAllResponse,
   mockListSecretForAppResponse,
+  mockPartialStatusResponse,
   mockShowConfigResponse,
   mockStatusResponse,
   mockVersionResponse
@@ -1456,6 +1457,40 @@ describe('Fly', () => {
       });
     });
 
+    describe('when a machine is reported mid-update', () => {
+      const partialStatusRule = (app: string) => ({
+        cmdMatch: new RegExp(`status --app ${app} --json`),
+        resolveOrReject: 'resolve' as const,
+        output: JSON.stringify(mockPartialStatusResponse(app))
+      });
+
+      it('should resolve with app, hostname and url', async () => {
+        setupFlyMocks([partialStatusRule(mockDefs.testApp)]);
+        const fly = new Fly(mockFlyConfig);
+
+        await expect(
+          fly.deploy({ app: mockDefs.testApp, config: mockDefs.testConfig })
+        ).resolves.toEqual({
+          app: mockDefs.testApp,
+          hostname: `${mockDefs.testApp}.fly.dev`,
+          url: `https://${mockDefs.testApp}.fly.dev`
+        });
+      });
+
+      it('should find the existing app and not create it', async () => {
+        setupFlyMocks([partialStatusRule(mockDefs.testApp)]);
+        const fly = new Fly(mockFlyConfig);
+
+        await fly.deploy({
+          app: mockDefs.testApp,
+          config: mockDefs.testConfig
+        });
+
+        assertSpawn('not', ['apps', 'create']);
+        assertSpawn('some', ['deploy', '--app', mockDefs.testApp]);
+      });
+    });
+
     it('should create app with provided name and deploy with existing config', async () => {
       const fly = new Fly(mockFlyConfig);
       const response = await fly.deploy({
@@ -1978,6 +2013,19 @@ describe('Fly', () => {
       const status = await fly.status();
 
       expect(status).toEqual(mockStatusResponse(mockDefs.testApp));
+    });
+
+    it('should return null when a machine lacks imageRef, config and events', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /status --app test-app --json/,
+          resolveOrReject: 'resolve',
+          output: JSON.stringify(mockPartialStatusResponse(mockDefs.testApp))
+        }
+      ]);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      expect(await fly.status()).toBeNull();
     });
 
     it('should return status null when app does not exist', async () => {

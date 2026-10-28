@@ -85,3 +85,31 @@ export const StatusTransformedResponseSchema = withCamelCase(
     specialCases: { AppURL: 'appUrl' }
   }
 );
+
+/**
+ * Lenient status response schema for internal lookups
+ *
+ * Fly briefly reports a machine mid-update without `imageRef`, `config` and
+ * `events`. A lookup only needs the app name, hostname and each machine's
+ * id and state, so everything else is let through unchecked.
+ *
+ * Internal, not part of the public API.
+ */
+export const statusLookupSchema = withCamelCase(
+  z
+    .object({
+      name: z.string(),
+      hostname: z.string(),
+      machines: z.array(
+        z
+          .object({
+            id: z.string(),
+            state: z.string()
+          })
+          .passthrough()
+      )
+    })
+    .passthrough()
+);
+
+export type StatusLookup = z.infer<typeof statusLookupSchema>;

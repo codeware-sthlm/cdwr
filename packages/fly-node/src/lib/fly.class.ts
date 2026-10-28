@@ -24,7 +24,11 @@ import { PostgresUsersListTransformedResponseSchema } from './schemas/postgres-u
 import { SecretsListWithAppTransformedResponseSchema } from './schemas/secrets-list-with-app.schema';
 import { SecretsListTransformedResponseSchema } from './schemas/secrets-list.schema';
 import { StatusExtendedTransformedResponseSchema } from './schemas/status-extended.schema';
-import { StatusTransformedResponseSchema } from './schemas/status.schema';
+import {
+  type StatusLookup,
+  StatusTransformedResponseSchema,
+  statusLookupSchema
+} from './schemas/status.schema';
 import { VersionTransformedResponseSchema } from './schemas/version.schema';
 import type {
   AllocateIpOptions,
@@ -416,7 +420,7 @@ export class Fly {
       const { appName } = await this.deployApp(options);
       this.logger.info(`Application '${appName}' was deployed`);
 
-      const status = await this.fetchAppStatus('throwOnError', {
+      const status = await this.fetchAppLookup('throwOnError', {
         app: appName
       });
 
@@ -869,7 +873,7 @@ export class Fly {
 
     // Lookup an existing app by name (appName indicates existence)
     if (lookupApp) {
-      const status = await this.fetchAppStatus('nullOnError', {
+      const status = await this.fetchAppLookup('nullOnError', {
         app: lookupApp
       });
       if (status) {
@@ -1114,7 +1118,7 @@ export class Fly {
     secrets: Record<string, string>,
     options?: SetAppSecretsOptions
   ): Promise<string> {
-    const status = await this.fetchAppStatus('throwOnError', options);
+    const status = await this.fetchAppLookup('throwOnError', options);
 
     const args = ['secrets', 'set'];
 
@@ -1140,7 +1144,7 @@ export class Fly {
     keys: Array<string>,
     options?: UnsetAppSecretsOptions
   ): Promise<string> {
-    const status = await this.fetchAppStatus('throwOnError', options);
+    const status = await this.fetchAppLookup('throwOnError', options);
 
     const args = ['secrets', 'unset'];
 
@@ -1164,7 +1168,7 @@ export class Fly {
     hostname: string,
     options?: AppOrConfig
   ): Promise<string> {
-    const status = await this.fetchAppStatus('throwOnError', options);
+    const status = await this.fetchAppLookup('throwOnError', options);
 
     const args = ['certs', 'add', hostname];
 
@@ -1250,7 +1254,7 @@ export class Fly {
     hostname: string,
     options?: AppOrConfig
   ): Promise<string> {
-    const status = await this.fetchAppStatus('throwOnError', options);
+    const status = await this.fetchAppLookup('throwOnError', options);
 
     const args = ['certs', 'remove', hostname];
 
@@ -1340,7 +1344,7 @@ export class Fly {
     const deadline = Date.now() + MACHINE_STATE_TIMEOUT_MS;
     while (Date.now() < deadline) {
       // A failed poll is retried until the deadline, not fatal
-      const status = await this.fetchAppStatus('nullOnError', { app });
+      const status = await this.fetchAppLookup('nullOnError', { app });
       const machine = status?.machines.find(({ id }) => id === machineId);
       if (machine && states.includes(machine.state)) {
         return;
@@ -1532,6 +1536,50 @@ export class Fly {
     try {
       response = await this.execFly<StatusResponse>(args);
       return StatusTransformedResponseSchema.parse(response);
+    } catch (error) {
+      if (onError === 'throwOnError') {
+        throw error;
+      }
+      if (error instanceof ZodError) {
+        this.logger.info(`Failed to parse response:
+${error.message}`);
+        this.logger.info(`Raw response:
+${JSON.stringify(response, null, 2)}`);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * @private
+   * Like `fetchAppStatus`, but only requires what a lookup needs (name,
+   * hostname and each machine's id and state), so a machine Fly reports
+   * mid-update does not fail it.
+   *
+   * @returns The app lookup or `null` if the app cannot be found and `nullOnError` is used
+   * @throws An error if the app cannot be found and `throwOnError` is used
+   */
+  private async fetchAppLookup(
+    onError: 'throwOnError',
+    options?: AppOrConfig
+  ): Promise<StatusLookup>;
+  private async fetchAppLookup(
+    onError: 'nullOnError',
+    options?: AppOrConfig
+  ): Promise<StatusLookup | null>;
+  private async fetchAppLookup(
+    onError: 'throwOnError' | 'nullOnError',
+    options?: AppOrConfig
+  ): Promise<StatusLookup | null> {
+    const args = ['status'];
+
+    args.push(...this.getAppOrConfigArgs(options));
+    args.push('--json');
+
+    let response: unknown = null;
+    try {
+      response = await this.execFly<unknown>(args);
+      return statusLookupSchema.parse(response);
     } catch (error) {
       if (onError === 'throwOnError') {
         throw error;
