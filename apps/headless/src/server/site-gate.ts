@@ -30,8 +30,9 @@ const inFlight = new Map<string, number>();
 
 /**
  * Whether the gate stands in front of this path: all of them but its own and
- * three that answer for themselves while gated. `/robots.txt` disallows all,
- * `/sitemap.xml` is empty, and `/stats/…` is a relay that reaches only Umami.
+ * four that answer for themselves while gated. `/robots.txt` disallows all,
+ * `/sitemap.xml` is empty, `/stats/…` is a relay that reaches only Umami, and
+ * `/api/health` is the platform's check, which answers a fixed status.
  *
  * Not the cms's `isGatedPath`, which exempts `/api` and anything with a file
  * extension. Here the router answers those: `/x.js` renders the not-found
@@ -44,6 +45,7 @@ export const isGatedPath = (pathname: string): boolean =>
   pathname !== SITE_GATE_PATH &&
   pathname !== '/robots.txt' &&
   pathname !== '/sitemap.xml' &&
+  pathname !== '/api/health' &&
   !pathname.startsWith(`${STATS_PATH}/`);
 
 const localeFrom = (request: Request): SupportedLocale =>
