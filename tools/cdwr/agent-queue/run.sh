@@ -131,13 +131,14 @@ job_line() {
   local dir=tools/cdwr/agent-queue secs want theirs f out kind=install
   local -a differs
   if [[ "${AGENT_QUEUE_HOST:-}" == container ]]; then
-    # The container's copies under $HOME_DIR are the baked ones
+    # The container's copies under $HOME_DIR are the baked ones; a CI build bakes in its commit too
     kind=image
+    [[ "${AGENT_IMAGE_SHA:-}" =~ '^[0-9a-f]{7,40}$' ]] && kind="image sha-${AGENT_IMAGE_SHA[1,7]}"
     secs="${RUN_INTERVAL_SECONDS:-}"
   else
     secs="$(plutil -extract StartInterval raw -o - "$PLIST" 2>/dev/null)"
   fi
-  if [[ $kind == image && "${RUN_FALLBACK_SECONDS:-}" == <-> ]] && listener_live; then
+  if [[ $kind == image* && "${RUN_FALLBACK_SECONDS:-}" == <-> ]] && listener_live; then
     out="Job: live · fallback $(( RUN_FALLBACK_SECONDS / 60 )) min"
   elif [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
@@ -149,7 +150,7 @@ job_line() {
   done
   [[ "$secs" == "$want" ]] || differs+=(interval)
   if (( ${#differs} )); then print -r -- "$out · $kind out of date (${(j:, :)differs})"
-  elif [[ $kind == image ]]; then print -r -- "$out · image"
+  elif [[ $kind == image* ]]; then print -r -- "$out · $kind"
   else print -r -- "$out · install current"; fi
 }
 

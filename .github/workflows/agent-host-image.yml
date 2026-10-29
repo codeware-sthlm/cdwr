@@ -12,6 +12,11 @@ permissions:
   contents: read
   packages: write
 
+# One build at a time, in order, so the `main` tag and the desk's `builds` row name the same commit
+concurrency:
+  group: agent-host-image
+  cancel-in-progress: false
+
 jobs:
   image:
     runs-on: ubuntu-latest
@@ -44,5 +49,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: AGENT_IMAGE_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

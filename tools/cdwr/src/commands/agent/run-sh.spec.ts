@@ -749,6 +749,34 @@ describe('run.sh woken by the listener', () => {
     );
   });
 
+  it.skipIf(!hasZsh)(
+    'names the commit the image was built from, when it has one',
+    () => {
+      const job = (sha?: string) =>
+        spawnSync(
+          'zsh',
+          [
+            '-c',
+            [
+              `REPO="${home}"`,
+              'AGENT_QUEUE_HOST=container',
+              'RUN_INTERVAL_SECONDS=600',
+              sha === undefined ? '' : `AGENT_IMAGE_SHA='${sha}'`,
+              fn('job_line'),
+              'job_line'
+            ].join('\n')
+          ],
+          { encoding: 'utf8' }
+        ).stdout.trim();
+
+      expect(job('0123456789abcdef0123456789abcdef01234567')).toBe(
+        'Job: every 10 min · image sha-0123456 unknown'
+      );
+      expect(job()).toBe('Job: every 10 min · image unknown');
+      expect(job('not-a-sha')).toBe('Job: every 10 min · image unknown');
+    }
+  );
+
   it('records the interval and the version from either job line', () => {
     const run = fn('record_run');
     expect(run).toContain(`'(every|fallback) ([0-9]+) min'`);
