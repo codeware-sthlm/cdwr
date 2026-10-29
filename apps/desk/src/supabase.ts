@@ -1,5 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
+import {
+  parseAttended,
+  parseJob,
+  parseSuggested,
+  validateQueueView
+} from './desk/parsers';
+import type { Attended, Job, QueueView, Suggested } from './desk/types';
 import type { Database } from './supabase.types';
 
 type Tables = Database['public']['Tables'];
@@ -30,20 +37,12 @@ const PAGE_SIZE = 1000;
 const MAX_PAGES = 20;
 type Role = 'planning' | 'orchestrating' | 'implementing';
 
-/** The page's own parsers, injected so `desk.js` stays untouched. They take the text of a document line. */
-export type Parsers = {
-  parseAttended: (text: string) => unknown;
-  parseSuggested: (text: string) => unknown;
-  parseJob: (text: string) => unknown;
-  validateQueueView: (view: unknown) => unknown;
-};
-
 export type RunsPayload = {
   last: { when: string; outcome: string } | null;
-  attended: unknown;
-  suggested: unknown;
-  job: unknown;
-  qv: unknown;
+  attended: Attended | null;
+  suggested: Suggested | null;
+  job: Job | null;
+  qv: QueueView | null;
   rows: { when: string; outcome: string; ticket: string; detail: string }[];
 };
 
@@ -109,8 +108,7 @@ const LAST_RUN = /^\d{4}-\d\d-\d\d \d\d:\d\d\s*·\s*(.+)$/;
 
 export const toRuns = (
   queueStates: QueueStateRow[],
-  runRows: RunRow[],
-  parsers: Parsers
+  runRows: RunRow[]
 ): RunsPayload | null => {
   const state = newest(queueStates);
   if (!state) return null;
@@ -120,14 +118,14 @@ export const toRuns = (
       ? { when: localStamp(state.at), outcome: lastMatch[1].trim() }
       : null,
     attended: state.attended
-      ? parsers.parseAttended(`Attended: ${state.attended}`)
+      ? parseAttended(`Attended: ${state.attended}`)
       : null,
     suggested: state.suggested
-      ? parsers.parseSuggested(`Suggested: ${state.suggested}`)
+      ? parseSuggested(`Suggested: ${state.suggested}`)
       : null,
     // run.sh's job_line already starts with `Job: `; the other two lines are stored bare
-    job: state.job ? parsers.parseJob(state.job) : null,
-    qv: parsers.validateQueueView(state.view),
+    job: state.job ? parseJob(state.job) : null,
+    qv: validateQueueView(state.view),
     // Idle adds no row
     rows: runRows
       .filter((r) => r.outcome !== 'idle')
@@ -297,10 +295,7 @@ const failure = ({ message, code, status }: Failure): SupabaseError => {
   return new SupabaseError('bad_response', message);
 };
 
-export const createSupabase = (
-  { url, anonKey }: SupabaseConfig,
-  parsers: Parsers
-) => {
+export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
   const client = createClient<Database>(url, anonKey, {
     auth: { persistSession: false }
   });
@@ -364,7 +359,7 @@ export const createSupabase = (
       ]);
       const queueStates = settle(states);
       return {
-        runs: toRuns(queueStates, settle(runs), parsers),
+        runs: toRuns(queueStates, settle(runs)),
         usage: toUsage(usageRows, now),
         activity: toActivity(settle(activity), newest(queueStates)?.at ?? null)
       };

@@ -1,3 +1,5 @@
+import { byCreated, parseHandoffs, parseIdea, parsePlan } from './desk/parsers';
+
 const SERVER = 'Linear';
 const TEAM = 'Codeware';
 const STATES = ['triage', 'backlog', 'unstarted', 'started'];
@@ -136,126 +138,6 @@ function openIssues() {
   return [...seen.values()].sort(byQueue);
 }
 
-function parsePlan(desc) {
-  const lines = String(desc || '').split('\n');
-  let steps = 0,
-    done = 0,
-    inTable = false;
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line.startsWith('|')) {
-      if (inTable) inTable = false;
-      continue;
-    }
-    const cells = line
-      .split('|')
-      .slice(1, -1)
-      .map((c) => c.trim());
-    if (!inTable) {
-      if (
-        /^step$/i.test(cells[0] || '') &&
-        cells.some((c) => /^status$/i.test(c))
-      )
-        inTable = true;
-      continue;
-    }
-    if (cells.every((c) => /^:?-+:?$/.test(c))) continue;
-    steps++;
-    if (/^done\b/i.test(cells[cells.length - 1] || '')) done++;
-  }
-  const next =
-    (desc || '').match(/\*\*Next:?\*\*:?\s*(.+)/i)?.[1]?.trim() || null;
-  return { steps, done, next };
-}
-
-const byCreated = (a, b) =>
-  String(a.createdAt).localeCompare(String(b.createdAt));
-
-// Suggested (COD-579): run.sh `suggested_line`, "YYYY-MM-DD · COD-123 <title>", "nothing today",
-// "COD-123 still open", "stopped at the budget", "failed" or "no verdict". Linear may wrap ids in mention tags.
-// The rest of the first line that starts with `prefix`, trimmed, or null. Lines are split on fixed
-// separators rather than matched with `\s*…(.*)` patterns, which backtrack polynomially (CodeQL)
-const lineAfter = (text, prefix) => {
-  for (const raw of String(text ?? '').split('\n'))
-    if (raw.startsWith(prefix)) return raw.slice(prefix.length).trim();
-  return null;
-};
-// Linear's mention tags out of a line, and any stray angle bracket with them; the text is escaped
-// again wherever it is rendered
-const stripTags = (s) => {
-  // A character scan, not a regex: a tag is everything from `<` to the next `>`; an unclosed
-  // `<` keeps the text after it, and no bracket survives
-  let out = '';
-  let tag = null;
-  for (const ch of s) {
-    if (ch === '<') {
-      if (tag === null) tag = '';
-    } else if (ch === '>') {
-      tag = null;
-    } else if (tag !== null) {
-      tag += ch;
-    } else {
-      out += ch;
-    }
-  }
-  return tag === null ? out : out + tag;
-};
-
-export function parseSuggested(text) {
-  const after = lineAfter(text, 'Suggested:');
-  const dot = after === null ? -1 : after.indexOf('·');
-  if (dot < 0) return null;
-  const date = after.slice(0, dot).trim();
-  if (!/^\d{4}-\d\d-\d\d$/.test(date)) return null;
-  const rest = stripTags(after.slice(dot + 1)).trim();
-  const id = /^[A-Z]+-\d+/.exec(rest)?.[0];
-  if (id && /still open$/.test(rest))
-    return { date, kind: 'open', ticket: id, text: rest };
-  if (id)
-    return {
-      date,
-      kind: 'suggested',
-      ticket: id,
-      title: rest.slice(id.length).trim(),
-      text: rest
-    };
-  const kind =
-    rest === 'nothing today'
-      ? 'nothing'
-      : /budget/.test(rest)
-        ? 'cap'
-        : rest === 'failed'
-          ? 'failed'
-          : 'other';
-  return { date, kind, text: rest };
-}
-// A suggestion's description, as the suggest-improvement skill writes it: Evidence bullets, What changes, Cost, Focus, Why now
-function parseIdea(desc) {
-  const text = String(desc || '');
-  const section = (name) =>
-    (text.split(new RegExp('^## ' + name + '\\s*$', 'm'))[1] || '')
-      .split(/^## /m)[0]
-      .trim();
-  const bullets = (s) =>
-    s
-      .split('\n')
-      .map((l) => l.match(/^\s*[-*]\s+(.*)$/)?.[1])
-      .filter(Boolean);
-  const evidence = section('Evidence'),
-    change = section('What changes');
-  if (!evidence && !change) return null;
-  return {
-    evidence: bullets(evidence),
-    change,
-    cost: section('Cost'),
-    focus: section('Focus').split('\n')[0].split(',')[0].trim(),
-    why: section('Why now')
-      .split('\n')
-      .filter((l) => !/^Accept:/.test(l.trim()))
-      .join('\n')
-      .trim()
-  };
-}
 const ideaVerdict = (i) =>
   i.statusType === 'canceled'
     ? 'discarded'
@@ -263,73 +145,6 @@ const ideaVerdict = (i) =>
       ? 'accepted'
       : 'to decide';
 
-// Unticked items of the newest "**Agent: PR ready**" comment's "Hand-off checklist:" block, as watch.jq `handoffs` reads them
-function parseHandoffs(comments) {
-  const c = (comments || [])
-    .filter((x) => String(x.body || '').startsWith('**Agent: PR ready**'))
-    .sort(byCreated)
-    .pop();
-  if (!c) return [];
-  const lines = c.body.split('\n');
-  const at = lines.findIndex(
-    (l) =>
-      l
-        .trim()
-        .replace(/^\*\*|\*\*$/g, '')
-        .toLowerCase() === 'hand-off checklist:'
-  );
-  if (at < 0) return [];
-  const items = [];
-  for (const l of lines.slice(at + 1)) {
-    if (/^\s*$/.test(l)) continue;
-    const open = l.match(/^\s*[-*] \[ \] (.*)$/);
-    if (open) {
-      items.push(open[1].trim());
-      continue;
-    }
-    if (/^\s*[-*] \[[xX]\] /.test(l)) continue;
-    break;
-  }
-  return items;
-}
-
-// The runs document: a "Last run:" line, an "Attended:" line, a "Job:" line, then a table of runs that weren't idle, newest first
-// OK: idle, or planned a ticket ("planned" in a row, "planned COD-123" on the last-run line)
-// Job: on launchd "every 10 min · install current", "· install out of date (run.sh, interval)" or "· install unknown";
-// in the agent-host container "· image sha-9c7a20d", "· image sha-9c7a20d out of date (run.sh, …)", or "· image" with no
-// commit for a local build (the commit arrives with the ticket that bakes it into the image)
-export function parseJob(text) {
-  const line = lineAfter(text, 'Job:');
-  if (!line) return null;
-  const minutes = Number(line.match(/every (\d+) min/)?.[1]) || null;
-  const host = /·\s*image\b/.test(line)
-    ? 'container'
-    : /·\s*install\b/.test(line)
-      ? 'launchd'
-      : null;
-  const rev = line.match(/·\s*image (sha-[0-9a-f]{7,40})\b/)?.[1] || null;
-  const install = /out of date/.test(line)
-    ? 'stale'
-    : /install current/.test(line) ||
-        (host === 'container' && !/unknown/.test(line))
-      ? 'current'
-      : 'unknown';
-  return {
-    line,
-    minutes,
-    host,
-    rev,
-    install,
-    items: between(line, 'out of date (', ')')
-  };
-}
-// The text between `open` and the next `close`, or '' when either is missing
-function between(line, open, close) {
-  const start = line.indexOf(open);
-  if (start < 0) return '';
-  const end = line.indexOf(close, start + open.length);
-  return end < 0 ? '' : line.slice(start + open.length, end);
-}
 const HOST = { container: 'Container', launchd: 'Mac · launchd' };
 const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
 // "Container · sha-9c7a20d" (the commit links to GitHub), "Mac · launchd", or nothing before the line says
@@ -345,35 +160,6 @@ const updateHint = (job) =>
   job?.host === 'container'
     ? 'pull the new image: <code>docker compose pull && docker compose up -d</code> in <code>apps/agent-host</code>'
     : 'run <code>cdwr agent install</code>';
-// The queue view (watch.jq `queue_view`, COD-556): a fenced JSON block in the runs document, the one
-// source of what the agent takes next, what the limit holds, and what waits on Håkan before and after
-export function validateQueueView(v) {
-  if (!v || !v.limit || !v.table) return null;
-  return {
-    at: v.at,
-    limit: v.limit,
-    session: v.session || { state: 'none' },
-    next: v.next || [],
-    held: v.held || { tickets: [], free: [] },
-    parked: v.parked || [],
-    table: { before: v.table.before || [], after: v.table.after || [] }
-  };
-}
-// Attended (COD-545): watch.jq `attended_line`, what an attended /work-queue would take now.
-// "running: COD-1 · <Next line>", "run now: COD-2 answered" (or review feedback, ready, take over COD-3 …),
-// "idle: waits on …; limit 3/5". Missing when the scheduler couldn't compute one. Linear may wrap ids in mention tags.
-export function parseAttended(text) {
-  const after = lineAfter(text, 'Attended:');
-  if (after === null) return null;
-  const verdict = ['running', 'run now', 'idle'].find((v) =>
-    after.startsWith(`${v}:`)
-  );
-  if (!verdict) return null;
-  return {
-    verdict,
-    text: stripTags(after.slice(verdict.length + 1)).trim()
-  };
-}
 const withIds = (s) =>
   inline(s).replace(
     /\b([A-Z]+-\d+)\b/g,
