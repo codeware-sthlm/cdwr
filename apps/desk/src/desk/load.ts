@@ -214,6 +214,17 @@ export const createLoader = ({
       }
       render();
     });
+    adapter.watchTool('Supabase', 'hostMetrics', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.hostMetrics = ev.result.payload;
+        state.errors.delete('hostMetrics');
+      } else {
+        state.errors.set('hostMetrics', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.hostMetrics = null;
+      }
+      render();
+    });
     adapter.watchTool(SERVER, 'list_issues', { label: IDEA_LABEL }, (ev) => {
       if (stopped) return;
       if (ev.type === 'data') {

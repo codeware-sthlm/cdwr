@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { DAY_MS } from './desk/format';
+
 const ENDPOINT = 'https://api.linear.app/graphql';
 const TEAM = 'Codeware';
 export const OPEN_STATES = [
@@ -11,7 +13,6 @@ export const OPEN_STATES = [
 export const IDEA_LABEL = 'agent-idea';
 export const IDEA_WINDOW_DAYS = 60;
 export const CLOSED_WINDOW_DAYS = 30;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type LinearErrorCode =
   'unauthorized' | 'rate_limited' | 'network' | 'bad_response' | 'tool_error';

@@ -1,7 +1,13 @@
 import { REFRESH_MS } from '../../data';
 import { CLOSED_WINDOW_DAYS, IDEA_WINDOW_DAYS, type Issue } from '../../linear';
+import type { HostMetricRow } from '../../supabase';
 import {
   AGENT_AVATAR,
+  HOST_DISK_FREE_MIN,
+  HOST_LOAD_PER_CORE_MAX,
+  HOST_MEM_USED_MAX,
+  HOST_STALE_MIN,
+  HOST_WINDOW_MIN,
   LIMIT,
   LINEAR_ISSUE,
   ROLES,
@@ -10,7 +16,9 @@ import {
   waitName
 } from '../constants';
 import {
+  DAY_MS,
   ageText,
+  bytes,
   dayLabel,
   esc,
   hhmm,
@@ -18,15 +26,19 @@ import {
   mtok,
   plural,
   seenAgo,
+  span,
   txt,
   usd
 } from '../format';
 import { DETAIL_STALE_MS, HANDOFF_STALE_MS, REASON_STALE_MS } from '../load';
 import {
+  type HostFigures,
+  type HostProblem,
   type Model,
   type TicketRef,
   activityMissing,
   agentState,
+  hostFigures,
   isProblem,
   prOf,
   shipped
@@ -43,7 +55,7 @@ import type { DeskState, Detail, SheetId } from '../state';
 import type { Job, QueueNext } from '../types';
 
 import { headline } from './band';
-import { chartSlot } from './charts';
+import { chartSlot, gauge, sparkline } from './charts';
 import { blockedText, prWaitText, whyLine } from './columns';
 import {
   empty,
@@ -505,6 +517,122 @@ const renderTimers = (m: Model): string =>
     )
     .join('');
 
+// ---------- NUC ----------
+
+const PROBLEM_TEXT: Record<HostProblem, string> = {
+  load: `average load per core above ${HOST_LOAD_PER_CORE_MAX}`,
+  memory: `memory used above ${HOST_MEM_USED_MAX * 100}%`,
+  swap: 'swap in use and growing',
+  disk: `disk free below ${HOST_DISK_FREE_MIN * 100}%`
+};
+
+type Figure = {
+  key: keyof HostFigures;
+  title: string;
+  /** The least the sparkline's top stands for, so a quiet figure stays flat */
+  floor: number;
+  /** Where the figure turns bad, as the same share the gauge shows; null when it has no limit of its own */
+  limit: number | null;
+  problem: HostProblem | null;
+  detail: (r: HostMetricRow) => string;
+};
+
+const FIGURES: readonly Figure[] = [
+  {
+    key: 'load',
+    title: 'Load per core',
+    floor: 2,
+    limit: HOST_LOAD_PER_CORE_MAX,
+    problem: 'load',
+    detail: (r) =>
+      `${r.load1.toFixed(2)} / ${r.load5.toFixed(2)} / ${r.load15.toFixed(2)} over ${plural(r.cores, 'core', 'cores')}, 1 / 5 / 15 min`
+  },
+  {
+    key: 'mem',
+    title: 'Memory used',
+    floor: 1,
+    limit: HOST_MEM_USED_MAX,
+    problem: 'memory',
+    detail: (r) =>
+      `${bytes(r.mem_total - r.mem_available)} of ${bytes(r.mem_total)}`
+  },
+  {
+    key: 'swap',
+    title: 'Swap used',
+    floor: 1,
+    limit: null,
+    problem: 'swap',
+    detail: (r) =>
+      r.swap_total
+        ? `${bytes(r.swap_total - r.swap_free)} of ${bytes(r.swap_total)}`
+        : 'no swap'
+  },
+  {
+    key: 'disk',
+    title: 'Disk used',
+    floor: 1,
+    limit: 1 - HOST_DISK_FREE_MIN,
+    problem: 'disk',
+    detail: (r) =>
+      `${bytes(r.disk_total - r.disk_free)} of ${bytes(r.disk_total)}`
+  },
+  {
+    key: 'container',
+    title: 'Container memory',
+    floor: 1,
+    limit: null,
+    problem: null,
+    detail: (r) =>
+      r.cgroup_mem_current !== null && r.cgroup_mem_max !== null
+        ? `${bytes(r.cgroup_mem_current)} of its ${bytes(r.cgroup_mem_max)} limit`
+        : ''
+  }
+];
+
+const renderNuc = (m: Model, state: DeskState, now: Date): string => {
+  if (!state.data.hostMetrics)
+    return empty(
+      state.errors.has('hostMetrics')
+        ? "The host_metrics table couldn't load from Supabase."
+        : 'Loading the host samples…'
+    );
+  const h = m.host;
+  if (!h)
+    return empty(
+      'No host samples yet. The queue host writes one about every ten minutes, from a Linux machine only.'
+    );
+  const verdict =
+    h.verdict === 'stale'
+      ? `No sample for ${span(h.ageMin)}`
+      : h.problems.length
+        ? h.problems.map((p) => PROBLEM_TEXT[p]).join('; ')
+        : 'Within limits';
+  const from = now.getTime() - DAY_MS;
+  const figures = FIGURES.flatMap((f) => {
+    const latest = h.figures[f.key];
+    const average = h.average[f.key];
+    if (latest === null || average === null) return [];
+    const bad =
+      h.verdict !== 'stale' &&
+      f.problem !== null &&
+      h.problems.includes(f.problem);
+    const points = h.series.flatMap((r) => {
+      const value = hostFigures(r)[f.key];
+      return value === null ? [] : [{ at: Date.parse(r.at), value }];
+    });
+    const max = Math.max(f.floor, ...points.map((p) => p.value));
+    return [
+      `<div class="fig"><div class="figh"><h3>${f.title}</h3><b class="${bad ? 'bad' : ''}">${pct(latest, 1)}</b><span>${HOST_WINDOW_MIN} min average ${pct(average, 1)}</span></div>
+      ${gauge(latest, bad)}
+      ${sparkline(points, from, now.getTime(), max, f.limit, `${f.title}, last 24 hours`)}
+      <p class="rule">${esc(f.detail(h.latest))}</p></div>`
+    ];
+  });
+  return `<div class="group"><h3>${esc(h.host)}</h3><div class="verdict ${h.verdict === 'ok' ? '' : 'bad'}">${esc(verdict)}</div><p class="rule">Newest sample ${esc(ageText(h.ageMin))}, ${plural(h.series.length, 'sample', 'samples')} in the last 24 hours.</p></div>
+    <div class="figs">${figures.join('')}</div>
+    <p class="rule">From the <code>host_metrics</code> table, one row about every ten minutes from the queue host. Bad is an average load per core above ${HOST_LOAD_PER_CORE_MAX} over ${HOST_WINDOW_MIN} minutes (the 5-minute load average), memory used above ${HOST_MEM_USED_MAX * 100}% of the total, swap in use and growing over ${HOST_WINDOW_MIN} minutes, or disk free below ${HOST_DISK_FREE_MIN * 100}%. The dashed line marks the limit. A host silent for more than ${HOST_STALE_MIN} minutes shows as stale.</p>`;
+};
+
 // ---------- Activity ----------
 
 const NO_ACTIVITY =
@@ -887,6 +1015,11 @@ export const SHEETS: Record<SheetId, SheetDef> = {
     title: 'Timers',
     sub: "Every interval, window and timeout the queue runs on, and where it's set",
     body: renderTimers
+  },
+  nuc: {
+    title: 'NUC',
+    sub: 'How hard the queue host works: load, memory, swap and disk, with the last 24 hours',
+    body: renderNuc
   },
   activity: {
     title: 'Activity',

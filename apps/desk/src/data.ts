@@ -11,6 +11,7 @@ import {
 import {
   type IssueEventRow,
   type Payloads,
+  type QueuePayloads,
   SupabaseError,
   type createSupabase
 } from './supabase';
@@ -74,7 +75,10 @@ export type AdapterOptions = {
     | 'getIssueSummary'
     | 'listComments'
   >;
-  supabase: Pick<ReturnType<typeof createSupabase>, 'read' | 'subscribe'>;
+  supabase: Pick<
+    ReturnType<typeof createSupabase>,
+    'read' | 'readHostMetrics' | 'subscribe'
+  >;
   now?: () => number;
   events?: DataEvents;
   /** Called with the Realtime channel health when it changes, and once with false at start. */
@@ -265,6 +269,7 @@ export const createAdapter = ({
     listed(() => linear.listClosed())
   );
   const queue = track(SUPABASE, () => supabase.read());
+  const hostMetrics = track(SUPABASE, () => supabase.readHostMetrics());
   const details = new Map<string, Source<IssueDetail>>();
   const comments = new Map<string, Source<{ comments: Comment[] }>>();
 
@@ -307,11 +312,12 @@ export const createAdapter = ({
       return undefined;
     }
     if (server === SUPABASE) {
-      const pick = (key: keyof Payloads) => (payloads: Payloads) =>
+      const pick = (key: keyof QueuePayloads) => (payloads: QueuePayloads) =>
         payloads[key];
       if (tool === 'runs') return bind(queue, pick('runs'));
       if (tool === 'usage') return bind(queue, pick('usage'));
       if (tool === 'activity') return bind(queue, pick('activity'));
+      if (tool === 'hostMetrics') return bind(hostMetrics, (rows) => rows);
     }
     return undefined;
   };
@@ -333,6 +339,9 @@ export const createAdapter = ({
 
   const refreshLinear = () => {
     if (!stopped) void refreshWatched(LINEAR);
+  };
+  const refreshHostMetrics = () => {
+    if (!stopped && hostMetrics.watching()) void hostMetrics.refresh();
   };
   const refreshSupabase = () => {
     if (!stopped) void refreshWatched(SUPABASE);
@@ -481,7 +490,8 @@ export const createAdapter = ({
           scheduleBackoff();
         }
       },
-      queueIssue
+      queueIssue,
+      refreshHostMetrics
     )
   );
 

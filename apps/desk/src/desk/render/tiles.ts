@@ -35,6 +35,26 @@ const ideaTile = (m: Model, state: DeskState, now: Date): TileValue => {
   return { value: `${s.text}, ${day}`, bad: true };
 };
 
+const share = (n: number): string => `${Math.round(n * 100)}%`;
+
+/** The first problem when bad, else the worse of load per core and memory used, with the verdict; stale and missing samples say so */
+const nucTile = ({ host }: Model): TileValue => {
+  if (!host) return { value: '–' };
+  if (host.verdict === 'stale') return { value: 'stale', bad: true };
+  const problem = host.problems[0];
+  const figure =
+    problem === 'load'
+      ? `load ${share(host.average.load)}`
+      : problem === 'memory'
+        ? `memory ${share(host.figures.mem)}`
+        : problem === 'disk'
+          ? `disk ${share(host.figures.disk)}`
+          : problem === 'swap'
+            ? 'swap growing'
+            : share(Math.max(host.average.load, host.figures.mem));
+  return { value: `${figure} · ${host.verdict}`, bad: host.verdict === 'bad' };
+};
+
 export const renderTiles = (m: Model, state: DeskState, now: Date): string => {
   const { activity, closed, usage } = state.data;
   const loaded = bucketsLoaded(state.data);
@@ -79,6 +99,12 @@ export const renderTiles = (m: Model, state: DeskState, now: Date): string => {
       icon: 'all',
       label: 'Open tickets',
       value: loaded ? String(m.all.length) : '–'
+    },
+    {
+      sheet: 'nuc',
+      icon: 'chip',
+      label: 'NUC',
+      ...nucTile(m)
     },
     {
       sheet: 'timers',

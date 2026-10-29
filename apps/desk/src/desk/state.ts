@@ -1,6 +1,11 @@
 import type { DataFailure } from '../data';
 import type { Issue, OpenStatusType } from '../linear';
-import type { ActivityPayload, RunsPayload, UsagePayload } from '../supabase';
+import type {
+  ActivityPayload,
+  HostMetricRow,
+  RunsPayload,
+  UsagePayload
+} from '../supabase';
 
 import { STATES } from './constants';
 import type { Idea, PlanProgress } from './types';
@@ -26,6 +31,7 @@ export const SHEET_IDS = [
   'limit',
   'scheduler',
   'timers',
+  'nuc',
   'activity',
   'shipped',
   'spend',
@@ -50,6 +56,8 @@ export type DeskData = {
   runs: RunsPayload | null;
   usage: UsagePayload | null;
   activity: ActivityPayload | null;
+  /** The host's samples of the last 24 hours, oldest first */
+  hostMetrics: HostMetricRow[] | null;
   /** When the open tickets were last stored, in ms */
   storedAt: number | null;
 };
@@ -88,6 +96,7 @@ export const createState = (): DeskState => ({
     runs: null,
     usage: null,
     activity: null,
+    hostMetrics: null,
     storedAt: null
   },
   details: new Map(),
