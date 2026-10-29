@@ -75,7 +75,7 @@ remember() {
 # pick: the attended verdict as JSON; fails on a Linear or jq error
 pick() {
   local resp watch waits
-  resp="$(linear "$ATTENDED_QUERY")" || return 1
+  resp="$(linear "$ATTENDED_QUERY" | attended_nodes)" || return 1
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null || return 1
   watch="$(jq -c 'if type == "object" then . else {} end' "$WATCH_FILE" 2>/dev/null || print '{}')"
   [[ -n "$watch" ]] || watch='{}'

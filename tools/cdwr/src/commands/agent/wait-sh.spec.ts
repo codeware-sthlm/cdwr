@@ -348,3 +348,41 @@ describe.skipIf(!hasZsh)('parked_waits', () => {
     expect(parkedWaits(input, 'echo "{}"').res.stdout.trim()).toBe('{}');
   });
 });
+
+const LIB = fileURLToPath(
+  new URL('../../../agent-queue/lib.sh', import.meta.url)
+);
+
+describe.skipIf(!hasZsh)('lib.sh attended_nodes', () => {
+  const fold = (input: unknown): unknown =>
+    JSON.parse(
+      spawnSync('zsh', ['-c', `source "${LIB}"; attended_nodes`], {
+        input: JSON.stringify(input),
+        encoding: 'utf8',
+        env: { PATH: process.env['PATH'] ?? '', AGENT_QUEUE_LINEAR_KEY: 'k' }
+      }).stdout
+    );
+
+  it('folds the sub-issues into the issues, once each', () => {
+    expect(
+      fold({
+        data: {
+          issues: { nodes: [{ identifier: 'COD-1' }] },
+          subissues: {
+            nodes: [{ identifier: 'COD-1' }, { identifier: 'COD-2' }]
+          }
+        }
+      })
+    ).toEqual({
+      data: {
+        issues: { nodes: [{ identifier: 'COD-1' }, { identifier: 'COD-2' }] }
+      }
+    });
+  });
+
+  // An empty queue made from an error would read as nothing to do
+  it('leaves an error answer as it came', () => {
+    const error = { errors: [{ message: 'rate limited' }] };
+    expect(fold(error)).toEqual(error);
+  });
+});

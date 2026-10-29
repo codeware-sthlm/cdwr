@@ -163,6 +163,24 @@ def blocked:
     | select(.type == "blocks" and (.issue.state.type != "completed" and .issue.state.type != "canceled")) ]
   | length > 0;
 
+# An issue's `blocks` inverse relations, as the blocking issues
+def blockers:
+  [ (.inverseRelations.nodes // [])[] | select(.type == "blocks") | .issue ];
+
+# True for an open sub-issue that waits only on the label: no agent label of its own, not started,
+# this repo, every blocker done and at least one of them agent work. Surfaced for Håkan, never labelled.
+def to_label:
+  blockers as $b
+  | .parent != null
+    # A closed parent is an abandoned split
+    and (.parent.state.type // "" | IN("completed", "canceled") | not)
+    and agent_label == null
+    and (.state.type | IN("backlog", "unstarted", "triage"))
+    and (other_repo | not)
+    and ($b | length) > 0
+    and all($b[]; .state.type == "completed" or .state.type == "canceled")
+    and any($b[]; agent_label != null);
+
 # True when the newest comment is not the agent's
 def answered:
   ((.comments.nodes // []) | sort_by(.createdAt) | last) as $c
@@ -203,9 +221,9 @@ def limit_used($now; $limit):
 
 # The whole queue: { at, limit, session, next, held, parked, table }. `next` is every actionable
 # item in the order the skill takes them; `held` is what the limit keeps from starting; `parked`
-# is every ticket waiting on a PR check or Copilot; `table` is what waits on Håkan, before and
-# after implementation. $session comes from session_state, or null. $waits comes from
-# waits.sh, keyed by identifier.
+# is every ticket waiting on a PR check or Copilot; `table` is what waits on Håkan: before and
+# after implementation, and sub-issues ready to label. $session comes from session_state, or null.
+# $waits comes from waits.sh, keyed by identifier.
 def queue_view($now; $limit; $watch; $session; $waits):
   map(select(other_repo | not)) as $all
   | ($all | limit_used($now; $limit)) as $lu0
@@ -262,6 +280,8 @@ def queue_view($now; $limit; $watch; $session; $waits):
                              resolved: .ws.resolved, outcome: .ws.outcome })),
       table: {
         before: $before,
+        label: ([ $all[] | select(to_label) ] | sort_by(queue_order)
+                | map({ ticket: .identifier, parent: .parent.identifier, blockers: (blockers | map(.identifier)) })),
         after: (($lu.open | map({ ticket: ., kind: "pr", pr: ($watch[.].pr // null) }))
                 + ($lu.handoffs | map({ ticket: ., kind: "handoffs", items: ($by[.] | handoffs) })))
       }
@@ -274,7 +294,8 @@ def attended($now; $limit; $watch; $waits):
   queue_view($now; $limit; $watch; null; $waits) as $q
   | ($q.table.before | map(.ticket + " input")) as $inputs
   | ($q.table.after | map(.ticket + (if .kind == "pr" then " PR" else " hand-offs" end))) as $after
-  | { used: $q.limit.used, limit: $limit, waiting: ($inputs + $after) }
+  | ($q.table.label | map(.ticket + " label")) as $label
+  | { used: $q.limit.used, limit: $limit, waiting: ($inputs + $after + $label) }
     + ($q.next[0] as $n
        | if $n == null then { verdict: "idle", ticket: null, reason: null, detail: null }
          elif $n.reason == "resume" then { verdict: "running", ticket: $n.ticket, reason: "working", detail: $n.detail }

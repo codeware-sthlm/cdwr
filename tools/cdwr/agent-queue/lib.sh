@@ -31,17 +31,46 @@ query {
     labels: { some: { name: { startsWith: "agent:" } } }
     state: { type: { neq: "canceled" } }
     or: [{ completedAt: { null: true } }, { completedAt: { gt: "-P14D" } }]
+  }) { ...queued }
+  # Only what watch.jq `to_label` reads: no description or comments for issues it merely checks
+  subissues: issues(first: 100, filter: {
+    team: { key: { eq: "COD" } }
+    parent: { null: false }
+    state: { type: { nin: ["completed", "canceled"] } }
   }) {
     nodes {
-      identifier priority createdAt completedAt description
+      identifier priority createdAt
+      parent { identifier state { type } }
       state { type }
-      labels { nodes { name } }
-      comments(first: 50, orderBy: createdAt) { nodes { body createdAt } }
-      inverseRelations { nodes { type issue { state { type } } } }
+      labels(first: 20) { nodes { name } }
+      inverseRelations(first: 20) { nodes { type issue { identifier state { type } labels(first: 20) { nodes { name } } } } }
     }
   }
 }
+fragment queued on IssueConnection {
+  nodes {
+    identifier priority createdAt completedAt description
+    parent { identifier state { type } }
+    state { type }
+    labels { nodes { name } }
+    comments(first: 50, orderBy: createdAt) { nodes { body createdAt } }
+    inverseRelations { nodes { type issue { identifier state { type } labels(first: 20) { nodes { name } } } } }
+  }
+}
 GQL
+
+# attended_nodes: appends the open sub-issues not already there to .data.issues.nodes, keeping
+# Linear's order, so every reader of
+# the attended response sees one list. A filter-level `or` would be one field, but Linear widens a
+# nested `or` to the whole team.
+attended_nodes() {
+  # An error answer stays as it came, so it still reads as one
+  jq -c 'if (.data.issues.nodes | type) == "array" then
+      (.data.issues.nodes | map(.identifier)) as $have
+      | .data.issues.nodes += [ (.data.subissues.nodes // [])[] | select(.identifier | IN($have[]) | not) ]
+      | del(.data.subissues)
+    else . end' 2>/dev/null
+}
 
 # host_id: the machine's stable name (a Mac's hostname follows the network); session-hook.sh has the twin
 host_id() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null || hostname -s; }
