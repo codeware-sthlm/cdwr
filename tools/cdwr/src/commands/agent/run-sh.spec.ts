@@ -198,7 +198,9 @@ describe('run.sh without Linear documents', () => {
       exit.indexOf('  record_queue_state')
     );
     const state = fn('record_queue_state');
-    expect(state).toContain('$(cat "$HOME_DIR/attended-line" 2>/dev/null)');
+    expect(state).toContain(
+      '$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)'
+    );
     expect(state).toContain('$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)');
   });
 
