@@ -150,6 +150,32 @@ export const schedulerRow = (
 export const attendedSummary = (mirror: string | null): string =>
   `Attended only; the scheduler runs ${mirrorHost(mirror) ? `on ${mirrorHost(mirror)}` : 'elsewhere'}`;
 
+/**
+ * The summary line: an attended-only machine says so only when its rows hold no warning
+ * or failure, otherwise the normal counts show
+ */
+export const statusSummary = (
+  scheduler: RemoteReport['scheduler'],
+  mirror: string | null,
+  problems: number,
+  warnings: number
+): string =>
+  problems > 0
+    ? `${problems} thing(s) need attention`
+    : scheduler === 'elsewhere' && warnings === 0
+      ? attendedSummary(mirror)
+      : warnings > 0
+        ? `Loaded, with ${warnings} thing(s) worth a look`
+        : 'The queue is healthy';
+
+/** The checkout the script's `--check` runs against; this one when an attended-only machine has no planner checkout */
+export const checkRepoOf = (
+  scheduler: RemoteReport['scheduler'],
+  worktree: { path: string; exists: boolean },
+  root: string
+): string =>
+  scheduler === 'elsewhere' && !worktree.exists ? root : worktree.path;
+
 const envelope = z.object({ result: reportShape });
 
 export type RemoteReport = z.infer<typeof reportShape>;

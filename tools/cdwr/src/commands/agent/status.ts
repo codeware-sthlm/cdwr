@@ -52,6 +52,7 @@ import {
 import {
   type RemoteReport,
   attendedSummary,
+  checkRepoOf,
   formatContainerJob,
   parseListener,
   parseRemoteStatus,
@@ -61,6 +62,7 @@ import {
   showsRow,
   skewedStatus,
   staleScriptsHint,
+  statusSummary,
   unreadableStatus
 } from './status.logic';
 
@@ -270,14 +272,12 @@ export default defineCommand({
 
     const problems = shown.filter((r) => r[0] === symbols.fail).length;
     const warnings = shown.filter((r) => r[0] === symbols.warn).length;
-    const summary =
-      problems > 0
-        ? `${problems} thing(s) need attention`
-        : report.scheduler === 'elsewhere'
-          ? attendedSummary(report.mirror)
-          : warnings > 0
-            ? `Loaded, with ${warnings} thing(s) worth a look`
-            : 'The queue is healthy';
+    const summary = statusSummary(
+      report.scheduler,
+      report.mirror,
+      problems,
+      warnings
+    );
     return { summary, partial: problems > 0, json: report };
   }
 });
@@ -302,7 +302,16 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
       // Before the check, which logs its own skip and busy lines
       const lastScheduled =
         lastSchedulerLine(readText(queue.schedulerLog) ?? '') ?? null;
-      const checked = await checkRun(queue, worktree, ctx.env).catch(
+      const scheduler = schedulerHere(host, job, existsSync(queue.plist))
+        ? ('here' as const)
+        : ('elsewhere' as const);
+      // Attended-only with no planner checkout: this checkout still answers the verdicts
+      const checkRepo = checkRepoOf(
+        scheduler,
+        { path: worktree, exists: existsSync(worktree) },
+        ctx.root
+      );
+      const checked = await checkRun(queue, checkRepo, ctx.env).catch(
         (error: unknown): Awaited<ReturnType<typeof checkRun>> => ({
           decision: `skip: check failed (${error instanceof Error ? error.message : String(error)})`
         })
@@ -315,9 +324,7 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         keySource: linearKeySource(host, ctx.env),
         keyPresent: key,
         mirror: mirrorTargetOf(queue),
-        scheduler: schedulerHere(host, job, existsSync(queue.plist))
-          ? ('here' as const)
-          : ('elsewhere' as const),
+        scheduler,
         script:
           'source' in sources
             ? filesDrift(installed, sources.source)

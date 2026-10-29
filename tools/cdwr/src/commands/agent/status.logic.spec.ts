@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   attendedSummary,
+  checkRepoOf,
   formatContainerJob,
   parseListener,
   parseRemoteStatus,
@@ -11,6 +12,7 @@ import {
   showsRow,
   skewedStatus,
   staleScriptsHint,
+  statusSummary,
   unreadableStatus
 } from './status.logic';
 
@@ -298,5 +300,39 @@ describe('parseRemoteStatus scheduler', () => {
       });
       expect(parseRemoteStatus(text).kind).toBe('report');
     }
+  });
+});
+
+describe('statusSummary', () => {
+  const mirror = 'nuc:docker:cdwr-agent:/d';
+
+  it('says attended only when nothing is wrong', () => {
+    expect(statusSummary('elsewhere', mirror, 0, 0)).toBe(
+      'Attended only; the scheduler runs on nuc'
+    );
+  });
+
+  it('shows the warnings of an attended-only machine', () => {
+    expect(statusSummary('elsewhere', mirror, 0, 2)).toBe(
+      'Loaded, with 2 thing(s) worth a look'
+    );
+  });
+
+  it('counts failures first, and a healthy local queue', () => {
+    expect(statusSummary('elsewhere', mirror, 1, 2)).toBe(
+      '1 thing(s) need attention'
+    );
+    expect(statusSummary('here', mirror, 0, 0)).toBe('The queue is healthy');
+  });
+});
+
+describe('checkRepoOf', () => {
+  it('falls back to this checkout when the planner checkout is gone', () => {
+    const gone = { path: '/p/planner', exists: false };
+    expect(checkRepoOf('elsewhere', gone, '/p/root')).toBe('/p/root');
+    expect(checkRepoOf('here', gone, '/p/root')).toBe('/p/planner');
+    expect(
+      checkRepoOf('elsewhere', { path: '/p/planner', exists: true }, '/p/root')
+    ).toBe('/p/planner');
   });
 });
