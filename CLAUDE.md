@@ -51,7 +51,7 @@ steps to the `implementer` subagent (`.claude/agents/implementer.md`, Sonnet) in
 per ticket, asks in Linear instead of waiting in the terminal, and keeps going until a limit
 of what waits on Håkan. The skill holds the queue order, the labels and how a gate asks.
 
-To start an attended session, run `cdwr agent attend` from a current checkout: it moves `codeware-queue` to `origin/main` (installing when the lockfile changed) and prints the line that starts `/work-queue` there. A session started on a detached checkout that is behind main warns at start (the SessionStart hook, `tools/cdwr/agent-queue/session-start.sh`).
+To start an attended session, run `cdwr agent attend [COD-n]` from anywhere: it moves `codeware-queue` to `origin/main` (installing when the lockfile changed) and starts `/work-queue` there in the same terminal (`--no-start` prints the line instead). A session started on a detached checkout that is behind main warns at start and names that one command (the SessionStart hook, `tools/cdwr/agent-queue/session-start.sh`).
 
 A launchd job runs it plan-only every 10 minutes on this machine; `cdwr agent install` sets that up
 and `cdwr agent status` says what it would take next. Launchd runs an installed copy of
