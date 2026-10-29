@@ -329,8 +329,11 @@ Read `~/.cdwr/agent-queue/notify-level`: `all` sends both levels, `action` sends
 Send each notice through the PushNotification tool, and to Slack when a shell is available:
 
 ```sh
-jq -n --arg m "COD-123: <one line>" --arg c "$PWD" '{message:$m,cwd:$c}' | tools/cdwr/agent-queue/notify.sh
+tools/cdwr/agent-queue/notify.sh "COD-123: <one line>"
 ```
+
+Keep `$` and backticks out of the message: under dontAsk (implement-only) any `$` in a command
+gets it denied, quoted or not.
 
 Keep each to one line: the ticket id, what happened, and what's needed from Håkan, if anything.
 A Linear comment is no notice: it's posted as Håkan, and Linear doesn't notify him about

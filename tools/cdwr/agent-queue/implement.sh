@@ -144,7 +144,7 @@ AGENT_QUEUE_LINEAR_KEY="$LINEAR_MCP_KEY" ENABLE_TOOL_SEARCH=false claude -p "/wo
     "Bash(jq *)" "Bash(uuidgen*)" "Bash(cut *)" "Bash(date *)" "Bash(wc -c *)" \
     "Bash(tools/cdwr/agent-queue/session.sh register)" "Bash(tools/cdwr/agent-queue/session.sh ticket *)" \
     "Bash(tools/cdwr/agent-queue/wait.sh*)" \
-    "Bash(tools/cdwr/agent-queue/notify.sh)" "Bash(~/.claude/hooks/notify-slack.sh)" "Bash($HOME/.claude/hooks/notify-slack.sh)" \
+    "Bash(tools/cdwr/agent-queue/notify.sh *)" "Bash(~/.claude/hooks/notify-slack.sh)" "Bash($HOME/.claude/hooks/notify-slack.sh)" \
     "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels \
     "$L"__save_issue "$L"__save_comment "$L"__prepare_attachment_upload "$L"__create_attachment_from_upload \
   > "$result" 2> "$log" &
