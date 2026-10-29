@@ -1,9 +1,9 @@
 import { getAuthenticatedPayload } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
+import { proxyStats } from '@codeware/shared/util/umami';
 import type { NextRequest } from 'next/server';
 
 import configPromise from '../../../payload.config';
-import { proxyStats } from '../../../utils/stats-proxy';
 
 type Context = { params: Promise<{ path: string[] }> };
 

@@ -116,7 +116,13 @@ const readCapped = async (
     }
     chunks.push(value);
   }
-  return new TextDecoder().decode(Buffer.concat(chunks));
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 };
 
 /** A script served from Umami, cached unless Umami answered with an error */
