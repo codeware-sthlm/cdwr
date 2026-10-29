@@ -8,19 +8,21 @@ import type { RequestBaseOptions } from './utils/types';
  *
  * @param options - The options to find tours with.
  * @param options.limit - Maximum number of tours to return.
+ * @param options.depth - How deep relations are populated; the REST default when omitted.
  * @returns The list of tours.
  * @throws A formatted error message when the request fails.
  */
 export const findTours = async (
-  options: RequestBaseOptions & { limit?: number }
+  options: RequestBaseOptions & { limit?: number; depth?: number }
 ): Promise<Array<Tour>> => {
-  const { limit, ...baseOptions } = options;
+  const { limit, depth, ...baseOptions } = options;
 
   const response = await invokeRequest('tours', {
     ...baseOptions,
     method: 'GET',
     query: 'sort=-createdAt',
-    limit
+    limit,
+    depth
   });
 
   if ('error' in response) {

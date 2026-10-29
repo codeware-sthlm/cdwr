@@ -8,19 +8,21 @@ import type { RequestBaseOptions } from './utils/types';
  *
  * @param options - The options to find posts with.
  * @param options.limit - Maximum number of posts to return.
+ * @param options.depth - How deep relations are populated; the REST default when omitted.
  * @returns The list of posts.
  * @throws A formatted error message when the request fails.
  */
 export const findPosts = async (
-  options: RequestBaseOptions & { limit?: number }
+  options: RequestBaseOptions & { limit?: number; depth?: number }
 ): Promise<Array<Post>> => {
-  const { limit, ...baseOptions } = options;
+  const { limit, depth, ...baseOptions } = options;
 
   const response = await invokeRequest('posts', {
     ...baseOptions,
     method: 'GET',
     query: 'sort=-createdAt',
-    limit
+    limit,
+    depth
   });
 
   if ('error' in response) {
