@@ -1,5 +1,11 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  renameSync,
+  rmSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +54,7 @@ describe.skipIf(!hasZsh)('session-start.sh', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'session-start-'));
     origin = join(root, 'origin.git');
-    work = join(root, 'work');
+    work = join(root, 'codeware-queue');
     const seed = join(root, 'seed');
     mkdirSync(seed);
     git(seed, 'init', '-q', '-b', 'main');
@@ -68,19 +74,29 @@ describe.skipIf(!hasZsh)('session-start.sh', () => {
     const result = run();
     expect(result.status).toBe(0);
     const out = JSON.parse(result.stdout);
-    expect(out.systemMessage).toContain('2 commits behind origin/main');
-    expect(out.systemMessage).toContain(`cdwr agent attend --path '${work}'`);
+    expect(out.systemMessage).toBe(
+      'This checkout is 2 commits behind origin/main. Exit and run `cdwr agent attend`.'
+    );
     expect(out.hookSpecificOutput.hookEventName).toBe('SessionStart');
-    expect(out.hookSpecificOutput.additionalContext).toContain('2 commits');
+    expect(out.hookSpecificOutput.additionalContext).toContain(
+      out.systemMessage
+    );
   });
 
-  it('quotes a checkout directory with a space', () => {
-    const spaced = join(root, 'my work');
+  // attend refreshes codeware-queue unless told otherwise
+  it('names any other checkout, quoted for the shell', () => {
+    const spaced = join(realpathSync(root), 'my work');
     renameSync(work, spaced);
     const result = run({ CLAUDE_PROJECT_DIR: spaced });
-    expect(JSON.parse(result.stdout).systemMessage).toContain(
-      `--path '${spaced}'`
+    expect(JSON.parse(result.stdout).systemMessage).toBe(
+      `This checkout is 2 commits behind origin/main. Exit and run \`cdwr agent attend --path '${spaced}'\`.`
     );
+  });
+
+  it('says 1 commit when one behind', () => {
+    git(work, 'fetch', '-q', 'origin', 'main');
+    git(work, 'switch', '-q', '--detach', 'origin/main~1');
+    expect(JSON.parse(run().stdout).systemMessage).toContain('1 commit behind');
   });
 
   it.each<Record<string, string>>([
