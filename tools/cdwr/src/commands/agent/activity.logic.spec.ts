@@ -8,7 +8,6 @@ import {
   commentEvents,
   historyEvents,
   plural,
-  renderActivityDocument,
   runEvents
 } from './activity.logic';
 import { localMinute } from './usage.logic';
@@ -259,50 +258,7 @@ describe('collectEvents', () => {
   });
 });
 
-describe('renderActivityDocument', () => {
-  const event = (
-    over: Partial<Parameters<typeof renderActivityDocument>[0][0]> = {}
-  ) => ({
-    id: 'e1',
-    at: new Date(2026, 9, 10, 20, 1),
-    ticket: 'COD-540',
-    actor: 'Håkan Ströberg',
-    change: 'status Todo → In Progress',
-    ...over
-  });
-  const opts = { updated: '2026-10-10 20:30', windowDays: 7, dropped: 0 };
-
-  it('renders the contract', () => {
-    expect(renderActivityDocument([event()], opts)).toBe(
-      [
-        'Updated: 2026-10-10 20:30 · last 7 days · 1 event',
-        '',
-        'Written by the agent queue scheduler from Linear\'s issue history and its own runs. Times are local. Actor "agent" is a comment marked `**Agent`; the agent and Håkan otherwise write through the same Linear account.',
-        '',
-        '| When | Ticket | Actor | Change |',
-        '| -- | -- | -- | -- |',
-        '| 2026-10-10 20:01 | COD-540 | Håkan Ströberg | status Todo → In Progress |'
-      ].join('\n')
-    );
-  });
-
-  it('escapes pipes and flattens newlines', () => {
-    const doc = renderActivityDocument([event({ change: 'a | b\nc' })], opts);
-    expect(doc).toContain('| a \\| b c |');
-  });
-
-  it('escapes backslashes before pipes', () => {
-    const doc = renderActivityDocument([event({ change: 'path\\' })], opts);
-    expect(doc).toContain('| path\\\\ |');
-  });
-
-  it('mentions what the cap left out only when something was', () => {
-    const line = 'Older events beyond the newest 1 are left out (4).';
-    const cut = renderActivityDocument([event()], { ...opts, dropped: 4 });
-    expect(cut).toContain(`the same Linear account.\n\n${line}\n\n| When`);
-    expect(renderActivityDocument([event()], opts)).not.toContain('Older');
-  });
-
+describe('plural', () => {
   it.each([
     [0, 'event', '0 events'],
     [1, 'event', '1 event'],
@@ -310,16 +266,6 @@ describe('renderActivityDocument', () => {
     [7, 'day', '7 days']
   ])('plural(%i, %s) is %s', (n, noun, expected) => {
     expect(plural(n, noun)).toBe(expected);
-  });
-
-  it('prints the header alone without events', () => {
-    const doc = renderActivityDocument([], opts);
-    expect(
-      doc.startsWith('Updated: 2026-10-10 20:30 · last 7 days · 0 events')
-    ).toBe(true);
-    expect(
-      doc.endsWith('| When | Ticket | Actor | Change |\n| -- | -- | -- | -- |')
-    ).toBe(true);
   });
 });
 

@@ -9,7 +9,6 @@ import {
   familyBase,
   localDay,
   normaliseModel,
-  renderUsageDocument,
   roleOf,
   ticketOf,
   usageRows,
@@ -226,84 +225,6 @@ describe('aggregate dayOf', () => {
     expect(
       aggregate(late, { since, dayOf: () => '2026-10-07' }).days[0].day
     ).toBe('2026-10-07');
-  });
-});
-
-describe('renderUsageDocument', () => {
-  const since = new Date('2026-10-01T00:00:00.000Z');
-  const result = aggregate(
-    [
-      reply({ ticket: 'COD-2', role: 'planning' }), // 25
-      reply({
-        ticket: 'COD-2',
-        role: 'implementing',
-        model: 'claude-sonnet-5'
-      }), // 10
-      reply({ ticket: 'unattributed', timestamp: '2026-10-05T12:00:00.000Z' }), // 25, older day
-      reply({
-        ticket: 'COD-1',
-        tokens: tokens({ output: 2_000_000, cacheRead: 3 })
-      }) // 50
-    ],
-    { since }
-  );
-  const doc = renderUsageDocument(result, {
-    updated: '2026-10-07 00:13',
-    windowDays: 30
-  });
-
-  it('starts with the lines the Desk reads', () => {
-    expect(doc.split('\n\n').slice(0, 2)).toEqual([
-      'Updated: 2026-10-07 00:13 · last 30 days · 110.00 USD',
-      'Prices: 2026-09-25'
-    ]);
-  });
-
-  it('writes one daily row per day, by role', () => {
-    expect(doc).toContain(
-      '| Day | Planning | Orchestrating | Implementing | Total |'
-    );
-    expect(doc).toContain('| 2026-10-05 | 0.00 | 25.00 | 0.00 | 25.00 |');
-    expect(doc).toContain('| 2026-10-06 | 25.00 | 50.00 | 10.00 | 85.00 |');
-  });
-
-  it('lists tickets by cost, unattributed last', () => {
-    const tickets = doc
-      .split('## Tickets')[1]
-      .split('\n')
-      .filter((line) => /^\| (COD|unattributed)/.test(line));
-    expect(tickets).toEqual([
-      '| COD-1 | 0.00 | 50.00 | 0.00 | 50.00 | 2000000 | 3 |',
-      '| COD-2 | 25.00 | 0.00 | 10.00 | 35.00 | 2000000 | 0 |',
-      '| unattributed | 0.00 | 25.00 | 0.00 | 25.00 | 1000000 | 0 |'
-    ]);
-  });
-
-  it('rounds after summing, so sub-cent rows add up to the total', () => {
-    const tiny = tokens({ output: 160 }); // $0.004 on claude-opus-5
-    const doc = renderUsageDocument(
-      aggregate(
-        [
-          reply({ tokens: tiny }),
-          reply({ tokens: tiny, model: 'claude-opus-4-8' })
-        ],
-        { since }
-      ),
-      { updated: 'x', windowDays: 1 }
-    );
-    expect(doc).toContain('· 0.01 USD');
-    expect(doc).toContain('| 2026-10-06 | 0.00 | 0.01 | 0.00 | 0.01 |');
-  });
-
-  it('shows an unpriced cost as ? and names the model', () => {
-    const unpriced = renderUsageDocument(
-      aggregate([reply({ model: 'claude-mystery' })], { since }),
-      { updated: 'x', windowDays: 1 }
-    );
-    expect(unpriced).toContain(
-      'Prices: 2026-09-25 · not priced: claude-mystery'
-    );
-    expect(unpriced).toContain('| claude-mystery | 0 | 1000000 | 0 | 0 | ? |');
   });
 });
 

@@ -792,7 +792,7 @@ export const queueViewSchema = z.object({
       ])
     )
   }),
-  // Older runs documents have no parked
+  // Older queue views have no parked
   parked: z
     .array(
       z.object({
@@ -819,7 +819,7 @@ export const queueViewSchema = z.object({
         })
       ])
     ),
-    // Older runs documents have no label; a malformed entry drops alone, as in the desk
+    // Older queue views have no label; a malformed entry drops alone, as in the desk
     label: z
       .array(z.unknown())
       .default([])
