@@ -85,8 +85,12 @@ export default [
               onlyDependOnLibsWithTags: ['type:util']
             },
             {
-              // type:theme is a dependency-free leaf — token CSS plus the
-              // generated theme registry — so it sits alongside type:util here
+              // Token CSS, the generated theme registry and the font faces
+              // they name; utils only, so ui can depend on it like a util
+              sourceTag: 'type:theme',
+              onlyDependOnLibsWithTags: ['type:util']
+            },
+            {
               sourceTag: 'type:ui',
               onlyDependOnLibsWithTags: ['type:ui', 'type:util', 'type:theme']
             },

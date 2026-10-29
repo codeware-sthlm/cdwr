@@ -9,18 +9,13 @@ import {
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { isUser } from '@codeware/app-cms/util/misc';
 import {
-  BUILT_IN_TOKENS,
   THEME_COOKIE,
   customThemeCss,
   resolveTheme,
+  siteFontFaceCss,
   themeLabel
 } from '@codeware/shared/theme';
 import { RenderLayout } from '@codeware/shared/ui/cms-renderer';
-import {
-  entitledFonts,
-  fontFaceCss,
-  selfServedFontsIn
-} from '@codeware/shared/util/color';
 import {
   DEFAULT_OG_IMAGE_PATH,
   ogLocale,
@@ -109,25 +104,12 @@ export default async function RootLayout({
   // A licensed face may only be embedded on a site Codeware owns or controls,
   // so the entitlement belongs to the deployment rather than to whoever chose
   // the font — and which deployment is settled by where the secret lives.
-  // Driven off the tokens because those are what renders, and only for a
-  // family the platform serves itself: Inter comes from the bundle.
-  const fontFaces = entitledFonts(
-    selfServedFontsIn([
-      ...customThemes.flatMap(({ tokensLight, tokensDark }) => [
-        tokensLight,
-        tokensDark
-      ]),
-      // A built-in may name a licensed face too, which only an entitled
-      // deployment embeds; elsewhere its stack falls back to Inter
-      ...themes.flatMap((name) => {
-        const builtIn = BUILT_IN_TOKENS[name];
-        return builtIn ? [builtIn.light, builtIn.dark] : [];
-      })
-    ]),
-    env.RESTRICTED_FONTS
-  )
-    .map((font) => fontFaceCss(font, env.FONT_ASSETS_BASE_URL))
-    .join('');
+  const fontFaces = siteFontFaceCss(
+    themes,
+    customThemes,
+    env.RESTRICTED_FONTS,
+    env.FONT_ASSETS_BASE_URL
+  );
   const customLabels = new Map(
     customThemes.map(({ slug, name }) => [slug, name])
   );

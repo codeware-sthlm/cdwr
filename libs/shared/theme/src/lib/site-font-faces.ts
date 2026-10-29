@@ -1,9 +1,10 @@
-import { BUILT_IN_TOKENS } from '@codeware/shared/theme';
 import {
   entitledFonts,
   fontFaceCss,
   selfServedFontsIn
 } from '@codeware/shared/util/color';
+
+import { BUILT_IN_TOKENS } from './built-in-tokens';
 
 type Tokens = Record<string, unknown>;
 type CustomTheme = { tokensLight: Tokens; tokensDark: Tokens };

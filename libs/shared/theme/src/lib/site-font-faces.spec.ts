@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { siteFontFaceCss } from './font-faces';
+import { siteFontFaceCss } from './site-font-faces';
 
 const named = [
   {
