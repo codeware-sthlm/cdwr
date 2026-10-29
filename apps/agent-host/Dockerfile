@@ -57,6 +57,7 @@ COPY --chmod=755 apps/agent-host/secrets.sh apps/agent-host/entrypoint.sh apps/a
 ENV AGENT_QUEUE_HOST=container \
     AGENT_QUEUE_HOME=/home/agent/.cdwr/agent-queue \
     AGENT_QUEUE_REPO=/work/codeware-agent \
+    AGENT_QUEUE_LINEAR_KEY_FILE=/run/agent/linear.key \
     RUN_INTERVAL_SECONDS=600 \
     pnpm_config_store_dir=/pnpm-store
 
