@@ -18,6 +18,7 @@ export * from './lib/is-object';
 export * from './lib/is-regex-pattern';
 export * from './lib/postgres';
 export * from './lib/sanitize-svg';
+export * from './lib/site-icon';
 export * from './lib/tenant-site-url';
 export * from './lib/to-pooler-url';
 export * from './lib/turn-queue';

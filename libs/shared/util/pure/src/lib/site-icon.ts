@@ -1,5 +1,6 @@
 import type { TenantIconConfig } from '@codeware/shared/util/payload-types';
-import { sanitizeSvg } from '@codeware/shared/util/pure';
+
+import { sanitizeSvg } from './sanitize-svg';
 
 /** Text colours the mark takes as a favicon, where the page's own are absent */
 const INK = { light: '#1f2937', dark: '#f3f4f6' } as const;

@@ -37,13 +37,6 @@ export {
   siteOrigin
 } from './lib/document-seo';
 export { publicVisibilityWhere } from './lib/public-visibility';
-export {
-  faviconSvg,
-  fitMark,
-  parseIconSize,
-  svgDataUri,
-  svgMark
-} from './lib/site-icon';
 export { sitePath, type SiteCollection } from './lib/site-path';
 export {
   type DocData,
