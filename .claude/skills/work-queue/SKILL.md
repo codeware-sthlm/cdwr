@@ -72,7 +72,7 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
 1. **A parked ticket whose wait resolved** (`run now: COD-1 parked wait resolved (success)`;
    the outcome in brackets), when its claim carries this session's id or is older than 2 hours,
    as in step 2. Carry on where the wait left off: see **Parking**.
-2. **An `agent:working` ticket you may resume.** Skip one that is parked on a pending wait.
+2. **An open `agent:working` ticket you may resume.** Skip one that is parked on a pending wait.
    Read the `**Claim:**` line under its Status table. Resume it when the claim carries this
    session's id, or is older than 2 hours. A newer claim with another id means another session
    holds it, even in the same worktree: leave it alone. On a take-over, post
@@ -88,8 +88,12 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    `**Agent: review addressed**` comment. See **Review feedback**.
 5. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
    removes anything. It only removes ticket worktrees whose PR merged or closed and that
-   have nothing uncommitted. Then close each parent ticket whose sub-issues are all Done or
-   Canceled: set it Done and post `**Agent: closed**` naming the sub-issues. Linear's own
+   have nothing uncommitted. Clear `agent:working` or `agent:needs-input` from a Done or
+   Canceled ticket (`list_issues` with that label in those states; pass the full label list
+   without it) and post `**Agent: label cleared**` naming the label. Leave `agent:review` and
+   every other label: a merged ticket keeps `agent:review` for its hand-offs, the PR watch and
+   the Desk. Then close each parent ticket whose sub-issues are all Done or Canceled: set it
+   Done and post `**Agent: closed**` naming the sub-issues. Linear's own
    parent auto-close stays off, so nothing else closes it.
 6. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
    starts: go to **Nothing workable**.
