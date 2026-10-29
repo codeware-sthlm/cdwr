@@ -35,6 +35,8 @@ export type JobHost = 'container' | 'launchd';
 export type Job = {
   line: string;
   minutes: number | null;
+  /** The listener wakes the scheduler on events; `minutes` is then the fallback interval */
+  live: boolean;
   host: JobHost | null;
   rev: string | null;
   install: 'stale' | 'current' | 'unknown';

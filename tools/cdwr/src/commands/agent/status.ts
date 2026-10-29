@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { defineCommand, readOnly } from '../../cli/command';
 import type { Context } from '../../cli/context';
@@ -23,6 +24,7 @@ import {
   KEYCHAIN_SERVICE,
   LINEAR_KEY_ENV,
   REMOTE_CONTAINER,
+  RUN_FALLBACK_SECONDS,
   RUN_INTERVAL_SECONDS,
   byFile,
   filesDrift,
@@ -46,6 +48,8 @@ import {
 } from './agent.logic';
 import {
   type RemoteReport,
+  formatContainerJob,
+  parseListener,
   parseRemoteStatus,
   remoteStatus,
   rmLockCommand,
@@ -84,6 +88,12 @@ export default defineCommand({
 
   async apply(ctx, report, { host: sshHost }) {
     const { job } = report;
+    const containerJob = formatContainerJob(
+      report.listener,
+      new Date(),
+      RUN_INTERVAL_SECONDS / 60,
+      RUN_FALLBACK_SECONDS / 60
+    );
     const row = (ok: boolean | 'warn', check: string, detail: string) => [
       ok === 'warn' ? symbols.warn : ok ? symbols.ok : symbols.fail,
       check,
@@ -98,11 +108,7 @@ export default defineCommand({
 
     const rows = [
       report.host === 'container'
-        ? row(
-            true,
-            'job',
-            `container loop, every ${RUN_INTERVAL_SECONDS / 60} min`
-          )
+        ? row(containerJob.ok, 'job', containerJob.detail)
         : job.loaded
           ? row(
               (job.lastExitCode === undefined || job.lastExitCode === 0) &&
@@ -309,6 +315,10 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         ),
         lock: queue.lock,
         implement: implementReport(queue, ctx.env),
+        listener:
+          host === 'container'
+            ? parseListener(readText(join(queue.home, 'listener.json')))
+            : null,
         next: checked === undefined ? null : parseCheck(checked.decision),
         attended:
           checked?.attended === undefined

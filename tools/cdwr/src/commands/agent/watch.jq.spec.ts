@@ -711,6 +711,67 @@ describe('attended picks', () => {
     });
   });
 
+  describe('closed tickets keep agent:working', () => {
+    const view = (issues: Node[]) =>
+      run(`queue_view(${NOW}; 5; {}; null; {})`, issues) as {
+        next: Array<{ ticket: string; reason: string }>;
+        held: { tickets: unknown[] };
+        parked: Array<{ ticket: string }>;
+      };
+
+    it.each([
+      ['Done', 'completed'],
+      ['Canceled', 'canceled']
+    ])('a %s ticket holds nothing', (_name, type) => {
+      const v = view([
+        node('COD-1', 'agent:working', {
+          state: { type },
+          description: claimLine(600)
+        })
+      ]);
+      expect(v.next).toEqual([]);
+      expect(v.held.tickets).toEqual([]);
+      expect(v.parked).toEqual([]);
+    });
+
+    it.each([['completed'], ['canceled']])(
+      'a %s ticket with a stale claim is no take over',
+      (type) => {
+        const r = attended([
+          node('COD-1', 'agent:working', {
+            state: { type },
+            description: claimLine(3 * HOUR)
+          })
+        ]);
+        expect(r.reason).not.toBe('take over');
+        expect(r.verdict).toBe('idle');
+      }
+    );
+
+    it('an answered ticket behind a Done one is run', () => {
+      const answered = node('COD-3', 'agent:needs-input', {
+        comments: {
+          nodes: [
+            { body: '**Agent: question**', createdAt: '2026-10-01T00:00:00Z' },
+            { body: 'go ahead', createdAt: '2026-10-02T00:00:00Z' }
+          ]
+        }
+      });
+      const r = attended([
+        node('COD-1', 'agent:working', {
+          state: { type: 'completed' },
+          description: claimLine(600)
+        }),
+        answered
+      ]);
+      expect(r).toMatchObject({
+        verdict: 'run',
+        ticket: 'COD-3',
+        reason: 'answered'
+      });
+    });
+  });
+
   describe('answered', () => {
     const input = (...bodies: string[]) =>
       node('COD-3', 'agent:needs-input', {

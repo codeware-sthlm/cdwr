@@ -83,7 +83,9 @@ pick() {
   jq -L "$HERE" -c --argjson now "$(date +%s)" --argjson watch "$watch" --argjson waits "$waits" \
     'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)' <<<"$resp"
 }
-key_of() { jq -c '{verdict, ticket, reason, waiting}' <<<"$1"; }
+# What the printed line shows: waiting and the limit only for an idle pick. A running line's
+# detail is this session's own Next line, so it stays out
+key_of() { jq -c '{verdict, ticket, reason} + (if .verdict == "idle" then {waiting, used, limit} else {} end)' <<<"$1"; }
 line_of() { jq -r -L "$HERE" 'include "watch"; attended_line' <<<"$1"; }
 
 if $NOW; then

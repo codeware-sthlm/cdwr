@@ -93,6 +93,7 @@ describe('toRuns', () => {
     expect(result?.job).toMatchObject({
       line: 'nuc job',
       minutes: null,
+      live: false,
       install: 'unknown'
     });
   });
@@ -111,6 +112,7 @@ describe('toRuns', () => {
     expect(result?.job).toEqual({
       line: 'every 10 min · install current',
       minutes: 10,
+      live: false,
       host: 'launchd',
       rev: null,
       install: 'current',
