@@ -36,6 +36,8 @@ export type SiteChrome = {
   /** `@font-face` rules for the licensed faces this deployment may embed */
   fontFaceCss: string;
   iconConfig: PayloadValue['iconConfig'];
+  /** The landing page, which answers at `/` whatever its slug */
+  landingPageId: number | string | null;
   locale: string;
   payloadUrl: string;
   /** The site's own origin, when it can be told */
@@ -115,6 +117,7 @@ export const loadSite = createServerFn({ method: 'GET' }).handler(
             env.FONT_ASSETS_BASE_URL
           ),
           iconConfig: tenantConfig.icon,
+          landingPageId: tenantConfig.landingPage.id,
           locale: tenantConfig.locale,
           payloadUrl: env.PAYLOAD_URL,
           origin: resolveSiteOrigin(

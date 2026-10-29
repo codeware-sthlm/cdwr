@@ -46,7 +46,9 @@ export function docHead(
 
   const kind: 'website' | 'article' =
     doc.collection === 'posts' ? 'article' : 'website';
-  const path = landing ? '/' : sitePath(doc.collection, doc.doc);
+  const path = landing
+    ? '/'
+    : sitePath(doc.collection, doc.doc, site?.landingPageId);
   const origin = site?.origin ?? undefined;
 
   return seoHead(
@@ -59,6 +61,7 @@ export function docHead(
       locale: site?.locale
     }),
     appName,
-    origin
+    origin,
+    site?.payloadUrl
   );
 }
