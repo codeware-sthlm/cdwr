@@ -5,10 +5,7 @@ import {
   RenderLayout
 } from '@codeware/shared/ui/cms-renderer';
 import { NotFound } from '@codeware/shared/ui/primitives';
-import {
-  DEFAULT_OG_IMAGE_PATH,
-  ogLocale
-} from '@codeware/shared/util/payload-utils';
+import { ogLocale } from '@codeware/shared/util/payload-utils';
 import { STATS_PATH, statsScript } from '@codeware/shared/util/umami';
 import * as Sentry from '@sentry/tanstackstart-react';
 import {
@@ -48,36 +45,16 @@ export const Route = createRootRoute({
               { property: 'og:type', content: 'website' },
               { property: 'og:site_name', content: site.appName },
               ...(locale ? [{ property: 'og:locale', content: locale }] : []),
-              {
-                property: 'og:image',
-                content: site.origin
-                  ? new URL(DEFAULT_OG_IMAGE_PATH, site.origin).toString()
-                  : DEFAULT_OG_IMAGE_PATH
-              },
-              { name: 'twitter:card', content: 'summary_large_image' }
+              { name: 'twitter:card', content: 'summary' }
             ]
           : [])
       ],
       links: [
         { rel: 'stylesheet', href: appCss },
-        // The tab and the bookmark in the tenant's own mark: an SVG is the
-        // favicon as it is, with PNGs drawn from it; an upload is used as is
+        // The tab in the tenant's own mark: an SVG is the favicon as it is,
+        // with no PNGs drawn from it here; an upload is used as is
         ...(icon?.source === 'svg'
-          ? [
-              { rel: 'icon', href: '/site-icon.svg', type: 'image/svg+xml' },
-              {
-                rel: 'icon',
-                href: '/site-icon.png',
-                type: 'image/png',
-                sizes: '32x32'
-              },
-              {
-                rel: 'apple-touch-icon',
-                href: '/site-apple-icon.png',
-                type: 'image/png',
-                sizes: '180x180'
-              }
-            ]
+          ? [{ rel: 'icon', href: '/site-icon.svg', type: 'image/svg+xml' }]
           : icon?.source === 'upload'
             ? [
                 { rel: 'icon', href: icon.fileUrl },

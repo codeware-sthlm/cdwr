@@ -24,9 +24,8 @@ describe('seoHead', () => {
       { property: 'og:locale', content: 'sv_SE' },
       { property: 'og:title', content: 'About' },
       { property: 'og:description', content: 'Who we are' },
-      { property: 'og:image', content: 'https://codeware.se/og-image.png' },
       { property: 'og:url', content: 'https://codeware.se/about' },
-      { name: 'twitter:card', content: 'summary_large_image' }
+      { name: 'twitter:card', content: 'summary' }
     ]);
     expect(head.links).toEqual([
       { rel: 'canonical', href: 'https://codeware.se/about' }
