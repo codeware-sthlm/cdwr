@@ -188,6 +188,26 @@ cat "${dir}/${name}-answer-$n.json"
     expect(result.stdout).toMatch(/^changed: /);
   });
 
+  it('does not wake on a waiting set change under a running pick', () => {
+    const working = {
+      ...ticket('COD-9', 'started'),
+      labels: { nodes: [{ name: 'agent:working' }] },
+      description: `**Claim:** s · /w · ${new Date().toISOString().slice(0, 16)}Z\n**Next:** step 2\n`
+    };
+    const waiting = (id: string) => ({
+      ...ticket(id, 'started'),
+      labels: { nodes: [{ name: 'agent:needs-input' }] }
+    });
+    const result = run(
+      [
+        response(working, waiting('COD-1')),
+        response(working, waiting('COD-2'))
+      ],
+      ['--interval', '1', '--max', '3']
+    );
+    expect(result.stdout).toMatch(/^timeout: running/);
+  });
+
   it("wakes when a parked ticket's CI resolves between ticks", () => {
     const result = run(
       [response(parkedTicket('COD-1', 'CI', 'agent:review'))],
