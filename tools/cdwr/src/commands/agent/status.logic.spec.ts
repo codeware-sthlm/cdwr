@@ -26,7 +26,7 @@ const report = {
   lastScheduled: null,
   lockState: 'free',
   lock: '/l',
-  implement: { cap: 40 },
+  implement: { cap: 40, budget: 15 },
   next: null,
   attended: null,
   suggest: null,
@@ -83,6 +83,14 @@ describe('parseRemoteStatus', () => {
       message: 'No Linear key',
       hint: 'Set it'
     });
+  });
+
+  it('reads a report from an older image without the implement budget', () => {
+    const old = JSON.stringify({
+      ok: true,
+      result: { ...report, implement: { cap: 40 } }
+    });
+    expect(parseRemoteStatus(old)).toMatchObject({ kind: 'report' });
   });
 
   it('names the paths of a report that differs and keeps its line', () => {

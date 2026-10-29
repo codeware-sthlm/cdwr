@@ -15,6 +15,7 @@ import {
   formatTable,
   formatWatching,
   hostKind,
+  implementBudget,
   implementCap,
   installedEnv,
   lastImplementRun,
@@ -961,6 +962,15 @@ describe('implement spend', () => {
     expect(implementCap(value)).toBe(expected);
   });
 
+  it.each([
+    [undefined, 15],
+    ['0', 15],
+    ['abc', 15],
+    ['20', 20]
+  ])('budget %j is %i', (value, expected) => {
+    expect(implementBudget(value)).toBe(expected);
+  });
+
   it('reads the last implementing row', () => {
     const runs = [
       '{"when":"a","outcome":"implemented","ticket":"COD-1"}',
@@ -988,6 +998,16 @@ describe('implement spend', () => {
     );
     expect(formatImplement(0, 40, undefined)).toBe(
       'implement spend today $0.00 of $40, no implementing session yet'
+    );
+  });
+
+  it.each([
+    [39.99, ''],
+    [40, ' (over; a run may overshoot by its $15 budget)'],
+    [44.76, ' (over; a run may overshoot by its $15 budget)']
+  ])('marks spend %s against the cap', (spent, over) => {
+    expect(formatImplement(spent, 40, undefined, 15)).toBe(
+      `implement spend today $${spent.toFixed(2)} of $40${over}, no implementing session yet`
     );
   });
 

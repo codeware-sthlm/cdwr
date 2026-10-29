@@ -21,6 +21,7 @@ import { CommandError, run as exec } from '../../services/shell';
 import { symbols, theme } from '../../ui/theme';
 
 import {
+  IMPLEMENT_BUDGET_USD,
   KEYCHAIN_SERVICE,
   LINEAR_KEY_ENV,
   REMOTE_CONTAINER,
@@ -193,12 +194,16 @@ export default defineCommand({
           ]
         : []),
       row(
-        report.implement.spent === undefined ? 'warn' : true,
+        report.implement.spent === undefined ||
+          report.implement.spent >= report.implement.cap
+          ? 'warn'
+          : true,
         'implement',
         formatImplement(
           report.implement.spent,
           report.implement.cap,
-          report.implement.last
+          report.implement.last,
+          report.implement.budget ?? IMPLEMENT_BUDGET_USD
         )
       ),
       report.next
