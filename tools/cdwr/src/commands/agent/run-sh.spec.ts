@@ -761,7 +761,10 @@ describe('run.sh woken by the listener', () => {
               `REPO="${home}"`,
               'AGENT_QUEUE_HOST=container',
               'RUN_INTERVAL_SECONDS=600',
-              sha === undefined ? '' : `AGENT_IMAGE_SHA='${sha}'`,
+              // The agent image exports its own sha, so the unset case clears it
+              sha === undefined
+                ? 'unset AGENT_IMAGE_SHA'
+                : `AGENT_IMAGE_SHA='${sha}'`,
               fn('job_line'),
               'job_line'
             ].join('\n')
