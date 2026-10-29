@@ -63,6 +63,7 @@ const runsPayload = (over: Partial<RunsPayload> = {}): RunsPayload => ({
   suggested: null,
   job: null,
   qv: view(),
+  main: { image: null, desk: null },
   rows: [],
   ...over
 });
@@ -502,6 +503,82 @@ describe('model', () => {
       const m = model(merged, NOW);
       expect(m.prs).toEqual([]);
       expect(m.slots).toEqual([]);
+    });
+  });
+
+  describe('behind main', () => {
+    const OLD = 'abc1234' + '0'.repeat(33);
+    const NEW = 'def5678' + '0'.repeat(33);
+    const job = (over: Partial<NonNullable<RunsPayload['job']>> = {}) => ({
+      line: 'every 10 min',
+      minutes: 10,
+      live: false,
+      host: 'container' as const,
+      rev: 'sha-abc1234',
+      install: 'current' as const,
+      items: '',
+      ...over
+    });
+    const at = (over: Partial<RunsPayload>, desk: string | null = null) =>
+      model(
+        withState((s) => {
+          s.data.runs = runsPayload(over);
+        }),
+        NOW,
+        desk
+      );
+
+    it('flags an image that differs from main', () => {
+      const m = at({ job: job(), main: { image: NEW, desk: null } });
+      expect(m.imageBehind).toEqual({
+        runs: 'sha-abc1234',
+        main: 'sha-def5678'
+      });
+    });
+
+    it('is current when the image is main', () => {
+      const m = at({ job: job(), main: { image: OLD, desk: null } });
+      expect(m.imageBehind).toBeNull();
+    });
+
+    it('does not know without the Job line commit', () => {
+      const m = at({
+        job: job({ rev: null }),
+        main: { image: NEW, desk: null }
+      });
+      expect(m.imageBehind).toBeNull();
+    });
+
+    it('does not know without main image', () => {
+      expect(at({ job: job() }).imageBehind).toBeNull();
+    });
+
+    it('ignores a launchd host', () => {
+      const m = at({
+        job: job({ host: 'launchd' }),
+        main: { image: NEW, desk: null }
+      });
+      expect(m.imageBehind).toBeNull();
+    });
+
+    it('flags a desk that differs from main', () => {
+      const m = at({ main: { image: null, desk: NEW } }, OLD);
+      expect(m.deskBehind).toEqual({
+        runs: 'sha-abc1234',
+        main: 'sha-def5678'
+      });
+    });
+
+    it('is current when the desk is main', () => {
+      expect(
+        at({ main: { image: null, desk: OLD } }, OLD).deskBehind
+      ).toBeNull();
+    });
+
+    it('does not know a local build', () => {
+      expect(
+        at({ main: { image: null, desk: NEW } }, null).deskBehind
+      ).toBeNull();
     });
   });
 

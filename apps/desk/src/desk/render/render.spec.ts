@@ -74,6 +74,7 @@ const runs = (qv: QueueView | null): RunsPayload => ({
     items: ''
   },
   qv,
+  main: { image: null, desk: null },
   rows: [
     {
       when: '2026-10-29 11:50',
@@ -268,6 +269,52 @@ describe('band', () => {
       last: { when: '2026-10-28 01:00', outcome: 'idle' }
     };
     expect(renderBand(model(state, NOW), NOW).className).toBe('now block');
+  });
+
+  const OLD = 'abc1234' + '0'.repeat(33);
+  const NEW = 'def5678' + '0'.repeat(33);
+  const behind = (main: RunsPayload['main'], container: boolean) => {
+    const state = filled();
+    const base = runs(view());
+    state.data.runs = {
+      ...base,
+      main,
+      job: base.job && {
+        ...base.job,
+        ...(container ? { host: 'container', rev: 'sha-abc1234' } : {})
+      }
+    };
+    return state;
+  };
+
+  it('says when the image is behind main', () => {
+    const state = behind({ image: NEW, desk: null }, true);
+    const m = model(state, NOW, null);
+    expect(renderBand(m, NOW).html).toContain('image behind main');
+    const html = SHEETS.scheduler.body(m, state, NOW);
+    expect(html).toContain('cdwr agent deploy --host agent-host');
+    expect(html).toContain('sha-def5678');
+    expect(html).not.toContain('docker compose pull');
+  });
+
+  it('says when the desk is behind main', () => {
+    const state = behind({ image: null, desk: NEW }, false);
+    const m = model(state, NOW, OLD);
+    expect(renderBand(m, NOW).html).toContain('desk behind main');
+    // Said, but no scheduler failure
+    expect(renderBand(m, NOW).className).not.toContain('block');
+    expect(SHEETS.scheduler.body(m, state, NOW)).toContain(
+      'cdwr agent desk install'
+    );
+  });
+
+  it('shows neither when both are current', () => {
+    const state = behind({ image: OLD, desk: OLD }, true);
+    const m = model(state, NOW, OLD);
+    expect(renderBand(m, NOW).html).not.toContain('behind main');
+    const html = SHEETS.scheduler.body(m, state, NOW);
+    expect(html).not.toContain('cdwr agent desk install');
+    expect(html).not.toContain('docker compose pull');
   });
 });
 

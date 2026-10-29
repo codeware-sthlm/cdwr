@@ -300,8 +300,12 @@ const hostHTML = (job: Job): string => {
 /** What to do about scripts that differ from main: pull a newer image, or reinstall on the Mac */
 const updateHint = (job: Job): string =>
   job.host === 'container'
-    ? 'pull the new image: <code>docker compose pull && docker compose up -d</code> in <code>apps/agent-host</code>'
+    ? 'run <code>cdwr agent deploy --host agent-host</code>'
     : 'run <code>cdwr agent install</code>';
+
+/** A `sha-abc1234` linked to its commit on GitHub */
+const shaLink = (sha: string): string =>
+  `<a class="prn" href="${GH_COMMIT + esc(sha.slice(4))}" target="_blank" rel="noopener">${esc(sha)}</a>`;
 
 const renderScheduler = (m: Model): string => {
   if (!m.runs)
@@ -321,9 +325,15 @@ const renderScheduler = (m: Model): string => {
         ? `${esc(job.line)}. The scheduler couldn't read origin/main to compare.`
         : esc(job.line);
   const hostRow = job?.host
-    ? `<dl class="kv"><dt>Runs on</dt><dd>${hostHTML(job)}</dd>${job.host === 'container' && !job.rev ? `<dt>Image</dt><dd>No commit on the Job line yet. The image learns its own commit with the ticket that bakes it in; until then <code>docker inspect cdwr-agent</code> shows it.</dd>` : ''}</dl>`
+    ? `<dl class="kv"><dt>Runs on</dt><dd>${hostHTML(job)}</dd>${job.host === 'container' && !job.rev ? `<dt>Image</dt><dd>No commit on the Job line: a local build, or an image built before it reported one. <code>cdwr agent deploy --host agent-host</code> installs main's.</dd>` : ''}</dl>`
     : '';
-  const jobHTML = `<div class="group"><h3>Job</h3>${hostRow}<div class="${!job || job.install === 'stale' ? 'empty' : 'rule'}">${jobText}</div></div>`;
+  const imageBehind = m.imageBehind
+    ? `<div class="empty">agent-host runs ${shaLink(m.imageBehind.runs)}, main has ${shaLink(m.imageBehind.main)}: run <code>cdwr agent deploy --host agent-host</code>.</div>`
+    : '';
+  const jobHTML = `<div class="group"><h3>Job</h3>${hostRow}<div class="${!job || job.install === 'stale' ? 'empty' : 'rule'}">${jobText}</div>${imageBehind}</div>`;
+  const deskHTML = m.deskBehind
+    ? `<div class="group"><h3>Desk</h3><div class="empty">This desk is ${shaLink(m.deskBehind.runs)}, main has ${shaLink(m.deskBehind.main)}: run <code>cdwr agent desk install</code>.</div></div>`
+    : '';
   const rows = m.runs.rows
     .map(
       (r) => `<li class="item ${isProblem(r.outcome) ? 'blocked' : 'ready'}">
@@ -336,6 +346,7 @@ const renderScheduler = (m: Model): string => {
   return (
     head +
     jobHTML +
+    deskHTML +
     `<div class="group"><h3>Recent runs that did something</h3>${rows ? `<ul>${rows}</ul>` : empty('None yet.')}</div>
     <p class="rule">Idle runs update the last-run and job lines at most once an hour. The scheduler plans new tickets itself. For answers, reviews and parked work it starts an implementing session when none is alive (<code>launched</code>, then <code>implemented</code>, <code>cap</code> or <code>failed</code>). A problem is any outcome other than planned, idle, suggested or nothing, for example a failed run or one that planned nothing. It turns the tile red until a later run goes well. Full logs: <code>cdwr agent logs</code>.</p>`
   );

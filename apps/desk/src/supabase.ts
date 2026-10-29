@@ -17,6 +17,10 @@ export type UsageRow = Tables['usage']['Row'];
 export type ActivityRow = Tables['activity']['Row'];
 export type IssueEventRow = Tables['issue_events']['Row'];
 export type HostMetricRow = Tables['host_metrics']['Row'];
+export type BuildRow = Tables['builds']['Row'];
+
+/** Full commits of main's newest successful builds; null when none is recorded */
+export type MainBuilds = { image: string | null; desk: string | null };
 
 export type SupabaseErrorCode = 'unauthorized' | 'network' | 'bad_response';
 
@@ -44,6 +48,7 @@ export type RunsPayload = {
   suggested: Suggested | null;
   job: Job | null;
   qv: QueueView | null;
+  main: MainBuilds;
   rows: { when: string; outcome: string; ticket: string; detail: string }[];
 };
 
@@ -112,9 +117,15 @@ const newest = (rows: QueueStateRow[]): QueueStateRow | undefined =>
 // The text's clock time is the scheduler host's local time; the row's `at` carries the zone
 const LAST_RUN = /^\d{4}-\d\d-\d\d \d\d:\d\d\s*·\s*(.+)$/;
 
+export const toMain = (rows: BuildRow[]): MainBuilds => ({
+  image: rows.find((r) => r.workflow === 'agent-host-image.yml')?.sha ?? null,
+  desk: rows.find((r) => r.workflow === 'desk.yml')?.sha ?? null
+});
+
 export const toRuns = (
   queueStates: QueueStateRow[],
-  runRows: RunRow[]
+  runRows: RunRow[],
+  buildRows: BuildRow[] = []
 ): RunsPayload | null => {
   const state = newest(queueStates);
   if (!state) return null;
@@ -132,6 +143,7 @@ export const toRuns = (
     // run.sh's job_line already starts with `Job: `; the other two lines are stored bare
     job: state.job ? parseJob(state.job) : null,
     qv: validateQueueView(state.view),
+    main: toMain(buildRows),
     // Idle adds no row
     rows: runRows
       .filter((r) => r.outcome !== 'idle')
@@ -293,6 +305,9 @@ export type SupabaseConfig = { url: string; anonKey: string };
 
 type Failure = { message: string; code?: string; status: number };
 
+/** PostgREST's "table not in the schema cache", and Postgres's "undefined table" */
+const MISSING_TABLE = ['PGRST205', '42P01'];
+
 const failure = ({ message, code, status }: Failure): SupabaseError => {
   if (status === 401 || status === 403 || code === 'PGRST301')
     return new SupabaseError('unauthorized', message);
@@ -334,11 +349,21 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     }
   };
 
+  // The table is applied by hand after merge, so a missing one reads as no builds; any other error fails as usual
+  const buildRows = (result: {
+    data: BuildRow[] | null;
+    error: { message: string; code?: string } | null;
+    status: number;
+  }): BuildRow[] =>
+    result.error && MISSING_TABLE.includes(result.error.code ?? '')
+      ? []
+      : settle(result);
+
   const read = (): Promise<QueuePayloads> =>
     attempt(async () => {
       const now = new Date();
       const since = new Date(now.getTime() - WINDOW_DAYS * DAY_MS);
-      const [states, runs, usageRows, activity] = await Promise.all([
+      const [states, runs, usageRows, activity, builds] = await Promise.all([
         client.from('queue_state').select('*'),
         client
           .from('runs')
@@ -361,11 +386,12 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
           .from('activity')
           .select('*')
           .order('at', { ascending: false })
-          .limit(ACTIVITY_LIMIT)
+          .limit(ACTIVITY_LIMIT),
+        client.from('builds').select('*')
       ]);
       const queueStates = settle(states);
       return {
-        runs: toRuns(queueStates, settle(runs)),
+        runs: toRuns(queueStates, settle(runs), buildRows(builds)),
         usage: toUsage(usageRows, now),
         activity: toActivity(settle(activity), newest(queueStates)?.at ?? null)
       };
@@ -464,11 +490,26 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         hostChanged
       )
       .subscribe();
+    // Its own channel, so that before the builds migration is applied a refused
+    // subscription costs the badges only, never the desk's health or its other updates
+    let builds = client.channel('desk-builds');
+    for (const event of ['INSERT', 'UPDATE'] as const) {
+      builds = builds.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'builds' },
+        changed
+      );
+    }
+    // A (re)join catches up on a build that landed while it was away
+    builds.subscribe((status) => {
+      if (status === 'SUBSCRIBED') changed();
+    });
     return () => {
       clearTimeout(timer);
       clearTimeout(hostTimer);
       void client.removeChannel(channel);
       void client.removeChannel(hostChannel);
+      void client.removeChannel(builds);
     };
   };
 
