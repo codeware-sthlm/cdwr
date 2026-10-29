@@ -90,7 +90,9 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    removes anything. It only removes ticket worktrees whose PR merged or closed and that
    have nothing uncommitted. Clear `agent:working` or `agent:needs-input` from a Done or
    Canceled ticket (`list_issues` with that label in those states; pass the full label list
-   without it) and post `**Agent: label cleared**` naming the label. Leave `agent:review` and
+   without it) and post `**Agent: label cleared**` naming the label. Skip a ticket that blocks
+   an open issue with no agent label: `to_label` needs the blocker's agent label to list that
+   issue as ready to label, so clear it once the issue is labelled. Leave `agent:review` and
    every other label: a merged ticket keeps `agent:review` for its hand-offs, the PR watch and
    the Desk. Then close each parent ticket whose sub-issues are all Done or Canceled: set it
    Done and post `**Agent: closed**` naming the sub-issues. Linear's own
