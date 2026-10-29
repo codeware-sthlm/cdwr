@@ -340,7 +340,7 @@ e2e/         # End-to-end tests
 
 **`apps/cms`** — the platform itself: Payload CMS v3 on Next.js 16, serving the admin UI and the tenant-facing site from one app (`(payload)` and `(site)` route groups). **This is the preferred client for a tenant** — deployed in tenant mode it serves that tenant's site with its admin pages scoped to it. Uses PostgreSQL, S3 storage, Lexical rich text, and Sentry for error tracking.
 
-The Remix showcase `apps/web` is retired; a TanStack Start client, `apps/headless`, replaces it (COD-611).
+**`apps/headless`** — a headless client for a tenant: TanStack Start on Nitro, deployed only as tenant apps (`cdwr-headless-<tenant>`), with no host app. `/apps/headless` holds what all tenants share, such as Sentry; each tenant's own settings are in `/tenants/<tenant>/apps/headless`. It replaces the retired Remix showcase `apps/web`.
 
 ### Publishable Packages (`packages/`)
 

@@ -36,6 +36,16 @@
 
   "packageRules": [
     {
+      "description": "Update the TanStack Start client and its server runtime in one PR",
+      "matchPackageNames": [
+        "@tanstack/react-router",
+        "@tanstack/react-start",
+        "nitro"
+      ],
+      "groupName": "tanstack start",
+      "automerge": false
+    },
+    {
       "description": "Security updates configuration",
       "matchUpdateTypes": ["patch", "minor", "major"],
       "matchCategories": ["security"],
