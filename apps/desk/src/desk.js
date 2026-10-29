@@ -1,8 +1,53 @@
+import {
+  LIMIT,
+  LINEAR_ISSUE,
+  RETRACT,
+  ROLES,
+  SHIP_DAYS,
+  STALE_HOURS,
+  STATES,
+  STUCK_MIN,
+  waitName
+} from './desk/constants';
+import {
+  ageText,
+  dayKey,
+  dayLabel,
+  esc,
+  hhmm,
+  inline,
+  mtok,
+  niceCeil,
+  plural,
+  runTime,
+  seenAgo,
+  span,
+  txt,
+  usd
+} from './desk/format';
+import {
+  agentState,
+  ideaVerdict,
+  isProblem,
+  model,
+  openIssues,
+  prOf as prOfDetail,
+  shipped
+} from './desk/model';
+import { notice } from './desk/notice';
 import { byCreated, parseHandoffs, parseIdea, parsePlan } from './desk/parsers';
+import {
+  perTicketAverage,
+  spendDays as spendDaysOf,
+  spendStats as spendStatsOf,
+  ticketCosts as ticketCostsOf,
+  tokenTotals,
+  unattributedTotal
+} from './desk/spend';
+import { createState, isFilter } from './desk/state';
 
 const SERVER = 'Linear';
 const TEAM = 'Codeware';
-const STATES = ['triage', 'backlog', 'unstarted', 'started'];
 const FIELDS = [
   'title',
   'priority',
@@ -12,89 +57,22 @@ const FIELDS = [
   'createdAt',
   'url'
 ];
-const AGENT = [
-  'agent:needs-input',
-  'agent:working',
-  'agent:ready',
-  'agent:review'
-];
-const OTHER_REPOS = ['nx-plugins', 'enjinex'];
 const CLOSED_WINDOW = '-P30D';
 const IDEA_LABEL = 'agent-idea'; // the Source label of a daily suggestion (COD-579)
 const IDEA_WINDOW = '-P60D'; // how far back the accepted and discarded ideas are shown
 const ACTIVITY_STALE_MIN = 30; // the document's Updated line older than this shows in the warning colour
-const LINEAR_ISSUE = 'https://linear.app/codeware/issue/';
-// The codeware-agent GitHub App's avatar, embedded: the page can't load images from GitHub
 const AGENT_AVATAR =
   'data:image/png;base64,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';
-const ROLES = ['planning', 'orchestrating', 'implementing'];
-const STALE_HOURS = 2; // a scheduler silent this long is a problem
-const STUCK_MIN = 5; // a session polling this long while the queue has work for it missed the wake
-const INSTALL_MINUTES = 10; // what cdwr agent install writes (RUN_INTERVAL_SECONDS 600), assumed until the Job line says
-const LIMIT = 5; // the default limit of open agent PRs, used until the queue view says
 const ROWS = 5; // rows a column shows before "+ n more"; keeps the main view on one screen
 const GH_PR = 'https://github.com/codeware-sthlm/cdwr/pull/';
 const PRIO = { 1: 'Urgent', 2: 'High', 3: 'Medium', 4: 'Low', 0: 'None' };
 const PRIO_MARK = { 1: '!!!', 2: '▲▲', 3: '▲', 4: '▽', 0: '–' };
 
-const buckets = {}; // state type -> issues
-const details = {}; // id -> { steps, done, next, blockedBy }
-const liveHandoffs = {}; // id -> unticked hand-off items read from the ticket's comments, ahead of the queue view
-const errors = {}; // source -> error
-let closed = null; // agent tickets completed in the last 30 days
-let ideas = null; // agent-idea tickets updated in the last 60 days, every state
-const ideaReasons = {}; // id -> the discard word: the cancelled ticket's last comment
-let runs = null; // payload of the "runs" tool: { last, attended, job, qv (the queue view), rows: [{ when, outcome, ticket, detail }] }
-let usage = null; // payload of the "usage" tool: { updated, windowDays, total, pricesDate, unpriced, models, days, tickets }
-let activity = null; // payload of the "activity" tool: { updated, header, dropped, rows: [{ when, ticket, actor, change }] }, or { missing: true }
-let actFilter = 'all'; // the Activity sheet's ticket filter
-let storedAt = null;
-let filter = 'all';
-let openSheet = null;
+const state = createState(); // everything the page shows and the viewer chose; survives a settings re-start
 let mcp = null; // the data adapter, set by start()
 
 const $ = (id) => document.getElementById(id);
-const esc = (s) =>
-  String(s ?? '').replace(
-    /[&<>"]/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]
-  );
-// Links in text from Linear can't be followed here, so show their name: [text](url) → text,
-// a Linear issue URL → its id (COD-123), a GitHub PR or issue URL → #n, any other URL → host and path
-const linkName = (u) => {
-  const lin = u.match(/^https?:\/\/linear\.app\/[^/]+\/issue\/([A-Za-z]+-\d+)/);
-  if (lin) return lin[1].toUpperCase();
-  const gh = u.match(
-    /^https?:\/\/github\.com\/[^/]+\/[^/]+\/(?:pull|issues)\/(\d+)/
-  );
-  if (gh) return '#' + gh[1];
-  return u.replace(/^https?:\/\/(www\.)?/, '').replace(/[/?#]+$/, '');
-};
-const tidy = (s) =>
-  String(s ?? '')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, t, u) =>
-      /^https?:\/\//.test(t.trim()) ? linkName(t.trim()) : t
-    )
-    .replace(/<(https?:\/\/[^>\s]+)>/g, (_, u) => linkName(u))
-    .replace(
-      /https?:\/\/[^\s)\]>"']+/g,
-      (u) =>
-        linkName(u.replace(/[.,;:]+$/, '')) + (u.match(/[.,;:]+$/)?.[0] || '')
-    );
-const txt = (s) => esc(tidy(s));
-const inline = (s) => txt(s).replace(/`([^`]+)`/g, '<code>$1</code>');
-const rankOf = (i) => i.priority?.value || 5;
-// Status first (In Progress, Todo, Backlog, Triage), then priority, then oldest
-const STATUS_RANK = { started: 0, unstarted: 1, backlog: 2, triage: 3 };
-const statusOf = (i) => STATUS_RANK[i.statusType] ?? 4;
-const byQueue = (a, b) =>
-  statusOf(a) - statusOf(b) ||
-  rankOf(a) - rankOf(b) ||
-  a.createdAt.localeCompare(b.createdAt);
-const agentState = (i) =>
-  (i.labels || []).find((l) => AGENT.includes(l))?.slice(6) || null;
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-const ticketLine = (x) => (x ? x.i.id + ' ' + x.i.title : '');
+const bucketsLoaded = () => STATES.some((s) => state.data.buckets.has(s));
 
 const ICON = {
   plan: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
@@ -127,24 +105,6 @@ const icon = (k) =>
 
 // ---------- Data ----------
 
-function openIssues() {
-  const seen = new Map();
-  for (const s of STATES)
-    for (const i of buckets[s] || []) {
-      if (i.statusType === 'completed' || i.statusType === 'canceled') continue;
-      if ((i.labels || []).some((l) => OTHER_REPOS.includes(l))) continue;
-      seen.set(i.id, i);
-    }
-  return [...seen.values()].sort(byQueue);
-}
-
-const ideaVerdict = (i) =>
-  i.statusType === 'canceled'
-    ? 'discarded'
-    : agentState(i) || i.statusType === 'completed'
-      ? 'accepted'
-      : 'to decide';
-
 const HOST = { container: 'Container', launchd: 'Mac · launchd' };
 const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
 // "Container · sha-9c7a20d" (the commit links to GitHub), "Mac · launchd", or nothing before the line says
@@ -160,62 +120,6 @@ const updateHint = (job) =>
   job?.host === 'container'
     ? 'pull the new image: <code>docker compose pull && docker compose up -d</code> in <code>apps/agent-host</code>'
     : 'run <code>cdwr agent install</code>';
-const withIds = (s) =>
-  inline(s).replace(
-    /\b([A-Z]+-\d+)\b/g,
-    (id) =>
-      `<a class="id" href="${LINEAR_ISSUE + id}" target="_blank" rel="noopener">${id}</a>`
-  );
-const ATTENDED = { running: 'Running', 'run now': 'Run now', idle: 'Idle' };
-const activityAge = () =>
-  activity?.updated
-    ? (Date.now() - Date.parse(activity.updated.replace(' ', 'T'))) / 6e4
-    : null;
-const ageText = (min) =>
-  min < 60
-    ? `${Math.max(0, Math.round(min))} min ago`
-    : min < 48 * 60
-      ? `${Math.round(min / 60)} h ago`
-      : `${Math.round(min / 1440)} days ago`;
-
-const runTime = (when) => Date.parse(when.replace(' ', 'T'));
-const isProblem = (outcome) =>
-  !/^(idle|planned( [A-Z]+-\d+)?|launched|implemented|suggested( [A-Z]+-\d+)?|nothing|skip)$/.test(
-    outcome
-  );
-
-// Titles and links for the ids the queue view names: open tickets, then the recently closed
-function issueIndex() {
-  const map = new Map();
-  for (const i of closed || []) map.set(i.id, i);
-  for (const s of STATES) for (const i of buckets[s] || []) map.set(i.id, i);
-  return map;
-}
-const stub = (id) => ({
-  id,
-  title: '',
-  url: LINEAR_ISSUE + id,
-  status: '',
-  priority: null
-});
-
-// Blockers before the PRs they block, otherwise the queue view's order; a cycle falls back to that order
-function mergeOrder(prs, blockersOf) {
-  const byTicket = new Map(prs.map((x) => [x.ticket, x]));
-  const placed = new Set(),
-    out = [];
-  const visit = (x, path) => {
-    if (placed.has(x.ticket) || path.has(x.ticket)) return;
-    path.add(x.ticket);
-    for (const b of blockersOf(x.ticket))
-      if (byTicket.has(b)) visit(byTicket.get(b), path);
-    path.delete(x.ticket);
-    placed.add(x.ticket);
-    out.push(x);
-  };
-  for (const x of prs) visit(x, new Set());
-  return out;
-}
 // "merge #617 (COD-566) first", or a blocker without a PR yet; empty when nothing holds the PR back
 const blockedText = (m, id) =>
   (m.prBlockers?.get(id) || [])
@@ -226,169 +130,17 @@ const blockedText = (m, id) =>
     )
     .join('; ');
 
-function model() {
-  const idx = issueIndex();
-  const v = runs?.qv || null;
-  const get = (id) => idx.get(id) || stub(id);
-  const m = { all: openIssues(), runs, v, get };
-  m.before = v ? v.table.before : [];
-  m.plans = m.before.filter((x) => x.kind === 'plan');
-  m.questions = m.before.filter((x) => x.kind !== 'plan');
-  m.after = v ? v.table.after : [];
-  // Open PRs in merge order: a ticket's PR waits for the open tickets it is blocked by in Linear
-  const openPrs = m.after.filter((x) => x.kind === 'pr');
-  const prByTicket = new Map(openPrs.map((x) => [x.ticket, x]));
-  const blockersOf = (id) =>
-    (details[id]?.blockedBy || []).filter((b) => {
-      const i = idx.get(b);
-      return i && !['completed', 'canceled'].includes(i.statusType);
-    });
-  m.prs = mergeOrder(openPrs, blockersOf);
-  m.prBlockers = new Map(
-    m.prs.map((x) => [
-      x.ticket,
-      blockersOf(x.ticket).map((b) => ({
-        ticket: b,
-        pr: prByTicket.has(b) ? prOf(b, prByTicket.get(b).pr) : null
-      }))
-    ])
-  );
-  // Which tickets have hand-offs comes from the queue view; which items are still open, from Linear directly
-  m.handoffs = m.after
-    .filter((x) => x.kind === 'handoffs')
-    .map((x) =>
-      liveHandoffs[x.ticket] ? { ...x, items: liveHandoffs[x.ticket] } : x
-    )
-    .filter((x) => x.items?.length);
-  m.handoffItems = m.handoffs.reduce((n, x) => n + (x.items?.length || 0), 0);
-  m.next = v ? v.next : [];
-  m.parked = v ? v.parked : [];
-  m.held = v ? v.held : { tickets: [], free: [] };
-  m.limit = v ? v.limit : { used: 0, max: LIMIT };
-  const slots = new Map();
-  for (const x of m.prs)
-    slots.set(x.ticket, {
-      ticket: x.ticket,
-      pr: x.pr,
-      why: 'open PR, in review'
-    });
-  for (const p of m.parked)
-    if (!slots.has(p.ticket))
-      slots.set(p.ticket, {
-        ticket: p.ticket,
-        pr: p.pr,
-        why: `PR waits on ${WAIT[p.wait] || p.wait}`
-      });
-  m.slots = [...slots.values()];
-  m.session = v ? v.session : null;
-  // Polling since its last heartbeat while the queue view, taken later, has work for it: wait.sh never woke it
-  const s = m.session;
-  const polled =
-    s?.state === 'alive' &&
-    s.detail === 'polling' &&
-    s.lastSeen &&
-    v?.at &&
-    m.next.length
-      ? (Date.parse(v.at) - Date.parse(s.lastSeen)) / 6e4
-      : null;
-  m.stuck = polled !== null && polled >= STUCK_MIN ? polled : null;
-  const day = Date.now() - 864e5;
-  // A problem counts until a later run goes well: an OK row, or an OK last-run line
-  const okTimes = (runs?.rows || [])
-    .filter((r) => !isProblem(r.outcome))
-    .map((r) => runTime(r.when));
-  if (runs?.last && !isProblem(runs.last.outcome))
-    okTimes.push(runTime(runs.last.when));
-  const lastOk = Math.max(0, ...okTimes);
-  m.runProblems = (runs?.rows || []).filter(
-    (r) =>
-      isProblem(r.outcome) && runTime(r.when) >= day && runTime(r.when) > lastOk
-  );
-  m.lastRunAge = runs?.last
-    ? (Date.now() - runTime(runs.last.when)) / 36e5
-    : null;
-  // Idle runs publish at most hourly, so a slow interval stretches what counts as silent
-  m.staleHours = Math.max(
-    STALE_HOURS,
-    (2 * (runs?.job?.minutes || 0)) / 60 + 1
-  );
-  m.schedulerStale = m.lastRunAge === null || m.lastRunAge > m.staleHours;
-  m.installStale = runs?.job?.install === 'stale';
-  // The daily suggestion: an agent-idea ticket without an Agent label waits on Håkan's verdict
-  const allIdeas = (ideas || []).filter(
-    (i) => !(i.labels || []).some((l) => OTHER_REPOS.includes(l))
-  );
-  m.ideasPending = allIdeas
-    .filter((i) => ideaVerdict(i) === 'to decide')
-    .sort(byCreated);
-  m.ideasAccepted = allIdeas
-    .filter((i) => ideaVerdict(i) === 'accepted')
-    .sort(byCreated)
-    .reverse();
-  m.ideasDiscarded = allIdeas
-    .filter((i) => ideaVerdict(i) === 'discarded')
-    .sort((a, b) =>
-      String(b.canceledAt || '').localeCompare(String(a.canceledAt || ''))
-    );
-  m.suggested = runs?.suggested || null;
-  return m;
-}
-
 // Previews: the overview each card shows before its sheet opens
-const pvEmpty = (t) => `<p class="pv-empty">${t}</p>`;
 const pvMore = (n) => (n > 0 ? `<p class="pv-more">+ ${n} more</p>` : '');
 const tLink = (i) =>
   `<a class="t" href="${esc(i.url)}" target="_blank" rel="noopener"><span class="id">${esc(i.id)}</span>${esc(i.title)}</a>`;
-function pvTickets(xs, max, sub = () => '', rank = false) {
-  if (!xs.length) return '';
-  return `<ul class="pv-list">${xs
-    .slice(0, max)
-    .map((x, n) => {
-      const extra = sub(x);
-      return `<li><span class="rank">${rank ? n + 1 : ''}</span>${tLink(x.i)}${extra ? `<span class="sub">${extra}</span>` : ''}</li>`;
-    })
-    .join('')}</ul>${pvMore(xs.length - max)}`;
-}
-const nextOf = (x) => (details[x.i.id]?.next ? txt(details[x.i.id].next) : '');
-function progressOf(x) {
-  const d = details[x.i.id];
-  if (!d?.steps) return nextOf(x);
-  return `<span class="meta"><span class="bar" aria-hidden="true"><i style="width:${Math.round((d.done / d.steps) * 100)}%"></i></span>${d.done}/${d.steps} steps</span>${d.next ? `<span>${txt(d.next)}</span>` : ''}`;
-}
 function loadMeter(m) {
   const n = m.limit.used,
     max = m.limit.max || LIMIT;
   return `<div class="meter" aria-hidden="true"><i style="width:${Math.min(100, (n / max) * 100)}%;background:var(${n >= max ? '--block' : n >= max - 1 ? '--wait' : '--ok'})"></i></div>`;
 }
 
-// Agent tickets closed per day over the last 30 days, the one trend on the page
-const SHIP_DAYS = 30;
-const dayKey = (t) => {
-  const d = new Date(t);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-const dayLabel = (key) =>
-  new Date(key + 'T12:00').toLocaleDateString([], {
-    month: 'short',
-    day: 'numeric'
-  });
-function shipped() {
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  const days = [];
-  for (let k = SHIP_DAYS - 1; k >= 0; k--)
-    days.push({ key: dayKey(today.getTime() - k * 864e5), items: [] });
-  const byKey = new Map(days.map((d) => [d.key, d]));
-  for (const i of closed || []) {
-    if (!i.completedAt || !(i.labels || []).some((l) => l.startsWith('agent:')))
-      continue;
-    if ((i.labels || []).some((l) => OTHER_REPOS.includes(l))) continue;
-    byKey.get(dayKey(i.completedAt))?.items.push(i);
-  }
-  const total = days.reduce((n, d) => n + d.items.length, 0);
-  const week = days.slice(-7).reduce((n, d) => n + d.items.length, 0);
-  return { days, total, week };
-}
+const shippedNow = () => shipped(state.data.closed, new Date());
 
 // Both day charts share these insets, so "Spend per day" lines up under "Closed by the agent"
 const PAD = { l: 38, r: 4, t: 8, b: 20 };
@@ -396,7 +148,7 @@ const PAD = { l: 38, r: 4, t: 8, b: 20 };
 // Drawn after layout so text stays at its real size at every width
 function drawChart(el) {
   if (el.dataset.chart === 'spend') return drawSpend(el);
-  const { days } = shipped();
+  const { days } = shippedNow();
   const W = Math.max(240, el.clientWidth),
     H = Number(el.dataset.h) || 150;
   const padL = PAD.l,
@@ -456,38 +208,11 @@ function drawChart(el) {
 }
 // ---------- Spend ----------
 
-const usd = (n, dp = 0) =>
-  n == null
-    ? '?'
-    : '$' +
-      n.toLocaleString('en-US', {
-        minimumFractionDigits: dp,
-        maximumFractionDigits: dp
-      });
-const niceCeil = (v) => {
-  const p = 10 ** Math.floor(Math.log10(Math.max(v, 1)));
-  return [1, 2, 2.5, 5, 10].map((k) => k * p).find((x) => x >= v);
-};
 const legendHTML = () =>
   `<div class="legend">${ROLES.map((r) => `<span><i class="seg-${r}" aria-hidden="true"></i>${r}</span>`).join('')}</div>`;
 
-// The same 30 local days as shipped(), each with its cost per role; days the document lacks are zero
-function spendDays() {
-  const byDay = new Map((usage?.days || []).map((d) => [d.day, d]));
-  return shipped().days.map(({ key }) => {
-    const d = byDay.get(key);
-    return {
-      key,
-      ...Object.fromEntries(ROLES.map((r) => [r, d?.[r] || 0])),
-      total: d?.total ?? 0
-    };
-  });
-}
-function spendStats() {
-  const days = spendDays();
-  const sum = (xs) => xs.reduce((n, d) => n + d.total, 0);
-  return { days, total: sum(days), week: sum(days.slice(-7)) };
-}
+const spendDays = () => spendDaysOf(state.data.usage, shippedNow().days);
+const spendStats = () => spendStatsOf(state.data.usage, shippedNow().days);
 
 function drawSpend(el) {
   const days = spendDays();
@@ -559,15 +284,7 @@ function drawSpend(el) {
   };
 }
 
-// Agent tickets closed in the window that have a usage row, most expensive first
-function ticketCosts() {
-  const cost = new Map((usage?.tickets || []).map((t) => [t.ticket, t]));
-  return shipped()
-    .days.flatMap((d) => d.items)
-    .filter((i) => cost.has(i.id))
-    .map((i) => ({ i, ...cost.get(i.id) }))
-    .sort((a, b) => (b.total ?? 0) - (a.total ?? 0));
-}
+const ticketCosts = () => ticketCostsOf(state.data.usage, shippedNow().days);
 function hbarsHTML(rows, max) {
   const top = Math.max(1, ...rows.map((r) => r.total ?? 0));
   return `<div class="hbars">${rows
@@ -588,38 +305,20 @@ function hbarsHTML(rows, max) {
 
 const tableHTML = (head, rows) =>
   `<div class="tblwrap"><table class="tbl"><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-const mtok = (n) =>
-  n >= 1e9
-    ? (n / 1e9).toFixed(2) + 'B'
-    : n >= 1e6
-      ? (n / 1e6).toFixed(1) + 'M'
-      : n >= 1e3
-        ? Math.round(n / 1e3) + 'k'
-        : String(n);
 const noUsage = () =>
   empty(
     'No usage document yet. The scheduler writes <code>Agent queue: usage</code> at most once an hour once <code>cdwr agent install</code> has run with COD-533.'
   );
 
 function renderSpend() {
+  const { usage } = state.data;
   if (!usage) return noUsage();
   const s = spendStats();
-  const tok = usage.models.reduce(
-    (a, m) => ({
-      input: a.input + m.input,
-      output: a.output + m.output,
-      cacheRead: a.cacheRead + m.cacheRead,
-      cacheWrite: a.cacheWrite + m.cacheWrite
-    }),
-    { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
-  );
-  const allTok = tok.input + tok.output + tok.cacheRead + tok.cacheWrite;
-  const unattributed =
-    usage.tickets.find((t) => t.ticket === 'unattributed')?.total || 0;
+  const tok = tokenTotals(usage.models);
+  const allTok = tok.all;
+  const unattributed = unattributedTotal(usage);
   const tc = ticketCosts();
-  const perTicket = tc.length
-    ? tc.reduce((n, r) => n + (r.total || 0), 0) / tc.length
-    : null;
+  const perTicket = perTicketAverage(tc);
   const pct = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '–');
   return `<div class="pv-stats">
       <div><b>${usd(s.total)}</b><span>last ${SHIP_DAYS} days</span></div>
@@ -666,6 +365,7 @@ function renderSpend() {
 }
 
 function renderTicketCost() {
+  const { usage } = state.data;
   if (!usage) return noUsage();
   const rows = ticketCosts();
   return `${legendHTML()}${rows.length ? hbarsHTML(rows, rows.length) : empty('No agent ticket closed in the last ' + SHIP_DAYS + ' days has usage recorded.')}
@@ -697,7 +397,7 @@ try {
 } catch {}
 
 function renderShipped() {
-  const s = shipped();
+  const s = shippedNow();
   const daysWith = s.days.filter((d) => d.items.length).reverse();
   const listHTML = daysWith
     .map(
@@ -737,16 +437,13 @@ function activityTable(rows, compact) {
     .join('')}</tbody></table></div>`;
 }
 // The Updated line, in the warning colour once it's older than ACTIVITY_STALE_MIN: the scheduler stops while the Mac sleeps
-function activityHead() {
-  const age = activityAge();
+function activityHead(m, activity) {
+  const age = m.activityAge;
   const stale = age !== null && age > ACTIVITY_STALE_MIN;
   return `<span class="${stale ? 'stale' : ''}" title="${stale ? "The scheduler hasn't published for " + esc(ageText(age)) + '. It stops while the Mac sleeps.' : ''}">${esc(activity.header)}</span>`;
 }
-const activityDay = () =>
-  (activity?.rows || []).filter((r) => Date.now() - runTime(r.when) <= 864e5)
-    .length;
-
-function renderActivity() {
+function renderActivity(m) {
+  const { activity } = state.data;
   if (!activity) return empty("The activity document hasn't loaded yet.");
   if (activity.missing) return empty(NO_ACTIVITY);
   const tickets = [
@@ -754,20 +451,21 @@ function renderActivity() {
       activity.rows.map((r) => r.ticket).filter((t) => /^[A-Z]+-\d+$/.test(t))
     )
   ].sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]));
-  if (actFilter !== 'all' && !tickets.includes(actFilter)) actFilter = 'all';
+  if (state.ui.actFilter !== 'all' && !tickets.includes(state.ui.actFilter))
+    state.ui.actFilter = 'all';
   const rows =
-    actFilter === 'all'
+    state.ui.actFilter === 'all'
       ? activity.rows
-      : activity.rows.filter((r) => r.ticket === actFilter);
-  return `<div class="act-bar"><label>Ticket <select data-af aria-label="Filter by ticket"><option value="all"${actFilter === 'all' ? ' selected' : ''}>All</option>${tickets.map((t) => `<option value="${esc(t)}"${t === actFilter ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label><span>${plural(rows.length, 'event', 'events')}</span></div>
+      : activity.rows.filter((r) => r.ticket === state.ui.actFilter);
+  return `<div class="act-bar"><label>Ticket <select data-af aria-label="Filter by ticket"><option value="all"${state.ui.actFilter === 'all' ? ' selected' : ''}>All</option>${tickets.map((t) => `<option value="${esc(t)}"${t === state.ui.actFilter ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label><span>${plural(rows.length, 'event', 'events')}</span></div>
     ${activity.dropped ? `<p class="rule">${esc(activity.dropped)}</p>` : ''}
     ${rows.length ? activityTable(rows, false) : empty('No events for this ticket in the window.')}
-    <p class="rule">From Linear's issue history of tickets that carried an <code>agent:*</code> label, and the scheduler's own runs. The agent and Håkan write through the same Linear account, so only comments starting <code>**Agent</code> say <b>agent</b>; other changes from that account carry its name. Updated ${activityHead()}.</p>`;
+    <p class="rule">From Linear's issue history of tickets that carried an <code>agent:*</code> label, and the scheduler's own runs. The agent and Håkan write through the same Linear account, so only comments starting <code>**Agent</code> say <b>agent</b>; other changes from that account carry its name. Updated ${activityHead(m, activity)}.</p>`;
 }
 
 // ---------- Main view ----------
 
-const prOf = (id, known) => known || details[id]?.pr || null;
+const prOf = (id, known) => prOfDetail(state.details, id, known);
 const prn = (n) =>
   n
     ? `<a class="prn" href="${GH_PR + n}" target="_blank" rel="noopener" title="Pull request ${esc(n)}">#${esc(n)}</a>`
@@ -800,8 +498,7 @@ const reasonChip = (r) => {
   const [t, c] = REASON[r] || [r, 'resume'];
   return `<span class="chip ${c}">${esc(t)}</span>`;
 };
-const WAIT = { ci: 'CI', copilot: 'Copilot review' };
-const nextAt = (m) => (nextRun(m) ? hhmm(nextRun(m)) : 'its next run');
+const nextAt = (m) => (m.nextRun ? hhmm(m.nextRun) : 'its next run');
 const WHY = {
   answered: 'Your reply is in.',
   'review feedback': 'Its PR has review comments to address.',
@@ -829,18 +526,13 @@ function whyLine(m, x) {
 }
 const parkedText = (p) =>
   p.resolved
-    ? `${WAIT[p.wait] || p.wait} ${esc(p.outcome || 'done')}, resumes next`
-    : `waits on ${WAIT[p.wait] || esc(p.wait)}`;
-const seenAgo = (iso) =>
-  iso ? ageText((Date.now() - Date.parse(iso)) / 6e4) : '';
-const span = (min) =>
-  min < 60
-    ? `${Math.round(min)} min`
-    : `${Math.floor(min / 60)} h ${Math.round(min % 60)} min`;
+    ? `${waitName(p.wait) || p.wait} ${esc(p.outcome || 'done')}, resumes next`
+    : `waits on ${waitName(p.wait) || esc(p.wait)}`;
 
 // One sentence for what happens next, from the session and the head of the queue
 function headline(m) {
   const v = m.v;
+  const { runs } = m;
   if (!runs) return { tone: '', text: 'Loading the runs document…', note: '' };
   if (!v)
     return {
@@ -850,7 +542,7 @@ function headline(m) {
     };
   const s = m.session || { state: 'none' };
   const first = m.next[0];
-  const when = nextRun(m) ? '~' + hhmm(nextRun(m)) : 'its next run';
+  const when = m.nextRun ? '~' + hhmm(m.nextRun) : 'its next run';
   const on = s.ticket ? ' on ' + idLink(s.ticket) : '';
   let tone = '',
     text;
@@ -893,7 +585,7 @@ function headline(m) {
     : '';
   const seen =
     s.lastSeen && s.state !== 'none'
-      ? `session seen ${esc(seenAgo(s.lastSeen))}`
+      ? `session seen ${esc(seenAgo(s.lastSeen, new Date()))}`
       : '';
   return {
     tone,
@@ -905,6 +597,7 @@ function headline(m) {
 }
 
 function renderNow(m) {
+  const { runs } = m;
   const h = headline(m);
   const s = m.session || { state: 'none' };
   const sched = !runs
@@ -925,7 +618,7 @@ function renderNow(m) {
     `<button type="button" class="pill ${esc(s.state)}${m.stuck !== null ? ' stuck' : ''}" data-w="session" aria-haspopup="dialog"><i aria-hidden="true"></i>${m.stuck !== null ? 'Session stuck' : esc(SESSION[s.state] || s.state)}${s.state !== 'none' && s.detail ? ` · ${esc(s.detail)}` : ''}</button>
     <div class="headline"><p>${h.text}</p>${h.note ? `<small>${h.note}</small>` : ''}</div>
     <button type="button" class="gauge" data-w="limit" aria-haspopup="dialog"><span class="k">Limit · agent PRs in flight</span><b>${m.limit.used} <small>of ${m.limit.max} · ${m.limit.used >= m.limit.max ? 'no new ticket starts' : plural(m.limit.max - m.limit.used, 'slot', 'slots') + ' free'}</small></b>${loadMeter(m)}</button>
-    <button type="button" class="gauge" data-w="scheduler" aria-haspopup="dialog"><span class="k">Scheduler</span><b>${esc(sched)}</b><small style="color:var(--muted);font-size:.78rem">${runs?.last ? 'last ' + esc(runs.last.when.slice(11)) + ' · next ' + (nextRun(m) ? hhmm(nextRun(m)) : '?') : 'no runs yet'}${runs?.job?.host ? '<br>' + esc(HOST[runs.job.host]) + (runs.job.rev ? ' · ' + esc(runs.job.rev) : '') : ''}</small></button>`;
+    <button type="button" class="gauge" data-w="scheduler" aria-haspopup="dialog"><span class="k">Scheduler</span><b>${esc(sched)}</b><small style="color:var(--muted);font-size:.78rem">${runs?.last ? 'last ' + esc(runs.last.when.slice(11)) + ' · next ' + (m.nextRun ? hhmm(m.nextRun) : '?') : 'no runs yet'}${runs?.job?.host ? '<br>' + esc(HOST[runs.job.host]) + (runs.job.rev ? ' · ' + esc(runs.job.rev) : '') : ''}</small></button>`;
 }
 
 function rowsHTML(items, none) {
@@ -955,7 +648,7 @@ function colHTML(k, title, count, body) {
 }
 
 function renderCols(m) {
-  const loading = !runs;
+  const loading = !m.runs;
   const before = [
     ...m.before.map(
       (x) =>
@@ -1028,21 +721,22 @@ function renderCols(m) {
 }
 
 function renderMore(m) {
-  const loaded = STATES.some((s) => buckets[s]);
+  const { activity, closed, usage } = state.data;
+  const loaded = bucketsLoaded();
   const tiles = [
     [
       'activity',
       'activity',
       'Activity, 24 h',
       activity && !activity.missing
-        ? plural(activityDay(), 'event', 'events')
+        ? plural(m.activityDay, 'event', 'events')
         : '–'
     ],
     [
       'shipped',
       'bars',
       'Closed, 30 days',
-      loaded || closed ? String(shipped().total) : '–'
+      loaded || closed ? String(shippedNow().total) : '–'
     ],
     ['spend', 'coin', 'Spend, 30 days', usage ? usd(spendStats().total) : '–'],
     [
@@ -1050,10 +744,8 @@ function renderMore(m) {
       'ticket',
       'Per closed ticket',
       (() => {
-        const r = ticketCosts();
-        return r.length
-          ? usd(r.reduce((n, x) => n + (x.total || 0), 0) / r.length)
-          : '–';
+        const avg = perTicketAverage(ticketCosts());
+        return avg === null ? '–' : usd(avg);
       })()
     ],
     ['ideas', 'bulb', 'Suggestion, daily', ...ideaTile(m)],
@@ -1062,7 +754,7 @@ function renderMore(m) {
       'timers',
       'timer',
       'Next scheduler run',
-      nextRun(m) ? '~' + hhmm(nextRun(m)) : '–'
+      m.nextRun ? '~' + hhmm(m.nextRun) : '–'
     ]
   ];
   $('more').innerHTML = tiles
@@ -1075,6 +767,7 @@ function renderMore(m) {
 
 // The tile's value and whether it's a problem: an idea to decide first, else what the last suggest run did
 function ideaTile(m) {
+  const { ideas } = state.data;
   if (m.ideasPending.length)
     return [plural(m.ideasPending.length, 'to decide', 'to decide')];
   const s = m.suggested;
@@ -1090,7 +783,7 @@ function ideaTile(m) {
 }
 
 function renderMain() {
-  const m = model();
+  const m = model(state, new Date());
   renderNow(m);
   renderCols(m);
   renderMore(m);
@@ -1184,7 +877,7 @@ const SHEETS = [
 const empty = (t) => `<div class="empty">${t}</div>`;
 
 function itemHTML(i, opts = {}) {
-  const d = details[i.id];
+  const d = state.details.get(i.id);
   const prog =
     d && d.steps
       ? `<div class="meta"><div class="bar" aria-hidden="true"><i style="width:${Math.round((d.done / d.steps) * 100)}%"></i></div><span>${d.done}/${d.steps} steps</span></div>`
@@ -1227,13 +920,13 @@ function renderBefore(m) {
 // ---------- Suggestions ----------
 
 function ideaCard(i) {
-  const d = details[i.id]?.idea;
+  const d = state.details.get(i.id)?.idea;
   const when = new Date(i.createdAt).toLocaleDateString([], {
     month: 'short',
     day: 'numeric'
   });
   const part = (h, html) => (html ? `<div><h4>${h}</h4>${html}</div>` : '');
-  const body = details[i.id]
+  const body = state.details.has(i.id)
     ? d
       ? part(
           'Evidence',
@@ -1255,9 +948,10 @@ function ideaCard(i) {
 }
 
 function renderIdeas(m) {
+  const { ideas } = state.data;
   if (!ideas)
     return empty(
-      errors['ideas']
+      state.errors.has('ideas')
         ? "The suggestions couldn't load from Linear."
         : 'Loading the suggestions…'
     );
@@ -1290,12 +984,11 @@ function renderIdeas(m) {
           itemHTML(i, {
             state: 'plain',
             side: i.canceledAt ? esc(dayLabel(i.canceledAt.slice(0, 10))) : '',
-            note:
-              i.id in ideaReasons
-                ? ideaReasons[i.id]
-                  ? `<span class="reason">“${esc(ideaReasons[i.id])}”</span>`
-                  : `<span class="reason">no reason given</span>`
-                : ''
+            note: state.ideaReasons.has(i.id)
+              ? state.ideaReasons.get(i.id)
+                ? `<span class="reason">“${esc(state.ideaReasons.get(i.id))}”</span>`
+                : `<span class="reason">no reason given</span>`
+              : ''
           })
         )
         .join('')}</ul></div>`
@@ -1306,7 +999,7 @@ function renderIdeas(m) {
   const notWorth = m.ideasDiscarded.filter(
     (i) =>
       Date.parse(i.canceledAt || i.createdAt) >= month &&
-      /not worth/i.test(ideaReasons[i.id] || '')
+      /not worth/i.test(state.ideaReasons.get(i.id) || '')
   ).length;
   const stats = `<div class="pv-stats"><div><b>${recent(m.ideasAccepted, (i) => i.completedAt)}</b><span>accepted, 30 days</span></div><div><b>${recent(m.ideasDiscarded, (i) => i.canceledAt)}</b><span>discarded, 30 days</span></div><div><b>${notWorth}</b><span>of them "not worth it"</span></div></div>`;
   return (
@@ -1327,7 +1020,7 @@ function renderNext(m) {
         'Nothing to take. In Linear, add <code>agent:ready</code> to a ticket as the last step of refining it.'
       );
   const parked = m.parked.length
-    ? `<div class="group"><h3>Parked on a wait · ${m.parked.length}</h3><ul>${m.parked.map((p) => itemHTML(m.get(p.ticket), { state: 'working', side: `${prn(prOf(p.ticket, p.pr))} <span class="chip parked">${esc(WAIT[p.wait] || p.wait)}</span>`, note: `${parkedText(p)}${p.pr ? ' for #' + esc(p.pr) : ''}, since ${p.since ? hhmm(Date.parse(p.since)) : '?'}. It resumes when that finishes.` })).join('')}</ul></div>`
+    ? `<div class="group"><h3>Parked on a wait · ${m.parked.length}</h3><ul>${m.parked.map((p) => itemHTML(m.get(p.ticket), { state: 'working', side: `${prn(prOf(p.ticket, p.pr))} <span class="chip parked">${esc(waitName(p.wait) || p.wait)}</span>`, note: `${parkedText(p)}${p.pr ? ' for #' + esc(p.pr) : ''}, since ${p.since ? hhmm(Date.parse(p.since)) : '?'}. It resumes when that finishes.` })).join('')}</ul></div>`
     : '';
   const held = m.held.tickets.length
     ? `<div class="group"><h3>Held by the limit · ${m.held.tickets.length}</h3><ul>${m.held.tickets.map((id) => itemHTML(m.get(id), { state: 'plain', side: '<span class="chip held">held</span>' })).join('')}</ul>${freeHTML(m)}</div>`
@@ -1398,21 +1091,6 @@ function renderLoad(m) {
     <p class="rule">Each open <code>agent:review</code> PR counts one, and so does a ticket parked on its PR's CI or Copilot review, since its PR is already open. Hand-offs don't count. At ${max}, <code>/work-queue</code> stops starting new tickets but still resumes your answers, reviews and parked work. A session's <code>limit=N</code> isn't visible here, so the queue view's limit applies.</p>`;
 }
 
-// Runs keep launchd's grid from the last load, so step the last-run time forward by the interval.
-// Sleep shifts the grid, hence "about".
-const hhmm = (t) =>
-  new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-const runMinutes = (m) => m.runs?.job?.minutes || INSTALL_MINUTES;
-function nextRun(m) {
-  const min = runMinutes(m),
-    last = m.runs?.last;
-  if (!last) return null;
-  const step = min * 6e4;
-  let t = runTime(last.when) + step;
-  if (t < Date.now()) t += Math.ceil((Date.now() - t) / step) * step;
-  return t;
-}
-
 // Kept by hand in step with run.sh, the work-queue skill and agent.logic.ts; only the interval is read live
 function timerGroups(m) {
   const min = m.runs?.job?.minutes;
@@ -1423,7 +1101,7 @@ function timerGroups(m) {
       [
         [
           'Scheduled run',
-          `every ${runMinutes(m)} min`,
+          `every ${m.runMinutes} min`,
           `launchd StartInterval, from RUN_INTERVAL_SECONDS in agent.logic.ts (600 s). The live value comes from the Job line${assumed}`
         ],
         [
@@ -1433,7 +1111,7 @@ function timerGroups(m) {
         ],
         [
           'Next run',
-          nextRun(m) ? 'about ' + hhmm(nextRun(m)) : 'unknown',
+          m.nextRun ? 'about ' + hhmm(m.nextRun) : 'unknown',
           'last run plus whole intervals; sleep shifts it'
         ],
         [
@@ -1641,9 +1319,9 @@ function renderAttended(m) {
 function renderAll(m) {
   const queuePos = new Map(m.next.map((x, n) => [x.ticket, n + 1]));
   const shown = m.all.filter((i) =>
-    filter === 'all'
+    state.ui.filter === 'all'
       ? true
-      : filter === 'agent'
+      : state.ui.filter === 'agent'
         ? agentState(i)
         : ['unstarted', 'started'].includes(i.statusType) &&
           i.status !== 'Triage'
@@ -1663,9 +1341,9 @@ function renderAll(m) {
     })
     .join('');
   return `<div class="filters" role="group" aria-label="Filter">
-      <button type="button" data-f="all" aria-pressed="${filter === 'all'}">All open</button>
-      <button type="button" data-f="todo" aria-pressed="${filter === 'todo'}">Todo + In Progress</button>
-      <button type="button" data-f="agent" aria-pressed="${filter === 'agent'}">Agent only</button>
+      <button type="button" data-f="all" aria-pressed="${state.ui.filter === 'all'}">All open</button>
+      <button type="button" data-f="todo" aria-pressed="${state.ui.filter === 'todo'}">Todo + In Progress</button>
+      <button type="button" data-f="agent" aria-pressed="${state.ui.filter === 'agent'}">Agent only</button>
     </div>
     ${shown.length ? `<ol>${rows}</ol>` : empty('No tickets match this filter.')}
     <p class="rule">Manual drag order in a Linear view isn't exposed through the connector.</p>`;
@@ -1676,10 +1354,10 @@ function renderAll(m) {
 function showSheet(id, focus = true) {
   const w = SHEETS.find((x) => x.id === id);
   if (!w) return;
-  openSheet = id;
+  state.ui.openSheet = id;
   $('sheet-title').textContent = w.title;
   $('sheet-sub').textContent = w.sub;
-  $('sheet-body').innerHTML = w.body(model());
+  $('sheet-body').innerHTML = w.body(model(state, new Date()));
   $('sheet').hidden = false;
   $('scrim').hidden = false;
   $('sheet-body').querySelectorAll('[data-chart]').forEach(drawChart);
@@ -1689,8 +1367,8 @@ function showSheet(id, focus = true) {
   if (focus) $('sheet-close').focus();
 }
 function hideSheet() {
-  const was = openSheet;
-  openSheet = null;
+  const was = state.ui.openSheet;
+  state.ui.openSheet = null;
   $('sheet').hidden = true;
   $('scrim').hidden = true;
   try {
@@ -1709,9 +1387,9 @@ document.addEventListener('click', (e) => {
   }
   const f = e.target.closest('[data-f]');
   if (f) {
-    filter = f.dataset.f;
+    if (isFilter(f.dataset.f)) state.ui.filter = f.dataset.f;
     try {
-      localStorage.setItem('aq-filter', filter);
+      localStorage.setItem('aq-filter', state.ui.filter);
     } catch {}
     render();
   }
@@ -1719,104 +1397,38 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', (e) => {
   const s = e.target.closest?.('[data-af]');
   if (!s) return;
-  actFilter = s.value;
+  state.ui.actFilter = s.value;
   render();
   document.querySelector('[data-af]')?.focus();
 });
 $('sheet-close').onclick = hideSheet;
 $('scrim').onclick = hideSheet;
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && openSheet) hideSheet();
+  if (e.key === 'Escape' && state.ui.openSheet) hideSheet();
 });
 
 // ---------- Render and load ----------
 
-const SUPABASE_ERRORS = ['runs', 'usage', 'activity'];
-function errorCopy(e, key) {
-  const source = SUPABASE_ERRORS.includes(key) ? 'Supabase' : 'Linear';
-  switch (e?.code) {
-    case 'unauthorized':
-      return source === 'Supabase'
-        ? 'Supabase rejected the anon key. Check it in Settings.'
-        : 'Linear rejected the API key. Check it in Settings.';
-    case 'network':
-      return (
-        "Can't reach " +
-        source +
-        '. Showing the last data; it refreshes when the connection is back.'
-      );
-    case 'bad_response':
-      return "Got an answer that couldn't be read.";
-    case 'needs_reauth':
-      return 'Linear needs reconnecting. Check the key in Settings, then refresh.';
-    case 'server_not_connected':
-    case 'selection_required':
-      return "Linear isn't connected for you. Add the key in Settings, then refresh.";
-    case 'not_in_manifest':
-    case 'consent_required':
-      return 'Linear is turned off for this page. Check the key in Settings.';
-    case 'blocked_by_policy':
-    case 'approval_required':
-      return "Your organization's policy blocks this page from reading Linear.";
-    case 'server_unavailable':
-    case 'rate_limited':
-      return (
-        source + " didn't answer. Showing the last data; refresh to try again."
-      );
-    case 'tool_error':
-      return (
-        source + ' refused the request: ' + (e.message || 'no reason given')
-      );
-    default:
-      return (
-        "Couldn't load from " + source + ': ' + (e?.message || 'unknown error')
-      );
-  }
-}
-const RETRACT = [
-  'unauthorized',
-  'bad_response',
-  'needs_reauth',
-  'server_not_connected',
-  'selection_required',
-  'not_in_manifest',
-  'consent_required',
-  'blocked_by_policy',
-  'approval_required'
-];
-
 function renderNotice() {
-  const errs = Object.values(errors);
   const n = $('notice');
-  if (!mcp) {
-    n.hidden = false;
-    n.className = 'notice';
-    n.textContent = 'Waiting for settings.';
-    return;
-  }
-  if (!errs.length) {
-    n.hidden = true;
-    return;
-  }
-  n.hidden = false;
-  n.className =
-    'notice' + (errs.some((e) => RETRACT.includes(e.code)) ? ' err' : '');
-  n.textContent = [
-    ...new Set(Object.entries(errors).map(([k, e]) => errorCopy(e, k)))
-  ].join(' ');
+  const view = notice(state.errors, Boolean(mcp));
+  n.hidden = view.hidden;
+  if (view.hidden) return;
+  n.className = 'notice' + (view.severe ? ' err' : '');
+  n.textContent = view.text;
 }
 
 function render() {
   renderMain();
-  if (openSheet) {
+  if (state.ui.openSheet) {
     const scroll = $('sheet-body').scrollTop;
-    showSheet(openSheet, false);
+    showSheet(state.ui.openSheet, false);
     $('sheet-body').scrollTop = scroll;
   }
-  const loaded = STATES.some((s) => buckets[s]);
+  const loaded = bucketsLoaded();
   $('fresh').textContent = loaded
     ? 'Updated ' +
-      new Date(storedAt || Date.now()).toLocaleTimeString([], {
+      new Date(state.data.storedAt || Date.now()).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit'
       })
@@ -1836,8 +1448,9 @@ const prFromAttachments = (atts) => {
   return null;
 };
 async function loadDetails() {
+  const { ideas, runs } = state.data;
   const ids = new Set(
-    openIssues()
+    openIssues(state.data)
       .filter((i) => agentState(i))
       .map((i) => i.id)
   );
@@ -1862,15 +1475,15 @@ async function loadDetails() {
           { cache: { staleTime: 60000 } }
         );
         const p = r.payload || {};
-        details[id] = {
+        state.details.set(id, {
           ...parsePlan(p.description),
           idea: parseIdea(p.description),
           blockedBy: (p.relations?.blockedBy || []).map((b) => b.id),
           pr: prFromAttachments(p.attachments)
-        };
-        delete errors['detail:' + id];
+        });
+        state.errors.delete('detail:' + id);
       } catch (e) {
-        errors['detail:' + id] = e;
+        state.errors.set('detail:' + id, e);
       }
     })
   );
@@ -1886,16 +1499,16 @@ async function loadDetails() {
           { issueId: id, limit: 100, orderBy: 'createdAt' },
           { cache: { staleTime: 30000 } }
         );
-        liveHandoffs[id] = parseHandoffs(r.payload?.comments);
-        delete errors['handoffs:' + id];
+        state.liveHandoffs.set(id, parseHandoffs(r.payload?.comments));
+        state.errors.delete('handoffs:' + id);
       } catch (e) {
-        errors['handoffs:' + id] = e;
+        state.errors.set('handoffs:' + id, e);
       }
     })
   );
   // The discard word of a cancelled idea is its last comment, as the suggest-improvement skill reads it
   const cancelled = (ideas || []).filter(
-    (i) => i.statusType === 'canceled' && !(i.id in ideaReasons)
+    (i) => i.statusType === 'canceled' && !state.ideaReasons.has(i.id)
   );
   await Promise.all(
     cancelled.map(async (i) => {
@@ -1910,15 +1523,18 @@ async function loadDetails() {
           .slice()
           .sort(byCreated)
           .pop();
-        ideaReasons[i.id] = lastComment
-          ? String(lastComment.body || '')
-              .replace(/\s+/g, ' ')
-              .trim()
-              .slice(0, 80)
-          : '';
-        delete errors['reason:' + i.id];
+        state.ideaReasons.set(
+          i.id,
+          lastComment
+            ? String(lastComment.body || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 80)
+            : ''
+        );
+        state.errors.delete('reason:' + i.id);
       } catch (e) {
-        errors['reason:' + i.id] = e;
+        state.errors.set('reason:' + i.id, e);
       }
     })
   );
@@ -1941,14 +1557,14 @@ function watchAll() {
       { team: TEAM, state: s, limit: 250, fields: FIELDS },
       (ev) => {
         if (ev.type === 'data') {
-          buckets[s] = ev.result.payload?.issues || [];
-          storedAt = ev.result.cache?.storedAt || Date.now();
-          delete errors['list:' + s];
+          state.data.buckets.set(s, ev.result.payload?.issues || []);
+          state.data.storedAt = ev.result.cache?.storedAt || Date.now();
+          state.errors.delete('list:' + s);
           render();
           scheduleDetails();
         } else {
-          errors['list:' + s] = ev.error;
-          if (RETRACT.includes(ev.error.code)) delete buckets[s];
+          state.errors.set('list:' + s, ev.error);
+          if (RETRACT.includes(ev.error.code)) state.data.buckets.delete(s);
           render();
         }
       },
@@ -1961,12 +1577,12 @@ function watchAll() {
     {},
     (ev) => {
       if (ev.type === 'data') {
-        runs = ev.result.payload;
-        delete errors['runs'];
+        state.data.runs = ev.result.payload;
+        state.errors.delete('runs');
         scheduleDetails();
       } else {
-        errors['runs'] = ev.error;
-        if (RETRACT.includes(ev.error.code)) runs = null;
+        state.errors.set('runs', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.runs = null;
       }
       render();
     },
@@ -1978,11 +1594,11 @@ function watchAll() {
     {},
     (ev) => {
       if (ev.type === 'data') {
-        usage = ev.result.payload;
-        delete errors['usage'];
+        state.data.usage = ev.result.payload;
+        state.errors.delete('usage');
       } else {
-        errors['usage'] = ev.error;
-        if (RETRACT.includes(ev.error.code)) usage = null;
+        state.errors.set('usage', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.usage = null;
       }
       render();
     },
@@ -1994,11 +1610,11 @@ function watchAll() {
     {},
     (ev) => {
       if (ev.type === 'data') {
-        activity = ev.result.payload;
-        delete errors['activity'];
+        state.data.activity = ev.result.payload;
+        state.errors.delete('activity');
       } else {
-        errors['activity'] = ev.error;
-        if (RETRACT.includes(ev.error.code)) activity = null;
+        state.errors.set('activity', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.activity = null;
       }
       render();
     },
@@ -2016,13 +1632,13 @@ function watchAll() {
     },
     (ev) => {
       if (ev.type === 'data') {
-        ideas = ev.result.payload?.issues || [];
-        delete errors['ideas'];
+        state.data.ideas = ev.result.payload?.issues || [];
+        state.errors.delete('ideas');
         render();
         scheduleDetails();
       } else {
-        errors['ideas'] = ev.error;
-        if (RETRACT.includes(ev.error.code)) ideas = null;
+        state.errors.set('ideas', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.ideas = null;
         render();
       }
     },
@@ -2040,12 +1656,12 @@ function watchAll() {
     },
     (ev) => {
       if (ev.type === 'data') {
-        closed = ev.result.payload?.issues || [];
-        delete errors['list:completed'];
+        state.data.closed = ev.result.payload?.issues || [];
+        state.errors.delete('list:completed');
         render();
       } else {
-        errors['list:completed'] = ev.error;
-        if (RETRACT.includes(ev.error.code)) closed = null;
+        state.errors.set('list:completed', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.closed = null;
         render();
       }
     },
@@ -2059,14 +1675,14 @@ $('refresh').onclick = async () => {
   try {
     await Promise.all([mcp.invalidate(SERVER), mcp.invalidate('Supabase')]);
   } catch {}
-  for (const k of Object.keys(details)) delete details[k];
-  for (const k of Object.keys(liveHandoffs)) delete liveHandoffs[k];
-  for (const k of Object.keys(ideaReasons)) delete ideaReasons[k];
+  state.details.clear();
+  state.liveHandoffs.clear();
+  state.ideaReasons.clear();
   loadDetails();
 };
 try {
   const f = localStorage.getItem('aq-filter');
-  if (f) filter = f;
+  if (isFilter(f)) state.ui.filter = f;
 } catch {}
 
 document.querySelectorAll('[data-agent-avatar]').forEach((img) => {
