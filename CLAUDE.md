@@ -70,7 +70,10 @@ When that work waits and no session is alive, the job starts one itself: `implem
 `claude -p "/work-queue implement-only once"` detached, with deny-by-default permissions, a
 per-run budget (`AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, $15) and a daily cap
 (`AGENT_QUEUE_IMPLEMENT_CAP_USD`, $40) kept in `implement-spend.jsonl`. It resumes approved,
-answered or reviewed work only, and never starts a new ticket. On GitHub it acts as the
+answered or reviewed work only, and never starts a new ticket. It reaches Linear through the
+claude.ai connector on the Mac and, in the container, through Linear's own MCP server signed with
+the queue's key (`AGENT_QUEUE_LINEAR_MCP`, see `tools/cdwr/README.md`); a run without Linear tools
+doesn't start. On GitHub it acts as the
 `codeware-agent` app (`github-app.sh`, credentials in `tools/cdwr/.env`), never as Håkan, so
 main's rulesets apply to it; without the app it does not start. After two launches that change
 nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops

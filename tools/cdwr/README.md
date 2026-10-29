@@ -199,9 +199,22 @@ script holds the guardrails (read-only tools, Linear the only writable server, n
 review a change to it as one. The launchd job's Linear key is the Keychain's `linear-agent-queue`
 (a shell-exported `AGENT_QUEUE_LINEAR_KEY` never reaches the job; the container reads that variable
 instead); cdwr checks that it is there and never reads it. `install` asks for the key when it is
-missing, and only does what differs, so run it again after the script changes. Notices go
-through `agent-queue/notify.sh`, which posts to the webhook in `SLACK_WEBHOOK_URL` (or
-`CLAUDE_SLACK_WEBHOOK`, or `~/.claude/slack-webhook`) and does nothing without one. `--worktree` picks another
+missing, and only does what differs, so run it again after the script changes.
+
+The claude runs reach Linear through one of two MCP servers, picked by `AGENT_QUEUE_LINEAR_MCP`
+(`lib.sh`). `connector`, the default on the Mac, is the claude.ai connector of the interactive login.
+`key`, the default in the container, is Linear's own server at `https://mcp.linear.app/mcp`, signed with
+the queue's key: the runs load it with `--strict-mcp-config --mcp-config ~/.cdwr/agent-queue/linear-mcp.json`,
+whose header holds the placeholder `${AGENT_QUEUE_LINEAR_KEY}` that claude fills from its environment, so
+the key is never in a file or on a command line. Its tools are `mcp__agent_linear__*`; the allowlists
+take the prefix from the same place. The key writes as its owner, as the connector does. Before each
+claude run the scripts check that the server answers (`claude mcp list` for the connector, an MCP
+`initialize` for the key); without it nothing starts, the run is recorded as `no Linear tools`, one notice
+goes out, and `status` shows a `linear tools` warning. Notices go
+through `agent-queue/notify.sh "<message>"`, which posts to the webhook in `SLACK_WEBHOOK_URL` (or
+`CLAUDE_SLACK_WEBHOOK`, or `~/.claude/slack-webhook`) and does nothing without one. It also reads
+`{message, cwd}` JSON on stdin, as a hook; a session under `dontAsk` passes the message as an argument,
+since any `$` in a command gets it denied. `--worktree` picks another
 checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/notify-level`
 (missing means `all`), while the scheduler's own notices (a planned ticket, a failed or capped
 run) always go out.
