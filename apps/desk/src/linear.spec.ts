@@ -10,6 +10,7 @@ const node = (over: Record<string, unknown> = {}) => ({
   priority: 2,
   url: 'https://linear.app/codeware/issue/COD-1',
   createdAt: '2026-10-01T00:00:00.000Z',
+  updatedAt: '2026-10-01T00:00:00.000Z',
   state: { name: 'Todo', type: 'unstarted' },
   labels: { nodes: [{ name: 'agent:ready' }, { name: 'Bug' }] },
   ...over
@@ -157,6 +158,7 @@ describe('issue mapping', () => {
         statusType: 'unstarted',
         labels: ['agent:ready', 'Bug'],
         createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
         url: 'https://linear.app/codeware/issue/COD-1',
         completedAt: '2026-10-02T00:00:00.000Z',
         canceledAt: null
