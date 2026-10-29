@@ -21,6 +21,7 @@ import { setResponseStatus } from '@tanstack/react-start/server';
 
 import pkg from '../../package.json';
 import { getEnv } from '../env.server';
+import { siteFontFaceCss } from '../font-faces';
 
 import { payloadRequestOptions } from './payload-request';
 import { resolveSiteOrigin } from './site-origin';
@@ -32,6 +33,8 @@ export type SiteChrome = {
   chrome: PayloadValue['chrome'];
   colorSchemePolicy: 'system' | 'light' | 'dark';
   customCss: string;
+  /** `@font-face` rules for the licensed faces this deployment may embed */
+  fontFaceCss: string;
   iconConfig: PayloadValue['iconConfig'];
   locale: string;
   payloadUrl: string;
@@ -105,6 +108,12 @@ export const loadSite = createServerFn({ method: 'GET' }).handler(
           chrome: tenantConfig.chrome ?? 'outlined',
           colorSchemePolicy: tenantConfig.colorScheme,
           customCss: customThemeCss(tenantConfig.customThemes),
+          fontFaceCss: siteFontFaceCss(
+            tenantConfig.themes,
+            tenantConfig.customThemes,
+            env.RESTRICTED_FONTS,
+            env.FONT_ASSETS_BASE_URL
+          ),
           iconConfig: tenantConfig.icon,
           locale: tenantConfig.locale,
           payloadUrl: env.PAYLOAD_URL,

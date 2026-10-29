@@ -17,7 +17,8 @@ import {
   useLocation,
   useRouter
 } from '@tanstack/react-router';
-import { type ReactNode, useEffect, useState } from 'react';
+import { ThemeProvider, useTheme } from 'next-themes';
+import { type ReactNode, useEffect } from 'react';
 
 import { isClientPath } from '../navigate';
 import { readSearchParam } from '../search-param';
@@ -90,14 +91,15 @@ function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html
       lang={site?.locale ?? 'en'}
-      className={locked ?? 'light'}
       data-theme={site?.theme}
+      suppressHydrationWarning
     >
       <head>
         <HeadContent />
         {/* Authored themes are not in the CSS bundle. The generator whitelists
             every name and value, so the text holds no markup */}
         {site?.customCss && <style>{site.customCss}</style>}
+        {site?.fontFaceCss && <style>{site.fontFaceCss}</style>}
         {stats && (
           <>
             <script defer {...stats.tracker} />
@@ -106,7 +108,16 @@ function RootDocument({ children }: { children: ReactNode }) {
         )}
       </head>
       <body className="flex h-full">
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          // A locked site never leaves its scheme
+          forcedTheme={locked ?? undefined}
+          nonce={nonce}
+        >
+          {children}
+        </ThemeProvider>
         <Scripts />
       </body>
     </html>
@@ -117,9 +128,11 @@ function RootComponent() {
   const data = Route.useLoaderData();
   const location = useLocation();
   const router = useRouter();
-  const [colorScheme, setColorScheme] =
-    useState<NonNullable<PayloadValue['colorScheme']>>('system');
-  const [systemDark, setSystemDark] = useState(false);
+  const {
+    theme: colorScheme,
+    resolvedTheme: resolvedColorScheme,
+    setTheme: setColorScheme
+  } = useTheme();
 
   const locked =
     data.ok &&
@@ -127,28 +140,6 @@ function RootComponent() {
       data.site.colorSchemePolicy === 'dark')
       ? data.site.colorSchemePolicy
       : null;
-  const resolvedColorScheme =
-    locked ??
-    (colorScheme === 'system' ? (systemDark ? 'dark' : 'light') : colorScheme);
-
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-color-scheme: dark)');
-    const sync = () => setSystemDark(query.matches);
-    sync();
-    query.addEventListener('change', sync);
-    return () => query.removeEventListener('change', sync);
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle(
-      'dark',
-      resolvedColorScheme === 'dark'
-    );
-    document.documentElement.classList.toggle(
-      'light',
-      resolvedColorScheme === 'light'
-    );
-  }, [resolvedColorScheme]);
 
   if (!data.ok) {
     return (
@@ -165,7 +156,10 @@ function RootComponent() {
       value={{
         appInfo: site.appInfo,
         chrome: site.chrome,
-        colorScheme,
+        colorScheme:
+          colorScheme === 'light' || colorScheme === 'dark'
+            ? colorScheme
+            : 'system',
         getCurrentPath: () => location.pathname,
         getSearchParam: (name) => readSearchParam(location.searchStr, name),
         iconConfig: site.iconConfig,
@@ -181,8 +175,9 @@ function RootComponent() {
           }
         },
         payloadUrl: site.payloadUrl,
-        resolvedColorScheme,
-        setColorScheme,
+        // Unknown until mount; the pre-paint script has set the class by then
+        resolvedColorScheme: resolvedColorScheme === 'dark' ? 'dark' : 'light',
+        setColorScheme: (next) => setColorScheme(next),
         // One theme per deployment until a switcher is wanted
         setTheme: () => undefined,
         signupPolicy: data.signupPolicy,
