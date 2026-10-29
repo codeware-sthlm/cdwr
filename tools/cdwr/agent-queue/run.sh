@@ -30,7 +30,7 @@ OTHER_REPOS='["nx-plugins","enjinex"]'
 LOGS="$HOME_DIR/logs"
 mkdir -p "$LOGS"
 
-# The Suggested line of the runs document: today's date and what happened
+# The Suggested line of queue_state: today's date and what happened
 suggested_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/suggested-line"; }
 note() { print -r -- "$(date '+%F %T') $*" >> "$LOGS/scheduler.log"; }
 say() { note "$*"; $check && print -r -- "$*"; return 0; }
@@ -49,22 +49,23 @@ notice() {
 }
 check=false; [[ "${1:-}" == "--check" ]] && check=true
 
-# Run history for the "Agent queue: runs" Linear document, newest last. Idle adds no row.
+# Run history, newest last, kept to its last 20 rows; the suggest run and `cdwr agent activity`
+# read it. Idle adds no row.
 RUNS="$HOME_DIR/runs.jsonl"
 last_outcome=idle
 # What telemetry_run sends: the last real outcome apart from its ticket and detail
 RUN_STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 run_kind=plan outcome_name=idle outcome_ticket="" outcome_detail=""
 attended_work=""
-# Rows at the start; watch_prs records from a subshell, so a flag would miss its rows
-rows() { [[ -f "$RUNS" ]] && wc -l < "$RUNS" | tr -d ' ' || print 0; }
-rows_at_start="$(rows)"
-# record <outcome> [ticket] [detail]: a warn is a row, never the run's outcome.
+# record <outcome> [ticket] [detail]: a warn is a row, never the run's outcome. A warn also
+# goes to the runs table as a row of its own, detached, so the desk shows it.
 record() {
   $check && return 0
   [[ "$1" == warn ]] || { last_outcome="$1${2:+ $2}"; outcome_name="$1" outcome_ticket="${2:-}" outcome_detail="${3:-}"; }
   jq -nc --arg w "$(date '+%F %H:%M')" --arg o "$1" --arg t "${2:-}" --arg d "${3:-}" \
     '{when: $w, outcome: $o, ticket: $t, detail: $d}' >> "$RUNS" 2>/dev/null || true
+  [[ "$1" == warn ]] && ( telemetry_run "$(date -u +%Y-%m-%dT%H:%M:%SZ)" warn "${2:-}" "${3:-}" "" "$run_kind" "" "" "" ) &!
+  return 0
 }
 
 # to_main <what>: moves the checkout to origin/main and installs when its lockfile is not the one
@@ -113,29 +114,7 @@ linear_ok() {
   return 1
 }
 
-# The only writes run.sh makes: the runs, usage and activity documents, each created once
-# on the Codeware team and then updated in place.
-DOC_TITLE='Agent queue: runs'
-USAGE_TITLE='Agent queue: usage'
-ACTIVITY_TITLE='Agent queue: activity'
-read -r -d '' DOC_FIND <<'GQL' || true
-query($title: String!) {
-  documents(first: 1, filter: { title: { eq: $title } }) { nodes { id } }
-  teams(filter: { key: { eq: "COD" } }) { nodes { id } }
-}
-GQL
-read -r -d '' DOC_CREATE <<'GQL' || true
-mutation($team: String!, $title: String!, $content: String!) {
-  documentCreate(input: { teamId: $team, title: $title, content: $content }) { document { id } }
-}
-GQL
-read -r -d '' DOC_UPDATE <<'GQL' || true
-mutation($id: String!, $content: String!) {
-  documentUpdate(id: $id, input: { content: $content }) { success }
-}
-GQL
-
-# Job state for the runs document: the interval launchd uses and whether the installed copy
+# Job state for queue_state and the run row: the interval launchd uses and whether the installed copy
 # matches origin/main. Keep INTERVAL_SED in step with the line in agent.logic.ts.
 PLIST="$HOME/Library/LaunchAgents/se.codeware.agent-queue.plist"
 INTERVAL_SED='s/^export const RUN_INTERVAL_SECONDS = \([0-9][0-9]*\);$/\1/p'
@@ -164,50 +143,14 @@ job_line() {
   else print -r -- "$out · install current"; fi
 }
 
-# Rewrites the whole document from runs.jsonl; a failure is a warn line, never a stop.
-# A run that recorded nothing publishes only when the last publish is over an hour old.
-publish_runs() {
+# Keeps runs.jsonl to its last 20 rows, and this run's Attended line and queue view for a later
+# run that has no verdict of its own (record_queue_state falls back on them). Never a stop.
+keep_state() {
   $check && return 0
   setopt local_options no_err_exit
-  local stamp="$HOME_DIR/runs-published-at" seen="$HOME_DIR/attended-published" last=0 content
-  local seen_view="$HOME_DIR/queue-view-published" view_key=""
-  local seen_sug="$HOME_DIR/suggested-published" sug_line
-  sug_line="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
-  # The view without its timestamp and heartbeat, so an unchanged queue is no change
-  [[ -n "$queue_view" ]] &&
-    view_key="$(jq -c '{limit, next, held, parked, table, session: (.session | if . == null then null else {state, ticket} end)}' <<<"$queue_view" 2>/dev/null)"
-  # A changed Attended or Suggested line or queue view publishes at once, so it is never more than one run old
-  # (empty means no verdict this run, which is no change)
-  if (( $(rows) <= rows_at_start )) &&
-     [[ -z "$attended_line" || "$attended_line" == "$(cat "$seen" 2>/dev/null)" ]] &&
-     [[ "$sug_line" == "$(cat "$seen_sug" 2>/dev/null)" ]] &&
-     [[ -z "$view_key" || "$view_key" == "$(cat "$seen_view" 2>/dev/null)" ]]; then
-    last="$(cat "$stamp" 2>/dev/null)"
-    [[ "$last" == <-> ]] || last=0
-    (( $(date +%s) - last > 3600 )) || return 0
-  fi
   [[ -f "$RUNS" ]] && tail -n 20 "$RUNS" > "$RUNS.tmp" && mv "$RUNS.tmp" "$RUNS"
-  content="$({ [[ -f "$RUNS" ]] && cat "$RUNS"; true; } | jq -rs --arg last "$(date '+%F %H:%M') · $last_outcome" --arg job "$(job_line)" --arg attended "${attended_line:-$(cat "$seen" 2>/dev/null)}" --arg suggested "$sug_line" \
-    --arg view "$(jq . <<<"${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}" 2>/dev/null)" '
-    def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
-    "Last run: \($last)\n\n"
-    + (if $attended == "" then "" else "Attended: \($attended)\n\n" end)
-    + (if $suggested == "" then "" else "Suggested: \($suggested)\n\n" end)
-    + (if $view == "" then "" else "```json queue-view\n\($view)\n```\n\n" end)
-    + "\($job)\n\nWritten by the agent queue scheduler after every run. Idle runs update the lines above at most once an hour.\n\n"
-    + "| When | Outcome | Ticket | Detail |\n| -- | -- | -- | -- |\n"
-    + (reverse | map("| \(.when | cell) | \(.outcome | cell) | \(.ticket | cell) | \(.detail | cell) |") | join("\n"))
-  ')" || { note "warn: runs document: could not render"; return 0; }
-  local before="$(cat "$stamp" 2>/dev/null)"
-  publish_doc "$DOC_TITLE" "$HOME_DIR/runs-doc-id" "$stamp" "$content"
-  # publish_doc tells success only by moving the stamp; a failed publish stays unseen
-  [[ "$(cat "$stamp" 2>/dev/null)" != "$before" ]] || return 0
-  [[ -n "$attended_line" ]] && print -r -- "$attended_line" > "$seen"
-  print -r -- "$sug_line" > "$seen_sug"
-  if [[ -n "$view_key" ]]; then
-    print -r -- "$view_key" > "$seen_view"
-    print -r -- "$queue_view" > "$HOME_DIR/queue-view.json"
-  fi
+  [[ -n "$attended_line" ]] && print -r -- "$attended_line" > "$HOME_DIR/attended-line"
+  [[ -n "$queue_view" ]] && print -r -- "$queue_view" > "$HOME_DIR/queue-view.json"
   return 0
 }
 
@@ -224,30 +167,13 @@ record_usage() {
   (( $(date +%s) - last > 3600 )) || return 0
   date +%s > "$stamp"
   ( cd "$REPO" && AGENT_SUPABASE_SERVICE_KEY="$AGENT_SUPABASE_SERVICE_KEY" node tools/cdwr/bin/cdwr.mjs agent usage-record --yes --json >/dev/null 2>&1 </dev/null ||
-    note "warn: usage rows: cdwr agent usage-record failed" ) &!
-}
-# The usage document from `cdwr agent usage`, at most once an hour. The CLI runs from $REPO,
-# which follows origin/main, so it needs that checkout's install; when it can't start, that
-# is a warn row. Only numbers, model names and ticket ids leave the machine.
-publish_usage() {
-  $check && return 0
-  setopt local_options no_err_exit
-  local stamp="$HOME_DIR/usage-published-at" last content
-  last="$(cat "$stamp" 2>/dev/null)"
-  [[ "$last" == <-> ]] || last=0
-  (( $(date +%s) - last > 3600 )) || return 0
-  content="$(cd "$REPO" && node tools/cdwr/bin/cdwr.mjs agent usage --days 30 --json 2>/dev/null </dev/null |
-    jq -er '.result.document')" || {
-    # Stamped all the same, so a broken install warns once an hour, not every run
-    date +%s > "$stamp"
-    note "warn: usage document: cdwr agent usage failed"; record warn "" "usage: cdwr agent usage failed"; return 0
-  }
-  publish_doc "$USAGE_TITLE" "$HOME_DIR/usage-doc-id" "$stamp" "$content"
+    { note "warn: usage rows: cdwr agent usage-record failed"; record warn "" "usage: cdwr agent usage-record failed"; } ) &!
 }
 
-# The activity document from Linear's issue history and runs.jsonl, rendered by
-# `cdwr agent activity` (same install caveat as usage). Every run reads Linear, but publishes
-# only when something below the "Updated:" line changed, so idle runs leave it alone.
+# The activity rows from Linear's issue history and runs.jsonl, made by `cdwr agent activity`.
+# The CLI runs from $REPO, which follows origin/main, so it needs that checkout's install.
+# Every run reads Linear; rows already sent are ignored by the upsert. Without the env vars it
+# does nothing.
 read -r -d '' ACTIVITY_QUERY <<'GQL' || true
 query($after: String) {
   issues(first: 25, after: $after, filter: {
@@ -273,18 +199,18 @@ GQL
 # A warn row at most once an hour, so a lasting failure can't push real rows out of runs.jsonl
 activity_warn() {
   local stamp="$HOME_DIR/activity-warned-at" last
-  note "warn: activity document: $1"
+  note "warn: activity rows: $1"
   last="$(cat "$stamp" 2>/dev/null)"
   [[ "$last" == <-> ]] || last=0
   (( $(date +%s) - last > 3600 )) || return 0
   date +%s > "$stamp"
   record warn "" "activity: $1"
 }
-publish_activity() {
+record_activity() {
   $check && return 0
+  telemetry_on || return 0
   setopt local_options no_err_exit
-  local stamp="$HOME_DIR/activity-published-at" hashfile="$HOME_DIR/activity-hash" pages="$HOME_DIR/activity-pages.jsonl"
-  local resp content hash before after=null page out rows_json
+  local pages="$HOME_DIR/activity-pages.jsonl" resp after=null page out rows_json
   # Every page, so a ticket past the first can't hide one of the newest events; pages go
   # through a file, since all of them together can outgrow a command line.
   : > "$pages"
@@ -296,55 +222,17 @@ publish_activity() {
     jq -c '.data.issues.nodes' <<<"$resp" >> "$pages"
     [[ "$(jq -r '.data.issues.pageInfo.hasNextPage' <<<"$resp")" == true ]] || break
     after="$(jq -c '.data.issues.pageInfo.endCursor' <<<"$resp")"
-    (( page == 8 )) && note "warn: activity document: more than 8 pages of tickets, the rest left out"
+    (( page == 8 )) && note "warn: activity rows: more than 8 pages of tickets, the rest left out"
   done
   resp="$(jq -cs '{data: {issues: {nodes: add}}}' "$pages")"
   out="$(cd "$REPO" && node tools/cdwr/bin/cdwr.mjs agent activity --runs "$RUNS" --json 2>/dev/null <<<"$resp")"
-  content="$(jq -er '.result.document' <<<"$out")" || { activity_warn "cdwr agent activity failed"; return 0; }
-  # Rows for the telemetry table, the same events; duplicates are ignored. Never waited for.
-  rows_json="$(jq -c '.result.rows // empty' <<<"$out" 2>/dev/null)"
-  [[ -z "$rows_json" ]] || ( supabase_upsert activity event_id "$rows_json" merge ) &!
-  hash="$(print -r -- "$content" | sed 1d | shasum | cut -d' ' -f1)"
-  [[ "$hash" == "$(cat "$hashfile" 2>/dev/null)" ]] && return 0
-  before="$(cat "$stamp" 2>/dev/null)"
-  publish_doc "$ACTIVITY_TITLE" "$HOME_DIR/activity-doc-id" "$stamp" "$content"
-  # publish_doc stamps only a publish that went through
-  [[ "$(cat "$stamp" 2>/dev/null)" != "$before" ]] && print -r -- "$hash" > "$hashfile"
+  rows_json="$(jq -ce '.result.rows' <<<"$out" 2>/dev/null)" || { activity_warn "cdwr agent activity failed"; return 0; }
+  [[ "$rows_json" == "[]" ]] && return 0
+  # Duplicates are ignored. Never waited for.
+  ( supabase_upsert activity event_id "$rows_json" merge ) &!
   return 0
 }
 
-# publish_doc <title> <id file> <stamp file> <content>: finds the document by title or
-# creates it, then rewrites it. A failure is a warn line, never a stop.
-publish_doc() {
-  setopt local_options no_err_exit
-  local title=$1 file=$2 stamp=$3 content=$4 id resp team
-  id="$(cat "$file" 2>/dev/null)"
-  if [[ -z "$id" ]]; then
-    resp="$(linear "$DOC_FIND" "$(jq -nc --arg t "$title" '{title: $t}')")"
-    id="$(jq -r '.data.documents.nodes[0].id // empty' <<<"$resp" 2>/dev/null)"
-    if [[ -z "$id" ]]; then
-      team="$(jq -r '.data.teams.nodes[0].id // empty' <<<"$resp" 2>/dev/null)"
-      [[ -z "$team" ]] && { note "warn: $title: no Codeware team from Linear"; return 0; }
-      resp="$(linear "$DOC_CREATE" "$(jq -nc --arg team "$team" --arg t "$title" --arg c "$content" \
-        '{team: $team, title: $t, content: $c}')")"
-      id="$(jq -r '.data.documentCreate.document.id // empty' <<<"$resp" 2>/dev/null)"
-      [[ -z "$id" ]] && { note "warn: $title: create failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0; }
-      print -r -- "$id" > "$file"
-      date +%s > "$stamp"
-      return 0
-    fi
-    print -r -- "$id" > "$file"
-  fi
-
-  resp="$(linear "$DOC_UPDATE" "$(jq -nc --arg id "$id" --arg c "$content" '{id: $id, content: $c}')")"
-  if ! jq -e '.data.documentUpdate.success' >/dev/null <<<"$resp" 2>/dev/null; then
-    # A deleted document is found or created again next run
-    rm -f "$file"
-    note "warn: $title: update failed $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"
-  else
-    date +%s > "$stamp"
-  fi
-}
 # One row for this run in the telemetry database, detached so it can't slow the exit.
 # --check starts nothing and sends nothing.
 record_run() {
@@ -359,14 +247,15 @@ record_run() {
   ( telemetry_run "$RUN_STARTED" "$outcome_name" "$outcome_ticket" "$outcome_detail" "$attended_work" \
       "$run_kind" "$interval" "$limit" "$version" ) &!
 }
-# This host's queue state as one row, the same lines the runs document carries. Detached like record_run.
+# This host's queue state as one row: the last run, the Attended and Suggested lines, the job
+# line and the queue view. Detached like record_run.
 record_queue_state() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
   local last attended suggested job view
   last="$(date '+%F %H:%M') · $last_outcome"
-  attended="${attended_line:-$(cat "$HOME_DIR/attended-published" 2>/dev/null)}"
+  attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null)}"
   suggested="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
   job="$(job_line)"
   view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
@@ -380,11 +269,10 @@ on_exit() {
     note "fail: run.sh exited $st"
     record failed "" "run.sh exited $st, see scheduler.log"
   fi
-  # Usage and activity first: their warn rows belong in this run's runs document
-  publish_usage
+  # Activity first: its warn row belongs in this run's history
   record_usage
-  publish_activity
-  publish_runs
+  record_activity
+  keep_state
   record_queue_state
   record_run "$st"
   rmdir "$HOME_DIR/lock" 2>/dev/null
@@ -571,7 +459,7 @@ attended() {
   session="$(watch -c --argjson now "$(date +%s)" 'include "watch"; session_state($now)' <<<"$sessions_json" 2>/dev/null)" ||
     session='{"state":"none","detail":null,"id":null,"ticket":null,"lastSeen":null}'
   attended_line="$(watch -r 'include "watch"; session_prefix' <<<"$session") · $attended_line"
-  # The whole queue for the runs document and `cdwr agent status`; the pick above stays the
+  # The whole queue for queue_state and `cdwr agent status`; the pick above stays the
   # line and the notice
   queue_view="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson session "$session" --argjson waits "$waits" \
     'include "watch"; .data.issues.nodes | queue_view($now; 5; $watch; $session; $waits)' <<<"$resp")" ||
@@ -762,7 +650,7 @@ suggest_run() {
   # The memory rules start with `//`: one leading slash is project-relative, two anchor at the root.
   # In a subshell: the App token is minted fresh for this run and reaches only this claude
   ( gh_identity_or_note
-  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none}" \
+  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none} runs=$RUNS" \
     --model opus "${LINEAR_MCP_ARGS[@]}" \
     --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
     --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
@@ -770,7 +658,7 @@ suggest_run() {
     --permission-mode dontAsk --permission-prompts none \
     --max-budget-usd "$SUGGEST_BUDGET_USD" --output-format json \
     --allowedTools Skill Read Grep Glob \
-      "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels "$L"__list_documents "$L"__get_document "$L"__save_issue \
+      "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels "$L"__save_issue \
       "$S"__find_organizations "$S"__find_projects "$S"__search_issues "$S"__get_sentry_resource \
       "Bash(git log --since=30.days --name-only --format=)" "Bash(git log --since=30.days --grep=fix --name-only --format=)" "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(tools/cdwr/agent-queue/gh-review.sh threads *)" "Bash(node tools/cdwr/bin/cdwr.mjs agent usage*)" \
       ${MEMORY_DIR:+"Write(/$MEMORY_DIR/feedback_suggestion_taste.md)" "Edit(/$MEMORY_DIR/feedback_suggestion_taste.md)"}

@@ -31,7 +31,7 @@ notify() {
   [[ -x "$hook" ]] || return 0
   jq -n --arg m "$1" --arg c "$REPO" '{message: $m, cwd: $c}' | "$hook" || true
 }
-# The same rows run.sh writes, so the runs document shows launches too
+# The same rows run.sh writes, so the run history shows launches too
 record() {
   jq -nc --arg w "$(date '+%F %H:%M')" --arg o "$1" --arg t "$TICKET" --arg d "${2:-}" \
     '{when: $w, outcome: $o, ticket: $t, detail: $d}' >> "$HOME_DIR/runs.jsonl" 2>/dev/null || true
@@ -161,7 +161,7 @@ cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
 # No result (a crash or a kill) keeps the full reservation, so failing launches still meet the cap
 [[ "$cost" == <->(|.<->) ]] || cost="$BUDGET_USD"
 # Settle the reservation to the actual cost. The daily cap reads this ledger, not the hourly usage
-# document, so two launches can't slip through.
+# rows, so two launches can't slip through.
 settle="$(jq -n --argjson c "$cost" --argjson b "$BUDGET_USD" '$c - $b')"
 [[ "$settle" == 0 ]] || ledger "$settle" settle 2>/dev/null || note "warn: could not settle the spend ledger"
 spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result" 2>/dev/null) turns"
