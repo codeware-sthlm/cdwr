@@ -50,7 +50,7 @@ non-zero ends in `PostToolUseFailure`, which the hook doesn't see, so nothing is
 
 ## The queue rule
 
-The scheduler computes the same order as `queue_view` in `tools/cdwr/agent-queue/watch.jq` (the computed form of **What to take next** and **The limit**; `attended` is its first item) and publishes it in the "Agent queue: runs" document, as the `Attended:` line and a `queue-view` JSON block that the Agent Desk renders. A change to either is made in both.
+The scheduler computes the same order as `queue_view` in `tools/cdwr/agent-queue/watch.jq` (the computed form of **What to take next** and **The limit**; `attended` is its first item) and sends it to the telemetry table `queue_state`, as the `Attended:` line and the queue view that the Agent Desk renders. A change to either is made in both.
 
 1. Team **Codeware**, label **agent:ready**, status not Done or Canceled. Skip tickets whose
    **Repo** label names another repo (`nx-plugins`, `enjinex`). No Repo label, or `codeware`,
