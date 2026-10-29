@@ -56,6 +56,7 @@ trap '[[ "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]] && rm -rf "$LOCK"' EXIT
 # session that never starts costs nothing.
 source "${0:A:h}/github-app.sh"
 source "${0:A:h}/telemetry.sh"
+source "${0:A:h}/lib.sh"
 telemetry_env "$REPO/tools/cdwr/.env"
 # Where session-hook.sh finds the key: the path goes to the session, never the key
 [[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
@@ -70,6 +71,16 @@ if ! { app_env "$REPO/tools/cdwr/.env" && app_session; } 2> "$errf"; then
   exit 1
 fi
 rm -f "$errf"
+
+# Without Linear the session can read no ticket, so it does not start and reserves nothing
+linear_mcp "$HOME_DIR"
+if ! linear_gate "$HOME_DIR"; then
+  note "fail: no Linear tools ($linear_why); not starting"
+  $linear_new && notify "Agent queue: nothing launched for $TICKET. No Linear tools ($linear_why)."
+  record failed "$KEY · no Linear tools ($linear_why)"
+  telemetry failed "$KEY · no Linear tools ($linear_why)"
+  exit 1
+fi
 
 # Reserve the whole budget before the session starts, so a machine that dies mid-session still
 # counts it against the daily cap; the actual cost settles it afterwards. No reservation, no start.
@@ -90,7 +101,6 @@ result="${log%.log}.json"
 note "launch: $KEY → $log"
 record launched "$KEY · log $log"
 
-L=mcp__claude_ai_Linear
 # Escapes from the allow list below, denied first (deny wins). git config and -c run any
 # command through a pager, an ssh command or an alias; nx exec runs anything; a REST write or
 # a GraphQL mutation outside the thread replies could merge, push to main or drop protection.
@@ -115,8 +125,8 @@ claude_pid=
 trap '[[ -n "$claude_pid" ]] && kill -TERM $claude_pid 2>/dev/null' TERM INT
 # The session hook tells the sessions table what kind this is
 export AGENT_QUEUE_SESSION_KIND=implement
-ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
-  --model opus \
+AGENT_QUEUE_LINEAR_KEY="$LINEAR_MCP_KEY" ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
+  --model opus "${LINEAR_MCP_ARGS[@]}" \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
   --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
     "${DENY[@]}" \

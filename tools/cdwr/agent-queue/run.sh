@@ -102,6 +102,17 @@ telemetry_env "$REPO/tools/cdwr/.env"
 # No network is not a Linear failure: no record, no warn rows, the next run catches up
 if offline; then say "skip: offline (Mac asleep?)"; exit 0; fi
 
+linear_mcp "$HOME_DIR"
+# linear_ok: true when the claude runs would have Linear tools. Without them nothing starts, the
+# run is recorded as such, and one notice goes out per spell.
+linear_ok() {
+  linear_gate "$HOME_DIR" && return 0
+  note "fail: no Linear tools ($linear_why)"
+  record "no Linear tools" "" "$linear_why"
+  $linear_new && notify "Agent queue: the claude runs have no Linear tools ($linear_why); nothing starts until they do."
+  return 1
+}
+
 # The only writes run.sh makes: the runs, usage and activity documents, each created once
 # on the Codeware team and then updated in place.
 DOC_TITLE='Agent queue: runs'
@@ -606,6 +617,8 @@ attended() {
   # Misses count only while work waits: once the pick is idle, a later launch starts fresh. Not on
   # `running`: a launched session holds a fresh claim, and its death must still count as a miss.
   [[ "$(jq -r '.verdict' <<<"$verdict")" == idle ]] && rm -f "$HOME_DIR/launch.json"
+  # A session without Linear tools can't read its ticket; it would only count as a miss
+  if [[ "$action" == launch ]] && ! linear_ok; then return 0; fi
   if [[ "$action" == launch ]]; then
     jq -c '.last' <<<"$decision" > "$HOME_DIR/launch.json"
     # nohup and the plist's AbandonProcessGroup keep the session alive after this job exits.
@@ -632,6 +645,8 @@ attended() {
     fi
   fi
 }
+# status reads this line: whether a claude run here would have Linear tools
+if $check; then why="$(linear_tools)"; print -r -- "linear: ${why:+missing ($why)}${why:-ok ($LINEAR_MCP)}"; fi
 attended
 
 read -r -d '' QUERY <<'GQL' || true
@@ -729,8 +744,9 @@ run_outcome() {
 # It ends with `SUGGESTED COD-n <title>` or `nothing today`.
 suggest_run() {
   local focus="$1" log result rc=0 spent="" outcome verdict id title line
-  local L=mcp__claude_ai_Linear S=mcp__claude_ai_Sentry
+  local S=mcp__claude_ai_Sentry
   run_kind=suggest
+  linear_ok || { suggested_line "no Linear tools"; return 0; }
   cd "$REPO"
   to_main suggesting
   log="$LOGS/$(date +%F_%H%M)-suggest.log"
@@ -743,8 +759,8 @@ suggest_run() {
   # The memory rules start with `//`: one leading slash is project-relative, two anchor at the root.
   # In a subshell: the App token is minted fresh for this run and reaches only this claude
   ( gh_identity_or_note
-  ENABLE_TOOL_SEARCH=false claude -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none}" \
-    --model opus \
+  AGENT_QUEUE_LINEAR_KEY="$LINEAR_MCP_KEY" ENABLE_TOOL_SEARCH=false claude -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none}" \
+    --model opus "${LINEAR_MCP_ARGS[@]}" \
     --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
     --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
     --tools "Read,Grep,Glob,Skill,Bash,Write,Edit" \
@@ -804,6 +820,7 @@ if $check; then
   echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')"; exit 0
 fi
 
+linear_ok || exit 0
 cd "$REPO"
 to_main planning
 
@@ -811,11 +828,10 @@ log="$LOGS/$(date +%F_%H%M).log"
 result="${log%.log}.json"
 note "plan: $(print -r -- "$ready" | tr '\n' ' ')→ $log"
 
-L=mcp__claude_ai_Linear
 rc=0
 # Tool search would defer the Linear tools behind ToolSearch, which --tools leaves out.
-ENABLE_TOOL_SEARCH=false claude -p "/work-queue unattended once plan-only" \
-  --model opus \
+AGENT_QUEUE_LINEAR_KEY="$LINEAR_MCP_KEY" ENABLE_TOOL_SEARCH=false claude -p "/work-queue unattended once plan-only" \
+  --model opus "${LINEAR_MCP_ARGS[@]}" \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
   --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
   --tools "Read,Grep,Glob,Skill" \

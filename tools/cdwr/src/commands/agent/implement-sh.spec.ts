@@ -131,6 +131,8 @@ describe('implement.sh', () => {
       spawnSync('zsh', [join(scripts, 'implement.sh'), 'COD-1 answered'], {
         encoding: 'utf8',
         env: {
+          // Prints nothing: Linear tools are there
+          AGENT_QUEUE_LINEAR_TOOLS_CMD: 'true',
           ...extraEnv,
           PATH: `${bin}:${process.env['PATH'] ?? ''}`,
           // No Slack hook under this home
@@ -166,6 +168,10 @@ describe('implement.sh', () => {
         ''
       );
       copyFileSync(SCRIPT_PATH, join(scripts, 'implement.sh'));
+      copyFileSync(
+        fileURLToPath(new URL('../../../agent-queue/lib.sh', import.meta.url)),
+        join(scripts, 'lib.sh')
+      );
       copyFileSync(
         fileURLToPath(
           new URL('../../../agent-queue/telemetry.sh', import.meta.url)
@@ -300,6 +306,66 @@ describe('implement.sh', () => {
         fakeClaude(0, '{}');
         expect(start().status).toBe(0);
         expect(existsSync(log)).toBe(false);
+      });
+    });
+
+    describe('Linear tools', () => {
+      const argvFile = (): string => join(dir, 'argv');
+      const fakeArgvClaude = (): void => {
+        writeFileSync(
+          join(bin, 'claude'),
+          `#!/bin/sh\nprintf '%s\\n' "$@" > "${argvFile()}"\nprintf '%s' '{}'\n`
+        );
+        chmodSync(join(bin, 'claude'), 0o755);
+      };
+
+      it('does not start without them, and reserves nothing', () => {
+        fakeClaude(0, '{}');
+        const result = start({
+          AGENT_QUEUE_LINEAR_TOOLS_CMD:
+            'print -r -- "key: Linear MCP answered 401"'
+        });
+        expect(result.status).toBe(1);
+        expect(existsSync(calls)).toBe(false);
+        expect(existsSync(join(queueHome, 'implement-spend.jsonl'))).toBe(
+          false
+        );
+        expect(rows('runs.jsonl')).toEqual([
+          expect.objectContaining({
+            outcome: 'failed',
+            ticket: 'COD-1',
+            detail: expect.stringContaining('no Linear tools') as string
+          })
+        ]);
+        expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+      });
+
+      it('uses the connector by default', () => {
+        fakeArgvClaude();
+        expect(start().status).toBe(0);
+        const argv = readFileSync(argvFile(), 'utf8');
+        expect(argv).toContain('mcp__claude_ai_Linear__get_issue');
+        expect(argv).not.toContain('--mcp-config');
+      });
+
+      it('signs its own server with the key, which stays out of argv and the config', () => {
+        fakeArgvClaude();
+        const result = start({
+          AGENT_QUEUE_LINEAR_MCP: 'key',
+          AGENT_QUEUE_LINEAR_KEY: 'sekret'
+        });
+        expect(result.status).toBe(0);
+        const argv = readFileSync(argvFile(), 'utf8');
+        const config = join(queueHome, 'linear-mcp.json');
+        expect(argv).toContain(
+          `--strict-mcp-config\n--mcp-config\n${config}\n`
+        );
+        expect(argv).toContain('mcp__agent_linear__get_issue');
+        expect(argv).not.toContain('mcp__claude_ai_Linear');
+        expect(argv).not.toContain('sekret');
+        const json = readFileSync(config, 'utf8');
+        expect(json).toContain('${AGENT_QUEUE_LINEAR_KEY}');
+        expect(json).not.toContain('sekret');
       });
     });
 
