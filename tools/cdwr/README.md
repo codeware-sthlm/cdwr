@@ -158,11 +158,15 @@ rollover covers every pull request's apps. The token is never printed.
 
 ## The agent queue
 
-A launchd job (`se.codeware.agent-queue`), every 10 minutes, runs `/work-queue` plan-only against a
-separate worktree, `codeware-agent` beside this checkout. macOS only.
+The scheduler runs in the NUC's agent container, every 10 minutes, `/work-queue` plan-only against a
+separate worktree. A Mac is attended-only; it can still run the same loop as a launchd job
+(`se.codeware.agent-queue`, worktree `codeware-agent` beside this checkout), and `cdwr agent uninstall`
+removes that job. Without it, `status` shows the attended rows and names the host, and `pause`, `resume`
+and `run` refuse.
 
 ```sh
 cdwr agent install        # worktree, env files, deps, script, launchd job, Keychain key
+cdwr agent uninstall      # unload and remove the launchd job; --worktree-remove takes the planner checkout
 cdwr agent status         # loaded, paused, key, scripts current, watched PRs, next run
 cdwr agent run            # start a planning run now
 cdwr agent pause|resume   # hold or release the schedule
