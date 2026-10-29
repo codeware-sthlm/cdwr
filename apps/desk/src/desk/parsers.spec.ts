@@ -33,6 +33,11 @@ describe('parsePlan', () => {
       { steps: 0, done: 0, next: 'ship it' }
     ],
     [
+      'reads the Next line, not a mention of it in the text',
+      'The **Next:** line holds the wait.\n\n**Next:** `Waiting: CI · PR 7 · since x`',
+      { steps: 0, done: 0, next: '`Waiting: CI · PR 7 · since x`' }
+    ],
+    [
       'ignores a table without Step and Status headers',
       '| Name | Value |\n| - | - |\n| a | b |',
       { steps: 0, done: 0, next: null }

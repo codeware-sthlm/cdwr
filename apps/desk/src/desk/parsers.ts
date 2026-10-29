@@ -45,8 +45,9 @@ export function parsePlan(desc: string | null | undefined): PlanProgress {
     steps++;
     if (/^done\b/i.test(cells[cells.length - 1] || '')) done++;
   }
+  // A line of its own, as watch.jq reads it: a mention of the marker in the plan text isn't one
   const next =
-    (desc || '').match(/\*\*Next:?\*\*:?\s*(.+)/i)?.[1]?.trim() || null;
+    (desc || '').match(/^\s*\*\*Next:?\*\*:?\s*(.+)/im)?.[1]?.trim() || null;
   return { steps, done, next };
 }
 
