@@ -90,29 +90,8 @@ describe('run.sh', () => {
     expect(SCRIPT).toContain('Start /work-queue.');
   });
 
-  it('prints and publishes the queue view', () => {
+  it('prints and records the queue view', () => {
     expect(SCRIPT).toContain('print -r -- "queue-view: $queue_view"');
-    expect(SCRIPT).toContain('```json queue-view\\n');
-    // A heartbeat alone (lastSeen, detail) is no change to publish
-    expect(SCRIPT).toContain(
-      `session: (.session | if . == null then null else {state, ticket} end)`
-    );
-  });
-
-  // A failed publish must not mark the line and view as published
-  it('marks the runs document published only when its stamp moved', () => {
-    expect(SCRIPT).toContain(
-      `[[ "$(cat "$stamp" 2>/dev/null)" != "$before" ]] || return 0`
-    );
-  });
-
-  // The documents are the only things run.sh writes to Linear
-  it('sends no mutation but the documents', () => {
-    const mutations = [...SCRIPT.matchAll(/mutation\b[^{]*\{\s*(\w+)/gi)].map(
-      ([, field]) => field
-    );
-    expect(mutations).toEqual(['documentCreate', 'documentUpdate']);
-    expect(SCRIPT.match(/mutation/gi)).toHaveLength(2);
   });
 
   // run.sh tells an out-of-date install by reading this constant from origin/main
@@ -133,19 +112,6 @@ describe('run.sh', () => {
     expect(SCRIPT).toContain('== error_max_budget_usd ]]');
     expect(SCRIPT).toContain(`.total_cost_usd // empty' "$result"`);
     expect(SCRIPT).not.toContain('Exceeded USD budget');
-  });
-
-  it('publishes the usage document from cdwr agent usage', () => {
-    expect(SCRIPT).toMatch(/^USAGE_TITLE='Agent queue: usage'$/m);
-    expect(SCRIPT).toContain(
-      'node tools/cdwr/bin/cdwr.mjs agent usage --days 30 --json'
-    );
-    expect(SCRIPT).toMatch(
-      /publish_doc "\$USAGE_TITLE" "\$HOME_DIR\/usage-doc-id" "\$stamp"/
-    );
-    expect(SCRIPT).toMatch(
-      /publish_doc "\$DOC_TITLE" "\$HOME_DIR\/runs-doc-id" "\$stamp"/
-    );
   });
 
   // The verdict comes from watch.jq, never from logic copied into run.sh
@@ -173,30 +139,75 @@ describe('run.sh', () => {
     expect(SCRIPT).not.toMatch(/\/work-queue \S*COD-/);
   });
 
-  it('publishes the activity document from cdwr agent activity', () => {
-    expect(SCRIPT).toMatch(/^ACTIVITY_TITLE='Agent queue: activity'$/m);
-    expect(SCRIPT).toContain(
+  // Its warn rows land in runs.jsonl before the run's own row is sent
+  it('records activity before the queue state and the run row', () => {
+    const exit = SCRIPT.slice(SCRIPT.indexOf('on_exit() {'));
+    expect(exit.indexOf('  record_activity')).toBeGreaterThan(-1);
+    expect(exit.indexOf('  record_activity')).toBeLessThan(
+      exit.indexOf('  record_queue_state')
+    );
+    expect(exit.indexOf('  record_activity')).toBeLessThan(
+      exit.indexOf('  record_run')
+    );
+  });
+});
+
+// The queue reads its state from the telemetry tables; Linear documents are no longer written
+describe('run.sh without Linear documents', () => {
+  const code = SCRIPT.split('\n')
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n');
+  const exit = SCRIPT.slice(SCRIPT.indexOf('on_exit() {'));
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+
+  it('sends no document mutation or query', () => {
+    expect(code).not.toContain('documentCreate');
+    expect(code).not.toContain('documentUpdate');
+    expect(code).not.toContain('documents(');
+    expect(code).not.toMatch(/mutation\b/i);
+    expect(code).not.toMatch(/_TITLE=|publish_(doc|runs|usage|activity)/);
+  });
+
+  it('upserts activity rows from cdwr agent activity, gated on telemetry_on', () => {
+    const activity = fn('record_activity');
+    expect(activity).toContain(
       'node tools/cdwr/bin/cdwr.mjs agent activity --runs "$RUNS" --json'
     );
-    expect(SCRIPT).toMatch(
-      /publish_doc "\$ACTIVITY_TITLE" "\$HOME_DIR\/activity-doc-id" "\$stamp"/
+    expect(activity).toContain(
+      'supabase_upsert activity event_id "$rows_json" merge'
+    );
+    expect(activity).toMatch(
+      /\{\n {2}\$check && return 0\n {2}telemetry_on \|\| return 0\n/
     );
   });
 
-  // Its warn rows land in the runs document of the same run
-  it('publishes activity before the runs document', () => {
-    const exit = SCRIPT.slice(SCRIPT.indexOf('on_exit() {'));
-    expect(exit.indexOf('  publish_activity')).toBeGreaterThan(-1);
-    expect(exit.indexOf('  publish_activity')).toBeLessThan(
-      exit.indexOf('  publish_runs')
-    );
+  it('keeps the last 20 runs and caches the attended line and queue view', () => {
+    const keep = fn('keep_state');
+    expect(keep).toContain('$check && return 0');
+    expect(keep).toContain('tail -n 20 "$RUNS" > "$RUNS.tmp"');
+    expect(keep).toContain('> "$HOME_DIR/attended-line"');
+    expect(keep).toContain('> "$HOME_DIR/queue-view.json"');
   });
 
-  it('publishes the job line after the last run and the attended line', () => {
-    expect(SCRIPT).toContain('"Last run: \\($last)\\n\\n"');
-    expect(SCRIPT).toContain('"Attended: \\($attended)\\n\\n"');
-    expect(SCRIPT).toContain('+ "\\($job)\\n\\nWritten');
-    expect(SCRIPT).toMatch(/--arg job "\$\(job_line\)"/);
+  it('keeps state before the queue state reads it back', () => {
+    expect(exit.indexOf('  keep_state')).toBeGreaterThan(-1);
+    expect(exit.indexOf('  keep_state')).toBeLessThan(
+      exit.indexOf('  record_queue_state')
+    );
+    const state = fn('record_queue_state');
+    expect(state).toContain('$(cat "$HOME_DIR/attended-line" 2>/dev/null)');
+    expect(state).toContain('$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)');
+  });
+
+  it('gives the suggest session the runs file and no document tools', () => {
+    expect(code).toContain(
+      '/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none} runs=$RUNS'
+    );
+    expect(code).not.toContain('__list_documents');
+    expect(code).not.toContain('__get_document');
   });
 });
 
@@ -279,8 +290,9 @@ describe('run.sh telemetry', () => {
       'supabase_upsert activity event_id "$rows_json" merge'
     );
     expect(SCRIPT).toContain('agent usage-record --yes --json');
-    expect(exit.indexOf('  record_usage')).toBeGreaterThan(
-      exit.indexOf('  publish_usage')
+    expect(exit.indexOf('  record_usage')).toBeGreaterThan(-1);
+    expect(exit.indexOf('  record_usage')).toBeLessThan(
+      exit.indexOf('  record_activity')
     );
   });
 });
