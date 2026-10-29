@@ -24,14 +24,17 @@ wait $guard 2>/dev/null
 behind="$(git rev-list --count HEAD..origin/main 2>/dev/null)"
 [[ "$behind" == <-> ]] && (( behind > 0 )) || exit 0
 
-jq -n --arg dir "$dir" --arg n "$behind" '
+# attend refreshes codeware-queue on its own; any other checkout needs naming
+named=""; [[ "${dir:A:t}" == codeware-queue ]] || named="${dir:A}"
+jq -n --arg n "$behind" --arg named "$named" '
   (if $n == "1" then "1 commit" else "\($n) commits" end) as $count
-  | "This checkout is \($count) behind origin/main. From a current checkout, run: cdwr agent attend --path \($dir | @sh)" as $how
+  | (if $named == "" then "" else " --path \($named | @sh)" end) as $flag
+  | "This checkout is \($count) behind origin/main. Exit and run `cdwr agent attend\($flag)`." as $how
   | {
       systemMessage: $how,
       hookSpecificOutput: {
         hookEventName: "SessionStart",
-        additionalContext: "The checkout in \($dir) is \($count) behind origin/main. Tell the user so before taking any work, and suggest refreshing it: \($how)"
+        additionalContext: "Tell the user before taking any work: \($how)"
       }
     }' || true
 exit 0
