@@ -25,7 +25,12 @@ export const EnvSchema = z.object({
     .string({ description: 'ISO timestamp when the image was built' })
     .optional(),
   SENTRY_DSN: z
-    .string({ description: 'Sentry DSN, where CSP violations are reported' })
+    .string({
+      description: 'Sentry DSN, where errors and CSP violations are reported'
+    })
+    .optional(),
+  SENTRY_RELEASE: z
+    .string({ description: 'Sentry release, set by the deploy' })
     .optional(),
   CSP_ENFORCE: coerceBoolean(false),
   SITE_GATE_PASSWORD: z

@@ -4,6 +4,7 @@ import { getGlobalStartContext } from '@tanstack/react-start';
 import { nonceFrom } from './nonce';
 import { routeTree } from './routeTree.gen';
 import { parseSearch, stringifySearch } from './search-param';
+import { initSentryClient } from './sentry-client';
 
 export function getRouterOptions() {
   return {
@@ -20,10 +21,14 @@ export function getRouter() {
   // from the document
   const nonce = nonceFrom(getGlobalStartContext());
 
-  return createRouter({
+  const router = createRouter({
     ...getRouterOptions(),
     ...(nonce ? { ssr: { nonce } } : {})
   });
+
+  initSentryClient(router);
+
+  return router;
 }
 
 declare module '@tanstack/react-router' {

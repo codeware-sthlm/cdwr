@@ -5,6 +5,7 @@ import {
   RenderLayout
 } from '@codeware/shared/ui/cms-renderer';
 import { NotFound } from '@codeware/shared/ui/primitives';
+import * as Sentry from '@sentry/tanstackstart-react';
 import {
   type ErrorComponentProps,
   HeadContent,
@@ -174,8 +175,12 @@ function RootNotFound() {
 }
 
 function RootError({ error }: ErrorComponentProps) {
-  // The message can carry internals; the server log has them
+  // The message can carry internals; the server log and Sentry have them
   console.error('Route failed:', error);
+
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
 
   return (
     <ErrorContainer severity="error">
