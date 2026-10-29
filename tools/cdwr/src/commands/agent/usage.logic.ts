@@ -188,7 +188,7 @@ const add = (sums: Map<string, Sum>, key: string, reply: Reply): void => {
   sums.set(key, sum);
 };
 
-// Rows keep full precision: the document sums them per day, role and ticket before rounding
+// Rows keep full precision: callers sum them per day, role and ticket before rounding
 const finish = (sum: Sum): { tokens: Tokens; cost: number | null } => ({
   tokens: sum.tokens,
   cost: sum.priced ? sum.cost : null
@@ -203,7 +203,7 @@ export const localDay = (timestamp: string): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-/** `2026-10-07 00:13` in local time, like the runs document */
+/** `2026-10-07 00:13` in local time, for the tables */
 export const localMinute = (d: Date): string => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -270,108 +270,6 @@ export const aggregate = (
 };
 
 export const ROLES: Role[] = ['planning', 'orchestrating', 'implementing'];
-
-/** Dollars with two decimals and no sign, so the Desk parses a plain number; `?` when unpriced */
-const money = (cost: number | null): string =>
-  cost === null ? '?' : cost.toFixed(2);
-
-/** Cost per role and in total over some rows; any unpriced row makes that cell unknown */
-const byRole = (rows: UsageRow[]): string[] => {
-  const sum = (list: UsageRow[]) =>
-    list.some((r) => r.cost === null)
-      ? null
-      : list.reduce((acc, r) => acc + (r.cost ?? 0), 0);
-  return [
-    ...ROLES.map((role) => money(sum(rows.filter((r) => r.role === role)))),
-    money(sum(rows))
-  ];
-};
-
-const table = (head: string[], rows: string[][]): string =>
-  [
-    `| ${head.join(' | ')} |`,
-    `| ${head.map(() => '--').join(' | ')} |`,
-    ...rows.map((row) => `| ${row.join(' | ')} |`)
-  ].join('\n');
-
-const groups = <T, K extends string>(rows: T[], key: (row: T) => K) =>
-  [...new Set(rows.map(key))].map((k) => ({
-    key: k,
-    rows: rows.filter((row) => key(row) === k)
-  }));
-
-/**
- * The "Agent queue: usage" Linear document. The Agent Desk parses it, so the
- * line prefixes, headings and columns are a contract: change both together.
- */
-export const renderUsageDocument = (
-  result: Aggregate,
-  { updated, windowDays }: { updated: string; windowDays: number }
-): string => {
-  const { totals } = result;
-  const models = table(
-    ['Model', 'Input', 'Output', 'Cache read', 'Cache write', 'Cost'],
-    totals.byModel.map(({ model, tokens, cost }) => [
-      model,
-      String(tokens.input),
-      String(tokens.output),
-      String(tokens.cacheRead),
-      String(tokens.cacheWrite5m + tokens.cacheWrite1h),
-      money(cost)
-    ])
-  );
-  const daily = table(
-    ['Day', 'Planning', 'Orchestrating', 'Implementing', 'Total'],
-    groups(result.days, (r) => r.day).map(({ key, rows }) => [
-      key,
-      ...byRole(rows)
-    ])
-  );
-  const ticketRows = groups(result.tickets, (r) => r.ticket).map(
-    ({ key, rows }) => {
-      const tokens = noTokens();
-      for (const row of rows) addTokens(tokens, row.tokens);
-      const total = rows.reduce((acc, r) => acc + (r.cost ?? 0), 0);
-      return {
-        key,
-        total,
-        cells: [
-          key,
-          ...byRole(rows),
-          String(tokens.output),
-          String(tokens.cacheRead)
-        ]
-      };
-    }
-  );
-  // Most expensive first; unattributed last whatever it cost
-  ticketRows.sort(
-    (a, b) =>
-      Number(a.key === 'unattributed') - Number(b.key === 'unattributed') ||
-      b.total - a.total
-  );
-  const tickets = table(
-    [
-      'Ticket',
-      'Planning',
-      'Orchestrating',
-      'Implementing',
-      'Total',
-      'Output',
-      'Cache read'
-    ],
-    ticketRows.map((r) => r.cells)
-  );
-
-  return [
-    `Updated: ${updated} · last ${windowDays} days · ${money(totals.cost)} USD`,
-    `Prices: ${PRICES_DATE}${totals.unpricedModels.length > 0 ? ` · not priced: ${totals.unpricedModels.join(', ')}` : ''}`,
-    'Written by the agent queue scheduler at most once an hour from the local Claude Code transcripts of this repo and its worktrees. Costs are API-equivalent USD; nothing is billed on Max. Only numbers, model names and ticket ids leave the machine, never transcript content.',
-    `## Models\n\n${models}`,
-    `## Daily\n\n${daily}`,
-    `## Tickets\n\n${tickets}`
-  ].join('\n\n');
-};
 
 /** One row of the telemetry `usage` table */
 export interface UsageTelemetryRow {

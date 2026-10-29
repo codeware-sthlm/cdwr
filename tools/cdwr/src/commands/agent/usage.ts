@@ -8,8 +8,6 @@ import {
   aggregate,
   dedupeReplies,
   localDay,
-  localMinute,
-  renderUsageDocument,
   totalTokens
 } from './usage.logic';
 
@@ -91,12 +89,7 @@ export default defineCommand({
         since: since.toISOString(),
         dirs,
         ...result,
-        skippedLines,
-        // Ready for the Linear document the scheduler publishes
-        document: renderUsageDocument(result, {
-          updated: localMinute(now),
-          windowDays: days
-        })
+        skippedLines
       }
     };
   }

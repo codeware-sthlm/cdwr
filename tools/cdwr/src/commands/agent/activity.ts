@@ -11,8 +11,7 @@ import {
   type RunRow,
   activityRows,
   collectEvents,
-  plural,
-  renderActivityDocument
+  plural
 } from './activity.logic';
 import { hostId } from './host-id';
 import { localMinute } from './usage.logic';
@@ -44,9 +43,9 @@ const readStdin = async (): Promise<string> => {
 
 export default defineCommand({
   summary:
-    "The activity document from Linear's issue history and the runs file",
+    "Who did what to which ticket, from Linear's history and the runs file",
   description:
-    "Reads a Linear GraphQL response (issues with their history and comments) on stdin, as the queue script pipes it in, and the scheduler's runs.jsonl, and renders one Markdown table of who did what to which ticket. It never talks to Linear itself.",
+    "Reads a Linear GraphQL response (issues with their history and comments) on stdin, as the queue script pipes it in, and the scheduler's runs.jsonl, and prints a table of who did what to which ticket; --json adds the rows for the telemetry table. It never talks to Linear itself.",
   danger: 'read',
   inputs: {
     runs: input.optional(
@@ -130,13 +129,7 @@ export default defineCommand({
         dropped,
         skippedLines,
         // For the telemetry table, built from the same events
-        rows: activityRows(events),
-        // Ready for the Linear document the scheduler publishes
-        document: renderActivityDocument(events, {
-          updated: localMinute(now),
-          windowDays: days,
-          dropped
-        })
+        rows: activityRows(events)
       }
     };
   }

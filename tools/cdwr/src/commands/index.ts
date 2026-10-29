@@ -236,7 +236,7 @@ export const ENTRIES: Entry[] = [
   {
     path: ['agent', 'activity'],
     summary:
-      "The activity document from Linear's issue history and the runs file",
+      "Who did what to which ticket, from Linear's history and the runs file",
     danger: 'read',
     load: () => import('./agent/activity').then((m) => m.default)
   },

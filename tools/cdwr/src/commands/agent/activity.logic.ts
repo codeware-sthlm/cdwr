@@ -1,5 +1,3 @@
-import { localMinute } from './usage.logic';
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type Named = { name?: string | null } | null | undefined;
@@ -198,7 +196,7 @@ export interface ActivityRow {
 const actorKind = (actor: string): ActivityRow['actor'] =>
   actor === 'agent' || actor === 'scheduler' ? actor : 'human';
 
-/** The same events as the document, shaped for the `activity` table; the scheduler's `—` ticket is none */
+/** The events shaped for the `activity` table; the scheduler's `—` ticket is none */
 export const activityRows = (events: ActivityEvent[]): ActivityRow[] => {
   // One row per id: a merge upsert refuses to touch the same row twice in a batch
   const byId = new Map<string, ActivityRow>();
@@ -215,45 +213,6 @@ export const activityRows = (events: ActivityEvent[]): ActivityRow[] => {
   return [...byId.values()];
 };
 
-/** Backslash first, so a cell ending in `\` can't swallow the delimiter after it */
 /** `1 event`, `2 events` */
 export const plural = (n: number, noun: string): string =>
   `${n} ${noun}${n === 1 ? '' : 's'}`;
-
-const cell = (text: string): string =>
-  text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
-
-/**
- * The "Agent queue: activity" Linear document. The Agent Desk parses it, so the
- * first line, the table header and the column order are a contract: change
- * both together.
- */
-export const renderActivityDocument = (
-  events: ActivityEvent[],
-  {
-    updated,
-    windowDays,
-    dropped
-  }: { updated: string; windowDays: number; dropped: number }
-): string => {
-  const head = ['When', 'Ticket', 'Actor', 'Change'];
-  const table = [
-    `| ${head.join(' | ')} |`,
-    `| ${head.map(() => '--').join(' | ')} |`,
-    ...events.map(
-      (e) =>
-        `| ${[localMinute(e.at), e.ticket, e.actor, e.change].map(cell).join(' | ')} |`
-    )
-  ].join('\n');
-
-  return [
-    `Updated: ${updated} · last ${plural(windowDays, 'day')} · ${plural(events.length, 'event')}`,
-    'Written by the agent queue scheduler from Linear\'s issue history and its own runs. Times are local. Actor "agent" is a comment marked `**Agent`; the agent and Håkan otherwise write through the same Linear account.',
-    ...(dropped > 0
-      ? [
-          `Older events beyond the newest ${events.length} are left out (${dropped}).`
-        ]
-      : []),
-    table
-  ].join('\n\n');
-};
