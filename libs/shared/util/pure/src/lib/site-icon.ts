@@ -1,6 +1,10 @@
-import type { TenantIconConfig } from '@codeware/shared/util/payload-types';
-
 import { sanitizeSvg } from './sanitize-svg';
+
+/**
+ * The part of a tenant's icon config the favicon reads; structural, so this lib
+ * stays free of payload's types (and the Next globals they bring)
+ */
+type IconMark = { source?: string | null; svgCode?: string | null };
 
 /** Text colours the mark takes as a favicon, where the page's own are absent */
 const INK = { light: '#1f2937', dark: '#f3f4f6' } as const;
@@ -38,8 +42,8 @@ export function faviconSvg(
 }
 
 /** The mark as an SVG favicon, or null when the tenant has none in SVG */
-export const svgMark = (icon: TenantIconConfig | null): string | null =>
-  icon?.source === 'svg' ? icon.svgCode : null;
+export const svgMark = (icon: IconMark | null): string | null =>
+  icon?.source === 'svg' ? (icon.svgCode ?? null) : null;
 
 /**
  * The mark's size inside a square, keeping its proportions.
