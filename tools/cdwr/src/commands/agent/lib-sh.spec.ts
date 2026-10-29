@@ -71,7 +71,8 @@ describe('lib.sh', () => {
         `linear_mcp "${dir}"; print -r -- "$L|\${#LINEAR_MCP_ARGS[@]}|$LINEAR_MCP_KEY"`,
         { AGENT_QUEUE_LINEAR_KEY: 'sekret' }
       ).stdout.trim();
-      expect(out).toBe('mcp__claude_ai_Linear|0|');
+      // The session's wait.sh still finds the key it had
+      expect(out).toBe('mcp__claude_ai_Linear|0|sekret');
     });
 
     // Handed to claude alone, never exported to what the scripts run
@@ -118,6 +119,20 @@ describe('lib.sh', () => {
       expect(result.stdout.trim()).toBe(
         "after: key: Linear's MCP answered nothing"
       );
+    });
+
+    it('key: refuses a 200 that carries no initialize result', () => {
+      writeFileSync(
+        join(dir, 'bin', 'curl'),
+        `#!/bin/sh\nprintf '%s\\n200' 'data: {"jsonrpc":"2.0","id":1,"error":{"code":-32000}}'\n`
+      );
+      chmodSync(join(dir, 'bin', 'curl'), 0o755);
+      expect(
+        run('linear_tools', {
+          AGENT_QUEUE_LINEAR_MCP: 'key',
+          AGENT_QUEUE_LINEAR_KEY: 'k'
+        }).stdout.trim()
+      ).toBe("key: Linear's MCP refused initialize");
     });
 
     it('gate: marks a spell once and clears it when Linear is back', () => {

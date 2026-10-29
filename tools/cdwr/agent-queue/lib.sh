@@ -27,14 +27,17 @@ LINEAR_MCP="${AGENT_QUEUE_LINEAR_MCP:-}"
 LINEAR_MCP_URL=https://mcp.linear.app/mcp
 
 # linear_mcp <dir>: sets L, the tool prefix the allowlists use, LINEAR_MCP_ARGS, the claude
-# flags that load the server, and LINEAR_MCP_KEY; key mode writes its config into <dir>
+# flags that load the server, and LINEAR_MCP_KEY; key mode writes its config into <dir>.
+# Connector mode keeps whatever key the environment already has, for the session's wait.sh.
 linear_mcp() {
-  LINEAR_MCP_ARGS=() LINEAR_MCP_KEY=""
+  LINEAR_MCP_ARGS=() LINEAR_MCP_KEY="${AGENT_QUEUE_LINEAR_KEY:-}"
   if [[ "$LINEAR_MCP" == key ]]; then
     L=mcp__agent_linear
+    # Renamed into place: the scheduler and a launched session may write it at once
     jq -n --arg url "$LINEAR_MCP_URL" \
       '{mcpServers: {agent_linear: {type: "http", url: $url,
-        headers: {Authorization: "Bearer ${AGENT_QUEUE_LINEAR_KEY}"}}}}' > "$1/linear-mcp.json"
+        headers: {Authorization: "Bearer ${AGENT_QUEUE_LINEAR_KEY}"}}}}' > "$1/linear-mcp.json.$$"
+    mv -f "$1/linear-mcp.json.$$" "$1/linear-mcp.json"
     LINEAR_MCP_KEY="$key"
     LINEAR_MCP_ARGS=(--strict-mcp-config --mcp-config "$1/linear-mcp.json")
   else
@@ -46,16 +49,20 @@ linear_mcp() {
 # AGENT_QUEUE_LINEAR_TOOLS_CMD replaces the check in specs.
 linear_tools() {
   if [[ -n "${AGENT_QUEUE_LINEAR_TOOLS_CMD:-}" ]]; then eval "$AGENT_QUEUE_LINEAR_TOOLS_CMD"; return 0; fi
-  local code
+  local answer code
   case "$LINEAR_MCP" in
     key)
       [[ -n "$key" ]] || { print -r -- "key: no Linear API key"; return 0; }
-      code="$(curl -sS -m 20 -o /dev/null -w '%{http_code}' "$LINEAR_MCP_URL" \
+      answer="$(curl -sS -m 20 -w '\n%{http_code}' "$LINEAR_MCP_URL" \
         -H @<(print -r -- "Authorization: Bearer $key") \
         -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
         --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agent-queue","version":"1"}}}' \
         2>/dev/null)" || true
-      [[ "$code" == 200 ]] || print -r -- "key: Linear's MCP answered ${code:-nothing}" ;;
+      code="${answer##*$'\n'}"
+      # A JSON-RPC error comes with a 200 too; only an initialize result counts
+      if [[ "$code" != 200 ]]; then print -r -- "key: Linear's MCP answered ${code:-nothing}"
+      elif [[ "$answer" != *'"result"'*'"protocolVersion"'* ]]; then print -r -- "key: Linear's MCP refused initialize"
+      fi ;;
     connector)
       # From the queue home, so the repo's own .mcp.json servers are not health-checked
       ( cd "${HOME_DIR:-$HOME}" && claude mcp list 2>/dev/null ) | grep -q '^claude\.ai Linear: .*Connected' ||
