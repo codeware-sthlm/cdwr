@@ -236,7 +236,7 @@ def queue_view($now; $limit; $watch; $session; $waits):
   | ([ $park[] | select(agent_label == "agent:working") ]) as $parkWorking
   # A parked working ticket holds a slot like an open review
   | ($lu0 + { used: ($lu0.used + ($parkWorking | length)) }) as $lu
-  | ([ $all[] | select(agent_label == "agent:working") | . + { claim: claim } ]) as $working
+  | ([ $all[] | select(agent_label == "agent:working" and is_open) | . + { claim: claim } ]) as $working
   | ([ $working[] | select(.claim != null and ($now - .claim.at) < 7200 and (.identifier | IN($parkIds[]) | not)) ]
      | sort_by(.claim.at) | reverse
      | map({ ticket: .identifier, reason: "resume", detail: next_line })) as $fresh
