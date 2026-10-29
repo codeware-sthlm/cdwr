@@ -6,6 +6,17 @@
   "tags": ["scope:headless", "type:app"],
   "targets": {
     "build": {
+      "inputs": [
+        "production",
+        "^production",
+        { "externalDependencies": ["vite"] },
+        { "env": "DEPLOY_ENV" },
+        { "env": "SENTRY_AUTH_TOKEN" },
+        { "env": "SENTRY_DSN" },
+        { "env": "SENTRY_ORG" },
+        { "env": "SENTRY_PROJECT" },
+        { "env": "SENTRY_RELEASE" }
+      ],
       "outputs": ["{projectRoot}/.output"]
     },
     "dev": {
