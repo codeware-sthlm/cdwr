@@ -222,7 +222,7 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 run) always go out.
 
 The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
-`activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events` and `github_events`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events` and `builds`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
@@ -242,8 +242,8 @@ supabase functions deploy linear-webhook --use-api --no-verify-jwt --project-ref
 ```
 
 GitHub changes on `codeware-sthlm/cdwr` land beside them, in `github_events`, for the NUC's scheduler to
-wake on. A repo webhook (JSON) sends `pull_request`, `pull_request_review`, `pull_request_review_comment`
-and `check_suite` events to the Edge Function `github-webhook`, which checks `X-Hub-Signature-256`
+wake on. A repo webhook (JSON) sends `pull_request`, `pull_request_review`, `pull_request_review_comment`,
+`check_suite` and `workflow_run` events to the Edge Function `github-webhook`, which checks `X-Hub-Signature-256`
 against `GITHUB_WEBHOOK_SECRET`. GitHub sends no timestamp, so a replayed delivery is accepted; it can
 only cause an extra wake, which re-reads Linear and GitHub anyway. The function keeps one row per subject:
 `pr/<n>` when the event names a pull request, else `ref/<branch>`, with the action (`pull_request:merged`,
@@ -256,6 +256,17 @@ to it means deploying both:
 supabase functions deploy github-webhook --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
 supabase secrets set GITHUB_WEBHOOK_SECRET=… --project-ref xwmrptothspulojaxrvf
 ```
+
+A completed `workflow_run` goes to `builds` instead, and only when it is a successful `push` or
+`workflow_dispatch` run on `main` of `agent-host-image.yml` or `desk.yml`: one row per workflow with
+the commit and the time the run was created. Those workflows' path filters already say what touched the image
+or the desk, so a row there is a new version of it. Runs can finish out of order or be re-run, so a
+trigger keeps the row of the run created last, which a re-run of an old run never is; the image
+workflow also queues its runs, so the `main` tag lands in the same order. `builds` is its own table because the NUC wakes on `github_events`,
+and a desk build should not wake it. The desk compares it with the commit the NUC's image reports
+(`· image sha-…` on the Job line) and with its own (`VITE_DESK_SHA`, set by `desk.yml`) and says
+which is behind main. Until the first run lands the table is empty and the desk says nothing; a
+`workflow_dispatch` of each workflow on main fills it.
 
 The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
 
