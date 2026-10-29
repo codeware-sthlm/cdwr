@@ -178,6 +178,8 @@ def to_label:
     and (.state.type | IN("backlog", "unstarted", "triage"))
     and (other_repo | not)
     and ($b | length) > 0
+    # A blocker set cut short could hide one still open: not listed rather than wrongly listed
+    and (.inverseRelations.pageInfo.hasNextPage // false | not)
     and all($b[]; .state.type == "completed" or .state.type == "canceled")
     and any($b[]; agent_label != null);
 
