@@ -1,5 +1,5 @@
 import { execFile, spawnSync } from 'node:child_process';
-import { rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { type Server, createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -267,6 +267,118 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
         id: 'abc',
         kind: 'attended'
       });
+    });
+  });
+
+  describe('telemetry_host_metrics', () => {
+    let root: string;
+
+    const fixture = (cgroupMax: string | null) => {
+      mkdirSync(join(root, 'proc'), { recursive: true });
+      mkdirSync(join(root, 'sys/fs/cgroup'), { recursive: true });
+      writeFileSync(join(root, 'proc/loadavg'), '0.52 1.25 2.50 1/300 4242\n');
+      writeFileSync(
+        join(root, 'proc/cpuinfo'),
+        'processor\t: 0\nmodel name\t: x\n\nprocessor\t: 1\nmodel name\t: x\n\nprocessor\t: 2\nmodel name\t: x\n'
+      );
+      writeFileSync(
+        join(root, 'proc/meminfo'),
+        'MemTotal:        8000000 kB\nMemFree:          100000 kB\nMemAvailable:    3000000 kB\nSwapTotal:       2000000 kB\nSwapFree:        1500000 kB\n'
+      );
+      writeFileSync(join(root, 'sys/fs/cgroup/memory.current'), '123456\n');
+      if (cgroupMax !== null) {
+        writeFileSync(join(root, 'sys/fs/cgroup/memory.max'), `${cgroupMax}\n`);
+      }
+    };
+
+    const env = (os = 'Linux') => ({
+      ...configured(),
+      HOST_METRICS_OS: os,
+      HOST_METRICS_PROC: join(root, 'proc'),
+      HOST_METRICS_SYS: join(root, 'sys'),
+      HOST_METRICS_DISK: root
+    });
+
+    beforeEach(() => {
+      root = mkdtempSync(join(tmpdir(), 'host-metrics-'));
+    });
+    afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+    it('inserts one row, then prunes this host past 7 days', async () => {
+      fixture('4294967296');
+      const out = await zsh(env(), 'telemetry_host_metrics');
+      expect(out.stdout).toBe('rc=0');
+      expect(hits).toHaveLength(2);
+      expect(hits[0]).toMatchObject({
+        method: 'POST',
+        url: '/rest/v1/host_metrics'
+      });
+      const body = JSON.parse(hits[0]?.body ?? '') as Record<string, unknown>;
+      expect(body).toMatchObject({
+        load1: 0.52,
+        load5: 1.25,
+        load15: 2.5,
+        mem_total: 8000000 * 1024,
+        mem_available: 3000000 * 1024,
+        swap_total: 2000000 * 1024,
+        swap_free: 1500000 * 1024,
+        cgroup_mem_current: 123456,
+        cgroup_mem_max: 4294967296
+      });
+      expect(typeof body['host']).toBe('string');
+      expect(body['cores']).toBe(3);
+      expect(body['disk_free']).toBeGreaterThan(0);
+      expect(body['disk_total']).toBeGreaterThanOrEqual(
+        Number(body['disk_free'])
+      );
+
+      expect(hits[1]?.method).toBe('DELETE');
+      const url = new URL(hits[1]?.url ?? '', origin);
+      expect(url.pathname).toBe('/rest/v1/host_metrics');
+      expect(url.searchParams.get('host')).toBe(`eq.${String(body['host'])}`);
+      const cutoff = Date.parse(
+        (url.searchParams.get('at') ?? '').replace('lt.', '')
+      );
+      expect(Date.now() - cutoff).toBeGreaterThan(7 * 86400_000 - 60_000);
+      expect(Date.now() - cutoff).toBeLessThan(7 * 86400_000 + 60_000);
+      expect(hits[1]?.headers['apikey']).toBe(KEY);
+    });
+
+    it.each([['max'], [null]])(
+      'sends a null cgroup limit when memory.max is %j',
+      async (max) => {
+        fixture(max);
+        await zsh(env(), 'telemetry_host_metrics');
+        expect(JSON.parse(hits[0]?.body ?? '')).toMatchObject({
+          cgroup_mem_current: 123456,
+          cgroup_mem_max: null
+        });
+      }
+    );
+
+    it('falls back to nproc when cpuinfo is missing', async () => {
+      fixture('max');
+      rmSync(join(root, 'proc/cpuinfo'));
+      await zsh(env(), 'telemetry_host_metrics');
+      expect(
+        Number((JSON.parse(hits[0]?.body ?? '') as { cores: number }).cores)
+      ).toBeGreaterThan(0);
+    });
+
+    it('writes nothing on Darwin', async () => {
+      fixture('max');
+      const out = await zsh(env('Darwin'), 'telemetry_host_metrics');
+      expect(out.stdout).toBe('rc=0');
+      expect(hits).toEqual([]);
+    });
+
+    it('writes nothing without the env vars or the proc files', async () => {
+      fixture('max');
+      await zsh({ ...env(), AGENT_SUPABASE_URL: '' }, 'telemetry_host_metrics');
+      rmSync(join(root, 'proc'), { recursive: true });
+      const out = await zsh(env(), 'telemetry_host_metrics');
+      expect(out.stdout).toBe('rc=0');
+      expect(hits).toEqual([]);
     });
   });
 
