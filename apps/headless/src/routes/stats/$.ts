@@ -1,9 +1,8 @@
-import { getTenantConfig } from '@codeware/shared/util/payload-api';
 import { proxyStats } from '@codeware/shared/util/umami';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { getEnv } from '../../env.server';
-import { payloadRequestOptions } from '../../server/payload-request';
+import { loadTenantConfig } from '../../server/tenant-config';
 
 const handle = ({
   request,
@@ -17,9 +16,7 @@ const handle = ({
     path: (params._splat ?? '').split('/').filter(Boolean),
     umamiUrl: getEnv().UMAMI_URL,
     // Read only by the paths that check it
-    websiteId: async () =>
-      (await getTenantConfig(payloadRequestOptions(getEnv())))?.tenant
-        ?.statsWebsiteId
+    websiteId: async () => (await loadTenantConfig())?.tenant?.statsWebsiteId
   });
 
 /**
