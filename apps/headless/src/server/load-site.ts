@@ -1,6 +1,7 @@
 import {
   customThemeCss,
   resolveTheme,
+  siteFontFaceCss,
   themeLabel
 } from '@codeware/shared/theme';
 import type { AppInfo, PayloadValue } from '@codeware/shared/ui/cms-renderer';
@@ -12,7 +13,6 @@ import {
   findLandingDoc,
   getNavigationTree,
   getSiteSettings,
-  getTenantConfig,
   resolveFooter,
   resolveSignupPolicy
 } from '@codeware/shared/util/payload-api';
@@ -21,10 +21,10 @@ import { setResponseStatus } from '@tanstack/react-start/server';
 
 import pkg from '../../package.json';
 import { getEnv } from '../env.server';
-import { siteFontFaceCss } from '../font-faces';
 
 import { payloadRequestOptions } from './payload-request';
 import { resolveSiteOrigin } from './site-origin';
+import { loadTenantConfig } from './tenant-config';
 
 /** What the document needs from the tenant, with nothing that is secret */
 export type SiteChrome = {
@@ -75,7 +75,7 @@ export const loadSite = createServerFn({ method: 'GET' }).handler(
       const env = getEnv();
       const base = payloadRequestOptions(env);
 
-      const tenantConfig = await getTenantConfig(base);
+      const tenantConfig = await loadTenantConfig();
       if (!tenantConfig) {
         throw new Error(`No tenant configuration for '${env.TENANT_ID}'`);
       }
