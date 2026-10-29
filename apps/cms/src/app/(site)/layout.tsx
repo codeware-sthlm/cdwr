@@ -26,6 +26,7 @@ import {
   ogLocale,
   siteOrigin
 } from '@codeware/shared/util/payload-utils';
+import { statsScript } from '@codeware/shared/util/umami';
 import { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -38,7 +39,6 @@ import {
   MEMBER_LOGIN_PATH,
   MEMBER_LOGOUT_SUBMIT_PATH
 } from '../../utils/member-login';
-import { statsScript } from '../../utils/stats-proxy';
 
 import { Providers } from './providers';
 

@@ -1,6 +1,5 @@
-/**
- * @jest-environment node
- */
+import { describe, expect, it, vi } from 'vitest';
+
 import {
   CACHE_HEADER,
   CLIENT_IP_HEADER,
@@ -13,7 +12,7 @@ import {
 const UMAMI = 'https://umami.example';
 
 const upstream = () =>
-  jest.fn<Promise<Response>, Parameters<typeof fetch>>(
+  vi.fn<(...args: Parameters<typeof fetch>) => Promise<Response>>(
     async () =>
       new Response('ok', {
         status: 200,
@@ -25,7 +24,7 @@ const ID = '0b7a3c9e-5d1f-4e2a-9c8b-1a2b3c4d5e6f';
 const OTHER_ID = '9f8e7d6c-5b4a-4321-8fed-cba987654321';
 
 const site = (id: string | null = ID) =>
-  jest.fn<Promise<string | null>, []>(async () => id);
+  vi.fn<() => Promise<string | null>>(async () => id);
 
 const heatmap = (website: string) =>
   JSON.stringify({ type: 'heatmap', payload: { website, events: [] } });
@@ -241,7 +240,7 @@ describe('proxyStats', () => {
       path: ['script.js'],
       umamiUrl: UMAMI,
       websiteId: site(),
-      fetchImpl: jest.fn(async () => new Response('waking', { status: 503 }))
+      fetchImpl: vi.fn(async () => new Response('waking', { status: 503 }))
     });
     expect(response.status).toBe(503);
     expect(response.headers.get('cache-control')).toBe('no-store');
@@ -253,7 +252,7 @@ describe('proxyStats', () => {
       path: ['recorder.js'],
       umamiUrl: UMAMI,
       websiteId: site(),
-      fetchImpl: jest.fn(async () => new Response('waking', { status: 503 }))
+      fetchImpl: vi.fn(async () => new Response('waking', { status: 503 }))
     });
     expect(response.status).toBe(503);
     expect(response.headers.get('cache-control')).toBe('no-store');
@@ -265,7 +264,7 @@ describe('proxyStats', () => {
       path: ['api', 'send'],
       umamiUrl: UMAMI,
       websiteId: site(),
-      fetchImpl: jest.fn(async () => {
+      fetchImpl: vi.fn(async () => {
         throw new Error('ECONNREFUSED 10.0.0.1');
       })
     });
@@ -278,12 +277,13 @@ describe('proxyStats', () => {
       new Request(`https://site.example/stats/api/websites/${id}/recorder`);
 
     const umamiSettings = () =>
-      jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
-        Response.json({
-          heatmapEnabled: true,
-          heatmapSampleRate: 0.15,
-          replayEnabled: true
-        })
+      vi.fn<(...args: Parameters<typeof fetch>) => Promise<Response>>(
+        async () =>
+          Response.json({
+            heatmapEnabled: true,
+            heatmapSampleRate: 0.15,
+            replayEnabled: true
+          })
       );
 
     it('passes the own website through, replay switched off', async () => {
@@ -356,9 +356,9 @@ describe('proxyStats', () => {
         path: ['api', 'websites', ID, 'recorder'],
         umamiUrl: UMAMI,
         websiteId: site(),
-        fetchImpl: jest.fn<Promise<Response>, Parameters<typeof fetch>>(
-          async () => new Response('down', { status: 503 })
-        )
+        fetchImpl: vi.fn<
+          (...args: Parameters<typeof fetch>) => Promise<Response>
+        >(async () => new Response('down', { status: 503 }))
       });
 
       expect(response.status).toBe(503);
@@ -518,7 +518,7 @@ describe('proxyStats', () => {
         path: ['api', 'record'],
         umamiUrl: UMAMI,
         websiteId: site(),
-        fetchImpl: jest.fn(async () => {
+        fetchImpl: vi.fn(async () => {
           throw new Error('ECONNREFUSED 10.0.0.1');
         })
       });
