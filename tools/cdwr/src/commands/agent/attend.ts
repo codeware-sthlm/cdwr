@@ -1,21 +1,36 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { isMainThread } from 'node:worker_threads';
+
+import { z } from 'zod';
 
 import { defineCommand } from '../../cli/command';
-import { CliError } from '../../cli/errors';
+import { CliError, EXIT } from '../../cli/errors';
 import { input } from '../../cli/inputs';
-import { childEnv, run } from '../../services/shell';
+import { childEnv, run, runInteractive } from '../../services/shell';
 
 import {
   type AttendState,
   attendPath,
+  describeStart,
   describeStep,
+  parseTicket,
   planAttend,
   ready,
   startLine,
+  startPrompt,
   upToDate
 } from './attend.logic';
+
+const ticketSchema = z.string().transform((value, ctx) => {
+  const ticket = parseTicket(value);
+  if (ticket === undefined) {
+    ctx.addIssue({ code: 'custom', message: 'expected a ticket like COD-123' });
+    return z.NEVER;
+  }
+  return ticket;
+});
 
 const git = async (cwd: string, args: string[]): Promise<string> =>
   (await run('git', args, { cwd })).stdout.trim();
@@ -47,9 +62,25 @@ const remoteMain = async (path: string): Promise<string> => {
 export default defineCommand({
   summary: 'Refresh the checkout an attended session runs from',
   description:
-    'Moves codeware-queue beside this checkout to origin/main, installs dependencies when the lockfile changed, then prints the line that starts /work-queue there. Refuses a checkout with changes or on a branch. It does not start the session.',
+    'Moves codeware-queue beside this checkout to origin/main, installs dependencies when the lockfile changed, then starts /work-queue there in this terminal, for the ticket when one is given. With --no-start, or where there is no terminal, it prints the line that starts it instead. Refuses a checkout with changes or on a branch.',
   danger: 'mutate',
+  confirm: 'never',
   inputs: {
+    ticket: input.string({
+      prompt: 'Which ticket?',
+      description: 'The ticket to start /work-queue on, such as COD-123',
+      positional: true,
+      optional: true,
+      flagOnly: true,
+      schema: ticketSchema
+    }),
+    start: input.boolean({
+      prompt: 'Start the session?',
+      description: 'Start /work-queue here once the checkout is current',
+      short: 's',
+      default: true,
+      flagOnly: true
+    }),
     path: input.string({
       prompt: 'Which checkout?',
       short: 'p',
@@ -59,7 +90,7 @@ export default defineCommand({
     })
   },
 
-  async plan(ctx, { path: given }) {
+  async plan(ctx, { path: given, ticket, start: starting }) {
     const path = given ? resolve(given) : attendPath(ctx.root);
     const exists = existsSync(join(path, '.git'));
     let state: AttendState = {
@@ -93,11 +124,33 @@ export default defineCommand({
       }
     }
 
-    const verdict = planAttend(state, path);
+    // A worker (the app) or a pipe has no terminal for the session to take over
+    const terminal =
+      !ctx.flags.json &&
+      isMainThread &&
+      Boolean(process.stdin.isTTY) &&
+      Boolean(process.stdout.isTTY);
+    const verdict = planAttend(state, path, { start: starting && terminal });
     if ('refuse' in verdict) throw new CliError(verdict.refuse);
+    if (verdict.steps.includes('start')) {
+      // Before anything moves, rather than after the install
+      await run('claude', ['--version']).catch(() => {
+        throw new CliError(
+          'claude is not on PATH',
+          EXIT.failed,
+          `Once it is, start with: ${startLine(path, ticket)}`
+        );
+      });
+    }
 
-    const start = startLine(path);
-    const data = { path, steps: verdict.steps, main: verdict.main, start };
+    const start = startLine(path, ticket);
+    const data = {
+      path,
+      ticket,
+      steps: verdict.steps,
+      main: verdict.main,
+      start
+    };
     if (verdict.steps.length === 0) {
       return {
         steps: [],
@@ -107,14 +160,17 @@ export default defineCommand({
     }
     return {
       steps: verdict.steps.map((step) => ({
-        label: describeStep(step, verdict.main),
+        label:
+          step === 'start'
+            ? describeStart(path, ticket)
+            : describeStep(step, verdict.main),
         detail: path
       })),
       data
     };
   },
 
-  async apply(ctx, { path, steps, main, start }) {
+  async apply(ctx, { path, ticket, steps, main, start }) {
     if (steps.includes('switch')) {
       await ctx.ui.task('Switching to origin/main', async () => {
         await run('git', ['-C', path, 'fetch', '-q', 'origin', 'main']);
@@ -144,9 +200,29 @@ export default defineCommand({
         await writeFile(join(path, MARKER), `${lock}\n`);
       });
     }
+    if (!steps.includes('start')) {
+      return {
+        summary: `${ready(main)}. Start with: ${start}`,
+        json: { path, main, steps, start }
+      };
+    }
+    const exitCode = await runInteractive('claude', [startPrompt(ticket)], {
+      cwd: path,
+      env: childEnv(ctx.env)
+    }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') {
+        throw new CliError(
+          'claude is not on PATH',
+          EXIT.failed,
+          `Once it is, start with: ${start}`
+        );
+      }
+      throw error;
+    });
     return {
-      summary: `${ready(main)}. Start with: ${start}`,
-      json: { path, main, steps, start }
+      summary: `The ${startPrompt(ticket)} session in ${path} ended`,
+      json: { path, main, steps, start, exitCode },
+      partial: exitCode !== 0
     };
   }
 });

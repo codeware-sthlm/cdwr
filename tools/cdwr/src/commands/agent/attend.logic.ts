@@ -17,7 +17,7 @@ export interface AttendState {
   markerMatches: boolean;
 }
 
-export type AttendStep = 'switch' | 'install';
+export type AttendStep = 'switch' | 'install' | 'start';
 
 export type AttendPlan =
   { refuse: string } | { steps: AttendStep[]; main: string };
@@ -28,12 +28,31 @@ const short = (sha: string): string => sha.slice(0, 8);
 export const attendPath = (root: string): string =>
   join(dirname(root), 'codeware-queue');
 
-/** The line that starts the session in the checkout */
-export const startLine = (path: string): string =>
-  `cd ${shellQuote(path)} && claude "/work-queue"`;
+const TICKET = /^COD-\d+$/i;
 
-/** Refuses a checkout that is not safe to move, else lists what brings it to origin/main */
-export function planAttend(state: AttendState, path: string): AttendPlan {
+/** A ticket id in canonical form, or undefined when it is not one */
+export const parseTicket = (value: string): string | undefined => {
+  const ticket = value.trim();
+  return TICKET.test(ticket) ? ticket.toUpperCase() : undefined;
+};
+
+/** The prompt the session starts with, for the ticket when given */
+export const startPrompt = (ticket?: string): string =>
+  ticket ? `/work-queue ${ticket}` : '/work-queue';
+
+/** The line that starts the session in the checkout */
+export const startLine = (path: string, ticket?: string): string =>
+  `cd ${shellQuote(path)} && claude "${startPrompt(ticket)}"`;
+
+export const describeStart = (path: string, ticket?: string): string =>
+  `Start ${startPrompt(ticket)} in ${path}`;
+
+/** Refuses a checkout that is not safe to move, else lists what brings it to origin/main, then the start */
+export function planAttend(
+  state: AttendState,
+  path: string,
+  { start }: { start: boolean }
+): AttendPlan {
   if (!state.exists) return { refuse: `${path} does not exist` };
   if (!state.ofThisClone) {
     return { refuse: `${path} is not a worktree of this clone` };
@@ -46,13 +65,17 @@ export function planAttend(state: AttendState, path: string): AttendPlan {
     ...(state.head === state.main ? [] : (['switch'] as const)),
     ...(state.head !== state.main || !state.markerMatches
       ? (['install'] as const)
-      : [])
+      : []),
+    ...(start ? (['start'] as const) : [])
   ];
   return { steps, main: state.main };
 }
 
 /** One line per step, or the line for a checkout that needs nothing */
-export const describeStep = (step: AttendStep, main: string): string =>
+export const describeStep = (
+  step: Exclude<AttendStep, 'start'>,
+  main: string
+): string =>
   step === 'switch'
     ? `Switch to origin/main ${short(main)}`
     : 'Install dependencies when the lockfile changed';

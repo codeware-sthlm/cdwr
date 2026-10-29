@@ -161,6 +161,34 @@ export function runStreaming(
   });
 }
 
+/**
+ * Run a binary on the terminal, stdio inherited, and resolve its exit code
+ * (null when a signal ended it). Rejects with the spawn error, such as ENOENT.
+ * Ctrl-C and Ctrl-\ reach the child alone while it runs, as with system(3):
+ * left to their default here they would end this process under it.
+ */
+export function runInteractive(
+  binary: string,
+  args: string[],
+  options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
+): Promise<number | null> {
+  const ignore = (): void => undefined;
+  process.on('SIGINT', ignore);
+  process.on('SIGQUIT', ignore);
+  const restore = (): void => {
+    process.off('SIGINT', ignore);
+    process.off('SIGQUIT', ignore);
+  };
+  // A prompt before may have left stdin raw or flowing; the child reads it alone
+  if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  process.stdin.pause();
+  return new Promise<number | null>((resolve, reject) => {
+    const child = track(spawn(binary, args, { ...options, stdio: 'inherit' }));
+    child.once('error', reject);
+    child.once('exit', (code) => resolve(code));
+  }).finally(restore);
+}
+
 /** Quote for a POSIX shell, for the rare command that has to go through one */
 export const shellQuote = (value: string): string =>
   `'${value.replace(/'/g, "'\\''")}'`;
