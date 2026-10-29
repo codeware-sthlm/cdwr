@@ -7,12 +7,28 @@ import {
   currentUid,
   jobState,
   paths,
+  readText,
   requireHost,
   worktreeOf
 } from '../../services/agent-queue';
 import { run } from '../../services/shell';
 
-import { WORKTREE_PREF, serviceTarget } from './agent.logic';
+import { serviceTarget } from './agent.logic';
+import { rmLockCommand } from './status.logic';
+
+/** Whether a detached implementing session holds `implement.lock`; one that has not written its pid yet is just starting */
+function implementingAlive(lock: string): boolean {
+  if (!existsSync(lock)) return false;
+  const pid = Number(readText(`${lock}/pid`)?.trim());
+  if (!Number.isInteger(pid) || pid <= 0) return true;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: the process exists but belongs to someone else
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
 
 export default defineCommand({
   summary: 'Remove the scheduled planner from this machine',
@@ -45,12 +61,27 @@ export default defineCommand({
     }
 
     const queue = paths(ctx.env);
+    // A planning run holds queue.lock only while it runs; one left behind blocks the apply
+    if (existsSync(queue.lock)) {
+      throw new CliError(
+        'A stale queue lock is left behind',
+        undefined,
+        `Remove it with \`${rmLockCommand(queue.lock, undefined)}\`, then uninstall again`
+      );
+    }
     const checkout = worktreeOf(ctx);
     const work = {
       unload: job.loaded,
       plist: existsSync(queue.plist),
       checkout: worktreeRemove && existsSync(checkout)
     };
+    if (work.checkout && implementingAlive(queue.implementLock)) {
+      throw new CliError(
+        'An implementing session is running in the planner checkout',
+        undefined,
+        'Wait for it to finish or stop it, then uninstall again'
+      );
+    }
     const data = { host, queue, work, checkout, uid: currentUid() };
 
     const steps = [
@@ -80,7 +111,8 @@ export default defineCommand({
   async apply(ctx, data) {
     const { queue, work, checkout } = data;
 
-    if (work.unload || work.plist) {
+    let checkoutLeft = false;
+    if (work.unload || work.plist || work.checkout) {
       // The runner's own lock: bootout can't kill a run that started since the plan
       mkdirSync(queue.home, { recursive: true });
       try {
@@ -89,7 +121,7 @@ export default defineCommand({
         throw new CliError(
           'A planning run or a check holds the queue lock',
           undefined,
-          'Try again once `cdwr agent status` shows no run in progress'
+          `Try again once \`cdwr agent status\` shows no run in progress; a stale lock is cleared with \`${rmLockCommand(queue.lock, undefined)}\``
         );
       }
       try {
@@ -101,23 +133,28 @@ export default defineCommand({
           rmSync(queue.plist, { force: true });
           ctx.ui.info(`Removed ${queue.plist}`);
         }
+        if (work.checkout) {
+          // A session may have started since the plan
+          if (implementingAlive(queue.implementLock)) {
+            checkoutLeft = true;
+            ctx.ui.warn(
+              `${checkout} was left in place: an implementing session is running in it`
+            );
+          } else {
+            try {
+              await ctx.ui.task('Removing the planner checkout', () =>
+                run('git', ['worktree', 'remove', checkout], { cwd: ctx.root })
+              );
+            } catch (error) {
+              checkoutLeft = true;
+              ctx.ui.warn(
+                `${checkout} was left in place: ${error instanceof Error ? error.message.trim() : String(error)}`
+              );
+            }
+          }
+        }
       } finally {
         rmdirSync(queue.lock);
-      }
-    }
-
-    let checkoutLeft = false;
-    if (work.checkout) {
-      try {
-        await ctx.ui.task('Removing the planner checkout', () =>
-          run('git', ['worktree', 'remove', checkout], { cwd: ctx.root })
-        );
-        ctx.prefs.set(WORKTREE_PREF, '');
-      } catch (error) {
-        checkoutLeft = true;
-        ctx.ui.warn(
-          `${checkout} was left in place: ${error instanceof Error ? error.message.trim() : String(error)}`
-        );
       }
     }
 
