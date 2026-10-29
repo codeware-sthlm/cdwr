@@ -5,6 +5,14 @@
   "projectType": "application",
   "tags": ["scope:desk", "type:app"],
   "targets": {
+    "build": {
+      "inputs": [
+        "production",
+        "^production",
+        { "externalDependencies": ["vite"] },
+        { "env": "VITE_DESK_SHA" }
+      ]
+    },
     "tauri-dev": {
       "metadata": {
         "description": "Opens the desktop app in development, starting the Vite dev server first"
@@ -26,7 +34,8 @@
       "inputs": [
         "default",
         "{projectRoot}/src-tauri/**/*",
-        "!{projectRoot}/src-tauri/target/**/*"
+        "!{projectRoot}/src-tauri/target/**/*",
+        { "env": "VITE_DESK_SHA" }
       ],
       "outputs": ["{projectRoot}/src-tauri/target/*/bundle/**/*"],
       "options": {
