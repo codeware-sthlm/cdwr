@@ -291,7 +291,12 @@ describe('run.sh telemetry', () => {
     expect(SCRIPT).toContain(
       'supabase_upsert activity event_id "$rows_json" merge'
     );
-    expect(SCRIPT).toContain('agent usage-record --yes --json');
+    expect(SCRIPT).toContain('agent usage-record --kind "$kind" --yes --json');
+    // Hour rows every run; day rows too once the hourly stamp is older than an hour
+    expect(SCRIPT).toContain('kind=hour');
+    expect(SCRIPT).toMatch(
+      /> 3600 \)\); then\n\s+kind=both\n\s+date \+%s > "\$stamp"/
+    );
     expect(exit.indexOf('  record_usage')).toBeGreaterThan(-1);
     expect(exit.indexOf('  record_usage')).toBeLessThan(
       exit.indexOf('  record_activity')
