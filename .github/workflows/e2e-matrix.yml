@@ -207,14 +207,14 @@ jobs:
             name: macOS
             timeout: 30
             configuration: quick
-            # cms-e2e needs a Docker Postgres, which only Linux runners provide
-            skip-projects: cms-e2e
+            # cms-e2e and headless-e2e need a Docker Postgres, which only Linux runners provide
+            skip-projects: cms-e2e,headless-e2e
           - os: windows-latest
             name: Windows
             timeout: 60
             configuration: quick
-            # cms-e2e needs a Docker Postgres, which only Linux runners provide
-            skip-projects: cms-e2e
+            # cms-e2e and headless-e2e need a Docker Postgres, which only Linux runners provide
+            skip-projects: cms-e2e,headless-e2e
         exclude:
           - os: macos-latest
             pm: pnpm
@@ -273,7 +273,8 @@ jobs:
             ulimit -n 65536
             echo "Open-file limit: $(ulimit -n)"
           fi
-          pnpm nx run-many -t e2e --projects ${{ env.projects }} -c ${{ matrix.configuration }} --exclude "${{ matrix.skip-projects }}"
+          # One project at a time: cms-e2e and headless-e2e each start `next dev` in apps/cms, and Next allows one per directory
+          pnpm nx run-many -t e2e --parallel=1 --projects ${{ env.projects }} -c ${{ matrix.configuration }} --exclude "${{ matrix.skip-projects }}"
         timeout-minutes: ${{ matrix.timeout }}
         env:
           CDWR_E2E_PACKAGE_MANAGER: ${{ matrix.pm }}
