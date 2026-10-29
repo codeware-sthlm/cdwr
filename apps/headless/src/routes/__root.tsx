@@ -71,13 +71,20 @@ export const Route = createRootRoute({
   shellComponent: RootDocument
 });
 
+/** The scheme a site is locked to, or null when visitors choose */
+function lockedScheme(
+  site: { colorSchemePolicy: 'system' | 'light' | 'dark' } | null
+): 'light' | 'dark' | null {
+  return site?.colorSchemePolicy === 'light' ||
+    site?.colorSchemePolicy === 'dark'
+    ? site.colorSchemePolicy
+    : null;
+}
+
 function RootDocument({ children }: { children: ReactNode }) {
   const data = Route.useLoaderData();
   const site = data?.ok ? data.site : null;
-  const locked =
-    site?.colorSchemePolicy === 'light' || site?.colorSchemePolicy === 'dark'
-      ? site.colorSchemePolicy
-      : null;
+  const locked = lockedScheme(site);
   // The nonce is per request, so it is read here and not carried by the
   // loader; `stats` stands in for the Umami url, which stays on the server.
   // The scripts and their beacons all go to this app's own `/stats` relay
@@ -134,12 +141,7 @@ function RootComponent() {
     setTheme: setColorScheme
   } = useTheme();
 
-  const locked =
-    data.ok &&
-    (data.site.colorSchemePolicy === 'light' ||
-      data.site.colorSchemePolicy === 'dark')
-      ? data.site.colorSchemePolicy
-      : null;
+  const locked = lockedScheme(data.ok ? data.site : null);
 
   if (!data.ok) {
     return (
@@ -175,8 +177,10 @@ function RootComponent() {
           }
         },
         payloadUrl: site.payloadUrl,
-        // Unknown until mount; the pre-paint script has set the class by then
-        resolvedColorScheme: resolvedColorScheme === 'dark' ? 'dark' : 'light',
+        // Unknown until mount; the pre-paint script has set the class by then.
+        // `resolvedTheme` ignores a forced theme, so a locked scheme wins
+        resolvedColorScheme:
+          locked ?? (resolvedColorScheme === 'dark' ? 'dark' : 'light'),
         setColorScheme: (next) => setColorScheme(next),
         // One theme per deployment until a switcher is wanted
         setTheme: () => undefined,
