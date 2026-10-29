@@ -167,7 +167,9 @@ record_usage() {
   (( $(date +%s) - last > 3600 )) || return 0
   date +%s > "$stamp"
   ( cd "$REPO" && AGENT_SUPABASE_SERVICE_KEY="$AGENT_SUPABASE_SERVICE_KEY" node tools/cdwr/bin/cdwr.mjs agent usage-record --yes --json >/dev/null 2>&1 </dev/null ||
-    { note "warn: usage rows: cdwr agent usage-record failed"; record warn "" "usage: cdwr agent usage-record failed"; } ) &!
+    { note "warn: usage rows: cdwr agent usage-record failed"
+      # The runs table only: keep_state may be trimming runs.jsonl right now
+      telemetry_run "$(date -u +%Y-%m-%dT%H:%M:%SZ)" warn "" "usage: cdwr agent usage-record failed" "" "$run_kind" "" "" ""; } ) &!
 }
 
 # The activity rows from Linear's issue history and runs.jsonl, made by `cdwr agent activity`.
@@ -255,7 +257,8 @@ record_queue_state() {
   setopt local_options no_err_exit
   local last attended suggested job view
   last="$(date '+%F %H:%M') · $last_outcome"
-  attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null)}"
+  # attended-published is the cache before attended-line, until a verdict replaces it
+  attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
   suggested="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
   job="$(job_line)"
   view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
