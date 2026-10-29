@@ -247,6 +247,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      builds: {
+        Row: {
+          workflow: string;
+          sha: string;
+          run_created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workflow: string;
+          sha: string;
+          run_created_at: string;
+          updated_at: string;
+        };
+        Update: {
+          workflow?: string;
+          sha?: string;
+          run_created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       sessions: {
         Row: {
           id: string;
