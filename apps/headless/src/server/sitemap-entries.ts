@@ -67,9 +67,6 @@ export async function loadSitemapEntries(): Promise<{
         ...pages.map((doc) =>
           at(sitePath('pages', doc, landingId), doc.updatedAt)
         ),
-        // The landing page answers at `/` even if the list missed it; the
-        // sitemap drops the repeat when it did not
-        at('/', undefined),
         ...posts.map((doc) => at(sitePath('posts', doc), doc.updatedAt)),
         ...tours.map((doc) => at(sitePath('tours', doc), doc.updatedAt))
       ]
