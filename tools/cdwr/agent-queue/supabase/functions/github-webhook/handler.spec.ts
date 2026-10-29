@@ -1,4 +1,10 @@
-import { createHandler, sign, toRow, verifySignature } from './handler';
+import {
+  createHandler,
+  sign,
+  toBuild,
+  toRow,
+  verifySignature
+} from './handler';
 
 const SECRET = 'whsec-test';
 const NOW = Date.parse('2026-10-29T16:00:00Z');
@@ -14,6 +20,24 @@ const prEvent = (extra: Record<string, unknown> = {}) => ({
 const suiteEvent = (suite: Record<string, unknown>) => ({
   action: 'completed',
   check_suite: { conclusion: 'success', ...suite }
+});
+
+const SHA = '0123456789abcdef0123456789abcdef01234567';
+
+const runEvent = (run: Record<string, unknown> = {}) => ({
+  action: 'completed',
+  workflow_run: {
+    conclusion: 'success',
+    head_branch: 'main',
+    head_sha: SHA,
+    event: 'push',
+    path: '.github/workflows/agent-host-image.yml',
+    created_at: '2026-10-29T15:50:00Z',
+    // A re-run starts later than the run was created; the row keeps the creation
+    run_started_at: '2026-10-29T15:58:00Z',
+    display_title: 'Secret title',
+    ...run
+  }
 });
 
 const setup = (
@@ -219,7 +243,100 @@ describe('toRow', () => {
   });
 });
 
+describe('toBuild', () => {
+  it.each(['agent-host-image.yml', 'desk.yml'])(
+    'maps a successful push run of %s on main to its workflow and commit',
+    (workflow) => {
+      expect(
+        toBuild(
+          'workflow_run',
+          runEvent({ path: `.github/workflows/${workflow}` }),
+          AT
+        )
+      ).toEqual({
+        workflow,
+        sha: SHA,
+        run_created_at: '2026-10-29T15:50:00.000Z',
+        updated_at: AT.toISOString()
+      });
+    }
+  );
+
+  it('maps a dispatched run, and a path carrying a ref', () => {
+    expect(
+      toBuild(
+        'workflow_run',
+        runEvent({
+          event: 'workflow_dispatch',
+          path: '.github/workflows/desk.yml@refs/heads/main'
+        }),
+        AT
+      )
+    ).toMatchObject({ workflow: 'desk.yml', sha: SHA });
+  });
+
+  it.each([
+    ['another event', 'check_suite', runEvent()],
+    ['a requested run', 'workflow_run', { ...runEvent(), action: 'requested' }],
+    ['a failed run', 'workflow_run', runEvent({ conclusion: 'failure' })],
+    ['a cancelled run', 'workflow_run', runEvent({ conclusion: 'cancelled' })],
+    ['another branch', 'workflow_run', runEvent({ head_branch: 'cod-1-x' })],
+    ['a pull request run', 'workflow_run', runEvent({ event: 'pull_request' })],
+    [
+      'a workflow it does not track',
+      'workflow_run',
+      runEvent({ path: '.github/workflows/ci.yml' })
+    ],
+    [
+      'a tracked name outside the workflows folder',
+      'workflow_run',
+      runEvent({ path: 'apps/desk.yml' })
+    ],
+    ['a malformed sha', 'workflow_run', runEvent({ head_sha: 'abc' })],
+    ['a missing creation time', 'workflow_run', runEvent({ created_at: null })],
+    [
+      'an unparsable creation time',
+      'workflow_run',
+      runEvent({ created_at: 'soon' })
+    ],
+    ['no run', 'workflow_run', { action: 'completed' }]
+  ])('ignores %s', (_name, event, payload) => {
+    expect(toBuild(event, payload, AT)).toBeNull();
+  });
+});
+
 describe('createHandler', () => {
+  it('upserts a build on workflow, and nothing else of the run', async () => {
+    const { handle, fetch } = setup();
+    const res = await handle(await post(runEvent(), { event: 'workflow_run' }));
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('Stored');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe(
+      'https://x.supabase.co/rest/v1/builds?on_conflict=workflow'
+    );
+    expect(String(init.body)).not.toContain('Secret title');
+    expect(JSON.parse(String(init.body))).toEqual({
+      workflow: 'agent-host-image.yml',
+      sha: SHA,
+      run_created_at: '2026-10-29T15:50:00.000Z',
+      updated_at: AT.toISOString()
+    });
+  });
+
+  it('answers 200 without writing for a run it does not store', async () => {
+    const { handle, fetch } = setup();
+    const res = await handle(
+      await post(runEvent({ conclusion: 'failure' }), {
+        event: 'workflow_run'
+      })
+    );
+    expect(await res.text()).toBe('Ignored');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('upserts the row on subject with the service key, and nothing of the payload', async () => {
     const { handle, fetch } = setup();
     const res = await handle(await post(prEvent()));

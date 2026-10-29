@@ -10,6 +10,13 @@ export type GithubEventRow = {
   updated_at: string;
 };
 
+export type BuildRow = {
+  workflow: string;
+  sha: string;
+  run_created_at: string;
+  updated_at: string;
+};
+
 export type HandlerOptions = {
   secret: string | undefined;
   supabaseUrl: string | undefined;
@@ -34,6 +41,9 @@ export const STORED: Record<string, readonly string[]> = {
   pull_request_review_comment: ['created'],
   check_suite: ['completed']
 };
+
+/** The workflows whose successful runs on main are stored in `builds`: each is a new version of what it builds */
+export const BUILT = ['agent-host-image.yml', 'desk.yml'] as const;
 
 /** GitHub sends `sha256=<hex HMAC-SHA256 of the raw body>` in `X-Hub-Signature-256` */
 export const verifySignature = async (
@@ -123,6 +133,46 @@ export const toRow = (
   };
 };
 
+/** The build row for a successful workflow run on main of a built workflow, or null for anything else */
+export const toBuild = (
+  event: string | null,
+  payload: Record<string, unknown>,
+  at: Date
+): BuildRow | null => {
+  if (event !== 'workflow_run' || payload['action'] !== 'completed')
+    return null;
+  const run = isRecord(payload['workflow_run']) ? payload['workflow_run'] : {};
+  if (
+    run['conclusion'] !== 'success' ||
+    run['head_branch'] !== 'main' ||
+    (run['event'] !== 'push' && run['event'] !== 'workflow_dispatch')
+  )
+    return null;
+
+  const match = /^\.github\/workflows\/([^/@]+)(?:@.*)?$/.exec(
+    text(run['path']) ?? ''
+  );
+  const workflow = BUILT.find((name) => name === match?.[1]);
+  const sha = text(run['head_sha']);
+  // The run's creation, not its start: a re-run of an old run starts anew but keeps it
+  const created = text(run['created_at']);
+  if (
+    !workflow ||
+    !sha ||
+    !/^[0-9a-f]{40}$/.test(sha) ||
+    !created ||
+    Number.isNaN(Date.parse(created))
+  )
+    return null;
+
+  return {
+    workflow,
+    sha,
+    run_created_at: new Date(created).toISOString(),
+    updated_at: at.toISOString()
+  };
+};
+
 const reply = (status: number, message: string): Response =>
   new Response(message, {
     status,
@@ -137,8 +187,12 @@ export const createHandler = ({
   now = () => Date.now(),
   log = (line) => console.log(JSON.stringify(line))
 }: HandlerOptions) => {
-  const upsert = async (row: GithubEventRow): Promise<Response> => {
-    const url = `${(supabaseUrl ?? '').replace(/\/$/, '')}/rest/v1/github_events?on_conflict=subject`;
+  const upsert = async (
+    table: 'github_events' | 'builds',
+    key: string,
+    row: GithubEventRow | BuildRow
+  ): Promise<Response> => {
+    const url = `${(supabaseUrl ?? '').replace(/\/$/, '')}/rest/v1/${table}?on_conflict=${key}`;
     return fetch(url, {
       method: 'POST',
       headers: {
@@ -183,12 +237,19 @@ export const createHandler = ({
     }
     if (!isRecord(payload)) return reply(400, 'Not an object');
 
-    const row = toRow(event, payload, new Date(now()));
-    if (!row) return reply(200, 'Ignored');
+    const at = new Date(now());
+    const build = toBuild(event, payload, at);
+    const row = build ? null : toRow(event, payload, at);
+    const write = build
+      ? () => upsert('builds', 'workflow', build)
+      : row
+        ? () => upsert('github_events', 'subject', row)
+        : null;
+    if (!write) return reply(200, 'Ignored');
 
     let res: Response;
     try {
-      res = await upsert(row);
+      res = await write();
     } catch (error) {
       log({
         event: 'write failed',
@@ -200,7 +261,15 @@ export const createHandler = ({
       log({ event: 'write failed', status: res.status });
       return reply(500, 'Write failed');
     }
-    log({ event: 'stored', action: row.action, subject: row.subject });
+    log(
+      build
+        ? { event: 'stored', workflow: build.workflow, sha: build.sha }
+        : {
+            event: 'stored',
+            action: row?.action,
+            subject: row?.subject
+          }
+    );
     return reply(200, 'Stored');
   };
 };
