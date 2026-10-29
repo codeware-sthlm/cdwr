@@ -5,7 +5,7 @@ export type PlanProgress = {
   next: string | null;
 };
 
-/** A line of the "Suggested:" document line; `title` only when a ticket was suggested */
+/** A line of the "Suggested:" value; `title` only when a ticket was suggested */
 export type Suggested =
   | { date: string; kind: 'open'; ticket: string; text: string }
   | {

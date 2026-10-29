@@ -225,7 +225,7 @@ describe('band', () => {
 
   it('says it is loading before the runs arrive', () => {
     const band = renderBand(model(createState(), NOW), NOW);
-    expect(band.html).toContain('Loading the runs document…');
+    expect(band.html).toContain('Loading the runs…');
   });
 
   it('turns red for a scheduler that went silent', () => {

@@ -618,7 +618,7 @@ describe('model', () => {
   });
 
   describe('activity', () => {
-    it('measures the age of the document and counts the last 24 hours', () => {
+    it('measures the age of the activity and counts the last 24 hours', () => {
       const state = withState((s) => {
         s.data.activity = {
           updated: '2026-10-29 11:00',

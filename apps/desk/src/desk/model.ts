@@ -88,7 +88,7 @@ export type Model = {
   nextRun: number | null;
   /** The scheduler's interval in minutes */
   runMinutes: number;
-  /** Minutes since the activity document was updated; null without one */
+  /** Minutes since the activity table was updated; null without one */
   activityAge: number | null;
   /** Activity events in the last 24 hours */
   activityDay: number;
@@ -182,7 +182,7 @@ export const prOf = (
   known?: PrRef | null
 ): PrRef | null => known || details.get(id)?.pr || null;
 
-/** Whether the activity document is flagged missing; the payload does not carry the flag today, so this reads false until it does */
+/** Whether the activity data is flagged missing; the payload does not carry the flag today, so this reads false until it does */
 export const activityMissing = (activity: ActivityPayload): boolean =>
   'missing' in activity && Boolean(activity.missing);
 
