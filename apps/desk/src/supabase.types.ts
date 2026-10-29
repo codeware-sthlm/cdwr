@@ -173,6 +173,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      github_events: {
+        Row: {
+          subject: string;
+          pr: number | null;
+          action: string;
+          updated_at: string;
+        };
+        Insert: {
+          subject: string;
+          pr?: number | null;
+          action: string;
+          updated_at: string;
+        };
+        Update: {
+          subject?: string;
+          pr?: number | null;
+          action?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       sessions: {
         Row: {
           id: string;
