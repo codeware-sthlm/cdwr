@@ -1,8 +1,7 @@
 import {
   findPages,
   findPosts,
-  findTours,
-  getTenantConfig
+  findTours
 } from '@codeware/shared/util/payload-api';
 import { sitePath } from '@codeware/shared/util/payload-utils';
 
@@ -11,6 +10,7 @@ import { getEnv } from '../env.server';
 
 import { payloadRequestOptions } from './payload-request';
 import { resolveSiteOrigin } from './site-origin';
+import { loadTenantConfig } from './tenant-config';
 
 /** Most documents of a kind a sitemap lists; the protocol allows 50 000 URLs */
 const LIMIT = 5000;
@@ -29,7 +29,7 @@ export async function loadSitemapEntries(): Promise<{
   try {
     const env = getEnv();
     const base = payloadRequestOptions(env);
-    const tenantConfig = await getTenantConfig(base);
+    const tenantConfig = await loadTenantConfig();
     if (!tenantConfig) {
       return { origin: null, entries: [] };
     }
@@ -42,7 +42,13 @@ export async function loadSitemapEntries(): Promise<{
       return { origin: null, entries: [] };
     }
 
-    const options = { ...base, locale: tenantConfig.locale, limit: LIMIT };
+    const options = {
+      ...base,
+      locale: tenantConfig.locale,
+      limit: LIMIT,
+      // Paths and dates are the document's own fields
+      depth: 0
+    };
     const [pages, posts, tours] = await Promise.all([
       findPages(options),
       findPosts(options),
@@ -71,5 +77,23 @@ export async function loadSitemapEntries(): Promise<{
   } catch (error) {
     console.error('Failed to load sitemap entries:', error);
     return { origin: null, entries: [] };
+  }
+}
+
+/**
+ * The site's origin alone, for what needs no document list.
+ *
+ * `null` when the cms cannot be reached or the origin is unknown.
+ */
+export async function loadSiteOrigin(): Promise<string | null> {
+  try {
+    const tenantConfig = await loadTenantConfig();
+
+    return tenantConfig
+      ? resolveSiteOrigin(tenantConfig.tenant.domains, getEnv().FLY_APP_NAME)
+      : null;
+  } catch (error) {
+    console.error('Failed to load the site origin:', error);
+    return null;
   }
 }
