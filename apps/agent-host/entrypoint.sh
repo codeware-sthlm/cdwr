@@ -25,6 +25,9 @@ unset AGENT_GITHUB_APP_KEY
 
 # The Linear key the same way, where the image's AGENT_QUEUE_LINEAR_KEY_FILE points: lib.sh reads
 # the file, and no process inherits the key itself
+: "${AGENT_QUEUE_LINEAR_KEY_FILE:=/run/agent/linear.key}"
+export AGENT_QUEUE_LINEAR_KEY_FILE
+mkdir -p "${AGENT_QUEUE_LINEAR_KEY_FILE:h}"
 (umask 077; print -r -- "$AGENT_QUEUE_LINEAR_KEY" > "$AGENT_QUEUE_LINEAR_KEY_FILE")
 chmod 600 "$AGENT_QUEUE_LINEAR_KEY_FILE"
 unset AGENT_QUEUE_LINEAR_KEY
