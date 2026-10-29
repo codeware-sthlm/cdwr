@@ -28,7 +28,7 @@ test.describe('content security policy', () => {
     const nonce = /'nonce-([^']+)'/.exec(policy ?? '')?.[1];
     expect(nonce).toBeTruthy();
 
-    const scripts = (await response.text()).match(/<script\b[^>]*>/g) ?? [];
+    const scripts = (await response.text()).match(/<script\b[^>]*>/gi) ?? [];
     expect(scripts.length).toBeGreaterThan(0);
 
     for (const script of scripts) {
@@ -39,12 +39,16 @@ test.describe('content security policy', () => {
   test('the nonce is new for every response', async ({ request }) => {
     const nonceOf = async () => {
       const response = await request.get('/api/health');
-      return /'nonce-([^']+)'/.exec(fullPolicy(response.headers()) ?? '')?.[1];
+      expect(response.status()).toBe(200);
+      const nonce = /'nonce-([^']+)'/.exec(
+        fullPolicy(response.headers()) ?? ''
+      )?.[1];
+      expect(nonce).toBeTruthy();
+      return nonce;
     };
 
     const [first, second] = [await nonceOf(), await nonceOf()];
 
-    expect(first).toBeTruthy();
     expect(first).not.toBe(second);
   });
 });
