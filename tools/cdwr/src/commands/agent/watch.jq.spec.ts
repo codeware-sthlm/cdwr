@@ -2180,11 +2180,11 @@ describe('watch.jq on jq 1.6', () => {
   const KEYWORDS =
     'and|or|not|if|then|elif|else|end|as|def|reduce|foreach|try|catch|label|import|include|__loc__';
   it('uses no jq keyword as a field or variable name', () => {
-    const code = readFileSync(`${DIR}/watch.jq`, 'utf8')
-      .split('\n')
-      .map((line) => line.replace(/#.*$/, ''))
-      .join('\n')
-      .replace(/"(?:[^"\\]|\\.)*"/g, '""');
+    // Strings and comments in one pass, so a # in a string or a quote in a comment counts for neither
+    const code = readFileSync(`${DIR}/watch.jq`, 'utf8').replace(
+      /"(?:[^"\\]|\\.)*"|#.*$/gm,
+      (match) => (match.startsWith('"') ? '""' : '')
+    );
     expect(code.match(new RegExp(`[.$](?:${KEYWORDS})\\b`, 'g')) ?? []).toEqual(
       []
     );
