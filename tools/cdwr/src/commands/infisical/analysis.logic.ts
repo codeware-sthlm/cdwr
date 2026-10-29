@@ -4,7 +4,10 @@ import type { Environment } from '../../services/infisical';
 import type { DeploymentsMap, SkippedDeployment } from '../../services/tenancy';
 
 /** Apps analyzed on every run */
-export const APPS = ['cms', 'builder', 'umami'] as const;
+export const APPS = ['cms', 'headless', 'builder', 'umami'] as const;
+
+/** Apps that deploy per tenant only, never as a host */
+const TENANT_ONLY_APPS: readonly string[] = ['headless'];
 
 /** State of a folder's `DEPLOY_ENABLED` secret */
 export type FlagState = 'on' | 'off' | 'no flag' | 'invalid name';
@@ -22,8 +25,8 @@ export interface TenantFlag {
 
 export interface AppAnalysis {
   app: string;
-  /** Whether the host deployment of the app (`/apps/<app>`) deploys */
-  host: FlagState;
+  /** Whether the host deployment of the app (`/apps/<app>`) deploys, null for a tenant-only app */
+  host: FlagState | null;
   /** Tenant folders of the app with their flag state, sorted by tenant */
   tenants: TenantFlag[];
   /** App-level secrets under /apps/<app>, unmasked - the caller decides what to print */
@@ -73,11 +76,13 @@ export function summarize(
 
       return {
         app,
-        host: enabled.some(({ tenant }) => tenant === undefined)
-          ? 'on'
-          : hostSkip
-            ? skippedState(hostSkip)
-            : 'no flag',
+        host: TENANT_ONLY_APPS.includes(app)
+          ? null
+          : enabled.some(({ tenant }) => tenant === undefined)
+            ? 'on'
+            : hostSkip
+              ? skippedState(hostSkip)
+              : 'no flag',
         tenants,
         secrets: appSecrets[app] ?? {}
       };

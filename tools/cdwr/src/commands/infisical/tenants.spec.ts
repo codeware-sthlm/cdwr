@@ -48,6 +48,7 @@ describe('infisical tenants', () => {
         { tenant: 'globex', flag: 'no flag' },
         { tenant: 'initech', flag: 'no flag' }
       ],
+      headless: [],
       web: [{ tenant: 'acme', flag: 'on' }]
     });
   });

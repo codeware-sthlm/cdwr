@@ -12,7 +12,7 @@ import { APPS, type EnvironmentAnalysis, summarize } from './analysis.logic';
 export default defineCommand({
   summary: 'Deploy switches, tenant folders and app secrets side by side',
   description:
-    'For preview and production, per app (cms, builder): whether the host deploys, each tenant folder with its DEPLOY_ENABLED state (on, off or no flag), and the app secrets. Secret values are masked unless --reveal is given.',
+    'For preview and production, per app (cms, headless, builder): whether the host deploys, each tenant folder with its DEPLOY_ENABLED state (on, off or no flag), and the app secrets. Secret values are masked unless --reveal is given.',
   danger: 'read',
   needs: ['infisical'],
   inputs: {
@@ -61,7 +61,7 @@ export default defineCommand({
       ctx.ui.info(theme.title(environment));
       for (const { app, host, tenants, secrets } of apps) {
         ctx.ui.info(
-          `${app}: host ${host}; ${
+          `${app}: ${host === null ? 'tenant-only' : `host ${host}`}; ${
             tenants.length
               ? tenants
                   .map(({ tenant, flag }) => `${tenant} ${flag}`)
