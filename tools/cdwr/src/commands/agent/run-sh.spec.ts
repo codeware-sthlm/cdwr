@@ -698,3 +698,74 @@ describe('run.sh session files from another host', () => {
     expect(result.stdout.trim()).toBe('');
   });
 });
+
+describe('run.sh woken by the listener', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  let home: string;
+
+  const live = (file: unknown) => {
+    if (file !== undefined)
+      writeFileSync(
+        join(home, 'listener.json'),
+        typeof file === 'string' ? file : JSON.stringify(file)
+      );
+    return spawnSync(
+      'zsh',
+      [
+        '-c',
+        [`HOME_DIR="${home}"`, fn('listener_live'), 'listener_live'].join('\n')
+      ],
+      { encoding: 'utf8' }
+    ).status;
+  };
+  const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'listener-'));
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  it.skipIf(!hasZsh)(
+    'reads the listener as live only on a fresh live beat',
+    () => {
+      expect(live({ state: 'live', lastBeat: ago(5_000) })).toBe(0);
+      expect(live({ state: 'live', lastBeat: ago(180_000) })).not.toBe(0);
+      expect(live({ state: 'down', lastBeat: ago(5_000) })).not.toBe(0);
+      expect(live('not json')).not.toBe(0);
+    }
+  );
+
+  it.skipIf(!hasZsh)('reads no listener as not live', () => {
+    expect(live(undefined)).not.toBe(0);
+  });
+
+  it('says live and the fallback in the job line on the container', () => {
+    expect(fn('job_line')).toContain(
+      'out="Job: live · fallback $(( RUN_FALLBACK_SECONDS / 60 )) min"'
+    );
+  });
+
+  it('records the interval and the version from either job line', () => {
+    const run = fn('record_run');
+    expect(run).toContain(`'(every|fallback) ([0-9]+) min'`);
+    expect(run).toContain('version="${jl##* · }"');
+  });
+
+  it('reads Linear history at most once per 10 min on a woken run', () => {
+    const activity = fn('record_activity');
+    expect(SCRIPT).toContain(
+      'wake=false; [[ "${1:-}" == "--wake" ]] && wake=true'
+    );
+    expect(activity).toMatch(
+      /if \$wake; then[\s\S]*>= 600 \)\) \|\| \{ : > "\$owed"; return 0; \}/
+    );
+    // The stamp moves only after a read that went through
+    expect(activity.indexOf('date +%s > "$stamp"')).toBeGreaterThan(
+      activity.indexOf("rows_json=\"$(jq -ce '.result.rows'")
+    );
+  });
+});
