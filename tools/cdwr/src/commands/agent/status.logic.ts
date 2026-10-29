@@ -65,6 +65,8 @@ const reportShape = z.object({
   implement: z.object({
     spent: z.number().optional(),
     cap: z.number(),
+    // Absent from a container on an older image
+    budget: z.number().optional(),
     last: z
       .object({
         when: z.string(),

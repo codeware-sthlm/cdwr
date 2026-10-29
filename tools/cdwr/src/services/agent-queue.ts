@@ -18,6 +18,7 @@ import {
   byFile,
   filesDrift,
   hostKind,
+  implementBudget,
   implementCap,
   installedEnv,
   lastImplementRun,
@@ -200,6 +201,7 @@ export function implementReport(
 ): {
   spent: number | undefined;
   cap: number;
+  budget: number;
   last: ReturnType<typeof lastImplementRun>;
 } {
   // The day implement.sh stamps: local date
@@ -207,6 +209,7 @@ export function implementReport(
   return {
     spent: spendForDay(readText(queue.implementSpend), day),
     cap: implementCap(env['AGENT_QUEUE_IMPLEMENT_CAP_USD']),
+    budget: implementBudget(env['AGENT_QUEUE_IMPLEMENT_BUDGET_USD']),
     last: lastImplementRun(readText(queue.runs))
   };
 }

@@ -79,6 +79,8 @@ export const byFile = <T>(
 export const QUEUE_BINARIES = ['node', 'claude', 'jq', 'git', 'gh', 'pnpm'];
 /** Daily API-equivalent spend cap for implementing sessions, in USD */
 export const IMPLEMENT_CAP_USD = 40;
+/** Per-run budget for an implementing session, in USD; implement.sh has the same default */
+export const IMPLEMENT_BUDGET_USD = 15;
 /** Daily suggest session: budget in USD, the local hour it may start after, days between runs */
 export const SUGGEST_BUDGET_USD = 5;
 export const SUGGEST_HOUR = 6;
@@ -401,6 +403,14 @@ export const implementCap = (value: string | undefined): number => {
   return value?.trim() && Number.isFinite(n) && n > 0 ? n : IMPLEMENT_CAP_USD;
 };
 
+/** The per-run budget: the env value when it is a positive number, else the default */
+export const implementBudget = (value: string | undefined): number => {
+  const n = Number(value);
+  return value?.trim() && Number.isFinite(n) && n > 0
+    ? n
+    : IMPLEMENT_BUDGET_USD;
+};
+
 const jsonLines = (text: string | undefined): Record<string, unknown>[] =>
   (text ?? '').split('\n').flatMap((line) => {
     try {
@@ -477,12 +487,13 @@ export const lastImplementRun = (
 export const formatImplement = (
   spent: number | undefined,
   cap: number,
-  last: ImplementRun | undefined
+  last: ImplementRun | undefined,
+  budget = IMPLEMENT_BUDGET_USD
 ): string =>
   spent === undefined
     ? 'implement spend unreadable: implement-spend.jsonl has a bad line; no launch until it is fixed'
     : [
-        `implement spend today $${spent.toFixed(2)} of $${cap}`,
+        `implement spend today $${spent.toFixed(2)} of $${cap}${spent >= cap ? ` (over; a run may overshoot by its $${budget} budget)` : ''}`,
         last
           ? `last ${last.outcome}${last.ticket ? ` ${last.ticket}` : ''}${last.when ? ` (${last.when})` : ''}`
           : 'no implementing session yet'
