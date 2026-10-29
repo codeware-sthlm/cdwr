@@ -1740,6 +1740,15 @@ describe('attended picks', () => {
           sub('COD-5', [blocker('COD-1', 'completed')], { parent: null })
         ],
         [
+          'its relations run past one page',
+          sub('COD-5', [blocker('COD-1', 'completed')], {
+            inverseRelations: {
+              nodes: [blocker('COD-1', 'completed')],
+              pageInfo: { hasNextPage: true }
+            }
+          })
+        ],
+        [
           'its parent was cancelled, an abandoned split',
           sub('COD-5', [blocker('COD-1', 'completed')], {
             parent: { identifier: 'COD-100', state: { type: 'canceled' } }

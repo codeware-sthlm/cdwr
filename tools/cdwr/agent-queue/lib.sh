@@ -43,7 +43,10 @@ query {
       parent { identifier state { type } }
       state { type }
       labels(first: 20) { nodes { name } }
-      inverseRelations(first: 20) { nodes { type issue { identifier state { type } labels(first: 20) { nodes { name } } } } }
+      inverseRelations(first: 20) {
+        nodes { type issue { identifier state { type } labels(first: 20) { nodes { name } } } }
+        pageInfo { hasNextPage }
+      }
     }
   }
 }
