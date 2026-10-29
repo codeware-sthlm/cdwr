@@ -222,7 +222,7 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 run) always go out.
 
 The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
-`activity`, `sessions`, `queue_state` and `issue_events`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`activity`, `sessions`, `queue_state`, `issue_events` and `github_events`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
@@ -239,6 +239,22 @@ verification off, since Linear sends no Supabase JWT:
 
 ```sh
 supabase functions deploy linear-webhook --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
+```
+
+GitHub changes on `codeware-sthlm/cdwr` land beside them, in `github_events`, for the NUC's scheduler to
+wake on. A repo webhook (JSON) sends `pull_request`, `pull_request_review`, `pull_request_review_comment`
+and `check_suite` events to the Edge Function `github-webhook`, which checks `X-Hub-Signature-256`
+against `GITHUB_WEBHOOK_SECRET`. GitHub sends no timestamp, so a replayed delivery is accepted; it can
+only cause an extra wake, which re-reads Linear and GitHub anyway. The function keeps one row per subject:
+`pr/<n>` when the event names a pull request, else `ref/<branch>`, with the action (`pull_request:merged`,
+`check_suite:completed`, …) and never the payload. A `ping` is answered without a row, and every other
+event or action with `Ignored`. Commit statuses aren't subscribed: the required checks and Chromatic run
+as Actions jobs, which `check_suite` covers. Both functions share `functions/_shared/hmac.ts`, so a change
+to it means deploying both:
+
+```sh
+supabase functions deploy github-webhook --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
+supabase secrets set GITHUB_WEBHOOK_SECRET=… --project-ref xwmrptothspulojaxrvf
 ```
 
 The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
