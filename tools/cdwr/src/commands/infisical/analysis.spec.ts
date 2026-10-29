@@ -71,6 +71,7 @@ describe('infisical analysis', () => {
     expect(payload.result[0]?.apps[0]?.secrets['DATABASE_URL']).toBe('••••');
     expect(payload.result[0]?.apps.map(({ app }) => app)).toEqual([
       'cms',
+      'headless',
       'builder',
       'umami'
     ]);
@@ -78,7 +79,7 @@ describe('infisical analysis', () => {
       host: 'on',
       tenants: [{ tenant: 'acme', flag: 'on' }]
     });
-    expect(payload.result[0]?.apps[1]).toMatchObject({
+    expect(payload.result[0]?.apps[2]).toMatchObject({
       host: 'no flag',
       tenants: [{ tenant: 'acme', flag: 'off' }]
     });
@@ -116,7 +117,7 @@ describe('infisical analysis', () => {
     const payload = JSON.parse(stdout[0] ?? '{}') as {
       result: Array<{ apps: Array<{ app: string; host: string }> }>;
     };
-    expect(payload.result[0]?.apps[2]).toMatchObject({
+    expect(payload.result[0]?.apps[3]).toMatchObject({
       app: 'umami',
       host: 'no flag'
     });
