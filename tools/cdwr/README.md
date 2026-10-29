@@ -222,7 +222,7 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 run) always go out.
 
 The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
-`activity`, `sessions`, `queue_state`, `issue_events` and `github_events`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events` and `github_events`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
