@@ -166,6 +166,28 @@ describe('createLoader', () => {
     loader.stop();
   });
 
+  it('drops what a superseded load answers', async () => {
+    let fail: (e: Error) => void = () => undefined;
+    const { loader, state, adapter, linear } = setup(
+      () => new Promise((_resolve, reject) => (fail = reject))
+    );
+    loader.watchAll();
+    await settle();
+    // COD-1 leaves the agent's tickets, so the next load no longer asks for it
+    linear.listOpen.mockResolvedValue({
+      triage: [],
+      backlog: [],
+      unstarted: [],
+      started: [issue('COD-1')]
+    });
+    await adapter.invalidate('Linear');
+    await settle();
+    fail(new Error('late'));
+    await settle();
+    expect(state.errors.has('detail:COD-1')).toBe(false);
+    loader.stop();
+  });
+
   it('refresh clears the errors of per-ticket requests', async () => {
     const { loader, state } = setup(() => Promise.resolve(detail));
     loader.watchAll();

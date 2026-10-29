@@ -64,7 +64,12 @@ export const createLoader = ({
         state.errors.delete(key);
   };
 
+  // A newer load supersedes an older one: whatever the older one answers is dropped, so its
+  // failures can't bring back errors the newer one pruned
+  let generation = 0;
   const loadDetails = async (): Promise<void> => {
+    const current = ++generation;
+    const stale = (): boolean => stopped || current !== generation;
     const { ideas, runs } = state.data;
     const ids = new Set(
       openIssues(state.data)
@@ -99,7 +104,7 @@ export const createLoader = ({
             { id },
             { cache: { staleTime: DETAIL_STALE_MS } }
           );
-          if (stopped) return;
+          if (stale()) return;
           const p = r.payload;
           state.details.set(id, {
             ...parsePlan(p.description),
@@ -109,12 +114,12 @@ export const createLoader = ({
           });
           state.errors.delete('detail:' + id);
         } catch (e) {
-          if (stopped) return;
+          if (stale()) return;
           state.errors.set('detail:' + id, failure(e));
         }
       })
     );
-    if (stopped) return;
+    if (stale()) return;
     await Promise.all(
       handoffIds.map(async (id) => {
         try {
@@ -124,16 +129,16 @@ export const createLoader = ({
             { issueId: id },
             { cache: { staleTime: HANDOFF_STALE_MS } }
           );
-          if (stopped) return;
+          if (stale()) return;
           state.liveHandoffs.set(id, parseHandoffs(r.payload.comments));
           state.errors.delete('handoffs:' + id);
         } catch (e) {
-          if (stopped) return;
+          if (stale()) return;
           state.errors.set('handoffs:' + id, failure(e));
         }
       })
     );
-    if (stopped) return;
+    if (stale()) return;
     await Promise.all(
       cancelled
         .filter((i) => !state.ideaReasons.has(i.id))
@@ -145,7 +150,7 @@ export const createLoader = ({
               { issueId: i.id },
               { cache: { staleTime: REASON_STALE_MS } }
             );
-            if (stopped) return;
+            if (stale()) return;
             const lastComment = r.payload.comments
               .slice()
               .sort(byCreated)
@@ -158,12 +163,12 @@ export const createLoader = ({
             );
             state.errors.delete('reason:' + i.id);
           } catch (e) {
-            if (stopped) return;
+            if (stale()) return;
             state.errors.set('reason:' + i.id, failure(e));
           }
         })
     );
-    if (stopped) return;
+    if (stale()) return;
     render();
   };
 
