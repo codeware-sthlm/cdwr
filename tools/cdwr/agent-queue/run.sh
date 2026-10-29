@@ -646,7 +646,10 @@ attended() {
   fi
 }
 # status reads this line: whether a claude run here would have Linear tools
-if $check; then why="$(linear_tools)"; print -r -- "linear: ${why:+missing ($why)}${why:-ok ($LINEAR_MCP)}"; fi
+if $check; then
+  why="$(linear_tools)"
+  if [[ -n "$why" ]]; then print -r -- "linear: missing ($why)"; else print -r -- "linear: ok ($LINEAR_MCP)"; fi
+fi
 attended
 
 read -r -d '' QUERY <<'GQL' || true

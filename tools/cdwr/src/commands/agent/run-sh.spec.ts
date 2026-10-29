@@ -236,9 +236,10 @@ describe('run.sh Linear tools', () => {
   });
 
   it('reports the state on --check', () => {
-    expect(code).toMatch(
-      /if \$check; then why="\$\(linear_tools\)"; print -r -- "linear: /
-    );
+    // One form or the other: `${why:-…}` would repeat the reason after the missing form
+    expect(code).toContain('print -r -- "linear: missing ($why)"');
+    expect(code).toContain('print -r -- "linear: ok ($LINEAR_MCP)"');
+    expect(code).not.toContain('${why:-');
   });
 });
 
