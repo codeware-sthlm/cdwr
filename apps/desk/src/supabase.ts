@@ -372,16 +372,27 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     });
 
   // Apart from `read`, so a host_metrics failure (a migration not yet applied) leaves the other tiles alone
+  // The last 24 h plus the newest sample whatever its age, so a long outage reads as stale rather than empty
   const readHostMetrics = (): Promise<HostMetricRow[]> =>
-    attempt(async () =>
-      settle(
-        await client
+    attempt(async () => {
+      const [windowed, newest] = await Promise.all([
+        client
           .from('host_metrics')
           .select('*')
           .gte('at', new Date(Date.now() - DAY_MS).toISOString())
-          .order('at', { ascending: true })
-      )
-    );
+          .order('at', { ascending: true }),
+        client
+          .from('host_metrics')
+          .select('*')
+          .order('at', { ascending: false })
+          .limit(1)
+      ]);
+      const rows = settle(windowed);
+      const older = settle(newest).filter(
+        (r) => !rows.some((w) => w.id === r.id)
+      );
+      return [...older, ...rows];
+    });
 
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
@@ -422,11 +433,6 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         );
       }
     }
-    channel = channel.on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'host_metrics' },
-      hostChanged
-    );
     for (const event of ['INSERT', 'UPDATE'] as const) {
       channel = channel.on(
         'postgres_changes',
@@ -449,10 +455,20 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         onStatus?.(false);
       }
     });
+    // Its own channel, so a missing host_metrics table fails only this one; the status is ignored
+    const hostChannel = client
+      .channel('desk-host')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'host_metrics' },
+        hostChanged
+      )
+      .subscribe();
     return () => {
       clearTimeout(timer);
       clearTimeout(hostTimer);
       void client.removeChannel(channel);
+      void client.removeChannel(hostChannel);
     };
   };
 
