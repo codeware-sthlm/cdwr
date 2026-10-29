@@ -117,6 +117,10 @@ export default [
               ]
             },
             {
+              sourceTag: 'scope:headless-e2e',
+              onlyDependOnLibsWithTags: ['scope:headless-e2e', 'scope:shared']
+            },
+            {
               sourceTag: 'scope:app-cms',
               onlyDependOnLibsWithTags: [
                 'scope:app-cms',
