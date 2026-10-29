@@ -42,6 +42,7 @@ const view = (over: Partial<QueueView> = {}): QueueView => ({
   parked: [{ ticket: 'COD-2', wait: 'ci', pr: 5 }],
   table: {
     before: [{ ticket: 'COD-4', kind: 'plan' }],
+    label: [{ ticket: 'COD-6', parent: 'COD-<1>', blockers: ['COD-2'] }],
     after: [
       { ticket: 'COD-3', kind: 'pr', pr: 7 },
       { ticket: 'COD-5', kind: 'handoffs', items: ['check it'] }
@@ -251,6 +252,10 @@ describe('columns and tiles', () => {
     expect(cols.waiting).toBe(true);
     expect(cols.before).toContain('COD-4');
     expect(cols.before).toContain('idea');
+    expect(cols.before).toContain('COD-6');
+    expect(cols.before).toContain('ready to label');
+    expect(cols.before).toContain('COD-&lt;1&gt;');
+    expect(cols.before).not.toContain('COD-<1>');
     expect(cols.next).toContain('parked');
     expect(cols.after).toContain('Open PRs · 1');
   });

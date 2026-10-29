@@ -244,6 +244,16 @@ const list = <T extends z.ZodTypeAny>(item: T) =>
     .nullish()
     .transform((v) => v || []);
 
+// A malformed entry is dropped alone, not the view
+const labelEntry = z.object({
+  ticket: z.string(),
+  parent: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? null),
+  blockers: list(z.string())
+});
+
 const queueViewSchema = z
   .object({
     at: opt(z.string()),
@@ -292,6 +302,15 @@ const queueViewSchema = z
     ),
     table: z.object({
       before: list(z.object({ ticket: z.string(), kind: opt(z.string()) })),
+      label: z
+        .array(z.unknown())
+        .nullish()
+        .transform((v) =>
+          (v ?? []).flatMap((x) => {
+            const p = labelEntry.safeParse(x);
+            return p.success ? [p.data] : [];
+          })
+        ),
       after: list(
         z.object({
           ticket: z.string(),

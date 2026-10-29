@@ -157,7 +157,7 @@ describe('toRuns', () => {
       next: [],
       held: { tickets: [], free: [] },
       parked: [],
-      table: { before: [], after: [] }
+      table: { before: [], label: [], after: [] }
     });
   });
 

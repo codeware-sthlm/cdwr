@@ -428,7 +428,7 @@ describe('validateQueueView', () => {
       next: [],
       held: { tickets: [], free: [] },
       parked: [],
-      table: { before: [], after: [] }
+      table: { before: [], label: [], after: [] }
     });
   });
 
@@ -458,6 +458,7 @@ describe('validateQueueView', () => {
       parked: [{ ticket: 'COD-4', wait: 'checks', pr: 7, resolved: false }],
       table: {
         before: [{ ticket: 'COD-5', kind: 'plan' }],
+        label: [{ ticket: 'COD-7', parent: 'COD-1', blockers: [] }],
         after: [{ ticket: 'COD-6', kind: 'handoffs', items: ['a'] }]
       }
     };
@@ -516,6 +517,23 @@ describe('validateQueueView', () => {
       { ticket: 'COD-9', kind: undefined, items: undefined },
       { ticket: 'COD-10', kind: 'handoffs', items: ['a'] }
     ]);
+  });
+
+  it('reads table.label, dropping what is malformed', () => {
+    const label = (l: unknown) =>
+      validateQueueView({ limit, table: { label: l } })?.table.label;
+    expect(
+      label([
+        { ticket: 'COD-1', parent: 'COD-9', blockers: ['COD-2'] },
+        { ticket: 'COD-3', parent: null },
+        { parent: 'COD-9' }
+      ])
+    ).toEqual([
+      { ticket: 'COD-1', parent: 'COD-9', blockers: ['COD-2'] },
+      { ticket: 'COD-3', parent: null, blockers: [] }
+    ]);
+    expect(label(undefined)).toEqual([]);
+    expect(label(null)).toEqual([]);
   });
 
   it.each([
