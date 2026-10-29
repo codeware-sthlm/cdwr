@@ -59,6 +59,7 @@ const runs = (qv: QueueView | null): RunsPayload => ({
   job: {
     line: 'every 10 min',
     minutes: 10,
+    live: false,
     host: 'launchd',
     rev: null,
     install: 'current',

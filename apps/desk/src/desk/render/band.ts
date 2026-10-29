@@ -29,7 +29,11 @@ export const headline = (m: Model, now: Date): Headline => {
     };
   const s: SessionState = m.session ?? { state: 'none' };
   const first = m.next[0];
-  const when = m.nextRun ? '~' + hhmm(m.nextRun) : 'its next run';
+  const when = m.live
+    ? 'the next event'
+    : m.nextRun
+      ? '~' + hhmm(m.nextRun)
+      : 'its next run';
   const on = s.ticket ? ' on ' + idLink(s.ticket) : '';
   let tone: Tone = '',
     text: string;
@@ -117,6 +121,6 @@ export const renderBand = (m: Model, now: Date): Band => {
     html: `<button type="button" class="pill ${esc(s.state)}${m.stuck !== null ? ' stuck' : ''}" data-w="session" aria-haspopup="dialog"><i aria-hidden="true"></i>${m.stuck !== null ? 'Session stuck' : esc(sessionLabel(s.state))}${s.state !== 'none' && s.detail ? ` · ${esc(s.detail)}` : ''}</button>
     <div class="headline"><p>${h.text}</p>${h.note ? `<small>${h.note}</small>` : ''}</div>
     <button type="button" class="gauge" data-w="limit" aria-haspopup="dialog"><span class="k">Limit · agent PRs in flight</span><b>${m.limit.used} <small>of ${m.limit.max} · ${m.limit.used >= m.limit.max ? 'no new ticket starts' : plural(m.limit.max - m.limit.used, 'slot', 'slots') + ' free'}</small></b>${loadMeter(m)}</button>
-    <button type="button" class="gauge" data-w="scheduler" aria-haspopup="dialog"><span class="k">Scheduler</span><b>${esc(sched)}</b><small style="color:var(--muted);font-size:.78rem">${runs?.last ? 'last ' + esc(runs.last.when.slice(11)) + ' · next ' + (m.nextRun ? hhmm(m.nextRun) : '?') : 'no runs yet'}${host}</small></button>`
+    <button type="button" class="gauge" data-w="scheduler" aria-haspopup="dialog"><span class="k">Scheduler</span><b>${esc(sched)}</b><small style="color:var(--muted);font-size:.78rem">${runs?.last ? 'last ' + esc(runs.last.when.slice(11)) + ' · next ' + (m.live ? 'on events' : m.nextRun ? hhmm(m.nextRun) : '?') : 'no runs yet'}${host}</small></button>`
   };
 };

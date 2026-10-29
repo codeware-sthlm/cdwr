@@ -341,7 +341,9 @@ const timerGroups = (m: Model): [string, TimerRow[]][] => {
       [
         [
           'Scheduled run',
-          `every ${m.runMinutes} min`,
+          m.live
+            ? `on events, fallback every ${m.runMinutes} min`
+            : `every ${m.runMinutes} min`,
           `launchd StartInterval, from RUN_INTERVAL_SECONDS in agent.logic.ts (600 s). The live value comes from the Job line${assumed}`
         ],
         [
@@ -351,7 +353,11 @@ const timerGroups = (m: Model): [string, TimerRow[]][] => {
         ],
         [
           'Next run',
-          m.nextRun ? 'about ' + hhmm(m.nextRun) : 'unknown',
+          m.live
+            ? `on events, fallback about ${m.nextRun ? hhmm(m.nextRun) : '?'}`
+            : m.nextRun
+              ? 'about ' + hhmm(m.nextRun)
+              : 'unknown',
           'last run plus whole intervals; sleep shifts it'
         ],
         [

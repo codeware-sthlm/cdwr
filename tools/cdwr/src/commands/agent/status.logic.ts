@@ -7,6 +7,7 @@ import {
   WATCH_STATES,
   queueViewSchema
 } from './agent.logic';
+import { type ListenerState, listenerStateShape } from './listen.logic';
 
 /** The checkout the queue plans in, inside the agent container */
 export const REMOTE_CHECKOUT = '/work/codeware-agent';
@@ -101,7 +102,9 @@ const reportShape = z.object({
       text: z.string()
     })
     .nullable(),
-  queueView: queueViewSchema.or(z.literal('malformed')).nullable()
+  queueView: queueViewSchema.or(z.literal('malformed')).nullable(),
+  // Absent from a container on an older image, and null without a listener file
+  listener: listenerStateShape.nullable().optional()
 });
 
 const envelope = z.object({ result: reportShape });
@@ -181,3 +184,51 @@ export const staleScriptsHint = (host: 'launchd' | 'container'): string =>
   host === 'container'
     ? 're-deploy with `cdwr agent deploy --host <nuc>` from the Mac'
     : 're-run `cdwr agent install`';
+
+export type { ListenerState } from './listen.logic';
+
+/** The listener file's text as a state; null when absent or unreadable */
+export const parseListener = (
+  text: string | undefined
+): ListenerState | null => {
+  if (text === undefined) return null;
+  try {
+    const parsed = listenerStateShape.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+};
+
+/** The listener counts as live while its heartbeat is younger than this */
+export const LISTENER_STALE_MS = 2 * 60_000;
+
+/** The `job` row of the container loop, from the listener file at `now` */
+export const formatContainerJob = (
+  listener: ListenerState | null | undefined,
+  now: Date,
+  intervalMinutes: number,
+  fallbackMinutes: number
+): { ok: boolean | 'warn'; detail: string } => {
+  if (!listener)
+    return {
+      ok: true,
+      detail: `polling every ${intervalMinutes} min (no listener)`
+    };
+  const beat = Date.parse(listener.lastBeat);
+  if (listener.state === 'live' && now.getTime() - beat < LISTENER_STALE_MS)
+    return {
+      ok: true,
+      detail: `live (events), fallback every ${fallbackMinutes} min`
+    };
+  const since = new Date(
+    listener.state === 'down' ? listener.since : listener.lastBeat
+  );
+  const at = Number.isNaN(since.getTime())
+    ? 'unknown'
+    : since.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+  return {
+    ok: 'warn',
+    detail: `polling every ${intervalMinutes} min (listener down since ${at})`
+  };
+};

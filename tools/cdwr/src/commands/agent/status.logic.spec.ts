@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatContainerJob,
+  parseListener,
   parseRemoteStatus,
   remoteStatus,
   rmLockCommand,
@@ -154,5 +156,68 @@ describe('staleScriptsHint', () => {
     ]
   ] as const)('on %s', (host, text) => {
     expect(staleScriptsHint(host)).toBe(text);
+  });
+});
+
+describe('formatContainerJob', () => {
+  const now = new Date('2026-10-29T12:00:00Z');
+  const listener = (state: 'live' | 'down', lastBeat: string) => ({
+    state,
+    since: '2026-10-29T11:00:00Z',
+    lastBeat,
+    lastEvent: null,
+    pid: 1
+  });
+
+  it('is live while the beat is fresh', () => {
+    expect(
+      formatContainerJob(listener('live', '2026-10-29T11:59:30Z'), now, 10, 60)
+    ).toEqual({ ok: true, detail: 'live (events), fallback every 60 min' });
+  });
+
+  it('warns on a stale beat', () => {
+    const job = formatContainerJob(
+      listener('live', '2026-10-29T11:50:00Z'),
+      now,
+      10,
+      60
+    );
+    expect(job.ok).toBe('warn');
+    expect(job.detail).toMatch(/^polling every 10 min \(listener down since /);
+  });
+
+  it('warns on a down listener', () => {
+    const job = formatContainerJob(
+      listener('down', '2026-10-29T11:59:50Z'),
+      now,
+      10,
+      60
+    );
+    expect(job.ok).toBe('warn');
+    expect(job.detail).toContain('listener down since');
+  });
+
+  it('is fine without a listener file', () => {
+    expect(formatContainerJob(null, now, 10, 60)).toEqual({
+      ok: true,
+      detail: 'polling every 10 min (no listener)'
+    });
+  });
+});
+
+describe('parseListener', () => {
+  it('reads a listener file', () => {
+    const text = JSON.stringify({
+      state: 'live',
+      since: 'a',
+      lastBeat: 'b',
+      lastEvent: null,
+      pid: 3
+    });
+    expect(parseListener(text)?.pid).toBe(3);
+  });
+
+  it.each([[undefined], ['not json'], ['{}']])('gives null for %s', (text) => {
+    expect(parseListener(text)).toBeNull();
   });
 });

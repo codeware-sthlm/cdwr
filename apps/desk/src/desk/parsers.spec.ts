@@ -267,6 +267,7 @@ describe('parseJob', () => {
       {
         line: 'every 10 min · install current',
         minutes: 10,
+        live: false,
         host: 'launchd',
         rev: null,
         install: 'current',
@@ -279,6 +280,7 @@ describe('parseJob', () => {
       {
         line: 'every 10 min · install out of date (run.sh, interval)',
         minutes: 10,
+        live: false,
         host: 'launchd',
         rev: null,
         install: 'stale',
@@ -291,6 +293,7 @@ describe('parseJob', () => {
       {
         line: 'every 5 min · install unknown',
         minutes: 5,
+        live: false,
         host: 'launchd',
         rev: null,
         install: 'unknown',
@@ -303,6 +306,7 @@ describe('parseJob', () => {
       {
         line: 'every 10 min · image sha-9c7a20d',
         minutes: 10,
+        live: false,
         host: 'container',
         rev: 'sha-9c7a20d',
         install: 'current',
@@ -315,10 +319,24 @@ describe('parseJob', () => {
       {
         line: 'every 10 min · image sha-9c7a20d out of date (run.sh)',
         minutes: 10,
+        live: false,
         host: 'container',
         rev: 'sha-9c7a20d',
         install: 'stale',
         items: 'run.sh'
+      }
+    ],
+    [
+      'a live container',
+      'Job: live · fallback 60 min · image sha-9c7a20d',
+      {
+        line: 'live · fallback 60 min · image sha-9c7a20d',
+        minutes: 60,
+        live: true,
+        host: 'container',
+        rev: 'sha-9c7a20d',
+        install: 'current',
+        items: ''
       }
     ],
     [
@@ -327,6 +345,7 @@ describe('parseJob', () => {
       {
         line: '· image',
         minutes: null,
+        live: false,
         host: 'container',
         rev: null,
         install: 'current',
@@ -339,6 +358,7 @@ describe('parseJob', () => {
       {
         line: '· image unknown',
         minutes: null,
+        live: false,
         host: 'container',
         rev: null,
         install: 'unknown',
@@ -351,6 +371,7 @@ describe('parseJob', () => {
       {
         line: '· install out of date (run.sh',
         minutes: null,
+        live: false,
         host: 'launchd',
         rev: null,
         install: 'stale',
@@ -363,6 +384,7 @@ describe('parseJob', () => {
       {
         line: 'something else',
         minutes: null,
+        live: false,
         host: null,
         rev: null,
         install: 'unknown',

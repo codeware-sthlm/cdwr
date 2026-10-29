@@ -533,6 +533,7 @@ describe('model', () => {
         job: {
           line: 'Job: every 120 min',
           minutes: 120,
+          live: false,
           host: 'launchd',
           rev: null,
           install: 'current',
@@ -548,6 +549,7 @@ describe('model', () => {
         job: {
           line: 'Job: every 10 min',
           minutes: 10,
+          live: false,
           host: 'launchd',
           rev: null,
           install: 'stale',
@@ -621,6 +623,7 @@ describe('model', () => {
               ? {
                   line: '',
                   minutes,
+                  live: false,
                   host: null,
                   rev: null,
                   install: 'current',
@@ -642,6 +645,29 @@ describe('model', () => {
       expect(next('2026-10-29 11:03', 10).nextRun).toBe(
         new Date('2026-10-29T12:03:00').getTime()
       );
+    });
+
+    it('is live with the fallback interval when the listener is up', () => {
+      const m = model(
+        withState((s) => {
+          s.data.runs = runsPayload({
+            last: { when: '2026-10-29 11:30', outcome: 'idle' },
+            job: {
+              line: 'live · fallback 60 min',
+              minutes: 60,
+              live: true,
+              host: 'container',
+              rev: null,
+              install: 'current',
+              items: ''
+            }
+          });
+        }),
+        NOW
+      );
+      expect(m.live).toBe(true);
+      expect(m.runMinutes).toBe(60);
+      expect(m.nextRun).toBe(new Date('2026-10-29T12:30:00').getTime());
     });
 
     it('assumes ten minutes without a Job line', () => {
