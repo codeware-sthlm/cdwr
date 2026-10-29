@@ -919,6 +919,21 @@ describe('hostHealth', () => {
     expect(hostHealth([sample(20), sample(0)], NOW)?.swapGrowing).toBe(false);
   });
 
+  it('treats exactly 10 % disk free as ok and just under as bad', () => {
+    expect(
+      hostHealth([sample(0, { disk_free: 10 * GIB })], NOW)?.problems
+    ).toEqual([]);
+    expect(
+      hostHealth([sample(0, { disk_free: 10 * GIB - 1 })], NOW)?.problems
+    ).toEqual(['disk']);
+  });
+
+  it('reports a sample 30 h old as stale, not missing', () => {
+    const h = hostHealth([sample(30 * 60)], NOW);
+    expect(h?.verdict).toBe('stale');
+    expect(h?.series).toHaveLength(1);
+  });
+
   it('is bad when disk free drops below 10 %', () => {
     expect(
       hostHealth([sample(0, { disk_free: 9 * GIB })], NOW)?.problems

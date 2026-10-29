@@ -306,7 +306,8 @@ export const hostHealth = (
   if (average.load > HOST_LOAD_PER_CORE_MAX) problems.push('load');
   if (figures.mem > HOST_MEM_USED_MAX) problems.push('memory');
   if (swapGrowing) problems.push('swap');
-  if (1 - figures.disk < HOST_DISK_FREE_MIN) problems.push('disk');
+  if (share(latest.disk_free, latest.disk_total) < HOST_DISK_FREE_MIN)
+    problems.push('disk');
   const ageMin = (now.getTime() - at(latest)) / 6e4;
   return {
     host: latest.host,
