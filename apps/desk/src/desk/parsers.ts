@@ -11,7 +11,7 @@ import type {
   Suggested
 } from './types';
 
-// Line and description parsers for the queue documents. Nothing here touches the DOM.
+// Line and description parsers for the queue_state, runs and usage text. Nothing here touches the DOM.
 
 type Dated = { createdAt?: string | null };
 
@@ -183,7 +183,7 @@ export function parseHandoffs(
   return items;
 }
 
-// The runs document: a "Last run:" line, an "Attended:" line, a "Job:" line, then a table of runs that weren't idle, newest first
+// The queue state and runs: a "Last run:" line, an "Attended:" line, a "Job:" line, then a table of runs that weren't idle, newest first
 // Job: on launchd "every 10 min · install current", "· install out of date (run.sh, interval)" or "· install unknown";
 // in the agent-host container "· image sha-9c7a20d", "· image sha-9c7a20d out of date (run.sh, …)", or "· image" with no
 // commit for a local build (the commit arrives with the ticket that bakes it into the image)
@@ -231,7 +231,7 @@ export function parseAttended(
   };
 }
 
-// The queue view (watch.jq `queue_view`, COD-556): a fenced JSON block in the runs document, the one
+// The queue view (watch.jq `queue_view`, COD-556): a fenced JSON block in the queue state, the one
 // source of what the agent takes next, what the limit holds, and what waits on Håkan before and after.
 // As lenient as the page always was: only `limit` and `table` must be present, the rest gets defaults.
 const pr = z.union([z.number(), z.string()]).nullish();

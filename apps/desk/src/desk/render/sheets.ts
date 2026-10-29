@@ -60,7 +60,7 @@ import {
 // The sheets: one per column, gauge and tile. A sheet body is a pure function of the model and the state.
 
 const MINUTE_MS = 60 * 1000;
-const ACTIVITY_STALE_MIN = 30; // the document's Updated line older than this shows in the warning colour
+const ACTIVITY_STALE_MIN = 30; // the activity table's last update older than this shows in the warning colour
 const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
 
 const PRIO: ReadonlyMap<number, string> = new Map([
@@ -288,7 +288,7 @@ const updateHint = (job: Job): string =>
 const renderScheduler = (m: Model): string => {
   if (!m.runs)
     return empty(
-      "The runs document hasn't loaded yet. It's written by the scheduled planner after every run."
+      "The runs haven't loaded yet. The scheduled planner records them in Supabase after every run."
     );
   const last = m.runs.last;
   const head = last
@@ -349,25 +349,29 @@ const timerGroups = (m: Model): [string, TimerRow[]][] => {
           'last run plus whole intervals; sleep shifts it'
         ],
         [
-          'Runs document, idle runs',
-          'at most once an hour',
-          'run.sh publish_runs; runs that did something publish at once'
-        ],
-        ['Runs document history', 'last 20 runs', 'run.sh trims runs.jsonl'],
-        [
-          'Usage document',
-          'at most once an hour',
-          "run.sh publish_usage runs `cdwr agent usage --days 30` from the planner's checkout"
+          'Runs table',
+          'every run',
+          'run.sh record_run, one row per run; a warn is a row of its own; the desk hides idle runs'
         ],
         [
-          'Activity document',
-          'every run, when it changed',
-          "run.sh publish_activity: 7 days, newest 200 events, rendered by `cdwr agent activity` from the planner's checkout"
+          'Runs table history',
+          '30 days, at most 500 runs',
+          'the desk reads that window'
+        ],
+        [
+          'Usage table',
+          'at most once an hour',
+          "run.sh record_usage runs `cdwr agent usage-record` from the planner's checkout"
+        ],
+        [
+          'Activity table',
+          'every run',
+          "run.sh record_activity: 7 days, newest 200 events, from Linear's issue history via `cdwr agent activity`"
         ],
         [
           'Queue view',
           'every run',
-          'run.sh, watch.jq `queue_view`; a change republishes the runs document at once'
+          'run.sh, watch.jq `queue_view`; a change is written to queue_state at once'
         ],
         [
           'Daily suggestion',
@@ -433,7 +437,7 @@ const timerGroups = (m: Model): [string, TimerRow[]][] => {
         [
           'Linear refresh',
           `every ${REFRESH_MS / MINUTE_MS} min`,
-          'ticket lists, the runs, usage and activity documents; Refresh forces it'
+          'ticket lists, the runs, usage and activity tables; Refresh forces it'
         ],
         [
           'Activity called stale',
@@ -539,7 +543,7 @@ const activityHead = (m: Model, header: string): string => {
 
 const renderActivity = (m: Model, state: DeskState): string => {
   const { activity } = state.data;
-  if (!activity) return empty("The activity document hasn't loaded yet.");
+  if (!activity) return empty("The activity table hasn't loaded yet.");
   if (activityMissing(activity)) return empty(NO_ACTIVITY);
   const tickets = [
     ...new Set(
@@ -606,7 +610,7 @@ const tableHTML = (
 
 const noUsage = (): string =>
   empty(
-    'No usage document yet. The scheduler writes <code>Agent queue: usage</code> at most once an hour once <code>cdwr agent install</code> has run with COD-533.'
+    'No usage yet. The scheduler writes the <code>usage</code> table at most once an hour once <code>cdwr agent install</code> has run with COD-533.'
   );
 
 const pct = (a: number, b: number): string =>
@@ -760,7 +764,7 @@ const renderIdeas = (m: Model, state: DeskState, now: Date): string => {
   const { details, ideaReasons } = state;
   const s = m.suggested;
   const lastText = !s
-    ? 'No <code>Suggested:</code> line in the runs document yet. The first idle run after 06:00 writes it, once <code>cdwr agent install</code> has run with COD-579.'
+    ? 'No <code>Suggested:</code> value in <code>queue_state</code> yet. The first idle run after 06:00 writes it, once <code>cdwr agent install</code> has run with COD-579.'
     : s.kind === 'suggested'
       ? `${esc(s.date)} · suggested ${idLink(s.ticket)} ${esc(s.title)}`
       : s.kind === 'open'
@@ -864,7 +868,7 @@ export const SHEETS: Record<SheetId, SheetDef> = {
   },
   scheduler: {
     title: 'Scheduler',
-    sub: 'The scheduled runs, from the Agent queue: runs document',
+    sub: 'The scheduled runs, from the runs table',
     body: renderScheduler
   },
   timers: {
@@ -884,7 +888,7 @@ export const SHEETS: Record<SheetId, SheetDef> = {
   },
   spend: {
     title: 'Spend per day',
-    sub: `API-equivalent spend per day by role, last ${SHIP_DAYS} days, from the Agent queue: usage document`,
+    sub: `API-equivalent spend per day by role, last ${SHIP_DAYS} days, from the usage table`,
     body: (_m, state, now) => renderSpend(state, now)
   },
   ticketcost: {

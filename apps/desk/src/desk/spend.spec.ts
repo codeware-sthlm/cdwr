@@ -101,7 +101,7 @@ describe('spendDays', () => {
     ]);
   });
 
-  it('is all zero without a usage document', () => {
+  it('is all zero without usage data', () => {
     expect(spendDays(null, keys(2)).map((d) => d.total)).toEqual([0, 0]);
   });
 });

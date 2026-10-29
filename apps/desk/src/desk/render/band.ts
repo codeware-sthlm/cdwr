@@ -20,11 +20,11 @@ export type Headline = { tone: Tone; text: string; note: string };
 /** One sentence for what happens next, from the session and the head of the queue */
 export const headline = (m: Model, now: Date): Headline => {
   const { v, runs } = m;
-  if (!runs) return { tone: '', text: 'Loading the runs document…', note: '' };
+  if (!runs) return { tone: '', text: 'Loading the runs…', note: '' };
   if (!v)
     return {
       tone: 'wait',
-      text: 'The runs document has no queue view yet. Run <code>cdwr agent install</code> from main.',
+      text: 'The scheduler has recorded no queue view yet. Run <code>cdwr agent install</code> from main.',
       note: ''
     };
   const s: SessionState = m.session ?? { state: 'none' };
