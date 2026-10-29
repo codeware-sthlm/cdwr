@@ -90,8 +90,10 @@ export type Model = {
   suggested: Suggested | null;
   /** The scheduler's next run in ms; null without a last run */
   nextRun: number | null;
-  /** The scheduler's interval in minutes */
+  /** The scheduler's interval in minutes; the fallback interval while live */
   runMinutes: number;
+  /** The listener wakes the scheduler on events */
+  live: boolean;
   /** Minutes since the activity table was updated; null without one */
   activityAge: number | null;
   /** Activity events in the last 24 hours */
@@ -385,6 +387,7 @@ export const model = (state: DeskState, now: Date): Model => {
     suggested: runs?.suggested ?? null,
     nextRun: nextRunOf(runs, runMinutes, now),
     runMinutes,
+    live: runs?.job?.live ?? false,
     activityAge: activity?.updated
       ? (nowMs - Date.parse(activity.updated.replace(' ', 'T'))) / 6e4
       : null,

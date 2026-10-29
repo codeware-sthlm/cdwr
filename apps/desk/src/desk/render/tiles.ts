@@ -84,7 +84,7 @@ export const renderTiles = (m: Model, state: DeskState, now: Date): string => {
       sheet: 'timers',
       icon: 'timer',
       label: 'Next scheduler run',
-      value: m.nextRun ? '~' + hhmm(m.nextRun) : '–'
+      value: m.live ? 'on events' : m.nextRun ? '~' + hhmm(m.nextRun) : '–'
     }
   ];
   return tiles
