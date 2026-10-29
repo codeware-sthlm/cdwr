@@ -687,7 +687,7 @@ const EMPTY_VIEW: QueueView = {
   next: [],
   held: { tickets: [], free: [] },
   parked: [],
-  table: { before: [], after: [] }
+  table: { before: [], after: [], label: [] }
 };
 
 const FILLED_VIEW: QueueView = {
@@ -737,6 +737,10 @@ const FILLED_VIEW: QueueView = {
     after: [
       { ticket: 'COD-3', kind: 'pr', pr: 7 },
       { ticket: 'COD-2', kind: 'handoffs', items: ['a', 'b'] }
+    ],
+    label: [
+      { ticket: 'COD-8', parent: 'COD-100', blockers: ['COD-3'] },
+      { ticket: 'COD-9', parent: 'COD-100', blockers: ['COD-2', 'COD-3'] }
     ]
   }
 };
@@ -750,6 +754,33 @@ describe('parseQueueView', () => {
   it('reads a view from before parked existed', () => {
     const { parked: _parked, ...old } = EMPTY_VIEW;
     expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads a view from before label existed', () => {
+    const { label: _label, ...table } = EMPTY_VIEW.table;
+    expect(parseQueueView(JSON.stringify({ ...EMPTY_VIEW, table }))).toEqual(
+      EMPTY_VIEW
+    );
+  });
+
+  // The desk keeps the rest of the view too; one bad entry must not cost the status its queue
+  it('drops a malformed label entry alone and keeps a null parent', () => {
+    const view = parseQueueView(
+      JSON.stringify({
+        ...EMPTY_VIEW,
+        table: {
+          ...EMPTY_VIEW.table,
+          label: [
+            { ticket: 'COD-8', parent: null, blockers: ['COD-3'] },
+            { ticket: 42 }
+          ]
+        }
+      })
+    );
+    expect(view?.table.label).toEqual([
+      { ticket: 'COD-8', parent: null, blockers: ['COD-3'] }
+    ]);
+    expect(formatTable(view!)).toBe('label: COD-8');
   });
 
   it('is undefined for malformed JSON', () => {
@@ -828,15 +859,32 @@ describe('formatParked', () => {
 describe('formatTable', () => {
   it('lists what waits before and after', () => {
     expect(formatTable(FILLED_VIEW)).toBe(
-      'before: COD-4 plan, COD-5 question · after: COD-3 PR #7, COD-2 hand-offs (2)'
+      'before: COD-4 plan, COD-5 question · after: COD-3 PR #7, COD-2 hand-offs (2) · label: COD-8 (COD-100), COD-9 (COD-100)'
     );
+  });
+
+  it('lists only the sub-issues to label', () => {
+    expect(
+      formatTable({
+        ...EMPTY_VIEW,
+        table: {
+          before: [],
+          after: [],
+          label: [{ ticket: 'COD-8', parent: 'COD-100', blockers: ['COD-3'] }]
+        }
+      })
+    ).toBe('label: COD-8 (COD-100)');
   });
 
   it('leaves out an empty side', () => {
     expect(
       formatTable({
         ...EMPTY_VIEW,
-        table: { before: [{ ticket: 'COD-4', kind: 'plan' }], after: [] }
+        table: {
+          before: [{ ticket: 'COD-4', kind: 'plan' }],
+          after: [],
+          label: []
+        }
       })
     ).toBe('before: COD-4 plan');
   });
