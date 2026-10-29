@@ -30,6 +30,19 @@ describe('agent-host entrypoint', () => {
     expect(entrypoint).toMatch(/break\n {4}fi\n {4}checkin ok\n {2}done/);
   });
 
+  it('samples the host from one disowned sampler, with telemetry_env inside it', () => {
+    expect(entrypoint.match(/telemetry_host_metrics/g)).toHaveLength(1);
+    expect(entrypoint.match(/telemetry_env/g)).toHaveLength(2); // comment + call
+    expect(entrypoint).toMatch(
+      /\n\(\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}telemetry_host_metrics \|\| true\n {4}sleep "\$RUN_INTERVAL_SECONDS"\n {2}done\n\) &!\n/
+    );
+    // Never in the loop's own shell: it un-exports the key every run.sh needs
+    expect(entrypoint).not.toMatch(/^telemetry_env/m);
+    expect(entrypoint.indexOf('telemetry_host_metrics || true')).toBeLessThan(
+      entrypoint.indexOf('while (( ! stop ))')
+    );
+  });
+
   it('traps the wake before the listener can send one', () => {
     expect(entrypoint.indexOf("' USR1")).toBeLessThan(
       entrypoint.indexOf('supervise_listener &')
