@@ -18,6 +18,7 @@ on:
           - cms
           - builder
           - umami
+          - headless
       tenant:
         description: "Tenant ID (leave empty for all tenants, only applies to
           multi-tenant apps)"
