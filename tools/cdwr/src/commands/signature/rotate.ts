@@ -43,14 +43,14 @@ async function fetchAffectedApps(
   return classifyApps(
     names,
     configAppName(root, 'cms'),
-    RETIRED_SIGNER_BASE_NAME,
+    [configAppName(root, 'headless'), RETIRED_SIGNER_BASE_NAME],
     environment
   );
 }
 
 /**
  * The whole rollover runs in one go, restarting apps between steps. cms
- * accepts both secrets throughout, so nothing is rejected while web is
+ * accepts both secrets throughout, so nothing is rejected while the signers are
  * catching up - the secret is read from Infisical at boot, so restarting is
  * all it takes, no redeploy.
  */
@@ -80,8 +80,8 @@ export default defineCommand({
       (a) => `${a.verifiers.length} verifier(s), ${a.signers.length} signer(s)`
     );
 
-    // No signer is fine: previews no longer deploy one, and production has none
-    // between the old web apps going and headless arriving
+    // No signer is fine: a preview may deploy none. In production, none means
+    // the classification missed headless
     if (!apps.verifiers.length) {
       throw new Error(
         `Expected a cms app in ${environment}, found none ` +
@@ -129,7 +129,7 @@ export default defineCommand({
         current = 'previous-staged';
       }
 
-      // Step 2 - the new secret; cms has to know it before web signs with it,
+      // Step 2 - the new secret; cms has to know it before the signers sign with it,
       // hence verifiers first
       if (current === 'previous-staged') {
         await ctx.ui.task(`Generating a new ${ACTIVE}`, () =>

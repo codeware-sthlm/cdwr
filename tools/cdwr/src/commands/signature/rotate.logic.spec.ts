@@ -41,25 +41,37 @@ describe('classifyApps', () => {
     'cdwr-cms-pr-12',
     'cdwr-cms-acme',
     'cdwr-web-production',
-    'cdwr-web-pr-12-acme'
+    'cdwr-web-pr-12-acme',
+    'cdwr-headless-acme',
+    'cdwr-headless-pr-12-acme'
   ];
+  const signers = ['cdwr-headless', 'cdwr-web'];
 
-  it('picks the bare host app and web apps for production', () => {
-    const result = classifyApps(names, 'cdwr-cms', 'cdwr-web', 'production');
+  it('picks the bare host app and signer apps for production', () => {
+    const result = classifyApps(names, 'cdwr-cms', signers, 'production');
     expect(result.verifiers).toEqual(['cdwr-cms']);
-    expect(result.signers).toEqual(['cdwr-web-production']);
+    expect(result.signers).toEqual([
+      'cdwr-headless-acme',
+      'cdwr-web-production'
+    ]);
   });
 
-  it('picks the pull request host app and web apps for preview', () => {
-    const result = classifyApps(names, 'cdwr-cms', 'cdwr-web', 'preview');
+  it('picks the pull request host app and signer apps for preview', () => {
+    const result = classifyApps(names, 'cdwr-cms', signers, 'preview');
     expect(result.verifiers).toEqual(['cdwr-cms-pr-12']);
-    expect(result.signers).toEqual(['cdwr-web-pr-12-acme']);
+    expect(result.signers).toEqual([
+      'cdwr-headless-pr-12-acme',
+      'cdwr-web-pr-12-acme'
+    ]);
   });
 
   it('treats development like production, matching the bare app names', () => {
-    const result = classifyApps(names, 'cdwr-cms', 'cdwr-web', 'development');
+    const result = classifyApps(names, 'cdwr-cms', signers, 'development');
     expect(result.verifiers).toEqual(['cdwr-cms']);
-    expect(result.signers).toEqual(['cdwr-web-production']);
+    expect(result.signers).toEqual([
+      'cdwr-headless-acme',
+      'cdwr-web-production'
+    ]);
   });
 });
 
@@ -67,14 +79,14 @@ describe('remainingSteps', () => {
   it('lists every step from not-started', () => {
     expect(remainingSteps('not-started')).toEqual([
       `Stage the current secret as ${PREVIOUS}, restart cms`,
-      `Generate a new ${ACTIVE}, restart cms then web`,
+      `Generate a new ${ACTIVE}, restart cms then the signers`,
       `Retire ${PREVIOUS}, restart cms`
     ]);
   });
 
   it('skips staging once previous-staged', () => {
     expect(remainingSteps('previous-staged')).toEqual([
-      `Generate a new ${ACTIVE}, restart cms then web`,
+      `Generate a new ${ACTIVE}, restart cms then the signers`,
       `Retire ${PREVIOUS}, restart cms`
     ]);
   });
