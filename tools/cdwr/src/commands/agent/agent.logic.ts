@@ -703,6 +703,21 @@ export const parseAttended = (line: string): AttendedCheck => {
   return { kind: 'unknown', text };
 };
 
+export interface LinearCheck {
+  kind: 'ok' | 'missing' | 'unknown';
+  text: string;
+}
+
+/** Reads the text after `linear: ` in the `run.sh --check` output */
+export const parseLinear = (line: string): LinearCheck => {
+  const text = line.trim();
+  const ok = /^ok \((key|connector)\)$/.exec(text);
+  if (ok) return { kind: 'ok', text: `ok, ${ok[1]} mode` };
+  const missing = /^missing \((.+)\)$/.exec(text);
+  if (missing) return { kind: 'missing', text: missing[1] };
+  return { kind: 'unknown', text };
+};
+
 export interface SuggestCheck {
   kind: 'due' | 'done' | 'early' | 'skipped' | 'off' | 'unknown';
   focus?: string;

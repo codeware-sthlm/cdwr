@@ -94,7 +94,7 @@ export async function keyPresent(
 
 /**
  * What the installed script would do now: its decision (the last line) and the
- * `attended:` verdict, `queue-view:` and `suggest:` lines when it printed them. Undefined when it is not installed
+ * `attended:` verdict, `linear:` line, `queue-view:` and `suggest:` lines when it printed them. Undefined when it is not installed
  */
 export async function checkRun(
   queue: QueuePaths,
@@ -104,6 +104,7 @@ export async function checkRun(
   | {
       decision: string;
       attended?: string;
+      linear?: string;
       queueView?: string;
       suggest?: string;
     }
@@ -123,6 +124,7 @@ export async function checkRun(
   });
   const lines = stdout.trim().split('\n');
   const attended = lines.filter((line) => line.startsWith('attended: ')).at(-1);
+  const linear = lines.filter((line) => line.startsWith('linear: ')).at(-1);
   const queueView = lines
     .filter((line) => line.startsWith('queue-view: '))
     .at(-1);
@@ -135,6 +137,9 @@ export async function checkRun(
     ...(attended === undefined
       ? {}
       : { attended: attended.slice('attended: '.length) }),
+    ...(linear === undefined
+      ? {}
+      : { linear: linear.slice('linear: '.length) }),
     ...(queueView === undefined
       ? {}
       : { queueView: queueView.slice('queue-view: '.length) })

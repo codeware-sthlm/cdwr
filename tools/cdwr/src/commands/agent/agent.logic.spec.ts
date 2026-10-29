@@ -28,6 +28,7 @@ import {
   parseAttended,
   parseCheck,
   parseLaunchctlPrint,
+  parseLinear,
   parseNotifyLevel,
   parseQueueView,
   parseSuggest,
@@ -588,6 +589,27 @@ describe('parseAttended', () => {
     expect(result.kind).toBe(kind);
     expect(result.ticket).toBe(ticket);
     expect(result.text).toBe(line.trim());
+  });
+});
+
+describe('parseLinear', () => {
+  it.each([
+    ['ok (key)', 'ok', 'ok, key mode'],
+    ['ok (connector)', 'ok', 'ok, connector mode'],
+    [
+      "missing (key: Linear's MCP answered 401)",
+      'missing',
+      "key: Linear's MCP answered 401"
+    ],
+    [
+      'missing (connector: the claude.ai Linear connector is not connected)',
+      'missing',
+      'connector: the claude.ai Linear connector is not connected'
+    ],
+    ['garbage', 'unknown', 'garbage'],
+    ['', 'unknown', '']
+  ])('%j -> %s', (line, kind, text) => {
+    expect(parseLinear(line)).toEqual({ kind, text });
   });
 });
 
