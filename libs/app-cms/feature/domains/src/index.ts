@@ -1,8 +1,4 @@
 export {
-  type AdoptableDomains,
-  adoptableDomains
-} from './lib/adoptable-domains';
-export {
   CERTIFICATE_ACTIONS,
   type CertificateAction,
   type CertificateResult,

@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import { sitePath } from './site-path';
 
 describe('sitePath', () => {

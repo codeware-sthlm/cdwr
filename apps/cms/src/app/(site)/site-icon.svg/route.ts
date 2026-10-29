@@ -1,5 +1,6 @@
+import { faviconSvg, svgMark } from '@codeware/shared/util/payload-utils';
+
 import { payloadRuntime } from '../../../security/payload-runtime';
-import { faviconSvg, svgMark } from '../../../utils/site-icon';
 
 /** The tenant's own mark as the favicon, following the tab's colour scheme */
 export async function GET(): Promise<Response> {

@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import { faviconSvg, fitMark, parseIconSize, svgMark } from './site-icon';
 
 const mark =

@@ -24,6 +24,28 @@ export {
   componentTagName
 } from './lib/custom-component';
 export {
+  type AdoptableDomain,
+  type AdoptableDomains,
+  adoptableDomains
+} from './lib/adoptable-domains';
+export {
+  DEFAULT_OG_IMAGE_PATH,
+  type DocumentMeta,
+  type DocumentSeo,
+  documentSeo,
+  ogLocale,
+  siteOrigin
+} from './lib/document-seo';
+export { publicVisibilityWhere } from './lib/public-visibility';
+export {
+  faviconSvg,
+  fitMark,
+  parseIconSize,
+  svgDataUri,
+  svgMark
+} from './lib/site-icon';
+export { sitePath, type SiteCollection } from './lib/site-path';
+export {
   type DocData,
   type LandingDoc,
   type RenderableCollection

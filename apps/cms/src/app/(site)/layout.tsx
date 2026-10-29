@@ -21,6 +21,11 @@ import {
   fontFaceCss,
   selfServedFontsIn
 } from '@codeware/shared/util/color';
+import {
+  DEFAULT_OG_IMAGE_PATH,
+  ogLocale,
+  siteOrigin
+} from '@codeware/shared/util/payload-utils';
 import { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -33,11 +38,6 @@ import {
   MEMBER_LOGIN_PATH,
   MEMBER_LOGOUT_SUBMIT_PATH
 } from '../../utils/member-login';
-import {
-  DEFAULT_OG_IMAGE_PATH,
-  ogLocale,
-  siteOrigin
-} from '../../utils/page-metadata';
 import { statsScript } from '../../utils/stats-proxy';
 
 import { Providers } from './providers';

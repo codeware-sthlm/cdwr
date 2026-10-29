@@ -1,5 +1,5 @@
 import { getPost, getPostsListingPath } from '@codeware/app-cms/data-access';
-import { sitePath } from '@codeware/app-cms/util/misc';
+import { sitePath } from '@codeware/shared/util/payload-utils';
 import type { Metadata } from 'next';
 import { draftMode } from 'next/headers';
 import { notFound } from 'next/navigation';
