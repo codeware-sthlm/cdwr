@@ -7,7 +7,13 @@ vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
 vi.mock('../../services/fly', () => ({
   configAppName: vi.fn((_root: string, app: string) => `cdwr-${app}`),
-  listAppNames: vi.fn().mockResolvedValue(['cdwr-cms', 'cdwr-web-production']),
+  listAppNames: vi
+    .fn()
+    .mockResolvedValue([
+      'cdwr-cms',
+      'cdwr-headless-acme',
+      'cdwr-web-production'
+    ]),
   restartMachines: vi.fn().mockResolvedValue(1),
   belongsTo: (name: string, environment: 'preview' | 'production') =>
     (environment === 'preview') === /-pr-(\d+)(?:-|$)/.test(name)
@@ -54,8 +60,9 @@ describe('signature rotate', () => {
     expect(infisical.deleteInfisicalSecret).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'SIGNATURE_SECRET_PREVIOUS' })
     );
-    // Verifier (cms) restarts for every step, signer (web) only once
+    // Verifier (cms) restarts for every step, signers (headless, web) only once
     expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-cms');
+    expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-headless-acme');
     expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-web-production');
     expect(ui.asked[0]).toContain('Type');
   });
@@ -79,7 +86,7 @@ describe('signature rotate', () => {
 
     expect(exit).toBe(EXIT.ok);
     expect(fly.restartMachines).not.toHaveBeenCalledWith(
-      expect.stringMatching(/^cdwr-web/)
+      expect.stringMatching(/^cdwr-(web|headless)/)
     );
     expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-cms');
   });
