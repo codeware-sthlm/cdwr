@@ -175,6 +175,7 @@ cdwr agent notify [all|action]   # which notices are sent; no argument shows the
 cdwr agent attend [--path <dir>]   # refresh codeware-queue to origin/main, print the line that starts /work-queue
 cdwr agent worktree add COD-529 --branch <name>   # codeware-cod-529 beside this checkout
 cdwr agent worktree prune          # remove ticket worktrees whose PR is merged or closed
+cdwr agent desk install [--pr <n>] # install the Agent Desk from the newest CI build of main, or of a PR
 ```
 
 `worktree add` gives each ticket its own checkout, so starting the next never disturbs an earlier
@@ -183,6 +184,13 @@ It copies the env files and installs dependencies, and does only what differs. `
 removes the `codeware-cod-<n>` checkouts whose pull request is merged or closed, deleting the
 branch too when merged. One with no pull request, an open one or uncommitted changes is kept, as
 are the agent worktree and the one you run it from. Shell completion stops at `worktree`.
+
+`desk install` downloads the `agent-desk-macos-arm64` artifact of the newest successful `desk.yml`
+run (a push to main, or with `--pr` that PR's branch) and replaces `/Applications/Agent Desk.app`,
+quitting a running copy first and clearing the quarantine flag the unsigned build needs. It does not
+open the app; the settings live outside it and survive. An expired or missing artifact fails in the
+plan with the fix: `gh workflow run desk.yml` (`--ref <branch>` for a PR) or `nx tauri-build desk`.
+macOS arm64 only.
 
 The script's source is `agent-queue/run.sh`. Launchd runs the copy `install` puts in
 `~/.cdwr/agent-queue/`, beside its pause flag and logs, so a merged change does nothing
