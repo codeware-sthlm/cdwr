@@ -283,6 +283,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/install').then((m) => m.default)
   },
   {
+    path: ['agent', 'uninstall'],
+    summary: 'Remove the scheduled planner from this machine',
+    danger: 'mutate',
+    load: () => import('./agent/uninstall').then((m) => m.default)
+  },
+  {
     path: ['agent', 'attend'],
     summary: 'Refresh the checkout an attended session runs from',
     danger: 'mutate',
