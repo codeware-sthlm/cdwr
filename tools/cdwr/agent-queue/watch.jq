@@ -296,8 +296,8 @@ def attended($now; $limit; $watch; $waits):
   queue_view($now; $limit; $watch; null; $waits) as $q
   | ($q.table.before | map(.ticket + " input")) as $inputs
   | ($q.table.after | map(.ticket + (if .kind == "pr" then " PR" else " hand-offs" end))) as $after
-  | ($q.table.label | map(.ticket + " label")) as $label
-  | { used: $q.limit.used, limit: $limit, waiting: ($inputs + $after + $label) }
+  | ($q.table["label"] | map(.ticket + " label")) as $labels
+  | { used: $q.limit.used, limit: $limit, waiting: ($inputs + $after + $labels) }
     + ($q.next[0] as $n
        | if $n == null then { verdict: "idle", ticket: null, reason: null, detail: null }
          elif $n.reason == "resume" then { verdict: "running", ticket: $n.ticket, reason: "working", detail: $n.detail }
