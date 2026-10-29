@@ -11,6 +11,8 @@ export const LABEL = 'se.codeware.agent-queue';
  * so keep the `export const RUN_INTERVAL_SECONDS = <n>;` shape.
  */
 export const RUN_INTERVAL_SECONDS = 600;
+/** Seconds between runs in the container while its listener is live; the image sets the same */
+export const RUN_FALLBACK_SECONDS = 3600;
 export const KEYCHAIN_SERVICE = 'linear-agent-queue';
 /** Env var the Linear key comes from in the container */
 export const LINEAR_KEY_ENV = 'AGENT_QUEUE_LINEAR_KEY';

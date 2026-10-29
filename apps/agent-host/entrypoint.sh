@@ -74,23 +74,82 @@ write_env
 rmdir "$AGENT_QUEUE_HOME/lock" 2>/dev/null || true
 
 stop=0
+pending=0
+woken=0
 runner=
 sleeper=
-trap 'stop=1; [[ -n "$runner" ]] && kill -TERM $runner 2>/dev/null; [[ -n "$sleeper" ]] && kill $sleeper 2>/dev/null; true' TERM INT
+supervisor=
+# Before the listener starts: SIGUSR1's default action would end the loop
+trap 'stop=1; [[ -n "$runner" ]] && kill -TERM $runner 2>/dev/null; [[ -n "$sleeper" ]] && kill $sleeper 2>/dev/null; [[ -n "$supervisor" ]] && kill -TERM $supervisor 2>/dev/null; true' TERM INT
+# A wake only cuts the sleep short; during a run it is kept for right after
+trap 'pending=1; [[ -n "$sleeper" ]] && kill $sleeper 2>/dev/null; true' USR1
+
+# The listener (`cdwr agent listen`) wakes the loop on Supabase events and keeps listener.json
+# beating; without its env the loop polls every RUN_INTERVAL_SECONDS as before
+LISTENER_FILE="$AGENT_QUEUE_HOME/listener.json"
+loop_pid=$$
+# Restarts the listener with a back-off of 5 s doubling to 5 min, reset after 10 min up
+supervise_listener() {
+  local backoff=5 started listener=
+  trap '[[ -n "$listener" ]] && kill -TERM $listener 2>/dev/null; exit 0' TERM
+  while true; do
+    started=$SECONDS
+    (cd "$AGENT_QUEUE_REPO" && exec node tools/cdwr/bin/cdwr.mjs agent listen --notify-pid "$loop_pid") &
+    listener=$!
+    wait $listener || true
+    listener=
+    if (( SECONDS - started >= 600 )); then backoff=5; fi
+    print -r -- "agent-host: the listener exited, restarting in ${backoff}s"
+    # In the background, so a stop isn't held up by the back-off
+    sleep $backoff &
+    wait $! || true
+    (( backoff = backoff * 2 > 300 ? 300 : backoff * 2 ))
+  done
+}
+if [[ -n "${AGENT_SUPABASE_URL:-}" && -n "${AGENT_SUPABASE_ANON_KEY:-}" ]]; then
+  supervise_listener &
+  supervisor=$!
+else
+  print -r -- "agent-host: no AGENT_SUPABASE_URL or AGENT_SUPABASE_ANON_KEY, polling every ${RUN_INTERVAL_SECONDS}s"
+fi
+
+# The listener is live: its file says so and it beat under 2 min ago
+listener_live() {
+  local beat
+  beat="$(jq -r 'select(.state == "live") | .lastBeat | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$LISTENER_FILE" 2>/dev/null)" || return 1
+  [[ "$beat" == <-> ]] && (( $(date +%s) - beat < 120 ))
+}
+
+# The Sentry monitor expects a check-in every RUN_INTERVAL_SECONDS; between runs the loop sends them
+source "$AGENT_QUEUE_HOME/checkin.sh"
 
 while (( ! stop )); do
+  pending=0
   # In the background, so a stop reaches run.sh and its exit trap frees the lock
-  "$AGENT_QUEUE_HOME/run.sh" &
+  if (( woken )); then "$AGENT_QUEUE_HOME/run.sh" --wake & else "$AGENT_QUEUE_HOME/run.sh" & fi
   runner=$!
-  wait $runner || true
-  # wait returns early on a trapped signal; let run.sh finish its exit trap
-  kill -0 $runner 2>/dev/null && { wait $runner || true; }
+  # wait returns early on every trapped signal, a wake included; only run.sh's exit ends it
+  while kill -0 $runner 2>/dev/null; do wait $runner || true; done
   runner=
   (( stop )) && break
-  sleep "$RUN_INTERVAL_SECONDS" &
-  sleeper=$!
-  wait $sleeper || true
-  sleeper=
+  # Sleeps in steps of RUN_INTERVAL_SECONDS, up to RUN_FALLBACK_SECONDS while the listener is live.
+  # A step that finds the listener down, or an activity read a woken run skipped, runs at once.
+  slept=0
+  while (( ! stop && ! pending )); do
+    sleep "$RUN_INTERVAL_SECONDS" &
+    sleeper=$!
+    # A wake between the check and the line above found no sleeper to stop
+    (( pending )) && kill $sleeper 2>/dev/null
+    wait $sleeper || true
+    sleeper=
+    (( stop || pending )) && break
+    (( slept += RUN_INTERVAL_SECONDS ))
+    if (( slept >= ${RUN_FALLBACK_SECONDS:-3600} )) || [[ -e "$AGENT_QUEUE_HOME/activity-owed" ]] || ! listener_live; then
+      break
+    fi
+    checkin ok
+  done
+  woken=$pending
 done
 
 # A detached implementing session is not run.sh's child, so the stop above does not reach it.
