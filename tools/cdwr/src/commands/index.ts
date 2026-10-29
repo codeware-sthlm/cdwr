@@ -234,6 +234,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/usage-record').then((m) => m.default)
   },
   {
+    path: ['agent', 'listen'],
+    summary: 'Wake the scheduler when issue or GitHub events arrive',
+    danger: 'read',
+    load: () => import('./agent/listen').then((m) => m.default)
+  },
+  {
     path: ['agent', 'activity'],
     summary:
       "Who did what to which ticket, from Linear's history and the runs file",
