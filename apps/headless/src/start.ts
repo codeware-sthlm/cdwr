@@ -1,3 +1,7 @@
+import {
+  sentryGlobalFunctionMiddleware,
+  sentryGlobalRequestMiddleware
+} from '@sentry/tanstackstart-react';
 import { createCsrfMiddleware, createStart } from '@tanstack/react-start';
 
 import { securityMiddleware } from './server/request-middleware';
@@ -7,6 +11,12 @@ const csrfMiddleware = createCsrfMiddleware({
   filter: (ctx) => ctx.handlerType === 'serverFn'
 });
 
+// Sentry's go first, so they also see what the others throw
 export const startInstance = createStart(() => ({
-  requestMiddleware: [csrfMiddleware, securityMiddleware]
+  requestMiddleware: [
+    sentryGlobalRequestMiddleware,
+    csrfMiddleware,
+    securityMiddleware
+  ],
+  functionMiddleware: [sentryGlobalFunctionMiddleware]
 }));
