@@ -726,6 +726,13 @@ export const parseSuggest = (line: string): SuggestCheck => {
 const ticketSchema = z.string();
 const prSchema = z.number().nullable();
 
+/** A sub-issue ready to label; the parent may be unknown */
+const labelEntrySchema = z.object({
+  ticket: ticketSchema,
+  parent: ticketSchema.nullable(),
+  blockers: z.array(ticketSchema)
+});
+
 export const queueViewSchema = z.object({
   at: z.string(),
   limit: z.object({ used: z.number(), max: z.number() }),
@@ -796,7 +803,17 @@ export const queueViewSchema = z.object({
           items: z.array(z.string())
         })
       ])
-    )
+    ),
+    // Older runs documents have no label; a malformed entry drops alone, as in the desk
+    label: z
+      .array(z.unknown())
+      .default([])
+      .transform((entries) =>
+        entries.flatMap((entry) => {
+          const result = labelEntrySchema.safeParse(entry);
+          return result.success ? [result.data] : [];
+        })
+      )
   })
 });
 
@@ -846,7 +863,7 @@ export const formatParked = (view: QueueView): string =>
     .join(', ') || 'nothing';
 
 export const formatTable = (view: QueueView): string => {
-  const { before, after } = view.table;
+  const { before, after, label } = view.table;
   const parts = [
     before.length > 0
       ? `before: ${before.map((b) => `${b.ticket} ${b.kind}`).join(', ')}`
@@ -859,6 +876,9 @@ export const formatTable = (view: QueueView): string => {
               : `${a.ticket} hand-offs (${a.items.length})`
           )
           .join(', ')}`
+      : undefined,
+    label.length > 0
+      ? `label: ${label.map((l) => (l.parent ? `${l.ticket} (${l.parent})` : l.ticket)).join(', ')}`
       : undefined
   ].filter((part) => part !== undefined);
   return parts.join(' · ') || 'nothing';
