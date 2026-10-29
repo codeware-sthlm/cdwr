@@ -165,19 +165,21 @@ keep_state() {
   return 0
 }
 
-# The same usage as rows in the telemetry database, at most once an hour. Detached, so it can't
-# hold up the run; the command bounds itself with a 60 s deadline of its own. Without the env vars
-# it does nothing.
+# The same usage as rows in the telemetry database: hour rows (6-hour lookback) every run, day rows
+# at most once an hour. Detached, so it can't hold up the run; the command bounds itself with a
+# 60 s deadline of its own. Without the env vars it does nothing.
 record_usage() {
   $check && return 0
   setopt local_options no_err_exit
   telemetry_on || return 0
-  local stamp="$HOME_DIR/usage-recorded-at" last
+  local stamp="$HOME_DIR/usage-recorded-at" last kind=hour
   last="$(cat "$stamp" 2>/dev/null)"
   [[ "$last" == <-> ]] || last=0
-  (( $(date +%s) - last > 3600 )) || return 0
-  date +%s > "$stamp"
-  ( cd "$REPO" && AGENT_SUPABASE_SERVICE_KEY="$AGENT_SUPABASE_SERVICE_KEY" node tools/cdwr/bin/cdwr.mjs agent usage-record --yes --json >/dev/null 2>&1 </dev/null ||
+  if (( $(date +%s) - last > 3600 )); then
+    kind=both
+    date +%s > "$stamp"
+  fi
+  ( cd "$REPO" && AGENT_SUPABASE_SERVICE_KEY="$AGENT_SUPABASE_SERVICE_KEY" node tools/cdwr/bin/cdwr.mjs agent usage-record --kind "$kind" --yes --json >/dev/null 2>&1 </dev/null ||
     { note "warn: usage rows: cdwr agent usage-record failed"
       # The runs table only: keep_state may be trimming runs.jsonl right now
       telemetry_run "$(date -u +%Y-%m-%dT%H:%M:%SZ)" warn "" "usage: cdwr agent usage-record failed" "" "$run_kind" "" "" ""; } ) &!
