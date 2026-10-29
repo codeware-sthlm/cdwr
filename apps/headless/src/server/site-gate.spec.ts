@@ -37,17 +37,27 @@ describe('isGatedPath', () => {
     '/',
     '/about',
     '/x.js',
-    '/robots.txt',
     '/api',
     '/api/x',
     '/_serverFn/abc',
-    '/_serverFn/abc/a.js'
+    '/_serverFn/abc/a.js',
+    '/stats',
+    '/statsx/a',
+    '/robots.txt.bak',
+    '/sitemap.xml/x',
+    '/x/sitemap.xml'
   ])('gates %s', (path) => {
     expect(isGatedPath(path)).toBe(true);
   });
 
-  it('lets the gate itself through', () => {
-    expect(isGatedPath('/site-gate')).toBe(false);
+  it.each([
+    '/site-gate',
+    '/stats/script.js',
+    '/stats/api/send',
+    '/robots.txt',
+    '/sitemap.xml'
+  ])('lets %s through', (path) => {
+    expect(isGatedPath(path)).toBe(false);
   });
 });
 

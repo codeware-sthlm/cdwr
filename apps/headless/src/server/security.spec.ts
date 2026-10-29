@@ -11,6 +11,8 @@ const env: SecurityEnv = {
   DEPLOY_ENV: 'production',
   CSP_ENFORCE: false,
   SITE_GATE_PASSWORD: undefined,
+  FONT_ASSETS_BASE_URL: undefined,
+  UMAMI_URL: undefined,
   DEBUG: false
 };
 
@@ -60,6 +62,33 @@ describe('secureRequest', () => {
     expect(policy).toContain('report-uri https://o1.ingest.sentry.io/api/42/');
     expect(response.headers.get('reporting-endpoints')).toContain(
       'csp-endpoint'
+    );
+  });
+
+  it('allows the font origin and lets Umami frame the site', async () => {
+    const response = await secureRequest(
+      request(),
+      {
+        ...env,
+        FONT_ASSETS_BASE_URL: 'https://fonts.example.com/files',
+        UMAMI_URL: 'https://umami.example.com/'
+      },
+      'N0NCE',
+      render
+    );
+    const policy = response.headers.get('content-security-policy-report-only');
+
+    expect(policy).toMatch(/font-src [^;]*https:\/\/fonts\.example\.com/);
+    expect(response.headers.get('content-security-policy')).toMatch(
+      /frame-ancestors [^;]*https:\/\/umami\.example\.com/
+    );
+  });
+
+  it('lets nothing but itself frame the site without Umami', async () => {
+    const response = await secureRequest(request(), env, 'N0NCE', render);
+
+    expect(response.headers.get('content-security-policy')).toContain(
+      "frame-ancestors 'self';"
     );
   });
 

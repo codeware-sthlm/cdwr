@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as StatsSplatRouteImport } from './routes/stats/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
   path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StatsSplatRoute = StatsSplatRouteImport.update({
+  id: '/stats/$',
+  path: '/stats/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/api/health': typeof ApiHealthRoute
+  '/stats/$': typeof StatsSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/api/health': typeof ApiHealthRoute
+  '/stats/$': typeof StatsSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/api/health': typeof ApiHealthRoute
+  '/stats/$': typeof StatsSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$' | '/api/health'
+  fullPaths: '/' | '/$' | '/api/health' | '/stats/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$' | '/api/health'
-  id: '__root__' | '/' | '/$' | '/api/health'
+  to: '/' | '/$' | '/api/health' | '/stats/$'
+  id: '__root__' | '/' | '/$' | '/api/health' | '/stats/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  StatsSplatRoute: typeof StatsSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stats/$': {
+      id: '/stats/$'
+      path: '/stats/$'
+      fullPath: '/stats/$'
+      preLoaderRoute: typeof StatsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   ApiHealthRoute: ApiHealthRoute,
+  StatsSplatRoute: StatsSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

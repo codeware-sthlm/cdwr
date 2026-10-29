@@ -13,6 +13,7 @@ import {
   resolveReturnPath,
   verifySiteGateToken
 } from '@codeware/shared/util/site-gate';
+import { STATS_PATH } from '@codeware/shared/util/umami';
 
 /** Where the gate asks for the password, and where its form posts */
 export const SITE_GATE_PATH = '/site-gate';
@@ -28,17 +29,22 @@ const ATTEMPTS_PER_ADDRESS = 10;
 const inFlight = new Map<string, number>();
 
 /**
- * Whether the gate stands in front of this path: all of them but its own.
+ * Whether the gate stands in front of this path: all of them but its own and
+ * three that answer for themselves while gated. `/robots.txt` disallows all,
+ * `/sitemap.xml` is empty, and `/stats/…` is a relay that reaches only Umami.
  *
  * Not the cms's `isGatedPath`, which exempts `/api` and anything with a file
  * extension. Here the router answers those: `/x.js` renders the not-found
  * page with the whole site's data, and `/_serverFn/<id>/a.js` still runs the
  * server function. Real static files (`/assets/*`, `public/`) never get this
- * far, as Nitro serves them before the request handler, so nothing needs to
- * be exempt.
+ * far, as Nitro serves them before the request handler, so nothing else needs
+ * to be exempt.
  */
 export const isGatedPath = (pathname: string): boolean =>
-  pathname !== SITE_GATE_PATH;
+  pathname !== SITE_GATE_PATH &&
+  pathname !== '/robots.txt' &&
+  pathname !== '/sitemap.xml' &&
+  !pathname.startsWith(`${STATS_PATH}/`);
 
 const localeFrom = (request: Request): SupportedLocale =>
   (request.headers.get('accept-language') ?? '').toLowerCase().startsWith('sv')

@@ -5,6 +5,7 @@ import {
   RenderLayout
 } from '@codeware/shared/ui/cms-renderer';
 import { NotFound } from '@codeware/shared/ui/primitives';
+import { STATS_PATH, statsScript } from '@codeware/shared/util/umami';
 import * as Sentry from '@sentry/tanstackstart-react';
 import {
   type ErrorComponentProps,
@@ -47,6 +48,15 @@ function RootDocument({ children }: { children: ReactNode }) {
     site?.colorSchemePolicy === 'light' || site?.colorSchemePolicy === 'dark'
       ? site.colorSchemePolicy
       : null;
+  // The nonce is per request, so it is read here and not carried by the
+  // loader; `stats` stands in for the Umami url, which stays on the server.
+  // The scripts and their beacons all go to this app's own `/stats` relay
+  const nonce = useRouter().options.ssr?.nonce;
+  const stats = statsScript({
+    umamiUrl: site?.stats ? STATS_PATH : undefined,
+    websiteId: site?.statsWebsiteId,
+    nonce
+  });
 
   return (
     <html
@@ -59,6 +69,12 @@ function RootDocument({ children }: { children: ReactNode }) {
         {/* Authored themes are not in the CSS bundle. The generator whitelists
             every name and value, so the text holds no markup */}
         {site?.customCss && <style>{site.customCss}</style>}
+        {stats && (
+          <>
+            <script defer {...stats.tracker} />
+            <script defer {...stats.recorder} />
+          </>
+        )}
       </head>
       <body className="flex h-full">
         {children}

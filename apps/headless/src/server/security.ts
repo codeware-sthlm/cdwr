@@ -10,6 +10,8 @@ export type SecurityEnv = Pick<
   | 'SENTRY_DSN'
   | 'DEPLOY_ENV'
   | 'CSP_ENFORCE'
+  | 'FONT_ASSETS_BASE_URL'
+  | 'UMAMI_URL'
   | 'SITE_GATE_PASSWORD'
   | 'DEBUG'
 >;
