@@ -48,6 +48,8 @@ notice() {
   notify "$2"
 }
 check=false; [[ "${1:-}" == "--check" ]] && check=true
+# Set by the container loop when the listener woke this run
+wake=false; [[ "${1:-}" == "--wake" ]] && wake=true
 
 # Run history, newest last, kept to its last 20 rows; the suggest run and `cdwr agent activity`
 # read it. Idle adds no row.
@@ -118,6 +120,12 @@ linear_ok() {
 # matches origin/main. Keep INTERVAL_SED in step with the line in agent.logic.ts.
 PLIST="$HOME/Library/LaunchAgents/se.codeware.agent-queue.plist"
 INTERVAL_SED='s/^export const RUN_INTERVAL_SECONDS = \([0-9][0-9]*\);$/\1/p'
+# The container's listener is live: listener.json says so and it beat under 2 min ago
+listener_live() {
+  local beat
+  beat="$(jq -r 'select(.state == "live") | .lastBeat | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$HOME_DIR/listener.json" 2>/dev/null)" || return 1
+  [[ "$beat" == <-> ]] && (( $(date +%s) - beat < 120 ))
+}
 job_line() {
   setopt local_options no_err_exit
   local dir=tools/cdwr/agent-queue secs want theirs f out kind=install
@@ -129,7 +137,9 @@ job_line() {
   else
     secs="$(plutil -extract StartInterval raw -o - "$PLIST" 2>/dev/null)"
   fi
-  if [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
+  if [[ $kind == image && "${RUN_FALLBACK_SECONDS:-}" == <-> ]] && listener_live; then
+    out="Job: live · fallback $(( RUN_FALLBACK_SECONDS / 60 )) min"
+  elif [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
   if [[ -z "$want" ]]; then print -r -- "$out · $kind unknown"; return 0; fi
   for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh checkin.sh telemetry.sh; do
@@ -212,7 +222,15 @@ record_activity() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local pages="$HOME_DIR/activity-pages.jsonl" resp after=null page out rows_json
+  local pages="$HOME_DIR/activity-pages.jsonl" stamp="$HOME_DIR/activity-read-at" owed="$HOME_DIR/activity-owed"
+  local resp after=null page out rows_json last
+  # A woken run reads Linear's history at most once per 10 min, since events come in bursts. A
+  # skipped read is owed: the container loop runs again within 10 min instead of waiting the hour.
+  if $wake; then
+    last="$(cat "$stamp" 2>/dev/null)"
+    [[ "$last" == <-> ]] || last=0
+    (( $(date +%s) - last >= 600 )) || { : > "$owed"; return 0; }
+  fi
   # Every page, so a ticket past the first can't hide one of the newest events; pages go
   # through a file, since all of them together can outgrow a command line.
   : > "$pages"
@@ -229,6 +247,9 @@ record_activity() {
   resp="$(jq -cs '{data: {issues: {nodes: add}}}' "$pages")"
   out="$(cd "$REPO" && node tools/cdwr/bin/cdwr.mjs agent activity --runs "$RUNS" --json 2>/dev/null <<<"$resp")"
   rows_json="$(jq -ce '.result.rows' <<<"$out" 2>/dev/null)" || { activity_warn "cdwr agent activity failed"; return 0; }
+  # Only a read that went through counts; a failed one is tried again by the next run
+  date +%s > "$stamp"
+  rm -f "$owed"
   [[ "$rows_json" == "[]" ]] && return 0
   # Duplicates are ignored. Never waited for.
   ( supabase_upsert activity event_id "$rows_json" merge ) &!
@@ -243,8 +264,8 @@ record_run() {
   setopt local_options no_err_exit
   local jl interval="" version="" limit
   jl="$(job_line)"
-  [[ "$jl" =~ 'every ([0-9]+) min' ]] && interval=$(( match[1] * 60 ))
-  [[ "$jl" == *' · '* ]] && version="${jl#* · }"
+  [[ "$jl" =~ '(every|fallback) ([0-9]+) min' ]] && interval=$(( match[2] * 60 ))
+  [[ "$jl" == *' · '* ]] && version="${jl##* · }"
   limit="$(jq -r '.limit.max // empty' <<<"${queue_view:-null}" 2>/dev/null)"
   ( telemetry_run "$RUN_STARTED" "$outcome_name" "$outcome_ticket" "$outcome_detail" "$attended_work" \
       "$run_kind" "$interval" "$limit" "$version" ) &!
