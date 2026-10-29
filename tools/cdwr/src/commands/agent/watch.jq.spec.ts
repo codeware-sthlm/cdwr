@@ -1526,6 +1526,7 @@ describe('attended picks', () => {
       table: {
         before: Array<{ ticket: string; kind: string }>;
         after: Array<Record<string, unknown>>;
+        label: Array<{ ticket: string; parent: string; blockers: string[] }>;
       };
     };
     const view = (
@@ -1650,7 +1651,135 @@ describe('attended picks', () => {
       ]);
       expect(r.next).toEqual([]);
       expect(r.limit.used).toBe(0);
-      expect(r.table).toEqual({ before: [], after: [] });
+      expect(r.table).toEqual({ before: [], after: [], label: [] });
+    });
+
+    describe('to label', () => {
+      const blocker = (
+        id: string,
+        type: string,
+        labelName: string | null = 'agent:review'
+      ) => ({
+        type: 'blocks',
+        issue: {
+          identifier: id,
+          state: { type },
+          labels: { nodes: labelName ? [{ name: labelName }] : [] }
+        }
+      });
+      const sub = (id: string, relations: unknown[], over = {}) =>
+        node(id, null, {
+          parent: { identifier: 'COD-100' },
+          inverseRelations: { nodes: relations },
+          ...over
+        });
+      const listed = (issues: Node[]) =>
+        view(issues).table.label.map((l) => l.ticket);
+
+      it('lists a sub-issue whose blockers are all done', () => {
+        const r = view([
+          sub('COD-5', [
+            blocker('COD-1', 'completed'),
+            blocker('COD-2', 'completed', null)
+          ])
+        ]);
+        expect(r.table.label).toEqual([
+          { ticket: 'COD-5', parent: 'COD-100', blockers: ['COD-1', 'COD-2'] }
+        ]);
+      });
+
+      it('sorts by queue order', () => {
+        const rel = [blocker('COD-1', 'completed')];
+        expect(
+          listed([
+            sub('COD-6', rel, { priority: 3 }),
+            sub('COD-5', rel, { priority: 1 })
+          ])
+        ).toEqual(['COD-5', 'COD-6']);
+      });
+
+      it.each([
+        [
+          'a blocker is still open',
+          sub('COD-5', [
+            blocker('COD-1', 'completed'),
+            blocker('COD-2', 'started')
+          ])
+        ],
+        ['there are no blockers', sub('COD-5', [])],
+        [
+          'it only has relations of another type',
+          sub('COD-5', [
+            { type: 'related', issue: { state: { type: 'completed' } } }
+          ])
+        ],
+        [
+          'it already has an agent label',
+          sub('COD-5', [blocker('COD-1', 'completed')], {
+            labels: { nodes: [{ name: 'agent:ready' }] }
+          })
+        ],
+        [
+          'it is started',
+          sub('COD-5', [blocker('COD-1', 'completed')], {
+            state: { type: 'started' }
+          })
+        ],
+        [
+          'no blocker carries an agent label',
+          sub('COD-5', [blocker('COD-1', 'completed', null)])
+        ],
+        [
+          'it belongs to another repo',
+          sub('COD-5', [blocker('COD-1', 'completed')], {
+            labels: { nodes: [{ name: 'nx-plugins' }] }
+          })
+        ],
+        [
+          'it has no parent',
+          sub('COD-5', [blocker('COD-1', 'completed')], { parent: null })
+        ],
+        [
+          'its parent was cancelled, an abandoned split',
+          sub('COD-5', [blocker('COD-1', 'completed')], {
+            parent: { identifier: 'COD-100', state: { type: 'canceled' } }
+          })
+        ]
+      ])('does not list when %s', (_name, issue) => {
+        expect(listed([issue])).toEqual([]);
+      });
+
+      it('counts a cancelled blocker as done', () => {
+        expect(
+          listed([
+            sub('COD-5', [
+              blocker('COD-1', 'completed', null),
+              blocker('COD-2', 'canceled')
+            ])
+          ])
+        ).toEqual(['COD-5']);
+      });
+
+      it('lists attended.waiting entries after the others', () => {
+        const r = attended([
+          review('COD-1'),
+          sub('COD-5', [blocker('COD-2', 'completed')])
+        ]);
+        expect(r.waiting).toEqual(['COD-1 PR', 'COD-5 label']);
+      });
+
+      it('leaves next, held and the limit alone', () => {
+        const base = [review('COD-1'), ready('COD-9')];
+        const extra = [...base, sub('COD-5', [blocker('COD-2', 'completed')])];
+        const a = view(base, 2);
+        const b = view(extra, 2);
+        expect(b.next).toEqual(a.next);
+        expect(b.held).toEqual(a.held);
+        expect(b.limit).toEqual(a.limit);
+        expect(b.table.label).toHaveLength(1);
+        expect(attended(extra).verdict).toBe(attended(base).verdict);
+        expect(attended(extra).used).toBe(attended(base).used);
+      });
     });
   });
 });

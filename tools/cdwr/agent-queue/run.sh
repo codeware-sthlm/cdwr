@@ -508,7 +508,7 @@ queue_view=""
 attended() {
   setopt local_options no_err_exit
   local resp state verdict waits
-  resp="$(linear "$ATTENDED_QUERY")"
+  resp="$(linear "$ATTENDED_QUERY" | attended_nodes)"
   if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then
     note "warn: attended: Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
   fi
