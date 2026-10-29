@@ -1,11 +1,6 @@
-import type { OpenStatusType } from '../linear';
+import { OPEN_STATES } from '../linear';
 
-export const STATES: readonly OpenStatusType[] = [
-  'triage',
-  'backlog',
-  'unstarted',
-  'started'
-];
+export const STATES = OPEN_STATES;
 
 /** The Agent labels a ticket can carry; the state is the part after `agent:` */
 export const AGENT: readonly string[] = [

@@ -1,4 +1,5 @@
-import type { Issue } from '../../linear';
+import { REFRESH_MS } from '../../data';
+import { CLOSED_WINDOW_DAYS, IDEA_WINDOW_DAYS, type Issue } from '../../linear';
 import {
   AGENT_AVATAR,
   LIMIT,
@@ -20,6 +21,7 @@ import {
   txt,
   usd
 } from '../format';
+import { DETAIL_STALE_MS, HANDOFF_STALE_MS, REASON_STALE_MS } from '../load';
 import {
   type Model,
   type TicketRef,
@@ -57,6 +59,7 @@ import {
 
 // The sheets: one per column, gauge and tile. A sheet body is a pure function of the model and the state.
 
+const MINUTE_MS = 60 * 1000;
 const ACTIVITY_STALE_MIN = 30; // the document's Updated line older than this shows in the warning colour
 const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
 
@@ -424,7 +427,7 @@ const timerGroups = (m: Model): [string, TimerRow[]][] => {
       [
         [
           'Linear refresh',
-          'every 2 min',
+          `every ${REFRESH_MS / MINUTE_MS} min`,
           'ticket lists, the runs, usage and activity documents; Refresh forces it'
         ],
         [
@@ -434,17 +437,17 @@ const timerGroups = (m: Model): [string, TimerRow[]][] => {
         ],
         [
           'Ticket details',
-          'cached 60 s',
+          `cached ${DETAIL_STALE_MS / 1000} s`,
           'plan progress and Next lines in the sheets'
         ],
         [
           'Suggestions',
-          'every 2 min',
-          'agent-idea tickets of the last 60 days; the discard word of a cancelled one is its last comment, cached 10 min'
+          `every ${REFRESH_MS / MINUTE_MS} min`,
+          `agent-idea tickets of the last ${IDEA_WINDOW_DAYS} days; the discard word of a cancelled one is its last comment, cached ${REASON_STALE_MS / MINUTE_MS} min`
         ],
         [
           'Hand-off ticks',
-          'with each refresh, cached 30 s',
+          `with each refresh, cached ${HANDOFF_STALE_MS / 1000} s`,
           "read from the ticket's PR ready comment, ahead of the scheduler; a newly merged ticket still waits for its run"
         ],
         [
@@ -458,7 +461,11 @@ const timerGroups = (m: Model): [string, TimerRow[]][] => {
           "2 h, or twice the interval plus an hour when that's longer"
         ],
         ['Run problems', 'last 24 h', 'until a later run goes well'],
-        ['Titles of closed tickets', 'closed ≤ 30 days', 'CLOSED_WINDOW']
+        [
+          'Titles of closed tickets',
+          `closed ≤ ${CLOSED_WINDOW_DAYS} days`,
+          'CLOSED_WINDOW_DAYS in linear.ts'
+        ]
       ]
     ]
   ];

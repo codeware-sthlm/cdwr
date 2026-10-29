@@ -1,9 +1,11 @@
 import {
   type Comment,
+  IDEA_LABEL,
   type Issue,
   type IssueDetail,
   type Linear,
   LinearError,
+  OPEN_STATES,
   type OpenStatusType
 } from './linear';
 import {
@@ -15,17 +17,10 @@ import {
 
 const LINEAR = 'Linear';
 const SUPABASE = 'Supabase';
-const IDEA_LABEL = 'agent-idea';
-const OPEN_STATES: readonly OpenStatusType[] = [
-  'triage',
-  'backlog',
-  'unstarted',
-  'started'
-];
-const REFRESH_MS = 5 * 60 * 1000;
-const ISSUE_COALESCE_MS = 500;
-const FOCUS_DEBOUNCE_MS = 10 * 1000;
-const BACKOFF_MS = [15 * 1000, 30 * 1000, 60 * 1000];
+export const REFRESH_MS = 5 * 60 * 1000;
+export const ISSUE_COALESCE_MS = 500;
+export const FOCUS_DEBOUNCE_MS = 10 * 1000;
+export const BACKOFF_MS = [15 * 1000, 30 * 1000, 60 * 1000];
 
 /** What each request answers with, by server and tool */
 export type Requests = {

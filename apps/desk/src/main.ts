@@ -6,7 +6,7 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 import { type Adapter, createAdapter } from './data';
-import { start } from './desk.js';
+import { start } from './desk';
 import { LinearError, createLinear } from './linear';
 import {
   type KeyValueStore,

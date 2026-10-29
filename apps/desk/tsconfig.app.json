@@ -2,9 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "../../dist/out-tsc",
-    "allowJs": true,
-    "checkJs": false,
     "types": ["node", "vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.js", "vite.config.mts"]
+  "include": ["src/**/*.ts", "vite.config.mts"]
 }
