@@ -27,17 +27,29 @@ const ISSUE_COALESCE_MS = 500;
 const FOCUS_DEBOUNCE_MS = 10 * 1000;
 const BACKOFF_MS = [15 * 1000, 30 * 1000, 60 * 1000];
 
-type Server = typeof LINEAR | typeof SUPABASE;
+/** What each request answers with, by server and tool */
+export type Requests = {
+  [LINEAR]: {
+    list_issues: { issues: Issue[] };
+    get_issue: IssueDetail;
+    list_comments: { comments: Comment[] };
+  };
+  [SUPABASE]: Payloads;
+};
+
+type Server = keyof Requests;
+type Tool<S extends Server> = keyof Requests[S] & string;
 
 export type DataFailure = { code: string; message: string };
 
-export type DataResult = {
-  payload: unknown;
+export type DataResult<T = unknown> = {
+  payload: T;
   cache: { storedAt: number };
 };
 
-export type WatchEvent =
-  { type: 'data'; result: DataResult } | { type: 'error'; error: DataFailure };
+export type WatchEvent<T = unknown> =
+  | { type: 'data'; result: DataResult<T> }
+  | { type: 'error'; error: DataFailure };
 
 export type CallOptions = { cache?: { staleTime?: number } };
 
@@ -478,35 +490,50 @@ export const createAdapter = ({
     )
   );
 
-  return {
-    watchTool: (
-      server: string,
-      tool: string,
-      args: Record<string, unknown>,
-      callback: (event: WatchEvent) => void
-    ): (() => void) => {
-      const handle = stopped ? undefined : resolve(server, tool, args);
-      if (!handle) {
-        callback({ type: 'error', error: unknownTool(server, tool) });
-        return () => undefined;
-      }
-      return handle.watch(callback);
-    },
+  function watchTool<S extends Server, T extends Tool<S>>(
+    server: S,
+    tool: T,
+    args: Record<string, unknown>,
+    callback: (event: WatchEvent<Requests[S][T]>) => void
+  ): () => void;
+  function watchTool(
+    server: string,
+    tool: string,
+    args: Record<string, unknown>,
+    callback: (event: WatchEvent) => void
+  ): () => void {
+    const handle = stopped ? undefined : resolve(server, tool, args);
+    if (!handle) {
+      callback({ type: 'error', error: unknownTool(server, tool) });
+      return () => undefined;
+    }
+    return handle.watch(callback);
+  }
 
-    callTool: async (
-      server: string,
-      tool: string,
-      args: Record<string, unknown>,
-      options?: CallOptions
-    ): Promise<DataResult> => {
-      const handle = resolve(server, tool, args);
-      if (!handle) throw new AdapterError(unknownTool(server, tool));
-      try {
-        return await handle.call(options?.cache?.staleTime ?? 0);
-      } catch (error) {
-        throw new AdapterError(toFailure(error));
-      }
-    },
+  async function callTool<S extends Server, T extends Tool<S>>(
+    server: S,
+    tool: T,
+    args: Record<string, unknown>,
+    options?: CallOptions
+  ): Promise<DataResult<Requests[S][T]>>;
+  async function callTool(
+    server: string,
+    tool: string,
+    args: Record<string, unknown>,
+    options?: CallOptions
+  ): Promise<DataResult> {
+    const handle = resolve(server, tool, args);
+    if (!handle) throw new AdapterError(unknownTool(server, tool));
+    try {
+      return await handle.call(options?.cache?.staleTime ?? 0);
+    } catch (error) {
+      throw new AdapterError(toFailure(error));
+    }
+  }
+
+  return {
+    watchTool,
+    callTool,
 
     /** Clears the server's cache and refetches everything watched on it. */
     invalidate: (server: string): Promise<void> => {

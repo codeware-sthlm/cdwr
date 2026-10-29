@@ -6,13 +6,7 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 import { type Adapter, createAdapter } from './data';
-import {
-  parseAttended,
-  parseJob,
-  parseSuggested,
-  start,
-  validateQueueView
-} from './desk.js';
+import { start } from './desk.js';
 import { LinearError, createLinear } from './linear';
 import {
   type KeyValueStore,
@@ -38,10 +32,8 @@ document.addEventListener('click', (event) => {
   void openUrl(link.href);
 });
 
-const parsers = { parseAttended, parseJob, parseSuggested, validateQueueView };
-
 const supabaseFor = ({ supabaseUrl, supabaseAnonKey }: Settings) =>
-  createSupabase({ url: supabaseUrl, anonKey: supabaseAnonKey }, parsers);
+  createSupabase({ url: supabaseUrl, anonKey: supabaseAnonKey });
 
 const linearFor = ({ linearKey }: Settings) =>
   createLinear({ key: linearKey, fetch: tauriFetch });

@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type WatchEvent, createAdapter } from './data';
 import type { Issue } from './linear';
 import { LinearError } from './linear';
-import { type IssueEventRow, SupabaseError } from './supabase';
+import {
+  type IssueEventRow,
+  type QueueStateRow,
+  SupabaseError,
+  toRuns
+} from './supabase';
 
 const issue = (id: string, statusType: Issue['statusType']): Issue => ({
   id,
@@ -23,6 +28,20 @@ const summaryOf = (
   statusType: Issue['statusType'],
   labels: string[] = []
 ): Issue => ({ ...issue(id, statusType), labels });
+
+const queueState: QueueStateRow = {
+  host: 'mac',
+  at: '2026-10-28T10:00:00.000Z',
+  last_run: '2026-10-28 09:50 · planned COD-1',
+  attended: 'run now: COD-2 answered',
+  suggested: '2026-10-28 · COD-7 Trim the cache',
+  job: 'Job: every 10 min · install current',
+  view: {
+    at: '2026-10-28T10:00:00.000Z',
+    limit: { used: 1, max: 3 },
+    table: { before: [{ ticket: 'COD-2', kind: 'question' }], after: [] }
+  }
+};
 
 const setup = () => {
   const linear = {
@@ -50,7 +69,7 @@ const setup = () => {
   };
   const supabaseRead = vi.fn(() =>
     Promise.resolve({
-      runs: null,
+      runs: toRuns([queueState], []),
       usage: {
         updated: '',
         windowDays: 30,
@@ -173,7 +192,7 @@ describe('createAdapter', () => {
       { state: 'completed' },
       keep('closed')
     );
-    for (const tool of ['runs', 'usage', 'activity']) {
+    for (const tool of ['runs', 'usage', 'activity'] as const) {
       adapter.watchTool('Supabase', tool, {}, keep(tool));
     }
     await vi.advanceTimersByTimeAsync(0);
@@ -188,7 +207,16 @@ describe('createAdapter', () => {
     expect(seen.usage).toMatchObject({
       result: { payload: { total: 1 } }
     });
-    expect(seen.runs).toMatchObject({ result: { payload: null } });
+    expect(seen.runs).toMatchObject({
+      result: {
+        payload: {
+          attended: { verdict: 'run now', text: 'COD-2 answered' },
+          suggested: { kind: 'suggested', ticket: 'COD-7' },
+          job: { minutes: 10, host: 'launchd', install: 'current' },
+          qv: { limit: { used: 1, max: 3 }, session: { state: 'none' } }
+        }
+      }
+    });
 
     const detail = await adapter.callTool('Linear', 'get_issue', {
       id: 'COD-9',
@@ -375,6 +403,7 @@ describe('createAdapter', () => {
         }
       }
     ]);
+    // @ts-expect-error: an unknown request does not compile, and still fails at runtime
     await expect(adapter.callTool('Nope', 'x', {})).rejects.toMatchObject({
       code: 'tool_error'
     });

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   type ActivityRow,
-  type Parsers,
   type QueueStateRow,
   type RunRow,
   type UsageRow,
@@ -16,13 +15,6 @@ import {
 
 process.env.TZ = 'UTC';
 
-const parsers: Parsers = {
-  parseAttended: (text) => ({ attended: text }),
-  parseSuggested: (text) => ({ suggested: text }),
-  parseJob: (text) => ({ job: text }),
-  validateQueueView: (view) => (view ? { view } : null)
-};
-
 const state = (over: Partial<QueueStateRow> = {}): QueueStateRow => ({
   host: 'mac',
   at: '2026-10-28T10:00:00.000Z',
@@ -30,7 +22,11 @@ const state = (over: Partial<QueueStateRow> = {}): QueueStateRow => ({
   attended: 'idle: waits',
   suggested: '2026-10-28 · nothing today',
   job: 'Job: every 10 min · install current',
-  view: { limit: 1 },
+  view: {
+    at: '2026-10-28T10:00:00.000Z',
+    limit: { used: 1, max: 3 },
+    table: { before: [], after: [] }
+  },
   ...over
 });
 
@@ -75,7 +71,7 @@ const act = (over: Partial<ActivityRow> = {}): ActivityRow => ({
 
 describe('toRuns', () => {
   it('returns null without a queue_state row', () => {
-    expect(toRuns([], [run()], parsers)).toBeNull();
+    expect(toRuns([], [run()])).toBeNull();
   });
 
   it('picks the newest queue_state across hosts', () => {
@@ -92,10 +88,13 @@ describe('toRuns', () => {
           job: 'Job: nuc job'
         })
       ],
-      [],
-      parsers
+      []
     );
-    expect(result?.job).toEqual({ job: 'Job: nuc job' });
+    expect(result?.job).toMatchObject({
+      line: 'nuc job',
+      minutes: null,
+      install: 'unknown'
+    });
   });
 
   it('passes the job line as run.sh stores it, labelled once, and labels the bare lines', () => {
@@ -107,17 +106,25 @@ describe('toRuns', () => {
           suggested: '2026-10-28 · nothing today'
         })
       ],
-      [],
-      {
-        ...parsers,
-        parseJob: (text) => text,
-        parseAttended: (text) => text,
-        parseSuggested: (text) => text
-      }
+      []
     );
-    expect(result?.job).toBe('Job: every 10 min · install current');
-    expect(result?.attended).toBe('Attended: idle: nothing to do');
-    expect(result?.suggested).toBe('Suggested: 2026-10-28 · nothing today');
+    expect(result?.job).toEqual({
+      line: 'every 10 min · install current',
+      minutes: 10,
+      host: 'launchd',
+      rev: null,
+      install: 'current',
+      items: ''
+    });
+    expect(result?.attended).toEqual({
+      verdict: 'idle',
+      text: 'nothing to do'
+    });
+    expect(result?.suggested).toEqual({
+      date: '2026-10-28',
+      kind: 'nothing',
+      text: 'nothing today'
+    });
   });
 
   it.each([
@@ -132,16 +139,33 @@ describe('toRuns', () => {
     ['not a run', null],
     [null, null]
   ])('parses last_run %j', (last_run, expected) => {
-    expect(toRuns([state({ last_run })], [], parsers)?.last).toEqual(expected);
+    expect(toRuns([state({ last_run })], [])?.last).toEqual(expected);
   });
 
   it('runs the lines through the page parsers', () => {
-    const result = toRuns([state()], [], parsers);
-    expect(result?.attended).toEqual({ attended: 'Attended: idle: waits' });
+    const result = toRuns([state()], []);
+    expect(result?.attended).toEqual({ verdict: 'idle', text: 'waits' });
     expect(result?.suggested).toEqual({
-      suggested: 'Suggested: 2026-10-28 · nothing today'
+      date: '2026-10-28',
+      kind: 'nothing',
+      text: 'nothing today'
     });
-    expect(result?.qv).toEqual({ view: { limit: 1 } });
+    expect(result?.qv).toEqual({
+      at: '2026-10-28T10:00:00.000Z',
+      limit: { used: 1, max: 3 },
+      session: { state: 'none' },
+      next: [],
+      held: { tickets: [], free: [] },
+      parked: [],
+      table: { before: [], after: [] }
+    });
+  });
+
+  it('leaves a view without limit or table out', () => {
+    expect(
+      toRuns([state({ view: { limit: { used: 1, max: 3 } } })], [])?.qv
+    ).toBeNull();
+    expect(toRuns([state({ view: null })], [])?.qv).toBeNull();
   });
 
   it('leaves out idle runs and lists the rest newest first in local time', () => {
@@ -161,8 +185,7 @@ describe('toRuns', () => {
           ticket: null,
           detail: null
         })
-      ],
-      parsers
+      ]
     );
     expect(result?.rows).toEqual([
       { when: '2026-10-28 09:30', outcome: 'failed', ticket: '', detail: '' },
