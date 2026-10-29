@@ -47,7 +47,9 @@ describe('run.sh', () => {
 
   // Tool search hides the Linear tools from a run limited by --tools
   it('runs claude without tool search', () => {
-    expect(SCRIPT).toMatch(/^ENABLE_TOOL_SEARCH=false claude -p /m);
+    expect(SCRIPT).toMatch(
+      /^AGENT_QUEUE_LINEAR_KEY="\$LINEAR_MCP_KEY" ENABLE_TOOL_SEARCH=false claude -p /m
+    );
   });
 
   // A dark wake has no network; that is not a Linear failure worth a record
@@ -195,6 +197,48 @@ describe('run.sh', () => {
     expect(SCRIPT).toContain('"Attended: \\($attended)\\n\\n"');
     expect(SCRIPT).toContain('+ "\\($job)\\n\\nWritten');
     expect(SCRIPT).toMatch(/--arg job "\$\(job_line\)"/);
+  });
+});
+
+describe('run.sh Linear tools', () => {
+  const code = SCRIPT.split('\n')
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n');
+
+  it('gives the plan and suggest claude runs the Linear MCP flags', () => {
+    expect(
+      code.match(/--model opus "\$\{LINEAR_MCP_ARGS\[@\]\}"/g)
+    ).toHaveLength(2);
+  });
+
+  it('takes the tool prefix from lib.sh, never hardcoded', () => {
+    expect(code).not.toMatch(/\bL=mcp__claude_ai_Linear/);
+    expect(code).toContain('linear_mcp "$HOME_DIR"');
+  });
+
+  it('starts nothing without Linear tools', () => {
+    expect(code.indexOf('linear_ok || exit 0')).toBeGreaterThan(0);
+    expect(code.indexOf('linear_ok || exit 0')).toBeLessThan(
+      code.indexOf('to_main planning')
+    );
+    expect(code.indexOf('linear_ok || {')).toBeLessThan(
+      code.indexOf('to_main suggesting')
+    );
+    expect(code).toContain('record "no Linear tools"');
+    expect(code).toContain('linear_gate "$HOME_DIR"');
+  });
+
+  // A launched session without Linear tools could only fail and count as a miss
+  it('launches no session without Linear tools', () => {
+    expect(code).toContain(
+      'if [[ "$action" == launch ]] && ! linear_ok; then return 0; fi'
+    );
+  });
+
+  it('reports the state on --check', () => {
+    expect(code).toMatch(
+      /if \$check; then why="\$\(linear_tools\)"; print -r -- "linear: /
+    );
   });
 });
 
