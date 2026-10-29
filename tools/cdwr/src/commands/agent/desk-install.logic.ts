@@ -4,6 +4,8 @@ export const WORKFLOW = 'desk.yml';
 export const ARTIFACT = 'agent-desk-macos-arm64';
 export const APP_DIR = '/Applications';
 export const APP_NAME = 'Agent Desk';
+/** The running process: the Cargo binary, not the bundle's display name */
+export const APP_PROCESS = 'agent-desk';
 export const APP_PATH = `${APP_DIR}/${APP_NAME}.app`;
 /** The zipped bundle inside the artifact */
 export const APP_ZIP = `${APP_NAME}.app.zip`;
@@ -42,20 +44,27 @@ export const parseRuns = (text: string): DeskRun[] => {
 
 const prSchema = z.object({
   headRefName: z.string().min(1),
-  headRefOid: z.string().min(1)
+  headRefOid: z.string().min(1),
+  isCrossRepository: z.boolean()
 });
 
 export interface PrHead {
   branch: string;
   sha: string;
+  /** From a fork, whose branch name may also exist upstream */
+  fork: boolean;
 }
 
-/** The branch and head commit of `gh pr view --json headRefName,headRefOid` */
+/** The branch, head commit and origin of `gh pr view --json headRefName,headRefOid,isCrossRepository` */
 export const parsePrHead = (text: string): PrHead | undefined => {
   try {
     const parsed = prSchema.safeParse(JSON.parse(text));
     return parsed.success
-      ? { branch: parsed.data.headRefName, sha: parsed.data.headRefOid }
+      ? {
+          branch: parsed.data.headRefName,
+          sha: parsed.data.headRefOid,
+          fork: parsed.data.isCrossRepository
+        }
       : undefined;
   } catch {
     return undefined;
@@ -64,6 +73,8 @@ export const parsePrHead = (text: string): PrHead | undefined => {
 
 /** Events whose build is of the branch's own code; a `push` to a fork's `main` is not the PR's */
 const PR_EVENTS: readonly string[] = ['pull_request', 'workflow_dispatch'];
+/** A manual run on a fork PR's branch name is a run of the upstream branch, so only PR runs count */
+const FORK_PR_EVENTS: readonly string[] = ['pull_request'];
 const MAIN_EVENTS: readonly string[] = ['push', 'workflow_dispatch'];
 
 const newest = (runs: DeskRun[]): DeskRun | undefined =>
@@ -71,7 +82,8 @@ const newest = (runs: DeskRun[]): DeskRun | undefined =>
 
 /**
  * The newest successful run. Without a PR: a push or manual run on main.
- * With one: a run of its head commit, else the newest pull request or manual run of its branch.
+ * With one: a run of its head commit, else the newest pull request or manual run of its branch
+ * (pull request runs only for a fork).
  */
 export const chooseRun = (
   runs: DeskRun[],
@@ -89,7 +101,9 @@ export const chooseRun = (
     newest(succeeded.filter((run) => run.headSha === pr.sha)) ??
     newest(
       succeeded.filter(
-        (run) => run.headBranch === pr.branch && PR_EVENTS.includes(run.event)
+        (run) =>
+          run.headBranch === pr.branch &&
+          (pr.fork ? FORK_PR_EVENTS : PR_EVENTS).includes(run.event)
       )
     )
   );

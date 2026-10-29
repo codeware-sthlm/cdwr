@@ -54,7 +54,7 @@ describe('parseRuns', () => {
 });
 
 describe('chooseRun', () => {
-  const pr = { branch: 'cod-1-desk', sha: 'bbbbbbb2222' };
+  const pr = { branch: 'cod-1-desk', sha: 'bbbbbbb2222', fork: false };
 
   it.each([
     [
@@ -140,7 +140,7 @@ describe('chooseRun', () => {
     [
       'a fork PR from a branch named main never takes main push builds',
       [run({ databaseId: 1 }), run({ databaseId: 2, event: 'pull_request' })],
-      { branch: 'main', sha: 'bbbbbbb2222' },
+      { branch: 'main', sha: 'bbbbbbb2222', fork: true },
       2
     ]
   ])('%s', (_name, runs, prHead, expected) => {
@@ -155,6 +155,11 @@ describe('chooseRun', () => {
       'only a push on the PR branch',
       [run({ headBranch: 'cod-1-desk', event: 'push' })],
       pr
+    ],
+    [
+      'a fork PR named main and only a manual run of upstream main',
+      [run({ event: 'workflow_dispatch' })],
+      { branch: 'main', sha: 'bbbbbbb2222', fork: true }
     ]
   ])('%s -> undefined', (_name, runs, prHead) => {
     expect(chooseRun(runs, prHead)).toBeUndefined();
@@ -164,8 +169,10 @@ describe('chooseRun', () => {
 describe('parsePrHead', () => {
   it('reads the branch and head', () => {
     expect(
-      parsePrHead('{"headRefName":"cod-1-desk","headRefOid":"bbbbbbb2222"}')
-    ).toEqual({ branch: 'cod-1-desk', sha: 'bbbbbbb2222' });
+      parsePrHead(
+        '{"headRefName":"cod-1-desk","headRefOid":"bbbbbbb2222","isCrossRepository":true}'
+      )
+    ).toEqual({ branch: 'cod-1-desk', sha: 'bbbbbbb2222', fork: true });
   });
 
   it.each(['nope', '{}', '{"headRefName":"","headRefOid":"x"}'])(
@@ -177,7 +184,7 @@ describe('parsePrHead', () => {
 });
 
 describe('staleNote', () => {
-  const pr = { branch: 'b', sha: '5d6e7f8abcdef' };
+  const pr = { branch: 'b', sha: '5d6e7f8abcdef', fork: false };
 
   it.each([
     [

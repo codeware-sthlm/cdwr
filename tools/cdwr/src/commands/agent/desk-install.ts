@@ -11,6 +11,7 @@ import {
   APP_DIR,
   APP_NAME,
   APP_PATH,
+  APP_PROCESS,
   APP_ZIP,
   ARTIFACT,
   PREVIOUS_PATH,
@@ -40,7 +41,7 @@ const sleep = (ms: number): Promise<void> =>
 /** Whether the app has a process; pgrep exits 1 when none matches */
 const isRunning = async (): Promise<boolean> => {
   try {
-    await run('pgrep', ['-x', APP_NAME]);
+    await run('pgrep', ['-x', APP_PROCESS]);
     return true;
   } catch (error) {
     if (error instanceof CommandError && error.code === 1) return false;
@@ -105,7 +106,7 @@ export default defineCommand({
         '-R',
         REPO,
         '--json',
-        'headRefName,headRefOid'
+        'headRefName,headRefOid,isCrossRepository'
       ]);
       head = parsePrHead(stdout);
       if (!head) throw new CliError(`Could not read pull request ${pr}`);
