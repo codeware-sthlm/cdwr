@@ -2,6 +2,9 @@ import { basename, dirname, join } from 'node:path';
 
 export type Role = 'planning' | 'implementing' | 'orchestrating';
 
+/** `other` is a Claude project outside this repo */
+export type HourRole = Role | 'other';
+
 export interface Tokens {
   input: number;
   output: number;
@@ -14,7 +17,7 @@ export interface Tokens {
 export interface Reply {
   id?: string;
   timestamp: string;
-  role: Role;
+  role: HourRole;
   ticket: string;
   model: string;
   speed?: string;
@@ -22,7 +25,7 @@ export interface Reply {
 }
 
 export interface UsageRow {
-  role: Role;
+  role: HourRole;
   model: string;
   tokens: Tokens;
   cost: number | null;
@@ -248,14 +251,14 @@ export const aggregate = (
   return {
     days: rows(days).map(({ parts, tokens, cost }) => ({
       day: parts[0],
-      role: parts[1] as Role,
+      role: parts[1] as HourRole,
       model: parts[2],
       tokens,
       cost
     })),
     tickets: rows(tickets).map(({ parts, tokens, cost }) => ({
       ticket: parts[0],
-      role: parts[1] as Role,
+      role: parts[1] as HourRole,
       model: parts[2],
       tokens,
       cost
@@ -270,6 +273,8 @@ export const aggregate = (
 };
 
 export const ROLES: Role[] = ['planning', 'orchestrating', 'implementing'];
+
+const isRole = (role: HourRole): role is Role => ROLES.includes(role as Role);
 
 /** One row of the telemetry `usage` table */
 export interface UsageTelemetryRow {
@@ -307,22 +312,29 @@ export const usageRows = (
   return [...byTicket.entries()]
     .sort(([a], [b]) => byText(a, b))
     .flatMap(([ticket, list]) =>
-      aggregate(list, { since, dayOf }).days.map((d) => ({
-        day: d.day,
-        ticket: ticket === 'unattributed' ? null : ticket,
-        model: d.model,
-        role: d.role,
-        input_tokens:
-          d.tokens.input +
-          d.tokens.cacheRead +
-          d.tokens.cacheWrite5m +
-          d.tokens.cacheWrite1h,
-        output_tokens: d.tokens.output,
-        cache_read_tokens: d.tokens.cacheRead,
-        cache_write_tokens: d.tokens.cacheWrite5m + d.tokens.cacheWrite1h,
-        cost_usd: d.cost ?? 0,
-        host
-      }))
+      aggregate(list, { since, dayOf }).days.flatMap((d) =>
+        !isRole(d.role)
+          ? []
+          : [
+              {
+                day: d.day,
+                ticket: ticket === 'unattributed' ? null : ticket,
+                model: d.model,
+                role: d.role,
+                input_tokens:
+                  d.tokens.input +
+                  d.tokens.cacheRead +
+                  d.tokens.cacheWrite5m +
+                  d.tokens.cacheWrite1h,
+                output_tokens: d.tokens.output,
+                cache_read_tokens: d.tokens.cacheRead,
+                cache_write_tokens:
+                  d.tokens.cacheWrite5m + d.tokens.cacheWrite1h,
+                cost_usd: d.cost ?? 0,
+                host
+              }
+            ]
+      )
     );
 };
 
@@ -332,3 +344,75 @@ export const usageRows = (
  */
 export const wholeDaysSince = (now: Date, days: number): Date =>
   new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+
+/** The whole UTC hour of a timestamp, as an ISO string */
+export const hourOf = (timestamp: string): string => {
+  const d = new Date(timestamp);
+  d.setUTCMinutes(0, 0, 0);
+  return d.toISOString();
+};
+
+/**
+ * The whole UTC hour `hours` hours back. Rows are upserted by hour, so the window must start
+ * on an hour boundary: a start mid-hour would overwrite its first hour with a partial sum.
+ */
+export const wholeHoursSince = (now: Date, hours: number): Date => {
+  const start = new Date(now);
+  start.setUTCMinutes(0, 0, 0);
+  return new Date(start.getTime() - hours * 3_600_000);
+};
+
+/** One row of the telemetry `usage_hours` table */
+export interface UsageHourRow {
+  hour: string;
+  host: string;
+  model: string;
+  role: HourRole;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  cost_usd: number;
+}
+
+/** Hour, model and role rows over every Claude project; sums as `usageRows` does */
+export const hourRows = (
+  replies: Reply[],
+  { since, host }: { since: Date; host: string }
+): UsageHourRow[] => {
+  const sums = new Map<string, Sum>();
+  for (const reply of replies) {
+    if (new Date(reply.timestamp) < since) continue;
+    add(
+      sums,
+      [hourOf(reply.timestamp), reply.role, reply.model].join('\t'),
+      reply
+    );
+  }
+  return [...sums.entries()]
+    .map(([key, sum]) => {
+      const [hour, role, model] = key.split('\t');
+      return { hour, role: role as HourRole, model, ...finish(sum) };
+    })
+    .sort(
+      (a, b) =>
+        byText(a.hour, b.hour) ||
+        byText(a.role, b.role) ||
+        byText(a.model, b.model)
+    )
+    .map((r) => ({
+      hour: r.hour,
+      host,
+      model: r.model,
+      role: r.role,
+      input_tokens:
+        r.tokens.input +
+        r.tokens.cacheRead +
+        r.tokens.cacheWrite5m +
+        r.tokens.cacheWrite1h,
+      output_tokens: r.tokens.output,
+      cache_read_tokens: r.tokens.cacheRead,
+      cache_write_tokens: r.tokens.cacheWrite5m + r.tokens.cacheWrite1h,
+      cost_usd: r.cost ?? 0
+    }));
+};

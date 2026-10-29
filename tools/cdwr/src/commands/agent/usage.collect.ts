@@ -53,20 +53,27 @@ const transcriptsIn = (
   return found;
 };
 
-/** The transcripts of this repo and its worktrees touched within the window; reads nothing but directory entries */
+/**
+ * The transcripts of this repo and its worktrees touched within the window; reads nothing but
+ * directory entries. `allProjects` keeps every Claude project, `after` (ms) replaces the day window.
+ */
 export const findTranscripts = (
   root: string,
-  days: number
+  days: number,
+  options: { allProjects?: boolean; after?: number } = {}
 ): { base: string; dirs: string[]; transcripts: Transcript[] } => {
   const projects = join(homedir(), '.claude', 'projects');
   const base = familyBase(root);
   const dirs = existsSync(projects)
     ? readdirSync(projects, { withFileTypes: true })
-        .filter((e) => e.isDirectory() && countsDir(e.name, base))
+        .filter(
+          (e) =>
+            e.isDirectory() && (options.allProjects || countsDir(e.name, base))
+        )
         .map((e) => e.name)
         .sort()
     : [];
-  const after = Date.now() - (days + 1) * DAY_MS;
+  const after = options.after ?? Date.now() - (days + 1) * DAY_MS;
   const transcripts = dirs.flatMap((dir) =>
     transcriptsIn(projects, dir, after)
   );
@@ -105,7 +112,9 @@ export const readReplies = (
         requestId: parsed.requestId,
         output: num(usage.output_tokens),
         timestamp: parsed.timestamp,
-        role: roleOf({ dirName, base, subagent }),
+        role: countsDir(dirName, base)
+          ? roleOf({ dirName, base, subagent })
+          : 'other',
         ticket: ticketOf(parsed.gitBranch),
         model: normaliseModel(message.model),
         speed: usage.speed,

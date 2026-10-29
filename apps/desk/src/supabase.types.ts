@@ -92,6 +92,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      usage_hours: {
+        Row: {
+          hour: string;
+          host: string;
+          model: string;
+          role: string;
+          input_tokens: number;
+          output_tokens: number;
+          cache_read_tokens: number;
+          cache_write_tokens: number;
+          cost_usd: number;
+          updated_at: string;
+        };
+        Insert: {
+          hour: string;
+          host: string;
+          model: string;
+          role: string;
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_read_tokens?: number;
+          cache_write_tokens?: number;
+          cost_usd?: number;
+          updated_at?: string;
+        };
+        Update: {
+          hour?: string;
+          host?: string;
+          model?: string;
+          role?: string;
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_read_tokens?: number;
+          cache_write_tokens?: number;
+          cost_usd?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       activity: {
         Row: {
           id: number;

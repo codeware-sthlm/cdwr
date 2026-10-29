@@ -7,12 +7,15 @@ import {
   dedupeReplies,
   encodeProjectPath,
   familyBase,
+  hourOf,
+  hourRows,
   localDay,
   normaliseModel,
   roleOf,
   ticketOf,
   usageRows,
-  wholeDaysSince
+  wholeDaysSince,
+  wholeHoursSince
 } from './usage.logic';
 
 const tokens = (over: Partial<Tokens> = {}): Tokens => ({
@@ -283,5 +286,89 @@ describe('wholeDaysSince', () => {
     );
     // Oct 24 09:00 is before now-3d (14:00) yet its day is whole
     expect(rows.map((r) => r.day)).toEqual(['2026-10-24', '2026-10-27']);
+  });
+});
+
+describe('usageRows other', () => {
+  it('drops replies from projects outside the repo', () => {
+    const rows = usageRows(
+      [reply(), reply({ role: 'other', ticket: 'COD-2' })],
+      { since: new Date('2026-10-01T00:00:00Z'), host: 'h' }
+    );
+    expect(rows.map((r) => r.ticket)).toEqual(['COD-1']);
+  });
+});
+
+describe('hourOf', () => {
+  it('zeroes minutes, seconds and milliseconds in UTC', () => {
+    expect(hourOf('2026-10-29T23:59:59.999Z')).toBe('2026-10-29T23:00:00.000Z');
+    expect(hourOf('2026-10-30T01:30:00+02:00')).toBe(
+      '2026-10-29T23:00:00.000Z'
+    );
+  });
+});
+
+describe('wholeHoursSince', () => {
+  it('floors now to the hour, then steps back', () => {
+    expect(
+      wholeHoursSince(new Date('2026-10-30T10:42:17.500Z'), 6).toISOString()
+    ).toBe('2026-10-30T04:00:00.000Z');
+  });
+});
+
+describe('hourRows', () => {
+  const since = new Date('2026-10-06T10:00:00.000Z');
+  const opts = { since, host: 'h' };
+
+  it('buckets by hour, model and role and sums', () => {
+    const rows = hourRows(
+      [
+        reply({
+          timestamp: '2026-10-06T12:10:00.000Z',
+          tokens: tokens({
+            input: 100,
+            output: 5,
+            cacheRead: 10,
+            cacheWrite5m: 4,
+            cacheWrite1h: 1
+          })
+        }),
+        reply({
+          timestamp: '2026-10-06T12:50:00.000Z',
+          tokens: tokens({ input: 200, output: 7 })
+        }),
+        reply({ timestamp: '2026-10-06T13:00:00.000Z', role: 'other' }),
+        reply({ timestamp: '2026-10-06T12:20:00.000Z', role: 'implementing' })
+      ],
+      opts
+    );
+    expect(rows.map((r) => [r.hour, r.role])).toEqual([
+      ['2026-10-06T12:00:00.000Z', 'implementing'],
+      ['2026-10-06T12:00:00.000Z', 'orchestrating'],
+      ['2026-10-06T13:00:00.000Z', 'other']
+    ]);
+    expect(rows[1]).toMatchObject({
+      host: 'h',
+      input_tokens: 315,
+      output_tokens: 12,
+      cache_read_tokens: 10,
+      cache_write_tokens: 5
+    });
+  });
+
+  it('costs an unpriced model at 0 and honours since', () => {
+    const rows = hourRows(
+      [
+        reply({ model: 'mystery', tokens: tokens({ output: 9 }) }),
+        reply({ timestamp: '2026-10-06T09:59:00.000Z' })
+      ],
+      opts
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      model: 'mystery',
+      output_tokens: 9,
+      cost_usd: 0
+    });
   });
 });
