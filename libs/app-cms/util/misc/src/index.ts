@@ -8,4 +8,3 @@ export { hasRole } from './lib/has-role';
 export { editorTenantRoles, canEdit, canEditIn } from './lib/can-edit';
 export { isTenant } from './lib/is-tenant';
 export { isUser } from './lib/is-user';
-export { sitePath, type SiteCollection } from './lib/site-path';

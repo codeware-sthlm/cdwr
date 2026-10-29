@@ -1,4 +1,10 @@
-import type { TenantDomain } from './tenant-domain';
+/** The parts of a workspace domain row that adoption reads */
+export type AdoptableDomain = {
+  hostname?: string | null;
+  app?: string | null;
+  isPrimary?: boolean | null;
+  certificate?: { isConfigured?: boolean | null } | null;
+};
 
 export type AdoptableDomains = {
   /** The url the app should call its own, or `null` to keep what it has */
@@ -27,7 +33,7 @@ export type AdoptableDomains = {
  * @param app - This deployment's Fly app name
  */
 export const adoptableDomains = (
-  domains: Array<TenantDomain> | null | undefined,
+  domains: Array<AdoptableDomain> | null | undefined,
   app: string | null | undefined
 ): AdoptableDomains => {
   if (!app) {

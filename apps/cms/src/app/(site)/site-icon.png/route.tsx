@@ -1,13 +1,13 @@
-import { ImageResponse } from 'next/og';
-
-import { payloadRuntime } from '../../../security/payload-runtime';
 import {
   faviconSvg,
   fitMark,
   parseIconSize,
   svgDataUri,
   svgMark
-} from '../../../utils/site-icon';
+} from '@codeware/shared/util/payload-utils';
+import { ImageResponse } from 'next/og';
+
+import { payloadRuntime } from '../../../security/payload-runtime';
 
 /**
  * The mark as a PNG, for a browser that will not take an SVG favicon.

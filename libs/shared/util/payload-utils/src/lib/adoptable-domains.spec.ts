@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { adoptableDomains } from './adoptable-domains';
-import type { TenantDomain } from './tenant-domain';
+import { type AdoptableDomain, adoptableDomains } from './adoptable-domains';
 
-const domain = (overrides: Partial<TenantDomain> = {}): TenantDomain => ({
+const domain = (overrides: Partial<AdoptableDomain> = {}): AdoptableDomain => ({
   hostname: 'tours.example.com',
   app: 'cdwr-web-moon',
   certificate: { isConfigured: true },

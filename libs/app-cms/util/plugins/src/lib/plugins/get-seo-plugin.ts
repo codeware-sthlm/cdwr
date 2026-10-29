@@ -1,5 +1,5 @@
-import { sitePath } from '@codeware/app-cms/util/misc';
 import type { Page, Post, Tour } from '@codeware/shared/util/payload-types';
+import { sitePath } from '@codeware/shared/util/payload-utils';
 import { seoPlugin } from '@payloadcms/plugin-seo';
 import type { GenerateTitle, GenerateURL } from '@payloadcms/plugin-seo/types';
 

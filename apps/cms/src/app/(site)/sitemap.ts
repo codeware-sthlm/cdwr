@@ -1,6 +1,8 @@
 import { getPages, getPosts, getTours } from '@codeware/app-cms/data-access';
-import { publicVisibilityWhere } from '@codeware/app-cms/util/access';
-import { sitePath } from '@codeware/app-cms/util/misc';
+import {
+  publicVisibilityWhere,
+  sitePath
+} from '@codeware/shared/util/payload-utils';
 import type { MetadataRoute } from 'next';
 
 import { payloadRuntime } from '../../security/payload-runtime';

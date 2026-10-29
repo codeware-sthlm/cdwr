@@ -1,9 +1,6 @@
 export { editorUserAccess } from './lib/editor-user.access';
 export { authenticatedAccess } from './lib/authenticated.access';
-export {
-  contentVisibilityWhere,
-  publicVisibilityWhere
-} from './lib/content-visibility';
+export { contentVisibilityWhere } from './lib/content-visibility';
 export {
   isSecondFactorPending,
   isTotpSetupPending,

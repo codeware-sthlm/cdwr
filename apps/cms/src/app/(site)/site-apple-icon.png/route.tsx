@@ -1,12 +1,12 @@
-import { ImageResponse } from 'next/og';
-
-import { payloadRuntime } from '../../../security/payload-runtime';
 import {
   faviconSvg,
   fitMark,
   svgDataUri,
   svgMark
-} from '../../../utils/site-icon';
+} from '@codeware/shared/util/payload-utils';
+import { ImageResponse } from 'next/og';
+
+import { payloadRuntime } from '../../../security/payload-runtime';
 
 const SIZE = 180;
 
