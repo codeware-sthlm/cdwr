@@ -15,6 +15,7 @@ const issue = (id: string, labels: string[] = []): Issue => ({
   statusType: 'started',
   labels,
   createdAt: '2026-10-01T00:00:00.000Z',
+  updatedAt: '2026-10-01T00:00:00.000Z',
   url: `https://linear.app/${id}`,
   completedAt: null,
   canceledAt: null

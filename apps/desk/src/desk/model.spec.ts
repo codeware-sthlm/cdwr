@@ -28,6 +28,7 @@ const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
   statusType: 'unstarted',
   labels: [],
   createdAt: '2026-10-01T08:00:00',
+  updatedAt: '2026-10-01T08:00:00',
   url: `https://linear.app/codeware/issue/${id}`,
   completedAt: null,
   canceledAt: null,

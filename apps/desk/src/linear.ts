@@ -41,6 +41,7 @@ const issueNodeSchema = z.object({
   priority: z.number().int().min(0).max(4),
   url: z.string(),
   createdAt: z.string(),
+  updatedAt: z.string(),
   completedAt: z.string().nullish(),
   canceledAt: z.string().nullish(),
   state: z.object({ name: z.string(), type: statusTypeSchema }),
@@ -119,6 +120,7 @@ export type Issue = {
   statusType: StatusType;
   labels: string[];
   createdAt: string;
+  updatedAt: string;
   url: string;
   completedAt: string | null;
   canceledAt: string | null;
@@ -150,6 +152,7 @@ const ISSUE_FIELDS = `
   priority
   url
   createdAt
+  updatedAt
   completedAt
   canceledAt
   state { name type }
@@ -202,6 +205,7 @@ const toIssue = (node: z.infer<typeof issueNodeSchema>): Issue => ({
   statusType: node.state.type,
   labels: node.labels.nodes.map((l) => l.name),
   createdAt: node.createdAt,
+  updatedAt: node.updatedAt,
   url: node.url,
   completedAt: node.completedAt ?? null,
   canceledAt: node.canceledAt ?? null
