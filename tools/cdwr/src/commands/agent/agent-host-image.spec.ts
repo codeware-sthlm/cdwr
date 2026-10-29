@@ -25,9 +25,7 @@ describe('agent-host entrypoint', () => {
     expect(dockerfile).toContain(
       `RUN_FALLBACK_SECONDS=${RUN_FALLBACK_SECONDS}`
     );
-    expect(entrypoint).toContain(
-      '(( slept >= ${RUN_FALLBACK_SECONDS:-3600} ))'
-    );
+    expect(entrypoint).toContain('slept >= ${RUN_FALLBACK_SECONDS:-3600} ))');
     // The monitor's 10-minute schedule holds while the loop sleeps the hour
     expect(entrypoint).toMatch(/break\n {4}fi\n {4}checkin ok\n {2}done/);
   });
@@ -45,10 +43,20 @@ describe('agent-host entrypoint', () => {
     expect(entrypoint).toContain('agent listen --notify-pid "$loop_pid"');
   });
 
+  it('brings the checkout the listener runs from to origin/main at start', () => {
+    expect(
+      entrypoint.indexOf('git switch -q --detach origin/main')
+    ).toBeLessThan(entrypoint.indexOf('supervise_listener &'));
+  });
+
+  it('sends no heartbeat after a failed run', () => {
+    expect(entrypoint).toContain('(( st != 0 || slept >=');
+  });
+
   // A wake during a run must not start a second run.sh beside it
   it('waits on run.sh until it has exited', () => {
     expect(entrypoint).toContain(
-      'while kill -0 $runner 2>/dev/null; do wait $runner || true; done'
+      'while kill -0 $runner 2>/dev/null; do st=0; wait $runner || st=$?; done'
     );
     expect(entrypoint).toMatch(/trap 'pending=1;[^']*' USR1/);
   });
