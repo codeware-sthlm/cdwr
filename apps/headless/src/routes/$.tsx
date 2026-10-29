@@ -1,13 +1,10 @@
 import { RenderDoc } from '@codeware/shared/ui/cms-renderer';
-import {
-  type DocData,
-  resolveDocMeta
-} from '@codeware/shared/util/payload-utils';
-import { createFileRoute, getRouteApi, notFound } from '@tanstack/react-router';
+import type { DocData } from '@codeware/shared/util/payload-utils';
+import { createFileRoute, notFound } from '@tanstack/react-router';
 
+import { docHead } from '../doc-head';
 import { loadDoc } from '../server/load-doc';
-
-const rootRoute = getRouteApi('__root__');
+import type { Site } from '../server/load-site';
 
 /** Pages, posts and tours: the path says which, the cms says whether it exists */
 export const Route = createFileRoute('/$')({
@@ -25,19 +22,13 @@ export const Route = createFileRoute('/$')({
     }
     return result;
   },
-  head: ({ loaderData, matches }) => {
-    const root = matches[0];
-    const rootData = root?.loaderData as
-      { ok: true; site: { appName: string } } | { ok: false } | undefined;
-    const appName = rootData?.ok ? rootData.site.appName : 'Site';
-    const doc =
-      loaderData?.ok && loaderData.docJson
-        ? (JSON.parse(loaderData.docJson) as DocData)
-        : null;
-    const title = resolveDocMeta(doc)?.title;
-
-    return { meta: [{ title: title ? `${appName} - ${title}` : appName }] };
-  },
+  head: ({ loaderData, matches }) =>
+    docHead(matches[0]?.loaderData as Site | undefined, {
+      doc:
+        loaderData?.ok && loaderData.docJson
+          ? (JSON.parse(loaderData.docJson) as DocData)
+          : null
+    }),
   component: Doc
 });
 

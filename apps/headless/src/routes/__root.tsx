@@ -5,6 +5,10 @@ import {
   RenderLayout
 } from '@codeware/shared/ui/cms-renderer';
 import { NotFound } from '@codeware/shared/ui/primitives';
+import {
+  DEFAULT_OG_IMAGE_PATH,
+  ogLocale
+} from '@codeware/shared/util/payload-utils';
 import { STATS_PATH, statsScript } from '@codeware/shared/util/umami';
 import * as Sentry from '@sentry/tanstackstart-react';
 import {
@@ -27,14 +31,62 @@ export const Route = createRootRoute({
   loader: () => loadSite(),
   // The tenant chrome rarely changes; do not refetch it on every navigation
   staleTime: 60_000,
-  head: ({ loaderData }) => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: loaderData?.ok ? loaderData.site.appName : 'Site' }
-    ],
-    links: [{ rel: 'stylesheet', href: appCss }]
-  }),
+  // A page's own head replaces these tags by name or property, the deepest
+  // route winning, so what is set here is what a page states nothing about
+  head: ({ loaderData }) => {
+    const site = loaderData?.ok ? loaderData.site : null;
+    const locale = ogLocale(site?.locale);
+    const icon = site?.iconConfig ?? null;
+
+    return {
+      meta: [
+        { charSet: 'utf-8' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { title: site?.appName ?? 'Site' },
+        ...(site
+          ? [
+              { property: 'og:type', content: 'website' },
+              { property: 'og:site_name', content: site.appName },
+              ...(locale ? [{ property: 'og:locale', content: locale }] : []),
+              {
+                property: 'og:image',
+                content: site.origin
+                  ? new URL(DEFAULT_OG_IMAGE_PATH, site.origin).toString()
+                  : DEFAULT_OG_IMAGE_PATH
+              },
+              { name: 'twitter:card', content: 'summary_large_image' }
+            ]
+          : [])
+      ],
+      links: [
+        { rel: 'stylesheet', href: appCss },
+        // The tab and the bookmark in the tenant's own mark: an SVG is the
+        // favicon as it is, with PNGs drawn from it; an upload is used as is
+        ...(icon?.source === 'svg'
+          ? [
+              { rel: 'icon', href: '/site-icon.svg', type: 'image/svg+xml' },
+              {
+                rel: 'icon',
+                href: '/site-icon.png',
+                type: 'image/png',
+                sizes: '32x32'
+              },
+              {
+                rel: 'apple-touch-icon',
+                href: '/site-apple-icon.png',
+                type: 'image/png',
+                sizes: '180x180'
+              }
+            ]
+          : icon?.source === 'upload'
+            ? [
+                { rel: 'icon', href: icon.fileUrl },
+                { rel: 'apple-touch-icon', href: icon.fileUrl }
+              ]
+            : [])
+      ]
+    };
+  },
   component: RootComponent,
   notFoundComponent: RootNotFound,
   errorComponent: RootError,

@@ -23,6 +23,7 @@ import pkg from '../../package.json';
 import { getEnv } from '../env.server';
 
 import { payloadRequestOptions } from './payload-request';
+import { resolveSiteOrigin } from './site-origin';
 
 /** What the document needs from the tenant, with nothing that is secret */
 export type SiteChrome = {
@@ -34,6 +35,8 @@ export type SiteChrome = {
   iconConfig: PayloadValue['iconConfig'];
   locale: string;
   payloadUrl: string;
+  /** The site's own origin, when it can be told */
+  origin: string | null;
   /** Whether statistics are collected at all: Umami is configured */
   stats: boolean;
   /** The site's id in Umami, when it has one */
@@ -105,6 +108,10 @@ export const loadSite = createServerFn({ method: 'GET' }).handler(
           iconConfig: tenantConfig.icon,
           locale: tenantConfig.locale,
           payloadUrl: env.PAYLOAD_URL,
+          origin: resolveSiteOrigin(
+            tenantConfig.tenant.domains,
+            env.FLY_APP_NAME
+          ),
           stats: !!env.UMAMI_URL,
           statsWebsiteId: tenantConfig.tenant.statsWebsiteId ?? null,
           theme: resolveTheme(
