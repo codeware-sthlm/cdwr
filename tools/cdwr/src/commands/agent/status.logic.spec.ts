@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  attendedSummary,
   formatContainerJob,
   parseListener,
   parseRemoteStatus,
   remoteStatus,
   rmLockCommand,
+  schedulerRow,
+  showsRow,
   skewedStatus,
   staleScriptsHint,
   unreadableStatus
@@ -227,5 +230,73 @@ describe('parseListener', () => {
 
   it.each([[undefined], ['not json'], ['{}']])('gives null for %s', (text) => {
     expect(parseListener(text)).toBeNull();
+  });
+});
+
+describe('showsRow', () => {
+  it.each([
+    'job',
+    'paused',
+    'scripts',
+    'worktree',
+    'last run',
+    'watching',
+    'lock',
+    'implement',
+    'next run',
+    'suggest'
+  ])('drops %s when the scheduler is elsewhere', (check) => {
+    expect(showsRow('elsewhere', check)).toBe(false);
+    expect(showsRow('here', check)).toBe(true);
+    expect(showsRow(undefined, check)).toBe(true);
+  });
+
+  it.each([
+    'scheduler',
+    'notify',
+    'Linear key',
+    'Heartbeat mirror',
+    'attended',
+    'linear tools',
+    'next',
+    'held',
+    'parked',
+    'on your table'
+  ])('keeps %s when the scheduler is elsewhere', (check) => {
+    expect(showsRow('elsewhere', check)).toBe(true);
+  });
+});
+
+describe('schedulerRow and attendedSummary', () => {
+  it('names the mirror host', () => {
+    expect(schedulerRow('nuc:docker:cdwr-agent:/d')).toEqual({
+      ok: true,
+      detail: 'runs on nuc; cdwr agent status --host nuc'
+    });
+    expect(attendedSummary('nuc:docker:cdwr-agent:/d')).toBe(
+      'Attended only; the scheduler runs on nuc'
+    );
+  });
+
+  it('warns without a mirror', () => {
+    expect(schedulerRow(null)).toEqual({
+      ok: 'warn',
+      detail: 'not on this machine; cdwr agent status --host <host>'
+    });
+    expect(attendedSummary(null)).toBe(
+      'Attended only; the scheduler runs elsewhere'
+    );
+  });
+});
+
+describe('parseRemoteStatus scheduler', () => {
+  it('accepts a report with and without scheduler', () => {
+    for (const extra of [{}, { scheduler: 'elsewhere' }]) {
+      const text = JSON.stringify({
+        ok: true,
+        result: { ...report, ...extra }
+      });
+      expect(parseRemoteStatus(text).kind).toBe('report');
+    }
   });
 });

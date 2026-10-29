@@ -27,9 +27,11 @@ import {
   parseLaunchctlPrint,
   plistPath,
   queuePaths,
+  schedulerHere,
   serviceTarget,
   spendForDay
 } from '../commands/agent/agent.logic';
+import { mirrorHost } from '../commands/agent/mirror.logic';
 
 import { CommandError, run } from './shell';
 
@@ -299,4 +301,30 @@ export async function githubAppCheck(
       ?.replace(/^github app: /, '');
     return { ok: false, reason: reason || 'the token check failed' };
   }
+}
+
+/** The mirror target the session hook copies to, when one is set */
+export const mirrorTargetOf = (queue: QueuePaths): string | null =>
+  readText(queue.mirror)?.split('\n')[0]?.trim() || null;
+
+/**
+ * The host for a command that needs the scheduler on this machine; a Mac without the launchd
+ * job is attended-only, the scheduler runs in the agent container
+ */
+export async function requireScheduler(
+  env: NodeJS.ProcessEnv
+): Promise<'launchd' | 'container'> {
+  const host = requireHost(['launchd', 'container'], env);
+  if (host === 'container') return host;
+  const queue = paths(env);
+  const job = await jobState();
+  if (!schedulerHere(host, job, existsSync(queue.plist))) {
+    const where = mirrorHost(mirrorTargetOf(queue));
+    throw new CliError(
+      `No scheduler on this machine; it runs ${where ? `on ${where}` : 'elsewhere'}`,
+      undefined,
+      `cdwr agent status --host ${where ?? '<host>'}`
+    );
+  }
+  return host;
 }

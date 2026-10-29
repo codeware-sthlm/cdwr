@@ -16,6 +16,10 @@ export const mirrorTarget = (
   dir: string
 ): string => `${host}:docker:${container}:${dir}`;
 
+/** The host of a mirror target, its first `:`-segment */
+export const mirrorHost = (target: string | null): string | null =>
+  target?.split(':')[0]?.trim() || null;
+
 /**
  * The ssh arguments that check the target in one round trip. Read only by default: the directory,
  * or the nearest part of it that exists, must be writable. With `create` the directory is made

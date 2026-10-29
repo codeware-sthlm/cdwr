@@ -8,6 +8,7 @@ import {
   queueViewSchema
 } from './agent.logic';
 import { type ListenerState, listenerStateShape } from './listen.logic';
+import { mirrorHost } from './mirror.logic';
 
 /** The checkout the queue plans in, inside the agent container */
 export const REMOTE_CHECKOUT = '/work/codeware-agent';
@@ -43,6 +44,8 @@ const reportShape = z.object({
     }),
     z.object({ loaded: z.literal(false) })
   ]),
+  /** Optional so a status from an older container still parses; absent means here */
+  scheduler: z.enum(['here', 'elsewhere']).optional(),
   paused: z.boolean(),
   notifyLevel: z.enum(NOTIFY_LEVELS),
   host: z.enum(['launchd', 'container']),
@@ -108,6 +111,44 @@ const reportShape = z.object({
   // Absent from a container on an older image, and null without a listener file
   listener: listenerStateShape.nullable().optional()
 });
+
+/** The rows an attended-only machine shows; the others describe a scheduler it does not run */
+const ATTENDED_ROWS: ReadonlySet<string> = new Set([
+  'scheduler',
+  'notify',
+  'Linear key',
+  'Heartbeat mirror',
+  'attended',
+  'linear tools',
+  'queue view',
+  'next',
+  'held',
+  'parked',
+  'on your table'
+]);
+
+/** Whether the status row `check` shows for a machine with this scheduler */
+export const showsRow = (
+  scheduler: RemoteReport['scheduler'],
+  check: string
+): boolean => scheduler !== 'elsewhere' || ATTENDED_ROWS.has(check);
+
+/** The `scheduler` row of an attended-only machine; `mirror` is the mirror target, if one is set */
+export const schedulerRow = (
+  mirror: string | null
+): { ok: boolean | 'warn'; detail: string } => {
+  const host = mirrorHost(mirror);
+  return host
+    ? { ok: true, detail: `runs on ${host}; cdwr agent status --host ${host}` }
+    : {
+        ok: 'warn',
+        detail: 'not on this machine; cdwr agent status --host <host>'
+      };
+};
+
+/** The summary of an attended-only machine whose rows hold no failure */
+export const attendedSummary = (mirror: string | null): string =>
+  `Attended only; the scheduler runs ${mirrorHost(mirror) ? `on ${mirrorHost(mirror)}` : 'elsewhere'}`;
 
 const envelope = z.object({ result: reportShape });
 
