@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SiteIconDotsvgRouteImport } from './routes/site-icon[.]svg'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as StatsSplatRouteImport } from './routes/stats/$'
@@ -29,6 +30,11 @@ const SplatRoute = SplatRouteImport.update({
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SiteIconDotsvgRoute = SiteIconDotsvgRouteImport.update({
+  id: '/site-icon.svg',
+  path: '/site-icon.svg',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/site-icon.svg': typeof SiteIconDotsvgRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/health': typeof ApiHealthRoute
   '/stats/$': typeof StatsSplatRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/site-icon.svg': typeof SiteIconDotsvgRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/health': typeof ApiHealthRoute
   '/stats/$': typeof StatsSplatRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/site-icon.svg': typeof SiteIconDotsvgRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/health': typeof ApiHealthRoute
   '/stats/$': typeof StatsSplatRoute
@@ -75,14 +84,28 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/$' | '/robots.txt' | '/sitemap.xml' | '/api/health' | '/stats/$'
+    | '/'
+    | '/$'
+    | '/robots.txt'
+    | '/site-icon.svg'
+    | '/sitemap.xml'
+    | '/api/health'
+    | '/stats/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$' | '/robots.txt' | '/sitemap.xml' | '/api/health' | '/stats/$'
+  to:
+    | '/'
+    | '/$'
+    | '/robots.txt'
+    | '/site-icon.svg'
+    | '/sitemap.xml'
+    | '/api/health'
+    | '/stats/$'
   id:
     | '__root__'
     | '/'
     | '/$'
     | '/robots.txt'
+    | '/site-icon.svg'
     | '/sitemap.xml'
     | '/api/health'
     | '/stats/$'
@@ -92,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SiteIconDotsvgRoute: typeof SiteIconDotsvgRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiHealthRoute: typeof ApiHealthRoute
   StatsSplatRoute: typeof StatsSplatRoute
@@ -118,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/robots.txt'
       fullPath: '/robots.txt'
       preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/site-icon.svg': {
+      id: '/site-icon.svg'
+      path: '/site-icon.svg'
+      fullPath: '/site-icon.svg'
+      preLoaderRoute: typeof SiteIconDotsvgRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -148,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
+  SiteIconDotsvgRoute: SiteIconDotsvgRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiHealthRoute: ApiHealthRoute,
   StatsSplatRoute: StatsSplatRoute,

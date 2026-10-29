@@ -1,4 +1,7 @@
-import type { DocumentSeo } from '@codeware/shared/util/payload-utils';
+import {
+  DEFAULT_OG_IMAGE_PATH,
+  type DocumentSeo
+} from '@codeware/shared/util/payload-utils';
 
 type MetaTag =
   | { title: string }
@@ -45,6 +48,12 @@ export function seoHead(
 
   const property = (name: string, content: string | undefined) =>
     content ? [{ property: `og:${name}`, content }] : [];
+  // Headless draws no default card, so a page without an image of its own
+  // gets none rather than a link that 404s
+  const image =
+    openGraph.image === DEFAULT_OG_IMAGE_PATH
+      ? undefined
+      : absolute(openGraph.image, origin);
 
   return {
     meta: [
@@ -55,9 +64,9 @@ export function seoHead(
       ...property('locale', openGraph.locale),
       ...property('title', openGraph.title ?? fullTitle),
       ...property('description', openGraph.description),
-      ...property('image', absolute(openGraph.image, origin)),
+      ...property('image', image),
       ...(canonical ? property('url', canonical) : []),
-      { name: 'twitter:card', content: twitterCard }
+      { name: 'twitter:card', content: image ? twitterCard : 'summary' }
     ],
     links: canonical ? [{ rel: 'canonical', href: canonical }] : []
   };
