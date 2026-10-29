@@ -48,7 +48,7 @@ describe('run.sh', () => {
   // Tool search hides the Linear tools from a run limited by --tools
   it('runs claude without tool search', () => {
     expect(SCRIPT).toMatch(
-      /^AGENT_QUEUE_LINEAR_KEY="\$LINEAR_MCP_KEY" ENABLE_TOOL_SEARCH=false claude -p /m
+      /^\s*"\$\{claude_env\[@\]\}" ENABLE_TOOL_SEARCH=false claude -p /m
     );
   });
 

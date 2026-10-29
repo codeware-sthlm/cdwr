@@ -762,7 +762,7 @@ suggest_run() {
   # The memory rules start with `//`: one leading slash is project-relative, two anchor at the root.
   # In a subshell: the App token is minted fresh for this run and reaches only this claude
   ( gh_identity_or_note
-  AGENT_QUEUE_LINEAR_KEY="$LINEAR_MCP_KEY" ENABLE_TOOL_SEARCH=false claude -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none}" \
+  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none}" \
     --model opus "${LINEAR_MCP_ARGS[@]}" \
     --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
     --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
@@ -833,7 +833,7 @@ note "plan: $(print -r -- "$ready" | tr '\n' ' ')→ $log"
 
 rc=0
 # Tool search would defer the Linear tools behind ToolSearch, which --tools leaves out.
-AGENT_QUEUE_LINEAR_KEY="$LINEAR_MCP_KEY" ENABLE_TOOL_SEARCH=false claude -p "/work-queue unattended once plan-only" \
+"${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/work-queue unattended once plan-only" \
   --model opus "${LINEAR_MCP_ARGS[@]}" \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
   --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \

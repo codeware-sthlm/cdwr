@@ -23,6 +23,12 @@ mkdir -p /run/agent
 chmod 600 "$KEY_PATH"
 unset AGENT_GITHUB_APP_KEY
 
+# The Linear key the same way: lib.sh reads the file, and no process inherits the key itself
+(umask 077; print -r -- "$AGENT_QUEUE_LINEAR_KEY" > /run/agent/linear.key)
+chmod 600 /run/agent/linear.key
+export AGENT_QUEUE_LINEAR_KEY_FILE=/run/agent/linear.key
+unset AGENT_QUEUE_LINEAR_KEY
+
 # The identity on the tmpfs too: the credential helper reads it, and it exists before the first clone
 (umask 077; print -rl -- "AGENT_GITHUB_APP_ID=$AGENT_GITHUB_APP_ID" \
   "AGENT_GITHUB_APP_INSTALLATION_ID=$AGENT_GITHUB_APP_INSTALLATION_ID" \
