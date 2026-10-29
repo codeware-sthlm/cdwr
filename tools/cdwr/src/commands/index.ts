@@ -295,6 +295,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/worktree-prune').then((m) => m.default)
   },
   {
+    path: ['agent', 'desk', 'install'],
+    summary: 'Install the Agent Desk from a CI build',
+    danger: 'mutate',
+    load: () => import('./agent/desk-install').then((m) => m.default)
+  },
+  {
     path: ['agent', 'mirror', 'set'],
     summary: 'Mirror attended session files into the agent container',
     danger: 'mutate',
