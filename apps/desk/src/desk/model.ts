@@ -1,5 +1,5 @@
 import type { Issue, StatusType } from '../linear';
-import type { RunsPayload } from '../supabase';
+import type { ActivityPayload, RunsPayload } from '../supabase';
 
 import {
   AGENT,
@@ -178,6 +178,10 @@ export const prOf = (
   id: string,
   known?: PrRef | null
 ): PrRef | null => known || details.get(id)?.pr || null;
+
+/** Whether the activity document is flagged missing; the payload does not carry the flag today, so this reads false until it does */
+export const activityMissing = (activity: ActivityPayload): boolean =>
+  'missing' in activity && Boolean(activity.missing);
 
 export const isProblem = (outcome: string): boolean =>
   !/^(idle|planned( [A-Z]+-\d+)?|launched|implemented|suggested( [A-Z]+-\d+)?|nothing|skip)$/.test(
