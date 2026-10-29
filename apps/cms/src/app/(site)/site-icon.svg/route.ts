@@ -1,4 +1,4 @@
-import { faviconSvg, svgMark } from '@codeware/shared/util/payload-utils';
+import { faviconSvg, svgMark } from '@codeware/shared/util/pure';
 
 import { payloadRuntime } from '../../../security/payload-runtime';
 

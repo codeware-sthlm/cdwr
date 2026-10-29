@@ -4,7 +4,7 @@ import {
   parseIconSize,
   svgDataUri,
   svgMark
-} from '@codeware/shared/util/payload-utils';
+} from '@codeware/shared/util/pure';
 import { ImageResponse } from 'next/og';
 
 import { payloadRuntime } from '../../../security/payload-runtime';
