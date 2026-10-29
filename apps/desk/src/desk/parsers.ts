@@ -187,7 +187,7 @@ export function parseHandoffs(
 // The queue state and runs: a "Last run:" line, an "Attended:" line, a "Job:" line, then a table of runs that weren't idle, newest first
 // Job: on launchd "every 10 min · install current", "· install out of date (run.sh, interval)" or "· install unknown";
 // in the agent-host container "· image sha-9c7a20d", "· image sha-9c7a20d out of date (run.sh, …)", or "· image" with no
-// commit for a local build (the commit arrives with the ticket that bakes it into the image).
+// commit for a local build (the CI build passes AGENT_IMAGE_SHA).
 // With the listener up the interval reads "live · fallback 60 min" instead of "every 10 min".
 export function parseJob(text: string | null | undefined): Job | null {
   const line = lineAfter(text, 'Job:');

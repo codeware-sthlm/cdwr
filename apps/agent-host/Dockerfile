@@ -65,4 +65,9 @@ ENV AGENT_QUEUE_HOST=container \
 USER agent
 WORKDIR /work
 
+# The commit the image was built from, which job_line reports as `image sha-<7>`; empty for a local
+# build. Last, so a new commit busts no layer above it.
+ARG AGENT_IMAGE_SHA=
+ENV AGENT_IMAGE_SHA=$AGENT_IMAGE_SHA
+
 ENTRYPOINT ["/opt/agent-host/secrets.sh"]
