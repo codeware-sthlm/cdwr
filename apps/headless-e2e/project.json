@@ -1,0 +1,55 @@
+{
+  "name": "headless-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/headless-e2e/src",
+  "tags": ["scope:headless-e2e", "type:e2e"],
+  "targets": {
+    "dx:postgres": {
+      "metadata": {
+        "description": "Start an isolated Postgres container for E2E tests (port 5434, database headless-e2e)"
+      },
+      "command": "(docker ps -q -f name=postgres-headless-e2e | grep -q . || docker run --name postgres-headless-e2e --rm -d --env-file apps/headless-e2e/.env.e2e -p 5434:5432 postgres) && until docker exec postgres-headless-e2e pg_isready -q; do sleep 1; done"
+    },
+    "e2e": {
+      "dependsOn": ["re-seed"]
+    },
+    "open-report": {
+      "metadata": {
+        "description": "Open the Playwright HTML test report"
+      },
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "test -d dist/.playwright/apps/headless-e2e/playwright-report && pnpm exec playwright show-report dist/.playwright/apps/headless-e2e/playwright-report || echo 'Test report not found. Run: nx e2e headless-e2e'",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "re-seed": {
+      "metadata": {
+        "description": "Reset and re-seed the E2E database from a clean state"
+      },
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nx re-seed cms",
+        "env": {
+          "DATABASE_URL": "postgresql://postgres:postgres@localhost:5434/headless-e2e",
+          "MEDIA_DIR": "tmp/headless-e2e-media",
+          "S3_ACCESS_KEY_ID": "",
+          "SEED_DATA_URL": ""
+        }
+      },
+      "dependsOn": ["dx:postgres"]
+    },
+    "typecheck": {
+      "metadata": {
+        "description": "Type check the specs — Playwright strips types without checking them"
+      },
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p tsconfig.json",
+        "cwd": "apps/headless-e2e"
+      }
+    }
+  },
+  "implicitDependencies": ["cms", "headless"]
+}
