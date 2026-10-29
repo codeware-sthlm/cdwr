@@ -1,3 +1,4 @@
+import { deskSha } from '../build-info';
 import type { Issue } from '../linear';
 import type { ActivityPayload, HostMetricRow, RunsPayload } from '../supabase';
 
@@ -58,6 +59,9 @@ export type Slot = {
 
 export type IdeaVerdict = 'discarded' | 'accepted' | 'to decide';
 
+/** A running build against main's newest, both as `sha-<7 chars>` */
+export type Behind = { runs: string; main: string };
+
 export type Model = {
   all: Issue[];
   runs: RunsPayload | null;
@@ -90,6 +94,10 @@ export type Model = {
   staleHours: number;
   schedulerStale: boolean;
   installStale: boolean;
+  /** The NUC's image against main's newest image build; null when current or either side is unknown */
+  imageBehind: Behind | null;
+  /** This desk against main's newest desk build; null when current, a local build, or main's is unknown */
+  deskBehind: Behind | null;
   ideasPending: Issue[];
   ideasAccepted: Issue[];
   ideasDiscarded: Issue[];
@@ -348,7 +356,11 @@ export const shipped = (
   return { days, total, week };
 };
 
-export const model = (state: DeskState, now: Date): Model => {
+export const model = (
+  state: DeskState,
+  now: Date,
+  desk: string | null = deskSha()
+): Model => {
   const { data, details, liveHandoffs } = state;
   const { runs, ideas, activity } = data;
   const nowMs = now.getTime();
@@ -460,6 +472,24 @@ export const model = (state: DeskState, now: Date): Model => {
   // The daily suggestion: an agent-idea ticket without an Agent label waits on Håkan's verdict
   const allIdeas = (ideas ?? []).filter((i) => !isOtherRepo(i));
 
+  const job = runs?.job;
+  const mainImage = runs?.main.image;
+  const imageBehind: Behind | null =
+    job?.host === 'container' &&
+    job.rev &&
+    mainImage &&
+    mainImage.slice(0, 7) !== job.rev.slice(4)
+      ? { runs: job.rev, main: 'sha-' + mainImage.slice(0, 7) }
+      : null;
+  const mainDesk = runs?.main.desk;
+  const deskBehind: Behind | null =
+    desk && mainDesk && desk !== mainDesk
+      ? {
+          runs: 'sha-' + desk.slice(0, 7),
+          main: 'sha-' + mainDesk.slice(0, 7)
+        }
+      : null;
+
   return {
     all: openIssues(data),
     runs,
@@ -487,6 +517,8 @@ export const model = (state: DeskState, now: Date): Model => {
     staleHours,
     schedulerStale: lastRunAge === null || lastRunAge > staleHours,
     installStale: runs?.job?.install === 'stale',
+    imageBehind,
+    deskBehind,
     ideasPending: allIdeas
       .filter((i) => ideaVerdict(i) === 'to decide')
       .sort(byCreated),

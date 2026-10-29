@@ -107,12 +107,20 @@ export const renderBand = (m: Model, now: Date): Band => {
         ? job?.host === 'container'
           ? 'image out of date'
           : 'install out of date'
-        : m.runProblems.length
-          ? plural(m.runProblems.length, 'problem', 'problems')
-          : 'OK';
+        : m.imageBehind
+          ? 'image behind main'
+          : m.runProblems.length
+            ? plural(m.runProblems.length, 'problem', 'problems')
+            : m.deskBehind
+              ? 'desk behind main'
+              : 'OK';
+  // An outdated desk is said, but it is no scheduler failure, so it doesn't turn the band
   const bad =
     runs !== null &&
-    (m.schedulerStale || m.installStale || m.runProblems.length > 0);
+    (m.schedulerStale ||
+      m.installStale ||
+      m.imageBehind !== null ||
+      m.runProblems.length > 0);
   const host = job?.host
     ? '<br>' + esc(hostName(job.host)) + (job.rev ? ' · ' + esc(job.rev) : '')
     : '';

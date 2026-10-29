@@ -1,14 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   type ActivityRow,
+  type BuildRow,
   type QueueStateRow,
   type RunRow,
   type UsageRow,
+  createSupabase,
   localStamp,
   readAllPages,
   toActivity,
   toIssueEvent,
+  toMain,
   toRuns,
   toUsage
 } from './supabase';
@@ -69,7 +72,78 @@ const act = (over: Partial<ActivityRow> = {}): ActivityRow => ({
   ...over
 });
 
+const build = (over: Partial<BuildRow> = {}): BuildRow => ({
+  workflow: 'desk.yml',
+  sha: 'a'.repeat(40),
+  run_created_at: '2026-10-28T08:00:00.000Z',
+  updated_at: '2026-10-28T08:10:00.000Z',
+  ...over
+});
+
+describe('toMain', () => {
+  it('maps both workflows to their commits and ignores others', () => {
+    expect(
+      toMain([
+        build({ workflow: 'agent-host-image.yml', sha: 'b'.repeat(40) }),
+        build({ workflow: 'desk.yml', sha: 'c'.repeat(40) }),
+        build({ workflow: 'other.yml', sha: 'd'.repeat(40) })
+      ])
+    ).toEqual({ image: 'b'.repeat(40), desk: 'c'.repeat(40) });
+  });
+
+  it('is null for a workflow without a row', () => {
+    expect(toMain([])).toEqual({ image: null, desk: null });
+    expect(toMain([build({ workflow: 'desk.yml' })])).toEqual({
+      image: null,
+      desk: 'a'.repeat(40)
+    });
+  });
+});
+
+describe('createSupabase read of builds', () => {
+  const reply = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' }
+    });
+
+  const readWith = (builds: Response) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/rest/v1/builds')) return builds.clone();
+        if (url.includes('/rest/v1/queue_state')) return reply([state()]);
+        return reply([]);
+      })
+    );
+    return createSupabase({ url: 'https://x.supabase.co', anonKey: 'anon' })
+      .read()
+      .finally(() => vi.unstubAllGlobals());
+  };
+
+  it('reads a missing table as no builds', async () => {
+    const payload = await readWith(
+      reply({ code: 'PGRST205', message: 'Could not find the table' }, 404)
+    );
+    expect(payload.runs?.main).toEqual({ image: null, desk: null });
+  });
+
+  it('fails on any other error', async () => {
+    await expect(
+      readWith(reply({ code: '42501', message: 'permission denied' }, 401))
+    ).rejects.toMatchObject({ code: 'unauthorized' });
+  });
+});
+
 describe('toRuns', () => {
+  it('carries main, all null without build rows', () => {
+    expect(toRuns([state()], [])?.main).toEqual({ image: null, desk: null });
+    expect(
+      toRuns([state()], [], [build({ workflow: 'agent-host-image.yml' })])?.main
+    ).toEqual({ image: 'a'.repeat(40), desk: null });
+  });
+
   it('returns null without a queue_state row', () => {
     expect(toRuns([], [run()])).toBeNull();
   });
