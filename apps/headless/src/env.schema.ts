@@ -36,6 +36,38 @@ export const EnvSchema = z.object({
   SITE_GATE_PASSWORD: z
     .string({ description: 'Closes the whole site behind this password' })
     .optional(),
+  // Site statistics are collected only when set
+  UMAMI_URL: z
+    .string({
+      description: 'Base URL of the Umami instance site statistics go to'
+    })
+    .url()
+    .optional(),
+  // Licensed typefaces. Both absent is the safe state: no base means no face
+  // is written, and no allowlist means no site is entitled to one.
+  FONT_ASSETS_BASE_URL: z
+    .string({
+      description: 'Where the platform serves its own font files from'
+    })
+    .optional(),
+  /**
+   * The licensed typefaces this deployment's site may embed.
+   *
+   * The font licence permits embedding only on sites the licensee owns or
+   * controls, so the entitlement belongs to the site being served: set it
+   * under `/tenants/<tenant>/apps/headless/` and it reaches that deployment
+   * and no other. Named per font because each licence covers one typeface on
+   * its own terms.
+   */
+  RESTRICTED_FONTS: z
+    .string({
+      description:
+        'Comma-separated ids of the licensed typefaces this deployment may embed'
+    })
+    .optional(),
+  FLY_APP_NAME: z
+    .string({ description: "This deployment's Fly app name, set by Fly" })
+    .optional(),
   DEBUG: z
     .string({ description: 'Debug mode' })
     .transform((value) => value === 'true')

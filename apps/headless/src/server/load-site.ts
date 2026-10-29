@@ -34,6 +34,10 @@ export type SiteChrome = {
   iconConfig: PayloadValue['iconConfig'];
   locale: string;
   payloadUrl: string;
+  /** Whether statistics are collected at all: Umami is configured */
+  stats: boolean;
+  /** The site's id in Umami, when it has one */
+  statsWebsiteId: string | null;
   theme: string;
   themes: PayloadValue['themes'];
 };
@@ -101,6 +105,8 @@ export const loadSite = createServerFn({ method: 'GET' }).handler(
           iconConfig: tenantConfig.icon,
           locale: tenantConfig.locale,
           payloadUrl: env.PAYLOAD_URL,
+          stats: !!env.UMAMI_URL,
+          statsWebsiteId: tenantConfig.tenant.statsWebsiteId ?? null,
           theme: resolveTheme(
             undefined,
             tenantConfig.themes,

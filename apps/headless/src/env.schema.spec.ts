@@ -27,6 +27,26 @@ describe('EnvSchema', () => {
     expect(EnvSchema.safeParse(rest).success).toBe(false);
   });
 
+  it('takes the optional statistics, font and Fly settings', () => {
+    expect(
+      EnvSchema.parse({
+        ...valid,
+        UMAMI_URL: 'https://umami.example',
+        FONT_ASSETS_BASE_URL: 'https://fonts.example',
+        RESTRICTED_FONTS: 'sohne',
+        FLY_APP_NAME: 'cdwr-headless-moon'
+      })
+    ).toMatchObject({
+      UMAMI_URL: 'https://umami.example',
+      FONT_ASSETS_BASE_URL: 'https://fonts.example',
+      RESTRICTED_FONTS: 'sohne',
+      FLY_APP_NAME: 'cdwr-headless-moon'
+    });
+    expect(
+      EnvSchema.safeParse({ ...valid, UMAMI_URL: 'not a url' }).success
+    ).toBe(false);
+  });
+
   it('rejects a malformed url', () => {
     expect(
       EnvSchema.safeParse({ ...valid, PAYLOAD_URL: 'not a url' }).success
