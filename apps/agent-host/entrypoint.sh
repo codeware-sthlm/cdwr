@@ -70,6 +70,21 @@ if [[ ! -f "$INSTALLED" ]]; then
 fi
 write_env
 
+# The listener runs from the checkout, so a start (a deploy) brings it to origin/main first, the way
+# run.sh's to_main does before it plans: same lockfile marker, and a dirty checkout stays as it is
+(
+  cd "$AGENT_QUEUE_REPO"
+  if git fetch -q origin && git switch -q --detach origin/main 2>/dev/null; then
+    lock="$(git hash-object pnpm-lock.yaml)"
+    marker=node_modules/.cdwr-lockfile
+    if [[ ! -r "$marker" || "$(<"$marker")" != "$lock" ]]; then
+      pnpm install --frozen-lockfile && print -r -- "$lock" > "$marker"
+    fi
+  else
+    print -r -- "agent-host: the checkout stays where it is (not clean, or no fetch)"
+  fi
+) || print -r -- "agent-host: could not bring the checkout to origin/main"
+
 # One runner per container: a lock left by a killed run is stale
 rmdir "$AGENT_QUEUE_HOME/lock" 2>/dev/null || true
 
@@ -129,11 +144,14 @@ while (( ! stop )); do
   if (( woken )); then "$AGENT_QUEUE_HOME/run.sh" --wake & else "$AGENT_QUEUE_HOME/run.sh" & fi
   runner=$!
   # wait returns early on every trapped signal, a wake included; only run.sh's exit ends it
-  while kill -0 $runner 2>/dev/null; do wait $runner || true; done
+  st=0; wait $runner || st=$?
+  while kill -0 $runner 2>/dev/null; do st=0; wait $runner || st=$?; done
   runner=
   (( stop )) && break
-  # Sleeps in steps of RUN_INTERVAL_SECONDS, up to RUN_FALLBACK_SECONDS while the listener is live.
-  # A step that finds the listener down, or an activity read a woken run skipped, runs at once.
+  # Sleeps in steps of RUN_INTERVAL_SECONDS, up to RUN_FALLBACK_SECONDS while the listener is live
+  # and the last run went through. A step that finds the listener down, an activity read a woken
+  # run skipped, or a failed run behind it runs at once, so a failure is retried every 10 minutes
+  # and never covered by a heartbeat.
   slept=0
   while (( ! stop && ! pending )); do
     sleep "$RUN_INTERVAL_SECONDS" &
@@ -144,7 +162,7 @@ while (( ! stop )); do
     sleeper=
     (( stop || pending )) && break
     (( slept += RUN_INTERVAL_SECONDS ))
-    if (( slept >= ${RUN_FALLBACK_SECONDS:-3600} )) || [[ -e "$AGENT_QUEUE_HOME/activity-owed" ]] || ! listener_live; then
+    if (( st != 0 || slept >= ${RUN_FALLBACK_SECONDS:-3600} )) || [[ -e "$AGENT_QUEUE_HOME/activity-owed" ]] || ! listener_live; then
       break
     fi
     checkin ok
