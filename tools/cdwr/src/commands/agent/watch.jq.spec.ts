@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
@@ -2171,5 +2172,21 @@ describe('launch', () => {
       expect(res.action).toBe('notify');
       expect(res.reason).toMatch(/^daily implement cap/);
     });
+  });
+});
+
+// The container's jq is 1.6, which refuses a keyword as a .field or a $variable; CI's jq does not
+describe('watch.jq on jq 1.6', () => {
+  const KEYWORDS =
+    'and|or|not|if|then|elif|else|end|as|def|reduce|foreach|try|catch|label|import|include|__loc__';
+  it('uses no jq keyword as a field or variable name', () => {
+    const code = readFileSync(`${DIR}/watch.jq`, 'utf8')
+      .split('\n')
+      .map((line) => line.replace(/#.*$/, ''))
+      .join('\n')
+      .replace(/"(?:[^"\\]|\\.)*"/g, '""');
+    expect(code.match(new RegExp(`[.$](?:${KEYWORDS})\\b`, 'g')) ?? []).toEqual(
+      []
+    );
   });
 });
