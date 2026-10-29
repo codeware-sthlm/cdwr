@@ -280,8 +280,9 @@ from `tools/cdwr/.env`, the copy `install` keeps in the agent worktree: `AGENT_G
 `AGENT_GITHUB_APP_INSTALLATION_ID` and `AGENT_GITHUB_APP_KEY_PATH`, a `.pem` outside every
 checkout with mode 600. One of them missing or wrong, or a refused exchange, means no session
 and a notice saying why; it never falls back to your `gh` login. `doctor` runs the same exchange
-and shows what the token reaches. The app's permissions: Contents and Pull requests read and
-write, Metadata, Checks and Actions read; installed on `cdwr` only, in no ruleset bypass list.
+and shows what the token reaches. The app's permissions: Contents, Pull requests and Workflows
+read and write, Metadata, Checks and Actions read; installed on `cdwr` only, in no ruleset bypass
+list, so a workflow change still reaches main only through a reviewed PR.
 
 The agent container (`apps/agent-host`) reads its secrets from Infisical at start: `secrets.sh`, its
 entrypoint, logs in with a machine identity, exports production `/agent-queue` and then execs the run
