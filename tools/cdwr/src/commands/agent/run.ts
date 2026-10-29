@@ -8,7 +8,7 @@ import {
   jobState,
   lockAge,
   paths,
-  requireHost,
+  requireScheduler,
   worktreeOf
 } from '../../services/agent-queue';
 import { run } from '../../services/shell';
@@ -25,7 +25,7 @@ export default defineCommand({
   inputs: {},
 
   async plan(ctx) {
-    const host = requireHost(['launchd', 'container'], ctx.env);
+    const host = await requireScheduler(ctx.env);
     if (host === 'container') {
       return {
         steps: [],

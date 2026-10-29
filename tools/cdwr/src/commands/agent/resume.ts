@@ -1,7 +1,7 @@
 import { existsSync, rmSync } from 'node:fs';
 
 import { defineCommand } from '../../cli/command';
-import { paths, requireHost } from '../../services/agent-queue';
+import { paths, requireScheduler } from '../../services/agent-queue';
 
 export default defineCommand({
   summary: 'Let scheduled runs start again',
@@ -10,7 +10,7 @@ export default defineCommand({
   inputs: {},
 
   async plan(ctx) {
-    requireHost(['launchd', 'container'], ctx.env);
+    await requireScheduler(ctx.env);
     const queue = paths(ctx.env);
     if (!existsSync(queue.paused)) {
       return { steps: [], nothing: 'The queue is not paused', data: { queue } };

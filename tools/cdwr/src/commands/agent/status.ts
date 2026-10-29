@@ -11,6 +11,7 @@ import {
   jobState,
   keyPresent,
   lockAge,
+  mirrorTargetOf,
   paths,
   readQueueSources,
   readText,
@@ -45,15 +46,19 @@ import {
   parseQueueView,
   parseSuggest,
   parseWatchState,
+  schedulerHere,
   summarizeSchedulerLine
 } from './agent.logic';
 import {
   type RemoteReport,
+  attendedSummary,
   formatContainerJob,
   parseListener,
   parseRemoteStatus,
   remoteStatus,
   rmLockCommand,
+  schedulerRow,
+  showsRow,
   skewedStatus,
   staleScriptsHint,
   unreadableStatus
@@ -107,7 +112,11 @@ export default defineCommand({
         ? job.intervalSeconds
         : undefined;
 
-    const rows = [
+    const where = schedulerRow(report.mirror);
+    const allRows = [
+      ...(report.scheduler === 'elsewhere'
+        ? [row(where.ok, 'scheduler', where.detail)]
+        : []),
       report.host === 'container'
         ? row(containerJob.ok, 'job', containerJob.detail)
         : job.loaded
@@ -256,16 +265,19 @@ export default defineCommand({
               row(true, 'on your table', formatTable(report.queueView))
             ])
     ];
-    ctx.ui.table(['', 'check', 'detail'], rows);
+    const shown = allRows.filter((r) => showsRow(report.scheduler, r[1] ?? ''));
+    ctx.ui.table(['', 'check', 'detail'], shown);
 
-    const problems = rows.filter((r) => r[0] === symbols.fail).length;
-    const warnings = rows.filter((r) => r[0] === symbols.warn).length;
+    const problems = shown.filter((r) => r[0] === symbols.fail).length;
+    const warnings = shown.filter((r) => r[0] === symbols.warn).length;
     const summary =
       problems > 0
         ? `${problems} thing(s) need attention`
-        : warnings > 0
-          ? `Loaded, with ${warnings} thing(s) worth a look`
-          : 'The queue is healthy';
+        : report.scheduler === 'elsewhere'
+          ? attendedSummary(report.mirror)
+          : warnings > 0
+            ? `Loaded, with ${warnings} thing(s) worth a look`
+            : 'The queue is healthy';
     return { summary, partial: problems > 0, json: report };
   }
 });
@@ -302,7 +314,10 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         host,
         keySource: linearKeySource(host, ctx.env),
         keyPresent: key,
-        mirror: readText(queue.mirror)?.split('\n')[0]?.trim() || null,
+        mirror: mirrorTargetOf(queue),
+        scheduler: schedulerHere(host, job, existsSync(queue.plist))
+          ? ('here' as const)
+          : ('elsewhere' as const),
         script:
           'source' in sources
             ? filesDrift(installed, sources.source)

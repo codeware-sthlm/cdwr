@@ -40,6 +40,7 @@ import {
   remoteLogFile,
   remoteReadLog,
   renderPlist,
+  schedulerHere,
   serviceTarget,
   spendForDay,
   suggestSettings,
@@ -1087,4 +1088,18 @@ describe('remote logs', () => {
     ]);
     expect(remoteReadLog('h', file, 0).slice(4)).toEqual(['cat', file]);
   });
+});
+
+describe('schedulerHere', () => {
+  it.each([
+    ['container', false, false, true],
+    ['launchd', true, false, true],
+    ['launchd', false, true, true],
+    ['launchd', false, false, false]
+  ] as const)(
+    '%s loaded=%s plist=%s -> %s',
+    (host, loaded, plist, expected) => {
+      expect(schedulerHere(host, { loaded }, plist)).toBe(expected);
+    }
+  );
 });

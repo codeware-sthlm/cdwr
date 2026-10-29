@@ -195,6 +195,16 @@ export const lockState = (
       ? 'held'
       : 'stale';
 
+/**
+ * Whether this machine runs the scheduler. Only a Mac with no job loaded and no plist left is
+ * attended-only; a plist that is not loaded is a broken install and stays reported.
+ */
+export const schedulerHere = (
+  host: 'launchd' | 'container',
+  job: { loaded: boolean },
+  plistExists: boolean
+): boolean => host === 'container' || job.loaded || plistExists;
+
 export const serviceTarget = (uid: number): string => `gui/${uid}/${LABEL}`;
 export const domainTarget = (uid: number): string => `gui/${uid}`;
 

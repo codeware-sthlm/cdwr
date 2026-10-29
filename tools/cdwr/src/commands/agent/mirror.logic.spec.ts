@@ -7,6 +7,7 @@ import {
   checkArgs,
   checkFailure,
   invalidPart,
+  mirrorHost,
   mirrorTarget
 } from './mirror.logic';
 
@@ -98,5 +99,16 @@ describe('checkFailure', () => {
     [null, '', 'The check failed (no status)']
   ])('%s %j -> %s', (code, stderr, expected) => {
     expect(checkFailure(code, stderr, 'h', 'c', '/d')).toBe(expected);
+  });
+});
+
+describe('mirrorHost', () => {
+  it.each([
+    ['agent-host:docker:cdwr-agent:/a/b', 'agent-host'],
+    ['me@h.example:docker:c:/x', 'me@h.example'],
+    ['', null],
+    [null, null]
+  ])('%s -> %s', (target, expected) => {
+    expect(mirrorHost(target)).toBe(expected);
   });
 });
