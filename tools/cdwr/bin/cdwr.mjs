@@ -33,7 +33,7 @@ if (!existsSync(tsx)) {
 // Ctrl-C and Ctrl-\ go to the whole foreground group; the CLI decides what they
 // do, so this launcher must not die under it (an interactive session it starts
 // would lose its terminal to the shell)
-for (const signal of ['SIGINT', 'SIGQUIT']) process.on(signal, () => {});
+for (const signal of ['SIGINT', 'SIGQUIT']) process.on(signal, () => undefined);
 
 const result = spawnSync(
   tsx,
