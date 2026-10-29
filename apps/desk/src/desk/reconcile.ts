@@ -1,5 +1,6 @@
 import type { Issue } from '../linear';
 
+import { isClosed } from './constants';
 import type { QueueView } from './types';
 
 // The queue view is the scheduler's snapshot; the issue lists are live. An entry that a live change
@@ -19,31 +20,33 @@ export type Live = {
 /** True when the live issue contradicts the entry */
 type Rule = (i: LiveIssue, id: string, live: Live) => boolean;
 
-const isClosed = (i: LiveIssue): boolean =>
-  i.statusType === 'completed' || i.statusType === 'canceled';
-
 /** Closed, or without any of the labels the entry needs */
 const unless =
   (...labels: string[]): Rule =>
   (i) =>
-    isClosed(i) || !labels.some((l) => i.labels.includes(l));
+    isClosed(i.statusType) || !labels.some((l) => i.labels.includes(l));
+
+const notWorking = unless('agent:working');
+const notReady = unless('agent:ready');
+const notReview = unless('agent:review');
+const notWorkingOrReview = unless('agent:working', 'agent:review');
 
 /** A Next line that is still a wait marker; Linear keeps it in its code span */
 const isWaiting = (line: string): boolean => /^`?\s*Waiting:/.test(line.trim());
 
 const parked: Rule = (i, id, live) => {
-  if (unless('agent:working', 'agent:review')(i, id, live)) return true;
+  if (notWorkingOrReview(i, id, live)) return true;
   const line = live.nextLine(id);
   return typeof line === 'string' && !isWaiting(line);
 };
 
 const NEXT: ReadonlyMap<string, Rule> = new Map([
-  ['resume', unless('agent:working')],
-  ['take over', unless('agent:working')],
+  ['resume', notWorking],
+  ['take over', notWorking],
   ['parked wait resolved', parked],
   ['answered', unless('agent:needs-input')],
-  ['review feedback', unless('agent:review')],
-  ['ready', unless('agent:ready')]
+  ['review feedback', notReview],
+  ['ready', notReady]
 ]);
 
 /** The view without the `next`, `parked`, held and open-PR entries a later live change contradicts */
@@ -64,15 +67,13 @@ export const reconcileView = (view: QueueView, live: Live): QueueView => {
     parked: view.parked.filter((p) => stays(p.ticket, parked)),
     held: {
       ...view.held,
-      tickets: view.held.tickets.filter((id) =>
-        stays(id, unless('agent:ready'))
-      )
+      tickets: view.held.tickets.filter((id) => stays(id, notReady))
     },
     table: {
       ...view.table,
       // Hand-off entries are about closed tickets, and their items are already live
       after: view.table.after.filter(
-        (x) => x.kind !== 'pr' || stays(x.ticket, unless('agent:review'))
+        (x) => x.kind !== 'pr' || stays(x.ticket, notReview)
       )
     }
   };

@@ -1,4 +1,4 @@
-import type { Issue, StatusType } from '../linear';
+import type { Issue } from '../linear';
 import type { ActivityPayload, RunsPayload } from '../supabase';
 
 import {
@@ -12,6 +12,7 @@ import {
   STATES,
   STATUS_RANK,
   STUCK_MIN,
+  isClosed,
   waitName
 } from './constants';
 import { dayKey, runTime } from './format';
@@ -115,9 +116,6 @@ export const agentState = (i: Pick<Issue, 'labels'>): string | null =>
 
 const isOtherRepo = (i: Pick<Issue, 'labels'>): boolean =>
   i.labels.some((l) => OTHER_REPOS.includes(l));
-
-const isClosed = (statusType: StatusType): boolean =>
-  statusType === 'completed' || statusType === 'canceled';
 
 /** Open tickets of this repo in the agent's order */
 export const openIssues = (data: DeskData): Issue[] => {

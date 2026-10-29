@@ -1,6 +1,9 @@
-import { OPEN_STATES } from '../linear';
+import { OPEN_STATES, type StatusType } from '../linear';
 
 export const STATES = OPEN_STATES;
+
+export const isClosed = (statusType: StatusType): boolean =>
+  statusType === 'completed' || statusType === 'canceled';
 
 /** The Agent labels a ticket can carry; the state is the part after `agent:` */
 export const AGENT: readonly string[] = [
