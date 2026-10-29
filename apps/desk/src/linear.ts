@@ -2,10 +2,15 @@ import { z } from 'zod';
 
 const ENDPOINT = 'https://api.linear.app/graphql';
 const TEAM = 'Codeware';
-const OPEN_STATES = ['triage', 'backlog', 'unstarted', 'started'] as const;
-const IDEA_LABEL = 'agent-idea';
-const IDEA_WINDOW_DAYS = 60;
-const CLOSED_WINDOW_DAYS = 30;
+export const OPEN_STATES = [
+  'triage',
+  'backlog',
+  'unstarted',
+  'started'
+] as const;
+export const IDEA_LABEL = 'agent-idea';
+export const IDEA_WINDOW_DAYS = 60;
+export const CLOSED_WINDOW_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type LinearErrorCode =
