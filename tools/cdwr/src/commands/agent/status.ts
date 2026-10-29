@@ -37,6 +37,7 @@ import {
   lockState,
   parseAttended,
   parseCheck,
+  parseLinear,
   parseNotifyLevel,
   parseQueueView,
   parseSuggest,
@@ -222,6 +223,13 @@ export default defineCommand({
             report.attended.text
           )
         : row('warn', 'attended', 'unknown; no verdict from the script'),
+      report.linear
+        ? row(
+            report.linear.kind === 'ok' ? true : 'warn',
+            'linear tools',
+            report.linear.text
+          )
+        : row('warn', 'linear tools', 'unknown; no verdict from the script'),
       ...(report.queueView === null
         ? [row('warn', 'queue view', 'unknown; no queue view from the script')]
         : report.queueView === 'malformed'
@@ -306,6 +314,8 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
           checked?.attended === undefined
             ? null
             : parseAttended(checked.attended),
+        linear:
+          checked?.linear === undefined ? null : parseLinear(checked.linear),
         suggest:
           checked?.suggest === undefined ? null : parseSuggest(checked.suggest),
         queueView:

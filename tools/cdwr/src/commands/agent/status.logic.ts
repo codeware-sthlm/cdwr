@@ -86,6 +86,13 @@ const reportShape = z.object({
       text: z.string()
     })
     .nullable(),
+  linear: z
+    .object({
+      kind: z.enum(['ok', 'missing', 'unknown']),
+      text: z.string()
+    })
+    .nullable()
+    .optional(),
   suggest: z
     .object({
       kind: z.enum(['due', 'done', 'early', 'skipped', 'off', 'unknown']),
