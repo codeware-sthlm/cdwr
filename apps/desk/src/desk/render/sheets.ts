@@ -44,7 +44,7 @@ import type { Job, QueueNext } from '../types';
 
 import { headline } from './band';
 import { chartSlot } from './charts';
-import { blockedText, whyLine } from './columns';
+import { blockedText, prWaitText, whyLine } from './columns';
 import {
   empty,
   hostName,
@@ -214,11 +214,17 @@ const renderHandoffs = (m: Model, state: DeskState): string => {
     ? `<div class="group"><h3>Open PRs · ${m.prs.length}</h3><ul>${m.prs
         .map((x, n) => {
           const held = blockedText(m, x.ticket);
+          const note = [
+            held ? 'Merge order: ' + held : '',
+            prWaitText(m, x.ticket)
+          ]
+            .filter(Boolean)
+            .join('. ');
           return itemHTML(details, m.get(x.ticket), {
             state: held ? 'blocked' : 'review',
             rank: m.prs.length > 1 ? n + 1 : '',
             showNext: true,
-            note: held ? 'Merge order: ' + held : undefined,
+            note: note || undefined,
             side: `${prn(prOf(details, x.ticket, x.pr))}${held ? ' <span class="chip blocked">merge later</span>' : ''}`
           });
         })

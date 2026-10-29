@@ -10,7 +10,7 @@ import { model } from '../model';
 import { type DeskState, SHEET_IDS, createState, isSheetId } from '../state';
 import type { QueueView, SessionState } from '../types';
 
-import { renderBand } from './band';
+import { headline, renderBand } from './band';
 import { chartHeight, chartKind, shippedChart, spendChart } from './charts';
 import { renderColumns } from './columns';
 import { SHEETS } from './sheets';
@@ -259,6 +259,51 @@ describe('columns and tiles', () => {
     expect(cols.before).not.toContain('COD-<1>');
     expect(cols.next).toContain('parked');
     expect(cols.after).toContain('Open PRs · 1');
+  });
+
+  it('show a parked review only as its open PR', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        parked: [
+          { ticket: 'COD-3', wait: 'ci', pr: 7, since: '2026-10-29T11:50:00' }
+        ]
+      })
+    );
+    const m = model(state, NOW);
+    const cols = renderColumns(m, state);
+    expect(cols.next).not.toContain('COD-3');
+    expect(cols.after).toContain('COD-3');
+    expect(cols.after).toContain('Review fixes: waits on CI since');
+    expect(headline(m, NOW).note).toContain('COD-3');
+  });
+
+  it('drop a parked ticket a live change moved on from', () => {
+    const state = filled();
+    state.data.buckets.set('started', [
+      issue('COD-2', {
+        statusType: 'started',
+        labels: ['agent:review'],
+        updatedAt: '2026-10-29T11:57:00'
+      })
+    ]);
+    state.data.buckets.set(
+      'unstarted',
+      (state.data.buckets.get('unstarted') ?? []).filter(
+        (i) => i.id !== 'COD-2'
+      )
+    );
+    state.details.set('COD-2', {
+      steps: 4,
+      done: 4,
+      next: "waiting for Håkan's review of PR 5",
+      idea: null,
+      blockedBy: [],
+      pr: 5
+    });
+    const cols = renderColumns(model(state, NOW), state);
+    expect(cols.next).not.toContain('COD-2');
+    expect(cols.next).not.toContain('parked');
   });
 
   it('give every tile a sheet', () => {

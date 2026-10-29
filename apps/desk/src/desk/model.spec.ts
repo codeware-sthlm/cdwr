@@ -389,6 +389,12 @@ describe('model', () => {
       ]);
     });
 
+    it('keeps a parked review out of parked, as its open PR’s wait', () => {
+      expect(m.parked.map((p) => p.ticket)).toEqual(['COD-12', 'COD-14']);
+      expect([...m.prWaits.keys()]).toEqual(['COD-10']);
+      expect(m.prWaits.get('COD-10')?.wait).toBe('copilot');
+    });
+
     it('passes the queue view through', () => {
       expect(m.next.map((x) => x.ticket)).toEqual(['COD-20', 'COD-21']);
       expect(m.limit).toEqual({ used: 2, max: 5 });
@@ -428,6 +434,73 @@ describe('model', () => {
         });
       });
       expect(model(fresh, NOW).stuck).toBeNull();
+    });
+  });
+
+  describe('against live Linear', () => {
+    // The view was taken at 11:55; COD-1 changed at 11:57, COD-2 at 11:50
+    const live = (next: string | null) =>
+      withState((s) => {
+        s.data.buckets.set('started', [
+          issue('COD-1', {
+            statusType: 'started',
+            labels: ['agent:review'],
+            updatedAt: '2026-10-29T11:57:00'
+          }),
+          issue('COD-2', {
+            statusType: 'started',
+            labels: ['agent:working'],
+            updatedAt: '2026-10-29T11:50:00'
+          })
+        ]);
+        s.data.runs = runsPayload({
+          qv: view({
+            next: [{ ticket: 'COD-1', reason: 'parked wait resolved' }],
+            parked: [
+              { ticket: 'COD-1', wait: 'ci', pr: 713, resolved: true },
+              { ticket: 'COD-2', wait: 'copilot', pr: 714 }
+            ]
+          })
+        });
+        s.details.set('COD-1', detail({ next }));
+        s.details.set('COD-2', detail({ next: 'step 2' }));
+      });
+
+    it('drops a parked entry whose live Next line moved on', () => {
+      const m = model(live("waiting for Håkan's review of PR 713"), NOW);
+      expect(m.next).toEqual([]);
+      expect(m.parked.map((p) => p.ticket)).toEqual(['COD-2']);
+      expect(m.slots.map((x) => x.ticket)).toEqual(['COD-2']);
+    });
+
+    it('keeps it while the live Next line still waits', () => {
+      const m = model(live('`Waiting: CI · PR 713 @ 1a2b3c4 · since x`'), NOW);
+      expect(m.next.map((x) => x.ticket)).toEqual(['COD-1']);
+      expect(m.parked.map((p) => p.ticket)).toEqual(['COD-1', 'COD-2']);
+    });
+
+    it('drops an open PR whose ticket merged since the view', () => {
+      const merged = withState((s) => {
+        s.data.closed = [
+          issue('COD-3', {
+            statusType: 'completed',
+            labels: ['agent:review'],
+            updatedAt: '2026-10-29T11:58:00'
+          })
+        ];
+        s.data.runs = runsPayload({
+          qv: view({
+            table: {
+              before: [],
+              label: [],
+              after: [{ ticket: 'COD-3', kind: 'pr', pr: 9 }]
+            }
+          })
+        });
+      });
+      const m = model(merged, NOW);
+      expect(m.prs).toEqual([]);
+      expect(m.slots).toEqual([]);
     });
   });
 

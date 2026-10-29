@@ -38,6 +38,13 @@ export const blockedText = (m: Pick<Model, 'prBlockers'>, id: string): string =>
     )
     .join('; ');
 
+/** "Review fixes: waits on CI since 17:20" for an open PR whose ticket is parked; empty otherwise */
+export const prWaitText = (m: Pick<Model, 'prWaits'>, id: string): string => {
+  const p = m.prWaits.get(id);
+  if (!p) return '';
+  return `Review fixes: ${parkedText(p)}${p.since && !p.resolved ? ' since ' + hhmm(Date.parse(p.since)) : ''}`;
+};
+
 /** Who takes a queued item and when: the live session, or the scheduler on its next run */
 export const whyLine = (m: Model, x: QueueNext): string => {
   const s: SessionState = m.session ?? { state: 'none' };
@@ -142,7 +149,8 @@ export const renderColumns = (m: Model, state: DeskState): Columns => {
 
   const open = m.prs.map((x) => {
     const held = blockedText(m, x.ticket);
-    return `<li>${titled(m, x.ticket)}${side(prFor(x.ticket, x.pr), held ? '<span class="chip blocked">merge later</span>' : '<span class="chip pr">review</span>')}${held ? `<span class="s">${held}</span>` : ''}</li>`;
+    const note = [held, prWaitText(m, x.ticket)].filter(Boolean).join('; ');
+    return `<li>${titled(m, x.ticket)}${side(prFor(x.ticket, x.pr), held ? '<span class="chip blocked">merge later</span>' : '<span class="chip pr">review</span>')}${note ? `<span class="s">${note}</span>` : ''}</li>`;
   });
   const merged = m.handoffs.map(
     (x) =>

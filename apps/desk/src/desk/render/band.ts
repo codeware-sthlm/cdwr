@@ -66,7 +66,7 @@ export const headline = (m: Model, now: Date): Headline => {
       ? `Nothing for the agent. ${plural(yours, 'thing waits', 'things wait')} on you${head ? ', starting with ' + head : ''}.`
       : 'Nothing for the agent, and nothing waits on you.';
   }
-  const parked = m.parked
+  const parked = [...m.parked, ...m.prWaits.values()]
     .map(
       (p) =>
         `${idLink(p.ticket)} ${parkedText(p)}${p.pr ? ' on ' + pr(p.pr) : ''}`
