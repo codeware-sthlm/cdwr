@@ -2,6 +2,7 @@ import type { DataFailure } from '../data';
 import type { Issue, OpenStatusType } from '../linear';
 import type { ActivityPayload, RunsPayload, UsagePayload } from '../supabase';
 
+import { STATES } from './constants';
 import type { Idea, PlanProgress } from './types';
 
 /** What the page keeps of a ticket's description and relations */
@@ -15,6 +16,28 @@ export type Filter = 'all' | 'todo' | 'agent';
 
 export const isFilter = (value: unknown): value is Filter =>
   value === 'all' || value === 'todo' || value === 'agent';
+
+/** The sheets, one per column, gauge and tile; also what `data-w` and the URL hash name */
+export const SHEET_IDS = [
+  'before',
+  'next',
+  'after',
+  'session',
+  'limit',
+  'scheduler',
+  'timers',
+  'activity',
+  'shipped',
+  'spend',
+  'ticketcost',
+  'all',
+  'ideas'
+] as const;
+
+export type SheetId = (typeof SHEET_IDS)[number];
+
+export const isSheetId = (value: unknown): value is SheetId =>
+  SHEET_IDS.some((id) => id === value);
 
 /** What the sources have delivered; null until they have */
 export type DeskData = {
@@ -37,7 +60,7 @@ export type DeskUi = {
   filter: Filter;
   /** The Activity sheet's ticket filter, `all` or a ticket id */
   actFilter: string;
-  openSheet: string | null;
+  openSheet: SheetId | null;
 };
 
 export type DeskState = {
@@ -52,6 +75,10 @@ export type DeskState = {
   errors: Map<string, DataFailure>;
   ui: DeskUi;
 };
+
+/** Whether any of the ticket lists has arrived */
+export const bucketsLoaded = (data: DeskData): boolean =>
+  STATES.some((s) => data.buckets.has(s));
 
 export const createState = (): DeskState => ({
   data: {
