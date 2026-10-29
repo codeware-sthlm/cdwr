@@ -286,6 +286,24 @@ uses its environment as given. Secrets are read once per start, so a rotated one
 `docker compose restart`. Claude runs on `CLAUDE_CODE_OAUTH_TOKEN`, a long-lived token from
 `claude setup-token` on the Mac, which keeps billing on the subscription.
 
+In the container the loop wakes on events rather than on the clock. `cdwr agent listen`, started and
+restarted by the entrypoint (back-off from 5 s to 5 min), subscribes to `issue_events` and
+`github_events` over Supabase Realtime with the publishable key `AGENT_SUPABASE_ANON_KEY` (with
+`AGENT_SUPABASE_URL`, both in `/agent-queue`) and sends the loop `SIGUSR1`: 15 s after the first
+event, at most once a minute, and once on every (re)subscribe. It only wakes the loop; `run.sh`
+still decides, so pause, the lock, the live-session check and the spend caps apply as before. A
+wake during a run starts the next run right after it, never beside it. The loop sleeps in steps of
+`RUN_INTERVAL_SECONDS` (600): while `listener.json` in the queue home says live with a beat under 2
+minutes it keeps sleeping, up to `RUN_FALLBACK_SECONDS` (3600), and checks in with the Sentry monitor
+at each step so its 10-minute schedule holds; a step that finds the listener down runs at once, so
+without it, or without the two env vars, it polls every 10 minutes as before. A woken run reads
+Linear's history for the activity rows at most every 10 minutes; a read it skips is owed, and the
+next step runs for it. The agent's own Linear writes wake the loop too, and so does every check or
+status change on a PR (`github_events` is upserted per PR): during a CI run that is a run a minute,
+cheap since it starts no session, and it ends idle when nothing changed. The listener runs from the checkout, not the image, so a merged
+change to it takes effect when it restarts (a `cdwr agent deploy`), not at the next run. `status` and
+the desk show `live (events), fallback every 60 min` or that it is polling, and why.
+
 Before it plans, the scheduler watches the PRs of `agent:review` tickets (open, or done within 14
 days) without starting Claude. It sends one notice per change: a PR that left the merge queue
 or has failing checks (`action`), a merge with the hand-offs still unticked in the agent's
