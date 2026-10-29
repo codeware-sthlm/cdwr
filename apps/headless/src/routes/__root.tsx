@@ -35,6 +35,11 @@ export const Route = createRootRoute({
     const site = loaderData?.ok ? loaderData.site : null;
     const locale = ogLocale(site?.locale);
     const icon = site?.iconConfig ?? null;
+    // Uploads are served by the cms, not by this app
+    const uploadUrl =
+      site && icon?.source === 'upload'
+        ? new URL(icon.fileUrl, site.payloadUrl).toString()
+        : null;
 
     return {
       meta: [
@@ -56,10 +61,10 @@ export const Route = createRootRoute({
         // with no PNGs drawn from it here; an upload is used as is
         ...(icon?.source === 'svg'
           ? [{ rel: 'icon', href: '/site-icon.svg', type: 'image/svg+xml' }]
-          : icon?.source === 'upload'
+          : uploadUrl
             ? [
-                { rel: 'icon', href: icon.fileUrl },
-                { rel: 'apple-touch-icon', href: icon.fileUrl }
+                { rel: 'icon', href: uploadUrl },
+                { rel: 'apple-touch-icon', href: uploadUrl }
               ]
             : [])
       ]
