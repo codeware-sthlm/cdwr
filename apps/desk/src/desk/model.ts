@@ -16,6 +16,7 @@ import {
 } from './constants';
 import { dayKey, runTime } from './format';
 import { byCreated } from './parsers';
+import { reconcileView } from './reconcile';
 import type { DeskData, DeskState, Detail } from './state';
 import type {
   PrRef,
@@ -64,6 +65,8 @@ export type Model = {
   /** Open PRs in merge order */
   prs: QueueAfter[];
   prBlockers: Map<string, Blocker[]>;
+  /** Open PRs whose ticket is parked on a wait (review fixes on CI); kept out of `parked` and `next` */
+  prWaits: Map<string, QueueParked>;
   handoffs: QueueAfter[];
   handoffItems: number;
   next: QueueNext[];
@@ -237,7 +240,13 @@ export const model = (state: DeskState, now: Date): Model => {
   const { runs, ideas, activity } = data;
   const nowMs = now.getTime();
   const idx = issueIndex(data);
-  const v = runs?.qv ?? null;
+  // The scheduler's snapshot, without what a live Linear change has overtaken since
+  const v = runs?.qv
+    ? reconcileView(runs.qv, {
+        issue: (id) => idx.get(id),
+        nextLine: (id) => details.get(id)?.next
+      })
+    : null;
   const get = (id: string): TicketRef => idx.get(id) ?? stub(id);
 
   const before = v ? v.table.before : [];
@@ -275,7 +284,13 @@ export const model = (state: DeskState, now: Date): Model => {
     })
     .filter((x) => x.items?.length);
 
-  const parked = v ? v.parked : [];
+  // A parked review (its fixes on CI) shows as its open PR, with the wait as the row's note
+  const prWaits = new Map(
+    (v ? v.parked : [])
+      .filter((p) => prByTicket.has(p.ticket))
+      .map((p) => [p.ticket, p])
+  );
+  const parked = (v ? v.parked : []).filter((p) => !prWaits.has(p.ticket));
   const slots = new Map<string, Slot>();
   for (const x of prs)
     slots.set(x.ticket, {
@@ -291,7 +306,9 @@ export const model = (state: DeskState, now: Date): Model => {
         why: `PR waits on ${waitName(p.wait) || String(p.wait)}`
       });
 
-  const next = v ? v.next : [];
+  const next = (v ? v.next : []).filter(
+    (x) => !(x.reason === 'parked wait resolved' && prWaits.has(x.ticket))
+  );
   const session = v ? v.session : null;
   // Polling since its last heartbeat while the queue view, taken later, has work for it: wait.sh never woke it
   const polled =
@@ -342,6 +359,7 @@ export const model = (state: DeskState, now: Date): Model => {
     after,
     prs,
     prBlockers,
+    prWaits,
     handoffs,
     handoffItems: handoffs.reduce((n, x) => n + (x.items?.length || 0), 0),
     next,
