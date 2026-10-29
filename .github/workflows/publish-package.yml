@@ -26,6 +26,7 @@ on:
       - "!cms-*"
       - "!web-*"
       - "!umami-*"
+      - "!headless-*"
 
   # The trigger for `nx release-cli`, which creates tag and release together
   release:
@@ -59,7 +60,8 @@ jobs:
       !(startsWith(github.event.release.tag_name, 'builder-') ||
       startsWith(github.event.release.tag_name, 'cms-') ||
       startsWith(github.event.release.tag_name, 'web-') ||
-      startsWith(github.event.release.tag_name, 'umami-'))
+      startsWith(github.event.release.tag_name, 'umami-') ||
+      startsWith(github.event.release.tag_name, 'headless-'))
 
     permissions:
       contents: read
@@ -205,7 +207,7 @@ jobs:
             PROJECTS=$(echo "${{ steps.group.outputs.projects }}" | tr ',' ' ')
           else
             # Only projects with an nx-release-publish target - the "apps" release
-            # group (cms, web) is versioned for deployment and never published.
+            # group (cms, headless) is versioned for deployment and never published.
             PROJECTS=$(pnpm nx show projects --with-target nx-release-publish)
           fi
 
