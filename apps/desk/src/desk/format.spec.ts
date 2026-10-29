@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ageText,
+  bytes,
   dayKey,
   esc,
   inline,
@@ -121,5 +122,14 @@ describe('numbers', () => {
     [3_456_000_000, '3.46B']
   ])('mtok(%s) -> %s', (n, text) => {
     expect(mtok(n)).toBe(text);
+  });
+
+  it.each([
+    [0, '0 MiB'],
+    [512 * 2 ** 20, '512 MiB'],
+    [2 ** 30, '1.0 GiB'],
+    [7.5 * 2 ** 30, '7.5 GiB']
+  ])('bytes(%s) -> %s', (n, text) => {
+    expect(bytes(n)).toBe(text);
   });
 });

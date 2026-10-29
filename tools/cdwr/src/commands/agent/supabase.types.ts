@@ -193,6 +193,60 @@ export type Database = {
         };
         Relationships: [];
       };
+      host_metrics: {
+        Row: {
+          id: number;
+          host: string;
+          at: string;
+          cores: number;
+          load1: number;
+          load5: number;
+          load15: number;
+          mem_total: number;
+          mem_available: number;
+          swap_total: number;
+          swap_free: number;
+          disk_total: number;
+          disk_free: number;
+          cgroup_mem_current: number | null;
+          cgroup_mem_max: number | null;
+        };
+        Insert: {
+          id?: never;
+          host: string;
+          at?: string;
+          cores: number;
+          load1: number;
+          load5: number;
+          load15: number;
+          mem_total: number;
+          mem_available: number;
+          swap_total: number;
+          swap_free: number;
+          disk_total: number;
+          disk_free: number;
+          cgroup_mem_current?: number | null;
+          cgroup_mem_max?: number | null;
+        };
+        Update: {
+          id?: never;
+          host?: string;
+          at?: string;
+          cores?: number;
+          load1?: number;
+          load5?: number;
+          load15?: number;
+          mem_total?: number;
+          mem_available?: number;
+          swap_total?: number;
+          swap_free?: number;
+          disk_total?: number;
+          disk_free?: number;
+          cgroup_mem_current?: number | null;
+          cgroup_mem_max?: number | null;
+        };
+        Relationships: [];
+      };
       sessions: {
         Row: {
           id: string;

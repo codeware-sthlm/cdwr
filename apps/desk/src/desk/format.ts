@@ -1,5 +1,7 @@
 // Pure formatting helpers. Whatever depends on the clock takes `now`.
 
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
 export type Text = string | number | null | undefined;
 
 const ESCAPES: ReadonlyMap<string, string> = new Map([
@@ -104,3 +106,9 @@ export const mtok = (n: number): string =>
       : n >= 1e3
         ? Math.round(n / 1e3) + 'k'
         : String(n);
+
+/** Bytes as GiB, or MiB below one GiB */
+export const bytes = (n: number): string =>
+  n >= 2 ** 30
+    ? (n / 2 ** 30).toFixed(1) + ' GiB'
+    : Math.round(n / 2 ** 20) + ' MiB';

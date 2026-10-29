@@ -27,6 +27,13 @@ export const INSTALL_MINUTES = 10; // what cdwr agent install writes (RUN_INTERV
 export const LIMIT = 5; // the default limit of open agent PRs, used until the queue view says
 export const SHIP_DAYS = 30; // agent tickets closed per day over this many days, the one trend on the page
 
+export const HOST_WINDOW_MIN = 30; // the host's averages, and the span its swap must grow over
+export const HOST_STALE_MIN = 30; // a host silent this long has no data worth judging (the sampler writes every 10 min)
+export const HOST_LOAD_PER_CORE_MAX = 1; // average load per core above this is bad
+export const HOST_MEM_USED_MAX = 0.9; // memory used (total minus available) above this share is bad
+export const HOST_DISK_FREE_MIN = 0.1; // disk free below this share is bad
+export const HOST_SWAP_GROWTH_BYTES = 1024 * 1024; // swap in use must grow by more than this over the window to count as growing
+
 /** Status first (In Progress, Todo, Backlog, Triage), then priority, then oldest */
 export const STATUS_RANK: ReadonlyMap<string, number> = new Map([
   ['started', 0],

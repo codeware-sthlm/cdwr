@@ -84,19 +84,24 @@ const setup = () => {
       activity: null
     })
   );
+  const supabaseReadHost = vi.fn(() => Promise.resolve([]));
   let changed: () => void = () => undefined;
   let status: (healthy: boolean) => void = () => undefined;
   const unsubscribe = vi.fn();
   let issueEvent: (row: IssueEventRow) => void = () => undefined;
+  let hostEvent: () => void = () => undefined;
   const supabase = {
     read: supabaseRead,
+    readHostMetrics: supabaseReadHost,
     subscribe: vi.fn(
       (
         onChange: () => void,
         onStatus?: (healthy: boolean) => void,
-        onIssue?: (row: IssueEventRow) => void
+        onIssue?: (row: IssueEventRow) => void,
+        onHostMetrics?: () => void
       ) => {
         changed = onChange;
+        if (onHostMetrics) hostEvent = onHostMetrics;
         if (onStatus) status = onStatus;
         if (onIssue) issueEvent = onIssue;
         return unsubscribe;
@@ -132,6 +137,7 @@ const setup = () => {
       }),
     stopFocus,
     fireChange: () => changed(),
+    fireHostMetrics: () => hostEvent(),
     fireStatus: (healthy: boolean) => status(healthy),
     fireFocus: () => focus()
   };
@@ -325,6 +331,39 @@ describe('createAdapter', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(supabase.read).toHaveBeenCalledTimes(2);
     expect(linear.listOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the other Supabase tools when host_metrics fails', async () => {
+    const { adapter, supabase } = setup();
+    supabase.readHostMetrics.mockRejectedValueOnce(
+      new SupabaseError('bad_response', 'relation does not exist')
+    );
+    const seen: Record<string, WatchEvent> = {};
+    adapter.watchTool('Supabase', 'runs', {}, (e) => {
+      seen['runs'] = e;
+    });
+    adapter.watchTool('Supabase', 'hostMetrics', {}, (e) => {
+      seen['hostMetrics'] = e;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(seen['runs']?.type).toBe('data');
+    expect(seen['hostMetrics']).toMatchObject({
+      type: 'error',
+      error: { code: 'bad_response' }
+    });
+  });
+
+  it('rereads only host_metrics on a new sample', async () => {
+    const { adapter, supabase, fireHostMetrics } = setup();
+    adapter.watchTool('Supabase', 'runs', {}, () => undefined);
+    adapter.watchTool('Supabase', 'hostMetrics', {}, () => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    fireHostMetrics();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(supabase.readHostMetrics).toHaveBeenCalledTimes(2);
+    expect(supabase.read).toHaveBeenCalledTimes(1);
   });
 
   it('runs one follow-up read for changes during a read', async () => {

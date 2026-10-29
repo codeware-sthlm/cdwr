@@ -1,8 +1,14 @@
 import type { Issue } from '../linear';
-import type { ActivityPayload, RunsPayload } from '../supabase';
+import type { ActivityPayload, HostMetricRow, RunsPayload } from '../supabase';
 
 import {
   AGENT,
+  HOST_DISK_FREE_MIN,
+  HOST_LOAD_PER_CORE_MAX,
+  HOST_MEM_USED_MAX,
+  HOST_STALE_MIN,
+  HOST_SWAP_GROWTH_BYTES,
+  HOST_WINDOW_MIN,
   INSTALL_MINUTES,
   LIMIT,
   LINEAR_ISSUE,
@@ -98,6 +104,8 @@ export type Model = {
   activityAge: number | null;
   /** Activity events in the last 24 hours */
   activityDay: number;
+  /** The queue host's load; null without a sample */
+  host: HostHealth | null;
 };
 
 const rankOf = (i: Pick<Issue, 'priority'>): number => i.priority.value || 5;
@@ -207,6 +215,110 @@ const nextRunOf = (
   let t = runTime(last.when) + step;
   if (t < at) t += Math.ceil((at - t) / step) * step;
   return t;
+};
+
+/** What one sample says, as shares of what the host has; load is per core and can pass 1 */
+export type HostFigures = {
+  load: number;
+  mem: number;
+  swap: number;
+  disk: number;
+  /** The container's memory against its limit; null without a limit */
+  container: number | null;
+};
+
+export type HostProblem = 'load' | 'memory' | 'swap' | 'disk';
+
+export type HostHealth = {
+  host: string;
+  /** `stale`: the newest sample is older than HOST_STALE_MIN, so the figures are history */
+  verdict: 'ok' | 'bad' | 'stale';
+  problems: HostProblem[];
+  latest: HostMetricRow;
+  /** Minutes since the newest sample */
+  ageMin: number;
+  figures: HostFigures;
+  /** Averages over the HOST_WINDOW_MIN before the newest sample */
+  average: HostFigures;
+  swapGrowing: boolean;
+  /** The host's samples, oldest first */
+  series: HostMetricRow[];
+};
+
+const share = (part: number, whole: number): number =>
+  whole > 0 ? part / whole : 0;
+
+const mean = (xs: readonly number[]): number =>
+  xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+
+const swapUsed = (r: HostMetricRow): number => r.swap_total - r.swap_free;
+
+/** Load is the 5-minute average, which a sample every 10 minutes does not alias the way the 1-minute one would */
+export const hostFigures = (r: HostMetricRow): HostFigures => ({
+  load: share(r.load5, r.cores),
+  mem: share(r.mem_total - r.mem_available, r.mem_total),
+  swap: share(swapUsed(r), r.swap_total),
+  disk: share(r.disk_total - r.disk_free, r.disk_total),
+  container:
+    r.cgroup_mem_current !== null && r.cgroup_mem_max !== null
+      ? share(r.cgroup_mem_current, r.cgroup_mem_max)
+      : null
+});
+
+const averageFigures = (all: readonly HostFigures[]): HostFigures => {
+  const containers = all.flatMap((f) =>
+    f.container === null ? [] : [f.container]
+  );
+  return {
+    load: mean(all.map((f) => f.load)),
+    mem: mean(all.map((f) => f.mem)),
+    swap: mean(all.map((f) => f.swap)),
+    disk: mean(all.map((f) => f.disk)),
+    container: containers.length ? mean(containers) : null
+  };
+};
+
+/** The host with the newest sample: its latest figures, 30-minute averages and verdict; null without samples */
+export const hostHealth = (
+  rows: readonly HostMetricRow[] | null,
+  now: Date
+): HostHealth | null => {
+  const all = rows ?? [];
+  const at = (r: HostMetricRow): number => Date.parse(r.at);
+  const newestRow = all.reduce<HostMetricRow | null>(
+    (a, b) => (a && at(a) >= at(b) ? a : b),
+    null
+  );
+  if (!newestRow) return null;
+  const series = all
+    .filter((r) => r.host === newestRow.host)
+    .sort((a, b) => at(a) - at(b));
+  const latest = series[series.length - 1];
+  const recent = series.filter(
+    (r) => at(r) >= at(latest) - HOST_WINDOW_MIN * 6e4
+  );
+  const figures = hostFigures(latest);
+  const average = averageFigures(recent.map(hostFigures));
+  const swapGrowing =
+    swapUsed(latest) > 0 &&
+    swapUsed(latest) - swapUsed(recent[0]) > HOST_SWAP_GROWTH_BYTES;
+  const problems: HostProblem[] = [];
+  if (average.load > HOST_LOAD_PER_CORE_MAX) problems.push('load');
+  if (figures.mem > HOST_MEM_USED_MAX) problems.push('memory');
+  if (swapGrowing) problems.push('swap');
+  if (1 - figures.disk < HOST_DISK_FREE_MIN) problems.push('disk');
+  const ageMin = (now.getTime() - at(latest)) / 6e4;
+  return {
+    host: latest.host,
+    verdict: ageMin > HOST_STALE_MIN ? 'stale' : problems.length ? 'bad' : 'ok',
+    problems,
+    latest,
+    ageMin,
+    figures,
+    average,
+    swapGrowing,
+    series
+  };
 };
 
 export type ShippedDay = { key: string; items: Issue[] };
@@ -393,6 +505,7 @@ export const model = (state: DeskState, now: Date): Model => {
       : null,
     activityDay: (activity?.rows ?? []).filter(
       (r) => nowMs - runTime(r.when) <= 864e5
-    ).length
+    ).length,
+    host: hostHealth(data.hostMetrics, now)
   };
 };

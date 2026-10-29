@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Issue, StatusType } from '../linear';
-import type { RunsPayload } from '../supabase';
+import type { HostMetricRow, RunsPayload } from '../supabase';
 
 import {
   agentState,
   byQueue,
+  hostHealth,
   ideaVerdict,
   isProblem,
   mergeOrder,
@@ -821,5 +822,159 @@ describe('shipped', () => {
     );
     expect(s.total).toBe(1);
     expect(s.days[28].items.map((i) => i.id)).toEqual(['COD-5']);
+  });
+});
+
+describe('hostHealth', () => {
+  const GIB = 2 ** 30;
+  // A calm sample `ago` minutes before NOW
+  const sample = (
+    ago: number,
+    over: Partial<HostMetricRow> = {}
+  ): HostMetricRow => ({
+    id: 1,
+    host: 'nuc',
+    at: new Date(NOW.getTime() - ago * 6e4).toISOString(),
+    cores: 4,
+    load1: 1,
+    load5: 1,
+    load15: 1,
+    mem_total: 8 * GIB,
+    mem_available: 6 * GIB,
+    swap_total: 2 * GIB,
+    swap_free: 2 * GIB,
+    disk_total: 100 * GIB,
+    disk_free: 60 * GIB,
+    cgroup_mem_current: null,
+    cgroup_mem_max: null,
+    ...over
+  });
+
+  it('is null without samples', () => {
+    expect(hostHealth(null, NOW)).toBeNull();
+    expect(hostHealth([], NOW)).toBeNull();
+  });
+
+  it('is ok for a calm host and reads the latest figures', () => {
+    const h = hostHealth([sample(20), sample(10), sample(0)], NOW);
+    expect(h?.verdict).toBe('ok');
+    expect(h?.problems).toEqual([]);
+    expect(h?.figures.load).toBeCloseTo(0.25);
+    expect(h?.figures.mem).toBeCloseTo(0.25);
+    expect(h?.figures.disk).toBeCloseTo(0.4);
+    expect(h?.figures.container).toBeNull();
+  });
+
+  it('is bad when the 30-minute average load per core passes 1', () => {
+    const busy = { load5: 6 };
+    expect(
+      hostHealth([sample(20, busy), sample(10, busy), sample(0, busy)], NOW)
+    ).toMatchObject({ verdict: 'bad', problems: ['load'] });
+    // One spike among calm samples averages below the limit
+    expect(
+      hostHealth([sample(20), sample(10), sample(0, { load5: 8 })], NOW)
+        ?.verdict
+    ).toBe('ok');
+  });
+
+  it('leaves samples older than the window out of the average', () => {
+    const h = hostHealth(
+      [sample(120, { load5: 40 }), sample(10), sample(0)],
+      NOW
+    );
+    expect(h?.verdict).toBe('ok');
+    expect(h?.average.load).toBeCloseTo(0.25);
+  });
+
+  it('is bad when memory used passes 90 %, not at 90 %', () => {
+    expect(
+      hostHealth([sample(0, { mem_available: 0.7 * GIB })], NOW)?.problems
+    ).toEqual(['memory']);
+    expect(
+      hostHealth([sample(0, { mem_available: 0.8 * GIB })], NOW)?.verdict
+    ).toBe('ok');
+  });
+
+  it('is bad when swap is in use and growing, not when it is steady or unused', () => {
+    const used = (gib: number): Partial<HostMetricRow> => ({
+      swap_free: (2 - gib) * GIB
+    });
+    const growing = hostHealth(
+      [sample(20, used(0.2)), sample(0, used(0.5))],
+      NOW
+    );
+    expect(growing?.swapGrowing).toBe(true);
+    expect(growing?.problems).toEqual(['swap']);
+    const steady = hostHealth(
+      [sample(20, used(0.5)), sample(0, used(0.5))],
+      NOW
+    );
+    expect(steady?.swapGrowing).toBe(false);
+    expect(steady?.verdict).toBe('ok');
+    const shrinking = hostHealth(
+      [sample(20, used(0.5)), sample(0, used(0.2))],
+      NOW
+    );
+    expect(shrinking?.swapGrowing).toBe(false);
+    expect(hostHealth([sample(20), sample(0)], NOW)?.swapGrowing).toBe(false);
+  });
+
+  it('is bad when disk free drops below 10 %', () => {
+    expect(
+      hostHealth([sample(0, { disk_free: 9 * GIB })], NOW)?.problems
+    ).toEqual(['disk']);
+    expect(hostHealth([sample(0, { disk_free: 11 * GIB })], NOW)?.verdict).toBe(
+      'ok'
+    );
+  });
+
+  it('lists every problem', () => {
+    const h = hostHealth(
+      [sample(0, { load5: 9, mem_available: 0, disk_free: 0 })],
+      NOW
+    );
+    expect(h?.problems).toEqual(['load', 'memory', 'disk']);
+  });
+
+  it('is stale when the newest sample is older than 30 minutes, whatever it says', () => {
+    const h = hostHealth([sample(45, { load5: 9 })], NOW);
+    expect(h?.verdict).toBe('stale');
+    expect(h?.ageMin).toBeCloseTo(45);
+    expect(hostHealth([sample(29)], NOW)?.verdict).toBe('ok');
+  });
+
+  it('follows the host whose samples are newest', () => {
+    const h = hostHealth(
+      [
+        sample(5, { host: 'old', load5: 9 }),
+        sample(60, { host: 'old' }),
+        sample(1)
+      ],
+      NOW
+    );
+    expect(h?.host).toBe('nuc');
+    expect(h?.series).toHaveLength(1);
+    expect(
+      hostHealth([sample(1, { host: 'a' }), sample(2, { host: 'b' })], NOW)
+        ?.host
+    ).toBe('a');
+  });
+
+  it('measures the container against its limit when it has one', () => {
+    const h = hostHealth(
+      [sample(0, { cgroup_mem_current: 3 * GIB, cgroup_mem_max: 4 * GIB })],
+      NOW
+    );
+    expect(h?.figures.container).toBeCloseTo(0.75);
+    expect(h?.average.container).toBeCloseTo(0.75);
+  });
+
+  it('does not divide by a missing swap or core count', () => {
+    const h = hostHealth(
+      [sample(0, { swap_total: 0, swap_free: 0, cores: 0 })],
+      NOW
+    );
+    expect(h?.figures.swap).toBe(0);
+    expect(h?.figures.load).toBe(0);
   });
 });

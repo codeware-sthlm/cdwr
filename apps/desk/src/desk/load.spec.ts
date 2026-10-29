@@ -60,6 +60,7 @@ const setup = (getIssue: (id: string) => Promise<IssueDetail>) => {
         activity: null
       })
     ),
+    readHostMetrics: vi.fn(() => Promise.resolve([])),
     subscribe: vi.fn(() => () => undefined)
   };
   const adapter = createAdapter({

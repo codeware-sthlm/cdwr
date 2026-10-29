@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Issue } from '../../linear';
 import type {
   ActivityPayload,
+  HostMetricRow,
   RunsPayload,
   UsagePayload
 } from '../../supabase';
@@ -11,7 +12,14 @@ import { type DeskState, SHEET_IDS, createState, isSheetId } from '../state';
 import type { QueueView, SessionState } from '../types';
 
 import { headline, renderBand } from './band';
-import { chartHeight, chartKind, shippedChart, spendChart } from './charts';
+import {
+  chartHeight,
+  chartKind,
+  gauge,
+  shippedChart,
+  sparkline,
+  spendChart
+} from './charts';
 import { renderColumns } from './columns';
 import { SHEETS } from './sheets';
 import { renderTiles } from './tiles';
@@ -128,6 +136,28 @@ const activity: ActivityPayload = {
   ]
 };
 
+const hostSample = (
+  ago: number,
+  over: Partial<HostMetricRow> = {}
+): HostMetricRow => ({
+  id: 1,
+  host: 'nuc',
+  at: new Date(NOW.getTime() - ago * 6e4).toISOString(),
+  cores: 4,
+  load1: 1,
+  load5: 1,
+  load15: 1,
+  mem_total: 8 * 2 ** 30,
+  mem_available: 6 * 2 ** 30,
+  swap_total: 2 * 2 ** 30,
+  swap_free: 2 * 2 ** 30,
+  disk_total: 100 * 2 ** 30,
+  disk_free: 60 * 2 ** 30,
+  cgroup_mem_current: null,
+  cgroup_mem_max: null,
+  ...over
+});
+
 const filled = (session: SessionState = { state: 'none' }): DeskState => {
   const s = createState();
   s.data.buckets.set('unstarted', [
@@ -154,6 +184,7 @@ const filled = (session: SessionState = { state: 'none' }): DeskState => {
   s.data.runs = runs(view({ session }));
   s.data.usage = usage;
   s.data.activity = activity;
+  s.data.hostMetrics = [hostSample(10), hostSample(0)];
   s.ideaReasons.set('COD-51', 'not worth it');
   return s;
 };
@@ -307,6 +338,80 @@ describe('columns and tiles', () => {
     expect(cols.next).not.toContain('parked');
   });
 
+  it('draw the NUC sheet with a gauge and a sparkline per figure', () => {
+    const state = filled();
+    const html = SHEETS.nuc.body(model(state, NOW), state, NOW);
+    expect(html.match(/class="gauge"/g)).toHaveLength(4);
+    expect(html.match(/class="spark"/g)).toHaveLength(4);
+    expect(html).toContain('Within limits');
+    expect(html).not.toContain('Container memory');
+  });
+
+  it('add the container figure when it has a memory limit', () => {
+    const state = filled();
+    state.data.hostMetrics = [
+      hostSample(0, {
+        cgroup_mem_current: 2 * 2 ** 30,
+        cgroup_mem_max: 4 * 2 ** 30
+      })
+    ];
+    const html = SHEETS.nuc.body(model(state, NOW), state, NOW);
+    expect(html).toContain('Container memory');
+    expect(html).toContain('2.0 GiB of its 4.0 GiB limit');
+    expect(html.match(/class="gauge"/g)).toHaveLength(5);
+  });
+
+  it('name the problem on the NUC sheet and mark the tile bad', () => {
+    const state = filled();
+    state.data.hostMetrics = [hostSample(0, { mem_available: 0.2 * 2 ** 30 })];
+    const m = model(state, NOW);
+    expect(SHEETS.nuc.body(m, state, NOW)).toContain('memory used above 90%');
+    expect(renderTiles(m, state, NOW)).toMatch(/mini bad" data-w="nuc"/);
+  });
+
+  it('show the NUC tile as the worse of load and memory with the verdict', () => {
+    const state = filled();
+    const html = renderTiles(model(state, NOW), state, NOW);
+    expect(html).toMatch(/data-w="nuc"[^>]*>.*<b>25% · ok<\/b>/);
+  });
+
+  it('name the first problem on the NUC tile, not the worse of load and memory', () => {
+    const disk = filled();
+    disk.data.hostMetrics = [
+      hostSample(0, { disk_free: 5 * 2 ** 30, mem_available: 7 * 2 ** 30 })
+    ];
+    expect(renderTiles(model(disk, NOW), disk, NOW)).toMatch(
+      /data-w="nuc"[^>]*>.*<b>disk 95% · bad<\/b>/
+    );
+    const swap = filled();
+    swap.data.hostMetrics = [
+      hostSample(10, { swap_free: 2 * 2 ** 30 }),
+      hostSample(0, { swap_free: 1 * 2 ** 30 })
+    ];
+    expect(renderTiles(model(swap, NOW), swap, NOW)).toMatch(
+      /data-w="nuc"[^>]*>.*<b>swap growing · bad<\/b>/
+    );
+  });
+
+  it('show a stale NUC as stale and no samples as a dash', () => {
+    const stale = filled();
+    stale.data.hostMetrics = [hostSample(90)];
+    expect(renderTiles(model(stale, NOW), stale, NOW)).toMatch(
+      /data-w="nuc"[^>]*>.*<b>stale<\/b>/
+    );
+    expect(SHEETS.nuc.body(model(stale, NOW), stale, NOW)).toContain(
+      'No sample for 1 h 30 min'
+    );
+    const none = filled();
+    none.data.hostMetrics = [];
+    expect(renderTiles(model(none, NOW), none, NOW)).toMatch(
+      /data-w="nuc"[^>]*>.*<b>–<\/b>/
+    );
+    expect(SHEETS.nuc.body(model(none, NOW), none, NOW)).toContain(
+      'No host samples yet'
+    );
+  });
+
   it('give every tile a sheet', () => {
     const state = filled();
     const html = renderTiles(model(state, NOW), state, NOW);
@@ -317,6 +422,7 @@ describe('columns and tiles', () => {
       'ticketcost',
       'ideas',
       'all',
+      'nuc',
       'timers'
     ])
       expect(html).toContain(`data-w="${id}"`);
@@ -359,5 +465,34 @@ describe('charts', () => {
     expect(chartKind(undefined)).toBe('shipped');
     expect(chartHeight('200')).toBe(200);
     expect(chartHeight(undefined)).toBe(150);
+  });
+
+  it('fill a gauge to its share, clamped, and mark a bad one', () => {
+    expect(gauge(0.5, false)).toContain('class="fill" width="50"');
+    expect(gauge(3, true)).toContain('class="fill bad" width="100"');
+    expect(gauge(-1, false)).toContain('width="0"');
+  });
+
+  it('draw a sparkline over the window with the limit marked', () => {
+    const html = sparkline(
+      [
+        { at: 0, value: 0 },
+        { at: 100, value: 1 }
+      ],
+      0,
+      100,
+      1,
+      0.5,
+      'Load'
+    );
+    expect(html).toContain('points="0.0,40.0 240.0,0.0"');
+    expect(html).toContain('class="limit"');
+    expect(html).toContain('aria-label="Load"');
+  });
+
+  it('leave a sparkline without a line for fewer than two points', () => {
+    const html = sparkline([{ at: 5, value: 1 }], 0, 10, 1, null, 'x');
+    expect(html).not.toContain('polyline');
+    expect(html).not.toContain('class="limit"');
   });
 });

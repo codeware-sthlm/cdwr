@@ -7,7 +7,12 @@ import { RETRACT } from './constants';
 export type Notice =
   { hidden: true } | { hidden: false; severe: boolean; text: string };
 
-const SUPABASE_ERRORS: readonly string[] = ['runs', 'usage', 'activity'];
+const SUPABASE_ERRORS: readonly string[] = [
+  'runs',
+  'usage',
+  'activity',
+  'hostMetrics'
+];
 
 /** The sentence for a failure of the source behind `key` */
 export const errorCopy = (e: DataFailure, key: string): string => {

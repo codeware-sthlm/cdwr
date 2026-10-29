@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
+import { DAY_MS } from './desk/format';
 import {
   parseAttended,
   parseJob,
@@ -15,6 +16,7 @@ export type RunRow = Tables['runs']['Row'];
 export type UsageRow = Tables['usage']['Row'];
 export type ActivityRow = Tables['activity']['Row'];
 export type IssueEventRow = Tables['issue_events']['Row'];
+export type HostMetricRow = Tables['host_metrics']['Row'];
 
 export type SupabaseErrorCode = 'unauthorized' | 'network' | 'bad_response';
 
@@ -28,7 +30,6 @@ export class SupabaseError extends Error {
   }
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const WINDOW_DAYS = 30;
 const RUNS_LIMIT = 500;
 const ACTIVITY_LIMIT = 300;
@@ -77,10 +78,15 @@ export type ActivityPayload = {
   rows: { when: string; ticket: string; actor: string; change: string }[];
 };
 
-export type Payloads = {
+export type QueuePayloads = {
   runs: RunsPayload | null;
   usage: UsagePayload;
   activity: ActivityPayload | null;
+};
+
+export type Payloads = QueuePayloads & {
+  /** The last 24 hours of the queue host's samples, oldest first */
+  hostMetrics: HostMetricRow[];
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -328,7 +334,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     }
   };
 
-  const read = (): Promise<Payloads> =>
+  const read = (): Promise<QueuePayloads> =>
     attempt(async () => {
       const now = new Date();
       const since = new Date(now.getTime() - WINDOW_DAYS * DAY_MS);
@@ -365,21 +371,40 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       };
     });
 
+  // Apart from `read`, so a host_metrics failure (a migration not yet applied) leaves the other tiles alone
+  const readHostMetrics = (): Promise<HostMetricRow[]> =>
+    attempt(async () =>
+      settle(
+        await client
+          .from('host_metrics')
+          .select('*')
+          .gte('at', new Date(Date.now() - DAY_MS).toISOString())
+          .order('at', { ascending: true })
+      )
+    );
+
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
    * catch up on what was missed. `onStatus` gets false on a channel error, a
    * timeout or a close, and true on (re)joining. `onIssue` gets each
-   * `issue_events` row as it arrives, without debounce.
+   * `issue_events` row as it arrives, without debounce. `onHostMetrics` fires
+   * (debounced) on a new `host_metrics` row, which `onChange` does not.
    */
   const subscribe = (
     onChange: () => void,
     onStatus?: (healthy: boolean) => void,
-    onIssue?: (row: IssueEventRow) => void
+    onIssue?: (row: IssueEventRow) => void,
+    onHostMetrics?: () => void
   ): (() => void) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let hostTimer: ReturnType<typeof setTimeout> | undefined;
     const changed = (): void => {
       clearTimeout(timer);
       timer = setTimeout(onChange, DEBOUNCE_MS);
+    };
+    const hostChanged = (): void => {
+      clearTimeout(hostTimer);
+      hostTimer = setTimeout(() => onHostMetrics?.(), DEBOUNCE_MS);
     };
     let channel = client.channel('desk');
     for (const table of [
@@ -397,6 +422,11 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         );
       }
     }
+    channel = channel.on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'host_metrics' },
+      hostChanged
+    );
     for (const event of ['INSERT', 'UPDATE'] as const) {
       channel = channel.on(
         'postgres_changes',
@@ -421,6 +451,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     });
     return () => {
       clearTimeout(timer);
+      clearTimeout(hostTimer);
       void client.removeChannel(channel);
     };
   };
@@ -430,5 +461,5 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       settle(await client.from('queue_state').select('host').limit(1));
     });
 
-  return { read, subscribe, check };
+  return { read, readHostMetrics, subscribe, check };
 };
