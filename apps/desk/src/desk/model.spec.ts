@@ -51,7 +51,7 @@ const view = (over: Partial<QueueView> = {}): QueueView => ({
   next: [],
   held: { tickets: [], free: [] },
   parked: [],
-  table: { before: [], after: [] },
+  table: { before: [], label: [], after: [] },
   ...over
 });
 
@@ -322,6 +322,9 @@ describe('model', () => {
               { ticket: 'COD-31', kind: 'question' },
               { ticket: 'COD-32' }
             ],
+            label: [
+              { ticket: 'COD-33', parent: 'COD-29', blockers: ['COD-10'] }
+            ],
             after: [
               { ticket: 'COD-10', kind: 'pr', pr: 100 },
               { ticket: 'COD-11', kind: 'pr', pr: 101 },
@@ -351,6 +354,14 @@ describe('model', () => {
     it('splits the Before column into plans and questions', () => {
       expect(m.plans.map((x) => x.ticket)).toEqual(['COD-30']);
       expect(m.questions.map((x) => x.ticket)).toEqual(['COD-31', 'COD-32']);
+    });
+
+    it('carries the sub-issues to label, apart from the limit', () => {
+      expect(m.toLabel).toEqual([
+        { ticket: 'COD-33', parent: 'COD-29', blockers: ['COD-10'] }
+      ]);
+      expect(m.before.map((x) => x.ticket)).not.toContain('COD-33');
+      expect(m.limit).toEqual({ used: 2, max: 5 });
     });
 
     it('orders the open PRs after their open blockers', () => {

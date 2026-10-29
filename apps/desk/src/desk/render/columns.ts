@@ -114,6 +114,10 @@ export const renderColumns = (m: Model, state: DeskState): Columns => {
       const kind = x.kind === 'plan' ? 'plan' : 'question';
       return `<li>${titled(m, x.ticket)}<span class="chip ${kind}">${kind}</span></li>`;
     }),
+    ...m.toLabel.map(
+      (x) =>
+        `<li>${titled(m, x.ticket)}<span class="chip label">ready to label</span>${x.parent ? `<span class="s">${esc(x.parent)}</span>` : ''}</li>`
+    ),
     ...m.ideasPending.map(
       (i) =>
         `<li>${tLink(i)}<span class="chip idea">idea</span><span class="s">Accept with <code>agent:ready</code>, or cancel with one word</span></li>`
@@ -153,7 +157,7 @@ export const renderColumns = (m: Model, state: DeskState): Columns => {
       loading ? '–' : before.length,
       loading
         ? `<p class="none">Loading…</p>`
-        : rowsHTML(before, 'No plan, question or idea waits for you.')
+        : rowsHTML(before, 'No plan, question, label or idea waits for you.')
     ),
     next: colHTML(
       'The agent',

@@ -49,13 +49,19 @@ export const headline = (m: Model, now: Date): Headline => {
         ? `No session is running. The scheduler plans ${idLink(first.ticket)} at ${when}.`
         : `No session is running. The scheduler starts one for ${idLink(first.ticket)} (${esc(first.reason)}) at ${when}, unless today's cap or the back-off holds it.`;
   } else {
-    const yours = m.before.length + m.prs.length + m.ideasPending.length;
-    tone = m.before.length || m.ideasPending.length ? 'wait' : '';
+    const yours =
+      m.before.length + m.toLabel.length + m.prs.length + m.ideasPending.length;
+    tone =
+      m.before.length || m.toLabel.length || m.ideasPending.length
+        ? 'wait'
+        : '';
     const head = m.before.length
       ? idLink(m.before[0].ticket)
-      : m.ideasPending.length
-        ? 'the idea ' + idLink(m.ideasPending[0].id)
-        : '';
+      : m.toLabel.length
+        ? idLink(m.toLabel[0].ticket)
+        : m.ideasPending.length
+          ? 'the idea ' + idLink(m.ideasPending[0].id)
+          : '';
     text = yours
       ? `Nothing for the agent. ${plural(yours, 'thing waits', 'things wait')} on you${head ? ', starting with ' + head : ''}.`
       : 'Nothing for the agent, and nothing waits on you.';

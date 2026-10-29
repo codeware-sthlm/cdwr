@@ -22,6 +22,7 @@ import type {
   QueueAfter,
   QueueBefore,
   QueueFree,
+  QueueLabel,
   QueueNext,
   QueueParked,
   QueueView,
@@ -57,6 +58,8 @@ export type Model = {
   before: QueueBefore[];
   plans: QueueBefore[];
   questions: QueueBefore[];
+  /** Sub-issues ready to label `agent:ready`; they wait on you but do not count toward the limit */
+  toLabel: QueueLabel[];
   after: QueueAfter[];
   /** Open PRs in merge order */
   prs: QueueAfter[];
@@ -238,6 +241,7 @@ export const model = (state: DeskState, now: Date): Model => {
   const get = (id: string): TicketRef => idx.get(id) ?? stub(id);
 
   const before = v ? v.table.before : [];
+  const toLabel = v ? v.table.label : [];
   const after = v ? v.table.after : [];
 
   // Open PRs in merge order: a ticket's PR waits for the open tickets it is blocked by in Linear
@@ -334,6 +338,7 @@ export const model = (state: DeskState, now: Date): Model => {
     before,
     plans: before.filter((x) => x.kind === 'plan'),
     questions: before.filter((x) => x.kind !== 'plan'),
+    toLabel,
     after,
     prs,
     prBlockers,

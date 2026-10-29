@@ -1069,11 +1069,13 @@ code {
   background: var(--sunk);
   color: var(--muted);
 }
-.chip.idea {
+.chip.idea,
+.chip.label {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.col.wait.has .chip.idea {
+.col.wait.has .chip.idea,
+.col.wait.has .chip.label {
   background: var(--surface);
 }
 /* A suggestion: the ticket's Evidence, What changes, Cost and Why now, as the suggest-improvement skill writes them */

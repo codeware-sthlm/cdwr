@@ -123,13 +123,14 @@ const itemHTML = (
 
 const renderBefore = (m: Model, state: DeskState): string => {
   if (!m.v) return empty('No queue view yet.');
-  const group = (
+  const group = <X extends { ticket: string }>(
     h: string,
-    xs: readonly { ticket: string }[],
-    rowState: string
+    xs: readonly X[],
+    rowState: string,
+    extra: (x: X) => ItemOpts = () => ({ showNext: true })
   ): string =>
     xs.length
-      ? `<div class="group"><h3>${h} · ${xs.length}</h3><ul>${xs.map((x) => itemHTML(state.details, m.get(x.ticket), { state: rowState, showNext: true })).join('')}</ul></div>`
+      ? `<div class="group"><h3>${h} · ${xs.length}</h3><ul>${xs.map((x) => itemHTML(state.details, m.get(x.ticket), { state: rowState, ...extra(x) })).join('')}</ul></div>`
       : '';
   const ideasHTML = m.ideasPending.length
     ? `<div class="group"><h3>Ideas to decide · ${m.ideasPending.length}</h3>${m.ideasPending.map((i) => ideaCard(state, i)).join('')}</div>`
@@ -137,7 +138,11 @@ const renderBefore = (m: Model, state: DeskState): string => {
   return (
     group('Plans to approve', m.plans, 'needs-input') +
       group('Questions', m.questions, 'needs-input') +
-      ideasHTML || empty('No plan, question or idea waits for you.')
+      group('Ready to label', m.toLabel, 'ready', (x) => ({
+        side: '<span class="chip label">ready to label</span>',
+        note: x.parent ? `Next part of ${esc(x.parent)}` : undefined
+      })) +
+      ideasHTML || empty('No plan, question, label or idea waits for you.')
   );
 };
 

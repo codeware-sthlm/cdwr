@@ -80,6 +80,13 @@ export type QueueParked = {
 
 export type QueueBefore = { ticket: string; kind?: string };
 
+/** An open sub-issue whose blockers are done, waiting for `agent:ready`; not held by the limit */
+export type QueueLabel = {
+  ticket: string;
+  parent: string | null;
+  blockers: string[];
+};
+
 export type QueueAfter = {
   ticket: string;
   kind?: string;
@@ -95,5 +102,5 @@ export type QueueView = {
   next: QueueNext[];
   held: { tickets: string[]; free: QueueFree[] };
   parked: QueueParked[];
-  table: { before: QueueBefore[]; after: QueueAfter[] };
+  table: { before: QueueBefore[]; label: QueueLabel[]; after: QueueAfter[] };
 };
