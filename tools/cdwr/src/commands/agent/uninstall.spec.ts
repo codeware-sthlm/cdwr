@@ -57,6 +57,7 @@ describe('agent uninstall', () => {
     queue = {
       home: join(dir, 'agent-queue'),
       lock: join(dir, 'agent-queue', 'queue.lock'),
+      implementLock: join(dir, 'agent-queue', 'implement.lock'),
       plist: join(dir, 'queue.plist')
     } as QueuePaths;
   });
@@ -119,7 +120,7 @@ describe('agent uninstall', () => {
     expect(existsSync(queue.plist)).toBe(true);
   });
 
-  it('removes the planner checkout only with the flag, and clears the pref', async () => {
+  it('removes the planner checkout only with the flag, and keeps the pref', async () => {
     const without = await uninstall(['--yes']);
     expect(without.text).not.toContain('git worktree');
     expect(prefs.get(WORKTREE_PREF)).toBe(checkout);
@@ -128,7 +129,7 @@ describe('agent uninstall', () => {
     expect(exit).toBe(EXIT.ok);
     expect(run).toHaveBeenCalledWith('git', ['worktree', 'remove', checkout]);
     expect(run.mock.calls.flat().join(' ')).not.toContain('--force');
-    expect(prefs.get(WORKTREE_PREF)).toBe('');
+    expect(prefs.get(WORKTREE_PREF)).toBe(checkout);
   });
 
   it('keeps the pref and reports when the checkout cannot be removed', async () => {
@@ -136,5 +137,71 @@ describe('agent uninstall', () => {
     const { ui } = await uninstall(['--worktree-remove', '--yes']);
     expect(ui.printed.warn.join(' ')).toContain('left in place');
     expect(prefs.get(WORKTREE_PREF)).toBe(checkout);
+  });
+
+  it('refuses to remove the checkout while an implementing session lives', async () => {
+    mkdirSync(queue.implementLock, { recursive: true });
+    writeFileSync(join(queue.implementLock, 'pid'), String(process.pid));
+    const { exit, text } = await uninstall(['--worktree-remove', '--yes']);
+    expect(exit).toBe(EXIT.failed);
+    expect(text).toContain('An implementing session is running');
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('ignores an implement lock whose session is gone, or without the flag', async () => {
+    mkdirSync(queue.implementLock, { recursive: true });
+    writeFileSync(join(queue.implementLock, 'pid'), '2147483646');
+    const gone = await uninstall(['--worktree-remove', '--yes']);
+    expect(gone.exit).toBe(EXIT.ok);
+
+    writeFileSync(join(queue.implementLock, 'pid'), String(process.pid));
+    const without = await uninstall(['--yes']);
+    expect(without.text).not.toContain('implementing session');
+  });
+
+  it('reports a stale queue lock with the command that removes it', async () => {
+    job = { loaded: true, running: false };
+    writeFileSync(queue.plist, '<plist/>');
+    mkdirSync(queue.lock, { recursive: true });
+    const { exit, text } = await uninstall(['--yes']);
+    expect(exit).toBe(EXIT.failed);
+    expect(text).toContain('stale queue lock');
+    expect(text).toContain(`rmdir ${queue.lock}`);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('treats an implement lock without a pid as a session that is starting', async () => {
+    mkdirSync(queue.implementLock, { recursive: true });
+    const { exit, text } = await uninstall(['--worktree-remove', '--yes']);
+    expect(exit).toBe(EXIT.failed);
+    expect(text).toContain('An implementing session is running');
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('holds the queue lock around the checkout removal and re-checks the session', async () => {
+    let heldDuring = false;
+    run.mockImplementation(async (bin) => {
+      if (bin === 'git') heldDuring = existsSync(queue.lock);
+      return { stdout: '', stderr: '' };
+    });
+    const first = await uninstall(['--worktree-remove', '--yes']);
+    expect(first.exit).toBe(EXIT.ok);
+    expect(heldDuring).toBe(true);
+    expect(existsSync(queue.lock)).toBe(false);
+  });
+
+  it('keeps the checkout when a session starts after the plan', async () => {
+    job = { loaded: true, running: false };
+    run.mockImplementation(async (bin) => {
+      if (bin === 'launchctl') {
+        mkdirSync(queue.implementLock, { recursive: true });
+        writeFileSync(join(queue.implementLock, 'pid'), String(process.pid));
+      }
+      return { stdout: '', stderr: '' };
+    });
+    const { ui } = await uninstall(['--worktree-remove', '--yes']);
+    expect(run.mock.calls.map(([bin]) => bin)).toEqual(['launchctl']);
+    expect(ui.printed.warn.join(' ')).toContain('implementing session');
+    expect(existsSync(queue.lock)).toBe(false);
   });
 });
