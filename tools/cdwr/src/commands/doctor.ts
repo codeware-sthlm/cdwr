@@ -15,13 +15,15 @@ import {
   jobPathChecks,
   jobState,
   keyPresent,
+  mirrorTargetOf,
   paths,
   queueDrift,
   worktreeOf
 } from '../services/agent-queue';
 import { symbols, theme } from '../ui/theme';
 
-import { formatImplement, hostKind } from './agent/agent.logic';
+import { formatImplement, hostKind, schedulerHere } from './agent/agent.logic';
+import { schedulerRow } from './agent/status.logic';
 import { shellOf } from './completion';
 import { completionFile, completionState } from './completion.logic';
 import { ENTRIES, GROUPS } from './index';
@@ -52,6 +54,10 @@ interface Report {
   /** The agent queue, on a Mac or in the agent container */
   agentQueue?: {
     host: 'launchd' | 'container';
+    /** A Mac with no job loaded and no plist is attended-only; the job checks do not apply */
+    scheduler: 'here' | 'elsewhere';
+    /** The heartbeat mirror target, when one is set */
+    mirror: string | null;
     /** Always true in the container, which has no launchd job to load */
     loaded: boolean;
     keyPresent: boolean;
@@ -80,9 +86,12 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
   ]);
   const script = queueDrift(queue, ctx.root);
   const worktree = worktreeOf(ctx);
+  const scheduler = schedulerHere(host, job, existsSync(queue.plist))
+    ? ('here' as const)
+    : ('elsewhere' as const);
   // Both mint nothing lasting: a token lives an hour and is dropped with the check
   const [jobPath, githubApp] =
-    job.loaded || script !== 'missing'
+    scheduler === 'here' && (job.loaded || script !== 'missing')
       ? await Promise.all([
           // The job's PATH comes from the plist, which the container has none of
           host === 'container'
@@ -93,6 +102,8 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
       : [undefined, undefined];
   return {
     host,
+    scheduler,
+    mirror: mirrorTargetOf(queue),
     loaded: job.loaded,
     keyPresent: key,
     worktree: existsSync(worktree),
@@ -247,8 +258,15 @@ export default defineCommand({
     rows.push(completionRows[comp.state]());
     const queue = report.agentQueue;
     let queueProblems = 0;
-    // Optional per machine: never set up is not a problem
-    if (queue && !queue.loaded && queue.script === 'missing') {
+    if (queue?.scheduler === 'elsewhere') {
+      const where = schedulerRow(queue.mirror);
+      rows.push([
+        where.ok === true ? symbols.ok : symbols.warn,
+        'agent queue',
+        where.ok === true ? theme.muted(where.detail) : theme.warn(where.detail)
+      ]);
+      // Optional per machine: never set up is not a problem
+    } else if (queue && !queue.loaded && queue.script === 'missing') {
       rows.push([
         symbols.ok,
         'agent queue',
