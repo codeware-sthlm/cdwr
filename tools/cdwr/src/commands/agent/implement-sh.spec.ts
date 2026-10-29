@@ -101,6 +101,14 @@ describe('implement.sh', () => {
     expect(code).toContain('"${DENY[@]}"');
   });
 
+  it.each([
+    'Read(//run/agent/**)',
+    'Bash(*/run/agent/*)',
+    'Bash(*lib.sh header*)'
+  ])('denies reaching the container keys with %s', (rule) => {
+    expect(code).toContain(`"${rule}"`);
+  });
+
   describe.skipIf(!hasZsh)('run', () => {
     let dir: string;
     let bin: string;
@@ -311,10 +319,11 @@ describe('implement.sh', () => {
 
     describe('Linear tools', () => {
       const argvFile = (): string => join(dir, 'argv');
+      const envFile = (): string => join(dir, 'claude-env');
       const fakeArgvClaude = (): void => {
         writeFileSync(
           join(bin, 'claude'),
-          `#!/bin/sh\nprintf '%s\\n' "$@" > "${argvFile()}"\nprintf '%s' '{}'\n`
+          `#!/bin/sh\nprintf '%s\\n' "$@" > "${argvFile()}"\nenv > "${envFile()}"\nprintf '%s' '{}'\n`
         );
         chmodSync(join(bin, 'claude'), 0o755);
       };
@@ -350,11 +359,18 @@ describe('implement.sh', () => {
 
       it('signs its own server with the key, which stays out of argv and the config', () => {
         fakeArgvClaude();
+        const keyFile = join(dir, 'linear.key');
+        writeFileSync(keyFile, 'sekret\n');
         const result = start({
           AGENT_QUEUE_LINEAR_MCP: 'key',
-          AGENT_QUEUE_LINEAR_KEY: 'sekret'
+          AGENT_QUEUE_LINEAR_KEY: 'sekret',
+          AGENT_QUEUE_LINEAR_KEY_FILE: keyFile
         });
         expect(result.status).toBe(0);
+        expect(readFileSync(envFile(), 'utf8')).not.toContain(
+          'AGENT_QUEUE_LINEAR_KEY='
+        );
+        expect(readFileSync(envFile(), 'utf8')).not.toContain('sekret');
         const argv = readFileSync(argvFile(), 'utf8');
         const config = join(queueHome, 'linear-mcp.json');
         expect(argv).toContain(
@@ -364,7 +380,8 @@ describe('implement.sh', () => {
         expect(argv).not.toContain('mcp__claude_ai_Linear');
         expect(argv).not.toContain('sekret');
         const json = readFileSync(config, 'utf8');
-        expect(json).toContain('${AGENT_QUEUE_LINEAR_KEY}');
+        expect(json).toContain('headersHelper');
+        expect(json).not.toContain('${AGENT_QUEUE_LINEAR_KEY}');
         expect(json).not.toContain('sekret');
       });
     });

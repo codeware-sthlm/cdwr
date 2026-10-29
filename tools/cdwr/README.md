@@ -197,16 +197,18 @@ The script's source is `agent-queue/run.sh`. Launchd runs the copy `install` put
 unattended until the next `install`; `status` and `doctor` say when that copy is out of date. The
 script holds the guardrails (read-only tools, Linear the only writable server, no API key), so
 review a change to it as one. The launchd job's Linear key is the Keychain's `linear-agent-queue`
-(a shell-exported `AGENT_QUEUE_LINEAR_KEY` never reaches the job; the container reads that variable
-instead); cdwr checks that it is there and never reads it. `install` asks for the key when it is
+(a shell-exported `AGENT_QUEUE_LINEAR_KEY` never reaches the job; the container gets that variable
+from compose and files it at start); cdwr checks that it is there and never reads it. `install` asks for the key when it is
 missing, and only does what differs, so run it again after the script changes.
 
 The claude runs reach Linear through one of two MCP servers, picked by `AGENT_QUEUE_LINEAR_MCP`
 (`lib.sh`). `connector`, the default on the Mac, is the claude.ai connector of the interactive login.
 `key`, the default in the container, is Linear's own server at `https://mcp.linear.app/mcp`, signed with
 the queue's key: the runs load it with `--strict-mcp-config --mcp-config ~/.cdwr/agent-queue/linear-mcp.json`,
-whose header holds the placeholder `${AGENT_QUEUE_LINEAR_KEY}` that claude fills from its environment, so
-the key is never in a file or on a command line. Its tools are `mcp__agent_linear__*`; the allowlists
+whose `headersHelper` runs `zsh ~/.cdwr/agent-queue/lib.sh header`. That reads the key from
+`AGENT_QUEUE_LINEAR_KEY_FILE` (the container's `/run/agent/linear.key`, tmpfs, mode 600) or the Keychain,
+so the key is never in the config or on a command line. Claude itself runs without the key in its
+environment, and implement-only runs deny reading `/run/agent`. Its tools are `mcp__agent_linear__*`; the allowlists
 take the prefix from the same place. The key writes as its owner, as the connector does. Before each
 claude run the scripts check that the server answers (`claude mcp list` for the connector, an MCP
 `initialize` for the key); without it nothing starts, the run is recorded as `no Linear tools`, one notice

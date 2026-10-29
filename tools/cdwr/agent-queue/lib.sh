@@ -3,8 +3,13 @@
 # the claude runs use, and the attended query.
 # Read-only on purpose: no gh call and no mutation belong here.
 
-# The key comes from AGENT_QUEUE_LINEAR_KEY; on macOS the Keychain is the fallback
+# The key comes from AGENT_QUEUE_LINEAR_KEY, then the file AGENT_QUEUE_LINEAR_KEY_FILE names (the
+# container's), then on macOS the Keychain
+LIB_SH="${${(%):-%x}:A}"
 key="${AGENT_QUEUE_LINEAR_KEY:-}"
+if [[ -z "$key" && -n "${AGENT_QUEUE_LINEAR_KEY_FILE:-}" && -r "$AGENT_QUEUE_LINEAR_KEY_FILE" ]]; then
+  key="$(<"$AGENT_QUEUE_LINEAR_KEY_FILE")"
+fi
 if [[ -z "$key" && "$(uname)" == Darwin ]]; then
   key="$(security find-generic-password -s linear-agent-queue -w 2>/dev/null || true)"
 fi
@@ -19,26 +24,36 @@ linear() {
 
 # The Linear MCP the claude runs get. connector: the claude.ai connector of an interactive login,
 # as on the Mac. key: Linear's own server signed with the key, for a host without that login, as
-# the container; it is the default there. The key reaches neither argv nor a file: the header
-# holds a placeholder that claude fills from its environment, and only claude's, through
-# LINEAR_MCP_KEY on its command (empty in connector mode).
+# the container; it is the default there. The key reaches neither argv, the config nor claude's
+# environment: claude runs under `claude_env`, and the config's headersHelper asks lib.sh for the
+# header, which finds the key in the file or the Keychain.
 LINEAR_MCP="${AGENT_QUEUE_LINEAR_MCP:-}"
 [[ -n "$LINEAR_MCP" ]] || { [[ "${AGENT_QUEUE_HOST:-}" == container ]] && LINEAR_MCP=key || LINEAR_MCP=connector; }
 LINEAR_MCP_URL=https://mcp.linear.app/mcp
 
-# linear_mcp <dir>: sets L, the tool prefix the allowlists use, LINEAR_MCP_ARGS, the claude
-# flags that load the server, and LINEAR_MCP_KEY; key mode writes its config into <dir>.
-# Connector mode keeps whatever key the environment already has, for the session's wait.sh.
+# claude_env: the env prefix for every claude run, without the key; the session's wait.sh finds it
+# the same way the helper does
+claude_env=(env -u AGENT_QUEUE_LINEAR_KEY)
+
+# linear_header: the MCP header as JSON, for the headersHelper; nothing without a key
+linear_header() {
+  [[ -n "$key" ]] || return 1
+  jq -nc --arg k "Bearer $key" '{Authorization: $k}'
+}
+
+# The helper command, as claude's shell runs it: this file, run rather than sourced
+LINEAR_HEADERS_HELPER="zsh ${(q)LIB_SH} header"
+
+# linear_mcp <dir>: sets L, the tool prefix the allowlists use, and LINEAR_MCP_ARGS, the claude
+# flags that load the server; key mode writes its config into <dir>.
 linear_mcp() {
-  LINEAR_MCP_ARGS=() LINEAR_MCP_KEY="${AGENT_QUEUE_LINEAR_KEY:-}"
+  LINEAR_MCP_ARGS=()
   if [[ "$LINEAR_MCP" == key ]]; then
     L=mcp__agent_linear
     # Renamed into place: the scheduler and a launched session may write it at once
-    jq -n --arg url "$LINEAR_MCP_URL" \
-      '{mcpServers: {agent_linear: {type: "http", url: $url,
-        headers: {Authorization: "Bearer ${AGENT_QUEUE_LINEAR_KEY}"}}}}' > "$1/linear-mcp.json.$$"
+    jq -n --arg url "$LINEAR_MCP_URL" --arg helper "$LINEAR_HEADERS_HELPER" \
+      '{mcpServers: {agent_linear: {type: "http", url: $url, headersHelper: $helper}}}' > "$1/linear-mcp.json.$$"
     mv -f "$1/linear-mcp.json.$$" "$1/linear-mcp.json"
-    LINEAR_MCP_KEY="$key"
     LINEAR_MCP_ARGS=(--strict-mcp-config --mcp-config "$1/linear-mcp.json")
   else
     L=mcp__claude_ai_Linear
@@ -49,12 +64,14 @@ linear_mcp() {
 # AGENT_QUEUE_LINEAR_TOOLS_CMD replaces the check in specs.
 linear_tools() {
   if [[ -n "${AGENT_QUEUE_LINEAR_TOOLS_CMD:-}" ]]; then eval "$AGENT_QUEUE_LINEAR_TOOLS_CMD"; return 0; fi
-  local answer code
+  local answer code header
   case "$LINEAR_MCP" in
     key)
-      [[ -n "$key" ]] || { print -r -- "key: no Linear API key"; return 0; }
+      # The header claude will get: the helper run as claude runs it, without the key in its env
+      header="$("${claude_env[@]}" sh -c "$LINEAR_HEADERS_HELPER" 2>/dev/null | jq -r '.Authorization // empty' 2>/dev/null)" || true
+      [[ -n "$header" ]] || { print -r -- "key: no Linear API key for the header helper"; return 0; }
       answer="$(curl -sS -m 20 -w '\n%{http_code}' "$LINEAR_MCP_URL" \
-        -H @<(print -r -- "Authorization: Bearer $key") \
+        -H @<(print -r -- "Authorization: $header") \
         -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
         --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agent-queue","version":"1"}}}' \
         2>/dev/null)" || true
@@ -109,3 +126,9 @@ GQL
 
 # host_id: the machine's stable name (a Mac's hostname follows the network); session-hook.sh has the twin
 host_id() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null || hostname -s; }
+
+# Run as `zsh lib.sh header`, it is the MCP config's headersHelper
+if [[ "$ZSH_EVAL_CONTEXT" == toplevel && "${1:-}" == header ]]; then
+  linear_header
+  exit
+fi

@@ -116,6 +116,8 @@ DENY=(
   "Bash(gh api graphql*)" "Bash(gh api * -X *)" "Bash(gh api * --method *)"
   "Bash(gh api * -f *)" "Bash(gh api * -F *)" "Bash(gh api * --field *)" "Bash(gh api * --raw-field *)"
   "Bash(gh api * --input*)" "Bash(gh api *@*)"
+  # The container's keys live on its tmpfs; the Linear key reaches only the MCP's header helper
+  "Read(//run/agent/**)" "Bash(*/run/agent/*)" "Bash(*lib.sh header*)"
 )
 # The ticket worktrees sit beside the agent worktree; `//` anchors the rule at the root
 WT="/${REPO:h}/codeware-cod-*/**"
@@ -125,7 +127,7 @@ claude_pid=
 trap '[[ -n "$claude_pid" ]] && kill -TERM $claude_pid 2>/dev/null' TERM INT
 # The session hook tells the sessions table what kind this is
 export AGENT_QUEUE_SESSION_KIND=implement
-AGENT_QUEUE_LINEAR_KEY="$LINEAR_MCP_KEY" ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
+"${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
   --model opus "${LINEAR_MCP_ARGS[@]}" \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
   --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
