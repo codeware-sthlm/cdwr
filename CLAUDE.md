@@ -60,11 +60,9 @@ and `cdwr agent status` says what it would take next. Launchd runs an installed 
 `tools/cdwr/agent-queue/run.sh` (and its `watch.jq`, `waits.sh`, `implement.sh` and `github-app.sh`), so a merged change to its guardrails
 waits for the next `install`. Before planning, the same job watches the PRs of `agent:review`
 tickets and sends a notice when one leaves the merge queue, fails, or merges with hand-offs left.
-Each run also keeps three Linear documents up to date: "Agent queue: runs", "Agent queue: usage" (`cdwr agent usage`)
-and "Agent queue: activity" (`cdwr agent activity`, from Linear's issue history), which the Agent Desk reads.
-The runs document also carries an `Attended:` line saying whether an attended `/work-queue` has something to do, and `cdwr agent status` shows it too.
-The same telemetry also goes to the `agent-queue` Supabase project (tables `runs`, `usage`, `activity`, `sessions`, `queue_state`, and `issue_events` written by the `linear-webhook` Edge Function for the desk, `github_events` by `github-webhook`; env `AGENT_SUPABASE_URL` and `AGENT_SUPABASE_SERVICE_KEY`); the documents stay until the desk reads the tables.
-Once a day, in the first idle run after 06:00, the job runs `/suggest-improvement`, which proposes one evidence-led improvement as a `Source: agent-idea` ticket or records "nothing today"; the runs document's `Suggested:` line and `cdwr agent status` show it. Accept it with `agent:ready`, discard it by cancelling with one word in a comment.
+Each run also sends its telemetry to the `agent-queue` Supabase project, which the Agent Desk reads: tables `runs`, `usage` (`cdwr agent usage`), `activity` (`cdwr agent activity`, from Linear's issue history), `sessions`, `queue_state`, and `issue_events` written by the `linear-webhook` Edge Function, `github_events` by `github-webhook` (env `AGENT_SUPABASE_URL` and `AGENT_SUPABASE_SERVICE_KEY`). It writes no Linear document.
+The `queue_state` row carries an `Attended:` line saying whether an attended `/work-queue` has something to do, and `cdwr agent status` shows it too.
+Once a day, in the first idle run after 06:00, the job runs `/suggest-improvement`, which proposes one evidence-led improvement as a `Source: agent-idea` ticket or records "nothing today"; the `queue_state` row's `Suggested:` line and `cdwr agent status` show it. Accept it with `agent:ready`, discard it by cancelling with one word in a comment.
 
 When that work waits and no session is alive, the job starts one itself: `implement.sh` runs
 `claude -p "/work-queue implement-only once"` detached, with deny-by-default permissions, a

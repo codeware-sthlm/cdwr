@@ -170,7 +170,7 @@ cdwr agent logs [--run]   # the scheduler log, or the latest run
 cdwr agent logs --host <name> [--run]   # the same, from the agent container over ssh
 cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ticket, from local transcripts
 cdwr agent usage-record [--days 3]   # upsert that spend into the telemetry database; --dry-run prints the rows
-… | cdwr agent activity [--runs <file>]   # the activity document from a Linear history response on stdin
+… | cdwr agent activity [--runs <file>]   # activity rows and a table from a Linear history response on stdin
 cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
 cdwr agent attend [COD-n] [--path <dir>] [--no-start]   # refresh codeware-queue to origin/main, then start /work-queue there
 cdwr agent worktree add COD-529 --branch <name>   # codeware-cod-529 beside this checkout
@@ -226,7 +226,7 @@ The queue also writes telemetry to its own Supabase project, `agent-queue` (tabl
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
-Linear documents are still published alongside.
+queue writes no Linear document; the Agent Desk reads these tables.
 
 Linear changes reach the desk through the same project. A Linear webhook (team Codeware, Issue and
 Comment events) calls the Edge Function `linear-webhook` (`agent-queue/supabase/functions`). The function
