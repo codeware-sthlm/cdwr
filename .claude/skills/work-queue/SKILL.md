@@ -101,9 +101,14 @@ Nothing matched: go to **Nothing workable**.
 
 Counted from Linear: each `agent:review` ticket that is not Done or Canceled (an open PR)
 counts one, and so does each `agent:working` ticket parked on a wait (its PR reaches Håkan
-within the hour). Nothing else does: plans waiting for approval, questions, and merged tickets with
-unticked hand-offs stay on Håkan's table (the queue view lists them) but never hold new work
-back.
+within the hour). Nothing else does: plans waiting for approval, questions, merged tickets with
+unticked hand-offs, and sub-issues ready to label stay on Håkan's table (the queue view lists them)
+but never hold new work back.
+
+A sub-issue is ready to label when it has no agent label, is not started, and every issue
+blocking it is Done or Canceled, at least one of them the agent's (`to_label` in `watch.jq`). It is
+the next part of a split whose blockers finished. The queue lists it as `COD-n label`; only Håkan
+sets `agent:ready` on it, since a later part can hang on a question the split left open.
 
 Default limit 5, `limit=N` overrides it for the run.
 
@@ -112,7 +117,7 @@ Default limit 5, `limit=N` overrides it for the run.
 Everything waits on Håkan, or the limit is reached.
 
 1. Send one `action` notice naming what waits, e.g.
-   `Queue waiting on you: COD-1 plan, COD-2 PR, COD-3 hand-offs (limit 5/5)`.
+   `Queue waiting on you: COD-1 plan, COD-2 PR, COD-3 hand-offs, COD-4 label (limit 5/5)`.
 2. With `once` or `plan-only`, stop here.
 3. Otherwise wait in the shell: start `tools/cdwr/agent-queue/wait.sh` as a background Bash
    command with a timeout of 7200000. It checks Linear every minute, without waking the session,
@@ -131,12 +136,12 @@ fits in the 10-minute limit.
 
 ## Labels (group "Agent", one at a time)
 
-| Label               | Meaning                                              | Set by          |
-| ------------------- | ---------------------------------------------------- | --------------- |
-| `agent:ready`       | eligible                                             | Håkan           |
-| `agent:working`     | a session is on it; status In Progress               | agent, on claim |
-| `agent:needs-input` | blocked on Håkan; the question is the latest comment | agent           |
-| `agent:review`      | PR open; status In Review                            | agent           |
+| Label               | Meaning                                                 | Set by          |
+| ------------------- | ------------------------------------------------------- | --------------- |
+| `agent:ready`       | eligible; the queue lists unblocked sub-issues to label | Håkan           |
+| `agent:working`     | a session is on it; status In Progress                  | agent, on claim |
+| `agent:needs-input` | blocked on Håkan; the question is the latest comment    | agent           |
+| `agent:review`      | PR open; status In Review                               | agent           |
 
 Replacing the label means passing the full label list without the old agent label. Never
 remove the ticket's other labels.

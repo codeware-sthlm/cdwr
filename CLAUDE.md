@@ -50,6 +50,8 @@ Tickets carrying a Linear `agent:*` label (Agent group, Codeware team) are worke
 steps to the `implementer` subagent (`.claude/agents/implementer.md`, Sonnet) in a worktree
 per ticket, asks in Linear instead of waiting in the terminal, and keeps going until a limit
 of what waits on Håkan. The skill holds the queue order, the labels and how a gate asks.
+When a split's sub-issue has all its blockers done, the queue lists it as ready to label
+(`COD-n label`) among what waits on Håkan; only he sets `agent:ready`.
 
 To start an attended session, run `cdwr agent attend` from a current checkout: it moves `codeware-queue` to `origin/main` (installing when the lockfile changed) and prints the line that starts `/work-queue` there. A session started on a detached checkout that is behind main warns at start (the SessionStart hook, `tools/cdwr/agent-queue/session-start.sh`).
 
