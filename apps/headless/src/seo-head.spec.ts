@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { seoHead } from './seo-head';
 
 const ORIGIN = 'https://codeware.se';
+const MEDIA = 'https://cms.codeware.se';
 
 describe('seoHead', () => {
   it('titles a page in the site template, with its card and canonical link', () => {
@@ -60,17 +61,39 @@ describe('seoHead', () => {
         { kind: 'article' }
       ),
       'Codeware',
-      ORIGIN
+      ORIGIN,
+      MEDIA
     );
 
     expect(head.meta).toContainEqual({
       property: 'og:type',
       content: 'article'
     });
+    // Uploads are served by the cms, not by the site
     expect(head.meta).toContainEqual({
       property: 'og:image',
-      content: 'https://codeware.se/media/news.jpg'
+      content: 'https://cms.codeware.se/media/news.jpg'
     });
     expect(head.links).toEqual([]);
+  });
+
+  it('keeps an image that already has its own host', () => {
+    const head = seoHead(
+      documentSeo(
+        {
+          name: 'News',
+          meta: { image: { url: 'https://cdn.example.com/news.jpg' } }
+        },
+        {}
+      ),
+      'Codeware',
+      ORIGIN,
+      MEDIA
+    );
+
+    expect(head.meta).toContainEqual({
+      property: 'og:image',
+      content: 'https://cdn.example.com/news.jpg'
+    });
   });
 });

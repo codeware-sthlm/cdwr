@@ -10,13 +10,13 @@ type MetaTag =
 
 type LinkTag = { rel: string; href: string };
 
-/** An address a crawler can fetch: relative ones are taken from the site's origin */
-const absolute = (url: string, origin: string | undefined): string => {
-  if (!origin) {
+/** An address a crawler can fetch: relative ones are taken from the given base */
+const absolute = (url: string, base: string | undefined): string => {
+  if (!base) {
     return url;
   }
   try {
-    return new URL(url, origin).toString();
+    return new URL(url, base).toString();
   } catch {
     return url;
   }
@@ -32,12 +32,14 @@ const absolute = (url: string, origin: string | undefined): string => {
  *
  * @param seo - What `documentSeo` made of the document
  * @param siteName - The tenant's app name, the title template's second half
- * @param origin - The site's own origin, for the image a crawler fetches
+ * @param origin - The site's own origin, the base of a relative image when no media host is given
+ * @param mediaUrl - The cms url, which serves uploads: a relative image is taken from it
  */
 export function seoHead(
   seo: DocumentSeo,
   siteName: string,
-  origin?: string
+  origin?: string,
+  mediaUrl?: string
 ): { meta: Array<MetaTag>; links: Array<LinkTag> } {
   const { title, description, canonical, openGraph, twitterCard } = seo;
   const fullTitle = !title
@@ -53,7 +55,7 @@ export function seoHead(
   const image =
     openGraph.image === DEFAULT_OG_IMAGE_PATH
       ? undefined
-      : absolute(openGraph.image, origin);
+      : absolute(openGraph.image, mediaUrl ?? origin);
 
   return {
     meta: [
