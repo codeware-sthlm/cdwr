@@ -14,9 +14,14 @@ const tokens = (input: number, output: number) => ({
   cacheWrite1h: 1
 });
 
+const findCalls: unknown[] = [];
+
 vi.mock('./usage.collect', () => ({
   DAY_MS: 86_400_000,
-  findTranscripts: () => ({ base: '/b', dirs: [], transcripts: [] }),
+  findTranscripts: (_root: string, _days: number, options?: unknown) => {
+    findCalls.push(options);
+    return { base: '/b', dirs: [], transcripts: [] };
+  },
   readReplies: () => ({
     skippedLines: 0,
     records: [
@@ -37,6 +42,15 @@ vi.mock('./usage.collect', () => ({
         ticket: 'unattributed',
         model: 'claude-opus-4-7',
         tokens: tokens(200, 7)
+      },
+      {
+        id: 'c',
+        output: 3,
+        timestamp: '2026-10-27T09:45:00.000Z',
+        role: 'other',
+        ticket: 'unattributed',
+        model: 'claude-opus-4-7',
+        tokens: tokens(50, 3)
       }
     ]
   })
@@ -54,6 +68,7 @@ describe('agent usage-record', () => {
     vi.setSystemTime(new Date(NOW));
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockReset();
+    findCalls.length = 0;
     fetchMock.mockResolvedValue(new Response(null, { status: 201 }));
     ui = fakeUi([]);
   });
@@ -96,6 +111,7 @@ describe('agent usage-record', () => {
     expect(exit).toBe(EXIT.ok);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(JSON.stringify(ui.printed)).toContain('COD-1');
+    expect(JSON.stringify(ui.printed)).toContain('2026-10-27T09:00:00.000Z');
   });
 
   it('upserts day, ticket, model and role rows with the service key', async () => {
@@ -104,7 +120,7 @@ describe('agent usage-record', () => {
       AGENT_SUPABASE_SERVICE_KEY: KEY
     });
     expect(exit).toBe(EXIT.ok);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     const [url, init] = fetchMock.mock.calls[0] ?? [];
     expect(url).toBe(
       `${URL}/rest/v1/usage?on_conflict=day,ticket,model,role,host`
@@ -128,6 +144,51 @@ describe('agent usage-record', () => {
     expect(rows[0]?.['day']).toMatch(/^\d{4}-\d\d-\d\d$/);
     expect(rows[1]).toMatchObject({ ticket: null, input_tokens: 215 });
     expect(JSON.stringify(ui.printed)).not.toContain(KEY);
+  });
+
+  const env = { AGENT_SUPABASE_URL: URL, AGENT_SUPABASE_SERVICE_KEY: KEY };
+
+  it('sends hour rows of every project and prunes this host with --kind hour', async () => {
+    const { exit } = await record(['--yes', '--json', '--kind', 'hour'], env);
+    expect(exit).toBe(EXIT.ok);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(findCalls).toHaveLength(1);
+    expect(findCalls[0]).toMatchObject({ allProjects: true });
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe(
+      `${URL}/rest/v1/usage_hours?on_conflict=hour,model,role,host`
+    );
+    const rows = JSON.parse(String(init?.body)) as Record<string, unknown>[];
+    expect(rows.map((r) => r['role'])).toEqual(['orchestrating', 'other']);
+    expect(rows[0]).toMatchObject({
+      hour: '2026-10-27T09:00:00.000Z',
+      input_tokens: 330
+    });
+    const [delUrl, delInit] = fetchMock.mock.calls[1] ?? [];
+    expect(String(delUrl)).toMatch(
+      /^https:\/\/x\.supabase\.co\/rest\/v1\/usage_hours\?host=eq\.[^&]+&hour=lt\.2026-10-13T10%3A00%3A00\.000Z$/
+    );
+    expect(delInit).toMatchObject({
+      method: 'DELETE',
+      headers: { apikey: KEY, Prefer: 'return=minimal' }
+    });
+  });
+
+  it('sends only day rows with --kind day', async () => {
+    const { exit } = await record(['--yes', '--json', '--kind', 'day'], env);
+    expect(exit).toBe(EXIT.ok);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/rest/v1/usage?');
+    expect(findCalls[0]).toBeUndefined();
+  });
+
+  it('sends day rows, hour rows and the cleanup by default', async () => {
+    await record(['--yes', '--json'], env);
+    expect(fetchMock.mock.calls.map((c) => c[1]?.method)).toEqual([
+      'POST',
+      'POST',
+      'DELETE'
+    ]);
   });
 
   it('fails when Supabase refuses, without printing the key', async () => {
