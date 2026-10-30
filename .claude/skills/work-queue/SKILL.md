@@ -277,10 +277,12 @@ old is taken over like any other.
 run URL; the log of that run's failed steps is
 
 ```sh
-gh run view <run id> --log-failed -R codeware-sthlm/cdwr | rg -n 'Failed tasks|FAIL |Error:'
+gh run view <run id> --log-failed -R codeware-sthlm/cdwr
 ```
 
-or, where only `gh api` reaches, `gh api repos/codeware-sthlm/cdwr/actions/jobs/<job id>/logs
+No pipe: an implement-only run denies any command it doesn't list, `rg` included, and a denied
+pipeline is a stop. `--log-failed` prints the failed steps only, so read it whole. Or, where only
+`gh api` reaches, `gh api repos/codeware-sthlm/cdwr/actions/jobs/<job id>/logs
 --allow-escape-sequences` (without the flag gh prints nothing and exits 1 when the log carries
 colour codes; the job ids come from `…/actions/runs/<run id>/jobs`). Nx prints the failing task
 under `Failed tasks` and vitest the spec under `FAIL`. A spec that fails only in CI, passes
