@@ -236,4 +236,39 @@ describe('guardDomainConflicts', () => {
       ).rejects.toThrow('validation:domainTaken');
     });
   });
+
+  it('looks up the platform claims only after the tenant claims resolve', async () => {
+    // Both lookups share the transaction's single pg client, so they must
+    // run one after the other
+    let release: (value: { docs: Array<TenantWithDomains> }) => void = () =>
+      undefined;
+    const pending = new Promise<{ docs: Array<TenantWithDomains> }>(
+      (resolve) => {
+        release = resolve;
+      }
+    );
+    find.mockImplementationOnce(() => pending);
+
+    const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+    const running = invoke({
+      ...moon,
+      domains: [{ hostname: 'tours.example.com', app: 'cdwr-web-moon' }]
+    });
+
+    await flush();
+    expect(find).toHaveBeenCalledTimes(1);
+    expect(find).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: 'tenants' })
+    );
+
+    release({ docs: [] });
+    await flush();
+    expect(find).toHaveBeenCalledTimes(2);
+    expect(find).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: 'platform-settings' })
+    );
+
+    await running;
+  });
 });
