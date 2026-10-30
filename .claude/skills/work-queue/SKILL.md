@@ -298,14 +298,20 @@ Main's merge queue rebases each commit onto main, so a branch it can't replay is
 when GitHub calls the PR mergeable. Never merge main into the branch: the merge commit is
 dropped in the replay and the old commits still conflict.
 
-1. In the ticket's worktree, note the branch's remote head (`git rev-parse origin/<branch>`),
-   then `git rebase origin/main` and resolve each conflict in the commit that causes it.
-2. Check the result against a merge: `git diff $(git merge-tree --write-tree <old head> origin/main) HEAD`
-   is empty, or differs only where a conflict needed a hand resolution you can explain.
+1. In the ticket's worktree, `git fetch origin`, check out the branch at its remote head and
+   note that head (`git rev-parse origin/<branch>`). Then `git rebase origin/main` and resolve
+   each conflict in the commit that causes it.
+2. Check the result. When `git merge-tree --write-tree <old head> origin/main` exits 0 (the old
+   head already merged main), the tree on its first line must match: `git diff <tree> HEAD` is
+   empty, or differs only where a conflict needed a hand resolution you can explain. When it exits 1 there is no
+   reference tree; read `git range-diff origin/main <old head> HEAD` instead, and explain every
+   change beyond the conflicts.
 3. Run the narrow checks for the conflicted projects.
 4. Push with an explicit lease, never a bare `--force` or `--force-with-lease`:
    `git -C <worktree> push --force-with-lease=<branch>:<old head> origin HEAD:refs/heads/<branch>`.
-   A refused lease means someone pushed meanwhile: fetch and start over.
+   A refused lease means someone pushed meanwhile. Never retry with the new head as the lease:
+   drop the local rebase, start again at step 1 from the updated branch, so their commits are
+   rebased too.
 5. Park on `CI` (see **Parking**). Once green, say in a ticket comment starting `**Agent:**`
    that the branch was rebased, and name any hand resolution.
 
