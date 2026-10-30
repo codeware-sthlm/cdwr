@@ -31,10 +31,12 @@ describe('agent-host entrypoint', () => {
   });
 
   it('samples the host from one disowned sampler, with telemetry_env inside it', () => {
+    // The desk's NUC heartbeat: three missed samples read as silent
+    expect(dockerfile).toContain('HOST_METRICS_INTERVAL_SECONDS=60');
     expect(entrypoint.match(/telemetry_host_metrics/g)).toHaveLength(1);
     expect(entrypoint.match(/telemetry_env/g)).toHaveLength(2); // comment + call
     expect(entrypoint).toMatch(
-      /\n\(\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}telemetry_host_metrics \|\| true\n {4}sleep "\$RUN_INTERVAL_SECONDS"\n {2}done\n\) &!\n/
+      /\n\(\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}telemetry_host_metrics \|\| true\n {4}sleep "\$\{HOST_METRICS_INTERVAL_SECONDS:-\$RUN_INTERVAL_SECONDS\}"\n {2}done\n\) &!\n/
     );
     // Never in the loop's own shell: it un-exports the key every run.sh needs
     expect(entrypoint).not.toMatch(/^telemetry_env/m);
