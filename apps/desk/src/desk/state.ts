@@ -3,7 +3,9 @@ import type { Issue, OpenStatusType } from '../linear';
 import type {
   ActivityPayload,
   HostMetricRow,
+  PlanUsageRow,
   RunsPayload,
+  UsageHourRow,
   UsagePayload
 } from '../supabase';
 
@@ -32,6 +34,7 @@ export const SHEET_IDS = [
   'scheduler',
   'timers',
   'nuc',
+  'plan',
   'activity',
   'shipped',
   'spend',
@@ -58,6 +61,10 @@ export type DeskData = {
   activity: ActivityPayload | null;
   /** The host's samples of the last 24 hours, oldest first */
   hostMetrics: HostMetricRow[] | null;
+  /** The plan's usage samples of the last 8 days */
+  planUsage: PlanUsageRow[] | null;
+  /** The hourly usage rows of the last 8 days */
+  usageHours: UsageHourRow[] | null;
   /** When the open tickets were last stored, in ms */
   storedAt: number | null;
 };
@@ -97,6 +104,8 @@ export const createState = (): DeskState => ({
     usage: null,
     activity: null,
     hostMetrics: null,
+    planUsage: null,
+    usageHours: null,
     storedAt: null
   },
   details: new Map(),

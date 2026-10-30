@@ -1,4 +1,4 @@
-import { dayKey, dayLabel, esc, hhmm, plural, usd } from '../format';
+import { ageText, dayKey, dayLabel, esc, hhmm, plural, usd } from '../format';
 import { type Model, activityMissing, ideaVerdict, shipped } from '../model';
 import { perTicketAverage, spendStats, ticketCosts } from '../spend';
 import { type DeskState, type SheetId, bucketsLoaded } from '../state';
@@ -55,6 +55,23 @@ const nucTile = ({ host }: Model): TileValue => {
   return { value: `${figure} · ${host.verdict}`, bad: host.verdict === 'bad' };
 };
 
+/** Both windows' used share, `–` for a reset or missing one; the age of the older sample when stale, bad when a window is on course to run out */
+const planTile = ({ plan }: Model): TileValue => {
+  const windows = [plan.five_hour, plan.seven_day].map((w) =>
+    w && !w.reset ? w : null
+  );
+  const part = (label: string, w: (typeof windows)[number]): string =>
+    `${label} ${w ? Math.round(w.used) + '%' : '–'}`;
+  const stale = windows.filter((w) => w?.stale);
+  const age = Math.max(0, ...stale.map((w) => w?.ageMin ?? 0));
+  return {
+    value:
+      `${part('5h', windows[0])} · ${part('7d', windows[1])}` +
+      (stale.length ? ` · ${ageText(age)}` : ''),
+    bad: windows.some((w) => w && w.verdict !== 'ok')
+  };
+};
+
 export const renderTiles = (m: Model, state: DeskState, now: Date): string => {
   const { activity, closed, usage } = state.data;
   const loaded = bucketsLoaded(state.data);
@@ -105,6 +122,12 @@ export const renderTiles = (m: Model, state: DeskState, now: Date): string => {
       icon: 'chip',
       label: 'NUC',
       ...nucTile(m)
+    },
+    {
+      sheet: 'plan',
+      icon: 'load',
+      label: 'Plan usage',
+      ...planTile(m)
     },
     {
       sheet: 'timers',

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Issue, StatusType } from '../linear';
-import type { HostMetricRow, RunsPayload } from '../supabase';
+import type {
+  HostMetricRow,
+  PlanUsageRow,
+  RunsPayload,
+  UsageHourRow
+} from '../supabase';
 
 import {
   agentState,
@@ -12,8 +17,10 @@ import {
   mergeOrder,
   model,
   openIssues,
+  planUsage,
   prOf,
-  shipped
+  shipped,
+  usageBurn
 } from './model';
 import { type DeskState, type Detail, createState } from './state';
 import type { QueueView } from './types';
@@ -1068,5 +1075,221 @@ describe('hostHealth', () => {
     );
     expect(h?.figures.swap).toBe(0);
     expect(h?.figures.load).toBe(0);
+  });
+});
+
+describe('planUsage', () => {
+  const HOUR = 36e5;
+  // A sample `ago` minutes before NOW of a window that resets `resetsIn` hours after NOW
+  const sample = (
+    kind: PlanUsageRow['kind'],
+    resetsIn: number,
+    used: number,
+    ago = 0,
+    over: Partial<PlanUsageRow> = {}
+  ): PlanUsageRow => ({
+    kind,
+    resets_at: new Date(NOW.getTime() + resetsIn * HOUR).toISOString(),
+    used_percentage: used,
+    sampled_at: new Date(NOW.getTime() - ago * 6e4).toISOString(),
+    host: 'mac',
+    ...over
+  });
+
+  it('is null per window without rows', () => {
+    expect(planUsage(null, NOW)).toEqual({ five_hour: null, seven_day: null });
+    expect(planUsage([sample('seven_day', 100, 10)], NOW).five_hour).toBeNull();
+  });
+
+  it('projects a steady rate to the reset and is ok below the limit', () => {
+    // Three hours into the window at 30 %: 10 % an hour, 50 % after the two hours left
+    const w = planUsage([sample('five_hour', 2, 30)], NOW).five_hour;
+    expect(w).toMatchObject({ reset: false, used: 30, verdict: 'ok' });
+    if (!w || w.reset) throw new Error('expected a live window');
+    expect(w.rate).toBeCloseTo(10);
+    expect(w.projected).toBeCloseTo(50);
+    expect(w.runsOutAt).toBeNull();
+    expect(w.start.getTime()).toBe(NOW.getTime() - 3 * HOUR);
+  });
+
+  it('warns when the projection reaches 100 % and says when it runs out', () => {
+    const w = planUsage([sample('five_hour', 2, 70)], NOW).five_hour;
+    if (!w || w.reset) throw new Error('expected a live window');
+    expect(w.verdict).toBe('warn');
+    expect(w.projected).toBeCloseTo(116.67, 1);
+    // 100 / (70 / 3) hours after the start
+    expect(w.runsOutAt?.getTime()).toBeCloseTo(
+      NOW.getTime() - 3 * HOUR + (300 / 70) * HOUR,
+      -2
+    );
+    expect(w.runsOutAt && w.runsOutAt < w.resetsAt).toBe(true);
+  });
+
+  it('is bad once it is used up', () => {
+    const w = planUsage([sample('five_hour', 2, 100)], NOW).five_hour;
+    expect(w).toMatchObject({ verdict: 'bad', used: 100 });
+  });
+
+  it('has no run-out time without a rate', () => {
+    const w = planUsage([sample('five_hour', 2, 0)], NOW).five_hour;
+    expect(w).toMatchObject({ verdict: 'ok', runsOutAt: null, rate: 0 });
+  });
+
+  it('does not blow up on a sample at the very start of the window', () => {
+    const w = planUsage([sample('five_hour', 5, 1)], NOW).five_hour;
+    if (!w || w.reset) throw new Error('expected a live window');
+    expect(w.rate).toBeCloseTo(10);
+    expect(Number.isFinite(w.projected)).toBe(true);
+  });
+
+  it('marks a sample older than 60 minutes stale and keeps its age', () => {
+    const fresh = planUsage([sample('five_hour', 2, 30, 59)], NOW).five_hour;
+    const old = planUsage([sample('five_hour', 2, 30, 90)], NOW).five_hour;
+    expect(fresh).toMatchObject({ stale: false });
+    expect(old).toMatchObject({ stale: true });
+    expect(old && !old.reset && old.ageMin).toBeCloseTo(90);
+  });
+
+  it('reads a window past its reset as reset, without a used figure', () => {
+    const w = planUsage([sample('five_hour', -1, 80, 120)], NOW).five_hour;
+    expect(w).toEqual({
+      kind: 'five_hour',
+      reset: true,
+      resetsAt: new Date(NOW.getTime() - HOUR)
+    });
+  });
+
+  it('takes the window with the newest reset time and its newest sample', () => {
+    const w = planUsage(
+      [
+        sample('five_hour', -1, 95, 200),
+        sample('five_hour', 4, 5, 30),
+        sample('five_hour', 4, 8, 10),
+        sample('five_hour', 4, 6, 20)
+      ],
+      NOW
+    ).five_hour;
+    expect(w).toMatchObject({ reset: false, used: 8 });
+  });
+
+  it('reads a reset time that drifts by minutes as the same window', () => {
+    const w = planUsage(
+      [sample('five_hour', 4, 12, 5), sample('five_hour', 4.1, 10, 30)],
+      NOW
+    ).five_hour;
+    expect(w).toMatchObject({ reset: false, used: 12 });
+  });
+
+  it('keeps the two kinds apart', () => {
+    const plan = planUsage(
+      [sample('five_hour', 2, 30), sample('seven_day', 100, 18)],
+      NOW
+    );
+    expect(plan.five_hour).toMatchObject({ used: 30 });
+    expect(plan.seven_day).toMatchObject({ used: 18 });
+    // 7 d window: 68 h elapsed
+    if (plan.seven_day && !plan.seven_day.reset)
+      expect(plan.seven_day.rate).toBeCloseTo(18 / 68);
+  });
+});
+
+describe('usageBurn', () => {
+  const HOUR = 36e5;
+  const top = Math.floor(NOW.getTime() / HOUR) * HOUR;
+  // An hour row `ago` whole hours before the current hour
+  const row = (
+    ago: number,
+    cost: number,
+    over: Partial<UsageHourRow> = {}
+  ): UsageHourRow => ({
+    hour: new Date(top - ago * HOUR).toISOString(),
+    host: 'mac',
+    model: 'opus',
+    role: 'planning',
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+    cost_usd: cost,
+    updated_at: NOW.toISOString(),
+    ...over
+  });
+
+  it('zero-fills 24 buckets, oldest first, ending with the current hour', () => {
+    const b = usageBurn(null, NOW);
+    expect(b.hourly).toHaveLength(24);
+    expect(b.hourly[23].hour).toBe(top);
+    expect(b.hourly[0].hour).toBe(top - 23 * HOUR);
+    expect(b.hourly.every((h) => h.cost === 0)).toBe(true);
+    expect(b.fiveHour.total).toBe(0);
+    expect(b.sevenDay.total).toBe(0);
+  });
+
+  it('sums every host and model into the hour, and leaves older hours out', () => {
+    const b = usageBurn(
+      [
+        row(0, 1),
+        row(0, 2, { host: 'nuc', model: 'sonnet' }),
+        row(5, 4),
+        row(24, 8),
+        row(30, 16)
+      ],
+      NOW
+    );
+    expect(b.hourly[23].cost).toBe(3);
+    expect(b.hourly[18].cost).toBe(4);
+    expect(b.hourly.reduce((n, h) => n + h.cost, 0)).toBe(7);
+  });
+
+  it('totals roles over the last 5 hours without a window, and over 7 days', () => {
+    const b = usageBurn(
+      [
+        row(0, 1),
+        row(4, 2, { role: 'implementing' }),
+        row(5, 4, { role: 'other' }),
+        row(6, 32),
+        row(24 * 6, 8, { role: 'orchestrating' }),
+        row(24 * 8, 16)
+      ],
+      NOW
+    );
+    // The hour that ends at the window's edge is still inside, the one before it is not
+    expect(b.fiveHour).toEqual({
+      planning: 1,
+      orchestrating: 0,
+      implementing: 2,
+      other: 4,
+      total: 7
+    });
+    expect(b.sevenDay).toMatchObject({
+      planning: 33,
+      orchestrating: 8,
+      implementing: 2,
+      other: 4,
+      total: 47
+    });
+  });
+
+  it('starts the 5-hour totals at the window when it is known', () => {
+    const plan = planUsage(
+      [
+        {
+          kind: 'five_hour',
+          resets_at: new Date(NOW.getTime() + 1 * HOUR).toISOString(),
+          used_percentage: 10,
+          sampled_at: NOW.toISOString(),
+          host: 'mac'
+        }
+      ],
+      NOW
+    );
+    // The window began four hours before NOW, so the row from five hours ago is out
+    const b = usageBurn([row(0, 1), row(3, 2), row(5, 4)], NOW, plan.five_hour);
+    expect(b.fiveHour.total).toBe(3);
+  });
+
+  it('counts an unknown role as other', () => {
+    const b = usageBurn([row(0, 5, { role: 'mystery' })], NOW);
+    expect(b.fiveHour.other).toBe(5);
   });
 });

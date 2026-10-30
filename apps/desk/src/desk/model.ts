@@ -1,6 +1,12 @@
 import { deskSha } from '../build-info';
 import type { Issue } from '../linear';
-import type { ActivityPayload, HostMetricRow, RunsPayload } from '../supabase';
+import type {
+  ActivityPayload,
+  HostMetricRow,
+  PlanUsageRow,
+  RunsPayload,
+  UsageHourRow
+} from '../supabase';
 
 import {
   AGENT,
@@ -14,6 +20,11 @@ import {
   LIMIT,
   LINEAR_ISSUE,
   OTHER_REPOS,
+  PLAN_RESET_DRIFT_MS,
+  PLAN_STALE_MIN,
+  PLAN_WARN_PCT,
+  PLAN_WINDOW_H,
+  ROLES,
   SHIP_DAYS,
   STALE_HOURS,
   STATES,
@@ -114,6 +125,10 @@ export type Model = {
   activityDay: number;
   /** The queue host's load; null without a sample */
   host: HostHealth | null;
+  /** The plan's two usage windows; null per window without a sample */
+  plan: PlanUsage;
+  /** What the hours cost, by hour and by role */
+  burn: UsageBurn;
 };
 
 const rankOf = (i: Pick<Issue, 'priority'>): number => i.priority.value || 5;
@@ -330,6 +345,151 @@ export const hostHealth = (
   };
 };
 
+export type PlanKind = keyof typeof PLAN_WINDOW_H;
+
+/** A window whose reset has passed carries no usage: the next sample starts the new one */
+export type PlanWindow =
+  | { kind: PlanKind; reset: true; resetsAt: Date }
+  | {
+      kind: PlanKind;
+      reset: false;
+      resetsAt: Date;
+      /** The window's start: its reset minus PLAN_WINDOW_H */
+      start: Date;
+      /** Percent used at the newest sample */
+      used: number;
+      sampledAt: Date;
+      /** Percent per hour since the window started */
+      rate: number;
+      /** Percent at the reset if the rate holds, from the newest sample */
+      projected: number;
+      /** When the rate uses the plan up; null when it does not before the reset */
+      runsOutAt: Date | null;
+      /** Minutes since the newest sample */
+      ageMin: number;
+      /** `stale`: older than PLAN_STALE_MIN, so the figure is history */
+      stale: boolean;
+      verdict: 'ok' | 'warn' | 'bad';
+    };
+
+export type PlanUsage = Record<PlanKind, PlanWindow | null>;
+
+const planWindow = (
+  kind: PlanKind,
+  rows: readonly PlanUsageRow[],
+  now: Date
+): PlanWindow | null => {
+  const ofKind = rows.filter((r) => r.kind === kind);
+  if (!ofKind.length) return null;
+  const resetsMs = Math.max(...ofKind.map((r) => Date.parse(r.resets_at)));
+  const resetsAt = new Date(resetsMs);
+  if (resetsMs <= now.getTime()) return { kind, reset: true, resetsAt };
+  // A reset time that drifts a little between samples is still the same window
+  const latest = ofKind
+    .filter((r) => resetsMs - Date.parse(r.resets_at) < PLAN_RESET_DRIFT_MS)
+    .reduce((a, b) =>
+      Date.parse(a.sampled_at) >= Date.parse(b.sampled_at) ? a : b
+    );
+  const sampledMs = Date.parse(latest.sampled_at);
+  const startMs = resetsMs - PLAN_WINDOW_H[kind] * 36e5;
+  const used = latest.used_percentage;
+  const elapsedH = Math.max(0.1, (sampledMs - startMs) / 36e5);
+  const rate = used / elapsedH;
+  const projected = used + rate * Math.max(0, (resetsMs - sampledMs) / 36e5);
+  const ageMin = (now.getTime() - sampledMs) / 6e4;
+  return {
+    kind,
+    reset: false,
+    resetsAt,
+    start: new Date(startMs),
+    used,
+    sampledAt: new Date(sampledMs),
+    rate,
+    projected,
+    runsOutAt:
+      rate > 0 && projected >= 100
+        ? new Date(startMs + (100 / rate) * 36e5)
+        : null,
+    ageMin,
+    stale: ageMin > PLAN_STALE_MIN,
+    verdict: used >= 100 ? 'bad' : projected >= PLAN_WARN_PCT ? 'warn' : 'ok'
+  };
+};
+
+/** Each window as the newest sample of its newest reset time says, with a straight-line projection to the reset */
+export const planUsage = (
+  rows: readonly PlanUsageRow[] | null,
+  now: Date
+): PlanUsage => ({
+  five_hour: planWindow('five_hour', rows ?? [], now),
+  seven_day: planWindow('seven_day', rows ?? [], now)
+});
+
+export const BURN_ROLES = [...ROLES, 'other'] as const;
+export type BurnRole = (typeof BURN_ROLES)[number];
+
+export type BurnTotals = Record<BurnRole, number> & { total: number };
+
+export type UsageBurn = {
+  /** Dollars per hour over every host, the last 24 hours, oldest first and zero-filled; `hour` is the hour's start in ms */
+  hourly: { hour: number; cost: number }[];
+  /** Dollars per role since the five-hour window started, or the last 5 hours without one */
+  fiveHour: BurnTotals;
+  /** Dollars per role over the last 7 days */
+  sevenDay: BurnTotals;
+};
+
+const HOUR_MS = 36e5;
+
+const totalsSince = (
+  rows: readonly UsageHourRow[],
+  since: number
+): BurnTotals => {
+  const totals: BurnTotals = {
+    planning: 0,
+    orchestrating: 0,
+    implementing: 0,
+    other: 0,
+    total: 0
+  };
+  for (const r of rows) {
+    // An hour row counts when any of its hour falls inside
+    if (Date.parse(r.hour) + HOUR_MS <= since) continue;
+    const role = BURN_ROLES.find((x) => x === r.role) ?? 'other';
+    totals[role] += r.cost_usd;
+    totals.total += r.cost_usd;
+  }
+  return totals;
+};
+
+/** API-equivalent dollars from the hourly rows: a bucket per hour for the last 24, role totals for the plan's windows */
+export const usageBurn = (
+  rows: readonly UsageHourRow[] | null,
+  now: Date,
+  fiveHour: PlanWindow | null = null
+): UsageBurn => {
+  const all = rows ?? [];
+  const nowMs = now.getTime();
+  const thisHour = Math.floor(nowMs / HOUR_MS) * HOUR_MS;
+  const hourly = Array.from({ length: 24 }, (_, i) => ({
+    hour: thisHour - (23 - i) * HOUR_MS,
+    cost: 0
+  }));
+  for (const r of all) {
+    const bucket = hourly.find((b) => b.hour === Date.parse(r.hour));
+    if (bucket) bucket.cost += r.cost_usd;
+  }
+  const windowStart =
+    fiveHour && !fiveHour.reset
+      ? fiveHour.start.getTime()
+      : nowMs - 5 * HOUR_MS;
+  return {
+    hourly,
+    fiveHour: totalsSince(all, windowStart),
+    sevenDay: totalsSince(all, nowMs - 7 * 24 * HOUR_MS)
+  };
+};
+
 export type ShippedDay = { key: string; items: Issue[] };
 
 export type Shipped = { days: ShippedDay[]; total: number; week: number };
@@ -489,6 +649,7 @@ export const model = (
           main: 'sha-' + mainDesk.slice(0, 7)
         }
       : null;
+  const plan = planUsage(data.planUsage, now);
 
   return {
     all: openIssues(data),
@@ -539,6 +700,8 @@ export const model = (
     activityDay: (activity?.rows ?? []).filter(
       (r) => nowMs - runTime(r.when) <= 864e5
     ).length,
-    host: hostHealth(data.hostMetrics, now)
+    host: hostHealth(data.hostMetrics, now),
+    plan,
+    burn: usageBurn(data.usageHours, now, plan.five_hour)
   };
 };

@@ -18,6 +18,8 @@ export type ActivityRow = Tables['activity']['Row'];
 export type IssueEventRow = Tables['issue_events']['Row'];
 export type HostMetricRow = Tables['host_metrics']['Row'];
 export type BuildRow = Tables['builds']['Row'];
+export type PlanUsageRow = Tables['plan_usage']['Row'];
+export type UsageHourRow = Tables['usage_hours']['Row'];
 
 /** Full commits of main's newest successful builds; null when none is recorded */
 export type MainBuilds = { image: string | null; desk: string | null };
@@ -92,6 +94,10 @@ export type QueuePayloads = {
 export type Payloads = QueuePayloads & {
   /** The last 24 hours of the queue host's samples, oldest first */
   hostMetrics: HostMetricRow[];
+  /** The plan samples of the last 8 days, whichever host wrote them */
+  planUsage: PlanUsageRow[];
+  /** The hourly usage rows of the last 8 days, every host and model */
+  usageHours: UsageHourRow[];
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -420,21 +426,51 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       return [...older, ...rows];
     });
 
+  // Apart from `read`, so a plan_usage failure (a migration not yet applied) leaves the other tiles alone
+  const readPlanUsage = (): Promise<PlanUsageRow[]> =>
+    attempt(async () =>
+      settle(
+        await client
+          .from('plan_usage')
+          .select('*')
+          .gte('sampled_at', new Date(Date.now() - 8 * DAY_MS).toISOString())
+          .order('sampled_at', { ascending: true })
+      )
+    );
+
+  // Apart from `read`, so a usage_hours failure (a migration not yet applied) leaves the other tiles alone
+  const readUsageHours = (): Promise<UsageHourRow[]> =>
+    attempt(async () =>
+      settle(
+        await client
+          .from('usage_hours')
+          .select('*')
+          .gte('hour', new Date(Date.now() - 8 * DAY_MS).toISOString())
+          .order('hour', { ascending: true })
+      )
+    );
+
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
    * catch up on what was missed. `onStatus` gets false on a channel error, a
    * timeout or a close, and true on (re)joining. `onIssue` gets each
    * `issue_events` row as it arrives, without debounce. `onHostMetrics` fires
-   * (debounced) on a new `host_metrics` row, which `onChange` does not.
+   * (debounced) on a new `host_metrics` row, which `onChange` does not;
+   * `onPlanUsage` on a new `plan_usage` row and `onUsageHours` on a new or
+   * updated `usage_hours` row, likewise.
    */
   const subscribe = (
     onChange: () => void,
     onStatus?: (healthy: boolean) => void,
     onIssue?: (row: IssueEventRow) => void,
-    onHostMetrics?: () => void
+    onHostMetrics?: () => void,
+    onPlanUsage?: () => void,
+    onUsageHours?: () => void
   ): (() => void) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hostTimer: ReturnType<typeof setTimeout> | undefined;
+    let planTimer: ReturnType<typeof setTimeout> | undefined;
+    let hoursTimer: ReturnType<typeof setTimeout> | undefined;
     const changed = (): void => {
       clearTimeout(timer);
       timer = setTimeout(onChange, DEBOUNCE_MS);
@@ -442,6 +478,14 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     const hostChanged = (): void => {
       clearTimeout(hostTimer);
       hostTimer = setTimeout(() => onHostMetrics?.(), DEBOUNCE_MS);
+    };
+    const planChanged = (): void => {
+      clearTimeout(planTimer);
+      planTimer = setTimeout(() => onPlanUsage?.(), DEBOUNCE_MS);
+    };
+    const hoursChanged = (): void => {
+      clearTimeout(hoursTimer);
+      hoursTimer = setTimeout(() => onUsageHours?.(), DEBOUNCE_MS);
     };
     let channel = client.channel('desk');
     for (const table of [
@@ -504,12 +548,43 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     builds.subscribe((status) => {
       if (status === 'SUBSCRIBED') changed();
     });
+    // One channel per plan usage table too, so a missing one fails only its own data
+    const planChannel = client
+      .channel('desk-plan')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'plan_usage' },
+        planChanged
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'plan_usage' },
+        planChanged
+      )
+      .subscribe();
+    const hoursChannel = client
+      .channel('desk-hours')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'usage_hours' },
+        hoursChanged
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'usage_hours' },
+        hoursChanged
+      )
+      .subscribe();
     return () => {
       clearTimeout(timer);
       clearTimeout(hostTimer);
+      clearTimeout(planTimer);
+      clearTimeout(hoursTimer);
       void client.removeChannel(channel);
       void client.removeChannel(hostChannel);
       void client.removeChannel(builds);
+      void client.removeChannel(planChannel);
+      void client.removeChannel(hoursChannel);
     };
   };
 
@@ -518,5 +593,12 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       settle(await client.from('queue_state').select('host').limit(1));
     });
 
-  return { read, readHostMetrics, subscribe, check };
+  return {
+    read,
+    readHostMetrics,
+    readPlanUsage,
+    readUsageHours,
+    subscribe,
+    check
+  };
 };

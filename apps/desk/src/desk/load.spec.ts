@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAdapter } from '../data';
 import type { Issue, IssueDetail } from '../linear';
-import { toRuns } from '../supabase';
+import { SupabaseError, toRuns } from '../supabase';
 
 import { createLoader } from './load';
 import { createState } from './state';
@@ -61,6 +61,8 @@ const setup = (getIssue: (id: string) => Promise<IssueDetail>) => {
       })
     ),
     readHostMetrics: vi.fn(() => Promise.resolve([])),
+    readPlanUsage: vi.fn(() => Promise.resolve([])),
+    readUsageHours: vi.fn(() => Promise.resolve([])),
     subscribe: vi.fn(() => () => undefined)
   };
   const adapter = createAdapter({
@@ -71,7 +73,7 @@ const setup = (getIssue: (id: string) => Promise<IssueDetail>) => {
   const state = createState();
   const render = vi.fn();
   const loader = createLoader({ adapter, state, render });
-  return { adapter, linear, state, render, loader };
+  return { adapter, linear, supabase, state, render, loader };
 };
 
 // Lets the watches answer and the details timer fire
@@ -151,6 +153,32 @@ describe('createLoader', () => {
     await loader.refresh();
     expect(state.details.size).toBe(0);
     expect(render).toHaveBeenCalledTimes(renders);
+  });
+
+  it('keeps the plan and hourly usage rows, and drops them on a failure that cannot be trusted', async () => {
+    const { loader, state, supabase, adapter } = setup(() =>
+      Promise.resolve(detail)
+    );
+    loader.watchAll();
+    await settle();
+    expect(state.data.planUsage).toEqual([]);
+    expect(state.data.usageHours).toEqual([]);
+    expect(state.errors.has('planUsage')).toBe(false);
+
+    supabase.readPlanUsage.mockRejectedValueOnce(
+      new SupabaseError('bad_response', 'relation does not exist')
+    );
+    supabase.readUsageHours.mockRejectedValueOnce(
+      new SupabaseError('network', 'offline')
+    );
+    await adapter.invalidate('Supabase');
+    await settle();
+    expect(state.data.planUsage).toBeNull();
+    expect(state.errors.get('planUsage')?.code).toBe('bad_response');
+    // A network failure keeps what is shown
+    expect(state.data.usageHours).toEqual([]);
+    expect(state.errors.get('usageHours')?.code).toBe('network');
+    loader.stop();
   });
 
   it('drops the errors of tickets no longer requested on the next load', async () => {

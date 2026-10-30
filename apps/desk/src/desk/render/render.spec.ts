@@ -4,7 +4,9 @@ import type { Issue } from '../../linear';
 import type {
   ActivityPayload,
   HostMetricRow,
+  PlanUsageRow,
   RunsPayload,
+  UsageHourRow,
   UsagePayload
 } from '../../supabase';
 import { model } from '../model';
@@ -159,6 +161,41 @@ const hostSample = (
   ...over
 });
 
+// A sample `ago` minutes before NOW of a window that resets `resetsIn` hours after NOW
+const planSample = (
+  kind: PlanUsageRow['kind'],
+  resetsIn: number,
+  used: number,
+  ago = 0
+): PlanUsageRow => ({
+  kind,
+  resets_at: new Date(NOW.getTime() + resetsIn * 36e5).toISOString(),
+  used_percentage: used,
+  sampled_at: new Date(NOW.getTime() - ago * 6e4).toISOString(),
+  host: 'mac'
+});
+
+// An hour row `ago` whole hours before the current hour
+const hourRow = (
+  ago: number,
+  cost: number,
+  over: Partial<UsageHourRow> = {}
+): UsageHourRow => ({
+  hour: new Date(
+    Math.floor(NOW.getTime() / 36e5) * 36e5 - ago * 36e5
+  ).toISOString(),
+  host: 'mac',
+  model: 'opus',
+  role: 'planning',
+  input_tokens: 0,
+  output_tokens: 0,
+  cache_read_tokens: 0,
+  cache_write_tokens: 0,
+  cost_usd: cost,
+  updated_at: NOW.toISOString(),
+  ...over
+});
+
 const filled = (session: SessionState = { state: 'none' }): DeskState => {
   const s = createState();
   s.data.buckets.set('unstarted', [
@@ -186,6 +223,11 @@ const filled = (session: SessionState = { state: 'none' }): DeskState => {
   s.data.usage = usage;
   s.data.activity = activity;
   s.data.hostMetrics = [hostSample(10), hostSample(0)];
+  s.data.planUsage = [
+    planSample('five_hour', 2, 30),
+    planSample('seven_day', 100, 18)
+  ];
+  s.data.usageHours = [hourRow(0, 1.5), hourRow(2, 3, { role: 'other' })];
   s.ideaReasons.set('COD-51', 'not worth it');
   return s;
 };
@@ -470,9 +512,122 @@ describe('columns and tiles', () => {
       'ideas',
       'all',
       'nuc',
+      'plan',
       'timers'
     ])
       expect(html).toContain(`data-w="${id}"`);
+  });
+
+  it('show the plan tile as both used shares', () => {
+    const state = filled();
+    const html = renderTiles(model(state, NOW), state, NOW);
+    expect(html).toMatch(/mini" data-w="plan"[^>]*>.*<b>5h 30% · 7d 18%<\/b>/);
+  });
+
+  it('show a reset or missing plan window as a dash, and no data at all as one', () => {
+    const reset = filled();
+    reset.data.planUsage = [
+      planSample('five_hour', -1, 90, 200),
+      planSample('seven_day', 100, 18)
+    ];
+    expect(renderTiles(model(reset, NOW), reset, NOW)).toMatch(
+      /data-w="plan"[^>]*>.*<b>5h – · 7d 18%<\/b>/
+    );
+    const none = filled();
+    none.data.planUsage = [];
+    expect(renderTiles(model(none, NOW), none, NOW)).toMatch(
+      /data-w="plan"[^>]*>.*<b>5h – · 7d –<\/b>/
+    );
+  });
+
+  it('append the age to a stale plan tile', () => {
+    const state = filled();
+    state.data.planUsage = [
+      planSample('five_hour', 2, 30, 180),
+      planSample('seven_day', 100, 18, 90)
+    ];
+    expect(renderTiles(model(state, NOW), state, NOW)).toMatch(
+      /data-w="plan"[^>]*>.*<b>5h 30% · 7d 18% · 3 h ago<\/b>/
+    );
+  });
+
+  it('mark the plan tile bad when a window will run out before its reset', () => {
+    const state = filled();
+    state.data.planUsage = [
+      planSample('five_hour', 2, 70),
+      planSample('seven_day', 100, 18)
+    ];
+    expect(renderTiles(model(state, NOW), state, NOW)).toMatch(
+      /mini bad" data-w="plan"/
+    );
+  });
+
+  it('draw the plan sheet with a bar and a projection per window', () => {
+    const state = filled();
+    const html = SHEETS.plan.body(model(state, NOW), state, NOW);
+    expect(html).toContain('5-hour window');
+    expect(html).toContain('7-day window');
+    expect(html).toContain('At this rate 50% at reset');
+    expect(html.match(/class="gauge"/g)).toHaveLength(2);
+    expect(html.match(/class="spark"/g)).toHaveLength(1);
+    expect(html).toContain('Last 24 hours');
+    expect(html).toContain('API-equivalent dollars');
+  });
+
+  it('say when a plan window runs out and when it is used up', () => {
+    const warn = filled();
+    warn.data.planUsage = [planSample('five_hour', 2, 70)];
+    expect(SHEETS.plan.body(model(warn, NOW), warn, NOW)).toMatch(
+      /Runs out ~.*, before the .* reset/
+    );
+    const bad = filled();
+    bad.data.planUsage = [planSample('five_hour', 2, 100)];
+    expect(SHEETS.plan.body(model(bad, NOW), bad, NOW)).toContain(
+      'Used up until'
+    );
+  });
+
+  it('say a plan window has reset', () => {
+    const state = filled();
+    state.data.planUsage = [planSample('five_hour', -1, 90, 200)];
+    expect(SHEETS.plan.body(model(state, NOW), state, NOW)).toContain(
+      'The window has reset'
+    );
+  });
+
+  it('total the roles on the plan sheet', () => {
+    const state = filled();
+    const html = SHEETS.plan.body(model(state, NOW), state, NOW);
+    expect(html).toContain('<td>total</td><td>$4.50</td><td>$4.50</td>');
+    expect(html).toContain('<td>other</td><td>$3.00</td><td>$3.00</td>');
+  });
+
+  it('explain a missing plan_usage or usage_hours table, or no samples yet', () => {
+    const failed = filled();
+    failed.data.planUsage = null;
+    failed.data.usageHours = null;
+    failed.errors.set('planUsage', { code: 'bad_response', message: 'x' });
+    failed.errors.set('usageHours', { code: 'bad_response', message: 'x' });
+    const html = SHEETS.plan.body(model(failed, NOW), failed, NOW);
+    expect(html).toContain("The plan_usage table couldn't load from Supabase.");
+    expect(html).toContain(
+      "The usage_hours table couldn't load from Supabase."
+    );
+
+    const loading = filled();
+    loading.data.planUsage = null;
+    loading.data.usageHours = null;
+    const wait = SHEETS.plan.body(model(loading, NOW), loading, NOW);
+    expect(wait).toContain('Loading the plan samples');
+    expect(wait).toContain('Loading the hourly usage');
+
+    const none = filled();
+    none.data.planUsage = [];
+    none.data.usageHours = [];
+    const empty = SHEETS.plan.body(model(none, NOW), none, NOW);
+    expect(empty).toContain('cdwr agent statusline install');
+    expect(empty).toContain('No hourly usage yet');
+    expect(empty).toContain('a proxy for what the plan counts');
   });
 });
 

@@ -32,9 +32,11 @@ import {
 } from '../format';
 import { DETAIL_STALE_MS, HANDOFF_STALE_MS, REASON_STALE_MS } from '../load';
 import {
+  BURN_ROLES,
   type HostFigures,
   type HostProblem,
   type Model,
+  type PlanWindow,
   type TicketRef,
   activityMissing,
   agentState,
@@ -644,6 +646,90 @@ const renderNuc = (m: Model, state: DeskState, now: Date): string => {
     <p class="rule">From the <code>host_metrics</code> table, one row about every ten minutes from the queue host. Bad is an average load per core above ${HOST_LOAD_PER_CORE_MAX} over ${HOST_WINDOW_MIN} minutes (the 5-minute load average), memory used above ${HOST_MEM_USED_MAX * 100}% of the total, swap in use and growing over ${HOST_WINDOW_MIN} minutes, or disk free below ${HOST_DISK_FREE_MIN * 100}%. The dashed line marks the limit. A host silent for more than ${HOST_STALE_MIN} minutes shows as stale.</p>`;
 };
 
+// ---------- Plan usage ----------
+
+const WINDOW_TITLE = { five_hour: '5-hour window', seven_day: '7-day window' };
+
+/** A time for a reset or a run-out: the clock time today, with the weekday when it is another day */
+const planWhen = (at: Date, now: Date): string =>
+  at.toDateString() === now.toDateString()
+    ? hhmm(at.getTime())
+    : `${at.toLocaleDateString([], { weekday: 'short' })} ${hhmm(at.getTime())}`;
+
+const planWindowHTML = (w: PlanWindow, now: Date): string => {
+  const title = WINDOW_TITLE[w.kind];
+  if (w.reset)
+    return `<div class="fig"><div class="figh"><h3>${title}</h3><b>–</b><span>reset ${esc(planWhen(w.resetsAt, now))}</span></div>
+      ${gauge(0, false)}
+      <p class="rule">The window has reset. The next sample from an interactive session starts a new one.</p></div>`;
+  const bad = w.verdict !== 'ok';
+  const projection =
+    w.verdict === 'bad'
+      ? `Used up until ${planWhen(w.resetsAt, now)}`
+      : w.verdict === 'warn' && w.runsOutAt
+        ? `Runs out ~${planWhen(w.runsOutAt, now)}, before the ${planWhen(w.resetsAt, now)} reset`
+        : `At this rate ${Math.round(w.projected)}% at reset`;
+  return `<div class="fig"><div class="figh"><h3>${title}</h3><b class="${bad ? 'bad' : ''}">${Math.round(w.used)}%</b><span>resets ${esc(planWhen(w.resetsAt, now))}</span></div>
+    ${gauge(w.used / 100, bad)}
+    <p class="rule">${esc(projection)}. <span class="${w.stale ? 'stale' : ''}">Sample ${esc(ageText(w.ageMin))}.</span></p></div>`;
+};
+
+const planWindows = (m: Model, state: DeskState, now: Date): string => {
+  if (!state.data.planUsage)
+    return empty(
+      state.errors.has('planUsage')
+        ? "The plan_usage table couldn't load from Supabase."
+        : 'Loading the plan samples…'
+    );
+  const windows = [m.plan.five_hour, m.plan.seven_day].flatMap((w) =>
+    w ? [w] : []
+  );
+  if (!windows.length)
+    return empty(
+      'No plan sample yet. Run <code>cdwr agent statusline install</code> on the Mac, then use an interactive session.'
+    );
+  return `<div class="figs">${windows.map((w) => planWindowHTML(w, now)).join('')}</div>`;
+};
+
+const planBurn = (m: Model, state: DeskState): string => {
+  if (!state.data.usageHours)
+    return empty(
+      state.errors.has('usageHours')
+        ? "The usage_hours table couldn't load from Supabase."
+        : 'Loading the hourly usage…'
+    );
+  if (!state.data.usageHours.length)
+    return empty(
+      'No hourly usage yet. The hosts write the <code>usage_hours</code> table as their sessions run.'
+    );
+  const { hourly, fiveHour, sevenDay } = m.burn;
+  const day = hourly.reduce((n, h) => n + h.cost, 0);
+  const max = Math.max(1, ...hourly.map((h) => h.cost));
+  const table = tableHTML(
+    ['Role', '5-hour window', '7 days'],
+    [...BURN_ROLES, 'total' as const].map((r) => [
+      esc(r),
+      esc(usd(fiveHour[r], 2)),
+      esc(usd(sevenDay[r], 2))
+    ])
+  );
+  return `<div class="fig"><div class="figh"><h3>Last 24 hours</h3><b>${esc(usd(day, 2))}</b><span>per hour, peak ${esc(usd(max, 2))}</span></div>
+    ${sparkline(
+      hourly.map((h) => ({ at: h.hour, value: h.cost })),
+      hourly[0].hour,
+      hourly[hourly.length - 1].hour,
+      max,
+      null,
+      'API-equivalent dollars per hour, last 24 hours'
+    )}</div>
+    ${table}`;
+};
+
+const renderPlan = (m: Model, state: DeskState, now: Date): string =>
+  `${planWindows(m, state, now)}
+  ${planBurn(m, state)}
+  <p class="rule">Hourly figures are API-equivalent dollars across every Claude project on the hosts, a proxy for what the plan counts. The percentages come from Claude Code's status line on an interactive session, so they age while only the NUC runs.</p>`;
+
 // ---------- Activity ----------
 
 const NO_ACTIVITY =
@@ -1031,6 +1117,11 @@ export const SHEETS: Record<SheetId, SheetDef> = {
     title: 'NUC',
     sub: 'How hard the queue host works: load, memory, swap and disk, with the last 24 hours',
     body: renderNuc
+  },
+  plan: {
+    title: 'Plan usage',
+    sub: "The Claude plan's 5-hour and 7-day usage with a projection to each reset, and what the last 24 hours cost",
+    body: renderPlan
   },
   activity: {
     title: 'Activity',
