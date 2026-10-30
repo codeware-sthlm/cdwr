@@ -1,9 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { type Need, defineCommand, readOnly } from '../cli/command';
-import { type Shell, collect, render } from '../cli/completion';
+import type { Shell } from '../cli/completion';
 import type { Context } from '../cli/context';
 import { type Check, check, onPath } from '../cli/preflight';
 import { cdwrHome } from '../cli/prefs';
@@ -25,8 +25,13 @@ import { symbols, theme } from '../ui/theme';
 import { formatImplement, hostKind, schedulerHere } from './agent/agent.logic';
 import { schedulerRow } from './agent/status.logic';
 import { shellOf } from './completion';
-import { completionFile, completionState } from './completion.logic';
-import { ENTRIES, GROUPS } from './index';
+import { readRecord, treeOf } from './completion.install';
+import {
+  type CompletionHealth,
+  completionFile,
+  completionHealth,
+  refreshMarker
+} from './completion.logic';
 
 const NEEDS: Need[] = [
   'fly',
@@ -45,11 +50,13 @@ interface Report {
   node: string;
   /** Tool versions the workspace pins, read from its manifests */
   versions: { nx: string; pnpm: string; nodeWanted: string };
-  /** The completion script of the shell in $SHELL, against what the registry renders */
+  /** The completion script of the shell in $SHELL, against the checkout it follows */
   completion: {
     shell: Shell | null;
     file: string | null;
-    state: 'current' | 'stale' | 'missing' | 'unsupported' | 'unknown';
+    /** The checkout the script follows, once setup recorded it */
+    root: string | null;
+    state: CompletionHealth | 'unsupported';
   };
   /** The agent queue, on a Mac or in the agent container */
   agentQueue?: {
@@ -115,22 +122,38 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
   };
 }
 
-async function completion(ctx: Context): Promise<Report['completion']> {
+/** The installed script against the checkout it follows, not the one doctor runs in */
+function completion(ctx: Context): Report['completion'] {
   const shell = shellOf(ctx.env['SHELL']);
-  if (!shell) return { shell: null, file: null, state: 'unsupported' };
-  const file = completionFile(shell, {
-    cdwrHome: cdwrHome(ctx.env),
-    home: homedir()
-  });
-  // Rendering loads every command; a broken one must not take the report down
-  try {
-    const installed = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
-    const rendered = render(shell, GROUPS, await collect(ENTRIES));
-    return { shell, file, state: completionState(installed, rendered) };
-  } catch {
-    return { shell, file, state: 'unknown' };
+  if (!shell) {
+    return { shell: null, file: null, root: null, state: 'unsupported' };
   }
+  const home = cdwrHome(ctx.env);
+  const record = readRecord(home);
+  // A record for another shell says nothing about this one's script
+  const tracked = record?.shell === shell ? record : undefined;
+  const file =
+    tracked?.file ?? completionFile(shell, { cdwrHome: home, home: homedir() });
+  return {
+    shell,
+    file,
+    root: tracked?.root ?? null,
+    state: completionHealth({
+      record: tracked,
+      fileExists: existsSync(file),
+      tree: tracked ? treeOf(tracked.root) : undefined,
+      markerAgeMs: ageOf(refreshMarker(home))
+    })
+  };
 }
+
+const ageOf = (file: string): number | undefined => {
+  try {
+    return Date.now() - statSync(file).mtimeMs;
+  } catch {
+    return undefined;
+  }
+};
 
 const readJson = (file: string): Record<string, unknown> => {
   try {
@@ -173,7 +196,7 @@ export default defineCommand({
           )?.node ?? ''
         )
       },
-      completion: await completion(ctx),
+      completion: completion(ctx),
       agentQueue: await agentQueue(ctx)
     };
     return readOnly(report);
@@ -223,6 +246,9 @@ export default defineCommand({
           ]
     );
     const { completion: comp } = report;
+    // Named whenever it isn't where doctor runs: setup anywhere else would move the link
+    const elsewhere =
+      comp.root !== null && comp.root !== realpathSync(ctx.root);
     const completionRows: Record<
       Report['completion']['state'],
       () => [string, string, string]
@@ -230,22 +256,50 @@ export default defineCommand({
       current: () => [
         symbols.ok,
         'completion',
-        theme.muted(`${comp.shell} is current`)
+        theme.muted(
+          `${comp.shell} is current${elsewhere ? ` with ${comp.root}` : ''}`
+        )
       ],
-      stale: () => [
+      refreshing: () => [
+        symbols.ok,
+        'completion',
+        theme.muted(
+          `refreshes from ${comp.root} after the next cdwr run; open shells need a new shell or \`source ${comp.file}\``
+        )
+      ],
+      stuck: () => [
         symbols.warn,
         'completion',
-        theme.warn('out of date; run cdwr setup')
+        theme.warn(
+          `the refresh from ${comp.root} did not finish; check that \`pnpm install\` ran there, then run cdwr setup in it`
+        )
       ],
-      missing: () => [
-        symbols.ok,
+      untracked: () => [
+        symbols.warn,
         'completion',
-        theme.muted('not installed; cdwr setup adds it')
+        theme.warn(
+          "doesn't keep itself current yet; run cdwr setup once in the checkout cdwr links to"
+        )
       ],
+      missing: () =>
+        comp.root
+          ? [
+              symbols.warn,
+              'completion',
+              theme.warn(`${comp.file} is gone; run cdwr setup in ${comp.root}`)
+            ]
+          : [
+              symbols.ok,
+              'completion',
+              theme.muted('not installed; cdwr setup adds it')
+            ],
+      // A removed checkout lands here too, and then nothing refreshes it again
       unknown: () => [
-        symbols.ok,
+        symbols.warn,
         'completion',
-        theme.muted('could not be checked')
+        theme.warn(
+          `git can't read ${comp.root}, so nothing refreshes it; run cdwr setup in the checkout cdwr links to`
+        )
       ],
       unsupported: () => [
         symbols.ok,
@@ -347,7 +401,12 @@ export default defineCommand({
     const warnings =
       (report.envFile === 'current' ? 0 : 1) +
       (report.onPath ? 0 : 1) +
-      (comp.state === 'stale' ? 1 : 0) +
+      (comp.state === 'untracked' ||
+      comp.state === 'stuck' ||
+      comp.state === 'unknown' ||
+      (comp.state === 'missing' && comp.root !== null)
+        ? 1
+        : 0) +
       (queueProblems > 0 ? 1 : 0);
     const summary =
       missing > 0
