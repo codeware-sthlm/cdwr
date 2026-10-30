@@ -226,7 +226,7 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 run) always go out.
 
 The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
-`usage_hours`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events` and `builds`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events` and `builds`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
@@ -452,6 +452,18 @@ cdwr agent mirror clear                   # stop mirroring
 
 The NUC treats a file from another host as alive for three hours while it waits at a prompt or
 polls, and otherwise while its heartbeat is under 15 minutes old. It deletes the file after a day.
+
+The plan's own usage reaches the desk only from an interactive session: Claude Code hands its status
+line the 5-hour and weekly `rate_limits`, and nothing else exposes them. `agent-queue/statusline.sh`
+prints a one-line status, keeps the newest figures in `~/.cdwr/agent-queue/rate-limits.json` and
+sends a `plan_usage` row when a value changes, at most once a minute and detached. Set it once on
+the Mac; it refuses to replace a status line that is already set:
+
+```sh
+cdwr agent statusline install   # points ~/.claude/settings.json at this checkout's statusline.sh
+```
+
+The figures age while only the NUC runs, and the desk shows how old they are.
 
 ## Writing a command
 
