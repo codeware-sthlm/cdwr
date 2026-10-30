@@ -34,6 +34,7 @@ export const STORED: Record<string, readonly string[]> = {
     'closed',
     'synchronize',
     'ready_for_review',
+    'review_requested',
     'enqueued',
     'dequeued'
   ],
@@ -100,6 +101,36 @@ const branchOf = (
   return text(payload['check_suite']['head_branch']);
 };
 
+/** Copilot's login: `Copilot` in webhook payloads, `copilot-pull-request-reviewer` in GraphQL */
+const COPILOT = /^(copilot|copilot-pull-request-reviewer(\[bot\])?)$/i;
+
+/**
+ * The action's last part: a merge for a merged close, the conclusion of a completed
+ * suite (`success`, `failure`, …), `copilot` for Copilot's review, else the verb
+ */
+const outcomeOf = (
+  event: string,
+  verb: string,
+  payload: Record<string, unknown>
+): string => {
+  if (event === 'pull_request' && verb === 'closed') {
+    const pr = isRecord(payload['pull_request']) ? payload['pull_request'] : {};
+    return pr['merged'] === true ? 'merged' : verb;
+  }
+  if (event === 'check_suite') {
+    const suite = isRecord(payload['check_suite'])
+      ? payload['check_suite']
+      : {};
+    return text(suite['conclusion']) ?? verb;
+  }
+  if (event === 'pull_request_review') {
+    const review = isRecord(payload['review']) ? payload['review'] : {};
+    const user = isRecord(review['user']) ? review['user'] : {};
+    return COPILOT.test(text(user['login']) ?? '') ? 'copilot' : verb;
+  }
+  return verb;
+};
+
 /** The row for a stored event, or null for anything else */
 export const toRow = (
   event: string | null,
@@ -119,16 +150,10 @@ export const toRow = (
   const branch = pr === null ? branchOf(event, payload) : null;
   if (pr === null && branch === null) return null;
 
-  const merged =
-    event === 'pull_request' &&
-    verb === 'closed' &&
-    isRecord(payload['pull_request']) &&
-    payload['pull_request']['merged'] === true;
-
   return {
     subject: pr !== null ? `pr/${pr}` : `ref/${branch}`,
     pr,
-    action: `${event}:${merged ? 'merged' : verb}`,
+    action: `${event}:${outcomeOf(event, verb, payload)}`,
     updated_at: at.toISOString()
   };
 };

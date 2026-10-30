@@ -251,7 +251,8 @@ wake on. A repo webhook (JSON) sends `pull_request`, `pull_request_review`, `pul
 against `GITHUB_WEBHOOK_SECRET`. GitHub sends no timestamp, so a replayed delivery is accepted; it can
 only cause an extra wake, which re-reads Linear and GitHub anyway. The function keeps one row per subject:
 `pr/<n>` when the event names a pull request, else `ref/<branch>`, with the action (`pull_request:merged`,
-`check_suite:completed`, …) and never the payload. A `ping` is answered without a row, and every other
+`check_suite:success` or another conclusion, `pull_request_review:copilot` for Copilot's review, …) and never
+the payload; the desk reads the action as the PR's state. A `ping` is answered without a row, and every other
 event or action with `Ignored`. Commit statuses aren't subscribed: the required checks and Chromatic run
 as Actions jobs, which `check_suite` covers. Both functions share `functions/_shared/hmac.ts`, so a change
 to it means deploying both:
