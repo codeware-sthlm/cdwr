@@ -76,13 +76,17 @@ const runs = (qv: QueueView | null): RunsPayload => ({
     items: ''
   },
   qv,
+  viewInvalid: false,
+  at: new Date('2026-10-29T11:55:00').toISOString(),
   main: { image: null, desk: null },
   rows: [
     {
       when: '2026-10-29 11:50',
       outcome: 'failed',
       ticket: 'COD-1',
-      detail: 'x'
+      detail: 'x',
+      started: new Date('2026-10-29T11:50:00').toISOString(),
+      finished: null
     }
   ]
 });

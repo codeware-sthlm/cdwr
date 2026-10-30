@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import type { Issue, StatusType } from '../linear';
 import type {
+  ActivityPayload,
   HostMetricRow,
   PlanUsageRow,
   RunsPayload,
   UsageHourRow
 } from '../supabase';
 
+import { HOST_METRICS_MINUTES } from './constants';
 import {
+  activityBy,
   agentState,
   byQueue,
   hostHealth,
@@ -19,8 +22,11 @@ import {
   openIssues,
   planUsage,
   prOf,
+  runsToday,
   shipped,
-  usageBurn
+  ticketsByPr,
+  usageBurn,
+  waitAges
 } from './model';
 import { type DeskState, type Detail, createState } from './state';
 import type { QueueView } from './types';
@@ -70,6 +76,8 @@ const runsPayload = (over: Partial<RunsPayload> = {}): RunsPayload => ({
   suggested: null,
   job: null,
   qv: view(),
+  viewInvalid: false,
+  at: '2026-10-29T11:55:00.000Z',
   main: { image: null, desk: null },
   rows: [],
   ...over
@@ -648,7 +656,9 @@ describe('model', () => {
       when,
       outcome,
       ticket: '',
-      detail: ''
+      detail: '',
+      started: new Date(when.replace(' ', 'T')).toISOString(),
+      finished: null
     });
 
     it('counts the problems of the last 24 hours when no run went well since', () => {
@@ -848,6 +858,215 @@ describe('model', () => {
   });
 });
 
+describe('runsToday', () => {
+  // Local-time clock, whatever the zone the specs run in
+  const at = (d: number, h: number, min = 0): Date =>
+    new Date(2026, 9, d, h, min);
+  const now = at(29, 12);
+  const run = (
+    started: Date,
+    finished: Date | null,
+    outcome = 'implemented'
+  ): RunsPayload['rows'][number] => ({
+    when: '',
+    outcome,
+    ticket: '',
+    detail: '',
+    started: started.toISOString(),
+    finished: finished ? finished.toISOString() : null
+  });
+
+  it('is empty without runs', () => {
+    expect(runsToday([], now)).toEqual({
+      count: 0,
+      medianMs: null,
+      failed: 0
+    });
+  });
+
+  it('counts only the runs since local midnight', () => {
+    const r = runsToday(
+      [
+        run(at(29, 0, 0), at(29, 0, 5)),
+        run(at(29, 9), at(29, 9, 10)),
+        run(at(28, 23, 59), at(29, 0, 4))
+      ],
+      now
+    );
+    expect(r.count).toBe(2);
+    // 5 and 10 minutes
+    expect(r.medianMs).toBe(7.5 * 6e4);
+  });
+
+  it('takes the middle duration of an odd count', () => {
+    const r = runsToday(
+      [
+        run(at(29, 8), at(29, 8, 1)),
+        run(at(29, 9), at(29, 9, 30)),
+        run(at(29, 10), at(29, 10, 10))
+      ],
+      now
+    );
+    expect(r.medianMs).toBe(10 * 6e4);
+  });
+
+  it('averages the two middle durations of an even count', () => {
+    const r = runsToday(
+      [
+        run(at(29, 8), at(29, 8, 2)),
+        run(at(29, 9), at(29, 9, 4)),
+        run(at(29, 10), at(29, 10, 20)),
+        run(at(29, 11), at(29, 11, 40))
+      ],
+      now
+    );
+    expect(r.medianMs).toBe(12 * 6e4);
+  });
+
+  it('leaves open runs out of the median but not the count', () => {
+    const r = runsToday(
+      [run(at(29, 8), at(29, 8, 6)), run(at(29, 11, 50), null)],
+      now
+    );
+    expect(r.count).toBe(2);
+    expect(r.medianMs).toBe(6 * 6e4);
+    expect(runsToday([run(at(29, 11, 50), null)], now).medianMs).toBeNull();
+  });
+
+  it('counts the runs whose outcome is a problem as failed', () => {
+    const r = runsToday(
+      [
+        run(at(29, 8), at(29, 8, 1), 'failed'),
+        run(at(29, 9), at(29, 9, 1), 'cap'),
+        run(at(29, 10), at(29, 10, 1), 'planned COD-1'),
+        run(at(28, 10), at(28, 10, 1), 'failed')
+      ],
+      now
+    );
+    expect(r.count).toBe(3);
+    expect(r.failed).toBe(2);
+  });
+});
+
+describe('activityBy', () => {
+  const rows = (...actors: [string, string][]): ActivityPayload => ({
+    updated: '2026-10-29 11:50',
+    header: '',
+    dropped: '',
+    rows: actors.map(([when, actor]) => ({
+      when,
+      ticket: 'COD-1',
+      actor,
+      change: 'x'
+    }))
+  });
+
+  it('is zero without activity', () => {
+    expect(activityBy(null, NOW)).toEqual({ agent: 0, human: 0 });
+  });
+
+  it('counts the agent and the scheduler against everyone else', () => {
+    const a = rows(
+      ['2026-10-29 11:00', 'agent'],
+      ['2026-10-29 10:00', 'scheduler'],
+      ['2026-10-29 09:00', 'Håkan'],
+      ['2026-10-29 08:00', 'Copilot']
+    );
+    expect(activityBy(a, NOW)).toEqual({ agent: 2, human: 2 });
+  });
+
+  it('leaves out what is more than 24 hours old', () => {
+    const a = rows(
+      ['2026-10-28 12:00', 'agent'],
+      ['2026-10-28 11:59', 'agent'],
+      ['2026-10-28 11:59', 'Håkan']
+    );
+    expect(activityBy(a, NOW)).toEqual({ agent: 1, human: 0 });
+  });
+});
+
+describe('waitAges', () => {
+  const activity = (...rows: [string, string, string][]): ActivityPayload => ({
+    updated: '2026-10-29 11:50',
+    header: '',
+    dropped: '',
+    rows: rows.map(([when, ticket, change]) => ({
+      when,
+      ticket,
+      actor: 'agent',
+      change
+    }))
+  });
+
+  it('prefers the newest gate event over a newer ordinary one', () => {
+    // Newest first, as the activity rows are
+    const a = activity(
+      ['2026-10-29 11:30', 'COD-1', 'Moved to In Progress'],
+      ['2026-10-29 10:00', 'COD-1', '+agent:needs-input'],
+      ['2026-10-29 09:00', 'COD-1', '+agent:needs-input']
+    );
+    expect(waitAges(['COD-1'], a, NOW).get('COD-1')).toBe(120);
+  });
+
+  it('reads a gate comment as a gate event', () => {
+    const a = activity(
+      ['2026-10-29 11:30', 'COD-2', 'Moved to In Progress'],
+      ['2026-10-29 08:00', 'COD-2', 'comment: **Agent: plan ready**']
+    );
+    expect(waitAges(['COD-2'], a, NOW).get('COD-2')).toBe(240);
+  });
+
+  it('falls back to the newest row without a gate event', () => {
+    const a = activity(
+      ['2026-10-29 11:30', 'COD-3', 'Moved to In Progress'],
+      ['2026-10-29 09:00', 'COD-3', 'Moved to Todo']
+    );
+    expect(waitAges(['COD-3'], a, NOW).get('COD-3')).toBe(30);
+  });
+
+  it('leaves out tickets without rows or without activity', () => {
+    const a = activity(['2026-10-29 11:30', 'COD-1', '+agent:review']);
+    const ages = waitAges(['COD-1', 'COD-9'], a, NOW);
+    expect([...ages.keys()]).toEqual(['COD-1']);
+    expect(waitAges(['COD-1'], null, NOW).size).toBe(0);
+  });
+});
+
+describe('ticketsByPr', () => {
+  it('prefers the queue view’s PR over the attached one', () => {
+    const details = new Map([['A', detail({ pr: 7 })]]);
+    expect(ticketsByPr(details, [{ ticket: 'A', pr: 9 }])).toEqual(
+      new Map([[9, 'A']])
+    );
+    expect(ticketsByPr(details, [{ ticket: 'A' }])).toEqual(
+      new Map([[7, 'A']])
+    );
+  });
+
+  it('reads a PR written as a string as a number', () => {
+    const map = ticketsByPr(new Map(), [{ ticket: 'A', pr: '12' }]);
+    expect(map.get(12)).toBe('A');
+  });
+
+  it('leaves out tickets without a usable PR', () => {
+    const map = ticketsByPr(new Map(), [
+      { ticket: 'A' },
+      { ticket: 'B', pr: null },
+      { ticket: 'C', pr: 'soon' },
+      { ticket: 'D', pr: 0 }
+    ]);
+    expect(map.size).toBe(0);
+  });
+
+  it('keeps the first ticket when two name the same PR', () => {
+    const map = ticketsByPr(new Map(), [
+      { ticket: 'A', pr: 5 },
+      { ticket: 'B', pr: '5' }
+    ]);
+    expect([...map]).toEqual([[5, 'A']]);
+  });
+});
+
 describe('shipped', () => {
   const closedOn = (
     id: string,
@@ -1035,11 +1254,36 @@ describe('hostHealth', () => {
     expect(h?.problems).toEqual(['load', 'memory', 'disk']);
   });
 
-  it('is stale when the newest sample is older than 30 minutes, whatever it says', () => {
-    const h = hostHealth([sample(45, { load5: 9 })], NOW);
-    expect(h?.verdict).toBe('stale');
-    expect(h?.ageMin).toBeCloseTo(45);
-    expect(hostHealth([sample(29)], NOW)?.verdict).toBe('ok');
+  it('is stale after three sample intervals, whatever the newest sample says', () => {
+    // Samples 10 minutes apart: silent after 30 minutes
+    const slow = hostHealth(
+      [sample(51), sample(41), sample(31, { load5: 9 })],
+      NOW
+    );
+    expect(slow?.intervalMin).toBeCloseTo(10);
+    expect(slow?.silentMin).toBeCloseTo(30);
+    expect(slow?.ageMin).toBeCloseTo(31);
+    expect(slow?.verdict).toBe('stale');
+    const slowOk = hostHealth([sample(49), sample(39), sample(29)], NOW);
+    expect(slowOk?.silentMin).toBeCloseTo(30);
+    expect(slowOk?.verdict).toBe('ok');
+
+    // Samples a minute apart: silent after 3 minutes
+    const fast = hostHealth([sample(6), sample(5), sample(4)], NOW);
+    expect(fast?.intervalMin).toBeCloseTo(1);
+    expect(fast?.silentMin).toBeCloseTo(3);
+    expect(fast?.verdict).toBe('stale');
+    const fastOk = hostHealth([sample(4), sample(3), sample(2)], NOW);
+    expect(fastOk?.silentMin).toBeCloseTo(3);
+    expect(fastOk?.verdict).toBe('ok');
+  });
+
+  it('assumes the sampler interval from a single sample', () => {
+    const stale = hostHealth([sample(4)], NOW);
+    expect(stale?.intervalMin).toBe(HOST_METRICS_MINUTES);
+    expect(stale?.silentMin).toBe(3 * HOST_METRICS_MINUTES);
+    expect(stale?.verdict).toBe('stale');
+    expect(hostHealth([sample(2)], NOW)?.verdict).toBe('ok');
   });
 
   it('follows the host whose samples are newest', () => {
