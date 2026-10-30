@@ -137,15 +137,16 @@ listener_live() {
 
 # The Sentry monitor expects a check-in every RUN_INTERVAL_SECONDS; between runs the loop sends them
 source "$AGENT_QUEUE_HOME/checkin.sh"
-# The host's load, memory and disk go to Supabase every RUN_INTERVAL_SECONDS from a sampler of
-# its own: a long run or a slow Supabase never holds it, and it never ends the loop. telemetry_env
+# The host's load, memory and disk go to Supabase every HOST_METRICS_INTERVAL_SECONDS (else every
+# RUN_INTERVAL_SECONDS), the desk's NUC heartbeat, from a sampler of its own: a long run or a
+# slow Supabase never holds it, and it never ends the loop. telemetry_env
 # runs inside it only, as it un-exports the key every run.sh the loop starts needs.
 source "$AGENT_QUEUE_HOME/telemetry.sh"
 (
   telemetry_env "$ENV_FILE"
   while true; do
     telemetry_host_metrics || true
-    sleep "$RUN_INTERVAL_SECONDS"
+    sleep "${HOST_METRICS_INTERVAL_SECONDS:-$RUN_INTERVAL_SECONDS}"
   done
 ) &!
 

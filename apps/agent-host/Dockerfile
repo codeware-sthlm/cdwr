@@ -60,6 +60,7 @@ ENV AGENT_QUEUE_HOST=container \
     AGENT_QUEUE_LINEAR_KEY_FILE=/run/agent/linear.key \
     RUN_INTERVAL_SECONDS=600 \
     RUN_FALLBACK_SECONDS=3600 \
+    HOST_METRICS_INTERVAL_SECONDS=60 \
     pnpm_config_store_dir=/pnpm-store
 
 USER agent
