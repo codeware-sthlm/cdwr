@@ -6,21 +6,20 @@ import {
   readFileSync,
   readlinkSync,
   symlinkSync,
-  unlinkSync,
-  writeFileSync
+  unlinkSync
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
 import { defineCommand } from '../cli/command';
-import { SHELLS, type Shell, collect, render } from '../cli/completion';
+import { SHELLS, type Shell } from '../cli/completion';
 import { CliError } from '../cli/errors';
 import { input } from '../cli/inputs';
 import { cdwrHome } from '../cli/prefs';
 
 import { shellOf } from './completion';
+import { installCompletion } from './completion.install';
 import { completionFile } from './completion.logic';
-import { ENTRIES, GROUPS } from './index';
 
 const SHIM = 'tools/cdwr/bin/cdwr.mjs';
 const MARK = '# cdwr completion';
@@ -68,13 +67,16 @@ export default defineCommand({
     const onPath = (ctx.env['PATH'] ?? '').split(delimiter).includes(binDir);
 
     let linkState: 'missing' | 'ours' | 'other-link' | 'file' = 'missing';
+    let linkedTo: string | undefined;
     if (existsSync(link) || isSymlink(link)) {
       const stat = lstatSync(link);
-      linkState = stat.isSymbolicLink()
-        ? readlinkSync(link) === target
-          ? 'ours'
-          : 'other-link'
-        : 'file';
+      linkedTo = stat.isSymbolicLink() ? readlinkSync(link) : undefined;
+      linkState =
+        linkedTo === undefined
+          ? 'file'
+          : linkedTo === target
+            ? 'ours'
+            : 'other-link';
     }
     if (linkState === 'file') {
       throw new CliError(
@@ -88,12 +90,19 @@ export default defineCommand({
       linkState === 'ours'
         ? `Keep ${link} (already points here)`
         : `Link ${link} → ${SHIM}`,
-      `Write ${shell} completion to ${completion}`,
+      `Write ${shell} completion to ${completion}, kept current from ${ctx.root}`,
       ...(rc && !rcHasSource ? [`Add a source line to ${rc}`] : [])
     ];
-    const notes = onPath
-      ? []
-      : [`${binDir} is not on your PATH yet; the summary says what to add`];
+    const notes = [
+      ...(linkState === 'other-link'
+        ? [
+            `The link moves from ${linkedTo}; completion follows ${ctx.root} from now on`
+          ]
+        : []),
+      ...(onPath
+        ? []
+        : [`${binDir} is not on your PATH yet; the summary says what to add`])
+    ];
     return {
       steps,
       notes,
@@ -102,6 +111,7 @@ export default defineCommand({
         target,
         linkState,
         completionFile: completion,
+        cdwrHome: home,
         rc,
         rcHasSource: Boolean(rcHasSource),
         shell,
@@ -116,9 +126,12 @@ export default defineCommand({
     if (data.linkState === 'other-link') unlinkSync(data.link);
     if (data.linkState !== 'ours') symlinkSync(data.target, data.link);
 
-    const script = render(data.shell, GROUPS, await collect(ENTRIES));
-    mkdirSync(join(data.completionFile, '..'), { recursive: true });
-    writeFileSync(data.completionFile, script);
+    await installCompletion({
+      shell: data.shell,
+      file: data.completionFile,
+      root: ctx.root,
+      cdwrHome: data.cdwrHome
+    });
 
     const next: string[] = [];
     if (data.rc && !data.rcHasSource) {
