@@ -6,7 +6,8 @@ import {
   HOST_DISK_FREE_MIN,
   HOST_LOAD_PER_CORE_MAX,
   HOST_MEM_USED_MAX,
-  HOST_STALE_MIN,
+  HOST_METRICS_MINUTES,
+  HOST_STALE_SAMPLES,
   HOST_WINDOW_MIN,
   LIMIT,
   LINEAR_ISSUE,
@@ -612,7 +613,7 @@ const renderNuc = (m: Model, state: DeskState, now: Date): string => {
   const h = m.host;
   if (!h)
     return empty(
-      'No host samples yet. The queue host writes one about every ten minutes, from a Linux machine only.'
+      `No host samples yet. The queue host writes one about ${HOST_METRICS_MINUTES === 1 ? 'every minute' : `every ${HOST_METRICS_MINUTES} minutes`}, from a Linux machine only.`
     );
   const verdict =
     h.verdict === 'stale'
@@ -643,7 +644,7 @@ const renderNuc = (m: Model, state: DeskState, now: Date): string => {
   });
   return `<div class="group"><h3>${esc(h.host)}</h3><div class="verdict ${h.verdict === 'ok' ? '' : 'bad'}">${esc(verdict)}</div><p class="rule">Newest sample ${esc(ageText(h.ageMin))}, ${plural(h.series.length, 'sample', 'samples')} in the last 24 hours.</p></div>
     <div class="figs">${figures.join('')}</div>
-    <p class="rule">From the <code>host_metrics</code> table, one row about every ten minutes from the queue host. Bad is an average load per core above ${HOST_LOAD_PER_CORE_MAX} over ${HOST_WINDOW_MIN} minutes (the 5-minute load average), memory used above ${HOST_MEM_USED_MAX * 100}% of the total, swap in use and growing over ${HOST_WINDOW_MIN} minutes, or disk free below ${HOST_DISK_FREE_MIN * 100}%. The dashed line marks the limit. A host silent for more than ${HOST_STALE_MIN} minutes shows as stale.</p>`;
+    <p class="rule">From the <code>host_metrics</code> table, one row about every ten minutes from the queue host. Bad is an average load per core above ${HOST_LOAD_PER_CORE_MAX} over ${HOST_WINDOW_MIN} minutes (the 5-minute load average), memory used above ${HOST_MEM_USED_MAX * 100}% of the total, swap in use and growing over ${HOST_WINDOW_MIN} minutes, or disk free below ${HOST_DISK_FREE_MIN * 100}%. The dashed line marks the limit. A host that misses ${HOST_STALE_SAMPLES} samples (${span(h.silentMin)} at its pace) shows as stale.</p>`;
 };
 
 // ---------- Plan usage ----------

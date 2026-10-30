@@ -28,11 +28,17 @@ export const LIMIT = 5; // the default limit of open agent PRs, used until the q
 export const SHIP_DAYS = 30; // agent tickets closed per day over this many days, the one trend on the page
 
 export const HOST_WINDOW_MIN = 30; // the host's averages, and the span its swap must grow over
-export const HOST_STALE_MIN = 30; // a host silent this long has no data worth judging (the sampler writes every 10 min)
+export const HOST_METRICS_MINUTES = 1; // the NUC's sampler interval (HOST_METRICS_INTERVAL_SECONDS 60), assumed until the samples' spacing says
+export const HOST_STALE_SAMPLES = 3; // a host that missed this many samples is silent
+export const HOST_SPACING_SAMPLES = 10; // the newest samples whose median spacing is the observed interval
 export const HOST_LOAD_PER_CORE_MAX = 1; // average load per core above this is bad
 export const HOST_MEM_USED_MAX = 0.9; // memory used (total minus available) above this share is bad
 export const HOST_DISK_FREE_MIN = 0.1; // disk free below this share is bad
 export const HOST_SWAP_GROWTH_BYTES = 1024 * 1024; // swap in use must grow by more than this over the window to count as growing
+
+export const SESSION_ATTENDED_MIN = 5; // the Mac's attended session seen within this is attended
+export const SESSION_HANDBACK_MIN = 30; // seen within this it is handing back; also how long a session counts as live
+export const LINEAR_STALE_MIN = 15; // a Linear poll older than this fails its health check (the desk polls every 5 min)
 
 export const PLAN_STALE_MIN = 60; // a plan sample older than this is shown with its age (it ages while no interactive session runs)
 export const PLAN_WARN_PCT = 100; // a window projected to reach this share by its reset is a warning

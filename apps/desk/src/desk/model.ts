@@ -13,7 +13,6 @@ import {
   HOST_DISK_FREE_MIN,
   HOST_LOAD_PER_CORE_MAX,
   HOST_MEM_USED_MAX,
-  HOST_STALE_MIN,
   HOST_SWAP_GROWTH_BYTES,
   HOST_WINDOW_MIN,
   INSTALL_MINUTES,
@@ -35,6 +34,22 @@ import {
   waitName
 } from './constants';
 import { dayKey, runTime } from './format';
+import {
+  type AgentPr,
+  type HandBack,
+  type HealthCheck,
+  type HostSessions,
+  type Problem,
+  type Pulse,
+  agentPrs,
+  handBack,
+  health,
+  hostSessions,
+  problems,
+  pulse,
+  sampleMinutes,
+  silentAfter
+} from './live';
 import { byCreated } from './parsers';
 import { reconcileView } from './reconcile';
 import type { DeskData, DeskState, Detail } from './state';
@@ -130,7 +145,32 @@ export type Model = {
   plan: PlanUsage;
   /** What the hours cost, by hour and by role */
   burn: UsageBurn;
+  /** The scheduler's runs since local midnight */
+  runsToday: RunsToday;
+  /** The last 24 hours of activity by who acted */
+  activityBy: ActivityBy;
+  /** Ticket id -> minutes since the newest gate event of each item waiting on you */
+  waitAge: Map<string, number>;
+  /** The agent's PRs as GitHub last told, newest first */
+  agentPrs: AgentPr[];
+  /** Live sessions per host, newest first */
+  hostSessions: HostSessions[];
+  /** The Mac's hand-back to the NUC */
+  handBack: HandBack;
+  /** The newest live event; null before any */
+  pulse: Pulse | null;
+  problems: Problem[];
+  health: HealthCheck[];
 };
+
+export type RunsToday = {
+  count: number;
+  /** Median of finished runs, in ms; null without one */
+  medianMs: number | null;
+  failed: number;
+};
+
+export type ActivityBy = { agent: number; human: number };
 
 const rankOf = (i: Pick<Issue, 'priority'>): number => i.priority.value || 5;
 const statusOf = (i: Pick<Issue, 'statusType'>): number =>
@@ -255,12 +295,16 @@ export type HostProblem = 'load' | 'memory' | 'swap' | 'disk';
 
 export type HostHealth = {
   host: string;
-  /** `stale`: the newest sample is older than HOST_STALE_MIN, so the figures are history */
+  /** `stale`: the newest sample is older than `silentMin`, so the figures are history */
   verdict: 'ok' | 'bad' | 'stale';
   problems: HostProblem[];
   latest: HostMetricRow;
   /** Minutes since the newest sample */
   ageMin: number;
+  /** Minutes between samples, as their spacing says */
+  intervalMin: number;
+  /** Minutes without a sample after which the host is silent: HOST_STALE_SAMPLES intervals */
+  silentMin: number;
   figures: HostFigures;
   /** Averages over the HOST_WINDOW_MIN before the newest sample */
   average: HostFigures;
@@ -333,12 +377,17 @@ export const hostHealth = (
   if (share(latest.disk_free, latest.disk_total) < HOST_DISK_FREE_MIN)
     problems.push('disk');
   const ageMin = (now.getTime() - at(latest)) / 6e4;
+  // Observed rather than assumed, so a NUC still on the old 10-minute sampler is not silent between samples
+  const intervalMin = sampleMinutes(series);
+  const silentMin = silentAfter(intervalMin);
   return {
     host: latest.host,
-    verdict: ageMin > HOST_STALE_MIN ? 'stale' : problems.length ? 'bad' : 'ok',
+    verdict: ageMin > silentMin ? 'stale' : problems.length ? 'bad' : 'ok',
     problems,
     latest,
     ageMin,
+    intervalMin,
+    silentMin,
     figures,
     average,
     swapGrowing,
@@ -521,6 +570,74 @@ export const shipped = (
   return { days, total, week };
 };
 
+/** Runs since local midnight: how many, their median duration, and how many failed */
+export const runsToday = (rows: readonly Run[], now: Date): RunsToday => {
+  const midnight = new Date(now.getTime());
+  midnight.setHours(0, 0, 0, 0);
+  const today = rows.filter((r) => Date.parse(r.started) >= midnight.getTime());
+  const durations = today
+    .filter((r) => r.finished)
+    .map((r) => Date.parse(r.finished ?? '') - Date.parse(r.started))
+    .sort((a, b) => a - b);
+  const mid = Math.floor(durations.length / 2);
+  return {
+    count: today.length,
+    medianMs: durations.length
+      ? durations.length % 2
+        ? durations[mid]
+        : (durations[mid - 1] + durations[mid]) / 2
+      : null,
+    failed: today.filter((r) => isProblem(r.outcome)).length
+  };
+};
+
+/** The last 24 hours of activity: the agent and the scheduler against everyone else */
+export const activityBy = (
+  activity: ActivityPayload | null,
+  now: Date
+): ActivityBy => {
+  const day = (activity?.rows ?? []).filter(
+    (r) => now.getTime() - runTime(r.when) <= 864e5
+  );
+  const agent = day.filter(
+    (r) => r.actor === 'agent' || r.actor === 'scheduler'
+  ).length;
+  return { agent, human: day.length - agent };
+};
+
+// What opens a wait on Håkan, as `cdwr agent activity` words it: a gate label added, or a gate comment
+const GATE =
+  /\+agent:(needs-input|review)\b|^comment: \*\*Agent(: plan ready| needs input|: PR ready|: review addressed)/;
+
+/** Minutes since each ticket's newest gate event, else its newest event; tickets without activity are left out */
+export const waitAges = (
+  tickets: readonly string[],
+  activity: ActivityPayload | null,
+  now: Date
+): Map<string, number> => {
+  const out = new Map<string, number>();
+  for (const id of tickets) {
+    const rows = (activity?.rows ?? []).filter((r) => r.ticket === id);
+    // The rows are newest first
+    const row = rows.find((r) => GATE.test(r.change)) ?? rows[0];
+    if (row) out.set(id, (now.getTime() - runTime(row.when)) / 6e4);
+  }
+  return out;
+};
+
+/** PR number -> ticket, for every ticket the queue view names with a PR, as `prOf` resolves it */
+export const ticketsByPr = (
+  details: ReadonlyMap<string, Detail>,
+  entries: readonly { ticket: string; pr?: PrRef | null }[]
+): Map<number, string> => {
+  const out = new Map<number, string>();
+  for (const x of entries) {
+    const pr = Number(prOf(details, x.ticket, x.pr));
+    if (Number.isInteger(pr) && pr > 0 && !out.has(pr)) out.set(pr, x.ticket);
+  }
+  return out;
+};
+
 export const model = (
   state: DeskState,
   now: Date,
@@ -655,6 +772,18 @@ export const model = (
         }
       : null;
   const plan = planUsage(data.planUsage, now);
+  const host = hostHealth(data.hostMetrics, now);
+  const sessions = hostSessions(data.sessions, now);
+  const nucSession = sessions.find((s) => s.host === host?.host);
+  const nucFresh =
+    (host !== null && host.ageMin <= host.silentMin) ||
+    (nucSession !== undefined && nucSession.ageMin <= (host?.silentMin ?? 0));
+  const prTickets = ticketsByPr(details, [
+    ...after,
+    ...(v ? v.parked : []),
+    ...(v ? v.next : []),
+    ...before
+  ]);
 
   return {
     all: openIssues(data),
@@ -705,8 +834,46 @@ export const model = (
     activityDay: (activity?.rows ?? []).filter(
       (r) => nowMs - runTime(r.when) <= 864e5
     ).length,
-    host: hostHealth(data.hostMetrics, now),
+    host,
     plan,
-    burn: usageBurn(data.usageHours, now, plan.five_hour)
+    burn: usageBurn(data.usageHours, now, plan.five_hour),
+    runsToday: runsToday(rows, now),
+    activityBy: activityBy(activity, now),
+    waitAge: waitAges(
+      [
+        ...before.map((x) => x.ticket),
+        ...handoffs.map((x) => x.ticket),
+        ...prs.map((x) => x.ticket)
+      ],
+      activity,
+      now
+    ),
+    agentPrs: agentPrs(data.githubEvents, prTickets, (id) => get(id).title),
+    hostSessions: sessions,
+    handBack: handBack(data.sessions, host?.host ?? null, nucFresh, now),
+    pulse: pulse(data.githubEvents, data.connection),
+    problems: problems({
+      connection: data.connection,
+      runs,
+      runMinutes,
+      host: host ? { ageMin: host.ageMin, silentMin: host.silentMin } : null,
+      now
+    }),
+    health: health({
+      connection: data.connection,
+      runs,
+      staleHours,
+      nuc: host
+        ? {
+            host: host.host,
+            at: Date.parse(host.latest.at),
+            silentMin: host.silentMin
+          }
+        : null,
+      sessions,
+      events: data.githubEvents,
+      storedAt: data.storedAt,
+      now
+    })
   };
 };
