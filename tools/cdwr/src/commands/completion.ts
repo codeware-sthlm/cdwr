@@ -7,7 +7,7 @@ import { ENTRIES, GROUPS } from './index';
 export default defineCommand({
   summary: 'Print the completion script for zsh, bash or fish',
   description:
-    'Static: commands, subcommands and flags, generated from the registry. `cdwr setup` installs it for you.',
+    'Static: commands, subcommands and flags, generated from the registry. `cdwr setup` installs it for you and keeps it current.',
   danger: 'read',
   inputs: {
     shell: input.enum(SHELLS, {
