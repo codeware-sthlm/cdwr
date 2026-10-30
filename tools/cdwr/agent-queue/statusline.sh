@@ -1,9 +1,9 @@
 #!/bin/zsh
 # Claude Code status line (`cdwr agent statusline install` sets it in ~/.claude/settings.json).
 # Prints one line: model · directory · 5h and 7d plan usage when Claude Code sends them.
-# The plan's `rate_limits` go to <queue home>/rate-limits.json on every call, and to the telemetry
-# table `plan_usage` when a value changed, at most once a minute and detached, so the status line
-# never waits on the network. Prints nothing else and always exits 0.
+# The plan's `rate_limits` go to <queue home>/rate-limits.json and to the telemetry table
+# `plan_usage` (see record), detached, so the status line never waits on the network. Prints
+# nothing else and always exits 0.
 exec 2>/dev/null
 
 zmodload zsh/stat 2>/dev/null
@@ -24,23 +24,25 @@ send() {
   done
   telemetry_on || return 0
   rows="$(jq -c --arg host "$(telemetry_host)" '
-    to_entries | map({kind: .key, resets_at: (.value.resets_at | todate),
-      used_percentage: .value.used_percentage, host: $host})' <<<"$limits")" || return 0
-  # The same value from another host is already there: keep the first sample
-  supabase_upsert plan_usage kind,resets_at,used_percentage "$rows" ignore
+    (now | floor | todate) as $now
+    | to_entries | map({kind: .key, resets_at: (.value.resets_at | todate),
+      used_percentage: .value.used_percentage, sampled_at: $now, host: $host})' <<<"$limits")" || return 0
+  # A value already there gets the newer sample time, so a flat value reads as current
+  supabase_upsert plan_usage kind,resets_at,used_percentage "$rows" merge
   cutoff="$(jq -nr 'now - 14 * 86400 | todate')" || return 0
   supabase_delete plan_usage "sampled_at=lt.$cutoff"
 }
 
-# record <limits json>: the file on every call, a row when the value changed
+# record <limits json>: the file and a row when the value changed, at most once a minute, and
+# again every 10 minutes while it holds, so the desk sees a live session and a failed send is retried
 record() {
-  local limits=$1 file="$STATE/rate-limits.json" sent="$STATE/rate-limits.sent" last
+  local limits=$1 file="$STATE/rate-limits.json" sent="$STATE/rate-limits.sent" last wait=60
   mkdir -p "$STATE" || return 0
+  [[ "$(<"$sent")" == "$limits" ]] && wait=600
+  last="$(zstat +mtime "$sent")"
+  [[ "$last" == <-> ]] && (( $(date +%s) - last < wait )) && return 0
   jq -nc --argjson limits "$limits" '{at: (now | floor | todate), rate_limits: $limits}' > "$file.tmp.$$" &&
     mv -f "$file.tmp.$$" "$file" || rm -f "$file.tmp.$$"
-  [[ "$(<"$sent")" == "$limits" ]] && return 0
-  last="$(zstat +mtime "$sent")"
-  [[ "$last" == <-> ]] && (( $(date +%s) - last < 60 )) && return 0
   # Marked first, so a status line redrawn while this sends doesn't send again. The send lets go
   # of stdout, or Claude Code would wait for it to close
   print -r -- "$limits" > "$sent"

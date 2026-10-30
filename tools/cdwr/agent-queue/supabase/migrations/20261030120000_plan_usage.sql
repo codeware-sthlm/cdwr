@@ -1,6 +1,7 @@
 -- The plan's own usage, as Claude Code's status line reports it: one row per window, reset and value.
 -- Applied by hand to the Supabase project `agent-queue`, after 20261030000000_usage_hours.sql.
--- statusline.sh sends a row when a value changed; the same value from two hosts is one row.
+-- statusline.sh sends a row when a value changed and again every 10 minutes while it holds; the
+-- same value is one row, whose sampled_at is the newest time it was seen.
 -- The sender prunes rows sampled more than 14 days ago.
 
 create table if not exists public.plan_usage (

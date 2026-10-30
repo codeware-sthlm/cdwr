@@ -327,7 +327,7 @@ export const ENTRIES: Entry[] = [
   {
     path: ['agent', 'statusline', 'install'],
     summary:
-      "Show the plan's usage in the Claude status line and send it to the desk",
+      "Show the plan's usage in the Claude status line and send it to the desk; never replaces a status line that isn't this one",
     danger: 'mutate',
     load: () => import('./agent/statusline-install').then((m) => m.default)
   },
