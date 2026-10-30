@@ -2,9 +2,12 @@ import type { DataFailure } from '../data';
 import type { Issue, OpenStatusType } from '../linear';
 import type {
   ActivityPayload,
+  GithubEventRow,
   HostMetricRow,
+  IssueEventRow,
   PlanUsageRow,
   RunsPayload,
+  SessionRow,
   UsageHourRow,
   UsagePayload
 } from '../supabase';
@@ -65,8 +68,22 @@ export type DeskData = {
   planUsage: PlanUsageRow[] | null;
   /** The hourly usage rows of the last 8 days */
   usageHours: UsageHourRow[] | null;
+  /** One row per PR or branch, newest first */
+  githubEvents: GithubEventRow[] | null;
+  /** The sessions seen in the last 24 hours, newest first */
+  sessions: SessionRow[] | null;
+  /** The Realtime channel as the adapter reports it */
+  connection: Connection;
   /** When the open tickets were last stored, in ms */
   storedAt: number | null;
+};
+
+/** The Realtime channel: whether it is joined, how often it dropped, since when it is up, and the newest issue event it brought */
+export type Connection = {
+  live: boolean;
+  retries: number;
+  upSince: number | null;
+  lastIssue: IssueEventRow | null;
 };
 
 /** What the viewer has chosen */
@@ -106,6 +123,9 @@ export const createState = (): DeskState => ({
     hostMetrics: null,
     planUsage: null,
     usageHours: null,
+    githubEvents: null,
+    sessions: null,
+    connection: { live: false, retries: 0, upSince: null, lastIssue: null },
     storedAt: null
   },
   details: new Map(),

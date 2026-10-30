@@ -1,4 +1,5 @@
 import type { Adapter } from '../data';
+import type { IssueEventRow } from '../supabase';
 
 import { AGENT_AVATAR } from './constants';
 import { type Loader, createLoader } from './load';
@@ -223,6 +224,20 @@ document
 render();
 const startHash = (location.hash || '').slice(1);
 if (isSheetId(startHash)) showSheet(startHash, false);
+
+/** Records the Realtime channel's health for the model's problems and health checks */
+export function setConnection(
+  live: boolean,
+  connection: { retries: number; upSince: number | null }
+): void {
+  state.data.connection = { ...state.data.connection, live, ...connection };
+  render();
+}
+
+/** Records the newest issue event, the pulse's Linear side */
+export function setLastIssue(row: IssueEventRow): void {
+  state.data.connection = { ...state.data.connection, lastIssue: row };
+}
 
 /** Starts the page on a data adapter; called again with a new one when the settings change */
 export function start(next: Adapter | null): void {

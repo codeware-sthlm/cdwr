@@ -6,7 +6,7 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 import { type Adapter, createAdapter } from './data';
-import { start } from './desk';
+import { setConnection, setLastIssue, start } from './desk';
 import { LinearError, createLinear } from './linear';
 import {
   type KeyValueStore,
@@ -105,7 +105,11 @@ const startDesk = (settings: Settings): void => {
   adapter = createAdapter({
     linear: linearFor(settings),
     supabase: supabaseFor(settings),
-    onLive: setLive
+    onLive: (live, connection) => {
+      setLive(live);
+      setConnection(live, connection);
+    },
+    onIssue: setLastIssue
   });
   start(adapter);
 };

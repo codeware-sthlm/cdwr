@@ -9,6 +9,8 @@ import {
   type OpenStatusType
 } from './linear';
 import {
+  GITHUB_EVENTS_LIMIT,
+  type GithubEventRow,
   type IssueEventRow,
   type Payloads,
   type QueuePayloads,
@@ -81,13 +83,23 @@ export type AdapterOptions = {
     | 'readHostMetrics'
     | 'readPlanUsage'
     | 'readUsageHours'
+    | 'readGithubEvents'
+    | 'readSessions'
     | 'subscribe'
   >;
   now?: () => number;
   events?: DataEvents;
-  /** Called with the Realtime channel health when it changes, and once with false at start. */
-  onLive?: (live: boolean) => void;
+  /**
+   * Called with the Realtime channel health when it changes, and once with false at start.
+   * `connection` counts the times the channel went unhealthy and says since when it has been healthy.
+   */
+  onLive?: (live: boolean, connection: Connection) => void;
+  /** Called with each `issue_events` row as it arrives, for the page's pulse */
+  onIssue?: (row: IssueEventRow) => void;
 };
+
+/** The Realtime channel's record since the adapter started; `upSince` is null while it is down */
+export type Connection = { retries: number; upSince: number | null };
 
 const browserEvents: DataEvents = {
   onFocus: (onFocus) => {
@@ -243,7 +255,8 @@ export const createAdapter = ({
   supabase,
   now = () => Date.now(),
   events = browserEvents,
-  onLive
+  onLive,
+  onIssue
 }: AdapterOptions) => {
   const sources: Tracked[] = [];
   const track = <T>(server: Server, fetch: () => Promise<T>): Source<T> => {
@@ -276,6 +289,8 @@ export const createAdapter = ({
   const hostMetrics = track(SUPABASE, () => supabase.readHostMetrics());
   const planUsage = track(SUPABASE, () => supabase.readPlanUsage());
   const usageHours = track(SUPABASE, () => supabase.readUsageHours());
+  const githubEvents = track(SUPABASE, () => supabase.readGithubEvents());
+  const sessions = track(SUPABASE, () => supabase.readSessions());
   const details = new Map<string, Source<IssueDetail>>();
   const comments = new Map<string, Source<{ comments: Comment[] }>>();
 
@@ -326,6 +341,8 @@ export const createAdapter = ({
       if (tool === 'hostMetrics') return bind(hostMetrics, (rows) => rows);
       if (tool === 'planUsage') return bind(planUsage, (rows) => rows);
       if (tool === 'usageHours') return bind(usageHours, (rows) => rows);
+      if (tool === 'githubEvents') return bind(githubEvents, (rows) => rows);
+      if (tool === 'sessions') return bind(sessions, (rows) => rows);
     }
     return undefined;
   };
@@ -357,11 +374,26 @@ export const createAdapter = ({
   const refreshUsageHours = () => {
     if (!stopped && usageHours.watching()) void usageHours.refresh();
   };
+  const refreshSessions = () => {
+    if (!stopped && sessions.watching()) void sessions.refresh();
+  };
   const refreshSupabase = () => {
     if (!stopped) void refreshWatched(SUPABASE);
   };
 
-  onLive?.(false);
+  // A repeated event replaces its subject's row; a patch before the first load does nothing
+  const applyGithub = (row: GithubEventRow): void => {
+    if (stopped) return;
+    githubEvents.patch((list) =>
+      [row, ...list.filter((r) => r.subject !== row.subject)].slice(
+        0,
+        GITHUB_EVENTS_LIMIT
+      )
+    );
+  };
+
+  const connection: Connection = { retries: 0, upSince: null };
+  onLive?.(false, { ...connection });
 
   const pending = new Map<
     string,
@@ -431,12 +463,10 @@ export const createAdapter = ({
     closed.patch((list) => place(list, 'completed'));
   };
 
-  const queueIssue = ({
-    issue_id,
-    identifier,
-    action
-  }: IssueEventRow): void => {
+  const queueIssue = (row: IssueEventRow): void => {
     if (stopped) return;
+    const { issue_id, identifier, action } = row;
+    onIssue?.(row);
     const previous = pending.get(issue_id);
     clearTimeout(previous?.timer);
     const timer = setTimeout(() => {
@@ -492,7 +522,14 @@ export const createAdapter = ({
     supabase.subscribe(
       refreshSupabase,
       (healthy) => {
-        if (healthy !== subscribed) onLive?.(healthy);
+        if (healthy !== subscribed) {
+          if (healthy) connection.upSince = now();
+          else {
+            connection.retries += 1;
+            connection.upSince = null;
+          }
+          onLive?.(healthy, { ...connection });
+        }
         subscribed = healthy;
         if (healthy) {
           // Events may have been missed before the channel joined or while it was down
@@ -507,7 +544,9 @@ export const createAdapter = ({
       queueIssue,
       refreshHostMetrics,
       refreshPlanUsage,
-      refreshUsageHours
+      refreshUsageHours,
+      applyGithub,
+      refreshSessions
     )
   );
 

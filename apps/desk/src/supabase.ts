@@ -20,6 +20,8 @@ export type HostMetricRow = Tables['host_metrics']['Row'];
 export type BuildRow = Tables['builds']['Row'];
 export type PlanUsageRow = Tables['plan_usage']['Row'];
 export type UsageHourRow = Tables['usage_hours']['Row'];
+export type GithubEventRow = Tables['github_events']['Row'];
+export type SessionRow = Tables['sessions']['Row'];
 
 /** Full commits of main's newest successful builds; null when none is recorded */
 export type MainBuilds = { image: string | null; desk: string | null };
@@ -39,6 +41,7 @@ export class SupabaseError extends Error {
 const WINDOW_DAYS = 30;
 const RUNS_LIMIT = 500;
 const ACTIVITY_LIMIT = 300;
+export const GITHUB_EVENTS_LIMIT = 200;
 const DEBOUNCE_MS = 500;
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 20;
@@ -50,8 +53,20 @@ export type RunsPayload = {
   suggested: Suggested | null;
   job: Job | null;
   qv: QueueView | null;
+  /** The row carries a view that does not parse; `qv` is then null, or the last good one the page kept */
+  viewInvalid: boolean;
+  /** When the newest queue_state row was written, ISO */
+  at: string;
   main: MainBuilds;
-  rows: { when: string; outcome: string; ticket: string; detail: string }[];
+  rows: {
+    when: string;
+    outcome: string;
+    ticket: string;
+    detail: string;
+    /** ISO; `finished` is null while the run is open */
+    started: string;
+    finished: string | null;
+  }[];
 };
 
 type RoleCosts = Record<Role, number>;
@@ -98,6 +113,10 @@ export type Payloads = QueuePayloads & {
   planUsage: PlanUsageRow[];
   /** The hourly usage rows of the last 8 days, every host and model */
   usageHours: UsageHourRow[];
+  /** The newest 200 GitHub events, newest first */
+  githubEvents: GithubEventRow[];
+  /** The sessions seen in the last 24 hours, newest first */
+  sessions: SessionRow[];
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -136,6 +155,7 @@ export const toRuns = (
   const state = newest(queueStates);
   if (!state) return null;
   const lastMatch = state.last_run?.match(LAST_RUN);
+  const qv = validateQueueView(state.view);
   return {
     last: lastMatch
       ? { when: localStamp(state.at), outcome: lastMatch[1].trim() }
@@ -148,7 +168,9 @@ export const toRuns = (
       : null,
     // run.sh's job_line already starts with `Job: `; the other two lines are stored bare
     job: state.job ? parseJob(state.job) : null,
-    qv: validateQueueView(state.view),
+    qv,
+    viewInvalid: qv === null && state.view !== null,
+    at: state.at,
     main: toMain(buildRows),
     // Idle adds no row
     rows: runRows
@@ -158,7 +180,9 @@ export const toRuns = (
         when: localStamp(r.started_at),
         outcome: r.outcome,
         ticket: r.ticket ?? '',
-        detail: r.detail ?? ''
+        detail: r.detail ?? '',
+        started: r.started_at,
+        finished: r.finished_at ?? null
       }))
   };
 };
@@ -307,6 +331,21 @@ export const toIssueEvent = (row: unknown): IssueEventRow | undefined => {
   };
 };
 
+/** The row of a Realtime payload, or undefined when it is not a GitHub event. */
+export const toGithubEvent = (row: unknown): GithubEventRow | undefined => {
+  if (typeof row !== 'object' || row === null) return undefined;
+  if (!('subject' in row) || typeof row.subject !== 'string') return undefined;
+  return {
+    subject: row.subject,
+    pr: 'pr' in row && typeof row.pr === 'number' ? row.pr : null,
+    action: 'action' in row && typeof row.action === 'string' ? row.action : '',
+    updated_at:
+      'updated_at' in row && typeof row.updated_at === 'string'
+        ? row.updated_at
+        : ''
+  };
+};
+
 export type SupabaseConfig = { url: string; anonKey: string };
 
 type Failure = { message: string; code?: string; status: number };
@@ -407,19 +446,26 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
   // The last 24 h plus the newest sample whatever its age, so a long outage reads as stale rather than empty
   const readHostMetrics = (): Promise<HostMetricRow[]> =>
     attempt(async () => {
-      const [windowed, newest] = await Promise.all([
-        client
-          .from('host_metrics')
-          .select('*')
-          .gte('at', new Date(Date.now() - DAY_MS).toISOString())
-          .order('at', { ascending: true }),
+      const since = new Date(Date.now() - DAY_MS).toISOString();
+      const [rows, newest] = await Promise.all([
+        // A sample a minute is 1440 rows, past one page; ordered down to the key so a page boundary neither repeats nor skips one
+        readAllPages(async (from, to) =>
+          settle(
+            await client
+              .from('host_metrics')
+              .select('*')
+              .gte('at', since)
+              .order('at', { ascending: true })
+              .order('id', { ascending: true })
+              .range(from, to)
+          )
+        ),
         client
           .from('host_metrics')
           .select('*')
           .order('at', { ascending: false })
           .limit(1)
       ]);
-      const rows = settle(windowed);
       const older = settle(newest).filter(
         (r) => !rows.some((w) => w.id === r.id)
       );
@@ -465,6 +511,35 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       );
     });
 
+  // Apart from `read`, so a github_events failure (a migration not yet applied) leaves the other tiles alone
+  const readGithubEvents = (): Promise<GithubEventRow[]> =>
+    attempt(async () =>
+      settle(
+        await client
+          .from('github_events')
+          .select('*')
+          .order('updated_at', { ascending: false })
+          .limit(GITHUB_EVENTS_LIMIT)
+      )
+    );
+
+  // The table is never pruned, so only the last 24 h are read
+  const readSessions = (): Promise<SessionRow[]> =>
+    attempt(() => {
+      const since = new Date(Date.now() - DAY_MS).toISOString();
+      return readAllPages(async (from, to) =>
+        settle(
+          await client
+            .from('sessions')
+            .select('*')
+            .gte('last_seen', since)
+            .order('last_seen', { ascending: false })
+            .order('id', { ascending: true })
+            .range(from, to)
+        )
+      );
+    });
+
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
    * catch up on what was missed. `onStatus` gets false on a channel error, a
@@ -472,7 +547,9 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
    * `issue_events` row as it arrives, without debounce. `onHostMetrics` fires
    * (debounced) on a new `host_metrics` row, which `onChange` does not;
    * `onPlanUsage` on a new `plan_usage` row and `onUsageHours` on a new or
-   * updated `usage_hours` row, likewise.
+   * updated `usage_hours` row, likewise. `onGithub` gets each `github_events`
+   * row as it arrives, without debounce; `onSessions` fires (debounced) on a
+   * new or updated `sessions` row, which `onChange` hears too.
    */
   const subscribe = (
     onChange: () => void,
@@ -480,12 +557,15 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     onIssue?: (row: IssueEventRow) => void,
     onHostMetrics?: () => void,
     onPlanUsage?: () => void,
-    onUsageHours?: () => void
+    onUsageHours?: () => void,
+    onGithub?: (row: GithubEventRow) => void,
+    onSessions?: () => void
   ): (() => void) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hostTimer: ReturnType<typeof setTimeout> | undefined;
     let planTimer: ReturnType<typeof setTimeout> | undefined;
     let hoursTimer: ReturnType<typeof setTimeout> | undefined;
+    let sessionsTimer: ReturnType<typeof setTimeout> | undefined;
     const changed = (): void => {
       clearTimeout(timer);
       timer = setTimeout(onChange, DEBOUNCE_MS);
@@ -501,6 +581,10 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     const hoursChanged = (): void => {
       clearTimeout(hoursTimer);
       hoursTimer = setTimeout(() => onUsageHours?.(), DEBOUNCE_MS);
+    };
+    const sessionsChanged = (): void => {
+      clearTimeout(sessionsTimer);
+      sessionsTimer = setTimeout(() => onSessions?.(), DEBOUNCE_MS);
     };
     let channel = client.channel('desk');
     for (const table of [
@@ -526,6 +610,19 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
           const row = toIssueEvent(payload.new);
           if (row) onIssue?.(row);
         }
+      );
+      channel = channel.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'github_events' },
+        (payload) => {
+          const row = toGithubEvent(payload.new);
+          if (row) onGithub?.(row);
+        }
+      );
+      channel = channel.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'sessions' },
+        sessionsChanged
       );
     }
     channel.subscribe((status) => {
@@ -595,6 +692,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       clearTimeout(hostTimer);
       clearTimeout(planTimer);
       clearTimeout(hoursTimer);
+      clearTimeout(sessionsTimer);
       void client.removeChannel(channel);
       void client.removeChannel(hostChannel);
       void client.removeChannel(builds);
@@ -613,6 +711,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     readHostMetrics,
     readPlanUsage,
     readUsageHours,
+    readGithubEvents,
+    readSessions,
     subscribe,
     check
   };

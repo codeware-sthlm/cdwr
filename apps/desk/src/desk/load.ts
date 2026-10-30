@@ -183,7 +183,12 @@ export const createLoader = ({
     adapter.watchTool('Supabase', 'runs', {}, (ev) => {
       if (stopped) return;
       if (ev.type === 'data') {
-        state.data.runs = ev.result.payload;
+        const runs = ev.result.payload;
+        // A view that does not parse keeps the last good one; the model flags it
+        state.data.runs =
+          runs?.viewInvalid && state.data.runs?.qv
+            ? { ...runs, qv: state.data.runs.qv }
+            : runs;
         state.errors.delete('runs');
         scheduleDetails();
       } else {
@@ -244,6 +249,28 @@ export const createLoader = ({
       } else {
         state.errors.set('usageHours', ev.error);
         if (RETRACT.includes(ev.error.code)) state.data.usageHours = null;
+      }
+      render();
+    });
+    adapter.watchTool('Supabase', 'githubEvents', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.githubEvents = ev.result.payload;
+        state.errors.delete('githubEvents');
+      } else {
+        state.errors.set('githubEvents', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.githubEvents = null;
+      }
+      render();
+    });
+    adapter.watchTool('Supabase', 'sessions', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.sessions = ev.result.payload;
+        state.errors.delete('sessions');
+      } else {
+        state.errors.set('sessions', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.sessions = null;
       }
       render();
     });

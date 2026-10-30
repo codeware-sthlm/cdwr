@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   type ActivityRow,
   type BuildRow,
+  type HostMetricRow,
   type QueueStateRow,
   type RunRow,
   type UsageRow,
@@ -10,6 +11,7 @@ import {
   localStamp,
   readAllPages,
   toActivity,
+  toGithubEvent,
   toIssueEvent,
   toMain,
   toRuns,
@@ -264,14 +266,54 @@ describe('toRuns', () => {
       ]
     );
     expect(result?.rows).toEqual([
-      { when: '2026-10-28 09:30', outcome: 'failed', ticket: '', detail: '' },
+      {
+        when: '2026-10-28 09:30',
+        outcome: 'failed',
+        ticket: '',
+        detail: '',
+        started: '2026-10-28T09:30:00.000Z',
+        finished: null
+      },
       {
         when: '2026-10-28 08:05',
         outcome: 'planned',
         ticket: 'COD-1',
-        detail: 'plan written'
+        detail: 'plan written',
+        started: '2026-10-28T08:05:00.000Z',
+        finished: null
       }
     ]);
+  });
+
+  it('carries when each run finished, null while it is open', () => {
+    const result = toRuns(
+      [state()],
+      [
+        run({
+          id: 1,
+          started_at: '2026-10-28T08:05:00.000Z',
+          finished_at: '2026-10-28T08:12:00.000Z'
+        })
+      ]
+    );
+    expect(result?.rows[0]).toMatchObject({
+      started: '2026-10-28T08:05:00.000Z',
+      finished: '2026-10-28T08:12:00.000Z'
+    });
+  });
+
+  it('carries the row time as `at`', () => {
+    expect(toRuns([state()], [])?.at).toBe('2026-10-28T10:00:00.000Z');
+  });
+
+  it('flags a view that is present but does not parse', () => {
+    const bad = toRuns([state({ view: { limit: { used: 1, max: 3 } } })], []);
+    expect(bad?.qv).toBeNull();
+    expect(bad?.viewInvalid).toBe(true);
+    const absent = toRuns([state({ view: null })], []);
+    expect(absent?.qv).toBeNull();
+    expect(absent?.viewInvalid).toBe(false);
+    expect(toRuns([state()], [])?.viewInvalid).toBe(false);
   });
 });
 
@@ -479,6 +521,95 @@ describe('toIssueEvent', () => {
 
   it.each([null, undefined, 'x', {}, { issue_id: 1 }])('rejects %j', (row) => {
     expect(toIssueEvent(row)).toBeUndefined();
+  });
+});
+
+describe('toGithubEvent', () => {
+  it('keeps a row with a subject', () => {
+    expect(
+      toGithubEvent({
+        subject: 'pr-7',
+        pr: 7,
+        action: 'opened',
+        updated_at: '2026-10-28T10:00:00.000Z'
+      })
+    ).toEqual({
+      subject: 'pr-7',
+      pr: 7,
+      action: 'opened',
+      updated_at: '2026-10-28T10:00:00.000Z'
+    });
+  });
+
+  it('turns a missing pr into null and a missing action or time into empty', () => {
+    expect(toGithubEvent({ subject: 'main', pr: 'x' })).toEqual({
+      subject: 'main',
+      pr: null,
+      action: '',
+      updated_at: ''
+    });
+    expect(toGithubEvent({ subject: 'main', pr: null })).toMatchObject({
+      pr: null
+    });
+  });
+
+  it.each([null, undefined, 'x', {}, { subject: 1 }])('rejects %j', (row) => {
+    expect(toGithubEvent(row)).toBeUndefined();
+  });
+});
+
+describe('createSupabase readHostMetrics', () => {
+  const sample = (id: number): HostMetricRow => ({
+    id,
+    host: 'nuc',
+    at: new Date(Date.now() - (1500 - id) * 60000).toISOString(),
+    cores: 4,
+    load1: 0,
+    load5: 0,
+    load15: 0,
+    mem_total: 1,
+    mem_available: 1,
+    swap_total: 0,
+    swap_free: 0,
+    disk_total: 1,
+    disk_free: 1,
+    cgroup_mem_current: null,
+    cgroup_mem_max: null
+  });
+
+  it('reads a window past one page across pages', async () => {
+    const all = Array.from({ length: 1440 }, (_, i) => sample(i + 1));
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        urls.push(url.search);
+        const offset = Number(url.searchParams.get('offset') ?? 0);
+        const limit = Number(url.searchParams.get('limit'));
+        // The newest-sample query is the only one ordered descending
+        const body = url.searchParams.get('order')?.includes('desc')
+          ? [all[all.length - 1]]
+          : all.slice(offset, offset + limit);
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      })
+    );
+    const rows = await createSupabase({
+      url: 'https://x.supabase.co',
+      anonKey: 'anon'
+    })
+      .readHostMetrics()
+      .finally(() => vi.unstubAllGlobals());
+    expect(rows).toHaveLength(1440);
+    expect(rows.map((r) => r.id)).toEqual(all.map((r) => r.id));
+    expect(
+      urls.filter(
+        (u) => new URLSearchParams(u).get('order') === 'at.asc,id.asc'
+      )
+    ).toHaveLength(2);
   });
 });
 
