@@ -105,7 +105,8 @@ record launched "$KEY · log $log"
 # command through a pager, an ssh command or an alias; nx exec runs anything; a REST write or
 # a GraphQL mutation outside the thread replies could merge, push to main or drop protection.
 # A force push without a lease, or one to main, is the skill's to never do. GitHub's branch
-# rules still refuse a direct push to main; this keeps the session from trying.
+# rules still refuse a direct push to main; this keeps the session from trying. `gh run` is
+# allowed for `view` only, so a failed job's log can be read; a rerun stays with Håkan.
 DENY=(
   "Bash(git -c *)" "Bash(git -C * -c *)" "Bash(git * config *)" "Bash(git * --config-env*)"
   "Bash(git * push * main)" "Bash(git * push * main *)" "Bash(git * push *:main*)"
@@ -139,7 +140,7 @@ export AGENT_QUEUE_SESSION_KIND=implement
   --allowedTools \
     Skill Read Grep Glob Agent \
     "Edit($WT)" "Write($WT)" \
-    "Bash(git *)" "Bash(gh pr *)" "Bash(gh api repos/codeware-sthlm/cdwr/*)" \
+    "Bash(git *)" "Bash(gh pr *)" "Bash(gh run view *)" "Bash(gh api repos/codeware-sthlm/cdwr/*)" \
     "Bash(tools/cdwr/agent-queue/gh-review.sh *)" "Bash(tools/cdwr/agent-queue/linear-upload.sh *)" \
     "Bash(pnpm nx *)" "Bash(pnpm -C * nx *)" "Bash(pnpm -C * vitest *)" "Bash(pnpm -C * install*)" \
     "Bash(pnpm cdwr agent worktree *)" \

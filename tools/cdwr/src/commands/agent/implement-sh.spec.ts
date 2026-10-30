@@ -101,6 +101,12 @@ describe('implement.sh', () => {
     expect(code).toContain('"${DENY[@]}"');
   });
 
+  it('reads a failed job log but cannot rerun it', () => {
+    expect(code).toContain('"Bash(gh run view *)"');
+    expect(code).not.toContain('"Bash(gh run *)"');
+    expect(code).not.toContain('gh run rerun');
+  });
+
   it.each([
     'Read(//run/agent/**)',
     'Bash(*/run/agent/*)',
