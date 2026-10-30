@@ -541,16 +541,23 @@ describe('toGithubEvent', () => {
     });
   });
 
-  it('turns a missing pr into null and a missing action or time into empty', () => {
-    expect(toGithubEvent({ subject: 'main', pr: 'x' })).toEqual({
-      subject: 'main',
-      pr: null,
-      action: '',
-      updated_at: ''
-    });
-    expect(toGithubEvent({ subject: 'main', pr: null })).toMatchObject({
-      pr: null
-    });
+  it('turns a missing pr into null and a missing action into empty, and needs a time that parses', () => {
+    const at = '2026-10-28T10:00:00.000Z';
+    expect(toGithubEvent({ subject: 'main', pr: 'x', updated_at: at })).toEqual(
+      {
+        subject: 'main',
+        pr: null,
+        action: '',
+        updated_at: at
+      }
+    );
+    expect(
+      toGithubEvent({ subject: 'main', pr: null, updated_at: at })
+    ).toMatchObject({ pr: null });
+    expect(toGithubEvent({ subject: 'main' })).toBeUndefined();
+    expect(
+      toGithubEvent({ subject: 'main', updated_at: 'soon' })
+    ).toBeUndefined();
   });
 
   it.each([null, undefined, 'x', {}, { subject: 1 }])('rejects %j', (row) => {

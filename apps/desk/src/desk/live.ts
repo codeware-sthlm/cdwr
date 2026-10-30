@@ -32,6 +32,7 @@ export type PrStateName =
   | 'closed';
 
 const PASSED = ['success', 'neutral', 'skipped'];
+const FAILED = ['failure', 'timed_out', 'action_required', 'startup_failure'];
 
 /** The state an action names; null for one the desk does not know */
 export const prState = (action: string): PrStateName | null => {
@@ -54,7 +55,9 @@ export const prState = (action: string): PrStateName | null => {
     if (!outcome) return null;
     // A suite stored before the webhook kept its conclusion
     if (outcome === 'completed') return 'checks finished';
-    return PASSED.includes(outcome) ? 'checks passed' : 'checks failed';
+    if (PASSED.includes(outcome)) return 'checks passed';
+    // A cancelled or stale suite (the merge queue supersedes them) failed nothing
+    return FAILED.includes(outcome) ? 'checks failed' : 'checks finished';
   }
   if (event === 'pull_request_review')
     return outcome === 'copilot' ? 'Copilot reviewed' : 'reviewed';
@@ -135,15 +138,16 @@ export type HostSessions = {
 const ageOf = (iso: string, now: Date): number =>
   (now.getTime() - Date.parse(iso)) / 6e4;
 
-/** Sessions seen within SESSION_HANDBACK_MIN, per host, newest host first */
+/** Sessions seen within `maxAgeMin` (SESSION_HANDBACK_MIN, the live ones), per host, newest host first */
 export const hostSessions = (
   rows: readonly SessionRow[] | null,
-  now: Date
+  now: Date,
+  maxAgeMin = SESSION_HANDBACK_MIN
 ): HostSessions[] => {
   const hosts = new Map<string, HostSessions>();
   for (const r of rows ?? []) {
     const ageMin = ageOf(r.last_seen, now);
-    if (ageMin > SESSION_HANDBACK_MIN) continue;
+    if (ageMin > maxAgeMin) continue;
     const h = hosts.get(r.host) ?? { host: r.host, sessions: [], ageMin };
     h.sessions.push({ id: r.id, kind: r.kind, ageMin });
     h.ageMin = Math.min(h.ageMin, ageMin);
@@ -169,7 +173,8 @@ export type HandBack = {
  * The Mac's hand-back, from `sessions` alone: its newest attended heartbeat within
  * SESSION_ATTENDED_MIN is attended, within SESSION_HANDBACK_MIN handing back; after
  * that the NUC's heartbeat decides between heartbeat ok and idle. The Mac is any
- * host but the NUC, which is the host that sends samples.
+ * host but the NUC, which is the host that sends samples, or without samples the
+ * host that launches implementing sessions.
  */
 export const handBack = (
   rows: readonly SessionRow[] | null,
@@ -177,8 +182,10 @@ export const handBack = (
   nucFresh: boolean,
   now: Date
 ): HandBack => {
+  const nuc =
+    nucHost ?? (rows ?? []).find((r) => r.kind === 'implement')?.host ?? null;
   const attended = (rows ?? [])
-    .filter((r) => r.kind === 'attended' && r.host !== nucHost)
+    .filter((r) => r.kind === 'attended' && r.host !== nuc)
     .reduce<SessionRow | null>(
       (a, b) =>
         a && Date.parse(a.last_seen) >= Date.parse(b.last_seen) ? a : b,
@@ -242,8 +249,7 @@ export const problems = ({
   connection,
   runs,
   runMinutes,
-  host,
-  now
+  host
 }: {
   connection: Connection;
   runs: RunsPayload | null;
@@ -274,13 +280,15 @@ export const problems = ({
       kind: 'data',
       text: 'The queue_state row is older than the newest run'
     });
-  const open = (runs?.rows ?? []).some(
-    (r) => !r.finished && now.getTime() - Date.parse(r.started) < 864e5
-  );
-  if (open && host && host.ageMin > host.silentMin)
+  // A runs row is written only when the run ends, so the open work is the session the snapshot calls alive
+  if (
+    runs?.qv?.session.state === 'alive' &&
+    host &&
+    host.ageMin > host.silentMin
+  )
     out.push({
       kind: 'unknown',
-      text: 'A run is open while the NUC is silent; its state is unknown'
+      text: 'A session is alive while the NUC is silent; its state is unknown'
     });
   return out;
 };
@@ -308,6 +316,7 @@ export const health = ({
   staleHours: number;
   /** The NUC's newest sample and its silent threshold; null without samples */
   nuc: { host: string; at: number; silentMin: number } | null;
+  /** Every host seen in the last 24 hours, so a silent one fails rather than drops out */
   sessions: readonly HostSessions[];
   events: readonly GithubEventRow[] | null;
   storedAt: number | null;

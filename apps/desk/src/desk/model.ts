@@ -870,7 +870,7 @@ export const model = (
             silentMin: host.silentMin
           }
         : null,
-      sessions,
+      sessions: hostSessions(data.sessions, now, Infinity),
       events: data.githubEvents,
       storedAt: data.storedAt,
       now

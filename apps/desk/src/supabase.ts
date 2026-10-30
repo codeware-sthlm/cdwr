@@ -297,7 +297,8 @@ export const toActivity = (
  * and truncates silently. Fails rather than return partial data.
  */
 export const readAllPages = async <T>(
-  fetchPage: (from: number, to: number) => PromiseLike<T[]>
+  fetchPage: (from: number, to: number) => PromiseLike<T[]>,
+  table = 'usage'
 ): Promise<T[]> => {
   const rows: T[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -308,7 +309,7 @@ export const readAllPages = async <T>(
   }
   throw new SupabaseError(
     'bad_response',
-    `The usage read needs more than ${MAX_PAGES} pages`
+    `The ${table} read needs more than ${MAX_PAGES} pages`
   );
 };
 
@@ -331,18 +332,21 @@ export const toIssueEvent = (row: unknown): IssueEventRow | undefined => {
   };
 };
 
-/** The row of a Realtime payload, or undefined when it is not a GitHub event. */
+/** The row of a Realtime payload, or undefined when it is not a GitHub event; the time orders the PRs, so it must parse */
 export const toGithubEvent = (row: unknown): GithubEventRow | undefined => {
   if (typeof row !== 'object' || row === null) return undefined;
   if (!('subject' in row) || typeof row.subject !== 'string') return undefined;
+  if (
+    !('updated_at' in row) ||
+    typeof row.updated_at !== 'string' ||
+    Number.isNaN(Date.parse(row.updated_at))
+  )
+    return undefined;
   return {
     subject: row.subject,
     pr: 'pr' in row && typeof row.pr === 'number' ? row.pr : null,
     action: 'action' in row && typeof row.action === 'string' ? row.action : '',
-    updated_at:
-      'updated_at' in row && typeof row.updated_at === 'string'
-        ? row.updated_at
-        : ''
+    updated_at: row.updated_at
   };
 };
 
@@ -449,16 +453,18 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       const since = new Date(Date.now() - DAY_MS).toISOString();
       const [rows, newest] = await Promise.all([
         // A sample a minute is 1440 rows, past one page; ordered down to the key so a page boundary neither repeats nor skips one
-        readAllPages(async (from, to) =>
-          settle(
-            await client
-              .from('host_metrics')
-              .select('*')
-              .gte('at', since)
-              .order('at', { ascending: true })
-              .order('id', { ascending: true })
-              .range(from, to)
-          )
+        readAllPages(
+          async (from, to) =>
+            settle(
+              await client
+                .from('host_metrics')
+                .select('*')
+                .gte('at', since)
+                .order('at', { ascending: true })
+                .order('id', { ascending: true })
+                .range(from, to)
+            ),
+          'host_metrics'
         ),
         client
           .from('host_metrics')
@@ -523,20 +529,24 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       )
     );
 
-  // The table is never pruned, so only the last 24 h are read
+  // The table is never pruned, so only the last 24 h are read; paged by id, since heartbeats move last_seen between pages
   const readSessions = (): Promise<SessionRow[]> =>
-    attempt(() => {
+    attempt(async () => {
       const since = new Date(Date.now() - DAY_MS).toISOString();
-      return readAllPages(async (from, to) =>
-        settle(
-          await client
-            .from('sessions')
-            .select('*')
-            .gte('last_seen', since)
-            .order('last_seen', { ascending: false })
-            .order('id', { ascending: true })
-            .range(from, to)
-        )
+      const rows = await readAllPages(
+        async (from, to) =>
+          settle(
+            await client
+              .from('sessions')
+              .select('*')
+              .gte('last_seen', since)
+              .order('id', { ascending: true })
+              .range(from, to)
+          ),
+        'sessions'
+      );
+      return rows.sort(
+        (a, b) => Date.parse(b.last_seen) - Date.parse(a.last_seen)
       );
     });
 
@@ -613,14 +623,6 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       );
       channel = channel.on(
         'postgres_changes',
-        { event, schema: 'public', table: 'github_events' },
-        (payload) => {
-          const row = toGithubEvent(payload.new);
-          if (row) onGithub?.(row);
-        }
-      );
-      channel = channel.on(
-        'postgres_changes',
         { event, schema: 'public', table: 'sessions' },
         sessionsChanged
       );
@@ -637,6 +639,19 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         onStatus?.(false);
       }
     });
+    // Its own channel too, so a github_events table missing from the publication costs the PR states only
+    let github = client.channel('desk-github');
+    for (const event of ['INSERT', 'UPDATE'] as const) {
+      github = github.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'github_events' },
+        (payload) => {
+          const row = toGithubEvent(payload.new);
+          if (row) onGithub?.(row);
+        }
+      );
+    }
+    github.subscribe();
     // Its own channel, so a missing host_metrics table fails only this one; the status is ignored
     const hostChannel = client
       .channel('desk-host')
@@ -694,6 +709,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       clearTimeout(hoursTimer);
       clearTimeout(sessionsTimer);
       void client.removeChannel(channel);
+      void client.removeChannel(github);
       void client.removeChannel(hostChannel);
       void client.removeChannel(builds);
       void client.removeChannel(planChannel);

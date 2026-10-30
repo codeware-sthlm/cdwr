@@ -120,8 +120,9 @@ describe('prState', () => {
     ['check_suite:neutral', 'checks passed'],
     ['check_suite:skipped', 'checks passed'],
     ['check_suite:failure', 'checks failed'],
-    ['check_suite:cancelled', 'checks failed'],
     ['check_suite:timed_out', 'checks failed'],
+    ['check_suite:cancelled', 'checks finished'],
+    ['check_suite:stale', 'checks finished'],
     ['check_suite:completed', 'checks finished'],
     ['pull_request_review:copilot', 'Copilot reviewed'],
     ['pull_request_review:submitted', 'reviewed'],
@@ -493,8 +494,19 @@ describe('problems', () => {
     ).toEqual([]);
   });
 
-  it('calls the state unknown when a run is open and the NUC is silent', () => {
-    const open = runs(ago(5), [run(ago(10), null)]);
+  it('calls the state unknown when a session is alive and the NUC is silent', () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: {
+        at: ago(5),
+        limit: { used: 0, max: 5 },
+        session: { state: 'alive' },
+        next: [],
+        held: { tickets: [], free: [] },
+        parked: [],
+        table: { before: [], label: [], after: [] }
+      }
+    };
     const out = problems({
       ...base,
       runs: open,
@@ -502,7 +514,7 @@ describe('problems', () => {
     });
     expect(out).toHaveLength(1);
     expect(out[0].kind).toBe('unknown');
-    // A live host, a finished run or no host at all leaves it known
+    // A live host, no session or no host at all leaves it known
     expect(problems({ ...base, runs: open, host })).toEqual([]);
     expect(problems({ ...base, runs: open, host: null })).toEqual([]);
     expect(problems({ ...base, host: { ageMin: 31, silentMin: 30 } })).toEqual(

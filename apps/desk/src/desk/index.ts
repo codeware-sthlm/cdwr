@@ -237,6 +237,7 @@ export function setConnection(
 /** Records the newest issue event, the pulse's Linear side */
 export function setLastIssue(row: IssueEventRow): void {
   state.data.connection = { ...state.data.connection, lastIssue: row };
+  render();
 }
 
 /** Starts the page on a data adapter; called again with a new one when the settings change */
