@@ -225,6 +225,28 @@ export const createLoader = ({
       }
       render();
     });
+    adapter.watchTool('Supabase', 'planUsage', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.planUsage = ev.result.payload;
+        state.errors.delete('planUsage');
+      } else {
+        state.errors.set('planUsage', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.planUsage = null;
+      }
+      render();
+    });
+    adapter.watchTool('Supabase', 'usageHours', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.usageHours = ev.result.payload;
+        state.errors.delete('usageHours');
+      } else {
+        state.errors.set('usageHours', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.usageHours = null;
+      }
+      render();
+    });
     adapter.watchTool(SERVER, 'list_issues', { label: IDEA_LABEL }, (ev) => {
       if (stopped) return;
       if (ev.type === 'data') {

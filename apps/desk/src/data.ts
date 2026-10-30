@@ -77,7 +77,11 @@ export type AdapterOptions = {
   >;
   supabase: Pick<
     ReturnType<typeof createSupabase>,
-    'read' | 'readHostMetrics' | 'subscribe'
+    | 'read'
+    | 'readHostMetrics'
+    | 'readPlanUsage'
+    | 'readUsageHours'
+    | 'subscribe'
   >;
   now?: () => number;
   events?: DataEvents;
@@ -270,6 +274,8 @@ export const createAdapter = ({
   );
   const queue = track(SUPABASE, () => supabase.read());
   const hostMetrics = track(SUPABASE, () => supabase.readHostMetrics());
+  const planUsage = track(SUPABASE, () => supabase.readPlanUsage());
+  const usageHours = track(SUPABASE, () => supabase.readUsageHours());
   const details = new Map<string, Source<IssueDetail>>();
   const comments = new Map<string, Source<{ comments: Comment[] }>>();
 
@@ -318,6 +324,8 @@ export const createAdapter = ({
       if (tool === 'usage') return bind(queue, pick('usage'));
       if (tool === 'activity') return bind(queue, pick('activity'));
       if (tool === 'hostMetrics') return bind(hostMetrics, (rows) => rows);
+      if (tool === 'planUsage') return bind(planUsage, (rows) => rows);
+      if (tool === 'usageHours') return bind(usageHours, (rows) => rows);
     }
     return undefined;
   };
@@ -342,6 +350,12 @@ export const createAdapter = ({
   };
   const refreshHostMetrics = () => {
     if (!stopped && hostMetrics.watching()) void hostMetrics.refresh();
+  };
+  const refreshPlanUsage = () => {
+    if (!stopped && planUsage.watching()) void planUsage.refresh();
+  };
+  const refreshUsageHours = () => {
+    if (!stopped && usageHours.watching()) void usageHours.refresh();
   };
   const refreshSupabase = () => {
     if (!stopped) void refreshWatched(SUPABASE);
@@ -491,7 +505,9 @@ export const createAdapter = ({
         }
       },
       queueIssue,
-      refreshHostMetrics
+      refreshHostMetrics,
+      refreshPlanUsage,
+      refreshUsageHours
     )
   );
 

@@ -89,19 +89,29 @@ const setup = () => {
   let status: (healthy: boolean) => void = () => undefined;
   const unsubscribe = vi.fn();
   let issueEvent: (row: IssueEventRow) => void = () => undefined;
+  const supabaseReadPlan = vi.fn(() => Promise.resolve([]));
+  const supabaseReadHours = vi.fn(() => Promise.resolve([]));
   let hostEvent: () => void = () => undefined;
+  let planEvent: () => void = () => undefined;
+  let hoursEvent: () => void = () => undefined;
   const supabase = {
     read: supabaseRead,
     readHostMetrics: supabaseReadHost,
+    readPlanUsage: supabaseReadPlan,
+    readUsageHours: supabaseReadHours,
     subscribe: vi.fn(
       (
         onChange: () => void,
         onStatus?: (healthy: boolean) => void,
         onIssue?: (row: IssueEventRow) => void,
-        onHostMetrics?: () => void
+        onHostMetrics?: () => void,
+        onPlanUsage?: () => void,
+        onUsageHours?: () => void
       ) => {
         changed = onChange;
         if (onHostMetrics) hostEvent = onHostMetrics;
+        if (onPlanUsage) planEvent = onPlanUsage;
+        if (onUsageHours) hoursEvent = onUsageHours;
         if (onStatus) status = onStatus;
         if (onIssue) issueEvent = onIssue;
         return unsubscribe;
@@ -138,6 +148,8 @@ const setup = () => {
     stopFocus,
     fireChange: () => changed(),
     fireHostMetrics: () => hostEvent(),
+    firePlanUsage: () => planEvent(),
+    fireUsageHours: () => hoursEvent(),
     fireStatus: (healthy: boolean) => status(healthy),
     fireFocus: () => focus()
   };
@@ -363,6 +375,48 @@ describe('createAdapter', () => {
     fireHostMetrics();
     await vi.advanceTimersByTimeAsync(0);
     expect(supabase.readHostMetrics).toHaveBeenCalledTimes(2);
+    expect(supabase.read).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the other Supabase tools when plan_usage or usage_hours fails', async () => {
+    const { adapter, supabase } = setup();
+    supabase.readPlanUsage.mockRejectedValueOnce(
+      new SupabaseError('bad_response', 'relation does not exist')
+    );
+    supabase.readUsageHours.mockRejectedValueOnce(
+      new SupabaseError('bad_response', 'relation does not exist')
+    );
+    const seen: Record<string, WatchEvent> = {};
+    for (const tool of ['runs', 'planUsage', 'usageHours'] as const)
+      adapter.watchTool('Supabase', tool, {}, (e) => {
+        seen[tool] = e;
+      });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(seen['runs']?.type).toBe('data');
+    for (const tool of ['planUsage', 'usageHours'])
+      expect(seen[tool]).toMatchObject({
+        type: 'error',
+        error: { code: 'bad_response' }
+      });
+  });
+
+  it('rereads only plan_usage on a new sample and only usage_hours on a new hour', async () => {
+    const { adapter, supabase, firePlanUsage, fireUsageHours } = setup();
+    adapter.watchTool('Supabase', 'runs', {}, () => undefined);
+    adapter.watchTool('Supabase', 'planUsage', {}, () => undefined);
+    adapter.watchTool('Supabase', 'usageHours', {}, () => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    firePlanUsage();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(supabase.readPlanUsage).toHaveBeenCalledTimes(2);
+    expect(supabase.readUsageHours).toHaveBeenCalledTimes(1);
+
+    fireUsageHours();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(supabase.readUsageHours).toHaveBeenCalledTimes(2);
+    expect(supabase.readPlanUsage).toHaveBeenCalledTimes(2);
     expect(supabase.read).toHaveBeenCalledTimes(1);
   });
 
