@@ -273,6 +273,21 @@ carry on: after `copilot`, the Copilot round; after `CI`, the PR-ready gate or t
 `review addressed` comment, or a fix when it failed. A parked ticket whose claim grew 2 hours
 old is taken over like any other.
 
+**A failed CI run is read, never guessed at.** `gh pr checks <n>` names the failed job and its
+run URL; the log of that run's failed steps is
+
+```sh
+gh run view <run id> --log-failed -R codeware-sthlm/cdwr | rg -n 'Failed tasks|FAIL |Error:'
+```
+
+or, where only `gh api` reaches, `gh api repos/codeware-sthlm/cdwr/actions/jobs/<job id>/logs
+--allow-escape-sequences` (without the flag gh prints nothing and exits 1 when the log carries
+colour codes; the job ids come from `…/actions/runs/<run id>/jobs`). Nx prints the failing task
+under `Failed tasks` and vitest the spec under `FAIL`. A spec that fails only in CI, passes
+alone and touches nothing in the branch is a flake: say which spec in the gate and ask for a
+rerun, which only Håkan can start (`gh run rerun <run id> --failed`); never push an empty commit
+to retry.
+
 ## Review feedback
 
 Håkan reviews after the PR-ready comment. Handle it between tickets.
