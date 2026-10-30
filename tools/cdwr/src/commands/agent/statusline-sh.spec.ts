@@ -136,19 +136,45 @@ describe.skipIf(!hasZsh || !hasJq)('statusline.sh', () => {
     expect(written.at).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
   });
 
-  it('writes rate-limits.sent once and leaves it alone for the same values', async () => {
+  it('writes rate-limits.sent and leaves it alone for the same values while it is fresh', async () => {
     await run(PAYLOAD);
     const sent = file('rate-limits.sent');
     expect(JSON.parse(readFileSync(sent, 'utf8'))).toEqual({
       five_hour: { used_percentage: 23.5, resets_at: 1738425600 },
       seven_day: { used_percentage: 41.2, resets_at: 1738857600 }
     });
+    const fresh = new Date(Date.now() - 30_000);
+    utimesSync(sent, fresh, fresh);
+    const before = statSync(sent).mtimeMs;
+    const second = await run(PAYLOAD);
+    expect(second.status).toBe(0);
+    expect(statSync(sent).mtimeMs).toBe(before);
+  });
+
+  it('sends the same values again once the last send is 10 minutes old', async () => {
+    await run(PAYLOAD);
+    const sent = file('rate-limits.sent');
     const old = new Date(Date.now() - 3_600_000);
     utimesSync(sent, old, old);
     const before = statSync(sent).mtimeMs;
     const second = await run(PAYLOAD);
     expect(second.status).toBe(0);
-    expect(statSync(sent).mtimeMs).toBe(before);
+    expect(statSync(sent).mtimeMs).toBeGreaterThan(before);
+  });
+
+  it('does not send a changed value within a minute of the last send', async () => {
+    await run(PAYLOAD);
+    const sent = file('rate-limits.sent');
+    const before = readFileSync(sent, 'utf8');
+    const second = await run({
+      ...PAYLOAD,
+      rate_limits: {
+        ...PAYLOAD.rate_limits,
+        five_hour: { used_percentage: 30, resets_at: 1738425600 }
+      }
+    });
+    expect(second.status).toBe(0);
+    expect(readFileSync(sent, 'utf8')).toBe(before);
   });
 
   it('returns before the send finishes', () => {
@@ -170,26 +196,28 @@ describe.skipIf(!hasZsh || !hasJq)('statusline.sh', () => {
     expect(result.status).toBe(0);
   });
 
-  it('posts a row per window to plan_usage, ignoring duplicates', async () => {
+  it('posts a row per window to plan_usage, merging duplicates', async () => {
     await run(PAYLOAD);
     await waitForHit();
     const post = hits.find((hit) => hit.method === 'POST');
     expect(post?.url).toBe(
       '/rest/v1/plan_usage?on_conflict=kind,resets_at,used_percentage'
     );
-    expect(post?.headers['prefer']).toContain('resolution=ignore-duplicates');
+    expect(post?.headers['prefer']).toContain('resolution=merge-duplicates');
     const rows = JSON.parse(post?.body ?? '') as Record<string, unknown>[];
     expect(rows).toEqual([
       {
         kind: 'five_hour',
         resets_at: '2025-02-01T16:00:00Z',
         used_percentage: 23.5,
+        sampled_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT[\d:]+Z$/),
         host: expect.any(String)
       },
       {
         kind: 'seven_day',
         resets_at: '2025-02-06T16:00:00Z',
         used_percentage: 41.2,
+        sampled_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT[\d:]+Z$/),
         host: expect.any(String)
       }
     ]);

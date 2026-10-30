@@ -456,11 +456,11 @@ polls, and otherwise while its heartbeat is under 15 minutes old. It deletes the
 The plan's own usage reaches the desk only from an interactive session: Claude Code hands its status
 line the 5-hour and weekly `rate_limits`, and nothing else exposes them. `agent-queue/statusline.sh`
 prints a one-line status, keeps the newest figures in `~/.cdwr/agent-queue/rate-limits.json` and
-sends a `plan_usage` row when a value changes, at most once a minute and detached. Set it once on
-the Mac; it refuses to replace a status line that is already set:
+sends a `plan_usage` row when a value changes (at most once a minute) and every 10 minutes while it
+holds, detached. Set it once on the Mac; it refuses to replace a status line that isn't its own:
 
 ```sh
-cdwr agent statusline install   # points ~/.claude/settings.json at this checkout's statusline.sh
+cdwr agent statusline install   # points ~/.claude/settings.json at the main checkout's statusline.sh
 ```
 
 The figures age while only the NUC runs, and the desk shows how old they are.

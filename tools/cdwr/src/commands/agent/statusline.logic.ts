@@ -1,6 +1,13 @@
-import { isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 
 const SCRIPT = 'tools/cdwr/agent-queue/statusline.sh';
+
+/** A command this installer wrote, wherever the checkout was */
+const OURS = /^\/bin\/zsh '.+\/tools\/cdwr\/agent-queue\/statusline\.sh'$/;
+
+/** The main checkout, given `git rev-parse --path-format=absolute --git-common-dir`: the parent of the common `.git` */
+export const mainCheckout = (commonDir: string): string =>
+  dirname(commonDir.trim().replace(/\/+$/, ''));
 
 /** The settings file Claude Code reads: `$CLAUDE_CONFIG_DIR/settings.json`, else `~/.claude/settings.json` */
 export const settingsPath = (
@@ -16,7 +23,7 @@ export const statuslineCommand = (root: string): string | undefined => {
 };
 
 export type StatuslinePlan =
-  | { kind: 'install'; next: string }
+  | { kind: 'install'; next: string; replaces?: string }
   | { kind: 'current' }
   | { kind: 'taken'; current: unknown }
   | { kind: 'invalid' };
@@ -40,11 +47,20 @@ export const planStatusline = (
     }
   }
   const current = settings['statusLine'];
+  let replaces: string | undefined;
   if (current !== undefined) {
-    return isObject(current) && current['command'] === command
-      ? { kind: 'current' }
-      : { kind: 'taken', current };
+    if (isObject(current) && current['command'] === command)
+      return { kind: 'current' };
+    const old = isObject(current) ? current['command'] : undefined;
+    // Ours, from another checkout: it moves rather than stays
+    if (typeof old !== 'string' || !OURS.test(old))
+      return { kind: 'taken', current };
+    replaces = old;
   }
   const next = { ...settings, statusLine: { type: 'command', command } };
-  return { kind: 'install', next: `${JSON.stringify(next, null, 2)}\n` };
+  return {
+    kind: 'install',
+    next: `${JSON.stringify(next, null, 2)}\n`,
+    ...(replaces === undefined ? {} : { replaces })
+  };
 };
