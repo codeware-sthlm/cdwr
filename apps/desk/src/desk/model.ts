@@ -20,6 +20,7 @@ import {
   LIMIT,
   LINEAR_ISSUE,
   OTHER_REPOS,
+  PLAN_PROJECT_AFTER,
   PLAN_RESET_DRIFT_MS,
   PLAN_STALE_MIN,
   PLAN_WARN_PCT,
@@ -397,6 +398,9 @@ const planWindow = (
   const rate = used / elapsedH;
   const projected = used + rate * Math.max(0, (resetsMs - sampledMs) / 36e5);
   const ageMin = (now.getTime() - sampledMs) / 6e4;
+  // Too early in the window the rate says little, so no projection counts yet
+  const early =
+    sampledMs - startMs < PLAN_PROJECT_AFTER * PLAN_WINDOW_H[kind] * 36e5;
   return {
     kind,
     reset: false,
@@ -407,12 +411,13 @@ const planWindow = (
     rate,
     projected,
     runsOutAt:
-      rate > 0 && projected >= 100
+      !early && rate > 0 && projected >= 100
         ? new Date(startMs + (100 / rate) * 36e5)
         : null,
     ageMin,
     stale: ageMin > PLAN_STALE_MIN,
-    verdict: used >= 100 ? 'bad' : projected >= PLAN_WARN_PCT ? 'warn' : 'ok'
+    verdict:
+      used >= 100 ? 'bad' : !early && projected >= PLAN_WARN_PCT ? 'warn' : 'ok'
   };
 };
 

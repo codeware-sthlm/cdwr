@@ -1142,6 +1142,17 @@ describe('planUsage', () => {
     expect(Number.isFinite(w.projected)).toBe(true);
   });
 
+  it('counts no projection early in the window unless it is used up', () => {
+    // Six minutes in at 3 %: the rate projects past 100 %, but a tenth of the window has not passed
+    const w = planUsage([sample('five_hour', 4.9, 3)], NOW).five_hour;
+    if (!w || w.reset) throw new Error('expected a live window');
+    expect(w.projected).toBeGreaterThan(100);
+    expect(w.runsOutAt).toBeNull();
+    expect(w.verdict).toBe('ok');
+    const spent = planUsage([sample('five_hour', 4.9, 100)], NOW).five_hour;
+    expect(spent).toMatchObject({ verdict: 'bad', runsOutAt: null });
+  });
+
   it('marks a sample older than 60 minutes stale and keeps its age', () => {
     const fresh = planUsage([sample('five_hour', 2, 30, 59)], NOW).five_hour;
     const old = planUsage([sample('five_hour', 2, 30, 90)], NOW).five_hour;
