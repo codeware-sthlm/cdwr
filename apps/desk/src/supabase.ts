@@ -428,27 +428,42 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
 
   // Apart from `read`, so a plan_usage failure (a migration not yet applied) leaves the other tiles alone
   const readPlanUsage = (): Promise<PlanUsageRow[]> =>
-    attempt(async () =>
-      settle(
-        await client
-          .from('plan_usage')
-          .select('*')
-          .gte('sampled_at', new Date(Date.now() - 8 * DAY_MS).toISOString())
-          .order('sampled_at', { ascending: true })
-      )
-    );
+    attempt(() => {
+      const since = new Date(Date.now() - 8 * DAY_MS).toISOString();
+      // Ordered down to the key, so a page boundary inside equal samples neither repeats nor skips a row
+      return readAllPages(async (from, to) =>
+        settle(
+          await client
+            .from('plan_usage')
+            .select('*')
+            .gte('sampled_at', since)
+            .order('sampled_at', { ascending: true })
+            .order('kind', { ascending: true })
+            .order('resets_at', { ascending: true })
+            .order('used_percentage', { ascending: true })
+            .range(from, to)
+        )
+      );
+    });
 
   // Apart from `read`, so a usage_hours failure (a migration not yet applied) leaves the other tiles alone
   const readUsageHours = (): Promise<UsageHourRow[]> =>
-    attempt(async () =>
-      settle(
-        await client
-          .from('usage_hours')
-          .select('*')
-          .gte('hour', new Date(Date.now() - 8 * DAY_MS).toISOString())
-          .order('hour', { ascending: true })
-      )
-    );
+    attempt(() => {
+      const since = new Date(Date.now() - 8 * DAY_MS).toISOString();
+      return readAllPages(async (from, to) =>
+        settle(
+          await client
+            .from('usage_hours')
+            .select('*')
+            .gte('hour', since)
+            .order('hour', { ascending: true })
+            .order('host', { ascending: true })
+            .order('model', { ascending: true })
+            .order('role', { ascending: true })
+            .range(from, to)
+        )
+      );
+    });
 
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to

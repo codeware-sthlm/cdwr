@@ -704,7 +704,8 @@ const planBurn = (m: Model, state: DeskState): string => {
     );
   const { hourly, fiveHour, sevenDay } = m.burn;
   const day = hourly.reduce((n, h) => n + h.cost, 0);
-  const max = Math.max(1, ...hourly.map((h) => h.cost));
+  const peak = Math.max(0, ...hourly.map((h) => h.cost));
+  const max = Math.max(1, peak); // the chart's scale keeps a floor of 1
   const table = tableHTML(
     ['Role', '5-hour window', '7 days'],
     [...BURN_ROLES, 'total' as const].map((r) => [
@@ -713,7 +714,7 @@ const planBurn = (m: Model, state: DeskState): string => {
       esc(usd(sevenDay[r], 2))
     ])
   );
-  return `<div class="fig"><div class="figh"><h3>Last 24 hours</h3><b>${esc(usd(day, 2))}</b><span>per hour, peak ${esc(usd(max, 2))}</span></div>
+  return `<div class="fig"><div class="figh"><h3>Last 24 hours</h3><b>${esc(usd(day, 2))}</b><span>per hour, peak ${esc(usd(peak, 2))}</span></div>
     ${sparkline(
       hourly.map((h) => ({ at: h.hour, value: h.cost })),
       hourly[0].hour,

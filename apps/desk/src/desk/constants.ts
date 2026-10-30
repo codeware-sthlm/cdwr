@@ -36,6 +36,7 @@ export const HOST_SWAP_GROWTH_BYTES = 1024 * 1024; // swap in use must grow by m
 
 export const PLAN_STALE_MIN = 60; // a plan sample older than this is shown with its age (it ages while no interactive session runs)
 export const PLAN_WARN_PCT = 100; // a window projected to reach this share by its reset is a warning
+export const PLAN_PROJECT_AFTER = 0.1; // the share of a window that must have passed at the sample before a projection counts
 export const PLAN_RESET_DRIFT_MS = 15 * 6e4; // samples whose reset times are this close belong to the same window
 export const PLAN_WINDOW_H = { five_hour: 5, seven_day: 168 } as const; // the plan's windows, in hours
 
