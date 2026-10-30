@@ -13,7 +13,9 @@ const SUPABASE_ERRORS: readonly string[] = [
   'activity',
   'hostMetrics',
   'planUsage',
-  'usageHours'
+  'usageHours',
+  'githubEvents',
+  'sessions'
 ];
 
 /** The sentence for a failure of the source behind `key` */

@@ -4,6 +4,7 @@ import { type WatchEvent, createAdapter } from './data';
 import type { Issue } from './linear';
 import { LinearError } from './linear';
 import {
+  type GithubEventRow,
   type IssueEventRow,
   type QueueStateRow,
   SupabaseError,
@@ -91,14 +92,22 @@ const setup = () => {
   let issueEvent: (row: IssueEventRow) => void = () => undefined;
   const supabaseReadPlan = vi.fn(() => Promise.resolve([]));
   const supabaseReadHours = vi.fn(() => Promise.resolve([]));
+  const supabaseReadGithub = vi.fn<() => Promise<GithubEventRow[]>>(() =>
+    Promise.resolve([])
+  );
+  const supabaseReadSessions = vi.fn(() => Promise.resolve([]));
   let hostEvent: () => void = () => undefined;
   let planEvent: () => void = () => undefined;
   let hoursEvent: () => void = () => undefined;
+  let githubEvent: (row: GithubEventRow) => void = () => undefined;
+  let sessionsEvent: () => void = () => undefined;
   const supabase = {
     read: supabaseRead,
     readHostMetrics: supabaseReadHost,
     readPlanUsage: supabaseReadPlan,
     readUsageHours: supabaseReadHours,
+    readGithubEvents: supabaseReadGithub,
+    readSessions: supabaseReadSessions,
     subscribe: vi.fn(
       (
         onChange: () => void,
@@ -106,9 +115,13 @@ const setup = () => {
         onIssue?: (row: IssueEventRow) => void,
         onHostMetrics?: () => void,
         onPlanUsage?: () => void,
-        onUsageHours?: () => void
+        onUsageHours?: () => void,
+        onGithub?: (row: GithubEventRow) => void,
+        onSessions?: () => void
       ) => {
         changed = onChange;
+        if (onGithub) githubEvent = onGithub;
+        if (onSessions) sessionsEvent = onSessions;
         if (onHostMetrics) hostEvent = onHostMetrics;
         if (onPlanUsage) planEvent = onPlanUsage;
         if (onUsageHours) hoursEvent = onUsageHours;
@@ -150,6 +163,8 @@ const setup = () => {
     fireHostMetrics: () => hostEvent(),
     firePlanUsage: () => planEvent(),
     fireUsageHours: () => hoursEvent(),
+    fireGithub: (row: GithubEventRow) => githubEvent(row),
+    fireSessions: () => sessionsEvent(),
     fireStatus: (healthy: boolean) => status(healthy),
     fireFocus: () => focus()
   };
@@ -896,10 +911,103 @@ describe('createAdapter', () => {
 
   it('reports the channel health through onLive', async () => {
     const { onLive, fireStatus } = setup();
-    expect(onLive.mock.calls).toEqual([[false]]);
+    expect(onLive.mock.calls.map(([live]) => live)).toEqual([false]);
     fireStatus(true);
     fireStatus(true);
     fireStatus(false);
-    expect(onLive.mock.calls).toEqual([[false], [true], [false]]);
+    expect(onLive.mock.calls.map(([live]) => live)).toEqual([
+      false,
+      true,
+      false
+    ]);
+  });
+
+  it('records the retries and since when the channel has been up', async () => {
+    const { onLive, fireStatus } = setup();
+    const up = Date.now();
+    expect(onLive.mock.calls[0][1]).toEqual({ retries: 0, upSince: null });
+    fireStatus(true);
+    expect(onLive.mock.calls[1][1]).toEqual({ retries: 0, upSince: up });
+    fireStatus(false);
+    expect(onLive.mock.calls[2][1]).toEqual({ retries: 1, upSince: null });
+    await vi.advanceTimersByTimeAsync(5000);
+    fireStatus(true);
+    expect(onLive.mock.calls[3][1]).toEqual({
+      retries: 1,
+      upSince: up + 5000
+    });
+  });
+
+  describe('github events and sessions', () => {
+    const event = (subject: string, at: string): GithubEventRow => ({
+      subject,
+      pr: 1,
+      action: 'opened',
+      updated_at: at
+    });
+
+    it('replaces the row of a subject and puts the new one first', async () => {
+      const { adapter, supabase, fireGithub } = setup();
+      supabase.readGithubEvents.mockResolvedValueOnce([
+        event('pr-1', '2026-10-28T10:00:00.000Z'),
+        event('pr-2', '2026-10-28T09:00:00.000Z')
+      ]);
+      const events: WatchEvent[] = [];
+      adapter.watchTool('Supabase', 'githubEvents', {}, (e) => events.push(e));
+      await vi.advanceTimersByTimeAsync(0);
+
+      fireGithub(event('pr-2', '2026-10-28T11:00:00.000Z'));
+      expect(events.at(-1)).toMatchObject({
+        type: 'data',
+        result: {
+          payload: [
+            event('pr-2', '2026-10-28T11:00:00.000Z'),
+            event('pr-1', '2026-10-28T10:00:00.000Z')
+          ]
+        }
+      });
+      expect(supabase.readGithubEvents).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps at most 200 rows', async () => {
+      const { adapter, supabase, fireGithub } = setup();
+      supabase.readGithubEvents.mockResolvedValueOnce(
+        Array.from({ length: 200 }, (_, i) =>
+          event(`pr-${i}`, '2026-10-28T10:00:00.000Z')
+        )
+      );
+      const events: WatchEvent<GithubEventRow[]>[] = [];
+      adapter.watchTool('Supabase', 'githubEvents', {}, (e) => events.push(e));
+      await vi.advanceTimersByTimeAsync(0);
+
+      fireGithub(event('new', '2026-10-28T11:00:00.000Z'));
+      const last = events.at(-1);
+      const rows = last?.type === 'data' ? last.result.payload : [];
+      expect(rows).toHaveLength(200);
+      expect(rows[0].subject).toBe('new');
+      expect(rows.at(-1)?.subject).toBe('pr-198');
+    });
+
+    it('does nothing for a github event before the first load', () => {
+      const { fireGithub, supabase } = setup();
+      fireGithub(event('pr-1', '2026-10-28T11:00:00.000Z'));
+      expect(supabase.readGithubEvents).not.toHaveBeenCalled();
+    });
+
+    it('rereads sessions only when watched', async () => {
+      const { adapter, supabase, fireSessions } = setup();
+      fireSessions();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.readSessions).not.toHaveBeenCalled();
+
+      adapter.watchTool('Supabase', 'sessions', {}, () => undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.readSessions).toHaveBeenCalledTimes(1);
+
+      fireSessions();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.readSessions).toHaveBeenCalledTimes(2);
+      expect(supabase.read).not.toHaveBeenCalled();
+    });
   });
 });
