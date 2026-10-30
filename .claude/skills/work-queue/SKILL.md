@@ -292,6 +292,25 @@ Håkan reviews after the PR-ready comment. Handle it between tickets.
 
 Thread replies and resolving use the GraphQL calls in **Copilot review**.
 
+## A PR that conflicts with main
+
+Main's merge queue rebases each commit onto main, so a branch it can't replay is refused even
+when GitHub calls the PR mergeable. Never merge main into the branch: the merge commit is
+dropped in the replay and the old commits still conflict.
+
+1. In the ticket's worktree, note the branch's remote head (`git rev-parse origin/<branch>`),
+   then `git rebase origin/main` and resolve each conflict in the commit that causes it.
+2. Check the result against a merge: `git diff $(git merge-tree --write-tree <old head> origin/main) HEAD`
+   is empty, or differs only where a conflict needed a hand resolution you can explain.
+3. Run the narrow checks for the conflicted projects.
+4. Push with an explicit lease, never a bare `--force` or `--force-with-lease`:
+   `git -C <worktree> push --force-with-lease=<branch>:<old head> origin HEAD:refs/heads/<branch>`.
+   A refused lease means someone pushed meanwhile: fetch and start over.
+5. Park on `CI` (see **Parking**). Once green, say in a ticket comment starting `**Agent:**`
+   that the branch was rebased, and name any hand resolution.
+
+When the push is denied, post the exact push command as a needs-input gate.
+
 ## Copilot review
 
 1. The ticket comes back from its `copilot` park with the outcome `reviewed`, or `no review`
