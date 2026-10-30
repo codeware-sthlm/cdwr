@@ -308,6 +308,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      plan_usage: {
+        Row: {
+          kind: string;
+          resets_at: string;
+          used_percentage: number;
+          sampled_at: string;
+          host: string;
+        };
+        Insert: {
+          kind: string;
+          resets_at: string;
+          used_percentage: number;
+          sampled_at?: string;
+          host: string;
+        };
+        Update: {
+          kind?: string;
+          resets_at?: string;
+          used_percentage?: number;
+          sampled_at?: string;
+          host?: string;
+        };
+        Relationships: [];
+      };
       sessions: {
         Row: {
           id: string;

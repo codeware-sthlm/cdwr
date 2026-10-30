@@ -325,6 +325,13 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/mirror-clear').then((m) => m.default)
   },
   {
+    path: ['agent', 'statusline', 'install'],
+    summary:
+      "Show the plan's usage in the Claude status line and send it to the desk",
+    danger: 'mutate',
+    load: () => import('./agent/statusline-install').then((m) => m.default)
+  },
+  {
     path: ['release'],
     summary: 'Version, changelog, tag and publish the npm packages',
     danger: 'destructive',
