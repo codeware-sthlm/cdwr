@@ -38,6 +38,7 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
       input: typeof payload === 'string' ? payload : JSON.stringify(payload),
       env: {
         ...process.env,
+        AGENT_QUEUE_SESSION_KIND: '',
         AGENT_QUEUE_SESSIONS: sessions,
         AGENT_QUEUE_ENV_FILE: '/dev/null',
         CLAUDE_PROJECT_DIR: sessions
@@ -449,6 +450,7 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
       const child = spawn('zsh', [SCRIPT], {
         env: {
           ...process.env,
+          AGENT_QUEUE_SESSION_KIND: '',
           AGENT_QUEUE_SESSIONS: dir,
           AGENT_QUEUE_ENV_FILE: '/dev/null',
           CLAUDE_PROJECT_DIR: dir,
