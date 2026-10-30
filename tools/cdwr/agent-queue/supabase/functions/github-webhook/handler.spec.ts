@@ -116,6 +116,7 @@ describe('toRow', () => {
     'closed',
     'synchronize',
     'ready_for_review',
+    'review_requested',
     'enqueued',
     'dequeued'
   ])('maps pull_request %s to its PR', (action) => {
@@ -158,6 +159,57 @@ describe('toRow', () => {
     });
   });
 
+  it.each(['Copilot', 'copilot-pull-request-reviewer[bot]'])(
+    'tells a review by %s from any other',
+    (login) => {
+      expect(
+        toRow(
+          'pull_request_review',
+          {
+            action: 'submitted',
+            pull_request: { number: 712 },
+            review: { user: { login } }
+          },
+          AT
+        )?.action
+      ).toBe('pull_request_review:copilot');
+      expect(
+        toRow(
+          'pull_request_review',
+          {
+            action: 'submitted',
+            pull_request: { number: 712 },
+            review: { user: { login: 'hakan' } }
+          },
+          AT
+        )?.action
+      ).toBe('pull_request_review:submitted');
+    }
+  );
+
+  it.each(['success', 'failure', 'cancelled'])(
+    'names a completed suite by its conclusion (%s)',
+    (conclusion) => {
+      expect(
+        toRow(
+          'check_suite',
+          suiteEvent({ conclusion, pull_requests: [{ number: 712 }] }),
+          AT
+        )?.action
+      ).toBe(`check_suite:${conclusion}`);
+    }
+  );
+
+  it('keeps completed for a suite without a conclusion', () => {
+    expect(
+      toRow(
+        'check_suite',
+        suiteEvent({ conclusion: null, pull_requests: [{ number: 712 }] }),
+        AT
+      )?.action
+    ).toBe('check_suite:completed');
+  });
+
   it('maps a completed check suite to its first PR', () => {
     expect(
       toRow(
@@ -171,7 +223,7 @@ describe('toRow', () => {
     ).toMatchObject({
       subject: 'pr/712',
       pr: 712,
-      action: 'check_suite:completed'
+      action: 'check_suite:success'
     });
   });
 
