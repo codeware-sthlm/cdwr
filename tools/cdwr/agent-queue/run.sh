@@ -759,7 +759,7 @@ rc=0
   --output-format json \
   --allowedTools \
     Skill Read Grep Glob \
-    "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels \
+    "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels "$L"__get_attachment \
     "$L"__save_issue "$L"__save_comment \
   > "$result" 2> "$log" || rc=$?
 
