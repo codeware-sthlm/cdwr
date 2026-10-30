@@ -20,6 +20,8 @@ pnpm cdwr doctor          # what is missing: binaries, credentials, PATH
 
 Credentials live in `tools/cdwr/.env` (copy `.env.example`). `pnpm cdwr` works without the setup. Set up once per machine: the linked `cdwr` runs the code of the checkout you are standing in, and falls back to the one it was linked from.
 
+Completion follows the checkout it was linked from, not the one you stand in. After every run the shim compares that checkout's `tools/cdwr/src` tree (`git rev-parse HEAD:tools/cdwr/src`) with the one recorded in `~/.cdwr/completion.json`, and rewrites the script in the background when it moved, so a new command or flag completes in the next new shell. A checkout behind it never writes it. `cdwr doctor` says which checkout it follows; run `cdwr setup` there, never elsewhere, since setup moves the link to wherever it runs.
+
 ## The app
 
 A bare `cdwr` on a terminal opens a full-screen app: commands on the left, the selected command's
