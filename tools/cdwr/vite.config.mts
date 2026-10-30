@@ -14,6 +14,7 @@ export default defineConfig({
     env: { AGENT_SUPABASE_URL: '', AGENT_SUPABASE_SERVICE_KEY: '' },
     include: [
       'src/**/*.spec.{ts,tsx}',
+      'bin/**/*.spec.mjs',
       'agent-queue/supabase/functions/**/*.spec.ts'
     ],
     reporters: ['default'],
