@@ -431,6 +431,8 @@ listed.
    its own plan, even though no one is watching.
 2. Edit and Write work only inside the ticket worktrees. Read reaches anything. There is no
    `rm` or `mv`: delete a file with `git -C <worktree> rm <path>` and rename with `git mv`.
+   Nothing under `.claude/` can be edited, even in a worktree: Claude Code guards that
+   directory, so a step there is a needs-input gate.
 3. Never `cd`: a `cd … && git …` compound is denied. Use `git -C <worktree> …` and
    `pnpm -C <worktree> exec nx …` with absolute paths; without `exec`, pnpm runs the directory
    as a command and fails. Every implementer prompt must say the same. Dependencies change
@@ -447,10 +449,40 @@ listed.
 6. Notify through Slack only; there is no PushNotification in `-p`.
 7. A turn that ends, ends the run. Run every wait in the foreground, as repeated Bash calls of
    at most 10 minutes each, never as a background task.
-8. When a tool is denied, or the work needs a production action, money or Håkan's judgement,
-   post it as a needs-input gate (see **How a gate asks**) and stop.
+8. When a tool is denied, find out why first (**A denied tool** below). When the work needs a
+   production action, money or Håkan's judgement, or a denial is not a fix waiting for a
+   deploy, post it as a needs-input gate (see **How a gate asks**) and stop.
 9. With `once`, stop when the ticket reaches review or a gate. Don't go to **Nothing workable**,
    and don't start `wait.sh`.
+
+### A denied tool
+
+The rules that denied it are the _installed_ `implement.sh`, never the worktree's copy. It sits
+in `jq -rn 'env.AGENT_QUEUE_HOME'`: `/home/agent/.cdwr/agent-queue` in the container,
+`$HOME/.cdwr/agent-queue` on the Mac (Read takes the absolute path, not `~`). A merged rule
+reaches it only through a deploy (container) or an install (launchd), so the two can disagree for
+a while.
+
+1. Read `job.json` there, as a hint. Each scheduler run writes it at exit: `differs` names the
+   installed scripts that differ from the `origin/main` that run last fetched, plus `interval`
+   when only the schedule differs (`null` when main couldn't be read). `host`, `kind` and
+   `imageSha` say what is running, `at` when it was checked; an old `at` (a paused scheduler)
+   or a failed fetch makes it stale, so step 2 decides.
+2. `git -C <worktree> fetch origin main`, read the installed `implement.sh` (its `DENY` list and
+   `--allowedTools`) and compare them with main's,
+   `git -C <worktree> show origin/main:tools/cdwr/agent-queue/implement.sh`. Read the installed
+   copy, don't diff it: a Bash path outside the repo is denied.
+3. When main allows the call and the installed copy doesn't, find the commit with
+   `git -C <worktree> log -S '<the rule>' --format='%h %s' origin/main -- tools/cdwr/agent-queue/implement.sh`,
+   and the running image's with `jq -rn 'env.AGENT_IMAGE_SHA'`.
+4. The gate then asks for no decision: it says the rule merged in `<sha>` and waits for
+   `cdwr agent deploy --host agent-host` (`host` is `container`) or `cdwr agent install`
+   (`launchd`). Only a call main denies too is a real question.
+
+What an earlier run hit is in the same directory: `logs/implement_<date>.log` (an implementing
+run's stderr and result), `logs/<date>.log` (a scheduler run) and `runs.jsonl` (the last 20
+outcomes). The transcripts, `~/.claude/projects/<project>/*.jsonl`, record every denied call with
+its command.
 
 ## Plan-only runs
 
@@ -461,7 +493,9 @@ push, and it shouldn't try.
    answered `agent:needs-input` and review feedback wait for an attended session, and the
    limit doesn't apply.
 2. Investigate with Read, Grep and Glob against the checked-out `origin/main`. There is no
-   shell, so no git history; note in the plan where history would have helped.
+   shell, so no git history; note in the plan where history would have helped. A plan that
+   needs a new implement permission reads the installed `implement.sh` and `job.json` under
+   `/home/agent/.cdwr/agent-queue`, where scheduled runs live (see **A denied tool**), and says whether a deploy has to come before implementing.
 3. Write the plan into the description exactly as in **Plan**, with every Status row
    `Planned`, no **Claim:** line, and `**Next:** waiting for plan approval`. Any command the
    plan hands off ends in `(unverified)`, since nothing here can run it; the attended session
