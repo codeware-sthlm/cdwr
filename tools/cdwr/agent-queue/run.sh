@@ -126,10 +126,14 @@ listener_live() {
   beat="$(jq -r 'select(.state == "live") | .lastBeat | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$HOME_DIR/listener.json" 2>/dev/null)" || return 1
   [[ "$beat" == <-> ]] && (( $(date +%s) - beat < 120 ))
 }
+# Prints the line; run in the current shell it also leaves job_kind and job_differs (a JSON array
+# of what differs from origin/main, null when that can't be read) for job_state.
+job_kind="" job_differs=null
 job_line() {
   setopt local_options no_err_exit
   local dir=tools/cdwr/agent-queue secs want theirs f out kind=install
   local -a differs
+  job_differs=null
   if [[ "${AGENT_QUEUE_HOST:-}" == container ]]; then
     # The container's copies under $HOME_DIR are the baked ones; a CI build bakes in its commit too
     kind=image
@@ -138,6 +142,7 @@ job_line() {
   else
     secs="$(plutil -extract StartInterval raw -o - "$PLIST" 2>/dev/null)"
   fi
+  job_kind="$kind"
   if [[ $kind == image* && "${RUN_FALLBACK_SECONDS:-}" == <-> ]] && listener_live; then
     out="Job: live · fallback $(( RUN_FALLBACK_SECONDS / 60 )) min"
   elif [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
@@ -149,9 +154,29 @@ job_line() {
     [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")
   done
   [[ "$secs" == "$want" ]] || differs+=(interval)
+  job_differs="$(jq -nc '$ARGS.positional' --args "${differs[@]}")"
   if (( ${#differs} )); then print -r -- "$out · $kind out of date (${(j:, :)differs})"
   elif [[ $kind == image* ]]; then print -r -- "$out · $kind"
   else print -r -- "$out · install current"; fi
+}
+
+# The job line once per run, kept in $job for queue_state and the run row, and written to job.json,
+# where a session reads whether the installed scripts that deny its tools are behind origin/main.
+# Written with or without telemetry; --check writes nothing.
+job=""
+job_state() {
+  $check && return 0
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/job.json"
+  # Through a file, not $(…): a subshell would keep job_kind and job_differs to itself
+  job_line > "$file.line" 2>/dev/null
+  job="$(<"$file.line")"
+  rm -f "$file.line"
+  jq -n --arg at "$(date -u +%FT%TZ)" --arg host "${AGENT_QUEUE_HOST:-launchd}" --arg kind "$job_kind" \
+    --arg sha "${AGENT_IMAGE_SHA:-}" --arg line "$job" --argjson differs "${job_differs:-null}" \
+    '{at: $at, host: $host, kind: $kind, imageSha: (if $sha == "" then null else $sha end), line: $line, differs: $differs}' \
+    > "$file.tmp" 2>/dev/null && mv "$file.tmp" "$file"
+  return 0
 }
 
 # Keeps runs.jsonl to its last 20 rows, and this run's Attended line and queue view for a later
@@ -266,7 +291,7 @@ record_run() {
   telemetry_on || return 0
   setopt local_options no_err_exit
   local jl interval="" version="" limit
-  jl="$(job_line)"
+  jl="${job:-$(job_line)}"
   [[ "$jl" =~ '(every|fallback) ([0-9]+) min' ]] && interval=$(( match[2] * 60 ))
   [[ "$jl" == *' · '* ]] && version="${jl##* · }"
   limit="$(jq -r '.limit.max // empty' <<<"${queue_view:-null}" 2>/dev/null)"
@@ -279,14 +304,14 @@ record_queue_state() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local last attended suggested job view
+  local last attended suggested jl view
   last="$(date '+%F %H:%M') · $last_outcome"
   # attended-published is the cache before attended-line, until a verdict replaces it
   attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
   suggested="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
-  job="$(job_line)"
+  jl="${job:-$(job_line)}"
   view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
-  ( telemetry_queue_state "$last" "$attended" "$suggested" "$job" "$view" ) &!
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" ) &!
 }
 # Every handled outcome exits 0, so a non-zero exit is a failure nothing recorded.
 on_exit() {
@@ -300,6 +325,7 @@ on_exit() {
   record_usage
   record_activity
   keep_state
+  job_state
   record_queue_state
   record_run "$st"
   rmdir "$HOME_DIR/lock" 2>/dev/null
