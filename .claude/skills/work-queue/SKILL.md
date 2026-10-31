@@ -494,8 +494,11 @@ push, and it shouldn't try.
    limit doesn't apply.
 2. Investigate with Read, Grep and Glob against the checked-out `origin/main`. There is no
    shell, so no git history; note in the plan where history would have helped. A plan that
-   needs a new implement permission reads the installed `implement.sh` and `job.json` under
-   `/home/agent/.cdwr/agent-queue`, where scheduled runs live (see **A denied tool**), and says whether a deploy has to come before implementing.
+   needs a new implement permission reads the installed `implement.sh` and `job.json` in the
+   host's queue directory, `/home/agent/.cdwr/agent-queue` in the container or
+   `/Users/<user>/.cdwr/agent-queue` under launchd (the user from the checkout's path; see
+   **A denied tool**), and says whether a deploy (container) or an install (launchd) has to come
+   before implementing.
 3. Write the plan into the description exactly as in **Plan**, with every Status row
    `Planned`, no **Claim:** line, and `**Next:** waiting for plan approval`. Any command the
    plan hands off ends in `(unverified)`, since nothing here can run it; the attended session
