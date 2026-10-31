@@ -52,10 +52,21 @@ jobs:
 
       # Unsigned and not notarized; the target builds the frontend first
       # The desk compares its commit with main's newest desk build
+      # The output is kept as an artifact, so a failed build can be read even when the job's
+      # own log never reaches GitHub (the macos-15 runner lost it once)
       - name: Build the app
-        run: pnpm nx tauri-build desk --configuration release -- --target aarch64-apple-darwin
+        run: |
+          set -o pipefail
+          pnpm nx tauri-build desk --configuration release -- --target aarch64-apple-darwin --verbose 2>&1 | tee build.log
         env:
           VITE_DESK_SHA: ${{ github.sha }}
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: agent-desk-build-log
+          path: build.log
+          retention-days: 3
 
       - name: Collect the bundle
         run: |
