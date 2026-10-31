@@ -101,6 +101,13 @@ describe('implement.sh', () => {
     expect(code).toContain('"${DENY[@]}"');
   });
 
+  it.each(['Bash(pnpm -C * add *)', 'Bash(pnpm -C * remove *)'])(
+    'changes dependencies in a worktree with %s',
+    (rule) => {
+      expect(code).toContain(`"${rule}"`);
+    }
+  );
+
   it('reads a failed job log but cannot rerun it', () => {
     expect(code).toContain('"Bash(gh run view *)"');
     expect(code).not.toContain('"Bash(gh run *)"');

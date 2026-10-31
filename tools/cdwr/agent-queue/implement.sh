@@ -106,7 +106,9 @@ record launched "$KEY · log $log"
 # a GraphQL mutation outside the thread replies could merge, push to main or drop protection.
 # A force push without a lease, or one to main, is the skill's to never do. GitHub's branch
 # rules still refuse a direct push to main; this keeps the session from trying. `gh run` is
-# allowed for `view` only, so a failed job's log can be read; a rerun stays with Håkan.
+# allowed for `view` only, so a failed job's log can be read; a rerun stays with Håkan. pnpm
+# `add` and `remove` are scoped to a `-C` directory like `install`: a planned dependency change
+# is part of a step (COD-676 adds two font packages), and the lockfile goes through review.
 DENY=(
   "Bash(git -c *)" "Bash(git -C * -c *)" "Bash(git * config *)" "Bash(git * --config-env*)"
   "Bash(git * push * main)" "Bash(git * push * main *)" "Bash(git * push *:main*)"
@@ -143,6 +145,7 @@ export AGENT_QUEUE_SESSION_KIND=implement
     "Bash(git *)" "Bash(gh pr *)" "Bash(gh run view *)" "Bash(gh api repos/codeware-sthlm/cdwr/*)" \
     "Bash(tools/cdwr/agent-queue/gh-review.sh *)" "Bash(tools/cdwr/agent-queue/linear-upload.sh *)" \
     "Bash(pnpm nx *)" "Bash(pnpm -C * nx *)" "Bash(pnpm -C * vitest *)" "Bash(pnpm -C * install*)" \
+    "Bash(pnpm -C * add *)" "Bash(pnpm -C * remove *)" \
     "Bash(pnpm cdwr agent worktree *)" \
     "Bash(jq *)" "Bash(uuidgen*)" "Bash(cut *)" "Bash(date *)" "Bash(wc -c *)" \
     "Bash(tools/cdwr/agent-queue/session.sh register)" "Bash(tools/cdwr/agent-queue/session.sh ticket *)" \

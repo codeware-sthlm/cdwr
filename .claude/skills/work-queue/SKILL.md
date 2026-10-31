@@ -429,10 +429,12 @@ listed.
 1. Start and claim as usual. In **What to take next**, take only the steps before **The limit**:
    never a new `agent:ready` ticket. An unanswered plan stays a gate; this mode never approves
    its own plan, even though no one is watching.
-2. Edit and Write work only inside the ticket worktrees. Read reaches anything.
+2. Edit and Write work only inside the ticket worktrees. Read reaches anything. There is no
+   `rm` or `mv`: delete a file with `git -C <worktree> rm <path>` and rename with `git mv`.
 3. Never `cd`: a `cd … && git …` compound is denied. Use `git -C <worktree> …` and
    `pnpm -C <worktree> exec nx …` with absolute paths; without `exec`, pnpm runs the directory
-   as a command and fails. Every implementer prompt must say the same.
+   as a command and fails. Every implementer prompt must say the same. Dependencies change
+   the same way, `pnpm -C <worktree> add -w …` and `remove -w …`, when the plan names them.
 4. GitHub through `gh pr …`, REST reads (`gh api repos/codeware-sthlm/cdwr/…`) and
    `tools/cdwr/agent-queue/gh-review.sh threads <pr>`, `reply <thread id> <body>` and
    `resolve <thread id>` for review threads. Raw `gh api graphql` and any `gh api` write are
