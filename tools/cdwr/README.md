@@ -200,7 +200,9 @@ macOS arm64 only.
 
 The script's source is `agent-queue/run.sh`. Launchd runs the copy `install` puts in
 `~/.cdwr/agent-queue/`, beside its pause flag and logs, so a merged change does nothing
-unattended until the next `install`; `status` and `doctor` say when that copy is out of date. The
+unattended until the next `install`; `status` and `doctor` say when that copy is out of date.
+Each run also writes its own verdict to `job.json` there (`differs` names the scripts that differ
+from `origin/main`), which a session reads to tell a denial that a deploy fixes. The
 script holds the guardrails (read-only tools, Linear the only writable server, no API key), so
 review a change to it as one. The launchd job's Linear key is the Keychain's `linear-agent-queue`
 (a shell-exported `AGENT_QUEUE_LINEAR_KEY` never reaches the job; the container gets that variable
