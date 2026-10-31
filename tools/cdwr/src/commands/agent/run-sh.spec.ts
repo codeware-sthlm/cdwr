@@ -897,8 +897,8 @@ describe('run.sh job.json', () => {
     expect(exit.indexOf('job_state')).toBeLessThan(
       exit.indexOf('record_queue_state')
     );
-    expect(fn('record_run')).toContain('jl="${job:-$(job_line)}"');
-    expect(fn('record_queue_state')).toContain('jl="${job:-$(job_line)}"');
+    expect(fn('record_run')).toContain('jl="$job"');
+    expect(fn('record_queue_state')).toContain('jl="$job"');
   });
 
   it.skipIf(!hasZsh)('says nothing differs when the copies match', () => {
