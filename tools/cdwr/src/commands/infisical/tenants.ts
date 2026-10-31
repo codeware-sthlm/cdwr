@@ -1,11 +1,9 @@
 import { defineCommand, readOnly } from '../../cli/command';
 import { environmentInput } from '../../services/environment';
 import { readTenantDeployments } from '../../services/infisical';
+import { TENANT_APPS } from '../tenant/provision.logic';
 
 import { type TenantFlag, flagStateOf } from './analysis.logic';
-
-/** Apps a tenant can be deployed with */
-const APPS = ['cms'];
 
 export default defineCommand({
   summary: 'Tenant folders per app and their deploy switch',
@@ -24,7 +22,7 @@ export default defineCommand({
       (d) => `${d.size} tenant(s) in ${environment}`
     );
     const byApp: Record<string, TenantFlag[]> = Object.fromEntries(
-      APPS.map((app) => [app, []])
+      TENANT_APPS.map((app) => [app, []])
     );
     for (const [tenant, apps] of deployments) {
       for (const { app, flag } of apps) {

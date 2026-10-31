@@ -5,9 +5,21 @@ import { fakeUi } from '../../testing/fake-ui';
 
 vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
+const { setFlySecrets } = vi.hoisted(() => ({
+  setFlySecrets: vi.fn().mockResolvedValue(undefined)
+}));
+
 vi.mock('../../services/fly', () => ({
   configAppName: vi.fn((_root: string, app: string) => `cdwr-${app}`),
-  listAppNames: vi.fn().mockResolvedValue(['cdwr-cms', 'cdwr-web-production']),
+  fly: () => ({ secrets: { set: setFlySecrets } }),
+  startMachines: vi.fn().mockResolvedValue(undefined),
+  listAppNames: vi
+    .fn()
+    .mockResolvedValue([
+      'cdwr-cms',
+      'cdwr-headless-acme',
+      'cdwr-web-production'
+    ]),
   restartMachines: vi.fn().mockResolvedValue(1),
   belongsTo: (name: string, environment: 'preview' | 'production') =>
     (environment === 'preview') === /-pr-(\d+)(?:-|$)/.test(name)
@@ -54,16 +66,67 @@ describe('signature rotate', () => {
     expect(infisical.deleteInfisicalSecret).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'SIGNATURE_SECRET_PREVIOUS' })
     );
-    // Verifier (cms) restarts for every step, signer (web) only once
+    // Verifier (cms) restarts for every step, web once; headless gets the
+    // new secret itself, the one written to Infisical
+    const generated = vi.mocked(infisical.setInfisicalSecret).mock.calls[1][0];
+    expect(generated).toMatchObject({ key: 'SIGNATURE_SECRET' });
     expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-cms');
     expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-web-production');
+    expect(fly.restartMachines).not.toHaveBeenCalledWith('cdwr-headless-acme');
+    expect(setFlySecrets).toHaveBeenCalledTimes(1);
+    expect(setFlySecrets).toHaveBeenCalledWith(
+      { SIGNATURE_SECRET: generated.value },
+      { app: 'cdwr-headless-acme' }
+    );
     expect(ui.asked[0]).toContain('Type');
+  });
+
+  it('resumes a rollover by setting the active secret on headless before retiring', async () => {
+    const fly = await import('../../services/fly');
+    const infisical = await import('../../services/infisical');
+    vi.mocked(infisical.readSecrets).mockResolvedValueOnce({
+      SIGNATURE_SECRET: 'new',
+      SIGNATURE_SECRET_PREVIOUS: 'abc'
+    });
+    vi.mocked(infisical.setInfisicalSecret).mockClear();
+    vi.mocked(infisical.deleteInfisicalSecret).mockClear();
+    vi.mocked(fly.restartMachines).mockClear();
+    setFlySecrets.mockClear();
+    const command = (await import('./rotate')).default;
+
+    const exit = await runCommand({
+      name: 'signature rotate',
+      command,
+      argv: ['--env', 'production', '--interactive'],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: true,
+      ui: fakeUi(['signature'])
+    });
+
+    expect(exit).toBe(EXIT.ok);
+    expect(infisical.setInfisicalSecret).not.toHaveBeenCalled();
+    expect(setFlySecrets).toHaveBeenCalledWith(
+      { SIGNATURE_SECRET: 'new' },
+      { app: 'cdwr-headless-acme' }
+    );
+    expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-web-production');
+    // cms knows the new secret before headless signs with it
+    expect(vi.mocked(fly.restartMachines).mock.calls[0]).toEqual(['cdwr-cms']);
+    expect(
+      vi.mocked(fly.restartMachines).mock.invocationCallOrder[0]
+    ).toBeLessThan(setFlySecrets.mock.invocationCallOrder[0]);
+    expect(setFlySecrets.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(infisical.deleteInfisicalSecret).mock.invocationCallOrder[0]
+    );
   });
 
   it('rolls over with no signer left, restarting only cms', async () => {
     const fly = await import('../../services/fly');
     vi.mocked(fly.listAppNames).mockResolvedValueOnce(['cdwr-cms']);
     vi.mocked(fly.restartMachines).mockClear();
+    setFlySecrets.mockClear();
     const command = (await import('./rotate')).default;
 
     const exit = await runCommand({
@@ -79,8 +142,9 @@ describe('signature rotate', () => {
 
     expect(exit).toBe(EXIT.ok);
     expect(fly.restartMachines).not.toHaveBeenCalledWith(
-      expect.stringMatching(/^cdwr-web/)
+      expect.stringMatching(/^cdwr-(web|headless)/)
     );
     expect(fly.restartMachines).toHaveBeenCalledWith('cdwr-cms');
+    expect(setFlySecrets).not.toHaveBeenCalled();
   });
 });

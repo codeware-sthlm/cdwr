@@ -135,7 +135,7 @@
         }
       },
       "apps": {
-        "projects": ["cms", "builder", "umami"],
+        "projects": ["cms", "builder", "umami", "headless"],
         "projectsRelationship": "independent",
         "version": {
           "updateDependents": "never"

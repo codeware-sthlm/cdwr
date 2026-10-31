@@ -34,7 +34,7 @@ describe('summarize', () => {
       environment: 'production',
       apps: APPS.map((app) => ({
         app,
-        host: 'no flag',
+        host: app === 'headless' ? null : 'no flag',
         tenants: [],
         secrets: {}
       }))
@@ -64,6 +64,7 @@ describe('summarize', () => {
         ],
         secrets: { DATABASE_URL: 'postgres://x' }
       },
+      { app: 'headless', host: null, tenants: [], secrets: {} },
       { app: 'builder', host: 'off', tenants: [], secrets: {} },
       { app: 'umami', host: 'no flag', tenants: [], secrets: {} }
     ]);

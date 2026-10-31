@@ -45,7 +45,9 @@ describe('isGatedPath', () => {
     '/statsx/a',
     '/robots.txt.bak',
     '/sitemap.xml/x',
-    '/x/sitemap.xml'
+    '/x/sitemap.xml',
+    '/api/healthz',
+    '/api/health/x'
   ])('gates %s', (path) => {
     expect(isGatedPath(path)).toBe(true);
   });
@@ -55,7 +57,8 @@ describe('isGatedPath', () => {
     '/stats/script.js',
     '/stats/api/send',
     '/robots.txt',
-    '/sitemap.xml'
+    '/sitemap.xml',
+    '/api/health'
   ])('lets %s through', (path) => {
     expect(isGatedPath(path)).toBe(false);
   });
@@ -107,6 +110,12 @@ describe('siteGate', () => {
       expect(response?.status).toBeGreaterThanOrEqual(300);
     }
   );
+
+  it('lets the health check through while gated', async () => {
+    expect(
+      await siteGate(get('/api/health', { accept: '*/*' }), PASSWORD)
+    ).toBeUndefined();
+  });
 
   it('shows the gate page', async () => {
     const response = await siteGate(get('/site-gate?error=wrong'), PASSWORD);
