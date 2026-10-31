@@ -805,3 +805,138 @@ describe('run.sh woken by the listener', () => {
     );
   });
 });
+
+// A session reads job.json to learn whether the installed scripts that denied it are behind main
+describe('run.sh job.json', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  const FILES = [
+    'run.sh',
+    'lib.sh',
+    'waits.sh',
+    'watch.jq',
+    'implement.sh',
+    'github-app.sh',
+    'notify.sh',
+    'checkin.sh',
+    'telemetry.sh'
+  ];
+  let root: string;
+  let repo: string;
+  let home: string;
+
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+      { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+    ).trim();
+
+  // origin/main carries every script and the interval; the installed copies match it
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'job-json-'));
+    repo = join(root, 'repo');
+    home = join(root, 'home');
+    const dir = join(repo, 'tools/cdwr/agent-queue');
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(join(repo, 'tools/cdwr/src/commands/agent'), { recursive: true });
+    mkdirSync(home);
+    writeFileSync(
+      join(repo, 'tools/cdwr/src/commands/agent/agent.logic.ts'),
+      `export const RUN_INTERVAL_SECONDS = 600;\n`
+    );
+    for (const f of FILES) {
+      writeFileSync(join(dir, f), `# ${f}\n`);
+      writeFileSync(join(home, f), `# ${f}\n`);
+    }
+    if (!hasZsh) return;
+    git('init', '-q', '-b', 'main');
+    git('add', '-A');
+    git('commit', '-qm', 'main');
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  const run = (check = false) => {
+    const res = spawnSync(
+      'zsh',
+      [
+        '-c',
+        [
+          `REPO="${repo}"`,
+          `HOME_DIR="${home}"`,
+          `check=${check}`,
+          'AGENT_QUEUE_HOST=container',
+          'RUN_INTERVAL_SECONDS=600',
+          'unset RUN_FALLBACK_SECONDS',
+          "AGENT_IMAGE_SHA='0123456789abcdef0123456789abcdef01234567'",
+          SCRIPT.match(/^INTERVAL_SED=.*$/m)?.[0] ?? '',
+          'job_kind="" job_differs=null job=""',
+          fn('listener_live'),
+          fn('job_line'),
+          fn('job_state'),
+          'job_state',
+          'print -r -- "$job"'
+        ].join('\n')
+      ],
+      { encoding: 'utf8' }
+    );
+    const file = join(home, 'job.json');
+    return {
+      line: res.stdout.trim(),
+      json: existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null
+    };
+  };
+
+  it('writes job_state on exit, before the rows that reuse its line', () => {
+    const exit = fn('on_exit');
+    expect(exit.indexOf('job_state')).toBeGreaterThan(0);
+    expect(exit.indexOf('job_state')).toBeLessThan(
+      exit.indexOf('record_queue_state')
+    );
+    expect(fn('record_run')).toContain('jl="${job:-$(job_line)}"');
+    expect(fn('record_queue_state')).toContain('jl="${job:-$(job_line)}"');
+  });
+
+  it.skipIf(!hasZsh)('says nothing differs when the copies match', () => {
+    const { line, json } = run();
+    expect(line).toBe('Job: every 10 min · image sha-0123456');
+    expect(json).toMatchObject({
+      host: 'container',
+      kind: 'image sha-0123456',
+      imageSha: '0123456789abcdef0123456789abcdef01234567',
+      line,
+      differs: []
+    });
+    expect(json.at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  });
+
+  it.skipIf(!hasZsh)(
+    'names implement.sh when its installed copy differs',
+    () => {
+      writeFileSync(join(home, 'implement.sh'), '# an older implement.sh\n');
+      const { line, json } = run();
+      expect(line).toBe(
+        'Job: every 10 min · image sha-0123456 out of date (implement.sh)'
+      );
+      expect(json.differs).toEqual(['implement.sh']);
+    }
+  );
+
+  it.skipIf(!hasZsh)(
+    'keeps the kind with null when main cannot be read',
+    () => {
+      git('update-ref', '-d', 'refs/remotes/origin/main');
+      const { line, json } = run();
+      expect(line).toBe('Job: every 10 min · image sha-0123456 unknown');
+      expect(json).toMatchObject({ kind: 'image sha-0123456', differs: null });
+    }
+  );
+
+  it.skipIf(!hasZsh)('writes nothing under --check', () => {
+    expect(run(true).json).toBeNull();
+  });
+});
