@@ -160,6 +160,9 @@ rollover covers every pull request's apps. The token is never printed.
 
 ## The agent queue
 
+[MAP.md](agent-queue/MAP.md) draws the whole of it: the hosts, the services, the flows and what
+only a person does. The sections below hold the details.
+
 The scheduler runs in the NUC's agent container, every 10 minutes, `/work-queue` plan-only against a
 separate worktree. A Mac is attended-only; it can still run the same loop as a launchd job
 (`se.codeware.agent-queue`, worktree `codeware-agent` beside this checkout), and `cdwr agent uninstall`
