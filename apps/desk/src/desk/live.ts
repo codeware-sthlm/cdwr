@@ -209,11 +209,11 @@ export type Pulse = {
   at: number;
 };
 
-/** The newest event either live table brought; null before any */
-export const pulse = (
+/** The newest event of each live table, newest first; empty before any */
+export const feed = (
   events: readonly GithubEventRow[] | null,
   connection: Connection
-): Pulse | null => {
+): Pulse[] => {
   const github = (events ?? []).reduce<GithubEventRow | null>(
     (a, b) =>
       a && Date.parse(a.updated_at) >= Date.parse(b.updated_at) ? a : b,
@@ -235,10 +235,16 @@ export const pulse = (
           at: Date.parse(issue.updated_at)
         }
       : null;
-  if (!fromGithub) return fromIssue;
-  if (!fromIssue) return fromGithub;
-  return fromIssue.at > fromGithub.at ? fromIssue : fromGithub;
+  return [fromGithub, fromIssue]
+    .filter((p): p is Pulse => p !== null)
+    .sort((a, b) => b.at - a.at);
 };
+
+/** The newest event either live table brought; null before any */
+export const pulse = (
+  events: readonly GithubEventRow[] | null,
+  connection: Connection
+): Pulse | null => feed(events, connection)[0] ?? null;
 
 export type ProblemKind = 'connection' | 'data' | 'unknown';
 

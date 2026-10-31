@@ -54,6 +54,16 @@ export const ageText = (min: number): string =>
       ? `${Math.round(min / 60)} h ago`
       : `${Math.round(min / 1440)} days ago`;
 
+/** "12 s", "4 m", "2 h", "3 d" from minutes: the cards' compact age */
+export const shortAge = (min: number): string =>
+  min < 1
+    ? `${Math.max(0, Math.round(min * 60))} s`
+    : min < 60
+      ? `${Math.round(min)} m`
+      : min < 48 * 60
+        ? `${Math.round(min / 60)} h`
+        : `${Math.round(min / 1440)} d`;
+
 /** "1 h 5 min" from minutes */
 export const span = (min: number): string =>
   min < 60

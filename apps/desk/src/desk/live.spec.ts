@@ -15,6 +15,7 @@ import {
 import {
   type HostSessions,
   agentPrs,
+  feed,
   handBack,
   health,
   hostSessions,
@@ -434,6 +435,40 @@ describe('pulse', () => {
     };
     expect(pulse([event()], connection({ lastIssue }))?.subject).toBe('#10');
     expect(pulse([], connection({ lastIssue }))).toBeNull();
+  });
+});
+
+describe('feed', () => {
+  const lastIssue = {
+    issue_id: 'uuid-1',
+    identifier: 'COD-5',
+    action: 'update',
+    updated_at: ago(2)
+  };
+
+  it('is empty before any event', () => {
+    expect(feed(null, connection())).toEqual([]);
+  });
+
+  it('holds the newest of each table, newest first', () => {
+    const rows = feed(
+      [
+        event({ pr: 1, updated_at: ago(9) }),
+        event({ pr: 2, updated_at: ago(5) })
+      ],
+      connection({ lastIssue })
+    );
+    expect(rows.map((r) => r.subject)).toEqual(['COD-5', '#2']);
+    expect(
+      feed([event({ updated_at: ago(1) })], connection({ lastIssue })).map(
+        (r) => r.subject
+      )
+    ).toEqual(['#10', 'COD-5']);
+  });
+
+  it('holds one row when only one table brought an event', () => {
+    expect(feed([], connection({ lastIssue }))).toHaveLength(1);
+    expect(feed([event()], connection())).toHaveLength(1);
   });
 });
 
