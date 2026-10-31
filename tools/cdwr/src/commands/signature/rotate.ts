@@ -3,8 +3,10 @@ import { CliError, EXIT, messageOf } from '../../cli/errors';
 import { DEPLOYED, environmentInput } from '../../services/environment';
 import {
   configAppName,
+  fly,
   listAppNames,
-  restartMachines
+  restartMachines,
+  startMachines
 } from '../../services/fly';
 import {
   type Environment,
@@ -43,7 +45,10 @@ async function fetchAffectedApps(
   return classifyApps(
     names,
     configAppName(root, 'cms'),
-    [configAppName(root, 'headless'), RETIRED_SIGNER_BASE_NAME],
+    {
+      boot: [RETIRED_SIGNER_BASE_NAME],
+      fly: [configAppName(root, 'headless')]
+    },
     environment
   );
 }
@@ -51,8 +56,10 @@ async function fetchAffectedApps(
 /**
  * The whole rollover runs in one go, restarting apps between steps. cms
  * accepts both secrets throughout, so nothing is rejected while the signers are
- * catching up - the secret is read from Infisical at boot, so restarting is
- * all it takes, no redeploy.
+ * catching up. cms (and the retired web) read the secret from Infisical at
+ * boot, so a restart is all they need. headless never reads Infisical: the new
+ * secret is set on each of its apps as a Fly secret, which restarts it, and the
+ * tenant folders' import of the secret keeps later deploys right.
  */
 export default defineCommand({
   summary: 'Roll over the request signature secret, step by step',
@@ -77,15 +84,15 @@ export default defineCommand({
     const apps = await ctx.ui.task(
       'Finding apps that use the signature secret',
       () => fetchAffectedApps(ctx.root, environment),
-      (a) => `${a.verifiers.length} verifier(s), ${a.signers.length} signer(s)`
+      (a) =>
+        `${a.verifiers.length} verifier(s), ${a.bootSigners.length + a.flySigners.length} signer(s)`
     );
 
-    // No signer is fine: a preview may deploy none. In production, none means
-    // the classification missed headless
+    // No signer is fine: a preview may deploy none
     if (!apps.verifiers.length) {
       throw new Error(
         `Expected a cms app in ${environment}, found none ` +
-          `(signers=[${apps.signers.join(', ')}])`
+          `(signers=[${[...apps.flySigners, ...apps.bootSigners].join(', ')}])`
       );
     }
 
@@ -93,7 +100,7 @@ export default defineCommand({
       steps: remainingSteps(stage),
       notes: [
         `verifiers: ${apps.verifiers.join(', ')}`,
-        `signers:   ${apps.signers.join(', ')}`
+        `signers:   ${[...apps.flySigners, ...apps.bootSigners].join(', ')}`
       ],
       target: { environment, name: 'signature' },
       data: { environment, stage, active, apps }
@@ -109,6 +116,16 @@ export default defineCommand({
     const restartAll = async (names: string[]) => {
       for (const app of names) {
         await ctx.ui.task(`Restarting ${app}`, () => restartMachines(app));
+      }
+    };
+
+    // Setting a Fly secret restarts the app, and Fly can't update a suspended machine
+    const setOnSigners = async (secret: string) => {
+      for (const app of apps.flySigners) {
+        await ctx.ui.task(`Setting ${ACTIVE} on ${app}`, async () => {
+          await startMachines(app);
+          await fly().secrets.set({ [ACTIVE]: secret }, { app });
+        });
       }
     };
 
@@ -132,17 +149,26 @@ export default defineCommand({
       // Step 2 - the new secret; cms has to know it before the signers sign with it,
       // hence verifiers first
       if (current === 'previous-staged') {
+        const secret = generateSecret();
         await ctx.ui.task(`Generating a new ${ACTIVE}`, () =>
           setInfisicalSecret({
             environment,
             path: SECRET_PATH,
             key: ACTIVE,
-            value: generateSecret()
+            value: secret
           })
         );
         await restartAll(apps.verifiers);
-        await restartAll(apps.signers);
+        await restartAll(apps.bootSigners);
+        await setOnSigners(secret);
         current = 'rolling-over';
+      } else if (current === 'rolling-over') {
+        // The earlier run may have stopped before every signer had the new
+        // secret; retiring the previous one would then reject those signers.
+        // cms first, since it may have stopped before cms knew the new one
+        await restartAll(apps.verifiers);
+        await restartAll(apps.bootSigners);
+        await setOnSigners(active);
       }
 
       // Step 3 - only the new secret is accepted from here
@@ -166,7 +192,11 @@ export default defineCommand({
 
     return {
       summary: `Signature secret rolled over in ${environment}`,
-      json: { environment, verifiers: apps.verifiers, signers: apps.signers }
+      json: {
+        environment,
+        verifiers: apps.verifiers,
+        signers: [...apps.flySigners, ...apps.bootSigners]
+      }
     };
   }
 });

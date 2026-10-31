@@ -45,33 +45,33 @@ describe('classifyApps', () => {
     'cdwr-headless-acme',
     'cdwr-headless-pr-12-acme'
   ];
-  const signers = ['cdwr-headless', 'cdwr-web'];
+  const signers = { boot: ['cdwr-web'], fly: ['cdwr-headless'] };
 
   it('picks the bare host app and signer apps for production', () => {
     const result = classifyApps(names, 'cdwr-cms', signers, 'production');
-    expect(result.verifiers).toEqual(['cdwr-cms']);
-    expect(result.signers).toEqual([
-      'cdwr-headless-acme',
-      'cdwr-web-production'
-    ]);
+    expect(result).toEqual({
+      verifiers: ['cdwr-cms'],
+      bootSigners: ['cdwr-web-production'],
+      flySigners: ['cdwr-headless-acme']
+    });
   });
 
   it('picks the pull request host app and signer apps for preview', () => {
     const result = classifyApps(names, 'cdwr-cms', signers, 'preview');
-    expect(result.verifiers).toEqual(['cdwr-cms-pr-12']);
-    expect(result.signers).toEqual([
-      'cdwr-headless-pr-12-acme',
-      'cdwr-web-pr-12-acme'
-    ]);
+    expect(result).toEqual({
+      verifiers: ['cdwr-cms-pr-12'],
+      bootSigners: ['cdwr-web-pr-12-acme'],
+      flySigners: ['cdwr-headless-pr-12-acme']
+    });
   });
 
   it('treats development like production, matching the bare app names', () => {
     const result = classifyApps(names, 'cdwr-cms', signers, 'development');
-    expect(result.verifiers).toEqual(['cdwr-cms']);
-    expect(result.signers).toEqual([
-      'cdwr-headless-acme',
-      'cdwr-web-production'
-    ]);
+    expect(result).toEqual({
+      verifiers: ['cdwr-cms'],
+      bootSigners: ['cdwr-web-production'],
+      flySigners: ['cdwr-headless-acme']
+    });
   });
 });
 
@@ -79,14 +79,14 @@ describe('remainingSteps', () => {
   it('lists every step from not-started', () => {
     expect(remainingSteps('not-started')).toEqual([
       `Stage the current secret as ${PREVIOUS}, restart cms`,
-      `Generate a new ${ACTIVE}, restart cms then the signers`,
+      `Generate a new ${ACTIVE}, restart cms, then set it on the signers`,
       `Retire ${PREVIOUS}, restart cms`
     ]);
   });
 
   it('skips staging once previous-staged', () => {
     expect(remainingSteps('previous-staged')).toEqual([
-      `Generate a new ${ACTIVE}, restart cms then the signers`,
+      `Generate a new ${ACTIVE}, restart cms, then set it on the signers`,
       `Retire ${PREVIOUS}, restart cms`
     ]);
   });
