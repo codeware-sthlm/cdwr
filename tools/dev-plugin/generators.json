@@ -15,6 +15,11 @@
       "schema": "./src/generators/externalize-deps-sync/schema.json",
       "description": "Guard private manifests for internal libs importing un-bundleable deps"
     },
+    "lockstep-versions-sync": {
+      "factory": "./src/generators/lockstep-versions-sync/lockstep-versions-sync",
+      "schema": "./src/generators/lockstep-versions-sync/schema.json",
+      "description": "Keep each dependency family released in lockstep on one exact version in the root package.json"
+    },
     "theme-sync": {
       "factory": "./src/generators/theme-sync/theme-sync",
       "schema": "./src/generators/theme-sync/schema.json",
