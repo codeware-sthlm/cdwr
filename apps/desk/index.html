@@ -7,34 +7,31 @@
   </head>
   <body>
     <div class="wrap">
-      <header>
-        <div>
+      <header class="top">
+        <div class="brand">
           <h1>Agent Desk</h1>
-          <div class="sub">
-            cdwr repo · what <code>/work-queue</code> does next, and what waits
-            on you
-          </div>
+          <span class="sub"
+            >cdwr · what the work queue does next, and what waits on you</span
+          >
+        </div>
+        <div class="tools">
           <a
             class="who"
             href="https://github.com/apps/codeware-agent"
             target="_blank"
             rel="noopener"
             title="Commits, pull requests and review replies are made as this GitHub App"
-            ><img class="av" src="" data-agent-avatar alt="" />On GitHub as
-            <b>codeware-agent[bot]</b></a
-          >
-        </div>
-        <div class="tools">
-          <span
-            id="live"
-            class="live"
-            data-live="false"
-            aria-live="polite"
-            title="Live updates are not connected. The desk reloads every 5 minutes, on focus and on Refresh."
-            >Refreshing every 5 min</span
+            ><img class="av" src="" data-agent-avatar alt="" />on GitHub as
+            codeware-agent[bot]</a
+          ><span id="status" class="status" aria-live="polite"></span
           ><span id="fresh">Loading…</span
-          ><button id="refresh" type="button">Refresh</button
-          ><button id="settings" type="button" aria-label="Settings">
+          ><button id="refresh" type="button" class="tool">Refresh</button
+          ><button
+            id="settings"
+            type="button"
+            class="tool"
+            aria-label="Settings"
+          >
             Settings
           </button>
         </div>
@@ -42,13 +39,11 @@
 
       <div id="notice" hidden></div>
 
-      <section class="now" id="now" aria-label="What happens now"></section>
-
-      <section class="cols" aria-label="The queue">
-        <article class="col wait" id="col-before" data-w="before"></article>
-        <article class="col" id="col-next" data-w="next"></article>
-        <article class="col" id="col-after" data-w="after"></article>
-      </section>
+      <section
+        class="cards"
+        id="cards"
+        aria-label="Session and what waits on you"
+      ></section>
 
       <nav class="more" id="more" aria-label="More detail"></nav>
     </div>

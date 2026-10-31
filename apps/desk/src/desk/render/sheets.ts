@@ -55,11 +55,9 @@ import {
   unattributedTotal
 } from '../spend';
 import type { DeskState, Detail, SheetId } from '../state';
-import type { Job, QueueNext } from '../types';
+import type { Job, QueueNext, SessionState } from '../types';
 
-import { headline } from './band';
 import { chartSlot, gauge, sparkline } from './charts';
-import { blockedText, prWaitText, whyLine } from './columns';
 import {
   empty,
   hostName,
@@ -71,12 +69,64 @@ import {
   reasonChip,
   sessionLabel
 } from './html';
+import { headline } from './session';
 
-// The sheets: one per column, gauge and tile. A sheet body is a pure function of the model and the state.
+// The sheets: one per card, pill and tile. A sheet body is a pure function of the model and the state.
 
 const MINUTE_MS = 60 * 1000;
 const ACTIVITY_STALE_MIN = 30; // the activity table's last update older than this shows in the warning colour
 const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
+
+const WHY: ReadonlyMap<string, string> = new Map([
+  ['answered', 'Your reply is in.'],
+  ['review feedback', 'Its PR has review comments to address.'],
+  ['take over', 'Its claim went stale.'],
+  ['resume', ''],
+  ['ready', '']
+]);
+
+const nextAt = (m: Pick<Model, 'nextRun'>): string =>
+  m.nextRun ? hhmm(m.nextRun) : 'its next run';
+
+/** "merge #617 (COD-566) first", or a blocker without a PR yet; empty when nothing holds the PR back */
+export const blockedText = (m: Pick<Model, 'prBlockers'>, id: string): string =>
+  (m.prBlockers.get(id) || [])
+    .map((b) =>
+      b.pr
+        ? `merge ${prn(b.pr)} (${idLink(b.ticket)}) first`
+        : `${idLink(b.ticket)} has no PR yet`
+    )
+    .join('; ');
+
+/** "Review fixes: waits on CI since 17:20" for an open PR whose ticket is parked; empty otherwise */
+export const prWaitText = (m: Pick<Model, 'prWaits'>, id: string): string => {
+  const p = m.prWaits.get(id);
+  if (!p) return '';
+  return `Review fixes: ${parkedText(p)}${p.since && !p.resolved ? ' since ' + hhmm(Date.parse(p.since)) : ''}`;
+};
+
+/** Who takes a queued item and when: the live session, or the scheduler on its next run */
+export const whyLine = (m: Model, x: QueueNext): string => {
+  const s: SessionState = m.session ?? { state: 'none' };
+  const live = s.state === 'alive' || s.state === 'waiting';
+  const who =
+    m.stuck !== null
+      ? 'The live session should have taken it; it is stuck polling.'
+      : live
+        ? s.ticket === x.ticket
+          ? 'The live session is on it.'
+          : 'The live session takes it after its current step.'
+        : x.reason === 'ready'
+          ? `The scheduler plans it at ${nextAt(m)}.`
+          : `The scheduler starts a session for it at ${nextAt(m)}.`;
+  return [
+    (x.reason !== undefined && WHY.get(x.reason)) || '',
+    who,
+    x.detail ? inline(x.detail) : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+};
 
 const PRIO: ReadonlyMap<number, string> = new Map([
   [1, 'Urgent'],

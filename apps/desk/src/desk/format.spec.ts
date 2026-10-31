@@ -11,6 +11,7 @@ import {
   plural,
   runTime,
   seenAgo,
+  shortAge,
   span,
   tidy,
   txt,
@@ -74,6 +75,16 @@ describe('ageText and span', () => {
     [65, '1 h 5 min']
   ])('span(%s) -> %s', (min, text) => {
     expect(span(min)).toBe(text);
+  });
+
+  it.each([
+    [0.2, '12 s'],
+    [-1, '0 s'],
+    [4, '4 m'],
+    [120, '2 h'],
+    [72 * 60, '3 d']
+  ])('shortAge(%s) -> %s', (min, text) => {
+    expect(shortAge(min)).toBe(text);
   });
 });
 

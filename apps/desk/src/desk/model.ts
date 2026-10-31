@@ -42,6 +42,7 @@ import {
   type Problem,
   type Pulse,
   agentPrs,
+  feed,
   handBack,
   health,
   hostSessions,
@@ -159,6 +160,8 @@ export type Model = {
   handBack: HandBack;
   /** The newest live event; null before any */
   pulse: Pulse | null;
+  /** The newest event of each live table, newest first */
+  feed: Pulse[];
   problems: Problem[];
   health: HealthCheck[];
 };
@@ -842,6 +845,7 @@ export const model = (
     waitAge: waitAges(
       [
         ...before.map((x) => x.ticket),
+        ...toLabel.map((x) => x.ticket),
         ...handoffs.map((x) => x.ticket),
         ...prs.map((x) => x.ticket)
       ],
@@ -852,6 +856,7 @@ export const model = (
     hostSessions: sessions,
     handBack: handBack(data.sessions, host?.host ?? null, nucFresh, now),
     pulse: pulse(data.githubEvents, data.connection),
+    feed: feed(data.githubEvents, data.connection),
     problems: problems({
       connection: data.connection,
       runs,

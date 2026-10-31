@@ -63,20 +63,12 @@ export const pr = (n: PrRef | null | undefined): string =>
     ? `<a class="id" href="${GH_PR + n}" target="_blank" rel="noopener">#${esc(n)}</a>`
     : '';
 
-export const side = (n: PrRef | null | undefined, chipHtml: string): string =>
-  `<span class="side2">${prn(n)}${chipHtml}</span>`;
-
 export const idLink = (id: string): string =>
   `<a class="id" href="${LINEAR_ISSUE + esc(id)}" target="_blank" rel="noopener">${esc(id)}</a>`;
 
 /** A ticket's id and title as a link */
 export const tLink = (i: { id: string; title: string; url: string }): string =>
   `<a class="t" href="${esc(i.url)}" target="_blank" rel="noopener"><span class="id">${esc(i.id)}</span>${esc(i.title)}</a>`;
-
-export const titled = (m: Pick<Model, 'get'>, id: string): string => {
-  const { title, url } = m.get(id);
-  return tLink({ id, title, url });
-};
 
 const SESSION: ReadonlyMap<string, string> = new Map([
   ['alive', 'Session live'],

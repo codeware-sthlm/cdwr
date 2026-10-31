@@ -1,17 +1,20 @@
-import { ageText, esc, hhmm, plural, runTime, seenAgo, span } from '../format';
+import {
+  ageText,
+  esc,
+  hhmm,
+  plural,
+  runTime,
+  seenAgo,
+  shortAge,
+  span
+} from '../format';
+import type { Pulse } from '../live';
 import type { Model } from '../model';
 import type { SessionState } from '../types';
 
-import {
-  hostName,
-  idLink,
-  loadMeter,
-  parkedText,
-  pr,
-  sessionLabel
-} from './html';
+import { idLink, parkedText, pr } from './html';
 
-// The band under the header: the session, one sentence on what happens next, the limit and the scheduler
+// The session card: what the session does, where it runs, and the newest live events
 
 export type Tone = '' | 'wait' | 'block';
 
@@ -92,43 +95,73 @@ export const headline = (m: Model, now: Date): Headline => {
   };
 };
 
-export type Band = { className: string; html: string };
+type Status = { label: string; tone: 'live' | 'wait' | 'block' | 'idle' };
 
-export const renderBand = (m: Model, now: Date): Band => {
-  const { runs } = m;
-  const h = headline(m, now);
+const status = (m: Model): Status => {
+  const s = m.session?.state ?? 'none';
+  if (m.stuck !== null) return { label: 'Session stuck', tone: 'block' };
+  if (s === 'alive') return { label: 'Session live', tone: 'live' };
+  if (s === 'waiting') return { label: 'Waiting on a prompt', tone: 'wait' };
+  if (s === 'stopped') return { label: 'Session stopped', tone: 'idle' };
+  return { label: 'No session', tone: 'idle' };
+};
+
+/** "attended on mac", from the live session rows: the session's own, else the newest */
+export const whereText = (
+  m: Pick<Model, 'session' | 'hostSessions'>
+): string => {
+  const id = m.session?.id;
+  for (const h of m.hostSessions) {
+    const own = id ? h.sessions.find((x) => x.id === id) : undefined;
+    if (own) return `${own.kind} on ${h.host}`;
+  }
+  const h = m.hostSessions[0];
+  return h?.sessions[0] ? `${h.sessions[0].kind} on ${h.host}` : '';
+};
+
+/** A feed row's dot: green for a good outcome, red for a failed one, else neutral */
+const feedTone = (p: Pulse): string =>
+  /failed|closed/.test(p.what)
+    ? 'block'
+    : /passed|merged|reviewed/.test(p.what)
+      ? 'live'
+      : '';
+
+const feedRow = (p: Pulse, now: Date): string =>
+  `<li><i class="dot ${feedTone(p)}" aria-hidden="true"></i><span class="what">${esc(p.subject)} · ${esc(p.what)}</span><time>${esc(shortAge((now.getTime() - p.at) / 6e4))} ago</time></li>`;
+
+export const renderSession = (m: Model, now: Date): string => {
   const s: SessionState = m.session ?? { state: 'none' };
-  const job = runs?.job ?? null;
-  const sched = !runs
-    ? '–'
-    : m.schedulerStale
-      ? `silent ${Math.floor(m.lastRunAge ?? 0)} h`
-      : m.installStale
-        ? job?.host === 'container'
-          ? 'image out of date'
-          : 'install out of date'
-        : m.imageBehind
-          ? 'image behind main'
-          : m.runProblems.length
-            ? plural(m.runProblems.length, 'problem', 'problems')
-            : m.deskBehind
-              ? 'desk behind main'
-              : 'OK';
-  // An outdated desk is said, but it is no scheduler failure, so it doesn't turn the band
-  const bad =
-    runs !== null &&
-    (m.schedulerStale ||
-      m.installStale ||
-      m.imageBehind !== null ||
-      m.runProblems.length > 0);
-  const host = job?.host
-    ? '<br>' + esc(hostName(job.host)) + (job.rev ? ' · ' + esc(job.rev) : '')
-    : '';
-  return {
-    className: 'now ' + (bad && !h.tone ? 'block' : h.tone),
-    html: `<button type="button" class="pill ${esc(s.state)}${m.stuck !== null ? ' stuck' : ''}" data-w="session" aria-haspopup="dialog"><i aria-hidden="true"></i>${m.stuck !== null ? 'Session stuck' : esc(sessionLabel(s.state))}${s.state !== 'none' && s.detail ? ` · ${esc(s.detail)}` : ''}</button>
-    <div class="headline"><p>${h.text}</p>${h.note ? `<small>${h.note}</small>` : ''}</div>
-    <button type="button" class="gauge" data-w="limit" aria-haspopup="dialog"><span class="k">Limit · agent PRs in flight</span><b>${m.limit.used} <small>of ${m.limit.max} · ${m.limit.used >= m.limit.max ? 'no new ticket starts' : plural(m.limit.max - m.limit.used, 'slot', 'slots') + ' free'}</small></b>${loadMeter(m)}</button>
-    <button type="button" class="gauge" data-w="scheduler" aria-haspopup="dialog"><span class="k">Scheduler</span><b>${esc(sched)}</b><small style="color:var(--muted);font-size:.78rem">${runs?.last ? 'last ' + esc(runs.last.when.slice(11)) + ' · next ' + (m.live ? 'on events' : m.nextRun ? hhmm(m.nextRun) : '?') : 'no runs yet'}${host}</small></button>`
-  };
+  const st = status(m);
+  const h = headline(m, now);
+  const where = s.state === 'none' ? '' : whereText(m);
+  const seen =
+    s.lastSeen && s.state !== 'none'
+      ? `seen ${esc(shortAge((now.getTime() - Date.parse(s.lastSeen)) / 6e4))} ago`
+      : '';
+  const who = [
+    where
+      ? `<b class="${where.startsWith('attended') ? 'attended' : ''}">${esc(where)}</b>`
+      : '',
+    seen
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const working = s.ticket && (s.state === 'alive' || s.state === 'waiting');
+  const reason = working
+    ? m.next.find((x) => x.ticket === s.ticket)?.reason
+    : undefined;
+  const big = working
+    ? `Working on <span class="mono">${idLink(s.ticket ?? '')}</span>`
+    : h.text;
+  const sub = working
+    ? [reason, m.get(s.ticket ?? '').title].filter(Boolean).map(esc).join(' · ')
+    : h.note;
+  const feed = m.feed.slice(0, 2);
+  return `<article class="card-top session ${st.tone}" data-w="session">
+    <div class="ct-head"><button type="button" class="open state" aria-haspopup="dialog"><i class="dot" aria-hidden="true"></i>${esc(st.label)}</button>${who ? `<span class="who-runs">${who}</span>` : ''}</div>
+    <div class="big">${big}</div>
+    ${sub ? `<p class="ct-sub">${sub}</p>` : ''}
+    <ul class="feed">${feed.length ? feed.map((p) => feedRow(p, now)).join('') : '<li class="none">No live event yet</li>'}</ul>
+  </article>`;
 };

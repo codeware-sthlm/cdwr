@@ -13,7 +13,6 @@ import { model } from '../model';
 import { type DeskState, SHEET_IDS, createState, isSheetId } from '../state';
 import type { QueueView, SessionState } from '../types';
 
-import { headline, renderBand } from './band';
 import {
   chartHeight,
   chartKind,
@@ -22,9 +21,11 @@ import {
   sparkline,
   spendChart
 } from './charts';
-import { renderColumns } from './columns';
+import { platform, renderStatus } from './header';
+import { headline, renderSession } from './session';
 import { SHEETS } from './sheets';
 import { renderTiles } from './tiles';
+import { renderWaiting, waitRows } from './waiting';
 
 // Local-time dates, so the specs read the same in every time zone
 const NOW = new Date('2026-10-29T12:00:00');
@@ -286,35 +287,123 @@ describe('sheets', () => {
   });
 });
 
-describe('band', () => {
+describe('session card', () => {
   it.each([
-    [{ state: 'alive', detail: 'polling' }, 'Session live'],
-    [{ state: 'waiting' }, 'Session waits on you'],
-    [{ state: 'stopped' }, 'Session stopped'],
-    [{ state: 'none' }, 'No session']
-  ] satisfies [SessionState, string][])(
+    [{ state: 'alive', detail: 'polling' }, 'Session live', 'live'],
+    [{ state: 'waiting' }, 'Waiting on a prompt', 'wait'],
+    [{ state: 'stopped' }, 'Session stopped', 'idle'],
+    [{ state: 'none' }, 'No session', 'idle']
+  ] satisfies [SessionState, string, string][])(
     'shows the session %j',
-    (session, label) => {
-      const state = filled(session);
-      const band = renderBand(model(state, NOW), NOW);
-      expect(band.html).toContain(label);
-      expect(band.html).toContain('data-w="limit"');
-      expect(band.html).toContain('data-w="scheduler"');
+    (session, label, tone) => {
+      const html = renderSession(model(filled(session), NOW), NOW);
+      expect(html).toContain(label);
+      expect(html).toContain(`session ${tone}" data-w="session"`);
     }
   );
 
   it('says it is loading before the runs arrive', () => {
-    const band = renderBand(model(createState(), NOW), NOW);
-    expect(band.html).toContain('Loading the runs…');
+    expect(renderSession(model(createState(), NOW), NOW)).toContain(
+      'Loading the runs…'
+    );
   });
 
-  it('turns red for a scheduler that went silent', () => {
+  it('names the ticket, its reason and where the session runs', () => {
+    const state = filled({
+      state: 'alive',
+      detail: 'working',
+      id: 's1',
+      ticket: 'COD-1',
+      lastSeen: '2026-10-29T11:59:30'
+    });
+    state.data.sessions = [
+      {
+        id: 's1',
+        host: 'mac',
+        kind: 'attended',
+        last_seen: new Date('2026-10-29T11:59:30').toISOString()
+      } as never
+    ];
+    const html = renderSession(model(state, NOW), NOW);
+    expect(html).toContain('Working on');
+    expect(html).toContain('COD-1</a>');
+    expect(html).toContain('ready · Title of COD-1');
+    expect(html).toContain('<b class="attended">attended on mac</b>');
+    expect(html).toContain('seen 30 s ago');
+  });
+
+  it('says the session is stuck', () => {
+    const state = filled({
+      state: 'alive',
+      detail: 'polling',
+      lastSeen: '2026-10-29T10:00:00'
+    });
+    const html = renderSession(model(state, NOW), NOW);
+    expect(html).toContain('Session stuck');
+    expect(html).toContain('session block"');
+  });
+
+  it('lists the newest event of each live table, and says when there is none', () => {
+    const state = filled();
+    expect(renderSession(model(state, NOW), NOW)).toContain(
+      'No live event yet'
+    );
+    state.data.githubEvents = [
+      {
+        pr: 7,
+        subject: 'x',
+        action: 'check_suite:failure',
+        updated_at: new Date('2026-10-29T11:59:00').toISOString()
+      } as never
+    ];
+    state.data.connection.lastIssue = {
+      issue_id: 'u',
+      identifier: 'COD-<5>',
+      action: 'update',
+      updated_at: new Date('2026-10-29T11:50:00').toISOString()
+    };
+    const html = renderSession(model(state, NOW), NOW);
+    expect(html.match(/<li>/g)).toHaveLength(2);
+    expect(html).toContain('dot block');
+    expect(html).toContain('#7 · checks failed');
+    expect(html).toContain('COD-&lt;5&gt; · update');
+    expect(html.indexOf('#7')).toBeLessThan(html.indexOf('COD-&lt;5'));
+  });
+});
+
+describe('header', () => {
+  const connection = (live: boolean) => ({
+    live,
+    retries: 0,
+    upSince: NOW.getTime() - 6e4,
+    lastIssue: null
+  });
+
+  it('opens the scheduler sheet from the Platform pill', () => {
+    const html = renderStatus(model(filled(), NOW), connection(true));
+    expect(html).toContain('class="platform" data-w="scheduler"');
+    expect(html).toContain('LIVE');
+    expect(html).toContain('realtime ·');
+  });
+
+  it('shows the unknown state while polling', () => {
+    const html = renderStatus(model(filled(), NOW), connection(false));
+    expect(html).toContain('live off');
+    expect(html).toContain('every 5 min');
+  });
+
+  it('counts failing checks and run problems, and a dash while loading', () => {
+    expect(renderStatus(model(createState(), NOW), connection(true))).toContain(
+      'checks –'
+    );
     const state = filled();
     state.data.runs = {
       ...runs(view()),
       last: { when: '2026-10-28 01:00', outcome: 'idle' }
     };
-    expect(renderBand(model(state, NOW), NOW).className).toBe('now block');
+    const m = model(state, NOW);
+    expect(platform(m).failing).toContain('scheduler silent 35 h');
+    expect(renderStatus(m, connection(true))).toMatch(/\d+ failing/);
   });
 
   const OLD = 'abc1234' + '0'.repeat(33);
@@ -336,7 +425,8 @@ describe('band', () => {
   it('says when the image is behind main', () => {
     const state = behind({ image: NEW, desk: null }, true);
     const m = model(state, NOW, null);
-    expect(renderBand(m, NOW).html).toContain('image behind main');
+    expect(platform(m).updates).toBe(1);
+    expect(renderStatus(m, state.data.connection)).toContain('· 1 update');
     const html = SHEETS.scheduler.body(m, state, NOW);
     expect(html).toContain('cdwr agent deploy --host agent-host');
     expect(html).toContain('sha-def5678');
@@ -346,9 +436,9 @@ describe('band', () => {
   it('says when the desk is behind main', () => {
     const state = behind({ image: null, desk: NEW }, false);
     const m = model(state, NOW, OLD);
-    expect(renderBand(m, NOW).html).toContain('desk behind main');
-    // Said, but no scheduler failure
-    expect(renderBand(m, NOW).className).not.toContain('block');
+    // An update, but no failing check
+    expect(platform(m).updates).toBe(1);
+    expect(platform(m).failing).not.toContain('desk');
     expect(SHEETS.scheduler.body(m, state, NOW)).toContain(
       'cdwr agent desk install'
     );
@@ -357,33 +447,91 @@ describe('band', () => {
   it('shows neither when both are current', () => {
     const state = behind({ image: OLD, desk: OLD }, true);
     const m = model(state, NOW, OLD);
-    expect(renderBand(m, NOW).html).not.toContain('behind main');
+    expect(platform(m).updates).toBe(0);
+    expect(renderStatus(m, state.data.connection)).not.toContain(
+      'class="updates"'
+    );
     const html = SHEETS.scheduler.body(m, state, NOW);
     expect(html).not.toContain('cdwr agent desk install');
     expect(html).not.toContain('docker compose pull');
   });
 });
 
-describe('columns and tiles', () => {
+describe('waiting card, queue sheets and tiles', () => {
   it('show a placeholder while loading', () => {
-    const cols = renderColumns(model(createState(), NOW), createState());
-    expect(cols.waiting).toBe(false);
-    expect(cols.before).toContain('Loading…');
-    expect(cols.next).toContain('<span class="count">–</span>');
+    const html = renderWaiting(model(createState(), NOW), NOW);
+    expect(html).toContain('Loading…');
+    expect(html).toContain('<b class="count">–</b>');
+    expect(html).not.toContain('waiting has');
   });
 
-  it('list what waits on the viewer', () => {
+  it('list what waits on the viewer, with its kind and age', () => {
     const state = filled();
-    const cols = renderColumns(model(state, NOW), state);
-    expect(cols.waiting).toBe(true);
-    expect(cols.before).toContain('COD-4');
-    expect(cols.before).toContain('idea');
-    expect(cols.before).toContain('COD-6');
-    expect(cols.before).toContain('ready to label');
-    expect(cols.before).toContain('COD-&lt;1&gt;');
-    expect(cols.before).not.toContain('COD-<1>');
-    expect(cols.next).toContain('parked');
-    expect(cols.after).toContain('Open PRs · 1');
+    state.data.activity = {
+      ...activity,
+      rows: [
+        {
+          when: '2026-10-29 10:00',
+          ticket: 'COD-4',
+          actor: 'agent',
+          change: 'comment: **Agent: plan ready**'
+        }
+      ]
+    };
+    const m = model(state, NOW);
+    expect(waitRows(m, NOW).map((r) => [r.id, r.kind])).toEqual([
+      ['COD-4', 'plan'],
+      ['COD-6', 'ready to label'],
+      ['COD-50', 'idea']
+    ]);
+    const html = renderWaiting(m, NOW);
+    expect(html).toContain('waiting has" data-w="before"');
+    expect(html).toContain('<b class="count">3</b>');
+    expect(html).toContain('<span class="kind">plan</span><time>2 h</time>');
+    expect(html).toContain('href="https://linear.app/codeware/issue/COD-6"');
+    expect(html).toContain('wait age from activity gate events');
+  });
+
+  it('render every row and hide all but two behind open all on a phone', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        table: {
+          before: [
+            { ticket: 'COD-4', kind: 'plan' },
+            { ticket: 'COD-<7>', kind: 'question' }
+          ],
+          label: [],
+          after: []
+        }
+      })
+    );
+    const m = model(state, NOW);
+    const html = renderWaiting(m, NOW);
+    expect(html.match(/class="wrow"/g)).toHaveLength(3);
+    expect(html).toContain('+ 1 more — open all');
+    expect(html).toContain('COD-&lt;7&gt;');
+    expect(html).not.toContain('COD-<7>');
+  });
+
+  it('stay in place, neutral, when nothing waits', () => {
+    const state = filled();
+    state.data.ideas = [];
+    state.data.runs = runs(
+      view({ table: { before: [], label: [], after: [] } })
+    );
+    const html = renderWaiting(model(state, NOW), NOW);
+    expect(html).toContain('Nothing waits on you.');
+    expect(html).toContain('<b class="count">0</b>');
+    expect(html).not.toContain('waiting has');
+    expect(html).not.toContain('open all');
+  });
+
+  it('show a parked ticket on the next sheet and open PRs on the after sheet', () => {
+    const state = filled();
+    const m = model(state, NOW);
+    expect(SHEETS.next.body(m, state, NOW)).toContain('Parked on a wait · 1');
+    expect(SHEETS.after.body(m, state, NOW)).toContain('Open PRs · 1');
   });
 
   it('show a parked review only as its open PR', () => {
@@ -396,10 +544,11 @@ describe('columns and tiles', () => {
       })
     );
     const m = model(state, NOW);
-    const cols = renderColumns(m, state);
-    expect(cols.next).not.toContain('COD-3');
-    expect(cols.after).toContain('COD-3');
-    expect(cols.after).toContain('Review fixes: waits on CI since');
+    expect(m.parked).toEqual([]);
+    expect(SHEETS.next.body(m, state, NOW)).not.toContain('Parked on a wait');
+    const after = SHEETS.after.body(m, state, NOW);
+    expect(after).toContain('COD-3');
+    expect(after).toContain('Review fixes: waits on CI since');
     expect(headline(m, NOW).note).toContain('COD-3');
   });
 
@@ -426,9 +575,9 @@ describe('columns and tiles', () => {
       blockedBy: [],
       pr: 5
     });
-    const cols = renderColumns(model(state, NOW), state);
-    expect(cols.next).not.toContain('COD-2');
-    expect(cols.next).not.toContain('parked');
+    const m = model(state, NOW);
+    expect(m.parked).toEqual([]);
+    expect(SHEETS.next.body(m, state, NOW)).not.toContain('Parked on a wait');
   });
 
   it('draw the NUC sheet with a gauge and a sparkline per figure', () => {
@@ -509,6 +658,9 @@ describe('columns and tiles', () => {
     const state = filled();
     const html = renderTiles(model(state, NOW), state, NOW);
     for (const id of [
+      'next',
+      'after',
+      'limit',
       'activity',
       'shipped',
       'spend',

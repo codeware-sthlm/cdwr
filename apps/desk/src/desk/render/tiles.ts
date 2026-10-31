@@ -5,7 +5,7 @@ import { type DeskState, type SheetId, bucketsLoaded } from '../state';
 
 import { type IconName, icon } from './html';
 
-// The tiles under the columns, each opening a sheet
+// The tiles under the cards, each opening a sheet
 
 type Tile = {
   sheet: SheetId;
@@ -77,7 +77,33 @@ export const renderTiles = (m: Model, state: DeskState, now: Date): string => {
   const loaded = bucketsLoaded(state.data);
   const { days, total } = shipped(closed, now);
   const avg = perTicketAverage(ticketCosts(usage, days));
+  const runsIn = m.runs !== null;
   const tiles: Tile[] = [
+    {
+      sheet: 'next',
+      icon: 'next',
+      label: 'Up next',
+      value: !runsIn
+        ? '–'
+        : m.next[0]
+          ? `${m.next[0].ticket}${m.next.length > 1 ? ` + ${m.next.length - 1}` : ''}`
+          : 'nothing'
+    },
+    {
+      sheet: 'after',
+      icon: 'review',
+      label: 'Review & check',
+      value: runsIn
+        ? `${plural(m.prs.length, 'PR', 'PRs')} · ${plural(m.handoffItems, 'check', 'checks')}`
+        : '–'
+    },
+    {
+      sheet: 'limit',
+      icon: 'load',
+      label: 'Limit, PRs in flight',
+      value: runsIn ? `${m.limit.used} of ${m.limit.max}` : '–',
+      bad: runsIn && m.limit.used >= m.limit.max
+    },
     {
       sheet: 'activity',
       icon: 'activity',
