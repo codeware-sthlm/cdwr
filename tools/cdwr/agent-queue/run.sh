@@ -291,7 +291,7 @@ record_run() {
   telemetry_on || return 0
   setopt local_options no_err_exit
   local jl interval="" version="" limit
-  jl="${job:-$(job_line)}"
+  jl="$job"
   [[ "$jl" =~ '(every|fallback) ([0-9]+) min' ]] && interval=$(( match[2] * 60 ))
   [[ "$jl" == *' · '* ]] && version="${jl##* · }"
   limit="$(jq -r '.limit.max // empty' <<<"${queue_view:-null}" 2>/dev/null)"
@@ -309,7 +309,7 @@ record_queue_state() {
   # attended-published is the cache before attended-line, until a verdict replaces it
   attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
   suggested="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
-  jl="${job:-$(job_line)}"
+  jl="$job"
   view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
   ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" ) &!
 }
