@@ -25,6 +25,7 @@ apps/headless/.output
 # Temporary files
 coverage
 dist
+**/node_modules
 node_modules
 tmp
 
