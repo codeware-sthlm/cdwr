@@ -5,16 +5,17 @@ import { AGENT_AVATAR } from './constants';
 import { type Loader, createLoader } from './load';
 import { model, shipped } from './model';
 import { notice } from './notice';
-import { renderBand } from './render/band';
 import {
   chartHeight,
   chartKind,
   shippedChart,
   spendChart
 } from './render/charts';
-import { renderColumns } from './render/columns';
+import { renderStatus } from './render/header';
+import { renderSession } from './render/session';
 import { SHEETS } from './render/sheets';
 import { renderTiles } from './render/tiles';
+import { renderWaiting } from './render/waiting';
 import { spendDays } from './spend';
 import { bucketsLoaded, createState, isFilter, isSheetId } from './state';
 
@@ -90,14 +91,8 @@ try {
 function renderMain(): void {
   const now = new Date();
   const m = model(state, now);
-  const band = renderBand(m, now);
-  $('now').className = band.className;
-  $('now').innerHTML = band.html;
-  const cols = renderColumns(m, state);
-  $('col-before').classList.toggle('has', cols.waiting);
-  $('col-before').innerHTML = cols.before;
-  $('col-next').innerHTML = cols.next;
-  $('col-after').innerHTML = cols.after;
+  $('status').innerHTML = renderStatus(m, state.data.connection);
+  $('cards').innerHTML = renderSession(m, now) + renderWaiting(m, now);
   $('more').innerHTML = renderTiles(m, state, now);
 }
 
