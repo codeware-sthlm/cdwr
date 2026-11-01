@@ -343,7 +343,7 @@ $check || CHECKIN_ID="$(checkin in_progress)"
 # label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write.
 read -r -d '' WATCHED <<'GQL' || true
 query {
-  issues(first: 50, filter: {
+  issues(first: 100, filter: {
     team: { key: { eq: "COD" } }
     labels: { some: { name: { in: ["agent:working", "agent:needs-input", "agent:review"] } } }
     state: { type: { neq: "canceled" } }
@@ -442,6 +442,9 @@ watch_prs() {
   resp="$(linear "$WATCHED")" || { print -r -- "Linear did not answer"; return 1; }
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
     { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
+  # A full page means tickets beyond it go unwatched
+  [[ "$(jq '.data.issues.nodes | length' <<<"$resp")" -lt 100 ]] ||
+    { note "warn: watch: 100 tickets, the page limit; later ones are not watched"; record warn "" "watch: page limit reached"; }
   # Same repo rule as planning: tickets labelled for another repo have no PR here.
   nodes="$(jq -c --argjson other "$OTHER_REPOS" '[.data.issues.nodes[]
     | select((.labels.nodes | map(.name | IN($other[])) | any) | not)]' <<<"$resp")"
