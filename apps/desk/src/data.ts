@@ -9,6 +9,7 @@ import {
   type OpenStatusType
 } from './linear';
 import {
+  type ChannelStatus,
   GITHUB_EVENTS_LIMIT,
   type GithubEventRow,
   type IssueEventRow,
@@ -98,8 +99,15 @@ export type AdapterOptions = {
   onIssue?: (row: IssueEventRow) => void;
 };
 
-/** The Realtime channel's record since the adapter started; `upSince` is null while it is down */
-export type Connection = { retries: number; upSince: number | null };
+/** The Realtime channel's record since the adapter started; `upSince` is null while it is down, `downSince` while it is up */
+export type Connection = {
+  retries: number;
+  upSince: number | null;
+  downSince: number | null;
+  status: ChannelStatus | null;
+  /** When the backoff timer fires next, in ms; null with none pending */
+  nextAt: number | null;
+};
 
 const browserEvents: DataEvents = {
   onFocus: (onFocus) => {
@@ -392,7 +400,13 @@ export const createAdapter = ({
     );
   };
 
-  const connection: Connection = { retries: 0, upSince: null };
+  const connection: Connection = {
+    retries: 0,
+    upSince: null,
+    downSince: now(),
+    status: null,
+    nextAt: null
+  };
   onLive?.(false, { ...connection });
 
   const pending = new Map<
@@ -501,11 +515,21 @@ export const createAdapter = ({
     if (stopped || backoffTimer !== undefined) return;
     const delay = BACKOFF_MS[Math.min(backoffStep, BACKOFF_MS.length - 1)];
     backoffStep += 1;
+    connection.nextAt = now() + delay;
     backoffTimer = setTimeout(() => {
       backoffTimer = undefined;
+      connection.nextAt = null;
       refreshSupabase();
       if (!subscribed) scheduleBackoff();
+      onLive?.(subscribed, { ...connection });
     }, delay);
+  };
+
+  const resetBackoff = () => {
+    backoffStep = 0;
+    clearTimeout(backoffTimer);
+    backoffTimer = undefined;
+    connection.nextAt = null;
   };
 
   let lastFocus = -Infinity;
@@ -518,28 +542,38 @@ export const createAdapter = ({
     })
   );
 
-  stopFns.push(
-    supabase.subscribe(
+  // Each subscription has its number; a status from one that was replaced is ignored
+  let generation = 0;
+  let reconnecting: Promise<void> | null = null;
+  const join = () => {
+    const mine = ++generation;
+    return supabase.subscribe(
       refreshSupabase,
-      (healthy) => {
-        if (healthy !== subscribed) {
-          if (healthy) connection.upSince = now();
-          else {
+      (healthy, status) => {
+        if (mine !== generation) return;
+        const before = `${connection.status}|${connection.nextAt}`;
+        connection.status = status;
+        const flipped = healthy !== subscribed;
+        if (flipped) {
+          if (healthy) {
+            connection.upSince = now();
+            connection.downSince = null;
+          } else {
             connection.retries += 1;
             connection.upSince = null;
+            connection.downSince ??= now();
           }
-          onLive?.(healthy, { ...connection });
         }
         subscribed = healthy;
         if (healthy) {
           // Events may have been missed before the channel joined or while it was down
           refreshLinear();
-          backoffStep = 0;
-          clearTimeout(backoffTimer);
-          backoffTimer = undefined;
+          resetBackoff();
         } else {
           scheduleBackoff();
         }
+        if (flipped || before !== `${connection.status}|${connection.nextAt}`)
+          onLive?.(healthy, { ...connection });
       },
       queueIssue,
       refreshHostMetrics,
@@ -547,8 +581,12 @@ export const createAdapter = ({
       refreshUsageHours,
       applyGithub,
       refreshSessions
-    )
-  );
+    );
+  };
+  let leave = join();
+  stopFns.push(() => {
+    void leave();
+  });
 
   function watchTool<S extends Server, T extends Tool<S>>(
     server: S,
@@ -600,6 +638,29 @@ export const createAdapter = ({
       if (server !== LINEAR && server !== SUPABASE) return Promise.resolve();
       for (const s of sources) if (s.server === server) s.clear();
       return refreshWatched(server);
+    },
+
+    /** Leaves the Realtime channel once it is gone and joins again from the first backoff step; the retry count stays. */
+    reconnect: (): Promise<void> => {
+      if (stopped) return Promise.resolve();
+      if (reconnecting) return reconnecting;
+      // The old channel's close while it leaves is not a drop
+      generation += 1;
+      // Shows at once; the old status would read CLOSED until the new channel answers
+      connection.status = null;
+      onLive?.(subscribed, { ...connection });
+      reconnecting = (async () => {
+        try {
+          await leave();
+          if (stopped) return;
+          resetBackoff();
+          leave = join();
+          onLive?.(subscribed, { ...connection });
+        } finally {
+          reconnecting = null;
+        }
+      })();
+      return reconnecting;
     },
 
     /** Stops the timer, the listeners and the Realtime channel, and silences the watchers. */

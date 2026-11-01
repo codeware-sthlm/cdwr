@@ -1078,7 +1078,14 @@ export const model = (
       connection: data.connection,
       runs,
       runMinutes,
-      host: host ? { ageMin: host.ageMin, silentMin: host.silentMin } : null,
+      host: host
+        ? {
+            host: host.host,
+            at: Date.parse(host.latest.at),
+            ageMin: host.ageMin,
+            silentMin: host.silentMin
+          }
+        : null,
       now
     }),
     health: health({

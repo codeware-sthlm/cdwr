@@ -184,7 +184,7 @@ export const createLoader = ({
       if (stopped) return;
       if (ev.type === 'data') {
         const runs = ev.result.payload;
-        // A view that does not parse keeps the last good one; the model flags it
+        // A view that does not parse keeps the last good one (only `qv`); the model flags it
         state.data.runs =
           runs?.viewInvalid && state.data.runs?.qv
             ? { ...runs, qv: state.data.runs.qv }

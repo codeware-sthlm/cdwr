@@ -5,9 +5,16 @@ import {
   parseAttended,
   parseJob,
   parseSuggested,
+  queueViewIssues,
   validateQueueView
 } from './desk/parsers';
-import type { Attended, Job, QueueView, Suggested } from './desk/types';
+import type {
+  Attended,
+  Job,
+  QueueView,
+  Suggested,
+  ViewIssue
+} from './desk/types';
 import type { Database } from './supabase.types';
 
 type Tables = Database['public']['Tables'];
@@ -38,6 +45,10 @@ export class SupabaseError extends Error {
   }
 }
 
+/** What the Realtime channel reports once it has been asked to join */
+export type ChannelStatus =
+  'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'CLOSED';
+
 const WINDOW_DAYS = 30;
 const RUNS_LIMIT = 500;
 const ACTIVITY_LIMIT = 300;
@@ -55,6 +66,10 @@ export type RunsPayload = {
   qv: QueueView | null;
   /** The row carries a view that does not parse; `qv` is then null, or the last good one the page kept */
   viewInvalid: boolean;
+  /** The row's view as stored, whether or not it parses */
+  view: unknown;
+  /** The paths that fail to parse; empty unless `viewInvalid` */
+  viewIssues: ViewIssue[];
   /** When the newest queue_state row was written, ISO */
   at: string;
   main: MainBuilds;
@@ -156,6 +171,7 @@ export const toRuns = (
   if (!state) return null;
   const lastMatch = state.last_run?.match(LAST_RUN);
   const qv = validateQueueView(state.view);
+  const viewInvalid = qv === null && state.view !== null;
   return {
     last: lastMatch
       ? { when: localStamp(state.at), outcome: lastMatch[1].trim() }
@@ -169,7 +185,9 @@ export const toRuns = (
     // run.sh's job_line already starts with `Job: `; the other two lines are stored bare
     job: state.job ? parseJob(state.job) : null,
     qv,
-    viewInvalid: qv === null && state.view !== null,
+    viewInvalid,
+    view: state.view,
+    viewIssues: viewInvalid ? queueViewIssues(state.view) : [],
     at: state.at,
     main: toMain(buildRows),
     // Idle adds no row
@@ -553,7 +571,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
    * catch up on what was missed. `onStatus` gets false on a channel error, a
-   * timeout or a close, and true on (re)joining. `onIssue` gets each
+   * timeout or a close, and true on (re)joining, with the status behind it. `onIssue` gets each
    * `issue_events` row as it arrives, without debounce. `onHostMetrics` fires
    * (debounced) on a new `host_metrics` row, which `onChange` does not;
    * `onPlanUsage` on a new `plan_usage` row and `onUsageHours` on a new or
@@ -563,14 +581,14 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
    */
   const subscribe = (
     onChange: () => void,
-    onStatus?: (healthy: boolean) => void,
+    onStatus?: (healthy: boolean, status: ChannelStatus) => void,
     onIssue?: (row: IssueEventRow) => void,
     onHostMetrics?: () => void,
     onPlanUsage?: () => void,
     onUsageHours?: () => void,
     onGithub?: (row: GithubEventRow) => void,
     onSessions?: () => void
-  ): (() => void) => {
+  ): (() => Promise<void>) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hostTimer: ReturnType<typeof setTimeout> | undefined;
     let planTimer: ReturnType<typeof setTimeout> | undefined;
@@ -629,14 +647,14 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     }
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        onStatus?.(true);
+        onStatus?.(true, status);
         onChange();
       } else if (
         status === 'CHANNEL_ERROR' ||
         status === 'TIMED_OUT' ||
         status === 'CLOSED'
       ) {
-        onStatus?.(false);
+        onStatus?.(false, status);
       }
     });
     // Its own channel too, so a github_events table missing from the publication costs the PR states only
@@ -708,12 +726,12 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       clearTimeout(planTimer);
       clearTimeout(hoursTimer);
       clearTimeout(sessionsTimer);
-      void client.removeChannel(channel);
-      void client.removeChannel(github);
-      void client.removeChannel(hostChannel);
-      void client.removeChannel(builds);
-      void client.removeChannel(planChannel);
-      void client.removeChannel(hoursChannel);
+      // Resolves once every channel is gone; a resubscribe before that gets the old one back
+      return Promise.allSettled(
+        [channel, github, hostChannel, builds, planChannel, hoursChannel].map(
+          (c) => client.removeChannel(c)
+        )
+      ).then(() => undefined);
     };
   };
 

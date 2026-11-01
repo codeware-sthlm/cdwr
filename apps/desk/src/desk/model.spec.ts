@@ -81,6 +81,8 @@ const runsPayload = (over: Partial<RunsPayload> = {}): RunsPayload => ({
   job: null,
   qv: view(),
   viewInvalid: false,
+  view: null,
+  viewIssues: [],
   at: '2026-10-29T11:55:00.000Z',
   main: { image: null, desk: null },
   rows: [],

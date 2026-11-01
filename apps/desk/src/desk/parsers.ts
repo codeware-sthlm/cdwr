@@ -8,7 +8,8 @@ import type {
   JobHost,
   PlanProgress,
   QueueView,
-  Suggested
+  Suggested,
+  ViewIssue
 } from './types';
 
 // Line and description parsers for the queue_state, runs and usage text. Nothing here touches the DOM.
@@ -340,4 +341,14 @@ export const validateQueueView = (v: unknown): QueueView | null => {
   if (!parsed.success) return null;
   const { at, limit, session, next, held, parked, table } = parsed.data;
   return { at, limit, session, next, held, parked, table };
+};
+
+/** The paths a view fails to parse at; `missing` when the field is absent rather than mistyped */
+export const queueViewIssues = (v: unknown): ViewIssue[] => {
+  const parsed = queueViewSchema.safeParse(v);
+  if (parsed.success) return [];
+  return parsed.error.issues.map((i) => ({
+    path: i.path.join('.'),
+    missing: i.code === 'invalid_type' && i.received === 'undefined'
+  }));
 };

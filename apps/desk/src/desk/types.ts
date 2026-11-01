@@ -1,3 +1,6 @@
+/** A path a queue_state view fails to parse at; `missing` when the field is absent rather than mistyped */
+export type ViewIssue = { path: string; missing: boolean };
+
 /** What `parsePlan` reads from a ticket description's Status table */
 export type PlanProgress = {
   steps: number;

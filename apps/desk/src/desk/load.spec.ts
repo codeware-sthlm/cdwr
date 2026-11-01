@@ -65,7 +65,7 @@ const setup = (getIssue: (id: string) => Promise<IssueDetail>) => {
     readUsageHours: vi.fn(() => Promise.resolve([])),
     readGithubEvents: vi.fn(() => Promise.resolve([])),
     readSessions: vi.fn(() => Promise.resolve([])),
-    subscribe: vi.fn(() => () => undefined)
+    subscribe: vi.fn(() => () => Promise.resolve())
   };
   const adapter = createAdapter({
     linear,

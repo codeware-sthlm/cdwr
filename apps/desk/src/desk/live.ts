@@ -6,6 +6,7 @@ import type {
 } from '../supabase';
 
 import {
+  CONNECT_GRACE_MS,
   HOST_METRICS_MINUTES,
   HOST_SPACING_SAMPLES,
   HOST_STALE_SAMPLES,
@@ -14,6 +15,7 @@ import {
   SESSION_HANDBACK_MIN
 } from './constants';
 import type { Connection } from './state';
+import type { ViewIssue } from './types';
 
 // What the desk derives from the live tables: PR states, sessions per host, the pulse, problems and health.
 
@@ -246,37 +248,119 @@ export const pulse = (
   connection: Connection
 ): Pulse | null => feed(events, connection)[0] ?? null;
 
-export type ProblemKind = 'connection' | 'data' | 'unknown';
+/** What the desk can see is wrong with what it shows; `since` is when it began, in ms */
+export type Problem =
+  | {
+      kind: 'connection';
+      text: string;
+      since: number;
+      retries: number;
+      status: Connection['status'];
+      nextAt: number | null;
+    }
+  | {
+      kind: 'data';
+      reason: 'parse';
+      text: string;
+      since: number;
+      /** When the kept view was written; null without one */
+      goodAt: number | null;
+      /** When the newest bad row was written */
+      rowAt: number;
+      view: unknown;
+      issues: ViewIssue[];
+    }
+  | {
+      kind: 'data';
+      reason: 'stale';
+      text: string;
+      since: number;
+      newestRun: number;
+    }
+  | {
+      kind: 'unknown';
+      text: string;
+      since: number;
+      host: string;
+      ticket: string | null;
+      silentMin: number;
+      /** When the ticket's open run started, in ms */
+      started: number | null;
+    };
 
-export type Problem = { kind: ProblemKind; text: string };
+export type ProblemKind = Problem['kind'];
+
+export type ProblemKey = 'connection' | 'unknown' | 'data-parse' | 'data-stale';
+
+/** The card a problem gets: its kind, and for data its reason */
+export const problemKey = (p: Problem): ProblemKey => {
+  switch (p.kind) {
+    case 'connection':
+    case 'unknown':
+      return p.kind;
+    case 'data':
+      return p.reason === 'parse' ? 'data-parse' : 'data-stale';
+    default: {
+      const unreachable: never = p;
+      return unreachable;
+    }
+  }
+};
+
+/** The earliest `since`: when what the desk shows stopped being current; null without problems */
+export const frozenAt = (list: readonly Problem[]): number | null =>
+  list.length ? Math.min(...list.map((p) => p.since)) : null;
 
 /** What the desk can see is wrong with what it shows */
 export const problems = ({
   connection,
   runs,
   runMinutes,
-  host
+  host,
+  now
 }: {
   connection: Connection;
   runs: RunsPayload | null;
   runMinutes: number;
-  /** The NUC's newest sample age and its silent threshold; null without samples */
-  host: { ageMin: number; silentMin: number } | null;
+  /** The NUC's newest sample (ms) and age, and its silent threshold; null without samples */
+  host: {
+    host: string;
+    at: number;
+    ageMin: number;
+    silentMin: number;
+  } | null;
   now: Date;
 }): Problem[] => {
   const out: Problem[] = [];
-  if (!connection.live)
+  const nowMs = now.getTime();
+  const past =
+    connection.retries > 0 ||
+    (connection.downSince !== null &&
+      nowMs - connection.downSince >= CONNECT_GRACE_MS);
+  if (!connection.live && past)
     out.push({
       kind: 'connection',
       text: connection.retries
         ? `Realtime is down (dropped ${connection.retries}×); polling every 5 min`
-        : 'Realtime is not connected; polling every 5 min'
+        : 'Realtime is not connected; polling every 5 min',
+      since: connection.downSince ?? nowMs,
+      retries: connection.retries,
+      status: connection.status,
+      nextAt: connection.nextAt
     });
-  if (runs?.viewInvalid)
+  if (runs?.viewInvalid) {
+    const goodAt = runs.qv?.at ? Date.parse(runs.qv.at) : null;
     out.push({
       kind: 'data',
-      text: 'The queue_state row does not parse; showing the last good snapshot'
+      reason: 'parse',
+      text: 'The queue_state row does not parse; showing the last good snapshot',
+      since: goodAt ?? Date.parse(runs.at),
+      goodAt,
+      rowAt: Date.parse(runs.at),
+      view: runs.view,
+      issues: runs.viewIssues
     });
+  }
   const newestRun = Math.max(
     0,
     ...(runs?.rows ?? []).map((r) => Date.parse(r.started))
@@ -284,18 +368,31 @@ export const problems = ({
   if (runs?.at && newestRun - Date.parse(runs.at) > 2 * runMinutes * 6e4)
     out.push({
       kind: 'data',
-      text: 'The queue_state row is older than the newest run'
+      reason: 'stale',
+      text: 'The queue_state row is older than the newest run',
+      since: Date.parse(runs.at),
+      newestRun
     });
   // A runs row is written only when the run ends, so the open work is the session the snapshot calls alive
   if (
     runs?.qv?.session.state === 'alive' &&
     host &&
     host.ageMin > host.silentMin
-  )
+  ) {
+    const ticket = runs.qv.session.ticket ?? null;
+    const open = ticket
+      ? runs.rows.find((r) => r.ticket === ticket && r.finished === null)
+      : undefined;
     out.push({
       kind: 'unknown',
-      text: 'A session is alive while the NUC is silent; its state is unknown'
+      text: 'A session is alive while the NUC is silent; its state is unknown',
+      since: host.at,
+      host: host.host,
+      ticket,
+      silentMin: host.silentMin,
+      started: open ? Date.parse(open.started) : null
     });
+  }
   return out;
 };
 

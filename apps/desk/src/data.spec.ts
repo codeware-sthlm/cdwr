@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type WatchEvent, createAdapter } from './data';
+import { BACKOFF_MS, type WatchEvent, createAdapter } from './data';
 import type { Issue } from './linear';
 import { LinearError } from './linear';
 import {
+  type ChannelStatus,
   type GithubEventRow,
   type IssueEventRow,
   type QueueStateRow,
@@ -87,8 +88,9 @@ const setup = () => {
   );
   const supabaseReadHost = vi.fn(() => Promise.resolve([]));
   let changed: () => void = () => undefined;
-  let status: (healthy: boolean) => void = () => undefined;
-  const unsubscribe = vi.fn();
+  let status: (healthy: boolean, status: ChannelStatus) => void = () =>
+    undefined;
+  const unsubscribe = vi.fn<() => Promise<void>>(() => Promise.resolve());
   let issueEvent: (row: IssueEventRow) => void = () => undefined;
   const supabaseReadPlan = vi.fn(() => Promise.resolve([]));
   const supabaseReadHours = vi.fn(() => Promise.resolve([]));
@@ -111,7 +113,7 @@ const setup = () => {
     subscribe: vi.fn(
       (
         onChange: () => void,
-        onStatus?: (healthy: boolean) => void,
+        onStatus?: (healthy: boolean, status: ChannelStatus) => void,
         onIssue?: (row: IssueEventRow) => void,
         onHostMetrics?: () => void,
         onPlanUsage?: () => void,
@@ -165,7 +167,8 @@ const setup = () => {
     fireUsageHours: () => hoursEvent(),
     fireGithub: (row: GithubEventRow) => githubEvent(row),
     fireSessions: () => sessionsEvent(),
-    fireStatus: (healthy: boolean) => status(healthy),
+    fireStatus: (healthy: boolean, channel?: ChannelStatus) =>
+      status(healthy, channel ?? (healthy ? 'SUBSCRIBED' : 'CLOSED')),
     fireFocus: () => focus()
   };
 };
@@ -584,6 +587,96 @@ describe('createAdapter', () => {
     expect(supabase.read).toHaveBeenCalledTimes(3);
   });
 
+  it('reconnects after the old subscription is gone, from the first backoff step', async () => {
+    const { adapter, supabase, unsubscribe, onLive, fireStatus } = setup();
+    adapter.watchTool('Supabase', 'runs', {}, () => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    fireStatus(true);
+    fireStatus(false);
+    await vi.advanceTimersByTimeAsync(BACKOFF_MS[0]);
+    expect(onLive.mock.calls.at(-1)?.[1].nextAt).toBe(
+      Date.now() + BACKOFF_MS[1]
+    );
+
+    let release: () => void = () => undefined;
+    unsubscribe.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      })
+    );
+    const done = adapter.reconnect();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(supabase.subscribe).toHaveBeenCalledTimes(1);
+    // The old channel closing on its way out is not a drop
+    supabase.subscribe.mock.calls[0][1]?.(false, 'CLOSED');
+    release();
+    await done;
+    expect(supabase.subscribe).toHaveBeenCalledTimes(2);
+    expect(onLive.mock.calls.at(-1)?.[1]).toMatchObject({
+      retries: 1,
+      nextAt: null
+    });
+
+    // The first step again
+    fireStatus(false);
+    expect(onLive.mock.calls.at(-1)?.[1].nextAt).toBe(
+      Date.now() + BACKOFF_MS[0]
+    );
+    adapter.stop();
+    expect(unsubscribe).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers a second reconnect with the one in flight', async () => {
+    const { adapter, supabase, unsubscribe } = setup();
+    let release: () => void = () => undefined;
+    unsubscribe.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      })
+    );
+    const first = adapter.reconnect();
+    const second = adapter.reconnect();
+    release();
+    await Promise.all([first, second]);
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(supabase.subscribe).toHaveBeenCalledTimes(2);
+    await adapter.reconnect();
+    expect(supabase.subscribe).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows not connected at once when it reconnects', async () => {
+    const { adapter, unsubscribe, onLive, fireStatus } = setup();
+    fireStatus(false, 'CLOSED');
+    expect(onLive.mock.calls.at(-1)?.[1].status).toBe('CLOSED');
+    let release: () => void = () => undefined;
+    unsubscribe.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      })
+    );
+    const done = adapter.reconnect();
+    expect(onLive.mock.calls.at(-1)?.[1].status).toBeNull();
+    release();
+    await done;
+  });
+
+  it('ignores the status of a subscription it replaced', async () => {
+    const { adapter, supabase, onLive } = setup();
+    const before = supabase.subscribe.mock.calls[0][1];
+    await adapter.reconnect();
+    const calls = onLive.mock.calls.length;
+    before?.(false, 'CLOSED');
+    expect(onLive.mock.calls).toHaveLength(calls);
+  });
+
+  it('does nothing after stop', async () => {
+    const { adapter, supabase } = setup();
+    adapter.stop();
+    await adapter.reconnect();
+    expect(supabase.subscribe).toHaveBeenCalledTimes(1);
+  });
+
   it('does not poll Supabase while the channel is healthy', async () => {
     const { adapter, supabase, fireStatus } = setup();
     adapter.watchTool('Supabase', 'runs', {}, () => undefined);
@@ -925,17 +1018,69 @@ describe('createAdapter', () => {
   it('records the retries and since when the channel has been up', async () => {
     const { onLive, fireStatus } = setup();
     const up = Date.now();
-    expect(onLive.mock.calls[0][1]).toEqual({ retries: 0, upSince: null });
+    expect(onLive.mock.calls[0][1]).toEqual({
+      retries: 0,
+      upSince: null,
+      downSince: up,
+      status: null,
+      nextAt: null
+    });
     fireStatus(true);
-    expect(onLive.mock.calls[1][1]).toEqual({ retries: 0, upSince: up });
+    expect(onLive.mock.calls[1][1]).toEqual({
+      retries: 0,
+      upSince: up,
+      downSince: null,
+      status: 'SUBSCRIBED',
+      nextAt: null
+    });
     fireStatus(false);
-    expect(onLive.mock.calls[2][1]).toEqual({ retries: 1, upSince: null });
+    expect(onLive.mock.calls[2][1]).toEqual({
+      retries: 1,
+      upSince: null,
+      downSince: up,
+      status: 'CLOSED',
+      nextAt: up + BACKOFF_MS[0]
+    });
     await vi.advanceTimersByTimeAsync(5000);
     fireStatus(true);
     expect(onLive.mock.calls[3][1]).toEqual({
       retries: 1,
-      upSince: up + 5000
+      upSince: up + 5000,
+      downSince: null,
+      status: 'SUBSCRIBED',
+      nextAt: null
     });
+  });
+
+  it('keeps downSince across repeated down statuses and reports a changed status', () => {
+    const { onLive, fireStatus } = setup();
+    const start = Date.now();
+    fireStatus(true);
+    vi.advanceTimersByTime(1000);
+    fireStatus(false, 'CHANNEL_ERROR');
+    vi.advanceTimersByTime(1000);
+    fireStatus(false, 'TIMED_OUT');
+    const last = onLive.mock.calls.at(-1)?.[1];
+    expect(last).toMatchObject({
+      retries: 1,
+      downSince: start + 1000,
+      status: 'TIMED_OUT'
+    });
+  });
+
+  it('reports the next retry as the backoff timer comes and goes', async () => {
+    const { onLive, fireStatus } = setup();
+    const t0 = Date.now();
+    fireStatus(true);
+    fireStatus(false);
+    await vi.advanceTimersByTimeAsync(BACKOFF_MS[0]);
+    const nexts = onLive.mock.calls.map(([, c]) => c.nextAt);
+    expect(nexts).toEqual([
+      null,
+      null,
+      t0 + BACKOFF_MS[0],
+      t0 + BACKOFF_MS[0] + BACKOFF_MS[1]
+    ]);
   });
 
   describe('github events and sessions', () => {
