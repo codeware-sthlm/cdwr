@@ -55,6 +55,8 @@ wake=false; [[ "${1:-}" == "--wake" ]] && wake=true
 # read it. Idle adds no row.
 RUNS="$HOME_DIR/runs.jsonl"
 last_outcome=idle
+# Why a guard refused the implementing launch this run, for last_run (watch.jq `launch` reason)
+launch_note=""
 # What telemetry_run sends: the last real outcome apart from its ticket and detail
 RUN_STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 run_kind=plan outcome_name=idle outcome_ticket="" outcome_detail=""
@@ -305,7 +307,7 @@ record_queue_state() {
   telemetry_on || return 0
   setopt local_options no_err_exit
   local last attended suggested jl view
-  last="$(date '+%F %H:%M') · $last_outcome"
+  last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
   # attended-published is the cache before attended-line, until a verdict replaces it
   attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
   suggested="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
@@ -578,11 +580,16 @@ attended() {
   [[ -d "$lockdir" ]] && locked=true
   # jq prints `0` and still fails on a missing file, so check for it first
   spent=0
-  # An unreadable ledger fails closed: the cap reads as spent
+  # A negative day (a correction, or a settle that once landed after midnight) counts as 0. An
+  # unreadable ledger fails closed as null, which launch() refuses with its own reason.
   if [[ -f "$HOME_DIR/implement-spend.jsonl" ]]; then
     spent="$(jq -s --arg d "$(date +%F)" '[.[] | select(.day == $d) | .cost] | add // 0' \
       "$HOME_DIR/implement-spend.jsonl" 2>/dev/null)" || spent=""
-    [[ "$spent" == <->(|.<->) ]] || { note "warn: implement-spend.jsonl unreadable; no launch today"; spent=1000000; }
+    if [[ "$spent" == (|-)<->(|.<->) ]]; then
+      [[ "$spent" != -* ]] || spent=0
+    else
+      note "warn: implement-spend.jsonl unreadable; no launch today"; spent=null
+    fi
   fi
   cap="${AGENT_QUEUE_IMPLEMENT_CAP_USD:-40}"
   [[ "$cap" == <->(|.<->) ]] || cap=null
@@ -619,7 +626,10 @@ attended() {
   # fresh agent:ready ticket: this scheduler plans that itself. A launch that a guard refused
   # (cap, back-off) says why.
   local file="$HOME_DIR/attended.json" key prev why=""
-  [[ "$action" == notify ]] && why=" Not launched: $(jq -r '.reason' <<<"$decision")."
+  if [[ "$action" == notify ]]; then
+    launch_note="$(jq -r '.reason' <<<"$decision")"
+    why=" Not launched: $launch_note."
+  fi
   key="$(jq -c --argjson s "$session" --arg a "$action" '{verdict, ticket, reason, session: $s.state, launch: $a}' <<<"$verdict")"
   prev="$(cat "$file" 2>/dev/null)"
   if [[ "$key" != "$prev" ]]; then

@@ -2452,6 +2452,16 @@ describe('launch', () => {
     expect(res.reason).toBe(`daily implement cap reached ($${spent} of $40)`);
   });
 
+  // run.sh passes null when it can't sum the ledger
+  it('notifies, without launching, when the spend ledger is unreadable', () => {
+    const res = launch(pick(), guards({ spent: null }));
+    expect(res).toMatchObject({
+      action: 'notify',
+      reason: 'spend ledger unreadable'
+    });
+    expect(res.last).toBeUndefined();
+  });
+
   describe('back-off', () => {
     it.each([
       [{ key: 'COD-1 answered', launches: 1 }, 'launch', 2],
