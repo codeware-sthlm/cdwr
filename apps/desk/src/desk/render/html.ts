@@ -61,6 +61,13 @@ export const prTone = (state: PrStateName | null): PrTone =>
         ? 'bad'
         : 'neutral';
 
+/** The PR the queue view names for a ticket, among its PRs and parked waits; null when it names none */
+export const queuePr = (
+  m: Pick<Model, 'prs' | 'parked'>,
+  id: string
+): PrRef | null =>
+  [...m.prs, ...m.parked].find((x) => x.ticket === id && x.pr)?.pr ?? null;
+
 /** A queued PR's number and the github_events PR behind it, when one has landed */
 export const livePr = (
   m: Pick<Model, 'agentPrs'>,

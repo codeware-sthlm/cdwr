@@ -1865,6 +1865,22 @@ describe('pull requests on the waiting rows and the session card', () => {
     expect(text).toContain('>#31</a>');
   });
 
+  it('take the PR the queue view names when the ticket has no details yet', () => {
+    const session: SessionState = {
+      state: 'alive',
+      detail: 'working',
+      ticket: 'COD-1',
+      lastSeen: '2026-10-29T11:59:30'
+    };
+    const state = filled(session);
+    state.data.runs = runs(
+      view({ session, parked: [{ ticket: 'COD-1', wait: 'CI', pr: 77 }] })
+    );
+    expect(renderSession(model(state, NOW), state.details, NOW)).toContain(
+      '>#77</a>'
+    );
+  });
+
   it('add no PR link to the session card without one', () => {
     const state = filled({
       state: 'alive',
