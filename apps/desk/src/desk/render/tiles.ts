@@ -1,9 +1,25 @@
-import { ageText, dayKey, dayLabel, esc, hhmm, plural, usd } from '../format';
-import { type Model, activityMissing, ideaVerdict, shipped } from '../model';
+import { SHIP_DAYS } from '../constants';
+import {
+  ageText,
+  dayKey,
+  dayLabel,
+  esc,
+  hhmm,
+  plural,
+  shortAge,
+  usd
+} from '../format';
+import {
+  type Model,
+  activityMissing,
+  ideaVerdict,
+  prOf,
+  shipped
+} from '../model';
 import { perTicketAverage, spendStats, ticketCosts } from '../spend';
 import { type DeskState, type SheetId, bucketsLoaded } from '../state';
 
-import { type IconName, icon } from './html';
+import { type IconName, icon, prTone } from './html';
 
 // The tiles under the cards, each opening a sheet
 
@@ -12,6 +28,8 @@ type Tile = {
   icon: IconName;
   label: string;
   value: string;
+  /** The line under the label */
+  sub?: string;
   /** The value is a problem */
   bad?: boolean;
 };
@@ -72,100 +90,149 @@ const planTile = ({ plan }: Model): TileValue => {
   };
 };
 
+/** The PRs that wait on you or have failed checks, by what github_events last said */
+const prCounts = (
+  m: Model,
+  state: DeskState
+): { waiting: number; failed: number } => {
+  let waiting = 0,
+    failed = 0;
+  for (const x of m.prs) {
+    const n = prOf(state.details, x.ticket, x.pr);
+    const s =
+      n === null
+        ? null
+        : (m.agentPrs.find((p) => p.pr === Number(n))?.state ?? null);
+    const tone = prTone(s);
+    if (tone === 'wait') waiting++;
+    if (s === 'checks failed') failed++;
+  }
+  return { waiting, failed };
+};
+
+const sessionSub = (m: Model): string =>
+  m.hostSessions
+    .map(
+      (h) =>
+        `${h.host} ${[...new Set(h.sessions.map((s) => s.kind))].join('/')}`
+    )
+    .join(' · ');
+
 export const renderTiles = (m: Model, state: DeskState, now: Date): string => {
   const { activity, closed, usage } = state.data;
   const loaded = bucketsLoaded(state.data);
   const { days, total } = shipped(closed, now);
   const avg = perTicketAverage(ticketCosts(usage, days));
   const runsIn = m.runs !== null;
+  const first = m.next[0];
+  const prs = prCounts(m, state);
+  const idea = ideaTile(m, state, now);
+  const today = m.runsToday;
+  const sessions = m.hostSessions.reduce((n, h) => n + h.sessions.length, 0);
   const tiles: Tile[] = [
     {
       sheet: 'next',
       icon: 'next',
-      label: 'Up next',
-      value: !runsIn
-        ? '–'
-        : m.next[0]
-          ? `${m.next[0].ticket}${m.next.length > 1 ? ` + ${m.next.length - 1}` : ''}`
-          : 'nothing'
+      label: 'up next',
+      value: runsIn ? String(m.next.length) : '–',
+      sub: first ? [first.ticket, first.reason].filter(Boolean).join(' · ') : ''
     },
     {
-      sheet: 'after',
+      sheet: 'review',
       icon: 'review',
-      label: 'Review & check',
-      value: runsIn
-        ? `${plural(m.prs.length, 'PR', 'PRs')} · ${plural(m.handoffItems, 'check', 'checks')}`
-        : '–'
+      label: 'review & check',
+      value: runsIn ? String(m.prs.length) : '–',
+      sub: runsIn ? `${prs.waiting} await you · live` : '',
+      bad: prs.failed > 0
     },
     {
-      sheet: 'limit',
-      icon: 'load',
-      label: 'Limit, PRs in flight',
-      value: runsIn ? `${m.limit.used} of ${m.limit.max}` : '–',
-      bad: runsIn && m.limit.used >= m.limit.max
+      sheet: 'handoffs',
+      icon: 'handoff',
+      label: 'hand-offs left',
+      value: runsIn ? String(m.handoffItems) : '–',
+      sub: runsIn ? (m.handoffItems ? 'merged, steps remain' : 'none') : ''
+    },
+    {
+      sheet: 'session',
+      icon: 'terminal',
+      label: 'live sessions',
+      value: String(sessions),
+      sub: sessionSub(m)
+    },
+    {
+      sheet: 'runs',
+      icon: 'timer',
+      label: 'runs today',
+      value: runsIn ? String(today.count) : '–',
+      sub: runsIn
+        ? `median ${today.medianMs === null ? '–' : shortAge(today.medianMs / 6e4)} · ${today.failed} failed`
+        : '',
+      bad: today.failed > 0
     },
     {
       sheet: 'activity',
       icon: 'activity',
-      label: 'Activity, 24 h',
+      label: 'activity, 24 h',
       value:
-        activity && !activityMissing(activity)
-          ? plural(m.activityDay, 'event', 'events')
-          : '–'
+        activity && !activityMissing(activity) ? String(m.activityDay) : '–',
+      sub: `agent ${m.activityBy.agent} · you ${m.activityBy.human}`
     },
     {
       sheet: 'shipped',
-      icon: 'bars',
-      label: 'Closed, 30 days',
-      value: loaded || closed ? String(total) : '–'
+      icon: 'box',
+      label: 'shipped, 30 days',
+      value: loaded || closed ? String(total) : '–',
+      sub: `≈ ${(total / SHIP_DAYS).toFixed(1)} per day`
     },
     {
-      sheet: 'spend',
+      sheet: 'effort',
       icon: 'coin',
-      label: 'Spend, 30 days',
-      value: usage ? usd(spendStats(usage, days).total) : '–'
-    },
-    {
-      sheet: 'ticketcost',
-      icon: 'ticket',
-      label: 'Per closed ticket',
-      value: avg === null ? '–' : usd(avg)
-    },
-    {
-      sheet: 'ideas',
-      icon: 'bulb',
-      label: 'Suggestion, daily',
-      ...ideaTile(m, state, now)
+      label: 'effort, 30 days',
+      value: usage ? usd(spendStats(usage, days).total) : '–',
+      sub: 'simulated' + (avg === null ? '' : ` · ${usd(avg)} per ticket`)
     },
     {
       sheet: 'all',
       icon: 'all',
-      label: 'Open tickets',
-      value: loaded ? String(m.all.length) : '–'
+      label: 'open tickets',
+      value: loaded ? String(m.all.length) : '–',
+      sub: 'via Linear poll, 5 min'
     },
     {
-      sheet: 'nuc',
-      icon: 'chip',
-      label: 'NUC',
-      ...nucTile(m)
-    },
+      sheet: 'ideas',
+      icon: 'bulb',
+      label: 'suggested today',
+      value: state.data.ideas ? String(m.ideasPending.length) : '–',
+      sub: m.ideasPending.length
+        ? `${m.ideasPending[0].id} · accept?`
+        : idea.value,
+      bad: idea.bad
+    }
+  ];
+  const interim: Tile[] = [
     {
-      sheet: 'plan',
+      sheet: 'limit',
       icon: 'load',
-      label: 'Plan usage',
-      ...planTile(m)
+      label: 'limit, PRs in flight',
+      value: runsIn ? `${m.limit.used} of ${m.limit.max}` : '–',
+      bad: runsIn && m.limit.used >= m.limit.max
     },
+    { sheet: 'nuc', icon: 'chip', label: 'NUC', ...nucTile(m) },
+    { sheet: 'plan', icon: 'load', label: 'plan usage', ...planTile(m) },
     {
       sheet: 'timers',
       icon: 'timer',
-      label: 'Next scheduler run',
+      label: 'next scheduler run',
       value: m.live ? 'on events' : m.nextRun ? '~' + hhmm(m.nextRun) : '–'
     }
   ];
-  return tiles
-    .map(
-      (t) =>
-        `<button type="button" class="mini${t.bad ? ' bad' : ''}" data-w="${t.sheet}" aria-haspopup="dialog"><span class="ico">${icon(t.icon)}</span><span>${esc(t.label)}</span><b>${esc(t.value)}</b></button>`
-    )
-    .join('');
+  const html = (ts: Tile[]): string =>
+    ts
+      .map(
+        (t) =>
+          `<button type="button" class="tile${t.bad ? ' bad' : ''}" data-w="${t.sheet}" aria-haspopup="dialog"><span class="ico">${icon(t.icon)}</span><b class="v">${esc(t.value)}</b><span class="l">${esc(t.label)}</span>${t.sub ? `<span class="s">${esc(t.sub)}</span>` : ''}</button>`
+      )
+      .join('');
+  return `<div class="grid-head"><h2>Everything else</h2><span>each widget opens a sheet</span></div><div class="tiles">${html(tiles)}</div>
+    <div class="grid-head interim"><h2>Until the Platform view</h2></div><div class="tiles small">${html(interim)}</div>`;
 };

@@ -17,7 +17,7 @@ import { SHEETS } from './render/sheets';
 import { renderTiles } from './render/tiles';
 import { renderWaiting } from './render/waiting';
 import { spendDays } from './spend';
-import { bucketsLoaded, createState, isFilter, isSheetId } from './state';
+import { bucketsLoaded, createState, isFilter, sheetIdOf } from './state';
 
 const state = createState(); // everything the page shows and the viewer chose; survives a settings re-start
 let adapter: Adapter | null = null; // set by start()
@@ -98,8 +98,9 @@ function renderMain(): void {
 
 // ---------- Sheet ----------
 
-function showSheet(id: string, focus = true): void {
-  if (!isSheetId(id)) return;
+function showSheet(value: string, focus = true): void {
+  const id = sheetIdOf(value);
+  if (!id) return;
   const now = new Date();
   const w = SHEETS[id];
   state.ui.openSheet = id;
@@ -218,7 +219,8 @@ document
   });
 render();
 const startHash = (location.hash || '').slice(1);
-if (isSheetId(startHash)) showSheet(startHash, false);
+const startSheet = sheetIdOf(startHash);
+if (startSheet) showSheet(startSheet, false);
 
 /** Records the Realtime channel's health for the model's problems and health checks */
 export function setConnection(

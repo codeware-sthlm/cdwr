@@ -31,17 +31,18 @@ export const isFilter = (value: unknown): value is Filter =>
 export const SHEET_IDS = [
   'before',
   'next',
-  'after',
+  'review',
+  'handoffs',
   'session',
   'limit',
   'scheduler',
+  'runs',
   'timers',
   'nuc',
   'plan',
   'activity',
   'shipped',
-  'spend',
-  'ticketcost',
+  'effort',
   'all',
   'ideas'
 ] as const;
@@ -50,6 +51,21 @@ export type SheetId = (typeof SHEET_IDS)[number];
 
 export const isSheetId = (value: unknown): value is SheetId =>
   SHEET_IDS.some((id) => id === value);
+
+/** Sheet ids an older saved link may still carry, and the sheet that took their place */
+export const OLD_SHEET_IDS: ReadonlyMap<string, SheetId> = new Map([
+  ['after', 'review'],
+  ['spend', 'effort'],
+  ['ticketcost', 'effort']
+]);
+
+/** A current sheet id, or the sheet an old id moved to; null for anything else */
+export const sheetIdOf = (value: unknown): SheetId | null =>
+  isSheetId(value)
+    ? value
+    : typeof value === 'string'
+      ? (OLD_SHEET_IDS.get(value) ?? null)
+      : null;
 
 /** What the sources have delivered; null until they have */
 export type DeskData = {
