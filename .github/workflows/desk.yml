@@ -26,17 +26,17 @@ concurrency:
 jobs:
   build:
     # macOS 14 images were retired on 2026-11-02; 15 is arm64 as well
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install pnpm package manager
         uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: pnpm
 
       - name: Install dependencies
@@ -61,7 +61,7 @@ jobs:
         env:
           VITE_DESK_SHA: ${{ github.sha }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: agent-desk-build-log
@@ -77,7 +77,7 @@ jobs:
             ditto -c -k --keepParent "$app" "out/$(basename "$app").zip"
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: agent-desk-macos-arm64
           path: out/*
