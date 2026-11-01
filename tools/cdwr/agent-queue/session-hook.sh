@@ -79,18 +79,37 @@ mirror_send() {
   return 0
 }
 
+# One upsert at a time per session, each reading the state as it sends, so a send still in flight
+# never lands after a newer one. A busy sender is told by a pending mark and sends again. The lock
+# is a directory, stale after a minute.
+beat_send() {
+  local lock="$file.beating" sstate sdetail
+  [[ -d "$lock" && "$(zstat +mtime "$lock" 2>/dev/null)" == <-> ]] &&
+    (( $(date +%s) - $(zstat +mtime "$lock") > 60 )) && rmdir "$lock" 2>/dev/null
+  if ! mkdir "$lock" 2>/dev/null; then : > "$file.beatpending"; return 0; fi
+  while :; do
+    rm -f "$file.beatpending"
+    IFS=$'\x1f' read -r sstate sdetail <<<"$(jq -r '[.state, .detail] | map(. // "") | join("\u001f")' "$file" 2>/dev/null)"
+    telemetry_session "$id" "${AGENT_QUEUE_SESSION_KIND:-attended}" "$sstate" "$sdetail"
+    [[ -e "$file.beatpending" ]] || break
+  done
+  rmdir "$lock" 2>/dev/null
+  [[ -e "$file.beatpending" ]] && beat_send
+  return 0
+}
+
 # heartbeat <state before> <state after>: upserts the session, with its state and detail, into the
 # telemetry database, at most once a minute per session. A change of state beats at once, so the
-# desk never keeps `working` for a session that stopped within the minute. The stamp is written first and the call runs detached, so a tool call never waits on
-# the network; SessionEnd waits for it, since a detached child may not outlive the exiting claude.
-# kind is `implement` for a launched session (implement.sh exports it), `attended` otherwise.
+# desk never keeps `working` for a session that stopped within the minute. The stamp is written
+# first and the send runs detached, so a tool call never waits on the network; SessionEnd waits
+# for a send in flight and then sends itself, since a detached child may not outlive the exiting
+# claude. kind is `implement` for a launched session (implement.sh exports it), `attended` otherwise.
 heartbeat() {
-  local stamp="$file.beat" last now_s sstate sdetail
+  local stamp="$file.beat" last now_s n
   if [[ "$1" == "$2" && -f "$stamp" ]]; then
     now_s="$(date +%s)"; last="$(zstat +mtime "$stamp" 2>/dev/null)"
     [[ "$last" == <-> ]] && (( now_s - last < 60 )) && return 0
   fi
-  IFS=$'\x1f' read -r sstate sdetail <<<"$(jq -r '[.state, .detail] | map(. // "") | join("\u001f")' "$file" 2>/dev/null)"
   source "$HOOK_DIR/telemetry.sh" 2>/dev/null || return 0
   # The file a launched session was told, else this checkout's, else the main checkout's,
   # which is where a linked worktree finds the credentials
@@ -104,9 +123,11 @@ heartbeat() {
   telemetry_on || return 0
   : > "$stamp"
   if [[ "$event" == SessionEnd ]]; then
-    telemetry_session "$id" "${AGENT_QUEUE_SESSION_KIND:-attended}" "$sstate" "$sdetail"
+    # A send's curl gives up after 10 s
+    for n in {1..22}; do [[ -d "$file.beating" ]] || break; sleep 0.5; done
+    beat_send
   else
-    ( telemetry_session "$id" "${AGENT_QUEUE_SESSION_KIND:-attended}" "$sstate" "$sdetail" ) &!
+    ( beat_send ) &!
   fi
   return 0
 }

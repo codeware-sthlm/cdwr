@@ -592,7 +592,7 @@ attended() {
       # Ended or dead for over 24 h: delete
       if [[ "$pa" == false || "$(jq -r '.state' "$f" 2>/dev/null)" == ended ]] &&
          (( $(date +%s) - $(jq -r '.lastSeen // empty | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$f" 2>/dev/null || echo 0) > 86400 )); then
-        rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen" "$f.mirrored" "$f.beat"; continue
+        rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen" "$f.mirrored" "$f.beat" "$f.beatpending"; continue
       fi
       if $remote; then
         items+=("$(jq -c '. + {pidAlive: null, watcherAlive: null}' "$f" 2>/dev/null)")
