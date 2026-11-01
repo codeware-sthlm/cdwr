@@ -192,7 +192,9 @@ describe('toRuns', () => {
       host: 'launchd',
       rev: null,
       install: 'current',
-      items: ''
+      items: '',
+      effort: null,
+      paused: false
     });
     expect(result?.attended).toEqual({
       verdict: 'idle',

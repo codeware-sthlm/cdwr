@@ -80,7 +80,9 @@ const runs = (qv: QueueView | null): RunsPayload => ({
     host: 'launchd',
     rev: null,
     install: 'current',
-    items: ''
+    items: '',
+    effort: null,
+    paused: false
   },
   qv,
   viewInvalid: false,

@@ -341,7 +341,11 @@ describe('run.sh telemetry', () => {
   it('clamps a negative spend day to 0 and passes an unreadable ledger as null', () => {
     expect(SCRIPT).toContain('if [[ "$spent" == (|-)<->(|.<->) ]]; then');
     expect(SCRIPT).toContain('[[ "$spent" != -* ]] || spent=0');
-    expect(SCRIPT).toMatch(/no launch today"; spent=null$/m);
+    expect(SCRIPT).toMatch(/^ {6}spent=null$/m);
+    expect(SCRIPT).toContain('spent="$(spent_today)"');
+    expect(SCRIPT).toContain(
+      '[[ "$spent" == null ]] && note "warn: implement-spend.jsonl unreadable; no launch today"'
+    );
     expect(SCRIPT).not.toContain('spent=1000000');
   });
 
@@ -374,11 +378,23 @@ describe('run.sh Sentry check-ins', () => {
     expect(SCRIPT).toContain('source "${0:A:h}/checkin.sh"');
   });
 
-  it('checks in once when paused, before the lock, and not on --check', () => {
-    expect(SCRIPT).toContain('then checkin ok; exit 0; fi');
-    expect(SCRIPT.indexOf('then checkin ok; exit 0; fi')).toBeLessThan(
-      SCRIPT.indexOf('mkdir "$HOME_DIR/lock"')
+  it('publishes and checks in once when paused, without the lock, before the key checks, and not on --check', () => {
+    const paused = SCRIPT.slice(
+      SCRIPT.indexOf('if $paused; then\n  last_outcome=paused')
     );
+    expect(paused).toMatch(
+      /^if \$paused; then\n {2}last_outcome=paused\n {2}job_state\n {2}record_queue_state\n {2}checkin ok\n {2}exit 0\nfi\n/
+    );
+    expect(SCRIPT).toContain(
+      'if [[ -e "$HOME_DIR/paused" ]] && ! $check; then paused=true; fi'
+    );
+    expect(SCRIPT).toContain(
+      'if ! $paused; then\n  if ! mkdir "$HOME_DIR/lock"'
+    );
+    const at = SCRIPT.indexOf('if $paused; then\n  last_outcome=paused');
+    expect(at).toBeGreaterThan(SCRIPT.indexOf('mkdir "$HOME_DIR/lock"'));
+    expect(at).toBeLessThan(SCRIPT.indexOf('[[ -z "$key" ]]'));
+    expect(at).toBeLessThan(SCRIPT.indexOf('if offline; then'));
     expect(SCRIPT).toContain('$check || CHECKIN_ID="$(checkin in_progress)"');
     expect(SCRIPT).toContain('if ! $check; then');
   });
@@ -963,7 +979,108 @@ describe('run.sh job.json', () => {
       exit.indexOf('record_queue_state')
     );
     expect(fn('record_run')).toContain('jl="$job"');
-    expect(fn('record_queue_state')).toContain('jl="$job"');
+    expect(fn('record_queue_state')).toContain('jl="$(queue_job_line)"');
+  });
+
+  const zsh = (script: string, env: Record<string, string> = {}) =>
+    spawnSync('zsh', ['-c', script], {
+      encoding: 'utf8',
+      env: { ...process.env, ...env }
+    }).stdout.trim();
+
+  describe.skipIf(!hasZsh)('spent_today', () => {
+    const today = () => new Date().toLocaleDateString('sv-SE').slice(0, 10);
+    const spent = (rows?: string) => {
+      if (rows !== undefined)
+        writeFileSync(join(home, 'implement-spend.jsonl'), rows);
+      return zsh(
+        [`HOME_DIR="${home}"`, fn('spent_today'), 'spent_today'].join('\n')
+      );
+    };
+    const row = (day: string, cost: number) =>
+      `${JSON.stringify({ day, cost })}\n`;
+
+    it('is 0 without a ledger', () => {
+      expect(spent()).toBe('0');
+    });
+
+    it("sums today's rows only", () => {
+      expect(
+        spent(row(today(), 1.5) + row(today(), 2) + row('2000-01-01', 99))
+      ).toBe('3.5');
+    });
+
+    it('reads a negative day as 0', () => {
+      expect(spent(row(today(), -3) + row(today(), 1))).toBe('0');
+    });
+
+    it('is null for an unreadable ledger', () => {
+      expect(spent('not json\n')).toBe('null');
+    });
+  });
+
+  describe.skipIf(!hasZsh)('queue_job_line', () => {
+    const line = (opts: {
+      job?: string;
+      spent?: string;
+      cap?: string;
+      paused?: boolean;
+    }) =>
+      zsh(
+        [
+          `job='${opts.job ?? 'Job: every 10 min · image sha-0123456'}'`,
+          `paused=${opts.paused ?? false}`,
+          `spent_today() { print -r -- ${opts.spent ?? '0'}; }`,
+          `implement_cap() { print -r -- ${opts.cap ?? '40'}; }`,
+          fn('queue_job_line'),
+          'queue_job_line'
+        ].join('\n')
+      );
+
+    it('appends the effort with two decimals', () => {
+      expect(line({ spent: '12.3' })).toBe(
+        'Job: every 10 min · image sha-0123456 · effort $12.30 of $40'
+      );
+      expect(line({ spent: '0' })).toBe(
+        'Job: every 10 min · image sha-0123456 · effort $0.00 of $40'
+      );
+    });
+
+    it('omits the effort when the spend or the cap is unknown', () => {
+      const bare = 'Job: every 10 min · image sha-0123456';
+      expect(line({ spent: 'null' })).toBe(bare);
+      expect(line({ cap: 'null' })).toBe(bare);
+    });
+
+    it('appends the pause last', () => {
+      expect(line({ spent: '1', paused: true })).toBe(
+        'Job: every 10 min · image sha-0123456 · effort $1.00 of $40 · paused'
+      );
+      expect(line({ cap: 'null', paused: true })).toBe(
+        'Job: every 10 min · image sha-0123456 · paused'
+      );
+    });
+
+    it('prints nothing for an empty job line', () => {
+      expect(line({ job: '', paused: true })).toBe('');
+    });
+  });
+
+  describe.skipIf(!hasZsh)('implement_cap', () => {
+    const cap = (value?: string) =>
+      zsh(
+        [fn('implement_cap'), 'implement_cap'].join('\n'),
+        value === undefined ? {} : { AGENT_QUEUE_IMPLEMENT_CAP_USD: value }
+      );
+
+    it('defaults to 40 and reads a number', () => {
+      expect(cap('')).toBe('40');
+      expect(cap('12.5')).toBe('12.5');
+    });
+
+    it('is null for a non-number', () => {
+      expect(cap('lots')).toBe('null');
+    });
   });
 
   it.skipIf(!hasZsh)('says nothing differs when the copies match', () => {

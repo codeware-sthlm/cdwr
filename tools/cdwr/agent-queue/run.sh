@@ -90,10 +90,14 @@ to_main() {
 }
 
 source "${0:A:h}/checkin.sh"
-# A pause is deliberate: the tick still checks in ok, so the monitor does not alert
-if [[ -e "$HOME_DIR/paused" ]] && ! $check; then checkin ok; exit 0; fi
-if ! mkdir "$HOME_DIR/lock" 2>/dev/null; then say "busy: a run is in progress"; exit 0; fi
-trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
+# A pause is deliberate: the tick takes no lock and still checks in ok, so the monitor does not
+# alert. It publishes its queue state below, once that can be written.
+paused=false
+if [[ -e "$HOME_DIR/paused" ]] && ! $check; then paused=true; fi
+if ! $paused; then
+  if ! mkdir "$HOME_DIR/lock" 2>/dev/null; then say "busy: a run is in progress"; exit 0; fi
+  trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
+fi
 CHECKIN_ID=""
 
 source "${0:A:h}/lib.sh"
@@ -103,20 +107,6 @@ source "${0:A:h}/telemetry.sh"
 telemetry_env "$REPO/tools/cdwr/.env"
 # Where session-hook.sh finds the key: the path goes to the sessions, never the key
 [[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
-[[ -z "$key" ]] && { say "skip: no Linear API key (AGENT_QUEUE_LINEAR_KEY or Keychain service linear-agent-queue)"; exit 0; }
-# No network is not a Linear failure: no record, no warn rows, the next run catches up
-if offline; then say "skip: offline (Mac asleep?)"; exit 0; fi
-
-linear_mcp "$HOME_DIR"
-# linear_ok: true when the claude runs would have Linear tools. Without them nothing starts, the
-# run is recorded as such, and one notice goes out per spell.
-linear_ok() {
-  linear_gate "$HOME_DIR" && return 0
-  note "fail: no Linear tools ($linear_why)"
-  record "no Linear tools" "" "$linear_why"
-  $linear_new && notify "Agent queue: the claude runs have no Linear tools ($linear_why); nothing starts until they do."
-  return 1
-}
 
 # Job state for queue_state and the run row: the interval launchd uses and whether the installed copy
 # matches origin/main. Keep INTERVAL_SED in step with the line in agent.logic.ts.
@@ -190,6 +180,82 @@ keep_state() {
   [[ -n "$attended_line" ]] && print -r -- "$attended_line" > "$HOME_DIR/attended-line"
   [[ -n "$queue_view" ]] && print -r -- "$queue_view" > "$HOME_DIR/queue-view.json"
   return 0
+}
+
+# The day's implement spend from the ledger, 0 without one. A negative day (a correction, or a
+# settle that once landed after midnight) counts as 0; an unreadable ledger prints null, which
+# launch() refuses with its own reason.
+spent_today() {
+  setopt local_options no_err_exit
+  local spent=0
+  # jq prints `0` and still fails on a missing file, so check for it first
+  if [[ -f "$HOME_DIR/implement-spend.jsonl" ]]; then
+    spent="$(jq -s --arg d "$(date +%F)" '[.[] | select(.day == $d) | .cost] | add // 0' \
+      "$HOME_DIR/implement-spend.jsonl" 2>/dev/null)" || spent=""
+    if [[ "$spent" == (|-)<->(|.<->) ]]; then
+      [[ "$spent" != -* ]] || spent=0
+    else
+      spent=null
+    fi
+  fi
+  print -r -- "$spent"
+}
+# The daily implement cap in dollars; null when the setting is not a number
+implement_cap() {
+  local cap="${AGENT_QUEUE_IMPLEMENT_CAP_USD:-40}"
+  [[ "$cap" == <->(|.<->) ]] || cap=null
+  print -r -- "$cap"
+}
+# The job line as queue_state carries it: the day's spend against the cap, and a pause, after the
+# line's own segments. The run row keeps the bare line, whose last segment is its version.
+queue_job_line() {
+  setopt local_options no_err_exit
+  local line="$job" spent cap
+  [[ -n "$line" ]] || return 0
+  spent="$(spent_today)" cap="$(implement_cap)"
+  [[ "$spent" != null && "$cap" != null ]] && line+=" · effort \$$(printf '%.2f' "$spent") of \$$cap"
+  $paused && line+=" · paused"
+  print -r -- "$line"
+}
+# This host's queue state as one row: the last run, the Attended and Suggested lines, the job
+# line and the queue view. Detached like record_run.
+record_queue_state() {
+  $check && return 0
+  telemetry_on || return 0
+  setopt local_options no_err_exit
+  local last attended suggested jl view
+  last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
+  # attended-published is the cache before attended-line, until a verdict replaces it
+  attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
+  suggested="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
+  jl="$(queue_job_line)"
+  view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" ) &!
+}
+
+# A paused tick publishes the last run's Attended line and queue view with a paused job line, so
+# the desk reads a pause rather than a silent scheduler, and checks in ok
+if $paused; then
+  last_outcome=paused
+  job_state
+  record_queue_state
+  checkin ok
+  exit 0
+fi
+
+[[ -z "$key" ]] && { say "skip: no Linear API key (AGENT_QUEUE_LINEAR_KEY or Keychain service linear-agent-queue)"; exit 0; }
+# No network is not a Linear failure: no record, no warn rows, the next run catches up
+if offline; then say "skip: offline (Mac asleep?)"; exit 0; fi
+
+linear_mcp "$HOME_DIR"
+# linear_ok: true when the claude runs would have Linear tools. Without them nothing starts, the
+# run is recorded as such, and one notice goes out per spell.
+linear_ok() {
+  linear_gate "$HOME_DIR" && return 0
+  note "fail: no Linear tools ($linear_why)"
+  record "no Linear tools" "" "$linear_why"
+  $linear_new && notify "Agent queue: the claude runs have no Linear tools ($linear_why); nothing starts until they do."
+  return 1
 }
 
 # The same usage as rows in the telemetry database: hour rows (6-hour lookback) every run, day rows
@@ -299,21 +365,6 @@ record_run() {
   limit="$(jq -r '.limit.max // empty' <<<"${queue_view:-null}" 2>/dev/null)"
   ( telemetry_run "$RUN_STARTED" "$outcome_name" "$outcome_ticket" "$outcome_detail" "$attended_work" \
       "$run_kind" "$interval" "$limit" "$version" ) &!
-}
-# This host's queue state as one row: the last run, the Attended and Suggested lines, the job
-# line and the queue view. Detached like record_run.
-record_queue_state() {
-  $check && return 0
-  telemetry_on || return 0
-  setopt local_options no_err_exit
-  local last attended suggested jl view
-  last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
-  # attended-published is the cache before attended-line, until a verdict replaces it
-  attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
-  suggested="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
-  jl="$job"
-  view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
-  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" ) &!
 }
 # Every handled outcome exits 0, so a non-zero exit is a failure nothing recorded.
 on_exit() {
@@ -581,21 +632,9 @@ attended() {
     fi
   fi
   [[ -d "$lockdir" ]] && locked=true
-  # jq prints `0` and still fails on a missing file, so check for it first
-  spent=0
-  # A negative day (a correction, or a settle that once landed after midnight) counts as 0. An
-  # unreadable ledger fails closed as null, which launch() refuses with its own reason.
-  if [[ -f "$HOME_DIR/implement-spend.jsonl" ]]; then
-    spent="$(jq -s --arg d "$(date +%F)" '[.[] | select(.day == $d) | .cost] | add // 0' \
-      "$HOME_DIR/implement-spend.jsonl" 2>/dev/null)" || spent=""
-    if [[ "$spent" == (|-)<->(|.<->) ]]; then
-      [[ "$spent" != -* ]] || spent=0
-    else
-      note "warn: implement-spend.jsonl unreadable; no launch today"; spent=null
-    fi
-  fi
-  cap="${AGENT_QUEUE_IMPLEMENT_CAP_USD:-40}"
-  [[ "$cap" == <->(|.<->) ]] || cap=null
+  spent="$(spent_today)"
+  [[ "$spent" == null ]] && note "warn: implement-spend.jsonl unreadable; no launch today"
+  cap="$(implement_cap)"
   last=null
   [[ -f "$HOME_DIR/launch.json" ]] && last="$(jq -ce 'objects' "$HOME_DIR/launch.json" 2>/dev/null || print null)"
   local guards
