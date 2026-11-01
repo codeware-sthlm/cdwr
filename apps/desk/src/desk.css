@@ -2492,6 +2492,10 @@ button:disabled {
   font: 11px var(--font-mono);
   color: var(--muted);
 }
+/* The separator shows only while the countdown has text */
+.tick[data-fmt='next']:not(:empty)::before {
+  content: ' · ';
+}
 .p-body {
   font-size: 13px;
   color: #c8c3ba;

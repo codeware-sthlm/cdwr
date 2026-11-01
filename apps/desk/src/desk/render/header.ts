@@ -61,7 +61,7 @@ export const renderStatus = (m: Model, connection: Connection): string => {
       : `down since ${hhmmss(last)}`;
     return (
       pill +
-      `<span class="conn offline" title="Live updates dropped. The numbers on the desk are from the last event."><i class="dot" aria-hidden="true"></i><b>OFFLINE</b><span class="at"><span class="long">${esc(longText)}</span><span class="short">since ${esc(hhmm(last))}</span></span></span>`
+      `<span class="conn offline" title="Live updates are down. The desk polls instead, so numbers may lag."><i class="dot" aria-hidden="true"></i><b>OFFLINE</b><span class="at"><span class="long">${esc(longText)}</span><span class="short">since ${esc(hhmm(last))}</span></span></span>`
     );
   }
   const live = connection.live
