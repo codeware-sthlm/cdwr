@@ -84,6 +84,16 @@ describe('implement.sh', () => {
     expect(code).toContain('>> "$HOME_DIR/implement-spend.jsonl"');
   });
 
+  // A settle after midnight must not land on the next day
+  it('stamps both ledger rows with the day captured before the reservation', () => {
+    const ledger = /^ledger\(\) \{\n([\s\S]*?)\n\}$/m.exec(code)?.[1];
+    expect(ledger).toContain('--arg day "$DAY"');
+    expect(ledger).not.toContain('date');
+    expect(code.indexOf('DAY="$(date +%F)"')).toBeLessThan(
+      code.indexOf('ledger "$BUDGET_USD" reserve')
+    );
+  });
+
   it.each([
     'Bash(git -c *)',
     'Bash(git * config *)',
@@ -223,6 +233,30 @@ describe('implement.sh', () => {
         'implemented'
       ]);
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+    });
+
+    it('settles on the reservation day when the session ends after midnight', () => {
+      // A date whose day turns over while the session runs; every other format is the real one
+      const dayFile = join(dir, 'day');
+      const realDate = spawnSync('sh', ['-c', 'command -v date'], {
+        encoding: 'utf8'
+      }).stdout.trim();
+      writeFileSync(dayFile, '2026-10-31\n');
+      writeFileSync(
+        join(bin, 'date'),
+        `#!/bin/sh\nif [ "$1" = "+%F" ]; then cat "${dayFile}"; else exec "${realDate}" "$@"; fi\n`
+      );
+      chmodSync(join(bin, 'date'), 0o755);
+      writeFileSync(
+        join(bin, 'claude'),
+        `#!/bin/sh\necho 2026-11-01 > "${dayFile}"\nprintf '%s' '{"total_cost_usd":6.5,"num_turns":3,"result":"ok"}'\n`
+      );
+      chmodSync(join(bin, 'claude'), 0o755);
+      expect(start().status).toBe(0);
+      expect(rows('implement-spend.jsonl')).toEqual([
+        { day: '2026-10-31', ticket: 'COD-1', cost: 15, kind: 'reserve' },
+        { day: '2026-10-31', ticket: 'COD-1', cost: -8.5, kind: 'settle' }
+      ]);
     });
 
     it('does not start without the app identity, and reserves nothing', () => {
