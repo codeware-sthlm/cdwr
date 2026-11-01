@@ -9,17 +9,11 @@ import {
   shortAge,
   usd
 } from '../format';
-import {
-  type Model,
-  activityMissing,
-  ideaVerdict,
-  prOf,
-  shipped
-} from '../model';
+import { type Model, activityMissing, ideaVerdict, shipped } from '../model';
 import { perTicketAverage, spendStats, ticketCosts } from '../spend';
 import { type DeskState, type SheetId, bucketsLoaded } from '../state';
 
-import { type IconName, icon, prTone } from './html';
+import { type IconName, icon, livePr, prTone } from './html';
 
 // The tiles under the cards, each opening a sheet
 
@@ -98,14 +92,9 @@ const prCounts = (
   let waiting = 0,
     failed = 0;
   for (const x of m.prs) {
-    const n = prOf(state.details, x.ticket, x.pr);
-    const s =
-      n === null
-        ? null
-        : (m.agentPrs.find((p) => p.pr === Number(n))?.state ?? null);
-    const tone = prTone(s);
+    const tone = prTone(livePr(m, state.details, x).live?.state ?? null);
     if (tone === 'wait') waiting++;
-    if (s === 'checks failed') failed++;
+    if (tone === 'bad') failed++;
   }
   return { waiting, failed };
 };
@@ -124,6 +113,7 @@ export const renderTiles = (m: Model, state: DeskState, now: Date): string => {
   const { days, total } = shipped(closed, now);
   const avg = perTicketAverage(ticketCosts(usage, days));
   const runsIn = m.runs !== null;
+  const activityIn = activity ? !activityMissing(activity) : false;
   const first = m.next[0];
   const prs = prCounts(m, state);
   const idea = ideaTile(m, state, now);
@@ -173,23 +163,26 @@ export const renderTiles = (m: Model, state: DeskState, now: Date): string => {
       sheet: 'activity',
       icon: 'activity',
       label: 'activity, 24 h',
-      value:
-        activity && !activityMissing(activity) ? String(m.activityDay) : '–',
-      sub: `agent ${m.activityBy.agent} · you ${m.activityBy.human}`
+      value: activityIn ? String(m.activityDay) : '–',
+      sub: activityIn
+        ? `agent ${m.activityBy.agent} · you ${m.activityBy.human}`
+        : ''
     },
     {
       sheet: 'shipped',
       icon: 'box',
       label: 'shipped, 30 days',
       value: loaded || closed ? String(total) : '–',
-      sub: `≈ ${(total / SHIP_DAYS).toFixed(1)} per day`
+      sub: loaded || closed ? `≈ ${(total / SHIP_DAYS).toFixed(1)} per day` : ''
     },
     {
       sheet: 'effort',
       icon: 'coin',
       label: 'effort, 30 days',
       value: usage ? usd(spendStats(usage, days).total) : '–',
-      sub: 'simulated' + (avg === null ? '' : ` · ${usd(avg)} per ticket`)
+      sub: usage
+        ? 'simulated' + (avg === null ? '' : ` · ${usd(avg)} per ticket`)
+        : ''
     },
     {
       sheet: 'all',

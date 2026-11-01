@@ -64,6 +64,7 @@ import {
   empty,
   hostName,
   idLink,
+  livePr,
   loadMeter,
   parkedText,
   prTone,
@@ -79,6 +80,7 @@ import { type WaitRow, waitRows } from './waiting';
 
 const MINUTE_MS = 60 * 1000;
 const ACTIVITY_STALE_MIN = 30; // the activity table's last update older than this shows in the warning colour
+const RUNS_WINDOW_DAYS = 30; // the runs payload reaches back this far (see the Runs table history timer)
 const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
 
 const WHY: ReadonlyMap<string, string> = new Map([
@@ -286,10 +288,9 @@ const renderReview = (m: Model, state: DeskState, now: Date): string => {
   if (!m.v) return empty('No queue view yet.');
   const { details } = state;
   const rows = m.prs
-    .map((x) => {
-      const n = prOf(details, x.ticket, x.pr);
-      const live =
-        n === null ? undefined : m.agentPrs.find((p) => p.pr === Number(n));
+    .map((x, rank) => {
+      const { n, live } = livePr(m, details, x);
+      const blocked = blockedText(m, x.ticket);
       const tone = live ? prTone(live.state) : 'neutral';
       const text = !live
         ? 'queued'
@@ -300,17 +301,15 @@ const renderReview = (m: Model, state: DeskState, now: Date): string => {
         ? `<time>${esc(shortAge((now.getTime() - live.at) / 6e4))} ago</time>`
         : '';
       const note = [
-        blockedText(m, x.ticket)
-          ? 'Merge order: ' + blockedText(m, x.ticket)
-          : '',
+        blocked ? 'Merge order: ' + blocked : '',
         prWaitText(m, x.ticket)
       ]
         .filter(Boolean)
         .join('. ');
       const i = m.get(x.ticket);
-      return `<li class="pr-row" data-pr="${esc(n ?? '')}">
-        <div class="line"><span class="prnum">${prn(n)}</span><span class="id">${esc(x.ticket)}</span><a class="title" href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
-        <div class="meta"><span class="pill ${tone}">${esc(text)}</span>${age}</div>
+      return `<li class="pr-row${blocked ? ' blocked' : ''}" data-pr="${esc(n ?? '')}">
+        <div class="line">${m.prs.length > 1 ? `<span class="rank">${rank + 1}</span>` : ''}<span class="prnum">${prn(n)}</span><span class="id">${esc(x.ticket)}</span><a class="title" href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
+        <div class="meta"><span class="pill ${tone}">${esc(text)}</span>${blocked ? '<span class="chip blocked">merge later</span>' : ''}${age}</div>
         ${note ? `<div class="meta">${note}</div>` : ''}
       </li>`;
     })
@@ -428,7 +427,7 @@ const renderScheduler = (m: Model): string => {
     head +
     jobHTML +
     deskHTML +
-    `<p class="rule">Idle runs update the last-run and job lines at most once an hour. The scheduler plans new tickets itself. For answers, reviews and parked work it starts an implementing session when none is alive (<code>launched</code>, then <code>implemented</code>, <code>cap</code> or <code>failed</code>). A problem is any outcome other than planned, idle, suggested or nothing, for example a failed run or one that planned nothing. It turns the Platform pill red until a later run goes well. The runs themselves are on the Runs today sheet. Full logs: <code>cdwr agent logs</code>.</p>`
+    `<p class="rule">Idle runs update the last-run and job lines at most once an hour. The scheduler plans new tickets itself. For answers, reviews and parked work it starts an implementing session when none is alive (<code>launched</code>, then <code>implemented</code>, <code>cap</code> or <code>failed</code>). A problem is any outcome other than planned, idle, launched, implemented, suggested, nothing or skip, for example a failed run or one that planned nothing. It turns the Platform pill red until a later run goes well. The runs themselves are on the Runs today sheet. Full logs: <code>cdwr agent logs</code>.</p>`
   );
 };
 
@@ -448,8 +447,8 @@ const renderRuns = (m: Model): string => {
     )
     .join('');
   return `<div class="pv-stats"><div><b>${t.count}</b><span>runs today</span></div><div><b>${t.medianMs === null ? '–' : esc(shortAge(t.medianMs / 6e4))}</b><span>median duration</span></div><div><b>${t.failed}</b><span>failed</span></div></div>
-    <div class="group"><h3>Recent runs that did something</h3>${rows ? `<ul>${rows}</ul>` : empty('None yet.')}</div>
-    <p class="rule">Runs since local midnight. Idle runs are left out of the list. A failed run is any outcome other than planned, idle, launched, implemented, suggested or nothing.</p>`;
+    <div class="group"><h3>Recent runs that did something, last ${RUNS_WINDOW_DAYS} days</h3>${rows ? `<ul>${rows}</ul>` : empty('None yet.')}</div>
+    <p class="rule">The figures above count the runs that did something since local midnight; idle runs are left out of them and of the list. The list reaches back ${RUNS_WINDOW_DAYS} days. A failed run is any outcome other than planned, idle, launched, implemented, suggested, nothing or skip.</p>`;
 };
 
 type TimerRow = readonly [what: string, value: string, source: string];
@@ -952,14 +951,16 @@ const noUsage = (): string =>
 const pct = (a: number, b: number): string =>
   b ? Math.round((a / b) * 100) + '%' : '–';
 
-const renderSpend = (state: DeskState, now: Date): string => {
-  const { usage, closed } = state.data;
-  if (!usage) return noUsage();
-  const { days } = shipped(closed, now);
+type Usage = NonNullable<DeskState['data']['usage']>;
+
+const renderSpend = (
+  usage: Usage,
+  days: ReturnType<typeof shipped>['days'],
+  perTicket: number | null
+): string => {
   const s = spendStats(usage, days);
   const tok = tokenTotals(usage.models);
   const unattributed = unattributedTotal(usage);
-  const perTicket = perTicketAverage(ticketCosts(usage, days));
   return `<div class="pv-stats">
       <div><b>${usd(s.total)}</b><span>last ${SHIP_DAYS} days</span></div>
       <div><b>${usd(s.week)}</b><span>last 7 days</span></div>
@@ -967,7 +968,6 @@ const renderSpend = (state: DeskState, now: Date): string => {
       <div><b>${pct(tok.cacheRead, tok.all)}</b><span>of tokens are cache reads</span></div>
       <div><b>${pct(unattributed, usage.total)}</b><span>unattributed</span></div>
     </div>
-    ${legendHTML()}
     ${chartSlot('spend')}
     <div class="group"><h3>By model</h3>${tableHTML(
       ['Model', 'Cost', 'Output', 'Cache read', 'Cache write', 'Input'],
@@ -1004,11 +1004,8 @@ const renderSpend = (state: DeskState, now: Date): string => {
     <p class="rule">API-equivalent cost of the local Claude Code transcripts of this repo and its worktrees, at prices from ${esc(usage.pricesDate)}. Nothing is billed on Max; the cost is the weight the allowance follows. Planning is the scheduled planner; implementing is subagents; orchestrating is every other session. Planning runs on <code>origin/main</code>, so its cost is never tied to a ticket.${usage.unpriced.length ? ` Not priced, left out: ${esc(usage.unpriced.join(', '))}.` : ''} Updated ${esc(usage.updated)}.</p>`;
 };
 
-const renderTicketCost = (state: DeskState, now: Date): string => {
-  const { usage, closed } = state.data;
-  if (!usage) return noUsage();
-  const rows = ticketCosts(usage, shipped(closed, now).days);
-  return `${legendHTML()}${rows.length ? hbarsHTML(rows, rows.length) : empty('No agent ticket closed in the last ' + SHIP_DAYS + ' days has usage recorded.')}
+const renderTicketCost = (usage: Usage, rows: readonly TicketCost[]): string =>
+  `${rows.length ? hbarsHTML(rows, rows.length) : empty('No agent ticket closed in the last ' + SHIP_DAYS + ' days has usage recorded.')}
     <div class="group"><h3>Every ticket with usage</h3>${tableHTML(
       ['Ticket', ...ROLES, 'Total', 'Output', 'Cache read'],
       usage.tickets.map((t) => [
@@ -1020,13 +1017,19 @@ const renderTicketCost = (state: DeskState, now: Date): string => {
       ])
     )}</div>
     <p class="rule">Closed agent tickets from the last ${SHIP_DAYS} days, by the API-equivalent cost of sessions on their branch over the last ${usage.windowDays} days. Work before that window isn't counted.</p>`;
-};
 
 /** Cost per closed ticket, then the spend per day and model, from one usage table */
-const renderEffort = (state: DeskState, now: Date): string =>
-  state.data.usage
-    ? renderTicketCost(state, now) + renderSpend(state, now)
-    : noUsage();
+const renderEffort = (state: DeskState, now: Date): string => {
+  const { usage, closed } = state.data;
+  if (!usage) return noUsage();
+  const { days } = shipped(closed, now);
+  const rows = ticketCosts(usage, days);
+  return (
+    legendHTML() +
+    renderTicketCost(usage, rows) +
+    renderSpend(usage, days, perTicketAverage(rows))
+  );
+};
 
 // ---------- All open tickets ----------
 
@@ -1186,7 +1189,7 @@ export const SHEETS: Record<SheetId, SheetDef> = {
   before: {
     title: 'Waiting on you before the agent can build',
     sub: "Plans to approve and questions to answer. Reply in the ticket's newest Agent comment.",
-    body: (m, state, now) => renderBefore(m, state, now)
+    body: renderBefore
   },
   next: {
     title: 'What the agent takes next',
@@ -1220,7 +1223,7 @@ export const SHEETS: Record<SheetId, SheetDef> = {
   },
   runs: {
     title: 'Runs today',
-    sub: 'The scheduler runs since midnight, from the runs table',
+    sub: 'The scheduler runs that did something since midnight, from the runs table; idle runs are left out',
     body: renderRuns
   },
   timers: {

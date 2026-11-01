@@ -1,7 +1,8 @@
 import { LIMIT, LINEAR_ISSUE, waitName } from '../constants';
 import { esc } from '../format';
 import type { PrStateName } from '../live';
-import type { Model } from '../model';
+import { type Model, prOf } from '../model';
+import type { Detail } from '../state';
 import type { JobHost, PrRef, QueueParked } from '../types';
 
 // Shared HTML pieces: icons, links, chips. Every value is escaped here, unless the caller says it is HTML.
@@ -59,6 +60,19 @@ export const prTone = (state: PrStateName | null): PrTone =>
       : state === 'checks failed'
         ? 'bad'
         : 'neutral';
+
+/** A queued PR's number and the github_events PR behind it, when one has landed */
+export const livePr = (
+  m: Pick<Model, 'agentPrs'>,
+  details: ReadonlyMap<string, Detail>,
+  x: { ticket: string; pr?: PrRef | null }
+): { n: PrRef | null; live: Model['agentPrs'][number] | undefined } => {
+  const n = prOf(details, x.ticket, x.pr);
+  return {
+    n,
+    live: n === null ? undefined : m.agentPrs.find((p) => p.pr === Number(n))
+  };
+};
 
 /** A chip; `html` is already HTML */
 export const chip = (kind: string, html: string): string =>
