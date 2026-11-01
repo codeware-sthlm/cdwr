@@ -80,6 +80,11 @@ export const renderAlert = (m: Model): string => {
       : ' · not connected'
     : '';
   const count = plural(m.problems.length, 'problem', 'problems');
+  const checks = plural(ofKind(m.problems, 'check').length, 'check', 'checks');
+  // Failing checks alone leave the numbers standing
+  const vouch = m.problems.every((p) => p.kind === 'check')
+    ? 'a health check is failing'
+    : "the desk can't vouch for what it shows";
   const dropped = down && down.retries > 0 ? link : '';
   const sub =
     frozen !== null
@@ -99,8 +104,15 @@ export const renderAlert = (m: Model): string => {
   const onlyWriters = writers.length === m.problems.length;
   const title = onlyWriters
     ? `${esc(count)} — another host publishes the queue`
-    : `${esc(count)} — the desk can't vouch for what it shows`;
-  const subText = onlyWriters ? `the desk reads ${esc(writers[0].used)}` : sub;
+    : `${esc(count)} — ${esc(vouch)}`;
+  const subText =
+    sub ||
+    (onlyWriters
+      ? `the desk reads ${esc(writers[0].used)}`
+      : both(
+          `${esc(checks)} failing · see Platform`,
+          `${esc(checks)} failing.`
+        ));
   return `<div class="alert" role="alert"><div class="alert-in">${WARNING}<b class="alert-t">${both(title, esc(count))}</b><span class="alert-s">${subText}</span><a class="alert-link" href="#problems" data-see-problems>See problems</a></div></div>`;
 };
 
@@ -226,8 +238,23 @@ const unknownCard = (p: Extract<Problem, { kind: 'unknown' }>): Card => {
   };
 };
 
+const checkCard = (p: Extract<Problem, { kind: 'check' }>): Card => ({
+  pill: 'CHECK',
+  title: p.name,
+  time:
+    p.since === null
+      ? ['never seen', 'never']
+      : [`since ${esc(hhmm(p.since))}`, `since ${esc(hhmm(p.since))}`],
+  body: `${esc(p.text)}. A failing check says nothing about the queue, so its numbers stand.`,
+  short: esc(p.text),
+  actions:
+    '<button type="button" class="p-btn" data-view="platform">Platform ›</button>'
+});
+
 const card = (p: Problem): Card => {
   switch (p.kind) {
+    case 'check':
+      return checkCard(p);
     case 'connection':
       return connectionCard(p);
     case 'data':
@@ -252,6 +279,12 @@ const card = (p: Problem): Card => {
   }
 };
 
+/** The id a Platform row links to: one card per check, the first card of any other key */
+export const problemId = (p: Problem): string =>
+  p.kind === 'check'
+    ? `problem-check-${p.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
+    : `problem-${problemKey(p)}`;
+
 /** The cards as markup that holds still; `updateTicks` fills the timers */
 export const renderProblems = (m: Model): string => {
   if (!m.problems.length) return '';
@@ -259,9 +292,9 @@ export const renderProblems = (m: Model): string => {
   const cards = m.problems.map((p) => {
     const c = card(p);
     const key = problemKey(p);
-    const first = !seen.has(key);
+    const first = p.kind === 'check' || !seen.has(key);
     seen.add(key);
-    return `<div class="problem"${first ? ` id="problem-${key}"` : ''} data-kind="${p.kind}" tabindex="-1">
+    return `<div class="problem"${first ? ` id="${problemId(p)}"` : ''} data-kind="${p.kind}" tabindex="-1">
       <div class="p-main">
         <div class="p-head"><span class="p-pill">${c.pill}</span><b class="p-title">${esc(c.title)}</b><span class="p-time">${both(c.time[0], c.time[1])}</span></div>
         <span class="p-body">${c.short ? both(c.body, c.short) : c.body}</span>

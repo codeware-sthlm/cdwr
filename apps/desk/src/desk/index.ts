@@ -132,7 +132,8 @@ function renderLive(m: Model, now: Date): void {
   $('frozen-label').hidden = platform || !label;
   setHtml(
     'cards',
-    (renderUnknownSession(m) || renderSession(m, now)) + renderWaiting(m, now)
+    (renderUnknownSession(m) || renderSession(m, state.details, now)) +
+      renderWaiting(m, state.details, now)
   );
   $('capacity').classList.toggle('frozen', Boolean(label));
   $('more').classList.toggle('frozen', Boolean(label));
@@ -258,7 +259,7 @@ document.addEventListener('click', (e) => {
   const problem = e.target.closest<HTMLElement>('[data-problem]');
   if (problem) {
     showView('desk', false);
-    const card = document.getElementById('problem-' + problem.dataset.problem);
+    const card = document.getElementById(problem.dataset.problem ?? '');
     card?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth' });
     card?.focus({ preventScroll: true });
     return;

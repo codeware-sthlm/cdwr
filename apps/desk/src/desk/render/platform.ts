@@ -1,10 +1,11 @@
 import { SESSION_ATTENDED_MIN, SESSION_HANDBACK_MIN } from '../constants';
 import { ageText, esc, hhmm, plural, runTime, shortAge, usd } from '../format';
-import { type HandBackState, type ProblemKey, problemKey } from '../live';
+import { type HandBackState, type HealthCheck, problemOf } from '../live';
 import type { Model, VersionState } from '../model';
 
 import { STEPS, percent } from './capacity';
 import { platform } from './header';
+import { problemId } from './problems';
 
 // The Platform view: hosts, versions and health, read-only. It fills `#platform` in place of the desk's cards.
 
@@ -188,29 +189,23 @@ const versions = (m: Model): string =>
 
 // ---------- Health ----------
 
-const PROBLEM_OF = (name: string): ProblemKey | null =>
-  name === 'Realtime'
-    ? 'connection'
-    : name === 'queue_state parses'
-      ? 'data-parse'
-      : name === 'Snapshot age'
-        ? 'data-stale'
-        : name.endsWith(' heartbeat')
-          ? 'unknown'
-          : null;
-
-const whyOf = (m: Model, key: ProblemKey | null): string => {
-  const problem = key && m.problems.find((p) => problemKey(p) === key);
-  const text = esc(problem?.text || 'failing');
+/** A failing row links to the problem card that explains it */
+const whyOf = (m: Model, c: HealthCheck): string => {
+  const problem = problemOf(m.problems, c.name);
+  const text = esc(problem?.text || c.note || 'failing');
   return problem
-    ? `<small class="pf-why"><button type="button" class="pf-problem" data-problem="${key}">${text}</button></small>`
+    ? `<small class="pf-why"><button type="button" class="pf-problem" data-problem="${problemId(problem)}">${text}</button></small>`
     : `<small class="pf-why">${text}</small>`;
 };
 
 const healthChecks = (m: Model, now: Date): string => {
   const rows = m.health
     .map((c) => {
-      const why = c.ok ? '' : whyOf(m, PROBLEM_OF(c.name));
+      const why = c.ok
+        ? c.note
+          ? `<small class="pf-note">${esc(c.note)}</small>`
+          : ''
+        : whyOf(m, c);
       const age =
         c.at === null ? 'never' : ageText((now.getTime() - c.at) / 6e4);
       return `<i class="cap-dot ${c.ok ? '' : 'bad'}" aria-hidden="true"></i><span class="pf-hname"><span>${esc(c.name)}</span>${why}</span><code class="pf-mono">${esc(age)}</code>`;
