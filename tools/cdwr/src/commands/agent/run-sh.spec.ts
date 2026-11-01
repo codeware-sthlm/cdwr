@@ -167,8 +167,56 @@ describe('run.sh without Linear documents', () => {
     expect(code).not.toContain('documentCreate');
     expect(code).not.toContain('documentUpdate');
     expect(code).not.toContain('documents(');
-    expect(code).not.toMatch(/mutation\b/i);
     expect(code).not.toMatch(/_TITLE=|publish_(doc|runs|usage|activity)/);
+  });
+
+  // The watch's one Linear write relabels a ticket whose PR merged outside review
+  it('holds exactly one Linear mutation, issueUpdate in the RELABEL query', () => {
+    expect(code.match(/mutation\b/gi)).toHaveLength(1);
+    const relabel = code.match(
+      /read -r -d '' RELABEL <<'GQL' \|\| true\n([\s\S]*?)\nGQL\n/
+    )?.[1];
+    expect(relabel).toMatch(/^mutation\(/);
+    expect(relabel).toContain('issueUpdate(');
+    expect(code.match(/issueUpdate\b/g)).toHaveLength(2);
+  });
+
+  it('uses "$RELABEL" only inside relabel_merged', () => {
+    const relabel = fn('relabel_merged');
+    expect(relabel).toContain('linear "$RELABEL" "$vars"');
+    expect(code.match(/"\$RELABEL"/g)).toHaveLength(1);
+    expect(code.replace(relabel, '')).not.toContain('$RELABEL');
+  });
+
+  it('watches the three agent labels', () => {
+    const watched = code.match(
+      /read -r -d '' WATCHED <<'GQL' \|\| true\n([\s\S]*?)\nGQL\n/
+    )?.[1];
+    expect(watched).toContain(
+      'labels: { some: { name: { in: ["agent:working", "agent:needs-input", "agent:review"] } } }'
+    );
+    expect(watched).toContain('id');
+    expect(watched).toContain('description');
+    expect(watched).toContain('labels { nodes { id name } }');
+    expect(watched).toContain('issueLabels(');
+  });
+
+  it('keeps lib.sh free of mutations', () => {
+    const lib = readFileSync(
+      fileURLToPath(new URL('../../../agent-queue/lib.sh', import.meta.url)),
+      'utf8'
+    )
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
+    expect(lib).not.toMatch(/mutation/i);
+  });
+
+  it('stores relabelled only after the relabel write succeeded', () => {
+    expect(code.match(/\.entry\.relabelled = true/g)).toHaveLength(1);
+    expect(code).toMatch(
+      /relabel_merged "\$node" [^\n]*"\$review" &&\n\s*out="\$\(jq -c '\.entry\.relabelled = true' <<<"\$out"\)"/
+    );
   });
 
   it('upserts activity rows from cdwr agent activity, gated on telemetry_on', () => {
