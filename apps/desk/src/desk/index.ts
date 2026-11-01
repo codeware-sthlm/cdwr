@@ -164,7 +164,47 @@ document.addEventListener('change', (e) => {
   document.querySelector<HTMLElement>('[data-af]')?.focus();
 });
 $('sheet-close').onclick = hideSheet;
+$('sheet-handle').onclick = hideSheet;
 $('scrim').onclick = hideSheet;
+
+// Drag the bottom sheet down to close it; the same breakpoint as the CSS
+const PHONE = '(max-width: 600px)';
+const DRAG_CLOSE_PX = 80;
+{
+  const sheet = $('sheet');
+  let startY: number | null = null;
+  let dy = 0;
+  const onDown = (e: PointerEvent): void => {
+    if (!window.matchMedia(PHONE).matches) return;
+    if (e.target instanceof Element && e.target.closest('#sheet-close')) return;
+    startY = e.clientY;
+    dy = 0;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: PointerEvent): void => {
+    if (startY === null) return;
+    dy = Math.max(0, e.clientY - startY);
+    sheet.style.transform = `translateY(${dy}px)`;
+  };
+  const onEnd = (): void => {
+    if (startY === null) return;
+    const close = dy > DRAG_CLOSE_PX;
+    startY = null;
+    dy = 0;
+    if (close) hideSheet();
+    sheet.style.transform = '';
+  };
+  for (const el of [
+    $('sheet-handle'),
+    sheet.querySelector<HTMLElement>('.sheet-head')
+  ]) {
+    if (!el) continue;
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onEnd);
+    el.addEventListener('pointercancel', onEnd);
+  }
+}
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.ui.openSheet) hideSheet();
 });
