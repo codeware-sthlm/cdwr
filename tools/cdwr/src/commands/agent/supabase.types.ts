@@ -404,7 +404,17 @@ export type Database = {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      desk_abandon: {
+        Args: {
+          p_host: string;
+          p_actor: string;
+          p_at: string;
+          p_session: string | null;
+        };
+        Returns: { id: number; status: string; note: string | null }[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

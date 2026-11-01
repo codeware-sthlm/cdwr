@@ -23,9 +23,8 @@ type Options = {
   /** queue_state rows, or a status to fail the read with */
   queue?: unknown[] | number;
   insert?: number;
-  patch?: unknown[] | number | 'throw';
-  /** status of the desk_commands ack PATCH */
-  ack?: number;
+  /** desk_abandon result rows, a status to fail with, or a throw */
+  rpc?: unknown[] | number | 'throw';
   activity?: number | 'throw';
   fail?: boolean;
 };
@@ -47,13 +46,11 @@ const setup = async (options: Options = {}) => {
         const queue = options.queue ?? [{ at: AT, view: {} }];
         return typeof queue === 'number' ? json([], queue) : json(queue);
       }
-      if (path.startsWith('sessions?') && method === 'PATCH') {
-        if (options.patch === 'throw') throw new Error('offline');
-        const patch = options.patch ?? [{ id: 's1' }];
-        return typeof patch === 'number' ? json([], patch) : json(patch);
+      if (path === 'rpc/desk_abandon' && method === 'POST') {
+        if (options.rpc === 'throw') throw new Error('offline');
+        const rpc = options.rpc ?? [{ id: 7, status: 'applied', note: null }];
+        return typeof rpc === 'number' ? json([], rpc) : json(rpc);
       }
-      if (path.startsWith('desk_commands?id=eq.') && method === 'PATCH')
-        return new Response(null, { status: options.ack ?? 204 });
       if (path.startsWith('desk_commands') && method === 'POST')
         return options.insert && options.insert >= 400
           ? json({}, options.insert)
@@ -419,30 +416,15 @@ describe('createHandler', () => {
           ([url, init]) =>
             `${init.method} ${url.slice(BASE.length + 1).split('?')[0]}`
         )
-      ).toEqual([
-        'GET queue_state',
-        'POST desk_commands',
-        'PATCH sessions',
-        'PATCH desk_commands',
-        'POST activity'
-      ]);
-      const [patch] = callsTo(fetch, 'sessions', 'PATCH');
-      expect(patch[0]).toBe(`${BASE}/sessions?id=eq.s1&state=isdistinct.ended`);
-      expect(bodyOf(patch)).toEqual({
-        state: 'ended',
-        detail: 'abandoned from the desk'
-      });
-      expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
-        status: 'pending',
-        applied_at: null,
-        note: null
-      });
-      const [ack] = callsTo(fetch, 'desk_commands', 'PATCH');
-      expect(ack[0]).toBe(`${BASE}/desk_commands?id=eq.7`);
-      expect(bodyOf(ack)).toEqual({
-        status: 'applied',
-        applied_at: AT,
-        note: null
+      ).toEqual(['GET queue_state', 'POST rpc/desk_abandon', 'POST activity']);
+      expect(callsTo(fetch, 'desk_commands', 'POST')).toHaveLength(0);
+      const [rpc] = callsTo(fetch, 'rpc/desk_abandon', 'POST');
+      expect(rpc[0]).toBe(`${BASE}/rpc/desk_abandon`);
+      expect(bodyOf(rpc)).toEqual({
+        p_host: 'nuc',
+        p_actor: 'mac',
+        p_at: AT,
+        p_session: 's1'
       });
       expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
         event_id: 'desk:7',
@@ -455,11 +437,13 @@ describe('createHandler', () => {
   );
 
   it.each([
-    ['the snapshot has no session', [{ at: AT, view: {} }], undefined],
-    ['the session is not open', session('ended'), undefined],
-    ['the PATCH matches nothing', KNOWN, []]
-  ])('refuses abandon when %s', async (_name, queue, patch) => {
-    const { handle, fetch } = await setup({ queue, patch });
+    ['the snapshot has no session', [{ at: AT, view: {} }]],
+    ['the session is not open', session('ended')]
+  ])('passes no session to the RPC when %s', async (_name, queue) => {
+    const { handle, fetch } = await setup({
+      queue,
+      rpc: [{ id: 7, status: 'refused', note: 'no open session to abandon' }]
+    });
     const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
@@ -467,35 +451,70 @@ describe('createHandler', () => {
       status: 'refused',
       note: 'no open session to abandon'
     });
-    expect(bodyOf(callsTo(fetch, 'desk_commands', 'PATCH')[0])).toEqual({
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_abandon')[0])).toEqual({
+      p_host: 'nuc',
+      p_actor: 'mac',
+      p_at: AT,
+      p_session: null
+    });
+    expect(callsTo(fetch, 'desk_commands', 'POST')).toHaveLength(0);
+    expect(callsTo(fetch, 'activity')).toHaveLength(1);
+  });
+
+  it('answers refused when the RPC finds the session already ended', async () => {
+    const { handle, fetch } = await setup({
+      queue: KNOWN,
+      rpc: [{ id: 7, status: 'refused', note: 'no open session to abandon' }]
+    });
+    const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: 7,
       status: 'refused',
-      applied_at: null,
       note: 'no open session to abandon'
+    });
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_abandon')[0])).toMatchObject({
+      p_session: 's1'
     });
     expect(callsTo(fetch, 'activity')).toHaveLength(1);
   });
 
-  it.each([
-    ['a failing sessions PATCH', 500],
-    ['a throwing sessions PATCH', 'throw' as const]
-  ])('acks abandon as refused on %s', async (_name, patch) => {
-    const { handle, fetch } = await setup({ queue: KNOWN, patch });
-    const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+  it('refuses abandon on an unknown host with a plain insert, no RPC', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(post({ host: 'ghost', kind: 'abandon' }));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { status: string; note: string };
-    expect(body.status).toBe('refused');
-    expect(body.note).toMatch(/^could not end the session: /);
-    expect(bodyOf(callsTo(fetch, 'desk_commands', 'PATCH')[0])).toEqual({
+    expect(await res.json()).toEqual({
+      id: 7,
       status: 'refused',
-      applied_at: null,
-      note: body.note
+      note: 'no scheduler reports from ghost'
+    });
+    expect(callsTo(fetch, 'rpc/desk_abandon')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
+      kind: 'abandon',
+      status: 'refused',
+      note: 'no scheduler reports from ghost'
     });
   });
 
   it.each([
+    ['a failing RPC', 500],
+    ['a throwing RPC', 'throw' as const],
+    ['an empty RPC result', []],
+    ['an RPC row without an id', [{}]]
+  ])('answers 500 on %s and writes no activity', async (_name, rpc) => {
+    const { handle, fetch, log } = await setup({ queue: KNOWN, rpc });
+    const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Write failed' });
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'write failed' })
+    );
+  });
+
+  it.each([
     ['a failing queue_state read', { queue: 500 }],
-    ['a failing ack PATCH', { queue: KNOWN, ack: 500 }],
-    ['a failing insert', { insert: 500 }],
+    ['a failing insert', { queue: [], insert: 500 }],
     ['fetch throwing', { fail: true }]
   ])('answers 500 on %s', async (_name, options) => {
     const { handle, log } = await setup(options);

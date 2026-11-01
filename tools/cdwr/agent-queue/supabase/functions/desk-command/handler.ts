@@ -215,19 +215,40 @@ export const createHandler = ({
     };
   };
 
-  /** Ends the session row the snapshot calls open; false when there is none to end */
-  const endSession = async (id: string): Promise<boolean> => {
-    const res = await rest(
-      `sessions?id=eq.${encodeURIComponent(id)}&state=isdistinct.ended`,
-      {
-        method: 'PATCH',
-        body: { state: 'ended', detail: 'abandoned from the desk' },
-        prefer: 'return=representation'
-      }
-    );
-    if (!res.ok) throw new Error(`sessions ${res.status}`);
-    const rows: unknown = await res.json();
-    return Array.isArray(rows) && rows.length > 0;
+  /** Ends the session and stores its command in one transaction (`desk_abandon`) */
+  const abandon = async (
+    host: string,
+    actor: string,
+    at: string,
+    session: string | null
+  ): Promise<{ id: number; status: Status; note: string | null }> => {
+    const res = await rest('rpc/desk_abandon', {
+      method: 'POST',
+      body: { p_host: host, p_actor: actor, p_at: at, p_session: session }
+    });
+    if (!res.ok) throw new Error(`desk_abandon ${res.status}`);
+    const [row] = (await res.json()) as {
+      id: number;
+      status: Status;
+      note: string | null;
+    }[];
+    if (typeof row?.id !== 'number')
+      throw new Error('desk_abandon returned no id');
+    return row;
+  };
+
+  /** Stores a command as it is, returning its id */
+  const insert = async (row: CommandRow): Promise<number> => {
+    const res = await rest('desk_commands?select=id', {
+      method: 'POST',
+      body: row,
+      prefer: 'return=representation'
+    });
+    if (!res.ok) throw new Error(`desk_commands ${res.status}`);
+    const [stored] = (await res.json()) as { id: number }[];
+    if (typeof stored?.id !== 'number')
+      throw new Error('desk_commands returned no id');
+    return stored.id;
   };
 
   return async (request: Request): Promise<Response> => {
@@ -270,49 +291,24 @@ export const createHandler = ({
         note = `no scheduler reports from ${command.host}`;
       }
 
-      // Recorded before abandon acts, so every change it makes has its row
-      const row: CommandRow = {
-        ...command,
-        at,
-        actor: device,
-        status,
-        applied_at: null,
-        note
-      };
-      const res = await rest('desk_commands?select=id', {
-        method: 'POST',
-        body: row,
-        prefer: 'return=representation'
-      });
-      if (!res.ok) throw new Error(`desk_commands ${res.status}`);
-      const [stored] = (await res.json()) as { id: number }[];
-      const id = stored?.id;
-      if (typeof id !== 'number')
-        throw new Error('desk_commands returned no id');
-
+      let id: number;
       if (known && command.kind === 'abandon') {
         ticket = session?.ticket ?? null;
-        try {
-          if (session?.id && (await endSession(session.id))) status = 'applied';
-          else {
-            status = 'refused';
-            note = 'no open session to abandon';
-          }
-        } catch (error) {
-          status = 'refused';
-          note = `could not end the session: ${error instanceof Error ? error.message : String(error)}`;
-        }
-        const acked = await rest(`desk_commands?id=eq.${id}`, {
-          method: 'PATCH',
-          body: {
-            status,
-            applied_at: status === 'applied' ? at : null,
-            note
-          },
-          prefer: 'return=minimal'
+        ({ id, status, note } = await abandon(
+          command.host,
+          device,
+          at,
+          session?.id ?? null
+        ));
+      } else
+        id = await insert({
+          ...command,
+          at,
+          actor: device,
+          status,
+          applied_at: null,
+          note
         });
-        if (!acked.ok) throw new Error(`desk_commands ack ${acked.status}`);
-      }
 
       // The command is stored either way; a missing activity row is only logged
       if (status !== 'pending')

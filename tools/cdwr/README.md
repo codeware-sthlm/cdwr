@@ -285,9 +285,9 @@ desk posts `{host, kind, args}` with a per-device bearer token, and the function
 SHA-256 against `DESK_CONTROL_TOKENS`, a JSON object of `{device: hex sha256}`; the device name is
 the actor, so one device is revoked on its own. Kinds are `pause`, `resume`, `run`, `limit`
 (`{value}` 1–20) and `cap` (`{value}` 0–500 dollars), which it stores `pending` in `desk_commands`
-for the scheduler on that host to apply, and `abandon`, which it applies itself by ending the
+for the scheduler on that host to apply, and `abandon`, which it applies itself through `desk_abandon`, a database function that ends the
 session row the host's last snapshot calls alive or waiting; that is the desk's record only, since the
-host reads its own session files. A host whose `queue_state` row is missing or more than 2 hours old,
+host reads its own session files. The function stores the command in the same transaction. A host whose `queue_state` row is missing or more than 2 hours old,
 or an `abandon` with no open session, is stored `refused` with the reason. An applied or refused command also
 writes an `activity` row (`desk:<id>`, actor `human`). A new device gets its own token:
 
