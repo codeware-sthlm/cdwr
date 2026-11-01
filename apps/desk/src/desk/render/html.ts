@@ -1,5 +1,6 @@
 import { LIMIT, LINEAR_ISSUE, waitName } from '../constants';
 import { esc } from '../format';
+import type { PrStateName } from '../live';
 import type { Model } from '../model';
 import type { JobHost, PrRef, QueueParked } from '../types';
 
@@ -32,6 +33,9 @@ const ICON = {
   activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   bulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/>',
   chip: '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/>',
+  terminal:
+    '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M12 15h5"/>',
+  box: '<path d="M12 3l9 5v8l-9 5-9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>',
   all: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>'
 } as const;
 
@@ -39,6 +43,22 @@ export type IconName = keyof typeof ICON;
 
 export const icon = (name: IconName): string =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+
+export type PrTone = 'wait' | 'ok' | 'bad' | 'neutral';
+
+/** How a PR's state reads: `wait` when it waits on you, `ok` when it is on its way, `bad` when checks failed */
+export const prTone = (state: PrStateName | null): PrTone =>
+  state === 'Copilot reviewed' ||
+  state === 'reviewed' ||
+  state === 'review requested'
+    ? 'wait'
+    : state === 'checks passed' ||
+        state === 'in merge queue' ||
+        state === 'merged'
+      ? 'ok'
+      : state === 'checks failed'
+        ? 'bad'
+        : 'neutral';
 
 /** A chip; `html` is already HTML */
 export const chip = (kind: string, html: string): string =>

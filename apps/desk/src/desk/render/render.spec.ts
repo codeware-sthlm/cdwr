@@ -10,7 +10,13 @@ import type {
   UsagePayload
 } from '../../supabase';
 import { model } from '../model';
-import { type DeskState, SHEET_IDS, createState, isSheetId } from '../state';
+import {
+  type DeskState,
+  SHEET_IDS,
+  createState,
+  isSheetId,
+  sheetIdOf
+} from '../state';
 import type { QueueView, SessionState } from '../types';
 
 import {
@@ -244,6 +250,17 @@ describe('sheets', () => {
     expect(isSheetId('nope')).toBe(false);
     expect(isSheetId(null)).toBe(false);
     expect(isSheetId(undefined)).toBe(false);
+  });
+
+  it('map an old sheet id to the sheet that took its place', () => {
+    expect(sheetIdOf('review')).toBe('review');
+    expect(sheetIdOf('after')).toBe('review');
+    expect(sheetIdOf('spend')).toBe('effort');
+    expect(sheetIdOf('ticketcost')).toBe('effort');
+    expect(sheetIdOf('nope')).toBeNull();
+    expect(sheetIdOf('')).toBeNull();
+    expect(sheetIdOf(null)).toBeNull();
+    expect(sheetIdOf(7)).toBeNull();
   });
 
   it.each(SHEET_IDS)('render %s from filled and from empty state', (id) => {
@@ -527,11 +544,133 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(html).not.toContain('open all');
   });
 
-  it('show a parked ticket on the next sheet and open PRs on the after sheet', () => {
+  it('show a parked ticket on the next sheet, open PRs on the review sheet and hand-offs on their own', () => {
     const state = filled();
     const m = model(state, NOW);
     expect(SHEETS.next.body(m, state, NOW)).toContain('Parked on a wait · 1');
-    expect(SHEETS.after.body(m, state, NOW)).toContain('Open PRs · 1');
+    expect(SHEETS.review.body(m, state, NOW)).toContain('data-pr="7"');
+    const handoffs = SHEETS.handoffs.body(m, state, NOW);
+    expect(handoffs).toContain('Merged, hand-offs left · 1');
+    expect(handoffs).toContain('check it');
+    expect(handoffs).toContain('Hand-off checklist:');
+  });
+
+  it('list the review sheet in merge order, queued without an event', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        table: {
+          before: [],
+          label: [],
+          after: [
+            { ticket: 'COD-3', kind: 'pr', pr: 7 },
+            { ticket: 'COD-2', kind: 'pr', pr: 5 }
+          ]
+        }
+      })
+    );
+    const m = model(state, NOW);
+    const order = m.prs.map((x) => String(x.pr));
+    const html = SHEETS.review.body(m, state, NOW);
+    expect([...html.matchAll(/data-pr="(\d+)"/g)].map((x) => x[1])).toEqual(
+      order
+    );
+    expect(html).toContain('<span class="pill neutral">queued</span>');
+    expect(html).not.toContain('<time>');
+    expect(html).toContain('Rows update in place as github_events lands');
+  });
+
+  it('change a review row in place when a newer github event lands', () => {
+    const event = (action: string, minutesAgo: number) =>
+      ({
+        pr: 7,
+        subject: 'x',
+        action,
+        updated_at: new Date(NOW.getTime() - minutesAgo * 6e4).toISOString()
+      }) as never;
+    const state = filled();
+    state.data.githubEvents = [event('check_suite:success', 12)];
+    const before = SHEETS.review.body(model(state, NOW), state, NOW);
+    expect(before).toContain('<span class="pill ok">checks passed</span>');
+    expect(before).toContain('<time>12 m ago</time>');
+    state.data.githubEvents = [
+      event('pull_request_review:copilot', 2),
+      event('check_suite:success', 12)
+    ];
+    const after = SHEETS.review.body(model(state, NOW), state, NOW);
+    expect(after).toContain(
+      '<span class="pill wait">Copilot reviewed — your turn</span>'
+    );
+    expect(after).toContain('<time>2 m ago</time>');
+    expect(after).not.toContain('checks passed');
+    state.data.githubEvents = [event('check_suite:failure', 1)];
+    expect(SHEETS.review.body(model(state, NOW), state, NOW)).toContain(
+      '<span class="pill bad">checks failed</span>'
+    );
+  });
+
+  it('give each thing that waits on you a card with its action', () => {
+    const state = filled();
+    state.data.activity = {
+      ...activity,
+      rows: [
+        {
+          when: '2026-10-29 10:00',
+          ticket: 'COD-4',
+          actor: 'agent',
+          change: 'comment: **Agent: plan ready**'
+        }
+      ]
+    };
+    const html = SHEETS.before.body(model(state, NOW), state, NOW);
+    expect(html.match(/class="wcard"/g)).toHaveLength(2);
+    expect(html).toContain('class="kind k-plan">plan</span>');
+    expect(html).toContain('<time>waiting 2 h</time>');
+    expect(html).toMatch(/class="act primary"[^>]*>Answer in Linear<\/a>/);
+    expect(html).toContain(
+      'class="kind k-ready-to-label">ready to label</span>'
+    );
+    expect(html).toMatch(/class="act secondary"[^>]*>Label agent:ready<\/a>/);
+    expect(html).toContain('Ideas to decide · 1');
+  });
+
+  it('list the hosts with live sessions on the session sheet', () => {
+    const state = filled();
+    expect(SHEETS.session.body(model(state, NOW), state, NOW)).toContain(
+      'No live session on any host.'
+    );
+    state.data.sessions = [
+      {
+        id: 's1',
+        host: 'nuc',
+        kind: 'implement',
+        last_seen: new Date(NOW.getTime() - 3 * 6e4).toISOString()
+      } as never
+    ];
+    const html = SHEETS.session.body(model(state, NOW), state, NOW);
+    expect(html).toContain('<b>nuc</b>');
+    expect(html).toContain('1 session · implement · newest heartbeat 3 m ago');
+  });
+
+  it('count the runs of today on the runs sheet, and keep them off the scheduler sheet', () => {
+    const state = filled();
+    const m = model(state, NOW);
+    const html = SHEETS.runs.body(m, state, NOW);
+    expect(html).toContain('<b>1</b><span>runs today</span>');
+    expect(html).toContain('<b>–</b><span>median duration</span>');
+    expect(html).toContain('<b>1</b><span>failed</span>');
+    expect(html).toContain('Recent runs that did something');
+    expect(SHEETS.scheduler.body(m, state, NOW)).not.toContain(
+      'Recent runs that did something'
+    );
+  });
+
+  it('put the cost per ticket and the spend per day on the effort sheet', () => {
+    const state = filled();
+    const html = SHEETS.effort.body(model(state, NOW), state, NOW);
+    expect(html).toContain('Every ticket with usage');
+    expect(html).toContain('By model');
+    expect(html).toContain('data-chart="spend"');
   });
 
   it('show a parked review only as its open PR', () => {
@@ -546,9 +685,9 @@ describe('waiting card, queue sheets and tiles', () => {
     const m = model(state, NOW);
     expect(m.parked).toEqual([]);
     expect(SHEETS.next.body(m, state, NOW)).not.toContain('Parked on a wait');
-    const after = SHEETS.after.body(m, state, NOW);
-    expect(after).toContain('COD-3');
-    expect(after).toContain('Review fixes: waits on CI since');
+    const review = SHEETS.review.body(m, state, NOW);
+    expect(review).toContain('COD-3');
+    expect(review).toContain('Review fixes: waits on CI since');
     expect(headline(m, NOW).note).toContain('COD-3');
   });
 
@@ -608,13 +747,13 @@ describe('waiting card, queue sheets and tiles', () => {
     state.data.hostMetrics = [hostSample(0, { mem_available: 0.2 * 2 ** 30 })];
     const m = model(state, NOW);
     expect(SHEETS.nuc.body(m, state, NOW)).toContain('memory used above 90%');
-    expect(renderTiles(m, state, NOW)).toMatch(/mini bad" data-w="nuc"/);
+    expect(renderTiles(m, state, NOW)).toMatch(/tile bad" data-w="nuc"/);
   });
 
   it('show the NUC tile as the worse of load and memory with the verdict', () => {
     const state = filled();
     const html = renderTiles(model(state, NOW), state, NOW);
-    expect(html).toMatch(/data-w="nuc"[^>]*>.*<b>25% · ok<\/b>/);
+    expect(html).toMatch(/data-w="nuc"[^>]*>.*<b class="v">25% · ok<\/b>/);
   });
 
   it('name the first problem on the NUC tile, not the worse of load and memory', () => {
@@ -623,7 +762,7 @@ describe('waiting card, queue sheets and tiles', () => {
       hostSample(0, { disk_free: 5 * 2 ** 30, mem_available: 7 * 2 ** 30 })
     ];
     expect(renderTiles(model(disk, NOW), disk, NOW)).toMatch(
-      /data-w="nuc"[^>]*>.*<b>disk 95% · bad<\/b>/
+      /data-w="nuc"[^>]*>.*<b class="v">disk 95% · bad<\/b>/
     );
     const swap = filled();
     swap.data.hostMetrics = [
@@ -631,7 +770,7 @@ describe('waiting card, queue sheets and tiles', () => {
       hostSample(0, { swap_free: 1 * 2 ** 30 })
     ];
     expect(renderTiles(model(swap, NOW), swap, NOW)).toMatch(
-      /data-w="nuc"[^>]*>.*<b>swap growing · bad<\/b>/
+      /data-w="nuc"[^>]*>.*<b class="v">swap growing · bad<\/b>/
     );
   });
 
@@ -639,7 +778,7 @@ describe('waiting card, queue sheets and tiles', () => {
     const stale = filled();
     stale.data.hostMetrics = [hostSample(90)];
     expect(renderTiles(model(stale, NOW), stale, NOW)).toMatch(
-      /data-w="nuc"[^>]*>.*<b>stale<\/b>/
+      /data-w="nuc"[^>]*>.*<b class="v">stale<\/b>/
     );
     expect(SHEETS.nuc.body(model(stale, NOW), stale, NOW)).toContain(
       'No sample for 1 h 30 min'
@@ -647,37 +786,122 @@ describe('waiting card, queue sheets and tiles', () => {
     const none = filled();
     none.data.hostMetrics = [];
     expect(renderTiles(model(none, NOW), none, NOW)).toMatch(
-      /data-w="nuc"[^>]*>.*<b>–<\/b>/
+      /data-w="nuc"[^>]*>.*<b class="v">–<\/b>/
     );
     expect(SHEETS.nuc.body(model(none, NOW), none, NOW)).toContain(
       'No host samples yet'
     );
   });
 
-  it('give every tile a sheet', () => {
+  const tileOf = (html: string, id: string): string =>
+    html.match(
+      new RegExp(`<button[^>]*data-w="${id}"[^>]*>.*?</button>`)
+    )?.[0] ?? '';
+
+  it('give every tile a sheet, the interim four in their own row', () => {
     const state = filled();
     const html = renderTiles(model(state, NOW), state, NOW);
+    const [main, interim] = html.split('Until the Platform view');
+    expect(html).toContain('<h2>Everything else</h2>');
     for (const id of [
       'next',
-      'after',
-      'limit',
+      'review',
+      'handoffs',
+      'session',
+      'runs',
       'activity',
       'shipped',
-      'spend',
-      'ticketcost',
-      'ideas',
+      'effort',
       'all',
-      'nuc',
-      'plan',
-      'timers'
+      'ideas'
     ])
-      expect(html).toContain(`data-w="${id}"`);
+      expect(main).toContain(`data-w="${id}"`);
+    for (const id of ['limit', 'nuc', 'plan', 'timers']) {
+      expect(interim).toContain(`data-w="${id}"`);
+      expect(main).not.toContain(`data-w="${id}"`);
+    }
+    expect(interim).toContain('class="tiles small"');
+  });
+
+  it('show the value and sub-line of each of the ten tiles', () => {
+    const state = filled();
+    state.data.sessions = [
+      {
+        id: 's1',
+        host: 'nuc',
+        kind: 'implement',
+        last_seen: new Date(NOW.getTime() - 3 * 6e4).toISOString()
+      } as never,
+      {
+        id: 's2',
+        host: 'mac',
+        kind: 'attended',
+        last_seen: new Date(NOW.getTime() - 1 * 6e4).toISOString()
+      } as never
+    ];
+    const html = renderTiles(model(state, NOW), state, NOW);
+    const tile = (id: string, value: string, sub: string) => {
+      const t = tileOf(html, id);
+      expect(t).toContain(`<b class="v">${value}</b>`);
+      expect(t).toContain(`<span class="s">${sub}</span>`);
+    };
+    tile('next', '1', 'COD-1 · ready');
+    tile('review', '1', '0 await you · live');
+    tile('handoffs', '1', 'merged, steps remain');
+    tile('session', '2', 'mac attended · nuc implement');
+    tile('runs', '1', 'median – · 1 failed');
+    tile('activity', '1', 'agent 1 · you 0');
+    tile('shipped', '1', '≈ 0.0 per day');
+    tile('effort', '$6', 'simulated · $6 per ticket');
+    tile('all', '4', 'via Linear poll, 5 min');
+    tile('ideas', '1', 'COD-50 · accept?');
+    expect(tileOf(html, 'next')).toContain('class="tile"');
+  });
+
+  it('omit the sub-line of a tile that has none, and show dashes before the runs', () => {
+    const state = createState();
+    const html = renderTiles(model(state, NOW), state, NOW);
+    expect(tileOf(html, 'next')).toContain('<b class="v">–</b>');
+    expect(tileOf(html, 'next')).not.toContain('class="s"');
+  });
+
+  it('mark the review tile bad when checks failed, and the runs tile bad on a failure', () => {
+    const state = filled();
+    state.data.githubEvents = [
+      {
+        pr: 7,
+        subject: 'x',
+        action: 'check_suite:failure',
+        updated_at: new Date('2026-10-29T11:59:00').toISOString()
+      } as never
+    ];
+    let html = renderTiles(model(state, NOW), state, NOW);
+    expect(tileOf(html, 'review')).toContain('class="tile bad"');
+    expect(tileOf(html, 'runs')).toContain('class="tile bad"');
+
+    state.data.githubEvents = [
+      {
+        pr: 7,
+        subject: 'x',
+        action: 'pull_request_review:copilot',
+        updated_at: new Date('2026-10-29T11:59:00').toISOString()
+      } as never
+    ];
+    state.data.runs = runs(view());
+    state.data.runs.rows = [];
+    html = renderTiles(model(state, NOW), state, NOW);
+    expect(tileOf(html, 'review')).not.toContain('tile bad');
+    expect(tileOf(html, 'review')).toContain('1 await you · live');
+    expect(tileOf(html, 'runs')).not.toContain('tile bad');
+    expect(tileOf(html, 'runs')).toContain('median – · 0 failed');
   });
 
   it('show the plan tile as both used shares', () => {
     const state = filled();
     const html = renderTiles(model(state, NOW), state, NOW);
-    expect(html).toMatch(/mini" data-w="plan"[^>]*>.*<b>5h 30% · 7d 18%<\/b>/);
+    expect(html).toMatch(
+      /tile" data-w="plan"[^>]*>.*<b class="v">5h 30% · 7d 18%<\/b>/
+    );
   });
 
   it('show a reset or missing plan window as a dash, and no data at all as one', () => {
@@ -687,12 +911,12 @@ describe('waiting card, queue sheets and tiles', () => {
       planSample('seven_day', 100, 18)
     ];
     expect(renderTiles(model(reset, NOW), reset, NOW)).toMatch(
-      /data-w="plan"[^>]*>.*<b>5h – · 7d 18%<\/b>/
+      /data-w="plan"[^>]*>.*<b class="v">5h – · 7d 18%<\/b>/
     );
     const none = filled();
     none.data.planUsage = [];
     expect(renderTiles(model(none, NOW), none, NOW)).toMatch(
-      /data-w="plan"[^>]*>.*<b>5h – · 7d –<\/b>/
+      /data-w="plan"[^>]*>.*<b class="v">5h – · 7d –<\/b>/
     );
   });
 
@@ -703,7 +927,7 @@ describe('waiting card, queue sheets and tiles', () => {
       planSample('seven_day', 100, 18, 90)
     ];
     expect(renderTiles(model(state, NOW), state, NOW)).toMatch(
-      /data-w="plan"[^>]*>.*<b>5h 30% · 7d 18% · 3 h ago<\/b>/
+      /data-w="plan"[^>]*>.*<b class="v">5h 30% · 7d 18% · 3 h ago<\/b>/
     );
   });
 
@@ -714,7 +938,7 @@ describe('waiting card, queue sheets and tiles', () => {
       planSample('seven_day', 100, 18)
     ];
     expect(renderTiles(model(state, NOW), state, NOW)).toMatch(
-      /mini bad" data-w="plan"/
+      /tile bad" data-w="plan"/
     );
   });
 

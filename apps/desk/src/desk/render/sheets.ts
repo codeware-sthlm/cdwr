@@ -27,10 +27,12 @@ import {
   mtok,
   plural,
   seenAgo,
+  shortAge,
   span,
   txt,
   usd
 } from '../format';
+import type { PrStateName } from '../live';
 import { DETAIL_STALE_MS, HANDOFF_STALE_MS, REASON_STALE_MS } from '../load';
 import {
   BURN_ROLES,
@@ -64,12 +66,14 @@ import {
   idLink,
   loadMeter,
   parkedText,
+  prTone,
   prn,
   pvMore,
   reasonChip,
   sessionLabel
 } from './html';
 import { headline } from './session';
+import { type WaitRow, waitRows } from './waiting';
 
 // The sheets: one per card, pill and tile. A sheet body is a pure function of the model and the state.
 
@@ -186,28 +190,29 @@ const itemHTML = (
 
 // ---------- Waiting on you, next, after ----------
 
-const renderBefore = (m: Model, state: DeskState): string => {
+/** One card per plan, question and ticket to label, with the one thing to do about it */
+const waitCard = (r: WaitRow): string => {
+  const label = r.kind === 'ready to label';
+  return `<article class="wcard">
+    <div class="wc-head"><span class="id">${esc(r.id)}</span><span class="kind k-${esc(r.kind.replace(/ /g, '-'))}">${esc(r.kind)}</span>${r.age === null ? '' : `<time>waiting ${esc(shortAge(r.age))}</time>`}</div>
+    <div class="wc-title">${esc(r.title)}</div>
+    <a class="act ${label ? 'secondary' : 'primary'}" href="${esc(r.url)}" target="_blank" rel="noopener">${label ? 'Label agent:ready' : 'Answer in Linear'}</a>
+  </article>`;
+};
+
+const renderBefore = (m: Model, state: DeskState, now: Date): string => {
   if (!m.v) return empty('No queue view yet.');
-  const group = <X extends { ticket: string }>(
-    h: string,
-    xs: readonly X[],
-    rowState: string,
-    extra: (x: X) => ItemOpts = () => ({ showNext: true })
-  ): string =>
-    xs.length
-      ? `<div class="group"><h3>${h} · ${xs.length}</h3><ul>${xs.map((x) => itemHTML(state.details, m.get(x.ticket), { state: rowState, ...extra(x) })).join('')}</ul></div>`
-      : '';
+  // Ideas wait on you too, but their card below carries the evidence to decide on
+  const cards = waitRows(m, now)
+    .filter((r) => r.kind !== 'idea')
+    .map(waitCard)
+    .join('');
   const ideasHTML = m.ideasPending.length
     ? `<div class="group"><h3>Ideas to decide · ${m.ideasPending.length}</h3>${m.ideasPending.map((i) => ideaCard(state, i)).join('')}</div>`
     : '';
   return (
-    group('Plans to approve', m.plans, 'needs-input') +
-      group('Questions', m.questions, 'needs-input') +
-      group('Ready to label', m.toLabel, 'ready', (x) => ({
-        side: '<span class="chip label">ready to label</span>',
-        note: x.parent ? `Next part of ${esc(x.parent)}` : undefined
-      })) +
-      ideasHTML || empty('No plan, question, label or idea waits for you.')
+    cards + ideasHTML ||
+    empty('No plan, question, label or idea waits for you.')
   );
 };
 
@@ -272,35 +277,56 @@ const handoffCard = (
   </article>`;
 };
 
+/** The pill text of a PR state; Copilot's review says whose turn it is */
+const prStateText = (state: PrStateName): string =>
+  state === 'Copilot reviewed' ? 'Copilot reviewed — your turn' : state;
+
+/** One card per open PR in merge order, its state and age from the newest github event */
+const renderReview = (m: Model, state: DeskState, now: Date): string => {
+  if (!m.v) return empty('No queue view yet.');
+  const { details } = state;
+  const rows = m.prs
+    .map((x) => {
+      const n = prOf(details, x.ticket, x.pr);
+      const live =
+        n === null ? undefined : m.agentPrs.find((p) => p.pr === Number(n));
+      const tone = live ? prTone(live.state) : 'neutral';
+      const text = !live
+        ? 'queued'
+        : live.state
+          ? prStateText(live.state)
+          : live.action;
+      const age = live
+        ? `<time>${esc(shortAge((now.getTime() - live.at) / 6e4))} ago</time>`
+        : '';
+      const note = [
+        blockedText(m, x.ticket)
+          ? 'Merge order: ' + blockedText(m, x.ticket)
+          : '',
+        prWaitText(m, x.ticket)
+      ]
+        .filter(Boolean)
+        .join('. ');
+      const i = m.get(x.ticket);
+      return `<li class="pr-row" data-pr="${esc(n ?? '')}">
+        <div class="line"><span class="prnum">${prn(n)}</span><span class="id">${esc(x.ticket)}</span><a class="title" href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
+        <div class="meta"><span class="pill ${tone}">${esc(text)}</span>${age}</div>
+        ${note ? `<div class="meta">${note}</div>` : ''}
+      </li>`;
+    })
+    .join('');
+  return `${rows ? `<ul class="pr-rows">${rows}</ul>` : empty('No open agent PR.')}
+    <p class="rule">Rows update in place as github_events lands — parked Copilot and CI waits resolve here, not at the next scheduler snapshot.</p>`;
+};
+
 const renderHandoffs = (m: Model, state: DeskState): string => {
   if (!m.v) return empty('No queue view yet.');
   const { details } = state;
-  const prs = m.prs.length
-    ? `<div class="group"><h3>Open PRs · ${m.prs.length}</h3><ul>${m.prs
-        .map((x, n) => {
-          const held = blockedText(m, x.ticket);
-          const note = [
-            held ? 'Merge order: ' + held : '',
-            prWaitText(m, x.ticket)
-          ]
-            .filter(Boolean)
-            .join('. ');
-          return itemHTML(details, m.get(x.ticket), {
-            state: held ? 'blocked' : 'review',
-            rank: m.prs.length > 1 ? n + 1 : '',
-            showNext: true,
-            note: note || undefined,
-            side: `${prn(prOf(details, x.ticket, x.pr))}${held ? ' <span class="chip blocked">merge later</span>' : ''}`
-          });
-        })
-        .join('')}</ul></div>`
-    : '';
-  const ho = m.handoffs.length
-    ? `<div class="group"><h3>Merged, hand-offs left · ${m.handoffItems}</h3>${m.handoffs.map((x) => handoffCard(m, details, x)).join('')}</div>`
-    : '';
   return (
-    (prs + ho || empty('No PR to review and no hand-off left.')) +
-    `<p class="rule">Open PRs are numbered in merge order: a PR whose ticket is blocked by another open ticket in Linear comes after that ticket's PR, and is marked <i>merge later</i> until the blocker closes. Hand-offs come from agent tickets merged in the last 14 days. They don't count toward the limit. The heading must read exactly <code>Hand-off checklist:</code>.</p>`
+    (m.handoffs.length
+      ? `<div class="group"><h3>Merged, hand-offs left · ${m.handoffItems}</h3>${m.handoffs.map((x) => handoffCard(m, details, x)).join('')}</div>`
+      : empty('No hand-off left.')) +
+    `<p class="rule">Hand-offs come from agent tickets merged in the last 14 days. They don't count toward the limit. The heading must read exactly <code>Hand-off checklist:</code>.</p>`
   );
 };
 
@@ -318,7 +344,18 @@ const renderAttended = (m: Model, now: Date): string => {
       ${s.id ? `<dt>Session</dt><dd><code>${esc(s.id.slice(0, 8))}</code></dd>` : ''}
     </dl></div>`
     : '';
+  const hosts = `<div class="group"><h3>Hosts</h3>${
+    m.hostSessions.length
+      ? `<ul class="knobs">${m.hostSessions
+          .map(
+            (h) =>
+              `<li><b>${esc(h.host)}</b><span>${esc(plural(h.sessions.length, 'session', 'sessions'))} · ${esc([...new Set(h.sessions.map((s) => s.kind))].join(', '))} · newest heartbeat ${esc(shortAge(h.ageMin))} ago</span></li>`
+          )
+          .join('')}</ul>`
+      : empty('No live session on any host.')
+  }</div>`;
   return (
+    hosts +
     head +
     facts +
     `<div class="group"><h3>What the states mean</h3><ul class="knobs">
@@ -387,6 +424,20 @@ const renderScheduler = (m: Model): string => {
   const deskHTML = m.deskBehind
     ? `<div class="group"><h3>Desk</h3><div class="empty">This desk is ${shaLink(m.deskBehind.runs)}, main has ${shaLink(m.deskBehind.main)}: run <code>cdwr agent desk install</code>.</div></div>`
     : '';
+  return (
+    head +
+    jobHTML +
+    deskHTML +
+    `<p class="rule">Idle runs update the last-run and job lines at most once an hour. The scheduler plans new tickets itself. For answers, reviews and parked work it starts an implementing session when none is alive (<code>launched</code>, then <code>implemented</code>, <code>cap</code> or <code>failed</code>). A problem is any outcome other than planned, idle, suggested or nothing, for example a failed run or one that planned nothing. It turns the Platform pill red until a later run goes well. The runs themselves are on the Runs today sheet. Full logs: <code>cdwr agent logs</code>.</p>`
+  );
+};
+
+const renderRuns = (m: Model): string => {
+  if (!m.runs)
+    return empty(
+      "The runs haven't loaded yet. The scheduled planner records them in Supabase after every run."
+    );
+  const t = m.runsToday;
   const rows = m.runs.rows
     .map(
       (r) => `<li class="item ${isProblem(r.outcome) ? 'blocked' : 'ready'}">
@@ -396,13 +447,9 @@ const renderScheduler = (m: Model): string => {
       <span class="side">${esc(r.when)}</span></li>`
     )
     .join('');
-  return (
-    head +
-    jobHTML +
-    deskHTML +
-    `<div class="group"><h3>Recent runs that did something</h3>${rows ? `<ul>${rows}</ul>` : empty('None yet.')}</div>
-    <p class="rule">Idle runs update the last-run and job lines at most once an hour. The scheduler plans new tickets itself. For answers, reviews and parked work it starts an implementing session when none is alive (<code>launched</code>, then <code>implemented</code>, <code>cap</code> or <code>failed</code>). A problem is any outcome other than planned, idle, suggested or nothing, for example a failed run or one that planned nothing. It turns the tile red until a later run goes well. Full logs: <code>cdwr agent logs</code>.</p>`
-  );
+  return `<div class="pv-stats"><div><b>${t.count}</b><span>runs today</span></div><div><b>${t.medianMs === null ? '–' : esc(shortAge(t.medianMs / 6e4))}</b><span>median duration</span></div><div><b>${t.failed}</b><span>failed</span></div></div>
+    <div class="group"><h3>Recent runs that did something</h3>${rows ? `<ul>${rows}</ul>` : empty('None yet.')}</div>
+    <p class="rule">Runs since local midnight. Idle runs are left out of the list. A failed run is any outcome other than planned, idle, launched, implemented, suggested or nothing.</p>`;
 };
 
 type TimerRow = readonly [what: string, value: string, source: string];
@@ -975,6 +1022,12 @@ const renderTicketCost = (state: DeskState, now: Date): string => {
     <p class="rule">Closed agent tickets from the last ${SHIP_DAYS} days, by the API-equivalent cost of sessions on their branch over the last ${usage.windowDays} days. Work before that window isn't counted.</p>`;
 };
 
+/** Cost per closed ticket, then the spend per day and model, from one usage table */
+const renderEffort = (state: DeskState, now: Date): string =>
+  state.data.usage
+    ? renderTicketCost(state, now) + renderSpend(state, now)
+    : noUsage();
+
 // ---------- All open tickets ----------
 
 const renderAll = (m: Model, state: DeskState): string => {
@@ -1133,16 +1186,21 @@ export const SHEETS: Record<SheetId, SheetDef> = {
   before: {
     title: 'Waiting on you before the agent can build',
     sub: "Plans to approve and questions to answer. Reply in the ticket's newest Agent comment.",
-    body: renderBefore
+    body: (m, state, now) => renderBefore(m, state, now)
   },
   next: {
     title: 'What the agent takes next',
     sub: "In the order a session takes them, from the scheduler's queue view",
     body: renderNext
   },
-  after: {
-    title: 'Review and check',
-    sub: "Open agent PRs, and unticked hand-offs from each ticket's latest Agent: PR ready comment. Tick them in Linear.",
+  review: {
+    title: 'Review & check',
+    sub: 'Open agent PRs · live via github_events',
+    body: renderReview
+  },
+  handoffs: {
+    title: 'Hand-offs left',
+    sub: "Unticked hand-off items of merged agent tickets, from each ticket's latest Agent: PR ready comment. Tick them in Linear.",
     body: renderHandoffs
   },
   session: {
@@ -1159,6 +1217,11 @@ export const SHEETS: Record<SheetId, SheetDef> = {
     title: 'Scheduler',
     sub: 'The scheduled runs, from the runs table',
     body: renderScheduler
+  },
+  runs: {
+    title: 'Runs today',
+    sub: 'The scheduler runs since midnight, from the runs table',
+    body: renderRuns
   },
   timers: {
     title: 'Timers',
@@ -1185,15 +1248,10 @@ export const SHEETS: Record<SheetId, SheetDef> = {
     sub: `Agent tickets closed per day, last ${SHIP_DAYS} days`,
     body: (_m, state, now) => renderShipped(state, now)
   },
-  spend: {
-    title: 'Spend per day',
-    sub: `API-equivalent spend per day by role, last ${SHIP_DAYS} days, from the usage table`,
-    body: (_m, state, now) => renderSpend(state, now)
-  },
-  ticketcost: {
-    title: 'Cost per closed ticket',
-    sub: "Agent tickets closed in the last 30 days, by what their branch's sessions cost",
-    body: (_m, state, now) => renderTicketCost(state, now)
+  effort: {
+    title: 'Effort, 30 days',
+    sub: 'API-equivalent cost, simulated on Max: per closed ticket, then per day and model',
+    body: (_m, state, now) => renderEffort(state, now)
   },
   all: {
     title: 'All open tickets',
