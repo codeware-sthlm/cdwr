@@ -203,7 +203,7 @@ const writersCard = (
   pill: 'DATA',
   title: 'More than one host publishes the queue',
   time: [`last ${esc(hhmm(p.since))}`, `last ${esc(hhmm(p.since))}`],
-  body: `The desk reads ${esc(p.used)}; ${esc(writerList(p.others))} also wrote a queue_state row in the last ${WINDOW}. Stop the scheduler on the host that should not publish: "cdwr agent uninstall" on a Mac, "cdwr agent pause --host <host>" for the container. The row stops counting once it is older than ${WINDOW}.`,
+  body: `The desk reads ${esc(p.used)}; ${esc(writerList(p.others))} also wrote a queue_state row in the last ${WINDOW}. Stop the scheduler on the host that should not publish: "cdwr agent uninstall" on a Mac, or stop the agent container; a paused scheduler still publishes. The row stops counting once it is older than ${WINDOW}.`,
   short: `Also published by ${p.others.map((o) => esc(o.host)).join(', ')}.`
 });
 
