@@ -41,6 +41,10 @@ export type Job = {
   rev: string | null;
   install: 'stale' | 'current' | 'unknown';
   items: string;
+  /** The day's implement spend against its daily cap, in dollars; null when the line does not carry them */
+  effort: { spent: number; cap: number } | null;
+  /** The queue is paused (`cdwr agent pause`): the tick publishes and starts nothing */
+  paused: boolean;
 };
 
 export type AttendedVerdict = 'running' | 'run now' | 'idle';

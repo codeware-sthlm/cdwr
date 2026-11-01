@@ -392,7 +392,65 @@ describe('parseJob', () => {
       }
     ]
   ])('reads %s', (_name, text, expected) => {
-    expect(parseJob(text)).toEqual(expected);
+    expect(parseJob(text)).toEqual({
+      effort: null,
+      paused: false,
+      ...expected
+    });
+  });
+
+  it.each([
+    [
+      'the effort of a live container',
+      'Job: live · fallback 60 min · image sha-0123456 · effort $12.50 of $40',
+      { spent: 12.5, cap: 40 },
+      false
+    ],
+    [
+      'a pause after the effort',
+      'Job: live · fallback 60 min · image sha-0123456 · effort $12.50 of $40 · paused',
+      { spent: 12.5, cap: 40 },
+      true
+    ],
+    [
+      'a pause without an effort',
+      'Job: every 10 min · install current · paused',
+      null,
+      true
+    ],
+    [
+      'an effort of 0 on launchd',
+      'Job: every 10 min · install out of date (run.sh) · effort $0.00 of $12.5',
+      { spent: 0, cap: 12.5 },
+      false
+    ]
+  ])('reads %s', (_name, text, effort, paused) => {
+    const job = parseJob(text);
+    expect(job?.effort).toEqual(effort);
+    expect(job?.paused).toBe(paused);
+  });
+
+  it('leaves rev, install and items as they were with the appended segments', () => {
+    const job = parseJob(
+      'Job: live · fallback 60 min · image sha-0123456 · effort $12.50 of $40 · paused'
+    );
+    expect(job).toMatchObject({
+      minutes: 60,
+      live: true,
+      host: 'container',
+      rev: 'sha-0123456',
+      install: 'current',
+      items: ''
+    });
+    expect(
+      parseJob(
+        'Job: every 10 min · install out of date (run.sh, interval) · effort $1.00 of $40 · paused'
+      )
+    ).toMatchObject({
+      host: 'launchd',
+      install: 'stale',
+      items: 'run.sh, interval'
+    });
   });
 
   it.each([

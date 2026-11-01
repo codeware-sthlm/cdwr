@@ -189,6 +189,8 @@ export function parseHandoffs(
 // in the agent-host container "· image sha-9c7a20d", "· image sha-9c7a20d out of date (run.sh, …)", or "· image" with no
 // commit for a local build (the CI build passes AGENT_IMAGE_SHA).
 // With the listener up the interval reads "live · fallback 60 min" instead of "every 10 min".
+// queue_state appends "· effort $12.34 of $40" (the day's implement spend against its cap) when both are known,
+// and a last "· paused" while the queue is paused.
 export function parseJob(text: string | null | undefined): Job | null {
   const line = lineAfter(text, 'Job:');
   if (!line) return null;
@@ -209,6 +211,7 @@ export function parseJob(text: string | null | undefined): Job | null {
         (host === 'container' && !/unknown/.test(line))
       ? 'current'
       : 'unknown';
+  const spend = line.match(/effort \$(\d+(?:\.\d+)?) of \$(\d+(?:\.\d+)?)/);
   return {
     line,
     minutes,
@@ -216,7 +219,9 @@ export function parseJob(text: string | null | undefined): Job | null {
     host,
     rev,
     install,
-    items: between(line, 'out of date (', ')')
+    items: between(line, 'out of date (', ')'),
+    effort: spend ? { spent: Number(spend[1]), cap: Number(spend[2]) } : null,
+    paused: /·\s*paused\b/.test(line)
   };
 }
 
