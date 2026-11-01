@@ -309,10 +309,12 @@ export const mirrorTargetOf = (queue: QueuePaths): string | null =>
 
 /**
  * The host for a command that needs the scheduler on this machine; a Mac without the launchd
- * job is attended-only, the scheduler runs in the agent container
+ * job is attended-only, the scheduler runs in the agent container. The hint names `command`
+ * with `--host`, which acts there.
  */
 export async function requireScheduler(
-  env: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv,
+  command: 'pause' | 'resume' | 'run'
 ): Promise<'launchd' | 'container'> {
   const host = requireHost(['launchd', 'container'], env);
   if (host === 'container') return host;
@@ -323,7 +325,7 @@ export async function requireScheduler(
     throw new CliError(
       `No scheduler on this machine; it runs ${where ? `on ${where}` : 'elsewhere'}`,
       undefined,
-      `cdwr agent status --host ${where ?? '<host>'}`
+      `cdwr agent ${command} --host ${where ?? '<host>'}`
     );
   }
   return host;

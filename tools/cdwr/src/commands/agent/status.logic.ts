@@ -5,31 +5,19 @@ import {
   NOTIFY_LEVELS,
   REMOTE_CONTAINER,
   WATCH_STATES,
-  queueViewSchema
+  queueViewSchema,
+  remoteCdwr
 } from './agent.logic';
 import { type ListenerState, listenerStateShape } from './listen.logic';
 import { mirrorHost } from './mirror.logic';
+import { excerpt, parseRemoteAnswer } from './remote.logic';
 
-/** The checkout the queue plans in, inside the agent container */
-export const REMOTE_CHECKOUT = '/work/codeware-agent';
-/** Fetches the vault secrets, exports them and runs the command it is given */
-export const REMOTE_SECRETS = '/opt/agent-host/secrets.sh';
+/** The cdwr arguments of the status report of the queue in the container */
+export const STATUS_ARGS = ['agent', 'status', '--json'];
 
 /** ssh's arguments for the status report of the queue in the container on `host` */
-export const remoteStatus = (host: string): string[] => [
-  host,
-  'docker',
-  'exec',
-  '-w',
-  REMOTE_CHECKOUT,
-  REMOTE_CONTAINER,
-  REMOTE_SECRETS,
-  'node',
-  'tools/cdwr/bin/cdwr.mjs',
-  'agent',
-  'status',
-  '--json'
-];
+export const remoteStatus = (host: string): string[] =>
+  remoteCdwr(host, STATUS_ARGS);
 
 /** Exactly what the status table reads; `localReport` must produce it, so a missing or renamed field fails to compile (an extra local field does not) */
 const reportShape = z.object({
@@ -176,15 +164,7 @@ export const checkRepoOf = (
 ): string =>
   scheduler === 'elsewhere' && !worktree.exists ? root : worktree.path;
 
-const envelope = z.object({ result: reportShape });
-
 export type RemoteReport = z.infer<typeof reportShape>;
-
-/** The first `n` characters of `text`, for an error that quotes the answer */
-const excerpt = (text: string, n = 200): string => {
-  const flat = text.trim().replace(/\s+/g, ' ');
-  return flat.length > n ? `${flat.slice(0, n)}...` : flat;
-};
 
 /** What `cdwr agent status --json` printed, as far as it can be read */
 export type RemoteAnswer =
@@ -193,38 +173,18 @@ export type RemoteAnswer =
   | { kind: 'skew'; paths: string[]; line: string }
   | { kind: 'none' };
 
-const failure = z.object({
-  ok: z.literal(false),
-  error: z.object({ message: z.string(), hint: z.string().optional() })
-});
-
-/**
- * The answer in `cdwr agent status --json` output. `secrets.sh` prints a line
- * before the command's own output, so the last line holding a JSON object wins.
- */
+/** The answer in `cdwr agent status --json` output; any envelope without a report reads as none */
 export const parseRemoteStatus = (stdout: string): RemoteAnswer => {
-  const lines = stdout.split('\n').map((line) => line.trim());
-  for (const line of lines.reverse()) {
-    if (!line.startsWith('{')) continue;
-    let json: unknown;
-    try {
-      json = JSON.parse(line);
-    } catch {
-      continue; // Not JSON; keep looking upwards
-    }
-    const parsed = envelope.safeParse(json);
-    if (parsed.success) return { kind: 'report', report: parsed.data.result };
-    const failed = failure.safeParse(json);
-    if (failed.success) return { kind: 'failed', ...failed.data.error };
-    return {
-      kind: 'skew',
-      paths: [
-        ...new Set(parsed.error.issues.map((i) => i.path.join('.') || '(root)'))
-      ],
-      line
-    };
+  const answer = parseRemoteAnswer(stdout, reportShape);
+  switch (answer.kind) {
+    case 'result':
+      return { kind: 'report', report: answer.result };
+    case 'nothing':
+    case 'plan':
+      return { kind: 'none' };
+    default:
+      return answer;
   }
-  return { kind: 'none' };
 };
 
 /** The message for an answer that holds no report */

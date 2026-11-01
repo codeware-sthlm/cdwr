@@ -103,6 +103,8 @@ trap 'pending=1; [[ -n "$sleeper" ]] && kill $sleeper 2>/dev/null; true' USR1
 # beating; without its env the loop polls every RUN_INTERVAL_SECONDS as before
 LISTENER_FILE="$AGENT_QUEUE_HOME/listener.json"
 loop_pid=$$
+# `cdwr agent run` in the container wakes the loop through this file, as the listener does
+print -r -- "$loop_pid" > "$AGENT_QUEUE_HOME/loop.pid"
 # Restarts the listener with a back-off of 5 s doubling to 5 min, reset after 10 min up
 supervise_listener() {
   local backoff=5 started listener=

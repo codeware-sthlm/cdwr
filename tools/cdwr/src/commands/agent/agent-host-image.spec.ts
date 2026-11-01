@@ -51,6 +51,18 @@ describe('agent-host entrypoint', () => {
     );
   });
 
+  it('records the loop pid for `cdwr agent run`, after the wake is trapped', () => {
+    const write = 'print -r -- "$loop_pid" > "$AGENT_QUEUE_HOME/loop.pid"';
+    expect(entrypoint).toContain(`loop_pid=$$\n`);
+    expect(entrypoint).toContain(write);
+    expect(entrypoint.indexOf("' USR1")).toBeLessThan(
+      entrypoint.indexOf(write)
+    );
+    expect(entrypoint.indexOf('loop_pid=$$')).toBeLessThan(
+      entrypoint.indexOf(write)
+    );
+  });
+
   it('starts the listener only with its env, and wakes the loop itself', () => {
     expect(entrypoint).toMatch(
       /if \[\[ -n "\$\{AGENT_SUPABASE_URL:-\}" && -n "\$\{AGENT_SUPABASE_ANON_KEY:-\}" \]\]; then\n {2}supervise_listener &/

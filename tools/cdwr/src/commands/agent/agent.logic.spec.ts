@@ -30,12 +30,14 @@ import {
   parseCheck,
   parseLaunchctlPrint,
   parseLinear,
+  parseLoopPid,
   parseNotifyLevel,
   parseQueueView,
   parseSuggest,
   parseWatchState,
   plistPath,
   queuePaths,
+  remoteCdwr,
   remoteListLogs,
   remoteLogFile,
   remoteReadLog,
@@ -179,6 +181,7 @@ describe('queuePaths', () => {
       lock: '/h/.cdwr/agent-queue/lock',
       implementLock: '/h/.cdwr/agent-queue/implement.lock',
       implementSpend: '/h/.cdwr/agent-queue/implement-spend.jsonl',
+      loopPid: '/h/.cdwr/agent-queue/loop.pid',
       runs: '/h/.cdwr/agent-queue/runs.jsonl',
       logs: '/h/.cdwr/agent-queue/logs',
       schedulerLog: '/h/.cdwr/agent-queue/logs/scheduler.log',
@@ -1101,6 +1104,40 @@ describe('remote logs', () => {
       file
     ]);
     expect(remoteReadLog('h', file, 0).slice(4)).toEqual(['cat', file]);
+  });
+});
+
+describe('remoteCdwr', () => {
+  it('runs cdwr in the container checkout through secrets.sh, one argv entry per word', () => {
+    expect(remoteCdwr('agent-host', ['agent', 'notify', 'action'])).toEqual([
+      'agent-host',
+      'docker',
+      'exec',
+      '-w',
+      '/work/codeware-agent',
+      'cdwr-agent',
+      '/opt/agent-host/secrets.sh',
+      'node',
+      'tools/cdwr/bin/cdwr.mjs',
+      'agent',
+      'notify',
+      'action'
+    ]);
+  });
+});
+
+describe('parseLoopPid', () => {
+  it.each([
+    ['123\n', 123],
+    ['1', 1],
+    ['', undefined],
+    [undefined, undefined],
+    ['abc', undefined],
+    ['-5', undefined],
+    ['0', undefined],
+    ['1.5', undefined]
+  ])('reads %j as %s', (text, expected) => {
+    expect(parseLoopPid(text)).toBe(expected);
   });
 });
 
