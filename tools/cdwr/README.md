@@ -233,7 +233,7 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 run) always go out.
 
 The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
-`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events` and `builds`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events`, `builds` and `desk_commands`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
@@ -261,8 +261,8 @@ only cause an extra wake, which re-reads Linear and GitHub anyway. The function 
 `check_suite:success` or another conclusion, `pull_request_review:copilot` for Copilot's review, …) and never
 the payload; the desk reads the action as the PR's state. A `ping` is answered without a row, and every other
 event or action with `Ignored`. Commit statuses aren't subscribed: the required checks and Chromatic run
-as Actions jobs, which `check_suite` covers. Both functions share `functions/_shared/hmac.ts`, so a change
-to it means deploying both:
+as Actions jobs, which `check_suite` covers. Both webhooks share `functions/_shared/hmac.ts` with `desk-command` (below), so a
+change to it means deploying all three:
 
 ```sh
 supabase functions deploy github-webhook --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
@@ -279,6 +279,24 @@ and a desk build should not wake it. The desk compares it with the commit the NU
 (`· image sha-…` on the Job line) and with its own (`VITE_DESK_SHA`, set by `desk.yml`) and says
 which is behind main. Until the first run lands the table is empty and the desk says nothing; a
 `workflow_dispatch` of each workflow on main fills it.
+
+The desk steers the queue through a third Edge Function, `desk-command`. Anon may only read, so the
+desk posts `{host, kind, args}` with a per-device bearer token, and the function checks the token's
+SHA-256 against `DESK_CONTROL_TOKENS`, a JSON object of `{device: hex sha256}`; the device name is
+the actor, so one device is revoked on its own. Kinds are `pause`, `resume`, `run`, `limit`
+(`{value}` 1–20) and `cap` (`{value}` 0–500 dollars), which it stores `pending` in `desk_commands`
+for the scheduler on that host to apply, and `abandon`, which it applies itself by ending the
+session row the host's last snapshot calls alive or waiting; that is the desk's record only, since the
+host reads its own session files. A host whose `queue_state` row is missing or more than 2 hours old,
+or an `abandon` with no open session, is stored `refused` with the reason. An applied or refused command also
+writes an `activity` row (`desk:<id>`, actor `human`). A new device gets its own token:
+
+```sh
+openssl rand -hex 32                     # the token, entered in the desk's settings
+printf %s '<token>' | shasum -a 256      # its hash, for the secret
+supabase secrets set DESK_CONTROL_TOKENS='{"mac-studio":"<hash>"}' --project-ref xwmrptothspulojaxrvf
+supabase functions deploy desk-command --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
+```
 
 The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
 
