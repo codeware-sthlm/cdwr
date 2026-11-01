@@ -1433,6 +1433,14 @@ table.act {
   gap: 10px;
   min-width: 0;
 }
+.pr-row .rank {
+  flex-shrink: 0;
+  font: 11px var(--font-mono);
+  color: var(--muted);
+}
+.pr-row.blocked {
+  border-color: color-mix(in srgb, var(--block) 40%, var(--line-strong));
+}
 .pr-row .prnum {
   font: 600 13px var(--font-mono);
 }
