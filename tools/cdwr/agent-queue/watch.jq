@@ -399,7 +399,8 @@ def session_prefix:
 
 # --- Implementing launch: should the scheduler start a /work-queue implement-only session? ---
 # Input: the attended pick. $guards: { session (session_state), locked (implement.lock held),
-# spent and cap (today's implement spend and the daily cap, USD), last ({ key, launches } of the
+# spent and cap (today's implement spend and the daily cap, USD; spent is null when the ledger
+# is unreadable), last ({ key, launches } of the
 # previous launch, or null) }. Output: { action: launch|notify|skip, reason, key }, plus `last`,
 # the state to store, only when the action is launch.
 def launch($guards):
@@ -417,7 +418,9 @@ def launch($guards):
       elif $guards.locked then { action: "skip", reason: "a launched session is still running" }
       # No cap is no licence to spend: fail safe
       elif ($guards.cap | type) != "number" then { action: "notify", reason: "no daily implement cap set" }
-      elif ($guards.spent // 0) >= $guards.cap
+      # run.sh passes null for a ledger it couldn't sum: fail closed, and say so
+      elif ($guards.spent | type) != "number" then { action: "notify", reason: "spend ledger unreadable" }
+      elif $guards.spent >= $guards.cap
         then { action: "notify", reason: "daily implement cap reached ($\($guards.spent) of $\($guards.cap))" }
       # A launch that ended without moving the pick is a miss; two misses on one key stop launching
       elif $done >= 2 then { action: "notify", reason: "\($done) launches changed nothing" }

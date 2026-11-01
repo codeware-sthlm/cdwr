@@ -328,6 +328,23 @@ describe('run.sh telemetry', () => {
     expect(SCRIPT).toMatch(/\( telemetry_queue_state "\$last" [^)]*\) &!/s);
   });
 
+  // A refused launch shows on the desk and in `cdwr agent status`, not only in the log
+  it('names a refused launch in the queue state', () => {
+    expect(SCRIPT).toMatch(/^launch_note=""$/m);
+    expect(SCRIPT).toContain(`launch_note="$(jq -r '.reason' <<<"$decision")"`);
+    expect(SCRIPT).toContain(
+      `last="$(date '+%F %H:%M') · $last_outcome\${launch_note:+ · no launch: $launch_note}"`
+    );
+  });
+
+  // A day that sums below zero (a settle after midnight, a correction) is no unreadable ledger
+  it('clamps a negative spend day to 0 and passes an unreadable ledger as null', () => {
+    expect(SCRIPT).toContain('if [[ "$spent" == (|-)<->(|.<->) ]]; then');
+    expect(SCRIPT).toContain('[[ "$spent" != -* ]] || spent=0');
+    expect(SCRIPT).toMatch(/no launch today"; spent=null$/m);
+    expect(SCRIPT).not.toContain('spent=1000000');
+  });
+
   it('records the outcome apart from its ticket and detail', () => {
     expect(SCRIPT).toContain(
       'outcome_name="$1" outcome_ticket="${2:-}" outcome_detail="${3:-}"'
