@@ -578,6 +578,26 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(html).toContain('<span class="pill neutral">queued</span>');
     expect(html).not.toContain('<time>');
     expect(html).toContain('Rows update in place as github_events lands');
+    expect(html.match(/<span class="rank">\d+<\/span>/g)).toEqual([
+      '<span class="rank">1</span>',
+      '<span class="rank">2</span>'
+    ]);
+  });
+
+  it('mark a review row that has to merge later', () => {
+    const state = filled();
+    const base = model(state, NOW);
+    const m = {
+      ...base,
+      prBlockers: new Map([
+        [base.prs[0].ticket, [{ ticket: 'COD-9', pr: 4 as never }]]
+      ])
+    } as typeof base;
+    const html = SHEETS.review.body(m, state, NOW);
+    expect(html).toContain('class="pr-row blocked"');
+    expect(html).toContain('<span class="chip blocked">merge later</span>');
+    expect(html).toContain('Merge order: merge');
+    expect(SHEETS.review.body(base, state, NOW)).not.toContain('merge later');
   });
 
   it('change a review row in place when a newer github event lands', () => {
@@ -659,7 +679,8 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(html).toContain('<b>1</b><span>runs today</span>');
     expect(html).toContain('<b>–</b><span>median duration</span>');
     expect(html).toContain('<b>1</b><span>failed</span>');
-    expect(html).toContain('Recent runs that did something');
+    expect(html).toContain('Recent runs that did something, last 30 days');
+    expect(html).toContain('idle runs are left out');
     expect(SHEETS.scheduler.body(m, state, NOW)).not.toContain(
       'Recent runs that did something'
     );
