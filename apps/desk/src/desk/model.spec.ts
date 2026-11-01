@@ -6,6 +6,7 @@ import type {
   HostMetricRow,
   PlanUsageRow,
   RunsPayload,
+  SessionRow,
   UsageHourRow
 } from '../supabase';
 
@@ -14,9 +15,11 @@ import {
   activityBy,
   agentState,
   byQueue,
+  cpuDay,
   hostHealth,
   ideaVerdict,
   isProblem,
+  macToday,
   mergeOrder,
   model,
   openIssues,
@@ -26,6 +29,7 @@ import {
   shipped,
   ticketsByPr,
   usageBurn,
+  versions,
   waitAges
 } from './model';
 import { type DeskState, type Detail, createState } from './state';
@@ -208,6 +212,7 @@ describe('agentState and ideaVerdict', () => {
 describe('isProblem', () => {
   it.each([
     ['idle', false],
+    ['paused', false],
     ['planned', false],
     ['planned COD-12', false],
     ['launched', false],
@@ -532,6 +537,8 @@ describe('model', () => {
       rev: 'sha-abc1234',
       install: 'current' as const,
       items: '',
+      effort: null,
+      paused: false,
       ...over
     });
     const at = (over: Partial<RunsPayload>, desk: string | null = null) =>
@@ -630,7 +637,9 @@ describe('model', () => {
           host: 'launchd',
           rev: null,
           install: 'current',
-          items: ''
+          items: '',
+          effort: null,
+          paused: false
         }
       });
       expect(m.staleHours).toBe(5);
@@ -646,7 +655,9 @@ describe('model', () => {
           host: 'launchd',
           rev: null,
           install: 'stale',
-          items: 'run.sh'
+          items: 'run.sh',
+          effort: null,
+          paused: false
         }
       });
       expect(m.installStale).toBe(true);
@@ -722,7 +733,9 @@ describe('model', () => {
                   host: null,
                   rev: null,
                   install: 'current',
-                  items: ''
+                  items: '',
+                  effort: null,
+                  paused: false
                 }
               : null
           });
@@ -754,7 +767,9 @@ describe('model', () => {
               host: 'container',
               rev: null,
               install: 'current',
-              items: ''
+              items: '',
+              effort: null,
+              paused: false
             }
           });
         }),
@@ -1445,6 +1460,272 @@ describe('planUsage', () => {
     // 7 d window: 68 h elapsed
     if (plan.seven_day && !plan.seven_day.reset)
       expect(plan.seven_day.rate).toBeCloseTo(18 / 68);
+  });
+});
+
+describe('limits, nuc and versions in the model', () => {
+  const GIB = 2 ** 30;
+  const sample = (
+    ago: number,
+    over: Partial<HostMetricRow> = {}
+  ): HostMetricRow => ({
+    id: 1,
+    host: 'nuc',
+    at: new Date(NOW.getTime() - ago * 6e4).toISOString(),
+    cores: 4,
+    load1: 1,
+    load5: 1,
+    load15: 1,
+    mem_total: 8 * GIB,
+    mem_available: 6 * GIB,
+    swap_total: 2 * GIB,
+    swap_free: 2 * GIB,
+    disk_total: 100 * GIB,
+    disk_free: 60 * GIB,
+    cgroup_mem_current: null,
+    cgroup_mem_max: null,
+    ...over
+  });
+  const run = (
+    startedAgo: number,
+    finishedAgo: number | null,
+    ticket = 'COD-1'
+  ): RunsPayload['rows'][number] => ({
+    when: '2026-10-29 11:00',
+    outcome: 'implemented',
+    ticket,
+    detail: '',
+    started: new Date(NOW.getTime() - startedAgo * 6e4).toISOString(),
+    finished:
+      finishedAgo === null
+        ? null
+        : new Date(NOW.getTime() - finishedAgo * 6e4).toISOString()
+  });
+  const job = (over: Partial<NonNullable<RunsPayload['job']>> = {}) => ({
+    line: 'every 10 min',
+    minutes: 10,
+    live: false,
+    host: 'container' as const,
+    rev: 'sha-abc1234',
+    install: 'current' as const,
+    items: '',
+    effort: null,
+    paused: false,
+    ...over
+  });
+  const at = (
+    runs: Partial<RunsPayload> | null,
+    metrics: HostMetricRow[] | null = null
+  ) =>
+    model(
+      withState((s) => {
+        s.data.runs = runs ? runsPayload(runs) : null;
+        s.data.hostMetrics = metrics;
+      }),
+      NOW
+    );
+
+  describe('limits', () => {
+    it('takes the PR limit from the queue view', () => {
+      expect(at({}).limits.prs).toEqual({ used: 2, max: 5 });
+    });
+
+    it('is the day spend against its cap, unpublished or paused or not', () => {
+      expect(at({ job: job() }).limits).toMatchObject({
+        effort: null,
+        paused: false
+      });
+      expect(
+        at({ job: job({ effort: { spent: 10, cap: 40 }, paused: true }) })
+          .limits
+      ).toMatchObject({
+        effort: { spent: 10, cap: 40, share: 0.25 },
+        paused: true
+      });
+    });
+
+    it('reads a zero cap as no share, and no job as not paused', () => {
+      expect(
+        at({ job: job({ effort: { spent: 3, cap: 0 } }) }).limits.effort?.share
+      ).toBe(0);
+      expect(at({}).limits.paused).toBe(false);
+    });
+  });
+
+  describe('nuc', () => {
+    it('is null without a sample', () => {
+      expect(at({}).nuc).toBeNull();
+      expect(at({}).cpuDay).toBeNull();
+    });
+
+    it('reads the newest sample as shares, load1 per core', () => {
+      const m = at({ rows: [run(60, 50)] }, [sample(10), sample(0)]);
+      expect(m.nuc).toMatchObject({
+        host: 'nuc',
+        verdict: 'ok',
+        memorySource: 'host',
+        busy: false
+      });
+      expect(m.nuc?.cpu).toBeCloseTo(0.25);
+      expect(m.nuc?.memory).toBeCloseTo(0.25);
+      expect(m.nuc?.disk).toBeCloseTo(0.4);
+    });
+
+    it('prefers the container memory when both cgroup figures are set', () => {
+      const m = at({}, [
+        sample(0, { cgroup_mem_current: GIB, cgroup_mem_max: 2 * GIB })
+      ]);
+      expect(m.nuc?.memorySource).toBe('container');
+      expect(m.nuc?.memory).toBeCloseTo(0.5);
+      const half = at({}, [sample(0, { cgroup_mem_current: GIB })]);
+      expect(half.nuc?.memorySource).toBe('host');
+    });
+
+    it('is busy while a run opened in the last 24 hours is open', () => {
+      expect(at({ rows: [run(30, null)] }, [sample(0)]).nuc?.busy).toBe(true);
+      expect(at({ rows: [run(25 * 60, null)] }, [sample(0)]).nuc?.busy).toBe(
+        false
+      );
+    });
+  });
+
+  describe('cpuDay', () => {
+    it('is the mean outside and inside runs, with the peak and its ticket', () => {
+      const series = [
+        sample(180, { load1: 0.4 }),
+        sample(100, { load1: 0.8 }),
+        sample(55, { load1: 3.2 }),
+        sample(40, { load1: 1.6 }),
+        sample(5, { load1: 0.4 })
+      ];
+      const d = cpuDay(series, [run(60, 30, 'COD-9')], NOW);
+      expect(d.points.map((p) => p.cpu)).toEqual([0.1, 0.2, 0.8, 0.4, 0.1]);
+      expect(d.bands).toEqual([
+        {
+          start: NOW.getTime() - 60 * 6e4,
+          end: NOW.getTime() - 30 * 6e4,
+          ticket: 'COD-9'
+        }
+      ]);
+      expect(d.idle).toBeCloseTo((0.1 + 0.2 + 0.1) / 3);
+      expect(d.inRuns).toBeCloseTo(0.6);
+      expect(d.peak).toEqual({
+        at: NOW.getTime() - 55 * 6e4,
+        cpu: 0.8,
+        ticket: 'COD-9'
+      });
+    });
+
+    it('runs an open run to now and clips to the window', () => {
+      const d = cpuDay([], [run(30 * 60, null), run(10, null, '')], NOW);
+      expect(d.from).toBe(NOW.getTime() - 864e5);
+      expect(d.bands[0]).toMatchObject({ start: d.from, end: NOW.getTime() });
+      expect(d.bands[1]).toMatchObject({ end: NOW.getTime(), ticket: null });
+      expect(d.idle).toBeNull();
+      expect(d.inRuns).toBeNull();
+      expect(d.peak).toBeNull();
+    });
+
+    it('leaves out samples and runs outside the window or unparsable', () => {
+      const bad = { ...run(10, 5), started: 'later' };
+      const d = cpuDay(
+        [sample(25 * 60), sample(1)],
+        [run(30 * 60, 26 * 60), bad],
+        NOW
+      );
+      expect(d.points).toHaveLength(1);
+      expect(d.bands).toEqual([]);
+    });
+  });
+
+  describe('macToday', () => {
+    const s = (
+      id: string,
+      host: string,
+      kind: string,
+      lastSeen: string
+    ): SessionRow => ({ id, host, kind, last_seen: lastSeen });
+
+    it('lists the Mac sessions seen since local midnight, oldest first', () => {
+      const out = macToday(
+        [
+          s('n', 'nuc', 'implement', '2026-10-29T11:00:00'),
+          s('m2', 'mac', 'attended', '2026-10-29T10:00:00'),
+          s('m1', 'mac', 'implement', '2026-10-29T08:00:00'),
+          s('old', 'mac', 'attended', '2026-10-28T23:59:00')
+        ],
+        'nuc',
+        'mac',
+        NOW
+      );
+      expect(out).toEqual([
+        {
+          id: 'm1',
+          kind: 'implement',
+          lastSeen: Date.parse('2026-10-29T08:00:00')
+        },
+        {
+          id: 'm2',
+          kind: 'attended',
+          lastSeen: Date.parse('2026-10-29T10:00:00')
+        }
+      ]);
+    });
+
+    it('finds the Mac as any host but the NUC without a hand-back host', () => {
+      const rows = [
+        s('n', 'nuc', 'implement', '2026-10-29T11:00:00'),
+        s('m', 'mac', 'attended', '2026-10-29T10:00:00')
+      ];
+      expect(macToday(rows, null, null, NOW).map((e) => e.id)).toEqual(['m']);
+      expect(macToday(rows.slice(0, 1), 'nuc', null, NOW)).toEqual([]);
+      expect(macToday(null, null, null, NOW)).toEqual([]);
+    });
+  });
+
+  describe('versions', () => {
+    const OLD = 'abc1234' + '0'.repeat(33);
+    const NEW = 'def5678' + '0'.repeat(33);
+
+    it('says behind, current or unknown for the image', () => {
+      expect(versions(job(), { image: NEW, desk: null }, null).image).toEqual({
+        state: 'behind',
+        runs: 'sha-abc1234',
+        main: 'sha-def5678'
+      });
+      expect(
+        versions(job(), { image: OLD, desk: null }, null).image.state
+      ).toBe('current');
+      expect(versions(job(), { image: null, desk: null }, null).image).toEqual({
+        state: 'unknown',
+        runs: 'sha-abc1234',
+        main: null
+      });
+      expect(
+        versions(job({ host: 'launchd' }), { image: NEW, desk: null }, null)
+          .image
+      ).toEqual({ state: 'unknown', runs: null, main: 'sha-def5678' });
+    });
+
+    it('says the same for the desk, unknown for a local build', () => {
+      const main = { image: null, desk: NEW };
+      expect(versions(null, main, OLD).desk).toEqual({
+        state: 'behind',
+        runs: 'sha-abc1234',
+        main: 'sha-def5678'
+      });
+      expect(versions(null, { image: null, desk: OLD }, OLD).desk.state).toBe(
+        'current'
+      );
+      expect(versions(null, main, null).desk.state).toBe('unknown');
+    });
+
+    it('carries the install state of the Job line', () => {
+      expect(versions(job({ install: 'stale' }), null, null).install).toBe(
+        'stale'
+      );
+      expect(versions(null, null, null).install).toBeNull();
+    });
   });
 });
 
