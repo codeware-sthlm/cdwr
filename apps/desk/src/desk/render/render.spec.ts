@@ -9,6 +9,7 @@ import type {
   UsageHourRow,
   UsagePayload
 } from '../../supabase';
+import { hhmm } from '../format';
 import { model } from '../model';
 import {
   type DeskState,
@@ -32,6 +33,12 @@ import {
 } from './charts';
 import { platform, renderStatus } from './header';
 import { renderPlatform } from './platform';
+import {
+  renderAlert,
+  renderFrozenLabel,
+  renderProblems,
+  renderUnknownSession
+} from './problems';
 import { headline, renderSession } from './session';
 import { SHEETS } from './sheets';
 import { renderTiles } from './tiles';
@@ -1417,6 +1424,196 @@ describe('platform view', () => {
     const old = filled();
     old.data.sessions = [session('mac', 'attended', 20 * 60)];
     expect(html(old)).toContain('no sessions today');
+  });
+});
+
+describe('problems', () => {
+  const at = (ago: number): number => NOW.getTime() - ago * 6e4;
+  const down = (
+    s: DeskState,
+    over: Partial<DeskState['data']['connection']> = {}
+  ) => {
+    s.data.connection = {
+      ...s.data.connection,
+      live: false,
+      retries: 2,
+      downSince: at(2.7),
+      status: 'CHANNEL_ERROR',
+      nextAt: NOW.getTime() + 16000,
+      ...over
+    };
+    return s;
+  };
+  const parse = (s: DeskState) => {
+    s.data.runs = {
+      ...runs(view()),
+      qv: view(),
+      viewInvalid: true,
+      view: { limit: 1 },
+      viewIssues: [
+        { path: 'session', missing: true },
+        { path: 'limit', missing: false }
+      ]
+    };
+    return s;
+  };
+  const stale = (s: DeskState) => {
+    const base = runs(view());
+    s.data.runs = { ...base, at: new Date(at(60)).toISOString() };
+    return s;
+  };
+  const silent = (s: DeskState) => {
+    s.data.runs = runs(view({ session: { state: 'alive', ticket: 'COD-1' } }));
+    s.data.hostMetrics = [hostSample(60), hostSample(50)];
+    return s;
+  };
+  const live = (s: DeskState) => {
+    s.data.connection = { ...s.data.connection, live: true, upSince: at(1) };
+    return s;
+  };
+  const fresh = (s: DeskState) => {
+    s.data.runs = runs(view());
+    return s;
+  };
+
+  it('draws the connection problem with its timer, status and retry', () => {
+    const m = model(down(filled()), NOW);
+    const out = renderProblems(m, NOW);
+    expect(out).toContain('PROBLEMS · 1');
+    expect(out).toContain('id="problem-connection" data-kind="connection"');
+    expect(out).toContain('Realtime channel closed');
+    expect(out).toContain('for 2 m 42 s');
+    expect(out).toContain('CHANNEL_ERROR · dropped 2× · next refresh in 16 s');
+    expect(out).toContain('Dropped 2×. Waits and PR states');
+    expect(out).toContain('data-action="reconnect"');
+    expect(out).toContain('data-action="reload"');
+    const idle = renderProblems(
+      model(down(filled(), { status: null, retries: 0, nextAt: null }), NOW),
+      NOW
+    );
+    expect(idle).toContain('>not connected</span>');
+    expect(idle).not.toContain('dropped');
+    expect(idle).not.toContain('next refresh');
+    expect(idle).toContain('Realtime channel not connected');
+    expect(idle).toContain('has not connected since ');
+    expect(idle).toContain('Not connected. Waits and PR states');
+  });
+
+  it('draws the parse problem with the raw row and a marker per issue', () => {
+    const out = renderProblems(model(parse(filled()), NOW), NOW);
+    expect(out).toContain("queue_state doesn't parse");
+    expect(out).toContain('data-kind="data"');
+    expect(out).toContain('The row fails at session, limit.');
+    expect(out).toContain(`from ${hhmm(at(5))}`);
+    expect(out).toContain('<pre class="raw');
+    const raw = /<pre class="raw wide">([\s\S]*?)<\/pre>/.exec(out)?.[1];
+    expect(raw).not.toContain('⟨');
+    expect(out).toContain('<pre class="raw-marks wide">session: <mark>');
+    expect(out).toContain('session: <mark>⟨missing⟩</mark>');
+    expect(out).toContain('limit: <mark>⟨invalid⟩</mark>');
+    expect(out).toContain('data-action="copy-row"');
+  });
+
+  it('draws the stale problem without a raw row or a button', () => {
+    const out = renderProblems(model(stale(filled()), NOW), NOW);
+    expect(out).toContain('queue_state is older than the newest run');
+    expect(out).not.toContain('class="raw');
+    expect(out).not.toContain('data-action');
+  });
+
+  it('draws the unknown problem and swaps the session card', () => {
+    const m = model(silent(filled()), NOW);
+    const out = renderProblems(m, NOW);
+    expect(out).toContain('nuc silent with a run open');
+    expect(out).toContain('no heartbeat for 50 m · limit ');
+    expect(out).toContain(
+      `COD-1 started ${hhmm(at(10))} and has no finished_at.`
+    );
+    expect(out).toContain('comes with COD-680');
+    expect(out).not.toContain('Mark run abandoned</button>');
+    const card = renderUnknownSession(m);
+    expect(card).toContain('STATE UNKNOWN');
+    expect(card).toContain('Last known: nuc');
+    expect(card).toContain('running <span class="mono">COD-1</span>');
+    expect(card).toContain('Nothing here is assumed to be running.');
+    expect(renderUnknownSession(model(fresh(filled()), NOW))).toBe('');
+  });
+
+  it('counts the problems in the alert and says when the numbers froze', () => {
+    const s = down(parse(filled()));
+    const m = model(s, NOW);
+    const out = renderAlert(m, NOW);
+    expect(out).toContain('role="alert"');
+    expect(out).toContain(
+      "2 problems — the desk can't vouch for what it shows"
+    );
+    // The parse problem began at the row's time, earlier than the drop
+    expect(out).toContain(
+      `numbers frozen at ${hhmm(at(5))} · channel dropped 2×`
+    );
+    expect(out).toContain('href="#problems" data-see-problems');
+    expect(renderFrozenLabel(m)).toBe(
+      `EVERYTHING ELSE · FROZEN AT ${hhmm(at(5))}`
+    );
+    expect(renderProblems(m, NOW)).toContain('PROBLEMS · 2');
+    const closed = renderAlert(model(down(filled(), { retries: 0 }), NOW), NOW);
+    expect(closed).toContain('1 problem —');
+    expect(closed).toContain('· not connected');
+  });
+
+  it('renders nothing once the state is healthy again', () => {
+    const s = live(fresh(filled()));
+    const m = model(s, NOW);
+    expect(m.problems).toEqual([]);
+    expect(renderAlert(m, NOW)).toBe('');
+    expect(renderProblems(m, NOW)).toBe('');
+    expect(renderFrozenLabel(m)).toBe('');
+    expect(renderUnknownSession(m)).toBe('');
+  });
+
+  it('shows OFFLINE once the channel is down, and POLLING while it connects', () => {
+    const s = down(filled());
+    const out = renderStatus(model(s, NOW), s.data.connection);
+    expect(out).toContain('conn offline');
+    expect(out).toContain('OFFLINE');
+    expect(out).toContain('down since ');
+    expect(out).toContain('class="short">since ');
+    expect(out).not.toContain('class="long">last event');
+    s.data.connection.lastIssue = {
+      issue_id: 'u',
+      identifier: 'COD-1',
+      action: 'update',
+      updated_at: new Date(at(1)).toISOString()
+    };
+    const seen = renderStatus(model(s, NOW), s.data.connection);
+    expect(seen).toContain('class="long">last event ');
+    expect(seen).not.toContain('down since');
+    // Within the grace, with nothing dropped yet
+    const grace = down(filled(), {
+      retries: 0,
+      downSince: NOW.getTime() - 2000
+    });
+    const g = renderStatus(model(grace, NOW), grace.data.connection);
+    expect(g).toContain('POLLING');
+    expect(g).not.toContain('OFFLINE');
+    const on = live(filled());
+    expect(renderStatus(model(on, NOW), on.data.connection)).toContain('LIVE');
+  });
+
+  it('links a failing health check to its problem card', () => {
+    const failing = renderPlatform(model(down(filled()), NOW), NOW);
+    expect(failing).toContain('data-problem="connection"');
+    const ok = renderPlatform(model(live(fresh(filled())), NOW), NOW);
+    expect(ok).not.toContain('data-problem="connection"');
+    const frozen = parse(filled());
+    if (frozen.data.runs)
+      frozen.data.runs = {
+        ...frozen.data.runs,
+        at: new Date(at(60 * 24 * 5)).toISOString()
+      };
+    const both = renderPlatform(model(frozen, NOW), NOW);
+    expect(both).toMatch(/queue_state parses[\s\S]*?data-problem="data-parse"/);
+    expect(both).toMatch(/Snapshot age[\s\S]*?data-problem="data-stale"/);
   });
 });
 

@@ -3,7 +3,7 @@ import type { IssueEventRow } from '../supabase';
 
 import { AGENT_AVATAR } from './constants';
 import { type Loader, createLoader } from './load';
-import { model, shipped } from './model';
+import { type Model, model, shipped } from './model';
 import { notice } from './notice';
 import { renderCapacity } from './render/capacity';
 import {
@@ -14,6 +14,12 @@ import {
 } from './render/charts';
 import { renderStatus } from './render/header';
 import { renderPlatform } from './render/platform';
+import {
+  renderAlert,
+  renderFrozenLabel,
+  renderProblems,
+  renderUnknownSession
+} from './render/problems';
 import { renderSession } from './render/session';
 import { SHEETS } from './render/sheets';
 import { renderTiles } from './render/tiles';
@@ -98,11 +104,42 @@ try {
 
 // ---------- Main view ----------
 
+// Skips a write that changes nothing, so a ticking page keeps its selection and a live region its place
+const written = new Map<string, string>();
+function setHtml(id: string, html: string): void {
+  if (written.get(id) === html) return;
+  written.set(id, html);
+  $(id).innerHTML = html;
+}
+
+let shownProblems = false;
+
+/** The parts that show the problems and the time they have lasted; redrawn every second while any are */
+function renderLive(m: Model, now: Date): void {
+  shownProblems = m.problems.length > 0;
+  const platform = state.ui.view === 'platform';
+  setHtml('status', renderStatus(m, state.data.connection));
+  const alert = renderAlert(m, now);
+  setHtml('alert', alert);
+  $('alert').hidden = !alert;
+  const problems = renderProblems(m, now);
+  setHtml('problems', problems);
+  $('problems').hidden = platform || !problems;
+  const label = renderFrozenLabel(m);
+  $('frozen-label').textContent = label;
+  $('frozen-label').hidden = platform || !label;
+  setHtml(
+    'cards',
+    (renderUnknownSession(m) || renderSession(m, now)) + renderWaiting(m, now)
+  );
+  $('capacity').classList.toggle('frozen', Boolean(label));
+  $('more').classList.toggle('frozen', Boolean(label));
+}
+
 function renderMain(): void {
   const now = new Date();
   const m = model(state, now);
-  $('status').innerHTML = renderStatus(m, state.data.connection);
-  $('cards').innerHTML = renderSession(m, now) + renderWaiting(m, now);
+  renderLive(m, now);
   $('capacity').innerHTML = renderCapacity(m);
   $('more').innerHTML = renderTiles(m, state, now);
   if (state.ui.view === 'platform')
@@ -173,9 +210,56 @@ function hideSheet(): void {
   )?.focus();
 }
 
+const reducedMotion = (): boolean =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Selects a node's text, for the copy a blocked clipboard leaves to the viewer */
+function selectText(node: Node): void {
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function copyRow(button: Element): void {
+  const raw = button.closest('.problem')?.querySelector('.raw');
+  if (!raw) return;
+  const text = raw.textContent ?? '';
+  if (!navigator.clipboard) {
+    selectText(raw);
+    return;
+  }
+  navigator.clipboard.writeText(text).catch(() => selectText(raw));
+}
+
 document.addEventListener('click', (e) => {
   if (!(e.target instanceof Element)) return;
+  if (e.target.closest('[data-see-problems]')) {
+    e.preventDefault();
+    // The alert shows on the Platform view too, where the problems are hidden
+    if (state.ui.view !== 'desk') showView('desk', false);
+    $('problems').scrollIntoView({
+      behavior: reducedMotion() ? 'auto' : 'smooth'
+    });
+    return;
+  }
   if (e.target.closest('a')) return;
+  const action = e.target.closest<HTMLElement>('[data-action]');
+  if (action) {
+    if (action.dataset.action === 'reconnect') void adapter?.reconnect();
+    else if (action.dataset.action === 'reload') location.reload();
+    else if (action.dataset.action === 'copy-row') copyRow(action);
+    return;
+  }
+  const problem = e.target.closest<HTMLElement>('[data-problem]');
+  if (problem) {
+    showView('desk', false);
+    const card = document.getElementById('problem-' + problem.dataset.problem);
+    card?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth' });
+    card?.focus({ preventScroll: true });
+    return;
+  }
   const v = e.target.closest<HTMLElement>('[data-view]');
   if (v) {
     showView(v.dataset.view === 'platform' ? 'platform' : 'desk');
@@ -295,6 +379,18 @@ function render(): void {
       : 'Waiting for settings';
   renderNotice();
 }
+
+// The timers and the connection's grace move without an event. A healthy page checks every 15th tick: a host can go silent without one.
+const QUIET_TICKS = 15;
+let ticks = 0;
+setInterval(() => {
+  if (document.hidden) return;
+  ticks += 1;
+  if (state.data.connection.live && !shownProblems && ticks % QUIET_TICKS !== 0)
+    return;
+  const now = new Date();
+  renderLive(model(state, now), now);
+}, 1000);
 
 $('refresh').onclick = () => {
   if (!loader) return;

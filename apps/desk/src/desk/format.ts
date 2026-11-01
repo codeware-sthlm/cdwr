@@ -77,6 +77,23 @@ export const seenAgo = (iso: string | null | undefined, now: Date): string =>
 export const hhmm = (t: number): string =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+export const hhmmss = (t: number): string =>
+  new Date(t).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
+/** "41 s", "2 m 41 s", "1 h 05 m" from milliseconds: a timer that counts up */
+export const elapsed = (ms: number): string => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  return m < 60
+    ? `${m} m ${s % 60} s`
+    : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} m`;
+};
+
 /** The time of a `YYYY-MM-DD HH:MM` stamp, in local time */
 export const runTime = (when: string): number =>
   Date.parse(when.replace(' ', 'T'));

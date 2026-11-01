@@ -28,6 +28,13 @@
   --review-soft: #2f1f3d;
   --block: #f08a7e;
   --block-soft: #3a1c18;
+  --alert-bg: #3a1714;
+  --alert-line: #6b2a23;
+  --alert-fg: #fbd5cf;
+  --alert-sub: #f0b3aa;
+  --problem-bg: #1f1513;
+  --problem-line: #5a2a24;
+  --unknown-line: #6b6358;
   --unknown: repeating-linear-gradient(
     135deg,
     var(--faint) 0 2px,
@@ -2377,4 +2384,317 @@ button:disabled {
   stroke-dasharray: 3 3;
   opacity: 0.6;
   vector-effect: non-scaling-stroke;
+}
+
+/* Something is wrong: the alert band, the problem cards and the state-unknown card; dark only, like the page */
+#alert {
+  margin: calc(-1 * var(--pad-block)) calc(-1 * var(--pad-inline))
+    var(--pad-block);
+}
+.alert {
+  background: var(--alert-bg);
+  border-bottom: 1px solid var(--alert-line);
+  color: var(--block);
+}
+.alert-in {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 12px var(--pad-inline);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+.alert-t {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--alert-fg);
+}
+.alert-s {
+  font-size: 12px;
+  color: var(--alert-sub);
+}
+.alert-link {
+  margin-left: auto;
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  color: var(--alert-fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+.alert .short,
+.problem .short,
+.state-unknown .short {
+  display: none;
+}
+.problems {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.problems-h,
+.frozen-label {
+  margin: 0;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--block);
+}
+.frozen-label {
+  color: var(--muted);
+}
+.problem {
+  background: var(--problem-bg);
+  border: 1px solid var(--problem-line);
+  border-radius: var(--r-card);
+  padding: 18px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  align-items: flex-start;
+}
+.p-main {
+  flex: 1 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.p-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.p-pill {
+  font: 10px var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--block);
+  border: 1px solid var(--alert-line);
+  border-radius: var(--r-pill);
+  padding: 3px 9px;
+}
+.p-pill.solid {
+  align-self: flex-start;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--fg);
+  background: var(--line-strong);
+  border: 0;
+  padding: 5px 12px;
+}
+.p-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.p-time,
+.p-mono {
+  font: 11px var(--font-mono);
+  color: var(--muted);
+}
+.p-body {
+  font-size: 13px;
+  color: #c8c3ba;
+}
+.p-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+.raw,
+.raw-marks {
+  margin: 0;
+  background: #151110;
+  border: 1px solid #3a2420;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: 12px var(--font-mono);
+  color: #c8c3ba;
+  overflow-x: auto;
+  max-height: 14em;
+}
+.raw:has(+ .raw-marks) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.raw-marks {
+  margin-top: -1px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  max-height: none;
+}
+.raw mark,
+.raw-marks mark {
+  background: none;
+  color: var(--block);
+}
+.p-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.p-btn {
+  min-height: var(--tap);
+  padding: 0 16px;
+  background: none;
+  color: var(--fg);
+  border: 1px solid var(--problem-line);
+  border-radius: 9px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.p-btn.primary {
+  background: var(--block);
+  color: #2a0d09;
+  border: 0;
+  font-weight: 600;
+}
+.state-unknown {
+  border: 1px dashed var(--unknown-line);
+  border-radius: var(--r-card);
+  padding: 20px 22px;
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--sunk) 0 10px,
+    var(--surface) 10px 20px
+  );
+}
+.su-text {
+  flex: 1 1 400px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.su-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+.su-title .mono {
+  font-family: var(--font-mono);
+}
+.su-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+.capacity.frozen,
+.more.frozen {
+  opacity: 0.45;
+}
+.pf-problem {
+  all: unset;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.pf-problem:focus-visible {
+  outline: 2px solid var(--block);
+  outline-offset: 2px;
+}
+.conn.offline b {
+  color: var(--block);
+}
+.conn.offline .at {
+  color: var(--muted);
+}
+.conn.offline .dot {
+  background: var(--block);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .conn.offline .dot {
+    animation: blink 1s ease-in-out infinite;
+  }
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (max-width: 600px) {
+  #alert {
+    margin: 0 0 var(--gap);
+  }
+  .alert {
+    border: 1px solid var(--alert-line);
+    border-radius: var(--r-card);
+  }
+  .alert-in {
+    padding: 12px 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .alert-in svg,
+  .alert-link {
+    display: none;
+  }
+  .alert .long,
+  .problem .long,
+  .state-unknown .long {
+    display: none;
+  }
+  .alert .short,
+  .problem .short,
+  .state-unknown .short {
+    display: inline;
+  }
+  .problem {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+  .p-main {
+    flex-basis: 100%;
+    gap: 6px;
+  }
+  .p-head {
+    gap: 8px;
+  }
+  .p-pill {
+    font-size: 9px;
+    padding: 2px 7px;
+    order: 1;
+  }
+  .p-time {
+    order: 2;
+    margin-left: auto;
+    font-size: 10px;
+  }
+  .p-title {
+    order: 3;
+    flex-basis: 100%;
+    font-size: 13px;
+  }
+  .p-body {
+    font-size: 12px;
+  }
+  .problem .wide,
+  .state-unknown .wide {
+    display: none;
+  }
+  .p-actions:not(:has(> :not(.wide))) {
+    display: none;
+  }
+  .state-unknown {
+    padding: 12px 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .p-pill.solid {
+    font-size: 10px;
+    padding: 3px 9px;
+  }
+  .su-text {
+    flex-basis: auto;
+  }
+  .su-title {
+    font-size: 15px;
+  }
 }
