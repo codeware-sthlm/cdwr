@@ -506,6 +506,7 @@ describe('problems', () => {
     runs: runs(ago(5), [run(ago(10), ago(8))]),
     runMinutes: 10,
     host,
+    sessions: null,
     now: NOW
   };
 
@@ -683,6 +684,25 @@ describe('problems', () => {
     expect(problems({ ...base, runs: open, host: null })).toEqual([]);
     expect(problems({ ...base, host: { ...host, ageMin: 31 } })).toEqual([]);
   });
+
+  it("ignores a silent NUC when the alive session is another host's", () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: goodView(ago(5), { state: 'alive', id: 's1' })
+    };
+    const silentHost = { ...host, ageMin: 31 };
+    const args = { ...base, runs: open, host: silentHost };
+    expect(
+      problems({ ...args, sessions: [session({ id: 's1', host: 'mac' })] })
+    ).toEqual([]);
+    expect(
+      problems({ ...args, sessions: [session({ id: 's1', host: 'nuc' })] })
+    ).toHaveLength(1);
+    // A session the rows do not know keeps the NUC's silence meaning
+    expect(
+      problems({ ...args, sessions: [session({ id: 's2', host: 'mac' })] })
+    ).toHaveLength(1);
+  });
 });
 
 describe('problems of an alive session', () => {
@@ -705,6 +725,7 @@ describe('problems of an alive session', () => {
       runs: open,
       runMinutes: 10,
       host,
+      sessions: null,
       now: NOW
     });
     expect(out[0]).toMatchObject({
@@ -726,6 +747,7 @@ describe('problems of an alive session', () => {
         runs: open,
         runMinutes: 10,
         host,
+        sessions: null,
         now: NOW
       })
     ).toEqual([]);
@@ -745,6 +767,26 @@ describe('frozenAt', () => {
     });
     expect(frozenAt([at(300), at(100), at(200)])).toBe(100);
     expect(frozenAt([])).toBeNull();
+  });
+
+  it('ignores a connection problem: a down channel lags, it does not freeze', () => {
+    const conn: Problem = {
+      kind: 'connection',
+      text: '',
+      since: 50,
+      retries: 1,
+      status: null,
+      nextAt: null
+    };
+    const data: Problem = {
+      kind: 'data',
+      reason: 'stale',
+      text: '',
+      since: 200,
+      newestRun: 300
+    };
+    expect(frozenAt([conn])).toBeNull();
+    expect(frozenAt([conn, data])).toBe(200);
   });
 });
 

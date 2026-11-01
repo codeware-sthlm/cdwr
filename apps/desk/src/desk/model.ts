@@ -1086,6 +1086,7 @@ export const model = (
             silentMin: host.silentMin
           }
         : null,
+      sessions: data.sessions,
       now
     }),
     health: health({
