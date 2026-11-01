@@ -80,13 +80,13 @@ mirror_send() {
 }
 
 # heartbeat <state before> <state after>: upserts the session, with its state and detail, into the
-# telemetry database, at most once a minute per session. A session that is or was `ended` beats
-# at once. The stamp is written first and the call runs detached, so a tool call never waits on
+# telemetry database, at most once a minute per session. A change of state beats at once, so the
+# desk never keeps `working` for a session that stopped within the minute. The stamp is written first and the call runs detached, so a tool call never waits on
 # the network; SessionEnd waits for it, since a detached child may not outlive the exiting claude.
 # kind is `implement` for a launched session (implement.sh exports it), `attended` otherwise.
 heartbeat() {
   local stamp="$file.beat" last now_s sstate sdetail
-  if [[ "$1" != ended && "$2" != ended && -f "$stamp" ]]; then
+  if [[ "$1" == "$2" && -f "$stamp" ]]; then
     now_s="$(date +%s)"; last="$(zstat +mtime "$stamp" 2>/dev/null)"
     [[ "$last" == <-> ]] && (( now_s - last < 60 )) && return 0
   fi

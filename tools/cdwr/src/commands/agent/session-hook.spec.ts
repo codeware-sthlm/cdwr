@@ -556,6 +556,15 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
     expect(JSON.parse(hits[1]?.body ?? '')).toMatchObject({ state: 'working' });
   });
 
+  it('beats a change of state inside the minute, so a stopped turn never reads as working', async () => {
+    await hook(REGISTER, configured());
+    await settle();
+    await hook({ session_id: 'abc', hook_event_name: 'Stop' }, configured());
+    await settle();
+    expect(hits).toHaveLength(2);
+    expect(JSON.parse(hits[1]?.body ?? '')).toMatchObject({ state: 'stopped' });
+  });
+
   it('sends the state with an ordinary beat, and not again inside the minute', async () => {
     await hook(REGISTER, configured());
     await hook(tool, configured());
