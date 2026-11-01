@@ -337,18 +337,24 @@ export type Database = {
           host: string;
           kind: string;
           last_seen: string;
+          state: string | null;
+          detail: string | null;
         };
         Insert: {
           id: string;
           host: string;
           kind: string;
           last_seen: string;
+          state?: string | null;
+          detail?: string | null;
         };
         Update: {
           id?: string;
           host?: string;
           kind?: string;
           last_seen?: string;
+          state?: string | null;
+          detail?: string | null;
         };
         Relationships: [];
       };

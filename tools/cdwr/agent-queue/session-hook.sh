@@ -79,15 +79,18 @@ mirror_send() {
   return 0
 }
 
-# heartbeat: upserts the session into the telemetry database, at most once a minute per session.
-# The stamp is written first and the call runs detached, so a tool call never waits on the network.
+# heartbeat <state before> <state after>: upserts the session, with its state and detail, into the
+# telemetry database, at most once a minute per session. A session that is or was `ended` beats
+# at once. The stamp is written first and the call runs detached, so a tool call never waits on
+# the network; SessionEnd waits for it, since a detached child may not outlive the exiting claude.
 # kind is `implement` for a launched session (implement.sh exports it), `attended` otherwise.
 heartbeat() {
-  local stamp="$file.beat" last now_s
-  if [[ -f "$stamp" ]]; then
+  local stamp="$file.beat" last now_s sstate sdetail
+  if [[ "$1" != ended && "$2" != ended && -f "$stamp" ]]; then
     now_s="$(date +%s)"; last="$(zstat +mtime "$stamp" 2>/dev/null)"
     [[ "$last" == <-> ]] && (( now_s - last < 60 )) && return 0
   fi
+  IFS=$'\x1f' read -r sstate sdetail <<<"$(jq -r '[.state, .detail] | map(. // "") | join("\u001f")' "$file" 2>/dev/null)"
   source "$HOOK_DIR/telemetry.sh" 2>/dev/null || return 0
   # The file a launched session was told, else this checkout's, else the main checkout's,
   # which is where a linked worktree finds the credentials
@@ -100,7 +103,11 @@ heartbeat() {
   done
   telemetry_on || return 0
   : > "$stamp"
-  ( telemetry_session "$id" "${AGENT_QUEUE_SESSION_KIND:-attended}" ) &!
+  if [[ "$event" == SessionEnd ]]; then
+    telemetry_session "$id" "${AGENT_QUEUE_SESSION_KIND:-attended}" "$sstate" "$sdetail"
+  else
+    ( telemetry_session "$id" "${AGENT_QUEUE_SESSION_KIND:-attended}" "$sstate" "$sdetail" ) &!
+  fi
   return 0
 }
 
@@ -130,13 +137,15 @@ main() {
     if [[ $'\n'"$out"$'\n' == *$'\n'"registered work-queue session"$'\n'* ||
           "$cmd" == (([^[:space:]\;\&\|\`\$\(\)\<\>]##/|))tools/cdwr/agent-queue/session.sh\ register ]]; then
       mkdir -p "$DIR" || return 0
+      # A session resumed after it ended beats at once
+      state="$(jq -r '.state // empty' "$file" 2>/dev/null)"
       jq -n --arg id "$id" --argjson pid "$(claude_pid)" --arg now "$(now)" \
         --arg cwd "$(jq -r '.cwd // empty' <<<"$payload")" --arg host "$(host_id)" \
         '{id: $id, pid: $pid, startedAt: $now, lastSeen: $now, state: "working", ticket: null,
           detail: null, cwd: $cwd, host: $host}' > "$file.tmp.$$" &&
         mv "$file.tmp.$$" "$file" || rm -f "$file.tmp.$$"
       mirror force
-      heartbeat
+      heartbeat "$state" working
       return 0
     fi
     # `session.sh ticket COD-n` (or `-` to clear) names the ticket in hand, read the same way;
@@ -183,7 +192,7 @@ main() {
   if [[ "$event" == (Stop|SessionEnd) || "$after" != "$before" || -n "$ticket" ]]; then mirror force
   else mirror
   fi
-  heartbeat
+  heartbeat "$before" "$after"
   return 0
 }
 

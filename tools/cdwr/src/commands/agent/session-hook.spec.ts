@@ -524,6 +524,46 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
     });
   });
 
+  it('beats a SessionEnd inside the minute, with the state and reason', async () => {
+    await hook(REGISTER, configured());
+    await settle();
+    await hook(
+      { session_id: 'abc', hook_event_name: 'SessionEnd', reason: 'other' },
+      configured()
+    );
+    // No settle: SessionEnd waits for the POST
+    expect(hits).toHaveLength(2);
+    expect(JSON.parse(hits[1]?.body ?? '')).toMatchObject({
+      state: 'ended',
+      detail: 'other'
+    });
+  });
+
+  it('beats a resumed session at once, inside the minute', async () => {
+    await hook(REGISTER, configured());
+    await settle();
+    const file = join(dir, 'abc.json');
+    writeFileSync(
+      file,
+      JSON.stringify({
+        ...JSON.parse(readFileSync(file, 'utf8')),
+        state: 'ended'
+      })
+    );
+    await hook(tool, configured());
+    await settle();
+    expect(hits).toHaveLength(2);
+    expect(JSON.parse(hits[1]?.body ?? '')).toMatchObject({ state: 'working' });
+  });
+
+  it('sends the state with an ordinary beat, and not again inside the minute', async () => {
+    await hook(REGISTER, configured());
+    await hook(tool, configured());
+    await settle();
+    expect(hits).toHaveLength(1);
+    expect(JSON.parse(hits[0]?.body ?? '')).toMatchObject({ state: 'working' });
+  });
+
   describe('where the key comes from', () => {
     let root: string;
     const envText = () =>

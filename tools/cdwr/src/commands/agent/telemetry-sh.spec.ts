@@ -268,6 +268,21 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
         kind: 'attended'
       });
     });
+
+    it('sends the state and detail', async () => {
+      await zsh(configured(), `telemetry_session abc attended ended other`);
+      expect(JSON.parse(hits[0]?.body ?? '')).toMatchObject({
+        state: 'ended',
+        detail: 'other'
+      });
+    });
+
+    it('sends null state and detail when omitted', async () => {
+      await zsh(configured(), `telemetry_session abc attended`);
+      const body = JSON.parse(hits[0]?.body ?? '');
+      expect(body.state).toBeNull();
+      expect(body.detail).toBeNull();
+    });
   });
 
   describe('telemetry_host_metrics', () => {
