@@ -55,10 +55,15 @@ export const isSheetId = (value: unknown): value is SheetId =>
 export const OLD_SHEET_IDS: ReadonlyMap<string, SheetId> = new Map([
   ['after', 'review'],
   ['spend', 'effort'],
-  ['ticketcost', 'effort'],
-  // Until the Platform view takes #nuc links (COD-678 step 4)
-  ['nuc', 'scheduler']
+  ['ticketcost', 'effort']
 ]);
+
+/** The full-page views; the desk is the default and has no hash */
+export type View = 'desk' | 'platform';
+
+/** The view a URL hash names: `platform`, or `nuc` from older links; null for anything else */
+export const viewOf = (value: unknown): 'platform' | null =>
+  value === 'platform' || value === 'nuc' ? 'platform' : null;
 
 /** A current sheet id, or the sheet an old id moved to; null for anything else */
 export const sheetIdOf = (value: unknown): SheetId | null =>
@@ -110,6 +115,8 @@ export type DeskUi = {
   /** The Activity sheet's ticket filter, `all` or a ticket id */
   actFilter: string;
   openSheet: SheetId | null;
+  /** The full-page view shown in place of the desk */
+  view: View;
 };
 
 export type DeskState = {
@@ -149,5 +156,5 @@ export const createState = (): DeskState => ({
   liveHandoffs: new Map(),
   ideaReasons: new Map(),
   errors: new Map(),
-  ui: { filter: 'all', actFilter: 'all', openSheet: null }
+  ui: { filter: 'all', actFilter: 'all', openSheet: null, view: 'desk' }
 });

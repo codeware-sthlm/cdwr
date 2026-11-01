@@ -1434,6 +1434,265 @@ table.act {
   }
 }
 
+/* The Platform view: a full-page board in place of the desk's cards */
+.platform-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-card);
+}
+.pf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.pf-back {
+  min-height: var(--tap);
+  padding-inline: 14px;
+}
+.pf-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: auto;
+  min-width: 0;
+}
+.pf-title h1 {
+  margin: 0;
+  font: 600 22px/1.2 var(--font-ui);
+}
+.pf-title h1:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.pf-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pf-stat {
+  font: 500 12px var(--font-mono);
+  color: var(--muted);
+}
+.pf-stat.ok {
+  color: var(--ok);
+}
+.pf-stat.bad {
+  color: var(--block);
+}
+.pf-stat.wait {
+  color: var(--wait);
+}
+.pf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(580px, 100%), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.card-top.pf-card {
+  cursor: default;
+  gap: 14px;
+}
+.pf-card h2 {
+  margin: 0;
+}
+.pf-rows {
+  display: flex;
+  flex-direction: column;
+}
+.pf-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 12px;
+  border-top: 1px solid var(--line);
+}
+.pf-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.pf-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+.pf-line {
+  font-size: 12px;
+  color: var(--muted);
+}
+.pf-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.pf-mini {
+  min-height: var(--tap);
+  padding: 0 12px;
+  font-size: 12px;
+}
+.pf-val {
+  flex: none;
+  font: 600 13px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.pf-val.wait {
+  color: var(--wait);
+}
+.pf-foot {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pf-ver {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.pf-mono {
+  font: 12px var(--font-mono);
+  color: var(--muted);
+  background: none;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+.pf-chip {
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+.pf-chip.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.pf-chip.wait {
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+.pf-chip.bad {
+  background: var(--block-soft);
+  color: var(--block);
+}
+.pf-chip.muted {
+  background: var(--sunk);
+  color: var(--muted);
+}
+.pf-chip.work {
+  background: var(--work-soft);
+  color: var(--attended);
+}
+.pf-chip.work.on {
+  background: var(--attended);
+  color: var(--bg);
+}
+.pf-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-row);
+  background: var(--sunk);
+}
+.pf-box.mac {
+  border-color: var(--work-soft);
+  background: var(--work-soft);
+}
+.pf-strip {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.pf-strip > span {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--faint);
+}
+.pf-strip > span > i {
+  display: block;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+}
+.pf-strip b {
+  font-size: 12px;
+}
+.pf-strip small {
+  font-size: 11px;
+  color: var(--faint);
+}
+.pf-strip > span.on {
+  color: var(--attended);
+}
+.pf-strip > span.on > i {
+  background: var(--attended);
+}
+.pf-rule {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.pf-sub {
+  margin: 0 0 6px;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pf-times {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pf-t {
+  font: 500 12px var(--font-mono);
+  color: var(--fg);
+}
+.pf-health {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px 12px;
+  font-size: 13px;
+}
+.pf-health > .cap-dot {
+  margin-top: 6px;
+}
+.pf-hname {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pf-why {
+  font-size: 11px;
+  color: var(--block);
+}
+.pf-health > .pf-mono {
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .pf-strip {
+    flex-wrap: wrap;
+  }
+  .pf-strip > span {
+    flex-basis: calc(50% - 4px);
+  }
+}
+
 /* The tile grid for everything else */
 .more {
   display: flex;

@@ -56,7 +56,7 @@ export const renderStatus = (m: Model, connection: Connection): string => {
   ]
     .filter(Boolean)
     .join('. ');
-  const pill = `<button type="button" class="platform" data-w="scheduler" aria-haspopup="dialog"${title ? ` title="${esc(title)}"` : ''} aria-label="Platform: ${esc(loading ? 'loading' : p.failing.length ? p.failing.length + ' failing' : 'checks ok')}${p.updates ? ', ' + esc(plural(p.updates, 'update', 'updates')) : ''}">${SLIDERS}<span class="name">Platform</span>${checks}${updates}${flag ? `<i class="flag ${flag}" aria-hidden="true"></i>` : ''}</button>`;
+  const pill = `<button type="button" class="platform" data-view="platform"${title ? ` title="${esc(title)}"` : ''} aria-label="Platform: ${esc(loading ? 'loading' : p.failing.length ? p.failing.length + ' failing' : 'checks ok')}${p.updates ? ', ' + esc(plural(p.updates, 'update', 'updates')) : ''}">${SLIDERS}<span class="name">Platform</span>${checks}${updates}${flag ? `<i class="flag ${flag}" aria-hidden="true"></i>` : ''}</button>`;
   const at = m.pulse?.at ?? connection.upSince;
   const live = connection.live
     ? `<span class="live on" title="Linear and the queue push changes as they happen. Focus and Refresh still reload everything."><i class="dot" aria-hidden="true"></i><b>LIVE</b>${at ? `<span class="at"><span class="long">realtime · ${esc(time(at, true))}</span><span class="short">${esc(time(at, false))}</span></span>` : ''}</span>`
