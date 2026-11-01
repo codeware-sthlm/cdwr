@@ -15,7 +15,8 @@ import {
   SHEET_IDS,
   createState,
   isSheetId,
-  sheetIdOf
+  sheetIdOf,
+  viewOf
 } from '../state';
 import type { QueueView, SessionState } from '../types';
 
@@ -30,6 +31,7 @@ import {
   spendChart
 } from './charts';
 import { platform, renderStatus } from './header';
+import { renderPlatform } from './platform';
 import { headline, renderSession } from './session';
 import { SHEETS } from './sheets';
 import { renderTiles } from './tiles';
@@ -261,11 +263,19 @@ describe('sheets', () => {
     expect(sheetIdOf('after')).toBe('review');
     expect(sheetIdOf('spend')).toBe('effort');
     expect(sheetIdOf('ticketcost')).toBe('effort');
-    expect(sheetIdOf('nuc')).toBe('scheduler');
+    expect(sheetIdOf('nuc')).toBeNull();
     expect(sheetIdOf('nope')).toBeNull();
     expect(sheetIdOf('')).toBeNull();
     expect(sheetIdOf(null)).toBeNull();
     expect(sheetIdOf(7)).toBeNull();
+  });
+
+  it('name the Platform view from its hash, and from the old nuc link', () => {
+    expect(viewOf('platform')).toBe('platform');
+    expect(viewOf('nuc')).toBe('platform');
+    expect(viewOf('scheduler')).toBeNull();
+    expect(viewOf('')).toBeNull();
+    expect(viewOf(null)).toBeNull();
   });
 
   it.each(SHEET_IDS)('render %s from filled and from empty state', (id) => {
@@ -401,9 +411,10 @@ describe('header', () => {
     lastIssue: null
   });
 
-  it('opens the scheduler sheet from the Platform pill', () => {
+  it('opens the Platform view from the Platform pill', () => {
     const html = renderStatus(model(filled(), NOW), connection(true));
-    expect(html).toContain('class="platform" data-w="scheduler"');
+    expect(html).toContain('class="platform" data-view="platform"');
+    expect(html).not.toContain('aria-haspopup');
     expect(html).toContain('LIVE');
     expect(html).toContain('realtime ·');
   });
@@ -1218,6 +1229,188 @@ describe('cpu chart', () => {
   it('draw nothing under two samples', () => {
     expect(cpuChart({ ...day, points: [] })).toBe('');
     expect(cpuChart({ ...day, points: [day.points[0]] })).toBe('');
+  });
+});
+
+describe('platform view', () => {
+  const OLD = 'abc1234' + '0'.repeat(33);
+  const NEW = 'def5678' + '0'.repeat(33);
+  const jobWith = (
+    over: Partial<NonNullable<RunsPayload['job']>>,
+    main: RunsPayload['main'] = { image: null, desk: null }
+  ): DeskState => {
+    const s = filled();
+    const base = runs(view());
+    s.data.runs = { ...base, main, job: base.job && { ...base.job, ...over } };
+    return s;
+  };
+  const html = (s: DeskState, desk: string | null = null): string =>
+    renderPlatform(model(s, NOW, desk), NOW);
+  const session = (host: string, kind: string, ago: number) =>
+    ({
+      id: `${host}-${kind}`,
+      host,
+      kind,
+      last_seen: new Date(NOW.getTime() - ago * 6e4).toISOString()
+    }) as never;
+
+  it('draw the four sections with a back link and the head counts', () => {
+    const out = html(filled());
+    for (const label of [
+      'CONTROLS',
+      'HOSTS &amp; HEARTBEAT',
+      'VERSIONS &amp; UPDATES',
+      'HEALTH CHECKS'
+    ])
+      expect(out).toContain(`>${label}</h2>`);
+    expect(out).toContain('data-view="desk"');
+    expect(out).toContain('<h1 id="platform-title"');
+    expect(out).toContain('the controls come with COD-680');
+    expect(out).toContain('Steering from the desk is COD-680');
+    // Realtime is not connected in the fixture
+    expect(out).toMatch(/pf-stat bad">\d+ failing/);
+  });
+
+  it('say whether the queue runs or is paused, and the limits it sets', () => {
+    const out = html(filled());
+    expect(out).toContain('<b class="pf-val ">Running</b>');
+    expect(out).toContain(
+      '2 open now · set per session with /work-queue limit=N'
+    );
+    expect(out).toContain('last run ');
+    expect(html(jobWith({ paused: true }))).toContain(
+      '<b class="pf-val wait">Paused</b>'
+    );
+    expect(html(jobWith({ live: true }))).toContain('on events');
+  });
+
+  it('show the effort cap, and a dash when it is not published', () => {
+    expect(html(filled())).toContain('<b class="pf-val ">–</b>');
+    const out = html(jobWith({ effort: { spent: 32, cap: 40 } }));
+    expect(out).toContain('<b class="pf-val ">$40</b>');
+    expect(out).toContain('80% used today');
+  });
+
+  it('chip the image, the desk and the scripts against main', () => {
+    const behind = html(
+      jobWith(
+        { host: 'container', rev: 'sha-abc1234' },
+        { image: NEW, desk: NEW }
+      ),
+      OLD
+    );
+    expect(behind).toContain('update available');
+    expect(behind).toContain('sha-abc1234 → sha-def5678');
+    expect(behind).toContain('out of date');
+    expect(behind).toContain('reload the desk to update');
+    const current = html(
+      jobWith(
+        { host: 'container', rev: 'sha-abc1234' },
+        { image: OLD, desk: OLD }
+      ),
+      OLD
+    );
+    expect(current).toContain('up to date');
+    expect(current).not.toContain('update available');
+    expect(current).not.toContain('reload the desk');
+    expect(current).toContain('matches main');
+    const unknown = html(filled());
+    expect(unknown).toContain('pf-chip muted">unknown');
+  });
+
+  it('say the scripts are out of date with their items, or unknown', () => {
+    const stale = html(
+      jobWith({ install: 'stale', items: 'watch.jq, waits.sh' })
+    );
+    expect(stale).toContain('out of date (watch.jq, waits.sh)');
+    expect(html(jobWith({ install: 'unknown' }))).toContain(
+      'Scheduler scripts'
+    );
+    expect(html(jobWith({ install: 'unknown' }))).not.toContain('matches main');
+  });
+
+  it('list a check per row, with the problem text of a failing one', () => {
+    const s = filled();
+    s.data.hostMetrics = [hostSample(0)];
+    const out = html(s);
+    expect(out).toContain('Realtime');
+    expect(out).toContain('queue_state parses');
+    expect(out).toContain('nuc heartbeat');
+    expect(out).toContain('github_events last event');
+    expect(out).toContain('Linear poll');
+    expect(out).toContain('Realtime is not connected; polling every 5 min');
+    expect(out).toContain('cap-dot bad');
+    expect(out).toContain('never');
+    // A check without a matching problem just says it fails
+    expect(out).toContain('<small class="pf-why">failing</small>');
+  });
+
+  it('show the Mac panel only with a Mac host', () => {
+    const none = html(filled());
+    expect(none).not.toContain('pf-box mac');
+    expect(none).not.toContain('pf-strip');
+    expect(none).not.toContain('mac today');
+    const s = filled({
+      state: 'alive',
+      detail: 'working',
+      ticket: 'COD-1',
+      lastSeen: '2026-10-29T11:59:00'
+    });
+    s.data.sessions = [
+      session('mac', 'attended', 1),
+      session('nuc', 'implement', 3)
+    ];
+    const out = html(s);
+    expect(out).toContain('pf-box mac');
+    expect(out).toContain('<b class="cap-name">mac</b>');
+    expect(out).toContain('pf-chip work on">ATTENDED');
+    expect(out).toContain(
+      'you are on COD-1 · the queue schedules nothing here'
+    );
+    expect(out).toContain('heartbeat within 5 min');
+    expect(out).toContain('no heartbeat for 5–30 min');
+    expect(out).toContain('<span class="on"><i></i><b>attended</b>');
+    const back = filled();
+    back.data.sessions = [session('mac', 'attended', 10)];
+    const handing = html(back);
+    expect(handing).not.toContain('ATTENDED');
+    expect(handing).toContain('pf-chip muted">HANDING BACK');
+    expect(handing).toContain('seen 10 m ago');
+  });
+
+  it('give the NUC a verdict chip and its heartbeat line', () => {
+    expect(html(filled())).toContain('pf-chip ok">BUSY');
+    expect(html(filled())).toContain(
+      'heartbeat 0 s ago · every 10 min · CPU 25%'
+    );
+    const idle = jobWith({});
+    idle.data.runs = runs(view());
+    idle.data.runs.rows = [];
+    expect(html(idle)).toContain('pf-chip ok">IDLE');
+    const stale = filled();
+    stale.data.hostMetrics = [hostSample(30)];
+    expect(html(stale)).toContain('pf-chip muted">STALE');
+    const bad = filled();
+    bad.data.hostMetrics = [hostSample(0, { mem_available: 0.2 * 2 ** 30 })];
+    expect(html(bad)).toContain('pf-chip bad">BAD');
+    const empty = filled();
+    empty.data.hostMetrics = [];
+    expect(html(empty)).toContain('no samples yet');
+  });
+
+  it("list the Mac's sessions of today, and say when there are none", () => {
+    const s = filled();
+    s.data.sessions = [
+      session('mac', 'attended', 1),
+      session('nuc', 'implement', 3)
+    ];
+    const out = html(s);
+    expect(out).toContain('mac today');
+    expect(out).toContain('attended session · last seen');
+    expect(out).toContain('<span class="pf-t">now</span>');
+    const old = filled();
+    old.data.sessions = [session('mac', 'attended', 20 * 60)];
+    expect(html(old)).toContain('no sessions today');
   });
 });
 

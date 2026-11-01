@@ -12,7 +12,7 @@ import { cpuChart } from './charts';
 
 // The Capacity row between the cards and the tiles: limits and hosts on the desktop, one card on a phone
 
-type Tone = 'neutral' | 'ok' | 'wait' | 'bad';
+export type Tone = 'neutral' | 'ok' | 'wait' | 'bad';
 
 /** The agent PR limit with room for one more is already amber */
 const prsTone = (used: number, max: number): Tone =>
@@ -21,7 +21,7 @@ const prsTone = (used: number, max: number): Tone =>
 const effortTone = (share: number): Tone =>
   share >= 1 ? 'bad' : share >= 0.8 ? 'wait' : 'ok';
 
-const percent = (share: number): string => `${Math.round(share * 100)}%`;
+export const percent = (share: number): string => `${Math.round(share * 100)}%`;
 
 /** The bar's fill, capped at the track */
 const fill = (share: number): number => Math.max(0, Math.min(1, share)) * 100;
@@ -126,7 +126,7 @@ const nucHostBlock = (m: Model): string => {
     </div>`;
 };
 
-const STEPS: readonly HandBackState[] = [
+export const STEPS: readonly HandBackState[] = [
   'attended',
   'handing back',
   'heartbeat ok',

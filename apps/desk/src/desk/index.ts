@@ -13,12 +13,20 @@ import {
   spendChart
 } from './render/charts';
 import { renderStatus } from './render/header';
+import { renderPlatform } from './render/platform';
 import { renderSession } from './render/session';
 import { SHEETS } from './render/sheets';
 import { renderTiles } from './render/tiles';
 import { renderWaiting } from './render/waiting';
 import { spendDays } from './spend';
-import { bucketsLoaded, createState, isFilter, sheetIdOf } from './state';
+import {
+  type View,
+  bucketsLoaded,
+  createState,
+  isFilter,
+  sheetIdOf,
+  viewOf
+} from './state';
 
 const state = createState(); // everything the page shows and the viewer chose; survives a settings re-start
 let adapter: Adapter | null = null; // set by start()
@@ -96,6 +104,40 @@ function renderMain(): void {
   $('cards').innerHTML = renderSession(m, now) + renderWaiting(m, now);
   $('capacity').innerHTML = renderCapacity(m);
   $('more').innerHTML = renderTiles(m, state, now);
+  if (state.ui.view === 'platform')
+    $('platform').innerHTML = renderPlatform(m, now);
+}
+
+// ---------- View ----------
+
+/** The URL hash that names what is open: a sheet, else the view, else nothing */
+function setHash(): void {
+  const hash =
+    state.ui.openSheet ?? (state.ui.view === 'desk' ? '' : state.ui.view);
+  try {
+    history.replaceState(
+      null,
+      '',
+      hash ? '#' + hash : location.pathname + location.search
+    );
+  } catch {
+    // Some webviews refuse to change the URL
+  }
+}
+
+/** Shows the desk or a full-page view in its place */
+function showView(view: View, focus = true): void {
+  state.ui.view = view;
+  const platform = view === 'platform';
+  $('cards').hidden = platform;
+  $('capacity').hidden = platform;
+  $('more').hidden = platform;
+  $('platform').hidden = !platform;
+  renderMain();
+  setHash();
+  if (!focus) return;
+  if (platform) $('platform-title').focus();
+  else document.querySelector<HTMLElement>('.platform')?.focus();
 }
 
 // ---------- Sheet ----------
@@ -114,11 +156,7 @@ function showSheet(value: string, focus = true): void {
   $('sheet-body')
     .querySelectorAll<HTMLElement>('[data-chart]')
     .forEach((el) => drawChart(el));
-  try {
-    history.replaceState(null, '', '#' + id);
-  } catch {
-    // Some webviews refuse to change the URL
-  }
+  setHash();
   if (focus) $('sheet-close').focus();
 }
 function hideSheet(): void {
@@ -126,11 +164,7 @@ function hideSheet(): void {
   state.ui.openSheet = null;
   $('sheet').hidden = true;
   $('scrim').hidden = true;
-  try {
-    history.replaceState(null, '', location.pathname + location.search);
-  } catch {
-    // Some webviews refuse to change the URL
-  }
+  setHash();
   const el = document.querySelector<HTMLElement>(`[data-w="${was}"]`);
   (el?.matches('button')
     ? el
@@ -141,6 +175,11 @@ function hideSheet(): void {
 document.addEventListener('click', (e) => {
   if (!(e.target instanceof Element)) return;
   if (e.target.closest('a')) return;
+  const v = e.target.closest<HTMLElement>('[data-view]');
+  if (v) {
+    showView(v.dataset.view === 'platform' ? 'platform' : 'desk');
+    return;
+  }
   const t = e.target.closest<HTMLElement>('[data-w]');
   if (t?.dataset.w) {
     showSheet(t.dataset.w);
@@ -220,7 +259,9 @@ const DRAG_TAP_PX = 4; // a pointer that moved further than this was dragging, n
   }
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && state.ui.openSheet) hideSheet();
+  if (e.key !== 'Escape') return;
+  if (state.ui.openSheet) hideSheet();
+  else if (state.ui.view === 'platform') showView('desk');
 });
 
 // ---------- Render and load ----------
@@ -273,8 +314,11 @@ document
   });
 render();
 const startHash = (location.hash || '').slice(1);
-const startSheet = sheetIdOf(startHash);
-if (startSheet) showSheet(startSheet, false);
+if (viewOf(startHash)) showView('platform', false);
+else {
+  const startSheet = sheetIdOf(startHash);
+  if (startSheet) showSheet(startSheet, false);
+}
 
 /** Records the Realtime channel's health for the model's problems and health checks */
 export function setConnection(
