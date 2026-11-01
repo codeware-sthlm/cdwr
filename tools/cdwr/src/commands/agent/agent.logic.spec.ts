@@ -936,6 +936,20 @@ describe('implement spend', () => {
     expect(spendForDay(ledger, '2026-10-11')).toBeCloseTo(1.5);
   });
 
+  // COD-681's session reserved before midnight and settled after it
+  it('reads a settle that crossed midnight as 0 on its own day', () => {
+    const ledger = [row('2026-10-31', 15), row('2026-11-01', -9.1666)].join(
+      '\n'
+    );
+    expect(spendForDay(ledger, '2026-10-31')).toBe(15);
+    expect(spendForDay(ledger, '2026-11-01')).toBe(0);
+  });
+
+  it('reads a day that sums below zero as 0, not unreadable', () => {
+    const ledger = [row('2026-10-11', 2), row('2026-10-11', -5)].join('\n');
+    expect(spendForDay(ledger, '2026-10-11')).toBe(0);
+  });
+
   it('is zero for a missing or empty ledger', () => {
     expect(spendForDay(undefined, '2026-10-11')).toBe(0);
     expect(spendForDay('', '2026-10-11')).toBe(0);
