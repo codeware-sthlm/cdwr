@@ -1,5 +1,9 @@
 'use client';
 
+import type {
+  TranslationsKeys,
+  TranslationsObject
+} from '@codeware/app-cms/util/i18n';
 import {
   Alert,
   AlertDescription,
@@ -21,6 +25,7 @@ import {
 } from '@codeware/shared/ui/theme-studio';
 import type { ThemeRecipe, ThemeTokens } from '@codeware/shared/util/color';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { useTranslation } from '@payloadcms/ui';
 import { PaletteIcon, TriangleAlertIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -60,6 +65,7 @@ export function ThemeLibrary({
   /** The licensed faces this deployment may embed */
   grantedFonts?: string;
 }) {
+  const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const [open, setOpen] = useState<BuiltInTheme | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +80,8 @@ export function ThemeLibrary({
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `${source.label} fork`,
+          // Stored on the row, so it is named in the language of whoever forked
+          name: t('themeLibrary:forkName', { label: source.label }),
           recipe: result.recipe,
           overrides: result.overrides,
           tokensLight: result.tokensLight,
@@ -87,14 +94,17 @@ export function ThemeLibrary({
         // its message says which — worth showing rather than a status code
         const body = await response.json().catch(() => null);
         throw new Error(
-          body?.errors?.[0]?.message ?? `Could not save (${response.status})`
+          body?.errors?.[0]?.message ??
+            t('themeLibrary:couldNotSaveStatus', { status: response.status })
         );
       }
 
       const { doc } = await response.json();
       window.location.href = `/admin/collections/custom-themes/${doc.id}`;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save');
+      setError(
+        cause instanceof Error ? cause.message : t('themeLibrary:couldNotSave')
+      );
       setSaving(false);
     }
   };
@@ -113,7 +123,7 @@ export function ThemeLibrary({
         >
           <Link href="/admin">
             <ArrowLeftIcon className="size-4" />
-            Home
+            {t('nav:home')}
           </Link>
         </Button>
 
@@ -121,20 +131,22 @@ export function ThemeLibrary({
             switcher shows a visitor — one drawing for one idea */}
         <h1 className="flex items-center gap-2 text-xl font-semibold">
           <PaletteIcon className="size-5" />
-          Theme library
+          {t('themeLibrary:title')}
         </h1>
+        {/* The bold word is the one on the studio's confirm button */}
         <p className="text-muted-foreground mt-1 text-sm">
-          The themes built into the platform. Open one to see the decisions
-          behind it, then <strong className="font-medium">Fork</strong> it from
-          inside the studio to get an editable copy of your own. The built-in
-          stays as it is.
+          {t('themeLibrary:introBefore')}{' '}
+          <strong className="font-medium">
+            {t('themeLibrary:forkAction')}
+          </strong>{' '}
+          {t('themeLibrary:introAfter')}
         </p>
       </header>
 
       {error && (
         <Alert variant="destructive" className="mb-6">
           <TriangleAlertIcon className="size-4" />
-          <AlertTitle>The fork was not saved</AlertTitle>
+          <AlertTitle>{t('themeLibrary:forkFailed')}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -147,15 +159,22 @@ export function ThemeLibrary({
                 {theme.label}
                 <span
                   role="img"
-                  aria-label={`Primary colour ${theme.primary}`}
-                  title={`Primary colour — ${theme.primary}`}
+                  aria-label={t('themeLibrary:primaryColour', {
+                    colour: theme.primary
+                  })}
+                  title={t('themeLibrary:primaryColourTitle', {
+                    colour: theme.primary
+                  })}
                   className="border-border size-5 shrink-0 rounded-full border"
                   style={{ background: theme.primary }}
                 />
               </CardTitle>
               <CardDescription>
-                {theme.recipe.brandFamily} on {theme.recipe.baseFamily},{' '}
-                {theme.recipe.surface}
+                {t('themeLibrary:cardDescription', {
+                  brand: theme.recipe.brandFamily,
+                  base: theme.recipe.baseFamily,
+                  surface: theme.recipe.surface
+                })}
               </CardDescription>
             </CardHeader>
 
@@ -165,34 +184,41 @@ export function ThemeLibrary({
               <div className="flex flex-wrap gap-1.5">
                 <Badge
                   variant="secondary"
-                  title="Tokens set by hand, departing from what the recipe generates"
+                  title={t('themeLibrary:fineTunedTitle')}
                 >
-                  {theme.counts.fineTuned} fine-tuned
+                  {t('themeLibrary:fineTuned', {
+                    count: theme.counts.fineTuned
+                  })}
                 </Badge>
                 {theme.counts.extra > 0 && (
                   <Badge
                     variant="secondary"
-                    title="Colours this theme declares itself, outside the standard token set. A fork keeps them."
+                    title={t('themeLibrary:extraTitle')}
                   >
-                    {theme.counts.extra} extra
+                    {t('themeLibrary:extra', { count: theme.counts.extra })}
                   </Badge>
                 )}
                 {theme.counts.notPortable > 0 && (
                   <Badge
                     variant="destructive"
-                    title="Values resolved when the CSS is compiled, or aliases pointing at nothing. A fork cannot carry these."
+                    title={t('themeLibrary:notPortableTitle')}
                   >
-                    {theme.counts.notPortable} not portable
+                    {t('themeLibrary:notPortable', {
+                      count: theme.counts.notPortable
+                    })}
                   </Badge>
                 )}
                 {theme.counts.issues > 0 && (
                   <Badge
                     variant="destructive"
-                    title="Contrast pairs below WCAG AA, or aliases leading nowhere. The studio marks which tokens."
+                    title={t('themeLibrary:issuesTitle')}
                   >
                     <TriangleAlertIcon className="size-3" />
-                    {theme.counts.issues}{' '}
-                    {theme.counts.issues === 1 ? 'issue' : 'issues'}
+                    {theme.counts.issues === 1
+                      ? t('themeLibrary:issuesOne')
+                      : t('themeLibrary:issues', {
+                          count: theme.counts.issues
+                        })}
                   </Badge>
                 )}
               </div>
@@ -201,7 +227,7 @@ export function ThemeLibrary({
                 // The badge names the problem; this says what it costs, which
                 // is the part worth seeing without hovering anything
                 <p className="text-muted-foreground mt-3 text-xs">
-                  Those tokens fall back to the recipe in a fork.
+                  {t('themeLibrary:notPortableNote')}
                 </p>
               )}
             </CardContent>
@@ -214,7 +240,7 @@ export function ThemeLibrary({
                 onClick={() => setOpen(theme)}
                 disabled={saving}
               >
-                Open in studio
+                {t('themeLibrary:openInStudio')}
               </Button>
             </CardFooter>
           </Card>
@@ -244,7 +270,7 @@ export function ThemeLibrary({
               // The studio's confirm button writes back to whatever opened it.
               // Here that is a built-in, which is never written back to — so it
               // has to say what it really does
-              selectLabel={`Fork ${open.label}`}
+              selectLabel={t('themeLibrary:forkLabel', { label: open.label })}
               recipe={open.recipe}
               overrides={open.overrides}
               onSelect={(result) => fork(open, result)}

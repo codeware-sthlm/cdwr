@@ -1,4 +1,5 @@
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
+import { customT } from '@codeware/app-cms/util/i18n';
 import { hasRole } from '@codeware/app-cms/util/misc';
 import { BUILT_IN_TOKENS, themeLabel } from '@codeware/shared/theme';
 import {
@@ -74,6 +75,7 @@ const builtInThemes = (): Array<BuiltInTheme> =>
  * costs a few milliseconds, and keeps the fitting off the client bundle.
  */
 const ThemeLibraryView: React.FC<AdminViewServerProps> = ({
+  i18n,
   initPageResult
 }) => {
   // From the request, not from the `user` prop. A view mounted on its own path
@@ -84,11 +86,14 @@ const ThemeLibraryView: React.FC<AdminViewServerProps> = ({
   // Editing a platform theme changes every tenant's site, so the gate is the
   // same one the file export sits behind
   if (!hasRole(user, 'system-user')) {
+    // The request's first, for the same reason as `user`
+    const t = customT((initPageResult?.req?.i18n ?? i18n).t);
+
     return (
       <div className="twp p-8">
-        <h1 className="text-lg font-semibold">Theme library</h1>
+        <h1 className="text-lg font-semibold">{t('themeLibrary:title')}</h1>
         <p className="text-muted-foreground mt-2 text-sm">
-          Platform themes are managed by system administrators.
+          {t('themeLibrary:refusal')}
         </p>
       </div>
     );
