@@ -554,6 +554,23 @@ describe('step', () => {
       it('a merge queue removal is silent', () => {
         expect(step(removedNow, prev('queued'), [], label).notices).toEqual([]);
       });
+
+      // The step after the ticket reaches review reads the entry stored before it
+      it('a failure or removal seen outside review still notifies in review', () => {
+        const failing = step(now('failing'), prev('open'), [], label);
+        expect(failing.entry['state']).toBe('open');
+        expect(
+          step(now('failing'), failing.entry as Prev, [], 'agent:review')
+            .notices
+        ).toEqual([
+          { level: 'action', message: 'COD-9: PR #5 has failing checks' }
+        ]);
+        const removed = step(removedNow, prev('queued'), [], label);
+        expect(removed.entry['removedAt']).toBeNull();
+        expect(
+          step(removedNow, removed.entry as Prev, [], 'agent:review').notices
+        ).toHaveLength(1);
+      });
     });
 
     it('agent:review merged does not relabel', () => {

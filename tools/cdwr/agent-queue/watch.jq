@@ -76,9 +76,9 @@ def pr_state:
 
 # One watch step: notices to send, whether to relabel, and the entry to store for the ticket.
 # Leaving the queue by merging is also a removal event (reason "merged"); that is no notice.
-# $in.agentLabel is the ticket's agent label (agent:review when absent or empty). Outside review a session
-# still holds the ticket, so only a merge or a close notifies; a merge there asks for the relabel
-# to agent:review until run.sh has stored `relabelled` for that PR.
+# $in.agentLabel is the ticket's agent label (agent:review when absent or empty). Outside review
+# a session still holds the ticket, so only a merge or a close notifies; a merge there asks for
+# the relabel to agent:review until run.sh has stored `relabelled` for that PR.
 def step:
   . as $in
   | $in.id as $id | $in.pr as $pr | $in.now as $now
@@ -106,7 +106,11 @@ def step:
   | {
       notices: ($removal + $change),
       relabel: ($now.state == "merged" and ($review | not) and ($prev.relabelled != true)),
-      entry: ({ pr: $pr, state: $now.state, removedAt: ($now.removedAt // $prev.removedAt),
+      # Outside review only a merge or a close is stored, so a check that failed or a removal
+      # from the merge queue still notifies once the ticket reaches review
+      entry: ({ pr: $pr,
+                state: (if $review or ($now.state | IN("merged", "closed")) then $now.state else $prev.state end),
+                removedAt: (if $review then $now.removedAt // $prev.removedAt else $prev.removedAt end),
                 unresolved: ($now.unresolved // 0), at: $in.at }
               + (if $prev.relabelled == true then { relabelled: true } else {} end))
     };
