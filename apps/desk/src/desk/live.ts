@@ -307,9 +307,11 @@ export const problemKey = (p: Problem): ProblemKey => {
   }
 };
 
-/** The earliest `since`: when what the desk shows stopped being current; null without problems */
-export const frozenAt = (list: readonly Problem[]): number | null =>
-  list.length ? Math.min(...list.map((p) => p.since)) : null;
+/** The earliest `since` of the problems that freeze numbers (data, unknown); a down channel only lags, so null without those */
+export const frozenAt = (list: readonly Problem[]): number | null => {
+  const times = list.filter((p) => p.kind !== 'connection').map((p) => p.since);
+  return times.length ? Math.min(...times) : null;
+};
 
 /** What the desk can see is wrong with what it shows */
 export const problems = ({
@@ -317,11 +319,14 @@ export const problems = ({
   runs,
   runMinutes,
   host,
+  sessions,
   now
 }: {
   connection: Connection;
   runs: RunsPayload | null;
   runMinutes: number;
+  /** The session rows, to tell whose session the snapshot calls alive; null before they load */
+  sessions: readonly SessionRow[] | null;
   /** The NUC's newest sample (ms) and age, and its silent threshold; null without samples */
   host: {
     host: string;
@@ -373,11 +378,17 @@ export const problems = ({
       since: Date.parse(runs.at),
       newestRun
     });
+  // A session on another host (the attended Mac) says nothing about the NUC's silence
+  const sessionId = runs?.qv?.session.id;
+  const sessionHost = sessionId
+    ? (sessions ?? []).find((r) => r.id === sessionId)?.host
+    : undefined;
   // A runs row is written only when the run ends, so the open work is the session the snapshot calls alive
   if (
     runs?.qv?.session.state === 'alive' &&
     host &&
-    host.ageMin > host.silentMin
+    host.ageMin > host.silentMin &&
+    (sessionHost === undefined || sessionHost === host.host)
   ) {
     const ticket = runs.qv.session.ticket ?? null;
     const open = ticket
