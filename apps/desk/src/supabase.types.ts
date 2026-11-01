@@ -359,6 +359,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      desk_commands: {
+        Row: {
+          id: number;
+          at: string;
+          host: string;
+          kind: string;
+          args: Json;
+          actor: string;
+          status: string;
+          applied_at: string | null;
+          note: string | null;
+        };
+        Insert: {
+          id?: never;
+          at?: string;
+          host: string;
+          kind: string;
+          args?: Json;
+          actor: string;
+          status?: string;
+          applied_at?: string | null;
+          note?: string | null;
+        };
+        Update: {
+          id?: never;
+          at?: string;
+          host?: string;
+          kind?: string;
+          args?: Json;
+          actor?: string;
+          status?: string;
+          applied_at?: string | null;
+          note?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       status: {
