@@ -84,6 +84,7 @@ export const createLoader = ({
         ...v.next,
         ...v.parked,
         ...v.table.before,
+        ...v.table.label,
         ...v.table.after
       ])
         ids.add(x.ticket);
