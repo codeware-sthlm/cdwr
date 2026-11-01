@@ -1552,7 +1552,8 @@ describe('problems', () => {
     expect(out).toContain('More than one host publishes the queue');
     expect(out).toContain('mbp (paused, last ');
     expect(out).toContain('cdwr agent uninstall');
-    expect(out).toContain('cdwr agent pause --host');
+    expect(out).toContain('stop the agent container');
+    expect(out).not.toContain('<host>');
     expect(out).toContain('in the last 2 h');
     expect(out).toContain(`last ${hhmm(at(30))}`);
     expect(out).not.toContain('data-action');
