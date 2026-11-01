@@ -314,23 +314,30 @@ export const createHandler = ({
         if (!acked.ok) throw new Error(`desk_commands ack ${acked.status}`);
       }
 
-      if (status !== 'pending') {
-        const activity = await rest('activity?on_conflict=event_id', {
-          method: 'POST',
-          body: {
-            event_id: `desk:${id}`,
-            at,
-            ticket,
-            actor: 'human',
-            change: changeText(command, device, status, note, ticket),
-            host: command.host
-          },
-          prefer: 'resolution=merge-duplicates,return=minimal'
-        });
-        // The command is stored either way; a missing activity row is only logged
-        if (!activity.ok)
-          log({ event: 'activity failed', status: activity.status, id });
-      }
+      // The command is stored either way; a missing activity row is only logged
+      if (status !== 'pending')
+        try {
+          const activity = await rest('activity?on_conflict=event_id', {
+            method: 'POST',
+            body: {
+              event_id: `desk:${id}`,
+              at,
+              ticket,
+              actor: 'human',
+              change: changeText(command, device, status, note, ticket),
+              host: command.host
+            },
+            prefer: 'resolution=merge-duplicates,return=minimal'
+          });
+          if (!activity.ok)
+            log({ event: 'activity failed', status: activity.status, id });
+        } catch (error) {
+          log({
+            event: 'activity failed',
+            reason: error instanceof Error ? error.message : String(error),
+            id
+          });
+        }
 
       log({
         event: status,
