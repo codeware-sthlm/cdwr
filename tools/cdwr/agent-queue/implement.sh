@@ -84,8 +84,11 @@ fi
 
 # Reserve the whole budget before the session starts, so a machine that dies mid-session still
 # counts it against the daily cap; the actual cost settles it afterwards. No reservation, no start.
+# Both rows carry the reservation's day: a settle after midnight on the next day would leave that
+# day negative, and run.sh would read a ledger it can't use (COD-686).
+DAY="$(date +%F)"
 ledger() {
-  jq -nc --arg day "$(date +%F)" --arg t "$TICKET" --argjson c "$1" --arg k "$2" \
+  jq -nc --arg day "$DAY" --arg t "$TICKET" --argjson c "$1" --arg k "$2" \
     '{day: $day, ticket: $t, cost: $c, kind: $k}' >> "$HOME_DIR/implement-spend.jsonl"
 }
 if ! ledger "$BUDGET_USD" reserve 2>/dev/null; then
