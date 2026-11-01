@@ -338,14 +338,15 @@ describe('session card', () => {
   ] satisfies [SessionState, string, string][])(
     'shows the session %j',
     (session, label, tone) => {
-      const html = renderSession(model(filled(session), NOW), NOW);
+      const state = filled(session);
+      const html = renderSession(model(state, NOW), state.details, NOW);
       expect(html).toContain(label);
       expect(html).toContain(`session ${tone}" data-w="session"`);
     }
   );
 
   it('says it is loading before the runs arrive', () => {
-    expect(renderSession(model(createState(), NOW), NOW)).toContain(
+    expect(renderSession(model(createState(), NOW), new Map(), NOW)).toContain(
       'Loading the runs…'
     );
   });
@@ -366,7 +367,7 @@ describe('session card', () => {
         last_seen: new Date('2026-10-29T11:59:30').toISOString()
       } as never
     ];
-    const html = renderSession(model(state, NOW), NOW);
+    const html = renderSession(model(state, NOW), state.details, NOW);
     expect(html).toContain('Working on');
     expect(html).toContain('COD-1</a>');
     expect(html).toContain('ready · Title of COD-1');
@@ -380,14 +381,14 @@ describe('session card', () => {
       detail: 'polling',
       lastSeen: '2026-10-29T10:00:00'
     });
-    const html = renderSession(model(state, NOW), NOW);
+    const html = renderSession(model(state, NOW), state.details, NOW);
     expect(html).toContain('Session stuck');
     expect(html).toContain('session block"');
   });
 
   it('lists the newest event of each live table, and says when there is none', () => {
     const state = filled();
-    expect(renderSession(model(state, NOW), NOW)).toContain(
+    expect(renderSession(model(state, NOW), state.details, NOW)).toContain(
       'No live event yet'
     );
     state.data.githubEvents = [
@@ -404,7 +405,7 @@ describe('session card', () => {
       action: 'update',
       updated_at: new Date('2026-10-29T11:50:00').toISOString()
     };
-    const html = renderSession(model(state, NOW), NOW);
+    const html = renderSession(model(state, NOW), state.details, NOW);
     expect(html.match(/<li>/g)).toHaveLength(2);
     expect(html).toContain('dot block');
     expect(html).toContain('#7 · checks failed');
@@ -505,7 +506,7 @@ describe('header', () => {
 
 describe('waiting card, queue sheets and tiles', () => {
   it('show a placeholder while loading', () => {
-    const html = renderWaiting(model(createState(), NOW), NOW);
+    const html = renderWaiting(model(createState(), NOW), new Map(), NOW);
     expect(html).toContain('Loading…');
     expect(html).toContain('<b class="count">–</b>');
     expect(html).not.toContain('waiting has');
@@ -525,12 +526,12 @@ describe('waiting card, queue sheets and tiles', () => {
       ]
     };
     const m = model(state, NOW);
-    expect(waitRows(m, NOW).map((r) => [r.id, r.kind])).toEqual([
+    expect(waitRows(m, state.details, NOW).map((r) => [r.id, r.kind])).toEqual([
       ['COD-4', 'plan'],
       ['COD-6', 'ready to label'],
       ['COD-50', 'idea']
     ]);
-    const html = renderWaiting(m, NOW);
+    const html = renderWaiting(m, state.details, NOW);
     expect(html).toContain('waiting has" data-w="before"');
     expect(html).toContain('<b class="count">3</b>');
     expect(html).toContain('<span class="kind">plan</span><time>2 h</time>');
@@ -553,7 +554,7 @@ describe('waiting card, queue sheets and tiles', () => {
       })
     );
     const m = model(state, NOW);
-    const html = renderWaiting(m, NOW);
+    const html = renderWaiting(m, state.details, NOW);
     expect(html.match(/class="wrow"/g)).toHaveLength(3);
     expect(html).toContain('+ 1 more — open all');
     expect(html).toContain('COD-&lt;7&gt;');
@@ -566,7 +567,7 @@ describe('waiting card, queue sheets and tiles', () => {
     state.data.runs = runs(
       view({ table: { before: [], label: [], after: [] } })
     );
-    const html = renderWaiting(model(state, NOW), NOW);
+    const html = renderWaiting(model(state, NOW), state.details, NOW);
     expect(html).toContain('Nothing waits on you.');
     expect(html).toContain('<b class="count">0</b>');
     expect(html).not.toContain('waiting has');
@@ -738,7 +739,7 @@ describe('waiting card, queue sheets and tiles', () => {
     const review = SHEETS.review.body(m, state, NOW);
     expect(review).toContain('COD-3');
     expect(review).toContain('Review fixes: waits on CI since');
-    expect(headline(m, NOW).note).toContain('COD-3');
+    expect(headline(m, state.details, NOW).note).toContain('COD-3');
   });
 
   it('drop a parked ticket a live change moved on from', () => {
@@ -1355,8 +1356,10 @@ describe('platform view', () => {
     expect(out).toContain('Realtime is not connected; polling every 5 min');
     expect(out).toContain('cap-dot bad');
     expect(out).toContain('never');
-    // A check without a matching problem just says it fails
-    expect(out).toContain('<small class="pf-why">failing</small>');
+    // A check no other problem explains links to its own card
+    expect(out).toContain(
+      'data-problem="problem-check-github-events-last-event">no event in the last 24 h</button>'
+    );
   });
 
   it('show the Mac panel only with a Mac host', () => {
@@ -1430,6 +1433,20 @@ describe('platform view', () => {
 
 describe('problems', () => {
   const at = (ago: number): number => NOW.getTime() - ago * 6e4;
+  // Every health check passes, so only the problem under test shows
+  const base = (): DeskState => {
+    const s = filled();
+    s.data.githubEvents = [
+      {
+        pr: null,
+        subject: 'push',
+        action: 'push',
+        updated_at: new Date(at(5)).toISOString()
+      }
+    ];
+    s.data.storedAt = at(1);
+    return s;
+  };
   const down = (
     s: DeskState,
     over: Partial<DeskState['data']['connection']> = {}
@@ -1477,8 +1494,61 @@ describe('problems', () => {
     return s;
   };
 
+  const crashed = (s: DeskState) => {
+    s.data.sessions = [
+      {
+        id: 'm1',
+        host: 'mac',
+        kind: 'attended',
+        last_seen: new Date(at(42)).toISOString(),
+        state: 'working',
+        detail: null
+      }
+    ];
+    return s;
+  };
+
+  it('draws a card for a failing check no other problem explains, without freezing numbers', () => {
+    const m = model(live(crashed(base())), NOW);
+    expect(m.problems.map((p) => p.kind)).toEqual(['check']);
+    const out = renderProblems(m);
+    expect(out).toContain('id="problem-check-mac-heartbeat" data-kind="check"');
+    expect(out).toContain('mac heartbeat');
+    expect(out).toContain('no heartbeat for 42 m while a turn was running');
+    expect(out).toContain('data-view="platform"');
+    const alert = renderAlert(m);
+    expect(alert).toContain('a health check is failing');
+    expect(alert).toContain('1 check failing · see Platform');
+    expect(renderFrozenLabel(m)).toBe('');
+    const pf = renderPlatform(m, NOW);
+    expect(pf).toMatch(
+      /mac heartbeat[\s\S]*?data-problem="problem-check-mac-heartbeat"/
+    );
+  });
+
+  it('passes a host whose session ended, and the Platform row says so', () => {
+    const m = model(live(crashed(base())), NOW);
+    void m;
+    const s = live(base());
+    s.data.sessions = [
+      {
+        id: 'm1',
+        host: 'mac',
+        kind: 'attended',
+        last_seen: new Date(at(42)).toISOString(),
+        state: 'ended',
+        detail: null
+      }
+    ];
+    const ended = model(s, NOW);
+    expect(ended.problems).toEqual([]);
+    expect(renderPlatform(ended, NOW)).toMatch(
+      /mac heartbeat<\/span><small class="pf-note">no session<\/small>/
+    );
+  });
+
   it('draws the connection problem with its timer, status and retry', () => {
-    const m = model(down(filled()), NOW);
+    const m = model(down(base()), NOW);
     const out = renderProblems(m);
     expect(out).toContain('PROBLEMS · 1');
     expect(out).toContain('id="problem-connection" data-kind="connection"');
@@ -1494,7 +1564,7 @@ describe('problems', () => {
     expect(out).toContain('data-action="reconnect"');
     expect(out).toContain('data-action="reload"');
     const idle = renderProblems(
-      model(down(filled(), { status: null, retries: 0, nextAt: null }), NOW)
+      model(down(base(), { status: null, retries: 0, nextAt: null }), NOW)
     );
     expect(idle).toContain('>not connected</span>');
     expect(idle).not.toContain('dropped');
@@ -1505,7 +1575,7 @@ describe('problems', () => {
   });
 
   it('holds the cards still from second to second and ticks the timers by text', () => {
-    const m = model(down(filled()), NOW);
+    const m = model(down(base()), NOW);
     expect(renderProblems(m)).not.toMatch(/class="tick"[^>]*>[^<]/);
     const since = NOW.getTime() - 2.7 * 6e4;
     const later = new Date(NOW.getTime() + 1000);
@@ -1522,7 +1592,7 @@ describe('problems', () => {
   });
 
   it('draws the parse problem with the raw row and a marker per issue', () => {
-    const out = renderProblems(model(parse(filled()), NOW));
+    const out = renderProblems(model(parse(base()), NOW));
     expect(out).toContain("queue_state doesn't parse");
     expect(out).toContain('data-kind="data"');
     expect(out).toContain('The row fails at session, limit.');
@@ -1537,14 +1607,14 @@ describe('problems', () => {
   });
 
   it('draws the stale problem without a raw row or a button', () => {
-    const out = renderProblems(model(stale(filled()), NOW));
+    const out = renderProblems(model(stale(base()), NOW));
     expect(out).toContain('queue_state is older than the newest run');
     expect(out).not.toContain('class="raw');
     expect(out).not.toContain('data-action');
   });
 
   it('draws the unknown problem and swaps the session card', () => {
-    const m = model(silent(filled()), NOW);
+    const m = model(silent(base()), NOW);
     const out = renderProblems(m);
     expect(out).toContain('nuc silent with a run open');
     expect(out).toContain('data-fmt="quiet"');
@@ -1560,11 +1630,11 @@ describe('problems', () => {
     expect(card).toContain('Last known: nuc');
     expect(card).toContain('running <span class="mono">COD-1</span>');
     expect(card).toContain('Nothing here is assumed to be running.');
-    expect(renderUnknownSession(model(fresh(filled()), NOW))).toBe('');
+    expect(renderUnknownSession(model(fresh(base()), NOW))).toBe('');
   });
 
   it('counts the problems in the alert and says when the numbers froze', () => {
-    const s = down(parse(filled()));
+    const s = down(parse(base()));
     const m = model(s, NOW);
     const out = renderAlert(m);
     expect(out).toContain('role="alert"');
@@ -1580,20 +1650,20 @@ describe('problems', () => {
       `EVERYTHING ELSE · FROZEN AT ${hhmm(at(5))}`
     );
     expect(renderProblems(m)).toContain('PROBLEMS · 2');
-    const closed = renderAlert(model(down(filled(), { retries: 0 }), NOW));
+    const closed = renderAlert(model(down(base(), { retries: 0 }), NOW));
     expect(closed).toContain('1 problem —');
     expect(closed).toContain('live updates down since ');
     expect(closed).toContain('numbers may lag');
     expect(closed).not.toContain('frozen');
     expect(closed).not.toContain('channel dropped');
-    expect(renderAlert(model(down(filled()), NOW))).toContain(
+    expect(renderAlert(model(down(base()), NOW))).toContain(
       'numbers may lag · channel dropped 2×'
     );
-    expect(renderFrozenLabel(model(down(filled()), NOW))).toBe('');
+    expect(renderFrozenLabel(model(down(base()), NOW))).toBe('');
   });
 
   it('renders nothing once the state is healthy again', () => {
-    const s = live(fresh(filled()));
+    const s = live(fresh(base()));
     const m = model(s, NOW);
     expect(m.problems).toEqual([]);
     expect(renderAlert(m)).toBe('');
@@ -1632,19 +1702,23 @@ describe('problems', () => {
   });
 
   it('links a failing health check to its problem card', () => {
-    const failing = renderPlatform(model(down(filled()), NOW), NOW);
-    expect(failing).toContain('data-problem="connection"');
-    const ok = renderPlatform(model(live(fresh(filled())), NOW), NOW);
-    expect(ok).not.toContain('data-problem="connection"');
-    const frozen = parse(filled());
+    const failing = renderPlatform(model(down(base()), NOW), NOW);
+    expect(failing).toContain('data-problem="problem-connection"');
+    const ok = renderPlatform(model(live(fresh(base())), NOW), NOW);
+    expect(ok).not.toContain('data-problem="problem-connection"');
+    const frozen = parse(base());
     if (frozen.data.runs)
       frozen.data.runs = {
         ...frozen.data.runs,
         at: new Date(at(60 * 24 * 5)).toISOString()
       };
     const both = renderPlatform(model(frozen, NOW), NOW);
-    expect(both).toMatch(/queue_state parses[\s\S]*?data-problem="data-parse"/);
-    expect(both).toMatch(/Snapshot age[\s\S]*?data-problem="data-stale"/);
+    expect(both).toMatch(
+      /queue_state parses[\s\S]*?data-problem="problem-data-parse"/
+    );
+    expect(both).toMatch(
+      /Snapshot age[\s\S]*?data-problem="problem-data-stale"/
+    );
   });
 });
 
@@ -1713,5 +1787,93 @@ describe('charts', () => {
     const html = sparkline([{ at: 5, value: 1 }], 0, 10, 1, null, 'x');
     expect(html).not.toContain('polyline');
     expect(html).not.toContain('class="limit"');
+  });
+});
+
+describe('pull requests on the waiting rows and the session card', () => {
+  const withPr = (pr: number | null) => ({
+    steps: 0,
+    done: 0,
+    next: null,
+    idea: null,
+    blockedBy: [],
+    pr
+  });
+
+  it('link the PR beside a plan and a question row, outside the row link', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        table: {
+          before: [
+            { ticket: 'COD-4', kind: 'plan' },
+            { ticket: 'COD-8', kind: 'question' },
+            { ticket: 'COD-9', kind: 'plan' }
+          ],
+          label: [],
+          after: []
+        }
+      })
+    );
+    state.details.set('COD-4', withPr(21));
+    state.details.set('COD-8', withPr(22));
+    const m = model(state, NOW);
+    const rows = Object.fromEntries(
+      waitRows(m, state.details, NOW).map((r) => [r.id, r.pr])
+    );
+    expect(rows).toMatchObject({
+      'COD-4': 21,
+      'COD-8': 22,
+      'COD-9': null,
+      'COD-50': null
+    });
+    const html = renderWaiting(m, state.details, NOW);
+    expect(html).toContain('</a><a class="prn" href="https://github.com/');
+    expect(html).toContain('>#21</a></li>');
+    expect(html).toContain('>#22</a></li>');
+    expect(html.match(/class="prn/g)).toHaveLength(2);
+  });
+
+  it('put the PR beside Working on and the takes-next headline', () => {
+    const session: SessionState = {
+      state: 'alive',
+      detail: 'working',
+      ticket: 'COD-1',
+      lastSeen: '2026-10-29T11:59:30'
+    };
+    const state = filled(session);
+    state.data.runs = runs(
+      view({
+        session,
+        next: [
+          { ticket: 'COD-1', reason: 'ready' },
+          { ticket: 'COD-2', reason: 'answered' }
+        ]
+      })
+    );
+    state.details.set('COD-1', withPr(31));
+    state.details.set('COD-2', withPr(32));
+    const m = model(state, NOW);
+    const html = renderSession(m, state.details, NOW);
+    expect(html).toContain('COD-1</a> <a class="prn"');
+    expect(html).toContain('>#31</a></span>');
+    const text = headline(
+      model(filled({ state: 'alive', detail: 'working' }), NOW),
+      state.details,
+      NOW
+    ).text;
+    expect(text).toContain('>#31</a>');
+  });
+
+  it('add no PR link to the session card without one', () => {
+    const state = filled({
+      state: 'alive',
+      detail: 'working',
+      ticket: 'COD-1',
+      lastSeen: '2026-10-29T11:59:30'
+    });
+    expect(renderSession(model(state, NOW), state.details, NOW)).not.toContain(
+      'class="prn'
+    );
   });
 });

@@ -13,16 +13,22 @@ import {
   SESSION_HANDBACK_MIN
 } from './constants';
 import {
-  type HostSessions,
+  type CheckName,
+  type HealthCheck,
+  type HostHeartbeat,
   type Problem,
   agentPrs,
+  checkProblems,
   feed,
   frozenAt,
   handBack,
   health,
+  heartbeatOk,
+  hostHeartbeats,
   hostSessions,
   prState,
   problemKey,
+  problemOf,
   problems,
   pulse,
   sampleMinutes,
@@ -825,20 +831,23 @@ describe('health', () => {
     runs: runs(ago(5)),
     staleHours: 2,
     nuc: { host: 'nuc', at: NOW.getTime() - 2 * MIN, silentMin: 30 },
-    sessions: [],
+    heartbeats: [],
     events: [event()],
     storedAt: NOW.getTime() - 3 * MIN,
     now: NOW
   });
 
-  const mac = (ageMin: number): HostSessions => ({
+  const mac = (
+    ageMin: number,
+    state: string | null = 'working'
+  ): HostHeartbeat => ({
     host: 'mac',
-    ageMin,
-    sessions: [{ id: 's1', kind: 'attended', ageMin }]
+    state,
+    ageMin
   });
 
   it('lists the checks in the order the Platform view shows them', () => {
-    const checks = health({ ...fresh(), sessions: [mac(2)] });
+    const checks = health({ ...fresh(), heartbeats: [mac(2)] });
     expect(checks.map((c) => c.name)).toEqual([
       'Realtime',
       'queue_state parses',
@@ -850,35 +859,48 @@ describe('health', () => {
     ]);
   });
 
-  it('is ok throughout when everything is fresh', () => {
-    const checks = health({ ...fresh(), sessions: [mac(2)] });
+  it('is ok throughout when everything is fresh, with nothing to note', () => {
+    const checks = health({ ...fresh(), heartbeats: [mac(2)] });
     expect(checks.every((c) => c.ok)).toBe(true);
     expect(checks.every((c) => c.at !== null)).toBe(true);
+    expect(checks.every((c) => c.note === null)).toBe(true);
   });
 
-  it('fails each check that is stale', () => {
+  it('fails each check that is stale, and says why', () => {
     const checks = health({
-      connection: connection({ live: false, upSince: null }),
+      connection: connection({ live: false, upSince: null, retries: 2 }),
       runs: runs(ago(180), [], true),
       staleHours: 2,
       nuc: { host: 'nuc', at: NOW.getTime() - 45 * MIN, silentMin: 30 },
-      sessions: [mac(31)],
+      heartbeats: [mac(31)],
       events: [],
       storedAt: NOW.getTime() - 20 * MIN,
       now: NOW
     });
-    expect(Object.fromEntries(checks.map((c) => [c.name, c.ok]))).toEqual({
-      Realtime: false,
-      'queue_state parses': false,
-      'Snapshot age': false,
-      'nuc heartbeat': false,
-      'mac heartbeat': false,
-      'github_events last event': false,
-      'Linear poll': false
+    expect(
+      Object.fromEntries(checks.map((c) => [c.name, [c.ok, c.note]]))
+    ).toEqual({
+      Realtime: [false, 'dropped 2×'],
+      'queue_state parses': [false, 'does not parse'],
+      'Snapshot age': [false, 'older than 2 h'],
+      'nuc heartbeat': [false, 'no sample for 45 m, limit 30 m'],
+      'mac heartbeat': [
+        false,
+        'no heartbeat for 31 m while a turn was running'
+      ],
+      'github_events last event': [false, 'no event in the last 24 h'],
+      'Linear poll': [false, 'last stored 20 m ago, limit 15 m']
     });
     expect(checks.find((c) => c.name === 'github_events last event')?.at).toBe(
       null
     );
+  });
+
+  it('keeps Realtime ok within the connect grace, as the problems do', () => {
+    const grace = connection({ live: false, downSince: NOW.getTime() - 1000 });
+    const [rt] = health({ ...fresh(), connection: grace });
+    expect(rt.ok).toBe(true);
+    expect(problems({ ...problemArgs(), connection: grace })).toEqual([]);
   });
 
   it('fails what has no data yet', () => {
@@ -898,21 +920,146 @@ describe('health', () => {
     ]);
   });
 
-  it('gives a session host other than the NUC its own heartbeat check', () => {
-    const nucSession: HostSessions = {
-      host: 'nuc',
-      ageMin: 1,
-      sessions: [{ id: 's2', kind: 'implement', ageMin: 1 }]
-    };
-    const checks = health({ ...fresh(), sessions: [nucSession, mac(10)] });
-    const heartbeats = checks.filter((c) => c.name.endsWith('heartbeat'));
-    // The NUC's sessions do not repeat the NUC's own check
-    expect(heartbeats.map((c) => c.name)).toEqual([
-      'nuc heartbeat',
-      'mac heartbeat'
+  it('dates a host heartbeat from its newest row', () => {
+    const macCheck = health({ ...fresh(), heartbeats: [mac(10)] }).find(
+      (c) => c.name === 'mac heartbeat'
+    );
+    expect(macCheck?.ok).toBe(true);
+    expect(macCheck?.at).toBe(NOW.getTime() - 10 * MIN);
+  });
+});
+
+const problemArgs = (): Parameters<typeof problems>[0] => ({
+  connection: connection(),
+  runs: runs(ago(5)),
+  runMinutes: 10,
+  host: null,
+  sessions: [],
+  now: NOW
+});
+
+describe('hostHeartbeats', () => {
+  it("takes each host's newest row, ended included, and leaves the NUC out", () => {
+    const out = hostHeartbeats(
+      [
+        session({ id: 'a', state: 'working', last_seen: ago(50) }),
+        session({ id: 'b', state: 'ended', last_seen: ago(5) }),
+        session({ id: 'c', host: 'nuc', kind: 'implement', last_seen: ago(1) }),
+        session({
+          id: 'd',
+          host: 'laptop',
+          state: 'stopped',
+          last_seen: ago(9)
+        })
+      ],
+      'nuc',
+      NOW
+    );
+    expect(out).toEqual([
+      { host: 'mac', state: 'ended', ageMin: 5 },
+      { host: 'laptop', state: 'stopped', ageMin: 9 }
     ]);
-    const macCheck = heartbeats[1];
-    expect(macCheck.ok).toBe(true);
-    expect(macCheck.at).toBe(NOW.getTime() - 10 * MIN);
+  });
+
+  it('is empty without rows', () => {
+    expect(hostHeartbeats(null, 'nuc', NOW)).toEqual([]);
+  });
+});
+
+describe('heartbeatOk', () => {
+  const at = (state: string | null, ageMin: number) =>
+    heartbeatOk({ host: 'mac', state, ageMin });
+  const OLD = SESSION_HANDBACK_MIN + 1;
+
+  it('passes a host whose newest session ended, at any age', () => {
+    expect(at('ended', 1)).toEqual({ ok: true, note: 'no session' });
+    expect(at('ended', 600)).toEqual({ ok: true, note: 'no session' });
+  });
+
+  it('passes a session idle at its prompt, however quiet', () => {
+    for (const state of ['stopped', 'waiting', 'polling'])
+      expect(at(state, 600)).toEqual({ ok: true, note: 'idle' });
+  });
+
+  it('passes a working session within the window and fails one quiet past it', () => {
+    expect(at('working', SESSION_HANDBACK_MIN)).toEqual({
+      ok: true,
+      note: null
+    });
+    expect(at('working', OLD)).toEqual({
+      ok: false,
+      note: `no heartbeat for ${OLD} m while a turn was running`
+    });
+  });
+
+  it('reads a row without a state as ended once it is old', () => {
+    expect(at(null, 5)).toEqual({ ok: true, note: null });
+    expect(at(null, OLD)).toEqual({ ok: true, note: 'no session' });
+  });
+});
+
+describe('checkProblems', () => {
+  const failing = (name: CheckName): HealthCheck => ({
+    name,
+    ok: false,
+    at: NOW.getTime() - 40 * MIN,
+    note: `${name} broke`
+  });
+
+  // Every name health() can emit, a NUC and another host included
+  const NAMES: CheckName[] = [
+    'Realtime',
+    'queue_state parses',
+    'Snapshot age',
+    'nuc heartbeat',
+    'mac heartbeat',
+    'github_events last event',
+    'Linear poll'
+  ];
+
+  it('gives every failing check a problem', () => {
+    for (const name of NAMES) {
+      const found: Problem[] = [];
+      const all = [...found, ...checkProblems([failing(name)], found)];
+      expect(problemOf(all, name), name).toBeDefined();
+    }
+  });
+
+  it('adds a check problem only where no other problem explains the check', () => {
+    const down = problems({
+      ...problemArgs(),
+      connection: connection({
+        live: false,
+        retries: 1,
+        downSince: NOW.getTime()
+      })
+    });
+    const out = checkProblems(
+      [failing('Realtime'), failing('mac heartbeat')],
+      down
+    );
+    expect(out).toEqual([
+      {
+        kind: 'check',
+        name: 'mac heartbeat',
+        text: 'mac heartbeat broke',
+        since: NOW.getTime() - 40 * MIN
+      }
+    ]);
+  });
+
+  it('keeps a check that was never true without a since', () => {
+    const [p] = checkProblems([{ ...failing('Linear poll'), at: null }], []);
+    expect(p).toMatchObject({ kind: 'check', since: null });
+  });
+
+  it('leaves passing checks alone', () => {
+    expect(
+      checkProblems([{ ...failing('Linear poll'), ok: true }], [])
+    ).toEqual([]);
+  });
+
+  it('never freezes the numbers', () => {
+    expect(frozenAt(checkProblems([failing('Linear poll')], []))).toBe(null);
   });
 });

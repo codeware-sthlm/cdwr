@@ -161,6 +161,60 @@ export const hostSessions = (
   return [...hosts.values()].sort((a, b) => a.ageMin - b.ageMin);
 };
 
+export type HostHeartbeat = {
+  host: string;
+  /** The newest row's state; null on a row from before states were sent */
+  state: string | null;
+  /** Minutes since that row's heartbeat */
+  ageMin: number;
+};
+
+/** Each host's newest session row, ended ones included, newest host first; the NUC has its own check */
+export const hostHeartbeats = (
+  rows: readonly SessionRow[] | null,
+  nucHost: string | null,
+  now: Date
+): HostHeartbeat[] => {
+  const hosts = new Map<string, HostHeartbeat>();
+  for (const r of rows ?? []) {
+    if (r.host === nucHost) continue;
+    const ageMin = ageOf(r.last_seen, now);
+    const h = hosts.get(r.host);
+    if (!h || ageMin < h.ageMin)
+      hosts.set(r.host, { host: r.host, state: r.state, ageMin });
+  }
+  return [...hosts.values()].sort((a, b) => a.ageMin - b.ageMin);
+};
+
+/**
+ * A host's heartbeat check from its newest row. Ended is no session, and a session
+ * at its prompt sends no beat, so only a turn that went quiet for SESSION_HANDBACK_MIN
+ * fails: a crash, or a terminal closed without SessionEnd. A row without a state is
+ * from before states were sent and counts as ended once that old.
+ */
+export const heartbeatOk = (
+  h: HostHeartbeat
+): { ok: boolean; note: string | null } => {
+  const quiet = h.ageMin > SESSION_HANDBACK_MIN;
+  switch (h.state) {
+    case 'ended':
+      return { ok: true, note: 'no session' };
+    case 'stopped':
+    case 'waiting':
+    case 'polling':
+      return { ok: true, note: 'idle' };
+    case null:
+      return { ok: true, note: quiet ? 'no session' : null };
+    default:
+      return quiet
+        ? {
+            ok: false,
+            note: `no heartbeat for ${Math.round(h.ageMin)} m while a turn was running`
+          }
+        : { ok: true, note: null };
+  }
+};
+
 export type HandBackState =
   'attended' | 'handing back' | 'heartbeat ok' | 'idle';
 
@@ -289,17 +343,27 @@ export type Problem =
       silentMin: number;
       /** When the ticket's open run started, in ms */
       started: number | null;
+    }
+  | {
+      /** A failing health check that no other problem covers */
+      kind: 'check';
+      name: CheckName;
+      text: string;
+      /** When it was last true or last seen; null when never */
+      since: number | null;
     };
 
 export type ProblemKind = Problem['kind'];
 
-export type ProblemKey = 'connection' | 'unknown' | 'data-parse' | 'data-stale';
+export type ProblemKey =
+  'connection' | 'unknown' | 'data-parse' | 'data-stale' | 'check';
 
 /** The card a problem gets: its kind, and for data its reason */
 export const problemKey = (p: Problem): ProblemKey => {
   switch (p.kind) {
     case 'connection':
     case 'unknown':
+    case 'check':
       return p.kind;
     case 'data':
       return p.reason === 'parse' ? 'data-parse' : 'data-stale';
@@ -310,11 +374,20 @@ export const problemKey = (p: Problem): ProblemKey => {
   }
 };
 
-/** The earliest `since` of the problems that freeze numbers (data, unknown); a down channel only lags, so null without those */
+/** The earliest `since` of the problems that freeze numbers (data, unknown); a down channel only lags and a failing check says nothing of the queue, so null without those */
 export const frozenAt = (list: readonly Problem[]): number | null => {
-  const times = list.filter((p) => p.kind !== 'connection').map((p) => p.since);
+  const times = list.flatMap((p) =>
+    p.kind === 'connection' || p.kind === 'check' ? [] : [p.since]
+  );
   return times.length ? Math.min(...times) : null;
 };
+
+/** Down for longer than the grace, or dropped at least once */
+const channelDown = (connection: Connection, nowMs: number): boolean =>
+  !connection.live &&
+  (connection.retries > 0 ||
+    (connection.downSince !== null &&
+      nowMs - connection.downSince >= CONNECT_GRACE_MS));
 
 /** What the desk can see is wrong with what it shows */
 export const problems = ({
@@ -341,11 +414,7 @@ export const problems = ({
 }): Problem[] => {
   const out: Problem[] = [];
   const nowMs = now.getTime();
-  const past =
-    connection.retries > 0 ||
-    (connection.downSince !== null &&
-      nowMs - connection.downSince >= CONNECT_GRACE_MS);
-  if (!connection.live && past)
+  if (channelDown(connection, nowMs))
     out.push({
       kind: 'connection',
       text: connection.retries
@@ -410,11 +479,22 @@ export const problems = ({
   return out;
 };
 
+/** A health check's name; problems match checks by it */
+export type CheckName =
+  | 'Realtime'
+  | 'queue_state parses'
+  | 'Snapshot age'
+  | `${string} heartbeat`
+  | 'github_events last event'
+  | 'Linear poll';
+
 export type HealthCheck = {
-  name: string;
+  name: CheckName;
   ok: boolean;
   /** When it was last true or last seen, in ms; null when never */
   at: number | null;
+  /** Why it fails, or why a quiet check passes; null when there is nothing to say */
+  note: string | null;
 };
 
 /** The Platform view's checks, in the order it lists them */
@@ -423,7 +503,7 @@ export const health = ({
   runs,
   staleHours,
   nuc,
-  sessions,
+  heartbeats,
   events,
   storedAt,
   now
@@ -433,8 +513,8 @@ export const health = ({
   staleHours: number;
   /** The NUC's newest sample and its silent threshold; null without samples */
   nuc: { host: string; at: number; silentMin: number } | null;
-  /** Every host seen in the last 24 hours, so a silent one fails rather than drops out */
-  sessions: readonly HostSessions[];
+  /** Every other host seen in the last 24 hours, so a silent one fails rather than drops out */
+  heartbeats: readonly HostHeartbeat[];
   events: readonly GithubEventRow[] | null;
   storedAt: number | null;
   now: Date;
@@ -445,47 +525,116 @@ export const health = ({
     (a, e) => Math.max(a ?? 0, Date.parse(e.updated_at)),
     null
   );
+  const down = channelDown(connection, nowMs);
+  const nucQuiet = nuc ? (nowMs - nuc.at) / 6e4 : 0;
+  const linearAge = storedAt === null ? null : (nowMs - storedAt) / 6e4;
   return [
     {
       name: 'Realtime',
-      ok: connection.live,
-      at: connection.upSince
+      ok: !down,
+      at: connection.upSince,
+      note: down
+        ? connection.retries
+          ? `dropped ${connection.retries}×`
+          : 'not connected'
+        : null
     },
     {
       name: 'queue_state parses',
       ok: runs !== null && !runs.viewInvalid,
-      at: snapshot
+      at: snapshot,
+      note:
+        runs === null
+          ? 'not loaded'
+          : runs.viewInvalid
+            ? 'does not parse'
+            : null
     },
     {
       name: 'Snapshot age',
       ok: snapshot !== null && nowMs - snapshot <= staleHours * 36e5,
-      at: snapshot
+      at: snapshot,
+      note:
+        snapshot === null
+          ? 'no snapshot'
+          : nowMs - snapshot > staleHours * 36e5
+            ? `older than ${staleHours} h`
+            : null
     },
     ...(nuc
       ? [
           {
-            name: `${nuc.host} heartbeat`,
-            ok: (nowMs - nuc.at) / 6e4 <= nuc.silentMin,
-            at: nuc.at
+            name: `${nuc.host} heartbeat` as const,
+            ok: nucQuiet <= nuc.silentMin,
+            at: nuc.at,
+            note:
+              nucQuiet > nuc.silentMin
+                ? `no sample for ${Math.round(nucQuiet)} m, limit ${Math.round(nuc.silentMin)} m`
+                : null
           }
         ]
       : []),
-    ...sessions
-      .filter((s) => s.host !== nuc?.host)
-      .map((s) => ({
-        name: `${s.host} heartbeat`,
-        ok: s.ageMin <= SESSION_HANDBACK_MIN,
-        at: nowMs - s.ageMin * 6e4
-      })),
+    ...heartbeats.map((h) => ({
+      name: `${h.host} heartbeat` as const,
+      ...heartbeatOk(h),
+      at: nowMs - h.ageMin * 6e4
+    })),
     {
       name: 'github_events last event',
       ok: newestEvent !== null,
-      at: newestEvent
+      at: newestEvent,
+      note: newestEvent === null ? 'no event in the last 24 h' : null
     },
     {
       name: 'Linear poll',
-      ok: storedAt !== null && (nowMs - storedAt) / 6e4 <= LINEAR_STALE_MIN,
-      at: storedAt
+      ok: linearAge !== null && linearAge <= LINEAR_STALE_MIN,
+      at: storedAt,
+      note:
+        linearAge === null
+          ? 'not polled yet'
+          : linearAge > LINEAR_STALE_MIN
+            ? `last stored ${Math.round(linearAge)} m ago, limit ${LINEAR_STALE_MIN} m`
+            : null
     }
   ];
 };
+
+/** The problem that already explains a failing check, by its name */
+const covers = (p: Problem, name: CheckName): boolean => {
+  switch (p.kind) {
+    case 'connection':
+      return name === 'Realtime';
+    case 'data':
+      return (
+        name === (p.reason === 'parse' ? 'queue_state parses' : 'Snapshot age')
+      );
+    case 'unknown':
+      return name === `${p.host} heartbeat`;
+    case 'check':
+      return name === p.name;
+    default: {
+      const unreachable: never = p;
+      return unreachable;
+    }
+  }
+};
+
+/** The problem a check's row links to; undefined when none explains it */
+export const problemOf = (
+  list: readonly Problem[],
+  name: CheckName
+): Problem | undefined => list.find((p) => covers(p, name));
+
+/** A `check` problem for every failing check no other problem explains, so the main view shows whatever the pill counts */
+export const checkProblems = (
+  checks: readonly HealthCheck[],
+  found: readonly Problem[]
+): Problem[] =>
+  checks
+    .filter((c) => !c.ok && !problemOf(found, c.name))
+    .map((c) => ({
+      kind: 'check',
+      name: c.name,
+      text: c.note ?? 'failing',
+      since: c.at
+    }));

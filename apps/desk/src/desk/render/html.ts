@@ -85,10 +85,10 @@ export const empty = (html: string): string =>
 export const pvMore = (n: number): string =>
   n > 0 ? `<p class="pv-more">+ ${n} more</p>` : '';
 
-/** The pull request's number as a link; nothing without one */
-export const prn = (n: PrRef | null | undefined): string =>
+/** The pull request's number as a link, tinted by its live tone; nothing without one */
+export const prn = (n: PrRef | null | undefined, tone?: PrTone): string =>
   n
-    ? `<a class="prn" href="${GH_PR + n}" target="_blank" rel="noopener" title="Pull request ${esc(n)}">#${esc(n)}</a>`
+    ? `<a class="prn${tone && tone !== 'neutral' ? ' ' + tone : ''}" href="${GH_PR + n}" target="_blank" rel="noopener" title="Pull request ${esc(n)}">#${esc(n)}</a>`
     : '';
 
 /** The pull request as a plain id link */

@@ -1075,6 +1075,28 @@ table.act {
 .prn:hover {
   text-decoration: underline;
 }
+.prn.ok {
+  color: var(--ok);
+}
+.prn.wait {
+  color: var(--wait);
+}
+.prn.bad {
+  color: var(--block);
+}
+.wrow-li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.wrow-li .wrow {
+  flex: 1;
+  min-width: 0;
+}
+.wrow-li .prn {
+  flex-shrink: 0;
+}
 .chip.plan {
   background: var(--wait-soft);
   color: var(--wait);
@@ -1686,6 +1708,10 @@ table.act {
 .pf-why {
   font-size: 11px;
   color: var(--block);
+}
+.pf-note {
+  font-size: 11px;
+  color: var(--muted);
 }
 .pf-health > .pf-mono {
   text-align: right;
