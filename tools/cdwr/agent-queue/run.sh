@@ -470,10 +470,10 @@ watch_prs() {
     if [[ $? -ne 0 || -z "$now" || "$now" == null ]]; then
       note "warn: watch: could not read PR #$pr ($id)"; record warn "$id" "watch: could not read PR #$pr"; continue
     fi
-    out="$(watch -cn --arg id "$id" --arg label "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
+    out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
       --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
-      {id: $id, agentLabel: $label, pr: $pr, now: ($now | pr_state), prev: $state[$id], handoffs: ($node | handoffs), at: $at} | step')" ||
+      {id: $id, agentLabel: $agentLabel, pr: $pr, now: ($now | pr_state), prev: $state[$id], handoffs: ($node | handoffs), at: $at} | step')" ||
       { note "warn: watch: watch.jq failed on $id"; record warn "$id" "watch: watch.jq failed"; continue; }
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue
