@@ -1,10 +1,12 @@
+import { QUEUE_WRITER_MIN } from '../constants';
 import { elapsed, esc, hhmm, hhmmss, plural } from '../format';
 import {
   type Problem,
   type ProblemKey,
   type ProblemKind,
   frozenAt,
-  problemKey
+  problemKey,
+  writerList
 } from '../live';
 import type { Model } from '../model';
 
@@ -91,7 +93,15 @@ export const renderAlert = (m: Model): string => {
             'Live updates are down. Numbers may lag.'
           )
         : '';
-  return `<div class="alert" role="alert"><div class="alert-in">${WARNING}<b class="alert-t">${both(`${esc(count)} — the desk can't vouch for what it shows`, esc(count))}</b><span class="alert-s">${sub}</span><a class="alert-link" href="#problems" data-see-problems>See problems</a></div></div>`;
+  const writers = ofKind(m.problems, 'data').filter(
+    (p) => p.reason === 'writers'
+  );
+  const onlyWriters = writers.length === m.problems.length;
+  const title = onlyWriters
+    ? `${esc(count)} — another host publishes the queue`
+    : `${esc(count)} — the desk can't vouch for what it shows`;
+  const subText = onlyWriters ? `the desk reads ${esc(writers[0].used)}` : sub;
+  return `<div class="alert" role="alert"><div class="alert-in">${WARNING}<b class="alert-t">${both(title, esc(count))}</b><span class="alert-s">${subText}</span><a class="alert-link" href="#problems" data-see-problems>See problems</a></div></div>`;
 };
 
 /** The label above the widgets the problems leave stale; empty without problems */
@@ -182,6 +192,21 @@ const staleCard = (
   body: `The queue_state row is from ${esc(hhmm(p.since))}, but the newest run started at ${esc(hhmm(p.newestRun))}. The scheduler may have stopped writing it.`
 });
 
+const WINDOW =
+  QUEUE_WRITER_MIN % 60 === 0
+    ? `${QUEUE_WRITER_MIN / 60} h`
+    : `${QUEUE_WRITER_MIN} min`;
+
+const writersCard = (
+  p: Extract<Problem, { kind: 'data'; reason: 'writers' }>
+): Card => ({
+  pill: 'DATA',
+  title: 'More than one host publishes the queue',
+  time: [`last ${esc(hhmm(p.since))}`, `last ${esc(hhmm(p.since))}`],
+  body: `The desk reads ${esc(p.used)}; ${esc(writerList(p.others))} also wrote a queue_state row in the last ${WINDOW}. Stop the scheduler on the host that should not publish: "cdwr agent uninstall" on a Mac, "cdwr agent pause --host <host>" for the container. The row stops counting once it is older than ${WINDOW}.`,
+  short: `Also published by ${p.others.map((o) => esc(o.host)).join(', ')}.`
+});
+
 const unknownCard = (p: Extract<Problem, { kind: 'unknown' }>): Card => {
   const open =
     p.ticket && p.started !== null
@@ -206,7 +231,18 @@ const card = (p: Problem): Card => {
     case 'connection':
       return connectionCard(p);
     case 'data':
-      return p.reason === 'parse' ? parseCard(p) : staleCard(p);
+      switch (p.reason) {
+        case 'parse':
+          return parseCard(p);
+        case 'stale':
+          return staleCard(p);
+        case 'writers':
+          return writersCard(p);
+        default: {
+          const unreachable: never = p;
+          return unreachable;
+        }
+      }
     case 'unknown':
       return unknownCard(p);
     default: {

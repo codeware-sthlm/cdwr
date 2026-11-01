@@ -8,7 +8,9 @@ import {
   type RunRow,
   type UsageRow,
   createSupabase,
+  isPausedRow,
   localStamp,
+  pickQueueState,
   readAllPages,
   toActivity,
   toGithubEvent,
@@ -135,6 +137,58 @@ describe('createSupabase read of builds', () => {
     await expect(
       readWith(reply({ code: '42501', message: 'permission denied' }, 401))
     ).rejects.toMatchObject({ code: 'unauthorized' });
+  });
+});
+
+describe('isPausedRow', () => {
+  it.each([
+    ['2026-10-28 09:50 · paused', null, true],
+    ['2026-10-28 09:50 · paused · no launch: x', null, true],
+    ['2026-10-28 09:50 · planned COD-1', 'Job: every 10 min · paused', true],
+    [
+      '2026-10-28 09:50 · planned COD-1',
+      'Job: every 10 min · effort $1 of $40',
+      false
+    ],
+    [null, null, false]
+  ])('reads %s / %s as paused: %s', (last_run, job, expected) => {
+    expect(isPausedRow({ last_run, job })).toBe(expected);
+  });
+});
+
+describe('pickQueueState', () => {
+  const now = new Date('2026-10-28T10:00:00.000Z');
+  const at = (min: number) => new Date(now.getTime() - min * 6e4).toISOString();
+  const paused = { last_run: '2026-10-28 09:50 · paused' };
+
+  it('prefers an older live row to a newer paused one', () => {
+    const live = state({ host: 'nuc', at: at(40) });
+    expect(
+      pickQueueState([state({ host: 'mbp', at: at(10), ...paused }), live], now)
+    ).toBe(live);
+  });
+  it('takes the newest of several live rows', () => {
+    const newer = state({ host: 'b', at: at(10) });
+    expect(pickQueueState([state({ host: 'a', at: at(40) }), newer], now)).toBe(
+      newer
+    );
+  });
+  it('takes the newest of all when every row is paused', () => {
+    const newer = state({ host: 'b', at: at(10), ...paused });
+    expect(
+      pickQueueState([state({ host: 'a', at: at(40), ...paused }), newer], now)
+    ).toBe(newer);
+  });
+  it('does not let an old live row beat a fresh paused one', () => {
+    const fresh = state({ host: 'nuc', at: at(10), ...paused });
+    expect(
+      pickQueueState([state({ host: 'dead', at: at(300) }), fresh], now)
+    ).toBe(fresh);
+  });
+  it('takes a single row, paused or not, and none from none', () => {
+    const only = state({ ...paused });
+    expect(pickQueueState([only], now)).toBe(only);
+    expect(pickQueueState([], now)).toBeUndefined();
   });
 });
 
@@ -301,6 +355,26 @@ describe('toRuns', () => {
     expect(result?.rows[0]).toMatchObject({
       started: '2026-10-28T08:05:00.000Z',
       finished: '2026-10-28T08:12:00.000Z'
+    });
+  });
+
+  it('picks the live host over a newer paused one, and reports the others', () => {
+    const now = new Date('2026-10-28T10:30:00.000Z');
+    const live = state({ host: 'nuc', at: '2026-10-28T10:00:00.000Z' });
+    const paused = state({
+      host: 'mbp',
+      at: '2026-10-28T10:20:00.000Z',
+      last_run: '2026-10-28 10:20 · paused'
+    });
+    const old = state({ host: 'old', at: '2026-10-28T08:00:00.000Z' });
+    const result = toRuns([paused, live, old], [], [], now);
+    expect(result?.host).toBe('nuc');
+    expect(result?.others).toEqual([
+      { host: 'mbp', at: '2026-10-28T10:20:00.000Z', paused: true }
+    ]);
+    expect(toRuns([live], [], [], now)).toMatchObject({
+      host: 'nuc',
+      others: []
     });
   });
 

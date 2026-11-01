@@ -84,6 +84,8 @@ const runsPayload = (over: Partial<RunsPayload> = {}): RunsPayload => ({
   view: null,
   viewIssues: [],
   at: '2026-10-29T11:55:00.000Z',
+  host: 'nuc',
+  others: [],
   main: { image: null, desk: null },
   rows: [],
   ...over

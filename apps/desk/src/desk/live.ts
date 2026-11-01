@@ -14,6 +14,7 @@ import {
   SESSION_ATTENDED_MIN,
   SESSION_HANDBACK_MIN
 } from './constants';
+import { hhmm } from './format';
 import type { Connection } from './state';
 import type { ViewIssue } from './types';
 
@@ -281,6 +282,16 @@ export type Problem =
       newestRun: number;
     }
   | {
+      kind: 'data';
+      reason: 'writers';
+      text: string;
+      /** When the newest other host last wrote */
+      since: number;
+      /** The host the desk reads */
+      used: string;
+      others: { host: string; at: number; paused: boolean }[];
+    }
+  | {
       kind: 'unknown';
       text: string;
       since: number;
@@ -293,7 +304,8 @@ export type Problem =
 
 export type ProblemKind = Problem['kind'];
 
-export type ProblemKey = 'connection' | 'unknown' | 'data-parse' | 'data-stale';
+export type ProblemKey =
+  'connection' | 'unknown' | 'data-parse' | 'data-stale' | 'data-writers';
 
 /** The card a problem gets: its kind, and for data its reason */
 export const problemKey = (p: Problem): ProblemKey => {
@@ -302,7 +314,7 @@ export const problemKey = (p: Problem): ProblemKey => {
     case 'unknown':
       return p.kind;
     case 'data':
-      return p.reason === 'parse' ? 'data-parse' : 'data-stale';
+      return `data-${p.reason}`;
     default: {
       const unreachable: never = p;
       return unreachable;
@@ -310,11 +322,25 @@ export const problemKey = (p: Problem): ProblemKey => {
   }
 };
 
-/** The earliest `since` of the problems that freeze numbers (data, unknown); a down channel only lags, so null without those */
+/** The earliest `since` of the problems that freeze numbers (data, unknown); a down channel only lags and a second writer leaves the picked row current, so neither counts */
 export const frozenAt = (list: readonly Problem[]): number | null => {
-  const times = list.filter((p) => p.kind !== 'connection').map((p) => p.since);
+  const times = list
+    .filter(
+      (p) =>
+        p.kind !== 'connection' &&
+        !(p.kind === 'data' && p.reason === 'writers')
+    )
+    .map((p) => p.since);
   return times.length ? Math.min(...times) : null;
 };
+
+/** `host (paused, last HH:MM)` for each, comma separated; unescaped */
+export const writerList = (
+  others: readonly { host: string; at: number; paused: boolean }[]
+): string =>
+  others
+    .map((o) => `${o.host} (${o.paused ? 'paused, ' : ''}last ${hhmm(o.at)})`)
+    .join(', ');
 
 /** What the desk can see is wrong with what it shows */
 export const problems = ({
@@ -381,6 +407,21 @@ export const problems = ({
       since: Date.parse(runs.at),
       newestRun
     });
+  if (runs?.others.length) {
+    const others = runs.others.map((o) => ({
+      host: o.host,
+      at: Date.parse(o.at),
+      paused: o.paused
+    }));
+    out.push({
+      kind: 'data',
+      reason: 'writers',
+      text: `${runs.others.length === 1 ? 'Two hosts publish' : `${runs.others.length + 1} hosts publish`} the queue: ${runs.host} (used) and ${writerList(others)}`,
+      since: Math.max(...others.map((o) => o.at)),
+      used: runs.host,
+      others
+    });
+  }
   // A session on another host (the attended Mac) says nothing about the NUC's silence
   const sessionId = runs?.qv?.session.id;
   const sessionHost = sessionId
