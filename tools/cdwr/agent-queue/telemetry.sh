@@ -9,7 +9,8 @@
 #   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json>
 #                                                            upserts this host's row in `queue_state`; empty fields become null,
 #                                                            a view that isn't JSON too
-#   telemetry_session <id> <kind>                            upserts the session's heartbeat in `sessions`
+#   telemetry_session <id> <kind> [state] [detail]           upserts the session's heartbeat in `sessions`;
+#                                                            empty fields become null
 #   supabase_delete <table> <query>                          DELETE the rows a PostgREST filter matches
 #   telemetry_host_metrics                                   Linux only: one row of load, memory and disk in `host_metrics`,
 #                                                            then this host's rows older than 7 days are deleted; roots
@@ -108,11 +109,14 @@ telemetry_queue_state() {
   supabase_upsert queue_state host "$body" merge
 }
 
+# telemetry_session <id> <kind> [state] [detail]: an empty or missing state or detail is null
 telemetry_session() {
   telemetry_on || return 0
   local body
-  body="$(jq -nc --arg id "$1" --arg kind "$2" --arg host "$(telemetry_host)" \
-    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{id: $id, host: $host, kind: $kind, last_seen: $now}')" || return 0
+  body="$(jq -nc --arg id "$1" --arg kind "$2" --arg state "${3:-}" --arg detail "${4:-}" \
+    --arg host "$(telemetry_host)" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    def orNull: if . == "" then null else . end;
+    {id: $id, host: $host, kind: $kind, last_seen: $now, state: ($state | orNull), detail: ($detail | orNull)}')" || return 0
   supabase_upsert sessions id "$body" merge
 }
 
