@@ -101,6 +101,8 @@ const runs = (qv: QueueView | null): RunsPayload => ({
   view: null,
   viewIssues: [],
   at: new Date('2026-10-29T11:55:00').toISOString(),
+  host: 'nuc',
+  others: [],
   main: { image: null, desk: null },
   rows: [
     {
@@ -1463,6 +1465,15 @@ describe('problems', () => {
     s.data.runs = { ...base, at: new Date(at(60)).toISOString() };
     return s;
   };
+  const writers = (s: DeskState) => {
+    s.data.runs = {
+      ...runs(view()),
+      others: [
+        { host: 'mbp', at: new Date(at(30)).toISOString(), paused: true }
+      ]
+    };
+    return s;
+  };
   const silent = (s: DeskState) => {
     s.data.runs = runs(view({ session: { state: 'alive', ticket: 'COD-1' } }));
     s.data.hostMetrics = [hostSample(60), hostSample(50)];
@@ -1534,6 +1545,26 @@ describe('problems', () => {
     expect(out).toContain('session: <mark>⟨missing⟩</mark>');
     expect(out).toContain('limit: <mark>⟨invalid⟩</mark>');
     expect(out).toContain('data-action="copy-row"');
+  });
+
+  it('draws the writers problem with the fix and no button', () => {
+    const out = renderProblems(model(writers(filled()), NOW));
+    expect(out).toContain('More than one host publishes the queue');
+    expect(out).toContain('mbp (paused, last ');
+    expect(out).toContain('cdwr agent uninstall');
+    expect(out).toContain('cdwr agent pause --host');
+    expect(out).toContain('in the last 2 h');
+    expect(out).toContain(`last ${hhmm(at(30))}`);
+    expect(out).not.toContain('data-action');
+  });
+
+  it('words the alert for a second writer alone, and keeps the usual one when mixed', () => {
+    const only = renderAlert(model(writers(filled()), NOW));
+    expect(only).toContain('1 problem — another host publishes the queue');
+    expect(only).toContain('the desk reads nuc');
+    expect(only).not.toContain("can't vouch");
+    const mixed = renderAlert(model(down(writers(filled())), NOW));
+    expect(mixed).toContain("the desk can't vouch for what it shows");
   });
 
   it('draws the stale problem without a raw row or a button', () => {

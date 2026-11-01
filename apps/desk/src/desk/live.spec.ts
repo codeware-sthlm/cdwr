@@ -12,6 +12,7 @@ import {
   HOST_SPACING_SAMPLES,
   SESSION_HANDBACK_MIN
 } from './constants';
+import { hhmm } from './format';
 import {
   type HostSessions,
   type Problem,
@@ -126,6 +127,8 @@ const runs = (
   view: null,
   viewIssues: [],
   at,
+  host: 'nuc',
+  others: [],
   main: { image: null, desk: null },
   rows
 });
@@ -661,6 +664,29 @@ describe('problems', () => {
     ]);
   });
 
+  it('flags a second host that wrote the queue lately', () => {
+    const other = (min: number, paused = true) => ({
+      host: 'mbp',
+      at: ago(min),
+      paused
+    });
+    const out = problems({
+      ...base,
+      runs: { ...runs(ago(5), [run(ago(10), ago(8))]), others: [other(30)] }
+    });
+    expect(out).toEqual([
+      expect.objectContaining({
+        kind: 'data',
+        reason: 'writers',
+        used: 'nuc',
+        others: [{ host: 'mbp', at: Date.parse(ago(30)), paused: true }],
+        text: `Two hosts publish the queue: nuc (used) and mbp (paused, last ${hhmm(Date.parse(ago(30)))})`
+      })
+    ]);
+    expect(out.map(problemKey)).toEqual(['data-writers']);
+    expect(problems(base)).toEqual([]);
+  });
+
   it('clears the parse problem when the row parses', () => {
     expect(problems({ ...base, runs: runs(ago(5)) })).toEqual([]);
   });
@@ -816,6 +842,18 @@ describe('frozenAt', () => {
     };
     expect(frozenAt([conn])).toBeNull();
     expect(frozenAt([conn, data])).toBe(200);
+  });
+
+  it('ignores a second writer: the picked row is still current', () => {
+    const writers: Problem = {
+      kind: 'data',
+      reason: 'writers',
+      text: '',
+      since: 50,
+      used: 'nuc',
+      others: [{ host: 'mbp', at: 40, paused: true }]
+    };
+    expect(frozenAt([writers])).toBeNull();
   });
 });
 

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
+import { QUEUE_WRITER_MIN } from './desk/constants';
 import { DAY_MS } from './desk/format';
 import {
   parseAttended,
@@ -70,8 +71,12 @@ export type RunsPayload = {
   view: unknown;
   /** The paths that fail to parse; empty unless `viewInvalid` */
   viewIssues: ViewIssue[];
-  /** When the newest queue_state row was written, ISO */
+  /** When the picked queue_state row was written, ISO */
   at: string;
+  /** The host that wrote the picked row */
+  host: string;
+  /** The other hosts that wrote a row within QUEUE_WRITER_MIN */
+  others: { host: string; at: string; paused: boolean }[];
   main: MainBuilds;
   rows: {
     when: string;
@@ -154,6 +159,27 @@ const byTimeDesc = (a: string, b: string): number =>
 const newest = (rows: QueueStateRow[]): QueueStateRow | undefined =>
   [...rows].sort((a, b) => byTimeDesc(a.at, b.at))[0];
 
+/** A paused tick ends its last_run line in `· paused` and its job line carries a `· paused` segment */
+export const isPausedRow = (
+  row: Pick<QueueStateRow, 'last_run' | 'job'>
+): boolean =>
+  (row.last_run ?? '')
+    .split('·')
+    .map((s) => s.trim())
+    .slice(1, 2)
+    .includes('paused') || parseJob(row.job)?.paused === true;
+
+const publishing = (row: QueueStateRow, now: Date): boolean =>
+  now.getTime() - Date.parse(row.at) <= QUEUE_WRITER_MIN * 6e4;
+
+/** The newest unpaused row written within QUEUE_WRITER_MIN, so neither a paused host nor a dead one hides the live host; else the newest of all */
+export const pickQueueState = (
+  rows: QueueStateRow[],
+  now: Date
+): QueueStateRow | undefined =>
+  newest(rows.filter((r) => !isPausedRow(r) && publishing(r, now))) ??
+  newest(rows);
+
 // The text's clock time is the scheduler host's local time; the row's `at` carries the zone
 const LAST_RUN = /^\d{4}-\d\d-\d\d \d\d:\d\d\s*·\s*(.+)$/;
 
@@ -165,9 +191,10 @@ export const toMain = (rows: BuildRow[]): MainBuilds => ({
 export const toRuns = (
   queueStates: QueueStateRow[],
   runRows: RunRow[],
-  buildRows: BuildRow[] = []
+  buildRows: BuildRow[] = [],
+  now: Date = new Date()
 ): RunsPayload | null => {
-  const state = newest(queueStates);
+  const state = pickQueueState(queueStates, now);
   if (!state) return null;
   const lastMatch = state.last_run?.match(LAST_RUN);
   const qv = validateQueueView(state.view);
@@ -189,6 +216,11 @@ export const toRuns = (
     view: state.view,
     viewIssues: viewInvalid ? queueViewIssues(state.view) : [],
     at: state.at,
+    host: state.host,
+    others: queueStates
+      .filter((r) => r !== state && publishing(r, now))
+      .sort((a, b) => byTimeDesc(a.at, b.at))
+      .map((r) => ({ host: r.host, at: r.at, paused: isPausedRow(r) })),
     main: toMain(buildRows),
     // Idle adds no row
     rows: runRows
@@ -457,10 +489,16 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         client.from('builds').select('*')
       ]);
       const queueStates = settle(states);
+      const runsPayload = toRuns(
+        queueStates,
+        settle(runs),
+        buildRows(builds),
+        now
+      );
       return {
-        runs: toRuns(queueStates, settle(runs), buildRows(builds)),
+        runs: runsPayload,
         usage: toUsage(usageRows, now),
-        activity: toActivity(settle(activity), newest(queueStates)?.at ?? null)
+        activity: toActivity(settle(activity), runsPayload?.at ?? null)
       };
     });
 
