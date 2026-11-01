@@ -661,6 +661,31 @@ describe('createAdapter', () => {
     await done;
   });
 
+  it('marks a live desk down when it reconnects, without counting a drop', async () => {
+    const { adapter, supabase, onLive, fireStatus } = setup();
+    fireStatus(true);
+    const up = Date.now();
+    expect(onLive.mock.calls.at(-1)?.[1]).toMatchObject({ upSince: up });
+    await vi.advanceTimersByTimeAsync(5000);
+    const done = adapter.reconnect();
+    expect(onLive.mock.calls[onLive.mock.calls.length - 1]).toEqual([
+      false,
+      expect.objectContaining({
+        retries: 0,
+        upSince: null,
+        downSince: up + 5000
+      })
+    ]);
+    await done;
+    await vi.advanceTimersByTimeAsync(3000);
+    supabase.subscribe.mock.calls[1][1]?.(true, 'SUBSCRIBED');
+    expect(onLive.mock.calls.at(-1)?.[1]).toMatchObject({
+      retries: 0,
+      upSince: up + 8000,
+      downSince: null
+    });
+  });
+
   it('ignores the status of a subscription it replaced', async () => {
     const { adapter, supabase, onLive } = setup();
     const before = supabase.subscribe.mock.calls[0][1];

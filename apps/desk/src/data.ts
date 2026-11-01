@@ -646,6 +646,12 @@ export const createAdapter = ({
       if (reconnecting) return reconnecting;
       // The old channel's close while it leaves is not a drop
       generation += 1;
+      // The old channel is gone, so a live desk is down until the new one answers; not a drop
+      if (subscribed) {
+        subscribed = false;
+        connection.upSince = null;
+        connection.downSince ??= now();
+      }
       // Shows at once; the old status would read CLOSED until the new channel answers
       connection.status = null;
       onLive?.(subscribed, { ...connection });
