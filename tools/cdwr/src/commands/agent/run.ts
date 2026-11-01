@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 
 import { type Plan, defineCommand } from '../../cli/command';
 import { CliError, EXIT } from '../../cli/errors';
+import { preflight } from '../../cli/preflight';
 import {
   checkRun,
   currentUid,
@@ -36,7 +37,6 @@ export default defineCommand({
     'Kicks the launchd job, or in the agent container wakes its loop, which runs the queue script as it would on schedule. Nothing starts when the queue is paused, busy or has nothing to plan.',
   danger: 'mutate',
   confirm: 'always',
-  needs: ['claude', 'jq'],
   inputs: {
     host: hostInput(
       'Start a run in the agent container over ssh on this host instead of locally'
@@ -46,6 +46,8 @@ export default defineCommand({
   async plan(ctx, { host: sshHost }): Promise<Plan<Data>> {
     if (sshHost)
       return remotePlan(ctx, { host: sshHost, args: ['agent', 'run'] });
+    // Checked here, not as `needs`: with `--host` the run happens in the container
+    preflight(['claude', 'jq'], ctx.env);
     const host = await requireScheduler(ctx.env, 'run');
     if (host === 'container') return containerPlan(paths(ctx.env));
     const job = await jobState();
@@ -148,12 +150,12 @@ function containerPlan(queue: QueuePaths): Plan<Data> {
   };
 }
 
-/** Whether a process with this pid exists and may be signalled */
+/** Whether a process with this pid exists; EPERM means it does, under another user */
 const alive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
   }
 };
