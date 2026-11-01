@@ -339,22 +339,33 @@ trap 'st=$?; on_exit $st; exit $st' EXIT
 $check || CHECKIN_ID="$(checkin in_progress)"
 
 # PR watch: gh runs as Håkan, so only reads (gh pr list, gh api graphql with a query).
-# The decisions live in watch.jq, installed next to this file.
+# The decisions live in watch.jq, installed next to this file. It watches every ticket an agent
+# label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write.
 read -r -d '' WATCHED <<'GQL' || true
 query {
   issues(first: 50, filter: {
     team: { key: { eq: "COD" } }
-    labels: { some: { name: { eq: "agent:review" } } }
+    labels: { some: { name: { in: ["agent:working", "agent:needs-input", "agent:review"] } } }
     state: { type: { neq: "canceled" } }
     or: [{ completedAt: { null: true } }, { completedAt: { gt: "-P14D" } }]
   }) {
     nodes {
+      id
       identifier
-      labels { nodes { name } }
+      description
+      labels { nodes { id name } }
       attachments { nodes { url createdAt } }
       comments(first: 50, orderBy: createdAt) { nodes { body createdAt } }
     }
   }
+  issueLabels(filter: { name: { eq: "agent:review" } }) { nodes { id team { key } } }
+}
+GQL
+# A ticket merged outside review ends as agent:review with a Next line saying so. The labels
+# change by id, so labels added since the read stay.
+read -r -d '' RELABEL <<'GQL' || true
+mutation($id: String!, $add: [String!], $remove: [String!], $d: String) {
+  issueUpdate(id: $id, input: { addedLabelIds: $add, removedLabelIds: $remove, description: $d }) { success }
 }
 GQL
 read -r -d '' PR_QUERY <<'GQL' || true
@@ -362,6 +373,7 @@ query($n: Int!) {
   repository(owner: "codeware-sthlm", name: "cdwr") {
     pullRequest(number: $n) {
       state
+      mergedAt
       mergeQueueEntry { state }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
       reviewThreads(first: 100) {
@@ -398,10 +410,34 @@ gh_identity_or_note() {
   return 0
 }
 
+# relabel_merged <node> <merged at> <agent:review label id>: the watch's one Linear write, for a
+# ticket whose PR merged outside review: agent:review in, its other agent label out, and the Next
+# line saying it merged and what is handed off. True only when Linear took it, so a failed write
+# is tried again on the next run.
+relabel_merged() {
+  local node="$1" when="${2:-$(date -u +%FT%TZ)}" review="$3" id vars resp
+  id="$(jq -r '.identifier' <<<"$node")"
+  [[ -n "$review" ]] || { note "warn: watch: no agent:review label for $id"; record warn "$id" "watch: no agent:review label"; return 1; }
+  vars="$(watch -c --arg when "$when" --arg review "$review" '
+    include "watch";
+    handoffs as $h
+    | { id, add: [$review],
+        remove: [ .labels.nodes[] | select((.name | startswith("agent:")) and .name != "agent:review") | .id ],
+        d: (.description | merged_next($when; $h)) }' <<<"$node")" ||
+    { note "warn: watch: watch.jq failed relabelling $id"; record warn "$id" "watch: relabel failed"; return 1; }
+  resp="$(linear "$RELABEL" "$vars")"
+  if ! jq -e '.data.issueUpdate.success == true' >/dev/null 2>&1 <<<"$resp"; then
+    note "warn: watch: relabel of $id failed ($(jq -c '.errors[0].message // "no answer"' <<<"$resp" 2>/dev/null))"
+    record warn "$id" "watch: relabel failed"
+    return 1
+  fi
+  note "watch: $id merged outside review, relabelled agent:review"
+}
+
 watch_prs() {
   # One PR failing to read skips that PR, not the rest.
   setopt local_options no_err_exit
-  local file="$HOME_DIR/watch.json" resp nodes state node id pr now out level msg
+  local file="$HOME_DIR/watch.json" resp nodes state node id label pr now out level msg review
   gh_identity_or_note
   resp="$(linear "$WATCHED")" || { print -r -- "Linear did not answer"; return 1; }
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
@@ -413,11 +449,17 @@ watch_prs() {
   state="$(jq -c 'if type == "object" then . else {} end' "$file" 2>/dev/null || print '{}')"
   state="$(watch -c --argjson ids "$(jq -c 'map(.identifier)' <<<"$nodes")" \
     'include "watch"; prune($ids)' <<<"$state")" || { print -r -- "watch.jq failed"; return 1; }
+  # The team's own agent:review label before a workspace one
+  review="$(jq -r '[.data.issueLabels.nodes[]? | select(.team == null or .team.key == "COD")]
+    | sort_by(.team == null) | first | .id // empty' <<<"$resp")"
 
   for node in ${(f)"$(jq -c '.[]' <<<"$nodes")"}; do
     id="$(jq -r '.identifier' <<<"$node")"
+    label="$(watch -r 'include "watch"; agent_label // empty' <<<"$node")"
     pr="$(watch 'include "watch"; pr_number // empty' <<<"$node")"
-    if [[ -z "$pr" ]]; then
+    # Outside review only the attached PR counts: a search could find a PR that merely names the
+    # ticket, and a merge there would relabel it
+    if [[ -z "$pr" && "$label" == agent:review ]]; then
       pr="$(gh_read gh pr list --repo codeware-sthlm/cdwr --state all --search "\"$id\" in:title,body" \
         --json number --limit 1 --jq '.[0].number // empty')" || { note "warn: watch: no PR lookup for $id"; record warn "$id" "watch: no PR lookup"; continue; }
     fi
@@ -426,16 +468,20 @@ watch_prs() {
     if [[ $? -ne 0 || -z "$now" || "$now" == null ]]; then
       note "warn: watch: could not read PR #$pr ($id)"; record warn "$id" "watch: could not read PR #$pr"; continue
     fi
-    out="$(watch -cn --arg id "$id" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
+    out="$(watch -cn --arg id "$id" --arg label "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
       --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
-      {id: $id, pr: $pr, now: ($now | pr_state), prev: $state[$id], handoffs: ($node | handoffs), at: $at} | step')" ||
+      {id: $id, agentLabel: $label, pr: $pr, now: ($now | pr_state), prev: $state[$id], handoffs: ($node | handoffs), at: $at} | step')" ||
       { note "warn: watch: watch.jq failed on $id"; record warn "$id" "watch: watch.jq failed"; continue; }
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue
       note "watch: $level $msg"
       notice "$level" "$msg"
     done <<<"$(jq -r '.notices[] | "\(.level)\t\(.message)"' <<<"$out")"
+    if [[ "$(jq -r '.relabel' <<<"$out")" == true ]]; then
+      relabel_merged "$node" "$(jq -r '.mergedAt // empty' <<<"$now")" "$review" &&
+        out="$(jq -c '.entry.relabelled = true' <<<"$out")"
+    fi
     state="$(jq -c --arg id "$id" --argjson e "$(jq -c '.entry' <<<"$out")" '.[$id] = $e' <<<"$state")"
   done
 
