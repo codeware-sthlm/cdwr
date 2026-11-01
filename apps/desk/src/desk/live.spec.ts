@@ -687,6 +687,17 @@ describe('problems', () => {
     expect(problems(base)).toEqual([]);
   });
 
+  it('drops a cached second writer once it is older than the window', () => {
+    const out = problems({
+      ...base,
+      runs: {
+        ...runs(ago(5), [run(ago(10), ago(8))]),
+        others: [{ host: 'mbp', at: ago(121), paused: true }]
+      }
+    });
+    expect(out).toEqual([]);
+  });
+
   it('clears the parse problem when the row parses', () => {
     expect(problems({ ...base, runs: runs(ago(5)) })).toEqual([]);
   });
