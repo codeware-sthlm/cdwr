@@ -13,11 +13,26 @@ def pr_number:
     else .url | capture("^https://github\\.com/codeware-sthlm/cdwr/pull/(?<n>[0-9]+)").n | tonumber
     end;
 
-# Unchecked items of the newest "PR ready" comment's "Hand-off checklist:" block
+# Open hand-off rows of the description's Status table (`| Step | What | Status |`): the What cell
+# starts with "Hand-off" and the Status cell doesn't start with "Done". The item is the What text
+# after "Hand-off:", or the whole cell when nothing follows.
+def status_handoffs:
+  [ (.description // "") | split("\n")[]
+    | select(test("^\\s*\\|"))
+    | [ sub("^\\s*\\|"; "") | sub("\\|\\s*$"; "") | split("|")[] | trim ]
+    | select(length >= 3)
+    | { what: .[1], status: .[-1] }
+    | select(.what | test("^hand-offs?\\b"; "i"))
+    | select(.status | test("^done\\b"; "i") | not)
+    | (.what | sub("^hand-offs?:?\\s*"; ""; "i")) as $t
+    | if $t == "" then .what else $t end ];
+
+# Unchecked items of the newest "PR ready" comment's "Hand-off checklist:" block. A ticket that
+# never got one (merged from a gate) falls back to the Status table's hand-off rows.
 def handoffs:
   ([ (.comments.nodes // [])[] | select(.body | startswith("**Agent: PR ready**")) ]
     | sort_by(.createdAt) | last) as $c
-  | if $c == null then []
+  | if $c == null then status_handoffs
     else
       ($c.body | split("\n")) as $lines
       | ([ range(0; $lines | length)
@@ -59,13 +74,17 @@ def pr_state:
                              and ((.body // "") | startswith("**Agent") | not)) ] | length
     };
 
-# One watch step: notices to send and the entry to store for the ticket.
+# One watch step: notices to send, whether to relabel, and the entry to store for the ticket.
 # Leaving the queue by merging is also a removal event (reason "merged"); that is no notice.
+# $in.agentLabel is the ticket's agent label (agent:review when absent or empty). Outside review a session
+# still holds the ticket, so only a merge or a close notifies; a merge there asks for the relabel
+# to agent:review until run.sh has stored `relabelled` for that PR.
 def step:
   . as $in
   | $in.id as $id | $in.pr as $pr | $in.now as $now
+  | (($in.agentLabel // "") | IN("", "agent:review")) as $review
   | (if $in.prev != null and $in.prev.pr == $pr then $in.prev else { state: "open", removedAt: null } end) as $prev
-  | (if $now.removedAt != null
+  | (if $review and $now.removedAt != null
         and ($prev.removedAt == null or $now.removedAt > $prev.removedAt)
         and ($now.state != "merged" and $now.state != "closed")
         and (($now.removedReason // "") | ascii_downcase) != "merged"
@@ -77,7 +96,7 @@ def step:
      else [] end) as $removal
   | (if $now.state == $prev.state then []
      elif $now.state == "failing" then
-       (if ($removal | length) > 0 then [] else [ { level: "action", message: "\($id): PR #\($pr) has failing checks" } ] end)
+       (if ($removal | length) > 0 or ($review | not) then [] else [ { level: "action", message: "\($id): PR #\($pr) has failing checks" } ] end)
      elif $now.state == "merged" then
        (if ($in.handoffs | length) > 0
         then [ { level: "action", message: "\($id) merged: hand-offs left: \($in.handoffs | join("; "))" } ]
@@ -86,9 +105,25 @@ def step:
      else [] end) as $change
   | {
       notices: ($removal + $change),
-      entry: { pr: $pr, state: $now.state, removedAt: ($now.removedAt // $prev.removedAt),
-               unresolved: ($now.unresolved // 0), at: $in.at }
+      relabel: ($now.state == "merged" and ($review | not) and ($prev.relabelled != true)),
+      entry: ({ pr: $pr, state: $now.state, removedAt: ($now.removedAt // $prev.removedAt),
+                unresolved: ($now.unresolved // 0), at: $in.at }
+              + (if $prev.relabelled == true then { relabelled: true } else {} end))
     };
+
+# The description with its first "**Next:** " line saying the PR merged at $when (ISO time) and
+# what is handed off; the line is appended when there is none
+def merged_next($when; $items):
+  ($when | capture("^(?<d>[0-9]{4}-[0-9]{2}-[0-9]{2})T(?<hm>[0-9]{2}:[0-9]{2})")) as $t
+  | ("**Next:** merged \($t.d) \($t.hm)Z; "
+     + (if ($items | length) > 0 then "hand-off: \($items | join("; "))" else "no hand-offs" end)) as $line
+  | (. // "" | rtrimstr("\n")) as $d
+  | ($d | split("\n")) as $lines
+  | ([ range(0; $lines | length) | select($lines[.] | startswith("**Next:** ")) ] | first) as $i
+  | if $i != null then $lines | .[$i] = $line | join("\n")
+    elif $d == "" then $line
+    else $d + "\n\n" + $line
+    end;
 
 # Keep only the watched tickets in the state object
 def prune($ids): (. // {}) | with_entries(select(.key as $k | $ids | index($k) != null));
@@ -128,14 +163,16 @@ def parked:
     | select(.wait == "copilot" or .wait == "ci") ]
   | first;
 
-# { resolved, outcome } for a parked issue. $waits maps identifier to { reviewed, rollup, oid };
-# a missing entry is pending. Copilot answers within 20 minutes or not at all; CI checks that
-# haven't finished on the named commit within an hour resolve as a timeout, so no ticket stays
-# parked for good.
+# { resolved, outcome } for a parked issue. $waits maps identifier to { state, reviewed, rollup, oid };
+# a missing entry is pending. A PR that merged or closed ends the wait whatever it waited for.
+# Copilot answers within 20 minutes or not at all; CI checks that haven't finished on the named
+# commit within an hour resolve as a timeout, so no ticket stays parked for good.
 def wait_state($now; $waits):
   parked as $p
   | ($waits[.identifier] // {}) as $w
-  | if $p.wait == "copilot" then
+  | if $w.state == "MERGED" then { resolved: true, outcome: "merged" }
+    elif $w.state == "CLOSED" then { resolved: true, outcome: "closed" }
+    elif $p.wait == "copilot" then
       if $w.reviewed == true then { resolved: true, outcome: "reviewed" }
       elif ($now - $p.since) >= 1200 then { resolved: true, outcome: "no review" }
       else { resolved: false, outcome: null }

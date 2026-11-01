@@ -28,7 +28,7 @@ gh_query() {
   fi
 }
 
-# parked_waits: reads the ATTENDED_QUERY response on stdin, prints { "COD-1": { reviewed, rollup, oid } }
+# parked_waits: reads the ATTENDED_QUERY response on stdin, prints { "COD-1": { state, reviewed, rollup, oid } }
 # for each parked ticket. Any failure prints {}, which leaves every wait pending.
 parked_waits() {
   setopt local_options no_err_exit
@@ -40,7 +40,7 @@ parked_waits() {
       | { ticket: .identifier, pr: parked.pr } ]' <<<"$resp" 2>/dev/null)" || { print -r -- '{}'; return 0; }
   [[ "$(jq 'length' <<<"$tickets" 2>/dev/null)" -gt 0 ]] 2>/dev/null || { print -r -- '{}'; return 0; }
   query="$(jq -r '"query { repository(owner: \"codeware-sthlm\", name: \"cdwr\") { "
-    + ([ to_entries[] | "t\(.key): pullRequest(number: \(.value.pr)) { reviews(first: 50) { nodes { author { login } } } commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } } }" ] | join(" "))
+    + ([ to_entries[] | "t\(.key): pullRequest(number: \(.value.pr)) { state reviews(first: 50) { nodes { author { login } } } commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } } }" ] | join(" "))
     + " } }"' <<<"$tickets")" || { print -r -- '{}'; return 0; }
   out="$(gh_query "$query" 2>/dev/null)" || { print -r -- '{}'; return 0; }
   jq -ec --argjson t "$tickets" '
@@ -48,6 +48,7 @@ parked_waits() {
     | $t | to_entries
     | map({ key: .value.ticket,
             value: ($repo["t\(.key)"] | {
+              state: (.state // null),
               reviewed: ([ .reviews.nodes[]?.author.login // empty | startswith("copilot-pull-request-reviewer") ] | any),
               rollup: ((.commits.nodes // [] | last | .commit.statusCheckRollup.state) // null),
               oid: ((.commits.nodes // [] | last | .commit.oid) // null) }) })
