@@ -2,6 +2,7 @@ import type { DataFailure } from '../data';
 import type { Issue, OpenStatusType } from '../linear';
 import type {
   ActivityPayload,
+  ChannelStatus,
   GithubEventRow,
   HostMetricRow,
   IssueEventRow,
@@ -100,11 +101,17 @@ export type DeskData = {
   storedAt: number | null;
 };
 
-/** The Realtime channel: whether it is joined, how often it dropped, since when it is up, and the newest issue event it brought */
+/** The Realtime channel: whether it is joined, how often it dropped, since when it is up or down, its last status, when the next retry fires, and the newest issue event it brought */
 export type Connection = {
   live: boolean;
   retries: number;
   upSince: number | null;
+  /** When the channel went (or started) down, in ms; null while it is up */
+  downSince: number | null;
+  /** The last status the channel reported; null before any */
+  status: ChannelStatus | null;
+  /** When the backoff timer fires next, in ms; null with none pending */
+  nextAt: number | null;
   lastIssue: IssueEventRow | null;
 };
 
@@ -149,7 +156,15 @@ export const createState = (): DeskState => ({
     usageHours: null,
     githubEvents: null,
     sessions: null,
-    connection: { live: false, retries: 0, upSince: null, lastIssue: null },
+    connection: {
+      live: false,
+      retries: 0,
+      upSince: null,
+      downSince: null,
+      status: null,
+      nextAt: null,
+      lastIssue: null
+    },
     storedAt: null
   },
   details: new Map(),

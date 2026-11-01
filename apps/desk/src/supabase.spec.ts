@@ -317,6 +317,17 @@ describe('toRuns', () => {
     expect(absent?.viewInvalid).toBe(false);
     expect(toRuns([state()], [])?.viewInvalid).toBe(false);
   });
+
+  it('keeps the raw view and names the failing paths only when invalid', () => {
+    const view = { limit: { used: 1, max: 3 } };
+    const bad = toRuns([state({ view })], []);
+    expect(bad?.view).toEqual(view);
+    expect(bad?.viewIssues).toEqual([{ path: 'table', missing: true }]);
+    const good = toRuns([state()], []);
+    expect(good?.view).toEqual(state().view);
+    expect(good?.viewIssues).toEqual([]);
+    expect(toRuns([state({ view: null })], [])?.viewIssues).toEqual([]);
+  });
 });
 
 describe('toUsage', () => {

@@ -90,6 +90,8 @@ const runs = (qv: QueueView | null): RunsPayload => ({
   },
   qv,
   viewInvalid: false,
+  view: null,
+  viewIssues: [],
   at: new Date('2026-10-29T11:55:00').toISOString(),
   main: { image: null, desk: null },
   rows: [
@@ -408,6 +410,9 @@ describe('header', () => {
     live,
     retries: 0,
     upSince: NOW.getTime() - 6e4,
+    downSince: null,
+    status: null,
+    nextAt: null,
     lastIssue: null
   });
 
@@ -1332,6 +1337,7 @@ describe('platform view', () => {
   it('list a check per row, with the problem text of a failing one', () => {
     const s = filled();
     s.data.hostMetrics = [hostSample(0)];
+    s.data.connection.downSince = NOW.getTime() - 60e3;
     const out = html(s);
     expect(out).toContain('Realtime');
     expect(out).toContain('queue_state parses');

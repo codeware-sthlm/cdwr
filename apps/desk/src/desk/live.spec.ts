@@ -14,18 +14,22 @@ import {
 } from './constants';
 import {
   type HostSessions,
+  type Problem,
   agentPrs,
   feed,
+  frozenAt,
   handBack,
   health,
   hostSessions,
   prState,
+  problemKey,
   problems,
   pulse,
   sampleMinutes,
   silentAfter
 } from './live';
 import type { Connection } from './state';
+import type { QueueView, SessionState } from './types';
 
 const NOW = new Date('2026-10-29T12:00:00.000Z');
 const MIN = 6e4;
@@ -38,6 +42,9 @@ const connection = (over: Partial<Connection> = {}): Connection => ({
   live: true,
   retries: 0,
   upSince: NOW.getTime() - 60 * MIN,
+  downSince: null,
+  status: null,
+  nextAt: null,
   lastIssue: null,
   ...over
 });
@@ -90,6 +97,19 @@ const run = (
   finished
 });
 
+const goodView = (
+  at: string,
+  session: SessionState = { state: 'none' }
+): QueueView => ({
+  at,
+  limit: { used: 0, max: 5 },
+  session,
+  next: [],
+  held: { tickets: [], free: [] },
+  parked: [],
+  table: { before: [], label: [], after: [] }
+});
+
 const runs = (
   at: string,
   rows: RunsPayload['rows'] = [],
@@ -101,6 +121,8 @@ const runs = (
   job: null,
   qv: null,
   viewInvalid,
+  view: null,
+  viewIssues: [],
   at,
   main: { image: null, desk: null },
   rows
@@ -473,7 +495,12 @@ describe('feed', () => {
 });
 
 describe('problems', () => {
-  const host = { ageMin: 2, silentMin: 30 };
+  const host = {
+    host: 'nuc',
+    at: NOW.getTime() - 2 * MIN,
+    ageMin: 2,
+    silentMin: 30
+  };
   const base = {
     connection: connection(),
     runs: runs(ago(5), [run(ago(10), ago(8))]),
@@ -490,7 +517,7 @@ describe('problems', () => {
   it('says Realtime is down, with the drop count when there is one', () => {
     const none = problems({
       ...base,
-      connection: connection({ live: false })
+      connection: connection({ live: false, downSince: NOW.getTime() - 60e3 })
     });
     expect(none).toHaveLength(1);
     expect(none[0].kind).toBe('connection');
@@ -503,11 +530,109 @@ describe('problems', () => {
     expect(dropped[0].text).toContain('dropped 3×');
   });
 
+  it('carries the connection details', () => {
+    const downSince = NOW.getTime() - 60e3;
+    const nextAt = NOW.getTime() + 15e3;
+    const [p] = problems({
+      ...base,
+      connection: connection({
+        live: false,
+        retries: 2,
+        downSince,
+        status: 'TIMED_OUT',
+        nextAt
+      })
+    });
+    expect(p).toMatchObject({
+      kind: 'connection',
+      since: downSince,
+      retries: 2,
+      status: 'TIMED_OUT',
+      nextAt
+    });
+  });
+
+  it('waits out the startup grace before saying Realtime is down', () => {
+    const down = (over: Partial<Connection>): Connection =>
+      connection({ live: false, ...over });
+    const kinds = (c: Connection) =>
+      problems({ ...base, connection: c }).map((p) => p.kind);
+    expect(kinds(down({ downSince: NOW.getTime() - 5e3 }))).toEqual([]);
+    expect(kinds(down({ downSince: NOW.getTime() - 10e3 }))).toEqual([
+      'connection'
+    ]);
+    expect(kinds(down({ downSince: NOW.getTime() - 1e3, retries: 1 }))).toEqual(
+      ['connection']
+    );
+    expect(kinds(down({ downSince: null }))).toEqual([]);
+    const unstamped = problems({
+      ...base,
+      connection: down({ downSince: null, retries: 1 })
+    });
+    expect(unstamped[0]).toMatchObject({ since: NOW.getTime() });
+  });
+
+  it('clears the connection problem when the channel is live again', () => {
+    expect(
+      problems({ ...base, connection: connection({ retries: 3 }) })
+    ).toEqual([]);
+  });
+
   it('flags a queue_state view that does not parse', () => {
     const out = problems({ ...base, runs: runs(ago(5), [], true) });
     expect(out).toHaveLength(1);
     expect(out[0].kind).toBe('data');
     expect(out[0].text).toContain('does not parse');
+  });
+
+  it('carries the parse details and the kept view time', () => {
+    const issues = [{ path: 'table', missing: true }];
+    const bad: RunsPayload = {
+      ...runs(ago(5), [], true),
+      view: { limit: 1 },
+      viewIssues: issues,
+      qv: goodView(ago(30))
+    };
+    expect(problems({ ...base, runs: bad })).toEqual([
+      expect.objectContaining({
+        kind: 'data',
+        reason: 'parse',
+        since: Date.parse(ago(30)),
+        goodAt: Date.parse(ago(30)),
+        rowAt: Date.parse(ago(5)),
+        view: { limit: 1 },
+        issues
+      })
+    ]);
+    const none = problems({ ...base, runs: runs(ago(5), [], true) });
+    expect(none[0]).toMatchObject({
+      goodAt: null,
+      since: Date.parse(ago(5)),
+      rowAt: Date.parse(ago(5))
+    });
+  });
+
+  it('keys a problem by its kind, and a data problem by its reason', () => {
+    const at = ago(60);
+    const started = new Date(Date.parse(at) + 21 * MIN).toISOString();
+    const stale = problems({
+      ...base,
+      runs: runs(at, [run(started, started)])
+    });
+    const parse = problems({ ...base, runs: runs(ago(5), [], true) });
+    const down = problems({
+      ...base,
+      connection: connection({ live: false, retries: 1 })
+    });
+    expect([...down, ...parse, ...stale].map(problemKey)).toEqual([
+      'connection',
+      'data-parse',
+      'data-stale'
+    ]);
+  });
+
+  it('clears the parse problem when the row parses', () => {
+    expect(problems({ ...base, runs: runs(ago(5)) })).toEqual([]);
   });
 
   it('flags a queue_state row older than the newest run by more than two intervals', () => {
@@ -521,6 +646,11 @@ describe('problems', () => {
     expect(late).toHaveLength(1);
     expect(late[0].kind).toBe('data');
     expect(late[0].text).toContain('older than the newest run');
+    expect(late[0]).toMatchObject({
+      reason: 'stale',
+      since: Date.parse(at),
+      newestRun: Date.parse(startedAt(21))
+    });
     expect(
       problems({
         ...base,
@@ -532,29 +662,89 @@ describe('problems', () => {
   it('calls the state unknown when a session is alive and the NUC is silent', () => {
     const open: RunsPayload = {
       ...runs(ago(5)),
-      qv: {
-        at: ago(5),
-        limit: { used: 0, max: 5 },
-        session: { state: 'alive' },
-        next: [],
-        held: { tickets: [], free: [] },
-        parked: [],
-        table: { before: [], label: [], after: [] }
-      }
+      qv: goodView(ago(5), { state: 'alive' })
     };
     const out = problems({
       ...base,
       runs: open,
-      host: { ageMin: 31, silentMin: 30 }
+      host: { ...host, ageMin: 31 }
     });
     expect(out).toHaveLength(1);
     expect(out[0].kind).toBe('unknown');
+    expect(out[0]).toMatchObject({
+      since: host.at,
+      host: 'nuc',
+      ticket: null,
+      silentMin: 30,
+      started: null
+    });
     // A live host, no session or no host at all leaves it known
     expect(problems({ ...base, runs: open, host })).toEqual([]);
     expect(problems({ ...base, runs: open, host: null })).toEqual([]);
-    expect(problems({ ...base, host: { ageMin: 31, silentMin: 30 } })).toEqual(
-      []
-    );
+    expect(problems({ ...base, host: { ...host, ageMin: 31 } })).toEqual([]);
+  });
+});
+
+describe('problems of an alive session', () => {
+  it('names the ticket and when its open run started', () => {
+    const host = {
+      host: 'nuc',
+      at: NOW.getTime() - 40 * MIN,
+      ageMin: 40,
+      silentMin: 30
+    };
+    const open: RunsPayload = {
+      ...runs(ago(50), [
+        { ...run(ago(45), null), ticket: 'COD-9' },
+        { ...run(ago(90), ago(80)), ticket: 'COD-9' }
+      ]),
+      qv: goodView(ago(50), { state: 'alive', ticket: 'COD-9' })
+    };
+    const out = problems({
+      connection: connection(),
+      runs: open,
+      runMinutes: 10,
+      host,
+      now: NOW
+    });
+    expect(out[0]).toMatchObject({
+      kind: 'unknown',
+      ticket: 'COD-9',
+      started: Date.parse(ago(45))
+    });
+  });
+
+  it('clears when the host has a fresh sample', () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: goodView(ago(5), { state: 'alive' })
+    };
+    const host = { host: 'nuc', at: NOW.getTime(), ageMin: 0, silentMin: 30 };
+    expect(
+      problems({
+        connection: connection(),
+        runs: open,
+        runMinutes: 10,
+        host,
+        now: NOW
+      })
+    ).toEqual([]);
+  });
+});
+
+describe('frozenAt', () => {
+  it('is the earliest since, null without problems', () => {
+    const at = (since: number): Problem => ({
+      kind: 'unknown',
+      text: '',
+      since,
+      host: 'nuc',
+      ticket: null,
+      silentMin: 30,
+      started: null
+    });
+    expect(frozenAt([at(300), at(100), at(200)])).toBe(100);
+    expect(frozenAt([])).toBeNull();
   });
 });
 

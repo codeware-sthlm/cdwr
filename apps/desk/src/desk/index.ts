@@ -20,6 +20,7 @@ import { renderTiles } from './render/tiles';
 import { renderWaiting } from './render/waiting';
 import { spendDays } from './spend';
 import {
+  type Connection,
   type View,
   bucketsLoaded,
   createState,
@@ -323,7 +324,7 @@ else {
 /** Records the Realtime channel's health for the model's problems and health checks */
 export function setConnection(
   live: boolean,
-  connection: { retries: number; upSince: number | null }
+  connection: Omit<Connection, 'live' | 'lastIssue'>
 ): void {
   state.data.connection = { ...state.data.connection, live, ...connection };
   render();

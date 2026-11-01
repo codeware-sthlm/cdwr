@@ -8,6 +8,7 @@ import {
   parseJob,
   parsePlan,
   parseSuggested,
+  queueViewIssues,
   validateQueueView
 } from './parsers';
 
@@ -629,5 +630,29 @@ describe('validateQueueView', () => {
     ['no table', { limit }]
   ])('gives null for %s', (_name, view) => {
     expect(validateQueueView(view)).toBeNull();
+  });
+});
+
+describe('queueViewIssues', () => {
+  const limit = { used: 1, max: 3 };
+
+  it('is empty for a view that parses', () => {
+    expect(queueViewIssues({ limit, table: {} })).toEqual([]);
+  });
+
+  it('names a missing field', () => {
+    expect(queueViewIssues({ limit })).toEqual([
+      { path: 'table', missing: true }
+    ]);
+  });
+
+  it('names a wrong-typed field by its path', () => {
+    expect(
+      queueViewIssues({ limit: { used: 'x', max: 3 }, table: {} })
+    ).toEqual([{ path: 'limit.used', missing: false }]);
+  });
+
+  it('names the view itself when it is not an object', () => {
+    expect(queueViewIssues(null)).toEqual([{ path: '', missing: false }]);
   });
 });
