@@ -435,7 +435,8 @@ const jsonLines = (text: string | undefined): Record<string, unknown>[] =>
 
 /**
  * Sum of the ledger's costs for one day (YYYY-MM-DD). Correction rows may be
- * negative. Undefined when any line is unreadable: a bad line is not zero spend.
+ * negative, and a day that sums below zero reads 0, as run.sh's guard does.
+ * Undefined when any line is unreadable: a bad line is not zero spend.
  */
 export const spendForDay = (
   ledger: string | undefined,
@@ -457,7 +458,7 @@ export const spendForDay = (
     if (typeof cost !== 'number' || !Number.isFinite(cost)) return undefined;
     if ((row as Record<string, unknown>)['day'] === day) sum += cost;
   }
-  return sum;
+  return Math.max(0, sum);
 };
 
 export const IMPLEMENT_OUTCOMES = [
