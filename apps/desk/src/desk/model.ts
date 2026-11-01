@@ -993,7 +993,8 @@ export const model = (
     ...after,
     ...(v ? v.parked : []),
     ...(v ? v.next : []),
-    ...before
+    ...before,
+    ...toLabel
   ]);
   const nucView = host
     ? {
