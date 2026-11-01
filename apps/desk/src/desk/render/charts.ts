@@ -1,6 +1,6 @@
 import { ROLES, SHIP_DAYS } from '../constants';
 import { dayLabel, esc, niceCeil, usd } from '../format';
-import type { ShippedDay } from '../model';
+import type { CpuDay, ShippedDay } from '../model';
 import type { SpendDay } from '../spend';
 
 // The two day charts as SVG strings. The page measures the element and draws after layout, so
@@ -167,7 +167,9 @@ export const spendChart = (
   };
 };
 
-// The NUC sheet's gauge and sparklines: fixed-size SVG that scales with its box, so nothing is measured
+// The gauge and sparklines: fixed-size SVG that scales with its box, so nothing is measured
+
+const CPU = { w: 600, h: 56 };
 
 const GAUGE = { w: 100, h: 8 };
 const SPARK = { w: 240, h: 40 };
@@ -203,4 +205,28 @@ export const sparkline = (
       ? ''
       : `<line class="limit" x1="0" x2="${SPARK.w}" y1="${y(limit)}" y2="${y(limit)}"/>`;
   return `<svg class="spark" viewBox="0 0 ${SPARK.w} ${SPARK.h}" preserveAspectRatio="none" role="img" aria-label="${esc(label)}">${mark}${line}</svg>`;
+};
+
+/**
+ * The NUC's CPU over the day: a band behind the line for each run, the line from the samples
+ * and a dot at the peak. Fewer than two samples draw nothing.
+ */
+export const cpuChart = (day: CpuDay): string => {
+  const span = day.to - day.from;
+  if (day.points.length < 2 || span <= 0) return '';
+  const x = (t: number): string => (((t - day.from) / span) * CPU.w).toFixed(1);
+  const y = (cpu: number): string =>
+    (CPU.h - 2 - Math.min(cpu, 1) * (CPU.h - 4)).toFixed(1);
+  const bands = day.bands
+    .map((b) => {
+      const w = Math.max(1, ((b.end - b.start) / span) * CPU.w);
+      return `<rect class="cpu-band" x="${x(b.start)}" y="0" width="${w.toFixed(1)}" height="${CPU.h}"/>`;
+    })
+    .join('');
+  const line = day.points.map((p) => `${x(p.at)},${y(p.cpu)}`).join(' ');
+  const peak = day.peak
+    ? `<circle class="cpu-peak" cx="${x(day.peak.at)}" cy="${y(day.peak.cpu)}" r="3"/>`
+    : '';
+  const label = `NUC CPU over the last 24 hours${day.peak ? `, peak ${Math.round(day.peak.cpu * 100)}%` : ''}, ${day.bands.length} agent runs shaded`;
+  return `<svg role="img" aria-label="${esc(label)}" width="100%" height="${CPU.h}" viewBox="0 0 ${CPU.w} ${CPU.h}" preserveAspectRatio="none">${bands}<polyline class="cpu-line" fill="none" vector-effect="non-scaling-stroke" stroke-width="1.5" points="${line}"/>${peak}</svg>`;
 };
