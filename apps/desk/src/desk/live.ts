@@ -11,6 +11,7 @@ import {
   HOST_SPACING_SAMPLES,
   HOST_STALE_SAMPLES,
   LINEAR_STALE_MIN,
+  QUEUE_WRITER_MIN,
   SESSION_ATTENDED_MIN,
   SESSION_HANDBACK_MIN
 } from './constants';
@@ -407,16 +408,15 @@ export const problems = ({
       since: Date.parse(runs.at),
       newestRun
     });
-  if (runs?.others.length) {
-    const others = runs.others.map((o) => ({
-      host: o.host,
-      at: Date.parse(o.at),
-      paused: o.paused
-    }));
+  // The payload may be older than the window, since Realtime skips the periodic read
+  const others = (runs?.others ?? [])
+    .map((o) => ({ host: o.host, at: Date.parse(o.at), paused: o.paused }))
+    .filter((o) => now.getTime() - o.at <= QUEUE_WRITER_MIN * 6e4);
+  if (runs && others.length) {
     out.push({
       kind: 'data',
       reason: 'writers',
-      text: `${runs.others.length === 1 ? 'Two hosts publish' : `${runs.others.length + 1} hosts publish`} the queue: ${runs.host} (used) and ${writerList(others)}`,
+      text: `${others.length === 1 ? 'Two hosts publish' : `${others.length + 1} hosts publish`} the queue: ${runs.host} (used) and ${writerList(others)}`,
       since: Math.max(...others.map((o) => o.at)),
       used: runs.host,
       others
