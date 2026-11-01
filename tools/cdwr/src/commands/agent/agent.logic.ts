@@ -140,6 +140,8 @@ export interface QueuePaths {
   lock: string;
   implementLock: string;
   implementSpend: string;
+  /** The container loop's pid, which a SIGUSR1 wakes; written by the image's entrypoint */
+  loopPid: string;
   runs: string;
   logs: string;
   schedulerLog: string;
@@ -164,12 +166,20 @@ export const queuePaths = (
     lock: join(home, 'lock'),
     implementLock: join(home, 'implement.lock'),
     implementSpend: join(home, 'implement-spend.jsonl'),
+    loopPid: join(home, 'loop.pid'),
     runs: join(home, 'runs.jsonl'),
     logs,
     schedulerLog: join(logs, 'scheduler.log'),
     launchdLog: join(logs, 'launchd.log'),
     plist: join(userHome, 'Library', 'LaunchAgents', `${LABEL}.plist`)
   };
+};
+
+/** The container loop's pid from its `loop.pid`; undefined when absent or not a pid */
+export const parseLoopPid = (text: string | undefined): number | undefined => {
+  const pid = Number(text?.trim());
+  // The entrypoint is often pid 1 in its container
+  return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
 };
 
 export const NOTIFY_LEVELS = ['all', 'action'] as const;
@@ -375,6 +385,25 @@ export const remoteExec = (host: string, command: string[]): string[] => [
   'exec',
   REMOTE_CONTAINER,
   ...command
+];
+
+/** The checkout the queue plans in, inside the agent container */
+export const REMOTE_CHECKOUT = '/work/codeware-agent';
+/** Fetches the vault secrets, exports them and runs the command it is given */
+export const REMOTE_SECRETS = '/opt/agent-host/secrets.sh';
+
+/** ssh's arguments for `cdwr <args>` in the agent container on `host`, run in its checkout through `secrets.sh` */
+export const remoteCdwr = (host: string, args: string[]): string[] => [
+  host,
+  'docker',
+  'exec',
+  '-w',
+  REMOTE_CHECKOUT,
+  REMOTE_CONTAINER,
+  REMOTE_SECRETS,
+  'node',
+  'tools/cdwr/bin/cdwr.mjs',
+  ...args
 ];
 
 export const remoteListLogs = (host: string): string[] =>

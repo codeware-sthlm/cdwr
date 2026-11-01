@@ -1,10 +1,25 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-import { defineCommand } from '../../cli/command';
+import { type Plan, defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
 import { paths, readText, requireHost } from '../../services/agent-queue';
 
-import { NOTIFY_LEVELS, parseNotifyLevel } from './agent.logic';
+import {
+  NOTIFY_LEVELS,
+  type NotifyLevel,
+  type QueuePaths,
+  parseNotifyLevel
+} from './agent.logic';
+import {
+  type RemoteTarget,
+  hostInput,
+  remoteApply,
+  remotePlan
+} from './remote';
+
+type Data =
+  | { queue: QueuePaths; level: NotifyLevel }
+  | { remote: RemoteTarget; level?: NotifyLevel };
 
 export default defineCommand({
   summary: 'Which notices the queue sends: all, or only what needs you',
@@ -21,10 +36,22 @@ export default defineCommand({
         flagOnly: true
       }),
       () => true
+    ),
+    host: hostInput(
+      'Read or set the level of the queue in the agent container over ssh on this host instead of locally'
     )
   },
 
-  async plan(ctx, { level }) {
+  async plan(ctx, { level, host }): Promise<Plan<Data>> {
+    if (host) {
+      // Without a level the remote answers its current one as nothing
+      const remote = {
+        host,
+        args: ['agent', 'notify', ...(level ? [level] : [])]
+      };
+      const plan = await remotePlan(ctx, remote);
+      return { ...plan, data: { remote, level } };
+    }
     requireHost(['launchd', 'container'], ctx.env);
     const queue = paths(ctx.env);
     const current = parseNotifyLevel(readText(queue.notifyLevel));
@@ -50,7 +77,10 @@ export default defineCommand({
     };
   },
 
-  async apply(_ctx, { queue, level }) {
+  async apply(ctx, data) {
+    if ('remote' in data)
+      return remoteApply(ctx, data.remote, `Notify level: ${data.level}`);
+    const { queue, level } = data;
     mkdirSync(queue.home, { recursive: true });
     writeFileSync(queue.notifyLevel, `${level}\n`);
     return { summary: `Notify level: ${level}`, json: { level } };

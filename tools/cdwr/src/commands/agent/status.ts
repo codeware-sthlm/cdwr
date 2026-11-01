@@ -1,10 +1,11 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { z } from 'zod';
+
 import { defineCommand, readOnly } from '../../cli/command';
 import type { Context } from '../../cli/context';
 import { CliError } from '../../cli/errors';
-import { input } from '../../cli/inputs';
 import {
   checkRun,
   implementReport,
@@ -18,14 +19,12 @@ import {
   requireHost,
   worktreeOf
 } from '../../services/agent-queue';
-import { CommandError, run as exec } from '../../services/shell';
 import { symbols, theme } from '../../ui/theme';
 
 import {
   IMPLEMENT_BUDGET_USD,
   KEYCHAIN_SERVICE,
   LINEAR_KEY_ENV,
-  REMOTE_CONTAINER,
   RUN_FALLBACK_SECONDS,
   RUN_INTERVAL_SECONDS,
   byFile,
@@ -49,14 +48,15 @@ import {
   schedulerHere,
   summarizeSchedulerLine
 } from './agent.logic';
+import { hostInput, sshCdwr } from './remote';
 import {
   type RemoteReport,
+  STATUS_ARGS,
   attendedSummary,
   checkRepoOf,
   formatContainerJob,
   parseListener,
   parseRemoteStatus,
-  remoteStatus,
   rmLockCommand,
   schedulerRow,
   showsRow,
@@ -73,13 +73,9 @@ export default defineCommand({
     'Reads the launchd job, the pause flag, the Keychain item, the installed script, the worktree and the logs. Nothing is changed and no secret is read.',
   danger: 'read',
   inputs: {
-    host: input.string({
-      prompt: 'Which host runs the agent container?',
-      short: 'H',
-      description:
-        'Read the status of the queue in the agent container over ssh on this host instead of locally',
-      default: ''
-    })
+    host: hostInput(
+      'Read the status of the queue in the agent container over ssh on this host instead of locally'
+    )
   },
 
   async plan(ctx, { host: sshHost }) {
@@ -368,24 +364,12 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
 /** The remote check alone may take 90 s (`checkRun`); ssh and the vault fetch come on top */
 const REMOTE_TIMEOUT_MS = 150_000;
 
-/** The report of the queue in the agent container on `host`, over ssh */
+/** The report of the queue in the agent container on `host`, over ssh; a queue with problems exits non-zero but still answers */
 async function remoteReport(host: string): Promise<RemoteReport> {
-  let stdout: string;
-  try {
-    stdout = (
-      await exec('ssh', remoteStatus(host), { timeout: REMOTE_TIMEOUT_MS })
-    ).stdout;
-  } catch (error) {
-    if (!(error instanceof CommandError)) throw error;
-    // A queue with problems exits non-zero but still answers
-    const answer = parseRemoteStatus(error.stdout);
-    if (answer.kind !== 'none') return fromAnswer(host, answer, error.stdout);
-    throw new CliError(
-      `Could not read the status over ssh on ${host}: ${error.stderr.trim() || error.message}`,
-      undefined,
-      `Check that the host is reachable and the container ${REMOTE_CONTAINER} runs`
-    );
-  }
+  const { stdout } = await sshCdwr(host, STATUS_ARGS, z.unknown(), {
+    timeoutMs: REMOTE_TIMEOUT_MS,
+    what: 'read the status'
+  });
   return fromAnswer(host, parseRemoteStatus(stdout), stdout);
 }
 
