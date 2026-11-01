@@ -325,13 +325,19 @@ cheap since it starts no session, and it ends idle when nothing changed. The lis
 change to it takes effect when it restarts (a `cdwr agent deploy`), not at the next run. `status` and
 the desk show `live (events), fallback every 60 min` or that it is polling, and why.
 
-Before it plans, the scheduler watches the PRs of `agent:review` tickets (open, or done within 14
-days) without starting Claude. It sends one notice per change: a PR that left the merge queue
-or has failing checks (`action`), a merge with the hand-offs still unticked in the agent's
-`**Agent: PR ready**` comment (`action`), and a plain merge or a close (`info`, which follows
-the level). `~/.cdwr/agent-queue/watch.json` remembers what was last sent, and `status` shows
-it. `gh` runs as you here, so the script only lists and queries; a spec fails on anything
-else. The watch's decisions live in `agent-queue/watch.jq`, installed beside `run.sh`, rather
+Before it plans, the scheduler watches the PRs of every ticket an agent label still claims
+(`agent:working`, `agent:needs-input`, `agent:review`; open, or done within 14 days) without
+starting Claude. It sends one notice per change: a PR that left the merge queue or has failing
+checks (`action`, `agent:review` only, since a working ticket has a session on it), a merge with
+hand-offs still unticked (`action`), and a plain merge or a close (`info`, which follows the
+level). The hand-offs come from the agent's `**Agent: PR ready**` comment, or from the Status
+table's `Hand-off` rows when none was posted. Outside review only the PR attached in Linear
+counts. A ticket whose PR merged outside review, as when you merge from a gate, gets the watch's
+one Linear write: `agent:review` replaces its agent label and its **Next:** line says when it
+merged and what is handed off. `~/.cdwr/agent-queue/watch.json` remembers what was last sent and
+whether the relabel went through, so a failed write is tried again on the next run. `gh` runs as
+you here, so the script only lists and queries; a spec fails on anything else, and on a second
+Linear mutation. The watch's decisions live in `agent-queue/watch.jq`, installed beside `run.sh`, rather
 than in a `*.logic.ts`: what runs unattended stays behind `install`, and jq is already a
 dependency of the script. Its spec runs it through `jq`.
 
