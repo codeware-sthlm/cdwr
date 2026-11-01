@@ -23,9 +23,54 @@ const both = (long: string, short: string): string =>
 const WARNING =
   '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h0"/></svg>';
 
-export const renderAlert = (m: Model, now: Date): string => {
+/** The timers in the cards: what each `data-fmt` counts from its `data-from` */
+export type TickFormat = 'for' | 'age' | 'silent' | 'quiet' | 'next';
+
+/** The text of one timer at `now`; empty once a countdown has run out */
+export const tickText = (fmt: TickFormat, from: number, now: Date): string => {
+  const ms = now.getTime() - from;
+  switch (fmt) {
+    case 'for':
+      return `for ${elapsed(ms)}`;
+    case 'age':
+      return elapsed(ms);
+    case 'silent':
+      return `${Math.round(ms / 6e4)} m silent`;
+    case 'quiet':
+      return `no heartbeat for ${Math.round(ms / 6e4)} m`;
+    case 'next':
+      return ms < 0 ? `next refresh in ${Math.ceil(-ms / 1000)} s` : '';
+    default: {
+      const unreachable: never = fmt;
+      return unreachable;
+    }
+  }
+};
+
+const isFormat = (fmt: string | undefined): fmt is TickFormat =>
+  fmt === 'for' ||
+  fmt === 'age' ||
+  fmt === 'silent' ||
+  fmt === 'quiet' ||
+  fmt === 'next';
+
+/** Fills the timers under `root`; the markup stays the same from second to second, so only their text moves */
+export const updateTicks = (root: ParentNode, now: Date): void => {
+  for (const el of root.querySelectorAll<HTMLElement>('.tick')) {
+    const { fmt, from } = el.dataset;
+    if (!isFormat(fmt) || from === undefined) continue;
+    const text = tickText(fmt, Number(from), now);
+    if (el.textContent !== text) el.textContent = text;
+  }
+};
+
+/** An empty timer span; `updateTicks` fills it */
+const tick = (fmt: TickFormat, from: number): string =>
+  `<span class="tick" data-fmt="${fmt}" data-from="${from}"></span>`;
+
+export const renderAlert = (m: Model): string => {
   if (!m.problems.length) return '';
-  const frozen = frozenAt(m.problems) ?? now.getTime();
+  const frozen = frozenAt(m.problems);
   const down = ofKind(m.problems, 'connection')[0];
   const link = down
     ? down.retries > 0
@@ -33,7 +78,20 @@ export const renderAlert = (m: Model, now: Date): string => {
       : ' · not connected'
     : '';
   const count = plural(m.problems.length, 'problem', 'problems');
-  return `<div class="alert" role="alert"><div class="alert-in">${WARNING}<b class="alert-t">${both(`${esc(count)} — the desk can't vouch for what it shows`, esc(count))}</b><span class="alert-s">${both(`numbers frozen at ${esc(hhmm(frozen))}${link}`, `Numbers are frozen at ${esc(hhmm(frozen))}. Nothing below is assumed to be running.`)}</span><a class="alert-link" href="#problems" data-see-problems>See problems</a></div></div>`;
+  const dropped = down && down.retries > 0 ? link : '';
+  const sub =
+    frozen !== null
+      ? both(
+          `numbers frozen at ${esc(hhmm(frozen))}${link}`,
+          `Numbers are frozen at ${esc(hhmm(frozen))}. Nothing below is assumed to be running.`
+        )
+      : down
+        ? both(
+            `live updates down since ${esc(hhmm(down.since))} · polling instead, numbers may lag${dropped}`,
+            'Live updates are down. Numbers may lag.'
+          )
+        : '';
+  return `<div class="alert" role="alert"><div class="alert-in">${WARNING}<b class="alert-t">${both(`${esc(count)} — the desk can't vouch for what it shows`, esc(count))}</b><span class="alert-s">${sub}</span><a class="alert-link" href="#problems" data-see-problems>See problems</a></div></div>`;
 };
 
 /** The label above the widgets the problems leave stale; empty without problems */
@@ -50,7 +108,7 @@ const button = (action: string, label: string, primary = false): string =>
 type Card = {
   pill: string;
   title: string;
-  /** Long and short timer texts */
+  /** Long and short timer markup */
   time: [string, string];
   body: string;
   /** Replaces the body on the phone */
@@ -60,28 +118,21 @@ type Card = {
   actions?: string;
 };
 
-const connectionCard = (
-  p: Extract<Problem, { kind: 'connection' }>,
-  now: Date
-): Card => {
+const connectionCard = (p: Extract<Problem, { kind: 'connection' }>): Card => {
   const line = [
     p.status ?? 'not connected',
-    ...(p.retries > 0 ? [`dropped ${p.retries}×`] : []),
-    ...(p.nextAt !== null && p.nextAt > now.getTime()
-      ? [`next refresh in ${Math.ceil((p.nextAt - now.getTime()) / 1000)} s`]
-      : [])
+    ...(p.retries > 0 ? [`dropped ${p.retries}×`] : [])
   ].join(' · ');
-  const age = elapsed(now.getTime() - p.since);
   const never = p.retries === 0;
   return {
     pill: 'CONNECTION',
     title: never ? 'Realtime channel not connected' : 'Realtime channel closed',
-    time: [`for ${age}`, age],
+    time: [tick('for', p.since), tick('age', p.since)],
     body: never
-      ? `The desk channel has not connected since ${hhmmss(p.since)}. Every number on the desk is from the last poll; PR states and waits will not resolve until it connects.`
-      : `The desk channel dropped at ${hhmmss(p.since)}. Every number on the desk is from that moment; PR states and waits will not resolve until it's back.`,
-    short: `${never ? 'Not connected.' : `Dropped ${p.retries}×.`} Waits and PR states won't resolve until it's back.`,
-    extra: `<span class="p-mono wide">${esc(line)}</span>`,
+      ? `Live updates have not connected since ${hhmmss(p.since)}. The desk polls instead, so numbers may lag by up to a minute and Linear by up to 5.`
+      : `Live updates dropped at ${hhmmss(p.since)}. The desk polls instead, so numbers may lag by up to a minute and Linear by up to 5; PR states and waits update on the next poll.`,
+    short: `${never ? 'Not connected.' : `Dropped ${p.retries}×.`} Polling; numbers may lag.`,
+    extra: `<span class="p-mono wide">${esc(line)}${p.nextAt === null ? '' : tick('next', p.nextAt)}</span>`,
     actions:
       button('reconnect', 'Reconnect now', true) +
       `<span class="wide">${button('reload', 'Reload desk')}</span>`
@@ -111,7 +162,7 @@ const parseCard = (
   return {
     pill: 'DATA',
     title: "queue_state doesn't parse",
-    time: [`since ${hhmm(p.rowAt)}`, `since ${hhmm(p.rowAt)}`],
+    time: [`since ${esc(hhmm(p.rowAt))}`, `since ${esc(hhmm(p.rowAt))}`],
     body: `${fields} The desk ignores the row ${good}.`,
     short:
       p.goodAt === null
@@ -127,15 +178,11 @@ const staleCard = (
 ): Card => ({
   pill: 'DATA',
   title: 'queue_state is older than the newest run',
-  time: [`since ${hhmm(p.since)}`, `since ${hhmm(p.since)}`],
+  time: [`since ${esc(hhmm(p.since))}`, `since ${esc(hhmm(p.since))}`],
   body: `The queue_state row is from ${esc(hhmm(p.since))}, but the newest run started at ${esc(hhmm(p.newestRun))}. The scheduler may have stopped writing it.`
 });
 
-const unknownCard = (
-  p: Extract<Problem, { kind: 'unknown' }>,
-  now: Date
-): Card => {
-  const silent = Math.round((now.getTime() - p.since) / 6e4);
+const unknownCard = (p: Extract<Problem, { kind: 'unknown' }>): Card => {
   const open =
     p.ticket && p.started !== null
       ? `${esc(p.ticket)} started ${esc(hhmm(p.started))} and has no finished_at. `
@@ -144,8 +191,8 @@ const unknownCard = (
     pill: 'UNKNOWN STATE',
     title: `${p.host} silent with a run open`,
     time: [
-      `no heartbeat for ${silent} m · limit ${Math.round(p.silentMin)} m`,
-      `${silent} m silent`
+      `${tick('quiet', p.since)} · limit ${Math.round(p.silentMin)} m`,
+      tick('silent', p.since)
     ],
     body: `${open}Without a heartbeat the desk can't tell running from crashed, so it says neither.`,
     short: "Can't tell running from crashed, so it says neither.",
@@ -154,14 +201,14 @@ const unknownCard = (
   };
 };
 
-const card = (p: Problem, now: Date): Card => {
+const card = (p: Problem): Card => {
   switch (p.kind) {
     case 'connection':
-      return connectionCard(p, now);
+      return connectionCard(p);
     case 'data':
       return p.reason === 'parse' ? parseCard(p) : staleCard(p);
     case 'unknown':
-      return unknownCard(p, now);
+      return unknownCard(p);
     default: {
       const unreachable: never = p;
       return unreachable;
@@ -169,17 +216,18 @@ const card = (p: Problem, now: Date): Card => {
   }
 };
 
-export const renderProblems = (m: Model, now: Date): string => {
+/** The cards as markup that holds still; `updateTicks` fills the timers */
+export const renderProblems = (m: Model): string => {
   if (!m.problems.length) return '';
   const seen = new Set<ProblemKey>();
   const cards = m.problems.map((p) => {
-    const c = card(p, now);
+    const c = card(p);
     const key = problemKey(p);
     const first = !seen.has(key);
     seen.add(key);
     return `<div class="problem"${first ? ` id="problem-${key}"` : ''} data-kind="${p.kind}" tabindex="-1">
       <div class="p-main">
-        <div class="p-head"><span class="p-pill">${c.pill}</span><b class="p-title">${esc(c.title)}</b><span class="p-time">${both(esc(c.time[0]), esc(c.time[1]))}</span></div>
+        <div class="p-head"><span class="p-pill">${c.pill}</span><b class="p-title">${esc(c.title)}</b><span class="p-time">${both(c.time[0], c.time[1])}</span></div>
         <span class="p-body">${c.short ? both(c.body, c.short) : c.body}</span>
         ${c.extra ?? ''}
       </div>

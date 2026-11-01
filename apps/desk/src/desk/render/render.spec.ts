@@ -37,7 +37,8 @@ import {
   renderAlert,
   renderFrozenLabel,
   renderProblems,
-  renderUnknownSession
+  renderUnknownSession,
+  tickText
 } from './problems';
 import { headline, renderSession } from './session';
 import { SHEETS } from './sheets';
@@ -1478,29 +1479,50 @@ describe('problems', () => {
 
   it('draws the connection problem with its timer, status and retry', () => {
     const m = model(down(filled()), NOW);
-    const out = renderProblems(m, NOW);
+    const out = renderProblems(m);
     expect(out).toContain('PROBLEMS · 1');
     expect(out).toContain('id="problem-connection" data-kind="connection"');
     expect(out).toContain('Realtime channel closed');
-    expect(out).toContain('for 2 m 42 s');
-    expect(out).toContain('CHANNEL_ERROR · dropped 2× · next refresh in 16 s');
-    expect(out).toContain('Dropped 2×. Waits and PR states');
+    const since = NOW.getTime() - 2.7 * 6e4;
+    expect(out).toContain(`data-fmt="for" data-from="${since}"`);
+    expect(out).toContain(
+      `data-fmt="next" data-from="${NOW.getTime() + 16000}"`
+    );
+    expect(out).toContain('CHANNEL_ERROR · dropped 2×<span class="tick"');
+    expect(out).toContain('The desk polls instead');
+    expect(out).toContain('Dropped 2×. Polling; numbers may lag.');
     expect(out).toContain('data-action="reconnect"');
     expect(out).toContain('data-action="reload"');
     const idle = renderProblems(
-      model(down(filled(), { status: null, retries: 0, nextAt: null }), NOW),
-      NOW
+      model(down(filled(), { status: null, retries: 0, nextAt: null }), NOW)
     );
     expect(idle).toContain('>not connected</span>');
     expect(idle).not.toContain('dropped');
-    expect(idle).not.toContain('next refresh');
+    expect(idle).not.toContain('data-fmt="next"');
     expect(idle).toContain('Realtime channel not connected');
-    expect(idle).toContain('has not connected since ');
-    expect(idle).toContain('Not connected. Waits and PR states');
+    expect(idle).toContain('Live updates have not connected since ');
+    expect(idle).toContain('Not connected. Polling; numbers may lag.');
+  });
+
+  it('holds the cards still from second to second and ticks the timers by text', () => {
+    const m = model(down(filled()), NOW);
+    expect(renderProblems(m)).not.toMatch(/class="tick"[^>]*>[^<]/);
+    const since = NOW.getTime() - 2.7 * 6e4;
+    const later = new Date(NOW.getTime() + 1000);
+    expect(tickText('for', since, NOW)).toBe('for 2 m 42 s');
+    expect(tickText('for', since, later)).toBe('for 2 m 43 s');
+    expect(tickText('age', since, NOW)).toBe('2 m 42 s');
+    const next = NOW.getTime() + 16000;
+    expect(tickText('next', next, NOW)).toBe('next refresh in 16 s');
+    expect(tickText('next', next, later)).toBe('next refresh in 15 s');
+    expect(tickText('next', next, new Date(next + 1))).toBe('');
+    const quiet = NOW.getTime() - 50 * 6e4;
+    expect(tickText('silent', quiet, NOW)).toBe('50 m silent');
+    expect(tickText('quiet', quiet, NOW)).toBe('no heartbeat for 50 m');
   });
 
   it('draws the parse problem with the raw row and a marker per issue', () => {
-    const out = renderProblems(model(parse(filled()), NOW), NOW);
+    const out = renderProblems(model(parse(filled()), NOW));
     expect(out).toContain("queue_state doesn't parse");
     expect(out).toContain('data-kind="data"');
     expect(out).toContain('The row fails at session, limit.');
@@ -1515,7 +1537,7 @@ describe('problems', () => {
   });
 
   it('draws the stale problem without a raw row or a button', () => {
-    const out = renderProblems(model(stale(filled()), NOW), NOW);
+    const out = renderProblems(model(stale(filled()), NOW));
     expect(out).toContain('queue_state is older than the newest run');
     expect(out).not.toContain('class="raw');
     expect(out).not.toContain('data-action');
@@ -1523,9 +1545,11 @@ describe('problems', () => {
 
   it('draws the unknown problem and swaps the session card', () => {
     const m = model(silent(filled()), NOW);
-    const out = renderProblems(m, NOW);
+    const out = renderProblems(m);
     expect(out).toContain('nuc silent with a run open');
-    expect(out).toContain('no heartbeat for 50 m · limit ');
+    expect(out).toContain('data-fmt="quiet"');
+    expect(out).toContain(' · limit ');
+    expect(out).toContain('data-fmt="silent"');
     expect(out).toContain(
       `COD-1 started ${hhmm(at(10))} and has no finished_at.`
     );
@@ -1542,7 +1566,7 @@ describe('problems', () => {
   it('counts the problems in the alert and says when the numbers froze', () => {
     const s = down(parse(filled()));
     const m = model(s, NOW);
-    const out = renderAlert(m, NOW);
+    const out = renderAlert(m);
     expect(out).toContain('role="alert"');
     expect(out).toContain(
       "2 problems — the desk can't vouch for what it shows"
@@ -1555,18 +1579,25 @@ describe('problems', () => {
     expect(renderFrozenLabel(m)).toBe(
       `EVERYTHING ELSE · FROZEN AT ${hhmm(at(5))}`
     );
-    expect(renderProblems(m, NOW)).toContain('PROBLEMS · 2');
-    const closed = renderAlert(model(down(filled(), { retries: 0 }), NOW), NOW);
+    expect(renderProblems(m)).toContain('PROBLEMS · 2');
+    const closed = renderAlert(model(down(filled(), { retries: 0 }), NOW));
     expect(closed).toContain('1 problem —');
-    expect(closed).toContain('· not connected');
+    expect(closed).toContain('live updates down since ');
+    expect(closed).toContain('numbers may lag');
+    expect(closed).not.toContain('frozen');
+    expect(closed).not.toContain('channel dropped');
+    expect(renderAlert(model(down(filled()), NOW))).toContain(
+      'numbers may lag · channel dropped 2×'
+    );
+    expect(renderFrozenLabel(model(down(filled()), NOW))).toBe('');
   });
 
   it('renders nothing once the state is healthy again', () => {
     const s = live(fresh(filled()));
     const m = model(s, NOW);
     expect(m.problems).toEqual([]);
-    expect(renderAlert(m, NOW)).toBe('');
-    expect(renderProblems(m, NOW)).toBe('');
+    expect(renderAlert(m)).toBe('');
+    expect(renderProblems(m)).toBe('');
     expect(renderFrozenLabel(m)).toBe('');
     expect(renderUnknownSession(m)).toBe('');
   });

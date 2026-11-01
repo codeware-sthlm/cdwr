@@ -18,7 +18,8 @@ import {
   renderAlert,
   renderFrozenLabel,
   renderProblems,
-  renderUnknownSession
+  renderUnknownSession,
+  updateTicks
 } from './render/problems';
 import { renderSession } from './render/session';
 import { SHEETS } from './render/sheets';
@@ -119,11 +120,12 @@ function renderLive(m: Model, now: Date): void {
   shownProblems = m.problems.length > 0;
   const platform = state.ui.view === 'platform';
   setHtml('status', renderStatus(m, state.data.connection));
-  const alert = renderAlert(m, now);
+  const alert = renderAlert(m);
   setHtml('alert', alert);
   $('alert').hidden = !alert;
-  const problems = renderProblems(m, now);
+  const problems = renderProblems(m);
   setHtml('problems', problems);
+  updateTicks($('problems'), now);
   $('problems').hidden = platform || !problems;
   const label = renderFrozenLabel(m);
   $('frozen-label').textContent = label;
@@ -134,6 +136,8 @@ function renderLive(m: Model, now: Date): void {
   );
   $('capacity').classList.toggle('frozen', Boolean(label));
   $('more').classList.toggle('frozen', Boolean(label));
+  // Its ages move by the minute; the cache rewrites it only when the text changed
+  if (platform) setHtml('platform', renderPlatform(m, now));
 }
 
 function renderMain(): void {
@@ -142,8 +146,7 @@ function renderMain(): void {
   renderLive(m, now);
   $('capacity').innerHTML = renderCapacity(m);
   $('more').innerHTML = renderTiles(m, state, now);
-  if (state.ui.view === 'platform')
-    $('platform').innerHTML = renderPlatform(m, now);
+  if (state.ui.view === 'platform') setHtml('platform', renderPlatform(m, now));
 }
 
 // ---------- View ----------
