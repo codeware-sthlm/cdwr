@@ -192,7 +192,7 @@ const waitCard = (r: WaitRow): string => {
 const renderBefore = (m: Model, state: DeskState, now: Date): string => {
   if (!m.v) return empty('No queue view yet.');
   // Ideas wait on you too, but their card below carries the evidence to decide on
-  const cards = waitRows(m, now)
+  const cards = waitRows(m, state.details, now)
     .filter((r) => r.kind !== 'idea')
     .map(waitCard)
     .join('');
@@ -318,9 +318,13 @@ const renderHandoffs = (m: Model, state: DeskState): string => {
 
 // ---------- Session, limit, scheduler, timers ----------
 
-const renderAttended = (m: Model, now: Date): string => {
+const renderAttended = (
+  m: Model,
+  details: ReadonlyMap<string, Detail>,
+  now: Date
+): string => {
   const s = m.session;
-  const h = headline(m, now);
+  const h = headline(m, details, now);
   const head = `<div class="group"><h3>Now</h3><div class="verdict">${h.text}</div>${h.note ? `<p class="rule">${h.note}</p>` : ''}</div>`;
   const facts = s
     ? `<div class="group"><h3>Heartbeat</h3><dl class="kv">
@@ -1080,7 +1084,7 @@ export const SHEETS: Record<SheetId, SheetDef> = {
   session: {
     title: 'Session',
     sub: "The work-queue session's heartbeat, and how the next step is decided",
-    body: (m, _state, now) => renderAttended(m, now)
+    body: (m, state, now) => renderAttended(m, state.details, now)
   },
   limit: {
     title: 'Limit',
