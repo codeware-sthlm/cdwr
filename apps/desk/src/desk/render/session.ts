@@ -10,9 +10,10 @@ import {
 } from '../format';
 import type { Pulse } from '../live';
 import type { Model } from '../model';
+import type { Detail } from '../state';
 import type { SessionState } from '../types';
 
-import { idLink, parkedText, pr } from './html';
+import { idLink, livePr, parkedText, pr, prTone, prn, queuePr } from './html';
 
 // The session card: what the session does, where it runs, and the newest live events
 
@@ -20,8 +21,24 @@ export type Tone = '' | 'wait' | 'block';
 
 export type Headline = { tone: Tone; text: string; note: string };
 
+/** A ticket's id link, then its PR, tinted by its live tone, when it has one */
+const idPr = (
+  m: Model,
+  details: ReadonlyMap<string, Detail>,
+  id: string
+): string => {
+  const { n, live } = livePr(m, details, { ticket: id, pr: queuePr(m, id) });
+  return n
+    ? `${idLink(id)} ${prn(n, prTone(live?.state ?? null))}`
+    : idLink(id);
+};
+
 /** One sentence for what happens next, from the session and the head of the queue */
-export const headline = (m: Model, now: Date): Headline => {
+export const headline = (
+  m: Model,
+  details: ReadonlyMap<string, Detail>,
+  now: Date
+): Headline => {
   const { v, runs } = m;
   if (!runs) return { tone: '', text: 'Loading the runs…', note: '' };
   if (!v)
@@ -49,12 +66,12 @@ export const headline = (m: Model, now: Date): Headline => {
   } else if (s.state === 'alive') {
     text = `A session is ${s.detail === 'polling' ? 'polling for changes' : 'working'}${on}.`;
     if (first)
-      text += ` It takes ${idLink(first.ticket)} next (${esc(first.reason)}).`;
+      text += ` It takes ${idPr(m, details, first.ticket)} next (${esc(first.reason)}).`;
   } else if (first) {
     text =
       first.reason === 'ready'
-        ? `No session is running. The scheduler plans ${idLink(first.ticket)} at ${when}.`
-        : `No session is running. The scheduler starts one for ${idLink(first.ticket)} (${esc(first.reason)}) at ${when}, unless today's cap or the back-off holds it.`;
+        ? `No session is running. The scheduler plans ${idPr(m, details, first.ticket)} at ${when}.`
+        : `No session is running. The scheduler starts one for ${idPr(m, details, first.ticket)} (${esc(first.reason)}) at ${when}, unless today's cap or the back-off holds it.`;
   } else {
     const yours =
       m.before.length + m.toLabel.length + m.prs.length + m.ideasPending.length;
@@ -130,10 +147,14 @@ const feedTone = (p: Pulse): string =>
 const feedRow = (p: Pulse, now: Date): string =>
   `<li><i class="dot ${feedTone(p)}" aria-hidden="true"></i><span class="what">${esc(p.subject)} · ${esc(p.what)}</span><time>${esc(shortAge((now.getTime() - p.at) / 6e4))} ago</time></li>`;
 
-export const renderSession = (m: Model, now: Date): string => {
+export const renderSession = (
+  m: Model,
+  details: ReadonlyMap<string, Detail>,
+  now: Date
+): string => {
   const s: SessionState = m.session ?? { state: 'none' };
   const st = status(m);
-  const h = headline(m, now);
+  const h = headline(m, details, now);
   const where = s.state === 'none' ? '' : whereText(m);
   const seen =
     s.lastSeen && s.state !== 'none'
@@ -152,7 +173,7 @@ export const renderSession = (m: Model, now: Date): string => {
     ? m.next.find((x) => x.ticket === s.ticket)?.reason
     : undefined;
   const big = working
-    ? `Working on <span class="mono">${idLink(s.ticket ?? '')}</span>`
+    ? `Working on <span class="mono">${idPr(m, details, s.ticket ?? '')}</span>`
     : h.text;
   const sub = working
     ? [reason, m.get(s.ticket ?? '').title].filter(Boolean).map(esc).join(' · ')

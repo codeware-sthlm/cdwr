@@ -61,6 +61,13 @@ export const prTone = (state: PrStateName | null): PrTone =>
         ? 'bad'
         : 'neutral';
 
+/** The PR the queue view names for a ticket, among its PRs and parked waits; null when it names none */
+export const queuePr = (
+  m: Pick<Model, 'prs' | 'parked'>,
+  id: string
+): PrRef | null =>
+  [...m.prs, ...m.parked].find((x) => x.ticket === id && x.pr)?.pr ?? null;
+
 /** A queued PR's number and the github_events PR behind it, when one has landed */
 export const livePr = (
   m: Pick<Model, 'agentPrs'>,
@@ -85,10 +92,10 @@ export const empty = (html: string): string =>
 export const pvMore = (n: number): string =>
   n > 0 ? `<p class="pv-more">+ ${n} more</p>` : '';
 
-/** The pull request's number as a link; nothing without one */
-export const prn = (n: PrRef | null | undefined): string =>
+/** The pull request's number as a link, tinted by its live tone; nothing without one */
+export const prn = (n: PrRef | null | undefined, tone?: PrTone): string =>
   n
-    ? `<a class="prn" href="${GH_PR + n}" target="_blank" rel="noopener" title="Pull request ${esc(n)}">#${esc(n)}</a>`
+    ? `<a class="prn${tone && tone !== 'neutral' ? ' ' + tone : ''}" href="${GH_PR + n}" target="_blank" rel="noopener" title="Pull request ${esc(n)}">#${esc(n)}</a>`
     : '';
 
 /** The pull request as a plain id link */

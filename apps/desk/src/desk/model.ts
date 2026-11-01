@@ -43,9 +43,11 @@ import {
   type Problem,
   type Pulse,
   agentPrs,
+  checkProblems,
   feed,
   handBack,
   health,
+  hostHeartbeats,
   hostSessions,
   problems,
   pulse,
@@ -991,8 +993,35 @@ export const model = (
     ...after,
     ...(v ? v.parked : []),
     ...(v ? v.next : []),
-    ...before
+    ...before,
+    ...toLabel
   ]);
+  const nucView = host
+    ? {
+        host: host.host,
+        at: Date.parse(host.latest.at),
+        ageMin: host.ageMin,
+        silentMin: host.silentMin
+      }
+    : null;
+  const found = problems({
+    connection: data.connection,
+    runs,
+    runMinutes,
+    host: nucView,
+    sessions: data.sessions,
+    now
+  });
+  const checks = health({
+    connection: data.connection,
+    runs,
+    staleHours,
+    nuc: nucView,
+    heartbeats: hostHeartbeats(data.sessions, host?.host ?? null, now),
+    events: data.githubEvents,
+    storedAt: data.storedAt,
+    now
+  });
 
   return {
     all: openIssues(data),
@@ -1074,36 +1103,7 @@ export const model = (
     handBack: hand,
     pulse: pulse(data.githubEvents, data.connection),
     feed: feed(data.githubEvents, data.connection),
-    problems: problems({
-      connection: data.connection,
-      runs,
-      runMinutes,
-      host: host
-        ? {
-            host: host.host,
-            at: Date.parse(host.latest.at),
-            ageMin: host.ageMin,
-            silentMin: host.silentMin
-          }
-        : null,
-      sessions: data.sessions,
-      now
-    }),
-    health: health({
-      connection: data.connection,
-      runs,
-      staleHours,
-      nuc: host
-        ? {
-            host: host.host,
-            at: Date.parse(host.latest.at),
-            silentMin: host.silentMin
-          }
-        : null,
-      sessions: hostSessions(data.sessions, now, Infinity),
-      events: data.githubEvents,
-      storedAt: data.storedAt,
-      now
-    })
+    problems: [...found, ...(runs ? checkProblems(checks, found) : [])],
+    health: checks
   };
 };
