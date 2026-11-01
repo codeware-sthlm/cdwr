@@ -5,6 +5,7 @@ import type {
   HostMetricRow,
   PlanUsageRow,
   RunsPayload,
+  SessionRow,
   UsageHourRow
 } from '../supabase';
 
@@ -55,6 +56,7 @@ import { byCreated } from './parsers';
 import { reconcileView } from './reconcile';
 import type { DeskData, DeskState, Detail } from './state';
 import type {
+  Job,
   PrRef,
   QueueAfter,
   QueueBefore,
@@ -90,6 +92,75 @@ export type IdeaVerdict = 'discarded' | 'accepted' | 'to decide';
 /** A running build against main's newest, both as `sha-<7 chars>` */
 export type Behind = { runs: string; main: string };
 
+/** What bounds the agent: PRs in flight, the day's implement spend, and a pause */
+export type Limits = {
+  /** Agent PRs in flight against the limit (the queue view's) */
+  prs: { used: number; max: number };
+  /** The day's implement spend against its cap; null when the scheduler does not publish it */
+  effort: { spent: number; cap: number; share: number } | null;
+  /** The queue is paused; false when unknown */
+  paused: boolean;
+};
+
+/** The NUC at a glance: the verdict and the newest sample's shares */
+export type NucBlock = {
+  host: string;
+  verdict: HostHealth['verdict'];
+  ageMin: number;
+  /** load1 / cores of the newest sample; the verdict keeps the 30-min load5 average */
+  cpu: number;
+  /** The container's memory against its limit when both cgroup figures are set, else the host's */
+  memory: number;
+  memorySource: 'container' | 'host';
+  disk: number;
+  /** A run is open now */
+  busy: boolean;
+};
+
+export type CpuBand = { start: number; end: number; ticket: string | null };
+
+/** The NUC's CPU over the last 24 hours against the scheduler's runs */
+export type CpuDay = {
+  /** The window in ms: now − 24 h, now */
+  from: number;
+  to: number;
+  /** The host's samples in the window, cpu = load1 / cores, oldest first */
+  points: { at: number; cpu: number }[];
+  /** Runs over the window, from started to finished (an open run to now), clipped to the window, oldest first */
+  bands: CpuBand[];
+  /** Mean cpu of the points outside any band; null when there are none */
+  idle: number | null;
+  /** Mean cpu of the points inside a band; null when there are none */
+  inRuns: number | null;
+  /** The highest point, with the ticket of the band it falls in */
+  peak: { at: number; cpu: number; ticket: string | null } | null;
+};
+
+/** A Mac session seen today; sessions carry no start time, so this is when it was last seen */
+export type MacEntry = {
+  id: string;
+  kind: string;
+  /** Last heartbeat in ms */
+  lastSeen: number;
+};
+
+export type VersionState = {
+  state: 'current' | 'behind' | 'unknown';
+  /** What runs, as `sha-<7>`; null when unknown */
+  runs: string | null;
+  /** Main's newest build, as `sha-<7>`; null when unknown */
+  main: string | null;
+};
+
+export type Versions = {
+  /** The NUC image (container job) against agent-host-image.yml's newest build */
+  image: VersionState;
+  /** This desk's build against desk.yml's newest */
+  desk: VersionState;
+  /** The installed scripts against origin/main, as the Job line says */
+  install: Job['install'] | null;
+};
+
 export type Model = {
   all: Issue[];
   runs: RunsPayload | null;
@@ -112,6 +183,7 @@ export type Model = {
   parked: QueueParked[];
   held: { tickets: string[]; free: QueueFree[] };
   limit: { used: number; max: number };
+  limits: Limits;
   slots: Slot[];
   session: SessionState | null;
   /** Minutes a session has polled while the queue had work for it, once that passes STUCK_MIN */
@@ -142,6 +214,14 @@ export type Model = {
   activityDay: number;
   /** The queue host's load; null without a sample */
   host: HostHealth | null;
+  /** The NUC block; null without a sample */
+  nuc: NucBlock | null;
+  /** The NUC's CPU over the last 24 hours with the runs; null without a sample */
+  cpuDay: CpuDay | null;
+  /** The Mac's sessions seen since local midnight, oldest first */
+  macToday: MacEntry[];
+  /** What runs against what main built */
+  versions: Versions;
   /** The plan's two usage windows; null per window without a sample */
   plan: PlanUsage;
   /** What the hours cost, by hour and by role */
@@ -265,7 +345,7 @@ export const activityMissing = (activity: ActivityPayload): boolean =>
   'missing' in activity && Boolean(activity.missing);
 
 export const isProblem = (outcome: string): boolean =>
-  !/^(idle|planned( [A-Z]+-\d+)?|launched|implemented|suggested( [A-Z]+-\d+)?|nothing|skip)$/.test(
+  !/^(idle|paused|planned( [A-Z]+-\d+)?|launched|implemented|suggested( [A-Z]+-\d+)?|nothing|skip)$/.test(
     outcome
   );
 
@@ -397,6 +477,139 @@ export const hostHealth = (
     series
   };
 };
+
+const DAY_MS = 864e5;
+
+/** A sample's CPU: the 1-minute load per core, which can pass 1 */
+const cpuOf = (r: HostMetricRow): number => share(r.load1, r.cores);
+
+/** The NUC's newest sample as shares, with whether a run is open now; the verdict stays the host's */
+export const nucBlock = (
+  host: HostHealth,
+  rows: readonly Run[],
+  now: Date
+): NucBlock => {
+  const r = host.latest;
+  const container = r.cgroup_mem_current !== null && r.cgroup_mem_max !== null;
+  return {
+    host: host.host,
+    verdict: host.verdict,
+    ageMin: host.ageMin,
+    cpu: cpuOf(r),
+    memory: container
+      ? share(r.cgroup_mem_current ?? 0, r.cgroup_mem_max ?? 0)
+      : share(r.mem_total - r.mem_available, r.mem_total),
+    memorySource: container ? 'container' : 'host',
+    disk: share(r.disk_total - r.disk_free, r.disk_total),
+    busy: rows.some(
+      (x) =>
+        x.finished === null && now.getTime() - Date.parse(x.started) <= DAY_MS
+    )
+  };
+};
+
+/** The last 24 hours of the NUC's CPU, with the runs as bands behind it */
+export const cpuDay = (
+  series: readonly HostMetricRow[],
+  rows: readonly Run[],
+  now: Date
+): CpuDay => {
+  const to = now.getTime();
+  const from = to - DAY_MS;
+  const points = series
+    .map((r) => ({ at: Date.parse(r.at), cpu: cpuOf(r) }))
+    .filter((p) => p.at >= from && p.at <= to)
+    .sort((a, b) => a.at - b.at);
+  const bands = rows
+    .flatMap((r): CpuBand[] => {
+      const start = Date.parse(r.started);
+      if (Number.isNaN(start)) return [];
+      const stop = r.finished === null ? to : Date.parse(r.finished);
+      const end = Number.isNaN(stop) ? to : stop;
+      if (end < from || start > to) return [];
+      return [
+        {
+          start: Math.max(start, from),
+          end: Math.min(end, to),
+          ticket: r.ticket || null
+        }
+      ];
+    })
+    .sort((a, b) => a.start - b.start);
+  const bandAt = (at: number): CpuBand | undefined =>
+    bands.find((b) => at >= b.start && at <= b.end);
+  const meanOrNull = (xs: readonly number[]): number | null =>
+    xs.length ? mean(xs) : null;
+  const peak = points.reduce<(typeof points)[number] | null>(
+    (a, b) => (a && a.cpu >= b.cpu ? a : b),
+    null
+  );
+  return {
+    from,
+    to,
+    points,
+    bands,
+    idle: meanOrNull(points.filter((p) => !bandAt(p.at)).map((p) => p.cpu)),
+    inRuns: meanOrNull(points.filter((p) => bandAt(p.at)).map((p) => p.cpu)),
+    peak: peak ? { ...peak, ticket: bandAt(peak.at)?.ticket ?? null } : null
+  };
+};
+
+/**
+ * The Mac's sessions seen since local midnight, oldest first. The Mac is the hand-back's
+ * host, else any host but the NUC (the sampled host, else the one that launches implementing sessions).
+ */
+export const macToday = (
+  rows: readonly SessionRow[] | null,
+  nucHost: string | null,
+  handBackHost: string | null,
+  now: Date
+): MacEntry[] => {
+  const all = rows ?? [];
+  const nuc = nucHost ?? all.find((r) => r.kind === 'implement')?.host ?? null;
+  const mac = handBackHost ?? all.find((r) => r.host !== nuc)?.host ?? null;
+  if (!mac) return [];
+  const midnight = new Date(now.getTime());
+  midnight.setHours(0, 0, 0, 0);
+  return all
+    .filter((r) => r.host === mac)
+    .map((r) => ({ id: r.id, kind: r.kind, lastSeen: Date.parse(r.last_seen) }))
+    .filter((e) => e.lastSeen >= midnight.getTime())
+    .sort((a, b) => a.lastSeen - b.lastSeen);
+};
+
+const sha7 = (sha: string): string => sha.replace(/^sha-/, '').slice(0, 7);
+
+const versionState = (
+  runs: string | null,
+  main: string | null
+): VersionState => ({
+  state:
+    runs && main
+      ? sha7(runs) === sha7(main)
+        ? 'current'
+        : 'behind'
+      : 'unknown',
+  runs,
+  main
+});
+
+/** The image, the desk and the scripts against what main built; `unknown` when either side is */
+export const versions = (
+  job: Job | null,
+  main: RunsPayload['main'] | null,
+  desk: string | null
+): Versions => ({
+  image: versionState(
+    job?.host === 'container' && job.rev ? job.rev : null,
+    main?.image ? 'sha-' + main.image.slice(0, 7) : null
+  ),
+  desk: versionState(
+    desk ? 'sha-' + desk.slice(0, 7) : null,
+    main?.desk ? 'sha-' + main.desk.slice(0, 7) : null
+  ),
+  install: job?.install ?? null
+});
 
 export type PlanKind = keyof typeof PLAN_WINDOW_H;
 
@@ -659,6 +872,7 @@ export const model = (
     : null;
   const get = (id: string): TicketRef => idx.get(id) ?? stub(id);
 
+  const limit = v ? v.limit : { used: 0, max: LIMIT };
   const before = v ? v.table.before : [];
   const toLabel = v ? v.table.label : [];
   const after = v ? v.table.after : [];
@@ -757,23 +971,14 @@ export const model = (
   // The daily suggestion: an agent-idea ticket without an Agent label waits on Håkan's verdict
   const allIdeas = (ideas ?? []).filter((i) => !isOtherRepo(i));
 
-  const job = runs?.job;
-  const mainImage = runs?.main.image;
-  const imageBehind: Behind | null =
-    job?.host === 'container' &&
-    job.rev &&
-    mainImage &&
-    mainImage.slice(0, 7) !== job.rev.slice(4)
-      ? { runs: job.rev, main: 'sha-' + mainImage.slice(0, 7) }
+  const vers = versions(runs?.job ?? null, runs?.main ?? null, desk);
+  const behind = (x: VersionState): Behind | null =>
+    x.state === 'behind' && x.runs && x.main
+      ? { runs: x.runs, main: x.main }
       : null;
-  const mainDesk = runs?.main.desk;
-  const deskBehind: Behind | null =
-    desk && mainDesk && desk !== mainDesk
-      ? {
-          runs: 'sha-' + desk.slice(0, 7),
-          main: 'sha-' + mainDesk.slice(0, 7)
-        }
-      : null;
+  const imageBehind = behind(vers.image);
+  const deskBehind = behind(vers.desk);
+  const effort = runs?.job?.effort ?? null;
   const plan = planUsage(data.planUsage, now);
   const host = hostHealth(data.hostMetrics, now);
   const sessions = hostSessions(data.sessions, now);
@@ -781,6 +986,7 @@ export const model = (
   const nucFresh =
     (host !== null && host.ageMin <= host.silentMin) ||
     (nucSession !== undefined && nucSession.ageMin <= (host?.silentMin ?? 0));
+  const hand = handBack(data.sessions, host?.host ?? null, nucFresh, now);
   const prTickets = ticketsByPr(details, [
     ...after,
     ...(v ? v.parked : []),
@@ -806,7 +1012,14 @@ export const model = (
     next,
     parked,
     held: v ? v.held : { tickets: [], free: [] },
-    limit: v ? v.limit : { used: 0, max: LIMIT },
+    limit,
+    limits: {
+      prs: limit,
+      effort: effort
+        ? { ...effort, share: share(effort.spent, effort.cap) }
+        : null,
+      paused: runs?.job?.paused ?? false
+    },
     slots: [...slots.values()],
     session,
     stuck,
@@ -838,6 +1051,10 @@ export const model = (
       (r) => nowMs - runTime(r.when) <= 864e5
     ).length,
     host,
+    nuc: host ? nucBlock(host, rows, now) : null,
+    cpuDay: host ? cpuDay(host.series, rows, now) : null,
+    macToday: macToday(data.sessions, host?.host ?? null, hand.host, now),
+    versions: vers,
     plan,
     burn: usageBurn(data.usageHours, now, plan.five_hour),
     runsToday: runsToday(rows, now),
@@ -854,7 +1071,7 @@ export const model = (
     ),
     agentPrs: agentPrs(data.githubEvents, prTickets, (id) => get(id).title),
     hostSessions: sessions,
-    handBack: handBack(data.sessions, host?.host ?? null, nucFresh, now),
+    handBack: hand,
     pulse: pulse(data.githubEvents, data.connection),
     feed: feed(data.githubEvents, data.connection),
     problems: problems({
