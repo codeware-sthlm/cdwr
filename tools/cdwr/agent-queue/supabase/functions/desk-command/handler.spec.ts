@@ -26,7 +26,7 @@ type Options = {
   patch?: unknown[] | number | 'throw';
   /** status of the desk_commands ack PATCH */
   ack?: number;
-  activity?: number;
+  activity?: number | 'throw';
   fail?: boolean;
 };
 
@@ -58,8 +58,10 @@ const setup = async (options: Options = {}) => {
         return options.insert && options.insert >= 400
           ? json({}, options.insert)
           : json([{ id: 7 }], 201);
-      if (path.startsWith('activity') && method === 'POST')
+      if (path.startsWith('activity') && method === 'POST') {
+        if (options.activity === 'throw') throw new Error('reset');
         return new Response(null, { status: options.activity ?? 201 });
+      }
       return json({}, 404);
     }
   );
@@ -512,6 +514,18 @@ describe('createHandler', () => {
     expect(log).toHaveBeenCalledWith({
       event: 'activity failed',
       status: 500,
+      id: 7
+    });
+  });
+
+  it('still succeeds when the activity upsert throws, and logs it', async () => {
+    const { handle, log } = await setup({ queue: [], activity: 'throw' });
+    const res = await handle(post({ host: 'ghost', kind: 'pause' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: 7, status: 'refused' });
+    expect(log).toHaveBeenCalledWith({
+      event: 'activity failed',
+      reason: 'reset',
       id: 7
     });
   });
