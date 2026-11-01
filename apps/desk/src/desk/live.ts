@@ -140,7 +140,7 @@ export type HostSessions = {
 const ageOf = (iso: string, now: Date): number =>
   (now.getTime() - Date.parse(iso)) / 6e4;
 
-/** Sessions seen within `maxAgeMin` (SESSION_HANDBACK_MIN, the live ones), per host, newest host first */
+/** Sessions seen within `maxAgeMin` (SESSION_HANDBACK_MIN, the live ones), per host, newest host first; an ended session is gone at once */
 export const hostSessions = (
   rows: readonly SessionRow[] | null,
   now: Date,
@@ -148,6 +148,7 @@ export const hostSessions = (
 ): HostSessions[] => {
   const hosts = new Map<string, HostSessions>();
   for (const r of rows ?? []) {
+    if (r.state === 'ended') continue;
     const ageMin = ageOf(r.last_seen, now);
     if (ageMin > maxAgeMin) continue;
     const h = hosts.get(r.host) ?? { host: r.host, sessions: [], ageMin };
@@ -187,7 +188,9 @@ export const handBack = (
   const nuc =
     nucHost ?? (rows ?? []).find((r) => r.kind === 'implement')?.host ?? null;
   const attended = (rows ?? [])
-    .filter((r) => r.kind === 'attended' && r.host !== nuc)
+    .filter(
+      (r) => r.kind === 'attended' && r.host !== nuc && r.state !== 'ended'
+    )
     .reduce<SessionRow | null>(
       (a, b) =>
         a && Date.parse(a.last_seen) >= Date.parse(b.last_seen) ? a : b,
