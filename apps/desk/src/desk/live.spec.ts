@@ -62,6 +62,8 @@ const session = (over: Partial<SessionRow> = {}): SessionRow => ({
   host: 'mac',
   kind: 'attended',
   last_seen: ago(1),
+  state: null,
+  detail: null,
   ...over
 });
 
@@ -291,6 +293,24 @@ describe('hostSessions', () => {
     expect(out.flatMap((h) => h.sessions.map((s) => s.id))).toEqual(['a']);
   });
 
+  it('drops an ended session at once, whatever its last_seen', () => {
+    const out = hostSessions(
+      [
+        session({ id: 'a', state: 'ended', last_seen: ago(0) }),
+        session({ id: 'b', state: 'working', last_seen: ago(1) })
+      ],
+      NOW
+    );
+    expect(out.flatMap((h) => h.sessions.map((x) => x.id))).toEqual(['b']);
+  });
+
+  it('keeps the window rule for a null state', () => {
+    const ids = (min: number) =>
+      hostSessions([session({ state: null, last_seen: ago(min) })], NOW).length;
+    expect(ids(SESSION_HANDBACK_MIN - 1)).toBe(1);
+    expect(ids(SESSION_HANDBACK_MIN + 1)).toBe(0);
+  });
+
   it('groups by host, newest first, with ages in minutes', () => {
     const out = hostSessions(
       [
@@ -323,6 +343,15 @@ describe('handBack', () => {
     expect(
       handBack([session({ last_seen: ago(5) })], 'nuc', true, NOW).state
     ).toBe('attended');
+  });
+
+  it('ignores an ended attended session', () => {
+    const rows = [session({ state: 'ended', last_seen: ago(1) })];
+    expect(handBack(rows, 'nuc', false, NOW)).toMatchObject({
+      state: 'idle',
+      host: null,
+      ageMin: null
+    });
   });
 
   it('is handing back within thirty minutes', () => {

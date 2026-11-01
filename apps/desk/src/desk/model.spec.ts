@@ -1646,7 +1646,14 @@ describe('limits, nuc and versions in the model', () => {
       host: string,
       kind: string,
       lastSeen: string
-    ): SessionRow => ({ id, host, kind, last_seen: lastSeen });
+    ): SessionRow => ({
+      id,
+      host,
+      kind,
+      last_seen: lastSeen,
+      state: null,
+      detail: null
+    });
 
     it('lists the Mac sessions seen since local midnight, oldest first', () => {
       const out = macToday(
@@ -1671,6 +1678,16 @@ describe('limits, nuc and versions in the model', () => {
           kind: 'attended',
           lastSeen: Date.parse('2026-10-29T10:00:00')
         }
+      ]);
+    });
+
+    it('keeps an ended session, it is still today’s history', () => {
+      const ended = {
+        ...s('e', 'mac', 'attended', '2026-10-29T09:00:00'),
+        state: 'ended'
+      };
+      expect(macToday([ended], 'nuc', 'mac', NOW).map((e) => e.id)).toEqual([
+        'e'
       ]);
     });
 
