@@ -164,14 +164,17 @@ The scheduler runs in the NUC's agent container, every 10 minutes, `/work-queue`
 separate worktree. A Mac is attended-only; it can still run the same loop as a launchd job
 (`se.codeware.agent-queue`, worktree `codeware-agent` beside this checkout), and `cdwr agent uninstall`
 removes that job. Without it, `status` shows the attended rows and names the host, and `pause`, `resume`
-and `run` refuse.
+and `run` refuse and name their `--host` line. With `--host <name>`, `status`, `notify`, `pause`,
+`resume` and `run` act on the queue in the agent container over ssh: the plan is the container's own
+`--dry-run`, and applying runs it there; `--json` passes the container's result through.
 
 ```sh
 cdwr agent install        # worktree, env files, deps, script, launchd job, Keychain key
 cdwr agent uninstall      # unload and remove the launchd job; --worktree-remove takes the planner checkout
 cdwr agent status         # loaded, paused, key, scripts current, watched PRs, next run
-cdwr agent run            # start a planning run now
+cdwr agent run            # start a planning run now; in the container, wake its loop
 cdwr agent pause|resume   # hold or release the schedule
+cdwr agent status|notify|pause|resume|run --host <name>   # the same, in the agent container over ssh
 cdwr agent logs [--run]   # the scheduler log, or the latest run
 cdwr agent logs --host <name> [--run]   # the same, from the agent container over ssh
 cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ticket, from local transcripts
@@ -313,7 +316,9 @@ restarted by the entrypoint (back-off from 5 s to 5 min), subscribes to `issue_e
 `AGENT_SUPABASE_URL`, both in `/agent-queue`) and sends the loop `SIGUSR1`: 15 s after the first
 event, at most once a minute, and once on every (re)subscribe. It only wakes the loop; `run.sh`
 still decides, so pause, the lock, the live-session check and the spend caps apply as before. A
-wake during a run starts the next run right after it, never beside it. The loop sleeps in steps of
+wake during a run starts the next run right after it, never beside it. `cdwr agent run` in the
+container (`--host` from the Mac) sends the same wake, to the pid the entrypoint keeps in `loop.pid`
+in the queue home. The loop sleeps in steps of
 `RUN_INTERVAL_SECONDS` (600): while `listener.json` in the queue home says live with a beat under 2
 minutes it keeps sleeping, up to `RUN_FALLBACK_SECONDS` (3600), and checks in with the Sentry monitor
 at each step so its 10-minute schedule holds; a step that finds the listener down runs at once, so
