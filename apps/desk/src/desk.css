@@ -184,29 +184,29 @@ h1 {
 .platform .flag.bad {
   background: var(--block);
 }
-.live {
+.conn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   font: 11px var(--font-mono);
 }
-.live b {
+.conn b {
   font-weight: 400;
   letter-spacing: 0.1em;
 }
-.live.on b {
+.conn.on b {
   color: var(--live);
 }
-.live.on .dot {
+.conn.on .dot {
   background: var(--live);
 }
 /* Not connected: the unknown state, dashed and striped */
-.live.off .dot {
+.conn.off .dot {
   background: var(--unknown);
   outline: 1px dashed var(--faint);
   outline-offset: 1px;
 }
-.live .short {
+.conn .short {
   display: none;
 }
 @media (max-width: 600px) {
@@ -216,10 +216,10 @@ h1 {
   .platform .name,
   .platform .checks,
   .platform .updates,
-  .live .long {
+  .conn .long {
     display: none;
   }
-  .live .short {
+  .conn .short {
     display: inline;
   }
   .platform {
@@ -1024,7 +1024,7 @@ table.act {
 }
 @media (prefers-reduced-motion: no-preference) {
   .session.live .open .dot,
-  .live.on .dot {
+  .conn.on .dot {
     animation: beat 2s ease-in-out infinite;
   }
 }

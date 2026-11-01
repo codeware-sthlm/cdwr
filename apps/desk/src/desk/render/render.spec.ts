@@ -421,7 +421,7 @@ describe('header', () => {
 
   it('shows the unknown state while polling', () => {
     const html = renderStatus(model(filled(), NOW), connection(false));
-    expect(html).toContain('live off');
+    expect(html).toContain('conn off');
     expect(html).toContain('every 5 min');
   });
 

@@ -59,7 +59,7 @@ export const renderStatus = (m: Model, connection: Connection): string => {
   const pill = `<button type="button" class="platform" data-view="platform"${title ? ` title="${esc(title)}"` : ''} aria-label="Platform: ${esc(loading ? 'loading' : p.failing.length ? p.failing.length + ' failing' : 'checks ok')}${p.updates ? ', ' + esc(plural(p.updates, 'update', 'updates')) : ''}">${SLIDERS}<span class="name">Platform</span>${checks}${updates}${flag ? `<i class="flag ${flag}" aria-hidden="true"></i>` : ''}</button>`;
   const at = m.pulse?.at ?? connection.upSince;
   const live = connection.live
-    ? `<span class="live on" title="Linear and the queue push changes as they happen. Focus and Refresh still reload everything."><i class="dot" aria-hidden="true"></i><b>LIVE</b>${at ? `<span class="at"><span class="long">realtime · ${esc(time(at, true))}</span><span class="short">${esc(time(at, false))}</span></span>` : ''}</span>`
-    : `<span class="live off" title="Live updates are not connected. The desk reloads every 5 minutes, on focus and on Refresh."><i class="dot" aria-hidden="true"></i><b>POLLING</b><span class="at">every 5 min</span></span>`;
+    ? `<span class="conn on" title="Linear and the queue push changes as they happen. Focus and Refresh still reload everything."><i class="dot" aria-hidden="true"></i><b>LIVE</b>${at ? `<span class="at"><span class="long">realtime · ${esc(time(at, true))}</span><span class="short">${esc(time(at, false))}</span></span>` : ''}</span>`
+    : `<span class="conn off" title="Live updates are not connected. The desk reloads every 5 minutes, on focus and on Refresh."><i class="dot" aria-hidden="true"></i><b>POLLING</b><span class="at">every 5 min</span></span>`;
   return pill + live;
 };
