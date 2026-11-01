@@ -57,8 +57,10 @@ To start an attended session, run `cdwr agent attend [COD-n]` from anywhere: it 
 
 The scheduler runs in the NUC's agent container, plan-only every 10 minutes; `cdwr agent status --host <host>` says what it would take next. The Mac is attended-only: `cdwr agent install` still sets up a launchd job there, and `cdwr agent uninstall` removes it (`--worktree-remove` takes the planner checkout too) and keeps the session side. Without the job, bare `status` shows the attended rows and `pause`, `resume` and `run` name the host that has the scheduler. Launchd runs an installed copy of
 `tools/cdwr/agent-queue/run.sh` (and its `watch.jq`, `waits.sh`, `implement.sh` and `github-app.sh`), so a merged change to its guardrails
-waits for the next `install`. Before planning, the same job watches the PRs of `agent:review`
-tickets and sends a notice when one leaves the merge queue, fails, or merges with hand-offs left.
+waits for the next `install`. Before planning, the same job watches the PRs of `agent:working`,
+`agent:needs-input` and `agent:review` tickets and sends a notice when a review PR leaves the merge
+queue or fails, or any of them merges with hand-offs left. A ticket merged outside review is
+relabelled `agent:review` with a **Next:** line naming its hand-offs, the job's one Linear write.
 In the NUC's container the loop wakes on Linear and GitHub events (`cdwr agent listen` on Supabase Realtime, publishable key `AGENT_SUPABASE_ANON_KEY`), with a run every hour as the fallback; without the listener it polls every 10 minutes.
 Each run also sends its telemetry to the `agent-queue` Supabase project, which the Agent Desk reads: tables `runs`, `usage` (`cdwr agent usage`), `usage_hours` (the same spend per whole UTC hour over every Claude project on the host, sent every run and kept 14 days), `activity` (`cdwr agent activity`, from Linear's issue history), `sessions`, `queue_state`, `host_metrics` (the container's load, memory and disk, kept 7 days; the desk's NUC tile), `plan_usage` (the plan's 5-hour and weekly usage from the Mac's status line, `cdwr agent statusline install`; the desk's Plan usage tile, with `usage_hours` as its hourly breakdown), and `issue_events` written by the `linear-webhook` Edge Function, `github_events` and `builds` by `github-webhook` (env `AGENT_SUPABASE_URL` and `AGENT_SUPABASE_SERVICE_KEY`). It writes no Linear document.
 The `queue_state` row carries an `Attended:` line saying whether an attended `/work-queue` has something to do, and `cdwr agent status` shows it too.
