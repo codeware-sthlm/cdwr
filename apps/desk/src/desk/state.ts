@@ -38,7 +38,6 @@ export const SHEET_IDS = [
   'scheduler',
   'runs',
   'timers',
-  'nuc',
   'plan',
   'activity',
   'shipped',
@@ -56,7 +55,9 @@ export const isSheetId = (value: unknown): value is SheetId =>
 export const OLD_SHEET_IDS: ReadonlyMap<string, SheetId> = new Map([
   ['after', 'review'],
   ['spend', 'effort'],
-  ['ticketcost', 'effort']
+  ['ticketcost', 'effort'],
+  // Until the Platform view takes #nuc links (COD-678 step 4)
+  ['nuc', 'scheduler']
 ]);
 
 /** A current sheet id, or the sheet an old id moved to; null for anything else */

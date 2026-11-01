@@ -5,6 +5,7 @@ import { AGENT_AVATAR } from './constants';
 import { type Loader, createLoader } from './load';
 import { model, shipped } from './model';
 import { notice } from './notice';
+import { renderCapacity } from './render/capacity';
 import {
   chartHeight,
   chartKind,
@@ -93,6 +94,7 @@ function renderMain(): void {
   const m = model(state, now);
   $('status').innerHTML = renderStatus(m, state.data.connection);
   $('cards').innerHTML = renderSession(m, now) + renderWaiting(m, now);
+  $('capacity').innerHTML = renderCapacity(m);
   $('more').innerHTML = renderTiles(m, state, now);
 }
 

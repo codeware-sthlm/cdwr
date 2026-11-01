@@ -19,9 +19,11 @@ import {
 } from '../state';
 import type { QueueView, SessionState } from '../types';
 
+import { renderCapacity } from './capacity';
 import {
   chartHeight,
   chartKind,
+  cpuChart,
   gauge,
   shippedChart,
   sparkline,
@@ -259,6 +261,7 @@ describe('sheets', () => {
     expect(sheetIdOf('after')).toBe('review');
     expect(sheetIdOf('spend')).toBe('effort');
     expect(sheetIdOf('ticketcost')).toBe('effort');
+    expect(sheetIdOf('nuc')).toBe('scheduler');
     expect(sheetIdOf('nope')).toBeNull();
     expect(sheetIdOf('')).toBeNull();
     expect(sheetIdOf(null)).toBeNull();
@@ -742,89 +745,14 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(SHEETS.next.body(m, state, NOW)).not.toContain('Parked on a wait');
   });
 
-  it('draw the NUC sheet with a gauge and a sparkline per figure', () => {
-    const state = filled();
-    const html = SHEETS.nuc.body(model(state, NOW), state, NOW);
-    expect(html.match(/class="gauge"/g)).toHaveLength(4);
-    expect(html.match(/class="spark"/g)).toHaveLength(4);
-    expect(html).toContain('Within limits');
-    expect(html).not.toContain('Container memory');
-  });
-
-  it('add the container figure when it has a memory limit', () => {
-    const state = filled();
-    state.data.hostMetrics = [
-      hostSample(0, {
-        cgroup_mem_current: 2 * 2 ** 30,
-        cgroup_mem_max: 4 * 2 ** 30
-      })
-    ];
-    const html = SHEETS.nuc.body(model(state, NOW), state, NOW);
-    expect(html).toContain('Container memory');
-    expect(html).toContain('2.0 GiB of its 4.0 GiB limit');
-    expect(html.match(/class="gauge"/g)).toHaveLength(5);
-  });
-
-  it('name the problem on the NUC sheet and mark the tile bad', () => {
-    const state = filled();
-    state.data.hostMetrics = [hostSample(0, { mem_available: 0.2 * 2 ** 30 })];
-    const m = model(state, NOW);
-    expect(SHEETS.nuc.body(m, state, NOW)).toContain('memory used above 90%');
-    expect(renderTiles(m, state, NOW)).toMatch(/tile bad" data-w="nuc"/);
-  });
-
-  it('show the NUC tile as the worse of load and memory with the verdict', () => {
-    const state = filled();
-    const html = renderTiles(model(state, NOW), state, NOW);
-    expect(html).toMatch(/data-w="nuc"[^>]*>.*<b class="v">25% · ok<\/b>/);
-  });
-
-  it('name the first problem on the NUC tile, not the worse of load and memory', () => {
-    const disk = filled();
-    disk.data.hostMetrics = [
-      hostSample(0, { disk_free: 5 * 2 ** 30, mem_available: 7 * 2 ** 30 })
-    ];
-    expect(renderTiles(model(disk, NOW), disk, NOW)).toMatch(
-      /data-w="nuc"[^>]*>.*<b class="v">disk 95% · bad<\/b>/
-    );
-    const swap = filled();
-    swap.data.hostMetrics = [
-      hostSample(10, { swap_free: 2 * 2 ** 30 }),
-      hostSample(0, { swap_free: 1 * 2 ** 30 })
-    ];
-    expect(renderTiles(model(swap, NOW), swap, NOW)).toMatch(
-      /data-w="nuc"[^>]*>.*<b class="v">swap growing · bad<\/b>/
-    );
-  });
-
-  it('show a stale NUC as stale and no samples as a dash', () => {
-    const stale = filled();
-    stale.data.hostMetrics = [hostSample(90)];
-    expect(renderTiles(model(stale, NOW), stale, NOW)).toMatch(
-      /data-w="nuc"[^>]*>.*<b class="v">stale<\/b>/
-    );
-    expect(SHEETS.nuc.body(model(stale, NOW), stale, NOW)).toContain(
-      'No sample for 1 h 30 min'
-    );
-    const none = filled();
-    none.data.hostMetrics = [];
-    expect(renderTiles(model(none, NOW), none, NOW)).toMatch(
-      /data-w="nuc"[^>]*>.*<b class="v">–<\/b>/
-    );
-    expect(SHEETS.nuc.body(model(none, NOW), none, NOW)).toContain(
-      'No host samples yet'
-    );
-  });
-
   const tileOf = (html: string, id: string): string =>
     html.match(
       new RegExp(`<button[^>]*data-w="${id}"[^>]*>.*?</button>`)
     )?.[0] ?? '';
 
-  it('give every tile a sheet, the interim four in their own row', () => {
+  it('give every tile a sheet, with the plan and timers among them and no interim row', () => {
     const state = filled();
     const html = renderTiles(model(state, NOW), state, NOW);
-    const [main, interim] = html.split('Until the Platform view');
     expect(html).toContain('<h2>Everything else</h2>');
     for (const id of [
       'next',
@@ -835,15 +763,23 @@ describe('waiting card, queue sheets and tiles', () => {
       'activity',
       'shipped',
       'effort',
+      'plan',
+      'timers',
       'all',
       'ideas'
     ])
-      expect(main).toContain(`data-w="${id}"`);
-    for (const id of ['limit', 'nuc', 'plan', 'timers']) {
-      expect(interim).toContain(`data-w="${id}"`);
-      expect(main).not.toContain(`data-w="${id}"`);
-    }
-    expect(interim).toContain('class="tiles small"');
+      expect(html).toContain(`data-w="${id}"`);
+    // The limit and the NUC moved to the Capacity row
+    expect(html).not.toContain('data-w="limit"');
+    expect(html).not.toContain('data-w="nuc"');
+    expect(html).not.toContain('Until the Platform view');
+    expect(html).not.toContain('tiles small');
+    expect(html.indexOf('data-w="effort"')).toBeLessThan(
+      html.indexOf('data-w="plan"')
+    );
+    expect(html.indexOf('data-w="timers"')).toBeLessThan(
+      html.indexOf('data-w="all"')
+    );
   });
 
   it('show the value and sub-line of each of the ten tiles', () => {
@@ -1031,6 +967,257 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(empty).toContain('cdwr agent statusline install');
     expect(empty).toContain('No hourly usage yet');
     expect(empty).toContain('a proxy for what the plan counts');
+  });
+});
+
+describe('capacity row', () => {
+  const GIB = 2 ** 30;
+  const jobWith = (
+    over: Partial<NonNullable<RunsPayload['job']>>,
+    limit?: QueueView['limit']
+  ): DeskState => {
+    const s = filled();
+    const base = runs(limit ? view({ limit }) : view());
+    s.data.runs = { ...base, job: base.job && { ...base.job, ...over } };
+    return s;
+  };
+  const html = (s: DeskState): string => renderCapacity(model(s, NOW));
+  const session = (host: string, kind: string, ago: number) =>
+    ({
+      id: `${host}-${kind}`,
+      host,
+      kind,
+      last_seen: new Date(NOW.getTime() - ago * 6e4).toISOString()
+    }) as never;
+
+  it('show the PRs in flight against the limit, with the free slots', () => {
+    const out = html(filled());
+    expect(out).toContain('LIMITS');
+    expect(out).toContain('data-w="limit"');
+    expect(out).toContain('Agent PRs in flight');
+    expect(out).toContain('<b class="cap-v">2 / 5</b>');
+    expect(out).toContain('3 slots free · merges free a slot live');
+    expect(out).toContain('cap-meter cap-btn neutral');
+    expect(out).toContain('<i class="neutral" style="width:40.0%"');
+  });
+
+  it('turn the PRs meter amber one below the limit and say when no slot is free', () => {
+    const one = html(jobWith({}, { used: 4, max: 5 }));
+    expect(one).toContain('1 slot free · merges free a slot live');
+    expect(one).toContain('cap-meter cap-btn wait');
+    const full = html(jobWith({}, { used: 5, max: 5 }));
+    expect(full).toContain('no slot free');
+    expect(full).not.toContain('slots free');
+    expect(full).toContain('cap-meter cap-btn wait');
+  });
+
+  it.each([
+    [23, '57%', 'ok'],
+    [32, '80%', 'wait'],
+    [40, '100%', 'bad']
+  ])('show an effort of %d dollars as %s, tone %s', (spent, value, tone) => {
+    const out = html(jobWith({ effort: { spent, cap: 40 } }));
+    expect(out).toContain(`<b class="cap-v">${value}</b>`);
+    expect(out).toContain(`class="cap-meter ${tone}"`);
+    expect(out).toContain(
+      `$${spent} of the $40 cap · simulated, nothing billed · resets 00:00`
+    );
+  });
+
+  it('say the effort is not published yet when the job line has none', () => {
+    const out = html(filled());
+    expect(out).toContain(
+      'not published yet: the scheduler sends it after its next deploy'
+    );
+    expect(out).toMatch(/Agent effort today<\/span><b class="cap-v">–<\/b>/);
+  });
+
+  it('say whether the queue runs or is paused', () => {
+    expect(html(filled())).toContain('<p class="cap-queue">Queue running</p>');
+    const paused = html(jobWith({ paused: true }));
+    expect(paused).toContain(
+      '<p class="cap-queue wait">Queue paused · cdwr agent resume</p>'
+    );
+    expect(paused).not.toContain('Queue running');
+  });
+
+  it('show dashes while the runs load', () => {
+    const out = html(createState());
+    expect(out).toMatch(/Agent PRs in flight<\/span><b class="cap-v">–<\/b>/);
+    expect(out).toMatch(/Agent effort today<\/span><b class="cap-v">–<\/b>/);
+    expect(out).not.toContain('slot');
+    expect(out).not.toContain('Queue running');
+    expect(out).toContain('no samples yet');
+  });
+
+  it('show the NUC bars as percents, and a hint when memory is the container', () => {
+    const out = html(filled());
+    expect(out).toContain('HOSTS');
+    expect(out).toContain('host_metrics · live');
+    expect(out).toContain('data-view="platform"');
+    expect(out).toContain('busy · heartbeat 0 s ago');
+    expect(out).toMatch(/>CPU<\/span>.*?<b class="cap-pct">25%<\/b>/s);
+    expect(out).toMatch(/>Memory<\/span>.*?<b class="cap-pct">25%<\/b>/s);
+    expect(out).toMatch(/>Disk<\/span>.*?<b class="cap-pct">40%<\/b>/s);
+    expect(out).toContain('cap-dot ok');
+    expect(out).not.toContain('cap-hint');
+    const s = filled();
+    s.data.hostMetrics = [
+      hostSample(0, {
+        cgroup_mem_current: 3 * GIB,
+        cgroup_mem_max: 4 * GIB
+      })
+    ];
+    const container = html(s);
+    expect(container).toContain('<small class="cap-hint">container</small>');
+    expect(container).toMatch(/>Memory.*?<b class="cap-pct">75%<\/b>/s);
+  });
+
+  it('turn a bar amber over its threshold and cap it at the track', () => {
+    const s = filled();
+    s.data.hostMetrics = [
+      hostSample(0, { mem_available: 0.2 * GIB, load1: 6 })
+    ];
+    const out = html(s);
+    expect(out).toContain('<i class="wait" style="width:97.5%"');
+    // Load 6 on 4 cores is 150%: shown as it is, drawn full
+    expect(out).toContain('<i class="wait" style="width:100.0%"');
+    expect(out).toContain('<b class="cap-pct">150%</b>');
+    expect(out).toContain('cap-dot bad');
+    const disk = filled();
+    disk.data.hostMetrics = [hostSample(0, { disk_free: 5 * GIB })];
+    expect(html(disk)).toContain('<i class="wait" style="width:95.0%"');
+  });
+
+  it('say a silent NUC is silent, and no samples at all', () => {
+    const stale = filled();
+    stale.data.hostMetrics = [hostSample(30)];
+    const out = html(stale);
+    expect(out).toContain('silent · last sample 30 m ago');
+    expect(out).toContain('cap-dot stale');
+    const none = filled();
+    none.data.hostMetrics = [];
+    const empty = html(none);
+    expect(empty).toContain('no samples yet');
+    expect(empty).not.toContain('cap-rows');
+  });
+
+  it('show the Mac block only with a Mac host, and mark the current step', () => {
+    expect(html(filled())).not.toContain('cap-strip');
+    expect(html(filled())).not.toContain('ATTENDED');
+    const s = filled({
+      state: 'alive',
+      detail: 'working',
+      ticket: 'COD-1',
+      lastSeen: '2026-10-29T11:59:00'
+    });
+    s.data.sessions = [
+      session('mac', 'attended', 1),
+      session('nuc', 'implement', 3)
+    ];
+    const out = html(s);
+    expect(out).toContain('<b class="cap-name">mac</b>');
+    expect(out).toContain('<span class="cap-chip">ATTENDED</span>');
+    expect(out).toContain('seen 1 m ago · COD-1');
+    expect(out).toContain('no host_metrics on this host');
+    expect(out).toContain(
+      'role="img" aria-label="Hand-back to the NUC: attended'
+    );
+    expect(out).toContain('<span class="on"><i></i>attended</span>');
+    expect(out).toContain('<span class=""><i></i>handing back</span>');
+    const back = filled();
+    back.data.sessions = [session('mac', 'attended', 10)];
+    const handing = html(back);
+    expect(handing).not.toContain('ATTENDED');
+    expect(handing).toContain('<span class="on"><i></i>handing back</span>');
+    expect(handing).toContain('<span class=""><i></i>attended</span>');
+    expect(handing).not.toContain('· COD-1');
+  });
+
+  it('draw the CPU day with its stats and peak, but only from two samples', () => {
+    const out = html(filled());
+    expect(out).toContain('nuc CPU, 24 h · shaded = agent runs');
+    expect(out).toContain('in runs avg 25% · peak 25%');
+    expect(out).not.toContain('idle 25%');
+    expect(out).toContain('Peak during COD-1 at ');
+    expect(out).toContain('<polyline');
+    const one = filled();
+    one.data.hostMetrics = [hostSample(0)];
+    const few = html(one);
+    expect(few).not.toContain('cap-cpu');
+    expect(few).not.toContain('<polyline');
+  });
+
+  it('show the phone card with four meters and a foot line', () => {
+    const s = filled();
+    s.data.sessions = [
+      session('mac', 'attended', 1),
+      session('nuc', 'implement', 3)
+    ];
+    const out = html(s);
+    expect(out).toContain(
+      'data-view="platform" aria-label="Capacity: tap for hosts"'
+    );
+    expect(out.match(/class="cap-mini /g)).toHaveLength(4);
+    expect(out).toContain('PRs in flight</span><b class="cap-v">2/5</b>');
+    expect(out).toContain('Effort today</span><b class="cap-v">–</b>');
+    expect(out).toContain('nuc CPU</span><b class="cap-v">25%</b>');
+    expect(out).toContain('nuc memory</span><b class="cap-v">25%</b>');
+    expect(out).toContain(
+      'mac attended · nuc busy, heartbeat 0 s — tap for hosts'
+    );
+    expect(html(filled())).toContain('nuc busy, heartbeat 0 s — tap for hosts');
+    expect(html(filled())).not.toContain('mac attended');
+  });
+});
+
+describe('cpu chart', () => {
+  const day = {
+    from: 0,
+    to: 1000,
+    points: [
+      { at: 0, cpu: 0.1 },
+      { at: 500, cpu: 0.9 },
+      { at: 1000, cpu: 0.2 }
+    ],
+    bands: [
+      { start: 400, end: 600, ticket: 'COD-1' },
+      { start: 800, end: 900, ticket: null }
+    ],
+    idle: 0.15,
+    inRuns: 0.9,
+    peak: { at: 500, cpu: 0.9, ticket: 'COD-1' }
+  };
+
+  it('draw a band per run, the line and a circle at the peak', () => {
+    const out = cpuChart(day);
+    expect(out).toContain('viewBox="0 0 600 56"');
+    expect(out).toContain('preserveAspectRatio="none"');
+    expect(out.match(/<rect /g)).toHaveLength(2);
+    expect(out).toContain('x="240.0" y="0" width="120.0" height="56"');
+    expect(out).toContain('vector-effect="non-scaling-stroke"');
+    expect(out).toContain('points="0.0,48.8 300.0,7.2 600.0,43.6"');
+    expect(out).toContain(
+      '<circle class="cpu-peak" cx="300.0" cy="7.2" r="3"/>'
+    );
+    expect(out).toContain('peak 90%');
+  });
+
+  it('keep a load above one on the top of the chart', () => {
+    const out = cpuChart({
+      ...day,
+      points: [
+        { at: 0, cpu: 3 },
+        { at: 1000, cpu: 0 }
+      ],
+      peak: { at: 0, cpu: 3, ticket: null }
+    });
+    expect(out).toContain('points="0.0,2.0 600.0,54.0"');
+  });
+
+  it('draw nothing under two samples', () => {
+    expect(cpuChart({ ...day, points: [] })).toBe('');
+    expect(cpuChart({ ...day, points: [day.points[0]] })).toBe('');
   });
 });
 
