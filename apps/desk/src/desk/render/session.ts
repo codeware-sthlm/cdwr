@@ -13,7 +13,7 @@ import type { Model } from '../model';
 import type { Detail } from '../state';
 import type { SessionState } from '../types';
 
-import { idLink, livePr, parkedText, pr, prTone, prn } from './html';
+import { idLink, livePr, parkedText, pr, prTone, prn, queuePr } from './html';
 
 // The session card: what the session does, where it runs, and the newest live events
 
@@ -27,7 +27,7 @@ const idPr = (
   details: ReadonlyMap<string, Detail>,
   id: string
 ): string => {
-  const { n, live } = livePr(m, details, { ticket: id });
+  const { n, live } = livePr(m, details, { ticket: id, pr: queuePr(m, id) });
   return n
     ? `${idLink(id)} ${prn(n, prTone(live?.state ?? null))}`
     : idLink(id);

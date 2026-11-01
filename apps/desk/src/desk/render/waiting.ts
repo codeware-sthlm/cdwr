@@ -3,7 +3,7 @@ import { type Model, prOf } from '../model';
 import type { Detail } from '../state';
 import type { PrRef } from '../types';
 
-import { livePr, prTone, prn } from './html';
+import { livePr, prTone, prn, queuePr } from './html';
 
 // The Waiting on you card: plans, questions, tickets to label and ideas, each with how long it has waited
 
@@ -34,7 +34,7 @@ export const waitRows = (
       title,
       url,
       kind,
-      pr: prOf(details, id),
+      pr: prOf(details, id, queuePr(m, id)),
       age: m.waitAge.get(id) ?? null
     };
   };
