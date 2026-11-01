@@ -442,7 +442,10 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
   let dir: string;
   let server: Server;
   let origin: string;
-  let hits: { url?: string; body: string }[];
+  let hits: { url?: string; body: string; at: number }[];
+  // Holds the next response this long, then resets; answered marks when it went out
+  let hold = 0;
+  let answered: number[];
 
   // Async, so the in-process server can answer while the hook runs
   const hook = (payload: unknown, extra: Record<string, string> = {}) =>
@@ -474,9 +477,14 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
       let raw = '';
       req.on('data', (c) => (raw += c));
       req.on('end', () => {
-        hits.push({ url: req.url, body: raw });
-        res.writeHead(201);
-        res.end();
+        hits.push({ url: req.url, body: raw, at: Date.now() });
+        const wait = hold;
+        hold = 0;
+        setTimeout(() => {
+          answered.push(Date.now());
+          res.writeHead(201);
+          res.end();
+        }, wait);
       });
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
@@ -489,6 +497,7 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
   });
   beforeEach(() => {
     hits = [];
+    answered = [];
     dir = mkdtempSync(join(tmpdir(), 'session-hook-beat-'));
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -563,6 +572,17 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
     await settle();
     expect(hits).toHaveLength(2);
     expect(JSON.parse(hits[1]?.body ?? '')).toMatchObject({ state: 'stopped' });
+  });
+
+  it('sends one beat at a time, so a slow working beat never lands after the stop', async () => {
+    hold = 800;
+    await hook(REGISTER, configured());
+    await hook({ session_id: 'abc', hook_event_name: 'Stop' }, configured());
+    await new Promise((r) => setTimeout(r, 1800));
+    expect(hits).toHaveLength(2);
+    expect(JSON.parse(hits[0]?.body ?? '')).toMatchObject({ state: 'working' });
+    expect(JSON.parse(hits[1]?.body ?? '')).toMatchObject({ state: 'stopped' });
+    expect(hits[1]?.at).toBeGreaterThanOrEqual(answered[0] ?? Infinity);
   });
 
   it('sends the state with an ordinary beat, and not again inside the minute', async () => {
