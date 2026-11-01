@@ -1,6 +1,6 @@
 import { SESSION_ATTENDED_MIN, SESSION_HANDBACK_MIN } from '../constants';
 import { ageText, esc, hhmm, plural, runTime, shortAge, usd } from '../format';
-import type { HandBackState, ProblemKind } from '../live';
+import { type HandBackState, type ProblemKey, problemKey } from '../live';
 import type { Model, VersionState } from '../model';
 
 import { STEPS, percent } from './capacity';
@@ -188,22 +188,29 @@ const versions = (m: Model): string =>
 
 // ---------- Health ----------
 
-const PROBLEM_OF = (name: string): ProblemKind | null =>
+const PROBLEM_OF = (name: string): ProblemKey | null =>
   name === 'Realtime'
     ? 'connection'
-    : name === 'queue_state parses' || name === 'Snapshot age'
-      ? 'data'
-      : name.endsWith(' heartbeat')
-        ? 'unknown'
-        : null;
+    : name === 'queue_state parses'
+      ? 'data-parse'
+      : name === 'Snapshot age'
+        ? 'data-stale'
+        : name.endsWith(' heartbeat')
+          ? 'unknown'
+          : null;
+
+const whyOf = (m: Model, key: ProblemKey | null): string => {
+  const problem = key && m.problems.find((p) => problemKey(p) === key);
+  const text = esc(problem?.text || 'failing');
+  return problem
+    ? `<small class="pf-why"><button type="button" class="pf-problem" data-problem="${key}">${text}</button></small>`
+    : `<small class="pf-why">${text}</small>`;
+};
 
 const healthChecks = (m: Model, now: Date): string => {
   const rows = m.health
     .map((c) => {
-      const kind = c.ok ? null : PROBLEM_OF(c.name);
-      const why = c.ok
-        ? ''
-        : `<small class="pf-why">${esc((kind && m.problems.find((p) => p.kind === kind)?.text) || 'failing')}</small>`;
+      const why = c.ok ? '' : whyOf(m, PROBLEM_OF(c.name));
       const age =
         c.at === null ? 'never' : ageText((now.getTime() - c.at) / 6e4);
       return `<i class="cap-dot ${c.ok ? '' : 'bad'}" aria-hidden="true"></i><span class="pf-hname"><span>${esc(c.name)}</span>${why}</span><code class="pf-mono">${esc(age)}</code>`;
