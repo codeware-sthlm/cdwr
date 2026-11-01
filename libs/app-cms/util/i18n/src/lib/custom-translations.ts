@@ -359,6 +359,32 @@ const customTranslationsSchema = z.object({
     waking: z.string(),
     week: z.string()
   }),
+  themeLibrary: z.object({
+    cardDescription: z.string(),
+    couldNotSave: z.string(),
+    couldNotSaveStatus: z.string(),
+    extra: z.string(),
+    extraTitle: z.string(),
+    fineTuned: z.string(),
+    fineTunedTitle: z.string(),
+    forkAction: z.string(),
+    forkFailed: z.string(),
+    forkLabel: z.string(),
+    forkName: z.string(),
+    introAfter: z.string(),
+    introBefore: z.string(),
+    issues: z.string(),
+    issuesOne: z.string(),
+    issuesTitle: z.string(),
+    notPortable: z.string(),
+    notPortableNote: z.string(),
+    notPortableTitle: z.string(),
+    openInStudio: z.string(),
+    primaryColour: z.string(),
+    primaryColourTitle: z.string(),
+    refusal: z.string(),
+    title: z.string()
+  }),
   tourSignups: z.object({
     anonymize: z.string(),
     anonymizeConfirm: z.string(),
@@ -869,6 +895,38 @@ You can assign multiple tags to a file.`,
       visits: 'Visits',
       waking: 'Statistics are waking up…',
       week: 'Last 7 days'
+    },
+    themeLibrary: {
+      cardDescription: '{{brand}} on {{base}}, {{surface}}',
+      couldNotSave: 'Could not save',
+      couldNotSaveStatus: 'Could not save ({{status}})',
+      extra: '{{count}} extra',
+      extraTitle:
+        'Colours this theme declares itself, outside the standard token set. A fork keeps them.',
+      fineTuned: '{{count}} fine-tuned',
+      fineTunedTitle:
+        'Tokens set by hand, departing from what the recipe generates',
+      forkAction: 'Fork',
+      forkFailed: 'The fork was not saved',
+      forkLabel: 'Fork {{label}}',
+      forkName: '{{label}} fork',
+      introAfter:
+        'it from inside the studio to get an editable copy of your own. The built-in stays as it is.',
+      introBefore:
+        'The themes built into the platform. Open one to see the decisions behind it, then',
+      issues: '{{count}} issues',
+      issuesOne: '1 issue',
+      issuesTitle:
+        'Contrast pairs below WCAG AA, or aliases leading nowhere. The studio marks which tokens.',
+      notPortable: '{{count}} not portable',
+      notPortableNote: 'Those tokens fall back to the recipe in a fork.',
+      notPortableTitle:
+        'Values resolved when the CSS is compiled, or aliases pointing at nothing. A fork cannot carry these.',
+      openInStudio: 'Open in studio',
+      primaryColour: 'Primary colour {{colour}}',
+      primaryColourTitle: 'Primary colour — {{colour}}',
+      refusal: 'Platform themes are managed by system administrators.',
+      title: 'Theme library'
     },
     tourSignups: {
       anonymize: 'Clear passenger data',
@@ -1411,6 +1469,38 @@ Du kan tilldela flera etiketter till en fil.`,
       visits: 'Besök',
       waking: 'Statistiktjänsten startar…',
       week: 'Senaste 7 dagarna'
+    },
+    themeLibrary: {
+      cardDescription: '{{brand}} på {{base}}, {{surface}}',
+      couldNotSave: 'Kunde inte spara',
+      couldNotSaveStatus: 'Kunde inte spara ({{status}})',
+      extra: '{{count}} extra',
+      extraTitle:
+        'Färger som temat deklarerar själv, utanför standarduppsättningen av tokens. En kopia behåller dem.',
+      fineTuned: '{{count}} finjusterade',
+      fineTunedTitle:
+        'Tokens som satts för hand och avviker från vad receptet genererar',
+      forkAction: 'Kopiera',
+      forkFailed: 'Kopian sparades inte',
+      forkLabel: 'Kopiera {{label}}',
+      forkName: '{{label}} (kopia)',
+      introAfter:
+        'det inifrån studion för att få en egen kopia att redigera. Det inbyggda temat förblir som det är.',
+      introBefore:
+        'Temana som är inbyggda i plattformen. Öppna ett för att se besluten bakom det, och',
+      issues: '{{count}} problem',
+      issuesOne: '1 problem',
+      issuesTitle:
+        'Kontrastpar under WCAG AA, eller alias som inte leder någonstans. Studion markerar vilka tokens.',
+      notPortable: '{{count}} inte portabla',
+      notPortableNote: 'I en kopia faller de tokens tillbaka på receptet.',
+      notPortableTitle:
+        'Värden som räknas fram när CSS:en kompileras, eller alias som pekar på ingenting. En kopia kan inte ta med dem.',
+      openInStudio: 'Öppna i studion',
+      primaryColour: 'Primärfärg {{colour}}',
+      primaryColourTitle: 'Primärfärg — {{colour}}',
+      refusal: 'Plattformens teman hanteras av systemadministratörer.',
+      title: 'Temabibliotek'
     },
     tourSignups: {
       anonymize: 'Rensa passageraruppgifter',
