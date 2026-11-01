@@ -219,6 +219,31 @@ cat "${dir}/${name}-answer-$n.json"
     );
   });
 
+  it.each(['copilot', 'CI'])(
+    'wakes when the PR of a parked %s wait is merged',
+    (wait) => {
+      const merged = JSON.stringify({
+        data: {
+          repository: {
+            t0: {
+              state: 'MERGED',
+              reviews: { nodes: [] },
+              commits: { nodes: [{ commit: { statusCheckRollup: null } }] }
+            }
+          }
+        }
+      });
+      const result = run(
+        [response(parkedTicket('COD-1', wait, 'agent:working'))],
+        ['--interval', '1', '--max', '20'],
+        [merged]
+      );
+      expect(result.stdout).toBe(
+        'changed: run now: COD-1 parked wait resolved (merged)\n'
+      );
+    }
+  );
+
   it('keeps a parked ticket pending when gh fails', () => {
     const result = run(
       [response(parkedTicket('COD-1', 'CI', 'agent:review'))],
@@ -352,13 +377,35 @@ describe.skipIf(!hasZsh)('parked_waits', () => {
       `echo '${answer}'`
     );
     expect(JSON.parse(res.stdout)).toEqual({
-      'COD-1': { reviewed: true, rollup: null, oid: null },
-      'COD-2': { reviewed: false, rollup: 'FAILURE', oid: null }
+      'COD-1': { state: null, reviewed: true, rollup: null, oid: null },
+      'COD-2': { state: null, reviewed: false, rollup: 'FAILURE', oid: null }
     });
+    expect(calls).toContain('pullRequest(number: 12) { state reviews');
     expect(calls).toContain('commit { oid statusCheckRollup { state } }');
     expect(calls.trim().split('\n')).toHaveLength(1);
     expect(calls).toContain('t0: pullRequest(number: 12)');
     expect(calls).toContain('t1: pullRequest(number: 12)');
+  });
+
+  it('reads the PR state', () => {
+    const merged = JSON.stringify({
+      data: {
+        repository: {
+          t0: {
+            state: 'MERGED',
+            reviews: { nodes: [] },
+            commits: { nodes: [{ commit: { statusCheckRollup: null } }] }
+          }
+        }
+      }
+    });
+    const { res } = parkedWaits(
+      response(parkedTicket('COD-1', 'ci', 'agent:working')),
+      `echo '${merged}'`
+    );
+    expect(JSON.parse(res.stdout)).toEqual({
+      'COD-1': { state: 'MERGED', reviewed: false, rollup: null, oid: null }
+    });
   });
 
   it('prints {} when gh fails or answers nonsense', () => {

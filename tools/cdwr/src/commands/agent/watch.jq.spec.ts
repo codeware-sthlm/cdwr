@@ -18,11 +18,13 @@ const PR = 'https://github.com/codeware-sthlm/cdwr/pull';
 
 const issue = (
   attachments: Array<{ url: string; createdAt: string }> = [],
-  comments: Array<{ body: string; createdAt: string }> = []
+  comments: Array<{ body: string; createdAt: string }> = [],
+  description?: string
 ) => ({
   identifier: 'COD-1',
   attachments: { nodes: attachments },
-  comments: { nodes: comments }
+  comments: { nodes: comments },
+  ...(description === undefined ? {} : { description })
 });
 
 describe('pr_number', () => {
@@ -152,6 +154,72 @@ describe('handoffs', () => {
   ])('%s gives []', (_name, comments) => {
     expect(h(...comments)).toEqual([]);
   });
+
+  describe('Status table fallback', () => {
+    const table = (...rows: string[]) =>
+      [
+        '**Plan**',
+        '',
+        '| Step | What | Status |',
+        '| -- | -- | -- |',
+        ...rows
+      ].join('\n');
+    const t = (
+      description: string,
+      comments: Array<{ body: string; createdAt: string }> = []
+    ) => run('handoffs', issue([], comments, description));
+
+    it('yields the text after "Hand-off:"', () => {
+      expect(
+        t(
+          table(
+            '| 5 | Hand-off: `cdwr agent deploy --host agent-host` after merge | Planned |'
+          )
+        )
+      ).toEqual(['`cdwr agent deploy --host agent-host` after merge']);
+    });
+
+    it('skips rows whose Status starts with Done', () => {
+      expect(
+        t(
+          table(
+            '| 4 | Hand-off: first | Done |',
+            '| 5 | Hand-off: second | Planned |',
+            '| 6 | Hand-off: third | Done 2026-10-31 |'
+          )
+        )
+      ).toEqual(['second']);
+    });
+
+    it('ignores rows that are not hand-offs', () => {
+      expect(
+        t(
+          table(
+            '| 1 | Write the code | Planned |',
+            '| 2 | Update the hand-off docs | Planned |',
+            '| 3 | Hand-off: run it | Planned |'
+          )
+        )
+      ).toEqual(['run it']);
+    });
+
+    it('a bare "Hand-off" cell gives the whole cell', () => {
+      expect(t(table('| 5 | Hand-off | Planned |'))).toEqual(['Hand-off']);
+    });
+
+    it('gives [] without hand-off rows or a description', () => {
+      expect(t(table('| 1 | Code | Planned |'))).toEqual([]);
+      expect(run('handoffs', issue())).toEqual([]);
+    });
+
+    it('a PR-ready comment wins, even without a checklist', () => {
+      const rows = table('| 5 | Hand-off: from the table | Planned |');
+      expect(t(rows, [ready('CI is green.')])).toEqual([]);
+      expect(
+        t(rows, [ready('Hand-off checklist:\n- [ ] from the comment')])
+      ).toEqual(['from the comment']);
+    });
+  });
 });
 
 describe('pr_state', () => {
@@ -277,7 +345,12 @@ describe('step', () => {
     removedReason: string | null;
     unresolved?: number;
   };
-  type Prev = { pr: number; state: string; removedAt: string | null } | null;
+  type Prev = {
+    pr: number;
+    state: string;
+    removedAt: string | null;
+    relabelled?: boolean;
+  } | null;
 
   const now = (state: string, over: Partial<Now> = {}): Now => ({
     state,
@@ -294,16 +367,18 @@ describe('step', () => {
     state,
     removedAt
   });
-  const step = (n: Now, p: Prev, handoffs: string[] = []) =>
+  const step = (n: Now, p: Prev, handoffs: string[] = [], label?: string) =>
     run('step', {
       id: 'COD-9',
       pr: 5,
       now: n,
       prev: p,
       handoffs,
-      at: '2026-05-01T00:00:00Z'
+      at: '2026-05-01T00:00:00Z',
+      ...(label === undefined ? {} : { agentLabel: label })
     }) as {
       notices: Array<{ level: string; message: string }>;
+      relabel: boolean;
       entry: Record<string, unknown>;
     };
 
@@ -436,6 +511,110 @@ describe('step', () => {
     ]);
   });
 
+  describe('label', () => {
+    const removedNow = now('open', {
+      removedAt: '2026-04-01T00:00:00Z',
+      removedReason: 'FAILED_CHECKS'
+    });
+
+    describe.each(['agent:working', 'agent:needs-input'])('%s', (label) => {
+      it('merged notifies info without hand-offs and asks for the relabel', () => {
+        const r = step(now('merged'), prev('open'), [], label);
+        expect(r.notices).toEqual([
+          { level: 'info', message: 'COD-9: PR #5 merged' }
+        ]);
+        expect(r.relabel).toBe(true);
+      });
+
+      it('merged notifies an action with hand-offs and asks for the relabel', () => {
+        const r = step(now('merged'), prev('open'), ['run install'], label);
+        expect(r.notices).toEqual([
+          {
+            level: 'action',
+            message: 'COD-9 merged: hand-offs left: run install'
+          }
+        ]);
+        expect(r.relabel).toBe(true);
+      });
+
+      it('closed notifies and does not relabel', () => {
+        const r = step(now('closed'), prev('open'), [], label);
+        expect(r.notices).toEqual([
+          { level: 'info', message: 'COD-9: PR #5 closed without merging' }
+        ]);
+        expect(r.relabel).toBe(false);
+      });
+
+      it('failing checks are silent', () => {
+        const r = step(now('failing'), prev('open'), [], label);
+        expect(r.notices).toEqual([]);
+        expect(r.relabel).toBe(false);
+      });
+
+      it('a merge queue removal is silent', () => {
+        expect(step(removedNow, prev('queued'), [], label).notices).toEqual([]);
+      });
+    });
+
+    it('agent:review merged does not relabel', () => {
+      const r = step(now('merged'), prev('open'), [], 'agent:review');
+      expect(r.relabel).toBe(false);
+      expect(r.notices).toHaveLength(1);
+    });
+
+    it.each([undefined, ''])('label %j behaves as agent:review', (label) => {
+      expect(step(removedNow, prev('queued'), [], label).notices).toHaveLength(
+        1
+      );
+      expect(step(now('failing'), prev('open'), [], label).notices).toEqual([
+        { level: 'action', message: 'COD-9: PR #5 has failing checks' }
+      ]);
+      expect(step(now('merged'), prev('open'), [], label).relabel).toBe(false);
+    });
+
+    describe('relabelled', () => {
+      const working = 'agent:working';
+
+      it('is not asked for again once stored, and the entry keeps it', () => {
+        const r = step(
+          now('merged'),
+          { pr: 5, state: 'merged', removedAt: null, relabelled: true },
+          [],
+          working
+        );
+        expect(r.relabel).toBe(false);
+        expect(r.entry['relabelled']).toBe(true);
+      });
+
+      it('is asked for again on a retry when the write failed', () => {
+        // The first step's entry, stored by run.sh without relabelled
+        const first = step(now('merged'), prev('open'), [], working);
+        expect(first.relabel).toBe(true);
+        expect(first.entry['relabelled']).toBeUndefined();
+        const retry = step(now('merged'), first.entry as Prev, [], working);
+        expect(retry.relabel).toBe(true);
+        expect(retry.notices).toEqual([]);
+      });
+
+      it('a different PR number resets it', () => {
+        const r = step(
+          now('merged'),
+          { pr: 4, state: 'merged', removedAt: null, relabelled: true },
+          [],
+          working
+        );
+        expect(r.relabel).toBe(true);
+        expect(r.entry['relabelled']).toBeUndefined();
+      });
+
+      it('is carried by the entry only when prev had it', () => {
+        expect(
+          step(now('open'), prev('open'), [], working).entry
+        ).not.toHaveProperty('relabelled');
+      });
+    });
+  });
+
   describe('entry', () => {
     it('carries the unresolved review threads', () => {
       expect(
@@ -515,6 +694,71 @@ describe('step', () => {
       });
       expect(counts).toEqual([1, 0, 1]);
     });
+  });
+});
+
+describe('merged_next', () => {
+  const next = (
+    description: string | null,
+    items: string[] = [],
+    when = '2026-10-31T22:15Z'
+  ) =>
+    run(
+      `merged_next(${JSON.stringify(when)}; ${JSON.stringify(items)})`,
+      description
+    );
+
+  it('replaces the first **Next:** line only', () => {
+    const d =
+      'Status\n\n**Next:** Waiting: CI · PR #5 · since 2026-10-31T21:00Z\nmiddle\n**Next:** second\n\ntail';
+    expect(next(d, ['a'])).toBe(
+      'Status\n\n**Next:** merged 2026-10-31 22:15Z; hand-off: a\nmiddle\n**Next:** second\n\ntail'
+    );
+  });
+
+  it('keeps the rest of the description byte-identical', () => {
+    const rest =
+      '# Plan\n\n| Step | What | Status |\n| -- | -- | -- |\n|  1 |  x  | Done |\n  indented  \n\n';
+    expect(next(`${rest}**Next:** old\n  trailing  `, [])).toBe(
+      `${rest}**Next:** merged 2026-10-31 22:15Z; no hand-offs\n  trailing  `
+    );
+  });
+
+  it('appends the line after a blank line when there is none', () => {
+    expect(next('Status text', ['a'])).toBe(
+      'Status text\n\n**Next:** merged 2026-10-31 22:15Z; hand-off: a'
+    );
+    expect(next('Status text\n', [])).toBe(
+      'Status text\n\n**Next:** merged 2026-10-31 22:15Z; no hand-offs'
+    );
+  });
+
+  it.each([null, ''])('description %j gives just the line', (d) => {
+    expect(next(d, ['a'])).toBe(
+      '**Next:** merged 2026-10-31 22:15Z; hand-off: a'
+    );
+  });
+
+  it('joins hand-offs with semicolons', () => {
+    expect(next(null, ['a', 'b'])).toBe(
+      '**Next:** merged 2026-10-31 22:15Z; hand-off: a; b'
+    );
+  });
+
+  it('says no hand-offs without any', () => {
+    expect(next(null, [])).toBe(
+      '**Next:** merged 2026-10-31 22:15Z; no hand-offs'
+    );
+  });
+
+  it.each([
+    '2026-10-31T22:15:00Z',
+    '2026-10-31T22:15:00.123Z',
+    '2026-10-31T22:15Z'
+  ])('accepts when %s', (when) => {
+    expect(next(null, [], when)).toBe(
+      '**Next:** merged 2026-10-31 22:15Z; no hand-offs'
+    );
   });
 });
 
@@ -1350,6 +1594,33 @@ describe('attended picks', () => {
           resolved,
           outcome
         });
+      });
+
+      it.each([
+        ['MERGED', 'merged'],
+        ['CLOSED', 'closed']
+      ])('a %s PR resolves either park, ahead of the checks', (pr, outcome) => {
+        const waits = {
+          'COD-1': {
+            state: pr,
+            reviewed: true,
+            rollup: 'SUCCESS',
+            oid: HEAD
+          }
+        };
+        expect(state(copilot(60), waits)).toEqual({ resolved: true, outcome });
+        expect(state(ci, waits)).toEqual({ resolved: true, outcome });
+        // Also when nothing else is known about the PR
+        expect(state(ci, { 'COD-1': { state: pr } })).toEqual({
+          resolved: true,
+          outcome
+        });
+      });
+
+      it('an OPEN PR leaves the checks to decide', () => {
+        expect(
+          state(copilot(60), { 'COD-1': { state: 'OPEN', reviewed: false } })
+        ).toEqual({ resolved: false, outcome: null });
       });
 
       it('ci: a marker without a commit waits for the timeout', () => {
