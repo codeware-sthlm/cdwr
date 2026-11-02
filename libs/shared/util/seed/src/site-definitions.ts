@@ -22,5 +22,10 @@ export {
   codewareSeLegalVars,
   codewareSePrivacyMarkdown
 } from './lib/site-definitions/codeware-se-legal';
+export { ksVininfo } from './lib/site-definitions/ks-vininfo';
+export {
+  ksVininfoLegalVars,
+  ksVininfoPrivacyMarkdown
+} from './lib/site-definitions/ks-vininfo-legal';
 export { moon } from './lib/site-definitions/moon';
 export { star } from './lib/site-definitions/star';

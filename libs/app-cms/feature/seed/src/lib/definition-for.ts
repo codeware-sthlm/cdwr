@@ -5,6 +5,7 @@ import type {
 import {
   cdwrIo,
   codewareSe,
+  ksVininfo,
   moon,
   star
 } from '@codeware/shared/util/seed/site-definitions';
@@ -22,6 +23,7 @@ import {
 export const SITE_BY_TENANT: Record<PlatformTenantSlug, SiteDefinition> = {
   'cdwr-io': cdwrIo,
   codeware: codewareSe,
+  'ks-vininfo': ksVininfo,
   moon,
   star
 };

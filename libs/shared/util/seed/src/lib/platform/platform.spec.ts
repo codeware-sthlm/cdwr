@@ -41,10 +41,16 @@ describe('the platform definition', () => {
     }
   });
 
-  it('seeds the four tenants the e2e suite and the platform agree on', () => {
+  it('seeds the five tenants the e2e suite and the platform agree on', () => {
     const slugs = platform.tenants.map(({ slug }) => slug);
 
-    expect(slugs).toEqual(['cdwr-io', 'codeware', 'moon', 'star']);
+    expect(slugs).toEqual([
+      'cdwr-io',
+      'codeware',
+      'ks-vininfo',
+      'moon',
+      'star'
+    ]);
   });
 
   it('opens signup with a code to spare, so a preview takes one as it boots', () => {

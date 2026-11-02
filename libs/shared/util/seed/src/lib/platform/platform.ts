@@ -140,6 +140,16 @@ export const platform = {
       supportedLocales: ['sv']
     },
     {
+      name: 'kajstroberg.se',
+      slug: 'ks-vininfo',
+      // Matches `TENANT_ID=ks-vininfo`, the id it has in Infisical and production
+      deployment: 'ks-vininfo',
+      apiKey: '0adc168c-4eb7-4052-b5c6-5899a4c07ea2',
+      description: 'Kaj Ströbergs vinresor',
+      locale: 'sv',
+      supportedLocales: ['sv']
+    },
+    {
       name: 'Moon',
       slug: 'moon',
       // Matches `TENANT_ID=moon`, which development runs tenant mode as
