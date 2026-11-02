@@ -38,7 +38,7 @@ tools/cdwr/agent-queue/session.sh register
 
 The command itself does nothing. The repo's `PostToolUse` hook sees it and writes
 `~/.cdwr/agent-queue/sessions/<session id>.json`, and the hooks keep that file current from then
-on: working, waiting on a prompt, stopped, polling or ended. The scheduler reads it to tell
+on: working (from the start of each turn), waiting on a prompt, stopped, polling or ended. The scheduler reads it to tell
 whether a session is alive, and only then stays quiet about work waiting for one.
 
 The file also names the ticket in hand. Run `tools/cdwr/agent-queue/session.sh ticket COD-123`

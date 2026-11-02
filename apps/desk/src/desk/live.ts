@@ -191,7 +191,8 @@ export const hostHeartbeats = (
 /**
  * A host's heartbeat check from its newest row. Ended is no session, and a session
  * at its prompt sends no beat, so only a turn that went quiet for SESSION_HANDBACK_MIN
- * fails: a crash, or a terminal closed without SessionEnd. A row without a state is
+ * fails: a crash, or a terminal closed without SessionEnd. A turn is working from its
+ * prompt on, so one that hangs before its first tool fails too. A row without a state is
  * from before states were sent and counts as ended once that old.
  */
 export const heartbeatOk = (
