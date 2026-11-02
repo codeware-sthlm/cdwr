@@ -1,5 +1,11 @@
 import { execFile, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs';
 import { type Server, createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,6 +32,8 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
   let origin: string;
   let hits: Hit[];
   let status: number;
+  // What the fake server answers with
+  let reply: string;
 
   // Runs a snippet with telemetry.sh sourced; the fake server shares this process, so async
   const zsh = async (
@@ -58,7 +66,7 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
           body: raw
         });
         res.writeHead(status);
-        res.end('{}');
+        res.end(reply);
       });
     });
     await new Promise<void>((resolve) =>
@@ -78,6 +86,7 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
   beforeEach(() => {
     hits = [];
     status = 201;
+    reply = '{}';
   });
 
   it.each([
@@ -157,6 +166,122 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
     expect(out.stdout).toBe('rc=0');
     expect(out.stderr).toContain('warn: supabase runs failed');
     expect(out.stderr).not.toContain(KEY);
+  });
+
+  describe('supabase_select and supabase_patch', () => {
+    beforeEach(() => (reply = '[{"id":1},{"id":2}]'));
+    const answering = zsh;
+
+    it('selects the rows a query matches', async () => {
+      status = 200;
+      const out = await answering(
+        configured(),
+        `supabase_select runs 'select=id&limit=2'`
+      );
+      expect(out.stdout).toBe('[{"id":1},{"id":2}]\nrc=0');
+      expect(hits[0]).toMatchObject({
+        method: 'GET',
+        url: '/rest/v1/runs?select=id&limit=2'
+      });
+      expect(hits[0]?.headers['apikey']).toBe(KEY);
+      expect(hits[0]?.headers['authorization']).toBe(`Bearer ${KEY}`);
+    });
+
+    it('selects [] and warns when the call fails, without the key', async () => {
+      status = 401;
+      const out = await answering(configured(), `supabase_select runs 'a=b'`);
+      expect(out.stdout).toBe('[]\nrc=0');
+      expect(out.stderr).toContain('warn: supabase runs?a=b failed');
+      expect(out.stderr).not.toContain(KEY);
+    });
+
+    it('warns through note when the caller defines it', async () => {
+      status = 500;
+      const out = await answering(
+        configured(),
+        `supabase_select runs 'a=b'`,
+        'note() { print -r -- "NOTE $*"; }'
+      );
+      expect(out.stdout).toContain('NOTE warn: supabase runs?a=b failed');
+      expect(out.stdout).not.toContain(KEY);
+    });
+
+    it('selects [] when the body is not an array', async () => {
+      status = 200;
+      reply = '{"message":"nope"}';
+      const out = await answering(configured(), `supabase_select runs 'a=b'`);
+      expect(out.stdout).toBe('[]\nrc=0');
+    });
+
+    it.each([
+      [{}],
+      [{ AGENT_SUPABASE_URL: 'http://127.0.0.1:1' }],
+      [{ AGENT_SUPABASE_SERVICE_KEY: KEY }]
+    ])('prints [] without calling when %j is not enough', async (env) => {
+      const out = await zsh(
+        env,
+        `supabase_select runs 'a=b'\nsupabase_patch runs 'a=b' '{"x":1}'`
+      );
+      expect(out.stdout).toBe('[]\n[]\nrc=0');
+      expect(out.stderr).toBe('');
+      expect(hits).toEqual([]);
+    });
+
+    it('patches with the body and Prefer header and prints the returned rows', async () => {
+      status = 200;
+      reply = '[{"id":1,"x":1}]';
+      const out = await answering(
+        configured(),
+        `supabase_patch queue_state 'host=eq.nuc' '{"x":1}'`
+      );
+      expect(out.stdout).toBe('[{"id":1,"x":1}]\nrc=0');
+      expect(hits[0]).toMatchObject({
+        method: 'PATCH',
+        url: '/rest/v1/queue_state?host=eq.nuc',
+        body: '{"x":1}'
+      });
+      expect(hits[0]?.headers['prefer']).toBe('return=representation');
+      expect(hits[0]?.headers['content-type']).toBe('application/json');
+      expect(hits[0]?.headers['apikey']).toBe(KEY);
+    });
+
+    it('patches [] and warns without the key when the call fails', async () => {
+      status = 400;
+      const out = await answering(
+        configured(),
+        `supabase_patch runs 'a=b' '{}'`
+      );
+      expect(out.stdout).toBe('[]\nrc=0');
+      expect(out.stderr).toContain('warn: supabase runs?a=b failed');
+      expect(out.stderr).not.toContain(KEY);
+    });
+
+    it('keeps the key out of curl arguments', async () => {
+      status = 200;
+      const dir = mkdtempSync(join(tmpdir(), 'fake-curl-'));
+      try {
+        const argv = join(dir, 'argv');
+        writeFileSync(
+          join(dir, 'curl'),
+          `#!/bin/sh\nprintf '%s\\n' "$@" > "${argv}"\ncat >/dev/null\necho '[]'\n`,
+          { mode: 0o755 }
+        );
+        const out = await zsh(
+          {
+            ...configured(),
+            PATH: `${dir}:${process.env['PATH'] ?? ''}`
+          },
+          `supabase_select runs 'a=b' >/dev/null\nsupabase_patch runs 'a=b' '{}' >/dev/null`
+        );
+        expect(out.stdout).toBe('rc=0');
+        const args = readFileSync(argv, 'utf8');
+        expect(args).toContain('PATCH');
+        expect(args).toContain('-K');
+        expect(args).not.toContain(KEY);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('telemetry_run', () => {

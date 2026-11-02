@@ -12,6 +12,10 @@
 #   telemetry_session <id> <kind> [state] [detail]           upserts the session's heartbeat in `sessions`;
 #                                                            empty fields become null
 #   supabase_delete <table> <query>                          DELETE the rows a PostgREST filter matches
+#   supabase_select <table> <query>                          GET the rows a PostgREST query matches; prints the JSON array,
+#                                                            `[]` when unconfigured, failing or not an array
+#   supabase_patch <table> <query> <json>                    PATCH the rows a filter matches; prints the rows the server
+#                                                            returned, `[]` when unconfigured or failing
 #   telemetry_host_metrics                                   Linux only: one row of load, memory and disk in `host_metrics`,
 #                                                            then this host's rows older than 7 days are deleted; roots
 #                                                            overridable with HOST_METRICS_OS, _PROC, _SYS and _DISK
@@ -42,6 +46,35 @@ _supabase_delete() {
     if (( $+functions[note] )); then note "$msg"; else print -ru2 -- "$msg"; fi
   fi
   return 0
+}
+
+# _supabase_rows <method> <url> [json]: prints the JSON array the call returns, `[]` otherwise.
+# With -f and -sS a success writes only the body and a failure only the error, so both can be read from one capture.
+_supabase_rows() {
+  local method=$1 url=$2 body=${3:-} out msg
+  local -a data
+  [[ -z "$body" ]] || data=(-H 'Content-Type: application/json' -H 'Prefer: return=representation' -d "$body")
+  if ! out="$(printf 'header = "apikey: %s"\nheader = "Authorization: Bearer %s"\n' \
+      "$AGENT_SUPABASE_SERVICE_KEY" "$AGENT_SUPABASE_SERVICE_KEY" |
+    curl --max-time 10 -sS -f -K - -X "$method" "${data[@]}" "$url" 2>&1)"; then
+    msg="warn: supabase ${url##*/rest/v1/} failed: ${out//$'\n'/ }"
+    msg="${msg//$AGENT_SUPABASE_SERVICE_KEY/***}"
+    if (( $+functions[note] )); then note "$msg"; else print -ru2 -- "$msg"; fi
+    print -r -- '[]'
+    return 0
+  fi
+  if [[ "$(jq -r 'type' <<<"$out" 2>/dev/null)" == array ]]; then print -r -- "$out"; else print -r -- '[]'; fi
+  return 0
+}
+
+supabase_select() {
+  if [[ -z "${AGENT_SUPABASE_URL:-}" || -z "${AGENT_SUPABASE_SERVICE_KEY:-}" ]]; then print -r -- '[]'; return 0; fi
+  _supabase_rows GET "${AGENT_SUPABASE_URL%/}/rest/v1/$1?$2"
+}
+
+supabase_patch() {
+  if [[ -z "${AGENT_SUPABASE_URL:-}" || -z "${AGENT_SUPABASE_SERVICE_KEY:-}" ]]; then print -r -- '[]'; return 0; fi
+  _supabase_rows PATCH "${AGENT_SUPABASE_URL%/}/rest/v1/$1?$2" "$3"
 }
 
 supabase_insert() {
