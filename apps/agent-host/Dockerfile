@@ -3,7 +3,7 @@
 # Build from the repository root:
 #   docker build -f apps/agent-host/Dockerfile .
 
-FROM node:22.22.2-bookworm-slim@sha256:9f6d5975c7dca860947d3915877f85607946403fc55349f39b4bc3688448bb6e
+FROM node:26.13.0-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9
 
 ARG TARGETARCH
 ARG GH_VERSION=2.102.0
