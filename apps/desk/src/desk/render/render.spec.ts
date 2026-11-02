@@ -1361,7 +1361,46 @@ describe('platform view', () => {
     expect(out).toContain('never');
     // A check no other problem explains links to its own card
     expect(out).toContain(
-      'data-problem="problem-check-github-events-last-event">no event in the last 24 h</button>'
+      'data-problem="problem-check-github-events-last-event">not loaded</button>'
+    );
+  });
+
+  it('say which PR change the webhook missed, on the row and the CHECK card', () => {
+    const at = (min: number) => NOW.getTime() - min * 6e4;
+    const s = filled();
+    s.data.hostMetrics = [hostSample(0)];
+    s.data.githubEvents = [
+      {
+        pr: 7,
+        subject: 'pr/7',
+        action: 'pull_request:opened',
+        updated_at: new Date(at(120)).toISOString()
+      } as never
+    ];
+    s.details.set('COD-2', {
+      steps: 0,
+      done: 0,
+      next: null,
+      idea: null,
+      blockedBy: [],
+      pr: 42,
+      prAt: at(60)
+    });
+    const text = `PR #42 (COD-2) changed ${hhmm(at(60))}, newest webhook event ${hhmm(at(120))}`;
+    const out = html(s);
+    expect(out).toContain(
+      `data-problem="problem-check-github-events-last-event">${text}</button>`
+    );
+    const card = renderProblems(model(s, NOW));
+    expect(card).toContain('id="problem-check-github-events-last-event"');
+    expect(card).toContain(text);
+  });
+
+  it('say quiet on the webhook row when no PR changed', () => {
+    const s = filled();
+    s.data.githubEvents = [];
+    expect(html(s)).toMatch(
+      /github_events last event<\/span><small class="pf-note">quiet<\/small>/
     );
   });
 
