@@ -7,7 +7,7 @@ import type { TenantApp } from '../../services/infisical';
 export const GATE_KEY = 'SITE_GATE_PASSWORD';
 
 /** Matches the cms env schema, which refuses to start the site below this */
-export const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 8;
 
 export type OnFly = 'missing' | 'set' | 'unreachable';
 

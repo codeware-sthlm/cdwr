@@ -33,9 +33,14 @@ export const EnvSchema = z.object({
     .string({ description: 'Sentry release, set by the deploy' })
     .optional(),
   CSP_ENFORCE: coerceBoolean(false),
-  SITE_GATE_PASSWORD: z
-    .string({ description: 'Closes the whole site behind this password' })
-    .optional(),
+  // A blank line in an env file means "not set", not a too-short password
+  SITE_GATE_PASSWORD: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .string({ description: 'Closes the whole site behind this password' })
+      .min(8, { message: 'SITE_GATE_PASSWORD must be at least 8 characters' })
+      .optional()
+  ),
   // Site statistics are collected only when set
   UMAMI_URL: z
     .string({
