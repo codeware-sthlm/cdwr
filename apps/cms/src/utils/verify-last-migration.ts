@@ -225,6 +225,7 @@ async function verifyLastMigration() {
   console.log('🔄 Run seed database...');
   const seedOk = await seed({
     environment: 'development',
+    password: undefined,
     payload,
     remoteDataUrl: env.SEED_DATA_URL,
     source: 'local',

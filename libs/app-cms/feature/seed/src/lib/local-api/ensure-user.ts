@@ -11,15 +11,20 @@ export type UserData = Pick<
  *
  * @param payload - Payload instance
  * @param data - User data
- * @param options - Seed options
+ * @param options - Seed options; `resetPassword` also writes the password to an existing user
  * @returns The user ID if exists or created, otherwise undefined
  */
 export async function ensureUser(
   payload: Payload,
   data: UserData,
-  options: { locale: TypedLocale; transactionID: string | number | undefined }
+  options: {
+    locale: TypedLocale;
+    /** Write the password to an existing user too */
+    resetPassword?: boolean;
+    transactionID: string | number | undefined;
+  }
 ): Promise<User | number> {
-  const { locale, transactionID } = options;
+  const { locale, resetPassword, transactionID } = options;
   const { description, email, name, password, role, tenants } = data;
 
   // Check if the user exists with the given email
@@ -34,7 +39,17 @@ export async function ensureUser(
   });
 
   if (users.totalDocs) {
-    return users.docs[0].id;
+    const { id } = users.docs[0];
+    if (resetPassword) {
+      await payload.update({
+        collection: 'users',
+        id,
+        data: { password },
+        context: { seedAction: true },
+        req: { transactionID }
+      });
+    }
+    return id;
   }
 
   // No user found, create one

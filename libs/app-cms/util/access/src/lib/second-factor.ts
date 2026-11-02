@@ -11,8 +11,8 @@ type SessionUser = UserAny & { _strategy?: string; hasTotp?: boolean };
 const verifiedStrategies: ReadonlyArray<string> = ['totp', 'api-key'];
 
 /**
- * The seeded users, when development asks for it. The env schema refuses the
- * flag outside development.
+ * The seeded users, when the environment asks for it. The env schema allows the
+ * flag in development, and in preview only with a secret `SEED_PASSWORD`.
  */
 const isExemptSeededUser = (user: UserAny | null): boolean =>
   process.env['TOTP_EXEMPT_SEEDED_USERS'] === 'true' &&

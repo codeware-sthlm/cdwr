@@ -454,6 +454,7 @@ export default buildConfig({
       // Run seeding for app cms host, on demand via cli or for tenants in development
       await seed({
         environment: env.DEPLOY_ENV,
+        password: env.SEED_PASSWORD,
         payload,
         remoteDataUrl: env.SEED_DATA_URL,
         source: env.SEED_SOURCE,

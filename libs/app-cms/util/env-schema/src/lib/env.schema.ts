@@ -1,3 +1,4 @@
+import { PASSWORD_MIN_LENGTH } from '@codeware/app-cms/util/definitions';
 import { coerceBoolean, withEnvVars } from '@codeware/shared/util/zod';
 import { z } from 'zod';
 
@@ -141,6 +142,15 @@ export const EnvSchema = withEnvVars(
         .optional(),
       SEED_SOURCE: SeedSourceSchema.default('local'),
       SEED_STRATEGY: SeedStrategySchema.default('delta'),
+      // The seeded users' password in preview, a secret since preview urls
+      // are public; development always seeds `dev`. Blank means not set
+      SEED_PASSWORD: z.preprocess(
+        (value) => (value === '' ? undefined : value),
+        z
+          .string({ description: 'Password the seeded users get in preview' })
+          .min(PASSWORD_MIN_LENGTH)
+          .optional()
+      ),
 
       // Where the component build toolchain lives; found by walking up from
       // the working directory when absent
@@ -179,10 +189,10 @@ export const EnvSchema = withEnvVars(
         'Enforce the full Content Security Policy instead of reporting it'
       ),
 
-      // Lets the seeded `@local.dev` users skip TOTP enrolment, so `nx dev cms`
-      // and the e2e suite start signed in. Development only
+      // Lets the seeded `@local.dev` users skip TOTP enrolment, so `nx dev cms`,
+      // the e2e suite and a preview start signed in. Never production
       TOTP_EXEMPT_SEEDED_USERS: coerceBoolean(false).describe(
-        'Exempt the seeded @local.dev users from TOTP enrolment (development only)'
+        'Exempt the seeded @local.dev users from TOTP enrolment (development, or preview with SEED_PASSWORD)'
       ),
 
       // Internal
@@ -242,12 +252,16 @@ export const EnvSchema = withEnvVars(
         path: ['SIGNATURE_SECRET']
       }
     )
-    // A seeded password is public, so the exemption never leaves development
+    // The development password is public, so the exemption reaches preview
+    // only where the seeded password is a secret, and never production
     .refine(
       (data) =>
-        !data.TOTP_EXEMPT_SEEDED_USERS || data.DEPLOY_ENV === 'development',
+        !data.TOTP_EXEMPT_SEEDED_USERS ||
+        data.DEPLOY_ENV === 'development' ||
+        (data.DEPLOY_ENV === 'preview' && Boolean(data.SEED_PASSWORD)),
       {
-        message: 'TOTP_EXEMPT_SEEDED_USERS is only allowed in development',
+        message:
+          'TOTP_EXEMPT_SEEDED_USERS is only allowed in development, or in preview with SEED_PASSWORD set',
         path: ['TOTP_EXEMPT_SEEDED_USERS']
       }
     )

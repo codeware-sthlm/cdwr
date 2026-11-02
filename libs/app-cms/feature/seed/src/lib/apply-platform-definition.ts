@@ -31,6 +31,8 @@ export type ApplyPlatformOptions = {
    * here and every stock filename resolves to a URL instead.
    */
   mediaBaseUrl?: string;
+  /** Also write `password` to the users that already exist, so none keeps an older one */
+  resetPassword?: boolean;
 };
 
 /**
@@ -61,7 +63,7 @@ export async function applyPlatformDefinition(
   definition: PlatformDefinition,
   options: ApplyPlatformOptions
 ): Promise<PlatformApplyReport> {
-  const { password, mediaBaseUrl } = options;
+  const { password, mediaBaseUrl, resetPassword = false } = options;
 
   const parsed = PlatformDefinitionSchema.safeParse(definition);
   if (!parsed.success) {
@@ -168,7 +170,7 @@ export async function applyPlatformDefinition(
             role: user.role,
             tenants: memberships
           },
-          { locale: user.locale, transactionID }
+          { locale: user.locale, resetPassword, transactionID }
         )
       );
     }
