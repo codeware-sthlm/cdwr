@@ -77,6 +77,10 @@ export const seenAgo = (iso: string | null | undefined, now: Date): string =>
 export const hhmm = (t: number): string =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+/** `hhmm` today, with the day in front on any other day, so an old time doesn't read as today's */
+export const dayTime = (t: number, nowMs: number): string =>
+  dayKey(t) === dayKey(nowMs) ? hhmm(t) : `${dayLabel(dayKey(t))} ${hhmm(t)}`;
+
 export const hhmmss = (t: number): string =>
   new Date(t).toLocaleTimeString([], {
     hour: '2-digit',

@@ -9,7 +9,7 @@ import type {
   UsageHourRow,
   UsagePayload
 } from '../../supabase';
-import { hhmm } from '../format';
+import { dayTime, hhmm } from '../format';
 import { model } from '../model';
 import {
   type DeskState,
@@ -1386,7 +1386,7 @@ describe('platform view', () => {
       pr: 42,
       prAt: at(60)
     });
-    const text = `PR #42 (COD-2) changed ${hhmm(at(60))}, newest webhook event ${hhmm(at(120))}`;
+    const text = `PR #42 (COD-2) changed ${dayTime(at(60), NOW.getTime())}, newest webhook event ${dayTime(at(120), NOW.getTime())}`;
     const out = html(s);
     expect(out).toContain(
       `data-problem="problem-check-github-events-last-event">${text}</button>`
