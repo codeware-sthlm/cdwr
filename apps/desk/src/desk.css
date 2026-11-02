@@ -1024,6 +1024,16 @@ table.act {
   color: var(--wait);
   font-size: 12px;
 }
+/* The desktop: four waiting rows (DESKTOP_ROWS), the rest behind "open all" */
+.wrows li:nth-child(n + 5) {
+  display: none;
+}
+.more-all.more-desk {
+  display: block;
+}
+.more-n.phone {
+  display: none;
+}
 .foot {
   margin: 0;
   font-size: 11px;
@@ -1064,6 +1074,12 @@ table.act {
   }
   .more-all {
     display: block;
+  }
+  .more-n.desk {
+    display: none;
+  }
+  .more-n.phone {
+    display: inline;
   }
 }
 .prn {

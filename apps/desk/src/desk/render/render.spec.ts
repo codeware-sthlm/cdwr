@@ -562,9 +562,49 @@ describe('waiting card, queue sheets and tiles', () => {
     const m = model(state, NOW);
     const html = renderWaiting(m, state.details, NOW);
     expect(html.match(/class="wrow"/g)).toHaveLength(3);
-    expect(html).toContain('+ 1 more — open all');
+    expect(html).toContain(
+      '<button type="button" class="more-all" aria-haspopup="dialog">+ <span class="more-n phone">1</span> more — open all</button>'
+    );
     expect(html).toContain('COD-&lt;7&gt;');
     expect(html).not.toContain('COD-<7>');
+  });
+
+  it.each([
+    [0, null],
+    [2, null],
+    [3, 'more-all'],
+    [4, 'more-all'],
+    [5, 'more-all more-desk'],
+    [8, 'more-all more-desk']
+  ])('with %i rows, show the more button as %s', (n, cls) => {
+    const state = filled();
+    state.data.ideas = [];
+    state.data.runs = runs(
+      view({
+        table: {
+          before: Array.from({ length: n }, (_, i) => ({
+            ticket: `COD-${10 + i}`,
+            kind: 'plan' as const
+          })),
+          label: [],
+          after: []
+        }
+      })
+    );
+    const html = renderWaiting(model(state, NOW), state.details, NOW);
+    expect(html.match(/class="wrow"/g) ?? []).toHaveLength(n);
+    if (cls === null) {
+      expect(html).not.toContain('more-all');
+      return;
+    }
+    expect(html).toContain(
+      `<button type="button" class="${cls}" aria-haspopup="dialog">+ <span class="more-n phone">${n - 2}</span>${n > 4 ? `<span class="more-n desk">${n - 4}</span>` : ''} more — open all</button>`
+    );
+    // Inside the card, so a click opens the full Waiting on you sheet
+    expect(html.indexOf('more-all')).toBeGreaterThan(
+      html.indexOf('data-w="before"')
+    );
+    expect(html.indexOf('more-all')).toBeLessThan(html.indexOf('</article>'));
   });
 
   it('stay in place, neutral, when nothing waits', () => {
@@ -1950,7 +1990,9 @@ describe('pull requests on the waiting rows and the session card', () => {
       '<span class="kind">approved · waits on COD-2</span>'
     );
     expect(html).toContain('wrow-li approved');
-    expect(html).toContain('+ 5 more — open all');
+    expect(html).toContain(
+      'class="more-all more-desk" aria-haspopup="dialog">+ <span class="more-n phone">5</span><span class="more-n desk">3</span> more'
+    );
     expect(html.match(/class="wrow"/g)).toHaveLength(7);
   });
 
