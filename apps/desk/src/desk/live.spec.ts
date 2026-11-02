@@ -116,6 +116,7 @@ const goodView = (
   next: [],
   held: { tickets: [], free: [] },
   parked: [],
+  blocked: [],
   table: { before: [], label: [], after: [] }
 });
 
