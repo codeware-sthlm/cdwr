@@ -147,6 +147,31 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
     });
 
     it.each([
+      ['stopped', { hook_event_name: 'Stop' }],
+      [
+        'waiting',
+        {
+          hook_event_name: 'Notification',
+          notification_type: 'permission_prompt'
+        }
+      ]
+    ])('UserPromptSubmit on a %s session records working', (_, event) => {
+      run({ session_id: 'abc', ...event });
+      const before = read();
+      run({ session_id: 'abc', hook_event_name: 'UserPromptSubmit' });
+      expect(read()).toMatchObject({ state: 'working', detail: null });
+      expect(read().lastSeen >= before.lastSeen).toBe(true);
+    });
+
+    it('UserPromptSubmit on a polling session records working', () => {
+      writeFileSync(join(dir, 'abc.watcher'), String(process.pid));
+      run({ session_id: 'abc', hook_event_name: 'Stop' });
+      expect(read().state).toBe('polling');
+      run({ session_id: 'abc', hook_event_name: 'UserPromptSubmit' });
+      expect(read().state).toBe('working');
+    });
+
+    it.each([
       ['permission_prompt', 'waiting', 'permission_prompt'],
       ['idle_prompt', 'working', null],
       ['elicitation_dialog', 'waiting', 'elicitation_dialog'],
@@ -248,6 +273,11 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
     });
   });
 
+  it('ignores a prompt from an unregistered session', () => {
+    run({ session_id: 'abc', hook_event_name: 'UserPromptSubmit' });
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
   it('ignores a ticket line from an unregistered session', () => {
     run({
       ...REGISTER,
@@ -344,6 +374,14 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
       hook(tool);
       expect(mirrored()).toHaveLength(3);
       hook(tool);
+      expect(mirrored()).toHaveLength(3);
+    });
+
+    it('mirrors a prompt that starts a turn after a Stop', () => {
+      hook(REGISTER);
+      hook({ session_id: 'abc', hook_event_name: 'Stop' });
+      expect(mirrored()).toHaveLength(2);
+      hook({ session_id: 'abc', hook_event_name: 'UserPromptSubmit' });
       expect(mirrored()).toHaveLength(3);
     });
 
@@ -572,6 +610,19 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
     await settle();
     expect(hits).toHaveLength(2);
     expect(JSON.parse(hits[1]?.body ?? '')).toMatchObject({ state: 'stopped' });
+  });
+
+  it('beats a prompt after a Stop at once, so a hung turn reads as working', async () => {
+    await hook(REGISTER, configured());
+    await hook({ session_id: 'abc', hook_event_name: 'Stop' }, configured());
+    await settle();
+    await hook(
+      { session_id: 'abc', hook_event_name: 'UserPromptSubmit' },
+      configured()
+    );
+    await settle();
+    expect(hits).toHaveLength(3);
+    expect(JSON.parse(hits[2]?.body ?? '')).toMatchObject({ state: 'working' });
   });
 
   it('sends one beat at a time, so a slow working beat never lands after the stop', async () => {
