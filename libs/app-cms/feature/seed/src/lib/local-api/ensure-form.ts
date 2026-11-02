@@ -1,21 +1,9 @@
 import { getId } from '@codeware/app-cms/util/misc';
 import type { Form } from '@codeware/shared/util/payload-types';
+import type { FormDefinition } from '@codeware/shared/util/seed';
 import type { Payload, TypedLocale } from 'payload';
 
-export type FormData = Pick<Form, 'tenant'> & {
-  /** Where a submission is sent. Falls back to the workspace's generic recipient */
-  emailTo?: string;
-  /** Stable lookup key — not localized, so it stays the same per tenant */
-  title: string;
-  /** Label on the single email field */
-  emailLabel: string;
-  emailPlaceholder: string;
-  submitLabel: string;
-  /** Shown in the dialog after a successful send */
-  confirmation: string;
-  /** Subject of the notification sent to the workspace */
-  subject: string;
-};
+export type FormData = Pick<Form, 'tenant'> & FormDefinition;
 
 /** Minimal Lexical value wrapping a single paragraph of text */
 const paragraph = (text: string) => ({
@@ -38,7 +26,8 @@ const paragraph = (text: string) => ({
 /**
  * Ensure a contact form exists for the given tenant.
  *
- * One email field and nothing else: this sits at the foot of the home page as
+ * One email field and nothing else, unless the definition states `fields`:
+ * this sits at the foot of the home page as
  * a closing invitation, where anything longer than a single input stops being
  * an invitation and starts being paperwork. It also means every environment
  * has a form that really sends mail, so a broken mail setup shows up by using
@@ -73,6 +62,7 @@ export async function ensureForm(
     emailLabel,
     emailTo,
     emailPlaceholder,
+    fields,
     subject,
     submitLabel,
     title,
@@ -102,7 +92,7 @@ export async function ensureForm(
       ...(managedBy ? { managedBy } : {}),
       title,
       tenant,
-      fields: [
+      fields: fields ?? [
         {
           blockType: 'email',
           name: 'email',

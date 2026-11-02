@@ -157,4 +157,37 @@ describe('ensureSiteSetting', () => {
       expect(updates).toEqual([]);
     });
   });
+
+  describe('forms retention', () => {
+    const withRetention = {
+      ...data,
+      forms: { retentionDays: 365 }
+    } as unknown as Parameters<typeof ensureSiteSetting>[1];
+
+    it('fills a missing period and keeps the stored recipients', async () => {
+      const { payload, updates } = payloadHolding();
+
+      await ensureSiteSetting(payload, withRetention, base);
+
+      expect(updates).toHaveLength(1);
+      expect(updates[0]['forms']).toEqual({
+        notificationRecipients: [{ email: 'a@b.se' }],
+        retentionDays: 365
+      });
+    });
+
+    it('lets the definition win when it is the truth, recipients kept', async () => {
+      const { payload, updates } = payloadHolding();
+
+      await ensureSiteSetting(payload, withRetention, {
+        ...base,
+        definitionWins: true
+      });
+
+      expect(updates[0]['forms']).toEqual({
+        notificationRecipients: [{ email: 'a@b.se' }],
+        retentionDays: 365
+      });
+    });
+  });
 });

@@ -422,18 +422,31 @@ export type NavigationItemDefinition =
   NavigationLinkDefinition | NavigationGroupDefinition;
 
 /**
- * A contact form, as the platform builds one.
+ * One field of a form that states its own, narrowed to what the form
+ * builder's text-like blocks accept.
+ */
+export type FormFieldDefinition = {
+  blockType: 'text' | 'textarea' | 'email' | 'number';
+  name: string;
+  label: string;
+  placeholder?: string;
+  /** Columns of six the field spans; six is full width */
+  width?: number;
+  required?: boolean;
+};
+
+/**
+ * A form, as the platform builds one.
  *
- * Deliberately narrow: `ensureForm` makes a single-email-field contact form and
- * nothing else, so a definition can only state what that accepts. A richer form
- * is a change to the platform before it is a change to this type — promising
- * one here would produce a definition the apply cannot honour.
+ * Either the single-email-field contact form (`emailLabel` and
+ * `emailPlaceholder`), or one with `fields` of its own. A form with `fields`
+ * must have exactly one `email` field named `email`, since the notification
+ * subject reads `{{email}}`. The rest of the form builder (selects, checkboxes,
+ * dates) is a change to the platform before it is a change to this type.
  */
 export type FormDefinition = {
   /** Stable lookup key, and what a `form` block points at */
   title: string;
-  emailLabel: string;
-  emailPlaceholder: string;
   submitLabel: string;
   /** Shown after a successful send */
   confirmation: string;
@@ -448,7 +461,14 @@ export type FormDefinition = {
    * settings exist.
    */
   emailTo?: string;
-};
+} & (
+  | { emailLabel: string; emailPlaceholder: string; fields?: never }
+  | {
+      fields: Array<FormFieldDefinition>;
+      emailLabel?: never;
+      emailPlaceholder?: never;
+    }
+);
 
 /**
  * A custom component, as an editor would save it.
@@ -506,6 +526,14 @@ export type SiteSettingsDefinition = {
     > & { source: 'svg'; svgCode: string };
   };
   footer?: SiteSetting['footer'];
+  forms?: {
+    /**
+     * Days a form submission is kept before the nightly sweep deletes it, at
+     * least 1. The privacy page states this period, so state it here whenever
+     * the page is rendered with the same number.
+     */
+    retentionDays?: number;
+  };
   legal?: {
     privacyPage?: { lookupSlug: string };
     termsPage?: { lookupSlug: string };
