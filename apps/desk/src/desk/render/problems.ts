@@ -10,6 +10,8 @@ import {
 } from '../live';
 import type { Model } from '../model';
 
+import { busy, status } from './controls';
+
 // The "something is wrong" state: the alert band, one card per problem, and the card that replaces the session's when its state is unknown. Long and short texts sit side by side for the phone.
 
 /** The problems of one kind, narrowed */
@@ -219,7 +221,19 @@ const writersCard = (
   short: `Also published by ${p.others.map((o) => esc(o.host)).join(', ')}.`
 });
 
-const unknownCard = (p: Extract<Problem, { kind: 'unknown' }>): Card => {
+const abandonControl = (m: Model): string => {
+  const c = m.controls;
+  if (!c)
+    return '<span class="p-note wide">Check the host first, then mark the run abandoned from the CLI or with a control token in Settings.</span>';
+  const view = c.states.abandon;
+  return `<span class="p-note wide">Check the host first.</span>
+    <span class="p-ctl wide"><button type="button" class="p-btn" data-cmd="abandon"${busy(view) ? ' disabled' : ''}>${c.confirming ? 'Confirm abandon' : 'Mark run abandoned'}</button>${status(view)}</span>`;
+};
+
+const unknownCard = (
+  p: Extract<Problem, { kind: 'unknown' }>,
+  m: Model
+): Card => {
   const open =
     p.ticket && p.started !== null
       ? `${esc(p.ticket)} started ${esc(hhmm(p.started))} and has no finished_at. `
@@ -233,8 +247,7 @@ const unknownCard = (p: Extract<Problem, { kind: 'unknown' }>): Card => {
     ],
     body: `${open}Without a heartbeat the desk can't tell running from crashed, so it says neither.`,
     short: "Can't tell running from crashed, so it says neither.",
-    extra:
-      '<span class="p-note wide">Check the host first. Marking the run abandoned comes with COD-680.</span>'
+    extra: abandonControl(m)
   };
 };
 
@@ -251,7 +264,7 @@ const checkCard = (p: Extract<Problem, { kind: 'check' }>): Card => ({
     '<button type="button" class="p-btn" data-view="platform">Platform ›</button>'
 });
 
-const card = (p: Problem): Card => {
+const card = (p: Problem, m: Model): Card => {
   switch (p.kind) {
     case 'check':
       return checkCard(p);
@@ -271,7 +284,7 @@ const card = (p: Problem): Card => {
         }
       }
     case 'unknown':
-      return unknownCard(p);
+      return unknownCard(p, m);
     default: {
       const unreachable: never = p;
       return unreachable;
@@ -290,7 +303,7 @@ export const renderProblems = (m: Model): string => {
   if (!m.problems.length) return '';
   const seen = new Set<ProblemKey>();
   const cards = m.problems.map((p) => {
-    const c = card(p);
+    const c = card(p, m);
     const key = problemKey(p);
     const first = p.kind === 'check' || !seen.has(key);
     seen.add(key);
