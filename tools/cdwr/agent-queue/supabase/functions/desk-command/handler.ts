@@ -194,15 +194,20 @@ export const createHandler = ({
     return Array.isArray(rows) ? (rows as T[]) : [];
   };
 
-  /** The host's queue_state row: unknown when absent or older than STALE_MS */
+  /**
+   * The host's queue_state row: unknown when absent or older than STALE_MS. Abandon takes a
+   * stale row too, since a silent host is the one whose session needs ending.
+   */
   const queueSession = async (
-    host: string
+    host: string,
+    stale: boolean
   ): Promise<{ known: boolean; session: QueueSession | null }> => {
     const rows = await read<{ at: unknown; view: unknown }>(
       `queue_state?host=eq.${encodeURIComponent(host)}&select=at,view`
     );
     const at = typeof rows[0]?.at === 'string' ? Date.parse(rows[0].at) : NaN;
-    if (!(now() - at <= STALE_MS)) return { known: false, session: null };
+    if (!(now() - at <= (stale ? Infinity : STALE_MS)))
+      return { known: false, session: null };
     const view = rows[0].view;
     const session =
       isRecord(view) && isRecord(view['session']) ? view['session'] : null;
@@ -285,7 +290,10 @@ export const createHandler = ({
     let note: string | null = null;
     let ticket: string | null = null;
     try {
-      const { known, session } = await queueSession(command.host);
+      const { known, session } = await queueSession(
+        command.host,
+        command.kind === 'abandon'
+      );
       if (!known) {
         status = 'refused';
         note = `no scheduler reports from ${command.host}`;
