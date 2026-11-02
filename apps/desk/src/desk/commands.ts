@@ -5,6 +5,9 @@ export type CommandKind =
 
 export type CommandStatus = 'pending' | 'applied' | 'refused';
 
+/** `value` for limit and cap; `session` for abandon, the session the desk showed */
+export type CommandArgs = { value?: number; session?: string };
+
 /** The function's answer to a stored command */
 export type CommandReply = {
   id: number;
@@ -61,9 +64,10 @@ const errorText = async (res: Response): Promise<string> => {
     if (
       typeof body === 'object' &&
       body !== null &&
-      typeof (body as { error?: unknown }).error === 'string'
+      'error' in body &&
+      typeof body.error === 'string'
     )
-      return (body as { error: string }).error;
+      return body.error;
   } catch {
     // Not JSON; the status says enough
   }
@@ -93,12 +97,9 @@ export const sendCommand = async (
   target: CommandTarget,
   host: string,
   kind: CommandKind,
-  value?: number
+  args: CommandArgs = {}
 ): Promise<CommandReply> => {
-  const res = await post(
-    target,
-    JSON.stringify({ host, kind, args: value === undefined ? {} : { value } })
-  );
+  const res = await post(target, JSON.stringify({ host, kind, args }));
   if (res.status === 401)
     throw new CommandError('unauthorized', 'The control token was rejected.');
   if (res.status === 400)
@@ -110,10 +111,18 @@ export const sendCommand = async (
   } catch {
     throw new CommandError('server', 'The reply was not JSON.');
   }
-  const { id, status, note } = (body ?? {}) as Record<string, unknown>;
-  if (typeof id !== 'number' || !isStatus(status))
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !('id' in body) ||
+    typeof body.id !== 'number' ||
+    !('status' in body) ||
+    !isStatus(body.status)
+  )
     throw new CommandError('server', 'The reply did not name the command.');
-  return { id, status, note: typeof note === 'string' ? note : null };
+  const note =
+    'note' in body && typeof body.note === 'string' ? body.note : null;
+  return { id: body.id, status: body.status, note };
 };
 
 /** The controls the desk shows; pause and resume share one */
@@ -132,6 +141,7 @@ const CONTROL: Record<CommandKind, Control> = {
 export type CommandRowLike = {
   id: number;
   at: string;
+  args: unknown;
   host: string;
   kind: string;
   status: string;
@@ -144,6 +154,47 @@ export type ControlState =
   | { state: 'pending'; kind: CommandKind }
   | { state: 'refused'; kind: CommandKind; note: string };
 
+/** What the host's newest `queue_state` row reports, to tell an applied command took effect */
+export type Reported = {
+  /** When the row was published, ISO; null without one */
+  at: string | null;
+  paused: boolean;
+  limit: number | null;
+  cap: number | null;
+};
+
+const valueOf = (args: unknown): number | null =>
+  typeof args === 'object' &&
+  args !== null &&
+  'value' in args &&
+  typeof args.value === 'number'
+    ? args.value
+    : null;
+
+/** Whether the host reports what an applied command asked for; a paused tick republishes an old queue view, so the time alone is not enough */
+const tookEffect = (
+  kind: CommandKind,
+  args: unknown,
+  appliedAt: string | null,
+  reported: Reported
+): boolean => {
+  if (kind === 'abandon') return true;
+  if (appliedAt === null || reported.at === null) return false;
+  if (Date.parse(reported.at) < Date.parse(appliedAt)) return false;
+  switch (kind) {
+    case 'pause':
+      return reported.paused;
+    case 'resume':
+      return !reported.paused;
+    case 'run':
+      return true;
+    case 'limit':
+      return reported.limit === valueOf(args);
+    case 'cap':
+      return reported.cap === valueOf(args);
+  }
+};
+
 /** A pending row older than this is one the scheduler expires (its DESK_STALE_SECS) */
 export const PENDING_MAX_MS = 2 * 60 * 60 * 1000;
 
@@ -155,14 +206,14 @@ const isKind = (value: string): value is CommandKind =>
 
 /**
  * Each control's state on one host from its newest command row. An applied row stays
- * pending until the host publishes `queue_state` at or after the ack (both whole seconds,
- * and the scheduler acks before it publishes); abandon is applied in place, so it is done
- * once applied. A refusal shows for REFUSED_SHOW_MS, a pending row for PENDING_MAX_MS.
+ * pending until the host reports its effect (`tookEffect`); abandon is applied in place, so
+ * it is done once applied. A refusal shows for REFUSED_SHOW_MS, a pending row for
+ * PENDING_MAX_MS.
  */
 export const controlStates = (
   rows: readonly CommandRowLike[],
   host: string,
-  queueAt: string | null,
+  reported: Reported,
   now: number
 ): Record<Control, ControlState> => {
   const states: Record<Control, ControlState> = {
@@ -180,7 +231,6 @@ export const controlStates = (
     if (!seen || row.id > seen.row.id)
       newest.set(control, { row, kind: row.kind });
   }
-  const published = queueAt === null ? NaN : Date.parse(queueAt);
   for (const [control, { row, kind }] of newest) {
     const age = now - Date.parse(row.applied_at ?? row.at);
     if (row.status === 'pending') {
@@ -194,8 +244,7 @@ export const controlStates = (
         };
     } else if (
       row.status === 'applied' &&
-      kind !== 'abandon' &&
-      !(row.applied_at !== null && published >= Date.parse(row.applied_at)) &&
+      !tookEffect(kind, row.args, row.applied_at, reported) &&
       age <= PENDING_MAX_MS
     )
       states[control] = { state: 'pending', kind };
