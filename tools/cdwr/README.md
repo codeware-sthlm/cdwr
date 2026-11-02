@@ -298,6 +298,20 @@ supabase secrets set DESK_CONTROL_TOKENS='{"mac-studio":"<hash>"}' --project-ref
 supabase functions deploy desk-command --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
 ```
 
+`run.sh` applies a host's pending commands at the start of every tick, before it reads `paused`, so
+a `resume` lifts the pause in the same tick. In the container the listener wakes on each new row
+(an update is the scheduler's own ack, so it doesn't wake); the Mac picks them up on its next tick.
+They are applied in `id` order, so the last one wins. A command older than 2 hours is refused `expired`
+and never replayed. `pause` and `resume` set or remove `paused`, `run` is this tick (refused while
+paused), and `limit` and `cap` write the files `limit` and `implement-cap` in the queue home. Those
+override the PR limit of 5 (`run.sh`, and `wait.sh` from its own machine's file) and
+`AGENT_QUEUE_IMPLEMENT_CAP_USD` (a cap of 0 launches nothing); `cdwr agent status` shows both and
+where they came from. Each command is acked `applied` or `refused` with a note, on
+`status=eq.pending`, so of two overlapping ticks only one lands it and writes its `activity` row. A
+list that can't be read applies nothing that tick, and an ack that fails leaves the row for the
+next. A `resume` sent while `cdwr agent deploy` holds the container paused applies too; at worst it
+delays the deploy by one run.
+
 The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
 
 A launched implementing session acts on GitHub as the `codeware-agent` GitHub App, never as you:
