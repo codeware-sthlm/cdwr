@@ -40,6 +40,7 @@ import {
   type HandBack,
   type HealthCheck,
   type HostSessions,
+  type PrActivity,
   type Problem,
   type Pulse,
   agentPrs,
@@ -856,6 +857,14 @@ export const ticketsByPr = (
   return out;
 };
 
+/** Each loaded ticket's PR with when Linear last synced it, for the webhook check */
+export const prActivity = (
+  details: ReadonlyMap<string, Detail>
+): PrActivity[] =>
+  [...details].flatMap(([ticket, d]) =>
+    d.pr !== null && d.prAt !== null ? [{ pr: d.pr, ticket, at: d.prAt }] : []
+  );
+
 export const model = (
   state: DeskState,
   now: Date,
@@ -1019,6 +1028,7 @@ export const model = (
     nuc: nucView,
     heartbeats: hostHeartbeats(data.sessions, host?.host ?? null, now),
     events: data.githubEvents,
+    activity: prActivity(details),
     storedAt: data.storedAt,
     now
   });

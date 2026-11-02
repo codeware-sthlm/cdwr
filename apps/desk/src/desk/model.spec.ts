@@ -24,6 +24,7 @@ import {
   model,
   openIssues,
   planUsage,
+  prActivity,
   prOf,
   runsToday,
   shipped,
@@ -1049,6 +1050,17 @@ describe('waitAges', () => {
     const ages = waitAges(['COD-1', 'COD-9'], a, NOW);
     expect([...ages.keys()]).toEqual(['COD-1']);
     expect(waitAges(['COD-1'], null, NOW).size).toBe(0);
+  });
+});
+
+describe('prActivity', () => {
+  it('keeps each loaded ticket whose PR attachment has a sync time', () => {
+    const details = new Map([
+      ['COD-1', detail({ pr: 10, prAt: 500 })],
+      ['COD-2', detail({ pr: 11 })],
+      ['COD-3', detail()]
+    ]);
+    expect(prActivity(details)).toEqual([{ pr: 10, ticket: 'COD-1', at: 500 }]);
   });
 });
 
