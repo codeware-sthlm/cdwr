@@ -7,7 +7,8 @@ import { SITE_GATE_PASSWORD as password } from './helpers/site-gate';
  * The suite runs with a gate password set, so every other spec reaches the
  * site through the gate on a cookie global setup collected. This one drops
  * that cookie to prove what an outsider actually meets. Unlike the cms, the
- * gate stands in front of every path but its own, `/api/health` included.
+ * gate stands in front of every path but its own and the few that answer for
+ * themselves (`isGatedPath`), `/api/health` among them.
  */
 test.describe('site gate', () => {
   // Neither a session nor the gate cookie: the visitor the gate exists for
@@ -51,10 +52,10 @@ test.describe('site gate', () => {
     expect(response.status()).toBe(401);
   });
 
-  test('keeps the health check behind it too', async ({ request }) => {
+  test('lets the platform health check through', async ({ request }) => {
     const response = await request.get('/api/health');
 
-    expect(response.status()).toBe(401);
+    expect(response.status()).toBe(200);
   });
 
   test('does not open on the wrong password', async ({ request }) => {
