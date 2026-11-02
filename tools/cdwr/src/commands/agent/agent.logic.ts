@@ -453,7 +453,7 @@ export const implementCapSource = (
   value: string | undefined,
   file?: string
 ): { cap: number; source: CapSource } => {
-  // The same form implement_cap() in run.sh accepts, so the two never disagree
+  // The file in the form implement_cap() in run.sh accepts, so the two read it alike
   const text = file?.trim() ?? '';
   if (/^\d+(\.\d+)?$/.test(text)) return { cap: Number(text), source: 'file' };
   const n = Number(value);

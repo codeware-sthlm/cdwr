@@ -10,7 +10,11 @@ describe('WATCHED', () => {
     expect(WATCHED).toEqual([
       { table: 'issue_events', events: ['INSERT', 'UPDATE'] },
       { table: 'github_events', events: ['INSERT', 'UPDATE'] },
-      { table: 'desk_commands', events: ['INSERT'] }
+      {
+        table: 'desk_commands',
+        events: ['INSERT'],
+        filter: 'status=eq.pending'
+      }
     ]);
   });
 });

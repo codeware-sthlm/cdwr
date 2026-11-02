@@ -16,13 +16,18 @@ export type ListenerState = z.infer<typeof listenerStateShape>;
 
 /**
  * The tables the listener watches and the changes on each. A desk_commands UPDATE is the
- * scheduler's own ack, which must not wake the loop again
+ * scheduler's own ack, which must not wake the loop again, and a row the desk-command function
+ * stored already applied or refused (an abandon, a stale host) has nothing left to apply
  */
-export const WATCHED = [
+export const WATCHED: readonly {
+  table: string;
+  events: readonly ('INSERT' | 'UPDATE')[];
+  filter?: string;
+}[] = [
   { table: 'issue_events', events: ['INSERT', 'UPDATE'] },
   { table: 'github_events', events: ['INSERT', 'UPDATE'] },
-  { table: 'desk_commands', events: ['INSERT'] }
-] as const;
+  { table: 'desk_commands', events: ['INSERT'], filter: 'status=eq.pending' }
+];
 
 /** Channel statuses supabase-js reports */
 export type ChannelStatus =
