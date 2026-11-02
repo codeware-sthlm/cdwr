@@ -13,7 +13,7 @@ import {
   SESSION_HANDBACK_MIN,
   WEBHOOK_GRACE_MIN
 } from './constants';
-import { hhmm } from './format';
+import { dayKey, dayLabel, dayTime, hhmm } from './format';
 import {
   type CheckName,
   type HealthCheck,
@@ -944,7 +944,7 @@ describe('health', () => {
       ],
       'github_events last event': [
         false,
-        `PR #7 (COD-1) changed ${hhmm(NOW.getTime() - 10 * MIN)}, newest webhook event never`
+        `PR #7 (COD-1) changed ${dayTime(NOW.getTime() - 10 * MIN, NOW.getTime())}, newest webhook event never`
       ],
       'Linear poll': [false, 'last stored 20 m ago, limit 15 m']
     });
@@ -1029,8 +1029,15 @@ describe('missedEvent', () => {
     ).toEqual({
       ok: false,
       at: at(120),
-      note: `PR #2 (COD-2) changed ${hhmm(at(120 - late))}, newest webhook event ${hhmm(at(120))}`
+      note: `PR #2 (COD-2) changed ${dayTime(at(120 - late), NOW.getTime())}, newest webhook event ${dayTime(at(120), NOW.getTime())}`
     });
+  });
+
+  it('dates a newest event from an earlier day', () => {
+    const out = check([event({ updated_at: ago(3 * 24 * 60) })], [pr(1, 30)]);
+    expect(out.note).toContain(
+      `newest webhook event ${dayLabel(dayKey(at(3 * 24 * 60)))} ${hhmm(at(3 * 24 * 60))}`
+    );
   });
 
   it('names the newest missed PR', () => {
@@ -1059,7 +1066,7 @@ describe('missedEvent', () => {
     expect(check([], [pr(3, 600)])).toEqual({
       ok: false,
       at: null,
-      note: `PR #3 (COD-3) changed ${hhmm(at(600))}, newest webhook event never`
+      note: `PR #3 (COD-3) changed ${dayTime(at(600), NOW.getTime())}, newest webhook event never`
     });
   });
 

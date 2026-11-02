@@ -17,7 +17,7 @@ import {
   WEBHOOK_GRACE_MIN,
   WEBHOOK_QUIET_HOURS
 } from './constants';
-import { hhmm } from './format';
+import { dayTime, hhmm } from './format';
 import type { Connection } from './state';
 import type { ViewIssue } from './types';
 
@@ -562,7 +562,7 @@ export const missedEvent = (
     return {
       ok: false,
       at: newest,
-      note: `PR #${missed.pr} (${missed.ticket}) changed ${hhmm(missed.at)}, newest webhook event ${newest === null ? 'never' : hhmm(newest)}`
+      note: `PR #${missed.pr} (${missed.ticket}) changed ${dayTime(missed.at, nowMs)}, newest webhook event ${newest === null ? 'never' : dayTime(newest, nowMs)}`
     };
   return {
     ok: true,
