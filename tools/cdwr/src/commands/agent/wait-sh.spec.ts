@@ -263,6 +263,16 @@ cat "${dir}/${name}-answer-$n.json"
       );
     });
 
+    it('shows the limit the desk set in the queue home on an idle pick', () => {
+      const idle = run([response()], ['--now']);
+      expect(idle.stdout).toMatch(/limit 0\/5/);
+      mkdirSync(join(dir, '.cdwr/agent-queue'), { recursive: true });
+      writeFileSync(join(dir, '.cdwr/agent-queue/limit'), '2\n');
+      const result = run([response()], ['--now']);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toMatch(/limit 0\/2/);
+    });
+
     it('says when Linear did not answer', () => {
       const result = run(['not json'], ['--now']);
       expect(result.status).toBe(0);

@@ -80,8 +80,8 @@ pick() {
   watch="$(jq -c 'if type == "object" then . else {} end' "$WATCH_FILE" 2>/dev/null || print '{}')"
   [[ -n "$watch" ]] || watch='{}'
   waits="$(parked_waits <<<"$resp")"
-  jq -L "$HERE" -c --argjson now "$(date +%s)" --argjson watch "$watch" --argjson waits "$waits" \
-    'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)' <<<"$resp"
+  jq -L "$HERE" -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$BASE")" --argjson watch "$watch" --argjson waits "$waits" \
+    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits)' <<<"$resp"
 }
 # What the printed line shows: waiting and the limit only for an idle pick. A running line's
 # detail is this session's own Next line, so it stays out

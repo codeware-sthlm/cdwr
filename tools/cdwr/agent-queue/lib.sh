@@ -156,6 +156,13 @@ attended_nodes() {
     else . end' 2>/dev/null
 }
 
+# queue_limit <dir>: the limit the desk sets in <dir>/limit, a whole number 1-20; 5 otherwise
+queue_limit() {
+  local v
+  v="$(tr -d '[:space:]' 2>/dev/null < "$1/limit" || true)"
+  if [[ "$v" == <-> ]] && (( 10#$v >= 1 && 10#$v <= 20 )); then print -r -- "$(( 10#$v ))"; else print -r -- 5; fi
+}
+
 # host_id: the machine's stable name (a Mac's hostname follows the network); session-hook.sh has the twin
 host_id() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null || hostname -s; }
 
