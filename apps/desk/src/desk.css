@@ -1086,6 +1086,7 @@ table.act {
 }
 .wrow-li {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -1096,6 +1097,19 @@ table.act {
 }
 .wrow-li .prn {
   flex-shrink: 0;
+}
+.wnote {
+  flex-basis: 100%;
+  padding: 0 14px;
+  font: 11px var(--font-mono);
+  color: var(--muted);
+}
+.wrow-li.approved .wrow {
+  background: none;
+  border-color: var(--line);
+}
+.wrow-li.approved .wrow .kind {
+  color: var(--muted);
 }
 .chip.plan {
   background: var(--wait-soft);
@@ -2076,8 +2090,17 @@ table.act {
   font-size: 11px;
   color: var(--muted);
 }
+.wcard .wc-note {
+  font: 11px var(--font-mono);
+  color: var(--muted);
+}
+.wcard.approved {
+  opacity: 0.7;
+}
 .wcard .kind.k-plan,
 .wcard .kind.k-question,
+.wcard .kind.k-review,
+.wcard .kind.k-hand-offs,
 .wcard .kind.k-idea {
   color: var(--wait);
 }

@@ -14,6 +14,7 @@ import type { Detail } from '../state';
 import type { SessionState } from '../types';
 
 import { idLink, livePr, parkedText, pr, prTone, prn, queuePr } from './html';
+import { countedRows, waitRows } from './waiting';
 
 // The session card: what the session does, where it runs, and the newest live events
 
@@ -73,19 +74,12 @@ export const headline = (
         ? `No session is running. The scheduler plans ${idPr(m, details, first.ticket)} at ${when}.`
         : `No session is running. The scheduler starts one for ${idPr(m, details, first.ticket)} (${esc(first.reason)}) at ${when}, unless today's cap or the back-off holds it.`;
   } else {
-    const yours =
-      m.before.length + m.toLabel.length + m.prs.length + m.ideasPending.length;
-    tone =
-      m.before.length || m.toLabel.length || m.ideasPending.length
-        ? 'wait'
-        : '';
-    const head = m.before.length
-      ? idLink(m.before[0].ticket)
-      : m.toLabel.length
-        ? idLink(m.toLabel[0].ticket)
-        : m.ideasPending.length
-          ? 'the idea ' + idLink(m.ideasPending[0].id)
-          : '';
+    const rows = countedRows(waitRows(m, details, now));
+    const yours = rows.length;
+    tone = rows.some((r) => r.kind !== 'review') ? 'wait' : '';
+    const head = rows[0]
+      ? (rows[0].kind === 'idea' ? 'the idea ' : '') + idLink(rows[0].id)
+      : '';
     text = yours
       ? `Nothing for the agent. ${plural(yours, 'thing waits', 'things wait')} on you${head ? ', starting with ' + head : ''}.`
       : 'Nothing for the agent, and nothing waits on you.';
