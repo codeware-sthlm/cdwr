@@ -227,7 +227,7 @@ const abandonControl = (m: Model): string => {
     return '<span class="p-note wide">Check the host first, then mark the run abandoned from the CLI or with a control token in Settings.</span>';
   const view = c.states.abandon;
   return `<span class="p-note wide">Check the host first.</span>
-    <span class="p-ctl wide"><button type="button" class="p-btn" data-cmd="abandon"${busy(view) ? ' disabled' : ''}>${c.confirming ? 'Confirm abandon' : 'Mark run abandoned'}</button>${status(view)}</span>`;
+    <span class="p-ctl"><button type="button" class="p-btn" data-cmd="abandon"${busy(view) ? ' disabled' : ''}>${c.confirming ? 'Confirm abandon' : 'Mark run abandoned'}</button>${status(view)}</span>`;
 };
 
 const unknownCard = (
