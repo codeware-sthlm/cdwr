@@ -2,7 +2,7 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 import { type Adapter, createAdapter } from './data';
-import { setConnection, setLastIssue, start } from './desk';
+import { setConnection, setControls, setLastIssue, start } from './desk';
 import { CommandError, checkToken } from './desk/commands';
 import { LinearError, createLinear } from './linear';
 import {
@@ -110,6 +110,14 @@ const startDesk = (settings: Settings): void => {
     onLive: setConnection,
     onIssue: setLastIssue
   });
+  setControls(
+    settings.controlToken === ''
+      ? null
+      : {
+          supabaseUrl: settings.supabaseUrl,
+          controlToken: settings.controlToken
+        }
+  );
   start(adapter);
 };
 

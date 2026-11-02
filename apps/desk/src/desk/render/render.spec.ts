@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Issue } from '../../linear';
 import type {
   ActivityPayload,
+  DeskCommandRow,
   HostMetricRow,
   PlanUsageRow,
   RunsPayload,
@@ -1329,8 +1330,9 @@ describe('platform view', () => {
       expect(out).toContain(`>${label}</h2>`);
     expect(out).toContain('data-view="desk"');
     expect(out).toContain('<h1 id="platform-title"');
-    expect(out).toContain('the controls come with COD-680');
-    expect(out).toContain('Steering from the desk is COD-680');
+    expect(out).toContain('controls need a control token in Settings');
+    expect(out).toContain('Read-only here: add a control token');
+    expect(out).not.toContain('data-cmd');
     // Realtime is not connected in the fixture
     expect(out).toMatch(/pf-stat bad">\d+ failing/);
   });
@@ -1742,8 +1744,8 @@ describe('problems', () => {
     expect(out).toContain(
       `COD-1 started ${hhmm(at(10))} and has no finished_at.`
     );
-    expect(out).toContain('comes with COD-680');
-    expect(out).not.toContain('Mark run abandoned</button>');
+    expect(out).toContain('from the CLI or with a control token in Settings');
+    expect(out).not.toContain('data-cmd');
     const card = renderUnknownSession(m);
     expect(card).toContain('STATE UNKNOWN');
     expect(card).toContain('Last known: nuc');
@@ -2121,5 +2123,99 @@ describe('pull requests on the waiting rows and the session card', () => {
     expect(renderSession(model(state, NOW), state.details, NOW)).not.toContain(
       'class="prn'
     );
+  });
+});
+
+describe('controls on', () => {
+  const target = { supabaseUrl: 'https://x.supabase.co', controlToken: 't' };
+  const row = (
+    id: number,
+    kind: string,
+    status = 'pending',
+    note: string | null = null
+  ): DeskCommandRow => ({
+    id,
+    at: NOW.toISOString(),
+    host: 'nuc',
+    kind,
+    args: {},
+    actor: 'mac',
+    status,
+    applied_at: status === 'pending' ? null : NOW.toISOString(),
+    note
+  });
+  const on = (build: (s: DeskState) => void = () => undefined): DeskState => {
+    const s = filled();
+    s.controls.target = target;
+    build(s);
+    return s;
+  };
+  const platformHtml = (s: DeskState): string =>
+    renderPlatform(model(s, NOW, null), NOW);
+
+  it('draw the buttons and steppers with their data attributes', () => {
+    const out = platformHtml(on());
+    expect(out).toContain('data-cmd="pause"');
+    expect(out).toContain('data-cmd="run"');
+    expect(out).toContain('data-step="limit:-1"');
+    expect(out).toContain('data-step="limit:1"');
+    expect(out).toContain('data-step="cap:-5"');
+    expect(out).toContain('data-step="cap:5"');
+    expect(out).toContain('data-apply="limit"');
+    expect(out).not.toContain('read-only');
+    expect(out).not.toContain('COD-680');
+  });
+
+  it('offer resume while paused, on the limits card too', () => {
+    const s = on((x) => {
+      const r = x.data.runs;
+      if (r?.job) r.job = { ...r.job, paused: true };
+    });
+    expect(platformHtml(s)).toContain('data-cmd="resume"');
+    const cap = renderCapacity(model(s, NOW));
+    expect(cap).toContain('Queue paused');
+    expect(cap).toContain('data-cmd="resume"');
+    expect(cap).toContain('data-cmd="run"');
+  });
+
+  it('show the draft and enable Apply only when it differs', () => {
+    expect(platformHtml(on())).toMatch(/data-apply="limit" disabled/);
+    const out = platformHtml(on((s) => (s.controls.drafts = { limit: 7 })));
+    expect(out).toContain('<b class="ctl-draft">7</b>');
+    expect(out).not.toMatch(/data-apply="limit" disabled/);
+  });
+
+  it('disable a pending control and say so', () => {
+    const out = platformHtml(
+      on((s) => (s.data.deskCommands = [row(1, 'run')]))
+    );
+    expect(out).toMatch(/data-cmd="run" disabled/);
+    expect(out).toContain('pending…');
+  });
+
+  it('show a refused note', () => {
+    const out = platformHtml(
+      on((s) => (s.data.deskCommands = [row(1, 'run', 'refused', 'paused')]))
+    );
+    expect(out).toContain('role="status">paused</small>');
+    expect(out).not.toMatch(/data-cmd="run" disabled/);
+  });
+
+  it('ask for a confirmation before abandoning', () => {
+    const silentState = (confirming: boolean): DeskState => {
+      const s = on((x) => {
+        x.data.runs = runs(
+          view({ session: { state: 'alive', ticket: 'COD-1' } })
+        );
+        x.data.hostMetrics = [hostSample(60), hostSample(50)];
+        if (confirming) x.controls.confirmUntil = NOW.getTime() + 1000;
+      });
+      return s;
+    };
+    const plain = renderProblems(model(silentState(false), NOW));
+    expect(plain).toContain('data-cmd="abandon"');
+    expect(plain).toContain('Mark run abandoned</button>');
+    const sure = renderProblems(model(silentState(true), NOW));
+    expect(sure).toContain('Confirm abandon</button>');
   });
 });

@@ -9,6 +9,7 @@ import type {
   UsageHourRow
 } from '../supabase';
 
+import { type Control, type ControlState, controlStates } from './commands';
 import {
   AGENT,
   HOST_DISK_FREE_MIN,
@@ -105,6 +106,21 @@ export type Limits = {
   paused: boolean;
 };
 
+/** A control's state as the buttons show it: the commands' own, or a request still in flight */
+export type ControlView = ControlState | { state: 'sending' };
+
+/** The controls' state; null without a control token or a queue_state row */
+export type ControlsModel = {
+  /** The host commands go to: the one whose queue_state the desk reads */
+  host: string;
+  states: Record<Control, ControlView>;
+  limit: { current: number | null; draft: number | null };
+  cap: { current: number | null; draft: number | null };
+  paused: boolean;
+  /** The abandon button asks to be pressed again */
+  confirming: boolean;
+};
+
 /** The NUC at a glance: the verdict and the newest sample's shares */
 export type NucBlock = {
   host: string;
@@ -192,6 +208,7 @@ export type Model = {
   held: { tickets: string[]; free: QueueFree[] };
   limit: { used: number; max: number };
   limits: Limits;
+  controls: ControlsModel | null;
   slots: Slot[];
   session: SessionState | null;
   /** Minutes a session has polled while the queue had work for it, once that passes STUCK_MIN */
@@ -870,6 +887,46 @@ export const prActivity = (
     d.pr !== null && d.prAt !== null ? [{ pr: d.pr, ticket, at: d.prAt }] : []
   );
 
+/** How long a sent command reads as sending while its row has not arrived */
+const AWAIT_MS = 30_000;
+
+const controlsOf = (
+  state: DeskState,
+  now: number,
+  limit: number | null,
+  cap: number | null
+): ControlsModel | null => {
+  const { controls: ui, data } = state;
+  const { runs } = data;
+  if (!ui.target || !runs) return null;
+  const rows = data.deskCommands ?? [];
+  // In flight first, then a sent command whose row has not arrived, then a failure that stored no row, then the newest row
+  const view = (control: Control, stored: ControlState): ControlView => {
+    if (ui.sending.has(control)) return { state: 'sending' };
+    const sent = ui.awaiting.get(control);
+    if (sent && now - sent.at < AWAIT_MS && !rows.some((r) => r.id === sent.id))
+      return { state: 'sending' };
+    const failed = ui.failed.get(control);
+    return failed === undefined ? stored : { state: 'refused', ...failed };
+  };
+  const own = controlStates(rows, runs.host, runs.at, now);
+  const states: Record<Control, ControlView> = {
+    pause: view('pause', own.pause),
+    run: view('run', own.run),
+    limit: view('limit', own.limit),
+    cap: view('cap', own.cap),
+    abandon: view('abandon', own.abandon)
+  };
+  return {
+    host: runs.host,
+    states,
+    limit: { current: limit, draft: ui.drafts.limit ?? limit },
+    cap: { current: cap, draft: ui.drafts.cap ?? cap },
+    paused: runs.job?.paused ?? false,
+    confirming: ui.confirmUntil !== null && ui.confirmUntil > now
+  };
+};
+
 export const model = (
   state: DeskState,
   now: Date,
@@ -1031,6 +1088,7 @@ export const model = (
     runMinutes,
     host: nucView,
     sessions: data.sessions,
+    deskCommands: data.deskCommands,
     now
   });
   const checks = health({
@@ -1073,6 +1131,12 @@ export const model = (
         : null,
       paused: runs?.job?.paused ?? false
     },
+    controls: controlsOf(
+      state,
+      nowMs,
+      v ? limit.max : null,
+      effort?.cap ?? null
+    ),
     slots: [...slots.values()],
     session,
     stuck,
