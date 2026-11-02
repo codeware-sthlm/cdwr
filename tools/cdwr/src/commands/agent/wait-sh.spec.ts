@@ -28,8 +28,8 @@ const ticket = (identifier: string, state: string) => ({
   description: '',
   state: { type: state },
   labels: { nodes: [{ name: 'agent:ready' }] },
-  comments: { nodes: [] },
-  inverseRelations: { nodes: [] }
+  comments: { nodes: [] as Array<{ body: string; createdAt: string }> },
+  inverseRelations: { nodes: [] as unknown[] }
 });
 // A ticket parked on `wait` since 11:00Z today
 const parkedTicket = (identifier: string, wait: string, label: string) => ({
@@ -133,6 +133,34 @@ cat "${dir}/${name}-answer-$n.json"
     const result = run([response()], ['--interval', '1', '--max', '2']);
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(/^timeout: idle/);
+  });
+
+  it('holds an answered plan until its blocker closes', () => {
+    const answered = (blocker: string) => ({
+      ...ticket('COD-702', 'started'),
+      labels: { nodes: [{ name: 'agent:needs-input' }] },
+      description:
+        '| Step | What | Status |\n| -- | -- | -- |\n| 1 | a | Planned |',
+      comments: {
+        nodes: [{ body: 'go ahead', createdAt: '2026-10-02T00:00:00Z' }]
+      },
+      inverseRelations: {
+        nodes: [
+          {
+            type: 'blocks',
+            issue: { identifier: 'COD-701', state: { type: blocker } }
+          }
+        ]
+      }
+    });
+    const held = run([response(answered('started'))], ['--now']);
+    expect(held.stdout).toMatch(/^idle/);
+    const result = run(
+      [response(answered('started')), response(answered('completed'))],
+      ['--interval', '1', '--max', '20']
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('changed: run now: COD-702 answered\n');
   });
 
   describe('a run pick at start', () => {

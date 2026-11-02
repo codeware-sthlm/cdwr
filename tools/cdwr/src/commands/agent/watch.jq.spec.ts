@@ -1873,6 +1873,7 @@ describe('attended picks', () => {
         tickets: string[];
         free: Array<Record<string, unknown>>;
       };
+      blocked: Array<{ ticket: string; blockers: string[] }>;
       table: {
         before: Array<{ ticket: string; kind: string }>;
         after: Array<Record<string, unknown>>;
@@ -2002,6 +2003,102 @@ describe('attended picks', () => {
       expect(r.next).toEqual([]);
       expect(r.limit.used).toBe(0);
       expect(r.table).toEqual({ before: [], after: [], label: [] });
+    });
+
+    describe('answered plan held by a blocker', () => {
+      const rel = (id: string, state: string) => ({
+        type: 'blocks',
+        issue: { identifier: id, state: { type: state } }
+      });
+      const answered = (relations: unknown[], description: string | null) =>
+        node('COD-702', 'agent:needs-input', {
+          comments: { nodes: human },
+          description,
+          inverseRelations: { nodes: relations }
+        });
+      const table = (status: string) =>
+        `| Step | What | Status |\n| --- | --- | --- |\n| 1 | a | ${status} |\n| 2 | b | Planned |\n`;
+      const planned = table('Planned');
+
+      it('is held, listing only the open blockers', () => {
+        const r = view([
+          answered(
+            [rel('COD-701', 'started'), rel('COD-690', 'completed')],
+            planned
+          )
+        ]);
+        expect(r.next).toEqual([]);
+        expect(r.blocked).toEqual([
+          { ticket: 'COD-702', blockers: ['COD-701'] }
+        ]);
+        expect(r.table.before).toEqual([]);
+      });
+
+      it.each(['completed', 'canceled'])(
+        'is released when the last blocker is %s',
+        (state) => {
+          const r = view([answered([rel('COD-701', state)], planned)]);
+          expect(r.next).toEqual([
+            { ticket: 'COD-702', reason: 'answered', detail: null }
+          ]);
+          expect(r.blocked).toEqual([]);
+        }
+      );
+
+      it.each(['Done, abc123', 'Waiting on review', 'In progress', 'Failed'])(
+        'resumes while blocked once a step is "%s"',
+        (status) => {
+          const r = view([
+            answered([rel('COD-701', 'started')], table(status))
+          ]);
+          expect(r.next.map((n) => n.reason)).toEqual(['answered']);
+          expect(r.blocked).toEqual([]);
+        }
+      );
+
+      // An answer to a question asked while planning finishes the plan
+      it.each([null, '## Report\n\nNo plan yet.'])(
+        'resumes while blocked without a Status table (%s)',
+        (description) => {
+          const r = view([answered([rel('COD-701', 'started')], description)]);
+          expect(r.next.map((n) => n.reason)).toEqual(['answered']);
+          expect(r.blocked).toEqual([]);
+        }
+      );
+
+      it('reads only the Status table, not other tables', () => {
+        const report =
+          '## Report\n\n| Item | Owner | State |\n| -- | -- | -- |\n| a | b | Done |\n\n## Plan\n\n';
+        const r = view([
+          answered([rel('COD-701', 'started')], report + planned)
+        ]);
+        expect(r.next).toEqual([]);
+        expect(r.blocked).toEqual([
+          { ticket: 'COD-702', blockers: ['COD-701'] }
+        ]);
+      });
+
+      it('names a blocker it cannot read "unknown"', () => {
+        const r = view([answered([{ type: 'blocks', issue: null }], planned)]);
+        expect(r.blocked).toEqual([
+          { ticket: 'COD-702', blockers: ['unknown'] }
+        ]);
+      });
+
+      it('does not change the limit', () => {
+        const r = view(
+          [review('COD-1'), answered([rel('COD-701', 'started')], planned)],
+          5
+        );
+        expect(r.limit.used).toBe(1);
+      });
+
+      it('leaves attended idle with nothing waiting', () => {
+        const r = attended([answered([rel('COD-701', 'started')], planned)]);
+        expect(r.verdict).toBe('idle');
+        expect(r.ticket).toBeNull();
+        expect(r.waiting).toEqual([]);
+      });
     });
 
     describe('to label', () => {
