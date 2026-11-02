@@ -55,6 +55,12 @@ const FIELD_SPECS: FieldSpec[] = [
     label: 'Supabase anon key',
     secret: true,
     placeholder: 'eyJ… or sb_publishable_…'
+  },
+  {
+    field: 'controlToken',
+    label: 'Desk control token (optional)',
+    secret: true,
+    placeholder: 'Empty keeps the desk read-only'
   }
 ];
 
@@ -135,6 +141,11 @@ export const openSettingsSheet = ({
       { className: 'settings-note' },
       'The anon key is in the Supabase project agent-queue, under Project Settings → API.'
     ),
+    el(
+      'p',
+      { className: 'settings-note' },
+      'The control token lets this desk pause, run and limit the queue. It is the device token whose hash is in DESK_CONTROL_TOKENS; leave it empty to only watch.'
+    ),
     ...rows,
     el('div', { className: 'settings-actions' }, submit, show),
     status
@@ -146,7 +157,8 @@ export const openSettingsSheet = ({
     const check = validateSettings({
       linearKey: inputs.get('linearKey')?.value ?? '',
       supabaseUrl: inputs.get('supabaseUrl')?.value ?? '',
-      supabaseAnonKey: inputs.get('supabaseAnonKey')?.value ?? ''
+      supabaseAnonKey: inputs.get('supabaseAnonKey')?.value ?? '',
+      controlToken: inputs.get('controlToken')?.value ?? ''
     });
     if (!check.ok) {
       setIssues(check.issues);

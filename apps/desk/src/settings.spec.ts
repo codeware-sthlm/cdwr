@@ -14,7 +14,8 @@ const JWT = 'eyJhbGciOi.eyJyb2xlIjoi.c2lnbmF0dXJl';
 const valid: Settings = {
   linearKey: 'lin_api_abc123',
   supabaseUrl: `https://${REF}.supabase.co`,
-  supabaseAnonKey: JWT
+  supabaseAnonKey: JWT,
+  controlToken: ''
 };
 
 const fields = (input: Settings) => {
@@ -46,9 +47,23 @@ describe('validateSettings', () => {
       validateSettings({
         linearKey: ` ${valid.linearKey}\n`,
         supabaseUrl: `${valid.supabaseUrl}/`,
-        supabaseAnonKey: ` ${JWT} `
+        supabaseAnonKey: ` ${JWT} `,
+        controlToken: '  '
       })
     ).toEqual({ ok: true, settings: valid });
+  });
+
+  it('accepts a control token and trims it', () => {
+    expect(validateSettings({ ...valid, controlToken: ' abc123 \n' })).toEqual({
+      ok: true,
+      settings: { ...valid, controlToken: 'abc123' }
+    });
+  });
+
+  it('refuses a control token with an inner space', () => {
+    expect(fields({ ...valid, controlToken: 'abc 123' })).toEqual([
+      'controlToken'
+    ]);
   });
 
   it('accepts a publishable key', () => {
@@ -92,7 +107,12 @@ describe('validateSettings', () => {
 
   it('reports every failing field', () => {
     expect(
-      fields({ linearKey: '', supabaseUrl: '', supabaseAnonKey: '' })
+      fields({
+        linearKey: '',
+        supabaseUrl: '',
+        supabaseAnonKey: '',
+        controlToken: ''
+      })
     ).toEqual(['linearKey', 'supabaseUrl', 'supabaseAnonKey']);
   });
 });
@@ -103,6 +123,24 @@ describe('settings storage', () => {
     await saveSettings(store, valid);
     expect(saves()).toBe(1);
     expect(await loadSettings(store)).toEqual(valid);
+  });
+
+  it('round-trips a control token', async () => {
+    const { store } = memoryStore();
+    await saveSettings(store, { ...valid, controlToken: 'abc123' });
+    expect(await loadSettings(store)).toEqual({
+      ...valid,
+      controlToken: 'abc123'
+    });
+  });
+
+  it('loads settings stored before the token existed', async () => {
+    const { linearKey, supabaseUrl, supabaseAnonKey } = valid;
+    expect(
+      await loadSettings(
+        memoryStore({ linearKey, supabaseUrl, supabaseAnonKey }).store
+      )
+    ).toEqual(valid);
   });
 
   it('returns null when a value is missing or invalid', async () => {

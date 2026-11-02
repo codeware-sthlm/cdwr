@@ -3,6 +3,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 
 import { type Adapter, createAdapter } from './data';
 import { setConnection, setLastIssue, start } from './desk';
+import { CommandError, checkToken } from './desk/commands';
 import { LinearError, createLinear } from './linear';
 import {
   type KeyValueStore,
@@ -69,6 +70,21 @@ const verify = async (settings: Settings): Promise<SettingsIssue[]> => {
     if (!(error instanceof SupabaseError)) throw error;
     issues.push(supabaseIssue(error));
   }
+  if (settings.controlToken !== '')
+    try {
+      await checkToken(settings);
+    } catch (error) {
+      if (!(error instanceof CommandError)) throw error;
+      issues.push({
+        field: 'controlToken',
+        message:
+          error.code === 'unauthorized'
+            ? error.message
+            : error.code === 'network'
+              ? "Can't reach the desk-command function."
+              : `The desk-command function answered: ${error.message}`
+      });
+    }
   return issues;
 };
 
