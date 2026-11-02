@@ -90,6 +90,79 @@ to_main() {
 }
 
 source "${0:A:h}/checkin.sh"
+source "${0:A:h}/telemetry.sh"
+telemetry_env "$REPO/tools/cdwr/.env"
+# Where session-hook.sh finds the key: the path goes to the sessions, never the key
+[[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
+
+# A pending desk command older than this is refused as expired, never replayed: the desk-command
+# function's STALE_MS, so a host back from a long silence fires no old run, pause or cap
+DESK_STALE_SECS=7200
+# This host's pending desk commands (the desk-command function stores them; abandon it applies
+# itself), applied in id order before the pause is read, so the last one wins and a resume lifts
+# the pause this tick. Each ack is a PATCH on status=eq.pending, so of two overlapping ticks only
+# one lands, and only that one writes the activity row. A list that can't be read applies nothing;
+# an ack that fails leaves the row for the next tick. --check only counts them.
+apply_commands() {
+  telemetry_on || return 0
+  setopt local_options no_err_exit
+  local host rows line id kind actor at value verdict why change body acked stamp now
+  host="$(telemetry_host)"
+  rows="$(supabase_select desk_commands "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor")"
+  if $check; then say "commands: $(jq 'length' <<<"$rows" 2>/dev/null || print 0) pending"; return 0; fi
+  now="$(date +%s)"
+  # One line per row: id, kind, actor, at in epoch seconds (0 when unreadable, so expired), value
+  for line in "${(@f)$(jq -r '.[] | [.id, .kind, (.actor // "unknown"),
+      (.at | tostring | sub("\\.[0-9]+"; "") | sub("\\+00(:00)?$"; "Z") | fromdateiso8601? // 0),
+      (.args.value // "" | tostring)] | @tsv' <<<"$rows" 2>/dev/null)}"; do
+    [[ -n "$line" ]] || continue
+    IFS=$'\t' read -r id kind actor at value <<<"$line"
+    [[ "$id" == <-> ]] || continue
+    verdict=applied why="" change=""
+    if [[ "$at" != <-> ]] || (( now - at > DESK_STALE_SECS )); then
+      verdict=refused why=expired
+    else
+      case "$kind" in
+        pause)
+          if [[ -e "$HOME_DIR/paused" ]]; then why="already paused"; else : > "$HOME_DIR/paused"; fi
+          change="paused from the desk ($actor)" ;;
+        resume)
+          if [[ -e "$HOME_DIR/paused" ]]; then rm -f "$HOME_DIR/paused"; else why="not paused"; fi
+          change="resumed from the desk ($actor)" ;;
+        run)
+          # In the container the listener woke this run; on the Mac the tick is the run
+          if [[ -e "$HOME_DIR/paused" ]]; then verdict=refused why=paused
+          else why="this run" change="run requested from the desk ($actor)"; fi ;;
+        limit)
+          if [[ "$value" == <-> ]] && (( value >= 1 && value <= 20 )) &&
+            print -r -- "$value" > "$HOME_DIR/limit.tmp" && mv "$HOME_DIR/limit.tmp" "$HOME_DIR/limit"; then
+            change="PR limit set to $value from the desk ($actor)"
+          else verdict=refused why="bad value"; fi ;;
+        cap)
+          if [[ "$value" == <->(|.<->) ]] && (( value <= 500 )) &&
+            print -r -- "$value" > "$HOME_DIR/implement-cap.tmp" && mv "$HOME_DIR/implement-cap.tmp" "$HOME_DIR/implement-cap"; then
+            change="implement cap set to \$$value from the desk ($actor)"
+          else verdict=refused why="bad value"; fi ;;
+        *) verdict=refused why="unknown kind" ;;
+      esac
+    fi
+    [[ "$verdict" == refused ]] && change="$kind refused from the desk ($actor): $why"
+    stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    body="$(jq -nc --arg s "$verdict" --arg n "$why" --arg at "$stamp" \
+      '{status: $s, applied_at: $at, note: (if $n == "" then null else $n end)}')"
+    acked="$(supabase_patch desk_commands "id=eq.$id&status=eq.pending" "$body")"
+    if [[ "$(jq 'length' <<<"$acked" 2>/dev/null)" != 1 ]]; then
+      note "desk command $id ($kind): not acked here, left to the tick that did or the next one"
+      continue
+    fi
+    note "desk command $id ($kind): $verdict${why:+ ($why)}"
+    supabase_upsert activity event_id "$(jq -nc --arg id "desk:$id" --arg at "$stamp" --arg change "$change" --arg host "$host" \
+      '{event_id: $id, at: $at, ticket: null, actor: "human", change: $change, host: $host}')" merge
+  done
+  return 0
+}
+apply_commands
+
 # A pause is deliberate: the tick takes no lock and still checks in ok, so the monitor does not
 # alert. It publishes its queue state below, once that can be written.
 paused=false
@@ -103,10 +176,6 @@ CHECKIN_ID=""
 source "${0:A:h}/lib.sh"
 source "${0:A:h}/waits.sh"
 source "${0:A:h}/github-app.sh"
-source "${0:A:h}/telemetry.sh"
-telemetry_env "$REPO/tools/cdwr/.env"
-# Where session-hook.sh finds the key: the path goes to the sessions, never the key
-[[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
 
 # Job state for queue_state and the run row: the interval launchd uses and whether the installed copy
 # matches origin/main. Keep INTERVAL_SED in step with the line in agent.logic.ts.

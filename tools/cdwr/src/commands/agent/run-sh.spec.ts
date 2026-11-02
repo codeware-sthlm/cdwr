@@ -1217,3 +1217,287 @@ describe('run.sh watch.jq errors', () => {
     }
   );
 });
+
+// Desk commands are read and applied before the pause is, so a resume lifts it in the same tick
+describe('run.sh apply_commands', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  let home: string;
+
+  type Row = {
+    id: number;
+    kind: string;
+    value?: unknown;
+    ageMs?: number;
+    at?: string;
+  };
+  type Opts = {
+    check?: boolean;
+    telemetry?: boolean;
+    lost?: number[];
+    paused?: boolean;
+    files?: Record<string, string>;
+  };
+
+  // PostgREST form: 2026-11-02T10:59:03.621+00:00
+  const stamp = (ageMs: number) =>
+    new Date(Date.now() - ageMs).toISOString().replace('Z', '+00:00');
+
+  // Runs apply_commands over the rows; every stub records what it was called with
+  const apply = (rows: Row[], opts: Opts = {}) => {
+    const json = rows.map((r) => ({
+      id: r.id,
+      at: r.at ?? stamp(r.ageMs ?? 60_000),
+      kind: r.kind,
+      args: r.value === undefined ? {} : { value: r.value },
+      actor: 'mac'
+    }));
+    writeFileSync(join(home, 'rows.json'), JSON.stringify(json));
+    writeFileSync(join(home, 'lost'), (opts.lost ?? []).join(' '));
+    if (opts.paused) writeFileSync(join(home, 'paused'), '');
+    for (const [name, content] of Object.entries(opts.files ?? {})) {
+      writeFileSync(join(home, name), content);
+    }
+    const t = (name: string) => join(home, `t-${name}`);
+    for (const name of ['select', 'patch', 'upsert', 'note', 'say']) {
+      rmSync(t(name), { force: true });
+    }
+    const script = [
+      `HOME_DIR="${home}"; check=${opts.check ?? false}; DESK_STALE_SECS=7200`,
+      `telemetry_on() { ${opts.telemetry === false ? 'return 1' : 'return 0'}; }`,
+      'telemetry_host() { print nuc; }',
+      `supabase_select() { print -r -- "$*" >> "${t('select')}"; cat "${home}/rows.json"; }`,
+      'supabase_patch() {',
+      '  local id="${2#id=eq.}"; id="${id%%&*}"',
+      `  print -r -- "$1|$2|$3" >> "${t('patch')}"`,
+      `  if [[ " $(<"${home}/lost") " == *" $id "* ]]; then print -r -- '[]'; else print -r -- "[{\\"id\\":$id}]"; fi`,
+      '}',
+      `supabase_upsert() { print -r -- "$1|$2|$3|$4" >> "${t('upsert')}"; }`,
+      `note() { print -r -- "$*" >> "${t('note')}"; }`,
+      `say() { print -r -- "$*" >> "${t('say')}"; }`,
+      fn('apply_commands'),
+      'apply_commands'
+    ].join('\n');
+    const result = spawnSync('zsh', ['-c', script], {
+      encoding: 'utf8',
+      env: { PATH: process.env['PATH'] ?? '', HOME: home }
+    });
+    const lines = (name: string) =>
+      existsSync(t(name))
+        ? readFileSync(t(name), 'utf8').trim().split('\n')
+        : [];
+    return {
+      stderr: result.stderr,
+      selects: lines('select'),
+      patches: lines('patch').map((l) => {
+        const [table, query, ...body] = l.split('|');
+        return {
+          table,
+          query,
+          body: JSON.parse(body.join('|')) as Record<string, unknown>
+        };
+      }),
+      upserts: lines('upsert').map((l) => {
+        const [table, key, body, mode] = l.split('|');
+        return {
+          table,
+          key,
+          mode,
+          body: JSON.parse(body as string) as Record<string, unknown>
+        };
+      }),
+      notes: lines('note'),
+      says: lines('say')
+    };
+  };
+
+  const file = (name: string) =>
+    existsSync(join(home, name))
+      ? readFileSync(join(home, name), 'utf8').trim()
+      : null;
+  const changes = (r: ReturnType<typeof apply>) =>
+    r.upserts.map((u) => u.body['change']);
+  const statuses = (r: ReturnType<typeof apply>) =>
+    r.patches.map((p) => [p.body['status'], p.body['note']]);
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'apply-commands-'));
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    expect(fn('apply_commands')).toContain('apply_commands()');
+  });
+
+  it('applies the commands before the pause is read', () => {
+    const env = SCRIPT.indexOf('telemetry_env "$REPO/tools/cdwr/.env"');
+    const call = SCRIPT.indexOf('\napply_commands\n');
+    expect(env).toBeGreaterThan(0);
+    expect(env).toBeLessThan(call);
+    expect(call).toBeLessThan(SCRIPT.indexOf('paused=false'));
+  });
+
+  it.skipIf(!canRun)('reads this host pending commands in id order', () => {
+    const r = apply([]);
+    expect(r.selects).toEqual([
+      'desk_commands host=eq.nuc&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor'
+    ]);
+    expect(r.patches).toEqual([]);
+  });
+
+  it.skipIf(!canRun)('pauses then resumes: no pause file, both acked', () => {
+    const r = apply([
+      { id: 1, kind: 'pause' },
+      { id: 2, kind: 'resume' }
+    ]);
+    expect(file('paused')).toBeNull();
+    expect(r.patches.map((p) => [p.table, p.query])).toEqual([
+      ['desk_commands', 'id=eq.1&status=eq.pending'],
+      ['desk_commands', 'id=eq.2&status=eq.pending']
+    ]);
+    expect(statuses(r)).toEqual([
+      ['applied', null],
+      ['applied', null]
+    ]);
+    expect(r.upserts.map((u) => [u.table, u.key, u.mode])).toEqual([
+      ['activity', 'event_id', 'merge'],
+      ['activity', 'event_id', 'merge']
+    ]);
+    expect(r.upserts.map((u) => u.body['event_id'])).toEqual([
+      'desk:1',
+      'desk:2'
+    ]);
+    expect(changes(r)).toEqual([
+      'paused from the desk (mac)',
+      'resumed from the desk (mac)'
+    ]);
+    for (const u of r.upserts) {
+      expect(u.body).toMatchObject({
+        actor: 'human',
+        host: 'nuc',
+        ticket: null
+      });
+    }
+  });
+
+  it.skipIf(!canRun)('resumes then pauses: the pause file stays', () => {
+    const r = apply([
+      { id: 1, kind: 'resume' },
+      { id: 2, kind: 'pause' }
+    ]);
+    expect(file('paused')).not.toBeNull();
+    expect(statuses(r)).toEqual([
+      ['applied', 'not paused'],
+      ['applied', null]
+    ]);
+  });
+
+  it.skipIf(!canRun)('notes a pause when already paused', () => {
+    const r = apply([{ id: 1, kind: 'pause' }], { paused: true });
+    expect(statuses(r)).toEqual([['applied', 'already paused']]);
+  });
+
+  it.skipIf(!canRun)('refuses a run while paused', () => {
+    const r = apply([{ id: 1, kind: 'run' }], { paused: true });
+    expect(statuses(r)).toEqual([['refused', 'paused']]);
+    expect(changes(r)).toEqual(['run refused from the desk (mac): paused']);
+  });
+
+  it.skipIf(!canRun)('applies a run when not paused', () => {
+    const r = apply([{ id: 1, kind: 'run' }]);
+    expect(statuses(r)).toEqual([['applied', 'this run']]);
+    expect(changes(r)).toEqual(['run requested from the desk (mac)']);
+  });
+
+  it.skipIf(!canRun)('sets the limit from 1 to 20 and refuses the rest', () => {
+    const ok = apply([{ id: 1, kind: 'limit', value: 3 }]);
+    expect(file('limit')).toBe('3');
+    expect(changes(ok)).toEqual(['PR limit set to 3 from the desk (mac)']);
+    for (const value of [0, 21, 2.5]) {
+      const r = apply([{ id: 1, kind: 'limit', value }]);
+      expect(statuses(r)).toEqual([['refused', 'bad value']]);
+      expect(file('limit')).toBe('3');
+      expect(changes(r)).toEqual([
+        'limit refused from the desk (mac): bad value'
+      ]);
+    }
+  });
+
+  it.skipIf(!canRun)(
+    'sets the implement cap up to 500 and refuses the rest',
+    () => {
+      const zero = apply([{ id: 1, kind: 'cap', value: 0 }]);
+      expect(file('implement-cap')).toBe('0');
+      expect(statuses(zero)).toEqual([['applied', null]]);
+
+      const frac = apply([{ id: 1, kind: 'cap', value: 25.5 }]);
+      expect(file('implement-cap')).toBe('25.5');
+      expect(changes(frac)).toEqual([
+        'implement cap set to $25.5 from the desk (mac)'
+      ]);
+
+      const big = apply([{ id: 1, kind: 'cap', value: 501 }]);
+      expect(statuses(big)).toEqual([['refused', 'bad value']]);
+      expect(file('implement-cap')).toBe('25.5');
+    }
+  );
+
+  it.skipIf(!canRun)(
+    'refuses a command 3 hours old and applies nothing',
+    () => {
+      const r = apply([{ id: 1, kind: 'pause', ageMs: 3 * 3600_000 }]);
+      expect(statuses(r)).toEqual([['refused', 'expired']]);
+      expect(file('paused')).toBeNull();
+      expect(changes(r)).toEqual([
+        'pause refused from the desk (mac): expired'
+      ]);
+    }
+  );
+
+  it.skipIf(!canRun)('reads an unparsable time as expired', () => {
+    const r = apply([{ id: 1, kind: 'pause', at: 'yesterday-ish' }]);
+    expect(statuses(r)).toEqual([['refused', 'expired']]);
+    expect(file('paused')).toBeNull();
+  });
+
+  it.skipIf(!canRun)('writes no activity row when the ack was lost', () => {
+    const r = apply(
+      [
+        { id: 1, kind: 'pause' },
+        { id: 2, kind: 'limit', value: 7 }
+      ],
+      { lost: [1] }
+    );
+    expect(file('paused')).not.toBeNull();
+    expect(r.upserts.map((u) => u.body['event_id'])).toEqual(['desk:2']);
+    expect(r.notes.join('\n')).toContain('desk command 1 (pause): not acked');
+    expect(file('limit')).toBe('7');
+  });
+
+  it.skipIf(!canRun)('only counts under --check', () => {
+    const r = apply(
+      [
+        { id: 1, kind: 'pause' },
+        { id: 2, kind: 'cap', value: 5 }
+      ],
+      { check: true }
+    );
+    expect(r.says).toEqual(['commands: 2 pending']);
+    expect(r.patches).toEqual([]);
+    expect(r.upserts).toEqual([]);
+    expect(file('paused')).toBeNull();
+    expect(file('implement-cap')).toBeNull();
+  });
+
+  it.skipIf(!canRun)('reads nothing without telemetry', () => {
+    const r = apply([{ id: 1, kind: 'pause' }], { telemetry: false });
+    expect(r.selects).toEqual([]);
+    expect(r.patches).toEqual([]);
+    expect(file('paused')).toBeNull();
+  });
+});
