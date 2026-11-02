@@ -253,15 +253,20 @@ export const EnvSchema = withEnvVars(
       }
     )
     // The development password is public, so the exemption reaches preview
-    // only where the seeded password is a secret, and never production
+    // only where the seeded password is a secret, and never production. The
+    // seed must run on every boot there too, since it is what writes that
+    // secret over an older database's public password
     .refine(
       (data) =>
         !data.TOTP_EXEMPT_SEEDED_USERS ||
         data.DEPLOY_ENV === 'development' ||
-        (data.DEPLOY_ENV === 'preview' && Boolean(data.SEED_PASSWORD)),
+        (data.DEPLOY_ENV === 'preview' &&
+          Boolean(data.SEED_PASSWORD) &&
+          data.SEED_SOURCE !== 'off' &&
+          data.SEED_STRATEGY === 'delta'),
       {
         message:
-          'TOTP_EXEMPT_SEEDED_USERS is only allowed in development, or in preview with SEED_PASSWORD set',
+          'TOTP_EXEMPT_SEEDED_USERS is only allowed in development, or in preview with SEED_PASSWORD set and the seed running (SEED_SOURCE not off, SEED_STRATEGY delta)',
         path: ['TOTP_EXEMPT_SEEDED_USERS']
       }
     )

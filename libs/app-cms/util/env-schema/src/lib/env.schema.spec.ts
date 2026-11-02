@@ -73,6 +73,15 @@ describe('EnvSchema', () => {
       ).toBe(true);
     });
 
+    it.each([{ SEED_SOURCE: 'off' }, { SEED_STRATEGY: 'once' }])(
+      'is refused in preview when the seed may not run (%o)',
+      (seed) => {
+        expect(
+          issuePaths({ ...exempt, ...password, ...seed, DEPLOY_ENV: 'preview' })
+        ).toEqual(['TOTP_EXEMPT_SEEDED_USERS']);
+      }
+    );
+
     it('is refused in production, SEED_PASSWORD or not', () => {
       expect(issuePaths({ ...exempt, DEPLOY_ENV: 'production' })).toEqual([
         'TOTP_EXEMPT_SEEDED_USERS'

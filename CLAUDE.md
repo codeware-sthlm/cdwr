@@ -262,7 +262,8 @@ System users and workspace admins must set up a TOTP authenticator at their firs
 sign-in. `nx dev cms` (and so `cms-e2e`) sets `TOTP_EXEMPT_SEEDED_USERS=true`, which
 lets the seeded `@local.dev` users skip it. A preview takes the same flag from Infisical
 together with `SEED_PASSWORD`, the seeded users' password there, since a preview url is
-public; the env schema refuses the flag in preview without it, and always in production.
+public; the env schema refuses the flag in preview without it or with the seed off or
+`once` (the seed writes that password over an older database's), and always in production.
 
 #### CMS Tenant mode
 
