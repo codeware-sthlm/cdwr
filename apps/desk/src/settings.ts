@@ -2,6 +2,8 @@ export type Settings = {
   linearKey: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
+  /** The desk-command device token; empty keeps the desk read-only */
+  controlToken: string;
 };
 
 export type SettingsField = keyof Settings;
@@ -42,17 +44,25 @@ const anonKeyIssue = (key: string): string | undefined => {
   return undefined;
 };
 
+const controlTokenIssue = (token: string): string | undefined => {
+  if (/\s/.test(token))
+    return 'The token must not contain spaces or line breaks.';
+  return undefined;
+};
+
 /** Trims the values, then checks each field; the settings come back normalized. */
 export const validateSettings = (input: Settings): SettingsCheck => {
   const settings: Settings = {
     linearKey: input.linearKey.trim(),
     supabaseUrl: input.supabaseUrl.trim().replace(/\/+$/, ''),
-    supabaseAnonKey: input.supabaseAnonKey.trim()
+    supabaseAnonKey: input.supabaseAnonKey.trim(),
+    controlToken: input.controlToken.trim()
   };
   const found: [SettingsField, string | undefined][] = [
     ['linearKey', linearKeyIssue(settings.linearKey)],
     ['supabaseUrl', supabaseUrlIssue(settings.supabaseUrl)],
-    ['supabaseAnonKey', anonKeyIssue(settings.supabaseAnonKey)]
+    ['supabaseAnonKey', anonKeyIssue(settings.supabaseAnonKey)],
+    ['controlToken', controlTokenIssue(settings.controlToken)]
   ];
   const issues = found.flatMap(([field, message]) =>
     message === undefined ? [] : [{ field, message }]
@@ -70,23 +80,29 @@ export type KeyValueStore = {
 const FIELDS: readonly SettingsField[] = [
   'linearKey',
   'supabaseUrl',
-  'supabaseAnonKey'
+  'supabaseAnonKey',
+  'controlToken'
 ];
 
-/** The stored settings, or null when any is missing or invalid. */
+/** The stored settings, or null when any is missing or invalid; a missing token is empty. */
 export const loadSettings = async (
   store: KeyValueStore
 ): Promise<Settings | null> => {
-  const [linearKey, supabaseUrl, supabaseAnonKey] = await Promise.all(
-    FIELDS.map((field) => store.get(field))
-  );
+  const [linearKey, supabaseUrl, supabaseAnonKey, controlToken = ''] =
+    await Promise.all(FIELDS.map((field) => store.get(field)));
   if (
     typeof linearKey !== 'string' ||
     typeof supabaseUrl !== 'string' ||
-    typeof supabaseAnonKey !== 'string'
+    typeof supabaseAnonKey !== 'string' ||
+    typeof controlToken !== 'string'
   )
     return null;
-  const check = validateSettings({ linearKey, supabaseUrl, supabaseAnonKey });
+  const check = validateSettings({
+    linearKey,
+    supabaseUrl,
+    supabaseAnonKey,
+    controlToken
+  });
   return check.ok ? check.settings : null;
 };
 
