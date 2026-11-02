@@ -185,6 +185,22 @@ describe('parseCommand', () => {
     });
   });
 
+  it('accepts abandon with the session it showed', () => {
+    expect(
+      parseCommand({ host: 'nuc', kind: 'abandon', args: { session: 's1' } })
+    ).toEqual({ host: 'nuc', kind: 'abandon', args: { session: 's1' } });
+  });
+
+  it.each([
+    ['a number', { session: 5 }],
+    ['spaces', { session: 'a b' }],
+    ['another key', { session: 's1', value: 1 }]
+  ])('refuses abandon with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'abandon', args })).toBe(
+      'abandon takes only a session id'
+    );
+  });
+
   it('refuses args on a kind that takes none', () => {
     expect(
       parseCommand({ host: 'nuc', kind: 'pause', args: { value: 1 } })
@@ -492,6 +508,33 @@ describe('createHandler', () => {
     expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
     expect(bodyOf(callsTo(fetch, 'rpc/desk_abandon')[0])).toMatchObject({
       p_session: 's1'
+    });
+  });
+
+  it('abandons when the session is the one the desk showed', async () => {
+    const { handle, fetch } = await setup({ queue: KNOWN });
+    const res = await handle(
+      post({ host: 'nuc', kind: 'abandon', args: { session: 's1' } })
+    );
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+    expect(callsTo(fetch, 'rpc/desk_abandon')).toHaveLength(1);
+  });
+
+  it('refuses abandon when the host names another session, with no RPC', async () => {
+    const { handle, fetch } = await setup({ queue: KNOWN });
+    const res = await handle(
+      post({ host: 'nuc', kind: 'abandon', args: { session: 's0' } })
+    );
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'the session changed; check the host again'
+    });
+    expect(callsTo(fetch, 'rpc/desk_abandon')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
+      kind: 'abandon',
+      args: { session: 's0' },
+      status: 'refused'
     });
   });
 
