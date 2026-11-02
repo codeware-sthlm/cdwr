@@ -765,7 +765,8 @@ describe('waiting card, queue sheets and tiles', () => {
       next: "waiting for Håkan's review of PR 5",
       idea: null,
       blockedBy: [],
-      pr: 5
+      pr: 5,
+      prAt: null
     });
     const m = model(state, NOW);
     expect(m.parked).toEqual([]);
@@ -1829,7 +1830,8 @@ describe('pull requests on the waiting rows and the session card', () => {
     next: null,
     idea: null,
     blockedBy: [],
-    pr
+    pr,
+    prAt: null
   });
 
   it('link the PR beside a plan and a question row, outside the row link', () => {

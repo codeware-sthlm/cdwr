@@ -21,6 +21,8 @@ export type Detail = PlanProgress & {
   idea: Idea | null;
   blockedBy: string[];
   pr: number | null;
+  /** When Linear last synced that PR's attachment, in ms; the evidence of GitHub activity the webhook check compares with */
+  prAt: number | null;
 };
 
 export type Filter = 'all' | 'todo' | 'agent';

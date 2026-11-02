@@ -37,14 +37,20 @@ const failure = (error: unknown): DataFailure =>
     ? { code: error.code, message: error.message }
     : { code: 'bad_response', message: String(error) };
 
-const prFromAttachments = (atts: readonly { url: string }[]): number | null => {
+/** The ticket's first cdwr PR attachment and when Linear last synced it, in ms */
+export const prAttachment = (
+  atts: readonly { url: string; updatedAt: string }[]
+): { pr: number | null; at: number | null } => {
   for (const a of atts) {
     const n = a.url.match(
       /^https:\/\/github\.com\/codeware-sthlm\/cdwr\/pull\/(\d+)/
     )?.[1];
-    if (n) return Number(n);
+    if (n) {
+      const at = Date.parse(a.updatedAt);
+      return { pr: Number(n), at: Number.isNaN(at) ? null : at };
+    }
   }
-  return null;
+  return { pr: null, at: null };
 };
 
 export const createLoader = ({
@@ -107,11 +113,13 @@ export const createLoader = ({
           );
           if (stale()) return;
           const p = r.payload;
+          const { pr, at } = prAttachment(p.attachments);
           state.details.set(id, {
             ...parsePlan(p.description),
             idea: parseIdea(p.description),
             blockedBy: p.relations.blockedBy.map((b) => b.id),
-            pr: prFromAttachments(p.attachments)
+            pr,
+            prAt: at
           });
           state.errors.delete('detail:' + id);
         } catch (e) {

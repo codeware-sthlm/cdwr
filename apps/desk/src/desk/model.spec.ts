@@ -60,6 +60,7 @@ const detail = (over: Partial<Detail> = {}): Detail => ({
   idea: null,
   blockedBy: [],
   pr: null,
+  prAt: null,
   ...over
 });
 

@@ -79,7 +79,9 @@ const issueDetailSchema = z.object({
         })
       )
     }),
-    attachments: z.object({ nodes: z.array(z.object({ url: z.string() })) })
+    attachments: z.object({
+      nodes: z.array(z.object({ url: z.string(), updatedAt: z.string() }))
+    })
   })
 });
 
@@ -130,7 +132,8 @@ export type Issue = {
 export type IssueDetail = {
   description: string;
   relations: { blockedBy: { id: string }[] };
-  attachments: { url: string }[];
+  /** `updatedAt` moves when Linear's GitHub integration syncs the PR, independent of `github-webhook` */
+  attachments: { url: string; updatedAt: string }[];
 };
 
 export type Comment = { body: string; createdAt: string };
@@ -177,7 +180,7 @@ const ISSUE_QUERY = `
     issue(id: $id) {
       description
       inverseRelations(first: 50) { nodes { type issue { identifier } } }
-      attachments(first: 20) { nodes { url } }
+      attachments(first: 20) { nodes { url updatedAt } }
     }
   }
 `;
@@ -381,7 +384,10 @@ export const createLinear = ({
             .filter((r) => r.type === 'blocks')
             .map((r) => ({ id: r.issue.identifier }))
         },
-        attachments: issue.attachments.nodes.map((a) => ({ url: a.url }))
+        attachments: issue.attachments.nodes.map((a) => ({
+          url: a.url,
+          updatedAt: a.updatedAt
+        }))
       };
     },
 

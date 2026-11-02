@@ -4,7 +4,7 @@ import { createAdapter } from '../data';
 import type { Issue, IssueDetail } from '../linear';
 import { SupabaseError, toRuns } from '../supabase';
 
-import { createLoader } from './load';
+import { createLoader, prAttachment } from './load';
 import { createState } from './state';
 
 const issue = (id: string, labels: string[] = []): Issue => ({
@@ -220,6 +220,27 @@ describe('createLoader', () => {
     loader.stop();
   });
 
+  it('keeps the PR attachment and when Linear last synced it', async () => {
+    const { loader, state } = setup(() =>
+      Promise.resolve({
+        ...detail,
+        attachments: [
+          {
+            url: 'https://github.com/codeware-sthlm/cdwr/pull/42',
+            updatedAt: '2026-11-02T10:00:00.000Z'
+          }
+        ]
+      })
+    );
+    loader.watchAll();
+    await settle();
+    expect(state.details.get('COD-1')).toMatchObject({
+      pr: 42,
+      prAt: Date.parse('2026-11-02T10:00:00.000Z')
+    });
+    loader.stop();
+  });
+
   it('refresh clears the errors of per-ticket requests', async () => {
     const { loader, state } = setup(() => Promise.resolve(detail));
     loader.watchAll();
@@ -232,5 +253,27 @@ describe('createLoader', () => {
     await loader.refresh();
     expect([...state.errors.keys()]).toEqual(['other']);
     loader.stop();
+  });
+});
+
+describe('prAttachment', () => {
+  const at = '2026-11-02T10:00:00.000Z';
+
+  it('takes the first cdwr PR and skips other links', () => {
+    expect(
+      prAttachment([
+        { url: 'https://github.com/o/r/pull/9', updatedAt: at },
+        { url: 'https://github.com/codeware-sthlm/cdwr/pull/7', updatedAt: at }
+      ])
+    ).toEqual({ pr: 7, at: Date.parse(at) });
+  });
+
+  it('has neither without a PR, and no time when it does not parse', () => {
+    expect(prAttachment([])).toEqual({ pr: null, at: null });
+    expect(
+      prAttachment([
+        { url: 'https://github.com/codeware-sthlm/cdwr/pull/7', updatedAt: '' }
+      ])
+    ).toEqual({ pr: 7, at: null });
   });
 });
