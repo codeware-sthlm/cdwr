@@ -29,7 +29,8 @@ const OPEN_STATES = ['alive', 'waiting'];
 export type Command = {
   host: string;
   kind: Kind;
-  args: { value?: number };
+  /** `value` for limit and cap; `session` for abandon, the session the desk showed */
+  args: { value?: number; session?: string };
 };
 
 export type Status = 'pending' | 'applied' | 'refused';
@@ -116,6 +117,16 @@ export const parseCommand = (payload: unknown): Command | string => {
   if (typeof host !== 'string' || !/^[A-Za-z0-9._-]{1,64}$/.test(host))
     return 'Bad host';
   if (!isKind(kind)) return 'Bad kind';
+  if (kind === 'abandon' && isRecord(args) && 'session' in args) {
+    const session = args['session'];
+    if (
+      Object.keys(args).length !== 1 ||
+      typeof session !== 'string' ||
+      !/^[A-Za-z0-9._-]{1,128}$/.test(session)
+    )
+      return 'abandon takes only a session id';
+    return { host, kind, args: { session } };
+  }
   if (kind !== 'limit' && kind !== 'cap') {
     if (
       args !== undefined &&
@@ -299,8 +310,20 @@ export const createHandler = ({
         note = `no scheduler reports from ${command.host}`;
       }
 
+      // The desk names the session it showed; one the host has since replaced is not abandoned
+      const expected = command.args.session;
+      if (
+        known &&
+        command.kind === 'abandon' &&
+        expected !== undefined &&
+        session?.id !== expected
+      ) {
+        status = 'refused';
+        note = 'the session changed; check the host again';
+      }
+
       let id: number;
-      if (known && command.kind === 'abandon') {
+      if (known && command.kind === 'abandon' && status === 'pending') {
         ticket = session?.ticket ?? null;
         ({ id, status, note } = await abandon(
           command.host,
