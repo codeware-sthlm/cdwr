@@ -13,15 +13,24 @@ def pr_number:
     else .url | capture("^https://github\\.com/codeware-sthlm/cdwr/pull/(?<n>[0-9]+)").n | tonumber
     end;
 
-# Open hand-off rows of the description's Status table (`| Step | What | Status |`): the What cell
-# starts with "Hand-off" and the Status cell doesn't start with "Done". The item is the What text
-# after "Hand-off:", or the whole cell when nothing follows.
+# { what, status } for each row of the description's Status table (`| Step | What | Status |`),
+# the rows under that header up to the first line that is not a table row. Other tables don't count.
+def status_rows:
+  [ foreach ((.description // "") | split("\n")[]) as $l
+      ({ in: false, row: null };
+       ($l | [ sub("^\\s*\\|"; "") | sub("\\|\\s*$"; "") | split("|")[] | trim ]) as $c
+       | if ($l | test("^\\s*\\|") | not) then { in: false, row: null }
+         elif ($c | map(ascii_downcase)) == ["step", "what", "status"] then { in: true, row: null }
+         elif .in and ($c | length) >= 3 and (all($c[]; test("^:?-+:?$")) | not)
+           then { in: true, row: { what: $c[1], status: $c[-1] } }
+         else .row = null end;
+       .row // empty) ];
+
+# Open hand-off rows of the Status table: the What cell starts with "Hand-off" and the Status cell
+# doesn't start with "Done". The item is the What text after "Hand-off:", or the whole cell when
+# nothing follows.
 def status_handoffs:
-  [ (.description // "") | split("\n")[]
-    | select(test("^\\s*\\|"))
-    | [ sub("^\\s*\\|"; "") | sub("\\|\\s*$"; "") | split("|")[] | trim ]
-    | select(length >= 3)
-    | { what: .[1], status: .[-1] }
+  [ status_rows[]
     | select(.what | test("^hand-offs?\\b"; "i"))
     | select(.status | test("^done\\b"; "i") | not)
     | (.what | sub("^hand-offs?:?\\s*"; ""; "i")) as $t
@@ -198,15 +207,16 @@ def agent_label:
 def other_repo:
   [ (.labels.nodes // [])[].name ] | any(. == "nx-plugins" or . == "enjinex");
 
-# True when an open issue blocks this one
-def blocked:
-  [ (.inverseRelations.nodes // [])[]
-    | select(.type == "blocks" and (.issue.state.type != "completed" and .issue.state.type != "canceled")) ]
-  | length > 0;
-
 # An issue's `blocks` inverse relations, as the blocking issues
 def blockers:
   [ (.inverseRelations.nodes // [])[] | select(.type == "blocks") | .issue ];
+
+# The blockers not Done or Canceled; one that can't be read counts as open
+def open_blockers:
+  [ blockers[] | select((.state.type // "") | IN("completed", "canceled") | not) ];
+
+# True when an open issue blocks this one
+def blocked: open_blockers | length > 0;
 
 # True for an open sub-issue that waits only on the label: no agent label of its own, not started,
 # this repo, every blocker done and at least one of them agent work. Surfaced for Håkan, never labelled.
@@ -223,6 +233,11 @@ def to_label:
     and (.inverseRelations.pageInfo.hasNextPage // false | not)
     and all($b[]; .state.type == "completed" or .state.type == "canceled")
     and any($b[]; agent_label != null);
+
+# True for a written plan not yet started: a Status table whose rows are all Planned
+def plan_unstarted:
+  status_rows as $r
+  | ($r | length) > 0 and all($r[]; .status | test("^planned\\b"; "i"));
 
 # True when the newest comment is not the agent's
 def answered:
@@ -262,8 +277,9 @@ def limit_used($now; $limit):
       | .identifier ] as $hand
   | { used: ($open | length), open: $open, handoffs: $hand };
 
-# The whole queue: { at, limit, session, next, held, parked, table }. `next` is every actionable
-# item in the order the skill takes them; `held` is what the limit keeps from starting; `parked`
+# The whole queue: { at, limit, session, next, held, blocked, parked, table }. `next` is every
+# actionable item in the order the skill takes them; `held` is what the limit keeps from starting;
+# `blocked` is each answered plan not yet started that waits on its open blockers; `parked`
 # is every ticket waiting on a PR check or Copilot; `table` is what waits on Håkan: before and
 # after implementation, and sub-issues ready to label. $session comes from session_state, or null.
 # $waits comes from waits.sh, keyed by identifier.
@@ -291,8 +307,13 @@ def queue_view($now; $limit; $watch; $session; $waits):
   | ($stale | map(.ticket)) as $staleIds
   | ([ $park[] | select(.ws.resolved and (.identifier | IN($staleIds[]) | not))
        | { ticket: .identifier, reason: "parked wait resolved", detail: .ws.outcome } ]) as $resolved
+  # An answer on a plan not yet started waits for an open blocker to close
   | ([ $all[] | select(agent_label == "agent:needs-input" and is_open and answered) ] | sort_by(queue_order)
-     | map({ ticket: .identifier, reason: "answered", detail: null })) as $ans
+     | map(. + { hold: (blocked and plan_unstarted) })) as $answered
+  | ($answered | map(select(.hold | not) | { ticket: .identifier, reason: "answered", detail: null })) as $ans
+  | ($answered | map(select(.hold)
+                     | { ticket: .identifier,
+                         blockers: [ open_blockers[] | .identifier // "unknown" ] })) as $blocked
   | ([ $all[] | select(agent_label == "agent:review" and is_open and (.identifier | IN($parkIds[]) | not)
                        and review_feedback($watch)) ] | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "review feedback", detail: null })) as $fb
@@ -318,6 +339,7 @@ def queue_view($now; $limit; $watch; $session; $waits):
                     + [ { action: "limit", value: ($lu.used + 1) } ]
                else [] end)
       },
+      blocked: $blocked,
       parked: ($park | map({ ticket: .identifier, wait: .park.wait, pr: .park.pr,
                              since: (.park.since | todateiso8601),
                              resolved: .ws.resolved, outcome: .ws.outcome })),
