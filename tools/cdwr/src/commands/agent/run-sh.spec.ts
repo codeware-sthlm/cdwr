@@ -1122,3 +1122,48 @@ describe('run.sh job.json', () => {
     expect(run(true).json).toBeNull();
   });
 });
+
+describe('run.sh watch.jq errors', () => {
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+
+  // A failure note without jq's reason can't be diagnosed after the fact
+  it('adds the reason to every watch.jq failure', () => {
+    const failures = SCRIPT.split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .filter((line) => line.includes('watch.jq failed'));
+    expect(failures.length).toBeGreaterThanOrEqual(6);
+    for (const line of failures) expect(line).toMatch(/watch_err|\$why/);
+  });
+
+  it.skipIf(!hasZsh)(
+    "prints jq's first error line after a failure, nothing after a success",
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'run-sh-watch-err-'));
+      try {
+        writeFileSync(join(dir, 'watch.jq'), `def long: ${'x'.repeat(200)};\n`);
+        const body = [
+          'set -euo pipefail',
+          `HOME_DIR="${dir}" LOGS="${dir}"`,
+          fn('watch'),
+          fn('watch_err'),
+          'out="$(watch -n \'include "watch"; long\')" || print -r -- "fail:$(watch_err)|"',
+          'out="$(watch -n 1)"; print -r -- "ok:$(watch_err)|"'
+        ].join('\n');
+        const result = spawnSync('zsh', ['-c', body], { encoding: 'utf8' });
+        const [fail, ok] = result.stdout.trim().split('\n');
+        expect(fail).toMatch(/^fail: \(jq: error.*\)\|$/);
+        // The body is cut to 120 characters
+        expect(fail?.length).toBe('fail: ()|'.length + 120);
+        expect(ok).toBe('ok:|');
+        // An unchecked call still leaves the error in the job's stderr
+        expect(result.stderr).toMatch(/^jq: error/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+});
