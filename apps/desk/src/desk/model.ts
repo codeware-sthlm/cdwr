@@ -176,7 +176,12 @@ export type Model = {
   after: QueueAfter[];
   /** Open PRs in merge order */
   prs: QueueAfter[];
+  /** Open blockers of every open PR, plan and question */
+  blockers: Map<string, Blocker[]>;
+  /** The open PRs' part of `blockers` */
   prBlockers: Map<string, Blocker[]>;
+  /** Answered plans held by blockers still open in Linear */
+  heldApprovals: { ticket: string; blockers: Blocker[] }[];
   /** Open PRs whose ticket is parked on a wait (review fixes on CI); kept out of `parked` and `next` */
   prWaits: Map<string, QueueParked>;
   handoffs: QueueAfter[];
@@ -888,18 +893,25 @@ export const model = (
       return i !== undefined && !isClosed(i.statusType);
     });
   const prs = mergeOrder(openPrs, blockersOf);
-  const prBlockers = new Map(
-    prs.map((x) => [
-      x.ticket,
-      blockersOf(x.ticket).map((b): Blocker => {
-        const blocker = prByTicket.get(b);
-        return {
-          ticket: b,
-          pr: blocker ? prOf(details, b, blocker.pr) : null
-        };
-      })
-    ])
+  const withPr = (b: string): Blocker => {
+    const blocker = prByTicket.get(b);
+    return { ticket: b, pr: blocker ? prOf(details, b, blocker.pr) : null };
+  };
+  const blockers = new Map(
+    [...prs, ...before].map((x) => [x.ticket, blockersOf(x.ticket).map(withPr)])
   );
+  const prBlockers = new Map(
+    prs.map((x) => [x.ticket, blockers.get(x.ticket) ?? []])
+  );
+  const heldApprovals = (v ? v.blocked : []).flatMap((x) => {
+    const open = x.blockers.filter((b) => {
+      const i = idx.get(b);
+      return !i || !isClosed(i.statusType);
+    });
+    return open.length
+      ? [{ ticket: x.ticket, blockers: open.map(withPr) }]
+      : [];
+  });
 
   // Which tickets have hand-offs comes from the queue view; which items are still open, from Linear directly
   const handoffs = after
@@ -1034,7 +1046,9 @@ export const model = (
     toLabel,
     after,
     prs,
+    blockers,
     prBlockers,
+    heldApprovals,
     prWaits,
     handoffs,
     handoffItems: handoffs.reduce((n, x) => n + (x.items?.length || 0), 0),
@@ -1093,7 +1107,8 @@ export const model = (
         ...before.map((x) => x.ticket),
         ...toLabel.map((x) => x.ticket),
         ...handoffs.map((x) => x.ticket),
-        ...prs.map((x) => x.ticket)
+        ...prs.map((x) => x.ticket),
+        ...heldApprovals.map((x) => x.ticket)
       ],
       activity,
       now

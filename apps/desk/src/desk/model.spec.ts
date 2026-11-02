@@ -70,6 +70,7 @@ const view = (over: Partial<QueueView> = {}): QueueView => ({
   next: [],
   held: { tickets: [], free: [] },
   parked: [],
+  blocked: [],
   table: { before: [], label: [], after: [] },
   ...over
 });
@@ -460,6 +461,79 @@ describe('model', () => {
         });
       });
       expect(model(fresh, NOW).stuck).toBeNull();
+    });
+  });
+
+  describe('blockers', () => {
+    // COD-10 (PR 100) and COD-14 (PR 140) are open; COD-13 is closed
+    const state = withState((s) => {
+      s.data.buckets.set('started', [
+        issue('COD-10', { statusType: 'started', labels: ['agent:review'] }),
+        issue('COD-14', { statusType: 'started', labels: ['agent:review'] }),
+        issue('COD-15', { statusType: 'started' })
+      ]);
+      s.data.closed = [issue('COD-13', { statusType: 'completed' })];
+      s.data.runs = runsPayload({
+        qv: view({
+          blocked: [
+            { ticket: 'COD-30', blockers: ['COD-10', 'COD-15'] },
+            { ticket: 'COD-31', blockers: ['COD-13', 'COD-15'] },
+            { ticket: 'COD-32', blockers: ['COD-13'] }
+          ],
+          table: {
+            before: [
+              { ticket: 'COD-40', kind: 'plan' },
+              { ticket: 'COD-41', kind: 'question' }
+            ],
+            label: [],
+            after: [
+              { ticket: 'COD-10', kind: 'pr', pr: 100 },
+              { ticket: 'COD-14', kind: 'pr', pr: 140 }
+            ]
+          }
+        })
+      });
+      s.details.set('COD-14', detail({ blockedBy: ['COD-10'], pr: 140 }));
+      s.details.set('COD-40', detail({ blockedBy: ['COD-10', 'COD-13'] }));
+      s.details.set('COD-41', detail({ blockedBy: ['COD-15'] }));
+      s.details.set('COD-15', detail({ pr: 150 }));
+    });
+    const m = model(state, NOW);
+
+    it('names the open blockers of a plan, with the blocker’s PR', () => {
+      expect(m.blockers.get('COD-40')).toEqual([{ ticket: 'COD-10', pr: 100 }]);
+    });
+
+    it('gives a blocker no PR without an open one in the view, whatever Linear has attached', () => {
+      expect(m.blockers.get('COD-41')).toEqual([
+        { ticket: 'COD-15', pr: null }
+      ]);
+    });
+
+    it('leaves prBlockers as the PR subset', () => {
+      expect(m.prBlockers.get('COD-14')).toEqual([
+        { ticket: 'COD-10', pr: 100 }
+      ]);
+      expect(m.prBlockers.get('COD-10')).toEqual([]);
+      expect(m.prBlockers.has('COD-40')).toBe(false);
+      expect(m.blockers.get('COD-14')).toEqual(m.prBlockers.get('COD-14'));
+    });
+
+    it('keeps open blockers of a held approval and drops closed ones', () => {
+      expect(m.heldApprovals).toEqual([
+        {
+          ticket: 'COD-30',
+          blockers: [
+            { ticket: 'COD-10', pr: 100 },
+            { ticket: 'COD-15', pr: null }
+          ]
+        },
+        { ticket: 'COD-31', blockers: [{ ticket: 'COD-15', pr: null }] }
+      ]);
+    });
+
+    it('drops a held approval once every blocker closed', () => {
+      expect(m.heldApprovals.map((x) => x.ticket)).not.toContain('COD-32');
     });
   });
 
