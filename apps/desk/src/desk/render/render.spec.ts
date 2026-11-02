@@ -1630,11 +1630,11 @@ describe('problems', () => {
   });
 
   it('words the alert for a second writer alone, and keeps the usual one when mixed', () => {
-    const only = renderAlert(model(writers(filled()), NOW));
+    const only = renderAlert(model(live(writers(base())), NOW));
     expect(only).toContain('1 problem — another host publishes the queue');
     expect(only).toContain('the desk reads nuc');
     expect(only).not.toContain("can't vouch");
-    const mixed = renderAlert(model(down(writers(filled())), NOW));
+    const mixed = renderAlert(model(down(writers(base())), NOW));
     expect(mixed).toContain("the desk can't vouch for what it shows");
   });
 
