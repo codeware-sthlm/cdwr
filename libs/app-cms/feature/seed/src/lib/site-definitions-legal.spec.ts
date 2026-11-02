@@ -5,7 +5,10 @@ import {
   cdwrIoPrivacyMarkdown,
   codewareSe,
   codewareSeLegalVars,
-  codewareSePrivacyMarkdown
+  codewareSePrivacyMarkdown,
+  ksVininfo,
+  ksVininfoLegalVars,
+  ksVininfoPrivacyMarkdown
 } from '@codeware/shared/util/seed/site-definitions';
 
 /**
@@ -26,6 +29,13 @@ describe.each([
     definition: codewareSe,
     vars: codewareSeLegalVars,
     privacy: codewareSePrivacyMarkdown
+  },
+  {
+    site: 'kajstroberg.se',
+    locale: 'sv',
+    definition: ksVininfo,
+    vars: ksVininfoLegalVars,
+    privacy: ksVininfoPrivacyMarkdown
   }
 ])('the legal pages of $site', ({ locale, definition, vars, privacy }) => {
   it('match the templates rendered with the same details', () => {
@@ -36,7 +46,10 @@ describe.each([
     const markdownOf = (slug: string) =>
       JSON.stringify(definition.pages.find((page) => page.slug === slug));
 
-    expect(markdownOf('privacy')).toContain(
+    const slug = definition.siteSettings?.legal?.privacyPage?.lookupSlug;
+
+    expect(slug).toBeDefined();
+    expect(markdownOf(slug as string)).toContain(
       JSON.stringify(privacy).slice(1, -1)
     );
   });

@@ -13,6 +13,8 @@ export const BUNDLED_MEDIA = [
   'document-1.pdf',
   'document-2.pdf',
   'earthrise.png',
+  'ks-vininfo-header.jpg',
+  'ks-vininfo-portrait.jpg',
   'moon-landscape.png',
   'moon-phases.png',
   'observing-night.png',
