@@ -30,6 +30,7 @@ import {
   RUN_INTERVAL_SECONDS,
   byFile,
   filesDrift,
+  formatBlocked,
   formatHeld,
   formatImplement,
   formatNext,
@@ -270,6 +271,7 @@ export default defineCommand({
                 'held',
                 formatHeld(report.queueView)
               ),
+              row(true, 'blocked', formatBlocked(report.queueView)),
               row(true, 'parked', formatParked(report.queueView)),
               row(true, 'on your table', formatTable(report.queueView))
             ])

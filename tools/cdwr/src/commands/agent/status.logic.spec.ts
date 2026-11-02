@@ -288,6 +288,7 @@ describe('showsRow', () => {
     'linear tools',
     'next',
     'held',
+    'blocked',
     'parked',
     'on your table'
   ])('keeps %s when the scheduler is elsewhere', (check) => {

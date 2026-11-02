@@ -8,6 +8,7 @@ import {
   domainTarget,
   drift,
   filesDrift,
+  formatBlocked,
   formatHeld,
   formatImplement,
   formatNext,
@@ -733,6 +734,7 @@ const EMPTY_VIEW: QueueView = {
   session: null,
   next: [],
   held: { tickets: [], free: [] },
+  blocked: [],
   parked: [],
   table: { before: [], after: [], label: [] }
 };
@@ -758,6 +760,10 @@ const FILLED_VIEW: QueueView = {
       { action: 'limit', value: 3 }
     ]
   },
+  blocked: [
+    { ticket: 'COD-702', blockers: ['COD-701'] },
+    { ticket: 'COD-710', blockers: ['COD-703', 'COD-704'] }
+  ],
   parked: [
     {
       ticket: 'COD-6',
@@ -888,6 +894,18 @@ describe('formatHeld', () => {
 
   it('says nothing when empty', () => {
     expect(formatHeld(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('formatBlocked', () => {
+  it('names each ticket and the blockers it waits on', () => {
+    expect(formatBlocked(FILLED_VIEW)).toBe(
+      'COD-702 after COD-701; COD-710 after COD-703, COD-704'
+    );
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatBlocked(EMPTY_VIEW)).toBe('nothing');
   });
 });
 

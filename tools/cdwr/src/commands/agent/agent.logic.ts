@@ -903,6 +903,10 @@ export const queueViewSchema = z.object({
       ])
     )
   }),
+  // Older queue views have no blocked
+  blocked: z
+    .array(z.object({ ticket: ticketSchema, blockers: z.array(ticketSchema) }))
+    .default([]),
   // Older queue views have no parked
   parked: z
     .array(
@@ -978,6 +982,11 @@ export const formatHeld = (view: QueueView): string => {
       ? `${held}; free a slot: ${slots.join(', ')}`
       : held;
 };
+
+export const formatBlocked = (view: QueueView): string =>
+  view.blocked
+    .map((b) => `${b.ticket} after ${b.blockers.join(', ')}`)
+    .join('; ') || 'nothing';
 
 export const formatParked = (view: QueueView): string =>
   view.parked
