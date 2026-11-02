@@ -1108,7 +1108,12 @@ table.act {
   background: none;
   border-color: var(--line);
 }
+/* Its label carries the blocker list, so it shrinks and wraps instead of pushing the age off a phone */
 .wrow-li.approved .wrow .kind {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
   color: var(--muted);
 }
 .chip.plan {
