@@ -384,10 +384,86 @@ describe('SiteDefinitionSchema', () => {
     expect(errors).toContainEqual("No form named 'Nowhere' in this definition");
   });
 
+  describe('a form with fields of its own', () => {
+    const base = {
+      title: 'Interest',
+      submitLabel: 'Send',
+      confirmation: 'Thanks',
+      subject: 'From {{email}}'
+    };
+    const email = { blockType: 'email', name: 'email', label: 'Email' };
+
+    it('accepts the single-email shape and the fields shape', () => {
+      expect(
+        errorsOf({
+          ...minimal,
+          forms: [{ ...base, emailLabel: 'Email', emailPlaceholder: 'a@b.se' }]
+        })
+      ).toEqual([]);
+      expect(
+        errorsOf({
+          ...minimal,
+          forms: [
+            {
+              ...base,
+              fields: [
+                { blockType: 'text', name: 'name', label: 'Name', width: 6 },
+                email
+              ]
+            }
+          ]
+        })
+      ).toEqual([]);
+    });
+
+    it.each([
+      [
+        'both shapes',
+        { emailLabel: 'E', emailPlaceholder: 'p', fields: [email] }
+      ],
+      ['neither shape', {}],
+      ['only an emailLabel', { emailLabel: 'E' }]
+    ])('refuses a form with %s', (_case, shape) => {
+      expect(errorsOf({ ...minimal, forms: [{ ...base, ...shape }] })).toEqual([
+        expect.stringMatching(/^A form (states either|needs either)/)
+      ]);
+    });
+
+    it.each([
+      ['no label', { blockType: 'text', name: 'name' }],
+      ['an empty label', { blockType: 'text', name: 'name', label: '' }],
+      ['a width of 0', { ...email, width: 0 }],
+      ['a width of 7', { ...email, width: 7 }],
+      ['a fractional width', { ...email, width: 2.5 }]
+    ])('refuses a field with %s', (_case, field) => {
+      const fields = field.blockType === 'email' ? [field] : [field, email];
+
+      expect(
+        errorsOf({ ...minimal, forms: [{ ...base, fields }] }).length
+      ).toBeGreaterThan(0);
+    });
+
+    it.each([
+      ['no email field', [{ blockType: 'text', name: 'name', label: 'Name' }]],
+      ['an email field not named email', [{ ...email, name: 'mail' }]],
+      ['two email fields', [email, email]]
+    ])('refuses fields with %s', (_case, fields) => {
+      expect(errorsOf({ ...minimal, forms: [{ ...base, fields }] })).toContain(
+        "A form with its own fields needs exactly one email field named 'email'"
+      );
+    });
+  });
+
   it('accepts a form reference the definition states', () => {
     const errors = errorsOf({
       ...minimal,
-      forms: [{ title: 'Contact', confirmation: 'Thanks' }],
+      forms: [
+        {
+          title: 'Contact',
+          emailLabel: 'Email',
+          emailPlaceholder: 'a@b.se'
+        }
+      ],
       pages: [
         {
           name: 'Home',

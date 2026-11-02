@@ -7,6 +7,7 @@ export { SiteDefinitionSchema } from './lib/site-definition.schema';
 export type {
   BlockDefinition,
   FormDefinition,
+  FormFieldDefinition,
   MediaDefinition,
   MediaRef,
   NavigationGroupDefinition,

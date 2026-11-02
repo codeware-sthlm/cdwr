@@ -62,7 +62,8 @@ are optional and follow the same shape as the collections they fill.
 A definition with no `siteSettings` still leaves the workspace with working
 ones: the apply fills in a standard footer, contact form recipient, app name,
 icon and theme, pointed at the definition's `home` page. State `siteSettings`
-only to override that.
+only to override that. `siteSettings.forms.retentionDays` states how many days
+submissions are kept, which the privacy page repeats.
 
 The block types come straight from Payload's generated types, so an editor
 completes them and a wrong field is a compile error rather than a surprise at
@@ -101,6 +102,12 @@ other reference:
 { blockType: 'form', form: { lookupTitle: 'Contact' }, enableIntro: true,
   introContent: { markdown: 'Leave your email.' } }
 ```
+
+A form states either `emailLabel` and `emailPlaceholder`, which gives the single
+email field, or `fields` of its own (`text`, `textarea`, `email` and `number`,
+each with `name`, `label` and optionally `placeholder`, `width` and `required`).
+`fields` must hold exactly one `email` field named `email`, since the
+notification subject uses `{{email}}`. A form is created once and never changed.
 
 Those are the only two places rich text exists. A post's `content` is a plain
 markdown string, because the field is called content and nothing else could be

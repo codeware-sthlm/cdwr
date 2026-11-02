@@ -116,7 +116,66 @@ export const SiteDefinitionSchema = z
       )
       .optional(),
     forms: z
-      .array(z.object({ title: z.string().min(1) }).passthrough())
+      .array(
+        z
+          .object({
+            title: z.string().min(1),
+            emailLabel: z.string().optional(),
+            emailPlaceholder: z.string().optional(),
+            fields: z
+              .array(
+                z
+                  .object({
+                    blockType: z.enum(['text', 'textarea', 'email', 'number']),
+                    name: z.string().min(1),
+                    label: z.string().min(1),
+                    // The renderer's grid is six columns
+                    width: z.number().int().min(1).max(6).optional()
+                  })
+                  .passthrough()
+              )
+              .optional()
+          })
+          .passthrough()
+          .superRefine(({ fields, emailLabel, emailPlaceholder }, ctx) => {
+            const single =
+              emailLabel !== undefined || emailPlaceholder !== undefined;
+
+            if (fields && single) {
+              ctx.addIssue({
+                code: 'custom',
+                message:
+                  "A form states either 'fields' or 'emailLabel' and 'emailPlaceholder', not both",
+                path: ['fields']
+              });
+            } else if (
+              !fields &&
+              (emailLabel === undefined || emailPlaceholder === undefined)
+            ) {
+              ctx.addIssue({
+                code: 'custom',
+                message:
+                  "A form needs either 'fields' or both 'emailLabel' and 'emailPlaceholder'",
+                path: ['fields']
+              });
+            }
+
+            if (
+              fields &&
+              fields.filter(
+                ({ blockType, name }) =>
+                  blockType === 'email' && name === 'email'
+              ).length !== 1
+            ) {
+              ctx.addIssue({
+                code: 'custom',
+                message:
+                  "A form with its own fields needs exactly one email field named 'email'",
+                path: ['fields']
+              });
+            }
+          })
+      )
       .optional(),
     customThemes: z
       .array(
