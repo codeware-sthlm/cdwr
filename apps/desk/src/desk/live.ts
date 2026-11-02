@@ -423,20 +423,31 @@ const channelDown = (connection: Connection, nowMs: number): boolean =>
       nowMs - connection.downSince >= CONNECT_GRACE_MS));
 
 /** What the desk can see is wrong with what it shows */
-/** An abandon applied on the host after its snapshot: the session it names is ended, even one too old for the sessions read */
-const abandonedSince = (
-  rows: readonly DeskCommandRow[] | null,
-  host: string,
-  at: string
-): boolean =>
-  (rows ?? []).some(
+/**
+ * Whether the session the queue view calls alive has ended: its sessions row says so, or an
+ * abandon was applied on the host after the view was taken. The view's own time, not the row's,
+ * since a paused tick republishes the same view; the abandon also covers a session too old
+ * for the sessions read.
+ */
+export const sessionEnded = (
+  runs: RunsPayload | null,
+  sessions: readonly SessionRow[] | null,
+  deskCommands: readonly DeskCommandRow[] | null
+): boolean => {
+  const id = runs?.qv?.session.id;
+  if (!runs || !id) return false;
+  if ((sessions ?? []).some((r) => r.id === id && r.state === 'ended'))
+    return true;
+  const taken = Date.parse(runs.qv?.at ?? runs.at);
+  return (deskCommands ?? []).some(
     (r) =>
-      r.host === host &&
+      r.host === runs.host &&
       r.kind === 'abandon' &&
       r.status === 'applied' &&
       r.applied_at !== null &&
-      Date.parse(r.applied_at) >= Date.parse(at)
+      Date.parse(r.applied_at) >= taken
   );
+};
 
 export const problems = ({
   connection,
@@ -526,8 +537,7 @@ export const problems = ({
     runs?.qv?.session.state === 'alive' &&
     host &&
     host.ageMin > host.silentMin &&
-    sessionRow?.state !== 'ended' &&
-    !abandonedSince(deskCommands, runs.host, runs.at) &&
+    !sessionEnded(runs, sessions, deskCommands) &&
     (sessionHost === undefined || sessionHost === host.host)
   ) {
     const ticket = runs.qv.session.ticket ?? null;

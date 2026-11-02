@@ -57,6 +57,8 @@ const ACTIVITY_LIMIT = 300;
 export const GITHUB_EVENTS_LIMIT = 200;
 const DEBOUNCE_MS = 500;
 const PAGE_SIZE = 1000;
+/** The newest applied abandons read past the 24 h window */
+const ABANDONS_LIMIT = 20;
 const MAX_PAGES = 20;
 type Role = 'planning' | 'orchestrating' | 'implementing';
 
@@ -609,21 +611,45 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       );
     });
 
-  // The table is applied by hand after merge, so a missing one reads as no commands; paged by id, like sessions
+  // The table is applied by hand after merge, so a missing one reads as no commands; paged by id, like sessions.
+  // The newest applied abandons come whatever their age: they end a session a long-silent host still names.
   const readDeskCommands = (): Promise<DeskCommandRow[]> =>
     attempt(async () => {
       const since = new Date(Date.now() - DAY_MS).toISOString();
-      return readAllPages(async (from, to) => {
-        const result = await client
-          .from('desk_commands')
-          .select('*')
-          .gte('at', since)
-          .order('id', { ascending: true })
-          .range(from, to);
-        return result.error && MISSING_TABLE.includes(result.error.code ?? '')
+      const orMissing = (result: {
+        data: DeskCommandRow[] | null;
+        error: { message: string; code?: string } | null;
+        status: number;
+      }): DeskCommandRow[] =>
+        result.error && MISSING_TABLE.includes(result.error.code ?? '')
           ? []
           : settle(result);
-      }, 'desk_commands');
+      const [recent, abandons] = await Promise.all([
+        readAllPages(
+          async (from, to) =>
+            orMissing(
+              await client
+                .from('desk_commands')
+                .select('*')
+                .gte('at', since)
+                .order('id', { ascending: true })
+                .range(from, to)
+            ),
+          'desk_commands'
+        ),
+        client
+          .from('desk_commands')
+          .select('*')
+          .eq('kind', 'abandon')
+          .eq('status', 'applied')
+          .order('id', { ascending: false })
+          .limit(ABANDONS_LIMIT)
+          .then(orMissing)
+      ]);
+      const byId = new Map(
+        [...abandons, ...recent].map((row) => [row.id, row])
+      );
+      return [...byId.values()].sort((a, b) => a.id - b.id);
     });
 
   /**
