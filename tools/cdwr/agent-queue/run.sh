@@ -100,13 +100,14 @@ telemetry_env "$REPO/tools/cdwr/.env"
 DESK_STALE_SECS=7200
 # This host's pending desk commands (the desk-command function stores them; abandon it applies
 # itself), applied in id order before the pause is read, so the last one wins and a resume lifts
-# the pause this tick. Each ack is a PATCH on status=eq.pending, so of two overlapping ticks only
-# one lands, and only that one writes the activity row. A list that can't be read applies nothing;
-# an ack that fails leaves the row for the next tick. --check only counts them.
+# the pause this tick. Each row is acked first, a PATCH on status=eq.pending, and its file changed
+# only when that ack landed: of two overlapping ticks only one applies a row and writes its
+# activity row, and a row whose ack failed is left as it was for the next tick. A list that can't
+# be read applies nothing. --check only counts them.
 apply_commands() {
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local host rows line id kind actor at value verdict why change body acked stamp now
+  local host rows line id kind actor at value verdict why change effect body acked stamp now
   host="$(telemetry_host)"
   rows="$(supabase_select desk_commands "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor")"
   if $check; then say "commands: $(jq 'length' <<<"$rows" 2>/dev/null || print 0) pending"; return 0; fi
@@ -118,30 +119,30 @@ apply_commands() {
     [[ -n "$line" ]] || continue
     IFS=$'\t' read -r id kind actor at value <<<"$line"
     [[ "$id" == <-> ]] || continue
-    verdict=applied why="" change=""
+    verdict=applied why="" change="" effect=""
     if [[ "$at" != <-> ]] || (( now - at > DESK_STALE_SECS )); then
       verdict=refused why=expired
     else
       case "$kind" in
         pause)
-          if [[ -e "$HOME_DIR/paused" ]]; then why="already paused"; else : > "$HOME_DIR/paused"; fi
+          if [[ -e "$HOME_DIR/paused" ]]; then why="already paused"; else effect=pause; fi
           change="paused from the desk ($actor)" ;;
         resume)
-          if [[ -e "$HOME_DIR/paused" ]]; then rm -f "$HOME_DIR/paused"; else why="not paused"; fi
+          if [[ -e "$HOME_DIR/paused" ]]; then effect=resume; else why="not paused"; fi
           change="resumed from the desk ($actor)" ;;
         run)
-          # In the container the listener woke this run; on the Mac the tick is the run
+          # In the container the listener woke this run; on the Mac the tick is the run. A run
+          # holding the lock would make this one exit busy, so the request is refused, not lost.
           if [[ -e "$HOME_DIR/paused" ]]; then verdict=refused why=paused
+          elif [[ -d "$HOME_DIR/lock" ]]; then verdict=refused why="a run is in progress"
           else why="this run" change="run requested from the desk ($actor)"; fi ;;
         limit)
-          if [[ "$value" == <-> ]] && (( value >= 1 && value <= 20 )) &&
-            print -r -- "$value" > "$HOME_DIR/limit.tmp" && mv "$HOME_DIR/limit.tmp" "$HOME_DIR/limit"; then
-            change="PR limit set to $value from the desk ($actor)"
+          if [[ "$value" == <-> ]] && (( value >= 1 && value <= 20 )); then
+            effect=limit change="PR limit set to $value from the desk ($actor)"
           else verdict=refused why="bad value"; fi ;;
         cap)
-          if [[ "$value" == <->(|.<->) ]] && (( value <= 500 )) &&
-            print -r -- "$value" > "$HOME_DIR/implement-cap.tmp" && mv "$HOME_DIR/implement-cap.tmp" "$HOME_DIR/implement-cap"; then
-            change="implement cap set to \$$value from the desk ($actor)"
+          if [[ "$value" == <->(|.<->) ]] && (( value <= 500 )); then
+            effect=implement-cap change="implement cap set to \$$value from the desk ($actor)"
           else verdict=refused why="bad value"; fi ;;
         *) verdict=refused why="unknown kind" ;;
       esac
@@ -155,6 +156,12 @@ apply_commands() {
       note "desk command $id ($kind): not acked here, left to the tick that did or the next one"
       continue
     fi
+    case "$effect" in
+      pause) : > "$HOME_DIR/paused" ;;
+      resume) rm -f "$HOME_DIR/paused" ;;
+      limit|implement-cap)
+        print -r -- "$value" > "$HOME_DIR/$effect.tmp" && mv "$HOME_DIR/$effect.tmp" "$HOME_DIR/$effect" ;;
+    esac || { note "warn: desk command $id ($kind): acked, but $effect could not be written"; record warn "" "desk command $id: $effect not written"; }
     note "desk command $id ($kind): $verdict${why:+ ($why)}"
     supabase_upsert activity event_id "$(jq -nc --arg id "desk:$id" --arg at "$stamp" --arg change "$change" --arg host "$host" \
       '{event_id: $id, at: $at, ticket: null, actor: "human", change: $change, host: $host}')" merge

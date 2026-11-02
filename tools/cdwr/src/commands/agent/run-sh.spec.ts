@@ -1465,19 +1465,28 @@ describe('run.sh apply_commands', () => {
     expect(file('paused')).toBeNull();
   });
 
-  it.skipIf(!canRun)('writes no activity row when the ack was lost', () => {
-    const r = apply(
-      [
-        { id: 1, kind: 'pause' },
-        { id: 2, kind: 'limit', value: 7 }
-      ],
-      { lost: [1] }
-    );
-    expect(file('paused')).not.toBeNull();
-    expect(r.upserts.map((u) => u.body['event_id'])).toEqual(['desk:2']);
-    expect(r.notes.join('\n')).toContain('desk command 1 (pause): not acked');
-    expect(file('limit')).toBe('7');
+  it.skipIf(!canRun)('refuses a run while another run holds the lock', () => {
+    mkdirSync(join(home, 'lock'));
+    const r = apply([{ id: 1, kind: 'run' }]);
+    expect(statuses(r)).toEqual([['refused', 'a run is in progress']]);
   });
+
+  it.skipIf(!canRun)(
+    'applies nothing and writes no activity row when the ack was lost',
+    () => {
+      const r = apply(
+        [
+          { id: 1, kind: 'pause' },
+          { id: 2, kind: 'limit', value: 7 }
+        ],
+        { lost: [1] }
+      );
+      expect(file('paused')).toBeNull();
+      expect(r.upserts.map((u) => u.body['event_id'])).toEqual(['desk:2']);
+      expect(r.notes.join('\n')).toContain('desk command 1 (pause): not acked');
+      expect(file('limit')).toBe('7');
+    }
+  );
 
   it.skipIf(!canRun)('only counts under --check', () => {
     const r = apply(

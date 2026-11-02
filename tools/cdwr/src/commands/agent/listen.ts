@@ -85,11 +85,11 @@ export default defineCommand({
         fail: () => finish(1)
       });
 
-      for (const { table, events } of WATCHED) {
+      for (const { table, events, filter } of WATCHED) {
         for (const event of events) {
           channel = channel.on(
             'postgres_changes',
-            { event, schema: 'public', table },
+            { event, schema: 'public', table, ...(filter ? { filter } : {}) },
             () => listener.event()
           );
         }
