@@ -52,4 +52,23 @@ describe('EnvSchema', () => {
       EnvSchema.safeParse({ ...valid, PAYLOAD_URL: 'not a url' }).success
     ).toBe(false);
   });
+
+  it('refuses a site gate password under 8 characters', () => {
+    expect(
+      EnvSchema.safeParse({ ...valid, SITE_GATE_PASSWORD: '1234567' }).success
+    ).toBe(false);
+  });
+
+  it('accepts a site gate password of 8 characters', () => {
+    expect(
+      EnvSchema.parse({ ...valid, SITE_GATE_PASSWORD: '12345678' })
+        .SITE_GATE_PASSWORD
+    ).toBe('12345678');
+  });
+
+  it('treats a blank site gate password as unset', () => {
+    expect(
+      EnvSchema.parse({ ...valid, SITE_GATE_PASSWORD: '' }).SITE_GATE_PASSWORD
+    ).toBeUndefined();
+  });
 });
