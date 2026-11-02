@@ -40,6 +40,8 @@ export const HOST_SWAP_GROWTH_BYTES = 1024 * 1024; // swap in use must grow by m
 export const SESSION_ATTENDED_MIN = 5; // the Mac's attended session seen within this is attended
 export const SESSION_HANDBACK_MIN = 30; // seen within this it is handing back; also how long a session counts as live
 export const LINEAR_STALE_MIN = 15; // a Linear poll older than this fails its health check (the desk polls every 5 min)
+export const WEBHOOK_GRACE_MIN = 15; // a PR change Linear synced this long after the newest github_events row counts as a missed event
+export const WEBHOOK_QUIET_HOURS = 24; // with no github_events row this recent the webhook check reads quiet
 
 export const PLAN_STALE_MIN = 60; // a plan sample older than this is shown with its age (it ages while no interactive session runs)
 export const PLAN_WARN_PCT = 100; // a window projected to reach this share by its reset is a warning

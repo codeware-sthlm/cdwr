@@ -13,7 +13,9 @@ import {
   LINEAR_STALE_MIN,
   QUEUE_WRITER_MIN,
   SESSION_ATTENDED_MIN,
-  SESSION_HANDBACK_MIN
+  SESSION_HANDBACK_MIN,
+  WEBHOOK_GRACE_MIN,
+  WEBHOOK_QUIET_HOURS
 } from './constants';
 import { hhmm } from './format';
 import type { Connection } from './state';
@@ -541,6 +543,38 @@ export type HealthCheck = {
   note: string | null;
 };
 
+/** A ticket's PR and when Linear last synced its attachment: GitHub activity the webhook should have stored */
+export type PrActivity = { pr: number; ticket: string; at: number };
+
+/** The webhook check: fails only when Linear saw a PR change after the newest `github_events` row, so a quiet day passes */
+export const missedEvent = (
+  events: readonly GithubEventRow[],
+  activity: readonly PrActivity[],
+  nowMs: number
+): Omit<HealthCheck, 'name'> => {
+  const newest = events.reduce<number | null>(
+    (a, e) => Math.max(a ?? 0, Date.parse(e.updated_at)),
+    null
+  );
+  const missed = activity
+    .filter((a) => newest === null || a.at - newest > WEBHOOK_GRACE_MIN * 6e4)
+    .reduce<PrActivity | null>((m, a) => (m && m.at >= a.at ? m : a), null);
+  if (missed)
+    return {
+      ok: false,
+      at: newest,
+      note: `PR #${missed.pr} (${missed.ticket}) changed ${hhmm(missed.at)}, newest webhook event ${newest === null ? 'never' : hhmm(newest)}`
+    };
+  return {
+    ok: true,
+    at: newest,
+    note:
+      newest === null || nowMs - newest > WEBHOOK_QUIET_HOURS * 36e5
+        ? 'quiet'
+        : null
+  };
+};
+
 /** The Platform view's checks, in the order it lists them */
 export const health = ({
   connection,
@@ -549,6 +583,7 @@ export const health = ({
   nuc,
   heartbeats,
   events,
+  activity,
   storedAt,
   now
 }: {
@@ -560,15 +595,13 @@ export const health = ({
   /** Every other host seen in the last 24 hours, so a silent one fails rather than drops out */
   heartbeats: readonly HostHeartbeat[];
   events: readonly GithubEventRow[] | null;
+  /** The PRs of the tickets whose details have loaded; none before they load, so a cold start reads quiet */
+  activity: readonly PrActivity[];
   storedAt: number | null;
   now: Date;
 }): HealthCheck[] => {
   const nowMs = now.getTime();
   const snapshot = runs?.at ? Date.parse(runs.at) : null;
-  const newestEvent = (events ?? []).reduce<number | null>(
-    (a, e) => Math.max(a ?? 0, Date.parse(e.updated_at)),
-    null
-  );
   const down = channelDown(connection, nowMs);
   const nucQuiet = nuc ? (nowMs - nuc.at) / 6e4 : 0;
   const linearAge = storedAt === null ? null : (nowMs - storedAt) / 6e4;
@@ -625,9 +658,9 @@ export const health = ({
     })),
     {
       name: 'github_events last event',
-      ok: newestEvent !== null,
-      at: newestEvent,
-      note: newestEvent === null ? 'no event in the last 24 h' : null
+      ...(events === null
+        ? { ok: false, at: null, note: 'not loaded' }
+        : missedEvent(events, activity, nowMs))
     },
     {
       name: 'Linear poll',

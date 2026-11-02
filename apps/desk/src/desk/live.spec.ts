@@ -10,13 +10,15 @@ import type {
 import {
   HOST_METRICS_MINUTES,
   HOST_SPACING_SAMPLES,
-  SESSION_HANDBACK_MIN
+  SESSION_HANDBACK_MIN,
+  WEBHOOK_GRACE_MIN
 } from './constants';
 import { hhmm } from './format';
 import {
   type CheckName,
   type HealthCheck,
   type HostHeartbeat,
+  type PrActivity,
   type Problem,
   agentPrs,
   checkProblems,
@@ -27,6 +29,7 @@ import {
   heartbeatOk,
   hostHeartbeats,
   hostSessions,
+  missedEvent,
   prState,
   problemKey,
   problemOf,
@@ -882,6 +885,7 @@ describe('health', () => {
     nuc: { host: 'nuc', at: NOW.getTime() - 2 * MIN, silentMin: 30 },
     heartbeats: [],
     events: [event()],
+    activity: [],
     storedAt: NOW.getTime() - 3 * MIN,
     now: NOW
   });
@@ -923,6 +927,7 @@ describe('health', () => {
       nuc: { host: 'nuc', at: NOW.getTime() - 45 * MIN, silentMin: 30 },
       heartbeats: [mac(31)],
       events: [],
+      activity: [{ pr: 7, ticket: 'COD-1', at: NOW.getTime() - 10 * MIN }],
       storedAt: NOW.getTime() - 20 * MIN,
       now: NOW
     });
@@ -937,7 +942,10 @@ describe('health', () => {
         false,
         'no heartbeat for 31 m while a turn was running'
       ],
-      'github_events last event': [false, 'no event in the last 24 h'],
+      'github_events last event': [
+        false,
+        `PR #7 (COD-1) changed ${hhmm(NOW.getTime() - 10 * MIN)}, newest webhook event never`
+      ],
       'Linear poll': [false, 'last stored 20 m ago, limit 15 m']
     });
     expect(checks.find((c) => c.name === 'github_events last event')?.at).toBe(
@@ -969,12 +977,105 @@ describe('health', () => {
     ]);
   });
 
+  it('says not loaded when github_events could not be read', () => {
+    const check = health({ ...fresh(), events: null }).find(
+      (c) => c.name === 'github_events last event'
+    );
+    expect(check).toMatchObject({ ok: false, at: null, note: 'not loaded' });
+  });
+
   it('dates a host heartbeat from its newest row', () => {
     const macCheck = health({ ...fresh(), heartbeats: [mac(10)] }).find(
       (c) => c.name === 'mac heartbeat'
     );
     expect(macCheck?.ok).toBe(true);
     expect(macCheck?.at).toBe(NOW.getTime() - 10 * MIN);
+  });
+});
+
+describe('missedEvent', () => {
+  const at = (min: number) => NOW.getTime() - min * MIN;
+  const pr = (n: number, min: number): PrActivity => ({
+    pr: n,
+    ticket: `COD-${n}`,
+    at: at(min)
+  });
+  const check = (
+    events: GithubEventRow[],
+    activity: PrActivity[]
+  ): ReturnType<typeof missedEvent> =>
+    missedEvent(events, activity, NOW.getTime());
+
+  it('passes a quiet day with no activity, and says quiet', () => {
+    expect(check([event({ updated_at: ago(30 * 60) })], [])).toEqual({
+      ok: true,
+      at: at(30 * 60),
+      note: 'quiet'
+    });
+  });
+
+  it('passes a recent event with nothing to note', () => {
+    expect(check([event()], [pr(1, 60)])).toEqual({
+      ok: true,
+      at: at(5),
+      note: null
+    });
+  });
+
+  it('fails when a PR changed after the newest event, beyond the grace', () => {
+    const late = WEBHOOK_GRACE_MIN + 1;
+    expect(
+      check([event({ updated_at: ago(120) })], [pr(1, 200), pr(2, 120 - late)])
+    ).toEqual({
+      ok: false,
+      at: at(120),
+      note: `PR #2 (COD-2) changed ${hhmm(at(120 - late))}, newest webhook event ${hhmm(at(120))}`
+    });
+  });
+
+  it('names the newest missed PR', () => {
+    const out = check(
+      [event({ updated_at: ago(120) })],
+      [pr(1, 60), pr(2, 30)]
+    );
+    expect(out.note).toMatch(/^PR #2 \(COD-2\)/);
+  });
+
+  it('passes activity within the grace of the newest event', () => {
+    expect(
+      check([event({ updated_at: ago(120) })], [pr(1, 120 - WEBHOOK_GRACE_MIN)])
+        .ok
+    ).toBe(true);
+  });
+
+  it('passes activity older than the newest event, and reads quiet past a day', () => {
+    expect(
+      check([event({ updated_at: ago(26 * 60) })], [pr(1, 30 * 60)])
+    ).toEqual({ ok: true, at: at(26 * 60), note: 'quiet' });
+  });
+
+  it('passes no events without activity, and fails no events with activity', () => {
+    expect(check([], [])).toEqual({ ok: true, at: null, note: 'quiet' });
+    expect(check([], [pr(3, 600)])).toEqual({
+      ok: false,
+      at: null,
+      note: `PR #3 (COD-3) changed ${hhmm(at(600))}, newest webhook event never`
+    });
+  });
+
+  it('reads quiet through health() before any details load', () => {
+    const row = health({
+      connection: connection(),
+      runs: runs(ago(5)),
+      staleHours: 2,
+      nuc: null,
+      heartbeats: [],
+      events: [],
+      activity: [],
+      storedAt: NOW.getTime(),
+      now: NOW
+    }).find((c) => c.name === 'github_events last event');
+    expect(row).toMatchObject({ ok: true, note: 'quiet' });
   });
 });
 
