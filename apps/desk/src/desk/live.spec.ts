@@ -823,6 +823,16 @@ describe('problems', () => {
     expect(
       problems({ ...args, sessions: [], deskCommands: [abandon(ago(10))] })
     ).toHaveLength(1);
+    // A paused tick republishes the same view with a newer row time; the view's own time counts
+    const republished = { ...open, at: ago(0) };
+    expect(
+      problems({
+        ...args,
+        runs: republished,
+        sessions: [],
+        deskCommands: [abandon(ago(1))]
+      })
+    ).toEqual([]);
   });
 });
 
