@@ -479,6 +479,22 @@ describe('createHandler', () => {
     expect(callsTo(fetch, 'activity')).toHaveLength(1);
   });
 
+  it('abandons on a host whose queue_state is past STALE_MS', async () => {
+    const { handle, fetch } = await setup({
+      queue: [
+        {
+          at: new Date(NOW - STALE_MS - 60_000).toISOString(),
+          view: { session: { state: 'alive', id: 's1', ticket: 'COD-1' } }
+        }
+      ]
+    });
+    const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_abandon')[0])).toMatchObject({
+      p_session: 's1'
+    });
+  });
+
   it('refuses abandon on an unknown host with a plain insert, no RPC', async () => {
     const { handle, fetch } = await setup({ queue: [] });
     const res = await handle(post({ host: 'ghost', kind: 'abandon' }));
