@@ -111,5 +111,7 @@ export type QueueView = {
   next: QueueNext[];
   held: { tickets: string[]; free: QueueFree[] };
   parked: QueueParked[];
+  /** Answered plans held by open blockers; they are in neither `next` nor `table.before` */
+  blocked: { ticket: string; blockers: string[] }[];
   table: { before: QueueBefore[]; label: QueueLabel[]; after: QueueAfter[] };
 };

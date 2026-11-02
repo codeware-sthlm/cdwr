@@ -313,6 +313,7 @@ const queueViewSchema = z
         outcome: z.string().nullish()
       })
     ),
+    blocked: list(z.object({ ticket: z.string(), blockers: list(z.string()) })),
     table: z.object({
       before: list(z.object({ ticket: z.string(), kind: opt(z.string()) })),
       label: z
@@ -339,8 +340,9 @@ const queueViewSchema = z
 export const validateQueueView = (v: unknown): QueueView | null => {
   const parsed = queueViewSchema.safeParse(v);
   if (!parsed.success) return null;
-  const { at, limit, session, next, held, parked, table } = parsed.data;
-  return { at, limit, session, next, held, parked, table };
+  const { at, limit, session, next, held, parked, blocked, table } =
+    parsed.data;
+  return { at, limit, session, next, held, parked, blocked, table };
 };
 
 /** The paths a view fails to parse at; `missing` when the field is absent rather than mistyped */

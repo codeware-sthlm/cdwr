@@ -14,6 +14,7 @@ const view = (over: Partial<QueueView> = {}): QueueView => ({
   next: [],
   held: { tickets: [], free: [] },
   parked: [],
+  blocked: [],
   table: { before: [], label: [], after: [] },
   ...over
 });
@@ -38,6 +39,10 @@ const parkedView = view({
   parked: [{ ticket: 'COD-1', wait: 'ci', pr: 713, since: AT }]
 });
 
+const blockedView = view({
+  blocked: [{ ticket: 'COD-1', blockers: ['COD-2'] }]
+});
+
 const tickets = (v: QueueView) => ({
   next: v.next.map((x) => x.ticket),
   parked: v.parked.map((x) => x.ticket),
@@ -46,6 +51,39 @@ const tickets = (v: QueueView) => ({
 });
 
 describe('reconcileView', () => {
+  describe('blocked', () => {
+    it('drops a held plan that was released since', () => {
+      const v = reconcileView(blockedView, live({ 'COD-1': { labels: [] } }));
+      expect(v.blocked).toEqual([]);
+    });
+
+    it('drops it once its ticket closed', () => {
+      const v = reconcileView(
+        blockedView,
+        live({
+          'COD-1': { labels: ['agent:needs-input'], statusType: 'canceled' }
+        })
+      );
+      expect(v.blocked).toEqual([]);
+    });
+
+    it('keeps one that is still held', () => {
+      const v = reconcileView(
+        blockedView,
+        live({ 'COD-1': { labels: ['agent:needs-input'] } })
+      );
+      expect(v.blocked).toEqual(blockedView.blocked);
+    });
+
+    it('keeps one the live issue is no newer than', () => {
+      const v = reconcileView(
+        blockedView,
+        live({ 'COD-1': { labels: [], updatedAt: BEFORE } })
+      );
+      expect(v.blocked).toEqual(blockedView.blocked);
+    });
+  });
+
   describe('parked', () => {
     it('hides an entry whose live Next line moved on from its wait', () => {
       const v = reconcileView(

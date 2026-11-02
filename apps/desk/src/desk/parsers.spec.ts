@@ -514,6 +514,7 @@ describe('validateQueueView', () => {
       next: [],
       held: { tickets: [], free: [] },
       parked: [],
+      blocked: [],
       table: { before: [], label: [], after: [] }
     });
   });
@@ -542,6 +543,7 @@ describe('validateQueueView', () => {
         free: [{ action: 'review', ticket: 'COD-3', pr: 12 }]
       },
       parked: [{ ticket: 'COD-4', wait: 'checks', pr: 7, resolved: false }],
+      blocked: [{ ticket: 'COD-8', blockers: ['COD-3', 'COD-9'] }],
       table: {
         before: [{ ticket: 'COD-5', kind: 'plan' }],
         label: [{ ticket: 'COD-7', parent: 'COD-1', blockers: [] }],
@@ -603,6 +605,17 @@ describe('validateQueueView', () => {
       { ticket: 'COD-9', kind: undefined, items: undefined },
       { ticket: 'COD-10', kind: 'handoffs', items: ['a'] }
     ]);
+  });
+
+  it('reads blocked, dropping nothing and defaulting a missing key', () => {
+    expect(validateQueueView({ limit, table: {} })?.blocked).toEqual([]);
+    expect(
+      validateQueueView({
+        limit,
+        blocked: [{ ticket: 'COD-8', blockers: null }],
+        table: {}
+      })?.blocked
+    ).toEqual([{ ticket: 'COD-8', blockers: [] }]);
   });
 
   it('reads table.label, dropping what is malformed', () => {

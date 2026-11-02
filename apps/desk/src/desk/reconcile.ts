@@ -29,6 +29,7 @@ const unless =
 const notWorking = unless('agent:working');
 const notReady = unless('agent:ready');
 const notReview = unless('agent:review');
+const notAnswered = unless('agent:needs-input');
 const notWorkingOrReview = unless('agent:working', 'agent:review');
 
 /** A Next line that is still a wait marker; Linear keeps it in its code span */
@@ -44,7 +45,7 @@ const NEXT: ReadonlyMap<string, Rule> = new Map([
   ['resume', notWorking],
   ['take over', notWorking],
   ['parked wait resolved', parked],
-  ['answered', unless('agent:needs-input')],
+  ['answered', notAnswered],
   ['review feedback', notReview],
   ['ready', notReady]
 ]);
@@ -65,6 +66,7 @@ export const reconcileView = (view: QueueView, live: Live): QueueView => {
       stays(x.ticket, x.reason === undefined ? undefined : NEXT.get(x.reason))
     ),
     parked: view.parked.filter((p) => stays(p.ticket, parked)),
+    blocked: view.blocked.filter((b) => stays(b.ticket, notAnswered)),
     held: {
       ...view.held,
       tickets: view.held.tickets.filter((id) => stays(id, notReady))

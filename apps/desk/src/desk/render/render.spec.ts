@@ -70,6 +70,7 @@ const view = (over: Partial<QueueView> = {}): QueueView => ({
   next: [{ ticket: 'COD-1', reason: 'ready' }],
   held: { tickets: ['COD-9'], free: [{ action: 'review', ticket: 'COD-3' }] },
   parked: [{ ticket: 'COD-2', wait: 'ci', pr: 5 }],
+  blocked: [],
   table: {
     before: [{ ticket: 'COD-4', kind: 'plan' }],
     label: [{ ticket: 'COD-6', parent: 'COD-<1>', blockers: ['COD-2'] }],
