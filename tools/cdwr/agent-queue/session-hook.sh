@@ -1,6 +1,7 @@
 #!/bin/zsh
-# One hook script for the work-queue session heartbeat (PostToolUse, Notification, Stop,
-# SessionEnd). Registered in .claude/settings.json; payload arrives as JSON on stdin.
+# One hook script for the work-queue session heartbeat (UserPromptSubmit, PostToolUse,
+# Notification, Stop, SessionEnd). A prompt records `working` at once, so a turn that hangs
+# before its first tool reads as working, not idle. Registered in .claude/settings.json; payload arrives as JSON on stdin.
 # It touches a session file only after `session.sh register` created it, always exits 0 and
 # prints nothing, so a failure never shows in a session.
 exec >/dev/null 2>&1
@@ -184,6 +185,8 @@ main() {
   before="$(jq -r '.state // empty' "$file" 2>/dev/null)"
 
   case "$event" in
+    UserPromptSubmit)
+      patch '.lastSeen = $now | .state = "working" | .detail = null' --arg now "$(now)" ;;
     PostToolUse)
       if [[ -n "$ticket" ]]; then
         patch '.lastSeen = $now | .state = "working" | .detail = null
