@@ -688,6 +688,14 @@ const withoutDanglingParen = (segment: string): string => {
     : segment;
 };
 
+/** Cuts a ` (…` tail the segment never closes, as when a reason holding `:` was split */
+const withoutOpenParen = (segment: string): string => {
+  const count = (char: string) => segment.split(char).length - 1;
+  return count('(') > count(')')
+    ? withoutOpenParen(segment.slice(0, segment.lastIndexOf('(')).trimEnd())
+    : segment;
+};
+
 /** The kind and the ticket (or first detail) of a scheduler line, short enough for a table cell */
 export const summarizeSchedulerLine = (message: string): string => {
   const [kindPart = '', ...restParts] = message.split(':');
@@ -702,10 +710,20 @@ export const summarizeSchedulerLine = (message: string): string => {
     }
   }
 
-  const segments = rest
+  const all = rest
     .split(/:| · /)
     .map((segment) => segment.trim())
     .filter((segment) => segment !== '');
+  // A reason holding `:` was split; it ends the line, so it and what follows go
+  const open = all.findIndex(
+    (segment) => withoutOpenParen(segment) !== segment
+  );
+  const segments =
+    open < 0
+      ? all
+      : [...all.slice(0, open), withoutOpenParen(all[open] ?? '')].filter(
+          (segment) => segment !== ''
+        );
   const at = segments.findIndex((segment) => SCHEDULER_TICKET.test(segment));
   const first = segments[0];
   let detail = first ?? '';
