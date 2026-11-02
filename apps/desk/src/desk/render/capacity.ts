@@ -124,10 +124,12 @@ const nucHostBlock = (m: Model): string => {
     n.verdict === 'stale'
       ? `silent · last sample ${shortAge(n.ageMin)} ago`
       : `${n.busy ? 'busy' : 'idle'} · heartbeat ${shortAge(n.ageMin)} ago`;
+  // Commands go to the host whose queue_state the desk reads; the button shows only when that is this one
+  const run = m.controls?.host === n.host ? m.controls : null;
   return `<div class="cap-host">
-      <div class="cap-hh"><i class="cap-dot ${n.verdict}" aria-hidden="true"></i><b class="cap-name">${esc(n.host)}</b>${m.controls ? cmdButton('run', 'Run now', m.controls.states.run) : ''}</div>
+      <div class="cap-hh"><i class="cap-dot ${n.verdict}" aria-hidden="true"></i><b class="cap-name">${esc(n.host)}</b>${run ? cmdButton('run', 'Run now', run.states.run) : ''}</div>
       <p class="cap-sub">${esc(sub)}</p>
-      ${m.controls ? status(m.controls.states.run) : ''}
+      ${run ? status(run.states.run) : ''}
       ${nucRows(n)}
     </div>`;
 };
