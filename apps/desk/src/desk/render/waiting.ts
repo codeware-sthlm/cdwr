@@ -7,8 +7,10 @@ import { livePr, prTone, prWaitText, prn, queuePr } from './html';
 
 // The Waiting on you card: everything that waits on you, furthest along first, each with how long it has waited
 
-/** Rows the phone shows before "+ n more — open all"; the desktop shows every row */
+/** Rows the phone shows before "+ n more — open all" */
 export const PHONE_ROWS = 2;
+/** Rows the desktop shows before "+ n more — open all" */
+export const DESKTOP_ROWS = 4;
 
 export type WaitRow = {
   id: string;
@@ -128,11 +130,16 @@ export const renderWaiting = (
   const loading = !m.runs;
   const rows = loading ? [] : waitRows(m, details, now);
   const count = countedRows(rows).length;
-  const hidden = rows.length - PHONE_ROWS;
+  // One button for both widths: CSS shows it and picks the count per breakpoint
+  const desk = rows.length > DESKTOP_ROWS;
+  const more =
+    rows.length > PHONE_ROWS
+      ? `<button type="button" class="more-all${desk ? ' more-desk' : ''}" aria-haspopup="dialog">+ <span class="more-n phone">${rows.length - PHONE_ROWS}</span>${desk ? `<span class="more-n desk">${rows.length - DESKTOP_ROWS}</span>` : ''} more — open all</button>`
+      : '';
   const body = loading
     ? '<p class="none">Loading…</p>'
     : rows.length
-      ? `<ul class="wrows">${rows.map(rowHTML(m, details)).join('')}</ul>${hidden > 0 ? `<button type="button" class="more-all" aria-haspopup="dialog">+ ${hidden} more — open all</button>` : ''}`
+      ? `<ul class="wrows">${rows.map(rowHTML(m, details)).join('')}</ul>${more}`
       : '<p class="none">Nothing waits on you.</p>';
   return `<article class="card-top waiting${count ? ' has' : ''}" data-w="before">
     <div class="ct-head"><button type="button" class="open state" aria-haspopup="dialog">Waiting on you</button><b class="count">${loading ? '–' : count}</b></div>
