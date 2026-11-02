@@ -117,11 +117,19 @@ describe('run.sh', () => {
   // The verdict comes from watch.jq, never from logic copied into run.sh
   it('computes the attended line with watch.jq', () => {
     expect(SCRIPT).toContain(
-      `'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)'`
+      `'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits)'`
     );
     expect(SCRIPT).toContain(
-      `'include "watch"; .data.issues.nodes | queue_view($now; 5; $watch; $session; $waits)'`
+      `'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits)'`
     );
+  });
+
+  // The desk sets the limit in a file; no literal 5 may bypass it
+  it('takes the limit from queue_limit, not a literal', () => {
+    expect(SCRIPT).not.toContain('; 5;');
+    expect(
+      SCRIPT.match(/--argjson limit "\$\(queue_limit "\$HOME_DIR"\)"/g)
+    ).toHaveLength(2);
   });
 
   // The parked tickets' PR reads live in waits.sh, installed beside run.sh
@@ -1067,11 +1075,14 @@ describe('run.sh job.json', () => {
   });
 
   describe.skipIf(!hasZsh)('implement_cap', () => {
-    const cap = (value?: string) =>
-      zsh(
-        [fn('implement_cap'), 'implement_cap'].join('\n'),
+    const cap = (value?: string, file?: string) => {
+      rmSync(join(home, 'implement-cap'), { force: true });
+      if (file !== undefined) writeFileSync(join(home, 'implement-cap'), file);
+      return zsh(
+        [`HOME_DIR="${home}"`, fn('implement_cap'), 'implement_cap'].join('\n'),
         value === undefined ? {} : { AGENT_QUEUE_IMPLEMENT_CAP_USD: value }
       );
+    };
 
     it('defaults to 40 and reads a number', () => {
       expect(cap('')).toBe('40');
@@ -1080,6 +1091,45 @@ describe('run.sh job.json', () => {
 
     it('is null for a non-number', () => {
       expect(cap('lots')).toBe('null');
+    });
+
+    it('prefers the file the desk sets, 0 included', () => {
+      expect(cap('12.5', '0\n')).toBe('0');
+      expect(cap('12.5', '25\n')).toBe('25');
+      expect(cap(undefined, ' 7.5 ')).toBe('7.5');
+    });
+
+    it('falls back to the env, then 40, when the file is not a number', () => {
+      expect(cap('12.5', 'x')).toBe('12.5');
+      expect(cap(undefined, 'x')).toBe('40');
+      expect(cap(undefined)).toBe('40');
+    });
+  });
+
+  describe.skipIf(!hasZsh)('queue_limit', () => {
+    const LIB = readFileSync(
+      fileURLToPath(new URL('../../../agent-queue/lib.sh', import.meta.url)),
+      'utf8'
+    );
+    const limit = (file?: string) => {
+      rmSync(join(home, 'limit'), { force: true });
+      if (file !== undefined) writeFileSync(join(home, 'limit'), file);
+      const body = LIB.match(/^queue_limit\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
+      return zsh([body, `queue_limit "${home}"`].join('\n'));
+    };
+
+    it('reads a whole number from 1 to 20', () => {
+      expect(limit('3\n')).toBe('3');
+      expect(limit(' 20 ')).toBe('20');
+      expect(limit('1')).toBe('1');
+    });
+
+    it('is 5 without a file', () => {
+      expect(limit()).toBe('5');
+    });
+
+    it.each(['0', '21', 'abc', '2.5', '', '-3'])('is 5 for %j', (value) => {
+      expect(limit(value)).toBe('5');
     });
   });
 

@@ -200,9 +200,11 @@ spent_today() {
   fi
   print -r -- "$spent"
 }
-# The daily implement cap in dollars; null when the setting is not a number
+# The daily implement cap in dollars: the file the desk sets, then the env, then 40; null when the setting is not a number
 implement_cap() {
-  local cap="${AGENT_QUEUE_IMPLEMENT_CAP_USD:-40}"
+  local cap
+  cap="$(tr -d '[:space:]' 2>/dev/null < "$HOME_DIR/implement-cap" || true)"
+  [[ "$cap" == <->(|.<->) ]] || cap="${AGENT_QUEUE_IMPLEMENT_CAP_USD:-40}"
   [[ "$cap" == <->(|.<->) ]] || cap=null
   print -r -- "$cap"
 }
@@ -585,8 +587,8 @@ attended() {
   state="$(jq -c 'if type == "object" then . else {} end' "$HOME_DIR/watch.json" 2>/dev/null || print '{}')"
   # The fallback was already noted by watch_prs, so this one stays quiet
   waits="$(gh_identity || true; parked_waits <<<"$resp")"
-  verdict="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson waits "$waits" \
-    'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)' <<<"$resp")" ||
+  verdict="$(watch -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$HOME_DIR")" --argjson watch "$state" --argjson waits "$waits" \
+    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits)' <<<"$resp")" ||
     { note "warn: attended: watch.jq failed$(watch_err)"; return 0; }
   attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
   [[ "$(jq -r '.verdict' <<<"$verdict" 2>/dev/null)" == idle ]] && attended_work=false || attended_work=true
@@ -632,8 +634,8 @@ attended() {
   attended_line="$(watch -r 'include "watch"; session_prefix' <<<"$session") · $attended_line"
   # The whole queue for queue_state and `cdwr agent status`; the pick above stays the
   # line and the notice
-  queue_view="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson session "$session" --argjson waits "$waits" \
-    'include "watch"; .data.issues.nodes | queue_view($now; 5; $watch; $session; $waits)' <<<"$resp")" ||
+  queue_view="$(watch -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$HOME_DIR")" --argjson watch "$state" --argjson session "$session" --argjson waits "$waits" \
+    'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits)' <<<"$resp")" ||
     { note "warn: queue view: watch.jq failed$(watch_err)"; queue_view=""; }
   # Should an implement-only session start? watch.jq `launch` decides from the pick and the
   # guards; implement.sh holds implement.lock while its session runs and writes the spend ledger.
