@@ -541,6 +541,22 @@ describe('summarizeSchedulerLine', () => {
       'warn: watch: watch.jq failed on COD-524)',
       'warn · watch · watch.jq failed on COD-524'
     ],
+    [
+      'warn: watch: watch.jq failed on COD-627 (jq: error: merged_next/2 is not defined)',
+      'warn · watch · watch.jq failed on COD-627'
+    ],
+    [
+      'warn: watch failed (watch.jq failed (jq: error: prune/1 is not defined))',
+      'warn · watch failed'
+    ],
+    [
+      'warn: attended: watch.jq failed (jq: error: attended/4 is not defined)',
+      'warn · attended'
+    ],
+    [
+      'warn: attended: watch.jq failed (jq: error (at <stdin>:0): Cannot index array with "COD-12")',
+      'warn · attended'
+    ],
     ['', '']
   ])('%j -> %j', (message, expected) => {
     expect(summarizeSchedulerLine(message)).toBe(expected);
