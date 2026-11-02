@@ -4,6 +4,7 @@ import {
   CommandError,
   PENDING_MAX_MS,
   REFUSED_SHOW_MS,
+  type Reported,
   checkToken,
   controlStates,
   sendCommand
@@ -67,7 +68,9 @@ describe('checkToken', () => {
 describe('sendCommand', () => {
   it('sends the host, kind and value and returns the reply', async () => {
     const fetch = answering(202, { id: 7, status: 'pending', note: null });
-    expect(await sendCommand(target(fetch), 'nuc', 'limit', 4)).toEqual({
+    expect(
+      await sendCommand(target(fetch), 'nuc', 'limit', { value: 4 })
+    ).toEqual({
       id: 7,
       status: 'pending',
       note: null
@@ -126,10 +129,12 @@ describe('controlStates', () => {
       at: string;
       applied_at: string;
       note: string;
+      args: unknown;
     }> = {}
   ) => ({
     id,
     at: extra.at ?? AT,
+    args: extra.args ?? {},
     host: extra.host ?? 'nuc',
     kind,
     status,
@@ -139,8 +144,15 @@ describe('controlStates', () => {
   const states = (
     rows: ReturnType<typeof row>[],
     queueAt: string | null = AT,
-    now = NOW
-  ) => controlStates(rows, 'nuc', queueAt, now);
+    now = NOW,
+    reported: Partial<Reported> = {}
+  ) =>
+    controlStates(
+      rows,
+      'nuc',
+      { at: queueAt, paused: true, limit: 5, cap: 40, ...reported },
+      now
+    );
 
   it('is idle without rows', () => {
     expect(states([]).run).toEqual({ state: 'idle' });
@@ -164,6 +176,23 @@ describe('controlStates', () => {
     expect(states(rows, null).pause.state).toBe('pending');
     expect(states(rows, AT).pause.state).toBe('idle');
     expect(states(rows, LATER).pause.state).toBe('idle');
+  });
+
+  it('waits for the host to report the paused state and the value asked for', () => {
+    const resume = [row(1, 'resume', 'applied', { applied_at: AT })];
+    expect(states(resume, LATER).pause.state).toBe('pending');
+    expect(states(resume, LATER, NOW, { paused: false }).pause.state).toBe(
+      'idle'
+    );
+    const limit = [
+      row(2, 'limit', 'applied', { applied_at: AT, args: { value: 8 } })
+    ];
+    expect(states(limit, LATER).limit.state).toBe('pending');
+    expect(states(limit, LATER, NOW, { limit: 8 }).limit.state).toBe('idle');
+    const cap = [
+      row(3, 'cap', 'applied', { applied_at: AT, args: { value: 40 } })
+    ];
+    expect(states(cap, LATER).cap.state).toBe('idle');
   });
 
   it('shows a refusal with its note for a while', () => {
