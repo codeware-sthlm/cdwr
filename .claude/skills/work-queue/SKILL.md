@@ -82,6 +82,13 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    agent's thread) does **not** start with `**Agent`. Read the answer. When it is enough,
    record it under **Decisions** and continue: an approved plan goes to **Per ticket** step 4.
    When it isn't, post a narrower follow-up question (see **How a gate asks**) and move on.
+   An answered ticket that is blocked by an open issue and has a plan not yet started (a Status
+   table with every row `Planned`) is held: the queue lists it under `blocked` and doesn't offer
+   it. Leave it as it is, with no comment of yours (an `**Agent` comment would make it unanswered
+   and lose the hold), and it comes back here once its last blocker is Done or Canceled; record
+   the answer then. An answer given while planning (no Status table yet) is taken as usual. A
+   ticket that has started (any Status row other than `Planned`) and gets a blocker mid-way keeps
+   going: name the blocker in the PR-ready comment instead.
 4. **Håkan's review on an `agent:review` ticket** whose PR is still open: an unresolved review
    thread on the PR by someone other than a bot, or a ticket comment not starting with
    `**Agent` that is newer than the agent's newest `**Agent: PR ready**` or
@@ -109,7 +116,8 @@ Counted from Linear: each `agent:review` ticket that is not Done or Canceled (an
 counts one, and so does each `agent:working` ticket parked on a wait (its PR reaches Håkan
 within the hour). Nothing else does: plans waiting for approval, questions, merged tickets with
 unticked hand-offs, and sub-issues ready to label stay on Håkan's table (the queue view lists them)
-but never hold new work back.
+but never hold new work back. An approved plan held by an open blocker counts neither, and waits on
+that blocker rather than on Håkan.
 
 A sub-issue is ready to label when it has no agent label, is not started, and every issue
 blocking it is Done or Canceled, at least one of them the agent's (`to_label` in `watch.jq`). It is
