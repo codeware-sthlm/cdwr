@@ -530,13 +530,16 @@ describe('waiting card, queue sheets and tiles', () => {
     };
     const m = model(state, NOW);
     expect(waitRows(m, state.details, NOW).map((r) => [r.id, r.kind])).toEqual([
+      ['COD-3', 'review'],
+      ['COD-5', 'hand-offs'],
       ['COD-4', 'plan'],
       ['COD-6', 'ready to label'],
       ['COD-50', 'idea']
     ]);
     const html = renderWaiting(m, state.details, NOW);
     expect(html).toContain('waiting has" data-w="before"');
-    expect(html).toContain('<b class="count">3</b>');
+    expect(html).toContain('<b class="count">5</b>');
+    expect(html).toContain('<span class="kind">hand-offs · 1</span>');
     expect(html).toContain('<span class="kind">plan</span><time>2 h</time>');
     expect(html).toContain('href="https://linear.app/codeware/issue/COD-6"');
     expect(html).toContain('wait age from activity gate events');
@@ -676,7 +679,10 @@ describe('waiting card, queue sheets and tiles', () => {
       ]
     };
     const html = SHEETS.before.body(model(state, NOW), state, NOW);
-    expect(html.match(/class="wcard"/g)).toHaveLength(2);
+    expect(html.match(/class="wcard"/g)).toHaveLength(4);
+    expect(html).toMatch(/class="act primary"[^>]*>Review on GitHub<\/a>/);
+    expect(html).toContain('pull/7');
+    expect(html).toMatch(/class="act primary"[^>]*>Open checklist<\/a>/);
     expect(html).toContain('class="kind k-plan">plan</span>');
     expect(html).toContain('<time>waiting 2 h</time>');
     expect(html).toMatch(/class="act primary"[^>]*>Answer in Linear<\/a>/);
@@ -1865,6 +1871,114 @@ describe('pull requests on the waiting rows and the session card', () => {
     expect(html).toContain('>#21</a></li>');
     expect(html).toContain('>#22</a></li>');
     expect(html.match(/class="prn/g)).toHaveLength(2);
+  });
+
+  it('order every kind furthest along first, approved plans last and uncounted', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        blocked: [{ ticket: 'COD-9', blockers: ['COD-2'] }],
+        table: {
+          before: [
+            { ticket: 'COD-4', kind: 'plan' },
+            { ticket: 'COD-8', kind: 'question' }
+          ],
+          label: [{ ticket: 'COD-6', parent: 'COD-<1>', blockers: [] }],
+          after: [
+            { ticket: 'COD-3', kind: 'pr', pr: 7 },
+            { ticket: 'COD-5', kind: 'handoffs', items: ['a', 'b'] }
+          ]
+        }
+      })
+    );
+    const m = model(state, NOW);
+    const rows = waitRows(m, state.details, NOW);
+    expect(rows.map((r) => [r.id, r.kind])).toEqual([
+      ['COD-3', 'review'],
+      ['COD-5', 'hand-offs'],
+      ['COD-8', 'question'],
+      ['COD-4', 'plan'],
+      ['COD-6', 'ready to label'],
+      ['COD-50', 'idea'],
+      ['COD-9', 'approved']
+    ]);
+    const html = renderWaiting(m, state.details, NOW);
+    expect(html).toContain('<b class="count">6</b>');
+    expect(html).toContain('<span class="kind">hand-offs · 2</span>');
+    expect(html).toContain(
+      '<span class="kind">approved · waits on COD-2</span>'
+    );
+    expect(html).toContain('wrow-li approved');
+    expect(html).toContain('+ 5 more — open all');
+    expect(html.match(/class="wrow"/g)).toHaveLength(7);
+  });
+
+  it('keep a parked PR listed, with its PR number, blockers and wait', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        parked: [{ ticket: 'COD-3', wait: 'ci', pr: 7 }],
+        table: {
+          before: [{ ticket: 'COD-4', kind: 'plan' }],
+          label: [],
+          after: [
+            { ticket: 'COD-3', kind: 'pr', pr: 7 },
+            { ticket: 'COD-2', kind: 'pr', pr: 5 }
+          ]
+        }
+      })
+    );
+    state.details.set('COD-3', { ...withPr(7), blockedBy: ['COD-2', 'COD-1'] });
+    state.details.set('COD-2', withPr(5));
+    state.details.set('COD-4', { ...withPr(null), blockedBy: ['COD-1'] });
+    const m = model(state, NOW);
+    const rows = waitRows(m, state.details, NOW);
+    expect(rows.find((r) => r.id === 'COD-3')).toMatchObject({
+      kind: 'review',
+      pr: 7,
+      blockers: 'COD-2 · PR 5, COD-1'
+    });
+    const html = renderWaiting(m, state.details, NOW);
+    expect(html).toContain('>#7</a>');
+    expect(html).toContain('after COD-2 · PR 5, COD-1');
+    expect(html).toContain('after COD-1</span>');
+    expect(html).toContain('Review fixes: waits on');
+  });
+
+  it('count the wait rows and name the first in the idle headline, hand-offs included', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        next: [],
+        table: {
+          before: [],
+          label: [],
+          after: [{ ticket: 'COD-5', kind: 'handoffs', items: ['a'] }]
+        }
+      })
+    );
+    state.data.ideas = [];
+    const h = headline(model(state, NOW), state.details, NOW);
+    expect(h.text).toContain('1 thing waits');
+    expect(h.text).toContain('starting with');
+    expect(h.text).toContain('COD-5');
+    expect(h.tone).toBe('wait');
+  });
+
+  it('show an approved plan on the sheet with its blockers and only an open link', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        blocked: [{ ticket: 'COD-9', blockers: ['COD-2'] }],
+        table: { before: [], label: [], after: [] }
+      })
+    );
+    state.data.ideas = [];
+    const html = SHEETS.before.body(model(state, NOW), state, NOW);
+    expect(html).toContain('wcard approved');
+    expect(html).toContain('approved · waits on COD-2');
+    expect(html).not.toContain('Waits on');
+    expect(html).toMatch(/class="act secondary"[^>]*>Open ticket<\/a>/);
   });
 
   it('put the PR beside Working on and the takes-next headline', () => {

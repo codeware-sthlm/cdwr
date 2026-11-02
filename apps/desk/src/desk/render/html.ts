@@ -1,5 +1,5 @@
 import { LIMIT, LINEAR_ISSUE, waitName } from '../constants';
-import { esc } from '../format';
+import { esc, hhmm } from '../format';
 import type { PrStateName } from '../live';
 import { type Model, prOf } from '../model';
 import type { Detail } from '../state';
@@ -151,6 +151,13 @@ export const parkedText = (p: QueueParked): string =>
   p.resolved
     ? `${waitName(p.wait) || esc(p.wait)} ${esc(p.outcome || 'done')}, resumes next`
     : `waits on ${waitName(p.wait) || esc(p.wait)}`;
+
+/** "Review fixes: waits on CI since 17:20" for an open PR whose ticket is parked; empty otherwise */
+export const prWaitText = (m: Pick<Model, 'prWaits'>, id: string): string => {
+  const p = m.prWaits.get(id);
+  if (!p) return '';
+  return `Review fixes: ${parkedText(p)}${p.since && !p.resolved ? ' since ' + hhmm(Date.parse(p.since)) : ''}`;
+};
 
 /** The meter under the limit: green, then amber one below the limit, then red */
 export const loadMeter = (m: Pick<Model, 'limit'>): string => {

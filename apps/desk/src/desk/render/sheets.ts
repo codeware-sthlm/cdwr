@@ -48,6 +48,7 @@ import type { Job, QueueNext, SessionState } from '../types';
 
 import { chartSlot, gauge, sparkline } from './charts';
 import {
+  GH_PR,
   empty,
   hostName,
   idLink,
@@ -55,13 +56,14 @@ import {
   loadMeter,
   parkedText,
   prTone,
+  prWaitText,
   prn,
   pvMore,
   reasonChip,
   sessionLabel
 } from './html';
 import { headline } from './session';
-import { type WaitRow, waitRows } from './waiting';
+import { type WaitRow, rowLabel, waitRows } from './waiting';
 
 // The sheets: one per card, pill and tile. A sheet body is a pure function of the model and the state.
 
@@ -90,13 +92,6 @@ export const blockedText = (m: Pick<Model, 'prBlockers'>, id: string): string =>
         : `${idLink(b.ticket)} has no PR yet`
     )
     .join('; ');
-
-/** "Review fixes: waits on CI since 17:20" for an open PR whose ticket is parked; empty otherwise */
-export const prWaitText = (m: Pick<Model, 'prWaits'>, id: string): string => {
-  const p = m.prWaits.get(id);
-  if (!p) return '';
-  return `Review fixes: ${parkedText(p)}${p.since && !p.resolved ? ' since ' + hhmm(Date.parse(p.since)) : ''}`;
-};
 
 /** Who takes a queued item and when: the live session, or the scheduler on its next run */
 export const whyLine = (m: Model, x: QueueNext): string => {
@@ -179,29 +174,54 @@ const itemHTML = (
 
 // ---------- Waiting on you, next, after ----------
 
-/** One card per plan, question and ticket to label, with the one thing to do about it */
+/** One card per waiting item, with the one thing to do about it */
 const waitCard = (r: WaitRow): string => {
-  const label = r.kind === 'ready to label';
-  return `<article class="wcard">
-    <div class="wc-head"><span class="id">${esc(r.id)}</span><span class="kind k-${esc(r.kind.replace(/ /g, '-'))}">${esc(r.kind)}</span>${r.age === null ? '' : `<time>waiting ${esc(shortAge(r.age))}</time>`}</div>
+  const act =
+    r.kind === 'review' && r.pr
+      ? { text: 'Review on GitHub', href: GH_PR + r.pr }
+      : r.kind === 'review'
+        ? { text: 'Open ticket', href: r.url }
+        : r.kind === 'hand-offs'
+          ? { text: 'Open checklist', href: r.url }
+          : r.kind === 'approved'
+            ? { text: 'Open ticket', href: r.url }
+            : r.kind === 'ready to label'
+              ? { text: 'Label agent:ready', href: r.url }
+              : { text: 'Answer in Linear', href: r.url };
+  const secondary = r.kind === 'ready to label' || r.kind === 'approved';
+  const note = [
+    // An approved card already names its blockers in its kind
+    r.blockers && r.kind !== 'approved' ? esc('After ' + r.blockers) : '',
+    r.wait
+  ]
+    .filter(Boolean)
+    .join('. ');
+  return `<article class="wcard${r.kind === 'approved' ? ' approved' : ''}">
+    <div class="wc-head"><span class="id">${esc(r.id)}</span><span class="kind k-${esc(r.kind.replace(/ /g, '-'))}">${esc(rowLabel(r))}</span>${prn(r.pr)}${r.age === null ? '' : `<time>waiting ${esc(shortAge(r.age))}</time>`}</div>
     <div class="wc-title">${esc(r.title)}</div>
-    <a class="act ${label ? 'secondary' : 'primary'}" href="${esc(r.url)}" target="_blank" rel="noopener">${label ? 'Label agent:ready' : 'Answer in Linear'}</a>
+    ${note ? `<div class="wc-note">${note}</div>` : ''}
+    <a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>
   </article>`;
 };
 
 const renderBefore = (m: Model, state: DeskState, now: Date): string => {
   if (!m.v) return empty('No queue view yet.');
   // Ideas wait on you too, but their card below carries the evidence to decide on
-  const cards = waitRows(m, state.details, now)
-    .filter((r) => r.kind !== 'idea')
-    .map(waitCard)
-    .join('');
+  const rows = waitRows(m, state.details, now);
+  const cards = (kinds: (k: WaitRow['kind']) => boolean) =>
+    rows
+      .filter((r) => kinds(r.kind))
+      .map(waitCard)
+      .join('');
   const ideasHTML = m.ideasPending.length
     ? `<div class="group"><h3>Ideas to decide · ${m.ideasPending.length}</h3>${m.ideasPending.map((i) => ideaCard(state, i)).join('')}</div>`
     : '';
+  // Approved plans only wait on a blocker, so they come after everything that waits on you
   return (
-    cards + ideasHTML ||
-    empty('No plan, question, label or idea waits for you.')
+    cards((k) => k !== 'idea' && k !== 'approved') +
+      ideasHTML +
+      cards((k) => k === 'approved') ||
+    empty('No PR, hand-off, plan, question, label or idea waits for you.')
   );
 };
 
@@ -1062,8 +1082,8 @@ export type SheetDef = {
 /** Every sheet by id; a new SheetId fails to compile until it has an entry */
 export const SHEETS: Record<SheetId, SheetDef> = {
   before: {
-    title: 'Waiting on you before the agent can build',
-    sub: "Plans to approve and questions to answer. Reply in the ticket's newest Agent comment.",
+    title: 'Waiting on you, furthest along first',
+    sub: "PRs to review, hand-offs to tick, plans to approve and questions to answer. Reply in the ticket's newest Agent comment.",
     body: renderBefore
   },
   next: {
