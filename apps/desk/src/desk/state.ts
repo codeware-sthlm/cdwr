@@ -14,7 +14,13 @@ import type {
   UsagePayload
 } from '../supabase';
 
-import type { CommandKind, CommandTarget, Control } from './commands';
+import type {
+  CommandArgs,
+  CommandKind,
+  CommandReply,
+  CommandTarget,
+  Control
+} from './commands';
 import { STATES } from './constants';
 import type { Idea, PlanProgress } from './types';
 
@@ -142,10 +148,18 @@ export type ControlsUi = {
   sending: Set<Control>;
   /** A failure that stored no row (network, token), shown until the control is used again */
   failed: Map<Control, { kind: CommandKind; note: string }>;
-  /** The command each control sent, read as sending until its row arrives; `at` in ms */
-  awaiting: Map<Control, { id: number; at: number }>;
-  /** Until when the abandon button asks for confirmation, in ms */
-  confirmUntil: number | null;
+  /** The function's reply to each control's last command, standing in for its row until that arrives; `at` in ms */
+  awaiting: Map<
+    Control,
+    CommandReply & {
+      host: string;
+      kind: CommandKind;
+      args: CommandArgs;
+      at: number;
+    }
+  >;
+  /** The abandon button asks for confirmation until `until` (ms), for the session it showed */
+  confirm: { until: number; session: string | null } | null;
 };
 
 export type DeskState = {
@@ -202,6 +216,6 @@ export const createState = (): DeskState => ({
     sending: new Set(),
     failed: new Map(),
     awaiting: new Map(),
-    confirmUntil: null
+    confirm: null
   }
 });

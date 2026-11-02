@@ -9,7 +9,13 @@ import type {
   UsageHourRow
 } from '../supabase';
 
-import { type Control, type ControlState, controlStates } from './commands';
+import {
+  type CommandRowLike,
+  type Control,
+  type ControlState,
+  type Reported,
+  controlStates
+} from './commands';
 import {
   AGENT,
   HOST_DISK_FREE_MIN,
@@ -54,6 +60,7 @@ import {
   problems,
   pulse,
   sampleMinutes,
+  sessionEnded,
   silentAfter
 } from './live';
 import { byCreated } from './parsers';
@@ -117,6 +124,8 @@ export type ControlsModel = {
   limit: { current: number | null; draft: number | null };
   cap: { current: number | null; draft: number | null };
   paused: boolean;
+  /** The session the queue view names, which an abandon is sent for; null without one */
+  session: string | null;
   /** The abandon button asks to be pressed again */
   confirming: boolean;
 };
@@ -887,9 +896,6 @@ export const prActivity = (
     d.pr !== null && d.prAt !== null ? [{ pr: d.pr, ticket, at: d.prAt }] : []
   );
 
-/** How long a sent command reads as sending while its row has not arrived */
-const AWAIT_MS = 30_000;
-
 const controlsOf = (
   state: DeskState,
   now: number,
@@ -899,17 +905,37 @@ const controlsOf = (
   const { controls: ui, data } = state;
   const { runs } = data;
   if (!ui.target || !runs) return null;
-  const rows = data.deskCommands ?? [];
-  // In flight first, then a sent command whose row has not arrived, then a failure that stored no row, then the newest row
-  const view = (control: Control, stored: ControlState): ControlView => {
-    if (ui.sending.has(control)) return { state: 'sending' };
-    const sent = ui.awaiting.get(control);
-    if (sent && now - sent.at < AWAIT_MS && !rows.some((r) => r.id === sent.id))
-      return { state: 'sending' };
-    const failed = ui.failed.get(control);
-    return failed === undefined ? stored : { state: 'refused', ...failed };
+  const stored = data.deskCommands ?? [];
+  // A reply stands in for its row until the row arrives, so a refusal shows even with the commands channel down
+  const replies: CommandRowLike[] = [...ui.awaiting.values()]
+    .filter((r) => !stored.some((row) => row.id === r.id))
+    .map((r) => {
+      const at = new Date(r.at).toISOString();
+      return {
+        id: r.id,
+        at,
+        args: r.args,
+        host: r.host,
+        kind: r.kind,
+        status: r.status,
+        applied_at: r.status === 'pending' ? null : at,
+        note: r.note
+      };
+    });
+  const rows = [...stored, ...replies];
+  const reported: Reported = {
+    at: runs.at,
+    paused: runs.job?.paused ?? false,
+    limit,
+    cap
   };
-  const own = controlStates(rows, runs.host, runs.at, now);
+  // In flight first, then a failure that stored no row, then the newest row or reply
+  const view = (control: Control, own: ControlState): ControlView => {
+    if (ui.sending.has(control)) return { state: 'sending' };
+    const failed = ui.failed.get(control);
+    return failed === undefined ? own : { state: 'refused', ...failed };
+  };
+  const own = controlStates(rows, runs.host, reported, now);
   const states: Record<Control, ControlView> = {
     pause: view('pause', own.pause),
     run: view('run', own.run),
@@ -917,13 +943,19 @@ const controlsOf = (
     cap: view('cap', own.cap),
     abandon: view('abandon', own.abandon)
   };
+  const session = runs.qv?.session.id ?? null;
   return {
     host: runs.host,
+    session,
     states,
     limit: { current: limit, draft: ui.drafts.limit ?? limit },
     cap: { current: cap, draft: ui.drafts.cap ?? cap },
-    paused: runs.job?.paused ?? false,
-    confirming: ui.confirmUntil !== null && ui.confirmUntil > now
+    paused: reported.paused,
+    // A confirmation holds only for the session it was asked about
+    confirming:
+      ui.confirm !== null &&
+      ui.confirm.until > now &&
+      ui.confirm.session === session
   };
 };
 
@@ -1013,7 +1045,12 @@ export const model = (
   const next = (v ? v.next : []).filter(
     (x) => !(x.reason === 'parked wait resolved' && prWaits.has(x.ticket))
   );
-  const session = v ? v.session : null;
+  // An ended row or an applied abandon outranks the snapshot, which still says alive
+  const session = v
+    ? sessionEnded(runs, data.sessions, data.deskCommands)
+      ? { ...v.session, state: 'ended' }
+      : v.session
+    : null;
   // Polling since its last heartbeat while the queue view, taken later, has work for it: wait.sh never woke it
   const polled =
     session?.state === 'alive' &&
