@@ -111,6 +111,7 @@ const ATTENDED_ROWS: ReadonlySet<string> = new Set([
   'queue view',
   'next',
   'held',
+  'blocked',
   'parked',
   'on your table'
 ]);
