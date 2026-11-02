@@ -446,10 +446,22 @@ describe('SiteDefinitionSchema', () => {
     it.each([
       ['no email field', [{ blockType: 'text', name: 'name', label: 'Name' }]],
       ['an email field not named email', [{ ...email, name: 'mail' }]],
-      ['two email fields', [email, email]]
+      ['two email fields', [email, email]],
+      [
+        'a second email field under another name',
+        [email, { ...email, name: 'alternateEmail' }]
+      ]
     ])('refuses fields with %s', (_case, fields) => {
       expect(errorsOf({ ...minimal, forms: [{ ...base, fields }] })).toContain(
         "A form with its own fields needs exactly one email field named 'email'"
+      );
+    });
+
+    it('refuses two fields with one name', () => {
+      const fields = [email, { blockType: 'text', name: 'email', label: 'E' }];
+
+      expect(errorsOf({ ...minimal, forms: [{ ...base, fields }] })).toContain(
+        'Each field of a form needs a name of its own'
       );
     });
   });

@@ -160,17 +160,31 @@ export const SiteDefinitionSchema = z
               });
             }
 
-            if (
-              fields &&
-              fields.filter(
-                ({ blockType, name }) =>
-                  blockType === 'email' && name === 'email'
-              ).length !== 1
-            ) {
+            if (!fields) {
+              return;
+            }
+
+            const emails = fields.filter(
+              ({ blockType }) => blockType === 'email'
+            );
+
+            if (emails.length !== 1 || emails[0].name !== 'email') {
               ctx.addIssue({
                 code: 'custom',
                 message:
                   "A form with its own fields needs exactly one email field named 'email'",
+                path: ['fields']
+              });
+            }
+
+            // The form binds each input by its name, so two fields with one
+            // name would share a single answer
+            const names = fields.map(({ name }) => name);
+
+            if (new Set(names).size !== names.length) {
+              ctx.addIssue({
+                code: 'custom',
+                message: 'Each field of a form needs a name of its own',
                 path: ['fields']
               });
             }
