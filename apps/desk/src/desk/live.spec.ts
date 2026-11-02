@@ -374,7 +374,7 @@ describe('handBack', () => {
   it('is decided by the NUC’s heartbeat after that', () => {
     const rows = [session({ last_seen: ago(45) })];
     expect(handBack(rows, 'nuc', true, NOW)).toMatchObject({
-      state: 'heartbeat ok',
+      state: 'handed back',
       host: 'mac'
     });
     expect(handBack(rows, 'nuc', false, NOW).state).toBe('idle');
@@ -382,7 +382,7 @@ describe('handBack', () => {
 
   it('has no host or age without an attended session', () => {
     expect(handBack(null, 'nuc', true, NOW)).toEqual({
-      state: 'heartbeat ok',
+      state: 'handed back',
       host: null,
       ageMin: null
     });
