@@ -2,6 +2,7 @@ import type { Adapter } from '../data';
 import type { IssueEventRow } from '../supabase';
 
 import {
+  type CommandArgs,
   CommandError,
   type CommandKind,
   type CommandTarget,
@@ -247,6 +248,20 @@ function copyRow(button: Element): void {
 
 const CONFIRM_MS = 4000;
 
+/** The first enabled, visible match in the region, for focus after a render replaced the node */
+function focusIn(region: Element | null, selectors: string[]): void {
+  const root = region?.id ? document.getElementById(region.id) : null;
+  for (const sel of selectors) {
+    const found = Array.from(
+      (root ?? document).querySelectorAll<HTMLButtonElement>(sel)
+    ).find((el) => !el.disabled && el.offsetParent !== null);
+    if (found) {
+      found.focus();
+      return;
+    }
+  }
+}
+
 /** Handles a control button's click; true when the click was one */
 function clickControl(target: Element): boolean {
   const button = target.closest<HTMLButtonElement>(
@@ -257,17 +272,29 @@ function clickControl(target: Element): boolean {
   const m = model(state, new Date()).controls;
   if (!c.target || !m || button.disabled) return true;
   const { cmd, step, apply } = button.dataset;
+  // The render replaces the button; keyboard focus goes back to it, or to the control's next part
+  const region = button.closest('[id]');
+  const refocus = (...selectors: string[]): void => focusIn(region, selectors);
   if (cmd === 'abandon') {
-    if (!m.confirming) c.confirmUntil = Date.now() + CONFIRM_MS;
+    if (!m.confirming)
+      c.confirm = { until: Date.now() + CONFIRM_MS, session: m.session };
     else {
-      c.confirmUntil = null;
-      sendControl('abandon', m.host, 'abandon');
+      c.confirm = null;
+      sendControl(
+        'abandon',
+        m.host,
+        'abandon',
+        m.session === null ? {} : { session: m.session }
+      );
     }
     render();
+    refocus('[data-cmd="abandon"]');
   } else if (cmd === 'pause' || cmd === 'resume') {
     sendControl('pause', m.host, cmd);
+    refocus('[data-cmd="pause"]', '[data-cmd="resume"]');
   } else if (cmd === 'run') {
     sendControl('run', m.host, 'run');
+    refocus('[data-cmd="run"]');
   } else if (step) {
     const [control, delta] = step.split(':');
     if (control === 'limit') {
@@ -281,10 +308,17 @@ function clickControl(target: Element): boolean {
       c.drafts.cap = Math.min(CAP_RANGE.max, Math.max(CAP_RANGE.min, next));
     }
     render();
+    refocus(
+      `[data-step="${step}"]`,
+      `[data-apply="${control}"]`,
+      `[data-step^="${control}:"]`
+    );
   } else if (apply === 'limit' && m.limit.draft !== null) {
-    sendControl('limit', m.host, 'limit', m.limit.draft);
+    sendControl('limit', m.host, 'limit', { value: m.limit.draft });
+    refocus('[data-apply="limit"]', '[data-step^="limit:"]');
   } else if (apply === 'cap' && m.cap.draft !== null) {
-    sendControl('cap', m.host, 'cap', m.cap.draft);
+    sendControl('cap', m.host, 'cap', { value: m.cap.draft });
+    refocus('[data-apply="cap"]', '[data-step^="cap:"]');
   }
   return true;
 }
@@ -506,7 +540,7 @@ export function setControls(target: CommandTarget | null): void {
     sending: new Set(),
     failed: new Map(),
     awaiting: new Map(),
-    confirmUntil: null
+    confirm: null
   };
   render();
 }
@@ -516,7 +550,7 @@ export function sendControl(
   control: Control,
   host: string,
   kind: CommandKind,
-  value?: number
+  args: CommandArgs = {}
 ): void {
   const c = state.controls;
   if (!c.target || c.sending.has(control)) return;
@@ -524,10 +558,16 @@ export function sendControl(
   c.failed.delete(control);
   c.awaiting.delete(control);
   render();
-  sendCommand(c.target, host, kind, value)
+  sendCommand(c.target, host, kind, args)
     .then((reply) => {
-      c.awaiting.set(control, { id: reply.id, at: Date.now() });
-      // A refused value stays in the stepper to adjust; an accepted one shows once the host publishes it
+      c.awaiting.set(control, {
+        ...reply,
+        host,
+        kind,
+        args,
+        at: Date.now()
+      });
+      // A refused value stays in the stepper to adjust; an accepted one shows once the host reports it
       if (
         reply.status !== 'refused' &&
         (control === 'limit' || control === 'cap')

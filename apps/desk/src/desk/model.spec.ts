@@ -2045,16 +2045,41 @@ describe('controls', () => {
     expect(model(s, NOW).controls?.states.run).toEqual({ state: 'sending' });
   });
 
-  it('reads a sent command as sending until its row arrives', () => {
+  it('shows the reply until its row arrives, then the row', () => {
     const s = on((x) => {
-      x.controls.awaiting.set('run', { id: 9, at: NOW.getTime() });
+      x.controls.awaiting.set('run', {
+        id: 9,
+        status: 'refused',
+        note: 'no scheduler reports from nuc',
+        host: 'nuc',
+        kind: 'run',
+        args: {},
+        at: NOW.getTime()
+      });
     });
-    expect(model(s, NOW).controls?.states.run).toEqual({ state: 'sending' });
+    expect(model(s, NOW).controls?.states.run).toEqual({
+      state: 'refused',
+      kind: 'run',
+      note: 'no scheduler reports from nuc'
+    });
     s.data.deskCommands = [row(9, 'run')];
     expect(model(s, NOW).controls?.states.run).toEqual({
       state: 'pending',
       kind: 'run'
     });
+  });
+
+  it('ends the session once an abandon is applied after the view', () => {
+    const s = on((x) => {
+      if (x.data.runs?.qv)
+        x.data.runs.qv = {
+          ...x.data.runs.qv,
+          session: { state: 'alive', id: 's1' }
+        };
+    });
+    expect(model(s, NOW).session?.state).toBe('alive');
+    s.data.deskCommands = [row(1, 'abandon', 'applied')];
+    expect(model(s, NOW).session?.state).toBe('ended');
   });
 
   it('leaves the limit unset without a queue view', () => {
@@ -2067,10 +2092,14 @@ describe('controls', () => {
     expect(c?.limit).toEqual({ current: null, draft: null });
   });
 
-  it('confirms until the deadline', () => {
-    const s = on((x) => (x.controls.confirmUntil = NOW.getTime() + 1000));
+  it('confirms until the deadline, for the session it asked about', () => {
+    const s = on();
+    const session = model(s, NOW).controls?.session ?? null;
+    s.controls.confirm = { until: NOW.getTime() + 1000, session };
     expect(model(s, NOW).controls?.confirming).toBe(true);
-    s.controls.confirmUntil = NOW.getTime() - 1;
+    s.controls.confirm = { until: NOW.getTime() + 1000, session: 'other' };
+    expect(model(s, NOW).controls?.confirming).toBe(false);
+    s.controls.confirm = { until: NOW.getTime() - 1, session };
     expect(model(s, NOW).controls?.confirming).toBe(false);
   });
 });

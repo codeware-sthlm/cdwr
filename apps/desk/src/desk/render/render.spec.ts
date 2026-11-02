@@ -2208,7 +2208,8 @@ describe('controls on', () => {
           view({ session: { state: 'alive', ticket: 'COD-1' } })
         );
         x.data.hostMetrics = [hostSample(60), hostSample(50)];
-        if (confirming) x.controls.confirmUntil = NOW.getTime() + 1000;
+        if (confirming)
+          x.controls.confirm = { until: NOW.getTime() + 1000, session: null };
       });
       return s;
     };
