@@ -4,6 +4,7 @@ import {
   attendedSummary,
   checkRepoOf,
   formatContainerJob,
+  formatLimit,
   parseListener,
   parseRemoteStatus,
   remoteStatus,
@@ -96,6 +97,31 @@ describe('parseRemoteStatus', () => {
       result: { ...report, implement: { cap: 40 } }
     });
     expect(parseRemoteStatus(old)).toMatchObject({ kind: 'report' });
+  });
+
+  it('reads the limit and the cap source, which an older image omits', () => {
+    const answer = JSON.stringify({
+      ok: true,
+      result: {
+        ...report,
+        implement: { cap: 25, capSource: 'file' },
+        limit: { value: 3, source: 'file' }
+      }
+    });
+    expect(parseRemoteStatus(answer)).toMatchObject({
+      kind: 'report',
+      report: {
+        implement: { cap: 25, capSource: 'file' },
+        limit: { value: 3, source: 'file' }
+      }
+    });
+  });
+
+  it.each([
+    [{ value: 3, source: 'file' as const }, '3, set from the desk'],
+    [{ value: 5, source: 'default' as const }, '5, default']
+  ])('formats the limit row %j', (limit, text) => {
+    expect(formatLimit(limit)).toBe(text);
   });
 
   it('names the paths of a report that differs and keeps its line', () => {

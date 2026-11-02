@@ -17,6 +17,7 @@ import {
   hostKind,
   implementBudget,
   implementCap,
+  implementCapSource,
   installedEnv,
   lastImplementRun,
   lastSchedulerLine,
@@ -36,6 +37,7 @@ import {
   parseSuggest,
   parseWatchState,
   plistPath,
+  queueLimit,
   queuePaths,
   remoteCdwr,
   remoteListLogs,
@@ -181,6 +183,8 @@ describe('queuePaths', () => {
       lock: '/h/.cdwr/agent-queue/lock',
       implementLock: '/h/.cdwr/agent-queue/implement.lock',
       implementSpend: '/h/.cdwr/agent-queue/implement-spend.jsonl',
+      limit: '/h/.cdwr/agent-queue/limit',
+      implementCap: '/h/.cdwr/agent-queue/implement-cap',
       loopPid: '/h/.cdwr/agent-queue/loop.pid',
       runs: '/h/.cdwr/agent-queue/runs.jsonl',
       logs: '/h/.cdwr/agent-queue/logs',
@@ -994,6 +998,53 @@ describe('implement spend', () => {
     ['25', 25]
   ])('cap %j is %i', (value, expected) => {
     expect(implementCap(value)).toBe(expected);
+  });
+
+  it.each([
+    [undefined, '0', 0, 'file'],
+    [undefined, '25\n', 25, 'file'],
+    ['10', '25', 25, 'file'],
+    ['10', 'x', 10, 'env'],
+    ['10', '-1', 10, 'env'],
+    ['10', '1e2', 10, 'env'],
+    ['10', '0x10', 10, 'env'],
+    ['10', '', 10, 'env'],
+    ['0', '', 40, 'default'],
+    ['0', 'x', 40, 'default'],
+    [undefined, undefined, 40, 'default']
+  ])(
+    'cap with env %j and file %j is %i from %s',
+    (env, file, expected, source) => {
+      expect(implementCap(env, file)).toBe(expected);
+      expect(implementCapSource(env, file)).toEqual({
+        cap: expected,
+        source
+      });
+    }
+  );
+
+  it.each([
+    [undefined, 5, 'default'],
+    ['', 5, 'default'],
+    ['3\n', 3, 'file'],
+    ['1', 1, 'file'],
+    ['20', 20, 'file'],
+    ['0', 5, 'default'],
+    ['21', 5, 'default'],
+    ['2.5', 5, 'default'],
+    ['-3', 5, 'default'],
+    ['x', 5, 'default']
+  ])('limit file %j is %i from %s', (file, value, source) => {
+    expect(queueLimit(file)).toEqual({ value, source });
+  });
+
+  it('marks where the cap came from', () => {
+    expect(formatImplement(1, 25, undefined, 15, 'file')).toBe(
+      'implement spend today $1.00 of $25 (desk), no implementing session yet'
+    );
+    expect(formatImplement(1, 30, undefined, 15, 'env')).toBe(
+      'implement spend today $1.00 of $30 (env), no implementing session yet'
+    );
   });
 
   it.each([
