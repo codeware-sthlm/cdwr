@@ -220,7 +220,14 @@ describe('getIssue', () => {
                 rel('blocks', 'COD-4')
               ]
             },
-            attachments: { nodes: [{ url: 'https://github.com/o/r/pull/9' }] }
+            attachments: {
+              nodes: [
+                {
+                  url: 'https://github.com/o/r/pull/9',
+                  updatedAt: '2026-11-02T10:00:00.000Z'
+                }
+              ]
+            }
           }
         }
       })
@@ -228,7 +235,12 @@ describe('getIssue', () => {
     expect(await linear.getIssue('COD-9')).toEqual({
       description: 'Body',
       relations: { blockedBy: [{ id: 'COD-1' }, { id: 'COD-4' }] },
-      attachments: [{ url: 'https://github.com/o/r/pull/9' }]
+      attachments: [
+        {
+          url: 'https://github.com/o/r/pull/9',
+          updatedAt: '2026-11-02T10:00:00.000Z'
+        }
+      ]
     });
   });
 
