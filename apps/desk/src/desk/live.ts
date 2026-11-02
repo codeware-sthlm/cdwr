@@ -1,4 +1,5 @@
 import type {
+  DeskCommandRow,
   GithubEventRow,
   HostMetricRow,
   RunsPayload,
@@ -422,12 +423,28 @@ const channelDown = (connection: Connection, nowMs: number): boolean =>
       nowMs - connection.downSince >= CONNECT_GRACE_MS));
 
 /** What the desk can see is wrong with what it shows */
+/** An abandon applied on the host after its snapshot: the session it names is ended, even one too old for the sessions read */
+const abandonedSince = (
+  rows: readonly DeskCommandRow[] | null,
+  host: string,
+  at: string
+): boolean =>
+  (rows ?? []).some(
+    (r) =>
+      r.host === host &&
+      r.kind === 'abandon' &&
+      r.status === 'applied' &&
+      r.applied_at !== null &&
+      Date.parse(r.applied_at) >= Date.parse(at)
+  );
+
 export const problems = ({
   connection,
   runs,
   runMinutes,
   host,
   sessions,
+  deskCommands = null,
   now
 }: {
   connection: Connection;
@@ -435,6 +452,8 @@ export const problems = ({
   runMinutes: number;
   /** The session rows, to tell whose session the snapshot calls alive; null before they load */
   sessions: readonly SessionRow[] | null;
+  /** The desk's commands, to tell an abandon that ended the session; null before they load */
+  deskCommands?: readonly DeskCommandRow[] | null;
   /** The NUC's newest sample (ms) and age, and its silent threshold; null without samples */
   host: {
     host: string;
@@ -498,14 +517,17 @@ export const problems = ({
   }
   // A session on another host (the attended Mac) says nothing about the NUC's silence
   const sessionId = runs?.qv?.session.id;
-  const sessionHost = sessionId
-    ? (sessions ?? []).find((r) => r.id === sessionId)?.host
+  const sessionRow = sessionId
+    ? (sessions ?? []).find((r) => r.id === sessionId)
     : undefined;
+  const sessionHost = sessionRow?.host;
   // A runs row is written only when the run ends, so the open work is the session the snapshot calls alive
   if (
     runs?.qv?.session.state === 'alive' &&
     host &&
     host.ageMin > host.silentMin &&
+    sessionRow?.state !== 'ended' &&
+    !abandonedSince(deskCommands, runs.host, runs.at) &&
     (sessionHost === undefined || sessionHost === host.host)
   ) {
     const ticket = runs.qv.session.ticket ?? null;

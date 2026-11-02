@@ -779,6 +779,51 @@ describe('problems', () => {
       problems({ ...args, sessions: [session({ id: 's2', host: 'mac' })] })
     ).toHaveLength(1);
   });
+
+  it('drops the unknown state once the session has ended', () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: goodView(ago(5), { state: 'alive', id: 's1' })
+    };
+    const args = { ...base, runs: open, host: { ...host, ageMin: 31 } };
+    expect(
+      problems({
+        ...args,
+        sessions: [session({ id: 's1', host: 'nuc', state: 'ended' })]
+      })
+    ).toEqual([]);
+    expect(
+      problems({
+        ...args,
+        sessions: [session({ id: 's1', host: 'nuc', state: 'alive' })]
+      })
+    ).toHaveLength(1);
+  });
+
+  it('drops the unknown state once an abandon is applied after the snapshot', () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: goodView(ago(5), { state: 'alive', id: 's1' })
+    };
+    const args = { ...base, runs: open, host: { ...host, ageMin: 31 } };
+    const abandon = (appliedAt: string) => ({
+      id: 1,
+      at: appliedAt,
+      host: open.host,
+      kind: 'abandon',
+      args: {},
+      actor: 'mac',
+      status: 'applied',
+      applied_at: appliedAt,
+      note: null
+    });
+    expect(
+      problems({ ...args, sessions: [], deskCommands: [abandon(ago(1))] })
+    ).toEqual([]);
+    expect(
+      problems({ ...args, sessions: [], deskCommands: [abandon(ago(10))] })
+    ).toHaveLength(1);
+  });
 });
 
 describe('problems of an alive session', () => {
