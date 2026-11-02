@@ -21,8 +21,8 @@ resumes. One ticket is active at a time; others may be parked on a Copilot or CI
 - `unattended` (or the user says they are leaving or going to bed): the agent approves its
   own plans and records the decisions, as overnight mode does
 - `once`: stop after one ticket reaches review or a gate, so each ticket gets a fresh context
-- `limit=N`: how much may wait on Håkan before no new ticket starts (default 5). See
-  **The limit** below.
+- `limit=N`: how much may wait on Håkan before no new ticket starts (default: the `limit` file in the
+  queue home, else 5). See **The limit** below.
 - `implement-only` (launched by the scheduler, with `once`): resume approved, answered or
   reviewed work only, never a new ticket. See **Implement-only runs** below.
 - `plan-only` (scheduled runs): investigate one ticket and write its plan, nothing else.
@@ -116,7 +116,8 @@ blocking it is Done or Canceled, at least one of them the agent's (`to_label` in
 the next part of a split whose blockers finished. The queue lists it as `COD-n label`; only Håkan
 sets `agent:ready` on it, since a later part can hang on a question the split left open.
 
-Default limit 5, `limit=N` overrides it for the run.
+The default is the `limit` file in the queue home (`~/.cdwr/agent-queue/limit`, a whole number
+1–20, set from the Agent Desk), else 5. `limit=N` overrides it for the run.
 
 ## Nothing workable
 
