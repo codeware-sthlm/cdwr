@@ -115,3 +115,90 @@ export const sendCommand = async (
     throw new CommandError('server', 'The reply did not name the command.');
   return { id, status, note: typeof note === 'string' ? note : null };
 };
+
+/** The controls the desk shows; pause and resume share one */
+export type Control = 'pause' | 'run' | 'limit' | 'cap' | 'abandon';
+
+const CONTROL: Record<CommandKind, Control> = {
+  pause: 'pause',
+  resume: 'pause',
+  run: 'run',
+  limit: 'limit',
+  cap: 'cap',
+  abandon: 'abandon'
+};
+
+/** The fields of a `desk_commands` row the state reads */
+export type CommandRowLike = {
+  id: number;
+  at: string;
+  host: string;
+  kind: string;
+  status: string;
+  applied_at: string | null;
+  note: string | null;
+};
+
+export type ControlState =
+  | { state: 'idle' }
+  | { state: 'pending'; kind: CommandKind }
+  | { state: 'refused'; kind: CommandKind; note: string };
+
+/** A pending row older than this is one the scheduler expires (its DESK_STALE_SECS) */
+export const PENDING_MAX_MS = 2 * 60 * 60 * 1000;
+
+/** How long a refusal note stays beside its control */
+export const REFUSED_SHOW_MS = 15 * 60 * 1000;
+
+const isKind = (value: string): value is CommandKind =>
+  Object.hasOwn(CONTROL, value);
+
+/**
+ * Each control's state on one host from its newest command row. An applied row stays
+ * pending until the host publishes `queue_state` at or after the ack (both whole seconds,
+ * and the scheduler acks before it publishes); abandon is applied in place, so it is done
+ * once applied. A refusal shows for REFUSED_SHOW_MS, a pending row for PENDING_MAX_MS.
+ */
+export const controlStates = (
+  rows: readonly CommandRowLike[],
+  host: string,
+  queueAt: string | null,
+  now: number
+): Record<Control, ControlState> => {
+  const states: Record<Control, ControlState> = {
+    pause: { state: 'idle' },
+    run: { state: 'idle' },
+    limit: { state: 'idle' },
+    cap: { state: 'idle' },
+    abandon: { state: 'idle' }
+  };
+  const newest = new Map<Control, { row: CommandRowLike; kind: CommandKind }>();
+  for (const row of rows) {
+    if (row.host !== host || !isKind(row.kind)) continue;
+    const control = CONTROL[row.kind];
+    const seen = newest.get(control);
+    if (!seen || row.id > seen.row.id)
+      newest.set(control, { row, kind: row.kind });
+  }
+  const published = queueAt === null ? NaN : Date.parse(queueAt);
+  for (const [control, { row, kind }] of newest) {
+    const age = now - Date.parse(row.applied_at ?? row.at);
+    if (row.status === 'pending') {
+      if (age <= PENDING_MAX_MS) states[control] = { state: 'pending', kind };
+    } else if (row.status === 'refused') {
+      if (age <= REFUSED_SHOW_MS)
+        states[control] = {
+          state: 'refused',
+          kind,
+          note: row.note ?? 'refused'
+        };
+    } else if (
+      row.status === 'applied' &&
+      kind !== 'abandon' &&
+      !(row.applied_at !== null && published >= Date.parse(row.applied_at)) &&
+      age <= PENDING_MAX_MS
+    )
+      states[control] = { state: 'pending', kind };
+  }
+  return states;
+};

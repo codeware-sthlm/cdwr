@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CommandError, checkToken, sendCommand } from './commands';
+import {
+  CommandError,
+  PENDING_MAX_MS,
+  REFUSED_SHOW_MS,
+  checkToken,
+  controlStates,
+  sendCommand
+} from './commands';
 
 const URL_ = 'https://abcdefghij0123456789.supabase.co';
 
@@ -102,5 +109,98 @@ describe('sendCommand', () => {
     await expect(
       sendCommand(target(answering(400, { error: 'Bad host' })), 'nuc', 'run')
     ).rejects.toThrow('Bad host');
+  });
+});
+
+describe('controlStates', () => {
+  const AT = '2026-11-02T20:00:00Z';
+  const EARLIER = '2026-11-02T19:59:59Z';
+  const LATER = '2026-11-02T20:10:00Z';
+  const NOW = Date.parse('2026-11-02T20:05:00Z');
+  const row = (
+    id: number,
+    kind: string,
+    status: string,
+    extra: Partial<{
+      host: string;
+      at: string;
+      applied_at: string;
+      note: string;
+    }> = {}
+  ) => ({
+    id,
+    at: extra.at ?? AT,
+    host: extra.host ?? 'nuc',
+    kind,
+    status,
+    applied_at: extra.applied_at ?? null,
+    note: extra.note ?? null
+  });
+  const states = (
+    rows: ReturnType<typeof row>[],
+    queueAt: string | null = AT,
+    now = NOW
+  ) => controlStates(rows, 'nuc', queueAt, now);
+
+  it('is idle without rows', () => {
+    expect(states([]).run).toEqual({ state: 'idle' });
+  });
+
+  it('is pending while the newest row is pending', () => {
+    expect(states([row(1, 'run', 'pending')]).run).toEqual({
+      state: 'pending',
+      kind: 'run'
+    });
+  });
+
+  it('drops a pending row the scheduler would expire', () => {
+    const late = NOW + PENDING_MAX_MS + 1000;
+    expect(states([row(1, 'run', 'pending')], AT, late).run.state).toBe('idle');
+  });
+
+  it('stays pending once applied until queue_state is published at or after it', () => {
+    const rows = [row(1, 'pause', 'applied', { applied_at: AT })];
+    expect(states(rows, EARLIER).pause.state).toBe('pending');
+    expect(states(rows, null).pause.state).toBe('pending');
+    expect(states(rows, AT).pause.state).toBe('idle');
+    expect(states(rows, LATER).pause.state).toBe('idle');
+  });
+
+  it('shows a refusal with its note for a while', () => {
+    const rows = [
+      row(1, 'run', 'refused', { applied_at: AT, note: 'a run is in progress' })
+    ];
+    expect(states(rows).run).toEqual({
+      state: 'refused',
+      kind: 'run',
+      note: 'a run is in progress'
+    });
+    expect(
+      states(rows, AT, Date.parse(AT) + REFUSED_SHOW_MS + 1000).run.state
+    ).toBe('idle');
+  });
+
+  it('reads the newest row per control; pause and resume share one', () => {
+    const rows = [
+      row(2, 'resume', 'pending'),
+      row(1, 'pause', 'refused', { note: 'already paused' })
+    ];
+    expect(states(rows).pause).toEqual({ state: 'pending', kind: 'resume' });
+  });
+
+  it('treats an applied abandon as done', () => {
+    expect(
+      states([row(1, 'abandon', 'applied', { applied_at: AT })], EARLIER)
+        .abandon
+    ).toEqual({ state: 'idle' });
+  });
+
+  it('ignores other hosts and unknown kinds', () => {
+    const all = states([
+      row(1, 'run', 'pending', { host: 'mac' }),
+      row(2, 'reboot', 'pending'),
+      row(3, 'toString', 'pending')
+    ]);
+    expect(Object.values(all).every((s) => s.state === 'idle')).toBe(true);
   });
 });

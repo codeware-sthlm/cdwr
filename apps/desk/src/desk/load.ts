@@ -283,6 +283,17 @@ export const createLoader = ({
       }
       render();
     });
+    adapter.watchTool('Supabase', 'deskCommands', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.deskCommands = ev.result.payload;
+        state.errors.delete('deskCommands');
+      } else {
+        state.errors.set('deskCommands', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.deskCommands = null;
+      }
+      render();
+    });
     adapter.watchTool(SERVER, 'list_issues', { label: IDEA_LABEL }, (ev) => {
       if (stopped) return;
       if (ev.type === 'data') {

@@ -3,6 +3,7 @@ import type { Issue, OpenStatusType } from '../linear';
 import type {
   ActivityPayload,
   ChannelStatus,
+  DeskCommandRow,
   GithubEventRow,
   HostMetricRow,
   IssueEventRow,
@@ -97,6 +98,8 @@ export type DeskData = {
   githubEvents: GithubEventRow[] | null;
   /** The sessions seen in the last 24 hours, newest first */
   sessions: SessionRow[] | null;
+  /** The desk commands of the last 24 hours, oldest first */
+  deskCommands: DeskCommandRow[] | null;
   /** The Realtime channel as the adapter reports it */
   connection: Connection;
   /** When the open tickets were last stored, in ms */
@@ -158,6 +161,7 @@ export const createState = (): DeskState => ({
     usageHours: null,
     githubEvents: null,
     sessions: null,
+    deskCommands: null,
     connection: {
       live: false,
       retries: 0,

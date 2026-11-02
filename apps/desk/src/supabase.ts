@@ -30,6 +30,7 @@ export type PlanUsageRow = Tables['plan_usage']['Row'];
 export type UsageHourRow = Tables['usage_hours']['Row'];
 export type GithubEventRow = Tables['github_events']['Row'];
 export type SessionRow = Tables['sessions']['Row'];
+export type DeskCommandRow = Tables['desk_commands']['Row'];
 
 /** Full commits of main's newest successful builds; null when none is recorded */
 export type MainBuilds = { image: string | null; desk: string | null };
@@ -137,6 +138,8 @@ export type Payloads = QueuePayloads & {
   githubEvents: GithubEventRow[];
   /** The sessions seen in the last 24 hours, newest first */
   sessions: SessionRow[];
+  /** The desk commands of the last 24 hours, oldest first */
+  deskCommands: DeskCommandRow[];
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -606,6 +609,23 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       );
     });
 
+  // The table is applied by hand after merge, so a missing one reads as no commands; paged by id, like sessions
+  const readDeskCommands = (): Promise<DeskCommandRow[]> =>
+    attempt(async () => {
+      const since = new Date(Date.now() - DAY_MS).toISOString();
+      return readAllPages(async (from, to) => {
+        const result = await client
+          .from('desk_commands')
+          .select('*')
+          .gte('at', since)
+          .order('id', { ascending: true })
+          .range(from, to);
+        return result.error && MISSING_TABLE.includes(result.error.code ?? '')
+          ? []
+          : settle(result);
+      }, 'desk_commands');
+    });
+
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
    * catch up on what was missed. `onStatus` gets false on a channel error, a
@@ -615,7 +635,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
    * `onPlanUsage` on a new `plan_usage` row and `onUsageHours` on a new or
    * updated `usage_hours` row, likewise. `onGithub` gets each `github_events`
    * row as it arrives, without debounce; `onSessions` fires (debounced) on a
-   * new or updated `sessions` row, which `onChange` hears too.
+   * new or updated `sessions` row, which `onChange` hears too; `onDeskCommands`
+   * fires (debounced) on a new or updated `desk_commands` row, and on each (re)join.
    */
   const subscribe = (
     onChange: () => void,
@@ -625,13 +646,15 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     onPlanUsage?: () => void,
     onUsageHours?: () => void,
     onGithub?: (row: GithubEventRow) => void,
-    onSessions?: () => void
+    onSessions?: () => void,
+    onDeskCommands?: () => void
   ): (() => Promise<void>) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hostTimer: ReturnType<typeof setTimeout> | undefined;
     let planTimer: ReturnType<typeof setTimeout> | undefined;
     let hoursTimer: ReturnType<typeof setTimeout> | undefined;
     let sessionsTimer: ReturnType<typeof setTimeout> | undefined;
+    let commandsTimer: ReturnType<typeof setTimeout> | undefined;
     const changed = (): void => {
       clearTimeout(timer);
       timer = setTimeout(onChange, DEBOUNCE_MS);
@@ -651,6 +674,10 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     const sessionsChanged = (): void => {
       clearTimeout(sessionsTimer);
       sessionsTimer = setTimeout(() => onSessions?.(), DEBOUNCE_MS);
+    };
+    const commandsChanged = (): void => {
+      clearTimeout(commandsTimer);
+      commandsTimer = setTimeout(() => onDeskCommands?.(), DEBOUNCE_MS);
     };
     let channel = client.channel('desk');
     for (const table of [
@@ -731,6 +758,19 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     builds.subscribe((status) => {
       if (status === 'SUBSCRIBED') changed();
     });
+    // Its own channel, so before the desk_commands migration is applied a refused subscription costs the commands only
+    let commands = client.channel('desk-commands');
+    for (const event of ['INSERT', 'UPDATE'] as const) {
+      commands = commands.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'desk_commands' },
+        commandsChanged
+      );
+    }
+    // A (re)join catches up on a command that changed while it was away
+    commands.subscribe((status) => {
+      if (status === 'SUBSCRIBED') commandsChanged();
+    });
     // One channel per plan usage table too, so a missing one fails only its own data
     const planChannel = client
       .channel('desk-plan')
@@ -764,11 +804,18 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       clearTimeout(planTimer);
       clearTimeout(hoursTimer);
       clearTimeout(sessionsTimer);
+      clearTimeout(commandsTimer);
       // Resolves once every channel is gone; a resubscribe before that gets the old one back
       return Promise.allSettled(
-        [channel, github, hostChannel, builds, planChannel, hoursChannel].map(
-          (c) => client.removeChannel(c)
-        )
+        [
+          channel,
+          github,
+          hostChannel,
+          builds,
+          commands,
+          planChannel,
+          hoursChannel
+        ].map((c) => client.removeChannel(c))
       ).then(() => undefined);
     };
   };
@@ -785,6 +832,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     readUsageHours,
     readGithubEvents,
     readSessions,
+    readDeskCommands,
     subscribe,
     check
   };
