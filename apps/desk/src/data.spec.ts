@@ -98,11 +98,13 @@ const setup = () => {
     Promise.resolve([])
   );
   const supabaseReadSessions = vi.fn(() => Promise.resolve([]));
+  const supabaseReadDeskCommands = vi.fn(() => Promise.resolve([]));
   let hostEvent: () => void = () => undefined;
   let planEvent: () => void = () => undefined;
   let hoursEvent: () => void = () => undefined;
   let githubEvent: (row: GithubEventRow) => void = () => undefined;
   let sessionsEvent: () => void = () => undefined;
+  let deskCommandsEvent: () => void = () => undefined;
   const supabase = {
     read: supabaseRead,
     readHostMetrics: supabaseReadHost,
@@ -110,6 +112,7 @@ const setup = () => {
     readUsageHours: supabaseReadHours,
     readGithubEvents: supabaseReadGithub,
     readSessions: supabaseReadSessions,
+    readDeskCommands: supabaseReadDeskCommands,
     subscribe: vi.fn(
       (
         onChange: () => void,
@@ -119,11 +122,13 @@ const setup = () => {
         onPlanUsage?: () => void,
         onUsageHours?: () => void,
         onGithub?: (row: GithubEventRow) => void,
-        onSessions?: () => void
+        onSessions?: () => void,
+        onDeskCommands?: () => void
       ) => {
         changed = onChange;
         if (onGithub) githubEvent = onGithub;
         if (onSessions) sessionsEvent = onSessions;
+        if (onDeskCommands) deskCommandsEvent = onDeskCommands;
         if (onHostMetrics) hostEvent = onHostMetrics;
         if (onPlanUsage) planEvent = onPlanUsage;
         if (onUsageHours) hoursEvent = onUsageHours;
@@ -167,6 +172,7 @@ const setup = () => {
     fireUsageHours: () => hoursEvent(),
     fireGithub: (row: GithubEventRow) => githubEvent(row),
     fireSessions: () => sessionsEvent(),
+    fireDeskCommands: () => deskCommandsEvent(),
     fireStatus: (healthy: boolean, channel?: ChannelStatus) =>
       status(healthy, channel ?? (healthy ? 'SUBSCRIBED' : 'CLOSED')),
     fireFocus: () => focus()
@@ -1177,6 +1183,22 @@ describe('createAdapter', () => {
       fireSessions();
       await vi.advanceTimersByTimeAsync(0);
       expect(supabase.readSessions).toHaveBeenCalledTimes(2);
+      expect(supabase.read).not.toHaveBeenCalled();
+    });
+
+    it('rereads desk commands only when watched', async () => {
+      const { adapter, supabase, fireDeskCommands } = setup();
+      fireDeskCommands();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.readDeskCommands).not.toHaveBeenCalled();
+
+      adapter.watchTool('Supabase', 'deskCommands', {}, () => undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.readDeskCommands).toHaveBeenCalledTimes(1);
+
+      fireDeskCommands();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.readDeskCommands).toHaveBeenCalledTimes(2);
       expect(supabase.read).not.toHaveBeenCalled();
     });
   });
