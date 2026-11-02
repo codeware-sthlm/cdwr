@@ -369,7 +369,7 @@ record_run() {
 # Every handled outcome exits 0, so a non-zero exit is a failure nothing recorded.
 on_exit() {
   local st=$1
-  rm -f "$LOGS/gh-read-fallback.$$"
+  rm -f "$LOGS/gh-read-fallback.$$" "$LOGS/watch.$$.err"
   if (( st != 0 )); then
     note "fail: run.sh exited $st"
     record failed "" "run.sh exited $st, see scheduler.log"
@@ -440,7 +440,23 @@ query($n: Int!) {
 }
 GQL
 
-watch() { jq -L "$HOME_DIR" "$@"; }
+# jq's stderr goes to a file, since every call that can fail runs in a command substitution; each
+# call overwrites it, and a failure still prints it for the calls nobody checks. watch_err prints
+# its first line as " (<line>)", cut to 120 characters, or nothing.
+watch() {
+  jq -L "$HOME_DIR" "$@" 2> "$LOGS/watch.$$.err" && return 0
+  local st=$?
+  cat "$LOGS/watch.$$.err" >&2
+  return $st
+}
+watch_err() {
+  setopt local_options no_err_exit extended_glob
+  local line=""
+  [[ -s "$LOGS/watch.$$.err" ]] && IFS= read -r line < "$LOGS/watch.$$.err"
+  line="${${line##[[:space:]]#}%%[[:space:]]#}"
+  [[ -n "$line" ]] && print -rn -- " (${line[1,120]})"
+  return 0
+}
 
 # gh_identity: exports the GitHub App's token for the reads of the calling subshell, so call it
 # only inside a command substitution. On failure sets gh_reason and returns 1, leaving the reads
@@ -477,7 +493,7 @@ relabel_merged() {
     | { id, add: [$review],
         remove: [ .labels.nodes[] | select((.name | startswith("agent:")) and .name != "agent:review") | .id ],
         d: (.description | merged_next($when; $h)) }' <<<"$node")" ||
-    { note "warn: watch: watch.jq failed relabelling $id"; record warn "$id" "watch: relabel failed"; return 1; }
+    { local why="$(watch_err)"; note "warn: watch: watch.jq failed relabelling $id$why"; record warn "$id" "watch: relabel failed$why"; return 1; }
   resp="$(linear "$RELABEL" "$vars")"
   if ! jq -e '.data.issueUpdate.success == true' >/dev/null 2>&1 <<<"$resp"; then
     note "warn: watch: relabel of $id failed ($(jq -c '.errors[0].message // "no answer"' <<<"$resp" 2>/dev/null))"
@@ -490,7 +506,7 @@ relabel_merged() {
 watch_prs() {
   # One PR failing to read skips that PR, not the rest.
   setopt local_options no_err_exit
-  local file="$HOME_DIR/watch.json" resp nodes state node id label pr now out level msg review
+  local file="$HOME_DIR/watch.json" resp nodes state node id label pr now out level msg review why
   gh_identity_or_note
   resp="$(linear "$WATCHED")" || { print -r -- "Linear did not answer"; return 1; }
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
@@ -504,7 +520,7 @@ watch_prs() {
   # A missing or broken state file counts as empty; tickets no longer watched drop out.
   state="$(jq -c 'if type == "object" then . else {} end' "$file" 2>/dev/null || print '{}')"
   state="$(watch -c --argjson ids "$(jq -c 'map(.identifier)' <<<"$nodes")" \
-    'include "watch"; prune($ids)' <<<"$state")" || { print -r -- "watch.jq failed"; return 1; }
+    'include "watch"; prune($ids)' <<<"$state")" || { print -r -- "watch.jq failed$(watch_err)"; return 1; }
   # The team's own agent:review label before a workspace one
   review="$(jq -r '[.data.issueLabels.nodes[]? | select(.team == null or .team.key == "COD")]
     | sort_by(.team == null) | first | .id // empty' <<<"$resp")"
@@ -528,7 +544,7 @@ watch_prs() {
       --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
       {id: $id, agentLabel: $agentLabel, pr: $pr, now: ($now | pr_state), prev: $state[$id], handoffs: ($node | handoffs), at: $at} | step')" ||
-      { note "warn: watch: watch.jq failed on $id"; record warn "$id" "watch: watch.jq failed"; continue; }
+      { why="$(watch_err)"; note "warn: watch: watch.jq failed on $id$why"; record warn "$id" "watch: watch.jq failed$why"; continue; }
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue
       note "watch: $level $msg"
@@ -571,7 +587,7 @@ attended() {
   waits="$(gh_identity || true; parked_waits <<<"$resp")"
   verdict="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson waits "$waits" \
     'include "watch"; .data.issues.nodes | attended($now; 5; $watch; $waits)' <<<"$resp")" ||
-    { note "warn: attended: watch.jq failed"; return 0; }
+    { note "warn: attended: watch.jq failed$(watch_err)"; return 0; }
   attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
   [[ "$(jq -r '.verdict' <<<"$verdict" 2>/dev/null)" == idle ]] && attended_work=false || attended_work=true
   # Session heartbeat files, with the process checks jq can't do. Never stops the run.
@@ -618,7 +634,7 @@ attended() {
   # line and the notice
   queue_view="$(watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson session "$session" --argjson waits "$waits" \
     'include "watch"; .data.issues.nodes | queue_view($now; 5; $watch; $session; $waits)' <<<"$resp")" ||
-    { note "warn: queue view: watch.jq failed"; queue_view=""; }
+    { note "warn: queue view: watch.jq failed$(watch_err)"; queue_view=""; }
   # Should an implement-only session start? watch.jq `launch` decides from the pick and the
   # guards; implement.sh holds implement.lock while its session runs and writes the spend ledger.
   # The lock holds its owner's pid; it is cleared only when that process is gone (a kill skips the
@@ -642,7 +658,8 @@ attended() {
     --argjson cap "$cap" --argjson last "$last" \
     '{session: $session, locked: $locked, spent: $spent, cap: $cap, last: $last}')"
   decision="$(watch -c --argjson g "$guards" 'include "watch"; launch($g)' <<<"$verdict" 2>/dev/null)" ||
-    { note "warn: launch: watch.jq failed"; decision='{"action":"skip","reason":"watch.jq failed","key":null}'; }
+    { local why="watch.jq failed$(watch_err)"; note "warn: launch: $why"
+      decision="$(jq -nc --arg r "$why" '{action: "skip", reason: $r, key: null}')"; }
   if $check; then
     print -r -- "attended: $attended_line"
     print -r -- "launch: $(jq -r '.action + (if .reason then " (" + .reason + ")" else "" end)' <<<"$decision")"
