@@ -4,10 +4,11 @@ import { type HandBackState, type HealthCheck, problemOf } from '../live';
 import type { Model, VersionState } from '../model';
 
 import { STEPS, percent } from './capacity';
+import { CAP_RANGE, LIMIT_RANGE, cmdButton, status, stepper } from './controls';
 import { platform } from './header';
 import { problemId } from './problems';
 
-// The Platform view: hosts, versions and health, read-only. It fills `#platform` in place of the desk's cards.
+// The Platform view: hosts, versions and health, with the queue's controls when the desk has a control token. It fills `#platform` in place of the desk's cards.
 
 type Tone = 'ok' | 'wait' | 'bad' | 'muted' | 'work';
 
@@ -26,9 +27,10 @@ const controlRow = (
   title: string,
   line: string,
   value: string,
-  tone = ''
+  tone = '',
+  actions = ''
 ): string =>
-  `<div class="pf-row"><div class="pf-main"><b>${esc(title)}</b><span class="pf-line">${line}</span></div><b class="pf-val ${tone}">${esc(value)}</b></div>`;
+  `<div class="pf-row"><div class="pf-main"><b>${esc(title)}</b><span class="pf-line">${line}</span>${actions ? `<span class="pf-btns">${actions}</span>` : ''}</div><b class="pf-val ${tone}">${esc(value)}</b></div>`;
 
 const schedulerRow = (m: Model): string => {
   const last = m.runs?.last
@@ -47,7 +49,10 @@ const schedulerRow = (m: Model): string => {
         `<button type="button" class="pf-mini" data-w="${id}" aria-haspopup="dialog">${label}</button>`
     )
     .join('');
-  return `<div class="pf-row"><div class="pf-main"><b>Scheduler</b><span class="pf-line">${esc(last)}</span><span class="pf-btns">${buttons}</span></div><b class="pf-val">${esc(value)}</b></div>`;
+  const c = m.controls;
+  const run = c ? cmdButton('run', 'Run now', c.states.run) : '';
+  const runStatus = c ? status(c.states.run) : '';
+  return `<div class="pf-row"><div class="pf-main"><b>Scheduler</b><span class="pf-line">${esc(last)}</span><span class="pf-btns">${run}${buttons}</span>${runStatus}</div><b class="pf-val">${esc(value)}</b></div>`;
 };
 
 const controls = (m: Model): string => {
@@ -55,16 +60,37 @@ const controls = (m: Model): string => {
   const { used, max } = m.limits.prs;
   const e = m.limits.effort;
   const queue = !loaded ? '–' : m.limits.paused ? 'Paused' : 'Running';
+  const c = m.controls;
+  const pause = c
+    ? cmdButton(
+        c.paused ? 'resume' : 'pause',
+        c.paused ? 'Resume' : 'Pause',
+        c.states.pause
+      ) + status(c.states.pause)
+    : '';
+  const limit = c
+    ? stepper(
+        'limit',
+        LIMIT_RANGE,
+        c.limit.current,
+        c.limit.draft,
+        c.states.limit,
+        String
+      )
+    : '';
+  const cap = c
+    ? stepper('cap', CAP_RANGE, c.cap.current, c.cap.draft, c.states.cap, usd)
+    : '';
   return section(
     'CONTROLS',
-    'read-only',
+    c ? '' : 'read-only',
     `<div class="pf-rows">
-      ${controlRow('Queue', 'cdwr agent pause · cdwr agent resume', queue, m.limits.paused ? 'wait' : '')}
-      ${controlRow('Agent PRs in flight', `${used} open now · set per session with /work-queue limit=N`, loaded ? String(max) : '–')}
-      ${controlRow('Daily effort cap', `${e ? percent(e.share) : '–'} used today · AGENT_QUEUE_IMPLEMENT_CAP_USD on the host`, e ? usd(e.cap) : '–')}
+      ${controlRow('Queue', c ? 'pause stops the scheduler launching work' : 'cdwr agent pause · cdwr agent resume', queue, m.limits.paused ? 'wait' : '', pause)}
+      ${controlRow('Agent PRs in flight', `${used} open now${c ? '' : ' · set per session with /work-queue limit=N'}`, loaded ? String(max) : '–', '', limit)}
+      ${controlRow('Daily effort cap', `${e ? percent(e.share) : '–'} used today${c ? '' : ' · AGENT_QUEUE_IMPLEMENT_CAP_USD on the host'}`, e ? usd(e.cap) : '–', '', cap)}
       ${schedulerRow(m)}
     </div>
-    <p class="pf-foot">Read-only here. Steering from the desk is COD-680; the CLI steers the queue today.</p>`
+    <p class="pf-foot">${c ? `Commands go to ${esc(c.host)}, which applies them at its next tick.` : 'Read-only here: add a control token in Settings to steer from the desk. The CLI steers the queue meanwhile.'}</p>`
   );
 };
 
@@ -235,7 +261,7 @@ export const renderPlatform = (m: Model, now: Date): string => {
     : '';
   return `<div class="pf-head">
       <button type="button" class="pf-back" data-view="desk">‹ Desk</button>
-      <div class="pf-title"><h1 id="platform-title" tabindex="-1">Platform</h1><span class="cap-sub">hosts, versions and health — read-only; the controls come with COD-680</span></div>
+      <div class="pf-title"><h1 id="platform-title" tabindex="-1">Platform</h1><span class="cap-sub">hosts, versions and health${m.controls ? '' : ' — read-only; controls need a control token in Settings'}</span></div>
       <div class="pf-stats">${checks}${updates}</div>
     </div>
     <div class="pf-grid">${controls(m)}${hosts(m)}${versions(m)}${healthChecks(m, now)}</div>`;

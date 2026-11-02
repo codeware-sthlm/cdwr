@@ -14,6 +14,7 @@ import type {
   UsagePayload
 } from '../supabase';
 
+import type { CommandKind, CommandTarget, Control } from './commands';
 import { STATES } from './constants';
 import type { Idea, PlanProgress } from './types';
 
@@ -131,6 +132,22 @@ export type DeskUi = {
   view: View;
 };
 
+/** The desk's own side of the controls */
+export type ControlsUi = {
+  /** Where commands go; null without a control token, which hides the controls */
+  target: CommandTarget | null;
+  /** Stepper values not yet applied */
+  drafts: Partial<Record<'limit' | 'cap', number>>;
+  /** Controls whose request is in flight */
+  sending: Set<Control>;
+  /** A failure that stored no row (network, token), shown until the control is used again */
+  failed: Map<Control, { kind: CommandKind; note: string }>;
+  /** The command each control sent, read as sending until its row arrives; `at` in ms */
+  awaiting: Map<Control, { id: number; at: number }>;
+  /** Until when the abandon button asks for confirmation, in ms */
+  confirmUntil: number | null;
+};
+
 export type DeskState = {
   data: DeskData;
   /** Ticket id -> plan progress, idea, blockers and PR */
@@ -142,6 +159,7 @@ export type DeskState = {
   /** Source -> its latest error */
   errors: Map<string, DataFailure>;
   ui: DeskUi;
+  controls: ControlsUi;
 };
 
 /** Whether any of the ticket lists has arrived */
@@ -177,5 +195,13 @@ export const createState = (): DeskState => ({
   liveHandoffs: new Map(),
   ideaReasons: new Map(),
   errors: new Map(),
-  ui: { filter: 'all', actFilter: 'all', openSheet: null, view: 'desk' }
+  ui: { filter: 'all', actFilter: 'all', openSheet: null, view: 'desk' },
+  controls: {
+    target: null,
+    drafts: {},
+    sending: new Set(),
+    failed: new Map(),
+    awaiting: new Map(),
+    confirmUntil: null
+  }
 });

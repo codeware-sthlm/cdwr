@@ -2756,3 +2756,39 @@ button:disabled {
     font-size: 15px;
   }
 }
+.ctl-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ctl-step {
+  min-width: var(--tap);
+  padding: 0;
+}
+.ctl-draft {
+  min-width: 3ch;
+  text-align: center;
+  font: 600 13px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.ctl-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+.ctl-status.refused {
+  color: var(--wait);
+}
+.pf-mini:disabled,
+.p-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.p-ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.cap-queue .pf-mini {
+  margin-inline: 6px;
+}

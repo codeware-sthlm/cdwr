@@ -9,6 +9,7 @@ import type { HandBackState } from '../live';
 import type { Model } from '../model';
 
 import { cpuChart } from './charts';
+import { cmdButton, status } from './controls';
 
 // The Capacity row between the cards and the tiles: limits and hosts on the desktop, one card on a phone
 
@@ -63,12 +64,16 @@ const effortMeter = (m: Model): string => {
 };
 
 const renderLimits = (m: Model): string => {
+  const c = m.controls;
+  const word = m.limits.paused ? 'Queue paused' : 'Queue running';
   const queue =
     m.runs === null
       ? ''
-      : m.limits.paused
-        ? '<p class="cap-queue wait">Queue paused · cdwr agent resume</p>'
-        : '<p class="cap-queue">Queue running</p>';
+      : c
+        ? `<p class="cap-queue ${m.limits.paused ? 'wait' : ''}">${word} ${cmdButton(m.limits.paused ? 'resume' : 'pause', m.limits.paused ? 'Resume' : 'Pause', c.states.pause, 'pf-mini')}${status(c.states.pause)}</p>`
+        : m.limits.paused
+          ? '<p class="cap-queue wait">Queue paused · cdwr agent resume</p>'
+          : '<p class="cap-queue">Queue running</p>';
   return `<article class="card-top cap-card cap-limits">
     <div class="ct-head"><span class="cap-label">LIMITS</span></div>
     ${prsMeter(m)}
@@ -120,8 +125,9 @@ const nucHostBlock = (m: Model): string => {
       ? `silent · last sample ${shortAge(n.ageMin)} ago`
       : `${n.busy ? 'busy' : 'idle'} · heartbeat ${shortAge(n.ageMin)} ago`;
   return `<div class="cap-host">
-      <div class="cap-hh"><i class="cap-dot ${n.verdict}" aria-hidden="true"></i><b class="cap-name">${esc(n.host)}</b></div>
+      <div class="cap-hh"><i class="cap-dot ${n.verdict}" aria-hidden="true"></i><b class="cap-name">${esc(n.host)}</b>${m.controls ? cmdButton('run', 'Run now', m.controls.states.run) : ''}</div>
       <p class="cap-sub">${esc(sub)}</p>
+      ${m.controls ? status(m.controls.states.run) : ''}
       ${nucRows(n)}
     </div>`;
 };

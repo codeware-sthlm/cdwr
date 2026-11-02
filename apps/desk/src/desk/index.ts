@@ -1,6 +1,13 @@
 import type { Adapter } from '../data';
 import type { IssueEventRow } from '../supabase';
 
+import {
+  CommandError,
+  type CommandKind,
+  type CommandTarget,
+  type Control,
+  sendCommand
+} from './commands';
 import { AGENT_AVATAR } from './constants';
 import { type Loader, createLoader } from './load';
 import { type Model, model, shipped } from './model';
@@ -12,6 +19,7 @@ import {
   shippedChart,
   spendChart
 } from './render/charts';
+import { CAP_RANGE, LIMIT_RANGE } from './render/controls';
 import { renderStatus } from './render/header';
 import { renderPlatform } from './render/platform';
 import {
@@ -237,6 +245,50 @@ function copyRow(button: Element): void {
   navigator.clipboard.writeText(text).catch(() => selectText(raw));
 }
 
+const CONFIRM_MS = 4000;
+
+/** Handles a control button's click; true when the click was one */
+function clickControl(target: Element): boolean {
+  const button = target.closest<HTMLButtonElement>(
+    '[data-cmd], [data-step], [data-apply]'
+  );
+  if (!button) return false;
+  const c = state.controls;
+  const m = model(state, new Date()).controls;
+  if (!c.target || !m || button.disabled) return true;
+  const { cmd, step, apply } = button.dataset;
+  if (cmd === 'abandon') {
+    if (!m.confirming) c.confirmUntil = Date.now() + CONFIRM_MS;
+    else {
+      c.confirmUntil = null;
+      sendControl('abandon', m.host, 'abandon');
+    }
+    render();
+  } else if (cmd === 'pause' || cmd === 'resume') {
+    sendControl('pause', m.host, cmd);
+  } else if (cmd === 'run') {
+    sendControl('run', m.host, 'run');
+  } else if (step) {
+    const [control, delta] = step.split(':');
+    if (control === 'limit') {
+      const next = (m.limit.draft ?? 0) + Number(delta);
+      c.drafts.limit = Math.min(
+        LIMIT_RANGE.max,
+        Math.max(LIMIT_RANGE.min, next)
+      );
+    } else if (control === 'cap') {
+      const next = (m.cap.draft ?? 0) + Number(delta);
+      c.drafts.cap = Math.min(CAP_RANGE.max, Math.max(CAP_RANGE.min, next));
+    }
+    render();
+  } else if (apply === 'limit' && m.limit.draft !== null) {
+    sendControl('limit', m.host, 'limit', m.limit.draft);
+  } else if (apply === 'cap' && m.cap.draft !== null) {
+    sendControl('cap', m.host, 'cap', m.cap.draft);
+  }
+  return true;
+}
+
 document.addEventListener('click', (e) => {
   if (!(e.target instanceof Element)) return;
   if (e.target.closest('[data-see-problems]')) {
@@ -256,6 +308,7 @@ document.addEventListener('click', (e) => {
     else if (action.dataset.action === 'copy-row') copyRow(action);
     return;
   }
+  if (clickControl(e.target)) return;
   const problem = e.target.closest<HTMLElement>('[data-problem]');
   if (problem) {
     showView('desk', false);
@@ -443,4 +496,53 @@ export function start(next: Adapter | null): void {
   loader = next ? createLoader({ adapter: next, state, render }) : null;
   loader?.watchAll();
   render();
+}
+
+/** Turns the controls on with a target, or off with null; the token never reaches the model */
+export function setControls(target: CommandTarget | null): void {
+  state.controls = {
+    target,
+    drafts: {},
+    sending: new Set(),
+    failed: new Map(),
+    awaiting: new Map(),
+    confirmUntil: null
+  };
+  render();
+}
+
+/** Sends one command for a control; the row's own state then arrives over Realtime */
+export function sendControl(
+  control: Control,
+  host: string,
+  kind: CommandKind,
+  value?: number
+): void {
+  const c = state.controls;
+  if (!c.target || c.sending.has(control)) return;
+  c.sending.add(control);
+  c.failed.delete(control);
+  c.awaiting.delete(control);
+  render();
+  sendCommand(c.target, host, kind, value)
+    .then((reply) => {
+      c.awaiting.set(control, { id: reply.id, at: Date.now() });
+      // A refused value stays in the stepper to adjust; an accepted one shows once the host publishes it
+      if (
+        reply.status !== 'refused' &&
+        (control === 'limit' || control === 'cap')
+      )
+        delete c.drafts[control];
+    })
+    .catch((error: unknown) => {
+      c.failed.set(control, {
+        kind,
+        note:
+          error instanceof CommandError ? error.message : 'The command failed.'
+      });
+    })
+    .finally(() => {
+      c.sending.delete(control);
+      render();
+    });
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Issue, StatusType } from '../linear';
 import type {
   ActivityPayload,
+  DeskCommandRow,
   HostMetricRow,
   PlanUsageRow,
   RunsPayload,
@@ -1935,5 +1936,141 @@ describe('usageBurn', () => {
   it('counts an unknown role as other', () => {
     const b = usageBurn([row(0, 5, { role: 'mystery' })], NOW);
     expect(b.fiveHour.other).toBe(5);
+  });
+});
+
+describe('controls', () => {
+  const target = { supabaseUrl: 'https://x.supabase.co', controlToken: 't' };
+  const row = (
+    id: number,
+    kind: string,
+    status = 'pending',
+    note: string | null = null
+  ): DeskCommandRow => ({
+    id,
+    at: NOW.toISOString(),
+    host: 'nuc',
+    kind,
+    args: {},
+    actor: 'mac',
+    status,
+    applied_at: status === 'pending' ? null : NOW.toISOString(),
+    note
+  });
+  const on = (build: (s: DeskState) => void = () => undefined): DeskState =>
+    withState((s) => {
+      s.controls.target = target;
+      s.data.runs = runsPayload({
+        qv: view({ limit: { used: 2, max: 5 } }),
+        job: {
+          line: 'every 10 min',
+          minutes: 10,
+          live: false,
+          host: 'launchd',
+          rev: null,
+          install: 'current',
+          items: '',
+          effort: { spent: 10, cap: 40 },
+          paused: true
+        }
+      });
+      build(s);
+    });
+
+  it('is null without a target or without a queue_state row', () => {
+    expect(
+      model(
+        withState((s) => (s.data.runs = runsPayload())),
+        NOW
+      ).controls
+    ).toBeNull();
+    expect(
+      model(
+        withState((s) => (s.controls.target = target)),
+        NOW
+      ).controls
+    ).toBeNull();
+  });
+
+  it('names the host, the current values and the paused state', () => {
+    const c = model(on(), NOW).controls;
+    expect(c?.host).toBe('nuc');
+    expect(c?.limit).toEqual({ current: 5, draft: 5 });
+    expect(c?.cap).toEqual({ current: 40, draft: 40 });
+    expect(c?.paused).toBe(true);
+    expect(c?.states.pause).toEqual({ state: 'idle' });
+  });
+
+  it('takes the draft over the current value', () => {
+    const c = model(
+      on((s) => (s.controls.drafts = { limit: 8, cap: 55 })),
+      NOW
+    ).controls;
+    expect(c?.limit.draft).toBe(8);
+    expect(c?.cap.draft).toBe(55);
+  });
+
+  it('reads the command rows', () => {
+    const c = model(
+      on((s) => {
+        s.data.deskCommands = [
+          row(1, 'resume'),
+          row(2, 'run', 'refused', 'busy')
+        ];
+      }),
+      NOW
+    ).controls;
+    expect(c?.states.pause).toEqual({ state: 'pending', kind: 'resume' });
+    expect(c?.states.run).toEqual({
+      state: 'refused',
+      kind: 'run',
+      note: 'busy'
+    });
+  });
+
+  it('puts a request in flight over a local failure over the rows', () => {
+    const s = on((x) => {
+      x.data.deskCommands = [row(1, 'run')];
+      x.controls.failed.set('run', {
+        kind: 'run',
+        note: 'The control token was rejected.'
+      });
+    });
+    expect(model(s, NOW).controls?.states.run).toEqual({
+      state: 'refused',
+      kind: 'run',
+      note: 'The control token was rejected.'
+    });
+    s.controls.sending.add('run');
+    expect(model(s, NOW).controls?.states.run).toEqual({ state: 'sending' });
+  });
+
+  it('reads a sent command as sending until its row arrives', () => {
+    const s = on((x) => {
+      x.controls.awaiting.set('run', { id: 9, at: NOW.getTime() });
+    });
+    expect(model(s, NOW).controls?.states.run).toEqual({ state: 'sending' });
+    s.data.deskCommands = [row(9, 'run')];
+    expect(model(s, NOW).controls?.states.run).toEqual({
+      state: 'pending',
+      kind: 'run'
+    });
+  });
+
+  it('leaves the limit unset without a queue view', () => {
+    const c = model(
+      on((s) => {
+        if (s.data.runs) s.data.runs.qv = null;
+      }),
+      NOW
+    ).controls;
+    expect(c?.limit).toEqual({ current: null, draft: null });
+  });
+
+  it('confirms until the deadline', () => {
+    const s = on((x) => (x.controls.confirmUntil = NOW.getTime() + 1000));
+    expect(model(s, NOW).controls?.confirming).toBe(true);
+    s.controls.confirmUntil = NOW.getTime() - 1;
+    expect(model(s, NOW).controls?.confirming).toBe(false);
   });
 });
