@@ -7,6 +7,7 @@ import { CliError } from '../cli/errors';
 import { cdwrHome } from '../cli/prefs';
 import { ENV_FILE } from '../cli/workspace';
 import {
+  type CapSource,
   HOST_ENV,
   type JobState,
   KEYCHAIN_SERVICE,
@@ -19,7 +20,7 @@ import {
   filesDrift,
   hostKind,
   implementBudget,
-  implementCap,
+  implementCapSource,
   installedEnv,
   lastImplementRun,
   linearKeySource,
@@ -203,14 +204,20 @@ export function implementReport(
 ): {
   spent: number | undefined;
   cap: number;
+  capSource: CapSource;
   budget: number;
   last: ReturnType<typeof lastImplementRun>;
 } {
   // The day implement.sh stamps: local date
   const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const { cap, source } = implementCapSource(
+    env['AGENT_QUEUE_IMPLEMENT_CAP_USD'],
+    readText(queue.implementCap)
+  );
   return {
     spent: spendForDay(readText(queue.implementSpend), day),
-    cap: implementCap(env['AGENT_QUEUE_IMPLEMENT_CAP_USD']),
+    cap,
+    capSource: source,
     budget: implementBudget(env['AGENT_QUEUE_IMPLEMENT_BUDGET_USD']),
     last: lastImplementRun(readText(queue.runs))
   };

@@ -140,6 +140,10 @@ export interface QueuePaths {
   lock: string;
   implementLock: string;
   implementSpend: string;
+  /** The PR limit the desk sets; absent means the default */
+  limit: string;
+  /** The daily implementing cap in dollars the desk sets; absent means the env or default */
+  implementCap: string;
   /** The container loop's pid, which a SIGUSR1 wakes; written by the image's entrypoint */
   loopPid: string;
   runs: string;
@@ -166,6 +170,8 @@ export const queuePaths = (
     lock: join(home, 'lock'),
     implementLock: join(home, 'implement.lock'),
     implementSpend: join(home, 'implement-spend.jsonl'),
+    limit: join(home, 'limit'),
+    implementCap: join(home, 'implement-cap'),
     loopPid: join(home, 'loop.pid'),
     runs: join(home, 'runs.jsonl'),
     logs,
@@ -436,10 +442,43 @@ const SYSTEM_PATH = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
 export const launchPath = (binaryDirs: string[]): string =>
   [...new Set([...binaryDirs, ...SYSTEM_PATH])].join(':');
 
-/** The daily cap: the env value when it is a positive number, else the default */
-export const implementCap = (value: string | undefined): number => {
+export type CapSource = 'file' | 'env' | 'default';
+
+/**
+ * The daily cap and where it came from: the desk's `implement-cap` file when it holds a
+ * number of 0 or more (0 stops launching), else the env value when it is a positive
+ * number, else the default
+ */
+export const implementCapSource = (
+  value: string | undefined,
+  file?: string
+): { cap: number; source: CapSource } => {
+  // The same form implement_cap() in run.sh accepts, so the two never disagree
+  const text = file?.trim() ?? '';
+  if (/^\d+(\.\d+)?$/.test(text)) return { cap: Number(text), source: 'file' };
   const n = Number(value);
-  return value?.trim() && Number.isFinite(n) && n > 0 ? n : IMPLEMENT_CAP_USD;
+  return value?.trim() && Number.isFinite(n) && n > 0
+    ? { cap: n, source: 'env' }
+    : { cap: IMPLEMENT_CAP_USD, source: 'default' };
+};
+
+/** The daily cap; see `implementCapSource` */
+export const implementCap = (
+  value: string | undefined,
+  file?: string
+): number => implementCapSource(value, file).cap;
+
+export const DEFAULT_QUEUE_LIMIT = 5;
+
+/** The PR limit and where it came from: the desk's `limit` file when it holds a whole number from 1 to 20, else the default */
+export const queueLimit = (
+  file: string | undefined
+): { value: number; source: 'file' | 'default' } => {
+  const text = file?.trim() ?? '';
+  const n = Number(text);
+  return /^\d+$/.test(text) && n >= 1 && n <= 20
+    ? { value: n, source: 'file' }
+    : { value: DEFAULT_QUEUE_LIMIT, source: 'default' };
 };
 
 /** The per-run budget: the env value when it is a positive number, else the default */
@@ -528,12 +567,13 @@ export const formatImplement = (
   spent: number | undefined,
   cap: number,
   last: ImplementRun | undefined,
-  budget = IMPLEMENT_BUDGET_USD
+  budget = IMPLEMENT_BUDGET_USD,
+  capSource: CapSource = 'default'
 ): string =>
   spent === undefined
     ? 'implement spend unreadable: implement-spend.jsonl has a bad line; no launch until it is fixed'
     : [
-        `implement spend today $${spent.toFixed(2)} of $${cap}${spent >= cap ? ` (over; a run may overshoot by its $${budget} budget)` : ''}`,
+        `implement spend today $${spent.toFixed(2)} of $${cap}${capSource === 'file' ? ' (desk)' : capSource === 'env' ? ' (env)' : ''}${spent >= cap ? ` (over; a run may overshoot by its $${budget} budget)` : ''}`,
         last
           ? `last ${last.outcome}${last.ticket ? ` ${last.ticket}` : ''}${last.when ? ` (${last.when})` : ''}`
           : 'no implementing session yet'

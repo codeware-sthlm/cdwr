@@ -57,6 +57,8 @@ const reportShape = z.object({
     spent: z.number().optional(),
     cap: z.number(),
     // Absent from a container on an older image
+    capSource: z.enum(['file', 'env', 'default']).optional(),
+    // Absent from a container on an older image
     budget: z.number().optional(),
     last: z
       .object({
@@ -97,8 +99,19 @@ const reportShape = z.object({
     .nullable(),
   queueView: queueViewSchema.or(z.literal('malformed')).nullable(),
   // Absent from a container on an older image, and null without a listener file
-  listener: listenerStateShape.nullable().optional()
+  listener: listenerStateShape.nullable().optional(),
+  // Absent from a container on an older image
+  limit: z
+    .object({ value: z.number(), source: z.enum(['file', 'default']) })
+    .optional()
 });
+
+/** The `limit` row's text: the PR limit and whether the desk set it */
+export const formatLimit = (limit: {
+  value: number;
+  source: 'file' | 'default';
+}): string =>
+  `${limit.value}, ${limit.source === 'file' ? 'set from the desk' : 'default'}`;
 
 /** The rows an attended-only machine shows; the others describe a scheduler it does not run */
 const ATTENDED_ROWS: ReadonlySet<string> = new Set([
@@ -109,6 +122,8 @@ const ATTENDED_ROWS: ReadonlySet<string> = new Set([
   'attended',
   'linear tools',
   'queue view',
+  // wait.sh reads the machine's own limit file, so an attended session follows it
+  'limit',
   'next',
   'held',
   'parked',

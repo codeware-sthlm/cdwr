@@ -22,6 +22,7 @@ import {
 import { symbols, theme } from '../../ui/theme';
 
 import {
+  DEFAULT_QUEUE_LIMIT,
   IMPLEMENT_BUDGET_USD,
   KEYCHAIN_SERVICE,
   LINEAR_KEY_ENV,
@@ -45,6 +46,7 @@ import {
   parseQueueView,
   parseSuggest,
   parseWatchState,
+  queueLimit,
   schedulerHere,
   summarizeSchedulerLine
 } from './agent.logic';
@@ -55,6 +57,7 @@ import {
   attendedSummary,
   checkRepoOf,
   formatContainerJob,
+  formatLimit,
   parseListener,
   parseRemoteStatus,
   rmLockCommand,
@@ -210,7 +213,15 @@ export default defineCommand({
           report.implement.spent,
           report.implement.cap,
           report.implement.last,
-          report.implement.budget ?? IMPLEMENT_BUDGET_USD
+          report.implement.budget ?? IMPLEMENT_BUDGET_USD,
+          report.implement.capSource
+        )
+      ),
+      row(
+        true,
+        'limit',
+        formatLimit(
+          report.limit ?? { value: DEFAULT_QUEUE_LIMIT, source: 'default' }
         )
       ),
       report.next
@@ -338,6 +349,7 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         ),
         lock: queue.lock,
         implement: implementReport(queue, ctx.env),
+        limit: queueLimit(readText(queue.limit)),
         listener:
           host === 'container'
             ? parseListener(readText(join(queue.home, 'listener.json')))

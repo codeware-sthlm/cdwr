@@ -13,16 +13,17 @@ import {
   BEAT_MS,
   type ChannelStatus,
   type ListenerState,
+  WATCHED,
   createListener
 } from './listen.logic';
 
 const URL_ENV = 'AGENT_SUPABASE_URL';
 const KEY_ENV = 'AGENT_SUPABASE_ANON_KEY';
-const TABLES = ['issue_events', 'github_events'] as const;
 
 export default defineCommand({
-  summary: 'Wake the scheduler when issue or GitHub events arrive',
-  description: `Subscribes to Supabase Realtime changes on issue_events and github_events and sends SIGUSR1 to the given pid, debounced and at most once a minute. It only wakes the scheduler; it decides nothing. Needs ${URL_ENV} and ${KEY_ENV} (the publishable key, never the service key). Writes listener.json in the queue home and exits 1 when it cannot recover, so a supervisor restarts it.`,
+  summary:
+    'Wake the scheduler when issue or GitHub events or desk commands arrive',
+  description: `Subscribes to Supabase Realtime changes on issue_events and github_events, and new rows in desk_commands, and sends SIGUSR1 to the given pid, debounced and at most once a minute. It only wakes the scheduler; it decides nothing. Needs ${URL_ENV} and ${KEY_ENV} (the publishable key, never the service key). Writes listener.json in the queue home and exits 1 when it cannot recover, so a supervisor restarts it.`,
   danger: 'read',
   history: false,
   inputs: {
@@ -42,7 +43,9 @@ export default defineCommand({
     if (!url) throw new CliError(`${URL_ENV} is not set`);
     if (!key) throw new CliError(`${KEY_ENV} is not set`);
     return {
-      steps: [`Listen on issue_events and github_events, wake ${notifyPid}`],
+      steps: [
+        `Listen on issue_events, github_events and desk_commands, wake ${notifyPid}`
+      ],
       data: { url, key, stateFile: join(paths(ctx.env).home, 'listener.json') }
     };
   },
@@ -82,8 +85,8 @@ export default defineCommand({
         fail: () => finish(1)
       });
 
-      for (const table of TABLES) {
-        for (const event of ['INSERT', 'UPDATE'] as const) {
+      for (const { table, events } of WATCHED) {
+        for (const event of events) {
           channel = channel.on(
             'postgres_changes',
             { event, schema: 'public', table },

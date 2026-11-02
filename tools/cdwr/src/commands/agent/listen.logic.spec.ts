@@ -1,8 +1,19 @@
 import {
   type ListenerState,
+  WATCHED,
   createListener,
   listenerStateShape
 } from './listen.logic';
+
+describe('WATCHED', () => {
+  it('wakes on new desk commands only, not on the scheduler ack that updates them', () => {
+    expect(WATCHED).toEqual([
+      { table: 'issue_events', events: ['INSERT', 'UPDATE'] },
+      { table: 'github_events', events: ['INSERT', 'UPDATE'] },
+      { table: 'desk_commands', events: ['INSERT'] }
+    ]);
+  });
+});
 
 const setup = () => {
   const persisted: ListenerState[] = [];

@@ -14,6 +14,16 @@ export const listenerStateShape = z.object({
 });
 export type ListenerState = z.infer<typeof listenerStateShape>;
 
+/**
+ * The tables the listener watches and the changes on each. A desk_commands UPDATE is the
+ * scheduler's own ack, which must not wake the loop again
+ */
+export const WATCHED = [
+  { table: 'issue_events', events: ['INSERT', 'UPDATE'] },
+  { table: 'github_events', events: ['INSERT', 'UPDATE'] },
+  { table: 'desk_commands', events: ['INSERT'] }
+] as const;
+
 /** Channel statuses supabase-js reports */
 export type ChannelStatus =
   'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'CLOSED';
