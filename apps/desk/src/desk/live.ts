@@ -218,7 +218,7 @@ export const heartbeatOk = (
 };
 
 export type HandBackState =
-  'attended' | 'handing back' | 'heartbeat ok' | 'idle';
+  'attended' | 'handing back' | 'handed back' | 'idle';
 
 export type HandBack = {
   state: HandBackState;
@@ -231,7 +231,7 @@ export type HandBack = {
 /**
  * The Mac's hand-back, from `sessions` alone: its newest attended heartbeat within
  * SESSION_ATTENDED_MIN is attended, within SESSION_HANDBACK_MIN handing back; after
- * that the NUC's heartbeat decides between heartbeat ok and idle. The Mac is any
+ * that the NUC's heartbeat decides between handed back and idle. The Mac is any
  * host but the NUC, which is the host that sends samples, or without samples the
  * host that launches implementing sessions.
  */
@@ -258,7 +258,7 @@ export const handBack = (
     return { state: 'attended', host, ageMin };
   if (ageMin !== null && ageMin <= SESSION_HANDBACK_MIN)
     return { state: 'handing back', host, ageMin };
-  return { state: nucFresh ? 'heartbeat ok' : 'idle', host, ageMin };
+  return { state: nucFresh ? 'handed back' : 'idle', host, ageMin };
 };
 
 export type Pulse = {

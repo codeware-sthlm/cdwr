@@ -129,7 +129,7 @@ const nucHostBlock = (m: Model): string => {
 export const STEPS: readonly HandBackState[] = [
   'attended',
   'handing back',
-  'heartbeat ok',
+  'handed back',
   'idle'
 ];
 

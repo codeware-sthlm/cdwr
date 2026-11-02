@@ -79,9 +79,9 @@ const STEP_RULE: Record<HandBackState, { label: string; sub: string }> = {
     label: 'handing back',
     sub: `no heartbeat for ${SESSION_ATTENDED_MIN}–${SESSION_HANDBACK_MIN} min`
   },
-  'heartbeat ok': {
-    label: 'heartbeat ok',
-    sub: 'the NUC sampled within its silent limit'
+  'handed back': {
+    label: 'handed back',
+    sub: 'the NUC has the queue and sampled within its silent limit'
   },
   idle: { label: 'idle', sub: 'the NUC is silent too; queue may schedule' }
 };
@@ -101,7 +101,7 @@ const macPanel = (m: Model): string => {
       <div class="cap-hh"><i class="cap-dot mac" aria-hidden="true"></i><b class="cap-name">${esc(h.host)}</b>${attended ? '<span class="pf-chip work on">ATTENDED</span>' : `<span class="pf-chip muted">${esc(h.state.toUpperCase())}</span>`}</div>
       ${text ? `<p class="cap-sub">${esc(text)}</p>` : ''}
       <div class="pf-strip" role="img" aria-label="Hand-back to the NUC: ${esc(h.state)}, one of ${esc(STEPS.join(', '))}">${STEPS.map((s) => `<span class="${s === h.state ? 'on' : ''}"><i></i><b>${STEP_RULE[s].label}</b><small>${esc(STEP_RULE[s].sub)}</small></span>`).join('')}</div>
-      <p class="pf-rule">Computed from sessions alone: the Mac's newest attended heartbeat within ${SESSION_ATTENDED_MIN} min is attended, within ${SESSION_HANDBACK_MIN} min it is handing back; after that the NUC's heartbeat decides between heartbeat ok and idle. An ended session drops at once.</p>
+      <p class="pf-rule">Computed from sessions alone: the Mac's newest attended heartbeat within ${SESSION_ATTENDED_MIN} min is attended, within ${SESSION_HANDBACK_MIN} min it is handing back; after that the NUC's heartbeat decides between handed back and idle. An ended session drops at once.</p>
     </div>`;
 };
 
