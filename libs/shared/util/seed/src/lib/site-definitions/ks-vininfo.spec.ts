@@ -57,11 +57,11 @@ describe('the kajstroberg.se definition', () => {
   });
 
   // Development and previews must never mail Kaj; go-live changes it (COD-710)
-  it('has an interest form with its own fields and a placeholder recipient', () => {
+  it('has a contact form with its own fields and a placeholder recipient', () => {
     const [form] = ksVininfo.forms ?? [];
 
     expect(ksVininfo.forms).toHaveLength(1);
-    expect(form.title).toBe('Intresseanmälan');
+    expect(form.title).toBe('Kontakt');
     expect(form.fields?.map(({ name }) => name)).toEqual([
       'name',
       'email',
@@ -69,6 +69,55 @@ describe('the kajstroberg.se definition', () => {
       'message'
     ]);
     expect(form.emailTo).toMatch(/@ks-vininfo\.dev$/);
+  });
+
+  const home = ksVininfo.pages[0].layout;
+
+  // The redesign (COD-717): the page opens on a hero that fills the screen,
+  // and every "Hör av dig" leads to the contact form rather than to a block
+  it('opens on a hero filling the screen, with one action to the contact form', () => {
+    const [hero] = home;
+
+    expect(hero).toMatchObject({
+      blockType: 'hero',
+      layout: 'fill',
+      decoration: 'vineyard-rows',
+      actions: [{ link: { type: 'custom', url: '#kontakt' } }]
+    });
+    expect('media' in hero).toBe(false);
+  });
+
+  it('keeps the contact form as an overlay that #kontakt opens', () => {
+    const form = home.find((block) => block.blockType === 'form');
+
+    expect(form).toMatchObject({
+      display: 'overlay',
+      anchor: 'kontakt',
+      overlayTitle: 'Hör av dig',
+      form: { lookupTitle: 'Kontakt' }
+    });
+  });
+
+  // Every photo the collage shows ships with the seed, so an apply resolves it
+  it('shows the trip photos in a collage, each one bundled', () => {
+    const gallery = home.find((block) => block.blockType === 'gallery');
+    const photos =
+      gallery?.blockType === 'gallery'
+        ? gallery.items.map(({ image }) => image.lookupFilename)
+        : [];
+    const bundled = ksVininfo.media?.map(({ filename }) => filename) ?? [];
+
+    expect(gallery).toMatchObject({ layout: 'collage' });
+    expect(photos).toHaveLength(8);
+    expect(bundled).toEqual(expect.arrayContaining(photos));
+  });
+
+  it('draws its own mark as SVG that follows the text colour', () => {
+    const icon = ksVininfo.siteSettings?.general?.icon;
+
+    expect(icon?.source).toBe('svg');
+    expect(icon?.svgCode).toContain('currentColor');
+    expect(icon?.svgCode).toContain('fill-rule="evenodd"');
   });
 
   it('offers the lingon theme alone', () => {
