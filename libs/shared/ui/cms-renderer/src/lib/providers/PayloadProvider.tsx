@@ -5,9 +5,11 @@ import type {
   FormSubmission,
   TenantIconConfig
 } from '@codeware/shared/util/payload-types';
-import { type ReactNode, createContext, use } from 'react';
+import { type ReactNode, createContext, use, useMemo, useRef } from 'react';
 
 import type { AppInfo } from '../about/AppAbout';
+
+import { type AnchorTargets, AnchorTargetsContext } from './anchor-targets';
 
 /**
  * What the browser sends so the server can tell a person from a script.
@@ -340,11 +342,58 @@ export function PayloadProvider({ children, value }: PayloadProviderProps) {
   // are not — they land as duplicate landmarks with the same name.
   const nested = use(Context) !== null;
 
+  // Overlays that a `#anchor` link opens. Kept in a ref: registering one
+  // must not re-render every consumer of the context
+  const targets = useRef(new Map<string, () => void>());
+  const anchorTargets = useMemo<AnchorTargets>(
+    () => ({
+      register: (anchor, open) => {
+        targets.current.set(anchor, open);
+        return () => {
+          if (targets.current.get(anchor) === open) {
+            targets.current.delete(anchor);
+          }
+        };
+      },
+      open: (anchor) => {
+        const open = targets.current.get(anchor);
+        open?.();
+        return !!open;
+      }
+    }),
+    []
+  );
+
+  // In-page links are handled here rather than by the app: both apps hand a
+  // `#` to their router, which cannot open an overlay, and the headless
+  // router would answer with a full page load
+  const wrapped = useMemo<PayloadValue>(
+    () => ({
+      ...value,
+      navigate: (path, newTab) => {
+        if (!newTab && path.startsWith('#')) {
+          const id = path.slice(1);
+          if (!anchorTargets.open(id)) {
+            document
+              .getElementById(id)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            history.replaceState(null, '', path);
+          }
+          return;
+        }
+        value.navigate(path, newTab);
+      }
+    }),
+    [value, anchorTargets]
+  );
+
   return (
-    <Context.Provider value={value}>
-      {children}
-      {!nested && <Toaster theme={value.resolvedColorScheme ?? 'system'} />}
-    </Context.Provider>
+    <AnchorTargetsContext.Provider value={anchorTargets}>
+      <Context.Provider value={wrapped}>
+        {children}
+        {!nested && <Toaster theme={value.resolvedColorScheme ?? 'system'} />}
+      </Context.Provider>
+    </AnchorTargetsContext.Provider>
   );
 }
 

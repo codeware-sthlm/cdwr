@@ -230,9 +230,13 @@ type Props = {
   nested?: boolean;
 };
 
+/** A form kept out of the flow until a link opens it */
+const isOverlay = (block: Props['blocks'][number]) =>
+  block.blockType === 'form' && block.display === 'overlay';
+
 /** A block's band, `none` for a block that has none or cannot have one */
 const bandOf = (block: Props['blocks'][number]): SectionBand =>
-  ('band' in block ? block.band : null) ?? 'none';
+  isOverlay(block) ? 'none' : (('band' in block ? block.band : null) ?? 'none');
 
 /**
  * Renders the blocks of a page.
@@ -291,6 +295,12 @@ export const RenderBlocks: React.FC<Props> = ({
               preview,
               framed
             );
+
+            // An overlay form draws nothing in the flow, so a band or a
+            // margin around it would be an empty strip
+            if (isOverlay(block)) {
+              return <Block key={index} {...block} {...extraProps} />;
+            }
 
             const band = bandOf(block);
 

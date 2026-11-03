@@ -1014,6 +1014,44 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'display',
+        type: 'select',
+        label: {
+          en: 'Display',
+          sv: 'Visning'
+        },
+        description: {
+          en: 'On the page draws the form where the block sits. Overlay keeps it hidden until a link to #anchor opens it beside the page, as a panel on a wide screen and a sheet from the bottom on a phone.',
+          sv: 'På sidan ritar formuläret där blocket ligger. Överlägg håller det dolt tills en länk till #ankare öppnar det bredvid sidan, som en panel på bred skärm och ett ark nedifrån på en telefon.'
+        }
+      },
+      {
+        name: 'anchor',
+        type: 'text',
+        label: {
+          en: 'Anchor',
+          sv: 'Ankare'
+        },
+        description: {
+          en: 'What a link reaches the form by, as #anchor. Lowercase letters, digits and dashes.',
+          sv: 'Det en länk når formuläret genom, som #ankare. Små bokstäver, siffror och bindestreck.'
+        }
+      },
+      {
+        name: 'overlayTitle',
+        type: 'text',
+        conditional: true,
+        localized: true,
+        label: {
+          en: 'Overlay title',
+          sv: 'Överläggets rubrik'
+        },
+        description: {
+          en: 'The heading of the panel. Empty means the form’s own title.',
+          sv: 'Panelens rubrik. Tomt betyder formulärets egen titel.'
+        }
+      },
+      {
         name: 'band',
         type: 'select',
         label: {
