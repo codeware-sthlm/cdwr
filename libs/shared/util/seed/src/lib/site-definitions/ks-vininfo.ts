@@ -1,23 +1,25 @@
 import type { SiteDefinition } from '../site-definition';
 
+import { ksVininfoIconSvg } from './ks-vininfo-icon';
 import { ksVininfoPrivacyMarkdown } from './ks-vininfo-legal';
 
 /**
  * `kajstroberg.se` — Kaj Ströberg's wine trips, as data.
  *
- * **One page, rebuilt from the one.com site.** The old page is a presentation
- * of Kaj, what the trips are and the travel guarantee; it stays that, in
- * Swedish.
+ * **One page, from the redesign (COD-717).** A hero that fills the screen,
+ * Kaj's introduction, what the trips are, photos from them, a contact form
+ * that opens from any `#kontakt` link, and the travel guarantee; in Swedish.
  *
  * **No dated trip at launch.** The Alsace trip of October 2026 is over, and a
  * page announcing it would be wrong from day one. Kaj adds the next one
- * himself when it is planned; until then the page says one is on its way.
+ * himself when it is planned.
  *
- * **An interest form.** The old page said "Resor bokas via denna sida" without
- * any way to book. The form takes an expression of interest, not a booking.
+ * **A contact form, not a booking.** The old page said "Resor bokas via denna
+ * sida" without any way to book. The form takes a question or a hello; dated
+ * trips go to tours when there is one to show.
  *
- * **Tours wait.** The platform's tours are for a dated trip with a programme;
- * with none to show, there is nothing to put in them yet.
+ * **Placeholders in Kaj's introduction.** The square brackets are for Håkan and
+ * Kaj to replace in the admin; nothing else on the page is a blank.
  *
  * **The form's recipient is a placeholder.** `hello@ks-vininfo.dev`, the one
  * every workspace gets, so the seed and previews never mail Kaj. At go-live the
@@ -29,20 +31,55 @@ export const ksVininfo: SiteDefinition = {
 
   media: [
     {
-      filename: 'ks-vininfo-header.jpg',
-      external: true,
-      alt: 'Vinodlingar och olivlundar på kullarna nedanför en by på en höjd'
-    },
-    {
       filename: 'ks-vininfo-portrait.jpg',
       external: true,
       alt: 'Kaj Ströberg med mikrofonen på resebussen'
+    },
+    {
+      filename: 'ks-vininfo-terraces.jpg',
+      external: true,
+      alt: 'Terrasserade vinberg i sensommarsol'
+    },
+    {
+      filename: 'ks-vininfo-river-village.jpg',
+      external: true,
+      alt: 'En by vid floden nedanför sluttande vinberg'
+    },
+    {
+      filename: 'ks-vininfo-tartelette.jpg',
+      external: true,
+      alt: 'Höstig tartelette med blommor'
+    },
+    {
+      filename: 'ks-vininfo-chocolate-dessert.jpg',
+      external: true,
+      alt: 'Chokladdessert med körsbärssorbet'
+    },
+    {
+      filename: 'ks-vininfo-pork.jpg',
+      external: true,
+      alt: 'Grillad fläskfilé med morötter och pumpa'
+    },
+    {
+      filename: 'ks-vininfo-village-street.jpg',
+      external: true,
+      alt: 'En gata i en vinby'
+    },
+    {
+      filename: 'ks-vininfo-autumn-vines.jpg',
+      external: true,
+      alt: 'Vinodlingar i höstfärger'
+    },
+    {
+      filename: 'ks-vininfo-green-dessert.jpg',
+      external: true,
+      alt: 'Dessert med en grön kupol'
     }
   ],
 
   forms: [
     {
-      title: 'Intresseanmälan',
+      title: 'Kontakt',
       fields: [
         {
           blockType: 'text',
@@ -68,13 +105,13 @@ export const ksVininfo: SiteDefinition = {
           blockType: 'textarea',
           name: 'message',
           label: 'Meddelande',
-          placeholder: 'Vilken resa är du intresserad av, och hur många är ni?',
+          placeholder: 'Vad vill du fråga om?',
           width: 6
         }
       ],
-      submitLabel: 'Skicka intresseanmälan',
-      confirmation: 'Tack! Jag hör av mig när nästa resa är klar.',
-      subject: 'Intresseanmälan från {{email}}',
+      submitLabel: 'Skicka',
+      confirmation: 'Tack! Jag hör av mig så snart jag kan.',
+      subject: 'Kontakt från {{email}}',
       // A development placeholder, so the seed and previews never mail Kaj; at
       // go-live the form's recipient is changed to his address (COD-710)
       emailTo: 'hello@ks-vininfo.dev'
@@ -93,17 +130,37 @@ export const ksVininfo: SiteDefinition = {
       layout: [
         {
           blockType: 'hero',
+          layout: 'fill',
+          decoration: 'vineyard-rows',
+          badge: 'Vinresor i Europa',
           heading: 'Vinresor med Kaj Ströberg',
           lede: 'Resor till Europas vinregioner, med besök hos gästfria producenter och tid för det lokala köket.',
-          media: { lookupFilename: 'ks-vininfo-header.jpg' }
+          actions: [
+            {
+              link: {
+                type: 'custom',
+                url: '#kontakt',
+                label: 'Hör av dig',
+                newTab: false
+              },
+              emphasis: 'primary'
+            }
+          ]
+        },
+        {
+          blockType: 'callout',
+          band: 'subtle',
+          showMark: false,
+          heading: 'Hej, jag heter Kaj',
+          // The brackets are Kaj's to fill in the admin
+          body: 'Jag har ordnat vinresor sedan [ÅR]. Det började med [HUR DET BÖRJADE, EN MENING]. Vi reser i små grupper på [ANTAL] personer, och jag är själv med på varje resa. Det jag bryr mig mest om är [DET SOM ÄR VIKTIGAST FÖR KAJ, T.EX. PRODUCENTERNA, MATEN ELLER TEMPOT].',
+          image: { lookupFilename: 'ks-vininfo-portrait.jpg' },
+          showLink: false
         },
         {
           blockType: 'feature-section',
-          band: 'subtle',
-          heading: 'Hej',
-          intro:
-            'Jag heter Kaj Ströberg och ordnar vinresor för dig som vill komma närmare vinet, maten och människorna bakom dem.',
-          media: { lookupFilename: 'ks-vininfo-portrait.jpg' },
+          eyebrow: 'Resorna',
+          heading: 'Vin, mat och tid att njuta',
           subFeatures: [
             {
               title: 'Gästfria producenter',
@@ -120,35 +177,71 @@ export const ksVininfo: SiteDefinition = {
           ]
         },
         {
-          blockType: 'content',
-          columns: [
+          blockType: 'gallery',
+          layout: 'collage',
+          eyebrow: 'Från resorna',
+          heading: 'Vinberg, byar och långa middagar',
+          items: [
             {
-              size: 'full',
-              richText: {
-                markdown:
-                  '## Kommande resor\n\nNästa resa planeras just nu. Anmäl ditt intresse nedan, så hör jag av mig när program och datum är klara.'
-              }
+              image: { lookupFilename: 'ks-vininfo-terraces.jpg' },
+              size: 'tall'
+            },
+            {
+              image: { lookupFilename: 'ks-vininfo-river-village.jpg' },
+              size: 'wide'
+            },
+            {
+              image: { lookupFilename: 'ks-vininfo-tartelette.jpg' },
+              size: 'normal'
+            },
+            {
+              image: { lookupFilename: 'ks-vininfo-chocolate-dessert.jpg' },
+              size: 'normal'
+            },
+            {
+              image: { lookupFilename: 'ks-vininfo-pork.jpg' },
+              size: 'normal'
+            },
+            {
+              image: { lookupFilename: 'ks-vininfo-village-street.jpg' },
+              size: 'tall'
+            },
+            {
+              image: { lookupFilename: 'ks-vininfo-autumn-vines.jpg' },
+              size: 'wide'
+            },
+            {
+              image: { lookupFilename: 'ks-vininfo-green-dessert.jpg' },
+              size: 'normal'
             }
           ]
         },
         {
+          // Nothing on the page: every "Hör av dig" link opens it beside the page
           blockType: 'form',
-          form: { lookupTitle: 'Intresseanmälan' },
+          form: { lookupTitle: 'Kontakt' },
+          display: 'overlay',
+          anchor: 'kontakt',
+          overlayTitle: 'Hör av dig',
           enableIntro: true,
           introContent: {
             markdown:
-              '## Anmälan\n\nAnmälan tas emot i turordning. Du kan anmäla dig här, mejla till kaj.stroberg@gmail.com eller ringa 070-994 74 03.'
+              'Har du frågor om resorna, eller vill du veta när det blir en ny resa? Skriv några rader så hör jag av mig.'
           }
         },
         {
-          blockType: 'content',
-          columns: [
+          blockType: 'feature-section',
+          band: 'subtle',
+          eyebrow: 'Trygghet',
+          heading: 'Vi har resegaranti hos Kammarkollegiet',
+          subFeatures: [
             {
-              size: 'full',
-              richText: {
-                markdown:
-                  '### Vi har resegaranti hos Kammarkollegiet\n\nAtt vi har ordnat med resegaranti innebär att du kan få ersättning om någon del av din paketresa eller sammanlänkade researrangemang blir inställd om vi skulle drabbas av insolvens.\n\nAtt vi har ordnat med resegaranti betyder att du har rätt till ersättning för den del av paketresan eller sammanlänkade researrangemanget som vi ansvarar för och som inte har fullgjorts.'
-              }
+              title: 'Om vi skulle drabbas av insolvens',
+              body: 'Att vi har ordnat med resegaranti innebär att du kan få ersättning om någon del av din paketresa eller sammanlänkade researrangemang blir inställd om vi skulle drabbas av insolvens.'
+            },
+            {
+              title: 'Det som inte har fullgjorts',
+              body: 'Att vi har ordnat med resegaranti betyder att du har rätt till ersättning för den del av paketresan eller sammanlänkade researrangemanget som vi ansvarar för och som inte har fullgjorts.'
             }
           ]
         }
@@ -172,18 +265,30 @@ export const ksVininfo: SiteDefinition = {
     general: {
       appName: 'kajstroberg.se',
       landingPage: { lookupSlug: 'hem' },
-      // The icon is left to the default: the definition can only state SVG
+      icon: { source: 'svg', svgCode: ksVininfoIconSvg },
       themes: ['lingon'],
       defaultTheme: 'lingon',
       colorScheme: 'light'
     },
     // One page, so the footer carries who and how to reach him
     footer: {
-      variant: 'standard',
+      variant: 'expanded',
+      tagline:
+        'Vinresor till Europas vinregioner, med gästfria producenter och det lokala köket.',
       linkSource: 'none',
       contact: [
-        { platform: 'email', email: 'kaj.stroberg@gmail.com' },
-        { platform: 'phone', phone: '070-994 74 03' }
+        {
+          platform: 'email',
+          email: 'kaj.stroberg@gmail.com',
+          withLabel: true,
+          label: 'kaj.stroberg@gmail.com'
+        },
+        {
+          platform: 'phone',
+          phone: '070-994 74 03',
+          withLabel: true,
+          label: '070-994 74 03'
+        }
       ],
       showCopyright: true,
       copyright: '© {year} Kaj Ströberg',
