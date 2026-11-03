@@ -57,7 +57,7 @@ export function RenderLandingPage({
   return (
     // The outer layer only: each block brings the inner one, so a band can
     // sit between the two and span the sheet
-    <ContainerOuter className="mt-16 sm:mt-32">
+    <ContainerOuter className="mt-16 has-[[data-opens-full]]:mt-0 sm:mt-32 sm:has-[[data-opens-full]]:mt-0">
       {landingPage?.header && (
         <ContainerInner>
           <header className="max-w-2xl">
@@ -67,7 +67,7 @@ export function RenderLandingPage({
           </header>
         </ContainerInner>
       )}
-      <article className="mt-16">
+      <article className="mt-16 has-[[data-opens-full]]:mt-0">
         {landingPage?.layout ? (
           <RenderBlocks
             framed

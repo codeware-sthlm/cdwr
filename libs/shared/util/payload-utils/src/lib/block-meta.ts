@@ -1073,8 +1073,33 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'layout',
+        type: 'select',
+        label: {
+          en: 'Layout',
+          sv: 'Layout'
+        },
+        description: {
+          en: 'Standard sets the text to the left with a visual beneath. Fill centres the text and makes the block fill the screen under the header, with no visual.',
+          sv: 'Standard placerar texten till vänster med en bild under. Fyll centrerar texten och låter blocket fylla skärmen under sidhuvudet, utan bild.'
+        }
+      },
+      {
+        name: 'decoration',
+        type: 'select',
+        label: {
+          en: 'Decoration',
+          sv: 'Dekoration'
+        },
+        description: {
+          en: 'A static drawing in the theme’s own colour along the bottom of the block, fading upward.',
+          sv: 'En stillbild i temats egen färg längs blockets nederkant, som tonar uppåt.'
+        }
+      },
+      {
         name: 'media',
         type: 'upload',
+        conditional: true,
         label: {
           en: 'Visual',
           sv: 'Bild'
@@ -1087,6 +1112,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       {
         name: 'illustration',
         type: 'textarea',
+        conditional: true,
         label: {
           en: 'Illustration',
           sv: 'Illustration'
