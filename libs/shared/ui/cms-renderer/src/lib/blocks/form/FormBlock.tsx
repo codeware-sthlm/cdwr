@@ -2,13 +2,6 @@
 
 import { Card, CardContent } from '@codeware/shared/ui/shadcn/components/card';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@codeware/shared/ui/shadcn/components/dialog';
-import {
   Form,
   FormField,
   FormItem,
@@ -38,13 +31,25 @@ import { Grid } from '../../layout/Grid';
 import { usePayload } from '../../providers/PayloadProvider';
 import { RichText } from '../RichText';
 
+import { FormConfirmationDialog } from './FormConfirmationDialog';
+import { FormOverlay } from './FormOverlay';
+
 // Assume form has the proper type but validate it before render anyway
 type Props = FormBlockProps & {
   /**
-   * Called after a submission is accepted, before any confirmation is shown.
-   * Lets a host close the surface the form sits in (a sheet, a dialog).
+   * Called after a submission is accepted.
+   *
+   * Lets a host close the surface the form sits in (a sheet, a dialog). A
+   * host that passes it owns the message confirmation too: the block opens
+   * no dialog of its own, so the host can show it once its surface is gone.
+   * Redirects and the fallback toast are unchanged.
    */
   onSuccess?: () => void;
+  /**
+   * Draw the form without its card, for a host that already provides a
+   * surface, like the overlay.
+   */
+  unframed?: boolean;
   /**
    * Draw the form with its submit button held shut.
    *
@@ -61,14 +66,52 @@ type Props = FormBlockProps & {
  * A form that is gone, or only an id, has no fields to draw, so the block
  * renders nothing rather than failing the page it sits on.
  */
-export const FormBlock: React.FC<Props> = ({ form, ...rest }) =>
-  form && typeof form === 'object' ? (
-    <PopulatedFormBlock {...rest} form={form} />
-  ) : null;
+export const FormBlock: React.FC<Props> = ({
+  anchor,
+  display,
+  form,
+  overlayTitle,
+  ...rest
+}) => {
+  if (!form || typeof form !== 'object') {
+    return null;
+  }
 
-const PopulatedFormBlock: React.FC<
+  if (display === 'overlay' && anchor) {
+    return (
+      <FormOverlay
+        anchor={anchor}
+        disabled={rest.disabled}
+        enableIntro={rest.enableIntro}
+        form={form}
+        introContent={rest.introContent}
+        title={overlayTitle || form.title}
+      />
+    );
+  }
+
+  const block = <PopulatedFormBlock {...rest} form={form} />;
+
+  // Only a form with an anchor needs the element a link scrolls to
+  return anchor ? (
+    <div id={anchor} className="scroll-mt-24">
+      {block}
+    </div>
+  ) : (
+    block
+  );
+};
+
+export const PopulatedFormBlock: React.FC<
   Omit<Props, 'form'> & { form: FormType }
-> = ({ disabled, enableIntro, form: formBuilder, introContent, onSuccess }) => {
+> = ({
+  disabled,
+  enableIntro,
+  form: formBuilder,
+  introContent,
+  onSuccess,
+  unframed
+}) => {
   // Since FormField is using a controlled component,
   // we need to provide default values for the form fields
   // since undefined is not allowed and will throw console errors.
@@ -166,8 +209,10 @@ const PopulatedFormBlock: React.FC<
           // Act on the type of confirmation
           let confirmed = false;
           if (confirmationType === 'message') {
-            // Open dialog with a message
-            setOpenConfirmationDialog(true);
+            // A host passing onSuccess shows the message itself
+            if (!onSuccess) {
+              setOpenConfirmationDialog(true);
+            }
             confirmed = true;
           } else if (confirmationType === 'redirect' && redirect) {
             // Redirect to collection document or URL if provided
@@ -242,172 +287,173 @@ const PopulatedFormBlock: React.FC<
     return null;
   }
 
-  return (
-    // A card of reading width, as a form reads best: a field stretched across
-    // the page asks for more than it wants
-    <Card className="w-full max-w-md">
-      <CardContent>
-        {enableIntro && introContent && (
-          <RichText className="mb-6 lg:mb-8" data={introContent} />
-        )}
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit, onError)}
-            className="mt-6 first:mt-0"
-          >
-            {/* Grid columns must be in sync with forms plugin, width field */}
-            <Grid columns={6} className="gap-x-4 gap-y-4">
-              {/* Loop through form builder field definitions */}
-              {formBuilder?.fields?.map((fieldDef, index) => {
-                // Handle message separately since it's not a form field.
-                // It can be used to display a message to the user anywhere in the form.
-                if (fieldDef.blockType === 'message') {
-                  return (
-                    fieldDef.message && (
-                      <ColSpan
-                        className="my-4 border-l-4 bg-inherit p-3 last:mb-0"
-                        key={index}
-                      >
-                        <RichText data={fieldDef.message} disableProse={true} />
-                      </ColSpan>
-                    )
-                  );
-                }
-                // Number fields carry an optional range from the form builder
-                const rules: RegisterOptions = {
-                  required: fieldDef.required ?? false
-                };
-                if (fieldDef.blockType === 'number') {
-                  if (typeof fieldDef.min === 'number') {
-                    rules.min = fieldDef.min;
-                  }
-                  if (typeof fieldDef.max === 'number') {
-                    rules.max = fieldDef.max;
-                  }
-                }
-
-                return (
-                  <ColSpan columns={fieldDef.width} key={index}>
-                    <FormField
-                      control={form.control}
-                      name={fieldDef.name}
-                      rules={rules}
-                      render={({ field }) => {
-                        return (
-                          <FormItem>
-                            {/* (Håkan) I chose to do this way to get full type safety on the builderField.
-                          Could this be improved to detect missing component implementations? */}
-                            {fieldDef.blockType === 'checkbox' && (
-                              <Checkbox
-                                label={fieldDef.label ?? fieldDef.name}
-                                {...field}
-                              />
-                            )}
-                            {fieldDef.blockType === 'country' && (
-                              <Select
-                                label={fieldDef.label}
-                                placeholder={fieldDef.placeholder}
-                                options={countryOptions}
-                                {...field}
-                              />
-                            )}
-                            {fieldDef.blockType === 'email' && (
-                              <Input
-                                type="email"
-                                label={fieldDef.label}
-                                placeholder={fieldDef.placeholder}
-                                {...field}
-                              />
-                            )}
-                            {fieldDef.blockType === 'number' && (
-                              <Input
-                                type="number"
-                                label={fieldDef.label}
-                                placeholder={fieldDef.placeholder}
-                                min={fieldDef.min ?? undefined}
-                                max={fieldDef.max ?? undefined}
-                                {...field}
-                                // A number input still reports a string, which
-                                // makes the min/max rules compare text
-                                onChange={(event) =>
-                                  field.onChange(
-                                    event.target.value === ''
-                                      ? undefined
-                                      : event.target.valueAsNumber
-                                  )
-                                }
-                              />
-                            )}
-                            {fieldDef.blockType === 'radio' && (
-                              <Radio
-                                label={fieldDef.label}
-                                options={fieldDef.options}
-                                {...field}
-                              />
-                            )}
-                            {fieldDef.blockType === 'select' && (
-                              <Select
-                                label={fieldDef.label}
-                                placeholder={fieldDef.placeholder}
-                                options={fieldDef.options ?? []}
-                                {...field}
-                              />
-                            )}
-                            {fieldDef.blockType === 'text' && (
-                              <Input
-                                type="text"
-                                label={fieldDef.label}
-                                placeholder={fieldDef.placeholder}
-                                {...field}
-                              />
-                            )}
-                            {fieldDef.blockType === 'textarea' && (
-                              <Textarea
-                                label={fieldDef.label}
-                                placeholder={fieldDef.placeholder}
-                                {...field}
-                              />
-                            )}
-                            {/* <FormDescription></FormDescription> */}
-                            <FormMessage />
-                          </FormItem>
-                        );
-                      }}
-                    />
-                  </ColSpan>
-                );
-              })}
-            </Grid>
-
-            {humanCheck.fields}
-
-            {/* Held shut until a drawn widget has been solved, so a click cannot
-              post into a refusal the visitor would read as the form failing */}
-            <Button
-              type="submit"
-              isLoading={isLoading}
-              disabled={disabled || !humanCheck.solved}
-              className="mt-4"
-            >
-              {submitButtonLabel}
-            </Button>
-          </form>
-        </Form>
-
-        {/* Display confirmation message in a dialog */}
-        <Dialog
-          open={openConfirmationDialog}
-          onOpenChange={setOpenConfirmationDialog}
+  const content = (
+    <>
+      {enableIntro && introContent && (
+        <RichText className="mb-6 lg:mb-8" data={introContent} />
+      )}
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(onSubmit, onError)}
+          className="mt-6 first:mt-0"
         >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t(locale, 'form.submitSuccess')}</DialogTitle>
-              <DialogDescription />
-            </DialogHeader>
-            {confirmationMessage && <RichText data={confirmationMessage} />}
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
+          {/* Grid columns must be in sync with forms plugin, width field */}
+          <Grid columns={6} className="gap-x-4 gap-y-4">
+            {/* Loop through form builder field definitions */}
+            {formBuilder?.fields?.map((fieldDef, index) => {
+              // Handle message separately since it's not a form field.
+              // It can be used to display a message to the user anywhere in the form.
+              if (fieldDef.blockType === 'message') {
+                return (
+                  fieldDef.message && (
+                    <ColSpan
+                      className="my-4 border-l-4 bg-inherit p-3 last:mb-0"
+                      key={index}
+                    >
+                      <RichText data={fieldDef.message} disableProse={true} />
+                    </ColSpan>
+                  )
+                );
+              }
+              // Number fields carry an optional range from the form builder
+              const rules: RegisterOptions = {
+                required: fieldDef.required ?? false
+              };
+              if (fieldDef.blockType === 'number') {
+                if (typeof fieldDef.min === 'number') {
+                  rules.min = fieldDef.min;
+                }
+                if (typeof fieldDef.max === 'number') {
+                  rules.max = fieldDef.max;
+                }
+              }
+
+              return (
+                <ColSpan columns={fieldDef.width} key={index}>
+                  <FormField
+                    control={form.control}
+                    name={fieldDef.name}
+                    rules={rules}
+                    render={({ field }) => {
+                      return (
+                        <FormItem>
+                          {/* (Håkan) I chose to do this way to get full type safety on the builderField.
+                          Could this be improved to detect missing component implementations? */}
+                          {fieldDef.blockType === 'checkbox' && (
+                            <Checkbox
+                              label={fieldDef.label ?? fieldDef.name}
+                              {...field}
+                            />
+                          )}
+                          {fieldDef.blockType === 'country' && (
+                            <Select
+                              label={fieldDef.label}
+                              placeholder={fieldDef.placeholder}
+                              options={countryOptions}
+                              {...field}
+                            />
+                          )}
+                          {fieldDef.blockType === 'email' && (
+                            <Input
+                              type="email"
+                              label={fieldDef.label}
+                              placeholder={fieldDef.placeholder}
+                              {...field}
+                            />
+                          )}
+                          {fieldDef.blockType === 'number' && (
+                            <Input
+                              type="number"
+                              label={fieldDef.label}
+                              placeholder={fieldDef.placeholder}
+                              min={fieldDef.min ?? undefined}
+                              max={fieldDef.max ?? undefined}
+                              {...field}
+                              // A number input still reports a string, which
+                              // makes the min/max rules compare text
+                              onChange={(event) =>
+                                field.onChange(
+                                  event.target.value === ''
+                                    ? undefined
+                                    : event.target.valueAsNumber
+                                )
+                              }
+                            />
+                          )}
+                          {fieldDef.blockType === 'radio' && (
+                            <Radio
+                              label={fieldDef.label}
+                              options={fieldDef.options}
+                              {...field}
+                            />
+                          )}
+                          {fieldDef.blockType === 'select' && (
+                            <Select
+                              label={fieldDef.label}
+                              placeholder={fieldDef.placeholder}
+                              options={fieldDef.options ?? []}
+                              {...field}
+                            />
+                          )}
+                          {fieldDef.blockType === 'text' && (
+                            <Input
+                              type="text"
+                              label={fieldDef.label}
+                              placeholder={fieldDef.placeholder}
+                              {...field}
+                            />
+                          )}
+                          {fieldDef.blockType === 'textarea' && (
+                            <Textarea
+                              label={fieldDef.label}
+                              placeholder={fieldDef.placeholder}
+                              {...field}
+                            />
+                          )}
+                          {/* <FormDescription></FormDescription> */}
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                </ColSpan>
+              );
+            })}
+          </Grid>
+
+          {humanCheck.fields}
+
+          {/* Held shut until a drawn widget has been solved, so a click cannot
+              post into a refusal the visitor would read as the form failing */}
+          <Button
+            type="submit"
+            isLoading={isLoading}
+            disabled={disabled || !humanCheck.solved}
+            className="mt-4"
+          >
+            {submitButtonLabel}
+          </Button>
+        </form>
+      </Form>
+    </>
+  );
+
+  return (
+    <>
+      {unframed ? (
+        content
+      ) : (
+        // A card of reading width, as a form reads best: a field stretched
+        // across the page asks for more than it wants
+        <Card className="w-full max-w-md">
+          <CardContent>{content}</CardContent>
+        </Card>
+      )}
+      <FormConfirmationDialog
+        open={openConfirmationDialog}
+        onOpenChange={setOpenConfirmationDialog}
+        message={confirmationMessage}
+      />
+    </>
   );
 };

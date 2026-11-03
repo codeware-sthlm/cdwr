@@ -1075,6 +1075,18 @@ export interface FormBlock {
     [k: string]: unknown;
   } | null;
   /**
+   * On the page draws the form where the block sits. Overlay keeps it hidden until a link to #anchor opens it beside the page, as a panel on a wide screen and a sheet from the bottom on a phone.
+   */
+  display?: ('inline' | 'overlay') | null;
+  /**
+   * What a link reaches the form by, as #anchor. Lowercase letters, digits and dashes.
+   */
+  anchor?: string | null;
+  /**
+   * The heading of the panel. Empty means the form’s own title.
+   */
+  overlayTitle?: string | null;
+  /**
    * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
   band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
