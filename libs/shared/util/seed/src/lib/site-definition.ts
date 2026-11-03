@@ -7,6 +7,7 @@ import type {
   FeatureSectionBlock,
   FileAreaBlock,
   FormBlock,
+  GalleryBlock,
   HeroBlock,
   ImageBlock,
   Page,
@@ -65,6 +66,7 @@ type ReferencingBlock =
   | FeatureSectionBlock
   | FileAreaBlock
   | FormBlock
+  | GalleryBlock
   | HeroBlock
   | ImageBlock
   | PillListBlock
@@ -241,6 +243,18 @@ export type PillListBlockDefinition = Omit<Authored<PillListBlock>, 'items'> & {
   > | null;
 };
 
+type GalleryItem = NonNullable<GalleryBlock['items']>[number];
+
+/**
+ * A gallery's photos each point at a media document, stated by filename.
+ *
+ * `size` and `caption` are kept as authored; `id` is left out, as on every
+ * array row a definition states.
+ */
+export type GalleryBlockDefinition = Omit<Authored<GalleryBlock>, 'items'> & {
+  items: Array<Omit<GalleryItem, 'id' | 'image'> & { image: MediaRef }>;
+};
+
 /** Any block a definition may place on a page. */
 export type BlockDefinition =
   | PlainBlockDefinition
@@ -249,6 +263,7 @@ export type BlockDefinition =
   | ImageBlockDefinition
   | FeatureSectionBlockDefinition
   | FormBlockDefinition
+  | GalleryBlockDefinition
   | CustomComponentBlockDefinition
   | ContentBlockDefinition
   | ReusableContentBlockDefinition

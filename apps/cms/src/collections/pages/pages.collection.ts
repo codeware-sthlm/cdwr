@@ -27,6 +27,7 @@ const blocks: Record<BlockSlug, boolean> = {
   'feature-section': true,
   'file-area': true,
   form: true,
+  gallery: true,
   hero: true,
   image: true,
   'pill-list': true,

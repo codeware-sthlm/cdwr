@@ -219,6 +219,24 @@ export const BLOCK_IMAGES: Record<string, BlockImages> = {
       'M9 6v12'
     ]
   },
+  gallery: {
+    thumbnail: [
+      ...eyebrow(28, 44, 56),
+      ...heading(28, 72, 190),
+      // A collage: one tall and one wide among the rest
+      ...imageBox(28, 112, 96, 172),
+      ...imageBox(136, 112, 96, 80),
+      ...imageBox(244, 112, 96, 80),
+      ...imageBox(352, 112, 100, 80),
+      ...imageBox(136, 204, 204, 80),
+      ...imageBox(352, 204, 100, 80)
+    ],
+    icon: [
+      roundRect(3, 3, 8, 8, 1),
+      roundRect(13, 3, 8, 8, 1),
+      roundRect(3, 13, 18, 8, 1)
+    ]
+  },
   hero: {
     thumbnail: [
       ...pill(28, 44, 104, 26),
