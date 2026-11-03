@@ -62,7 +62,9 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
       viewBox="0 0 1280 260"
       preserveAspectRatio="none"
       aria-hidden="true"
-      className="inset-x-band-reach pointer-events-none absolute bottom-0 h-36 md:h-56"
+      // Behind the text: the fade is painted in the page colour, and over the
+      // button it would wash it out
+      className="inset-x-band-reach pointer-events-none absolute bottom-0 -z-10 h-36 md:h-56"
     >
       <defs>
         <linearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
@@ -96,8 +98,10 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
     return (
       <section
         className={cn(
-          'relative flex min-h-[calc(90svh-4rem)] flex-col items-center justify-center text-center',
-          decorated && 'pb-24 md:pb-32'
+          // The header is 4rem; the rest of the first screen is the hero's
+          'relative isolate flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center text-center',
+          // Room for the rows, so the centred text stays clear of them
+          decorated && 'pb-36 md:pb-56'
         )}
       >
         {badge && (
@@ -118,7 +122,7 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
   }
 
   return (
-    <section className={cn(decorated && 'relative')}>
+    <section className={cn(decorated && 'relative isolate')}>
       {/* A drawing sits beside the text on a wide screen, where the text alone
           leaves half the row empty; an image keeps a row of its own */}
       <div
