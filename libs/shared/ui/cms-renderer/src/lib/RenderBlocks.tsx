@@ -19,6 +19,7 @@ import { FeatureCardsBlock } from './blocks/feature-cards/FeatureCardsBlock';
 import { FeatureSectionBlock } from './blocks/feature-section/FeatureSectionBlock';
 import { FileAreaBlock } from './blocks/file-area/FileAreaBlock';
 import { FormBlock } from './blocks/form/FormBlock';
+import { GalleryBlock } from './blocks/gallery/GalleryBlock';
 import { HeroBlock } from './blocks/hero/HeroBlock';
 import { ImageBlock } from './blocks/image/ImageBlock';
 import { PillListBlock } from './blocks/pill-list/PillListBlock';
@@ -188,6 +189,7 @@ const blocksMap: Record<
   'feature-section': FeatureSectionBlock,
   'file-area': FileAreaBlock,
   form: FormBlock,
+  gallery: GalleryBlock,
   hero: HeroBlock,
   image: ImageBlock,
   'pill-list': PillListBlock,

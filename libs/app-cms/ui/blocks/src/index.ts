@@ -9,6 +9,7 @@ export { featureCardsBlock } from './lib/feature-cards/feature-cards.block';
 export { featureSectionBlock } from './lib/feature-section/feature-section.block';
 export { fileAreaBlock } from './lib/file-area/file-area.block';
 export { formBlock } from './lib/form/form.block';
+export { galleryBlock } from './lib/gallery/gallery.block';
 export { heroBlock } from './lib/hero/hero.block';
 export { imageBlock } from './lib/image/image.block';
 export { pillListBlock } from './lib/pill-list/pill-list.block';

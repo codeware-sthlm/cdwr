@@ -171,6 +171,7 @@ export interface Config {
     'feature-section': FeatureSectionBlock;
     'file-area': FileAreaBlock;
     form: FormBlock;
+    gallery: GalleryBlock;
     hero: HeroBlock;
     image: ImageBlock;
     'pill-list': PillListBlock;
@@ -384,7 +385,11 @@ export interface CalloutBlock {
    * SVG code, drawn in the page itself. Colours can use the theme, such as var(--brand-500) or var(--foreground), so it follows a change of theme. Shown instead of the visual when both are set.
    */
   illustration?: string | null;
-  link: CalloutLink;
+  /**
+   * Uncheck for a band that says something without asking for a click.
+   */
+  showLink?: boolean | null;
+  link?: CalloutLink;
   /**
    * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
@@ -683,6 +688,7 @@ export interface Page {
     | FeatureSectionBlock
     | FileAreaBlock
     | FormBlock
+    | GalleryBlock
     | HeroBlock
     | ImageBlock
     | PillListBlock
@@ -1384,6 +1390,7 @@ export interface ReusableContent {
     | ContentBlock
     | FileAreaBlock
     | FormBlock
+    | GalleryBlock
     | ImageBlock
     | SocialMediaBlock
     | SpacingBlock
@@ -1413,6 +1420,43 @@ export interface FileAreaBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'file-area';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "GalleryBlock".
+ */
+export interface GalleryBlock {
+  /**
+   * Small uppercase label shown above the heading
+   */
+  eyebrow?: string | null;
+  heading?: string | null;
+  /**
+   * Short paragraph below the heading
+   */
+  intro?: string | null;
+  /**
+   * Collage lays the photos out like a scrapbook, each a little askew, sized by the item. Row lines them up evenly, with a caption under each.
+   */
+  layout?: ('collage' | 'row') | null;
+  items?:
+    | {
+        image: number | Media;
+        /**
+         * Wide takes two columns, tall two rows.
+         */
+        size?: ('normal' | 'wide' | 'tall') | null;
+        caption?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'gallery';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

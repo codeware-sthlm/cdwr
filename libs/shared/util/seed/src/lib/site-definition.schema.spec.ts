@@ -191,6 +191,26 @@ describe('SiteDefinitionSchema', () => {
       expect(errorsOf(definition)).toEqual([]);
     });
 
+    it('refuses a gallery photo naming media it does not state', () => {
+      const definition = {
+        ...minimal,
+        pages: [
+          {
+            name: 'Home',
+            slug: 'home',
+            layout: [
+              {
+                blockType: 'gallery',
+                items: [{ image: { lookupFilename: 'missing.jpg' } }]
+              }
+            ]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain('missing.jpg');
+    });
+
     it('refuses media tagged with a tag it does not state', () => {
       const definition = {
         ...minimal,

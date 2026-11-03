@@ -22,6 +22,7 @@ const blocks: Record<BlockSlug, boolean> = {
   content: true,
   'file-area': true,
   form: true,
+  gallery: true,
   image: true,
   'social-media': true,
   spacing: true,

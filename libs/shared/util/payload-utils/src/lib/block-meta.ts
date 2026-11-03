@@ -198,8 +198,21 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'showLink',
+        type: 'checkbox',
+        label: {
+          en: 'Show a button',
+          sv: 'Visa en knapp'
+        },
+        description: {
+          en: 'Uncheck for a band that says something without asking for a click.',
+          sv: 'Avmarkera för ett band som säger något utan att be om ett klick.'
+        }
+      },
+      {
         name: 'link',
         type: 'group',
+        conditional: true,
         fields: [
           {
             name: 'type',
@@ -1050,6 +1063,117 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           en: 'The heading of the panel. Empty means the form’s own title.',
           sv: 'Panelens rubrik. Tomt betyder formulärets egen titel.'
         }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
+        }
+      }
+    ]
+  },
+  gallery: {
+    slug: 'gallery',
+    label: {
+      en: 'Gallery',
+      sv: 'Galleri'
+    },
+    availableIn: ['pages', 'reusable-content'],
+    fields: [
+      {
+        name: 'eyebrow',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Eyebrow',
+          sv: 'Överrubrik'
+        },
+        description: {
+          en: 'Small uppercase label shown above the heading',
+          sv: 'Liten versal etikett som visas ovanför rubriken'
+        }
+      },
+      {
+        name: 'heading',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
+      },
+      {
+        name: 'intro',
+        type: 'textarea',
+        localized: true,
+        label: {
+          en: 'Intro',
+          sv: 'Ingress'
+        },
+        description: {
+          en: 'Short paragraph below the heading',
+          sv: 'Kort stycke under rubriken'
+        }
+      },
+      {
+        name: 'layout',
+        type: 'select',
+        label: {
+          en: 'Layout',
+          sv: 'Layout'
+        },
+        description: {
+          en: 'Collage lays the photos out like a scrapbook, each a little askew, sized by the item. Row lines them up evenly, with a caption under each.',
+          sv: 'Kollage lägger bilderna som i en klippbok, lite på sned, i den storlek varje bild anger. Rad radar upp dem jämnt, med en bildtext under var och en.'
+        }
+      },
+      {
+        name: 'items',
+        type: 'array',
+        label: {
+          en: 'Photos',
+          sv: 'Bilder'
+        },
+        fields: [
+          {
+            name: 'image',
+            type: 'upload',
+            required: true,
+            label: {
+              en: 'Image',
+              sv: 'Bild'
+            }
+          },
+          {
+            name: 'size',
+            type: 'select',
+            conditional: true,
+            label: {
+              en: 'Size',
+              sv: 'Storlek'
+            },
+            description: {
+              en: 'Wide takes two columns, tall two rows.',
+              sv: 'Bred tar två kolumner, hög två rader.'
+            }
+          },
+          {
+            name: 'caption',
+            type: 'text',
+            conditional: true,
+            localized: true,
+            label: {
+              en: 'Caption',
+              sv: 'Bildtext'
+            }
+          }
+        ]
       },
       {
         name: 'band',

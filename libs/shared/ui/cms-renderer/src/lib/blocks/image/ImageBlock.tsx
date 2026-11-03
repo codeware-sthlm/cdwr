@@ -1,4 +1,4 @@
-import { Image, type Size } from '@codeware/shared/ui/image';
+import { Image } from '@codeware/shared/ui/image';
 import type {
   ImageBlock as ImageBlockProps,
   StockMedia
@@ -7,6 +7,8 @@ import React from 'react';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import { RichText } from '../RichText';
+
+import { resolveImageSources } from './image-sources';
 
 type Props = {
   /**
@@ -31,36 +33,13 @@ export const ImageBlock: React.FC<Props> = ({ hideCaption, media }) => {
     return null;
   }
 
-  const { alt, sizes = {}, url = '' } = media;
+  const { alt } = media;
   const caption = 'caption' in media ? media.caption : undefined;
 
-  const src = url?.startsWith('http') ? url : `${payloadUrl}${url}`;
-  const mediaSizes = Object.values(sizes);
-
-  // Convert media sizes to responsive image sizes
-  let sizeCount = 0;
-  const responsiveSizes = mediaSizes.reduce((acc, mediaSize) => {
-    sizeCount++;
-    if (!mediaSize.url) {
-      return acc;
-    }
-    const size = {
-      src: mediaSize.url?.startsWith('http')
-        ? mediaSize.url
-        : `${payloadUrl}${mediaSize.url}`,
-      width: mediaSize.width ?? undefined,
-      mimeType: mediaSize.mimeType ?? undefined,
-      ignoreMedia: false
-    };
-    acc.push(size);
-    // Append a copy of the last size with ignored media query
-    // to ensure a modern image format is used as fallback
-    // before the component fallback image
-    if (sizeCount === mediaSizes.length) {
-      acc.push({ ...size, ignoreMedia: true });
-    }
-    return acc;
-  }, [] as Array<Size>);
+  const { src, sizes: responsiveSizes } = resolveImageSources(
+    media,
+    payloadUrl
+  );
 
   return (
     <>
