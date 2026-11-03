@@ -1630,6 +1630,14 @@ export interface HeroBlock {
    */
   lede: string;
   /**
+   * Standard sets the text to the left with a visual beneath. Fill centres the text and makes the block fill the screen under the header, with no visual.
+   */
+  layout?: ('standard' | 'fill') | null;
+  /**
+   * A static drawing in the theme’s own colour along the bottom of the block, fading upward.
+   */
+  decoration?: ('none' | 'vineyard-rows') | null;
+  /**
    * Shown below the actions. What makes the claim above checkable rather than asserted.
    */
   media?: (number | null) | Media;

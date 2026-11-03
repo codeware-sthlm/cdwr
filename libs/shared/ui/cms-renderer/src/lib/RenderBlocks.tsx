@@ -265,6 +265,16 @@ export const RenderBlocks: React.FC<Props> = ({
             ? ''
             : undefined
         }
+        // A page that opens on a hero filling the screen starts right under
+        // the header, which the layout reads from here
+        data-opens-full={
+          framed &&
+          !nested &&
+          blocks[0].blockType === 'hero' &&
+          blocks[0].layout === 'fill'
+            ? ''
+            : undefined
+        }
       >
         {blocks.map((block, index) => {
           const Block = blocksMap[block.blockType];

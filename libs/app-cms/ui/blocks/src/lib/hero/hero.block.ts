@@ -14,6 +14,10 @@ import { blockImages } from '../block-images';
  * An optional badge, a large headline, an introduction paragraph, up to two
  * call-to-action buttons and an optional visual beneath them. The brand mark inside the badge is rendered
  * automatically by the component when a tenant icon is available.
+ *
+ * The `fill` layout centres the text and fills the screen under the header,
+ * with no visual (the visual fields are hidden). An optional decoration is
+ * drawn along the bottom edge in either layout.
  */
 export const heroBlock: Block = {
   slug: 'hero',
@@ -62,19 +66,67 @@ export const heroBlock: Block = {
       required: true
     },
     {
+      name: 'layout',
+      type: 'select',
+      label: { en: 'Layout', sv: 'Layout' },
+      enumName: enumName('hero_layout'),
+      options: [
+        { label: { en: 'Standard', sv: 'Standard' }, value: 'standard' },
+        { label: { en: 'Fill the screen', sv: 'Fyll skärmen' }, value: 'fill' }
+      ],
+      defaultValue: 'standard',
+      admin: {
+        description: {
+          en: 'Standard sets the text to the left with a visual beneath. Fill centres the text and makes the block fill the screen under the header, with no visual.',
+          sv: 'Standard placerar texten till vänster med en bild under. Fyll centrerar texten och låter blocket fylla skärmen under sidhuvudet, utan bild.'
+        }
+      }
+    },
+    {
+      name: 'decoration',
+      type: 'select',
+      label: { en: 'Decoration', sv: 'Dekoration' },
+      enumName: enumName('hero_decoration'),
+      options: [
+        { label: { en: 'None', sv: 'Ingen' }, value: 'none' },
+        {
+          label: { en: 'Vineyard rows', sv: 'Vinrader' },
+          value: 'vineyard-rows'
+        }
+      ],
+      defaultValue: 'none',
+      admin: {
+        description: {
+          en: 'A static drawing in the theme’s own colour along the bottom of the block, fading upward.',
+          sv: 'En stillbild i temats egen färg längs blockets nederkant, som tonar uppåt.'
+        }
+      }
+    },
+    {
       name: 'media',
       type: 'upload',
       relationTo: 'media',
       filterOptions: { mimeType: { contains: 'image' } },
       label: { en: 'Visual', sv: 'Bild' },
       admin: {
+        condition: (_, siblingData) => siblingData?.layout !== 'fill',
         description: {
           en: 'Shown below the actions. What makes the claim above checkable rather than asserted.',
           sv: 'Visas under knapparna. Det som gör påståendet ovanför kontrollerbart i stället för påstått.'
         }
       }
     },
-    illustrationField(),
+    // The field takes no overrides, so its admin config is extended here
+    (() => {
+      const field = illustrationField();
+      return {
+        ...field,
+        admin: {
+          ...field.admin,
+          condition: (_, siblingData) => siblingData?.layout !== 'fill'
+        }
+      };
+    })(),
     {
       name: 'actions',
       type: 'array',
