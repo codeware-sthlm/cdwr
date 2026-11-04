@@ -135,10 +135,13 @@ Everything waits on Håkan, or the limit is reached.
    `Queue waiting on you: COD-1 plan, COD-2 PR, COD-3 hand-offs, COD-4 label (limit 5/5)`.
 2. With `once` or `plan-only`, stop here.
 3. Otherwise wait in the shell: start `tools/cdwr/agent-queue/wait.sh` as a background Bash
-   command with a timeout of 7200000. It checks Linear every minute, without waking the session,
-   and exits when the pick from **What to take next** changes (`changed: …`, a parked wait
-   that resolved included), at once when it starts on a `run now` pick this session has not
-   been told yet, or after 110 minutes (`timeout: …`). On `changed`, check **What to take next** again. On `timeout`, read the
+   command with a timeout of 7200000. It wakes on Linear and GitHub events (it starts
+   `cdwr agent listen` from the checkout, which needs `AGENT_SUPABASE_URL` and
+   `AGENT_SUPABASE_ANON_KEY` in `tools/cdwr/.env`) and re-checks Linear every 10 minutes
+   anyway, or every minute without that listener, without waking the session. It exits when
+   the pick from **What to take next** changes (`changed: …`, a parked wait that resolved
+   included), at once when it starts on a `run now` pick this session has not been told yet,
+   or after 110 minutes (`timeout: …`). On `changed`, check **What to take next** again. On `timeout`, read the
    line first: `run now` means check **What to take next**; anything else, start it again. Send no new notice while the waiting set is unchanged; send one when it changes.
    Without `once` or `plan-only`, never end a turn unless the watcher is running: an idle session
    with nothing to wake it stops answering Linear until Håkan types.
