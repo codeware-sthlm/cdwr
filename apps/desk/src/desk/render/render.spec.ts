@@ -7,6 +7,7 @@ import type {
   HostMetricRow,
   PlanUsageRow,
   RunsPayload,
+  SnoozeRow,
   UsageHourRow,
   UsagePayload
 } from '../../supabase';
@@ -44,7 +45,13 @@ import {
 import { headline, renderSession } from './session';
 import { SHEETS } from './sheets';
 import { renderTiles } from './tiles';
-import { renderWaiting, waitRows } from './waiting';
+import {
+  countedRows,
+  isSnoozed,
+  renderWaiting,
+  snoozeUi,
+  waitRows
+} from './waiting';
 
 // Local-time dates, so the specs read the same in every time zone
 const NOW = new Date('2026-10-29T12:00:00');
@@ -2123,6 +2130,253 @@ describe('pull requests on the waiting rows and the session card', () => {
     expect(renderSession(model(state, NOW), state.details, NOW)).not.toContain(
       'class="prn'
     );
+  });
+});
+
+describe('snoozed waiting rows', () => {
+  const snooze = (
+    ticket: string,
+    kind: string,
+    event_at: string | null = null
+  ): SnoozeRow => ({
+    ticket,
+    kind,
+    event_at,
+    at: NOW.toISOString(),
+    actor: 'desk'
+  });
+  const T1 = '2026-10-29T10:00:00.000Z';
+  const T2 = '2026-10-29T11:00:00.000Z';
+
+  it.each([
+    ['no snooze', 'review', null, [], false],
+    [
+      'the same kind, no events either side',
+      'review',
+      null,
+      [snooze('COD-1', 'review')],
+      true
+    ],
+    ['the kind changed', 'plan', null, [snooze('COD-1', 'review')], false],
+    [
+      'a newer gate event',
+      'review',
+      T2,
+      [snooze('COD-1', 'review', T1)],
+      false
+    ],
+    [
+      'a gate event no newer',
+      'review',
+      T1,
+      [snooze('COD-1', 'review', T1)],
+      true
+    ],
+    [
+      'an older gate event',
+      'review',
+      T1,
+      [snooze('COD-1', 'review', T2)],
+      true
+    ],
+    [
+      'a gate event the snooze never saw',
+      'review',
+      T1,
+      [snooze('COD-1', 'review')],
+      false
+    ],
+    [
+      'another ticket snoozed',
+      'review',
+      null,
+      [snooze('COD-2', 'review')],
+      false
+    ]
+  ] as const)('isSnoozed: %s', (_name, kind, gateAt, snoozes, expected) => {
+    expect(isSnoozed({ id: 'COD-1', kind }, gateAt, snoozes)).toBe(expected);
+  });
+
+  /** The filled state with no activity, so every gate is null; COD-3 and COD-50 are snoozed, COD-4 under a kind it no longer has */
+  const snoozed = (): DeskState => {
+    const s = filled();
+    s.data.activity = { ...activity, rows: [] };
+    s.data.snoozes = [
+      snooze('COD-3', 'review'),
+      snooze('COD-50', 'idea'),
+      snooze('COD-4', 'question')
+    ];
+    return s;
+  };
+  const on = (s: DeskState): DeskState => {
+    s.controls.target = {
+      supabaseUrl: 'https://x.supabase.co',
+      controlToken: 't'
+    };
+    return s;
+  };
+  const ui = (s: DeskState, m: ReturnType<typeof model>) =>
+    snoozeUi(m, s.controls);
+
+  it('marks the snoozed rows, those whose kind still matches', () => {
+    const s = snoozed();
+    const m = model(s, NOW);
+    expect(waitRows(m, s.details, NOW).map((r) => [r.id, r.snoozed])).toEqual([
+      ['COD-3', true],
+      ['COD-5', false],
+      ['COD-4', false],
+      ['COD-6', false],
+      ['COD-50', true]
+    ]);
+  });
+
+  it('leaves snoozed rows out of the badge and the session headline', () => {
+    const s = snoozed();
+    const m = model(s, NOW);
+    expect(countedRows(waitRows(m, s.details, NOW)).map((r) => r.id)).toEqual([
+      'COD-5',
+      'COD-4',
+      'COD-6'
+    ]);
+    const html = renderWaiting(m, s.details, NOW);
+    expect(html).toContain('<b class="count">3</b>');
+    s.data.runs = runs(
+      view({
+        next: [],
+        table: {
+          before: [],
+          label: [],
+          after: [{ ticket: 'COD-5', kind: 'handoffs', items: ['a'] }]
+        }
+      })
+    );
+    s.data.snoozes = [snooze('COD-5', 'hand-offs')];
+    s.data.ideas = [];
+    expect(headline(model(s, NOW), s.details, NOW).text).toContain(
+      'nothing waits on you'
+    );
+  });
+
+  it('folds the snoozed rows after the awake ones, only when there are some', () => {
+    const s = snoozed();
+    const html = renderWaiting(model(s, NOW), s.details, NOW);
+    expect(html).toContain(
+      '<details class="snoozed"><summary>Snoozed · 2</summary>'
+    );
+    expect(html.indexOf('COD-5')).toBeLessThan(html.indexOf('class="snoozed"'));
+    expect(html.indexOf('COD-3')).toBeGreaterThan(
+      html.indexOf('class="snoozed"')
+    );
+    const plain = filled();
+    expect(renderWaiting(model(plain, NOW), plain.details, NOW)).not.toContain(
+      'snoozed'
+    );
+  });
+
+  it('keeps the fold open once the viewer opened it', () => {
+    const s = snoozed();
+    s.ui.snoozedOpen = true;
+    const m = model(s, NOW);
+    const open = '<details class="snoozed" open><summary>Snoozed · 2</summary>';
+    expect(
+      renderWaiting(m, s.details, NOW, snoozeUi(m, s.controls, true))
+    ).toContain(open);
+    expect(SHEETS.before.body(m, s, NOW)).toContain(open);
+  });
+
+  it('says nothing waits when every row is snoozed, and keeps the fold', () => {
+    const s = filled();
+    s.data.activity = { ...activity, rows: [] };
+    s.data.ideas = [];
+    s.data.runs = runs(
+      view({
+        table: {
+          before: [{ ticket: 'COD-4', kind: 'plan' }],
+          label: [],
+          after: []
+        }
+      })
+    );
+    s.data.snoozes = [snooze('COD-4', 'plan')];
+    const html = renderWaiting(model(s, NOW), s.details, NOW);
+    expect(html).toContain('Nothing waits on you.');
+    expect(html).toContain('Snoozed · 1');
+    expect(html).toContain('<b class="count">0</b>');
+    expect(html).not.toContain('class="foot"');
+  });
+
+  it('draws Snooze and Wake buttons beside, not inside, the row link when controls are on', () => {
+    const s = on(snoozed());
+    const m = model(s, NOW);
+    const html = renderWaiting(m, s.details, NOW, ui(s, m));
+    expect(html).toContain(
+      '<button type="button" class="wsnooze" data-snooze="COD-5" data-kind="hand-offs" data-event-at="" aria-label="Snooze COD-5 until it changes">Snooze</button>'
+    );
+    expect(html).toContain(
+      '<button type="button" class="wsnooze" data-wake="COD-3" aria-label="Wake COD-3">Wake</button>'
+    );
+    // No button sits between an <a class="wrow"> and its </a>
+    for (const link of html.match(/<a class="wrow"[\s\S]*?<\/a>/g) ?? [])
+      expect(link).not.toContain('<button');
+  });
+
+  it('draws no buttons without controls, but still folds', () => {
+    const s = snoozed();
+    const m = model(s, NOW);
+    for (const html of [
+      renderWaiting(m, s.details, NOW),
+      renderWaiting(m, s.details, NOW, ui(s, m)),
+      SHEETS.before.body(m, s, NOW)
+    ]) {
+      expect(html).not.toContain('wsnooze');
+      expect(html).toContain('Snoozed · 2');
+    }
+  });
+
+  it('disables a button in flight and shows the note a refusal left', () => {
+    const s = on(snoozed());
+    s.controls.snoozing.add('COD-5');
+    s.controls.snoozeNotes.set('COD-3', 'not <snoozed>');
+    const m = model(s, NOW);
+    const html = renderWaiting(m, s.details, NOW, ui(s, m));
+    expect(html).toMatch(/data-snooze="COD-5"[^>]*disabled>/);
+    expect(html).not.toMatch(/data-wake="COD-3"[^>]*disabled>/);
+    expect(html).toContain('<span class="wnote">not &lt;snoozed&gt;</span>');
+  });
+
+  it('carries the gate time on the button so the snooze wakes on a newer event', () => {
+    const s = on(snoozed());
+    s.data.activity = {
+      ...activity,
+      rows: [
+        {
+          when: '2026-10-29 10:00',
+          ticket: 'COD-5',
+          actor: 'agent',
+          change: 'comment: **Agent: plan ready**'
+        }
+      ]
+    };
+    const m = model(s, NOW);
+    const html = renderWaiting(m, s.details, NOW, ui(s, m));
+    expect(html).toMatch(
+      /data-snooze="COD-5"[^>]*data-event-at="[^"]+T[^"]+Z"/
+    );
+  });
+
+  it('shows the same fold and buttons on the all-rows sheet', () => {
+    const s = on(snoozed());
+    const html = SHEETS.before.body(model(s, NOW), s, NOW);
+    expect(html).toContain(
+      '<details class="snoozed"><summary>Snoozed · 2</summary>'
+    );
+    expect(html).toContain('data-snooze="COD-5"');
+    expect(html).toContain('data-wake="COD-3"');
+    expect(html).toContain('data-wake="COD-50"');
+    // The snoozed idea moved to the fold, so no idea card is left to decide
+    expect(html).not.toContain('Ideas to decide');
+    for (const a of html.match(/<a class="act[\s\S]*?<\/a>/g) ?? [])
+      expect(a).not.toContain('<button');
   });
 });
 
