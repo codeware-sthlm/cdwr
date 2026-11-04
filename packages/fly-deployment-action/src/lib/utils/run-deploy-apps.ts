@@ -6,6 +6,7 @@ import type { ActionOutputs } from '../schemas/action-outputs.schema';
 import type { DeploymentConfig } from '../schemas/deployment-config.schema';
 
 import { addOpinionatedEnv } from './add-opinionated-env';
+import { getHealthCheckPath, probeHealth } from './probe-health';
 
 /**
  * Deploy provided apps or apps that are affected by code changes
@@ -51,8 +52,9 @@ export const runDeployApps = async (options: {
       continue;
     }
 
-    // Read the base app name from local config
+    // Read the base app name and the health check path from local config
     let configAppName: string;
+    let healthCheckPath: string | undefined;
 
     core.info(`Read Fly config file: ${flyConfigFile}`);
     try {
@@ -61,6 +63,7 @@ export const runDeployApps = async (options: {
         local: true
       });
       configAppName = flyConfig.app;
+      healthCheckPath = getHealthCheckPath(flyConfig.httpService);
     } catch {
       core.endGroup();
       throw new Error(
@@ -170,28 +173,22 @@ export const runDeployApps = async (options: {
           secrets: mergedSecrets
         });
 
-        // A deployed app with no public address answers nothing on the URL we
-        // are about to report. `flyctl` allocates one only for an app it
-        // creates itself, and neither route here qualifies — a registry push
-        // auto-creates the app before the deploy, and `apps create` never
-        // allocates. Idempotent, so it runs on every deploy rather than only
-        // on create, which also repairs apps that were left without one.
-        try {
-          const addresses = await fly.ips.ensure({ app: result.app });
-          core.debug(
-            `Public addresses for '${result.app}': ${addresses
-              .map((ip) => `${ip.type} ${ip.address}`)
-              .join(', ')}`
-          );
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-
-          // Loud, but not fatal: the deploy itself succeeded, and failing it
-          // here would throw away a working image. The whole defect being
-          // fixed is an unreachable app that reported success, so this must
-          // never pass silently.
-          core.warning(
-            `⚠️ Deployed '${result.app}' but could not ensure a public IP address, so it may be unreachable: ${msg}`
+        // A green deploy is no proof the app answers: a retried first deploy
+        // updates a suspended machine without waiting for its health check.
+        // fly-node gives the app its addresses before deploying, so one
+        // request to the app's own check settles it.
+        if (healthCheckPath) {
+          core.info(`Probe ${result.url}${healthCheckPath}...`);
+          const failure = await probeHealth(result.url, healthCheckPath);
+          if (failure) {
+            throw new Error(
+              `Deployed, but the health probe failed: ${failure}`
+            );
+          }
+          core.info(`Health probe answered 200`);
+        } else {
+          core.info(
+            `No health probe: ${flyConfigFile} has no [[http_service.checks]]`
           );
         }
 
