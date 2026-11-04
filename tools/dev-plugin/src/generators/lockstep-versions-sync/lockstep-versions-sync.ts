@@ -37,7 +37,6 @@ const FAMILIES: Family[] = [
     except: ['@tailwindcss/typography']
   },
   { name: 'Playwright', names: ['playwright'], scopes: ['@playwright/'] },
-  { name: 'Remix', names: ['remix'], scopes: ['@remix-run/'] },
   {
     name: 'Jest',
     names: ['jest', 'babel-jest'],
