@@ -1,7 +1,9 @@
 name: Fly Deployment
 
-# Deploys come from a pull request (preview, gated on the preview label that opening the PR adds)
-# or a push to main (production), and start without waiting for CI.
+# Deploys come from a pull request (preview) or a push to main (production), and start without
+# waiting for CI. A preview is opt-in: adding the preview label deploys the PR, and every later
+# push deploys again while the label stays. Nothing adds it on open; the agent queue adds it once
+# a PR's Copilot round is settled.
 # Closing a pull request tears its preview down.
 # Renovate and Nx migrations are ignored.
 # Can also be triggered manually for re-deployments.
@@ -47,6 +49,7 @@ on:
       - opened
       - reopened
       - synchronize
+      - labeled
       - closed
   push:
     branches:
@@ -55,7 +58,8 @@ on:
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   NX_NO_CLOUD: true
-  # Label used to indicate that a preview deployment is enabled for the PR
+  # Label that opts a pull request into preview deployments. Also written out in `concurrency`
+  # and in the `analyze-conditions` job's `if`, neither of which can read `env`
   FLY_PREVIEW_LABEL: preview-deploy
 
 permissions:
@@ -68,11 +72,16 @@ concurrency:
   # cancels the preview deploy in flight, so the latest commit wins; a production deploy on main is
   # never cut off. Keyed on the PR number, a manual preview dispatch's too: a fork's PR from its own
   # `main` must not share main's group, and a manual preview must not overlap that PR's own runs.
-  group: ${{ github.workflow }}-${{ (github.event.pull_request.number || github.event.inputs.environment == 'preview' && github.event.inputs.pr-number) && format('pr-{0}', github.event.pull_request.number || github.event.inputs.pr-number) || github.ref_name }}
+  # Adding any label other than the preview label (`FLY_PREVIEW_LABEL`) deploys nothing, so that run
+  # gets a group of its own and never cancels a preview in flight.
+  group: ${{ github.workflow }}-${{ github.event.action == 'labeled' && github.event.label.name != 'preview-deploy' && format('label-{0}', github.run_id) || (github.event.pull_request.number || github.event.inputs.environment == 'preview' && github.event.inputs.pr-number) && format('pr-{0}', github.event.pull_request.number || github.event.inputs.pr-number) || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze-conditions:
+    # Any label but the preview label (`FLY_PREVIEW_LABEL`) deploys nothing, so that run skips the
+    # install and build too; the concurrency group above already keeps it off a preview in flight
+    if: github.event.action != 'labeled' || github.event.label.name == 'preview-deploy'
     runs-on: ubuntu-latest
 
     outputs:
@@ -847,7 +856,8 @@ jobs:
             exit 0
           fi
 
-          if [ "$SKIPPED" = "true" ]; then
+          # Empty when analyze-conditions itself was skipped (a label that deploys nothing)
+          if [ "$SKIPPED" = "true" ] || [ -z "$SKIPPED" ]; then
             echo "⏭️ Deployment skipped - conditions not met" >> $GITHUB_STEP_SUMMARY
           elif [ "$ENVIRONMENT" = "" ]; then
             echo "⏭️ No affected apps" >> $GITHUB_STEP_SUMMARY
