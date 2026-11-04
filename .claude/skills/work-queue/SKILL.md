@@ -336,8 +336,11 @@ dropped in the replay and the old commits still conflict.
    reference tree; read `git range-diff origin/main <old head> HEAD` instead, and explain every
    change beyond the conflicts.
 3. Run the narrow checks for the conflicted projects.
-4. Push with an explicit lease, never a bare `--force` or `--force-with-lease`:
-   `git -C <worktree> push --force-with-lease=<branch>:<old head> origin HEAD:refs/heads/<branch>`.
+4. Push through the wrapper, never with a bare `--force` or `--force-with-lease`:
+   `tools/cdwr/agent-queue/force-push.sh <worktree> <branch> <old head>`. It checks that the
+   worktree and the branch belong to the same ticket, that the branch is checked out there, and
+   that the old head is a full sha, then runs the one push with a lease on that head
+   (`--force-with-lease=refs/heads/<branch>:<old head>`). A raw force-push prompts, or is denied.
    A refused lease means someone pushed meanwhile. Never retry with the new head as the lease:
    drop the local rebase, start again at step 1 from the updated branch, so their commits are
    rebased too.
@@ -456,8 +459,10 @@ listed.
 4. GitHub through `gh pr …`, REST reads (`gh api repos/codeware-sthlm/cdwr/…`) and
    `tools/cdwr/agent-queue/gh-review.sh threads <pr>`, `reply <thread id> <body>` and
    `resolve <thread id>` for review threads. Raw `gh api graphql` and any `gh api` write are
-   denied. The session acts as the `codeware-agent` GitHub App: `gh` and `git push` carry its
-   token, commits are the bot's, and main's rulesets apply to it with no bypass.
+   denied. A force-push goes through `tools/cdwr/agent-queue/force-push.sh`; a raw one is
+   denied, lease or not. The session acts as the `codeware-agent` GitHub App: `gh` and
+   `git push` carry its token, commits are the bot's, and main's rulesets apply to it with no
+   bypass.
 5. Snapshot images reach a ticket through `prepare_attachment_upload` (size from `wc -c`),
    `tools/cdwr/agent-queue/linear-upload.sh <png> <signed url> <header>...` with every signed
    header verbatim, then `create_attachment_from_upload`; one file at a time, since a signed URL
