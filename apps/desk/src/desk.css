@@ -83,8 +83,12 @@ body {
   color: var(--fg);
   font: 15px/1.45 var(--font-ui);
   margin: 0;
-  padding-block: var(--pad-block) calc(var(--pad-block) + 8px);
-  padding-inline: var(--pad-inline);
+  /* The page padding, grown to the phone's safe areas when standalone; the alert band cancels it */
+  --pad-top: max(var(--pad-block), env(safe-area-inset-top));
+  --pad-bottom: max(calc(var(--pad-block) + 8px), env(safe-area-inset-bottom));
+  --pad-left: max(var(--pad-inline), env(safe-area-inset-left));
+  --pad-right: max(var(--pad-inline), env(safe-area-inset-right));
+  padding: var(--pad-top) var(--pad-right) var(--pad-bottom) var(--pad-left);
 }
 .wrap {
   max-width: 1360px;
@@ -2596,8 +2600,8 @@ button:disabled {
 
 /* Something is wrong: the alert band, the problem cards and the state-unknown card; dark only, like the page */
 #alert {
-  margin: calc(-1 * var(--pad-block)) calc(-1 * var(--pad-inline))
-    var(--pad-block);
+  margin: calc(-1 * var(--pad-top)) calc(-1 * var(--pad-right)) var(--pad-block)
+    calc(-1 * var(--pad-left));
 }
 .alert {
   background: var(--alert-bg);
