@@ -2375,6 +2375,10 @@ describe('snoozed waiting rows', () => {
     expect(html).toContain('data-wake="COD-50"');
     // The snoozed idea moved to the fold, so no idea card is left to decide
     expect(html).not.toContain('Ideas to decide');
+    s.data.snoozes = [];
+    expect(SHEETS.before.body(model(s, NOW), s, NOW)).toMatch(
+      /<article class="idea">[\s\S]*data-snooze="COD-50" data-kind="idea"/
+    );
     for (const a of html.match(/<a class="act[\s\S]*?<\/a>/g) ?? [])
       expect(a).not.toContain('<button');
   });

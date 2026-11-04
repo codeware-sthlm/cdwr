@@ -229,11 +229,16 @@ const renderBefore = (m: Model, state: DeskState, now: Date): string => {
       .map(card)
       .join('');
   // A snoozed idea sits in the fold, not among the ideas to decide
-  const awakeIdeas = m.ideasPending.filter((i) =>
-    rows.some((r) => r.id === i.id)
+  const ideaRows = new Map(
+    rows.filter((r) => r.kind === 'idea').map((r) => [r.id, r])
   );
+  const awakeIdeas = m.ideasPending.filter((i) => ideaRows.has(i.id));
+  const ideaHTML = (i: Issue): string => {
+    const r = ideaRows.get(i.id);
+    return ideaCard(state, i, r ? snoozeControls(r, ui) : '');
+  };
   const ideasHTML = awakeIdeas.length
-    ? `<div class="group"><h3>Ideas to decide · ${awakeIdeas.length}</h3>${awakeIdeas.map((i) => ideaCard(state, i)).join('')}</div>`
+    ? `<div class="group"><h3>Ideas to decide · ${awakeIdeas.length}</h3>${awakeIdeas.map(ideaHTML).join('')}</div>`
     : '';
   const fold = snoozedFold(snoozed.length, snoozed.map(card).join(''), ui.open);
   // Approved plans only wait on a blocker, so they come after everything that waits on you
@@ -986,7 +991,8 @@ const renderAll = (m: Model, state: DeskState): string => {
 
 // ---------- Suggestions ----------
 
-const ideaCard = (state: DeskState, i: Issue): string => {
+/** An idea with its evidence; `controls` is the Snooze button the Waiting sheet gives it */
+const ideaCard = (state: DeskState, i: Issue, controls = ''): string => {
   const d = state.details.get(i.id)?.idea;
   const when = new Date(i.createdAt).toLocaleDateString([], {
     month: 'short',
@@ -1010,6 +1016,7 @@ const ideaCard = (state: DeskState, i: Issue): string => {
   return `<article class="idea">
     <a class="title" href="${esc(i.url)}" target="_blank" rel="noopener"><span class="id">${esc(i.id)}</span>${esc(i.title)}</a>
     <div class="meta"><span>suggested ${esc(when)}</span>${d?.focus ? `<span>· ${esc(d.focus)}</span>` : ''}</div>
+    ${controls}
     ${body}
     <p class="rule">Accept: set <code>agent:ready</code> on the ticket. Discard: cancel it with one word in a comment, such as <i>already decided</i>, <i>not worth it</i>, <i>wrong direction</i> or <i>later</i>. The agent reads the word before its next idea.</p>
   </article>`;

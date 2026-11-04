@@ -1176,6 +1176,28 @@ describe('waitAges', () => {
       );
     });
 
+    it('skips the rows a snooze or a wake writes, so a snooze never wakes itself', () => {
+      const a = activity(
+        [
+          '2026-10-29 11:40',
+          'COD-4',
+          'wake refused from the desk (mac): not snoozed'
+        ],
+        ['2026-10-29 11:35', 'COD-4', 'woke COD-4 from the desk (mac)'],
+        ['2026-10-29 11:30', 'COD-4', 'snoozed COD-4 from the desk (mac)'],
+        ['2026-10-29 09:00', 'COD-4', 'Moved to Todo']
+      );
+      expect(gateTimes(['COD-4'], a).get('COD-4')).toBe(
+        iso('2026-10-29T09:00:00')
+      );
+      const only = activity([
+        '2026-10-29 11:30',
+        'COD-5',
+        'snoozed COD-5 from the desk (mac)'
+      ]);
+      expect(gateTimes(['COD-5'], only).size).toBe(0);
+    });
+
     it('leaves out tickets without rows or without activity', () => {
       const a = activity(['2026-10-29 11:30', 'COD-1', '+agent:review']);
       expect([...gateTimes(['COD-1', 'COD-9'], a).keys()]).toEqual(['COD-1']);
