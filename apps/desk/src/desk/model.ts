@@ -864,12 +864,18 @@ export const activityBy = (
 const GATE =
   /\+agent:(needs-input|review)\b|^comment: \*\*Agent(: plan ready| needs input|: PR ready|: review addressed)/;
 
-/** The activity row a wait counts from: the ticket's newest gate event, else its newest event */
+// The desk-command function's own rows for a snooze or a wake; they change nothing that waits
+const SNOOZE_EVENT =
+  /^(snoozed|woke) COD-\d+ from the desk\b|^(snooze|wake) refused from the desk\b/;
+
+/** The activity row a wait counts from: the ticket's newest gate event, else its newest event; a snooze's own row is no event, or the snooze would wake itself */
 const waitRow = (
   id: string,
   activity: ActivityPayload | null
 ): ActivityPayload['rows'][number] | undefined => {
-  const rows = (activity?.rows ?? []).filter((r) => r.ticket === id);
+  const rows = (activity?.rows ?? []).filter(
+    (r) => r.ticket === id && !SNOOZE_EVENT.test(r.change)
+  );
   // The rows are newest first
   return rows.find((r) => GATE.test(r.change)) ?? rows[0];
 };

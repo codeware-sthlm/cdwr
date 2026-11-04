@@ -404,6 +404,8 @@ document.addEventListener('click', (e) => {
     showView(v.dataset.view === 'platform' ? 'platform' : 'desk');
     return;
   }
+  // The fold's summary only opens the fold, never the card's sheet
+  if (e.target.closest('details.snoozed > summary')) return;
   const t = e.target.closest<HTMLElement>('[data-w]');
   if (t?.dataset.w) {
     showSheet(t.dataset.w);
