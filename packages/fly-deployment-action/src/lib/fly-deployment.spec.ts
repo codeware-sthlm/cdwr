@@ -142,8 +142,14 @@ describe('flyDeployment', () => {
         TEST_FLY_POSTGRES_PREVIEW?: string | null;
         TEST_FLY_POSTGRES_PRODUCTION?: string | null;
       };
+      /**
+       * The `http_service` section `fly config show` returns, for health probes.
+       * @default undefined (no check, no probe)
+       */
+      httpService?: Record<string, unknown>;
     } = {}
   ) => {
+    const { httpService } = overrides;
     const { flyApps, envFlyPostgres } = {
       flyApps: overrides.flyApps || [{ name: 'app-one' }, { name: 'app-two' }],
       envFlyPostgres: overrides.envFlyPostgres || {
@@ -215,7 +221,8 @@ describe('flyDeployment', () => {
           show: vi.fn().mockImplementation(({ config }) =>
             Promise.resolve({
               // App name from fly.toml is '{app-name}-config'
-              app: config.replace(/\/apps\/([^/]+)\/.*/, '$1-config')
+              app: config.replace(/\/apps\/([^/]+)\/.*/, '$1-config'),
+              ...(httpService && { httpService })
             })
           )
         },
@@ -1118,6 +1125,114 @@ describe('flyDeployment', () => {
         );
       }
     );
+  });
+
+  describe('health probe', () => {
+    const httpService = { checks: [{ path: '/api/health' }] };
+    const mockFetch = vi.fn();
+
+    beforeEach(() => {
+      mockFetch.mockReset();
+      vi.stubGlobal('fetch', mockFetch);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('should report deploy when the probe answers 200', async () => {
+      setContext('push-main-branch');
+      setupMocks({ httpService });
+      mockFetch.mockResolvedValue({ status: 200 });
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{}] }
+      });
+      const result = await flyDeployment(config, true);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://app-one-config.fly.dev/api/health',
+        expect.objectContaining({ redirect: 'manual' })
+      );
+      expect(result.projects).toEqual([
+        {
+          action: 'deploy',
+          app: 'app-one-config',
+          name: 'app-one',
+          projectName: 'app-one',
+          url: 'https://app-one-config.fly.dev'
+        }
+      ]);
+    });
+
+    it('should report failed with the reason when the probe answers 503', async () => {
+      setContext('push-main-branch');
+      setupMocks({ httpService });
+      mockFetch.mockResolvedValue({ status: 503 });
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{}] }
+      });
+      const result = await flyDeployment(config, true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(result.projects).toEqual([
+        {
+          action: 'failed',
+          appOrProject: 'app-one',
+          error: expect.stringContaining('answered 503')
+        }
+      ]);
+    });
+
+    it('should not probe when the app has no health check', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{}] }
+      });
+      const result = await flyDeployment(config, true);
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(result.projects).toEqual([
+        expect.objectContaining({ action: 'deploy', app: 'app-one-config' })
+      ]);
+      expect(mockCoreInfo).toHaveBeenCalledWith(
+        expect.stringContaining('No health probe')
+      );
+    });
+
+    it('should skip tenants when the host probe fails', async () => {
+      setContext('push-main-branch');
+      setupMocks({ httpService });
+      mockFetch.mockResolvedValue({ status: 503 });
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{ tenant: 'demo' }, {}] }
+      });
+      const result = await flyDeployment(config, true);
+
+      // Only the host was deployed and probed
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(result.projects).toEqual([
+        {
+          action: 'failed',
+          appOrProject: 'app-one',
+          error: expect.stringContaining('answered 503')
+        },
+        {
+          action: 'failed',
+          appOrProject: 'app-one (demo)',
+          error: 'Skipped: host deployment failed'
+        }
+      ]);
+    });
   });
 
   describe('workflow_dispatch event', () => {
