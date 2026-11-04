@@ -1,24 +1,32 @@
 #!/bin/zsh
-# Background watcher for an attended /work-queue session: polls Linear and exits when the
+# Background watcher for an attended /work-queue session: re-picks from Linear and exits when the
 # attended pick changes, or after --max seconds so the session can re-arm it. A `run` pick it has
 # not reported to this session yet (<id>.seen) exits at once, so work that landed before it started is not missed.
+# It wakes on events: it starts `cdwr agent listen --notify-pid $$` from its own checkout, with a
+# state file of its own, and re-picks on SIGUSR1. While that listener is live (its file says so,
+# with a beat under 2 min), the clock re-picks only every --fallback seconds; without it (no
+# Supabase env in tools/cdwr/.env, a listener that exited) every --interval, as before. A listener
+# that dies mid-wait is not restarted; the next wait.sh starts a fresh one.
 # Runs from the repo, not installed. While it runs, <id>.watcher holds its pid and the hook reports `polling` on Stop.
-#   wait.sh [--interval 60] [--max 6600]
-#   wait.sh --now        print the current pick once and exit
-# AGENT_QUEUE_LINEAR_CMD replaces the Linear call with a command that prints a response, and
-# AGENT_QUEUE_GH_CMD the gh call that reads parked tickets' PRs (the query is its $1).
+#   wait.sh [--interval 60] [--fallback 600] [--max 6600]
+#   wait.sh --now        print the current pick once and exit, with no listener
+# AGENT_QUEUE_LINEAR_CMD replaces the Linear call with a command that prints a response,
+# AGENT_QUEUE_GH_CMD the gh call that reads parked tickets' PRs (the query is its $1), and
+# AGENT_QUEUE_LISTEN_CMD the listener (run as `<cmd> <pid to wake> <state file>`).
 INTERVAL=60
+FALLBACK=600
 MAX=6600
 NOW=false
 while (( $# )); do
   case "$1" in
     --interval) INTERVAL="${2:?--interval needs seconds}"; shift 2 ;;
+    --fallback) FALLBACK="${2:?--fallback needs seconds}"; shift 2 ;;
     --max) MAX="${2:?--max needs seconds}"; shift 2 ;;
     --now) NOW=true; shift ;;
-    *) print -ru2 -- "usage: wait.sh [--interval <s>] [--max <s>] [--now]"; exit 2 ;;
+    *) print -ru2 -- "usage: wait.sh [--interval <s>] [--fallback <s>] [--max <s>] [--now]"; exit 2 ;;
   esac
 done
-[[ "$INTERVAL" == <-> && "$MAX" == <-> ]] || { print -ru2 -- "wait.sh: seconds must be whole numbers"; exit 2; }
+[[ "$INTERVAL" == <-> && "$FALLBACK" == <-> && "$MAX" == <-> ]] || { print -ru2 -- "wait.sh: seconds must be whole numbers"; exit 2; }
 
 HERE="${0:A:h}"
 source "$HERE/lib.sh"
@@ -38,7 +46,7 @@ watcher=""
 # The registered session: among the session files whose pid is one of our ancestors, skip the
 # ended ones and take the newest lastSeen
 find_session() {
-  setopt local_options no_err_exit
+  setopt local_options no_err_exit no_nomatch
   [[ -d "$SESSIONS" ]] || return 0
   local pid=$$ hit
   while [[ "$pid" == <-> ]] && (( pid > 1 )); do
@@ -94,16 +102,95 @@ if $NOW; then
   exit 0
 fi
 
+# The listener: its state file and log live in a temp dir of this wait's own, never in the
+# sessions dir (everything there globs *.json as a session) nor in the queue home (status reads
+# listener.json there as the scheduler's)
+tmp=""
+listener=""
+LISTENER_FILE=""
+# The listener needs the Supabase url and publishable key, from the shell or the checkout's
+# tools/cdwr/.env; without them it would only boot to fail, so the wait says so and polls
+listener_env() {
+  local v
+  for v in AGENT_SUPABASE_URL AGENT_SUPABASE_ANON_KEY; do
+    [[ -n "${(P)v}" ]] || grep -q "^$v=." "$1/tools/cdwr/.env" 2>/dev/null || return 1
+  done
+  return 0
+}
+start_listener() {
+  # The checkout this script runs from. The shim takes the checkout the caller stands in, and
+  # cdwr loads that one's tools/cdwr/.env, so the listener starts from its root
+  local root="${HERE:h:h:h}"
+  if [[ -z "${AGENT_QUEUE_LISTEN_CMD:-}" ]] && ! listener_env "$root"; then
+    print -ru2 -- "wait: no AGENT_SUPABASE_URL or AGENT_SUPABASE_ANON_KEY for $root, polling every ${INTERVAL}s"
+    return 0
+  fi
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/wait-listener.XXXXXX")" || { tmp=""; return 0; }
+  LISTENER_FILE="$tmp/listener.json"
+  if [[ -n "${AGENT_QUEUE_LISTEN_CMD:-}" ]]; then
+    "$AGENT_QUEUE_LISTEN_CMD" "$$" "$LISTENER_FILE" > "$tmp/listener.log" 2>&1 &
+  else
+    (cd "$root" && exec node tools/cdwr/bin/cdwr.mjs agent listen --notify-pid "$$" --state-file "$LISTENER_FILE") > "$tmp/listener.log" 2>&1 &
+  fi
+  listener=$!
+  return 0
+}
+# TERM reaches every process under the listener's pid, children first: the shim (cdwr.mjs) runs
+# tsx with spawnSync and forwards no signal, and the listener itself is the deepest one
+kill_tree() {
+  local child
+  for child in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$child"; done
+  kill -TERM "$1" 2>/dev/null
+  return 0
+}
+stop_listener() {
+  local i
+  if [[ -n "$listener" ]]; then
+    kill_tree "$listener"
+    # Up to 5 s for the listener to close its channel and write its last state before the dir goes
+    for (( i = 0; i < 25; i++ )); do kill -0 "$listener" 2>/dev/null || break; sleep 0.2; done
+  fi
+  [[ -n "$tmp" ]] && rm -rf "$tmp"
+  return 0
+}
+# Live: the file says so and it beat under 2 min ago, the entrypoint's rule
+listener_live() {
+  local beat
+  [[ -n "$LISTENER_FILE" ]] || return 1
+  beat="$(jq -r 'select(.state == "live") | .lastBeat | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$LISTENER_FILE" 2>/dev/null)" || return 1
+  [[ "$beat" == <-> ]] && (( $(date +%s) - beat < 120 ))
+}
+
+# A wake cuts the sleep short; one that lands while picking is kept for the next nap
+woken=0
+sleeper=""
+nap() {
+  (( woken )) && return 0
+  sleep "$1" &
+  sleeper=$!
+  # A wake between the check and the line above found no sleeper to stop
+  (( woken )) && kill "$sleeper" 2>/dev/null
+  wait "$sleeper" 2>/dev/null
+  sleeper=""
+  return 0
+}
+
 find_session
 write_watcher
-trap remove_watcher EXIT
+trap 'stop_listener; remove_watcher' EXIT
 trap 'exit 0' INT TERM HUP
+# Before the listener starts: SIGUSR1's default action would end the wait
+trap 'woken=1; [[ -n "$sleeper" ]] && kill "$sleeper" 2>/dev/null; true' USR1
+start_listener
 
 start=""
 until start="$(pick)"; do
   (( SECONDS >= MAX )) && { print -r -- "timeout: Linear did not answer"; exit 0; }
-  sleep "$INTERVAL"
+  woken=0
+  nap "$INTERVAL"
 done
+# A wake that landed during the start pick (the listener's catch-up on subscribe) is spent on it
+woken=0
 start_key="$(key_of "$start")"
 if [[ "$(jq -r '.verdict' <<<"$start")" == run && "$start_key" != "$(seen_key)" ]]; then
   remember "$start_key"
@@ -113,7 +200,20 @@ fi
 
 while true; do
   (( SECONDS >= MAX )) && break
-  sleep "$INTERVAL"
+  if listener_live; then
+    # A wake re-picks at once; the clock only every FALLBACK, in steps of INTERVAL so a listener
+    # that died is noticed within a step and the wait goes back to the clock
+    slept=0
+    while (( slept < FALLBACK )) && listener_live; do
+      nap "$INTERVAL"
+      (( woken )) && break
+      (( slept += INTERVAL ))
+      (( SECONDS >= MAX )) && break
+    done
+  else
+    nap "$INTERVAL"
+  fi
+  woken=0
   # An error counts as unchanged; the next tick tries again
   now="$(pick)" || { (( SECONDS >= MAX )) && break; continue; }
   if [[ "$(key_of "$now")" != "$start_key" ]]; then
