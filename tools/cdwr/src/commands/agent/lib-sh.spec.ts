@@ -253,4 +253,99 @@ describe('lib.sh', () => {
       ).toBe('custom');
     });
   });
+
+  describe.skipIf(!hasZsh)('the scheduler elsewhere', () => {
+    let dir: string;
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'lib-sh-'));
+      mkdirSync(join(dir, 'bin'));
+      writeFileSync(join(dir, 'bin', 'uname'), '#!/bin/sh\necho Linux\n');
+      chmodSync(join(dir, 'bin', 'uname'), 0o755);
+    });
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    const stub = (name: string, body: string) => {
+      writeFileSync(join(dir, 'bin', name), `#!/bin/sh\n${body}\n`);
+      chmodSync(join(dir, 'bin', name), 0o755);
+    };
+
+    const run = (script: string, env: Record<string, string> = {}) =>
+      spawnSync('zsh', ['-c', `source "${LIB}"\n${script}`], {
+        encoding: 'utf8',
+        env: {
+          PATH: `${join(dir, 'bin')}:${process.env['PATH'] ?? ''}`,
+          HOME: dir,
+          ...env
+        }
+      });
+
+    const here = (env: Record<string, string> = {}) =>
+      run('scheduler_here && print yes || print no', env).stdout.trim();
+
+    describe('scheduler_here', () => {
+      it('is true on the container host', () => {
+        stub('launchctl', 'exit 1');
+        expect(here({ AGENT_QUEUE_HOST: 'container' })).toBe('yes');
+      });
+
+      it('is true when the plist exists', () => {
+        stub('launchctl', 'exit 1');
+        const agents = join(dir, 'Library', 'LaunchAgents');
+        mkdirSync(agents, { recursive: true });
+        writeFileSync(join(agents, 'se.codeware.agent-queue.plist'), '');
+        expect(here()).toBe('yes');
+      });
+
+      it('is true when launchctl knows the job', () => {
+        stub('launchctl', 'exit 0');
+        expect(here()).toBe('yes');
+      });
+
+      it('is false when nothing holds', () => {
+        stub('launchctl', 'exit 1');
+        expect(here()).toBe('no');
+      });
+    });
+
+    describe('remote_watch', () => {
+      const row =
+        '[{"host":"nuc","at":"2026-11-05T00:00:00Z","watch":{"COD-1":{"pr":12,"state":"open","unresolved":1}}}]';
+
+      const fake = (json: string, seen: string) =>
+        `supabase_select() { print -r -- "$2" > "${seen}"; print -r -- '${json}' }\nremote_watch`;
+
+      it('prints the freshest other host row with its watch', () => {
+        const seen = join(dir, 'query');
+        const out = run(fake(row, seen)).stdout.trim();
+        expect(JSON.parse(out)).toEqual({
+          host: 'nuc',
+          at: '2026-11-05T00:00:00Z',
+          watch: { 'COD-1': { pr: 12, state: 'open', unresolved: 1 } }
+        });
+        const query = readFileSync(seen, 'utf8');
+        expect(query).toContain('watch=not.is.null');
+        expect(query).toContain('order=at.desc');
+        expect(query).toContain('limit=1');
+        expect(query).toContain('host=neq.');
+      });
+
+      it.each([
+        ['no rows', '[]'],
+        ['a null watch', '[{"host":"mac","at":"x","watch":null}]']
+      ])('prints nothing for %s', (_name, json) => {
+        const out = run(fake(json, join(dir, 'query')));
+        expect(out.stdout.trim()).toBe('');
+        expect(out.status).toBe(0);
+      });
+
+      it('prints nothing without supabase_select', () => {
+        const out = run('remote_watch; print -r -- "rc=$?"');
+        expect(out.stdout.trim()).toBe('rc=0');
+      });
+    });
+  });
 });

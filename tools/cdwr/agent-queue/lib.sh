@@ -166,6 +166,28 @@ queue_limit() {
 # host_id: the machine's stable name (a Mac's hostname follows the network); session-hook.sh has the twin
 host_id() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null || hostname -s; }
 
+# Succeeds when this machine runs the scheduler: the container, or a Mac with the launchd job. It
+# mirrors `schedulerHere` in agent.logic.ts; a plist that is not loaded still counts, so a broken
+# install stays reported.
+scheduler_here() {
+  [[ "${AGENT_QUEUE_HOST:-}" == container ]] && return 0
+  [[ -e "$HOME/Library/LaunchAgents/se.codeware.agent-queue.plist" ]] && return 0
+  command -v launchctl >/dev/null 2>&1 &&
+    launchctl print "gui/$(id -u)/se.codeware.agent-queue" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+# For the Mac's attended side when the scheduler runs elsewhere: prints {host, at, watch} for the
+# freshest queue_state row of another host that carries a watch, or nothing. A Mac row from before
+# an uninstall has no watch, so it never wins. Needs supabase_select (telemetry.sh), sourced by the
+# caller; without it, or on any failure, it prints nothing. Always succeeds.
+remote_watch() {
+  (( $+functions[supabase_select] )) || return 0
+  supabase_select queue_state "select=host,at,watch&watch=not.is.null&host=neq.$(host_id)&order=at.desc&limit=1" |
+    jq -c '.[0] | select(. != null and (.watch | type == "object")) | {host, at, watch}' 2>/dev/null
+  return 0
+}
+
 # Run as `zsh lib.sh header`, it is the MCP config's headersHelper
 if [[ "$ZSH_EVAL_CONTEXT" == toplevel && "${1:-}" == header ]]; then
   linear_header
