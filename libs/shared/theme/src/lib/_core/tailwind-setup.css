@@ -1,5 +1,5 @@
 /* Imports come first. An @import after any other rule is invalid CSS, and
-   Vite drops it without a warning: apps/web and Storybook shipped no webfaces
+   Vite drops it without a warning: Storybook shipped no webfaces
    at all while Next's pipeline let the same file through */
 /* Self-hosted webfaces */
 @import './fonts.css';

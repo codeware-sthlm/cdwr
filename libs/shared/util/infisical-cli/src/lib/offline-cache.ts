@@ -14,7 +14,8 @@ import { parseDotenv } from './parse-dotenv';
  * Generated, never hand-written, and kept apart from `.env` so refreshing it
  * cannot overwrite the public configuration living there.
  *
- * `/apps/web` and its sub-folders all cache to `apps/web/.env.offline`;
+ * `/apps/headless` and its sub-folders all cache to
+ * `apps/headless/.env.offline`;
  * a path outside `/apps/<app>` has no cache and throws. `app` names the app
  * that runs when it reads another app's folder; it must exist under `apps/`.
  */
