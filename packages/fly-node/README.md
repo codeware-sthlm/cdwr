@@ -227,6 +227,10 @@ await fly.apps.destroy('foo-app');
 >
 > Without providing the configuration file, the command will throw an error.
 
+Before the deploy itself, the app gets the public addresses it lacks (a shared IPv4 and an IPv6, as `ips.ensure` does), so an app is never left unreachable by a deploy that failed. A build-only deploy skips this.
+
+The deploy, the address calls and the staging of secrets are retried on transient Fly errors: `no capacity available`, a builder `deadline_exceeded` or `timed out connecting to machine`, and `503 Service Unavailable`. Each is tried 3 times in all, 10 and then 30 seconds apart, and every retry is logged with its cause. Creating an app and attaching Postgres are not retried, since a failure there may already have taken effect.
+
 ```ts
 // deploy the instance application, if provided
 const response = await fly.deploy();

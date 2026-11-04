@@ -3,6 +3,7 @@ import { dirname, join } from 'path';
 import { cwd } from 'process';
 
 import {
+  SpawnError,
   SpawnOptions,
   SpawnPtyOptions,
   spawn,
@@ -68,7 +69,34 @@ export type ExecFlyOptions = SpawnOptions &
      *   may appear in either stream (e.g. `fly deploy --build-only`)
      */
     streamStrategy?: 'stdout' | 'stderr' | 'combined';
+    /**
+     * Run the command again when it fails on a transient Fly error
+     * (see `TRANSIENT_FLY_ERRORS`). Only for commands that are safe to repeat:
+     * a command that may have taken effect before it failed must not set this.
+     */
+    retry?: boolean;
   };
+
+/**
+ * Fly errors that say nothing about the command, only about Fly at that
+ * moment: a region out of capacity, a builder that never answered, an API
+ * that was briefly unavailable. Seen in the deploy logs, not guessed.
+ */
+const TRANSIENT_FLY_ERRORS: ReadonlyArray<{ cause: string; pattern: RegExp }> =
+  [
+    { cause: 'no capacity available', pattern: /no capacity available/i },
+    { cause: 'builder deadline exceeded', pattern: /deadline_exceeded/i },
+    {
+      cause: 'timed out connecting to machine',
+      pattern: /timed out connecting to machine/i
+    },
+    // The status text, not a bare 503: an app whose health check answers
+    // 503 is broken, not unlucky, and must not be deployed three times
+    { cause: 'Fly API 503', pattern: /503 Service Unavailable/i }
+  ];
+
+/** Waits before each retry of a transient failure, so 3 attempts in all */
+const TRANSIENT_RETRY_DELAYS_MS: ReadonlyArray<number> = [10_000, 30_000];
 
 /** How often to poll a machine's state while waiting on it */
 const MACHINE_STATE_INTERVAL_MS = 2_000;
@@ -465,7 +493,8 @@ export class Fly {
      * safe on every deploy rather than only on create. That matters because
      * `flyctl` allocates addresses only for an app it creates itself — an app
      * that arrives any other way, such as a registry push auto-creating it,
-     * deploys green and answers nothing.
+     * deploys green and answers nothing. `deploy` runs it before every
+     * deploy that is not build-only.
      *
      * @param options - The application, and which addresses to ensure
      * @returns The addresses the application holds afterwards
@@ -1014,6 +1043,14 @@ export class Fly {
       }
     }
 
+    // Give the app its addresses before the deploy, not after. A deploy that
+    // fails would otherwise leave a new app unreachable, and flyctl's own
+    // first-deploy allocation, which it runs only for an app without any, is
+    // the one that has been broken. Skipped for build-only, which serves nothing.
+    if (!options?.buildOnly) {
+      await this.ips.ensure({ app: appName });
+    }
+
     // Deploy command
     const args = ['deploy', '--app', appName, '--config', deployConfig];
 
@@ -1048,10 +1085,10 @@ export class Fly {
 
     // flyctl writes progress output (including the image ref) to stderr for
     // --build-only, so use 'combined' strategy to search both streams.
-    const output = await this.execFly<string>(
-      args,
-      options?.buildOnly ? { streamStrategy: 'combined' } : undefined
-    );
+    const output = await this.execFly<string>(args, {
+      streamStrategy: options?.buildOnly ? 'combined' : 'stdout',
+      retry: true
+    });
 
     const imageRef = options?.buildOnly
       ? output?.match(/registry\.fly\.io\/\S+/)?.[0]
@@ -1130,7 +1167,9 @@ export class Fly {
       args.push(`${key}=${this.safeArg(value)}`);
     }
 
-    await this.execFly(args);
+    // Staging only records values, so repeating it is harmless; setting
+    // without it restarts the machines and is left to fail once
+    await this.execFly(args, { retry: options?.stage === true });
 
     return NameSchema.parse(status.name);
   }
@@ -1208,7 +1247,7 @@ export class Fly {
       args.push('--yes');
     }
 
-    await this.execFly(args);
+    await this.execFly(args, { retry: true });
   }
 
   /**
@@ -1235,7 +1274,7 @@ export class Fly {
 
     try {
       return await IpsListTransformedResponseSchema.parseAsync(
-        await this.execFly(args)
+        await this.execFly(args, { retry: true })
       );
     } catch (error) {
       if (onError === 'throwOnError') {
@@ -1846,40 +1885,34 @@ ${JSON.stringify(response, null, 2)}`);
 
     const flyCmd = 'flyctl';
     const toLogCmd = `${flyCmd} ${args.join(' ')}`;
+    const { retry = false, ...execOpts } = options ?? {};
     let output = '';
 
-    try {
-      this.traceCLI('CALL', toLogCmd);
-      // If the command requires interactive input, use spawnPty
-      if (options?.prompt) {
-        output = await spawnPty(flyCmd, args, { prompt: options.prompt });
-        this.traceCLI('RESULT', output);
-      } else {
-        // Otherwise use spawn
-        const { streamStrategy = 'stdout', ...spawnOpts } = options ?? {};
-        const result = await spawn(flyCmd, args, {
-          ...spawnOpts,
-          streamToConsole: this.logger.streamToConsole
-        });
-        const stdout = result.stdout.trim();
-        const stderr = result.stderr.trim();
-        this.traceCLI('RESULT', `${stdout}${stderr ? `\n${stderr}` : ''}`);
-        output =
-          streamStrategy === 'combined'
-            ? `${stdout}\n${stderr}`
-            : streamStrategy === 'stderr'
-              ? stderr
-              : stdout;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        output = await this.spawnFly(flyCmd, args, toLogCmd, execOpts);
+        break;
+      } catch (error) {
+        const errorMsg = (error as Error).message;
+        this.traceCLI('RESULT', errorMsg);
+
+        const cause = retry ? this.transientCause(error) : null;
+        const delay = TRANSIENT_RETRY_DELAYS_MS[attempt - 1];
+        if (cause && delay !== undefined) {
+          this.logger.info(
+            `Transient Fly error (${cause}), retrying in ${delay / 1000}s (attempt ${attempt + 1} of ${TRANSIENT_RETRY_DELAYS_MS.length + 1}): ${toLogCmd}`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        if (onError === 'throwOnError') {
+          throw new Error(`Command failed: ${toLogCmd}\n${errorMsg}`, {
+            cause: error
+          });
+        }
+        return null as T;
       }
-    } catch (error) {
-      const errorMsg = (error as Error).message;
-      this.traceCLI('RESULT', errorMsg);
-      if (onError === 'throwOnError') {
-        throw new Error(`Command failed: ${toLogCmd}\n${errorMsg}`, {
-          cause: error
-        });
-      }
-      return null as T;
     }
 
     try {
@@ -1893,6 +1926,61 @@ ${JSON.stringify(response, null, 2)}`);
       }
     }
     return undefined as T;
+  }
+
+  /**
+   * @private
+   * Run one fly command and assemble its output
+   *
+   * @returns The output selected by `streamStrategy`
+   * @throws An error if the command fails
+   */
+  private async spawnFly(
+    flyCmd: string,
+    args: Array<string>,
+    toLogCmd: string,
+    options: Omit<ExecFlyOptions, 'retry'>
+  ): Promise<string> {
+    this.traceCLI('CALL', toLogCmd);
+    // If the command requires interactive input, use spawnPty
+    if (options.prompt) {
+      const output = await spawnPty(flyCmd, args, { prompt: options.prompt });
+      this.traceCLI('RESULT', output);
+      return output;
+    }
+    // Otherwise use spawn
+    const { streamStrategy = 'stdout', ...spawnOpts } = options;
+    const result = await spawn(flyCmd, args, {
+      ...spawnOpts,
+      streamToConsole: this.logger.streamToConsole
+    });
+    const stdout = result.stdout.trim();
+    const stderr = result.stderr.trim();
+    this.traceCLI('RESULT', `${stdout}${stderr ? `\n${stderr}` : ''}`);
+    return streamStrategy === 'combined'
+      ? `${stdout}\n${stderr}`
+      : streamStrategy === 'stderr'
+        ? stderr
+        : stdout;
+  }
+
+  /**
+   * @private
+   * Name the transient Fly error behind a failed command, if it was one.
+   * Reads the full output kept on a `SpawnError`, since a streamed command's
+   * message only carries the tail of stderr.
+   *
+   * @returns The cause, or `null` when the failure is not a known transient one
+   */
+  private transientCause(error: unknown): string | null {
+    const text =
+      error instanceof SpawnError
+        ? `${error.stdout}\n${error.stderr}`
+        : String((error as Error)?.message ?? error);
+    return (
+      TRANSIENT_FLY_ERRORS.find(({ pattern }) => pattern.test(text))?.cause ??
+      null
+    );
   }
 
   /**

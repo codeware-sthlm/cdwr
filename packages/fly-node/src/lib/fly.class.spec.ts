@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import process from 'process';
 
-import { spawn, spawnPty } from '@codeware/shared/util/misc';
+import { SpawnError, spawn, spawnPty } from '@codeware/shared/util/misc';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ExecFlyOptions, Fly } from './fly.class';
@@ -1735,6 +1735,237 @@ describe('Fly', () => {
         mockDefs.testConfig,
         '--yes'
       ]);
+    });
+  });
+
+  describe('transient failures', () => {
+    const deployOptions = {
+      app: mockDefs.testApp,
+      config: mockDefs.testConfig
+    };
+
+    /** The number of times a command was spawned, matched on its leading args */
+    const spawnCount = (...lead: Array<string>) =>
+      mockSpawn.mock.calls.filter((call) =>
+        lead.every((arg, i) => call[1][i] === arg)
+      ).length;
+
+    /** Make a command fail for its first `times` runs, then behave as mocked */
+    const failCommand = (lead: Array<string>, error: Error, times: number) => {
+      const base = mockSpawn.getMockImplementation()!;
+      let left = times;
+      mockSpawn.mockImplementation((command, args, options) =>
+        lead.every((arg, i) => args[i] === arg) && left-- > 0
+          ? (Promise.reject(error) as ReturnType<typeof spawn>)
+          : base(command, args, options)
+      );
+    };
+
+    const spawnError = (stderr: string) =>
+      new SpawnError(`flyctl failed\n${stderr}`, {
+        exitCode: 1,
+        stdout: '',
+        stderr
+      });
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should retry a deploy that ran out of capacity and succeed', async () => {
+      failCommand(
+        ['deploy'],
+        spawnError('Error: no capacity available in arn'),
+        1
+      );
+      const fly = new Fly(mockFlyConfig);
+
+      const result = fly.deploy(deployOptions);
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      await expect(result).resolves.toEqual({
+        app: mockDefs.testApp,
+        hostname: `${mockDefs.testApp}.fly.dev`,
+        url: `https://${mockDefs.testApp}.fly.dev`
+      });
+      expect(spawnCount('deploy')).toBe(2);
+      expect(mockConsoleInfo).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Transient Fly error (no capacity available), retrying in 10s (attempt 2 of 3): flyctl deploy'
+        )
+      );
+    });
+
+    it.each([
+      ['no capacity available in arn', 'no capacity available'],
+      ['rpc error: DEADLINE_EXCEEDED', 'builder deadline exceeded'],
+      [
+        'timed out connecting to machine 1234',
+        'timed out connecting to machine'
+      ],
+      ['HTTP 503 Service Unavailable', 'Fly API 503']
+    ])('should recognise "%s" as transient', async (stderr, cause) => {
+      failCommand(['ips', 'list'], spawnError(stderr), 1);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      const result = fly.ips.list();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      await expect(result).resolves.toEqual([]);
+      expect(spawnCount('ips', 'list')).toBe(2);
+      expect(mockConsoleInfo).toHaveBeenCalledWith(
+        expect.stringContaining(`Transient Fly error (${cause})`)
+      );
+    });
+
+    it('should recognise a transient error in a plain error message', async () => {
+      failCommand(['ips', 'list'], new Error('no capacity available'), 1);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      const result = fly.ips.list();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      await expect(result).resolves.toEqual([]);
+      expect(spawnCount('ips', 'list')).toBe(2);
+    });
+
+    it('should not retry a deploy that fails for any other reason', async () => {
+      failCommand(['deploy'], spawnError('Error: app not found'), 5);
+      const fly = new Fly(mockFlyConfig);
+
+      await expect(fly.deploy(deployOptions)).rejects.toThrow('app not found');
+
+      expect(spawnCount('deploy')).toBe(1);
+    });
+
+    it('should give up after three attempts, waiting 10s and then 30s', async () => {
+      failCommand(
+        ['deploy'],
+        spawnError('Error: no capacity available in arn'),
+        10
+      );
+      const fly = new Fly(mockFlyConfig);
+
+      const result = fly.deploy(deployOptions);
+      const assertion = expect(result).rejects.toThrow('no capacity available');
+
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(spawnCount('deploy')).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(spawnCount('deploy')).toBe(2);
+
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(spawnCount('deploy')).toBe(2);
+      await vi.advanceTimersByTimeAsync(1);
+      await assertion;
+
+      expect(spawnCount('deploy')).toBe(3);
+      expect(mockConsoleInfo).toHaveBeenCalledWith(
+        expect.stringContaining('retrying in 30s (attempt 3 of 3)')
+      );
+    });
+
+    it('should not retry creating an app', async () => {
+      failCommand(
+        ['apps', 'create'],
+        spawnError('Error: no capacity available in arn'),
+        5
+      );
+      const fly = new Fly(mockFlyConfig);
+
+      await expect(fly.apps.create({ app: mockDefs.newApp })).rejects.toThrow(
+        'no capacity available'
+      );
+
+      expect(spawnCount('apps', 'create')).toBe(1);
+    });
+
+    it('should retry staged secrets', async () => {
+      failCommand(
+        ['secrets', 'set'],
+        spawnError('Error: no capacity available in arn'),
+        1
+      );
+      const fly = new Fly(mockFlyConfig);
+
+      const result = fly.secrets.set(
+        { NEW_SECRET: 'value' },
+        { app: mockDefs.testApp, stage: true }
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      await expect(result).resolves.toBeUndefined();
+      expect(spawnCount('secrets', 'set')).toBe(2);
+    });
+
+    it('should not retry secrets that are set without staging', async () => {
+      failCommand(
+        ['secrets', 'set'],
+        spawnError('Error: no capacity available in arn'),
+        5
+      );
+      const fly = new Fly(mockFlyConfig);
+
+      await expect(
+        fly.secrets.set({ NEW_SECRET: 'value' }, { app: mockDefs.testApp })
+      ).rejects.toThrow('no capacity available');
+
+      expect(spawnCount('secrets', 'set')).toBe(1);
+    });
+
+    it('should ensure addresses before the deploy', async () => {
+      const fly = new Fly(mockFlyConfig);
+      await fly.deploy(deployOptions);
+
+      const order = mockSpawn.mock.calls.map((call) =>
+        call[1].slice(0, 2).join(' ')
+      );
+      const list = order.indexOf('ips list');
+      const v4 = order.indexOf('ips allocate-v4');
+      const v6 = order.indexOf('ips allocate-v6');
+      const deploy = order.findIndex((cmd) => cmd.startsWith('deploy'));
+
+      expect(list).toBeGreaterThan(-1);
+      expect(v4).toBeGreaterThan(list);
+      expect(v6).toBeGreaterThan(list);
+      expect(deploy).toBeGreaterThan(v4);
+      expect(deploy).toBeGreaterThan(v6);
+    });
+
+    it('should not touch addresses for a build only deploy', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /deploy .* --build-only/,
+          resolveOrReject: 'resolve',
+          output: `registry.fly.io/${mockDefs.testApp}:deployment-1`
+        }
+      ]);
+      const fly = new Fly(mockFlyConfig);
+      await fly.deploy({ ...deployOptions, buildOnly: true });
+
+      expect(spawnCount('ips')).toBe(0);
+      expect(spawnCount('deploy')).toBe(1);
+    });
+
+    it('should fail the deploy without deploying when the addresses cannot be ensured', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /ips list/,
+          resolveOrReject: 'reject',
+          output: 'Error: app not found'
+        }
+      ]);
+      const fly = new Fly(mockFlyConfig);
+
+      await expect(fly.deploy(deployOptions)).rejects.toThrow(
+        'something broke'
+      );
+
+      expect(spawnCount('deploy')).toBe(0);
     });
   });
 
