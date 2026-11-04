@@ -1,5 +1,5 @@
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -23,7 +23,7 @@ const KEY_ENV = 'AGENT_SUPABASE_ANON_KEY';
 export default defineCommand({
   summary:
     'Wake the scheduler when issue or GitHub events or desk commands arrive',
-  description: `Subscribes to Supabase Realtime changes on issue_events and github_events, and new rows in desk_commands, and sends SIGUSR1 to the given pid, debounced and at most once a minute. It only wakes the scheduler; it decides nothing. Needs ${URL_ENV} and ${KEY_ENV} (the publishable key, never the service key). Writes listener.json in the queue home and exits 1 when it cannot recover, so a supervisor restarts it.`,
+  description: `Subscribes to Supabase Realtime changes on issue_events and github_events, and new rows in desk_commands, and sends SIGUSR1 to the given pid, debounced and at most once a minute. It only wakes the scheduler; it decides nothing. Needs ${URL_ENV} and ${KEY_ENV} (the publishable key, never the service key). Writes listener.json in the queue home, or the file given by --state-file, and exits 1 when it cannot recover, so a supervisor restarts it. Started by the container's loop (apps/agent-host/entrypoint.sh) and by an attended session's wait.sh, which passes --state-file so its state never lands in the queue home's listener.json.`,
   danger: 'read',
   history: false,
   inputs: {
@@ -33,11 +33,20 @@ export default defineCommand({
       short: 'P',
       description: 'The process that receives SIGUSR1 on a wake',
       schema: z.number().int().positive()
+    }),
+    stateFile: input.string({
+      prompt: 'Where should the listener write its state?',
+      flag: 'state-file',
+      short: 's',
+      description:
+        'The state file the listener keeps; listener.json in the queue home by default',
+      optional: true,
+      flagOnly: true
     })
   },
 
-  async plan(ctx, { notifyPid }) {
-    requireHost(['container'], ctx.env);
+  async plan(ctx, { notifyPid, stateFile }) {
+    requireHost(['container', 'launchd'], ctx.env);
     const url = ctx.env[URL_ENV];
     const key = ctx.env[KEY_ENV];
     if (!url) throw new CliError(`${URL_ENV} is not set`);
@@ -46,7 +55,13 @@ export default defineCommand({
       steps: [
         `Listen on issue_events, github_events and desk_commands, wake ${notifyPid}`
       ],
-      data: { url, key, stateFile: join(paths(ctx.env).home, 'listener.json') }
+      data: {
+        url,
+        key,
+        stateFile: stateFile
+          ? resolve(stateFile)
+          : join(paths(ctx.env).home, 'listener.json')
+      }
     };
   },
 
