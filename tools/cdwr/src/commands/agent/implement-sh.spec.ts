@@ -154,7 +154,8 @@ describe('implement.sh', () => {
   const wt = '/w/codeware-cod-705';
   const branch = 'cod-705-let-attended-sessions-force-push';
 
-  // Both the `git push` and the `git -C … push` form, each option right after `push` and later
+  // Both the `git push` and the `git -C … push` form, each option right after `push` and later;
+  // a raw push takes no option, since git also takes clusters (-uf) and abbreviations (--mi)
   it.each([
     'git push origin main',
     `git -C ${wt} push origin main`,
@@ -171,6 +172,15 @@ describe('implement.sh', () => {
     `git -C ${wt} push -f origin HEAD`,
     `git -C ${wt} push -fu origin HEAD`,
     `git -C ${wt} push origin HEAD -f`,
+    `git -C ${wt} push -uf origin HEAD`,
+    `git -C ${wt} push -ud origin ${branch}`,
+    `git -C ${wt} push --mi origin`,
+    `git -C ${wt} push origin --dele ${branch}`,
+    `git -C ${wt} push --force-w=${branch}:0123abcd origin HEAD`,
+    `git -C ${wt} push -u origin HEAD`,
+    `git -C ${wt} push --set-upstream origin HEAD`,
+    `git -C ${wt} push --no-verify origin HEAD`,
+    `git -C ${wt} push -o note=a+b origin HEAD`,
     `git -C ${wt} push origin +HEAD:refs/heads/${branch}`,
     `git -C ${wt} push +HEAD:refs/heads/${branch}`,
     `git -C ${wt} push --mirror origin`,
@@ -184,11 +194,10 @@ describe('implement.sh', () => {
   });
 
   it.each([
-    `git -C ${wt} push -u origin HEAD`,
     `git -C ${wt} push origin HEAD`,
-    `git -C ${wt} push -u origin ${branch}`,
+    `git -C ${wt} push origin ${branch}`,
     `git -C ${wt} push origin HEAD:refs/heads/${branch}`,
-    `git -C ${wt} push -o note=a+b origin HEAD`,
+    `git -C ${wt} push`,
     `git -C ${wt} fetch origin main`,
     `git -C ${wt} rebase origin/main`,
     `git -C ${wt} rev-parse origin/${branch}`,

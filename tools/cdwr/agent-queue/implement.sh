@@ -109,11 +109,12 @@ record launched "$KEY · log $log"
 # a GraphQL mutation outside the thread replies could merge, push to main or drop protection.
 # A push to main is the skill's to never do; GitHub's branch rules still refuse it, this keeps
 # the session from trying. Every force push goes through force-push.sh, which pins the lease to
-# the ticket branch and its old head: no raw --force*, -f, `+` refspec or --mirror, and no
-# --delete, -d or :branch either, since a pattern can't tell a lease on the branch from one on
-# anything else. A rule is a regex with `*` as `.*`, so each push rule comes in a `git push`
-# and a `git * push` form, and an option is matched both right after `push` and after a space
-# (`-f*` also takes `-fu`; a cluster with f later, `-uf`, is not caught). `gh run` is
+# the ticket branch and its old head. A raw push takes no option at all: git accepts option
+# clusters (-uf) and abbreviations (--mi), so a rule that lets -u through lets -uf through too,
+# and a pattern can't tell a lease on the branch from one on anything else. That covers
+# --force*, -f, --mirror, --delete and -d; a `+` refspec and a :branch delete are denied on their
+# own. A rule is a regex with `*` as `.*`, so each push rule comes in a `git push` and a
+# `git * push` form, and an argument is matched both right after `push` and after a space. `gh run` is
 # allowed for `view` only, so a failed job's log can be read; a rerun stays with Håkan. pnpm
 # `add` and `remove` are scoped to a `-C` directory like `install`: a planned dependency change
 # is part of a step (COD-676 adds two font packages), and the lockfile goes through review.
@@ -121,11 +122,7 @@ DENY=(
   "Bash(git -c *)" "Bash(git -C * -c *)" "Bash(git * config *)" "Bash(git * --config-env*)"
   "Bash(git push * main)" "Bash(git push * main *)" "Bash(git push *:main*)" "Bash(git push *heads/main*)"
   "Bash(git * push * main)" "Bash(git * push * main *)" "Bash(git * push *:main*)" "Bash(git * push *heads/main*)"
-  "Bash(git push *--force*)" "Bash(git * push *--force*)"
-  "Bash(git push *--mirror*)" "Bash(git * push *--mirror*)"
-  "Bash(git push *--delete*)" "Bash(git * push *--delete*)"
-  "Bash(git push -f*)" "Bash(git push * -f*)" "Bash(git * push -f*)" "Bash(git * push * -f*)"
-  "Bash(git push -d*)" "Bash(git push * -d*)" "Bash(git * push -d*)" "Bash(git * push * -d*)"
+  "Bash(git push -*)" "Bash(git push * -*)" "Bash(git * push -*)" "Bash(git * push * -*)"
   "Bash(git push +*)" "Bash(git push * +*)" "Bash(git * push +*)" "Bash(git * push * +*)"
   "Bash(git push * :*)" "Bash(git * push * :*)"
   "Bash(pnpm nx exec*)" "Bash(pnpm * nx exec*)"

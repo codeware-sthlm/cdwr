@@ -452,10 +452,11 @@ listed.
 4. GitHub through `gh pr …`, REST reads (`gh api repos/codeware-sthlm/cdwr/…`) and
    `tools/cdwr/agent-queue/gh-review.sh threads <pr>`, `reply <thread id> <body>` and
    `resolve <thread id>` for review threads. Raw `gh api graphql` and any `gh api` write are
-   denied. A force-push goes through `tools/cdwr/agent-queue/force-push.sh`; a raw one is
-   denied, lease or not. The session acts as the `codeware-agent` GitHub App: `gh` and
-   `git push` carry its token, commits are the bot's, and main's rulesets apply to it with no
-   bypass.
+   denied. A push is `git -C <worktree> push origin HEAD`, with no option: every push option
+   is denied, since git takes clusters (`-uf`) and abbreviations (`--mi`), and a force-push
+   goes through `tools/cdwr/agent-queue/force-push.sh`. The session acts as the
+   `codeware-agent` GitHub App: `gh` and `git push` carry its token, commits are the bot's,
+   and main's rulesets apply to it with no bypass.
 5. Snapshot images reach a ticket through `prepare_attachment_upload` (size from `wc -c`),
    `tools/cdwr/agent-queue/linear-upload.sh <png> <signed url> <header>...` with every signed
    header verbatim, then `create_attachment_from_upload`; one file at a time, since a signed URL
