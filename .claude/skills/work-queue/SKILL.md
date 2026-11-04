@@ -228,10 +228,11 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    **Copilot review** below. Once CI is green after it, set `agent:review` and status In
    Review, and add a comment
    that starts with `**Agent: PR ready**`. It holds the PR link, what the Copilot round
-   fixed and dismissed, what the Fly Deployment run did for the labelled PR (a preview url
-   from the PR comment, a failure, or no deployable app in the PR, read from
-   `gh run list --workflow 'Fly Deployment' --branch <branch>`), anything left open for
-   Håkan, and the **hand-off checklist**. Notify `action`: PR ready for review.
+   fixed and dismissed, what the Fly Deployment run did for the labelled PR (its jobs in
+   `gh pr checks <n>`, where every deploy job skipped means no deployable app, and the
+   preview urls from the workflow's PR comment in `gh pr view <n> --comments`), anything
+   left open for Håkan, and the **hand-off checklist**. Notify `action`: PR ready for
+   review.
 
    Write the checklist as a line `Hand-off checklist:` followed by one `- [ ] <item>` per
    line, with nothing else in between. The scheduler watches the PR after the gate and, on
