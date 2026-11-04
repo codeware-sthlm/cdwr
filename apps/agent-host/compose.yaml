@@ -23,6 +23,20 @@ services:
         max-size: 10m
         max-file: "5"
 
+  # The Agent Desk as a static site, for the phone: bound to the host's loopback only, and
+  # published to the tailnet with `tailscale serve` (tools/cdwr/README.md, the NUC section)
+  desk:
+    image: ghcr.io/codeware-sthlm/cdwr-desk:${DESK_IMAGE_TAG:-main}
+    container_name: cdwr-desk
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:80"
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
+
 volumes:
   agent-home:
   worktrees:

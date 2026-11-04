@@ -1,0 +1,10 @@
+# Only what the build reaches gets into the context: the desk and the root files its install
+# and its vite build read
+*
+!/package.json
+!/pnpm-lock.yaml
+!/pnpm-workspace.yaml
+!/tsconfig.base.json
+!/apps/desk
+/apps/desk/src-tauri/target
+/apps/desk/node_modules
