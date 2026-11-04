@@ -183,8 +183,35 @@ scheduler_here() {
 # caller; without it, or on any failure, it prints nothing. Always succeeds.
 remote_watch() {
   (( $+functions[supabase_select] )) || return 0
-  supabase_select queue_state "select=host,at,watch&watch=not.is.null&host=neq.$(host_id)&order=at.desc&limit=1" |
+  supabase_select queue_state "select=host,at,watch&watch=not.is.null&host=neq.$(jq -rn --arg h "$(host_id)" '$h | @uri')&order=at.desc&limit=1" |
     jq -c '.[0] | select(. != null and (.watch | type == "object")) | {host, at, watch}' 2>/dev/null
+  return 0
+}
+
+# AGENT_QUEUE_WATCH_CMD replaces the remote read with a command that prints the same object
+if [[ -n "${AGENT_QUEUE_WATCH_CMD:-}" ]]; then
+  remote_watch() { eval "$AGENT_QUEUE_WATCH_CMD"; }
+fi
+
+# watch_state <watch.json>: sets WATCH_STATE to the watch state as compact JSON, and WATCH_SOURCE
+# to where it came from. The file where the scheduler runs (`local`); elsewhere the freshest other
+# host's, from remote_watch (`<host> · <at>`); unreadable, the file as before (`local, remote
+# unreadable`). Globals, not output: a `$(watch_state)` call would keep the source in a subshell
+WATCH_SOURCE=""
+WATCH_STATE="{}"
+watch_state() {
+  local remote
+  if scheduler_here; then
+    WATCH_SOURCE=local
+  elif remote="$(remote_watch)" && [[ -n "$remote" ]] &&
+       jq -e '.watch | type == "object"' >/dev/null <<<"$remote" 2>/dev/null; then
+    WATCH_SOURCE="$(jq -r '"\(.host) · \(.at)"' <<<"$remote")"
+    WATCH_STATE="$(jq -c '.watch' <<<"$remote")"
+    return 0
+  else
+    WATCH_SOURCE="local, remote unreadable"
+  fi
+  WATCH_STATE="$(jq -c 'if type == "object" then . else {} end' "$1" 2>/dev/null || print '{}')"
   return 0
 }
 

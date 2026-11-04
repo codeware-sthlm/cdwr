@@ -91,7 +91,7 @@ to_main() {
 
 source "${0:A:h}/checkin.sh"
 source "${0:A:h}/telemetry.sh"
-telemetry_env "$REPO/tools/cdwr/.env"
+telemetry_env_search "$REPO"
 # Where session-hook.sh finds the key: the path goes to the sessions, never the key
 [[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
 
@@ -736,17 +736,23 @@ fi
 
 # What an attended /work-queue session would do now, from watch.jq's `attended` (the computed
 # form of the skill's "What to take next"). It reads watch.json, so it runs after the watch;
-# --check uses the last run's watch.json. A failure leaves the line empty, never stops the run.
+# --check uses the last run's watch.json. On a Mac without the scheduler that file is never
+# refreshed, so the state comes from the NUC's queue_state row instead (watch_state in lib.sh).
+# A failure leaves the line empty, never stops the run.
 attended_line=""
 queue_view=""
+attended_watch=""
 attended() {
   setopt local_options no_err_exit
   local resp state verdict waits
+  # Before the Linear read, so --check reports the source even when Linear fails
+  watch_state "$HOME_DIR/watch.json"
+  state="$WATCH_STATE"
+  attended_watch="$state"
   resp="$(linear "$ATTENDED_QUERY" | attended_nodes)"
   if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then
     note "warn: attended: Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
   fi
-  state="$(jq -c 'if type == "object" then . else {} end' "$HOME_DIR/watch.json" 2>/dev/null || print '{}')"
   # The fallback was already noted by watch_prs, so this one stays quiet
   waits="$(gh_identity || true; parked_waits <<<"$resp")"
   verdict="$(watch -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$HOME_DIR")" --argjson watch "$state" --argjson waits "$waits" \
@@ -826,6 +832,9 @@ attended() {
       decision="$(jq -nc --arg r "$why" '{action: "skip", reason: $r, key: null}')"; }
   if $check; then
     print -r -- "attended: $attended_line"
+    # Where the watch state came from, and the state itself, for `status`
+    print -r -- "watch-source: $WATCH_SOURCE"
+    print -r -- "watch-state: ${attended_watch:-{\}}"
     print -r -- "launch: $(jq -r '.action + (if .reason then " (" + .reason + ")" else "" end)' <<<"$decision")"
     [[ -n "$queue_view" ]] && print -r -- "queue-view: $queue_view"
     return 0

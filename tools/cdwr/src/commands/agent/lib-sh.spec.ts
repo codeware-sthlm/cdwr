@@ -346,6 +346,59 @@ describe('lib.sh', () => {
         const out = run('remote_watch; print -r -- "rc=$?"');
         expect(out.stdout.trim()).toBe('rc=0');
       });
+
+      it('url-encodes the host in the filter', () => {
+        const seen = join(dir, 'query');
+        run(`host_id() { print -r -- "Håkans Mac" }\n${fake(row, seen)}`);
+        expect(readFileSync(seen, 'utf8')).toContain(
+          'host=neq.H%C3%A5kans%20Mac'
+        );
+      });
+    });
+
+    // The state and its source land in globals, so the caller's shell sees both
+    describe('watch_state', () => {
+      const remote =
+        '[{"host":"nuc","at":"2026-11-05T00:00:00Z","watch":{"COD-1":{"pr":12,"state":"open","unresolved":1}}}]';
+      const report = `print -r -- "$WATCH_SOURCE"; print -r -- "$WATCH_STATE"`;
+
+      beforeEach(() => {
+        stub('launchctl', 'exit 1');
+        writeFileSync(
+          join(dir, 'watch.json'),
+          '{"COD-2":{"pr":3,"state":"open","unresolved":0}}'
+        );
+      });
+
+      it('reads the file where the scheduler runs', () => {
+        const out = run(`watch_state "${join(dir, 'watch.json')}"; ${report}`, {
+          AGENT_QUEUE_HOST: 'container'
+        });
+        expect(out.stdout.trim().split('\n')).toEqual([
+          'local',
+          '{"COD-2":{"pr":3,"state":"open","unresolved":0}}'
+        ]);
+      });
+
+      it('reads the remote row elsewhere', () => {
+        const out = run(
+          `supabase_select() { print -r -- '${remote}' }\nwatch_state "${join(dir, 'watch.json')}"; ${report}`
+        );
+        expect(out.stdout.trim().split('\n')).toEqual([
+          'nuc · 2026-11-05T00:00:00Z',
+          '{"COD-1":{"pr":12,"state":"open","unresolved":1}}'
+        ]);
+      });
+
+      it('falls back to the file when the remote is unreadable', () => {
+        const out = run(
+          `supabase_select() { print -r -- '[]' }\nwatch_state "${join(dir, 'watch.json')}"; ${report}`
+        );
+        expect(out.stdout.trim().split('\n')).toEqual([
+          'local, remote unreadable',
+          '{"COD-2":{"pr":3,"state":"open","unresolved":0}}'
+        ]);
+      });
     });
   });
 });
