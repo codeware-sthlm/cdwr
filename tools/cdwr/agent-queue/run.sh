@@ -471,7 +471,8 @@ $check || CHECKIN_ID="$(checkin in_progress)"
 
 # PR watch: gh runs as Håkan, so only reads (gh pr list, gh api graphql with a query).
 # The decisions live in watch.jq, installed next to this file. It watches every ticket an agent
-# label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write.
+# label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write. The
+# scheduler's other write is the parent close after it (CLOSE_PARENT, CLOSE_COMMENT).
 read -r -d '' WATCHED <<'GQL' || true
 query {
   issues(first: 100, filter: {
@@ -638,6 +639,88 @@ watch_prs() {
   print -r -- "$state" > "$file.tmp" && mv "$file.tmp" "$file"
 }
 
+# Parent close: a parent whose agent split finished is closed by the scheduler, since no session
+# may come by (an implement-only run stops before the skill's clean-up). Read from the sub-issues
+# closed in the last 14 days, each with its parent and the parent's sub-issues; watch.jq
+# `parents_to_close` decides. Linear's own parent auto-close stays off.
+read -r -d '' PARENTS <<'GQL' || true
+query {
+  issues(first: 50, orderBy: updatedAt, filter: {
+    team: { key: { eq: "COD" } }
+    parent: { null: false }
+    state: { type: { in: ["completed", "canceled"] } }
+    updatedAt: { gt: "-P14D" }
+  }) {
+    nodes {
+      parent {
+        id identifier
+        state { type }
+        team { key }
+        labels(first: 10) { nodes { name } }
+        children(first: 25) {
+          nodes { identifier state { type } labels(first: 10) { nodes { name } } }
+          pageInfo { hasNextPage }
+        }
+      }
+    }
+  }
+  teams(filter: { key: { eq: "COD" } }) { nodes { states { nodes { id name type position } } } }
+}
+GQL
+read -r -d '' CLOSE_PARENT <<'GQL' || true
+mutation($id: String!, $state: String!) {
+  issueUpdate(id: $id, input: { stateId: $state }) { success }
+}
+GQL
+read -r -d '' CLOSE_COMMENT <<'GQL' || true
+mutation($id: String!, $body: String!) {
+  commentCreate(input: { issueId: $id, body: $body }) { success }
+}
+GQL
+
+# close_parents: sets each finished parent Done, then posts its **Agent: closed** comment. A
+# failed close is a warn and is tried again on the next run; the comment follows only a close
+# Linear took, so it is never posted twice, and a failed one only warns. closed-parents keeps
+# every parent closed here, one per line, so one Håkan reopens stays open. The page is read newest
+# first, so a full one leaves out the oldest closes.
+close_parents() {
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/closed-parents" resp todo state p id vars closed
+  resp="$(linear "$PARENTS")" || { print -r -- "Linear did not answer"; return 1; }
+  jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
+    { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
+  [[ "$(jq '.data.issues.nodes | length' <<<"$resp")" -lt 50 ]] ||
+    { note "warn: close: 50 closed sub-issues, the page limit; older ones are not read"; record warn "" "close: page limit reached"; }
+  closed='[]'
+  [[ -r "$file" ]] && closed="$(jq -Rsc 'split("\n") | map(select(length > 0))' "$file")"
+  todo="$(watch -c --argjson closed "$closed" 'include "watch"; parents_to_close($closed)' <<<"$resp")" ||
+    { print -r -- "watch.jq failed$(watch_err)"; return 1; }
+  [[ "$(jq '.parents | length' <<<"$todo")" == 0 ]] && return 0
+  state="$(jq -r '.state // empty' <<<"$todo")"
+  [[ -n "$state" ]] || { print -r -- "no completed state in team COD"; return 1; }
+  for p in ${(f)"$(jq -c '.parents[]' <<<"$todo")"}; do
+    id="$(jq -r '.identifier' <<<"$p")"
+    vars="$(jq -c --arg s "$state" '{id, state: $s}' <<<"$p")"
+    resp="$(linear "$CLOSE_PARENT" "$vars")"
+    if ! jq -e '.data.issueUpdate.success == true' >/dev/null 2>&1 <<<"$resp"; then
+      note "warn: close: $id failed ($(jq -c '.errors[0].message // "no answer"' <<<"$resp" 2>/dev/null))"
+      record warn "$id" "close: parent close failed"
+      continue
+    fi
+    print -r -- "$id" >> "$file"
+    vars="$(jq -c '{id, body: .comment}' <<<"$p")"
+    resp="$(linear "$CLOSE_COMMENT" "$vars")"
+    if ! jq -e '.data.commentCreate.success == true' >/dev/null 2>&1 <<<"$resp"; then
+      note "warn: close: $id closed, its comment failed ($(jq -c '.errors[0].message // "no answer"' <<<"$resp" 2>/dev/null))"
+      record warn "$id" "close: closed without its comment"
+    fi
+    note "close: $id closed, all sub-issues are closed"
+    record closed "$id" "all sub-issues are closed"
+    notice info "$id: closed, all sub-issues are closed"
+  done
+  return 0
+}
+
 # One fetch per run: the job line and planning both read origin/main. A failure never stops the run.
 if ! $check; then
   git -C "$REPO" fetch -q origin 2>/dev/null || note "warn: fetch failed"
@@ -646,6 +729,8 @@ fi
 # Watching sends notices, so --check leaves it out; a failure never stops planning.
 if ! $check; then
   err="$(watch_prs)" || { note "warn: watch failed (${err:-unknown})"; record warn "" "watch failed: ${err:-unknown}"; }
+  # Same rule: a failure is a warn, never a stop
+  err="$(close_parents)" || { note "warn: parent close failed (${err:-unknown})"; record warn "" "parent close failed: ${err:-unknown}"; }
 fi
 
 # What an attended /work-queue session would do now, from watch.jq's `attended` (the computed
