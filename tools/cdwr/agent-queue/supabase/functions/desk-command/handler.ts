@@ -7,9 +7,27 @@ export const KINDS = [
   'run',
   'limit',
   'cap',
-  'abandon'
+  'abandon',
+  'snooze',
+  'wake'
 ] as const;
 export type Kind = (typeof KINDS)[number];
+
+/** The Waiting on you row kinds a snooze may record, as the desk's WaitRow names them */
+export const ROW_KINDS = [
+  'review',
+  'hand-offs',
+  'question',
+  'plan',
+  'ready to label',
+  'idea',
+  'approved'
+] as const;
+export type RowKind = (typeof ROW_KINDS)[number];
+
+const TICKET = /^COD-[0-9]{1,9}$/;
+const ISO_TIME =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/;
 
 /** The PR limit and the implement cap in dollars, as the steppers allow them */
 export const RANGES = {
@@ -29,8 +47,17 @@ const OPEN_STATES = ['alive', 'waiting'];
 export type Command = {
   host: string;
   kind: Kind;
-  /** `value` for limit and cap; `session` for abandon, the session the desk showed */
-  args: { value?: number; session?: string };
+  /**
+   * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
+   * snooze and wake, with the row's `kind` and newest gate event `eventAt` for snooze
+   */
+  args: {
+    value?: number;
+    session?: string;
+    ticket?: string;
+    kind?: RowKind;
+    eventAt?: string | null;
+  };
 };
 
 export type Status = 'pending' | 'applied' | 'refused';
@@ -127,6 +154,45 @@ export const parseCommand = (payload: unknown): Command | string => {
       return 'abandon takes only a session id';
     return { host, kind, args: { session } };
   }
+  if (kind === 'wake') {
+    const ticket = isRecord(args) ? args['ticket'] : undefined;
+    if (
+      !isRecord(args) ||
+      Object.keys(args).length !== 1 ||
+      typeof ticket !== 'string' ||
+      !TICKET.test(ticket)
+    )
+      return 'wake takes only a ticket';
+    return { host, kind, args: { ticket } };
+  }
+  if (kind === 'snooze') {
+    const message = 'snooze takes a ticket, a row kind and a gate time or null';
+    if (!isRecord(args)) return message;
+    const { ticket, kind: rowKind, eventAt = null } = args;
+    if (
+      Object.keys(args).some(
+        (k) => !['ticket', 'kind', 'eventAt'].includes(k)
+      ) ||
+      typeof ticket !== 'string' ||
+      !TICKET.test(ticket) ||
+      typeof rowKind !== 'string' ||
+      !(ROW_KINDS as readonly string[]).includes(rowKind) ||
+      (eventAt !== null &&
+        (typeof eventAt !== 'string' ||
+          !ISO_TIME.test(eventAt) ||
+          Number.isNaN(Date.parse(eventAt))))
+    )
+      return message;
+    return {
+      host,
+      kind,
+      args: {
+        ticket,
+        kind: rowKind as RowKind,
+        eventAt: eventAt === null ? null : new Date(eventAt).toISOString()
+      }
+    };
+  }
   if (kind !== 'limit' && kind !== 'cap') {
     if (
       args !== undefined &&
@@ -158,7 +224,11 @@ export const changeText = (
 ): string =>
   status === 'refused'
     ? `${command.kind} refused from the desk (${device}): ${note ?? 'no reason'}`
-    : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
+    : command.kind === 'snooze'
+      ? `snoozed ${ticket} from the desk (${device})`
+      : command.kind === 'wake'
+        ? `woke ${ticket} from the desk (${device})`
+        : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -231,25 +301,22 @@ export const createHandler = ({
     };
   };
 
-  /** Ends the session and stores its command in one transaction (`desk_abandon`) */
-  const abandon = async (
-    host: string,
-    actor: string,
-    at: string,
-    session: string | null
+  /**
+   * Applies a command and stores its row in one transaction: `desk_abandon` ends the session,
+   * `desk_snooze` and `desk_wake` set and remove the ticket's snooze
+   */
+  const rpc = async (
+    name: 'desk_abandon' | 'desk_snooze' | 'desk_wake',
+    body: Record<string, unknown>
   ): Promise<{ id: number; status: Status; note: string | null }> => {
-    const res = await rest('rpc/desk_abandon', {
-      method: 'POST',
-      body: { p_host: host, p_actor: actor, p_at: at, p_session: session }
-    });
-    if (!res.ok) throw new Error(`desk_abandon ${res.status}`);
+    const res = await rest(`rpc/${name}`, { method: 'POST', body });
+    if (!res.ok) throw new Error(`${name} ${res.status}`);
     const [row] = (await res.json()) as {
       id: number;
       status: Status;
       note: string | null;
     }[];
-    if (typeof row?.id !== 'number')
-      throw new Error('desk_abandon returned no id');
+    if (typeof row?.id !== 'number') throw new Error(`${name} returned no id`);
     return row;
   };
 
@@ -301,45 +368,65 @@ export const createHandler = ({
     let note: string | null = null;
     let ticket: string | null = null;
     try {
-      const { known, session } = await queueSession(
-        command.host,
-        command.kind === 'abandon'
-      );
-      if (!known) {
-        status = 'refused';
-        note = `no scheduler reports from ${command.host}`;
-      }
-
-      // The desk names the session it showed; one the host has since replaced is not abandoned
-      const expected = command.args.session;
-      if (
-        known &&
-        command.kind === 'abandon' &&
-        expected !== undefined &&
-        session?.id !== expected
-      ) {
-        status = 'refused';
-        note = 'the session changed; check the host again';
-      }
-
       let id: number;
-      if (known && command.kind === 'abandon' && status === 'pending') {
-        ticket = session?.ticket ?? null;
-        ({ id, status, note } = await abandon(
+      if (command.kind === 'snooze' || command.kind === 'wake') {
+        // A snooze belongs to a ticket, not a host: no scheduler applies it, so a silent host
+        // doesn't refuse it
+        ticket = command.args.ticket ?? null;
+        const base = {
+          p_host: command.host,
+          p_actor: device,
+          p_at: at,
+          p_ticket: ticket
+        };
+        ({ id, status, note } =
+          command.kind === 'snooze'
+            ? await rpc('desk_snooze', {
+                ...base,
+                p_kind: command.args.kind,
+                p_event_at: command.args.eventAt ?? null
+              })
+            : await rpc('desk_wake', base));
+      } else {
+        const { known, session } = await queueSession(
           command.host,
-          device,
-          at,
-          session?.id ?? null
-        ));
-      } else
-        id = await insert({
-          ...command,
-          at,
-          actor: device,
-          status,
-          applied_at: null,
-          note
-        });
+          command.kind === 'abandon'
+        );
+        if (!known) {
+          status = 'refused';
+          note = `no scheduler reports from ${command.host}`;
+        }
+
+        // The desk names the session it showed; one the host has since replaced is not abandoned
+        const expected = command.args.session;
+        if (
+          known &&
+          command.kind === 'abandon' &&
+          expected !== undefined &&
+          session?.id !== expected
+        ) {
+          status = 'refused';
+          note = 'the session changed; check the host again';
+        }
+
+        if (known && command.kind === 'abandon' && status === 'pending') {
+          ticket = session?.ticket ?? null;
+          ({ id, status, note } = await rpc('desk_abandon', {
+            p_host: command.host,
+            p_actor: device,
+            p_at: at,
+            p_session: session?.id ?? null
+          }));
+        } else
+          id = await insert({
+            ...command,
+            at,
+            actor: device,
+            status,
+            applied_at: null,
+            note
+          });
+      }
 
       // The command is stored either way; a missing activity row is only logged
       if (status !== 'pending')
