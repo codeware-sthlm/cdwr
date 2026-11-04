@@ -394,6 +394,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      snoozes: {
+        Row: {
+          ticket: string;
+          kind: string;
+          event_at: string | null;
+          at: string;
+          actor: string;
+        };
+        Insert: {
+          ticket: string;
+          kind: string;
+          event_at?: string | null;
+          at?: string;
+          actor: string;
+        };
+        Update: {
+          ticket?: string;
+          kind?: string;
+          event_at?: string | null;
+          at?: string;
+          actor?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       status: {
@@ -411,6 +435,26 @@ export type Database = {
           p_actor: string;
           p_at: string;
           p_session: string | null;
+        };
+        Returns: { id: number; status: string; note: string | null }[];
+      };
+      desk_snooze: {
+        Args: {
+          p_host: string;
+          p_actor: string;
+          p_at: string;
+          p_ticket: string;
+          p_kind: string;
+          p_event_at: string | null;
+        };
+        Returns: { id: number; status: string; note: string | null }[];
+      };
+      desk_wake: {
+        Args: {
+          p_host: string;
+          p_actor: string;
+          p_at: string;
+          p_ticket: string;
         };
         Returns: { id: number; status: string; note: string | null }[];
       };

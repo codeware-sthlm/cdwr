@@ -233,7 +233,7 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 run) always go out.
 
 The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
-`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events`, `builds` and `desk_commands`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events`, `builds`, `desk_commands` and `snoozes`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
@@ -288,7 +288,13 @@ the actor, so one device is revoked on its own. Kinds are `pause`, `resume`, `ru
 for the scheduler on that host to apply, and `abandon`, which it applies itself through `desk_abandon`, a database function that ends the
 session row the host's last snapshot calls alive or waiting; that is the desk's record only, since the
 host reads its own session files. The function stores the command in the same transaction. A host whose `queue_state` row is missing or more than 2 hours old,
-or an `abandon` with no open session, is stored `refused` with the reason. An applied or refused command also
+or an `abandon` with no open session, is stored `refused` with the reason. `snooze`
+(`{ticket, kind, eventAt}`: the Waiting on you row's kind and newest gate event, as the desk saw them)
+and `wake` (`{ticket}`) belong to a ticket, not a host, so no `queue_state` check refuses them. The
+function applies them itself through `desk_snooze` and `desk_wake`, which set or remove the ticket's
+row in `snoozes` and store the command `applied` in the same transaction; a `wake` with no snooze is
+`refused` (`not snoozed`). The desk keeps a row snoozed only while its kind and gate event still match,
+so a stale `snoozes` row is ignored and needs no cleanup. An applied or refused command also
 writes an `activity` row (`desk:<id>`, actor `human`). A new device gets its own token:
 
 ```sh
