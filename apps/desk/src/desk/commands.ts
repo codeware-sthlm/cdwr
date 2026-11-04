@@ -1,12 +1,24 @@
 // Sends desk commands to the desk-command Edge Function with the device token as the bearer
 
 export type CommandKind =
-  'pause' | 'resume' | 'run' | 'limit' | 'cap' | 'abandon';
+  'pause' | 'resume' | 'run' | 'limit' | 'cap' | 'abandon' | 'snooze' | 'wake';
+
+/** The kinds behind a control; snooze and wake are answered at once and stay in no control's state */
+export type ControlKind = Exclude<CommandKind, 'snooze' | 'wake'>;
 
 export type CommandStatus = 'pending' | 'applied' | 'refused';
 
-/** `value` for limit and cap; `session` for abandon, the session the desk showed */
-export type CommandArgs = { value?: number; session?: string };
+/**
+ * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
+ * snooze and wake, and `kind` (a waiting row's kind) with `eventAt` (ISO, or null) for snooze
+ */
+export type CommandArgs = {
+  value?: number;
+  session?: string;
+  ticket?: string;
+  kind?: string;
+  eventAt?: string | null;
+};
 
 /** The function's answer to a stored command */
 export type CommandReply = {
@@ -128,7 +140,7 @@ export const sendCommand = async (
 /** The controls the desk shows; pause and resume share one */
 export type Control = 'pause' | 'run' | 'limit' | 'cap' | 'abandon';
 
-const CONTROL: Record<CommandKind, Control> = {
+const CONTROL: Record<ControlKind, Control> = {
   pause: 'pause',
   resume: 'pause',
   run: 'run',
@@ -151,8 +163,8 @@ export type CommandRowLike = {
 
 export type ControlState =
   | { state: 'idle' }
-  | { state: 'pending'; kind: CommandKind }
-  | { state: 'refused'; kind: CommandKind; note: string };
+  | { state: 'pending'; kind: ControlKind }
+  | { state: 'refused'; kind: ControlKind; note: string };
 
 /** What the host's newest `queue_state` row reports, to tell an applied command took effect */
 export type Reported = {
@@ -173,7 +185,7 @@ const valueOf = (args: unknown): number | null =>
 
 /** Whether the host reports what an applied command asked for; a paused tick republishes an old queue view, so the time alone is not enough */
 const tookEffect = (
-  kind: CommandKind,
+  kind: ControlKind,
   args: unknown,
   appliedAt: string | null,
   reported: Reported
@@ -201,7 +213,7 @@ export const PENDING_MAX_MS = 2 * 60 * 60 * 1000;
 /** How long a refusal note stays beside its control */
 export const REFUSED_SHOW_MS = 15 * 60 * 1000;
 
-const isKind = (value: string): value is CommandKind =>
+const isKind = (value: string): value is ControlKind =>
   Object.hasOwn(CONTROL, value);
 
 /**
@@ -223,7 +235,7 @@ export const controlStates = (
     cap: { state: 'idle' },
     abandon: { state: 'idle' }
   };
-  const newest = new Map<Control, { row: CommandRowLike; kind: CommandKind }>();
+  const newest = new Map<Control, { row: CommandRowLike; kind: ControlKind }>();
   for (const row of rows) {
     if (row.host !== host || !isKind(row.kind)) continue;
     const control = CONTROL[row.kind];

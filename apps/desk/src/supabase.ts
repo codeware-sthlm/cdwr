@@ -31,6 +31,7 @@ export type UsageHourRow = Tables['usage_hours']['Row'];
 export type GithubEventRow = Tables['github_events']['Row'];
 export type SessionRow = Tables['sessions']['Row'];
 export type DeskCommandRow = Tables['desk_commands']['Row'];
+export type SnoozeRow = Tables['snoozes']['Row'];
 
 /** Full commits of main's newest successful builds; null when none is recorded */
 export type MainBuilds = { image: string | null; desk: string | null };
@@ -142,6 +143,8 @@ export type Payloads = QueuePayloads & {
   sessions: SessionRow[];
   /** The desk commands of the last 24 hours, oldest first */
   deskCommands: DeskCommandRow[];
+  /** Every snoozed ticket, by ticket */
+  snoozes: SnoozeRow[];
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -652,6 +655,18 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       return [...byId.values()].sort((a, b) => a.id - b.id);
     });
 
+  // The table is applied by hand after merge, so a missing one reads as no snoozes; a handful of rows, so no paging
+  const readSnoozes = (): Promise<SnoozeRow[]> =>
+    attempt(async () => {
+      const result = await client
+        .from('snoozes')
+        .select('*')
+        .order('ticket', { ascending: true });
+      return result.error && MISSING_TABLE.includes(result.error.code ?? '')
+        ? []
+        : settle(result);
+    });
+
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
    * catch up on what was missed. `onStatus` gets false on a channel error, a
@@ -662,7 +677,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
    * updated `usage_hours` row, likewise. `onGithub` gets each `github_events`
    * row as it arrives, without debounce; `onSessions` fires (debounced) on a
    * new or updated `sessions` row, which `onChange` hears too; `onDeskCommands`
-   * fires (debounced) on a new or updated `desk_commands` row, and on each (re)join.
+   * fires (debounced) on a new or updated `desk_commands` row, and on each (re)join;
+   * `onSnoozes` likewise on a new, updated or deleted `snoozes` row.
    */
   const subscribe = (
     onChange: () => void,
@@ -673,7 +689,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     onUsageHours?: () => void,
     onGithub?: (row: GithubEventRow) => void,
     onSessions?: () => void,
-    onDeskCommands?: () => void
+    onDeskCommands?: () => void,
+    onSnoozes?: () => void
   ): (() => Promise<void>) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hostTimer: ReturnType<typeof setTimeout> | undefined;
@@ -681,6 +698,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     let hoursTimer: ReturnType<typeof setTimeout> | undefined;
     let sessionsTimer: ReturnType<typeof setTimeout> | undefined;
     let commandsTimer: ReturnType<typeof setTimeout> | undefined;
+    let snoozesTimer: ReturnType<typeof setTimeout> | undefined;
     const changed = (): void => {
       clearTimeout(timer);
       timer = setTimeout(onChange, DEBOUNCE_MS);
@@ -704,6 +722,10 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     const commandsChanged = (): void => {
       clearTimeout(commandsTimer);
       commandsTimer = setTimeout(() => onDeskCommands?.(), DEBOUNCE_MS);
+    };
+    const snoozesChanged = (): void => {
+      clearTimeout(snoozesTimer);
+      snoozesTimer = setTimeout(() => onSnoozes?.(), DEBOUNCE_MS);
     };
     let channel = client.channel('desk');
     for (const table of [
@@ -797,6 +819,19 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     commands.subscribe((status) => {
       if (status === 'SUBSCRIBED') commandsChanged();
     });
+    // Its own channel too, so before the snoozes migration is applied a refused subscription costs the snoozes only
+    let snoozes = client.channel('desk-snoozes');
+    for (const event of ['INSERT', 'UPDATE', 'DELETE'] as const) {
+      snoozes = snoozes.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'snoozes' },
+        snoozesChanged
+      );
+    }
+    // A (re)join catches up on a snooze that changed while it was away
+    snoozes.subscribe((status) => {
+      if (status === 'SUBSCRIBED') snoozesChanged();
+    });
     // One channel per plan usage table too, so a missing one fails only its own data
     const planChannel = client
       .channel('desk-plan')
@@ -831,6 +866,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       clearTimeout(hoursTimer);
       clearTimeout(sessionsTimer);
       clearTimeout(commandsTimer);
+      clearTimeout(snoozesTimer);
       // Resolves once every channel is gone; a resubscribe before that gets the old one back
       return Promise.allSettled(
         [
@@ -839,6 +875,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
           hostChannel,
           builds,
           commands,
+          snoozes,
           planChannel,
           hoursChannel
         ].map((c) => client.removeChannel(c))
@@ -859,6 +896,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     readGithubEvents,
     readSessions,
     readDeskCommands,
+    readSnoozes,
     subscribe,
     check
   };

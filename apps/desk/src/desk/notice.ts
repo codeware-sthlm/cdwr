@@ -16,7 +16,8 @@ const SUPABASE_ERRORS: readonly string[] = [
   'usageHours',
   'githubEvents',
   'sessions',
-  'deskCommands'
+  'deskCommands',
+  'snoozes'
 ];
 
 /** The sentence for a failure of the source behind `key` */

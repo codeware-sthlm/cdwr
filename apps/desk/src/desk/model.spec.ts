@@ -17,6 +17,7 @@ import {
   agentState,
   byQueue,
   cpuDay,
+  gateTimes,
   hostHealth,
   ideaVerdict,
   isProblem,
@@ -1125,6 +1126,49 @@ describe('waitAges', () => {
     const ages = waitAges(['COD-1', 'COD-9'], a, NOW);
     expect([...ages.keys()]).toEqual(['COD-1']);
     expect(waitAges(['COD-1'], null, NOW).size).toBe(0);
+  });
+
+  describe('gateTimes', () => {
+    // Local times, as the activity rows are
+    const iso = (local: string) => new Date(local).toISOString();
+
+    it('gives the time of the gate row over a newer ordinary one', () => {
+      const a = activity(
+        ['2026-10-29 11:30', 'COD-1', 'Moved to In Progress'],
+        ['2026-10-29 10:00', 'COD-1', '+agent:needs-input'],
+        ['2026-10-29 09:00', 'COD-1', '+agent:needs-input']
+      );
+      expect(gateTimes(['COD-1'], a).get('COD-1')).toBe(
+        iso('2026-10-29T10:00:00')
+      );
+    });
+
+    it('falls back to the newest row without a gate event', () => {
+      const a = activity(
+        ['2026-10-29 11:30', 'COD-3', 'Moved to In Progress'],
+        ['2026-10-29 09:00', 'COD-3', 'Moved to Todo']
+      );
+      expect(gateTimes(['COD-3'], a).get('COD-3')).toBe(
+        iso('2026-10-29T11:30:00')
+      );
+    });
+
+    it('leaves out tickets without rows or without activity', () => {
+      const a = activity(['2026-10-29 11:30', 'COD-1', '+agent:review']);
+      expect([...gateTimes(['COD-1', 'COD-9'], a).keys()]).toEqual(['COD-1']);
+      expect(gateTimes(['COD-1'], null).size).toBe(0);
+    });
+
+    it('keeps waitAges counting from the same row', () => {
+      const a = activity(
+        ['2026-10-29 11:30', 'COD-1', 'Moved to In Progress'],
+        ['2026-10-29 10:00', 'COD-1', '+agent:needs-input']
+      );
+      const at = Date.parse(gateTimes(['COD-1'], a).get('COD-1') ?? '');
+      expect(waitAges(['COD-1'], a, NOW).get('COD-1')).toBe(
+        (NOW.getTime() - at) / 6e4
+      );
+    });
   });
 });
 

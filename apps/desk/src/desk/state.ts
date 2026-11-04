@@ -10,16 +10,17 @@ import type {
   PlanUsageRow,
   RunsPayload,
   SessionRow,
+  SnoozeRow,
   UsageHourRow,
   UsagePayload
 } from '../supabase';
 
 import type {
   CommandArgs,
-  CommandKind,
   CommandReply,
   CommandTarget,
-  Control
+  Control,
+  ControlKind
 } from './commands';
 import { STATES } from './constants';
 import type { Idea, PlanProgress } from './types';
@@ -107,6 +108,8 @@ export type DeskData = {
   sessions: SessionRow[] | null;
   /** The desk commands of the last 24 hours, oldest first */
   deskCommands: DeskCommandRow[] | null;
+  /** Every snoozed ticket, by ticket */
+  snoozes: SnoozeRow[] | null;
   /** The Realtime channel as the adapter reports it */
   connection: Connection;
   /** When the open tickets were last stored, in ms */
@@ -147,13 +150,13 @@ export type ControlsUi = {
   /** Controls whose request is in flight */
   sending: Set<Control>;
   /** A failure that stored no row (network, token), shown until the control is used again */
-  failed: Map<Control, { kind: CommandKind; note: string }>;
+  failed: Map<Control, { kind: ControlKind; note: string }>;
   /** The function's reply to each control's last command, standing in for its row until that arrives; `at` in ms */
   awaiting: Map<
     Control,
     CommandReply & {
       host: string;
-      kind: CommandKind;
+      kind: ControlKind;
       args: CommandArgs;
       at: number;
     }
@@ -194,6 +197,7 @@ export const createState = (): DeskState => ({
     githubEvents: null,
     sessions: null,
     deskCommands: null,
+    snoozes: null,
     connection: {
       live: false,
       retries: 0,
