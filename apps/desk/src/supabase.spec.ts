@@ -86,21 +86,27 @@ const build = (over: Partial<BuildRow> = {}): BuildRow => ({
 });
 
 describe('toMain', () => {
-  it('maps both workflows to their commits and ignores others', () => {
+  it('maps the three workflows to their commits and ignores others', () => {
     expect(
       toMain([
         build({ workflow: 'agent-host-image.yml', sha: 'b'.repeat(40) }),
         build({ workflow: 'desk.yml', sha: 'c'.repeat(40) }),
+        build({ workflow: 'desk-image.yml', sha: 'e'.repeat(40) }),
         build({ workflow: 'other.yml', sha: 'd'.repeat(40) })
       ])
-    ).toEqual({ image: 'b'.repeat(40), desk: 'c'.repeat(40) });
+    ).toEqual({
+      image: 'b'.repeat(40),
+      desk: 'c'.repeat(40),
+      deskWeb: 'e'.repeat(40)
+    });
   });
 
   it('is null for a workflow without a row', () => {
-    expect(toMain([])).toEqual({ image: null, desk: null });
+    expect(toMain([])).toEqual({ image: null, desk: null, deskWeb: null });
     expect(toMain([build({ workflow: 'desk.yml' })])).toEqual({
       image: null,
-      desk: 'a'.repeat(40)
+      desk: 'a'.repeat(40),
+      deskWeb: null
     });
   });
 });
@@ -131,7 +137,11 @@ describe('createSupabase read of builds', () => {
     const payload = await readWith(
       reply({ code: 'PGRST205', message: 'Could not find the table' }, 404)
     );
-    expect(payload.runs?.main).toEqual({ image: null, desk: null });
+    expect(payload.runs?.main).toEqual({
+      image: null,
+      desk: null,
+      deskWeb: null
+    });
   });
 
   it('fails on any other error', async () => {
@@ -195,10 +205,14 @@ describe('pickQueueState', () => {
 
 describe('toRuns', () => {
   it('carries main, all null without build rows', () => {
-    expect(toRuns([state()], [])?.main).toEqual({ image: null, desk: null });
+    expect(toRuns([state()], [])?.main).toEqual({
+      image: null,
+      desk: null,
+      deskWeb: null
+    });
     expect(
       toRuns([state()], [], [build({ workflow: 'agent-host-image.yml' })])?.main
-    ).toEqual({ image: 'a'.repeat(40), desk: null });
+    ).toEqual({ image: 'a'.repeat(40), desk: null, deskWeb: null });
   });
 
   it('returns null without a queue_state row', () => {

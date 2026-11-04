@@ -91,7 +91,7 @@ const runsPayload = (over: Partial<RunsPayload> = {}): RunsPayload => ({
   at: '2026-10-29T11:55:00.000Z',
   host: 'nuc',
   others: [],
-  main: { image: null, desk: null },
+  main: { image: null, desk: null, deskWeb: null },
   rows: [],
   ...over
 });
@@ -633,7 +633,10 @@ describe('model', () => {
       );
 
     it('flags an image that differs from main', () => {
-      const m = at({ job: job(), main: { image: NEW, desk: null } });
+      const m = at({
+        job: job(),
+        main: { image: NEW, desk: null, deskWeb: null }
+      });
       expect(m.imageBehind).toEqual({
         runs: 'sha-abc1234',
         main: 'sha-def5678'
@@ -641,14 +644,17 @@ describe('model', () => {
     });
 
     it('is current when the image is main', () => {
-      const m = at({ job: job(), main: { image: OLD, desk: null } });
+      const m = at({
+        job: job(),
+        main: { image: OLD, desk: null, deskWeb: null }
+      });
       expect(m.imageBehind).toBeNull();
     });
 
     it('does not know without the Job line commit', () => {
       const m = at({
         job: job({ rev: null }),
-        main: { image: NEW, desk: null }
+        main: { image: NEW, desk: null, deskWeb: null }
       });
       expect(m.imageBehind).toBeNull();
     });
@@ -660,13 +666,13 @@ describe('model', () => {
     it('ignores a launchd host', () => {
       const m = at({
         job: job({ host: 'launchd' }),
-        main: { image: NEW, desk: null }
+        main: { image: NEW, desk: null, deskWeb: null }
       });
       expect(m.imageBehind).toBeNull();
     });
 
     it('flags a desk that differs from main', () => {
-      const m = at({ main: { image: null, desk: NEW } }, OLD);
+      const m = at({ main: { image: null, desk: NEW, deskWeb: null } }, OLD);
       expect(m.deskBehind).toEqual({
         runs: 'sha-abc1234',
         main: 'sha-def5678'
@@ -675,13 +681,13 @@ describe('model', () => {
 
     it('is current when the desk is main', () => {
       expect(
-        at({ main: { image: null, desk: OLD } }, OLD).deskBehind
+        at({ main: { image: null, desk: OLD, deskWeb: null } }, OLD).deskBehind
       ).toBeNull();
     });
 
     it('does not know a local build', () => {
       expect(
-        at({ main: { image: null, desk: NEW } }, null).deskBehind
+        at({ main: { image: null, desk: NEW, deskWeb: null } }, null).deskBehind
       ).toBeNull();
     });
   });
@@ -1886,35 +1892,54 @@ describe('limits, nuc and versions in the model', () => {
     const NEW = 'def5678' + '0'.repeat(33);
 
     it('says behind, current or unknown for the image', () => {
-      expect(versions(job(), { image: NEW, desk: null }, null).image).toEqual({
+      expect(
+        versions(job(), { image: NEW, desk: null, deskWeb: null }, null).image
+      ).toEqual({
         state: 'behind',
         runs: 'sha-abc1234',
         main: 'sha-def5678'
       });
       expect(
-        versions(job(), { image: OLD, desk: null }, null).image.state
+        versions(job(), { image: OLD, desk: null, deskWeb: null }, null).image
+          .state
       ).toBe('current');
-      expect(versions(job(), { image: null, desk: null }, null).image).toEqual({
+      expect(
+        versions(job(), { image: null, desk: null, deskWeb: null }, null).image
+      ).toEqual({
         state: 'unknown',
         runs: 'sha-abc1234',
         main: null
       });
       expect(
-        versions(job({ host: 'launchd' }), { image: NEW, desk: null }, null)
-          .image
+        versions(
+          job({ host: 'launchd' }),
+          { image: NEW, desk: null, deskWeb: null },
+          null
+        ).image
       ).toEqual({ state: 'unknown', runs: null, main: 'sha-def5678' });
     });
 
+    it('compares the web desk with desk-image.yml, not desk.yml', () => {
+      const main = { image: null, desk: OLD, deskWeb: NEW };
+      expect(versions(null, main, OLD, true).desk).toEqual({
+        state: 'behind',
+        runs: 'sha-abc1234',
+        main: 'sha-def5678'
+      });
+      expect(versions(null, main, OLD).desk.state).toBe('current');
+    });
+
     it('says the same for the desk, unknown for a local build', () => {
-      const main = { image: null, desk: NEW };
+      const main = { image: null, desk: NEW, deskWeb: null };
       expect(versions(null, main, OLD).desk).toEqual({
         state: 'behind',
         runs: 'sha-abc1234',
         main: 'sha-def5678'
       });
-      expect(versions(null, { image: null, desk: OLD }, OLD).desk.state).toBe(
-        'current'
-      );
+      expect(
+        versions(null, { image: null, desk: OLD, deskWeb: null }, OLD).desk
+          .state
+      ).toBe('current');
       expect(versions(null, main, null).desk.state).toBe('unknown');
     });
 

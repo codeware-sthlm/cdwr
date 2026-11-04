@@ -184,7 +184,7 @@ export type VersionState = {
 export type Versions = {
   /** The NUC image (container job) against agent-host-image.yml's newest build */
   image: VersionState;
-  /** This desk's build against desk.yml's newest */
+  /** This desk's build against its workflow's newest: desk.yml on the Mac, desk-image.yml on the web */
   desk: VersionState;
   /** The installed scripts against origin/main, as the Job line says */
   install: Job['install'] | null;
@@ -257,6 +257,8 @@ export type Model = {
   macToday: MacEntry[];
   /** What runs against what main built */
   versions: Versions;
+  /** This desk is the web one, served by the NUC, not the Mac app */
+  web: boolean;
   /** The plan's two usage windows; null per window without a sample */
   plan: PlanUsage;
   /** What the hours cost, by hour and by role */
@@ -637,7 +639,8 @@ const versionState = (
 export const versions = (
   job: Job | null,
   main: RunsPayload['main'] | null,
-  desk: string | null
+  desk: string | null,
+  web = false
 ): Versions => ({
   image: versionState(
     job?.host === 'container' && job.rev ? job.rev : null,
@@ -645,7 +648,9 @@ export const versions = (
   ),
   desk: versionState(
     desk ? 'sha-' + desk.slice(0, 7) : null,
-    main?.desk ? 'sha-' + main.desk.slice(0, 7) : null
+    (web ? main?.deskWeb : main?.desk)
+      ? 'sha-' + (web ? main?.deskWeb : main?.desk)?.slice(0, 7)
+      : null
   ),
   install: job?.install ?? null
 });
@@ -994,7 +999,10 @@ const controlsOf = (
 export const model = (
   state: DeskState,
   now: Date,
-  desk: string | null = deskSha()
+  /** This desk's build commit; null for a local build */
+  desk: string | null = deskSha(),
+  /** The web desk the NUC serves, rather than the Mac app */
+  web = false
 ): Model => {
   const { data, details, liveHandoffs } = state;
   const { runs, ideas, activity } = data;
@@ -1120,7 +1128,7 @@ export const model = (
   // The daily suggestion: an agent-idea ticket without an Agent label waits on Håkan's verdict
   const allIdeas = (ideas ?? []).filter((i) => !isOtherRepo(i));
 
-  const vers = versions(runs?.job ?? null, runs?.main ?? null, desk);
+  const vers = versions(runs?.job ?? null, runs?.main ?? null, desk, web);
   const behind = (x: VersionState): Behind | null =>
     x.state === 'behind' && x.runs && x.main
       ? { runs: x.runs, main: x.main }
@@ -1250,6 +1258,7 @@ export const model = (
     cpuDay: host ? cpuDay(host.series, rows, now) : null,
     macToday: macToday(data.sessions, host?.host ?? null, hand.host, now),
     versions: vers,
+    web,
     plan,
     burn: usageBurn(data.usageHours, now, plan.five_hour),
     runsToday: runsToday(rows, now),

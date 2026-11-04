@@ -44,7 +44,11 @@ export const STORED: Record<string, readonly string[]> = {
 };
 
 /** The workflows whose successful runs on main are stored in `builds`: each is a new version of what it builds */
-export const BUILT = ['agent-host-image.yml', 'desk.yml'] as const;
+export const BUILT = [
+  'agent-host-image.yml',
+  'desk.yml',
+  'desk-image.yml'
+] as const;
 
 /** GitHub sends `sha256=<hex HMAC-SHA256 of the raw body>` in `X-Hub-Signature-256` */
 export const verifySignature = async (

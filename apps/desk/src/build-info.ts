@@ -1,4 +1,4 @@
-/** The commit `desk.yml` built this desk from (`VITE_DESK_SHA`); null for a local build */
+/** The commit this desk was built from (`VITE_DESK_SHA`, set by `desk.yml` and `desk-image.yml`); null for a local build */
 export const deskSha = (
   value: unknown = import.meta.env.VITE_DESK_SHA
 ): string | null =>
