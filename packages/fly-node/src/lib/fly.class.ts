@@ -509,16 +509,21 @@ export class Fly {
         const has = (...types: Array<string>) =>
           existing.some((ip) => types.includes(ip.type));
 
+        let allocated = false;
         if (sharedV4 && !has('v4', 'shared_v4')) {
           await this.allocateIp('allocate-v4', options);
           this.logger.info('Allocated a shared IPv4 address');
+          allocated = true;
         }
         if (v6 && !has('v6')) {
           await this.allocateIp('allocate-v6', options);
           this.logger.info('Allocated a dedicated IPv6 address');
+          allocated = true;
         }
 
-        return await this.fetchAppIps('throwOnError', options);
+        return allocated
+          ? await this.fetchAppIps('throwOnError', options)
+          : existing;
       } catch (error) {
         throw new Error(
           `[ensure ips] something broke, check your app addresses\n${error}`,
@@ -1046,8 +1051,11 @@ export class Fly {
     // Give the app its addresses before the deploy, not after. A deploy that
     // fails would otherwise leave a new app unreachable, and flyctl's own
     // first-deploy allocation, which it runs only for an app without any, is
-    // the one that has been broken. Skipped for build-only, which serves nothing.
-    if (!options?.buildOnly) {
+    // the one that has been broken. Skipped for build-only, and for an app
+    // whose config serves nothing, which is private on purpose.
+    const servesTraffic =
+      !!appConfig.httpService || (appConfig.services?.length ?? 0) > 0;
+    if (!options?.buildOnly && servesTraffic) {
       await this.ips.ensure({ app: appName });
     }
 
@@ -1247,7 +1255,8 @@ export class Fly {
       args.push('--yes');
     }
 
-    await this.execFly(args, { retry: true });
+    // Not retried: an allocation that failed in transit may have taken effect
+    await this.execFly(args);
   }
 
   /**
@@ -1967,16 +1976,24 @@ ${JSON.stringify(response, null, 2)}`);
   /**
    * @private
    * Name the transient Fly error behind a failed command, if it was one.
-   * Reads the full output kept on a `SpawnError`, since a streamed command's
-   * message only carries the tail of stderr.
+   *
+   * Only the error flyctl ended with counts: from its last `Error` line to
+   * the end of stderr, or the last few lines when there is none. A deploy
+   * streams the app's own output and errors flyctl recovered from, and
+   * matching those would repeat a deploy that failed for a real reason.
    *
    * @returns The cause, or `null` when the failure is not a known transient one
    */
   private transientCause(error: unknown): string | null {
-    const text =
-      error instanceof SpawnError
-        ? `${error.stdout}\n${error.stderr}`
-        : String((error as Error)?.message ?? error);
+    let text: string;
+    if (error instanceof SpawnError) {
+      const lines = error.stderr.split(/\r?\n/).filter((line) => line.trim());
+      const errorLines = lines.map((line) => /^\s*Error\b/.test(line));
+      const last = errorLines.lastIndexOf(true);
+      text = lines.slice(last >= 0 ? last : -3).join('\n');
+    } else {
+      text = String((error as Error)?.message ?? error);
+    }
     return (
       TRANSIENT_FLY_ERRORS.find(({ pattern }) => pattern.test(text))?.cause ??
       null

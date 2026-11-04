@@ -1917,6 +1917,108 @@ describe('Fly', () => {
       expect(spawnCount('secrets', 'set')).toBe(1);
     });
 
+    it('should judge a deploy by its final error, not an earlier transient line', async () => {
+      failCommand(
+        ['deploy'],
+        spawnError(
+          'timed out connecting to machine 1234\nretrying\nError: health checks failed'
+        ),
+        5
+      );
+      const fly = new Fly(mockFlyConfig);
+
+      const assertion = expect(fly.deploy(deployOptions)).rejects.toThrow(
+        'health checks failed'
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      await assertion;
+
+      expect(spawnCount('deploy')).toBe(1);
+    });
+
+    it('should not retry on a transient pattern found only in stdout', async () => {
+      failCommand(
+        ['deploy'],
+        new SpawnError('flyctl failed', {
+          exitCode: 1,
+          stdout: 'no capacity available in arn',
+          stderr: 'Error: app not found'
+        }),
+        5
+      );
+      const fly = new Fly(mockFlyConfig);
+
+      const assertion = expect(fly.deploy(deployOptions)).rejects.toThrow(
+        'flyctl failed'
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      await assertion;
+
+      expect(spawnCount('deploy')).toBe(1);
+    });
+
+    it('should not retry an address allocation', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /ips list --app .*/,
+          resolveOrReject: 'resolve',
+          output: JSON.stringify(
+            mockListIpResponse.filter((ip) => ip.type !== 'v6')
+          )
+        }
+      ]);
+      failCommand(
+        ['ips', 'allocate-v6'],
+        spawnError('Error: no capacity available in arn'),
+        5
+      );
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      const assertion = expect(fly.ips.ensure()).rejects.toThrow(
+        'no capacity available'
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      await assertion;
+
+      expect(spawnCount('ips', 'allocate-v6')).toBe(1);
+    });
+
+    it('should list once and allocate nothing when both addresses are held', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /ips list --app .*/,
+          resolveOrReject: 'resolve',
+          output: JSON.stringify(mockListIpResponse)
+        }
+      ]);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      await expect(fly.ips.ensure()).resolves.toEqual(mockListIpResponse);
+
+      expect(spawnCount('ips', 'list')).toBe(1);
+      expect(spawnCount('ips', 'allocate-v4')).toBe(0);
+      expect(spawnCount('ips', 'allocate-v6')).toBe(0);
+    });
+
+    it('should not touch addresses for a config that serves nothing', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /config show/,
+          resolveOrReject: 'resolve',
+          output: JSON.stringify({
+            app: mockDefs.testApp,
+            primaryRegion: 'arn',
+            build: { dockerfile: 'Dockerfile' }
+          })
+        }
+      ]);
+      const fly = new Fly(mockFlyConfig);
+      await fly.deploy(deployOptions);
+
+      expect(spawnCount('ips')).toBe(0);
+      expect(spawnCount('deploy')).toBe(1);
+    });
+
     it('should ensure addresses before the deploy', async () => {
       const fly = new Fly(mockFlyConfig);
       await fly.deploy(deployOptions);
