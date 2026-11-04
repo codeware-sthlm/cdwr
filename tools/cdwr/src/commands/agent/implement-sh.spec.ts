@@ -23,6 +23,28 @@ const code = SCRIPT.split('\n')
 
 const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
 
+// The Bash rules of the DENY array, `Bash(...)` stripped
+const denied: string[] = (/^DENY=\(\n([\s\S]*?)^\)$/m.exec(code)?.[1] ?? '')
+  .split('\n')
+  .filter((line) => !line.trim().startsWith('#'))
+  .flatMap((line) => [...line.matchAll(/"Bash\(([^"]*)\)"/g)].map((m) => m[1]));
+
+// How Claude Code matches a Bash rule against a command: the rule is a regex with `*` as `.*`,
+// anchored at both ends and spanning newlines; a rule ending in ` *` with that one star also
+// matches without the trailing argument
+const matches = (rule: string, command: string): boolean => {
+  let source = rule
+    .trim()
+    .replace(/[.+?^${}()|[\]\\'"]/g, '\\$&')
+    .replaceAll('*', '.*');
+  if (source.endsWith(' .*') && rule.split('*').length === 2) {
+    source = `${source.slice(0, -3)}( .*)?`;
+  }
+  return new RegExp(`^${source}$`, 's').test(command);
+};
+const isDenied = (command: string): boolean =>
+  denied.some((rule) => matches(rule, command));
+
 describe('implement.sh', () => {
   it('stops on the first error', () => {
     expect(SCRIPT).toMatch(/^set -euo pipefail$/m);
@@ -97,8 +119,6 @@ describe('implement.sh', () => {
   it.each([
     'Bash(git -c *)',
     'Bash(git * config *)',
-    'Bash(git * push *:main*)',
-    'Bash(git * push * --force)',
     'Bash(pnpm * nx exec*)',
     'Bash(gh pr merge*)',
     'Bash(gh api * -X *)',
@@ -117,6 +137,66 @@ describe('implement.sh', () => {
       expect(code).toContain(`"${rule}"`);
     }
   );
+
+  it('force-pushes only through force-push.sh', () => {
+    expect(code).toContain('"Bash(tools/cdwr/agent-queue/force-push.sh *)"');
+    expect(code).not.toMatch(/"Bash\([^"]*--force-with-lease=/);
+  });
+
+  it('reads the deny rules', () => {
+    expect(denied.length).toBeGreaterThan(20);
+    expect(matches('git * push * main', 'git -C /w push origin main')).toBe(
+      true
+    );
+    expect(matches('git * push * main', 'git push origin main')).toBe(false);
+  });
+
+  const wt = '/w/codeware-cod-705';
+  const branch = 'cod-705-let-attended-sessions-force-push';
+
+  // Both the `git push` and the `git -C … push` form, each option right after `push` and later
+  it.each([
+    'git push origin main',
+    `git -C ${wt} push origin main`,
+    `git -C ${wt} push -u origin main`,
+    `git -C ${wt} push origin HEAD:main`,
+    `git -C ${wt} push origin HEAD:refs/heads/main`,
+    'git push --force origin HEAD',
+    `git -C ${wt} push --force origin HEAD`,
+    `git -C ${wt} push origin HEAD --force`,
+    `git -C ${wt} push --force-with-lease=${branch}:0123abcd origin HEAD`,
+    `git -C ${wt} push origin HEAD --force-with-lease`,
+    `git -C ${wt} push --force-if-includes origin HEAD`,
+    'git push -f origin HEAD',
+    `git -C ${wt} push -f origin HEAD`,
+    `git -C ${wt} push -fu origin HEAD`,
+    `git -C ${wt} push origin HEAD -f`,
+    `git -C ${wt} push origin +HEAD:refs/heads/${branch}`,
+    `git -C ${wt} push +HEAD:refs/heads/${branch}`,
+    `git -C ${wt} push --mirror origin`,
+    `git -C ${wt} push origin --delete ${branch}`,
+    `git -C ${wt} push -d origin ${branch}`,
+    `git -C ${wt} push origin :${branch}`,
+    `git -c core.hooksPath=/x -C ${wt} push origin HEAD`,
+    `git -C ${wt} config user.name x`
+  ])('denies %s', (command) => {
+    expect(isDenied(command)).toBe(true);
+  });
+
+  it.each([
+    `git -C ${wt} push -u origin HEAD`,
+    `git -C ${wt} push origin HEAD`,
+    `git -C ${wt} push -u origin ${branch}`,
+    `git -C ${wt} push origin HEAD:refs/heads/${branch}`,
+    `git -C ${wt} push -o note=a+b origin HEAD`,
+    `git -C ${wt} fetch origin main`,
+    `git -C ${wt} rebase origin/main`,
+    `git -C ${wt} rev-parse origin/${branch}`,
+    `git -C ${wt} commit -m "fix: the push of a+b"`,
+    `tools/cdwr/agent-queue/force-push.sh ${wt} ${branch} 0123abcd`
+  ])('leaves %s to the allow list', (command) => {
+    expect(isDenied(command)).toBe(false);
+  });
 
   it('reads a failed job log but cannot rerun it', () => {
     expect(code).toContain('"Bash(gh run view *)"');
