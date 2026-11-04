@@ -901,6 +901,29 @@ describe('model', () => {
     it('sorts the ideas to decide oldest first', () => {
       expect(m.ideasPending.map((i) => i.id)).toEqual(['COD-51', 'COD-50']);
     });
+    it('gives a pending idea its gate time but keeps it out of waitAge', () => {
+      const s = withState((x) => {
+        x.data.ideas = [issue('COD-50', { createdAt: '2026-10-20T08:00:00' })];
+        x.data.activity = {
+          updated: '2026-10-29 11:50',
+          header: '',
+          dropped: '',
+          rows: [
+            {
+              when: '2026-10-29 10:00',
+              ticket: 'COD-50',
+              actor: 'agent',
+              change: 'comment: **Agent: plan ready**'
+            }
+          ]
+        };
+      });
+      const idea = model(s, NOW);
+      expect(idea.gateAt.get('COD-50')).toBe(
+        new Date('2026-10-29T10:00:00').toISOString()
+      );
+      expect(idea.waitAge.has('COD-50')).toBe(false);
+    });
     it('sorts the accepted newest first', () => {
       expect(m.ideasAccepted.map((i) => i.id)).toEqual(['COD-53', 'COD-52']);
     });
