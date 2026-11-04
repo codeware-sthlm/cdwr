@@ -29,6 +29,7 @@ const state = (over: Partial<QueueStateRow> = {}): QueueStateRow => ({
   attended: 'idle: waits',
   suggested: '2026-10-28 · nothing today',
   job: 'Job: every 10 min · install current',
+  watch: null,
   view: {
     at: '2026-10-28T10:00:00.000Z',
     limit: { used: 1, max: 3 },

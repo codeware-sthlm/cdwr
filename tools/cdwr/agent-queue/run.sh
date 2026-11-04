@@ -301,14 +301,15 @@ record_queue_state() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local last attended suggested jl view
+  local last attended suggested jl view watch
   last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
   # attended-published is the cache before attended-line, until a verdict replaces it
   attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
   suggested="$(cat "$HOME_DIR/suggested-line" 2>/dev/null)"
   jl="$(queue_job_line)"
   view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
-  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" ) &!
+  watch="$(cat "$HOME_DIR/watch.json" 2>/dev/null)"
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" ) &!
 }
 
 # A paused tick publishes the last run's Attended line and queue view with a paused job line, so

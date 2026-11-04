@@ -377,6 +377,48 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
       }
     });
 
+    describe('the watch', () => {
+      const watch = '{"COD-1":{"pr":12,"state":"open","unresolved":1}}';
+
+      it('patches it onto the host row after the upsert', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '${watch}'`
+        );
+        expect(hits).toHaveLength(2);
+        expect(hits[0]?.method).toBe('POST');
+        const host = (JSON.parse(hits[0]?.body ?? '') as { host: string }).host;
+        expect(hits[1]?.method).toBe('PATCH');
+        expect(hits[1]?.url).toBe(
+          `/rest/v1/queue_state?host=eq.${encodeURIComponent(host)}`
+        );
+        expect(JSON.parse(hits[1]?.body ?? '')).toEqual({
+          watch: JSON.parse(watch)
+        });
+      });
+
+      it('sends the upsert only when it is absent', async () => {
+        await zsh(configured(), `telemetry_queue_state 'x' '' '' '' ''`);
+        expect(hits).toHaveLength(1);
+      });
+
+      // A host whose watch.json is gone must not keep serving its last one
+      it('clears the column when it is empty', async () => {
+        await zsh(configured(), `telemetry_queue_state 'x' '' '' '' '' ''`);
+        expect(hits).toHaveLength(2);
+        expect(JSON.parse(hits[1]?.body ?? '')).toEqual({ watch: null });
+      });
+
+      it('patches null for an invalid one', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' 'not json {'`
+        );
+        expect(hits).toHaveLength(2);
+        expect(JSON.parse(hits[1]?.body ?? '')).toEqual({ watch: null });
+      });
+    });
+
     it('sends nothing without the env vars', async () => {
       const out = await zsh({}, `telemetry_queue_state x '' '' '' ''`);
       expect(out.stdout).toBe('rc=0');
