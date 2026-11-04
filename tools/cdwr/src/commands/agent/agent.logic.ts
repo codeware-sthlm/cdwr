@@ -221,6 +221,59 @@ export const schedulerHere = (
   plistExists: boolean
 ): boolean => host === 'container' || job.loaded || plistExists;
 
+/**
+ * How old a remote `queue_state` row may be before `status` calls its watch stale. Matches `STALE_MS`
+ * in the desk-command function and is longer than the NUC's hourly fallback run.
+ */
+export const STALE_WATCH_MS = 2 * 60 * 60 * 1000;
+
+/** Where `run.sh --check` took the watch state from */
+export type WatchSource =
+  | { kind: 'local' }
+  | { kind: 'remote'; host: string; at: string; ageMs: number }
+  | { kind: 'fallback' }
+  | { kind: 'unknown' };
+
+/** The check's `watch-source:` text: `local`, `<host> · <at ISO>` or `local, remote unreadable` */
+export const parseWatchSource = (line: string, now: Date): WatchSource => {
+  const text = line.trim();
+  if (text === 'local') return { kind: 'local' };
+  if (text === 'local, remote unreadable') return { kind: 'fallback' };
+  const [host, at] = text.split(' · ');
+  const time = at === undefined ? Number.NaN : Date.parse(at);
+  if (!host || at === undefined || Number.isNaN(time)) {
+    return { kind: 'unknown' };
+  }
+  return {
+    kind: 'remote',
+    host,
+    at,
+    ageMs: Math.max(0, now.getTime() - time)
+  };
+};
+
+const formatAgo = (ms: number): string => {
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `${hours} h ago` : `${Math.floor(hours / 24)} d ago`;
+};
+
+/** The `watch` row's text for a source */
+export const formatWatchSource = (source: WatchSource): string => {
+  switch (source.kind) {
+    case 'local':
+      return 'local';
+    case 'remote':
+      return `${source.host}, ${formatAgo(source.ageMs)}`;
+    case 'fallback':
+      return "local (the NUC's row is unreadable)";
+    case 'unknown':
+      return 'unknown';
+  }
+};
+
 export const serviceTarget = (uid: number): string => `gui/${uid}/${LABEL}`;
 export const domainTarget = (uid: number): string => `gui/${uid}`;
 

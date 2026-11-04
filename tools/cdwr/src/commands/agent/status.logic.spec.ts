@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { STALE_WATCH_MS } from './agent.logic';
 import {
   attendedSummary,
   checkRepoOf,
@@ -14,7 +15,8 @@ import {
   skewedStatus,
   staleScriptsHint,
   statusSummary,
-  unreadableStatus
+  unreadableStatus,
+  watchRow
 } from './status.logic';
 
 const report = {
@@ -261,6 +263,48 @@ describe('parseListener', () => {
   });
 });
 
+describe('watchRow', () => {
+  it('is ok for a fresh remote row', () => {
+    expect(
+      watchRow({ kind: 'remote', host: 'nuc', at: 'x', ageMs: 12 * 60_000 })
+    ).toEqual({ ok: true, detail: 'nuc, 12 min ago' });
+  });
+
+  it('warns on a stale remote row', () => {
+    expect(
+      watchRow({
+        kind: 'remote',
+        host: 'nuc',
+        at: 'x',
+        ageMs: STALE_WATCH_MS + 3_600_000
+      })
+    ).toEqual({ ok: 'warn', detail: 'nuc, 3 h ago, stale' });
+  });
+
+  it('warns on the fallback, a local source and no report', () => {
+    expect(watchRow({ kind: 'fallback' })).toEqual({
+      ok: 'warn',
+      detail:
+        "local (the NUC's row is unreadable); the local file is never refreshed here"
+    });
+    expect(watchRow({ kind: 'local' })).toEqual({
+      ok: 'warn',
+      detail: 'local; nothing refreshes it here'
+    });
+    expect(watchRow({ kind: 'unknown' }).detail).toBe(
+      'reported in a form status does not read'
+    );
+    expect(watchRow(null)).toEqual({
+      ok: 'warn',
+      detail: 'not reported by the check'
+    });
+  });
+
+  it('shows on an attended-only machine', () => {
+    expect(showsRow('elsewhere', 'watch')).toBe(true);
+  });
+});
+
 describe('showsRow', () => {
   it.each([
     'job',
@@ -268,7 +312,6 @@ describe('showsRow', () => {
     'scripts',
     'worktree',
     'last run',
-    'watching',
     'lock',
     'implement',
     'next run',
@@ -286,6 +329,8 @@ describe('showsRow', () => {
     'Heartbeat mirror',
     'attended',
     'linear tools',
+    'watching',
+    'watch',
     'next',
     'held',
     'blocked',
