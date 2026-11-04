@@ -1,3 +1,3 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`Fly CLI Compatibility & Schema Validation > Initialization > cli namespace > cli.version returns valid response 1`] = `"0.5.12"`;
+exports[`Fly CLI Compatibility & Schema Validation > Initialization > cli namespace > cli.version returns valid response 1`] = `"0.5.4"`;
