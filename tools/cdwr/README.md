@@ -237,7 +237,10 @@ The queue also writes telemetry to its own Supabase project, `agent-queue` (tabl
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
-queue writes no Linear document; the Agent Desk reads these tables.
+queue writes no Linear document; the Agent Desk reads these tables. The `queue_state` row also
+carries `watch`, the host's `watch.json` (the PRs of agent-labelled tickets with their state and
+unresolved threads), written in its own patch after the row; it needs the migration
+`20261105120000_queue_state_watch.sql`.
 
 Linear changes reach the desk through the same project. A Linear webhook (team Codeware, Issue and
 Comment events) calls the Edge Function `linear-webhook` (`agent-queue/supabase/functions`). The function
@@ -387,6 +390,13 @@ counts. A ticket whose PR merged outside review, as when you merge from a gate, 
 one Linear write: `agent:review` replaces its agent label and its **Next:** line says when it
 merged and what is handed off. `~/.cdwr/agent-queue/watch.json` remembers what was last sent and
 whether the relabel went through, so a failed write is tried again on the next run.
+
+On a Mac without the scheduler nothing refreshes the local `watch.json`, so `run.sh --check` (and so
+`status`) and the attended session's `wait.sh` read the freshest other host's `watch` from
+`queue_state` instead: one GET per check or pick, with the service key from `tools/cdwr/.env`, found as
+the status line finds it (`AGENT_QUEUE_ENV_FILE`, the checkout's, else the main checkout's). `status`
+shows a `watch` row with the host and the age of that row, and a warn when it is older than 2 h or when
+the remote row is unreadable and the local file is used instead.
 
 After the watch, the scheduler closes a parent whose agent split finished, its other Linear write,
 so no session has to come by for it. A parent closes when it is open in this team and repo, carries
