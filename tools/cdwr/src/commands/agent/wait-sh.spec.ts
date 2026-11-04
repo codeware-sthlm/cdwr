@@ -325,7 +325,9 @@ exec node -e "require('node:child_process').spawnSync('${inner}', [], { stdio: '
             AGENT_QUEUE_LINEAR_CMD: fake('linear', [idle]),
             AGENT_QUEUE_LISTEN_CMD: '',
             AGENT_SUPABASE_URL: '',
-            AGENT_SUPABASE_ANON_KEY: ''
+            AGENT_SUPABASE_ANON_KEY: '',
+            // Not the developer's checkout env file, which may hold both
+            AGENT_QUEUE_ENV_FILE: join(dir, 'no-env')
           },
           encoding: 'utf8',
           timeout: 30_000
