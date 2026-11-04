@@ -373,7 +373,7 @@ export const createHandler = ({
         // A snooze belongs to a ticket, not a host: no scheduler applies it, so a silent host
         // doesn't refuse it
         ticket = command.args.ticket ?? null;
-        const base = {
+        const params = {
           p_host: command.host,
           p_actor: device,
           p_at: at,
@@ -382,11 +382,11 @@ export const createHandler = ({
         ({ id, status, note } =
           command.kind === 'snooze'
             ? await rpc('desk_snooze', {
-                ...base,
+                ...params,
                 p_kind: command.args.kind,
                 p_event_at: command.args.eventAt ?? null
               })
-            : await rpc('desk_wake', base));
+            : await rpc('desk_wake', params));
       } else {
         const { known, session } = await queueSession(
           command.host,
