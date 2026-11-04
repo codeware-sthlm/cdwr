@@ -1173,6 +1173,9 @@ export const model = (
     ...prs.map((x) => x.ticket),
     ...heldApprovals.map((x) => x.ticket)
   ];
+  const ideasPending = allIdeas
+    .filter((i) => ideaVerdict(i) === 'to decide')
+    .sort(byCreated);
 
   return {
     all: openIssues(data),
@@ -1218,9 +1221,7 @@ export const model = (
     installStale: runs?.job?.install === 'stale',
     imageBehind,
     deskBehind,
-    ideasPending: allIdeas
-      .filter((i) => ideaVerdict(i) === 'to decide')
-      .sort(byCreated),
+    ideasPending,
     ideasAccepted: allIdeas
       .filter((i) => ideaVerdict(i) === 'accepted')
       .sort(byCreated)
@@ -1248,7 +1249,8 @@ export const model = (
     runsToday: runsToday(rows, now),
     activityBy: activityBy(activity, now),
     waitAge: waitAges(waiting, activity, now),
-    gateAt: gateTimes(waiting, activity),
+    // Ideas get a gate time too, so a snoozed idea wakes on activity; their age stays their createdAt
+    gateAt: gateTimes([...waiting, ...ideasPending.map((i) => i.id)], activity),
     snoozes: data.snoozes ?? [],
     agentPrs: agentPrs(data.githubEvents, prTickets, (id) => get(id).title),
     hostSessions: sessions,

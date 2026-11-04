@@ -139,6 +139,8 @@ export type DeskUi = {
   openSheet: SheetId | null;
   /** The full-page view shown in place of the desk */
   view: View;
+  /** The Snoozed fold is open, kept so a render doesn't close it */
+  snoozedOpen: boolean;
 };
 
 /** The desk's own side of the controls */
@@ -163,6 +165,10 @@ export type ControlsUi = {
   >;
   /** The abandon button asks for confirmation until `until` (ms), for the session it showed */
   confirm: { until: number; session: string | null } | null;
+  /** Tickets whose snooze or wake request is in flight */
+  snoozing: Set<string>;
+  /** Ticket -> why its last snooze or wake did not go through, shown until it is used again */
+  snoozeNotes: Map<string, string>;
 };
 
 export type DeskState = {
@@ -213,13 +219,21 @@ export const createState = (): DeskState => ({
   liveHandoffs: new Map(),
   ideaReasons: new Map(),
   errors: new Map(),
-  ui: { filter: 'all', actFilter: 'all', openSheet: null, view: 'desk' },
+  ui: {
+    filter: 'all',
+    actFilter: 'all',
+    openSheet: null,
+    view: 'desk',
+    snoozedOpen: false
+  },
   controls: {
     target: null,
     drafts: {},
     sending: new Set(),
     failed: new Map(),
     awaiting: new Map(),
-    confirm: null
+    confirm: null,
+    snoozing: new Set(),
+    snoozeNotes: new Map()
   }
 });

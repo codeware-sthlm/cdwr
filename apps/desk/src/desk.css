@@ -1025,7 +1025,7 @@ table.act {
   font-size: 12px;
 }
 /* The desktop: four waiting rows (DESKTOP_ROWS), the rest behind "open all" */
-.wrows li:nth-child(n + 5) {
+.waiting > .wrows li:nth-child(n + 5) {
   display: none;
 }
 .more-all.more-desk {
@@ -1062,7 +1062,7 @@ table.act {
     padding-top: 8px;
   }
   .feed li:nth-child(n + 2),
-  .wrows li:nth-child(n + 3) {
+  .waiting > .wrows li:nth-child(n + 3) {
     display: none;
   }
   .waiting .count {
@@ -1118,6 +1118,41 @@ table.act {
   flex-basis: 100%;
   padding: 0 14px;
   font: 11px var(--font-mono);
+  color: var(--muted);
+}
+.wsnooze {
+  flex: none;
+  padding: 2px 8px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-row);
+  color: var(--muted);
+  font-size: 11px;
+}
+.wsnooze:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--wait-dash);
+}
+.wsnooze:disabled {
+  opacity: 0.5;
+}
+/* Snoozed rows: folded away, quieter than the ones that wait */
+details.snoozed {
+  margin-top: 4px;
+}
+details.snoozed > summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+}
+details.snoozed[open] > summary {
+  margin-bottom: 8px;
+}
+details.snoozed .wrow {
+  background: none;
+  border-color: var(--line);
+}
+details.snoozed .wrow .kind {
   color: var(--muted);
 }
 .wrow-li.approved .wrow {
