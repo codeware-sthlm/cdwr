@@ -265,6 +265,51 @@ def queue_order:
 
 def is_open: .state.type != "completed" and .state.type != "canceled";
 
+# --- Parent close: the scheduler's second Linear write (run.sh `close_parents`) ---
+
+# True for an open parent whose agent split finished: this team and repo, no agent label of its
+# own (a split clears it, so one there means a session, a question or new work holds it), a
+# complete page of sub-issues all Done or Canceled, at least one Done and at least one agent work.
+# A split whose sub-issues were all canceled stays for Håkan.
+def parent_to_close:
+  (.children.nodes // []) as $c
+  | is_open
+    and ((.team.key // "COD") == "COD")
+    and (other_repo | not)
+    and agent_label == null
+    and ($c | length) > 0
+    # A page cut short could hide a sub-issue still open
+    and (.children.pageInfo.hasNextPage // false | not)
+    and all($c[]; .state.type | IN("completed", "canceled"))
+    and any($c[]; .state.type == "completed")
+    and any($c[]; agent_label != null);
+
+# The comment that goes with the close, sub-issues in number order
+def close_comment:
+  "**Agent: closed** all sub-issues are closed: "
+  + ([ .children.nodes
+       | sort_by(.identifier | capture("(?<n>[0-9]+)$").n | tonumber)[]
+       | "\(.identifier) (\(if .state.type == "completed" then "Done" else "Canceled" end))" ]
+     | join(", "))
+  + ".";
+
+# The state a parent closes to, from the team's states: the completed one named Done, else the
+# first completed one by position; null when there is none
+def done_state:
+  [ .[] | select(.type == "completed") ] | sort_by(.position // 0) as $s
+  | ([ $s[] | select(.name == "Done") ] + $s) | first | .id // null;
+
+# From the PARENTS response (closed sub-issues with their parents): { state, parents: [{ id,
+# identifier, comment }] }, each parent once. $closed lists the parents the scheduler closed before:
+# one reopened since is Håkan's, never closed again.
+def parents_to_close($closed):
+  { state: ((.data.teams.nodes[0].states.nodes // []) | done_state),
+    parents: ([ (.data.issues.nodes // [])[].parent | select(. != null) ]
+              | unique_by(.identifier)
+              | map(select(.identifier as $i | ($closed | index($i)) == null)
+                    | select(parent_to_close)
+                    | { id, identifier, comment: close_comment })) };
+
 # What waits on Håkan after implementation: open reviews count toward the limit; hand-off
 # tickets completed within 14 days are listed but don't count
 def limit_used($now; $limit):

@@ -2631,6 +2631,199 @@ describe('launch', () => {
   });
 });
 
+describe('parents to close', () => {
+  type State = 'completed' | 'canceled' | 'started' | 'backlog';
+  const child = (identifier: string, type: State, labels: string[] = []) => ({
+    identifier,
+    state: { type },
+    labels: { nodes: labels.map((name) => ({ name })) }
+  });
+  const parent = (
+    children: ReturnType<typeof child>[],
+    extra: Record<string, unknown> = {}
+  ) => ({
+    id: 'uuid-100',
+    identifier: 'COD-100',
+    state: { type: 'started' },
+    team: { key: 'COD' },
+    labels: { nodes: [] },
+    children: { nodes: children, pageInfo: { hasNextPage: false } },
+    ...extra
+  });
+  const STATES = [
+    { id: 'st-canceled', name: 'Canceled', type: 'canceled', position: 5 },
+    { id: 'st-shipped', name: 'Shipped', type: 'completed', position: 3 },
+    { id: 'st-done', name: 'Done', type: 'completed', position: 4 }
+  ];
+  // The PARENTS response: each closed sub-issue carries its parent, so one parent can repeat
+  const response = (parents: unknown[], states: unknown[] = STATES) => ({
+    data: {
+      issues: { nodes: parents.map((p) => ({ parent: p })) },
+      teams: { nodes: [{ states: { nodes: states } }] }
+    }
+  });
+  const closes = (p: unknown) => run('parent_to_close', p);
+
+  it('closes a split whose sub-issues are all Done', () => {
+    expect(
+      closes(
+        parent([
+          child('COD-101', 'completed', ['agent:review']),
+          child('COD-102', 'completed', ['agent:review'])
+        ])
+      )
+    ).toBe(true);
+  });
+
+  it('closes a split with Done and Canceled sub-issues', () => {
+    expect(
+      closes(
+        parent([
+          child('COD-101', 'completed', ['agent:review']),
+          child('COD-102', 'canceled')
+        ])
+      )
+    ).toBe(true);
+  });
+
+  it.each([
+    [
+      'every sub-issue was canceled',
+      parent([
+        child('COD-101', 'canceled', ['agent:review']),
+        child('COD-102', 'canceled')
+      ])
+    ],
+    [
+      'a sub-issue is still open',
+      parent([
+        child('COD-101', 'completed', ['agent:review']),
+        child('COD-102', 'backlog')
+      ])
+    ],
+    [
+      'no sub-issue was agent work',
+      parent([child('COD-101', 'completed', ['improvement'])])
+    ],
+    [
+      'the parent waits on a question',
+      parent([child('COD-101', 'completed', ['agent:review'])], {
+        labels: { nodes: [{ name: 'agent:needs-input' }] }
+      })
+    ],
+    [
+      'a session holds the parent',
+      parent([child('COD-101', 'completed', ['agent:review'])], {
+        labels: { nodes: [{ name: 'agent:working' }] }
+      })
+    ],
+    [
+      'the parent is queued again',
+      parent([child('COD-101', 'completed', ['agent:review'])], {
+        labels: { nodes: [{ name: 'agent:ready' }] }
+      })
+    ],
+    [
+      'the parent belongs to another repo',
+      parent([child('COD-101', 'completed', ['agent:review'])], {
+        labels: { nodes: [{ name: 'nx-plugins' }] }
+      })
+    ],
+    [
+      'the parent is in another team',
+      parent([child('COD-101', 'completed', ['agent:review'])], {
+        team: { key: 'ENG' }
+      })
+    ],
+    [
+      'the parent is already closed',
+      parent([child('COD-101', 'completed', ['agent:review'])], {
+        state: { type: 'completed' }
+      })
+    ],
+    [
+      'the page of sub-issues is cut short',
+      parent([child('COD-101', 'completed', ['agent:review'])], {
+        children: {
+          nodes: [child('COD-101', 'completed', ['agent:review'])],
+          pageInfo: { hasNextPage: true }
+        }
+      })
+    ],
+    ['the parent has no sub-issues', parent([])]
+  ])('keeps the parent open when %s', (_name, p) => {
+    expect(closes(p)).toBe(false);
+  });
+
+  it('names each sub-issue and its end state, in number order', () => {
+    expect(
+      run(
+        'close_comment',
+        parent([
+          child('COD-110', 'canceled'),
+          child('COD-99', 'completed', ['agent:review'])
+        ])
+      )
+    ).toBe(
+      '**Agent: closed** all sub-issues are closed: COD-99 (Done), COD-110 (Canceled).'
+    );
+  });
+
+  describe('done_state', () => {
+    it('takes the completed state named Done', () => {
+      expect(run('done_state', STATES)).toBe('st-done');
+    });
+
+    it('falls back to the first completed state by position', () => {
+      expect(
+        run('done_state', [
+          { id: 'b', name: 'Released', type: 'completed', position: 9 },
+          { id: 'a', name: 'Shipped', type: 'completed', position: 2 }
+        ])
+      ).toBe('a');
+    });
+
+    it('is null without a completed state', () => {
+      expect(run('done_state', [STATES[0]])).toBeNull();
+    });
+  });
+
+  it('lists each ready parent once, with its state and comment', () => {
+    const ready = parent([child('COD-101', 'completed', ['agent:review'])]);
+    const open = parent([child('COD-201', 'backlog', ['agent:ready'])], {
+      id: 'uuid-200',
+      identifier: 'COD-200'
+    });
+    expect(
+      run('parents_to_close([])', response([ready, ready, open, null]))
+    ).toEqual({
+      state: 'st-done',
+      parents: [
+        {
+          id: 'uuid-100',
+          identifier: 'COD-100',
+          comment:
+            '**Agent: closed** all sub-issues are closed: COD-101 (Done).'
+        }
+      ]
+    });
+  });
+
+  it('never closes a parent it closed before, since a reopen is Håkan’s', () => {
+    const ready = parent([child('COD-101', 'completed', ['agent:review'])]);
+    expect(
+      run('parents_to_close(["COD-100"]) | .parents', response([ready]))
+    ).toEqual([]);
+  });
+
+  it('reads an empty response as nothing to close', () => {
+    expect(run('parents_to_close([])', { data: {} })).toEqual({
+      state: null,
+      parents: []
+    });
+  });
+});
+
 // The container's jq is 1.6, which refuses a keyword as a .field or a $variable; CI's jq does not
 describe('watch.jq on jq 1.6', () => {
   const KEYWORDS =
