@@ -184,7 +184,7 @@ cdwr agent notify [all|action]   # which notices are sent; no argument shows the
 cdwr agent attend [COD-n] [--path <dir>] [--no-start]   # refresh codeware-queue to origin/main, then start /work-queue there
 cdwr agent worktree add COD-529 --branch <name>   # codeware-cod-529 beside this checkout
 cdwr agent worktree prune          # remove ticket worktrees whose PR is merged or closed
-cdwr agent desk install [--pr <n>] # install the Agent Desk from the newest CI build of main, or of a PR
+cdwr agent desk install [--pr <n>] # install the Agent Desk from the newest CI build of main, or of a PR (the phone gets it from the NUC, see The desk on the phone)
 ```
 
 `worktree add` gives each ticket its own checkout, so starting the next never disturbs an earlier
@@ -518,6 +518,37 @@ is named after its role, `agent-host`, so moving to another box changes only the
 minutes (default 30) for the running job to finish, writes the tag to `image.env`, pulls,
 restarts and resumes. Without `--tag` it takes the latest image built on main; `--dry-run` prints
 the plan with the resolved tag. When the queue stays busy it resumes and changes nothing.
+
+### The desk on the phone
+
+The same desk runs as a web app, served by the NUC to the tailnet only. `.github/workflows/desk-image.yml`
+builds `ghcr.io/codeware-sthlm/cdwr-desk` on main whenever `apps/desk` changes (`apps/desk/Dockerfile`:
+the Vite build behind nginx, with the Tauri window's CSP plus Linear's API as a header), and the
+`desk` service in `apps/agent-host/compose.yaml` runs it on the host's loopback, `127.0.0.1:8787`,
+never on a routable address. `cdwr agent deploy` pulls and restarts it with the agent. The keys are
+entered on the phone and stay there (`localStorage`), as they stay on the Mac; nothing in the image
+holds one. The page is live in the foreground only, as the Mac app is; Slack carries the notices.
+
+Once, in the tailnet's admin console, enable MagicDNS and HTTPS certificates (DNS → HTTPS
+Certificates → Enable); that gives the machine its `cdwr-nuc.<tailnet>.ts.net` name and lets
+Tailscale issue the certificate. Then, on the NUC, publish the port to the tailnet over HTTPS on
+that name:
+
+```sh
+sudo tailscale serve --bg 8787
+tailscale serve status     # https://cdwr-nuc.<tailnet>.ts.net/ -> http://127.0.0.1:8787
+```
+
+Then on the iPhone:
+
+1. Install Tailscale from the App Store and sign in to the tailnet (the device needs no tag).
+2. Open `https://cdwr-nuc.<tailnet>.ts.net/` in Safari, with Tailscale connected.
+3. Share → Add to Home Screen. It opens standalone, full height, with the desk's icon.
+4. In its Settings sheet, enter the Supabase url and publishable key and the Linear key, as on the Mac.
+5. For the controls, add a token of the phone's own to `DESK_CONTROL_TOKENS` (the `desk-command`
+   function's secret) and enter it in the same sheet.
+
+Nothing is cached offline: without Tailscale connected the page does not load, and a reload needs it.
 
 `cdwr agent status --host agent-host` reads the queue's status from the Mac: it runs `agent status`
 in the container over ssh, through `/opt/agent-host/secrets.sh` so the report sees the vault's
