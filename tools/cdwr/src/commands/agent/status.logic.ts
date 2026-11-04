@@ -4,7 +4,10 @@ import {
   IMPLEMENT_OUTCOMES,
   NOTIFY_LEVELS,
   REMOTE_CONTAINER,
+  STALE_WATCH_MS,
   WATCH_STATES,
+  type WatchSource,
+  formatWatchSource,
   queueViewSchema,
   remoteCdwr
 } from './agent.logic';
@@ -100,6 +103,21 @@ const reportShape = z.object({
   queueView: queueViewSchema.or(z.literal('malformed')).nullable(),
   // Absent from a container on an older image, and null without a listener file
   listener: listenerStateShape.nullable().optional(),
+  // Absent from a container on an older image, and null when the check printed none
+  watchSource: z
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('local') }),
+      z.object({
+        kind: z.literal('remote'),
+        host: z.string(),
+        at: z.string(),
+        ageMs: z.number()
+      }),
+      z.object({ kind: z.literal('fallback') }),
+      z.object({ kind: z.literal('unknown') })
+    ])
+    .nullable()
+    .optional(),
   // Absent from a container on an older image
   limit: z
     .object({ value: z.number(), source: z.enum(['file', 'default']) })
@@ -113,6 +131,37 @@ export const formatLimit = (limit: {
 }): string =>
   `${limit.value}, ${limit.source === 'file' ? 'set from the desk' : 'default'}`;
 
+/** The `watch` row of an attended-only machine: where its watch state came from, warning when that is not a fresh remote row */
+export const watchRow = (
+  source: WatchSource | null | undefined
+): { ok: boolean | 'warn'; detail: string } => {
+  if (!source) return { ok: 'warn', detail: 'not reported by the check' };
+  switch (source.kind) {
+    case 'remote': {
+      const stale = source.ageMs > STALE_WATCH_MS;
+      return {
+        ok: stale ? 'warn' : true,
+        detail: `${formatWatchSource(source)}${stale ? ', stale' : ''}`
+      };
+    }
+    case 'fallback':
+      return {
+        ok: 'warn',
+        detail: `${formatWatchSource(source)}; the local file is never refreshed here`
+      };
+    case 'local':
+      return {
+        ok: 'warn',
+        detail: `${formatWatchSource(source)}; nothing refreshes it here`
+      };
+    case 'unknown':
+      return {
+        ok: 'warn',
+        detail: 'reported in a form status does not read'
+      };
+  }
+};
+
 /** The rows an attended-only machine shows; the others describe a scheduler it does not run */
 const ATTENDED_ROWS: ReadonlySet<string> = new Set([
   'scheduler',
@@ -124,6 +173,9 @@ const ATTENDED_ROWS: ReadonlySet<string> = new Set([
   'queue view',
   // wait.sh reads the machine's own limit file, so an attended session follows it
   'limit',
+  // The PRs the watch state knows, and where that state comes from
+  'watching',
+  'watch',
   'next',
   'held',
   'blocked',

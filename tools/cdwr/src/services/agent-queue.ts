@@ -98,7 +98,7 @@ export async function keyPresent(
 
 /**
  * What the installed script would do now: its decision (the last line) and the
- * `attended:` verdict, `linear:` line, `queue-view:` and `suggest:` lines when it printed them. Undefined when it is not installed
+ * `attended:` verdict, `linear:` line, `queue-view:`, `suggest:`, `watch-source:` and `watch-state:` lines when it printed them. Undefined when it is not installed
  */
 export async function checkRun(
   queue: QueuePaths,
@@ -111,6 +111,8 @@ export async function checkRun(
       linear?: string;
       queueView?: string;
       suggest?: string;
+      watchSource?: string;
+      watchState?: string;
     }
   | undefined
 > {
@@ -133,6 +135,12 @@ export async function checkRun(
     .filter((line) => line.startsWith('queue-view: '))
     .at(-1);
   const suggest = lines.filter((line) => line.startsWith('suggest: ')).at(-1);
+  const watchSource = lines
+    .filter((line) => line.startsWith('watch-source: '))
+    .at(-1);
+  const watchState = lines
+    .filter((line) => line.startsWith('watch-state: '))
+    .at(-1);
   return {
     decision: lines.at(-1) ?? '',
     ...(suggest === undefined
@@ -146,7 +154,13 @@ export async function checkRun(
       : { linear: linear.slice('linear: '.length) }),
     ...(queueView === undefined
       ? {}
-      : { queueView: queueView.slice('queue-view: '.length) })
+      : { queueView: queueView.slice('queue-view: '.length) }),
+    ...(watchSource === undefined
+      ? {}
+      : { watchSource: watchSource.slice('watch-source: '.length) }),
+    ...(watchState === undefined
+      ? {}
+      : { watchState: watchState.slice('watch-state: '.length) })
   };
 }
 

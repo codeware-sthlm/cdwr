@@ -5,6 +5,7 @@ import {
   QUEUE_SOURCE_DIR,
   type QueueView,
   STALE_LOCK_MS,
+  STALE_WATCH_MS,
   domainTarget,
   drift,
   filesDrift,
@@ -14,6 +15,7 @@ import {
   formatNext,
   formatParked,
   formatTable,
+  formatWatchSource,
   formatWatching,
   hostKind,
   implementBudget,
@@ -36,6 +38,7 @@ import {
   parseNotifyLevel,
   parseQueueView,
   parseSuggest,
+  parseWatchSource,
   parseWatchState,
   plistPath,
   queueLimit,
@@ -1238,4 +1241,59 @@ describe('schedulerHere', () => {
       expect(schedulerHere(host, { loaded }, plist)).toBe(expected);
     }
   );
+});
+
+describe('parseWatchSource', () => {
+  const now = new Date('2026-11-05T00:12:00Z');
+
+  it('reads the four kinds', () => {
+    expect(parseWatchSource('local', now)).toEqual({ kind: 'local' });
+    expect(parseWatchSource('local, remote unreadable', now)).toEqual({
+      kind: 'fallback'
+    });
+    expect(parseWatchSource('nuc · 2026-11-05T00:00:00Z', now)).toEqual({
+      kind: 'remote',
+      host: 'nuc',
+      at: '2026-11-05T00:00:00Z',
+      ageMs: 12 * 60_000
+    });
+    expect(parseWatchSource('something else', now)).toEqual({
+      kind: 'unknown'
+    });
+    expect(parseWatchSource('nuc · not a date', now)).toEqual({
+      kind: 'unknown'
+    });
+  });
+
+  it('never gives a negative age', () => {
+    expect(parseWatchSource('nuc · 2026-11-06T00:00:00Z', now)).toMatchObject({
+      ageMs: 0
+    });
+  });
+
+  it('keeps the stale limit at two hours', () => {
+    expect(STALE_WATCH_MS).toBe(7_200_000);
+  });
+});
+
+describe('formatWatchSource', () => {
+  const remote = (ageMs: number) =>
+    formatWatchSource({ kind: 'remote', host: 'nuc', at: '', ageMs });
+
+  it.each([
+    [0, 'nuc, just now'],
+    [12 * 60_000, 'nuc, 12 min ago'],
+    [3 * 3_600_000, 'nuc, 3 h ago'],
+    [2 * 86_400_000, 'nuc, 2 d ago']
+  ])('formats a remote row %d ms old', (ageMs, text) => {
+    expect(remote(ageMs)).toBe(text);
+  });
+
+  it('formats the others', () => {
+    expect(formatWatchSource({ kind: 'local' })).toBe('local');
+    expect(formatWatchSource({ kind: 'fallback' })).toBe(
+      "local (the NUC's row is unreadable)"
+    );
+    expect(formatWatchSource({ kind: 'unknown' })).toBe('unknown');
+  });
 });

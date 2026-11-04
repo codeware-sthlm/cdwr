@@ -46,6 +46,7 @@ import {
   parseNotifyLevel,
   parseQueueView,
   parseSuggest,
+  parseWatchSource,
   parseWatchState,
   queueLimit,
   schedulerHere,
@@ -67,7 +68,8 @@ import {
   skewedStatus,
   staleScriptsHint,
   statusSummary,
-  unreadableStatus
+  unreadableStatus,
+  watchRow
 } from './status.logic';
 
 export default defineCommand({
@@ -195,6 +197,15 @@ export default defineCommand({
       ...(report.watching.length > 0
         ? [row(true, 'watching', formatWatching(report.watching))]
         : []),
+      ...(report.scheduler === 'elsewhere'
+        ? [
+            row(
+              watchRow(report.watchSource).ok,
+              'watch',
+              watchRow(report.watchSource).detail
+            )
+          ]
+        : []),
       ...(report.lockState === 'stale'
         ? [
             row(
@@ -320,7 +331,16 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         { path: worktree, exists: existsSync(worktree) },
         ctx.root
       );
-      const checked = await checkRun(queue, checkRepo, ctx.env).catch(
+      // The installed scripts are the scheduler's, refreshed by `install`; an attended-only
+      // machine has none to keep current, so its check runs the checkout's
+      const checkQueue =
+        scheduler === 'elsewhere'
+          ? {
+              ...queue,
+              script: join(checkRepo, 'tools', 'cdwr', 'agent-queue', 'run.sh')
+            }
+          : queue;
+      const checked = await checkRun(checkQueue, checkRepo, ctx.env).catch(
         (error: unknown): Awaited<ReturnType<typeof checkRun>> => ({
           decision: `skip: check failed (${error instanceof Error ? error.message : String(error)})`
         })
@@ -341,7 +361,13 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         installedAny: Object.values(installed).some(
           (text) => text !== undefined
         ),
-        watching: parseWatchState(readText(queue.watchState)),
+        watching: parseWatchState(
+          checked?.watchState ?? readText(queue.watchState)
+        ),
+        watchSource:
+          checked?.watchSource === undefined
+            ? null
+            : parseWatchSource(checked.watchSource, new Date()),
         worktree: { path: worktree, exists: existsSync(worktree) },
         lastScheduled,
         // Without launchd the lock owner cannot be checked, so a held lock counts as a run
