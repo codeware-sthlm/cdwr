@@ -63,7 +63,15 @@ import {
   sessionLabel
 } from './html';
 import { headline } from './session';
-import { type WaitRow, rowLabel, waitRows } from './waiting';
+import {
+  type SnoozeUi,
+  type WaitRow,
+  rowLabel,
+  snoozeControls,
+  snoozeUi,
+  snoozedFold,
+  waitRows
+} from './waiting';
 
 // The sheets: one per card, pill and tile. A sheet body is a pure function of the model and the state.
 
@@ -175,52 +183,66 @@ const itemHTML = (
 // ---------- Waiting on you, next, after ----------
 
 /** One card per waiting item, with the one thing to do about it */
-const waitCard = (r: WaitRow): string => {
-  const act =
-    r.kind === 'review' && r.pr
-      ? { text: 'Review on GitHub', href: GH_PR + r.pr }
-      : r.kind === 'review'
-        ? { text: 'Open ticket', href: r.url }
-        : r.kind === 'hand-offs'
-          ? { text: 'Open checklist', href: r.url }
-          : r.kind === 'approved'
-            ? { text: 'Open ticket', href: r.url }
-            : r.kind === 'ready to label'
-              ? { text: 'Label agent:ready', href: r.url }
-              : { text: 'Answer in Linear', href: r.url };
-  const secondary = r.kind === 'ready to label' || r.kind === 'approved';
-  const note = [
-    // An approved card already names its blockers in its kind
-    r.blockers && r.kind !== 'approved' ? esc('After ' + r.blockers) : '',
-    r.wait
-  ]
-    .filter(Boolean)
-    .join('. ');
-  return `<article class="wcard${r.kind === 'approved' ? ' approved' : ''}">
+const waitCard =
+  (ui: SnoozeUi) =>
+  (r: WaitRow): string => {
+    const act =
+      r.kind === 'review' && r.pr
+        ? { text: 'Review on GitHub', href: GH_PR + r.pr }
+        : r.kind === 'review'
+          ? { text: 'Open ticket', href: r.url }
+          : r.kind === 'hand-offs'
+            ? { text: 'Open checklist', href: r.url }
+            : r.kind === 'approved'
+              ? { text: 'Open ticket', href: r.url }
+              : r.kind === 'ready to label'
+                ? { text: 'Label agent:ready', href: r.url }
+                : { text: 'Answer in Linear', href: r.url };
+    const secondary = r.kind === 'ready to label' || r.kind === 'approved';
+    const note = [
+      // An approved card already names its blockers in its kind
+      r.blockers && r.kind !== 'approved' ? esc('After ' + r.blockers) : '',
+      r.wait
+    ]
+      .filter(Boolean)
+      .join('. ');
+    return `<article class="wcard${r.kind === 'approved' ? ' approved' : ''}">
     <div class="wc-head"><span class="id">${esc(r.id)}</span><span class="kind k-${esc(r.kind.replace(/ /g, '-'))}">${esc(rowLabel(r))}</span>${prn(r.pr)}${r.age === null ? '' : `<time>waiting ${esc(shortAge(r.age))}</time>`}</div>
     <div class="wc-title">${esc(r.title)}</div>
     ${note ? `<div class="wc-note">${note}</div>` : ''}
     <a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>
+    ${snoozeControls(r, ui)}
   </article>`;
-};
+  };
 
 const renderBefore = (m: Model, state: DeskState, now: Date): string => {
   if (!m.v) return empty('No queue view yet.');
+  const ui = snoozeUi(m, state.controls, state.ui.snoozedOpen);
+  const card = waitCard(ui);
   // Ideas wait on you too, but their card below carries the evidence to decide on
-  const rows = waitRows(m, state.details, now);
+  const all = waitRows(m, state.details, now);
+  const rows = all.filter((r) => !r.snoozed);
+  const snoozed = all.filter((r) => r.snoozed);
   const cards = (kinds: (k: WaitRow['kind']) => boolean) =>
     rows
       .filter((r) => kinds(r.kind))
-      .map(waitCard)
+      .map(card)
       .join('');
-  const ideasHTML = m.ideasPending.length
-    ? `<div class="group"><h3>Ideas to decide · ${m.ideasPending.length}</h3>${m.ideasPending.map((i) => ideaCard(state, i)).join('')}</div>`
+  // A snoozed idea sits in the fold, not among the ideas to decide
+  const awakeIdeas = m.ideasPending.filter((i) =>
+    rows.some((r) => r.id === i.id)
+  );
+  const ideasHTML = awakeIdeas.length
+    ? `<div class="group"><h3>Ideas to decide · ${awakeIdeas.length}</h3>${awakeIdeas.map((i) => ideaCard(state, i)).join('')}</div>`
     : '';
+  const fold = snoozedFold(snoozed.length, snoozed.map(card).join(''), ui.open);
   // Approved plans only wait on a blocker, so they come after everything that waits on you
-  return (
+  const awake =
     cards((k) => k !== 'idea' && k !== 'approved') +
-      ideasHTML +
-      cards((k) => k === 'approved') ||
+    ideasHTML +
+    cards((k) => k === 'approved');
+  return (
+    awake + fold ||
     empty('No PR, hand-off, plan, question, label or idea waits for you.')
   );
 };

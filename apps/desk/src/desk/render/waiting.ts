@@ -1,6 +1,7 @@
+import type { SnoozeRow } from '../../supabase';
 import { esc, shortAge } from '../format';
 import { type Blocker, type Model, prOf } from '../model';
-import type { Detail } from '../state';
+import type { ControlsUi, Detail } from '../state';
 import type { PrRef } from '../types';
 
 import { livePr, prTone, prWaitText, prn, queuePr } from './html';
@@ -34,7 +35,72 @@ export type WaitRow = {
   blockers: string;
   /** HTML note on a PR parked on review fixes; empty otherwise */
   wait: string;
+  /** ISO time of the activity event the wait counts from; null without activity */
+  gateAt: string | null;
+  /** Snoozed until something changes; such a row leaves every count */
+  snoozed: boolean;
 };
+
+/**
+ * Whether a snooze still holds for a row. It holds while the row has the kind it was snoozed
+ * in and no newer gate event has come since; a row the snooze no longer holds for is awake
+ * again, and the stale snooze row is simply ignored until a new snooze overwrites it.
+ */
+export const isSnoozed = (
+  row: { id: string; kind: WaitRow['kind'] },
+  gateAt: string | null,
+  snoozes: readonly SnoozeRow[]
+): boolean => {
+  const snooze = snoozes.find((s) => s.ticket === row.id);
+  if (!snooze || snooze.kind !== row.kind) return false;
+  if (gateAt === null) return true;
+  return (
+    snooze.event_at !== null &&
+    Date.parse(gateAt) <= Date.parse(snooze.event_at)
+  );
+};
+
+/** What the snooze buttons need: whether the controls are on, the tickets in flight and the notes to show, and whether the fold is open */
+export type SnoozeUi = {
+  on: boolean;
+  busy: ReadonlySet<string>;
+  notes: ReadonlyMap<string, string>;
+  open: boolean;
+};
+
+/** No controls: no buttons, though a fold of snoozed rows still shows */
+export const SNOOZE_OFF: SnoozeUi = {
+  on: false,
+  busy: new Set(),
+  notes: new Map(),
+  open: false
+};
+
+/** The snooze buttons' state from the model and the viewer's side of the controls */
+export const snoozeUi = (m: Model, c: ControlsUi, open = false): SnoozeUi => ({
+  on: m.controls !== null,
+  busy: c.snoozing,
+  notes: c.snoozeNotes,
+  open
+});
+
+/** The Snooze or Wake button for a row, with the note a refusal left; empty without controls. Keep it outside the row's link */
+export const snoozeControls = (r: WaitRow, ui: SnoozeUi): string => {
+  if (!ui.on) return '';
+  const id = esc(r.id);
+  const busy = ui.busy.has(r.id) ? ' disabled' : '';
+  const button = r.snoozed
+    ? `<button type="button" class="wsnooze" data-wake="${id}" aria-label="Wake ${id}"${busy}>Wake</button>`
+    : `<button type="button" class="wsnooze" data-snooze="${id}" data-kind="${esc(r.kind)}" data-event-at="${esc(r.gateAt ?? '')}" aria-label="Snooze ${id} until it changes"${busy}>Snooze</button>`;
+  const note = ui.notes.get(r.id);
+  return button + (note ? `<span class="wnote">${esc(note)}</span>` : '');
+};
+
+/** The fold of snoozed rows, collapsed unless the viewer opened it; empty when none are */
+export const snoozedFold = (n: number, inner: string, open = false): string =>
+  n
+    ? `<details class="snoozed"${open ? ' open' : ''}><summary>Snoozed · ${n}</summary>${inner}</details>`
+    : '';
 
 /** Open blockers as text: the ticket, with its PR when it has one */
 export const blockerText = (bs: readonly Blocker[]): string =>
@@ -60,6 +126,7 @@ export const waitRows = (
     opts: { blockers?: readonly Blocker[]; count?: number } = {}
   ): WaitRow => {
     const { title, url } = m.get(id);
+    const gateAt = m.gateAt.get(id) ?? null;
     return {
       id,
       title,
@@ -69,7 +136,9 @@ export const waitRows = (
       age: m.waitAge.get(id) ?? null,
       count: opts.count ?? null,
       blockers: blockerText(opts.blockers ?? []),
-      wait: prWaitText(m, id)
+      wait: prWaitText(m, id),
+      gateAt,
+      snoozed: isSnoozed({ id, kind }, gateAt, m.snoozes)
     };
   };
   const open = (id: string): readonly Blocker[] => m.blockers.get(id) ?? [];
@@ -85,29 +154,36 @@ export const waitRows = (
     ...before('question'),
     ...before('plan'),
     ...m.toLabel.map((x) => row(x.ticket, 'ready to label')),
-    ...m.ideasPending.map((i): WaitRow => ({
-      id: i.id,
-      title: i.title,
-      url: i.url,
-      kind: 'idea',
-      pr: null,
-      age: i.createdAt ? (now.getTime() - Date.parse(i.createdAt)) / 6e4 : null,
-      count: null,
-      blockers: '',
-      wait: ''
-    })),
+    ...m.ideasPending.map((i): WaitRow => {
+      const gateAt = m.gateAt.get(i.id) ?? null;
+      return {
+        id: i.id,
+        title: i.title,
+        url: i.url,
+        kind: 'idea',
+        pr: null,
+        age: i.createdAt
+          ? (now.getTime() - Date.parse(i.createdAt)) / 6e4
+          : null,
+        count: null,
+        blockers: '',
+        wait: '',
+        gateAt,
+        snoozed: isSnoozed({ id: i.id, kind: 'idea' }, gateAt, m.snoozes)
+      };
+    }),
     ...m.heldApprovals.map((h) =>
       row(h.ticket, 'approved', { blockers: h.blockers })
     )
   ];
 };
 
-/** The rows that count toward the card's badge; approved rows only wait on a blocker */
+/** The rows that count toward the card's badge; approved rows only wait on a blocker, snoozed ones on a change */
 export const countedRows = (rows: readonly WaitRow[]): WaitRow[] =>
-  rows.filter((r) => r.kind !== 'approved');
+  rows.filter((r) => r.kind !== 'approved' && !r.snoozed);
 
 const rowHTML =
-  (m: Model, details: ReadonlyMap<string, Detail>) =>
+  (m: Model, details: ReadonlyMap<string, Detail>, ui: SnoozeUi) =>
   (r: WaitRow): string => {
     const tone = prTone(
       livePr(m, details, { ticket: r.id, pr: r.pr }).live?.state ?? null
@@ -119,28 +195,37 @@ const rowHTML =
     ]
       .filter(Boolean)
       .join(' · ');
-    return `<li class="wrow-li${approved ? ' approved' : ''}"><a class="wrow" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="id">${esc(r.id)}</span><span class="t">${esc(r.title)}</span><span class="kind">${esc(rowLabel(r))}</span>${r.age === null ? '' : `<time>${esc(shortAge(r.age))}</time>`}</a>${prn(r.pr, tone)}${note ? `<span class="wnote">${note}</span>` : ''}</li>`;
+    return `<li class="wrow-li${approved ? ' approved' : ''}"><a class="wrow" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="id">${esc(r.id)}</span><span class="t">${esc(r.title)}</span><span class="kind">${esc(rowLabel(r))}</span>${r.age === null ? '' : `<time>${esc(shortAge(r.age))}</time>`}</a>${prn(r.pr, tone)}${snoozeControls(r, ui)}${note ? `<span class="wnote">${note}</span>` : ''}</li>`;
   };
 
 export const renderWaiting = (
   m: Model,
   details: ReadonlyMap<string, Detail>,
-  now: Date
+  now: Date,
+  ui: SnoozeUi = SNOOZE_OFF
 ): string => {
   const loading = !m.runs;
-  const rows = loading ? [] : waitRows(m, details, now);
-  const count = countedRows(rows).length;
+  const all = loading ? [] : waitRows(m, details, now);
+  const rows = all.filter((r) => !r.snoozed);
+  const snoozed = all.filter((r) => r.snoozed);
+  const count = countedRows(all).length;
+  const li = rowHTML(m, details, ui);
   // One button for both widths: CSS shows it and picks the count per breakpoint
   const desk = rows.length > DESKTOP_ROWS;
   const more =
     rows.length > PHONE_ROWS
       ? `<button type="button" class="more-all${desk ? ' more-desk' : ''}" aria-haspopup="dialog">+ <span class="more-n phone">${rows.length - PHONE_ROWS}</span>${desk ? `<span class="more-n desk">${rows.length - DESKTOP_ROWS}</span>` : ''} more — open all</button>`
       : '';
+  const fold = snoozedFold(
+    snoozed.length,
+    `<ul class="wrows">${snoozed.map(li).join('')}</ul>`,
+    ui.open
+  );
   const body = loading
     ? '<p class="none">Loading…</p>'
-    : rows.length
-      ? `<ul class="wrows">${rows.map(rowHTML(m, details)).join('')}</ul>${more}`
-      : '<p class="none">Nothing waits on you.</p>';
+    : (rows.length
+        ? `<ul class="wrows">${rows.map(li).join('')}</ul>${more}`
+        : '<p class="none">Nothing waits on you.</p>') + fold;
   return `<article class="card-top waiting${count ? ' has' : ''}" data-w="before">
     <div class="ct-head"><button type="button" class="open state" aria-haspopup="dialog">Waiting on you</button><b class="count">${loading ? '–' : count}</b></div>
     ${body}

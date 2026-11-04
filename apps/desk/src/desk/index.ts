@@ -33,7 +33,7 @@ import {
 import { renderSession } from './render/session';
 import { SHEETS } from './render/sheets';
 import { renderTiles } from './render/tiles';
-import { renderWaiting } from './render/waiting';
+import { renderWaiting, snoozeUi } from './render/waiting';
 import { spendDays } from './spend';
 import {
   type Connection,
@@ -142,7 +142,12 @@ function renderLive(m: Model, now: Date): void {
   setHtml(
     'cards',
     (renderUnknownSession(m) || renderSession(m, state.details, now)) +
-      renderWaiting(m, state.details, now)
+      renderWaiting(
+        m,
+        state.details,
+        now,
+        snoozeUi(m, state.controls, state.ui.snoozedOpen)
+      )
   );
   $('capacity').classList.toggle('frozen', Boolean(label));
   $('more').classList.toggle('frozen', Boolean(label));
@@ -323,6 +328,49 @@ function clickControl(target: Element): boolean {
   return true;
 }
 
+/** Handles a Snooze or Wake button's click; true when the click was one */
+function clickSnooze(target: Element): boolean {
+  const button = target.closest<HTMLButtonElement>(
+    '[data-snooze], [data-wake]'
+  );
+  if (!button) return false;
+  const { snooze, wake, kind, eventAt } = button.dataset;
+  const host = model(state, new Date()).controls?.host;
+  const ticket = snooze ?? wake;
+  if (!state.controls.target || !host || !ticket || button.disabled)
+    return true;
+  const region = button.closest('[id]');
+  // The render moves the row; focus goes to its button where it landed, else the fold's summary
+  const refocus = (): void =>
+    focusIn(region, [
+      `[data-snooze="${ticket}"]`,
+      `[data-wake="${ticket}"]`,
+      'details.snoozed > summary'
+    ]);
+  sendSnooze(
+    ticket,
+    host,
+    snooze === undefined
+      ? null
+      : { kind: kind ?? '', eventAt: eventAt || null },
+    refocus
+  );
+  return true;
+}
+
+// `toggle` doesn't bubble, so it is caught on the way down; a render then keeps the fold as the viewer left it
+document.addEventListener(
+  'toggle',
+  (e) => {
+    if (
+      e.target instanceof HTMLDetailsElement &&
+      e.target.classList.contains('snoozed')
+    )
+      state.ui.snoozedOpen = e.target.open;
+  },
+  true
+);
+
 document.addEventListener('click', (e) => {
   if (!(e.target instanceof Element)) return;
   if (e.target.closest('[data-see-problems]')) {
@@ -342,7 +390,7 @@ document.addEventListener('click', (e) => {
     else if (action.dataset.action === 'copy-row') copyRow(action);
     return;
   }
-  if (clickControl(e.target)) return;
+  if (clickControl(e.target) || clickSnooze(e.target)) return;
   const problem = e.target.closest<HTMLElement>('[data-problem]');
   if (problem) {
     showView('desk', false);
@@ -540,9 +588,61 @@ export function setControls(target: CommandTarget | null): void {
     sending: new Set(),
     failed: new Map(),
     awaiting: new Map(),
-    confirm: null
+    confirm: null,
+    snoozing: new Set(),
+    snoozeNotes: new Map()
   };
   render();
+}
+
+/** Snoozes a waiting row until it changes, or wakes it; the row moves at once, Realtime then confirms */
+function sendSnooze(
+  ticket: string,
+  host: string,
+  snooze: { kind: string; eventAt: string | null } | null,
+  refocus: () => void
+): void {
+  const c = state.controls;
+  if (!c.target || c.snoozing.has(ticket)) return;
+  c.snoozing.add(ticket);
+  c.snoozeNotes.delete(ticket);
+  render();
+  const sent = snooze
+    ? sendCommand(c.target, host, 'snooze', { ticket, ...snooze })
+    : sendCommand(c.target, host, 'wake', { ticket });
+  sent
+    .then((reply) => {
+      if (reply.status === 'refused') {
+        c.snoozeNotes.set(ticket, reply.note ?? 'refused');
+        return;
+      }
+      const rest = (state.data.snoozes ?? []).filter(
+        (s) => s.ticket !== ticket
+      );
+      state.data.snoozes = snooze
+        ? [
+            ...rest,
+            {
+              ticket,
+              kind: snooze.kind,
+              event_at: snooze.eventAt,
+              at: new Date().toISOString(),
+              actor: 'desk'
+            }
+          ]
+        : rest;
+    })
+    .catch((error: unknown) => {
+      c.snoozeNotes.set(
+        ticket,
+        error instanceof CommandError ? error.message : 'The command failed.'
+      );
+    })
+    .finally(() => {
+      c.snoozing.delete(ticket);
+      render();
+      refocus();
+    });
 }
 
 /** Sends one command for a control; the row's own state then arrives over Realtime */
