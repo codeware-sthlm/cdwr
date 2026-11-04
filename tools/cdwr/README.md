@@ -378,9 +378,22 @@ table's `Hand-off` rows when none was posted. Outside review only the PR attache
 counts. A ticket whose PR merged outside review, as when you merge from a gate, gets the watch's
 one Linear write: `agent:review` replaces its agent label and its **Next:** line says when it
 merged and what is handed off. `~/.cdwr/agent-queue/watch.json` remembers what was last sent and
-whether the relabel went through, so a failed write is tried again on the next run. `gh` runs as
-you here, so the script only lists and queries; a spec fails on anything else, and on a second
-Linear mutation. The watch's decisions live in `agent-queue/watch.jq`, installed beside `run.sh`, rather
+whether the relabel went through, so a failed write is tried again on the next run.
+
+After the watch, the scheduler closes a parent whose agent split finished, its other Linear write,
+so no session has to come by for it. A parent closes when it is open in this team and repo, carries
+no agent label of its own (a split clears it), and its sub-issues (read from those closed in the
+last 14 days) are all Done or Canceled, at least one Done and at least one carrying an agent label.
+It is set to the team's Done state and gets an `**Agent: closed**` comment naming the sub-issues,
+with an `info` notice. A split whose sub-issues were all canceled stays for you. A failed close is a
+warn and is tried again on the next run; the comment follows only a close Linear took.
+`~/.cdwr/agent-queue/closed-parents` lists every parent closed this way, so one you reopen stays
+open. Linear's own
+parent auto-close stays off, since it would also close epics no agent split started.
+
+`gh` runs as you here, so the script only lists and queries; a spec fails on anything else, and on
+a Linear mutation beyond its three named ones (`RELABEL`, `CLOSE_PARENT`, `CLOSE_COMMENT`), each
+used in one function. The watch's decisions live in `agent-queue/watch.jq`, installed beside `run.sh`, rather
 than in a `*.logic.ts`: what runs unattended stays behind `install`, and jq is already a
 dependency of the script. Its spec runs it through `jq`.
 
