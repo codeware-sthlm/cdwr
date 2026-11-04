@@ -6,7 +6,7 @@ import { totpEnrolmentPlugin } from './totp-enrolment.plugin';
 
 /**
  * Upload collections whose files visitors load without a user: images on
- * the site, in apps/web and through the Next image optimizer.
+ * the site, in headless and through the Next image optimizer.
  */
 export const publicFileCollections: ReadonlyArray<string> = [
   'media',

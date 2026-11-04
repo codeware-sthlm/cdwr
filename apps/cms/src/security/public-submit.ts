@@ -15,9 +15,10 @@ import { type NextRequest, NextResponse } from 'next/server';
 /**
  * Whether this request was signed by a first-party app forwarding a visitor.
  *
- * `apps/web` posts to these routes rather than to Payload's REST api — a
- * static route shadows the `[...slug]` catch-all — and it has already counted
- * the visitor against its own allowance, by their real address. Counting again
+ * A first-party client with forms of its own posts them to these routes
+ * rather than to Payload's REST api — a static route shadows the `[...slug]`
+ * catch-all — and has already counted the visitor against its own allowance,
+ * by their real address. No client does today. Counting again
  * here would put every visitor of that site in one bucket, since Fly rewrites
  * `Fly-Client-IP` at its edge and the cms sees the forwarding machine.
  *

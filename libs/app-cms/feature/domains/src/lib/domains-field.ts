@@ -62,7 +62,7 @@ export const domainsField = ({ override }: Props = {}): ArrayField => {
               required: true,
               admin: {
                 width: '40%',
-                placeholder: 'cdwr-web-moon',
+                placeholder: 'cdwr-headless-moon',
                 description: {
                   en: 'The Fly app that serves this domain. The certificate is attached to it.',
                   sv: 'Fly-appen som servar domänen. Certifikatet kopplas till den.'
