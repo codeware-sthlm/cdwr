@@ -16,8 +16,6 @@ describe('flyConditions', () => {
 
   const listLabelsMock = vi.fn();
   const addLabelsMock = vi.fn();
-  const listEventsMock = vi.fn();
-  const paginateMock = vi.fn();
 
   const defaultInputs = {
     previewLabel: 'preview-deploy',
@@ -28,19 +26,16 @@ describe('flyConditions', () => {
     vi.clearAllMocks();
 
     mockGetOctokit.mockReturnValue({
-      paginate: paginateMock,
       rest: {
         issues: {
           listLabelsOnIssue: listLabelsMock,
-          addLabels: addLabelsMock,
-          listEvents: listEventsMock
+          addLabels: addLabelsMock
         }
       }
     } as unknown as ReturnType<typeof github.getOctokit>);
 
     listLabelsMock.mockResolvedValue({ data: [] });
     addLabelsMock.mockResolvedValue({ data: [] });
-    paginateMock.mockResolvedValue([]);
 
     mockContext.repo = { owner: 'org', repo: 'repo' };
     mockContext.ref = 'refs/heads/main';
@@ -88,7 +83,11 @@ describe('flyConditions', () => {
       mockContext.eventName = 'pull_request';
       mockContext.ref = 'refs/heads/feature/my-feature';
       mockContext.payload = {
-        pull_request: { number: 42, head: { ref: 'feature/my-feature' } }
+        pull_request: {
+          number: 42,
+          state: 'open',
+          head: { ref: 'feature/my-feature' }
+        }
       };
     });
 
@@ -99,89 +98,89 @@ describe('flyConditions', () => {
       expect(mockGetOctokit).not.toHaveBeenCalled();
     });
 
-    it('should add label and continue when PR is opened and label is missing', async () => {
-      mockContext.payload = { ...mockContext.payload, action: 'opened' };
-      listLabelsMock.mockResolvedValue({ data: [] });
+    it.each(['opened', 'reopened', 'synchronize'])(
+      'should continue for %s when the preview label is present',
+      async (action) => {
+        mockContext.payload = { ...mockContext.payload, action };
+        listLabelsMock.mockResolvedValue({
+          data: [{ name: 'preview-deploy' }, { name: 'other' }]
+        });
+
+        const result = await flyConditions(defaultInputs);
+
+        expect(listLabelsMock).toHaveBeenCalledWith(
+          expect.objectContaining({ issue_number: 42 })
+        );
+        expect(result.skip).toBe(false);
+      }
+    );
+
+    it.each(['opened', 'reopened', 'synchronize'])(
+      'should skip for %s without the preview label, and never add it',
+      async (action) => {
+        mockContext.payload = { ...mockContext.payload, action };
+        listLabelsMock.mockResolvedValue({ data: [{ name: 'other' }] });
+
+        const result = await flyConditions(defaultInputs);
+
+        expect(addLabelsMock).not.toHaveBeenCalled();
+        expect(result.skip).toBe(true);
+      }
+    );
+
+    it('should continue when the preview label is added', async () => {
+      mockContext.payload = {
+        ...mockContext.payload,
+        action: 'labeled',
+        label: { name: 'preview-deploy' }
+      };
 
       const result = await flyConditions(defaultInputs);
 
-      expect(addLabelsMock).toHaveBeenCalledWith({
-        owner: 'org',
-        repo: 'repo',
-        issue_number: 42,
-        labels: ['preview-deploy']
-      });
+      expect(mockGetOctokit).not.toHaveBeenCalled();
       expect(result.skip).toBe(false);
     });
 
-    it('should not re-add label when PR is reopened and label already exists', async () => {
-      mockContext.payload = { ...mockContext.payload, action: 'reopened' };
+    it('should skip when a labeled event carries no label', async () => {
+      mockContext.payload = { ...mockContext.payload, action: 'labeled' };
+
+      const result = await flyConditions(defaultInputs);
+
+      expect(mockGetOctokit).not.toHaveBeenCalled();
+      expect(result.skip).toBe(true);
+    });
+
+    it.each(['closed', undefined])(
+      'should skip when the preview label is added to a pull request whose state is %s',
+      async (state) => {
+        mockContext.payload = {
+          ...mockContext.payload,
+          action: 'labeled',
+          label: { name: 'preview-deploy' },
+          pull_request: {
+            ...(mockContext.payload['pull_request'] as object),
+            state
+          }
+        };
+
+        const result = await flyConditions(defaultInputs);
+
+        expect(mockGetOctokit).not.toHaveBeenCalled();
+        expect(result.skip).toBe(true);
+      }
+    );
+
+    it('should skip when another label is added, even with the preview label present', async () => {
+      mockContext.payload = {
+        ...mockContext.payload,
+        action: 'labeled',
+        label: { name: 'agent:review' }
+      };
       listLabelsMock.mockResolvedValue({ data: [{ name: 'preview-deploy' }] });
 
       const result = await flyConditions(defaultInputs);
 
-      expect(addLabelsMock).not.toHaveBeenCalled();
-      expect(result.skip).toBe(false);
-    });
-
-    it('should continue for synchronize when preview label is present', async () => {
-      mockContext.payload = { ...mockContext.payload, action: 'synchronize' };
-      listLabelsMock.mockResolvedValue({
-        data: [{ name: 'preview-deploy' }, { name: 'other' }]
-      });
-
-      const result = await flyConditions(defaultInputs);
-
-      expect(result.skip).toBe(false);
-    });
-
-    it('should add a missing preview label for synchronize when it was never removed', async () => {
-      mockContext.payload = { ...mockContext.payload, action: 'synchronize' };
-      listLabelsMock.mockResolvedValue({ data: [{ name: 'other' }] });
-      paginateMock.mockResolvedValue([
-        { event: 'labeled', label: { name: 'other' } }
-      ]);
-
-      const result = await flyConditions(defaultInputs);
-
-      expect(paginateMock).toHaveBeenCalledWith(
-        listEventsMock,
-        expect.objectContaining({ issue_number: 42 })
-      );
-      expect(addLabelsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ labels: ['preview-deploy'] })
-      );
-      expect(result.skip).toBe(false);
-    });
-
-    it('should add the preview label for synchronize when it was removed before the PR was reopened', async () => {
-      mockContext.payload = { ...mockContext.payload, action: 'synchronize' };
-      listLabelsMock.mockResolvedValue({ data: [] });
-      paginateMock.mockResolvedValue([
-        { event: 'unlabeled', label: { name: 'preview-deploy' } },
-        { event: 'closed' },
-        { event: 'reopened' }
-      ]);
-
-      const result = await flyConditions(defaultInputs);
-
-      expect(addLabelsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ labels: ['preview-deploy'] })
-      );
-      expect(result.skip).toBe(false);
-    });
-
-    it('should skip for synchronize when the preview label was removed', async () => {
-      mockContext.payload = { ...mockContext.payload, action: 'synchronize' };
-      listLabelsMock.mockResolvedValue({ data: [{ name: 'other' }] });
-      paginateMock.mockResolvedValue([
-        { event: 'labeled', label: { name: 'preview-deploy' } },
-        { event: 'unlabeled', label: { name: 'preview-deploy' } }
-      ]);
-
-      const result = await flyConditions(defaultInputs);
-
-      expect(addLabelsMock).not.toHaveBeenCalled();
+      expect(mockGetOctokit).not.toHaveBeenCalled();
       expect(result.skip).toBe(true);
     });
 

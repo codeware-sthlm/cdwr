@@ -17,7 +17,7 @@ export async function flyConditions({
   const { eventName, ref, payload } = context;
 
   const pr = payload['pull_request'] as
-    { number: number; head: { ref: string } } | undefined;
+    { number: number; state?: string; head: { ref: string } } | undefined;
 
   const branchName = pr?.head?.ref ?? ref.replace('refs/heads/', '');
   const action = payload['action'] as string | undefined;
@@ -60,28 +60,24 @@ export async function flyConditions({
     return { skip: false };
   }
 
-  // On open/reopen: ensure the preview label is present and continue
-  if (action === 'opened' || action === 'reopened') {
-    const octokit = github.getOctokit(token);
-    const { data: existing } = await octokit.rest.issues.listLabelsOnIssue({
-      ...context.repo,
-      issue_number: prNumber
-    });
-
-    if (!existing.some((l) => l.name === previewLabel)) {
-      await octokit.rest.issues.addLabels({
-        ...context.repo,
-        issue_number: prNumber,
-        labels: [previewLabel]
-      });
-      core.info(`Added preview label '${previewLabel}' -> continue`);
-    } else {
-      core.info(`Preview label '${previewLabel}' already present -> continue`);
+  // The label is an opt-in, never added here. Adding it deploys at once;
+  // adding any other label deploys nothing.
+  if (action === 'labeled') {
+    // `closed` already tore the preview down, and nothing would tear a new one down
+    if (pr?.state !== 'open') {
+      core.info(`Pull request is ${pr?.state ?? 'N/A'}, not open -> skip`);
+      return { skip: true };
     }
-    return { skip: false };
+    const added = (payload['label'] as { name?: string } | undefined)?.name;
+    if (added === previewLabel) {
+      core.info(`Preview label '${previewLabel}' added -> continue`);
+      return { skip: false };
+    }
+    core.info(`Label '${added ?? 'N/A'}' is not the preview label -> skip`);
+    return { skip: true };
   }
 
-  // All other PR events (synchronize, labeled, etc.): gate on label
+  // All other PR events (opened, reopened, synchronize): gate on label
   const octokit = github.getOctokit(token);
   const { data: labels } = await octokit.rest.issues.listLabelsOnIssue({
     ...context.repo,
@@ -93,34 +89,6 @@ export async function flyConditions({
     return { skip: false };
   }
 
-  // A newer push cancels the run that opened or reopened the PR, possibly
-  // before it added the label. Add it here unless someone removed it on
-  // purpose since then; reopening turns previews back on.
-  const events = await octokit.paginate(octokit.rest.issues.listEvents, {
-    ...context.repo,
-    issue_number: prNumber,
-    per_page: 100
-  });
-  const lastReopen = events.map((e) => e.event).lastIndexOf('reopened');
-  const removed = events
-    .slice(lastReopen + 1)
-    .some(
-      (e) =>
-        e.event === 'unlabeled' &&
-        'label' in e &&
-        e.label?.name === previewLabel
-    );
-
-  if (removed) {
-    core.info(`Preview label '${previewLabel}' was removed -> skip`);
-    return { skip: true };
-  }
-
-  await octokit.rest.issues.addLabels({
-    ...context.repo,
-    issue_number: prNumber,
-    labels: [previewLabel]
-  });
-  core.info(`Added missing preview label '${previewLabel}' -> continue`);
-  return { skip: false };
+  core.info(`Preview label '${previewLabel}' not present -> skip`);
+  return { skip: true };
 }

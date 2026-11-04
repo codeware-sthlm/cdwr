@@ -27,8 +27,10 @@ Gate action that runs before the rest of the deployment pipeline. It outputs `sk
 2. Blocked branch prefixes (`renovate`, `update-nx-workspace`) — skip
 3. Non-`pull_request` events — always continue
 4. PR `closed` — continue (triggers cleanup jobs)
-5. PR `opened` / `reopened` — add the preview label if absent, then continue
-6. All other PR events (`synchronize`, `labeled`, …) — continue only if the preview label is present
+5. PR `labeled` — continue only if the PR is open and the label just added is the preview label
+6. All other PR events (`opened`, `reopened`, `synchronize`) — continue only if the preview label is present
+
+The action never adds the label: it is an opt-in, set by hand or by the agent queue once a PR is ready to test.
 
 ## Usage
 
