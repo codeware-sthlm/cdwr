@@ -108,12 +108,13 @@ fi
 tmp=""
 listener=""
 LISTENER_FILE=""
-# The listener needs the Supabase url and publishable key, from the shell or the checkout's
-# tools/cdwr/.env; without them it would only boot to fail, so the wait says so and polls
+# The listener needs the Supabase url and publishable key, from the shell or the env file: the
+# one AGENT_QUEUE_ENV_FILE names, else the checkout's tools/cdwr/.env. Without them it would only
+# boot to fail, so the wait says so and polls
 listener_env() {
-  local v
+  local v file="${AGENT_QUEUE_ENV_FILE:-$1/tools/cdwr/.env}"
   for v in AGENT_SUPABASE_URL AGENT_SUPABASE_ANON_KEY; do
-    [[ -n "${(P)v}" ]] || grep -q "^$v=." "$1/tools/cdwr/.env" 2>/dev/null || return 1
+    [[ -n "${(P)v}" ]] || grep -q "^$v=." "$file" 2>/dev/null || return 1
   done
   return 0
 }
