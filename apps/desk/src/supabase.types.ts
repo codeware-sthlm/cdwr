@@ -170,6 +170,7 @@ export type Database = {
           suggested: string | null;
           job: string | null;
           view: Json | null;
+          watch: Json | null;
         };
         Insert: {
           host: string;
@@ -179,6 +180,7 @@ export type Database = {
           suggested?: string | null;
           job?: string | null;
           view?: Json | null;
+          watch?: Json | null;
         };
         Update: {
           host?: string;
@@ -188,6 +190,7 @@ export type Database = {
           suggested?: string | null;
           job?: string | null;
           view?: Json | null;
+          watch?: Json | null;
         };
         Relationships: [];
       };

@@ -33,6 +33,7 @@ const summaryOf = (
 ): Issue => ({ ...issue(id, statusType), labels });
 
 const queueState: QueueStateRow = {
+  watch: null,
   host: 'mac',
   at: '2026-10-28T10:00:00.000Z',
   last_run: '2026-10-28 09:50 · planned COD-1',

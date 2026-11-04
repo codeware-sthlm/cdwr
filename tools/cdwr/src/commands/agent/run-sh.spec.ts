@@ -357,6 +357,10 @@ describe('run.sh telemetry', () => {
       /^record_queue_state\(\) \{\n {2}\$check && return 0\n {2}telemetry_on \|\| return 0/m
     );
     expect(SCRIPT).toMatch(/\( telemetry_queue_state "\$last" [^)]*\) &!/s);
+    expect(SCRIPT).toMatch(/telemetry_queue_state [^)]*"\$watch" \) &!/s);
+    expect(SCRIPT).toContain(
+      'watch="$(cat "$HOME_DIR/watch.json" 2>/dev/null)"'
+    );
   });
 
   // A refused launch shows on the desk and in `cdwr agent status`, not only in the log

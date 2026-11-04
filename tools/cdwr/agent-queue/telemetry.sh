@@ -6,9 +6,10 @@
 #   telemetry_on                                             succeeds when both are set
 #   telemetry_run <started_at> <outcome> <ticket> <detail> <attended> <kind> <interval> <limit> <version>
 #                                                            one row in `runs`; empty fields become null
-#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json>
+#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json]
 #                                                            upserts this host's row in `queue_state`; empty fields become null,
-#                                                            a view that isn't JSON too
+#                                                            a view that isn't JSON too; a watch, when given, is patched on after
+#                                                            (empty or invalid: null)
 #   telemetry_session <id> <kind> [state] [detail]           upserts the session's heartbeat in `sessions`;
 #                                                            empty fields become null
 #   supabase_delete <table> <query>                          DELETE the rows a PostgREST filter matches
@@ -140,6 +141,12 @@ telemetry_queue_state() {
     {host: $host, at: $now, last_run: ($last_run | orNull), attended: ($attended | orNull),
      suggested: ($suggested | orNull), job: ($job | orNull), view: ($view | try fromjson catch null)}')" || return 0
   supabase_upsert queue_state host "$body" merge
+  (( $# >= 6 )) || return 0
+  # The watch goes in its own patch so that, before the migration is applied, only this call
+  # fails (a warn) and the row itself still lands. An empty or invalid watch clears the column,
+  # so a host whose watch.json is gone never serves a stale one
+  supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
+    "$(jq -nc --arg w "$6" '{watch: ($w | try fromjson catch null)}')" >/dev/null || return 0
 }
 
 # telemetry_session <id> <kind> [state] [detail]: an empty or missing state or detail is null
