@@ -23,7 +23,7 @@ type Options = {
   /** queue_state rows, or a status to fail the read with */
   queue?: unknown[] | number;
   insert?: number;
-  /** desk_abandon result rows, a status to fail with, or a throw */
+  /** desk_abandon, desk_snooze or desk_wake result rows, a status to fail with, or a throw */
   rpc?: unknown[] | number | 'throw';
   activity?: number | 'throw';
   fail?: boolean;
@@ -46,7 +46,7 @@ const setup = async (options: Options = {}) => {
         const queue = options.queue ?? [{ at: AT, view: {} }];
         return typeof queue === 'number' ? json([], queue) : json(queue);
       }
-      if (path === 'rpc/desk_abandon' && method === 'POST') {
+      if (path.startsWith('rpc/desk_') && method === 'POST') {
         if (options.rpc === 'throw') throw new Error('offline');
         const rpc = options.rpc ?? [{ id: 7, status: 'applied', note: null }];
         return typeof rpc === 'number' ? json([], rpc) : json(rpc);
@@ -198,6 +198,76 @@ describe('parseCommand', () => {
   ])('refuses abandon with %s', (_name, args) => {
     expect(parseCommand({ host: 'nuc', kind: 'abandon', args })).toBe(
       'abandon takes only a session id'
+    );
+  });
+
+  it('accepts wake with a ticket', () => {
+    expect(
+      parseCommand({ host: 'nuc', kind: 'wake', args: { ticket: 'COD-718' } })
+    ).toEqual({ host: 'nuc', kind: 'wake', args: { ticket: 'COD-718' } });
+  });
+
+  it.each([
+    ['no args', undefined],
+    ['no ticket', {}],
+    ['a lowercase ticket', { ticket: 'cod-1' }],
+    ['another team', { ticket: 'ENG-1' }],
+    ['another key', { ticket: 'COD-1', kind: 'plan' }]
+  ])('refuses wake with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'wake', args })).toBe(
+      'wake takes only a ticket'
+    );
+  });
+
+  it('accepts snooze and normalises the gate time', () => {
+    expect(
+      parseCommand({
+        host: 'nuc',
+        kind: 'snooze',
+        args: {
+          ticket: 'COD-1',
+          kind: 'hand-offs',
+          eventAt: '2026-11-04T09:00:00+01:00'
+        }
+      })
+    ).toEqual({
+      host: 'nuc',
+      kind: 'snooze',
+      args: {
+        ticket: 'COD-1',
+        kind: 'hand-offs',
+        eventAt: '2026-11-04T08:00:00.000Z'
+      }
+    });
+  });
+
+  it.each([
+    ['a null gate time', { ticket: 'COD-1', kind: 'idea', eventAt: null }],
+    ['no gate time', { ticket: 'COD-1', kind: 'idea' }]
+  ])('accepts snooze with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'snooze', args })).toEqual({
+      host: 'nuc',
+      kind: 'snooze',
+      args: { ticket: 'COD-1', kind: 'idea', eventAt: null }
+    });
+  });
+
+  it.each([
+    ['no args', undefined],
+    ['no ticket', { kind: 'plan' }],
+    ['a bad ticket', { ticket: 'COD-x', kind: 'plan' }],
+    ['no row kind', { ticket: 'COD-1' }],
+    ['an unknown row kind', { ticket: 'COD-1', kind: 'pause' }],
+    ['a date only', { ticket: 'COD-1', kind: 'plan', eventAt: '2026-11-04' }],
+    ['a number', { ticket: 'COD-1', kind: 'plan', eventAt: 5 }],
+    [
+      'an impossible time',
+      { ticket: 'COD-1', kind: 'plan', eventAt: '2026-13-40T99:00:00Z' }
+    ],
+    ['another key', { ticket: 'COD-1', kind: 'plan', session: 's1' }]
+  ])('refuses snooze with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'snooze', args })).toBe(
+      'snooze takes a ticket, a row kind and a gate time or null'
     );
   });
 
@@ -569,6 +639,87 @@ describe('createHandler', () => {
     expect(log).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'write failed' })
     );
+  });
+
+  const SNOOZE = {
+    host: 'nuc',
+    kind: 'snooze',
+    args: { ticket: 'COD-9', kind: 'plan', eventAt: AT }
+  };
+
+  it('snoozes through desk_snooze without reading the host, and logs activity', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(post(SNOOZE));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+
+    expect(
+      fetch.mock.calls.map(
+        ([url, init]) =>
+          `${init.method} ${url.slice(BASE.length + 1).split('?')[0]}`
+      )
+    ).toEqual(['POST rpc/desk_snooze', 'POST activity']);
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_snooze')[0])).toEqual({
+      p_host: 'nuc',
+      p_actor: 'mac',
+      p_at: AT,
+      p_ticket: 'COD-9',
+      p_kind: 'plan',
+      p_event_at: AT
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toEqual({
+      event_id: 'desk:7',
+      at: AT,
+      ticket: 'COD-9',
+      actor: 'human',
+      change: 'snoozed COD-9 from the desk (mac)',
+      host: 'nuc'
+    });
+  });
+
+  it('wakes through desk_wake and logs activity', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(
+      post({ host: 'nuc', kind: 'wake', args: { ticket: 'COD-9' } })
+    );
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+    expect(callsTo(fetch, 'queue_state')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_wake')[0])).toEqual({
+      p_host: 'nuc',
+      p_actor: 'mac',
+      p_at: AT,
+      p_ticket: 'COD-9'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      ticket: 'COD-9',
+      change: 'woke COD-9 from the desk (mac)'
+    });
+  });
+
+  it('answers refused when there is nothing to wake', async () => {
+    const { handle, fetch } = await setup({
+      rpc: [{ id: 7, status: 'refused', note: 'not snoozed' }]
+    });
+    const res = await handle(
+      post({ host: 'nuc', kind: 'wake', args: { ticket: 'COD-9' } })
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'not snoozed'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      ticket: 'COD-9',
+      change: 'wake refused from the desk (mac): not snoozed'
+    });
+  });
+
+  it('answers 500 when desk_snooze fails, with no activity', async () => {
+    const { handle, fetch } = await setup({ rpc: 500 });
+    const res = await handle(post(SNOOZE));
+    expect(res.status).toBe(500);
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
   });
 
   it.each([
