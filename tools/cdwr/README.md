@@ -368,6 +368,14 @@ cheap since it starts no session, and it ends idle when nothing changed. The lis
 change to it takes effect when it restarts (a `cdwr agent deploy`), not at the next run. `status` and
 the desk show `live (events), fallback every 60 min` or that it is polling, and why.
 
+An attended session's `wait.sh` (the watcher the work-queue skill starts between tickets) wakes
+the same way: it starts `cdwr agent listen --notify-pid <its pid> --state-file <temp file>` from its
+own checkout, so the Mac's `tools/cdwr/.env` needs the same two variables, and re-picks on
+`SIGUSR1`. While that listener is live it re-picks every 10 minutes (`--fallback`) as well; without
+it, or once it exited, every minute (`--interval`) as before. The state file is a temp file of the
+wait's own, never the queue home's `listener.json`, which is the scheduler's. The listener is not
+restarted mid-wait; each `wait.sh` starts a fresh one and kills it on exit.
+
 Before it plans, the scheduler watches the PRs of every ticket an agent label still claims
 (`agent:working`, `agent:needs-input`, `agent:review`; open, or done within 14 days) without
 starting Claude. It sends one notice per change: a PR that left the merge queue or has failing
