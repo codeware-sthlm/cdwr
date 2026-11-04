@@ -228,8 +228,10 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    **Copilot review** below. Once CI is green after it, set `agent:review` and status In
    Review, and add a comment
    that starts with `**Agent: PR ready**`. It holds the PR link, what the Copilot round
-   fixed and dismissed, anything left open for Håkan, and the **hand-off checklist**.
-   Notify `action`: PR ready for review.
+   fixed and dismissed, what the Fly Deployment run did for the labelled PR (a preview url
+   from the PR comment, a failure, or no deployable app in the PR, read from
+   `gh run list --workflow 'Fly Deployment' --branch <branch>`), anything left open for
+   Håkan, and the **hand-off checklist**. Notify `action`: PR ready for review.
 
    Write the checklist as a line `Hand-off checklist:` followed by one `- [ ] <item>` per
    line, with nothing else in between. The scheduler watches the PR after the gate and, on
@@ -360,10 +362,14 @@ When the push is denied, post the exact push command as a needs-input gate.
      resolve the thread.
    - **A design question, or you aren't sure:** reply with your reading, leave the thread
      **unresolved**, and list it in the PR-ready comment for Håkan.
-4. Re-run the narrow checks for whatever you changed, push, and park on `CI`. Park on `CI`
-   even when nothing changed: it resolves on the next check if CI already finished. On
-   `success`, go on to the PR-ready gate (**Per ticket** step 6). On `failure`, fix and park
-   again. One round only: don't wait for or act on a second Copilot review.
+4. Re-run the narrow checks for whatever you changed, add the preview label
+   (`gh pr edit <n> --add-label preview-deploy`), push, and park on `CI`. The PR is ready to
+   test from here: the label deploys a preview at once and on every later push, and nothing
+   else adds it. The label goes on before the push, so the push's run is the one that
+   survives their shared concurrency group. Park on `CI` even when nothing changed: it
+   resolves on the next check if CI already finished. On `success`, go on to the PR-ready gate (**Per ticket** step 6). On
+   `failure`, fix and park again. One round only: don't wait for or act on a second Copilot
+   review.
 
 Reply and resolve through GraphQL:
 
