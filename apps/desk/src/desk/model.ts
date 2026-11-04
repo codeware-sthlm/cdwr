@@ -6,6 +6,7 @@ import type {
   PlanUsageRow,
   RunsPayload,
   SessionRow,
+  SnoozeRow,
   UsageHourRow
 } from '../supabase';
 
@@ -266,6 +267,10 @@ export type Model = {
   activityBy: ActivityBy;
   /** Ticket id -> minutes since the newest gate event of each item waiting on you */
   waitAge: Map<string, number>;
+  /** Ticket id -> ISO time of the event waitAge counts from; the time a snooze compares against */
+  gateAt: Map<string, string>;
+  /** Every snoozed ticket, by ticket */
+  snoozes: readonly SnoozeRow[];
   /** The agent's PRs as GitHub last told, newest first */
   agentPrs: AgentPr[];
   /** Live sessions per host, newest first */
@@ -859,6 +864,16 @@ export const activityBy = (
 const GATE =
   /\+agent:(needs-input|review)\b|^comment: \*\*Agent(: plan ready| needs input|: PR ready|: review addressed)/;
 
+/** The activity row a wait counts from: the ticket's newest gate event, else its newest event */
+const waitRow = (
+  id: string,
+  activity: ActivityPayload | null
+): ActivityPayload['rows'][number] | undefined => {
+  const rows = (activity?.rows ?? []).filter((r) => r.ticket === id);
+  // The rows are newest first
+  return rows.find((r) => GATE.test(r.change)) ?? rows[0];
+};
+
 /** Minutes since each ticket's newest gate event, else its newest event; tickets without activity are left out */
 export const waitAges = (
   tickets: readonly string[],
@@ -867,10 +882,21 @@ export const waitAges = (
 ): Map<string, number> => {
   const out = new Map<string, number>();
   for (const id of tickets) {
-    const rows = (activity?.rows ?? []).filter((r) => r.ticket === id);
-    // The rows are newest first
-    const row = rows.find((r) => GATE.test(r.change)) ?? rows[0];
+    const row = waitRow(id, activity);
     if (row) out.set(id, (now.getTime() - runTime(row.when)) / 6e4);
+  }
+  return out;
+};
+
+/** The ISO time of the event `waitAges` counts from; tickets without activity are left out */
+export const gateTimes = (
+  tickets: readonly string[],
+  activity: ActivityPayload | null
+): Map<string, string> => {
+  const out = new Map<string, string>();
+  for (const id of tickets) {
+    const row = waitRow(id, activity);
+    if (row) out.set(id, new Date(runTime(row.when)).toISOString());
   }
   return out;
 };
@@ -1140,6 +1166,14 @@ export const model = (
     now
   });
 
+  const waiting = [
+    ...before.map((x) => x.ticket),
+    ...toLabel.map((x) => x.ticket),
+    ...handoffs.map((x) => x.ticket),
+    ...prs.map((x) => x.ticket),
+    ...heldApprovals.map((x) => x.ticket)
+  ];
+
   return {
     all: openIssues(data),
     runs,
@@ -1213,17 +1247,9 @@ export const model = (
     burn: usageBurn(data.usageHours, now, plan.five_hour),
     runsToday: runsToday(rows, now),
     activityBy: activityBy(activity, now),
-    waitAge: waitAges(
-      [
-        ...before.map((x) => x.ticket),
-        ...toLabel.map((x) => x.ticket),
-        ...handoffs.map((x) => x.ticket),
-        ...prs.map((x) => x.ticket),
-        ...heldApprovals.map((x) => x.ticket)
-      ],
-      activity,
-      now
-    ),
+    waitAge: waitAges(waiting, activity, now),
+    gateAt: gateTimes(waiting, activity),
+    snoozes: data.snoozes ?? [],
     agentPrs: agentPrs(data.githubEvents, prTickets, (id) => get(id).title),
     hostSessions: sessions,
     handBack: hand,

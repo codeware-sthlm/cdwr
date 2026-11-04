@@ -4,9 +4,9 @@ import type { IssueEventRow } from '../supabase';
 import {
   type CommandArgs,
   CommandError,
-  type CommandKind,
   type CommandTarget,
   type Control,
+  type ControlKind,
   sendCommand
 } from './commands';
 import { AGENT_AVATAR } from './constants';
@@ -549,7 +549,7 @@ export function setControls(target: CommandTarget | null): void {
 export function sendControl(
   control: Control,
   host: string,
-  kind: CommandKind,
+  kind: ControlKind,
   args: CommandArgs = {}
 ): void {
   const c = state.controls;

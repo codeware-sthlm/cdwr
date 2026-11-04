@@ -294,6 +294,17 @@ export const createLoader = ({
       }
       render();
     });
+    adapter.watchTool('Supabase', 'snoozes', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.snoozes = ev.result.payload;
+        state.errors.delete('snoozes');
+      } else {
+        state.errors.set('snoozes', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.snoozes = null;
+      }
+      render();
+    });
     adapter.watchTool(SERVER, 'list_issues', { label: IDEA_LABEL }, (ev) => {
       if (stopped) return;
       if (ev.type === 'data') {

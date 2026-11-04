@@ -87,6 +87,7 @@ export type AdapterOptions = {
     | 'readGithubEvents'
     | 'readSessions'
     | 'readDeskCommands'
+    | 'readSnoozes'
     | 'subscribe'
   >;
   now?: () => number;
@@ -301,6 +302,7 @@ export const createAdapter = ({
   const githubEvents = track(SUPABASE, () => supabase.readGithubEvents());
   const sessions = track(SUPABASE, () => supabase.readSessions());
   const deskCommands = track(SUPABASE, () => supabase.readDeskCommands());
+  const snoozes = track(SUPABASE, () => supabase.readSnoozes());
   const details = new Map<string, Source<IssueDetail>>();
   const comments = new Map<string, Source<{ comments: Comment[] }>>();
 
@@ -354,6 +356,7 @@ export const createAdapter = ({
       if (tool === 'githubEvents') return bind(githubEvents, (rows) => rows);
       if (tool === 'sessions') return bind(sessions, (rows) => rows);
       if (tool === 'deskCommands') return bind(deskCommands, (rows) => rows);
+      if (tool === 'snoozes') return bind(snoozes, (rows) => rows);
     }
     return undefined;
   };
@@ -390,6 +393,9 @@ export const createAdapter = ({
   };
   const refreshDeskCommands = () => {
     if (!stopped && deskCommands.watching()) void deskCommands.refresh();
+  };
+  const refreshSnoozes = () => {
+    if (!stopped && snoozes.watching()) void snoozes.refresh();
   };
   const refreshSupabase = () => {
     if (!stopped) void refreshWatched(SUPABASE);
@@ -587,7 +593,8 @@ export const createAdapter = ({
       refreshUsageHours,
       applyGithub,
       refreshSessions,
-      refreshDeskCommands
+      refreshDeskCommands,
+      refreshSnoozes
     );
   };
   let leave = join();

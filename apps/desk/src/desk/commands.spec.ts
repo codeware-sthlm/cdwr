@@ -224,6 +224,17 @@ describe('controlStates', () => {
     ).toEqual({ state: 'idle' });
   });
 
+  it('ignores snooze and wake rows', () => {
+    const all = states([
+      row(1, 'snooze', 'applied', {
+        applied_at: AT,
+        args: { ticket: 'COD-1', kind: 'review', eventAt: null }
+      }),
+      row(2, 'wake', 'refused', { note: 'not snoozed' })
+    ]);
+    expect(Object.values(all).every((s) => s.state === 'idle')).toBe(true);
+  });
+
   it('ignores other hosts and unknown kinds', () => {
     const all = states([
       row(1, 'run', 'pending', { host: 'mac' }),
