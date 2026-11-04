@@ -178,22 +178,45 @@ describe('run.sh without Linear documents', () => {
     expect(code).not.toMatch(/_TITLE=|publish_(doc|runs|usage|activity)/);
   });
 
-  // The watch's one Linear write relabels a ticket whose PR merged outside review
-  it('holds exactly one Linear mutation, issueUpdate in the RELABEL query', () => {
-    expect(code.match(/mutation\b/gi)).toHaveLength(1);
-    const relabel = code.match(
-      /read -r -d '' RELABEL <<'GQL' \|\| true\n([\s\S]*?)\nGQL\n/
+  const gql = (name: string) =>
+    code.match(
+      new RegExp(
+        `read -r -d '' ${name} <<'GQL' \\|\\| true\\n([\\s\\S]*?)\\nGQL\\n`
+      )
     )?.[1];
-    expect(relabel).toMatch(/^mutation\(/);
-    expect(relabel).toContain('issueUpdate(');
-    expect(code.match(/issueUpdate\b/g)).toHaveLength(2);
+
+  // The scheduler's Linear writes: the watch relabels a ticket whose PR merged outside review,
+  // and a parent whose agent split finished is closed with a comment. Nothing else.
+  it('holds exactly three Linear mutations, each in its named query', () => {
+    expect(code.match(/mutation\b/gi)).toHaveLength(3);
+    expect(gql('RELABEL')).toMatch(/^mutation\(/);
+    expect(gql('RELABEL')).toContain('issueUpdate(');
+    expect(gql('CLOSE_PARENT')).toMatch(/^mutation\(/);
+    expect(gql('CLOSE_PARENT')).toContain(
+      'issueUpdate(id: $id, input: { stateId: $state })'
+    );
+    expect(gql('CLOSE_COMMENT')).toMatch(/^mutation\(/);
+    expect(gql('CLOSE_COMMENT')).toContain('commentCreate(');
+    // Each in its mutation and in the check of its answer
+    expect(code.match(/issueUpdate\b/g)).toHaveLength(4);
+    expect(code.match(/commentCreate\b/g)).toHaveLength(2);
   });
 
-  it('uses "$RELABEL" only inside relabel_merged', () => {
-    const relabel = fn('relabel_merged');
-    expect(relabel).toContain('linear "$RELABEL" "$vars"');
-    expect(code.match(/"\$RELABEL"/g)).toHaveLength(1);
-    expect(code.replace(relabel, '')).not.toContain('$RELABEL');
+  it.each([
+    ['RELABEL', 'relabel_merged'],
+    ['CLOSE_PARENT', 'close_parents'],
+    ['CLOSE_COMMENT', 'close_parents']
+  ])('uses "$%s" only inside %s', (name, owner) => {
+    const body = fn(owner);
+    expect(body).toContain(`linear "$${name}" "$vars"`);
+    expect(code.split(`"$${name}"`)).toHaveLength(2);
+    expect(code.replace(body, '')).not.toContain(`$${name}`);
+  });
+
+  it('closes parents after the watch, never on --check', () => {
+    expect(code).toMatch(
+      /if ! \$check; then\n {2}err="\$\(watch_prs\)"[^\n]*\n {2}err="\$\(close_parents\)" \|\| \{/
+    );
   });
 
   it('watches the three agent labels', () => {
@@ -724,6 +747,129 @@ describe('run.sh to_main', () => {
       'install --frozen-lockfile\ninstall --frozen-lockfile\n'
     );
   });
+});
+
+describe('run.sh close_parents', () => {
+  const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  // The queries and the function as written in run.sh
+  const source = SCRIPT.slice(
+    SCRIPT.indexOf("read -r -d '' PARENTS"),
+    SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('close_parents() {')) + 3
+  );
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  let root: string;
+
+  const PARENTS = {
+    data: {
+      issues: {
+        nodes: [
+          {
+            parent: {
+              id: 'uuid-100',
+              identifier: 'COD-100',
+              state: { type: 'started' },
+              team: { key: 'COD' },
+              labels: { nodes: [] },
+              children: {
+                nodes: [
+                  {
+                    identifier: 'COD-101',
+                    state: { type: 'completed' },
+                    labels: { nodes: [{ name: 'agent:review' }] }
+                  }
+                ],
+                pageInfo: { hasNextPage: false }
+              }
+            }
+          }
+        ]
+      },
+      teams: {
+        nodes: [
+          {
+            states: {
+              nodes: [
+                { id: 'st-done', name: 'Done', type: 'completed', position: 1 }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  };
+
+  // Runs close_parents with a fake Linear; `update` is what the close answers
+  const run = (update: unknown) => {
+    writeFileSync(join(root, 'parents.json'), JSON.stringify(PARENTS));
+    writeFileSync(join(root, 'update.json'), JSON.stringify(update));
+    const script = [
+      `ROOT="${root}"; HOME_DIR="${root}"`,
+      `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
+      `record() { print -r -- "$*" >> "$ROOT/records"; }`,
+      `notice() { print -r -- "$*" >> "$ROOT/notices"; }`,
+      `watch() { jq -L "${DIR}" "$@"; }`,
+      'watch_err() { :; }',
+      'linear() {',
+      '  case "$1" in',
+      '    *issueUpdate*) print -r -- "close $2" >> "$ROOT/calls"; cat "$ROOT/update.json" ;;',
+      '    *commentCreate*) print -r -- "comment $2" >> "$ROOT/calls"; print -r -- \'{"data":{"commentCreate":{"success":true}}}\' ;;',
+      '    *) cat "$ROOT/parents.json" ;;',
+      '  esac',
+      '}',
+      source,
+      'close_parents; print -r -- "rc=$?"'
+    ].join('\n');
+    return spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+  };
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'close-parents-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    expect(source).toContain('close_parents() {');
+    expect(source).toContain("read -r -d '' CLOSE_COMMENT");
+  });
+
+  it.skipIf(!canRun)('closes a ready parent once, then comments', () => {
+    const result = run({ data: { issueUpdate: { success: true } } });
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls').trim().split('\n')).toEqual([
+      'close {"id":"uuid-100","state":"st-done"}',
+      `comment ${JSON.stringify({ id: 'uuid-100', body: '**Agent: closed** all sub-issues are closed: COD-101 (Done).' })}`
+    ]);
+    expect(read('records')).toBe('closed COD-100 all sub-issues are closed\n');
+    expect(read('notices')).toBe(
+      'info COD-100: closed, all sub-issues are closed\n'
+    );
+    expect(read('closed-parents')).toBe('COD-100\n');
+  });
+
+  it.skipIf(!canRun)('leaves a parent it closed before alone', () => {
+    writeFileSync(join(root, 'closed-parents'), 'COD-100\n');
+    const result = run({ data: { issueUpdate: { success: true } } });
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls')).toBe('');
+    expect(read('records')).toBe('');
+  });
+
+  it.skipIf(!canRun)(
+    'only warns when the close fails, and posts no comment',
+    () => {
+      const result = run({ errors: [{ message: 'nope' }] });
+      expect(result.stdout).toContain('rc=0');
+      expect(read('calls')).not.toContain('comment');
+      expect(read('records')).toBe('warn COD-100 close: parent close failed\n');
+      expect(read('notes')).toContain('warn: close: COD-100 failed ("nope")');
+      expect(read('notices')).toBe('');
+      expect(read('closed-parents')).toBe('');
+    }
+  );
 });
 
 describe('run.sh session files from another host', () => {
