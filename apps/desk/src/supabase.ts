@@ -34,7 +34,12 @@ export type DeskCommandRow = Tables['desk_commands']['Row'];
 export type SnoozeRow = Tables['snoozes']['Row'];
 
 /** Full commits of main's newest successful builds; null when none is recorded */
-export type MainBuilds = { image: string | null; desk: string | null };
+/** Main's newest build of the NUC image, the Mac desk (desk.yml) and the web desk (desk-image.yml) */
+export type MainBuilds = {
+  image: string | null;
+  desk: string | null;
+  deskWeb: string | null;
+};
 
 export type SupabaseErrorCode = 'unauthorized' | 'network' | 'bad_response';
 
@@ -193,7 +198,8 @@ const LAST_RUN = /^\d{4}-\d\d-\d\d \d\d:\d\d\s*·\s*(.+)$/;
 
 export const toMain = (rows: BuildRow[]): MainBuilds => ({
   image: rows.find((r) => r.workflow === 'agent-host-image.yml')?.sha ?? null,
-  desk: rows.find((r) => r.workflow === 'desk.yml')?.sha ?? null
+  desk: rows.find((r) => r.workflow === 'desk.yml')?.sha ?? null,
+  deskWeb: rows.find((r) => r.workflow === 'desk-image.yml')?.sha ?? null
 });
 
 export const toRuns = (

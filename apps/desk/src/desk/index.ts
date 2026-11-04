@@ -1,3 +1,6 @@
+import { isTauri } from '@tauri-apps/api/core';
+
+import { deskSha } from '../build-info';
 import type { Adapter } from '../data';
 import { LinearError, linearMessage } from '../linear';
 import type { IssueEventRow } from '../supabase';
@@ -46,6 +49,11 @@ import {
   sheetIdOf,
   viewOf
 } from './state';
+
+// This build, and whether it is the web desk the NUC serves rather than the Mac app: that
+// decides which workflow's build main is compared with
+const DESK = deskSha();
+const WEB = !isTauri();
 
 const state = createState(); // everything the page shows and the viewer chose; survives a settings re-start
 let adapter: Adapter | null = null; // set by start()
@@ -162,7 +170,7 @@ function renderLive(m: Model, now: Date): void {
 
 function renderMain(): void {
   const now = new Date();
-  const m = model(state, now);
+  const m = model(state, now, DESK, WEB);
   forgetLabelled(state.controls.labelled, m.v ? m.toLabel : null);
   renderLive(m, now);
   $('capacity').innerHTML = renderCapacity(m);
@@ -212,7 +220,7 @@ function showSheet(value: string, focus = true): void {
   state.ui.openSheet = id;
   $('sheet-title').textContent = w.title;
   $('sheet-sub').textContent = w.sub;
-  $('sheet-body').innerHTML = w.body(model(state, now), state, now);
+  $('sheet-body').innerHTML = w.body(model(state, now, DESK, WEB), state, now);
   $('sheet').hidden = false;
   $('scrim').hidden = false;
   $('sheet-body')
@@ -278,7 +286,7 @@ function clickControl(target: Element): boolean {
   );
   if (!button) return false;
   const c = state.controls;
-  const m = model(state, new Date()).controls;
+  const m = model(state, new Date(), DESK, WEB).controls;
   if (!c.target || !m || button.disabled) return true;
   const { cmd, step, apply } = button.dataset;
   // The render replaces the button; keyboard focus goes back to it, or to the control's next part
@@ -339,7 +347,7 @@ function clickSnooze(target: Element): boolean {
   );
   if (!button) return false;
   const { snooze, wake, kind, eventAt } = button.dataset;
-  const host = model(state, new Date()).controls?.host;
+  const host = model(state, new Date(), DESK, WEB).controls?.host;
   const ticket = snooze ?? wake;
   if (!state.controls.target || !host || !ticket || button.disabled)
     return true;
@@ -595,7 +603,7 @@ setInterval(() => {
   if (state.data.connection.live && !shownProblems && ticks % QUIET_TICKS !== 0)
     return;
   const now = new Date();
-  renderLive(model(state, now), now);
+  renderLive(model(state, now, DESK, WEB), now);
 }, 1000);
 
 $('refresh').onclick = () => {

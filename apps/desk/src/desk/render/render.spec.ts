@@ -114,7 +114,7 @@ const runs = (qv: QueueView | null): RunsPayload => ({
   at: new Date('2026-10-29T11:55:00').toISOString(),
   host: 'nuc',
   others: [],
-  main: { image: null, desk: null },
+  main: { image: null, desk: null, deskWeb: null },
   rows: [
     {
       when: '2026-10-29 11:50',
@@ -692,7 +692,7 @@ describe('header', () => {
   };
 
   it('says when the image is behind main', () => {
-    const state = behind({ image: NEW, desk: null }, true);
+    const state = behind({ image: NEW, desk: null, deskWeb: null }, true);
     const m = model(state, NOW, null);
     expect(platform(m).updates).toBe(1);
     expect(renderStatus(m, state.data.connection)).toContain('· 1 update');
@@ -703,7 +703,7 @@ describe('header', () => {
   });
 
   it('says when the desk is behind main', () => {
-    const state = behind({ image: null, desk: NEW }, false);
+    const state = behind({ image: null, desk: NEW, deskWeb: null }, false);
     const m = model(state, NOW, OLD);
     // An update, but no failing check
     expect(platform(m).updates).toBe(1);
@@ -714,7 +714,7 @@ describe('header', () => {
   });
 
   it('shows neither when both are current', () => {
-    const state = behind({ image: OLD, desk: OLD }, true);
+    const state = behind({ image: OLD, desk: OLD, deskWeb: null }, true);
     const m = model(state, NOW, OLD);
     expect(platform(m).updates).toBe(0);
     expect(renderStatus(m, state.data.connection)).not.toContain(
@@ -1520,7 +1520,7 @@ describe('platform view', () => {
   const NEW = 'def5678' + '0'.repeat(33);
   const jobWith = (
     over: Partial<NonNullable<RunsPayload['job']>>,
-    main: RunsPayload['main'] = { image: null, desk: null }
+    main: RunsPayload['main'] = { image: null, desk: null, deskWeb: null }
   ): DeskState => {
     const s = filled();
     const base = runs(view());
@@ -1579,18 +1579,18 @@ describe('platform view', () => {
     const behind = html(
       jobWith(
         { host: 'container', rev: 'sha-abc1234' },
-        { image: NEW, desk: NEW }
+        { image: NEW, desk: NEW, deskWeb: null }
       ),
       OLD
     );
     expect(behind).toContain('update available');
     expect(behind).toContain('sha-abc1234 → sha-def5678');
     expect(behind).toContain('out of date');
-    expect(behind).toContain('reload the desk to update');
+    expect(behind).toContain('cdwr agent desk install');
     const current = html(
       jobWith(
         { host: 'container', rev: 'sha-abc1234' },
-        { image: OLD, desk: OLD }
+        { image: OLD, desk: OLD, deskWeb: null }
       ),
       OLD
     );

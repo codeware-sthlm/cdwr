@@ -458,7 +458,7 @@ const renderScheduler = (m: Model): string => {
     : '';
   const jobHTML = `<div class="group"><h3>Job</h3>${hostRow}<div class="${!job || job.install === 'stale' ? 'empty' : 'rule'}">${jobText}</div>${imageBehind}</div>`;
   const deskHTML = m.deskBehind
-    ? `<div class="group"><h3>Desk</h3><div class="empty">This desk is ${shaLink(m.deskBehind.runs)}, main has ${shaLink(m.deskBehind.main)}: run <code>cdwr agent desk install</code>.</div></div>`
+    ? `<div class="group"><h3>Desk</h3><div class="empty">This desk is ${shaLink(m.deskBehind.runs)}, main has ${shaLink(m.deskBehind.main)}: ${m.web ? 'run <code>cdwr agent deploy --host agent-host</code> on the Mac, then reload this page' : 'run <code>cdwr agent desk install</code>'}.</div></div>`
     : '';
   return (
     head +

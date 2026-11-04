@@ -208,7 +208,7 @@ const versions = (m: Model): string =>
     '',
     `<div class="pf-rows">
       ${versionRow('nuc image', m.versions.image, 'update available')}
-      ${versionRow('This desk', m.versions.desk, 'out of date', m.versions.desk.state === 'behind' ? 'reload the desk to update' : '')}
+      ${versionRow('This desk', m.versions.desk, 'out of date', m.versions.desk.state === 'behind' ? (m.web ? 'cdwr agent deploy, then reload' : 'cdwr agent desk install') : '')}
       ${installRow(m)}
     </div>`
   );
