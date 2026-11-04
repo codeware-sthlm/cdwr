@@ -114,6 +114,18 @@ telemetry_env() {
   return 0
 }
 
+# telemetry_env_search <checkout>: the env file named in the environment (AGENT_QUEUE_ENV_FILE), the
+# checkout's tools/cdwr/.env, else the main checkout's, where a linked worktree has it
+telemetry_env_search() {
+  local checkout=$1 common env_file
+  common="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+  for env_file in "${AGENT_QUEUE_ENV_FILE:-}" "$checkout/tools/cdwr/.env" "${common:+${common:h}/tools/cdwr/.env}"; do
+    [[ -n "$env_file" ]] && telemetry_env "$env_file"
+    telemetry_on && break
+  done
+  return 0
+}
+
 # The machine's stable name; run.sh has the same in lib.sh as host_id
 telemetry_host() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null || hostname -s; }
 

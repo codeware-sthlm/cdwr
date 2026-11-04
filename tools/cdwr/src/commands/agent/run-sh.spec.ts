@@ -340,9 +340,28 @@ const execAsync = promisify(execFile);
 describe('run.sh telemetry', () => {
   const exit = SCRIPT.slice(SCRIPT.indexOf('on_exit() {'));
 
-  it('sources telemetry.sh and reads its env from the checkout', () => {
+  it('sources telemetry.sh and searches its env from the checkout', () => {
     expect(SCRIPT).toContain('source "${0:A:h}/telemetry.sh"');
-    expect(SCRIPT).toContain('telemetry_env "$REPO/tools/cdwr/.env"');
+    expect(SCRIPT).toContain('telemetry_env_search "$REPO"');
+  });
+
+  // A Mac without the scheduler reads the NUC's watch from queue_state; --check says which
+  it('takes the watch state from watch_state and reports its source on --check', () => {
+    const attended = SCRIPT.slice(SCRIPT.indexOf('\nattended() {'));
+    expect(attended).toContain(
+      'watch_state "$HOME_DIR/watch.json"\n  state="$WATCH_STATE"'
+    );
+    expect(attended.indexOf('watch_state "$HOME_DIR/watch.json"')).toBeLessThan(
+      attended.indexOf('resp="$(linear "$ATTENDED_QUERY"')
+    );
+    expect(SCRIPT).not.toContain('$(watch_state');
+    expect(SCRIPT).not.toContain(
+      '"$HOME_DIR/watch.json" 2>/dev/null || print \'{}\')"'
+    );
+    expect(SCRIPT).toContain('print -r -- "watch-source: $WATCH_SOURCE"');
+    expect(SCRIPT).toContain(
+      'print -r -- "watch-state: ${attended_watch:-{\\}}"'
+    );
   });
 
   it('sends one runs row on exit, detached, never on --check', () => {
@@ -1485,7 +1504,7 @@ describe('run.sh apply_commands', () => {
   });
 
   it('applies the commands before the pause is read', () => {
-    const env = SCRIPT.indexOf('telemetry_env "$REPO/tools/cdwr/.env"');
+    const env = SCRIPT.indexOf('telemetry_env_search "$REPO"');
     const call = SCRIPT.indexOf('\napply_commands\n');
     expect(env).toBeGreaterThan(0);
     expect(env).toBeLessThan(call);

@@ -10,9 +10,13 @@
 # Runs from the repo, not installed. While it runs, <id>.watcher holds its pid and the hook reports `polling` on Stop.
 #   wait.sh [--interval 60] [--fallback 600] [--max 6600]
 #   wait.sh --now        print the current pick once and exit, with no listener
+# Where the scheduler runs elsewhere (a Mac without the launchd job), the watch state comes from
+# the NUC's queue_state row (`remote_watch`, one Supabase GET per pick) instead of the local
+# watch.json nothing refreshes; unreadable, the local file as before.
 # AGENT_QUEUE_LINEAR_CMD replaces the Linear call with a command that prints a response,
-# AGENT_QUEUE_GH_CMD the gh call that reads parked tickets' PRs (the query is its $1), and
-# AGENT_QUEUE_LISTEN_CMD the listener (run as `<cmd> <pid to wake> <state file>`).
+# AGENT_QUEUE_GH_CMD the gh call that reads parked tickets' PRs (the query is its $1),
+# AGENT_QUEUE_LISTEN_CMD the listener (run as `<cmd> <pid to wake> <state file>`), and
+# AGENT_QUEUE_WATCH_CMD the remote watch read (prints `{host, at, watch}` or nothing).
 INTERVAL=60
 FALLBACK=600
 MAX=6600
@@ -31,11 +35,16 @@ done
 HERE="${0:A:h}"
 source "$HERE/lib.sh"
 source "$HERE/waits.sh"
+source "$HERE/telemetry.sh"
+# telemetry's warnings go through note; the wait stays quiet while offline, as before
+note() { return 0; }
 if [[ -n "${AGENT_QUEUE_LINEAR_CMD:-}" ]]; then
   linear() { eval "$AGENT_QUEUE_LINEAR_CMD"; }
 elif [[ -z "$key" ]]; then
   print -r -- "wait: no Linear key"; exit 0
 fi
+# The Supabase env for the remote watch, found as the status line finds it
+[[ -n "${AGENT_QUEUE_WATCH_CMD:-}" ]] || telemetry_env_search "${HERE:h:h:h}"
 
 BASE="${CDWR_HOME:-$HOME/.cdwr}/agent-queue"
 SESSIONS="${AGENT_QUEUE_SESSIONS:-$BASE/sessions}"
@@ -80,12 +89,14 @@ remember() {
   return 0
 }
 
-# pick: the attended verdict as JSON; fails on a Linear or jq error
+# pick: the attended verdict as JSON; fails on a Linear or jq error. The watch state comes from
+# watch_state (lib.sh): the local file where the scheduler runs, else the NUC's row
 pick() {
   local resp watch waits
   resp="$(linear "$ATTENDED_QUERY" | attended_nodes)" || return 1
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null || return 1
-  watch="$(jq -c 'if type == "object" then . else {} end' "$WATCH_FILE" 2>/dev/null || print '{}')"
+  watch_state "$WATCH_FILE"
+  watch="$WATCH_STATE"
   [[ -n "$watch" ]] || watch='{}'
   waits="$(parked_waits <<<"$resp")"
   jq -L "$HERE" -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$BASE")" --argjson watch "$watch" --argjson waits "$waits" \

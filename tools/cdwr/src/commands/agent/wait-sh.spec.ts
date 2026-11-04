@@ -373,6 +373,69 @@ while true; do beat "$1" "$2"; sleep 1; done`
     });
   });
 
+  // On a Mac without the scheduler the watch comes from the NUC's queue_state row
+  describe('the remote watch', () => {
+    const inReview = {
+      ...ticket('COD-5', 'started'),
+      labels: { nodes: [{ name: 'agent:review' }] }
+    };
+    const watch = (unresolved: number) =>
+      JSON.stringify({
+        host: 'nuc',
+        at: '2026-11-05T00:00:00Z',
+        watch: { 'COD-5': { pr: 12, state: 'open', unresolved } }
+      });
+    const withWatch = (answers: string[], cmd: string) => {
+      const linear = fake('linear', answers);
+      return spawnSync('zsh', [SCRIPT, '--now'], {
+        env: {
+          ...process.env,
+          HOME: dir,
+          AGENT_QUEUE_HOST: '',
+          AGENT_QUEUE_SESSIONS: join(dir, 'sessions'),
+          AGENT_QUEUE_LINEAR_CMD: linear,
+          AGENT_QUEUE_WATCH_CMD: cmd,
+          PATH: `${join(dir, 'bin')}:${process.env['PATH'] ?? ''}`
+        },
+        encoding: 'utf8',
+        timeout: 30_000
+      });
+    };
+
+    beforeEach(() => {
+      // No launchd job here: the scheduler runs elsewhere
+      mkdirSync(join(dir, 'bin'));
+      writeFileSync(join(dir, 'bin', 'launchctl'), '#!/bin/sh\nexit 1\n');
+      chmodSync(join(dir, 'bin', 'launchctl'), 0o755);
+    });
+
+    it('reads review feedback from the remote watch', () => {
+      const result = withWatch(
+        [response(inReview)],
+        `printf '%s' '${watch(1)}'`
+      );
+      expect(result.stdout).toMatch(/^run now: COD-5 /);
+    });
+
+    it('falls back to the local file when the remote is unreadable', () => {
+      mkdirSync(join(dir, '.cdwr', 'agent-queue'), { recursive: true });
+      writeFileSync(
+        join(dir, '.cdwr', 'agent-queue', 'watch.json'),
+        JSON.stringify({ 'COD-5': { pr: 12, state: 'open', unresolved: 1 } })
+      );
+      const result = withWatch([response(inReview)], 'true');
+      expect(result.stdout).toMatch(/^run now: COD-5 /);
+    });
+
+    it('sees no feedback when the remote watch has none', () => {
+      const result = withWatch(
+        [response(inReview)],
+        `printf '%s' '${watch(0)}'`
+      );
+      expect(result.stdout).toMatch(/^idle/);
+    });
+  });
+
   describe('a run pick at start', () => {
     const register = () => {
       mkdirSync(join(dir, 'sessions'));
