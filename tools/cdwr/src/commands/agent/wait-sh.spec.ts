@@ -9,7 +9,7 @@ import {
   writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT = fileURLToPath(
@@ -87,8 +87,25 @@ cat "${dir}/${name}-answer-$n.json"
     chmodSync(cmd, 0o755);
     return cmd;
   };
-  // gh answers[n] for call n, like the fake linear
-  const run = (answers: string[], args: string[], gh: string[] = []) => {
+  // A listener stub, run as `<stub> <pid to wake> <state file>`
+  const stub = (name: string, body: string) => {
+    const cmd = join(dir, `${name}.sh`);
+    writeFileSync(cmd, `#!/bin/sh\n${body}\n`);
+    chmodSync(cmd, 0o755);
+    return cmd;
+  };
+  // Writes a live state file with a fresh beat (atomically, wait.sh reads it concurrently)
+  const BEAT = `beat() {
+  printf '{"state":"live","since":"2026-10-01T00:00:00Z","lastBeat":"%s","lastEvent":null,"pid":%s}\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" $$ > "$2.tmp"
+  mv "$2.tmp" "$2"
+}`;
+  // gh answers[n] for call n, like the fake linear; `listener` defaults to a stub that does nothing
+  const run = (
+    answers: string[],
+    args: string[],
+    gh: string[] = [],
+    listener?: string
+  ) => {
     const cmd = fake('linear', answers);
     return spawnSync('zsh', [SCRIPT, ...args], {
       env: {
@@ -96,6 +113,7 @@ cat "${dir}/${name}-answer-$n.json"
         HOME: dir,
         AGENT_QUEUE_SESSIONS: join(dir, 'sessions'),
         AGENT_QUEUE_LINEAR_CMD: cmd,
+        AGENT_QUEUE_LISTEN_CMD: listener ?? stub('no-listener', 'exit 0'),
         ...(gh.length > 0 ? { AGENT_QUEUE_GH_CMD: fake('gh', gh) } : {})
       },
       encoding: 'utf8',
@@ -161,6 +179,196 @@ cat "${dir}/${name}-answer-$n.json"
     );
     expect(result.status).toBe(0);
     expect(result.stdout).toBe('changed: run now: COD-702 answered\n');
+  });
+
+  describe('the listener', { timeout: 20_000 }, () => {
+    const idle = response();
+    const changed = response(ticket('COD-2', 'started'));
+    const calls = () =>
+      readFileSync(join(dir, 'linear-counter'), 'utf8').trim();
+
+    it('a wake re-picks before the interval and exits on a changed pick', () => {
+      const listener = stub(
+        'wake',
+        `${BEAT}
+beat "$1" "$2"
+sleep 1
+kill -USR1 "$1"
+while true; do sleep 1; beat "$1" "$2"; done`
+      );
+      const result = run(
+        [idle, changed],
+        ['--interval', '30', '--fallback', '600', '--max', '20'],
+        [],
+        listener
+      );
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe('changed: run now: COD-2 ready\n');
+      expect(calls()).toBe('2');
+    });
+
+    it('with a live listener the clock re-picks only every --fallback', () => {
+      const listener = stub(
+        'live',
+        `${BEAT}
+while true; do beat "$1" "$2"; sleep 1; done`
+      );
+      const first = run(
+        [idle, changed],
+        ['--interval', '1', '--fallback', '3', '--max', '10'],
+        [],
+        listener
+      );
+      expect(first.stdout).toMatch(/^changed: /);
+      expect(calls()).toBe('2');
+
+      // Only the start pick and the one when --max ends the wait; per-interval polling would be 4
+      const second = run(
+        [idle],
+        ['--interval', '1', '--fallback', '100', '--max', '3'],
+        [],
+        listener
+      );
+      expect(second.stdout).toMatch(/^timeout: idle/);
+      expect(calls()).toBe('2');
+    });
+
+    it('without a live state file it re-picks every --interval', () => {
+      const result = run(
+        [idle, idle, changed],
+        ['--interval', '1', '--max', '10']
+      );
+      expect(result.stdout).toMatch(/^changed: /);
+      expect(calls()).toBe('3');
+    });
+
+    it('a stale state file counts as down', () => {
+      const listener = stub(
+        'stale',
+        `printf '{"state":"live","since":"2026-10-01T00:00:00Z","lastBeat":"%s","lastEvent":null,"pid":1}\\n' "$(date -u -v-10M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%SZ)" > "$2"`
+      );
+      const result = run(
+        [idle, changed],
+        ['--interval', '1', '--fallback', '100', '--max', '10'],
+        [],
+        listener
+      );
+      expect(result.stdout).toMatch(/^changed: /);
+      expect(calls()).toBe('2');
+    });
+
+    // A dead listener's file lapses after 120 s by the beat rule; the test does not wait for
+    // that and relies on the fallback re-pick instead
+    it('a listener that exits mid-wait still ends in a re-pick', () => {
+      const listener = stub(
+        'dies',
+        `${BEAT}
+beat "$1" "$2"
+sleep 2
+exit 1`
+      );
+      const result = run(
+        [idle, changed],
+        ['--interval', '1', '--fallback', '4', '--max', '15'],
+        [],
+        listener
+      );
+      expect(result.stdout).toMatch(/^changed: /);
+      expect(calls()).toBe('2');
+    });
+
+    // cdwr.mjs runs the CLI with spawnSync and forwards no signal, so the kill has to reach the
+    // process under it: a shim-like stub, node around a shell that records its own pid
+    it('kills the listener under a shim that forwards no signal', async () => {
+      const inner = stub(
+        'inner',
+        `echo $$ > "${dir}/inner-pid"
+while true; do sleep 1; done`
+      );
+      const listener = stub(
+        'shim',
+        `${BEAT}
+beat "$1" "$2"
+exec node -e "require('node:child_process').spawnSync('${inner}', [], { stdio: 'inherit' })"`
+      );
+      const result = run(
+        [idle, changed],
+        ['--interval', '1', '--fallback', '2', '--max', '10'],
+        [],
+        listener
+      );
+      expect(result.stdout).toMatch(/^changed: /);
+      const pid = Number(readFileSync(join(dir, 'inner-pid'), 'utf8'));
+      const alive = () => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      for (let i = 0; i < 20 && alive(); i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      expect(alive()).toBe(false);
+    });
+
+    it('polls without a listener when the Supabase env is missing', () => {
+      const result = spawnSync(
+        'zsh',
+        [SCRIPT, '--interval', '1', '--max', '3'],
+        {
+          env: {
+            ...process.env,
+            HOME: dir,
+            AGENT_QUEUE_SESSIONS: join(dir, 'sessions'),
+            AGENT_QUEUE_LINEAR_CMD: fake('linear', [idle]),
+            AGENT_QUEUE_LISTEN_CMD: '',
+            AGENT_SUPABASE_URL: '',
+            AGENT_SUPABASE_ANON_KEY: ''
+          },
+          encoding: 'utf8',
+          timeout: 30_000
+        }
+      );
+      expect(result.stdout).toMatch(/^timeout: idle/);
+      expect(result.stderr).toMatch(
+        /^wait: no AGENT_SUPABASE_URL or AGENT_SUPABASE_ANON_KEY for .*, polling every 1s$/m
+      );
+      expect(Number(calls())).toBeGreaterThanOrEqual(3);
+    });
+
+    it('the listener is gone after wait.sh exits', async () => {
+      const listener = stub(
+        'gone',
+        `${BEAT}
+echo $$ > "${dir}/listener-pid"
+echo "$2" > "${dir}/listener-file"
+while true; do beat "$1" "$2"; sleep 1; done`
+      );
+      const result = run(
+        [idle, changed],
+        ['--interval', '1', '--fallback', '2', '--max', '10'],
+        [],
+        listener
+      );
+      expect(result.stdout).toMatch(/^changed: /);
+      const pid = Number(readFileSync(join(dir, 'listener-pid'), 'utf8'));
+      const stateFile = readFileSync(join(dir, 'listener-file'), 'utf8').trim();
+      const alive = () => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      for (let i = 0; i < 20 && alive(); i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      expect(alive()).toBe(false);
+      expect(existsSync(dirname(stateFile))).toBe(false);
+    });
   });
 
   describe('a run pick at start', () => {
