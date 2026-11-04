@@ -1,6 +1,3 @@
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
-import { openUrl } from '@tauri-apps/plugin-opener';
-
 import { type Adapter, createAdapter } from './data';
 import {
   setConnection,
@@ -11,35 +8,34 @@ import {
 } from './desk';
 import { CommandError, checkToken } from './desk/commands';
 import { LinearError, createLinear, linearMessage } from './linear';
+import { platform } from './platform';
 import {
-  type KeyValueStore,
   type Settings,
   type SettingsIssue,
   loadSettings,
   saveSettings
 } from './settings';
 import { openSettingsSheet } from './settings-sheet';
-import { openSettingsStore } from './settings-store';
 import { SupabaseError, createSupabase } from './supabase';
 
 import './fonts.css';
 import './desk.css';
 
-// Links open in the system browser, not in the webview
+// Links open in the system browser in Tauri, in a new tab elsewhere
 document.addEventListener('click', (event) => {
   const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
     'a[href^="http"]'
   );
   if (!link) return;
   event.preventDefault();
-  void openUrl(link.href);
+  void platform.openUrl(link.href);
 });
 
 const supabaseFor = ({ supabaseUrl, supabaseAnonKey }: Settings) =>
   createSupabase({ url: supabaseUrl, anonKey: supabaseAnonKey });
 
 const linearFor = ({ linearKey }: Settings) =>
-  createLinear({ key: linearKey, fetch: tauriFetch });
+  createLinear({ key: linearKey, fetch: platform.fetch });
 
 const supabaseIssue = (error: SupabaseError): SettingsIssue =>
   error.code === 'unauthorized'
@@ -87,18 +83,6 @@ const verify = async (settings: Settings): Promise<SettingsIssue[]> => {
   return issues;
 };
 
-const memoryStore = (): KeyValueStore => {
-  const values = new Map<string, unknown>();
-  return {
-    get: (key) => Promise.resolve(values.get(key)),
-    set: (key, value) => {
-      values.set(key, value);
-      return Promise.resolve();
-    },
-    save: () => Promise.resolve()
-  };
-};
-
 let adapter: Adapter | undefined;
 
 const startDesk = (settings: Settings): void => {
@@ -123,8 +107,7 @@ const startDesk = (settings: Settings): void => {
 };
 
 const boot = async (): Promise<void> => {
-  // Outside Tauri there is no store; the settings then last until the page reloads
-  const store = await openSettingsStore().catch(memoryStore);
+  const store = await platform.settingsStore();
   let current = await loadSettings(store).catch(() => null);
 
   const openSettings = (): void =>
