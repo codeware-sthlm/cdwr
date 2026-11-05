@@ -140,6 +140,20 @@ export const labelState = (
     : 'idle';
 };
 
+/**
+ * Forgets the labels this desk sent for tickets a loaded queue view no longer lists as ready to
+ * label: the queue took them, and a ticket that comes back starts fresh
+ */
+export const forgetLabelled = (
+  labelled: Map<string, number>,
+  toLabel: readonly { ticket: string }[] | null
+): void => {
+  if (toLabel === null) return;
+  const listed = new Set(toLabel.map((x) => x.ticket));
+  for (const ticket of [...labelled.keys()])
+    if (!listed.has(ticket)) labelled.delete(ticket);
+};
+
 /** The Label agent:ready button for a ready-to-label row, or what became of it; empty without controls. Keep it outside the row's link */
 export const labelControls = (
   r: WaitRow,

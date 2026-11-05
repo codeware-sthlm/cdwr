@@ -47,6 +47,7 @@ import { SHEETS } from './sheets';
 import { renderTiles } from './tiles';
 import {
   countedRows,
+  forgetLabelled,
   isSnoozed,
   labelState,
   renderWaiting,
@@ -2371,6 +2372,17 @@ describe('snoozed waiting rows', () => {
       const m = model(s, NOW);
       return renderWaiting(m, s.details, NOW, ui(s, m));
     };
+
+    it('forgets a label once the queue no longer lists the ticket', () => {
+      const labelled = new Map([
+        ['COD-6', 1],
+        ['COD-7', 2]
+      ]);
+      forgetLabelled(labelled, null);
+      expect([...labelled.keys()]).toEqual(['COD-6', 'COD-7']);
+      forgetLabelled(labelled, [{ ticket: 'COD-7' }]);
+      expect([...labelled.keys()]).toEqual(['COD-7']);
+    });
 
     it('reads the state from the controls', () => {
       const s = on(snoozed());
