@@ -1,5 +1,5 @@
 import { LIMIT, LINEAR_ISSUE, waitName } from '../constants';
-import { esc, hhmm } from '../format';
+import { esc, hhmm, shortAge } from '../format';
 import type { PrStateName } from '../live';
 import { type Model, prOf } from '../model';
 import type { Detail } from '../state';
@@ -60,6 +60,32 @@ export const prTone = (state: PrStateName | null): PrTone =>
       : state === 'checks failed'
         ? 'bad'
         : 'neutral';
+
+/** The pill text of a PR state; Copilot's review says whose turn it is */
+export const prStateText = (state: PrStateName): string =>
+  state === 'Copilot reviewed' ? 'Copilot reviewed — your turn' : state;
+
+/** The PR's state pill and, when a github event landed, how long ago; two strings so a caller can put a chip between */
+export const prPill = (
+  m: Pick<Model, 'agentPrs'>,
+  details: ReadonlyMap<string, Detail>,
+  x: { ticket: string; pr?: PrRef | null },
+  now: Date
+): { pill: string; age: string } => {
+  const { live } = livePr(m, details, x);
+  const tone = live ? prTone(live.state) : 'neutral';
+  const text = !live
+    ? 'queued'
+    : live.state
+      ? prStateText(live.state)
+      : live.action;
+  return {
+    pill: `<span class="pill ${tone}">${esc(text)}</span>`,
+    age: live
+      ? `<time>${esc(shortAge((now.getTime() - live.at) / 6e4))} ago</time>`
+      : ''
+  };
+};
 
 /** The PR the queue view names for a ticket, among its PRs and parked waits; null when it names none */
 export const queuePr = (

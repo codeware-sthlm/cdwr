@@ -22,7 +22,6 @@ import {
   txt,
   usd
 } from '../format';
-import type { PrStateName } from '../live';
 import { DETAIL_STALE_MS, HANDOFF_STALE_MS, REASON_STALE_MS } from '../load';
 import {
   BURN_ROLES,
@@ -55,7 +54,7 @@ import {
   livePr,
   loadMeter,
   parkedText,
-  prTone,
+  prPill,
   prWaitText,
   prn,
   pvMore,
@@ -185,8 +184,17 @@ const itemHTML = (
 
 /** One card per waiting item, with the one thing to do about it */
 const waitCard =
-  (ui: SnoozeUi, now: number) =>
+  (
+    m: Pick<Model, 'agentPrs'>,
+    details: ReadonlyMap<string, Detail>,
+    ui: SnoozeUi,
+    now: Date
+  ) =>
   (r: WaitRow): string => {
+    const pr =
+      r.kind === 'review' && r.pr
+        ? prPill(m, details, { ticket: r.id, pr: r.pr }, now)
+        : null;
     const act =
       r.kind === 'review' && r.pr
         ? { text: 'Review on GitHub', href: GH_PR + r.pr }
@@ -210,16 +218,16 @@ const waitCard =
     return `<article class="wcard${r.kind === 'approved' ? ' approved' : ''}">
     <div class="wc-head"><span class="id">${esc(r.id)}</span><span class="kind k-${esc(r.kind.replace(/ /g, '-'))}">${esc(rowLabel(r))}</span>${prn(r.pr)}${r.age === null ? '' : `<time>waiting ${esc(shortAge(r.age))}</time>`}</div>
     <div class="wc-title">${esc(r.title)}</div>
+    ${pr ? `<div class="wc-pr">${pr.pill}${pr.age}</div>` : ''}
     ${note ? `<div class="wc-note">${note}</div>` : ''}
-    <a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>${r.kind === 'ready to label' ? labelControls(r, ui, now, 'act secondary') : ''}
-    ${snoozeControls(r, ui)}
+    <div class="wc-actions"><a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>${r.kind === 'ready to label' ? labelControls(r, ui, now.getTime(), 'act secondary') : ''}${snoozeControls(r, ui)}</div>
   </article>`;
   };
 
 const renderBefore = (m: Model, state: DeskState, now: Date): string => {
   if (!m.v) return empty('No queue view yet.');
   const ui = snoozeUi(m, state.controls, state.ui.snoozedOpen);
-  const card = waitCard(ui, now.getTime());
+  const card = waitCard(m, state.details, ui, now);
   // Ideas wait on you too, but their card below carries the evidence to decide on
   const all = waitRows(m, state.details, now);
   const rows = all.filter((r) => !r.snoozed);
@@ -314,27 +322,15 @@ const handoffCard = (
   </article>`;
 };
 
-/** The pill text of a PR state; Copilot's review says whose turn it is */
-const prStateText = (state: PrStateName): string =>
-  state === 'Copilot reviewed' ? 'Copilot reviewed — your turn' : state;
-
 /** One card per open PR in merge order, its state and age from the newest github event */
 const renderReview = (m: Model, state: DeskState, now: Date): string => {
   if (!m.v) return empty('No queue view yet.');
   const { details } = state;
   const rows = m.prs
     .map((x, rank) => {
-      const { n, live } = livePr(m, details, x);
+      const { n } = livePr(m, details, x);
       const blocked = blockedText(m, x.ticket);
-      const tone = live ? prTone(live.state) : 'neutral';
-      const text = !live
-        ? 'queued'
-        : live.state
-          ? prStateText(live.state)
-          : live.action;
-      const age = live
-        ? `<time>${esc(shortAge((now.getTime() - live.at) / 6e4))} ago</time>`
-        : '';
+      const { pill, age } = prPill(m, details, x, now);
       const note = [
         blocked ? 'Merge order: ' + blocked : '',
         prWaitText(m, x.ticket)
@@ -344,7 +340,7 @@ const renderReview = (m: Model, state: DeskState, now: Date): string => {
       const i = m.get(x.ticket);
       return `<li class="pr-row${blocked ? ' blocked' : ''}" data-pr="${esc(n ?? '')}">
         <div class="line">${m.prs.length > 1 ? `<span class="rank">${rank + 1}</span>` : ''}<span class="prnum">${prn(n)}</span><span class="id">${esc(x.ticket)}</span><a class="title" href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
-        <div class="meta"><span class="pill ${tone}">${esc(text)}</span>${blocked ? '<span class="chip blocked">merge later</span>' : ''}${age}</div>
+        <div class="meta">${pill}${blocked ? '<span class="chip blocked">merge later</span>' : ''}${age}</div>
         ${note ? `<div class="meta">${note}</div>` : ''}
       </li>`;
     })

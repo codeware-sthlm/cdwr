@@ -1926,7 +1926,7 @@ details.snoozed .wrow .kind {
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(480px, 100%);
+  width: min(640px, 100%);
   background: var(--surface);
   border-left: 1px solid var(--line-strong);
   box-shadow: var(--shadow);
@@ -2185,6 +2185,45 @@ button.act.secondary {
   background: none;
   color: var(--wait);
   border: 1px solid var(--wait-line);
+}
+.wcard .wc-pr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wcard .wc-pr time {
+  font: 10px var(--font-mono);
+  color: var(--muted);
+}
+/* The card's buttons share one compact row; a note wraps to its own line under them */
+.wc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.wc-actions .act,
+.wc-actions .wsnooze {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  align-self: auto;
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+.wc-actions .wsnooze {
+  padding: 0 12px;
+  border-radius: 10px;
+}
+@media (max-width: 600px) {
+  .wc-actions .act,
+  .wc-actions .wsnooze {
+    min-height: var(--tap);
+  }
+}
+.wc-actions .wnote {
+  padding: 0;
 }
 
 .group {
