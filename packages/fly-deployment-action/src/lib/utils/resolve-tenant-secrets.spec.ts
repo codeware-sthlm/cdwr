@@ -66,15 +66,56 @@ describe('resolveTenantSecrets', () => {
     });
   });
 
-  it('should throw naming the deployment when secrets are named without credentials', async () => {
-    await expect(
-      resolveTenantSecrets(
-        { cms: [{}, { tenant: 'acme', secretNames: ['API_KEY'] }] },
-        'production',
-        undefined
-      )
-    ).rejects.toThrow('cms (acme)');
+  it('should error the named deployments without credentials, leaving the rest to deploy', async () => {
+    const result = await resolveTenantSecrets(
+      {
+        cms: [
+          {},
+          { tenant: 'moon', env: { URL: 'https://moon.com' } },
+          { tenant: 'acme', secretNames: ['API_KEY'] }
+        ]
+      },
+      'production',
+      undefined
+    );
+
     expect(mockFetchDeployments).not.toHaveBeenCalled();
+    expect(result['cms'][0]).toEqual({});
+    expect(result['cms'][1]).toEqual({
+      tenant: 'moon',
+      env: { URL: 'https://moon.com' }
+    });
+    expect(result['cms'][2].error).toContain('Infisical credentials');
+    expect(result['cms'][2]).not.toHaveProperty('secretNames');
+  });
+
+  it('should error the named deployments only when the read rejects', async () => {
+    mockFetchDeployments.mockRejectedValue(new Error('network down'));
+
+    const result = await resolveTenantSecrets(
+      { cms: [{}, { tenant: 'acme', secretNames: ['API_KEY'] }] },
+      'production',
+      infisical
+    );
+
+    expect(result['cms'][0]).toEqual({});
+    expect(result['cms'][1].error).toBe(
+      'Could not read secrets from Infisical: network down'
+    );
+    expect(core.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not treat an inherited property name as a read secret', async () => {
+    fetched({ cms: [{ tenant: 'acme', secrets: { OTHER: 'other-value' } }] });
+
+    const result = await resolveTenantSecrets(
+      { cms: [{ tenant: 'acme', secretNames: ['constructor'] }] },
+      'production',
+      infisical
+    );
+
+    expect(result['cms'][0].error).toContain('constructor');
+    expect(result['cms'][0].secrets).toBeUndefined();
   });
 
   it('should fill in the values of the planned names only', async () => {
@@ -165,9 +206,6 @@ describe('resolveTenantSecrets', () => {
     expect(entry.error).toContain('API_KEY');
     expect(entry.error).not.toContain('other-secret-value');
     expect(entry.secrets).toBeUndefined();
-    expect(core.error).toHaveBeenCalledWith(
-      expect.stringContaining('cms (acme)')
-    );
   });
 
   it('should mark a tenant absent from the fresh read as errored', async () => {
