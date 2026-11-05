@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
     "module": "ESNext",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "moduleResolution": "Bundler",
-    "declaration": true,
+    "declaration": false,
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,

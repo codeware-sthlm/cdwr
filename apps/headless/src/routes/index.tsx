@@ -1,9 +1,8 @@
+import type { Site } from '@codeware/app-headless/data-access';
 import { docHead } from '@codeware/app-headless/util/seo';
 import { RenderLandingPage } from '@codeware/shared/ui/cms-renderer';
 import type { LandingDoc } from '@codeware/shared/util/payload-utils';
 import { createFileRoute, getRouteApi } from '@tanstack/react-router';
-
-import type { Site } from '../server/load-site';
 
 export const Route = createFileRoute('/')({
   head: ({ matches }) => {

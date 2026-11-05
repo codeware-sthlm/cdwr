@@ -1,29 +1,12 @@
 import {
-  parseLoadDocInput,
-  resolveDocPath
-} from '@codeware/app-headless/util/routing';
-import {
-  type RequestBaseOptions,
-  findDoc
-} from '@codeware/shared/util/payload-api';
+  type LoadedDoc,
+  loadDocData
+} from '@codeware/app-headless/data-access';
+import { parseLoadDocInput } from '@codeware/app-headless/util/routing';
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 
-import { getEnv } from '../env.server';
-
-import { payloadRequestOptions } from './payload-request';
-
-const locales = ['en', 'sv'] as const satisfies ReadonlyArray<
-  RequestBaseOptions['locale']
->;
-
-export type LoadedDoc =
-  | {
-      ok: true;
-      /** `null` when the cms holds no such document */
-      docJson: string | null;
-    }
-  | { ok: false; message: string };
+import { serverContext } from './context';
 
 /**
  * Load the page, post or tour a path points at from the cms headless API.
@@ -33,30 +16,10 @@ export type LoadedDoc =
  */
 export const loadDoc = createServerFn({ method: 'GET' })
   .validator(parseLoadDocInput)
-  .handler(async ({ data: { splat, locale } }): Promise<LoadedDoc> => {
-    const lookup = resolveDocPath(splat);
-    if (!lookup) {
-      return { ok: true, docJson: null };
-    }
-
-    try {
-      const doc = await findDoc(
-        lookup.collection,
-        lookup.slug,
-        payloadRequestOptions(
-          getEnv(),
-          locales.find((allowed) => allowed === locale)
-        )
-      );
-
-      return { ok: true, docJson: doc && JSON.stringify(doc) };
-    } catch (error) {
-      // A failed request is the cms being unreachable, not a missing page
-      console.error('Failed to load document:', error);
+  .handler(async ({ data }): Promise<LoadedDoc> => {
+    const result = await loadDocData(serverContext, data);
+    if (!result.ok) {
       setResponseStatus(503);
-      return {
-        ok: false,
-        message: 'Unable to load the page. Please try again later.'
-      };
     }
+    return result;
   });
