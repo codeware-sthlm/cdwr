@@ -200,6 +200,14 @@ describe('reconcileView', () => {
       ]);
     });
 
+    it('hides a merged comment whose ticket was reopened', () => {
+      const v = reconcileView(
+        view({ next: [{ ticket: 'COD-7', reason: 'merged comment' }] }),
+        live({ 'COD-7': { labels: [], statusType: 'started' } })
+      );
+      expect(v.next).toEqual([]);
+    });
+
     it('keeps an entry with a reason it does not know', () => {
       const v = reconcileView(
         view({ next: [{ ticket: 'COD-1', reason: 'something new' }] }),
