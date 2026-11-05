@@ -628,7 +628,10 @@ watch_prs() {
       note "warn: watch: could not read PR #$pr ($id)"; record warn "$id" "watch: could not read PR #$pr"; continue
     fi
     # A renovate ticket carries Renovate's PR until its own PR opens: that one is not the ticket's
-    [[ "$(jq -r '.headRefName // ""' <<<"$now")" == renovate/* ]] && continue
+    if [[ "$(jq -r '.headRefName // ""' <<<"$now")" == renovate/* ]]; then
+      state="$(jq -c --arg id "$id" 'del(.[$id])' <<<"$state")"
+      continue
+    fi
     out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
       --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
