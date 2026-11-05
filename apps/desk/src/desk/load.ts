@@ -93,7 +93,8 @@ export const createLoader = ({
         ...v.table.label,
         ...v.table.after
       ])
-        ids.add(x.ticket);
+        // A Renovate item is `PR 754`, not an issue: the queue view already carries its title
+        if (/^[A-Z]+-\d+$/.test(x.ticket)) ids.add(x.ticket);
     const handoffIds = v
       ? v.table.after.filter((x) => x.kind === 'handoffs').map((x) => x.ticket)
       : [];
