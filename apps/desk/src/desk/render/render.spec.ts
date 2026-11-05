@@ -48,6 +48,7 @@ import { renderTiles } from './tiles';
 import {
   countedRows,
   isSnoozed,
+  labelState,
   renderWaiting,
   snoozeUi,
   waitRows
@@ -2362,6 +2363,86 @@ describe('snoozed waiting rows', () => {
     expect(html).toMatch(
       /data-snooze="COD-5"[^>]*data-event-at="[^"]+T[^"]+Z"/
     );
+  });
+
+  describe('Label button', () => {
+    const t = NOW.getTime();
+    const label = (s: DeskState) => {
+      const m = model(s, NOW);
+      return renderWaiting(m, s.details, NOW, ui(s, m));
+    };
+
+    it('reads the state from the controls', () => {
+      const s = on(snoozed());
+      const c = s.controls;
+      expect(labelState('COD-6', c, t)).toBe('idle');
+      c.labelConfirm.set('COD-6', t - 1000);
+      expect(labelState('COD-6', c, t)).toBe('confirming');
+      expect(labelState('COD-6', c, t + 5000)).toBe('idle');
+      c.labelling.add('COD-6');
+      expect(labelState('COD-6', c, t)).toBe('labelling');
+      c.labelling.clear();
+      c.labelled.set('COD-6', t - 1000);
+      expect(labelState('COD-6', c, t)).toBe('labelled');
+      expect(labelState('COD-6', c, t + 3 * 3600_000)).toBe('idle');
+      // A row whose gate moved on after the label came back as ready to label: live again
+      c.labelConfirm.delete('COD-6');
+      expect(labelState('COD-6', c, t, new Date(t - 2000).toISOString())).toBe(
+        'labelled'
+      );
+      expect(labelState('COD-6', c, t, new Date(t).toISOString())).toBe('idle');
+      c.labelNotes.set('COD-6', 'no');
+      expect(labelState('COD-6', c, t + 3 * 3600_000)).toEqual({ note: 'no' });
+    });
+
+    it('offers the button on a ready-to-label row only, outside the link', () => {
+      const html = label(on(snoozed()));
+      expect(html).toContain('data-label="COD-6"');
+      expect(html).toContain('>Label agent:ready</button>');
+      expect(html.match(/data-label=/g)).toHaveLength(1);
+      expect(html).not.toMatch(/<a class="wrow"[^>]*>(?:(?!<\/a>).)*<button/s);
+    });
+
+    it('asks to confirm, then disables the button in flight', () => {
+      const s = on(snoozed());
+      s.controls.labelConfirm.set('COD-6', t - 1000);
+      expect(label(s)).toContain('>Confirm label</button>');
+      s.controls.labelling.add('COD-6');
+      expect(label(s)).toMatch(/data-label="COD-6"[^>]*disabled>labelling…</);
+    });
+
+    it('replaces the button with a note once labelled', () => {
+      const s = on(snoozed());
+      s.controls.labelled.set('COD-6', t - 1000);
+      const html = label(s);
+      expect(html).not.toContain('data-label');
+      expect(html).toContain('labelled · waiting for the queue');
+    });
+
+    it('shows the note a failure left beside the button', () => {
+      const s = on(snoozed());
+      s.controls.labelNotes.set('COD-6', 'no <label>');
+      const html = label(s);
+      expect(html).toContain('data-label="COD-6"');
+      expect(html).toContain('<span class="wnote">no &lt;label&gt;</span>');
+    });
+
+    it('puts the button beside the sheet link, and keeps only the link without controls', () => {
+      const s = on(snoozed());
+      const html = SHEETS.before.body(model(s, NOW), s, NOW);
+      expect(html).toContain(
+        '<button type="button" class="act secondary" data-label="COD-6"'
+      );
+      // The link stays: it is how the ticket is checked before confirming
+      expect(html).toContain('>Label agent:ready</a>');
+      const off = snoozed();
+      const plain = SHEETS.before.body(model(off, NOW), off, NOW);
+      expect(plain).toContain('>Label agent:ready</a>');
+      expect(plain).not.toContain('data-label');
+      expect(renderWaiting(model(off, NOW), off.details, NOW)).not.toContain(
+        'data-label'
+      );
+    });
   });
 
   it('shows the same fold and buttons on the all-rows sheet', () => {

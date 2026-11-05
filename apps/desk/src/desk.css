@@ -1133,7 +1133,8 @@ table.act {
   color: var(--fg);
   border-color: var(--wait-dash);
 }
-.wsnooze:disabled {
+.wsnooze:disabled,
+button.act:disabled {
   opacity: 0.5;
 }
 /* Snoozed rows: folded away, quieter than the ones that wait */
@@ -2160,7 +2161,8 @@ details.snoozed .wrow .kind {
 .wcard .kind.k-idea {
   color: var(--wait);
 }
-a.act {
+a.act,
+button.act {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
@@ -2171,11 +2173,15 @@ a.act {
   font-weight: 600;
   text-decoration: none;
 }
+button.act {
+  cursor: pointer;
+}
 a.act.primary {
   background: var(--wait);
   color: #231803;
 }
-a.act.secondary {
+a.act.secondary,
+button.act.secondary {
   background: none;
   color: var(--wait);
   border: 1px solid var(--wait-line);
