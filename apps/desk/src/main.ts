@@ -2,9 +2,15 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 import { type Adapter, createAdapter } from './data';
-import { setConnection, setControls, setLastIssue, start } from './desk';
+import {
+  setConnection,
+  setControls,
+  setLabeller,
+  setLastIssue,
+  start
+} from './desk';
 import { CommandError, checkToken } from './desk/commands';
-import { LinearError, createLinear } from './linear';
+import { LinearError, createLinear, linearMessage } from './linear';
 import {
   type KeyValueStore,
   type Settings,
@@ -34,13 +40,6 @@ const supabaseFor = ({ supabaseUrl, supabaseAnonKey }: Settings) =>
 
 const linearFor = ({ linearKey }: Settings) =>
   createLinear({ key: linearKey, fetch: tauriFetch });
-
-const linearMessage = (error: LinearError): string =>
-  error.code === 'unauthorized'
-    ? 'Linear rejected this key.'
-    : error.code === 'network'
-      ? "Can't reach Linear. Check the connection."
-      : error.message;
 
 const supabaseIssue = (error: SupabaseError): SettingsIssue =>
   error.code === 'unauthorized'
@@ -104,8 +103,9 @@ let adapter: Adapter | undefined;
 
 const startDesk = (settings: Settings): void => {
   adapter?.stop();
+  const linear = linearFor(settings);
   adapter = createAdapter({
-    linear: linearFor(settings),
+    linear,
     supabase: supabaseFor(settings),
     onLive: setConnection,
     onIssue: setLastIssue
@@ -118,6 +118,7 @@ const startDesk = (settings: Settings): void => {
           controlToken: settings.controlToken
         }
   );
+  setLabeller((ticket) => linear.addLabel(ticket, 'agent:ready'));
   start(adapter);
 };
 
