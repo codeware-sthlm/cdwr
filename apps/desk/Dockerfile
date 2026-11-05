@@ -31,7 +31,7 @@ ENV VITE_DESK_SHA=$VITE_DESK_SHA
 # plugins included), which the context leaves out on purpose
 RUN node_modules/.bin/vite build --config apps/desk/vite.config.mts
 
-FROM nginx:1.29-alpine
+FROM nginx:1.31-alpine
 
 COPY apps/desk/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/apps/desk /usr/share/nginx/html
