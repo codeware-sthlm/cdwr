@@ -1,10 +1,10 @@
+import type { Site } from '@codeware/app-headless/data-access';
 import { docHead } from '@codeware/app-headless/util/seo';
 import { RenderDoc } from '@codeware/shared/ui/cms-renderer';
 import type { DocData } from '@codeware/shared/util/payload-utils';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 
 import { loadDoc } from '../server/load-doc';
-import type { Site } from '../server/load-site';
 
 /** Pages, posts and tours: the path says which, the cms says whether it exists */
 export const Route = createFileRoute('/$')({

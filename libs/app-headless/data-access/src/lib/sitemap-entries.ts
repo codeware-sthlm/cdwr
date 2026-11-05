@@ -1,4 +1,7 @@
-import type { SitemapEntry } from '@codeware/app-headless/util/seo';
+import {
+  type SitemapEntry,
+  resolveSiteOrigin
+} from '@codeware/app-headless/util/seo';
 import {
   findPages,
   findPosts,
@@ -6,11 +9,8 @@ import {
 } from '@codeware/shared/util/payload-api';
 import { sitePath } from '@codeware/shared/util/payload-utils';
 
-import { getEnv } from '../env.server';
-
 import { payloadRequestOptions } from './payload-request';
-import { resolveSiteOrigin } from './site-origin';
-import { loadTenantConfig } from './tenant-config';
+import type { ServerContext } from './server-context';
 
 /** Most documents of a kind a sitemap lists; the protocol allows 50 000 URLs */
 const LIMIT = 5000;
@@ -22,21 +22,26 @@ const LIMIT = 5000;
  * is what a crawler may see. Empty entries when the cms cannot be reached or
  * the origin is unknown: a sitemap that fails must not take the site down.
  */
-export async function loadSitemapEntries(): Promise<{
+export async function loadSitemapEntries(
+  getContext: () => ServerContext
+): Promise<{
   origin: string | null;
   entries: Array<SitemapEntry>;
 }> {
   try {
-    const env = getEnv();
+    const ctx = getContext();
+    const { env, requestOrigin } = ctx;
     const base = payloadRequestOptions(env);
-    const tenantConfig = await loadTenantConfig();
+    const tenantConfig = await ctx.loadTenantConfig();
     if (!tenantConfig) {
       return { origin: null, entries: [] };
     }
 
     const origin = resolveSiteOrigin(
       tenantConfig.tenant.domains,
-      env.FLY_APP_NAME
+      env.FLY_APP_NAME,
+      requestOrigin.host,
+      requestOrigin.proto
     );
     if (!origin) {
       return { origin: null, entries: [] };
@@ -82,12 +87,20 @@ export async function loadSitemapEntries(): Promise<{
  *
  * `null` when the cms cannot be reached or the origin is unknown.
  */
-export async function loadSiteOrigin(): Promise<string | null> {
+export async function loadSiteOrigin(
+  getContext: () => ServerContext
+): Promise<string | null> {
   try {
-    const tenantConfig = await loadTenantConfig();
+    const ctx = getContext();
+    const tenantConfig = await ctx.loadTenantConfig();
 
     return tenantConfig
-      ? resolveSiteOrigin(tenantConfig.tenant.domains, getEnv().FLY_APP_NAME)
+      ? resolveSiteOrigin(
+          tenantConfig.tenant.domains,
+          ctx.env.FLY_APP_NAME,
+          ctx.requestOrigin.host,
+          ctx.requestOrigin.proto
+        )
       : null;
   } catch (error) {
     console.error('Failed to load the site origin:', error);

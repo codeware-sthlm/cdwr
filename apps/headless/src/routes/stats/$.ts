@@ -2,7 +2,7 @@ import { proxyStats } from '@codeware/shared/util/umami';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { getEnv } from '../../env.server';
-import { loadTenantConfig } from '../../server/tenant-config';
+import { loadTenantConfig } from '../../server/context';
 
 const handle = ({
   request,

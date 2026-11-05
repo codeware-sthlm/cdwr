@@ -1,14 +1,18 @@
+import {
+  IMAGE_CACHE_CONTROL,
+  loadTenantMark
+} from '@codeware/app-headless/data-access';
 import { faviconSvg } from '@codeware/shared/util/pure';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { IMAGE_CACHE_CONTROL, loadTenantMark } from '../server/tenant-icon';
+import { serverContext } from '../server/context';
 
 /** The tenant's own mark as the favicon, following the tab's colour scheme */
 export const Route = createFileRoute('/site-icon.svg')({
   server: {
     handlers: {
       GET: async () => {
-        const mark = await loadTenantMark();
+        const mark = await loadTenantMark(serverContext);
         const svg = mark ? faviconSvg(mark) : null;
 
         if (!svg) {

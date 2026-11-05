@@ -233,7 +233,7 @@ nx payload cms generate:importmap
 
 #### Content Security Policy
 
-The cms sends one, built by `@codeware/shared/util/csp` in `apps/cms/src/proxy.ts`; `apps/headless` builds its own in `src/server/csp.ts`, from its global request middleware. Framing, plugins, `base-uri` and form targets are always
+The cms sends one, built by `@codeware/shared/util/csp` in `apps/cms/src/proxy.ts`; `apps/headless` builds its own in `@codeware/app-headless/feature/security`, from its global request middleware. Framing, plugins, `base-uri` and form targets are always
 enforced. The full policy — a per-request nonce with `'strict-dynamic'` for scripts — goes out
 `Content-Security-Policy-Report-Only` until `CSP_ENFORCE=true`. A new third-party origin has to be
 added there, or it breaks the site once enforcement is on.
@@ -377,6 +377,14 @@ consumable from npm, so these carry `private: true` and are excluded from `nx re
 - `feature/` — env-loader, seed
 - `ui/` — blocks, components, fields, Lexical plugins, tabs
 - `util/` — access control, db utils, email, env schema, filters, hooks, plugins
+
+**`libs/app-headless/`** — the headless client's code, so `apps/headless` keeps only routes and framework wiring:
+
+- `data-access/` — signed cms requests, tenant config, site and document loading, sitemap entries; each takes a server context the app builds
+- `feature/security` — the request pipeline: CSP, the site gate, debug headers
+- `util/` — env schema, routing, SEO
+
+No lib imports `@tanstack/react-start`: server functions, response statuses and request headers stay in the app.
 
 **`libs/shared/ui/`** — React component library (shadcn/Radix UI based): cms-renderer, code highlighting, color-picker, copy-button, file-area, icon-picker, image, primitives, shadcn components, video.
 
