@@ -523,8 +523,11 @@ GQL
 # jq's stderr goes to a file, since every call that can fail runs in a command substitution; each
 # call overwrites it, and a failure still prints it for the calls nobody checks. watch_err prints
 # its first line as " (<line>)", cut to 120 characters, or nothing.
+# watch.jq sits beside this script: the installed copy under the queue home, or the checkout's
+# when an attended-only machine's `status` runs the checkout's run.sh
+WATCH_DIR="${0:A:h}"
 watch() {
-  jq -L "$HOME_DIR" "$@" 2> "$LOGS/watch.$$.err" && return 0
+  jq -L "$WATCH_DIR" "$@" 2> "$LOGS/watch.$$.err" && return 0
   local st=$?
   cat "$LOGS/watch.$$.err" >&2
   return $st
@@ -749,6 +752,11 @@ attended() {
   watch_state "$HOME_DIR/watch.json"
   state="$WATCH_STATE"
   attended_watch="$state"
+  if $check; then
+    # Where the watch state came from, and the state itself, for `status`
+    print -r -- "watch-source: $WATCH_SOURCE"
+    print -r -- "watch-state: $state"
+  fi
   resp="$(linear "$ATTENDED_QUERY" | attended_nodes)"
   if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then
     note "warn: attended: Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
@@ -832,9 +840,6 @@ attended() {
       decision="$(jq -nc --arg r "$why" '{action: "skip", reason: $r, key: null}')"; }
   if $check; then
     print -r -- "attended: $attended_line"
-    # Where the watch state came from, and the state itself, for `status`
-    print -r -- "watch-source: $WATCH_SOURCE"
-    print -r -- "watch-state: ${attended_watch:-{\}}"
     print -r -- "launch: $(jq -r '.action + (if .reason then " (" + .reason + ")" else "" end)' <<<"$decision")"
     [[ -n "$queue_view" ]] && print -r -- "queue-view: $queue_view"
     return 0

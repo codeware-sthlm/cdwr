@@ -118,6 +118,9 @@ telemetry_env() {
 # checkout's tools/cdwr/.env, else the main checkout's, where a linked worktree has it
 telemetry_env_search() {
   local checkout=$1 common env_file
+  # A key the shell exported stays out of every child's environment, git's included, whether
+  # or not a file is read
+  [[ -z "${AGENT_SUPABASE_SERVICE_KEY+x}" ]] || typeset +x AGENT_SUPABASE_SERVICE_KEY
   common="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
   for env_file in "${AGENT_QUEUE_ENV_FILE:-}" "$checkout/tools/cdwr/.env" "${common:+${common:h}/tools/cdwr/.env}"; do
     [[ -n "$env_file" ]] && telemetry_env "$env_file"

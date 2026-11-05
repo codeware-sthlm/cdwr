@@ -358,10 +358,12 @@ describe('run.sh telemetry', () => {
     expect(SCRIPT).not.toContain(
       '"$HOME_DIR/watch.json" 2>/dev/null || print \'{}\')"'
     );
-    expect(SCRIPT).toContain('print -r -- "watch-source: $WATCH_SOURCE"');
-    expect(SCRIPT).toContain(
-      'print -r -- "watch-state: ${attended_watch:-{\\}}"'
-    );
+    expect(attended).toContain('print -r -- "watch-source: $WATCH_SOURCE"');
+    expect(attended).toContain('print -r -- "watch-state: $state"');
+    // Printed before the Linear read, so a Linear failure still reports the source
+    expect(
+      attended.indexOf('print -r -- "watch-source: $WATCH_SOURCE"')
+    ).toBeLessThan(attended.indexOf('resp="$(linear "$ATTENDED_QUERY"'));
   });
 
   it('sends one runs row on exit, detached, never on --check', () => {
@@ -1366,7 +1368,7 @@ describe('run.sh watch.jq errors', () => {
         writeFileSync(join(dir, 'watch.jq'), `def long: ${'x'.repeat(200)};\n`);
         const body = [
           'set -euo pipefail',
-          `HOME_DIR="${dir}" LOGS="${dir}"`,
+          `HOME_DIR="${dir}" LOGS="${dir}" WATCH_DIR="${dir}"`,
           fn('watch'),
           fn('watch_err'),
           'out="$(watch -n \'include "watch"; long\')" || print -r -- "fail:$(watch_err)|"',
