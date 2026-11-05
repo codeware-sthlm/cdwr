@@ -84,6 +84,7 @@ const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
 const WHY: ReadonlyMap<string, string> = new Map([
   ['answered', 'Your reply is in.'],
   ['review feedback', 'Its PR has review comments to address.'],
+  ['conflicts with main', 'Its PR conflicts with main and needs a rebase.'],
   ['take over', 'Its claim went stale.'],
   ['resume', ''],
   ['ready', '']
@@ -268,7 +269,7 @@ const reasonState = (x: QueueNext): string =>
     ? 'ready'
     : x.reason === 'answered'
       ? 'answered'
-      : x.reason === 'review feedback'
+      : x.reason === 'review feedback' || x.reason === 'conflicts with main'
         ? 'review'
         : 'working';
 
@@ -300,7 +301,7 @@ const renderNext = (m: Model, state: DeskState): string => {
     ? `<div class="group"><h3>Held by the limit · ${m.held.tickets.length}</h3><ul>${m.held.tickets.map((id) => itemHTML(details, m.get(id), { state: 'plain', side: '<span class="chip held">held</span>' })).join('')}</ul>${freeHTML(m)}</div>`
     : '';
   return `<div class="group"><h3>Next · ${m.next.length}</h3>${next}</div>${parked}${held}
-    <p class="rule">A session resumes its own work first, then takes over stale claims, answered tickets and review feedback, then new <code>agent:ready</code> tickets while the limit has room. A ticket parked on CI or a Copilot review resumes when the wait resolves. With no session alive, the scheduler starts one for anything but a new ready ticket, which it plans itself.</p>`;
+    <p class="rule">A session resumes its own work first, then takes over stale claims, answered tickets and review feedback, then rebases a review PR that conflicts with main, then takes new <code>agent:ready</code> tickets while the limit has room. A ticket parked on CI or a Copilot review resumes when the wait resolves. With no session alive, the scheduler starts one for anything but a new ready ticket, which it plans itself.</p>`;
 };
 
 const handoffCard = (

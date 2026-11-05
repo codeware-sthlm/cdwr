@@ -483,6 +483,11 @@ describe('parseAttended', () => {
       { verdict: 'idle', text: 'waits on review; limit 3/5' }
     ],
     [
+      'a multi-word reason',
+      'Attended: run now: COD-4 conflicts with main',
+      { verdict: 'run now', text: 'COD-4 conflicts with main' }
+    ],
+    [
       'a mention tag',
       'Attended: run now: <issue id="x">COD-3</issue> ready',
       { verdict: 'run now', text: 'COD-3 ready' }

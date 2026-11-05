@@ -1234,6 +1234,7 @@ details.snoozed .wrow .kind {
   color: var(--wait);
 }
 .chip.pr,
+.chip.conflict,
 .chip.feedback {
   background: var(--review-soft);
   color: var(--review);
