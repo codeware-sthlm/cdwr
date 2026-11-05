@@ -545,8 +545,10 @@ Then on the iPhone:
 2. Open `https://cdwr-nuc.<tailnet>.ts.net/` in Safari, with Tailscale connected.
 3. Share → Add to Home Screen. It opens standalone, full height, with the desk's icon.
 4. In its Settings sheet, enter the Supabase url and publishable key and the Linear key, as on the Mac.
-5. For the controls, add a token of the phone's own to `DESK_CONTROL_TOKENS` (the `desk-command`
-   function's secret) and enter it in the same sheet.
+5. For the controls, make the phone a token of its own the way the Mac got one (the recipe
+   under the agent queue's desk-command section): the secret `DESK_CONTROL_TOKENS` takes the
+   token's SHA-256 under a new device name, and the Settings sheet on the phone takes the token
+   itself.
 
 Nothing is cached offline: without Tailscale connected the page does not load, and a reload needs it.
 
