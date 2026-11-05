@@ -120,6 +120,7 @@ const goodView = (
   held: { tickets: [], free: [] },
   parked: [],
   blocked: [],
+  renovate: [],
   table: { before: [], label: [], after: [] }
 });
 

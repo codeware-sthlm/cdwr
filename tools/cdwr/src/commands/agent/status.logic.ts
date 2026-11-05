@@ -180,6 +180,7 @@ const ATTENDED_ROWS: ReadonlySet<string> = new Set([
   'held',
   'blocked',
   'parked',
+  'renovate',
   'on your table'
 ]);
 

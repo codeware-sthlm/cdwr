@@ -18,6 +18,8 @@ export const OTHER_REPOS: readonly string[] = ['nx-plugins', 'enjinex'];
 
 export const LINEAR_ISSUE = 'https://linear.app/codeware/issue/';
 
+export const GH_PR = 'https://github.com/codeware-sthlm/cdwr/pull/';
+
 export const ROLES = ['planning', 'orchestrating', 'implementing'] as const;
 export type Role = (typeof ROLES)[number];
 

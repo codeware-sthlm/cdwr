@@ -87,6 +87,14 @@ export type QueueParked = {
   outcome?: string | null;
 };
 
+/** A Renovate PR the queue tends or that needs a hand: failing checks, a conflict, or a ticket tending it */
+export type QueueRenovate = {
+  pr: PrRef;
+  title: string;
+  state: 'failing' | 'conflicting' | 'tended';
+  ticket: string | null;
+};
+
 export type QueueBefore = { ticket: string; kind?: string };
 
 /** An open sub-issue whose blockers are done, waiting for `agent:ready`; not held by the limit */
@@ -113,5 +121,6 @@ export type QueueView = {
   parked: QueueParked[];
   /** Answered plans held by open blockers; they are in neither `next` nor `table.before` */
   blocked: { ticket: string; blockers: string[] }[];
+  renovate: QueueRenovate[];
   table: { before: QueueBefore[]; label: QueueLabel[]; after: QueueAfter[] };
 };

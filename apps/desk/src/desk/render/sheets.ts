@@ -44,11 +44,12 @@ import {
   unattributedTotal
 } from '../spend';
 import type { DeskState, Detail, SheetId } from '../state';
-import type { Job, QueueNext, SessionState } from '../types';
+import type { Job, QueueNext, QueueRenovate, SessionState } from '../types';
 
 import { chartSlot, gauge, sparkline } from './charts';
 import {
   GH_PR,
+  chip,
   empty,
   hostName,
   idLink,
@@ -86,6 +87,7 @@ const WHY: ReadonlyMap<string, string> = new Map([
   ['review feedback', 'Its PR has review comments to address.'],
   ['conflicts with main', 'Its PR conflicts with main and needs a rebase.'],
   ['merged comment', 'A comment on its merged ticket waits for a suggestion.'],
+  ['renovate', 'This Renovate PR needs a hand.'],
   ['take over', 'Its claim went stale.'],
   ['resume', ''],
   ['ready', '']
@@ -293,6 +295,16 @@ const freeHTML = (m: Model): string => {
     .join('')}</ul>`;
 };
 
+/** One Renovate PR: its number and title link to GitHub, and the ticket tending it to Linear */
+const renovateHTML = (r: QueueRenovate): string => `<li class="item working">
+    <span class="rank"></span>
+    <div class="main">
+      <a class="title" href="${GH_PR + esc(r.pr)}" target="_blank" rel="noopener"><span class="id">#${esc(r.pr)}</span>${esc(r.title)}</a>
+      <div class="meta">${r.state === 'tended' && r.ticket ? `Tended by ${idLink(r.ticket)}` : r.state === 'conflicting' ? 'Conflicts with main' : 'Checks failed'}</div>
+    </div>
+    <span class="side">${chip(r.state === 'tended' ? 'resume' : 'conflict', esc(r.state))}</span>
+  </li>`;
+
 const renderNext = (m: Model, state: DeskState): string => {
   if (!m.v) return empty('No queue view yet.');
   const { details } = state;
@@ -304,10 +316,13 @@ const renderNext = (m: Model, state: DeskState): string => {
   const parked = m.parked.length
     ? `<div class="group"><h3>Parked on a wait · ${m.parked.length}</h3><ul>${m.parked.map((p) => itemHTML(details, m.get(p.ticket), { state: 'working', side: `${prn(prOf(details, p.ticket, p.pr))} <span class="chip parked">${esc(waitName(p.wait) || p.wait)}</span>`, note: `${parkedText(p)}${p.pr ? ' for #' + esc(p.pr) : ''}, since ${p.since ? hhmm(Date.parse(p.since)) : '?'}. It resumes when that finishes.` })).join('')}</ul></div>`
     : '';
+  const renovate = m.renovate.length
+    ? `<div class="group"><h3>Renovate PRs · ${m.renovate.length}</h3><ul>${m.renovate.map((r) => renovateHTML(r)).join('')}</ul></div>`
+    : '';
   const held = m.held.tickets.length
     ? `<div class="group"><h3>Held by the limit · ${m.held.tickets.length}</h3><ul>${m.held.tickets.map((id) => itemHTML(details, m.get(id), { state: 'plain', side: '<span class="chip held">held</span>' })).join('')}</ul>${freeHTML(m)}</div>`
     : '';
-  return `<div class="group"><h3>Next · ${m.next.length}</h3>${next}</div>${parked}${held}
+  return `<div class="group"><h3>Next · ${m.next.length}</h3>${next}</div>${parked}${renovate}${held}
     <p class="rule">A session resumes its own work first, then takes over stale claims, answered tickets and review feedback, then rebases a review PR that conflicts with main, then answers comments on merged tickets, then takes new <code>agent:ready</code> tickets while the limit has room. A ticket parked on CI or a Copilot review resumes when the wait resolves. With no session alive, the scheduler starts one for anything but a new ready ticket, which it plans itself.</p>`;
 };
 

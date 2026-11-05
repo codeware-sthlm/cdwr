@@ -531,6 +531,7 @@ describe('validateQueueView', () => {
       held: { tickets: [], free: [] },
       parked: [],
       blocked: [],
+      renovate: [],
       table: { before: [], label: [], after: [] }
     });
   });
@@ -560,6 +561,9 @@ describe('validateQueueView', () => {
       },
       parked: [{ ticket: 'COD-4', wait: 'checks', pr: 7, resolved: false }],
       blocked: [{ ticket: 'COD-8', blockers: ['COD-3', 'COD-9'] }],
+      renovate: [
+        { pr: 754, title: 'Update vite', state: 'failing', ticket: null }
+      ],
       table: {
         before: [{ ticket: 'COD-5', kind: 'plan' }],
         label: [{ ticket: 'COD-7', parent: 'COD-1', blockers: [] }],
@@ -632,6 +636,24 @@ describe('validateQueueView', () => {
         table: {}
       })?.blocked
     ).toEqual([{ ticket: 'COD-8', blockers: [] }]);
+  });
+
+  it('reads renovate, dropping what is malformed and defaulting a missing key', () => {
+    const renovate = (r: unknown) =>
+      validateQueueView({ limit, renovate: r, table: {} })?.renovate;
+    expect(
+      renovate([
+        { pr: 662, title: 'Update zod', state: 'tended', ticket: 'COD-740' },
+        { pr: 754, state: 'failing' },
+        { pr: 800, title: 'x', state: 'nap' },
+        { title: 'no pr', state: 'failing' }
+      ])
+    ).toEqual([
+      { pr: 662, title: 'Update zod', state: 'tended', ticket: 'COD-740' },
+      { pr: 754, title: '', state: 'failing', ticket: null }
+    ]);
+    expect(renovate(undefined)).toEqual([]);
+    expect(renovate(null)).toEqual([]);
   });
 
   it('reads table.label, dropping what is malformed', () => {

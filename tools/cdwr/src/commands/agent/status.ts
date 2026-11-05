@@ -35,6 +35,7 @@ import {
   formatImplement,
   formatNext,
   formatParked,
+  formatRenovate,
   formatTable,
   formatWatching,
   lastSchedulerLine,
@@ -284,6 +285,7 @@ export default defineCommand({
               ),
               row(true, 'blocked', formatBlocked(report.queueView)),
               row(true, 'parked', formatParked(report.queueView)),
+              row(true, 'renovate', formatRenovate(report.queueView)),
               row(true, 'on your table', formatTable(report.queueView))
             ])
     ];

@@ -81,6 +81,7 @@ const view = (over: Partial<QueueView> = {}): QueueView => ({
   held: { tickets: ['COD-9'], free: [{ action: 'review', ticket: 'COD-3' }] },
   parked: [{ ticket: 'COD-2', wait: 'ci', pr: 5 }],
   blocked: [],
+  renovate: [],
   table: {
     before: [{ ticket: 'COD-4', kind: 'plan' }],
     label: [{ ticket: 'COD-6', parent: 'COD-<1>', blockers: ['COD-2'] }],
@@ -848,6 +849,37 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(handoffs).toContain('Merged, hand-offs left · 1');
     expect(handoffs).toContain('check it');
     expect(handoffs).toContain('Hand-off checklist:');
+  });
+
+  it('list Renovate PRs on the next sheet with GitHub and ticket links, and nothing without any', () => {
+    const state = filled();
+    expect(SHEETS.next.body(model(state, NOW), state, NOW)).not.toContain(
+      'Renovate PRs'
+    );
+    state.data.runs = runs(
+      view({
+        next: [{ ticket: 'PR 754', reason: 'renovate', detail: 'failing' }],
+        held: { tickets: ['PR 754'], free: [] },
+        renovate: [
+          {
+            pr: 662,
+            title: 'Update zod',
+            state: 'tended',
+            ticket: 'COD-740'
+          },
+          { pr: 754, title: 'Update vite', state: 'failing', ticket: null }
+        ]
+      })
+    );
+    const html = SHEETS.next.body(model(state, NOW), state, NOW);
+    expect(html).toContain('Renovate PRs · 2');
+    expect(html).toContain(
+      'href="https://github.com/codeware-sthlm/cdwr/pull/754"'
+    );
+    expect(html).toContain('Update vite');
+    expect(html).toContain('Tended by');
+    expect(html).toContain('/issue/COD-740"');
+    expect(html).not.toContain('/issue/PR 754');
   });
 
   it('list the review sheet in merge order, queued without an event', () => {
