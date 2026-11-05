@@ -240,7 +240,9 @@ optional, and without them nothing is sent. A failed call is a warn line, never 
 queue writes no Linear document; the Agent Desk reads these tables. The `queue_state` row also
 carries `watch`, the host's `watch.json` (the PRs of agent-labelled tickets with their state and
 unresolved threads), written in its own patch after the row; it needs the migration
-`20261105120000_queue_state_watch.sql`.
+`20261105120000_queue_state_watch.sql`. It carries `renovate`, the host's `renovate.json`, the same
+way, after `20261105210000_queue_state_renovate.sql`; until that is applied only its patch fails, and
+a Mac reads the row without it.
 
 Linear changes reach the desk through the same project. A Linear webhook (team Codeware, Issue and
 Comment events) calls the Edge Function `linear-webhook` (`agent-queue/supabase/functions`). The function
@@ -411,6 +413,19 @@ warn and is tried again on the next run; the comment follows only a close Linear
 `~/.cdwr/agent-queue/closed-parents` lists every parent closed this way, so one you reopen stays
 open. Linear's own
 parent auto-close stays off, since it would also close epics no agent split started.
+
+The Renovate watch comes next, and writes nothing to Linear. It reads Renovate's open PRs
+(`gh pr list --author app/renovate`) and the `renovate`-labelled tickets with their attachments, and
+`watch.jq` `renovate_step` gives each PR a state: `tended` when a ticket carries the PR as an
+attachment (it is never offered again), `failing` when a check failed, `conflicting` when it
+conflicts with main and carries a commit not by Renovate (Renovate rebases its own unmodified
+branches), `fine` otherwise. `~/.cdwr/agent-queue/renovate.json` keeps one entry per open PR, and a
+PR that turns failing or conflicting sends one `info` notice. An untended broken PR is queue work,
+`PR 754` in the queue view after merged comments and before ready tickets, held by the limit like a
+new ticket. A failing one launches an implementing session, which diagnoses it and files a
+`renovate` ticket; a conflict waits for an attended one. `status` shows a `renovate` row and the desk
+a "Renovate PRs" group. A mechanical fix goes on a `cod-<n>-…` branch cut from Renovate's, with its
+own PR, never on Renovate's branch: Renovate automerges an edited non-major PR once it is green.
 
 `gh` runs as you here, so the script only lists and queries; a spec fails on anything else, and on
 a Linear mutation beyond its three named ones (`RELABEL`, `CLOSE_PARENT`, `CLOSE_COMMENT`), each
