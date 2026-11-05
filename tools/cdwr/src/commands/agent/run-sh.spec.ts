@@ -861,6 +861,12 @@ describe('run.sh close_parents', () => {
     expect(source).toContain("read -r -d '' CLOSE_COMMENT");
   });
 
+  it('reads only sub-issues whose parent is still open', () => {
+    expect(source).toContain(
+      'parent: { null: false, state: { type: { nin: ["completed", "canceled"] } } }'
+    );
+  });
+
   it.skipIf(!canRun)('closes a ready parent once, then comments', () => {
     const result = run({ data: { issueUpdate: { success: true } } });
     expect(result.stdout).toContain('rc=0');
