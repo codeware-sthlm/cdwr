@@ -188,12 +188,14 @@ def renovate_step:
              | any(test("renovate"; "i")) | not)) as $modified
       | (if .mergeable == "CONFLICTING" then true elif .mergeable == "MERGEABLE" then false
          else $p.conflicting == true end) as $conflicting
-      | (if $tended[$k] != null then "tended"
+      # A ticket once seen keeps tending its PR: past the query's page it would drop out
+      | ($tended[$k] // $p.ticket // null) as $ticket
+      | (if $ticket != null then "tended"
          elif $conflicting and $modified then "conflicting"
          elif $failing then "failing"
          else "fine" end) as $state
       | { pr: .number, title: (.title // ""), url: (.url // null), sha: (.headRefOid // null),
-          state: $state, ticket: ($tended[$k] // null), modified: $modified, conflicting: $conflicting,
+          state: $state, ticket: $ticket, modified: $modified, conflicting: $conflicting,
           at: (if $p.state == $state and $p.sha == .headRefOid then ($p.at // $in.at) else $in.at end),
           was: ($p.state // null) } ] as $entries
   | {

@@ -3286,6 +3286,19 @@ describe('renovate_step', () => {
       expect(r.notices).toEqual([]);
     });
 
+    it('keeps the ticket a previous run saw, though the query no longer lists it', () => {
+      const r = step(
+        [pr({ statusCheckRollup: [{ conclusion: 'FAILURE' }] })],
+        [],
+        { '754': { state: 'tended', sha: 'abc', at: AT, ticket: 'COD-9' } }
+      );
+      expect(r.state['754']).toMatchObject({
+        state: 'tended',
+        ticket: 'COD-9'
+      });
+      expect(r.notices).toEqual([]);
+    });
+
     it('ignores another pull number', () => {
       const r = step(
         [pr({ statusCheckRollup: [{ conclusion: 'FAILURE' }] })],
