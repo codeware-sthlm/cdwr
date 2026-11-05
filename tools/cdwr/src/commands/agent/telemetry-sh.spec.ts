@@ -334,6 +334,19 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
     });
   });
 
+  describe('telemetry_env_search', () => {
+    it('unexports the service key before searching, even when nothing is read', async () => {
+      const out = await zsh(
+        {
+          AGENT_SUPABASE_URL: 'https://x.supabase.co',
+          AGENT_SUPABASE_SERVICE_KEY: 'k'
+        },
+        `telemetry_env_search /nonexistent; print -r -- "\${(t)AGENT_SUPABASE_SERVICE_KEY}"`
+      );
+      expect(out.stdout).toBe('scalar\nrc=0');
+    });
+  });
+
   describe('telemetry_queue_state', () => {
     it('upserts the host row on host, with the view as jsonb', async () => {
       const view = JSON.stringify({ next: 'COD-9', limit: { max: 5 } });
