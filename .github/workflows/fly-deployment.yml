@@ -445,7 +445,6 @@ jobs:
           infisical-client-id: ${{ secrets.INFISICAL_READ_CLIENT_ID }}
           infisical-client-secret: ${{ secrets.INFISICAL_READ_CLIENT_SECRET }}
           infisical-project-id: ${{ secrets.INFISICAL_PROJECT_ID }}
-          infisical-site: ${{ vars.INFISICAL_SITE }}
           # Shared runtime environment variables. The per-app SENTRY_DSN,
           # SENTRY_PROJECT and SENTRY_RELEASE are added by the action from each
           # app's `sentry` details.
