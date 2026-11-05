@@ -925,12 +925,62 @@ table.act {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.ct-step,
+.ct-wait,
+.ct-then,
+.ct-plan,
+.ct-also {
+  margin: 0;
+  font: 11px var(--font-mono);
+  color: var(--muted);
+}
+.ct-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ct-step .bar {
+  flex: none;
+  width: 60px;
+}
+.ct-step span {
+  flex: none;
+}
+.ct-step .ct-next {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ct-wait a.id,
+.ct-then a.id {
+  color: inherit;
+}
+.ct-plan .bad {
+  color: var(--block);
+}
+.feed-h {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 600;
+}
 .feed {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+.feed-h + .feed {
+  padding-top: 0;
+  border-top: 0;
 }
 .feed li {
   display: flex;
@@ -1058,8 +1108,15 @@ table.act {
   .ct-sub {
     font-size: 12px;
   }
-  .feed {
+  .feed,
+  .feed-h + .feed {
     padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .feed-h,
+  .ct-then,
+  .ct-also {
+    display: none;
   }
   .feed li:nth-child(n + 2),
   .waiting > .wrows li:nth-child(n + 3) {

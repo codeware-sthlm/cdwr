@@ -16,6 +16,7 @@ import {
   hhmm,
   inline,
   mtok,
+  planWhen,
   plural,
   seenAgo,
   shortAge,
@@ -665,12 +666,6 @@ const renderTimers = (m: Model): string =>
 // ---------- Plan usage ----------
 
 const WINDOW_TITLE = { five_hour: '5-hour window', seven_day: '7-day window' };
-
-/** A time for a reset or a run-out: the clock time today, with the weekday when it is another day */
-const planWhen = (at: Date, now: Date): string =>
-  at.toDateString() === now.toDateString()
-    ? hhmm(at.getTime())
-    : `${at.toLocaleDateString([], { weekday: 'short' })} ${hhmm(at.getTime())}`;
 
 const planWindowHTML = (w: PlanWindow, now: Date): string => {
   const title = WINDOW_TITLE[w.kind];
