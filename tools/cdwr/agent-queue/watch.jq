@@ -61,9 +61,13 @@ def handoffs:
         end
     end;
 
-# Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved }.
+# Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved, conflicting,
+# mergeStateStatus }.
 # unresolved counts open review threads a person spoke last in: bots (Copilot) and the agent's
 # own replies, which leave a thread open on purpose, don't count.
+# conflicting is true for CONFLICTING, false for MERGEABLE and null for UNKNOWN (GitHub computes
+# it lazily), which step resolves to the previous value. A conflict beats failing checks: they are
+# stale, and the rebase reruns them. mergeStateStatus is only recorded.
 def pr_state:
   (.timelineItems.nodes // [] | last) as $r
   | ((.commits.nodes // [] | last | .commit.statusCheckRollup.state) // null) as $ci
@@ -71,6 +75,7 @@ def pr_state:
       state: (
         if .state == "MERGED" then "merged"
         elif .state == "CLOSED" then "closed"
+        elif .mergeable == "CONFLICTING" then "conflicting"
         elif $ci == "FAILURE" or $ci == "ERROR" then "failing"
         elif .mergeQueueEntry != null then "queued"
         else "open"
@@ -80,7 +85,9 @@ def pr_state:
       unresolved: [ (.reviewThreads.nodes // [])[] | select(.isResolved | not)
                     | (.comments.nodes // [] | last)
                     | select(. != null and .author.__typename != "Bot"
-                             and ((.body // "") | startswith("**Agent") | not)) ] | length
+                             and ((.body // "") | startswith("**Agent") | not)) ] | length,
+      conflicting: (if .mergeable == "CONFLICTING" then true elif .mergeable == "MERGEABLE" then false else null end),
+      mergeStateStatus: (.mergeStateStatus // null)
     };
 
 # One watch step: notices to send, whether to relabel, and the entry to store for the ticket.
@@ -88,11 +95,17 @@ def pr_state:
 # $in.agentLabel is the ticket's agent label (agent:review when absent or empty). Outside review
 # a session still holds the ticket, so only a merge or a close notifies; a merge there asks for
 # the relabel to agent:review until run.sh has stored `relabelled` for that PR.
+# A conflict that reads UNKNOWN keeps the previous value, so the state stays conflicting and
+# nothing is sent; a merged or closed PR conflicts with nothing.
 def step:
   . as $in
-  | $in.id as $id | $in.pr as $pr | $in.now as $now
+  | $in.id as $id | $in.pr as $pr
   | (($in.agentLabel // "") | IN("", "agent:review")) as $review
   | (if $in.prev != null and $in.prev.pr == $pr then $in.prev else { state: "open", removedAt: null } end) as $prev
+  | (if $in.now.state | IN("merged", "closed") then false
+     elif $in.now.conflicting == null then $prev.conflicting == true
+     else $in.now.conflicting end) as $conflicting
+  | ($in.now + (if $conflicting then { state: "conflicting" } else {} end)) as $now
   | (if $review and $now.removedAt != null
         and ($prev.removedAt == null or $now.removedAt > $prev.removedAt)
         and ($now.state != "merged" and $now.state != "closed")
@@ -106,6 +119,8 @@ def step:
   | (if $now.state == $prev.state then []
      elif $now.state == "failing" then
        (if ($removal | length) > 0 or ($review | not) then [] else [ { level: "action", message: "\($id): PR #\($pr) has failing checks" } ] end)
+     elif $now.state == "conflicting" then
+       (if ($removal | length) > 0 or ($review | not) then [] else [ { level: "action", message: "\($id): PR #\($pr) conflicts with main" } ] end)
      elif $now.state == "merged" then
        (if ($in.handoffs | length) > 0
         then [ { level: "action", message: "\($id) merged: hand-offs left: \($in.handoffs | join("; "))" } ]
@@ -116,11 +131,13 @@ def step:
       notices: ($removal + $change),
       relabel: ($now.state == "merged" and ($review | not) and ($prev.relabelled != true)),
       # Outside review only a merge or a close is stored, so a check that failed or a removal
-      # from the merge queue still notifies once the ticket reaches review
+      # from the merge queue still notifies once the ticket reaches review. conflicting is stored
+      # whatever the label, so the queue view sees it.
       entry: ({ pr: $pr,
                 state: (if $review or ($now.state | IN("merged", "closed")) then $now.state else $prev.state end),
                 removedAt: (if $review then $now.removedAt // $prev.removedAt else $prev.removedAt end),
-                unresolved: ($now.unresolved // 0), at: $in.at }
+                unresolved: ($now.unresolved // 0), conflicting: $conflicting,
+                mergeStateStatus: ($now.mergeStateStatus // null), at: $in.at }
               + (if $prev.relabelled == true then { relabelled: true } else {} end))
     };
 
@@ -362,6 +379,15 @@ def queue_view($now; $limit; $watch; $session; $waits):
   | ([ $all[] | select(agent_label == "agent:review" and is_open and (.identifier | IN($parkIds[]) | not)
                        and review_feedback($watch)) ] | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "review feedback", detail: null })) as $fb
+  # A review PR that conflicts with main is rebased; with review feedback it is listed there only
+  | ($fb | map(.ticket)) as $fbIds
+  | ([ $all[] | select(agent_label == "agent:review" and is_open
+                       and (.identifier | IN($parkIds[]) | not) and (.identifier | IN($fbIds[]) | not)
+                       and $watch[.identifier].conflicting == true
+                       and (($watch[.identifier].state // "open") | IN("merged", "closed") | not)) ]
+     | sort_by(queue_order)
+     | map({ ticket: .identifier, reason: "conflicts with main",
+             detail: ($watch[.identifier].pr | if . == null then null else "PR #\(.)" end) })) as $conf
   | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not)) ] | sort_by(queue_order)
      | map(.identifier)) as $rdy
   | ($lu.used >= $limit) as $full
@@ -374,7 +400,7 @@ def queue_view($now; $limit; $watch; $session; $waits):
       at: ($now | todateiso8601),
       limit: { used: $lu.used, max: $limit },
       session: $session,
-      next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb
+      next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb + $conf
              + (if $full then [] else $rdy | map({ ticket: ., reason: "ready", detail: null }) end)),
       held: {
         tickets: (if $full then $rdy else [] end),

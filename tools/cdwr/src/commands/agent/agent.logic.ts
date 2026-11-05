@@ -932,6 +932,7 @@ export const queueViewSchema = z.object({
         'take over',
         'answered',
         'review feedback',
+        'conflicts with main',
         'parked wait resolved',
         'ready'
       ]),

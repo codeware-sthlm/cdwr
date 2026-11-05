@@ -507,6 +507,8 @@ query($n: Int!) {
     pullRequest(number: $n) {
       state
       mergedAt
+      mergeable
+      mergeStateStatus
       mergeQueueEntry { state }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
       reviewThreads(first: 100) {

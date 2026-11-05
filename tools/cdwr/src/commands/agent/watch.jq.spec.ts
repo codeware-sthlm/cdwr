@@ -282,7 +282,9 @@ describe('pr_state', () => {
       state: 'open',
       removedAt: '2026-01-01T00:00:00Z',
       removedReason: 'FAILED_CHECKS',
-      unresolved: 0
+      unresolved: 0,
+      conflicting: null,
+      mergeStateStatus: null
     });
   });
 
@@ -291,7 +293,94 @@ describe('pr_state', () => {
       state: 'open',
       removedAt: null,
       removedReason: null,
-      unresolved: 0
+      unresolved: 0,
+      conflicting: null,
+      mergeStateStatus: null
+    });
+  });
+
+  describe('conflicting', () => {
+    const conflict = (
+      mergeable: string | undefined,
+      over: Record<string, unknown> = {},
+      rollup?: string | null
+    ) =>
+      pr(
+        { ...(mergeable === undefined ? {} : { mergeable }), ...over },
+        rollup
+      );
+    const out = (p: unknown) =>
+      run('pr_state', p) as {
+        state: string;
+        conflicting: boolean | null;
+        mergeStateStatus: string | null;
+      };
+
+    it('CONFLICTING is conflicting', () => {
+      const r = out(conflict('CONFLICTING', {}, 'SUCCESS'));
+      expect(r.state).toBe('conflicting');
+      expect(r.conflicting).toBe(true);
+    });
+
+    it('conflicting beats failing', () => {
+      expect(out(conflict('CONFLICTING', {}, 'FAILURE')).state).toBe(
+        'conflicting'
+      );
+    });
+
+    it('conflicting beats queued', () => {
+      expect(
+        out(
+          conflict(
+            'CONFLICTING',
+            { mergeQueueEntry: { state: 'QUEUED' } },
+            'SUCCESS'
+          )
+        ).state
+      ).toBe('conflicting');
+    });
+
+    it.each([
+      ['MERGED', 'merged'],
+      ['CLOSED', 'closed']
+    ])('%s beats conflicting', (prState, expected) => {
+      const r = out(conflict('CONFLICTING', { state: prState }, 'SUCCESS'));
+      expect(r.state).toBe(expected);
+      expect(r.conflicting).toBe(true);
+    });
+
+    it('MERGEABLE is conflicting false', () => {
+      const r = out(conflict('MERGEABLE', {}, 'SUCCESS'));
+      expect(r.state).toBe('open');
+      expect(r.conflicting).toBe(false);
+    });
+
+    it('MERGEABLE does not hide failing checks', () => {
+      expect(out(conflict('MERGEABLE', {}, 'FAILURE')).state).toBe('failing');
+    });
+
+    it.each([
+      ['UNKNOWN', 'UNKNOWN'],
+      ['missing', undefined]
+    ])('%s is null', (_name, mergeable) => {
+      const r = out(conflict(mergeable, {}, 'SUCCESS'));
+      expect(r.state).toBe('open');
+      expect(r.conflicting).toBeNull();
+    });
+
+    it('carries mergeStateStatus', () => {
+      expect(
+        out(conflict('CONFLICTING', { mergeStateStatus: 'DIRTY' }))
+          .mergeStateStatus
+      ).toBe('DIRTY');
+      expect(
+        out(conflict('MERGEABLE', { mergeStateStatus: 'CLEAN' }))
+          .mergeStateStatus
+      ).toBe('CLEAN');
+    });
+
+    it('mergeStateStatus is null when missing', () => {
+      expect(out(conflict('MERGEABLE')).mergeStateStatus).toBeNull();
     });
   });
 
@@ -344,12 +433,15 @@ describe('step', () => {
     removedAt: string | null;
     removedReason: string | null;
     unresolved?: number;
+    conflicting?: boolean | null;
+    mergeStateStatus?: string | null;
   };
   type Prev = {
     pr: number;
     state: string;
     removedAt: string | null;
     relabelled?: boolean;
+    conflicting?: boolean;
   } | null;
 
   const now = (state: string, over: Partial<Now> = {}): Now => ({
@@ -653,6 +745,8 @@ describe('step', () => {
         state: 'queued',
         removedAt: '2026-04-01T00:00:00Z',
         unresolved: 0,
+        conflicting: false,
+        mergeStateStatus: null,
         at: '2026-05-01T00:00:00Z'
       });
     });
@@ -665,6 +759,8 @@ describe('step', () => {
         state: 'open',
         removedAt: '2026-03-01T00:00:00Z',
         unresolved: 0,
+        conflicting: false,
+        mergeStateStatus: null,
         at: '2026-05-01T00:00:00Z'
       });
     });
@@ -672,15 +768,139 @@ describe('step', () => {
     it('is null removedAt when neither has one', () => {
       expect(step(now('open'), null).entry['removedAt']).toBeNull();
     });
+
+    it('carries mergeStateStatus', () => {
+      expect(
+        step(now('open', { mergeStateStatus: 'BLOCKED' }), null).entry[
+          'mergeStateStatus'
+        ]
+      ).toBe('BLOCKED');
+    });
+  });
+
+  describe('conflicting', () => {
+    const conflicting = (over: Partial<Now> = {}) =>
+      now('conflicting', { conflicting: true, ...over });
+    const msg = {
+      level: 'action',
+      message: 'COD-9: PR #5 conflicts with main'
+    };
+
+    it.each(['open', 'queued', 'failing'])(
+      '%s -> conflicting notifies',
+      (from) => {
+        expect(step(conflicting(), prev(from)).notices).toEqual([msg]);
+      }
+    );
+
+    it('first sight of a conflicting PR notifies', () => {
+      expect(step(conflicting(), null).notices).toEqual([msg]);
+    });
+
+    it('conflicting then UNKNOWN stays conflicting and silent', () => {
+      const first = step(conflicting(), prev('open'));
+      expect(first.entry['conflicting']).toBe(true);
+      const second = step(
+        now('open', { conflicting: null }),
+        first.entry as Prev
+      );
+      expect(second.notices).toEqual([]);
+      expect(second.entry['conflicting']).toBe(true);
+      expect(second.entry['state']).toBe('conflicting');
+    });
+
+    it('conflicting then MERGEABLE is silent and clears the flag', () => {
+      const first = step(conflicting(), prev('open'));
+      const second = step(
+        now('open', { conflicting: false }),
+        first.entry as Prev
+      );
+      expect(second.notices).toEqual([]);
+      expect(second.entry['conflicting']).toBe(false);
+      expect(second.entry['state']).toBe('open');
+    });
+
+    it('missing conflicting without a prev is false', () => {
+      expect(step(now('open'), null).entry['conflicting']).toBe(false);
+    });
+
+    it('outside review is silent, stored as a flag, and notifies once in review', () => {
+      const r = step(conflicting(), prev('open'), [], 'agent:working');
+      expect(r.notices).toEqual([]);
+      expect(r.entry['conflicting']).toBe(true);
+      expect(r.entry['state']).toBe('open');
+      expect(
+        step(conflicting(), r.entry as Prev, [], 'agent:review').notices
+      ).toEqual([msg]);
+    });
+
+    it('with a merge queue removal in the same step gives only the removal', () => {
+      const r = step(
+        conflicting({
+          removedAt: '2026-04-01T00:00:00Z',
+          removedReason: 'MERGE_CONFLICT'
+        }),
+        prev('queued')
+      );
+      expect(r.notices).toEqual([
+        {
+          level: 'action',
+          message: 'COD-9: PR #5 left the merge queue (merge conflict)'
+        }
+      ]);
+      expect(r.entry['conflicting']).toBe(true);
+    });
+
+    it('merged with a conflicting prev clears the flag', () => {
+      const r = step(now('merged', { conflicting: true }), {
+        pr: 5,
+        state: 'conflicting',
+        removedAt: null,
+        conflicting: true
+      });
+      expect(r.entry['conflicting']).toBe(false);
+      expect(r.entry['state']).toBe('merged');
+      expect(r.notices).toEqual([
+        { level: 'info', message: 'COD-9: PR #5 merged' }
+      ]);
+    });
+
+    it('closed with a conflicting prev clears the flag', () => {
+      const r = step(now('closed', { conflicting: null }), {
+        pr: 5,
+        state: 'conflicting',
+        removedAt: null,
+        conflicting: true
+      });
+      expect(r.entry['conflicting']).toBe(false);
+    });
+
+    it('a different PR number resets the conflicting flag', () => {
+      const r = step(now('open', { conflicting: null }), {
+        pr: 4,
+        state: 'conflicting',
+        removedAt: null,
+        conflicting: true
+      });
+      expect(r.entry['conflicting']).toBe(false);
+      expect(r.notices).toEqual([]);
+    });
   });
 
   describe('no repeat notices', () => {
-    it.each(['failing', 'merged', 'closed', 'open', 'queued'])(
+    it.each(['failing', 'merged', 'closed', 'open', 'queued', 'conflicting'])(
       '%s twice is silent',
       (state) => {
         expect(step(now(state), prev(state)).notices).toEqual([]);
       }
     );
+
+    it('conflicting: an identical observation repeated is silent', () => {
+      const n = now('conflicting', { conflicting: true });
+      const first = step(n, prev('open'));
+      expect(first.notices).toHaveLength(1);
+      expect(step(n, first.entry as Prev).notices).toEqual([]);
+    });
 
     // The second step reads the entry the first one produced, as run.sh does
     it.each([
@@ -1181,6 +1401,141 @@ describe('attended picks', () => {
     );
   });
 
+  describe('conflicts with main', () => {
+    const conflicting = { pr: 7, state: 'conflicting', conflicting: true };
+    const view = (issues: Node[], watch: Record<string, unknown> = {}) =>
+      run(
+        `queue_view(${NOW}; 5; ${JSON.stringify(watch)}; null; {})`,
+        issues
+      ) as {
+        next: Array<{ ticket: string; reason: string; detail: string | null }>;
+      };
+
+    it('a conflicting review ticket is picked with its PR', () => {
+      const r = attended([review('COD-5')], 5, { 'COD-5': conflicting });
+      expect(r).toMatchObject({
+        verdict: 'run',
+        ticket: 'COD-5',
+        reason: 'conflicts with main',
+        detail: 'PR #7'
+      });
+    });
+
+    it('detail is null without a pr', () => {
+      const r = attended([review('COD-5')], 5, {
+        'COD-5': { conflicting: true }
+      });
+      expect(r).toMatchObject({
+        ticket: 'COD-5',
+        reason: 'conflicts with main',
+        detail: null
+      });
+    });
+
+    it.each([false, null])('conflicting %j is no pick', (value) => {
+      expect(
+        attended([review('COD-5')], 5, {
+          'COD-5': { pr: 7, conflicting: value }
+        }).verdict
+      ).toBe('idle');
+    });
+
+    it('is no pick without a watch entry', () => {
+      expect(attended([review('COD-5')]).verdict).toBe('idle');
+    });
+
+    it('a parked review ticket is excluded', () => {
+      const parkedAt = iso(60).slice(0, 16) + 'Z';
+      const n = review('COD-5', {
+        description: `**Next:** Waiting: copilot · PR #7 · since ${parkedAt}`
+      });
+      expect(
+        view([n], { 'COD-5': conflicting }).next.map((x) => x.ticket)
+      ).not.toContain('COD-5');
+    });
+
+    it('review feedback lists it once, as review feedback', () => {
+      const n = review('COD-5', {
+        comments: {
+          nodes: [
+            prReady(false),
+            { body: 'fix this', createdAt: '2026-09-02T00:00:00Z' }
+          ]
+        }
+      });
+      expect(
+        view([n], { 'COD-5': conflicting }).next.map(({ ticket, reason }) => ({
+          ticket,
+          reason
+        }))
+      ).toEqual([{ ticket: 'COD-5', reason: 'review feedback' }]);
+    });
+
+    it.each(['merged', 'closed'])('a %s watch state is excluded', (state) => {
+      expect(
+        attended([review('COD-5')], 5, {
+          'COD-5': { ...conflicting, state }
+        }).verdict
+      ).toBe('idle');
+    });
+
+    it('a completed review ticket is excluded', () => {
+      expect(
+        attended([review('COD-5', { state: { type: 'completed' } })], 5, {
+          'COD-5': conflicting
+        }).verdict
+      ).toBe('idle');
+    });
+
+    it('an agent:working ticket gets no such pick', () => {
+      const n = node('COD-5', 'agent:working', {
+        description: claimLine(60)
+      });
+      expect(
+        view([n], { 'COD-5': conflicting }).next.map((x) => x.reason)
+      ).toEqual(['resume']);
+    });
+
+    it('comes after review feedback and before ready', () => {
+      const feedback = review('COD-4', {
+        comments: { nodes: [prReady(false)] }
+      });
+      const r = view(
+        [ready('COD-9'), review('COD-5'), review('COD-6'), feedback],
+        {
+          'COD-4': { pr: 4, unresolved: 1 },
+          'COD-5': { pr: 5, conflicting: true },
+          'COD-6': { pr: 6, conflicting: true }
+        }
+      );
+      expect(r.next.map((x) => `${x.ticket} ${x.reason}`)).toEqual([
+        'COD-4 review feedback',
+        'COD-5 conflicts with main',
+        'COD-6 conflicts with main',
+        'COD-9 ready'
+      ]);
+    });
+
+    it('comes after an answered plan', () => {
+      const answered = node('COD-3', 'agent:needs-input', {
+        comments: { nodes: [{ body: 'ok', createdAt: '2026-10-01T00:00:00Z' }] }
+      });
+      const r = view([review('COD-5'), answered], {
+        'COD-5': { pr: 5, conflicting: true }
+      });
+      expect(r.next.map((x) => x.reason)).toEqual([
+        'answered',
+        'conflicts with main'
+      ]);
+    });
+
+    it('still counts toward the limit', () => {
+      expect(
+        attended([review('COD-5')], 5, { 'COD-5': conflicting }).used
+      ).toBe(1);
+    });
+  });
+
   describe('limit', () => {
     const done = (id: string, daysAgo: number) =>
       review(id, {
@@ -1404,6 +1759,11 @@ describe('attended picks', () => {
       expect(
         line([review('COD-544')], 5, { 'COD-544': { unresolved: 1 } })
       ).toBe('run now: COD-544 review feedback');
+      expect(
+        line([review('COD-547')], 5, {
+          'COD-547': { pr: 8, conflicting: true }
+        })
+      ).toBe('run now: COD-547 conflicts with main');
       expect(line([ready('COD-546')])).toBe('run now: COD-546 ready');
       expect(
         line([
@@ -2500,6 +2860,7 @@ describe('launch', () => {
   it.each([
     ['answered', 'answered', null],
     ['review feedback', 'review feedback', null],
+    ['conflicts with main', 'conflicts with main', null],
     ['take over', 'take over', null],
     ['answered, session state none', 'answered', { state: 'none' }],
     ['answered, session state stopped', 'answered', { state: 'stopped' }]
