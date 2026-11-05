@@ -40,7 +40,9 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     } satisfies ActionInputs);
 
-    maskSecretsIn(inputs);
+    // Not the apps: their Sentry DSNs travel on in this job's `apps` output,
+    // which GitHub drops when it holds a masked value
+    maskSecretsIn({ ...inputs, apps: [] });
     core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     const { environment, images } = await flyBuild(inputs);
