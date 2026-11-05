@@ -119,6 +119,7 @@ jobs:
     outputs:
       apps: ${{ steps.pre-deploy.outputs.apps }}
       environment: ${{ steps.pre-deploy.outputs.environment }}
+      # Carries tenant secret names only; the deployment reads the values
       app-tenants: ${{ steps.pre-deploy.outputs.app-tenants }}
       pr-number: ${{ steps.resolve-pr.outputs.number }}
 
@@ -440,6 +441,11 @@ jobs:
           app-details: ${{ needs.pre-deploy.outputs.app-tenants }}
           pr-number: ${{ needs.pre-deploy.outputs.pr-number }}
           images-path: ${{ runner.temp }}/fly-images/fly-built-images.json
+          # Read the values of the tenant secrets named in `app-details`
+          infisical-client-id: ${{ secrets.INFISICAL_READ_CLIENT_ID }}
+          infisical-client-secret: ${{ secrets.INFISICAL_READ_CLIENT_SECRET }}
+          infisical-project-id: ${{ secrets.INFISICAL_PROJECT_ID }}
+          infisical-site: ${{ vars.INFISICAL_SITE }}
           # Shared runtime environment variables. The per-app SENTRY_DSN,
           # SENTRY_PROJECT and SENTRY_RELEASE are added by the action from each
           # app's `sentry` details.
