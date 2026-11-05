@@ -997,6 +997,19 @@ describe('run.sh watch_prs', () => {
       expect(read('records')).toBe('');
     }
   );
+
+  it.skipIf(!canRun)(
+    'drops a cached entry for a ticket whose attached PR is Renovate’s',
+    () => {
+      writeFileSync(
+        join(root, 'watch.json'),
+        JSON.stringify({ 'COD-5': { pr: 754, state: 'conflicting' } })
+      );
+      const result = run('renovate/zod-4.x');
+      expect(result.stdout).toContain('rc=0');
+      expect(JSON.parse(read('watch.json'))).toEqual({});
+    }
+  );
 });
 
 describe('run.sh watch_renovate', () => {
