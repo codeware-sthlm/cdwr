@@ -602,6 +602,7 @@ describe('parseAttended', () => {
     ['running: COD-545', 'running', 'COD-545'],
     ['run now: COD-543 answered', 'run', 'COD-543'],
     ['run now: COD-544 review feedback', 'run', 'COD-544'],
+    ['run now: COD-9 merged comment', 'run', 'COD-9'],
     ['run now: COD-546 ready', 'run', 'COD-546'],
     ['run now: take over COD-540 (claim 3 h old)', 'run', 'COD-540'],
     ['run now: take over COD-540 (no claim)', 'run', 'COD-540'],
