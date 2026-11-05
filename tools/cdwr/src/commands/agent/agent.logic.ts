@@ -933,6 +933,7 @@ export const queueViewSchema = z.object({
         'answered',
         'review feedback',
         'conflicts with main',
+        'merged comment',
         'parked wait resolved',
         'ready'
       ]),
