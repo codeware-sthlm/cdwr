@@ -2,18 +2,29 @@ import {
   ageText,
   esc,
   hhmm,
+  planWhen,
   plural,
   runTime,
   seenAgo,
   shortAge,
-  span
+  span,
+  txt
 } from '../format';
 import type { Pulse } from '../live';
 import type { Model } from '../model';
 import type { Detail } from '../state';
 import type { SessionState } from '../types';
 
-import { idLink, livePr, parkedText, pr, prTone, prn, queuePr } from './html';
+import {
+  idLink,
+  livePr,
+  parkedText,
+  pr,
+  prPill,
+  prTone,
+  prn,
+  queuePr
+} from './html';
 import { countedRows, waitRows } from './waiting';
 
 // The session card: what the session does, where it runs, and the newest live events
@@ -141,6 +152,59 @@ const feedTone = (p: Pulse): string =>
 const feedRow = (p: Pulse, now: Date): string =>
   `<li><i class="dot ${feedTone(p)}" aria-hidden="true"></i><span class="what">${esc(p.subject)} · ${esc(p.what)}</span><time>${esc(shortAge((now.getTime() - p.at) / 6e4))} ago</time></li>`;
 
+/** "Step 3 of 5" with a bar and the next step, for the working ticket; empty without a plan */
+const stepLine = (d: Detail | undefined): string =>
+  d && d.steps
+    ? `<div class="ct-step"><div class="bar" aria-hidden="true"><i style="width:${Math.round((d.done / d.steps) * 100)}%"></i></div><span>Step ${Math.min(d.done + 1, d.steps)} of ${d.steps}</span>${d.next ? `<span class="ct-next">${txt(d.next)}</span>` : ''}</div>`
+    : '';
+
+/** What the working ticket is parked on, and for how long; empty when it is not parked */
+const waitLine = (m: Model, ticket: string, now: Date): string => {
+  const p = m.parked.find((x) => x.ticket === ticket) ?? m.prWaits.get(ticket);
+  if (!p) return '';
+  const age =
+    p.since && !p.resolved
+      ? ` for ${esc(shortAge((now.getTime() - Date.parse(p.since)) / 6e4))}`
+      : '';
+  return `<div class="ct-wait">${parkedText(p)}${p.pr ? ' on ' + pr(p.pr) : ''}${age}</div>`;
+};
+
+/** The working ticket's own PR as the feed's first row; empty without a PR */
+const ownPrRow = (
+  m: Model,
+  details: ReadonlyMap<string, Detail>,
+  ticket: string,
+  now: Date
+): string => {
+  const x = { ticket, pr: queuePr(m, ticket) };
+  const { n, live } = livePr(m, details, x);
+  if (!n) return '';
+  const { pill, age } = prPill(m, details, x, now);
+  return `<li class="own">${prn(n, prTone(live?.state ?? null))} ${pill}${age}</li>`;
+};
+
+/** "Plan: 5h 30% · resets 14:00 · 7d 18%", a window over its pace marked bad; empty without a live 5-hour window */
+const planLine = (m: Model, now: Date): string => {
+  const five = m.plan.five_hour;
+  if (!five || five.reset) return '';
+  const pct = (w: typeof five) =>
+    `<span class="${w.verdict === 'ok' ? '' : 'bad'}">${Math.round(w.used)}%</span>`;
+  const seven = m.plan.seven_day;
+  return `<div class="ct-plan">Plan: 5h ${pct(five)} · resets ${esc(planWhen(five.resetsAt, now))}${seven && !seven.reset ? ` · 7d ${pct(seven)}` : ''}</div>`;
+};
+
+/** "also: implement on agent-host · attended on mac", the live sessions besides the one the card names, at most two */
+const alsoText = (m: Pick<Model, 'session' | 'hostSessions'>): string => {
+  const all = m.hostSessions.flatMap((h) =>
+    h.sessions.map((x) => ({ id: x.id, text: `${x.kind} on ${h.host}` }))
+  );
+  const id = m.session?.id;
+  const picked = (id && all.find((x) => x.id === id)) || all[0];
+  const rest = all.filter((x) => x !== picked).map((x) => x.text);
+  if (!rest.length) return '';
+  return `also: ${rest.slice(0, 2).join(' · ')}${rest.length > 2 ? ` +${rest.length - 2} more` : ''}`;
+};
+
 export const renderSession = (
   m: Model,
   details: ReadonlyMap<string, Detail>,
@@ -172,11 +236,26 @@ export const renderSession = (
   const sub = working
     ? [reason, m.get(s.ticket ?? '').title].filter(Boolean).map(esc).join(' · ')
     : h.note;
-  const feed = m.feed.slice(0, 2);
+  const ticket = working ? (s.ticket ?? '') : '';
+  const own = ticket ? ownPrRow(m, details, ticket, now) : '';
+  const rows =
+    own +
+    m.feed
+      .slice(0, 2)
+      .map((p) => feedRow(p, now))
+      .join('');
+  const then = ticket ? m.next.find((x) => x.ticket !== ticket) : undefined;
+  const plan = planLine(m, now);
+  const also = alsoText(m);
   return `<article class="card-top session ${st.tone}" data-w="session">
     <div class="ct-head"><button type="button" class="open state" aria-haspopup="dialog"><i class="dot" aria-hidden="true"></i>${esc(st.label)}</button>${who ? `<span class="who-runs">${who}</span>` : ''}</div>
     <div class="big">${big}</div>
     ${sub ? `<p class="ct-sub">${sub}</p>` : ''}
-    <ul class="feed">${feed.length ? feed.map((p) => feedRow(p, now)).join('') : '<li class="none">No live event yet</li>'}</ul>
+    ${ticket ? stepLine(details.get(ticket)) + waitLine(m, ticket, now) : ''}
+    <h4 class="feed-h">Latest events</h4>
+    <ul class="feed">${rows || '<li class="none">No live event yet</li>'}</ul>
+    ${then ? `<div class="ct-then">Then: ${idLink(then.ticket)} (${esc(then.reason)})</div>` : ''}
+    ${plan}
+    ${also ? `<div class="ct-also">${esc(also)}</div>` : ''}
   </article>`;
 };

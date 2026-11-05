@@ -81,6 +81,12 @@ export const hhmm = (t: number): string =>
 export const dayTime = (t: number, nowMs: number): string =>
   dayKey(t) === dayKey(nowMs) ? hhmm(t) : `${dayLabel(dayKey(t))} ${hhmm(t)}`;
 
+/** A time for a reset or a run-out: the clock time today, with the weekday when it is another day */
+export const planWhen = (at: Date, now: Date): string =>
+  at.toDateString() === now.toDateString()
+    ? hhmm(at.getTime())
+    : `${at.toLocaleDateString([], { weekday: 'short' })} ${hhmm(at.getTime())}`;
+
 export const hhmmss = (t: number): string =>
   new Date(t).toLocaleTimeString([], {
     hour: '2-digit',
