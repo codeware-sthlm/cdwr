@@ -59,7 +59,7 @@ The scheduler runs in the NUC's agent container, plan-only every 10 minutes; `cd
 `tools/cdwr/agent-queue/run.sh` (and its `watch.jq`, `waits.sh`, `implement.sh` and `github-app.sh`), so a merged change to its guardrails
 waits for the next `install`. Before planning, the same job watches the PRs of `agent:working`,
 `agent:needs-input` and `agent:review` tickets and sends a notice when a review PR leaves the merge
-queue or fails, or any of them merges with hand-offs left. A ticket merged outside review is
+queue, fails or conflicts with main, or any of them merges with hand-offs left. A ticket merged outside review is
 relabelled `agent:review` with a **Next:** line naming its hand-offs. After the watch, a parent whose
 agent split finished (every sub-issue Done or Canceled, at least one Done and one agent work) is set
 Done with an `**Agent: closed**` comment. Those are the job's two Linear writes.

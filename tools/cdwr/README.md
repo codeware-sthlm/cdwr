@@ -378,8 +378,8 @@ restarted mid-wait; each `wait.sh` starts a fresh one and kills it on exit.
 
 Before it plans, the scheduler watches the PRs of every ticket an agent label still claims
 (`agent:working`, `agent:needs-input`, `agent:review`; open, or done within 14 days) without
-starting Claude. It sends one notice per change: a PR that left the merge queue or has failing
-checks (`action`, `agent:review` only, since a working ticket has a session on it), a merge with
+starting Claude. It sends one notice per change: a PR that left the merge queue, has failing
+checks or conflicts with main (`action`, `agent:review` only, since a working ticket has a session on it), a merge with
 hand-offs still unticked (`action`), and a plain merge or a close (`info`, which follows the
 level). The hand-offs come from the agent's `**Agent: PR ready**` comment, or from the Status
 table's `Hand-off` rows when none was posted. Outside review only the PR attached in Linear
