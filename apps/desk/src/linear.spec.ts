@@ -337,6 +337,95 @@ describe('listComments', () => {
   });
 });
 
+describe('addLabel', () => {
+  const label = (over: Record<string, unknown> = {}) => ({
+    id: 'label-1',
+    name: 'agent:ready',
+    team: { name: 'Codeware' },
+    ...over
+  });
+  const labels = (...nodes: unknown[]) =>
+    json({ data: { issueLabels: { nodes } } });
+  const issueId = () => json({ data: { issue: { id: 'uuid-1' } } });
+  const updated = (success = true) =>
+    json({ data: { issueUpdate: { success } } });
+
+  it('adds the cached label id to the issue and looks it up once', async () => {
+    const { linear, sent } = setup(
+      labels(label(), label({ id: 'other', team: { name: 'Elsewhere' } })),
+      issueId(),
+      updated(),
+      issueId(),
+      updated()
+    );
+    await linear.addLabel('COD-1', 'agent:ready');
+    await linear.addLabel('COD-2', 'agent:ready');
+    expect(sent).toHaveLength(5);
+    expect(sent[0].body.variables).toEqual({ name: 'agent:ready' });
+    expect(sent[1].body.variables).toEqual({ id: 'COD-1' });
+    expect(sent[2].body.variables).toEqual({
+      id: 'uuid-1',
+      labelId: 'label-1'
+    });
+    expect(sent[4].body.variables).toEqual({
+      id: 'uuid-1',
+      labelId: 'label-1'
+    });
+  });
+
+  it('accepts a workspace label', async () => {
+    const { linear, sent } = setup(
+      labels(label({ team: null })),
+      issueId(),
+      updated()
+    );
+    await linear.addLabel('COD-1', 'agent:ready');
+    expect(sent[2].body.variables).toMatchObject({ labelId: 'label-1' });
+  });
+
+  it('throws when no label matches', async () => {
+    const { linear, sent } = setup(
+      labels(label({ team: { name: 'Elsewhere' } }))
+    );
+    await expect(linear.addLabel('COD-1', 'agent:ready')).rejects.toMatchObject(
+      { code: 'tool_error', message: 'No label agent:ready' }
+    );
+    expect(sent).toHaveLength(1);
+  });
+
+  it('throws when the name is ambiguous', async () => {
+    const { linear } = setup(labels(label(), label({ id: 'label-2' })));
+    await expect(linear.addLabel('COD-1', 'agent:ready')).rejects.toMatchObject(
+      { code: 'tool_error', message: '2 labels named agent:ready' }
+    );
+  });
+
+  it('throws when Linear reports no success', async () => {
+    const { linear } = setup(labels(label()), issueId(), updated(false));
+    await expect(linear.addLabel('COD-1', 'agent:ready')).rejects.toMatchObject(
+      { code: 'tool_error' }
+    );
+  });
+
+  it.each([
+    ['HTTP 401', () => json({}, 401)],
+    [
+      'a GraphQL AUTHENTICATION_ERROR',
+      () =>
+        json({
+          errors: [
+            { message: 'x', extensions: { code: 'AUTHENTICATION_ERROR' } }
+          ]
+        })
+    ]
+  ])('%s throws unauthorized', async (_, respond) => {
+    const { linear } = setup(respond());
+    await expect(linear.addLabel('COD-1', 'agent:ready')).rejects.toMatchObject(
+      { code: 'unauthorized' }
+    );
+  });
+});
+
 describe('errors', () => {
   const gql = (code: string) =>
     json({ errors: [{ message: `boom ${code}`, extensions: { code } }] });

@@ -27,6 +27,14 @@ export class LinearError extends Error {
   }
 }
 
+/** What a Linear error means to the person, for the settings sheet and the row notes alike */
+export const linearMessage = (error: LinearError): string =>
+  error.code === 'unauthorized'
+    ? 'Linear rejected this key.'
+    : error.code === 'network'
+      ? "Can't reach Linear. Check the connection."
+      : error.message;
+
 const statusTypeSchema = z.enum([
   'triage',
   'backlog',
@@ -95,6 +103,24 @@ const commentsSchema = z.object({
 
 const viewerSchema = z.object({
   viewer: z.object({ id: z.string(), name: z.string() })
+});
+
+const labelLookupSchema = z.object({
+  issueLabels: z.object({
+    nodes: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        team: z.object({ name: z.string() }).nullable()
+      })
+    )
+  })
+});
+
+const issueIdSchema = z.object({ issue: z.object({ id: z.string() }) });
+
+const issueUpdateSchema = z.object({
+  issueUpdate: z.object({ success: z.boolean() })
 });
 
 const envelopeSchema = z.object({
@@ -201,6 +227,22 @@ const COMMENTS_QUERY = `
 
 const VIEWER_QUERY = `query Viewer { viewer { id name } }`;
 
+const LABEL_QUERY = `
+  query IssueLabel($name: String!) {
+    issueLabels(filter: { name: { eq: $name } }, first: 50) {
+      nodes { id name team { name } }
+    }
+  }
+`;
+
+const ISSUE_ID_QUERY = `query IssueId($id: String!) { issue(id: $id) { id } }`;
+
+const ADD_LABEL_MUTATION = `
+  mutation AddLabel($id: String!, $labelId: String!) {
+    issueUpdate(id: $id, input: { addedLabelIds: [$labelId] }) { success }
+  }
+`;
+
 const toIssue = (node: z.infer<typeof issueNodeSchema>): Issue => ({
   id: node.identifier,
   title: node.title,
@@ -304,6 +346,32 @@ export const createLinear = ({
     }
   };
 
+  const labelIds = new Map<string, string>();
+  const labelId = async (name: string): Promise<string> => {
+    const cached = labelIds.get(name);
+    if (cached) return cached;
+    const { issueLabels } = await request(
+      LABEL_QUERY,
+      { name },
+      labelLookupSchema
+    );
+    // The team's label or the workspace's; another team's of the same name is not ours
+    const matches = issueLabels.nodes.filter(
+      (l) => l.team === null || l.team.name === TEAM
+    );
+    if (matches.length === 0) {
+      throw new LinearError('tool_error', `No label ${name}`);
+    }
+    if (matches.length > 1) {
+      throw new LinearError(
+        'tool_error',
+        `${matches.length} labels named ${name}`
+      );
+    }
+    labelIds.set(name, matches[0].id);
+    return matches[0].id;
+  };
+
   const teamFilter = { team: { name: { eq: TEAM } } };
   const since = (days: number) =>
     new Date(now().getTime() - days * DAY_MS).toISOString();
@@ -399,6 +467,27 @@ export const createLinear = ({
         commentsSchema
       );
       return { comments: issue.comments.nodes.slice().sort(byCreatedAt) };
+    },
+
+    /** Adds a label by name to an issue; the desk's only Linear write. */
+    async addLabel(identifier: string, name: string): Promise<void> {
+      const label = await labelId(name);
+      const { issue } = await request(
+        ISSUE_ID_QUERY,
+        { id: identifier },
+        issueIdSchema
+      );
+      const { issueUpdate } = await request(
+        ADD_LABEL_MUTATION,
+        { id: issue.id, labelId: label },
+        issueUpdateSchema
+      );
+      if (!issueUpdate.success) {
+        throw new LinearError(
+          'tool_error',
+          `Linear did not label ${identifier}`
+        );
+      }
     },
 
     async viewer(): Promise<Viewer> {
