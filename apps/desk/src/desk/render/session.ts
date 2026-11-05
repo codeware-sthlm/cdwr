@@ -11,7 +11,7 @@ import {
   txt
 } from '../format';
 import type { Pulse } from '../live';
-import type { Model } from '../model';
+import type { Model, PlanWindow } from '../model';
 import type { Detail } from '../state';
 import type { SessionState } from '../types';
 
@@ -183,14 +183,22 @@ const ownPrRow = (
   return `<li class="own">${prn(n, prTone(live?.state ?? null))} ${pill}${age}</li>`;
 };
 
-/** "Plan: 5h 30% · resets 14:00 · 7d 18%", a window over its pace marked bad; empty without a live 5-hour window */
+/** "Plan: 5h 30% · resets 14:00 · 7d 18%", a window over its pace marked bad, an old sample dimmed; empty without a live window */
 const planLine = (m: Model, now: Date): string => {
-  const five = m.plan.five_hour;
-  if (!five || five.reset) return '';
-  const pct = (w: typeof five) =>
+  type Live = Exclude<PlanWindow, { reset: true }>;
+  const live = (w: PlanWindow | null): Live | null =>
+    w && !w.reset ? w : null;
+  const five = live(m.plan.five_hour);
+  const seven = live(m.plan.seven_day);
+  if (!five && !seven) return '';
+  const pct = (w: Live) =>
     `<span class="${w.verdict === 'ok' ? '' : 'bad'}">${Math.round(w.used)}%</span>`;
-  const seven = m.plan.seven_day;
-  return `<div class="ct-plan">Plan: 5h ${pct(five)} · resets ${esc(planWhen(five.resetsAt, now))}${seven && !seven.reset ? ` · 7d ${pct(seven)}` : ''}</div>`;
+  const parts = [
+    five ? `5h ${pct(five)} · resets ${esc(planWhen(five.resetsAt, now))}` : '',
+    seven ? `7d ${pct(seven)}` : ''
+  ].filter(Boolean);
+  const stale = [five, seven].some((w) => w?.stale);
+  return `<div class="ct-plan${stale ? ' stale' : ''}">Plan: ${parts.join(' · ')}</div>`;
 };
 
 /** "also: implement on agent-host · attended on mac", the live sessions besides the one the card names, at most two */
@@ -246,7 +254,8 @@ export const renderSession = (
       .join('');
   const then = ticket ? m.next.find((x) => x.ticket !== ticket) : undefined;
   const plan = planLine(m, now);
-  const also = alsoText(m);
+  // "also" adds to the session the head names; with none named it has nothing to add to
+  const also = where ? alsoText(m) : '';
   return `<article class="card-top session ${st.tone}" data-w="session">
     <div class="ct-head"><button type="button" class="open state" aria-haspopup="dialog"><i class="dot" aria-hidden="true"></i>${esc(st.label)}</button>${who ? `<span class="who-runs">${who}</span>` : ''}</div>
     <div class="big">${big}</div>
