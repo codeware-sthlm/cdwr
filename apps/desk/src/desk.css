@@ -2611,7 +2611,9 @@ button:disabled {
 .alert-in {
   max-width: 1360px;
   margin: 0 auto;
-  padding: 12px var(--pad-inline);
+  /* The band runs edge to edge; its content stays out of the status bar and the notch */
+  padding: max(12px, env(safe-area-inset-top)) var(--pad-right) 12px
+    var(--pad-left);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
