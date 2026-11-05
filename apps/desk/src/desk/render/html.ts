@@ -1,4 +1,4 @@
-import { LIMIT, LINEAR_ISSUE, waitName } from '../constants';
+import { GH_PR, LIMIT, LINEAR_ISSUE, waitName } from '../constants';
 import { esc, hhmm, shortAge } from '../format';
 import type { PrStateName } from '../live';
 import { type Model, prOf } from '../model';
@@ -7,7 +7,7 @@ import type { JobHost, PrRef, QueueParked } from '../types';
 
 // Shared HTML pieces: icons, links, chips. Every value is escaped here, unless the caller says it is HTML.
 
-export const GH_PR = 'https://github.com/codeware-sthlm/cdwr/pull/';
+export { GH_PR };
 
 const ICON = {
   plan: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
@@ -163,6 +163,7 @@ const REASON: ReadonlyMap<string, readonly [string, string]> = new Map([
   ['review feedback', ['review feedback', 'feedback']],
   ['conflicts with main', ['conflicts with main', 'conflict']],
   ['merged comment', ['merged comment', 'comment']],
+  ['renovate', ['renovate', 'renovate']],
   ['ready', ['ready', 'ready']]
 ]);
 

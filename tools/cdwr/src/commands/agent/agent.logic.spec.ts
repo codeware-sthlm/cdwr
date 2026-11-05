@@ -14,6 +14,7 @@ import {
   formatImplement,
   formatNext,
   formatParked,
+  formatRenovate,
   formatTable,
   formatWatchSource,
   formatWatching,
@@ -740,6 +741,7 @@ const EMPTY_VIEW: QueueView = {
   held: { tickets: [], free: [] },
   blocked: [],
   parked: [],
+  renovate: [],
   table: { before: [], after: [], label: [] }
 };
 
@@ -786,6 +788,15 @@ const FILLED_VIEW: QueueView = {
       outcome: null
     }
   ],
+  renovate: [
+    {
+      pr: 662,
+      title: 'Update dependency zod',
+      state: 'tended',
+      ticket: 'COD-740'
+    },
+    { pr: 754, title: 'Update dependency vite', state: 'failing', ticket: null }
+  ],
   table: {
     before: [
       { ticket: 'COD-4', kind: 'plan' },
@@ -811,6 +822,23 @@ describe('parseQueueView', () => {
   it('reads a view from before parked existed', () => {
     const { parked: _parked, ...old } = EMPTY_VIEW;
     expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads a view from before renovate existed', () => {
+    const { renovate: _renovate, ...old } = EMPTY_VIEW;
+    expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads renovate next items and PR held entries', () => {
+    const view = parseQueueView(
+      JSON.stringify({
+        ...EMPTY_VIEW,
+        next: [{ ticket: 'PR 754', reason: 'renovate', detail: 'failing' }],
+        held: { tickets: ['PR 754'], free: [] }
+      })
+    );
+    expect(formatNext(view!)).toBe('PR 754 renovate (failing)');
+    expect(formatHeld(view!)).toBe('PR 754');
   });
 
   it('reads a view from before label existed', () => {
@@ -922,6 +950,18 @@ describe('formatParked', () => {
 
   it('says nothing when empty', () => {
     expect(formatParked(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('formatRenovate', () => {
+  it('names each PR with its state, title and tender', () => {
+    expect(formatRenovate(FILLED_VIEW)).toBe(
+      'PR #662 tended by COD-740 · Update dependency zod; PR #754 failing · Update dependency vite'
+    );
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatRenovate(EMPTY_VIEW)).toBe('nothing');
   });
 });
 

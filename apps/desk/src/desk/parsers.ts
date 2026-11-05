@@ -268,6 +268,19 @@ const labelEntry = z.object({
   blockers: list(z.string())
 });
 
+const renovateEntry = z.object({
+  pr: z.union([z.number(), z.string()]),
+  title: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? ''),
+  state: z.enum(['failing', 'conflicting', 'tended']),
+  ticket: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? null)
+});
+
 const queueViewSchema = z
   .object({
     at: opt(z.string()),
@@ -315,6 +328,16 @@ const queueViewSchema = z
       })
     ),
     blocked: list(z.object({ ticket: z.string(), blockers: list(z.string()) })),
+    // Older views have no renovate; a malformed entry is dropped alone
+    renovate: z
+      .array(z.unknown())
+      .nullish()
+      .transform((v) =>
+        (v ?? []).flatMap((x) => {
+          const p = renovateEntry.safeParse(x);
+          return p.success ? [p.data] : [];
+        })
+      ),
     table: z.object({
       before: list(z.object({ ticket: z.string(), kind: opt(z.string()) })),
       label: z
@@ -341,9 +364,9 @@ const queueViewSchema = z
 export const validateQueueView = (v: unknown): QueueView | null => {
   const parsed = queueViewSchema.safeParse(v);
   if (!parsed.success) return null;
-  const { at, limit, session, next, held, parked, blocked, table } =
+  const { at, limit, session, next, held, parked, blocked, renovate, table } =
     parsed.data;
-  return { at, limit, session, next, held, parked, blocked, table };
+  return { at, limit, session, next, held, parked, blocked, renovate, table };
 };
 
 /** The paths a view fails to parse at; `missing` when the field is absent rather than mistyped */

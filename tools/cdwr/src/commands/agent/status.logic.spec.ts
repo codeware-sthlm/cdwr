@@ -335,6 +335,7 @@ describe('showsRow', () => {
     'held',
     'blocked',
     'parked',
+    'renovate',
     'on your table'
   ])('keeps %s when the scheduler is elsewhere', (check) => {
     expect(showsRow('elsewhere', check)).toBe(true);

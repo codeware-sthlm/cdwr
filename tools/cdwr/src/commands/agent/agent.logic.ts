@@ -935,6 +935,7 @@ export const queueViewSchema = z.object({
         'conflicts with main',
         'merged comment',
         'parked wait resolved',
+        'renovate',
         'ready'
       ]),
       detail: z.string().nullable()
@@ -972,6 +973,17 @@ export const queueViewSchema = z.object({
         since: z.string(),
         resolved: z.boolean(),
         outcome: z.string().nullable()
+      })
+    )
+    .default([]),
+  // Older queue views have no renovate
+  renovate: z
+    .array(
+      z.object({
+        pr: z.number(),
+        title: z.string(),
+        state: z.enum(['failing', 'conflicting', 'tended']),
+        ticket: ticketSchema.nullable()
       })
     )
     .default([]),
@@ -1051,6 +1063,14 @@ export const formatParked = (view: QueueView): string =>
         (p.resolved ? ` (resolved: ${p.outcome})` : '')
     )
     .join(', ') || 'nothing';
+
+export const formatRenovate = (view: QueueView): string =>
+  view.renovate
+    .map(
+      (r) =>
+        `PR #${r.pr} ${r.state === 'tended' && r.ticket ? `tended by ${r.ticket}` : r.state} · ${r.title}`
+    )
+    .join('; ') || 'nothing';
 
 export const formatTable = (view: QueueView): string => {
   const { before, after, label } = view.table;

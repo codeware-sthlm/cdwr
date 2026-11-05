@@ -19,6 +19,7 @@ import {
 } from './commands';
 import {
   AGENT,
+  GH_PR,
   HOST_DISK_FREE_MIN,
   HOST_LOAD_PER_CORE_MAX,
   HOST_MEM_USED_MAX,
@@ -76,6 +77,7 @@ import type {
   QueueLabel,
   QueueNext,
   QueueParked,
+  QueueRenovate,
   QueueView,
   SessionState,
   Suggested
@@ -215,6 +217,8 @@ export type Model = {
   handoffItems: number;
   next: QueueNext[];
   parked: QueueParked[];
+  /** Renovate PRs that fail, conflict with main or are tended by a ticket, sorted by PR */
+  renovate: QueueRenovate[];
   held: { tickets: string[]; free: QueueFree[] };
   limit: { used: number; max: number };
   limits: Limits;
@@ -1015,7 +1019,16 @@ export const model = (
         nextLine: (id) => details.get(id)?.next
       })
     : null;
-  const get = (id: string): TicketRef => idx.get(id) ?? stub(id);
+  // A Renovate PR is queued as "PR 754": it links to GitHub and takes the title the view carries
+  const get = (id: string): TicketRef => {
+    const n = /^PR (\d+)$/.exec(id)?.[1];
+    if (n === undefined) return idx.get(id) ?? stub(id);
+    return {
+      ...stub(id),
+      title: v?.renovate.find((r) => String(r.pr) === n)?.title ?? '',
+      url: GH_PR + n
+    };
+  };
 
   const limit = v ? v.limit : { used: 0, max: LIMIT };
   const before = v ? v.table.before : [];
@@ -1210,6 +1223,7 @@ export const model = (
     handoffItems: handoffs.reduce((n, x) => n + (x.items?.length || 0), 0),
     next,
     parked,
+    renovate: v ? v.renovate : [],
     held: v ? v.held : { tickets: [], free: [] },
     limit,
     limits: {

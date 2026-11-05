@@ -1240,6 +1240,7 @@ details.snoozed .wrow .kind {
 .chip.pr,
 .chip.conflict,
 .chip.comment,
+.chip.renovate,
 .chip.feedback {
   background: var(--review-soft);
   color: var(--review);
