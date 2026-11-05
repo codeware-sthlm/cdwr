@@ -128,7 +128,9 @@ export default [
                 'scope:shared',
                 'type:ui',
                 'type:util'
-              ]
+              ],
+              // `type:util` would otherwise let the cms reach the headless util libs
+              notDependOnLibsWithTags: ['scope:app-headless']
             },
             {
               sourceTag: 'scope:app-headless',
