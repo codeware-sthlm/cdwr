@@ -301,7 +301,7 @@ record_queue_state() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local last attended suggested jl view watch
+  local last attended suggested jl view watch renovate
   last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
   # attended-published is the cache before attended-line, until a verdict replaces it
   attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
@@ -309,7 +309,8 @@ record_queue_state() {
   jl="$(queue_job_line)"
   view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
   watch="$(cat "$HOME_DIR/watch.json" 2>/dev/null)"
-  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" ) &!
+  renovate="$(cat "$HOME_DIR/renovate.json" 2>/dev/null)"
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" ) &!
 }
 
 # A paused tick publishes the last run's Attended line and queue view with a paused job line, so
@@ -505,6 +506,7 @@ read -r -d '' PR_QUERY <<'GQL' || true
 query($n: Int!) {
   repository(owner: "codeware-sthlm", name: "cdwr") {
     pullRequest(number: $n) {
+      headRefName
       state
       mergedAt
       mergeable
@@ -625,6 +627,8 @@ watch_prs() {
     if [[ $? -ne 0 || -z "$now" || "$now" == null ]]; then
       note "warn: watch: could not read PR #$pr ($id)"; record warn "$id" "watch: could not read PR #$pr"; continue
     fi
+    # A renovate ticket carries Renovate's PR until its own PR opens: that one is not the ticket's
+    [[ "$(jq -r '.headRefName // ""' <<<"$now")" == renovate/* ]] && continue
     out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
       --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
@@ -727,6 +731,53 @@ close_parents() {
   return 0
 }
 
+# The renovate-labelled tickets with their attachments: a PR one carries is tended, never offered
+# again, so closed tickets count too
+read -r -d '' RENOVATE_TICKETS <<'GQL' || true
+query {
+  issues(first: 100, orderBy: updatedAt, includeArchived: true, filter: {
+    team: { key: { eq: "COD" } }
+    labels: { some: { name: { eq: "renovate" } } }
+  }) {
+    nodes { identifier attachments { nodes { url } } }
+  }
+}
+GQL
+
+# watch_renovate: Renovate's open PRs against the renovate tickets, through watch.jq
+# `renovate_step`, into renovate.json in the queue home; one info notice when a PR turns broken. It
+# never touches watch.json, whose entries are tickets. A failure leaves the file as it was.
+watch_renovate() {
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/renovate.json" prs resp prev out level msg
+  gh_identity_or_note
+  prs="$(gh_read gh pr list --repo codeware-sthlm/cdwr --author app/renovate --state open --limit 100 \
+    --json number,title,url,headRefOid,mergeable,statusCheckRollup,commits)" || { print -r -- "no Renovate PR list"; return 1; }
+  jq -e 'type == "array"' >/dev/null 2>&1 <<<"$prs" || { print -r -- "no Renovate PR list"; return 1; }
+  resp="$(linear "$RENOVATE_TICKETS")" || { print -r -- "Linear did not answer"; return 1; }
+  jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
+    { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
+  [[ "$(jq '.data.issues.nodes | length' <<<"$resp")" -lt 100 ]] ||
+    { note "warn: renovate: 100 renovate tickets, the page limit; older ones are not read"; record warn "" "renovate: page limit reached"; }
+  # null without a file: the first run sends no notices for PRs already broken
+  prev="$(jq -c 'if type == "object" then . else {} end' "$file" 2>/dev/null)"
+  [[ -n "$prev" ]] || prev=null
+  # The PR list on stdin: with its commits it can outgrow an argument
+  out="$(watch -c --argjson tickets "$(jq -c '.data.issues.nodes' <<<"$resp")" \
+    --argjson prev "$prev" --arg at "$(date -u +%FT%TZ)" \
+    'include "watch"; {prs: ., tickets: $tickets, prev: $prev, at: $at} | renovate_step' <<<"$prs")" ||
+    { print -r -- "watch.jq failed$(watch_err)"; return 1; }
+  # The state first: a failed write sends nothing, so the next run doesn't repeat the notices
+  { jq -c '.state' <<<"$out" > "$file.tmp" && mv "$file.tmp" "$file"; } ||
+    { print -r -- "could not write renovate.json"; return 1; }
+  while IFS=$'\t' read -r level msg; do
+    [[ -z "$level" ]] && continue
+    note "renovate: $level $msg"
+    notice "$level" "$msg"
+  done <<<"$(jq -r '.notices[] | "\(.level)\t\(.message)"' <<<"$out")"
+  return 0
+}
+
 # One fetch per run: the job line and planning both read origin/main. A failure never stops the run.
 if ! $check; then
   git -C "$REPO" fetch -q origin 2>/dev/null || note "warn: fetch failed"
@@ -735,6 +786,7 @@ fi
 # Watching sends notices, so --check leaves it out; a failure never stops planning.
 if ! $check; then
   err="$(watch_prs)" || { note "warn: watch failed (${err:-unknown})"; record warn "" "watch failed: ${err:-unknown}"; }
+  err="$(watch_renovate)" || { note "warn: renovate watch failed (${err:-unknown})"; record warn "" "renovate watch failed: ${err:-unknown}"; }
   # Same rule: a failure is a warn, never a stop
   err="$(close_parents)" || { note "warn: parent close failed (${err:-unknown})"; record warn "" "parent close failed: ${err:-unknown}"; }
 fi
@@ -749,10 +801,11 @@ queue_view=""
 attended_watch=""
 attended() {
   setopt local_options no_err_exit
-  local resp state verdict waits
+  local resp state verdict waits renovate
   # Before the Linear read, so --check reports the source even when Linear fails
   watch_state "$HOME_DIR/watch.json"
   state="$WATCH_STATE"
+  renovate="$RENOVATE_STATE"
   attended_watch="$state"
   if $check; then
     # Where the watch state came from, and the state itself, for `status`
@@ -766,7 +819,8 @@ attended() {
   # The fallback was already noted by watch_prs, so this one stays quiet
   waits="$(gh_identity || true; parked_waits <<<"$resp")"
   verdict="$(watch -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$HOME_DIR")" --argjson watch "$state" --argjson waits "$waits" \
-    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits)' <<<"$resp")" ||
+    --argjson renovate "$renovate" \
+    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate)' <<<"$resp")" ||
     { note "warn: attended: watch.jq failed$(watch_err)"; return 0; }
   attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
   [[ "$(jq -r '.verdict' <<<"$verdict" 2>/dev/null)" == idle ]] && attended_work=false || attended_work=true
@@ -813,7 +867,8 @@ attended() {
   # The whole queue for queue_state and `cdwr agent status`; the pick above stays the
   # line and the notice
   queue_view="$(watch -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$HOME_DIR")" --argjson watch "$state" --argjson session "$session" --argjson waits "$waits" \
-    'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits)' <<<"$resp")" ||
+    --argjson renovate "$renovate" \
+    'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits; $renovate)' <<<"$resp")" ||
     { note "warn: queue view: watch.jq failed$(watch_err)"; queue_view=""; }
   # Should an implement-only session start? watch.jq `launch` decides from the pick and the
   # guards; implement.sh holds implement.lock while its session runs and writes the spend ledger.

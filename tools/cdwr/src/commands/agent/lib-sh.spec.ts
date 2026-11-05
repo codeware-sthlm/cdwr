@@ -342,6 +342,44 @@ describe('lib.sh', () => {
         expect(out.status).toBe(0);
       });
 
+      it('includes the renovate state when the row has it', () => {
+        const withRenovate =
+          '[{"host":"nuc","at":"2026-11-05T00:00:00Z","watch":{},"renovate":{"754":{"pr":754,"state":"failing"}}}]';
+        const seen = join(dir, 'query');
+        const out = run(fake(withRenovate, seen)).stdout.trim();
+        expect(JSON.parse(out)).toEqual({
+          host: 'nuc',
+          at: '2026-11-05T00:00:00Z',
+          watch: {},
+          renovate: { '754': { pr: 754, state: 'failing' } }
+        });
+        expect(readFileSync(seen, 'utf8')).toContain(
+          'select=host,at,watch,renovate&'
+        );
+      });
+
+      it('omits renovate when the row has none', () => {
+        const out = run(fake(row, join(dir, 'query'))).stdout.trim();
+        expect(JSON.parse(out)).not.toHaveProperty('renovate');
+      });
+
+      // Before the renovate column exists the first select fails and prints nothing
+      it('falls back to the select without renovate when the first prints nothing', () => {
+        const log = join(dir, 'queries');
+        const out = run(
+          `supabase_select() {\n  print -r -- "$2" >> "${log}"\n  [[ "$2" == *renovate* ]] && return 0\n  print -r -- '${row}'\n}\nremote_watch`
+        ).stdout.trim();
+        expect(JSON.parse(out)).toEqual({
+          host: 'nuc',
+          at: '2026-11-05T00:00:00Z',
+          watch: { 'COD-1': { pr: 12, state: 'open', unresolved: 1 } }
+        });
+        const queries = readFileSync(log, 'utf8').trim().split('\n');
+        expect(queries).toHaveLength(2);
+        expect(queries[0]).toContain('select=host,at,watch,renovate&');
+        expect(queries[1]).toContain('select=host,at,watch&');
+      });
+
       it('prints nothing without supabase_select', () => {
         const out = run('remote_watch; print -r -- "rc=$?"');
         expect(out.stdout.trim()).toBe('rc=0');
@@ -388,6 +426,53 @@ describe('lib.sh', () => {
           'nuc · 2026-11-05T00:00:00Z',
           '{"COD-1":{"pr":12,"state":"open","unresolved":1}}'
         ]);
+      });
+
+      it('reads renovate.json beside the watch file where the scheduler runs', () => {
+        writeFileSync(join(dir, 'renovate.json'), '{"754":{"pr":754}}');
+        const out = run(
+          `watch_state "${join(dir, 'watch.json')}"; print -r -- "$RENOVATE_STATE"`,
+          { AGENT_QUEUE_HOST: 'container' }
+        );
+        expect(out.stdout.trim()).toBe('{"754":{"pr":754}}');
+      });
+
+      it('reads the remote row renovate elsewhere', () => {
+        const withRenovate =
+          '[{"host":"nuc","at":"2026-11-05T00:00:00Z","watch":{},"renovate":{"754":{"pr":754}}}]';
+        const out = run(
+          `supabase_select() { print -r -- '${withRenovate}' }\nwatch_state "${join(dir, 'watch.json')}"; print -r -- "$RENOVATE_STATE"`
+        );
+        expect(out.stdout.trim()).toBe('{"754":{"pr":754}}');
+      });
+
+      it('is {} when the row has no renovate, or no file exists', () => {
+        const noRenovate = run(
+          `supabase_select() { print -r -- '${remote}' }\nwatch_state "${join(dir, 'watch.json')}"; print -r -- "$RENOVATE_STATE"`
+        );
+        expect(noRenovate.stdout.trim()).toBe('{}');
+        const noFile = run(
+          `watch_state "${join(dir, 'watch.json')}"; print -r -- "$RENOVATE_STATE"`,
+          { AGENT_QUEUE_HOST: 'container' }
+        );
+        expect(noFile.stdout.trim()).toBe('{}');
+      });
+
+      it('reads an empty renovate.json as {} where the scheduler runs', () => {
+        writeFileSync(join(dir, 'renovate.json'), '');
+        const out = run(
+          `watch_state "${join(dir, 'watch.json')}"; print -r -- "$RENOVATE_STATE"`,
+          { AGENT_QUEUE_HOST: 'container' }
+        );
+        expect(out.stdout.trim()).toBe('{}');
+      });
+
+      it('reads an empty watch.json as {} where the scheduler runs', () => {
+        writeFileSync(join(dir, 'watch.json'), '');
+        const out = run(`watch_state "${join(dir, 'watch.json')}"; ${report}`, {
+          AGENT_QUEUE_HOST: 'container'
+        });
+        expect(out.stdout.trim().split('\n')).toEqual(['local', '{}']);
       });
 
       it('falls back to the file when the remote is unreadable', () => {

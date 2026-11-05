@@ -6,10 +6,10 @@
 #   telemetry_on                                             succeeds when both are set
 #   telemetry_run <started_at> <outcome> <ticket> <detail> <attended> <kind> <interval> <limit> <version>
 #                                                            one row in `runs`; empty fields become null
-#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json]
+#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json]
 #                                                            upserts this host's row in `queue_state`; empty fields become null,
-#                                                            a view that isn't JSON too; a watch, when given, is patched on after
-#                                                            (empty or invalid: null)
+#                                                            a view that isn't JSON too; a watch and a renovate state, when
+#                                                            given, are each patched on after (empty or invalid: null)
 #   telemetry_session <id> <kind> [state] [detail]           upserts the session's heartbeat in `sessions`;
 #                                                            empty fields become null
 #   supabase_delete <table> <query>                          DELETE the rows a PostgREST filter matches
@@ -162,6 +162,10 @@ telemetry_queue_state() {
   # so a host whose watch.json is gone never serves a stale one
   supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
     "$(jq -nc --arg w "$6" '{watch: ($w | try fromjson catch null)}')" >/dev/null || return 0
+  # The Renovate state the same way, in a patch of its own for its own migration
+  (( $# >= 7 )) || return 0
+  supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
+    "$(jq -nc --arg r "$7" '{renovate: ($r | try fromjson catch null)}')" >/dev/null || return 0
 }
 
 # telemetry_session <id> <kind> [state] [detail]: an empty or missing state or detail is null

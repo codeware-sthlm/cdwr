@@ -63,6 +63,16 @@ describe('pr_number', () => {
       [{ url: `${PR}/13#discussion_r1`, createdAt: '2026-01-01T00:00:00Z' }],
       13
     ],
+    [
+      'trailing letters after the number give null',
+      [{ url: `${PR}/754abc`, createdAt: '2026-01-01T00:00:00Z' }],
+      null
+    ],
+    [
+      'a /files suffix gives the number',
+      [{ url: `${PR}/754/files`, createdAt: '2026-01-01T00:00:00Z' }],
+      754
+    ],
     ['no attachments', [], null],
     [
       'nothing matches',
@@ -3205,6 +3215,457 @@ describe('launch', () => {
       );
       expect(res.action).toBe('notify');
       expect(res.reason).toMatch(/^daily implement cap/);
+    });
+  });
+});
+
+describe('renovate_step', () => {
+  type Pr = Record<string, unknown>;
+  const AT = '2026-10-11T12:00:00Z';
+  const pr = (over: Pr = {}): Pr => ({
+    number: 754,
+    title: 'chore(deps): update zod',
+    url: `${PR}/754`,
+    headRefOid: 'abc',
+    mergeable: 'MERGEABLE',
+    statusCheckRollup: [],
+    commits: [{ authors: [{ login: 'renovate[bot]', name: 'renovate[bot]' }] }],
+    ...over
+  });
+  const ticket = (url: string) => ({
+    identifier: 'COD-9',
+    attachments: { nodes: [{ url }] }
+  });
+  const hand = {
+    commits: [
+      { authors: [{ login: 'renovate[bot]' }] },
+      { authors: [{ login: 'hakan', name: 'Håkan', email: 'h@codeware.se' }] }
+    ]
+  };
+  type Step = {
+    state: Record<
+      string,
+      { state: string; at: string } & Record<string, unknown>
+    >;
+    notices: Array<{ level: string; message: string }>;
+  };
+  const step = (prs: Pr[], tickets: unknown[] = [], prev: unknown = {}) =>
+    run('renovate_step', { prs, tickets, prev, at: AT }) as Step;
+
+  it('is fine without failing checks or a conflict', () => {
+    const r = step([pr()]);
+    expect(r.state['754']).toMatchObject({ pr: 754, state: 'fine' });
+    expect(r.notices).toEqual([]);
+  });
+
+  it.each([
+    ['a failed CheckRun', [{ conclusion: 'FAILURE' }], 'failing'],
+    ['a timed out CheckRun', [{ conclusion: 'TIMED_OUT' }], 'failing'],
+    ['an errored StatusContext', [{ state: 'ERROR' }], 'failing'],
+    ['a failed StatusContext', [{ state: 'FAILURE' }], 'failing'],
+    ['a cancelled CheckRun', [{ conclusion: 'CANCELLED' }], 'fine'],
+    ['a successful CheckRun', [{ conclusion: 'SUCCESS' }], 'fine'],
+    ['a pending StatusContext', [{ state: 'PENDING' }], 'fine']
+  ])('reads %s', (_name, statusCheckRollup, state) => {
+    expect(step([pr({ statusCheckRollup })]).state['754'].state).toBe(state);
+  });
+
+  describe('tended', () => {
+    it.each([
+      ['a pull attachment', `${PR}/754`],
+      ['an attachment with a /files suffix', `${PR}/754/files`]
+    ])('%s', (_name, url) => {
+      const r = step(
+        [pr({ statusCheckRollup: [{ conclusion: 'FAILURE' }] })],
+        [ticket(url)]
+      );
+      expect(r.state['754']).toMatchObject({
+        state: 'tended',
+        ticket: 'COD-9'
+      });
+      expect(r.notices).toEqual([]);
+    });
+
+    it('ignores another pull number', () => {
+      const r = step(
+        [pr({ statusCheckRollup: [{ conclusion: 'FAILURE' }] })],
+        [ticket(`${PR}/75`)]
+      );
+      expect(r.state['754']).toMatchObject({ state: 'failing', ticket: null });
+    });
+  });
+
+  describe('conflicting', () => {
+    const conflicting = (over: Pr = {}) =>
+      pr({ mergeable: 'CONFLICTING', ...over });
+
+    it('is conflicting only when the branch was modified', () => {
+      expect(step([conflicting(hand)]).state['754']).toMatchObject({
+        state: 'conflicting',
+        modified: true,
+        conflicting: true
+      });
+    });
+
+    it('reads a commit without an author as modified', () => {
+      expect(
+        step([conflicting({ commits: [{ authors: [] }] })]).state['754'].state
+      ).toBe('conflicting');
+    });
+
+    it('leaves an unmodified conflicting branch to Renovate', () => {
+      const r = step([conflicting()]);
+      expect(r.state['754']).toMatchObject({ state: 'fine', modified: false });
+      expect(r.notices).toEqual([]);
+    });
+
+    it('reads an unmodified conflicting branch with failing checks as failing', () => {
+      const r = step([
+        conflicting({ statusCheckRollup: [{ conclusion: 'FAILURE' }] })
+      ]);
+      expect(r.state['754']).toMatchObject({
+        state: 'failing',
+        modified: false
+      });
+      expect(r.notices).toEqual([
+        {
+          level: 'info',
+          message:
+            'Renovate PR #754 has failing checks: chore(deps): update zod'
+        }
+      ]);
+    });
+
+    it('beats failing checks', () => {
+      const r = step([
+        conflicting({ ...hand, statusCheckRollup: [{ conclusion: 'FAILURE' }] })
+      ]);
+      expect(r.state['754'].state).toBe('conflicting');
+    });
+
+    it('keeps the previous conflict while mergeability is UNKNOWN', () => {
+      const prev = {
+        '754': { state: 'conflicting', sha: 'abc', at: AT, conflicting: true }
+      };
+      expect(
+        step([pr({ ...hand, mergeable: 'UNKNOWN' })], [], prev).state['754']
+      ).toMatchObject({ state: 'conflicting', conflicting: true });
+      expect(
+        step([pr({ ...hand, mergeable: 'UNKNOWN' })], [], {
+          '754': { ...prev['754'], conflicting: false }
+        }).state['754']
+      ).toMatchObject({ conflicting: false });
+    });
+
+    it('is not conflicting when UNKNOWN and nothing came before', () => {
+      expect(
+        step([pr({ ...hand, mergeable: 'UNKNOWN' })]).state['754'].state
+      ).toBe('fine');
+    });
+  });
+
+  describe('at', () => {
+    const prev = (over: Pr = {}) => ({
+      '754': {
+        state: 'failing',
+        sha: 'abc',
+        at: '2026-10-10T08:00:00Z',
+        conflicting: false,
+        ...over
+      }
+    });
+    const failing = (over: Pr = {}) =>
+      pr({ statusCheckRollup: [{ conclusion: 'FAILURE' }], ...over });
+
+    it('is kept while the state and the sha hold', () => {
+      expect(step([failing()], [], prev()).state['754'].at).toBe(
+        '2026-10-10T08:00:00Z'
+      );
+    });
+
+    it('is new when the sha changes', () => {
+      expect(
+        step([failing({ headRefOid: 'def' })], [], prev()).state['754'].at
+      ).toBe(AT);
+    });
+
+    it('is new when the state changes', () => {
+      expect(step([pr()], [], prev()).state['754'].at).toBe(AT);
+    });
+
+    it('is new for a PR not seen before', () => {
+      expect(step([failing()]).state['754'].at).toBe(AT);
+    });
+  });
+
+  describe('notices', () => {
+    const failing = pr({ statusCheckRollup: [{ conclusion: 'FAILURE' }] });
+    const conflict = pr({ ...hand, mergeable: 'CONFLICTING' });
+
+    it('sends one info notice when a PR turns failing', () => {
+      expect(step([failing]).notices).toEqual([
+        {
+          level: 'info',
+          message:
+            'Renovate PR #754 has failing checks: chore(deps): update zod'
+        }
+      ]);
+    });
+
+    it('sends one info notice when a PR turns conflicting', () => {
+      expect(step([conflict]).notices).toEqual([
+        {
+          level: 'info',
+          message:
+            'Renovate PR #754 conflicts with main: chore(deps): update zod'
+        }
+      ]);
+    });
+
+    it('sends another when failing turns conflicting', () => {
+      const prev = { '754': { state: 'failing', sha: 'abc', at: AT } };
+      expect(step([conflict], [], prev).notices).toHaveLength(1);
+    });
+
+    it('sends none while the state is unchanged', () => {
+      const prev = { '754': { state: 'failing', sha: 'abc', at: AT } };
+      expect(step([failing], [], prev).notices).toEqual([]);
+    });
+
+    it('sends none when it turns fine', () => {
+      const prev = { '754': { state: 'failing', sha: 'abc', at: AT } };
+      expect(step([pr()], [], prev).notices).toEqual([]);
+    });
+
+    it.each([
+      ['null', { prs: [failing], tickets: [], prev: null, at: AT }],
+      ['omitted', { prs: [failing], tickets: [], at: AT }]
+    ])(
+      'sends none on the first run, prev %s, but writes the state',
+      (_n, input) => {
+        const r = run('renovate_step', input) as Step;
+        expect(r.notices).toEqual([]);
+        expect(r.state['754']).toMatchObject({ state: 'failing' });
+      }
+    );
+
+    it('sends none for a tended PR', () => {
+      expect(step([failing], [ticket(`${PR}/754`)]).notices).toEqual([]);
+    });
+  });
+
+  it('drops closed PRs and keys the rest by number', () => {
+    const prev = {
+      '700': { state: 'failing', sha: 'x', at: AT },
+      '754': { state: 'fine', sha: 'abc', at: AT }
+    };
+    const r = step([pr(), pr({ number: 800, url: `${PR}/800` })], [], prev);
+    expect(Object.keys(r.state).sort()).toEqual(['754', '800']);
+  });
+
+  it('tolerates a missing prev', () => {
+    const r = run('renovate_step', {
+      prs: [pr()],
+      tickets: [],
+      at: AT
+    }) as Step;
+    expect(r.state['754'].state).toBe('fine');
+  });
+});
+
+describe('renovate in the queue', () => {
+  const NOW = Date.parse('2026-10-11T12:00:00Z') / 1000;
+  const node = (
+    id: string,
+    label: string | null,
+    over: Record<string, unknown> = {}
+  ) => ({
+    identifier: id,
+    priority: 3,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    completedAt: null as string | null,
+    state: { type: 'unstarted' },
+    labels: { nodes: label ? [{ name: label }] : [] },
+    description: null as string | null,
+    comments: { nodes: [] as Array<{ body: string; createdAt: string }> },
+    inverseRelations: { nodes: [] as unknown[] },
+    ...over
+  });
+  const merged = node('COD-5', 'agent:review', {
+    state: { type: 'completed' },
+    completedAt: '2026-09-01T12:00:00Z',
+    comments: {
+      nodes: [
+        {
+          body: `**Agent: PR ready**: ${PR}/1\n\nDone`,
+          createdAt: '2026-09-01T00:00:00Z'
+        },
+        { body: 'one more thing', createdAt: '2026-09-02T00:00:00Z' }
+      ]
+    }
+  });
+  const open = (id: string) => node(id, 'agent:review');
+  const rdy = node('COD-9', 'agent:ready');
+  const row = (n: number, state: string, ticket: string | null = null) => ({
+    pr: n,
+    title: `title ${n}`,
+    url: `${PR}/${n}`,
+    state,
+    ticket
+  });
+  const REN = {
+    '800': row(800, 'conflicting'),
+    '754': row(754, 'failing'),
+    '760': row(760, 'fine'),
+    '770': row(770, 'tended', 'COD-12')
+  };
+  const view = (issues: unknown[], ren: unknown = REN, limit = 5) =>
+    run(
+      `queue_view(${NOW}; ${limit}; {}; null; {}; ${JSON.stringify(ren)})`,
+      issues
+    ) as {
+      next: Array<{ ticket: string; reason: string; detail: string | null }>;
+      held: { tickets: string[]; free: Array<{ action: string }> };
+      renovate: Array<Record<string, unknown>>;
+    };
+
+  it('lists tended and broken rows by PR number, never fine ones', () => {
+    expect(view([]).renovate).toEqual([
+      { pr: 754, title: 'title 754', state: 'failing', ticket: null },
+      { pr: 770, title: 'title 770', state: 'tended', ticket: 'COD-12' },
+      { pr: 800, title: 'title 800', state: 'conflicting', ticket: null }
+    ]);
+  });
+
+  it('has no rows without renovate state', () => {
+    expect(view([], {}).renovate).toEqual([]);
+    expect(
+      run(`queue_view(${NOW}; 5; {}; null; {})`, []) as { renovate: unknown[] }
+    ).toMatchObject({ renovate: [] });
+  });
+
+  it('queues the untended broken PRs after a merged comment and before ready', () => {
+    expect(view([rdy, merged]).next).toEqual([
+      { ticket: 'COD-5', reason: 'merged comment', detail: null },
+      { ticket: 'PR 754', reason: 'renovate', detail: 'failing' },
+      { ticket: 'PR 800', reason: 'renovate', detail: 'conflicting' },
+      { ticket: 'COD-9', reason: 'ready', detail: null }
+    ]);
+  });
+
+  it('holds them, before the ready tickets, when the limit is full', () => {
+    const r = view([open('COD-1'), rdy], REN, 1);
+    expect(r.next).toEqual([]);
+    expect(r.held.tickets).toEqual(['PR 754', 'PR 800', 'COD-9']);
+  });
+
+  it('frees the limit for a held PR even with no ready ticket', () => {
+    const r = view([open('COD-1')], REN, 1);
+    expect(r.held.tickets).toEqual(['PR 754', 'PR 800']);
+    expect(r.held.free.map((f) => f.action)).toEqual(['review', 'limit']);
+  });
+
+  describe('attended', () => {
+    const attended = (issues: unknown[]) =>
+      run(
+        `attended(${NOW}; 5; {}; {}; ${JSON.stringify(REN)}) | [., attended_line]`,
+        issues
+      ) as [Record<string, unknown>, string];
+
+    it('picks the first broken PR', () => {
+      const [pick, line] = attended([]);
+      expect(pick).toMatchObject({
+        verdict: 'run',
+        ticket: 'PR 754',
+        reason: 'renovate',
+        detail: 'failing'
+      });
+      expect(line).toBe('run now: PR 754 renovate');
+    });
+
+    it('yields to a ticket before it', () => {
+      const [pick] = attended([merged]);
+      expect(pick).toMatchObject({ ticket: 'COD-5' });
+    });
+
+    it('leaves a tended-only queue idle', () => {
+      const r = run(
+        `attended(${NOW}; 5; {}; {}; ${JSON.stringify({ '770': REN['770'] })})`,
+        []
+      );
+      expect(r).toMatchObject({ verdict: 'idle' });
+    });
+  });
+
+  it('lists failing PRs before conflicting ones, whatever the number', () => {
+    const ren = { '700': row(700, 'conflicting'), '754': row(754, 'failing') };
+    expect(view([], ren).next).toEqual([
+      { ticket: 'PR 754', reason: 'renovate', detail: 'failing' },
+      { ticket: 'PR 700', reason: 'renovate', detail: 'conflicting' }
+    ]);
+  });
+
+  it('keeps PR-number order within failing and conflicting groups', () => {
+    const ren = {
+      '900': row(900, 'failing'),
+      '700': row(700, 'conflicting'),
+      '800': row(800, 'failing'),
+      '600': row(600, 'conflicting')
+    };
+    expect(view([], ren).next.map((n) => n.ticket)).toEqual([
+      'PR 800',
+      'PR 900',
+      'PR 600',
+      'PR 700'
+    ]);
+  });
+
+  describe('launch', () => {
+    const guards = {
+      session: null,
+      locked: false,
+      spent: 0,
+      cap: 40,
+      last: null
+    };
+    const launch = (detail: string) =>
+      run(`launch(${JSON.stringify(guards)})`, {
+        verdict: 'run',
+        ticket: 'PR 754',
+        reason: 'renovate',
+        detail
+      }) as { key: string; action: string; reason: string | null };
+
+    it('launches a failing PR under a key without spaces in the ticket', () => {
+      expect(launch('failing')).toMatchObject({
+        key: 'PR-754 renovate',
+        action: 'launch',
+        reason: null
+      });
+    });
+
+    it('launches the attended pick when a lower-numbered PR conflicts', () => {
+      const ren = {
+        '700': row(700, 'conflicting'),
+        '754': row(754, 'failing')
+      };
+      const r = run(
+        `attended(${NOW}; 5; {}; {}; ${JSON.stringify(ren)}) | launch(${JSON.stringify(guards)})`,
+        []
+      );
+      expect(r).toMatchObject({
+        key: 'PR-754 renovate',
+        action: 'launch',
+        reason: null
+      });
+    });
+
+    it('leaves a conflicting PR to an attended session', () => {
+      expect(launch('conflicting')).toMatchObject({
+        key: 'PR-754 renovate',
+        action: 'skip',
+        reason: 'a Renovate conflict waits for an attended session'
+      });
     });
   });
 });

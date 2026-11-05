@@ -432,6 +432,45 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
       });
     });
 
+    describe('the renovate state', () => {
+      const renovate = '{"754":{"pr":754,"state":"failing","ticket":null}}';
+
+      it('patches it in a patch of its own, after the watch', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '${renovate}'`
+        );
+        expect(hits).toHaveLength(3);
+        const host = (JSON.parse(hits[0]?.body ?? '') as { host: string }).host;
+        expect(hits[1]?.method).toBe('PATCH');
+        expect(JSON.parse(hits[1]?.body ?? '')).toEqual({ watch: {} });
+        expect(hits[2]?.method).toBe('PATCH');
+        expect(hits[2]?.url).toBe(
+          `/rest/v1/queue_state?host=eq.${encodeURIComponent(host)}`
+        );
+        expect(JSON.parse(hits[2]?.body ?? '')).toEqual({
+          renovate: JSON.parse(renovate)
+        });
+      });
+
+      it('patches null when it is empty or invalid', async () => {
+        await zsh(configured(), `telemetry_queue_state 'x' '' '' '' '' '' ''`);
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '' 'not json {'`
+        );
+        expect(hits).toHaveLength(6);
+        expect(JSON.parse(hits[2]?.body ?? '')).toEqual({ renovate: null });
+        expect(JSON.parse(hits[5]?.body ?? '')).toEqual({ renovate: null });
+      });
+
+      it('sends no patch for it when absent', async () => {
+        await zsh(configured(), `telemetry_queue_state 'x' '' '' '' '' '{}'`);
+        expect(hits).toHaveLength(2);
+        expect(hits.every((h) => !h.body.includes('renovate'))).toBe(true);
+      });
+    });
+
     it('sends nothing without the env vars', async () => {
       const out = await zsh({}, `telemetry_queue_state x '' '' '' ''`);
       expect(out.stdout).toBe('rc=0');

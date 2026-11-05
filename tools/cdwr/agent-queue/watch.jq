@@ -4,14 +4,15 @@
 
 def trim: gsub("^\\s+|\\s+$"; "");
 
+# The number of a cdwr pull URL, else null
+def pull_number:
+  (capture("^https://github\\.com/codeware-sthlm/cdwr/pull/(?<n>[0-9]+)(?:[/?#]|$)") | .n | tonumber)? // null;
+
 # PR number from the newest cdwr pull attachment of a Linear issue, else null
 def pr_number:
-  [ (.attachments.nodes // [])[]
-    | select(.url | test("^https://github\\.com/codeware-sthlm/cdwr/pull/[0-9]+")) ]
+  [ (.attachments.nodes // [])[] | select(.url | pull_number != null) ]
   | sort_by(.createdAt) | last
-  | if . == null then null
-    else .url | capture("^https://github\\.com/codeware-sthlm/cdwr/pull/(?<n>[0-9]+)").n | tonumber
-    end;
+  | if . == null then null else .url | pull_number end;
 
 # { what, status } for each row of the description's Status table (`| Step | What | Status |`),
 # the rows under that header up to the first line that is not a table row. Other tables don't count.
@@ -156,6 +157,51 @@ def merged_next($when; $items):
     elif $d == "" then $line
     else $d + "\n\n" + $line
     end;
+
+# --- Renovate PRs: a broken one becomes queue work (watch_renovate in run.sh) ---
+
+# One step over Renovate's open PRs. Input: { prs, tickets, prev, at }: prs from `gh pr list --json
+# number,title,url,headRefOid,mergeable,statusCheckRollup,commits`, tickets the `renovate`-labelled
+# Linear issues with their attachments, prev the last renovate.json. Output: { state, notices }, the
+# new renovate.json (one entry per open PR, keyed by its number) and the info notices to send.
+# A PR is `tended` once a ticket carries it as an attachment, and is never offered again. Else
+# `conflicting` when it conflicts with main and carries a commit not by Renovate (Renovate rebases
+# its own unmodified branches), `failing` when a check failed, `fine` otherwise. Such a conflict
+# beats failing checks, as in pr_state; an unmodified one is left to Renovate, unless its checks
+# fail too. UNKNOWN mergeability keeps the previous value. A null prev (no renovate.json yet)
+# sends no notices: the first run would announce every PR already broken.
+def renovate_step:
+  . as $in
+  | ($in.prev == null) as $first
+  | ($in.prev // {} | if type == "object" then . else {} end) as $prev
+  | ([ ($in.tickets // [])[] | .identifier as $id
+       | (.attachments.nodes // [])[] | (.url | pull_number) as $n | select($n != null)
+       | { key: ($n | tostring), value: $id } ] | from_entries) as $tended
+  | [ ($in.prs // [])[]
+      | (.number | tostring) as $k
+      | ($prev[$k] // {}) as $p
+      | ([ (.statusCheckRollup // [])[]
+           | select((.conclusion // "" | IN("FAILURE", "TIMED_OUT", "STARTUP_FAILURE"))
+                    or (.state // "" | IN("FAILURE", "ERROR"))) ] | length > 0) as $failing
+      | (any((.commits // [])[];
+             [ (.authors // [])[] | (.login // ""), (.name // ""), (.email // "") ]
+             | any(test("renovate"; "i")) | not)) as $modified
+      | (if .mergeable == "CONFLICTING" then true elif .mergeable == "MERGEABLE" then false
+         else $p.conflicting == true end) as $conflicting
+      | (if $tended[$k] != null then "tended"
+         elif $conflicting and $modified then "conflicting"
+         elif $failing then "failing"
+         else "fine" end) as $state
+      | { pr: .number, title: (.title // ""), url: (.url // null), sha: (.headRefOid // null),
+          state: $state, ticket: ($tended[$k] // null), modified: $modified, conflicting: $conflicting,
+          at: (if $p.state == $state and $p.sha == .headRefOid then ($p.at // $in.at) else $in.at end),
+          was: ($p.state // null) } ] as $entries
+  | {
+      state: ($entries | map({ key: (.pr | tostring), value: del(.was) }) | from_entries),
+      notices: [ $entries[] | select($first | not) | select(.state != .was and (.state | IN("failing", "conflicting")))
+                 | { level: "info",
+                     message: "Renovate PR #\(.pr) \(if .state == "failing" then "has failing checks" else "conflicts with main" end): \(.title)" } ]
+    };
 
 # Keep only the watched tickets in the state object
 def prune($ids): (. // {}) | with_entries(select(.key as $k | $ids | index($k) != null));
@@ -353,13 +399,15 @@ def limit_used($now; $limit):
       | .identifier ] as $hand
   | { used: ($open | length), open: $open, handoffs: $hand };
 
-# The whole queue: { at, limit, session, next, held, blocked, parked, table }. `next` is every
-# actionable item in the order the skill takes them; `held` is what the limit keeps from starting;
-# `blocked` is each answered plan not yet started that waits on its open blockers; `parked`
-# is every ticket waiting on a PR check or Copilot; `table` is what waits on Håkan: before and
-# after implementation, and sub-issues ready to label. $session comes from session_state, or null.
-# $waits comes from waits.sh, keyed by identifier.
-def queue_view($now; $limit; $watch; $session; $waits):
+# The whole queue: { at, limit, session, next, held, blocked, parked, renovate, table }. `next` is
+# every actionable item in the order the skill takes them; `held` is what the limit keeps from
+# starting; `blocked` is each answered plan not yet started that waits on its open blockers;
+# `parked` is every ticket waiting on a PR check or Copilot; `renovate` is every Renovate PR that is
+# broken or tended; `table` is what waits on Håkan: before and after implementation, and sub-issues
+# ready to label. $session comes from session_state, or null. $waits comes from waits.sh, keyed by
+# identifier. $renovate is renovate.json (renovate_step's state); an untended broken PR is a `next`
+# item `PR <n>` after merged comments, new work that the limit holds like a ready ticket.
+def queue_view($now; $limit; $watch; $session; $waits; $renovate):
   map(select(other_repo | not)) as $all
   | ($all | limit_used($now; $limit)) as $lu0
   | ([ $all[] | select((agent_label == "agent:working" or agent_label == "agent:review")
@@ -408,6 +456,10 @@ def queue_view($now; $limit; $watch; $session; $waits):
      | map({ ticket: .identifier, reason: "merged comment", detail: null })) as $mc
   | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not)) ] | sort_by(queue_order)
      | map(.identifier)) as $rdy
+  | ([ ($renovate // {} | if type == "object" then . else {} end)[]
+       | select(.state | IN("failing", "conflicting", "tended")) ] | sort_by(.pr)) as $ren
+  # Failing first: launch reads only the first pick, and implement-only runs take failing ones only
+  | ([ $ren | map(select(.state != "tended")) | sort_by(.state != "failing")[] | { ticket: "PR \(.pr)", reason: "renovate", detail: .state } ]) as $renNext
   | ($lu.used >= $limit) as $full
   | ([ $all[] | select(agent_label == "agent:needs-input" and is_open and (answered | not)) ] | sort_by(queue_order)
      | map({ ticket: .identifier,
@@ -419,10 +471,10 @@ def queue_view($now; $limit; $watch; $session; $waits):
       limit: { used: $lu.used, max: $limit },
       session: $session,
       next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb + $conf + $mc
-             + (if $full then [] else $rdy | map({ ticket: ., reason: "ready", detail: null }) end)),
+             + (if $full then [] else $renNext + ($rdy | map({ ticket: ., reason: "ready", detail: null })) end)),
       held: {
-        tickets: (if $full then $rdy else [] end),
-        free: (if $full and ($rdy | length) > 0
+        tickets: (if $full then ($renNext | map(.ticket)) + $rdy else [] end),
+        free: (if $full and (($rdy | length) + ($renNext | length)) > 0
                then ($lu0.open | map({ action: "review", ticket: ., pr: ($watch[.].pr // null) }))
                     + ($parkWorking | map({ action: "wait", ticket: .identifier, pr: .park.pr }))
                     + [ { action: "limit", value: ($lu.used + 1) } ]
@@ -432,6 +484,7 @@ def queue_view($now; $limit; $watch; $session; $waits):
       parked: ($park | map({ ticket: .identifier, wait: .park.wait, pr: .park.pr,
                              since: (.park.since | todateiso8601),
                              resolved: .ws.resolved, outcome: .ws.outcome })),
+      renovate: ($ren | map({ pr, title, state, ticket })),
       table: {
         before: $before,
         label: ([ $all[] | select(to_label) ] | sort_by(queue_order)
@@ -440,12 +493,13 @@ def queue_view($now; $limit; $watch; $session; $waits):
                 + ($lu.handoffs | map({ ticket: ., kind: "handoffs", items: ($by[.] | handoffs) })))
       }
     };
+def queue_view($now; $limit; $watch; $session; $waits): queue_view($now; $limit; $watch; $session; $waits; {});
 def queue_view($now; $limit; $watch; $session): queue_view($now; $limit; $watch; $session; {});
 
 # The pick: { verdict: running|run|idle, ticket, reason, detail, waiting, used, limit }, the first
 # of queue_view's `next`. A resumable ticket reads as running: a session may hold it.
-def attended($now; $limit; $watch; $waits):
-  queue_view($now; $limit; $watch; null; $waits) as $q
+def attended($now; $limit; $watch; $waits; $renovate):
+  queue_view($now; $limit; $watch; null; $waits; $renovate) as $q
   | ($q.table.before | map(.ticket + " input")) as $inputs
   | ($q.table.after | map(.ticket + (if .kind == "pr" then " PR" else " hand-offs" end))) as $after
   | ($q.table["label"] | map(.ticket + " label")) as $labels
@@ -455,6 +509,7 @@ def attended($now; $limit; $watch; $waits):
          elif $n.reason == "resume" then { verdict: "running", ticket: $n.ticket, reason: "working", detail: $n.detail }
          else { verdict: "run", ticket: $n.ticket, reason: $n.reason, detail: $n.detail }
          end);
+def attended($now; $limit; $watch; $waits): attended($now; $limit; $watch; $waits; {});
 def attended($now; $limit; $watch): attended($now; $limit; $watch; {});
 
 # One line for the attended pick object
@@ -515,7 +570,8 @@ def session_prefix:
 # previous launch, or null) }. Output: { action: launch|notify|skip, reason, key }, plus `last`,
 # the state to store, only when the action is launch.
 def launch($guards):
-  (if .ticket == null then null else "\(.ticket) \(.reason)" end) as $key
+  # implement.sh takes the key's first word as the ticket, so a Renovate pick's `PR 754` is `PR-754`
+  (if .ticket == null then null else "\(.ticket | gsub(" "; "-")) \(.reason)" end) as $key
   | ($guards.last // {}) as $prev
   # Counted per ticket and reason, so new work on a ticket starts fresh. A `take over` of the
   # ticket last launched is the same miss: a launched session that dies turns its pick into one.
@@ -524,6 +580,9 @@ def launch($guards):
      then ($prev.launches // 0) else 0 end) as $done
   | { key: $key }
     + if .verdict != "run" or .reason == "ready" or $key == null then { action: "skip", reason: "nothing to implement" }
+      # An implement-only run files a ticket for a failing Renovate PR; a conflict on a modified
+      # branch is attended work
+      elif .reason == "renovate" and .detail != "failing" then { action: "skip", reason: "a Renovate conflict waits for an attended session" }
       elif ($guards.session.state // "none") == "alive" or ($guards.session.state // "none") == "waiting"
         then { action: "skip", reason: "a session is alive" }
       elif $guards.locked then { action: "skip", reason: "a launched session is still running" }
