@@ -36,6 +36,13 @@
 
   "packageRules": [
     {
+      "description": "Majors: one PR each, opened on demand from the dashboard. First, so the rules below still win",
+      "matchUpdateTypes": ["major"],
+      "groupName": null,
+      "automerge": false,
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "Update the TanStack Start client and its server runtime in one PR",
       "matchPackageNames": [
         "@tanstack/react-router",
@@ -50,6 +57,7 @@
       "matchUpdateTypes": ["patch", "minor", "major"],
       "matchCategories": ["security"],
       "automerge": true,
+      "dependencyDashboardApproval": false,
       "prCreation": "immediate",
       "prConcurrentLimit": 0,
       "groupName": "security updates"
@@ -110,6 +118,12 @@
         "vite",
         "vitest"
       ],
+      "enabled": false
+    },
+    {
+      "description": "Runtime majors are planned, not auto-proposed. Last, so it wins over the major rule",
+      "matchPackageNames": ["node", "postgres", "macos", "@types/node"],
+      "matchUpdateTypes": ["major"],
       "enabled": false
     }
   ]
