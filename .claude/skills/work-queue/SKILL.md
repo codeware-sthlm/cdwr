@@ -42,7 +42,7 @@ on: working (from the start of each turn), waiting on a prompt, stopped, polling
 whether a session is alive, and only then stays quiet about work waiting for one.
 
 The file also names the ticket in hand. Run `tools/cdwr/agent-queue/session.sh ticket COD-123`
-when a ticket is claimed or resumed (**Per ticket** step 1, **What to take next** steps 1–4),
+when a ticket is claimed or resumed (**Per ticket** step 1, **What to take next** steps 1–5),
 and `tools/cdwr/agent-queue/session.sh ticket -` before going back to **What to take next**.
 
 Run both markers on their own or chained with commands that succeed: a Bash call that exits
@@ -77,7 +77,9 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    session's id, or is older than 2 hours. A newer claim with another id means another session
    holds it, even in the same worktree: leave it alone. On a take-over, post
    `**Agent: took over**` with the old claim line, then continue from the Status table and
-   **Next:** line, checking the branch for commits beyond them.
+   **Next:** line, checking the branch for commits beyond them. When its PR is open and
+   `gh pr view <n> --json mergeable` reads `CONFLICTING`, rebase first (**A PR that conflicts
+   with main**).
 3. **An answered `agent:needs-input` ticket**: its newest comment (or newest reply in the
    agent's thread) does **not** start with `**Agent`. Read the answer. When it is enough,
    record it under **Decisions** and continue: an approved plan goes to **Per ticket** step 4.
@@ -93,7 +95,10 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    thread on the PR by someone other than a bot, or a ticket comment not starting with
    `**Agent` that is newer than the agent's newest `**Agent: PR ready**` or
    `**Agent: review addressed**` comment. See **Review feedback**.
-5. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
+5. **A review PR that conflicts with main** (`run now: COD-1 conflicts with main`): the PR
+   watch read `mergeable` as `CONFLICTING`. Rebase it as in **A PR that conflicts with main**.
+   The ticket stays `agent:review`.
+6. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
    removes anything. It only removes ticket worktrees whose PR merged or closed and that
    have nothing uncommitted. Clear `agent:working` or `agent:needs-input` from a Done or
    Canceled ticket (`list_issues` with that label in those states; pass the full label list
@@ -104,9 +109,9 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    the Desk. Then close each parent ticket whose sub-issues are all Done or Canceled: set it
    Done and post `**Agent: closed**` naming the sub-issues. Linear's own
    parent auto-close stays off, so nothing else closes it.
-6. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
+7. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
    starts: go to **Nothing workable**.
-7. **A new `agent:ready` ticket** by the queue rule.
+8. **A new `agent:ready` ticket** by the queue rule.
 
 Nothing matched: go to **Nothing workable**.
 
@@ -208,7 +213,7 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    One ticket, one PR, so every PR maps to a ticket of its own. Work that needs more than
    one PR becomes sub-issues of the ticket, one per PR, each on its own branch and worked
    as a ticket. The parent holds the overview and opens no PR; the agent closes it once all its
-   sub-issues are done (**What to take next**, step 5).
+   sub-issues are done (**What to take next**, step 6).
 
 3. **Plan approval, in Linear.** Post `**Agent: plan ready**` with the decisions most worth
    checking and any open questions as numbered options (the format in **How a gate asks**).
@@ -228,7 +233,8 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    on merge Linear moves those tickets back to In Progress instead of Done. Notify `info`:
    PR opened. Then park on `copilot` (see **Parking**) and go to **What to take next**.
 6. **Copilot round.** Copilot reviews every PR on its own; handle it before the gate. See
-   **Copilot review** below. Once CI is green after it, set `agent:review` and status In
+   **Copilot review** below. Once CI is green after it, and `gh pr view <n> --json mergeable`
+   doesn't read `CONFLICTING` (else rebase first, **A PR that conflicts with main**), set `agent:review` and status In
    Review, and add a comment
    that starts with `**Agent: PR ready**`. It holds the PR link, what the Copilot round
    fixed and dismissed, what the Fly Deployment run did for the labelled PR (its jobs in
@@ -284,8 +290,9 @@ an hour after `since` (`timeout`: read `gh pr checks` and decide, as for a failu
 fix). `wait.sh` exits on it, and **What to take next** puts it first.
 
 On resume, run `session.sh ticket COD-123`, set the **Next:** line back to what comes next, and
-carry on: after `copilot`, the Copilot round; after `CI`, the PR-ready gate or the
-`review addressed` comment, or a fix when it failed. A parked ticket whose claim grew 2 hours
+carry on: after `copilot`, the Copilot round; after `CI`, the PR-ready gate, the
+`review addressed` comment, or the `**Agent:** rebased` comment after a rebase; or a fix when it
+failed. A parked ticket whose claim grew 2 hours
 old is taken over like any other.
 
 **A failed CI run is read, never guessed at.** `gh pr checks <n>` names the failed job and its
@@ -310,6 +317,8 @@ to retry.
 Håkan reviews after the PR-ready comment. Handle it between tickets.
 
 1. Work in the ticket's worktree (`worktree add` again if it is gone) and pull the branch.
+   When `gh pr view <n> --json mergeable` reads `CONFLICTING`, rebase first (**A PR that
+   conflicts with main**).
 2. Each point is its own commit on top; review fixes stack, they aren't squashed.
 3. Reply in each thread `**Agent:** Fixed in <sha>: <what changed>` and resolve it. A point
    you aren't sure about gets your reading and stays unresolved.
@@ -444,7 +453,8 @@ A plan approval uses the same numbered options under `**Agent: plan ready**`.
 ## Implement-only runs
 
 The scheduler starts `claude -p "/work-queue implement-only once"` when work that only an
-implementing session can do waits (an approved plan, an answer, review feedback, a stale claim)
+implementing session can do waits (an approved plan, an answer, review feedback, a review PR that conflicts with main, a
+stale claim)
 and no session is alive. Nobody is at the terminal, and the permissions deny anything not
 listed.
 
