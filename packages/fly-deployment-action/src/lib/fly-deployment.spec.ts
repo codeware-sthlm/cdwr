@@ -2,6 +2,7 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import type { context } from '@actions/github';
 import { type DeployAppOptions, Fly } from '@cdwr/fly-node';
+import { fetchDeployments } from '@codeware/shared/feature/tenancy';
 import * as coreAction from '@codeware/shared/util/github';
 import type { PullRequestEvent } from '@octokit/webhooks-types';
 import { vol } from 'memfs';
@@ -40,6 +41,9 @@ vi.mock('@codeware/shared/util/github', async () => ({
   getRepositoryDefaultBranch: vi.fn()
 }));
 vi.mock('@cdwr/fly-node');
+vi.mock('@codeware/shared/feature/tenancy', () => ({
+  fetchDeployments: vi.fn()
+}));
 
 describe('flyDeployment', () => {
   // Save environment variables before tests
@@ -1125,6 +1129,102 @@ describe('flyDeployment', () => {
         );
       }
     );
+  });
+
+  describe('tenant secrets', () => {
+    const infisical = {
+      infisicalClientId: 'client-id',
+      infisicalClientSecret: 'client-secret',
+      infisicalProjectId: 'project-id'
+    };
+
+    const mockFetchDeployments = vi.mocked(fetchDeployments);
+
+    const fetched = (
+      secrets: Record<string, string>
+    ): Awaited<ReturnType<typeof fetchDeployments>> => ({
+      deployments: {
+        'app-one': [{}, { tenant: 'demo', secrets }]
+      },
+      skipped: []
+    });
+
+    it('should deploy a tenant with the secret values read from Infisical', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+      mockFetchDeployments.mockResolvedValue(
+        fetched({ API_KEY: 'api-key-value', OTHER: 'other-value' })
+      );
+
+      const config = setupTest({
+        ...infisical,
+        apps: [getDefaultApps()[0]],
+        appDetails: {
+          'app-one': [{}, { tenant: 'demo', secretNames: ['API_KEY'] }]
+        }
+      });
+      await flyDeployment(config, true);
+
+      expect(mockFetchDeployments).toHaveBeenCalledWith(
+        expect.objectContaining({ environment: 'production', site: 'eu' }),
+        ['app-one']
+      );
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(2);
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          app: 'app-one-config-demo',
+          secrets: { API_KEY: 'api-key-value' }
+        })
+      );
+      expect(core.setSecret).toHaveBeenCalledWith('api-key-value');
+    });
+
+    it('should report a tenant as failed without deploying it when a named secret is missing', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+      mockFetchDeployments.mockResolvedValue(fetched({ OTHER: 'other-value' }));
+
+      const config = setupTest({
+        ...infisical,
+        apps: [getDefaultApps()[0]],
+        appDetails: {
+          'app-one': [{}, { tenant: 'demo', secretNames: ['API_KEY'] }]
+        }
+      });
+      const result = await flyDeployment(config, true);
+
+      // Only the host was deployed
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-one-config' })
+      );
+      expect(result.projects).toEqual([
+        expect.objectContaining({ action: 'deploy', app: 'app-one-config' }),
+        {
+          action: 'failed',
+          appOrProject: 'app-one (demo)',
+          error: expect.stringContaining('API_KEY')
+        }
+      ]);
+    });
+
+    it('should fail before deploying when secrets are named without credentials', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: {
+          'app-one': [{}, { tenant: 'demo', secretNames: ['API_KEY'] }]
+        }
+      });
+
+      await expect(flyDeployment(config, true)).rejects.toThrow(
+        'app-one (demo)'
+      );
+      expect(mockFetchDeployments).not.toHaveBeenCalled();
+      expect(getMockFly().deploy).not.toHaveBeenCalled();
+    });
   });
 
   describe('health probe', () => {

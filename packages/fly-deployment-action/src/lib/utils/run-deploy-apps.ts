@@ -7,6 +7,7 @@ import type { DeploymentConfig } from '../schemas/deployment-config.schema';
 
 import { addOpinionatedEnv } from './add-opinionated-env';
 import { getHealthCheckPath, probeHealth } from './probe-health';
+import type { ResolvedAppDetails } from './resolve-tenant-secrets';
 
 /**
  * Deploy provided apps or apps that are affected by code changes
@@ -19,6 +20,8 @@ import { getHealthCheckPath, probeHealth } from './probe-health';
  * @returns List of deploy statuses of apps
  */
 export const runDeployApps = async (options: {
+  /** Planned deployments with their tenant secrets read from Infisical */
+  appDetails: ResolvedAppDetails;
   config: DeploymentConfig;
   environment: Environment;
   fly: Fly;
@@ -27,7 +30,8 @@ export const runDeployApps = async (options: {
 }): Promise<ActionOutputs['projects']> => {
   const projects: ActionOutputs['projects'] = [];
 
-  const { config, environment, fly, imageMap, pullRequest } = options;
+  const { appDetails, config, environment, fly, imageMap, pullRequest } =
+    options;
 
   // Track apps whose host deployment failed so tenant deployments can be skipped.
   // Deploying tenants against an incompatible schema would cause runtime failures.
@@ -43,7 +47,7 @@ export const runDeployApps = async (options: {
     // Pre-deploy only lists apps that have somewhere to go. One without any is
     // never deployed as a bare host app: that is how a host nobody asked for
     // reaches production.
-    const appDeploymentDetails = config.appDetails[projectName] ?? [];
+    const appDeploymentDetails = appDetails[projectName] ?? [];
     if (appDeploymentDetails.length === 0) {
       core.warning(
         `Skipping ${projectName}: no host or tenant deployment is enabled for it`
@@ -100,6 +104,17 @@ export const runDeployApps = async (options: {
           appOrProject: `${projectName} (${tenantId})`,
           action: 'failed',
           error: `Skipped: host deployment failed`
+        });
+        continue;
+      }
+
+      // The secrets this deployment needs could not be read
+      if (deploymentDetails.error) {
+        core.warning(`Skipping${tenantLabel}: ${deploymentDetails.error}`);
+        projects.push({
+          appOrProject: tenantId ? `${projectName} (${tenantId})` : projectName,
+          action: 'failed',
+          error: deploymentDetails.error
         });
         continue;
       }

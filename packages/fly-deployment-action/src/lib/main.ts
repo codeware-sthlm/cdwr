@@ -27,7 +27,8 @@ export async function run(): Promise<void> {
     try {
       appDetails = appDetailsInput ? JSON.parse(appDetailsInput) : {};
     } catch {
-      // The parser's message quotes the input, which holds tenant secrets
+      // The parser's message quotes the input, which a stale caller may have
+      // filled with tenant secret values
       throw new Error('app-details is not valid JSON');
     }
 
@@ -52,6 +53,12 @@ export async function run(): Promise<void> {
       flyTraceCli: core.getBooleanInput('fly-trace-cli'),
       flyConsoleLogs: core.getBooleanInput('fly-console-logs'),
       images,
+      infisicalClientId: core.getInput('infisical-client-id') || undefined,
+      infisicalClientSecret:
+        core.getInput('infisical-client-secret') || undefined,
+      infisicalProjectId: core.getInput('infisical-project-id') || undefined,
+      infisicalSite: (core.getInput('infisical-site') ||
+        undefined) as ActionInputs['infisicalSite'],
       optOutDepotBuilder: core.getBooleanInput('opt-out-depot-builder'),
       prNumber: parsePrNumber(core.getInput('pr-number')),
       secrets: core.getMultilineInput('secrets'),
@@ -59,7 +66,9 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     } satisfies ActionInputs);
 
-    maskSecretsIn(inputs);
+    // app-details holds secret names and public env only; masking the names
+    // would blank the ones a failed read reports. Values are masked on read.
+    maskSecretsIn({ ...inputs, appDetails: undefined });
     core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     const { environment, projects } = await flyDeployment(inputs);

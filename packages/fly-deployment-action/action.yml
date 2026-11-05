@@ -51,12 +51,29 @@ inputs:
       The token to use for repository authentication.
       For example `GITHUB_TOKEN`.
     required: true
+  infisical-client-id:
+    description: >
+      Infisical client ID for reading tenant secrets.
+      Needed only when a tenant deployment names secrets; the action reads their values from Infisical.
+  infisical-client-secret:
+    description: >
+      Infisical client secret for reading tenant secrets.
+      Needed only when a tenant deployment names secrets; the action reads their values from Infisical.
+  infisical-project-id:
+    description: >
+      Infisical project ID for reading tenant secrets.
+      Needed only when a tenant deployment names secrets; the action reads their values from Infisical.
+  infisical-site:
+    description: >
+      Infisical site to use ('eu' or 'us').
+      Defaults to 'eu'.
   app-details:
     description: >
       Optional JSON object mapping apps to their deployment details, when needed.
-      Each app maps to an array of objects with optional tenant, env, and secrets.
-      Example: {"web":[{"tenant":"acme","env":{"URL":"..."},"secrets":{"KEY":"..."}}]}
-      The tenant field is optional - you can provide env/secrets without a tenant.
+      Each app maps to an array of objects with optional tenant, env, and secretNames.
+      Example: {"web":[{"tenant":"acme","env":{"URL":"..."},"secretNames":["KEY"]}]}
+      The tenant field is optional - you can provide env/secretNames without a tenant.
+      Carries secret names only; the action reads their values from Infisical and masks them.
       If an app has an empty array, it will be deployed once without deployment-specific config.
       Deployment-specific env/secrets are merged with global env/secrets (deployment takes precedence).
       Defaults to an empty object (single deployment per app with global config only).
