@@ -40,6 +40,7 @@ describe('main', () => {
       if (name === 'environment') return 'production';
       if (name === 'images') return '';
       if (name === 'images-path') return '';
+      if (name === 'infisical-site') return 'eu';
       return name;
     });
     getMultilineInputMock.mockImplementation(() => []);
@@ -75,16 +76,17 @@ describe('main', () => {
     getInputMock.mockImplementation((name: string) => {
       if (name === 'apps') return JSON.stringify(apps);
       if (name === 'app-details')
-        return '{"web":[{"tenant":"t1","secrets":{"KEY":"val"}}]}';
+        return '{"web":[{"tenant":"t1","secretNames":["KEY"]}]}';
       if (name === 'environment') return 'production';
       if (name === 'images') return '';
       if (name === 'images-path') return '';
+      if (name === 'infisical-site') return 'us';
       return name;
     });
     await main.run();
 
     expect(flyDeploymentMock).toHaveBeenCalledWith({
-      appDetails: { web: [{ tenant: 't1', secrets: { KEY: 'val' } }] },
+      appDetails: { web: [{ tenant: 't1', secretNames: ['KEY'] }] },
       apps,
       env: [],
       environment: 'production',
@@ -94,6 +96,10 @@ describe('main', () => {
       flyTraceCli: true,
       flyConsoleLogs: true,
       images: undefined,
+      infisicalClientId: 'infisical-client-id',
+      infisicalClientSecret: 'infisical-client-secret',
+      infisicalProjectId: 'infisical-project-id',
+      infisicalSite: 'us',
       optOutDepotBuilder: true,
       secrets: [],
       token: 'token'
@@ -125,6 +131,10 @@ describe('main', () => {
       flyTraceCli: true,
       flyConsoleLogs: true,
       images: undefined,
+      infisicalClientId: undefined,
+      infisicalClientSecret: undefined,
+      infisicalProjectId: undefined,
+      infisicalSite: undefined,
       optOutDepotBuilder: true,
       secrets: [],
       token: 'token'
@@ -186,6 +196,7 @@ describe('main', () => {
       if (name === 'environment') return 'production';
       if (name === 'images') return '';
       if (name === 'images-path') return '';
+      if (name === 'infisical-site') return 'eu';
       return name;
     });
     const error = new Error('error message');

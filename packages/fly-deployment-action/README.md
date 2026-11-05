@@ -73,6 +73,9 @@ deploy:
         environment: ${{ needs.pre-deploy.outputs.environment }}
         app-details: ${{ needs.pre-deploy.outputs.app-tenants }}
         images: ${{ needs.build.outputs.images }}
+        infisical-client-id: ${{ secrets.INFISICAL_READ_CLIENT_ID }}
+        infisical-client-secret: ${{ secrets.INFISICAL_READ_CLIENT_SECRET }}
+        infisical-project-id: ${{ secrets.INFISICAL_PROJECT_ID }}
 ```
 
 ### Environment Determination
@@ -109,17 +112,19 @@ Provide a JSON object that maps app names to their deployment configurations. Th
     {
       "tenant": "acme",
       "env": { "PUBLIC_URL": "https://acme.example.com" },
-      "secrets": { "API_KEY": "sk_acme_..." }
+      "secretNames": ["API_KEY"]
     },
     {
       "tenant": "globex",
       "env": { "PUBLIC_URL": "https://globex.example.com" },
-      "secrets": { "API_KEY": "sk_globex_..." }
+      "secretNames": ["API_KEY"]
     }
   ],
   "cms": [{ "tenant": "acme" }]
 }
 ```
+
+**Secrets:** `app-details` carries secret _names_ only, never values, since a job output is printed in the log of every step that takes it. The action reads the values from Infisical itself and masks them in the log. This needs the `infisical-client-id`, `infisical-client-secret` and `infisical-project-id` inputs (and `infisical-site`, default `eu`), but only when a tenant deployment names secrets. A name missing in Infisical fails that tenant's deployment, naming the secret; a secret added since pre-deploy is ignored with a warning.
 
 **Behavior:**
 
@@ -144,7 +149,7 @@ Provide a JSON object that maps app names to their deployment configurations. Th
 
 In this example, `GLOBAL_VAR` and `SHARED_SECRET` are available to all deployments, but deployment-specific values take precedence if they have the same key.
 
-**Note:** The `tenant` field is optional. You can provide `env`/`secrets` without a tenant for multi-deployment scenarios (e.g., different configurations for staging/production).
+**Note:** The `tenant` field is optional. You can provide `env`/`secretNames` without a tenant for multi-deployment scenarios (e.g., different configurations for staging/production).
 
 #### `secrets`
 

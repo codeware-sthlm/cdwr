@@ -24,6 +24,10 @@ export const getDeploymentConfig = (inputs: ActionInputs): DeploymentConfig => {
     flyRegion,
     flyTraceCli,
     flyConsoleLogs,
+    infisicalClientId,
+    infisicalClientSecret,
+    infisicalProjectId,
+    infisicalSite,
     optOutDepotBuilder,
     secrets: secretsInput,
     apps,
@@ -47,6 +51,15 @@ export const getDeploymentConfig = (inputs: ActionInputs): DeploymentConfig => {
     secrets,
     apps,
     appDetails: appDetails ?? {},
+    infisical:
+      infisicalClientId && infisicalClientSecret && infisicalProjectId
+        ? {
+            clientId: infisicalClientId,
+            clientSecret: infisicalClientSecret,
+            projectId: infisicalProjectId,
+            site: infisicalSite || 'eu'
+          }
+        : undefined,
     token
   };
   return DeploymentConfigSchema.parse(config);
