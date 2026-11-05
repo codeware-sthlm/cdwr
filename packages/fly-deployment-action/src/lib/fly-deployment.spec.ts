@@ -1208,7 +1208,7 @@ describe('flyDeployment', () => {
       ]);
     });
 
-    it('should fail before deploying when secrets are named without credentials', async () => {
+    it('should report only the tenant as failed, and deploy the host, when credentials are missing', async () => {
       setContext('push-main-branch');
       setupMocks();
 
@@ -1218,12 +1218,21 @@ describe('flyDeployment', () => {
           'app-one': [{}, { tenant: 'demo', secretNames: ['API_KEY'] }]
         }
       });
+      const result = await flyDeployment(config, true);
 
-      await expect(flyDeployment(config, true)).rejects.toThrow(
-        'app-one (demo)'
-      );
       expect(mockFetchDeployments).not.toHaveBeenCalled();
-      expect(getMockFly().deploy).not.toHaveBeenCalled();
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-one-config' })
+      );
+      expect(result.projects).toEqual([
+        expect.objectContaining({ action: 'deploy', app: 'app-one-config' }),
+        {
+          action: 'failed',
+          appOrProject: 'app-one (demo)',
+          error: expect.stringContaining('Infisical credentials are required')
+        }
+      ]);
     });
   });
 

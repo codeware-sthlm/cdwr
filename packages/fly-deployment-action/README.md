@@ -124,7 +124,7 @@ Provide a JSON object that maps app names to their deployment configurations. Th
 }
 ```
 
-**Secrets:** `app-details` carries secret _names_ only, never values, since a job output is printed in the log of every step that takes it. The action reads the values from Infisical itself and masks them in the log. This needs the `infisical-client-id`, `infisical-client-secret` and `infisical-project-id` inputs (and `infisical-site`, default `eu`), but only when a tenant deployment names secrets. A name missing in Infisical fails that tenant's deployment, naming the secret; a secret added since pre-deploy is ignored with a warning.
+**Secrets:** `app-details` carries secret _names_ only, never values, since a job output is printed in the log of every step that takes it. The action reads the values from Infisical itself and masks them in the log. This needs the `infisical-client-id`, `infisical-client-secret` and `infisical-project-id` inputs (and `infisical-site`, default `eu`), but only when a tenant deployment names secrets. Without credentials, or when Infisical can't be read, only the deployments that name secrets fail; the rest still deploy. A name missing in Infisical fails that tenant's deployment, naming the secret; a secret added since pre-deploy is ignored with a warning.
 
 **Behavior:**
 
