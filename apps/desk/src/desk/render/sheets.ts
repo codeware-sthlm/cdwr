@@ -208,7 +208,11 @@ const waitCard =
             : r.kind === 'approved'
               ? { text: 'Open ticket', href: r.url }
               : r.kind === 'ready to label'
-                ? { text: 'Label agent:ready', href: r.url }
+                ? // Beside the label button the link only opens the ticket
+                  {
+                    text: ui.on ? 'Open ticket' : 'Label agent:ready',
+                    href: r.url
+                  }
                 : { text: 'Answer in Linear', href: r.url };
     const secondary = r.kind === 'ready to label' || r.kind === 'approved';
     const note = [
