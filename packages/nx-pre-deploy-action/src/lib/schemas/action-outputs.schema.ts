@@ -3,11 +3,14 @@ import { z } from 'zod';
 
 const EnvironmentSchema = z.enum(['preview', 'production', '']);
 
-const AppTenantDetailsSchema = z.object({
-  tenant: z.string().optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  secrets: z.record(z.string(), z.string()).optional()
-});
+const AppTenantDetailsSchema = z
+  .object({
+    tenant: z.string().optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    // Names only: the deployment action reads the values from Infisical
+    secretNames: z.array(z.string()).optional()
+  })
+  .strict();
 
 export const ActionOutputsSchema = z.object({
   apps: z.array(DeployableAppSchema),

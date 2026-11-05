@@ -174,8 +174,15 @@ export async function preDeploy(
       return false;
     });
 
-    const appTenants: DeploymentsMap = Object.fromEntries(
-      deployable.map((app) => [app.name, deployments[app.name]])
+    // Only the secret names leave this step; the values stay in Infisical
+    const appTenants: ActionOutputs['appTenants'] = Object.fromEntries(
+      deployable.map((app) => [
+        app.name,
+        deployments[app.name].map(({ secrets, ...entry }) => {
+          const secretNames = Object.keys(secrets ?? {}).sort();
+          return secretNames.length > 0 ? { ...entry, secretNames } : entry;
+        })
+      ])
     );
 
     for (const [app, entries] of Object.entries(appTenants)) {
