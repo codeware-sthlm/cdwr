@@ -332,12 +332,13 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         ctx.root
       );
       // The installed scripts are the scheduler's, refreshed by `install`; an attended-only
-      // machine has none to keep current, so its check runs the checkout's
+      // machine has none to keep current, so its check runs this checkout's, which `attend`
+      // keeps on main (a planner checkout left behind by `uninstall` could be stale)
       const checkQueue =
         scheduler === 'elsewhere'
           ? {
               ...queue,
-              script: join(checkRepo, 'tools', 'cdwr', 'agent-queue', 'run.sh')
+              script: join(ctx.root, 'tools', 'cdwr', 'agent-queue', 'run.sh')
             }
           : queue;
       const checked = await checkRun(checkQueue, checkRepo, ctx.env).catch(
