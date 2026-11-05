@@ -577,7 +577,7 @@ describe('session card', () => {
       expect(html(s)).not.toContain('7d');
     });
 
-    it('marks a window bad when it runs out, and shows nothing without a 5-hour window', () => {
+    it('marks a window bad when it runs out, and shows nothing without a live window', () => {
       const s = filled();
       s.data.planUsage = [
         planSample('five_hour', 2, 70),
@@ -586,10 +586,27 @@ describe('session card', () => {
       const out = html(s);
       expect(out).toContain('5h <span class="bad">70%</span>');
       expect(out).toContain('7d <span class="">18%</span>');
-      s.data.planUsage = [planSample('seven_day', 100, 18)];
-      expect(html(s)).not.toContain('ct-plan');
       s.data.planUsage = [planSample('five_hour', -1, 90, 200)];
       expect(html(s)).not.toContain('ct-plan');
+    });
+
+    it('keeps the 7-day share when the 5-hour window has reset', () => {
+      const s = filled();
+      s.data.planUsage = [
+        planSample('five_hour', -1, 90, 200),
+        planSample('seven_day', 100, 18)
+      ];
+      expect(html(s)).toContain(
+        '<div class="ct-plan">Plan: 7d <span class="">18%</span></div>'
+      );
+    });
+
+    it('marks the plan line stale when its sample is old', () => {
+      const s = filled();
+      s.data.planUsage = [planSample('five_hour', 2, 30, 90)];
+      expect(html(s)).toContain('<div class="ct-plan stale">');
+      s.data.planUsage = [planSample('five_hour', 2, 30)];
+      expect(html(s)).not.toContain('ct-plan stale');
     });
 
     it('lists the other live sessions, two at most', () => {
