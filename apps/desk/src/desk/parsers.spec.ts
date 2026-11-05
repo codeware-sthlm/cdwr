@@ -236,6 +236,17 @@ describe('parseHandoffs', () => {
     ).toEqual(['a']);
   });
 
+  it('drops a struck item, with or without a reason', () => {
+    expect(
+      parseHandoffs([
+        ready(
+          '**Agent: PR ready**\nHand-off checklist:\n- [ ] ~~a~~\n- [ ] ~~b~~ dropped: CI covers it\n- [ ] c\nDrop one: strike it through, or say why in a comment.',
+          '1'
+        )
+      ])
+    ).toEqual(['c']);
+  });
+
   it.each([
     ['no comments', []],
     ['null', null],
