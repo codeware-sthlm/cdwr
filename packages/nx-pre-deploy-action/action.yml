@@ -69,8 +69,9 @@ outputs:
   app-tenants:
     description: >
       JSON object mapping apps to their deployments. A host deployment is an
-      empty object and comes first; a tenant deployment has tenant, env, and secrets.
-      Example: { "web": [{}, { "tenant": "acme", "env": { "PUBLIC_URL": "https://acme.com" }, "secrets": { "API_KEY": "..." } }] }
+      empty object and comes first; a tenant deployment has tenant, env, and secretNames.
+      Carries secret names only, never their values; the deployment reads the values from Infisical.
+      Example: { "web": [{}, { "tenant": "acme", "env": { "PUBLIC_URL": "https://acme.com" }, "secretNames": ["API_KEY"] }] }
 
 runs:
   using: "node24"

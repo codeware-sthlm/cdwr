@@ -514,7 +514,7 @@ describe('preDeploy', () => {
         web: [
           {},
           { tenant: 'acme', env: { PUBLIC_URL: 'https://acme.com' } },
-          { tenant: 'demo', secrets: { API_KEY: 'secret' } }
+          { tenant: 'demo', secretNames: ['API_KEY'] }
         ],
         cms: [{ tenant: 'demo' }]
       });
@@ -522,6 +522,22 @@ describe('preDeploy', () => {
       expect(mockCoreInfo).toHaveBeenCalledWith(
         'Deploy web to: <host>, acme, demo'
       );
+    });
+
+    it('should output secret names sorted and never a secret value', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+      mockDeployments({
+        web: [
+          { tenant: 'demo', secrets: { ZED: 'value-z', API_KEY: 'value-a' } }
+        ]
+      });
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.appTenants).toEqual({
+        web: [{ tenant: 'demo', secretNames: ['API_KEY', 'ZED'] }]
+      });
+      expect(JSON.stringify(result)).not.toContain('value-');
     });
 
     it('should deploy a host-only app with a single host entry', async () => {
