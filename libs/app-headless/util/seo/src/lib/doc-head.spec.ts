@@ -1,38 +1,17 @@
 import type { DocData } from '@codeware/shared/util/payload-utils';
 import { describe, expect, it } from 'vitest';
 
-import { docHead } from './doc-head';
-import type { Site } from './server/load-site';
+import { type HeadRoot, docHead } from './doc-head';
 
-const root = (landingPageId: number | null): Site => ({
+const root = (landingPageId: number | null): HeadRoot => ({
   ok: true,
   site: {
     appName: 'Codeware',
-    appInfo: {
-      name: 'headless',
-      version: '0.0.0',
-      sha: '',
-      deployEnv: 'test',
-      buildTime: ''
-    },
-    chrome: 'outlined',
-    colorSchemePolicy: 'system',
-    customCss: '',
-    fontFaceCss: '',
-    iconConfig: null,
     landingPageId,
     locale: 'en',
     origin: 'https://codeware.se',
-    payloadUrl: 'https://cms.codeware.se',
-    stats: false,
-    statsWebsiteId: null,
-    theme: 'codeware',
-    themes: []
-  },
-  landingDocJson: null,
-  navigationTree: [],
-  footer: null,
-  signupPolicy: null
+    payloadUrl: 'https://cms.codeware.se'
+  }
 });
 
 const page = (id: number, slug: string): DocData => ({

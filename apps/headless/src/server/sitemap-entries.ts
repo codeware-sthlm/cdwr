@@ -1,3 +1,4 @@
+import type { SitemapEntry } from '@codeware/app-headless/util/seo';
 import {
   findPages,
   findPosts,
@@ -5,7 +6,6 @@ import {
 } from '@codeware/shared/util/payload-api';
 import { sitePath } from '@codeware/shared/util/payload-utils';
 
-import type { SitemapEntry } from '../crawl-files';
 import { getEnv } from '../env.server';
 
 import { payloadRequestOptions } from './payload-request';

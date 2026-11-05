@@ -1,11 +1,14 @@
 import {
+  parseLoadDocInput,
+  resolveDocPath
+} from '@codeware/app-headless/util/routing';
+import {
   type RequestBaseOptions,
   findDoc
 } from '@codeware/shared/util/payload-api';
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 
-import { parseLoadDocInput, resolveDocPath } from '../doc-path';
 import { getEnv } from '../env.server';
 
 import { payloadRequestOptions } from './payload-request';

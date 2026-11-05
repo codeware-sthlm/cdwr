@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import type { Env } from '@codeware/app-headless/util/env-schema';
 import type { RequestBaseOptions } from '@codeware/shared/util/payload-api';
-
-import type { Env } from '../env.schema';
 
 /**
  * Base options for a signed request to the cms headless API.

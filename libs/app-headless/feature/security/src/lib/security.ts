@@ -1,4 +1,4 @@
-import type { Env } from '../env.schema';
+import type { Env } from '@codeware/app-headless/util/env-schema';
 
 import { cspResponseHeaders } from './csp';
 import { logRequestHeaders, logResponseHeaders } from './debug-headers';

@@ -6,7 +6,18 @@ import {
 } from '@codeware/shared/util/payload-utils';
 
 import { seoHead } from './seo-head';
-import type { Site } from './server/load-site';
+
+/** What the head reads of the loaded site */
+export type HeadSite = {
+  appName: string;
+  landingPageId: number | string | null;
+  locale: string;
+  origin: string | null;
+  payloadUrl: string;
+};
+
+/** The root route's data, as far as the head is concerned */
+export type HeadRoot = { ok: true; site: HeadSite } | { ok: false };
 
 /** What a page, post or tour states about itself, whichever it is */
 export const docMeta = (data: DocData): DocumentMeta => {
@@ -33,7 +44,7 @@ export const docMeta = (data: DocData): DocumentMeta => {
  * @param landing - The front page, which carries the site's name alone
  */
 export function docHead(
-  root: Site | undefined,
+  root: HeadRoot | undefined,
   options: { doc: DocData | null; landing?: boolean }
 ) {
   const site = root?.ok ? root.site : null;

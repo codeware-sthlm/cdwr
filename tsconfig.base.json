@@ -109,6 +109,21 @@
       "@codeware/app-cms/util/tour-signups": [
         "./libs/app-cms/util/tour-signups/src/index.ts"
       ],
+      "@codeware/app-headless/data-access": [
+        "./libs/app-headless/data-access/src/index.ts"
+      ],
+      "@codeware/app-headless/feature/security": [
+        "./libs/app-headless/feature/security/src/index.ts"
+      ],
+      "@codeware/app-headless/util/env-schema": [
+        "./libs/app-headless/util/env-schema/src/index.ts"
+      ],
+      "@codeware/app-headless/util/routing": [
+        "./libs/app-headless/util/routing/src/index.ts"
+      ],
+      "@codeware/app-headless/util/seo": [
+        "./libs/app-headless/util/seo/src/index.ts"
+      ],
       "@codeware/apps/cms/components/*": ["./apps/cms/src/components/*"],
       "@codeware/e2e/utils": ["./e2e/utils/index.ts"],
       "@codeware/shared/feature/infisical": [

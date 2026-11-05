@@ -131,6 +131,10 @@ export default [
               ]
             },
             {
+              sourceTag: 'scope:app-headless',
+              onlyDependOnLibsWithTags: ['scope:app-headless', 'scope:shared']
+            },
+            {
               sourceTag: 'scope:builder',
               onlyDependOnLibsWithTags: [
                 'scope:builder',
@@ -150,6 +154,7 @@ export default [
               sourceTag: 'scope:headless',
               onlyDependOnLibsWithTags: [
                 'scope:headless',
+                'scope:app-headless',
                 'scope:shared',
                 'domain:signature'
               ]

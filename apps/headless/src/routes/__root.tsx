@@ -1,4 +1,8 @@
 import {
+  isClientPath,
+  readSearchParam
+} from '@codeware/app-headless/util/routing';
+import {
   ErrorContainer,
   PayloadProvider,
   type PayloadValue,
@@ -20,8 +24,6 @@ import {
 import { ThemeProvider, useTheme } from 'next-themes';
 import { type ReactNode, useEffect } from 'react';
 
-import { isClientPath } from '../navigate';
-import { readSearchParam } from '../search-param';
 import { loadSite } from '../server/load-site';
 import appCss from '../styles.css?url';
 
