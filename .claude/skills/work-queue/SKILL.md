@@ -116,7 +116,8 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    parent auto-close stays off, so nothing else closes it.
 8. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
    starts: go to **Nothing workable**.
-9. **A new `agent:ready` ticket** by the queue rule.
+9. **A broken Renovate PR** (`run now: PR 754 renovate`): see **Renovate PRs**.
+10. **A new `agent:ready` ticket** by the queue rule.
 
 Nothing matched: go to **Nothing workable**.
 
@@ -127,7 +128,8 @@ counts one, and so does each `agent:working` ticket parked on a wait (its PR rea
 within the hour). Nothing else does: plans waiting for approval, questions, merged tickets with
 unticked hand-offs, and sub-issues ready to label stay on Håkan's table (the queue view lists them)
 but never hold new work back. An approved plan held by an open blocker counts neither, and waits on
-that blocker rather than on Håkan.
+that blocker rather than on Håkan. An untended broken Renovate PR is new work, held by the limit
+like an `agent:ready` ticket.
 
 A sub-issue is ready to label when it has no agent label, is not started, and every issue
 blocking it is Done or Canceled, at least one of them the agent's (`to_label` in `watch.jq`). It is
@@ -390,6 +392,41 @@ The attended query keeps a merged ticket in view for 14 days after it went Done,
 (the `merged` alias in `lib.sh`). A comment after that goes unanswered. It also reads only the
 first 50 comments of a ticket, so on a longer ticket the newest are not seen.
 
+## Renovate PRs
+
+The scheduler's watch reads Renovate's open PRs into `renovate.json` (`watch_renovate` in
+`run.sh`). A PR is broken when its checks fail, or when it conflicts with main on a branch that
+carries a commit not by Renovate; Renovate rebases its own unmodified branches. A `renovate`
+ticket that carries the PR as an attachment tends it, and the queue never offers that PR again.
+`cdwr agent status` and the Desk list each broken or tended PR.
+
+1. Look for a `renovate` ticket that already carries the PR (`list_issues` with the `renovate`
+   label, then its attachments). The pick comes from `renovate.json`, which only the
+   scheduler's next watch rewrites, so a PR filed minutes ago still reads as untended. Found,
+   the PR is tended: skip it, as you skip one you filed in this session, and go on.
+2. Read the PR: `gh pr view <n> --json title,headRefName,mergeable,url`, `gh pr checks <n>`,
+   and the failed log as in **Parking**. Find what breaks (the job and its error lines) and why
+   (what the package change does to it). For a conflict, name the files and the commit that
+   isn't Renovate's.
+3. File the ticket in team Codeware with the `renovate` label, `agent:needs-input`, and the PR
+   in `links` at creation: the link is the attachment the watch dedupes on. The ticket's PR
+   watch ignores that link, since Renovate's branch isn't the ticket's. Its title names the
+   package and the break. Its report holds what breaks and why. Then post the options as a
+   `**Agent needs input**` comment (**How a gate asks**): a mechanical fix, closing the PR,
+   holding the package back in `renovate.json`, or waiting for upstream are typical ones.
+   The label and the comment make Håkan's answer resume the ticket like any other gate.
+   Notify `action`: `PR <n>: Renovate checks fail, filed COD-n`, then go to
+   **What to take next**. This far the path claims nothing and needs no worktree. An
+   implement-only run stops here; it never writes the fix.
+4. An attended session may skip the question when the fix is mechanical: a type, an import or a
+   snapshot the update moved, with nothing to choose. Say so in the report, claim the ticket
+   (`agent:working`) and work it as in **Per ticket**, with a short plan it approves itself.
+5. Whichever way it comes, the fix goes on the ticket's own branch, never on Renovate's:
+   Renovate automerges an edited non-major PR once it is green, so a fix pushed there merges
+   unreviewed. Before the first commit, fast-forward the new branch to Renovate's:
+   `git merge --ff-only origin/<renovate branch>`. The PR closes the ticket, and Renovate closes
+   its own PR once main has the update.
+
 ## A PR that conflicts with main
 
 Main's merge queue rebases each commit onto main, so a branch it can't replay is refused even
@@ -515,8 +552,9 @@ stale claim)
 and no session is alive. Nobody is at the terminal, and the permissions deny anything not
 listed.
 
-1. Start and claim as usual. In **What to take next**, take only the steps before **The limit**:
-   never a new `agent:ready` ticket. A merged-ticket comment is taken here too; it claims
+1. Start and claim as usual. In **What to take next**, take only the steps before **The limit**,
+   and a Renovate PR whose checks fail (`run now: PR 754 renovate`, the ticket-only path in
+   **Renovate PRs**): never a new `agent:ready` ticket. A merged-ticket comment is taken here too; it claims
    nothing and needs no worktree, since it only writes comments, tickets and the struck line.
    An unanswered plan stays a gate; this mode never approves its own plan, even though no one
    is watching.
