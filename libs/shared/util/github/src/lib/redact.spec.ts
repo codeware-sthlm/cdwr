@@ -55,6 +55,18 @@ describe('redactConfig', () => {
     });
   });
 
+  it('leaves a key ending in Names alone, since it holds names', () => {
+    expect(redactConfig({ secretNames: ['API_KEY'] })).toEqual({
+      secretNames: ['API_KEY']
+    });
+  });
+
+  it('still redacts a Names key beneath a sensitive parent', () => {
+    expect(redactConfig({ secrets: { fooNames: ['x-long-value'] } })).toEqual({
+      secrets: { fooNames: ['[redacted]'] }
+    });
+  });
+
   it('redacts a value holding = whole unless it is a list item', () => {
     expect(
       redactConfig({
@@ -107,6 +119,12 @@ describe('maskSecretsIn', () => {
       'secret-value',
       'token-value'
     ]);
+  });
+
+  it('masks nothing under a key ending in Names', () => {
+    maskSecretsIn({ secretNames: ['DATABASE_URL'] });
+
+    expect(core.setSecret).not.toHaveBeenCalled();
   });
 
   it('masks a sensitive NAME=value item under an ordinary key, not an ordinary one', () => {

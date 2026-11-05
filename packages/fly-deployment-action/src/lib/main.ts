@@ -66,9 +66,7 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     } satisfies ActionInputs);
 
-    // app-details holds secret names and public env only; masking the names
-    // would blank the ones a failed read reports. Values are masked on read.
-    maskSecretsIn({ ...inputs, appDetails: undefined });
+    maskSecretsIn(inputs);
     core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     const { environment, projects } = await flyDeployment(inputs);

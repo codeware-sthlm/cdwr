@@ -9,6 +9,9 @@ import * as core from '@actions/core';
 export const SENSITIVE_KEY_PATTERN =
   /secret|token|password|passwd|api[-_]?key|dsn|authorization|cookie|credential|private[-_]?key/i;
 
+/** A key ending in `Names` (such as `secretNames`) lists names, not values, so it is exempt */
+const NAME_LIST_KEY = /Names$/;
+
 const REDACTED = '[redacted]';
 
 const NAME_VALUE = /^([^=\s]+)=([\s\S]*)$/;
@@ -56,7 +59,8 @@ const transform = (
         key,
         transform(
           child,
-          sensitive || SENSITIVE_KEY_PATTERN.test(key),
+          sensitive ||
+            (SENSITIVE_KEY_PATTERN.test(key) && !NAME_LIST_KEY.test(key)),
           false,
           leaf
         )
@@ -74,7 +78,8 @@ const transform = (
  * leaf redacted, keeping its keys; an array item `NAME=value` (an env-style
  * list such as `secrets`) keeps `NAME=`. Anywhere else a value is redacted
  * whole, since a secret such as a database url or base64 can hold `=`.
- * Never mutates the input.
+ * A key ending in `Names` (`secretNames`) lists names and is left as is,
+ * unless a parent key is sensitive. Never mutates the input.
  */
 export const redactConfig = <T>(value: T): T =>
   transform(value, false, false, (text, listItem) => {
