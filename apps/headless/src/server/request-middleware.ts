@@ -1,9 +1,10 @@
+import {
+  createCspNonce,
+  secureRequest
+} from '@codeware/app-headless/feature/security';
 import { createMiddleware } from '@tanstack/react-start';
 
 import { getEnv } from '../env.server';
-
-import { createCspNonce } from './csp';
-import { secureRequest } from './security';
 
 /**
  * Global request middleware: the site gate, the Content Security Policy and
