@@ -45,6 +45,16 @@ describe('redactConfig', () => {
     });
   });
 
+  it('redacts a sensitive NAME=value item under an ordinary key', () => {
+    expect(
+      redactConfig({
+        buildArgs: ['APP_SHA=abc1234', 'SENTRY_AUTH_TOKEN=sntrys_value']
+      })
+    ).toEqual({
+      buildArgs: ['APP_SHA=abc1234', 'SENTRY_AUTH_TOKEN=[redacted]']
+    });
+  });
+
   it('redacts a value holding = whole unless it is a list item', () => {
     expect(
       redactConfig({
@@ -96,6 +106,16 @@ describe('maskSecretsIn', () => {
       'postgres://u:pass@h/db?sslmode=require',
       'secret-value',
       'token-value'
+    ]);
+  });
+
+  it('masks a sensitive NAME=value item under an ordinary key, not an ordinary one', () => {
+    maskSecretsIn({
+      buildArgs: ['APP_SHA=abc1234', 'SENTRY_AUTH_TOKEN=sntrys_value']
+    });
+
+    expect(vi.mocked(core.setSecret).mock.calls.map(([v]) => v)).toEqual([
+      'sntrys_value'
     ]);
   });
 });

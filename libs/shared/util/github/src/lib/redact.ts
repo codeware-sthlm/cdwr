@@ -25,6 +25,13 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return proto === Object.prototype || proto === null;
 };
 
+/** An env-style `NAME=value` item whose name is sensitive, such as `SENTRY_AUTH_TOKEN=…` in build args */
+const sensitiveAssignment = (item: unknown): boolean => {
+  if (typeof item !== 'string') return false;
+  const match = NAME_VALUE.exec(item);
+  return match !== null && SENSITIVE_KEY_PATTERN.test(match[1]);
+};
+
 /**
  * Deep copy of `value` where every string or number beneath a sensitive key
  * goes through `leaf`, a number as its string.
@@ -39,7 +46,9 @@ const transform = (
     return sensitive ? leaf(String(value), listItem) : value;
   }
   if (Array.isArray(value)) {
-    return value.map((item) => transform(item, sensitive, true, leaf));
+    return value.map((item) =>
+      transform(item, sensitive || sensitiveAssignment(item), true, leaf)
+    );
   }
   if (isPlainObject(value)) {
     return Object.fromEntries(
