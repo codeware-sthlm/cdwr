@@ -27,16 +27,17 @@ def status_rows:
        .row // empty) ];
 
 # Open hand-off rows of the Status table: the What cell starts with "Hand-off" and the Status cell
-# doesn't start with "Done". The item is the What text after "Hand-off:", or the whole cell when
-# nothing follows.
+# doesn't start with "Done" or "Dropped". The item is the What text after "Hand-off:", or the whole
+# cell when nothing follows.
 def status_handoffs:
   [ status_rows[]
     | select(.what | test("^hand-offs?\\b"; "i"))
-    | select(.status | test("^done\\b"; "i") | not)
+    | select(.status | test("^(done|dropped)\\b"; "i") | not)
     | (.what | sub("^hand-offs?:?\\s*"; ""; "i")) as $t
     | if $t == "" then .what else $t end ];
 
-# Unchecked items of the newest "PR ready" comment's "Hand-off checklist:" block. A ticket that
+# Unchecked items of the newest "PR ready" comment's "Hand-off checklist:" block. An unchecked item
+# struck through (`- [ ] ~~item~~`, a reason may follow) is dropped, not waiting. A ticket that
 # never got one (merged from a gate) falls back to the Status table's hand-off rows.
 def handoffs:
   ([ (.comments.nodes // [])[] | select(.body | startswith("**Agent: PR ready**")) ]
@@ -52,6 +53,7 @@ def handoffs:
           reduce $lines[$i + 1:][] as $l ({ items: [], stop: false };
             if .stop then .
             elif ($l | test("^\\s*$")) then .
+            elif ($l | test("^\\s*[-*] \\[ \\] ~~")) then .
             elif ($l | test("^\\s*[-*] \\[ \\] ")) then
               .items += [ $l | capture("^\\s*[-*] \\[ \\] (?<t>.*)$").t | trim ]
             elif ($l | test("^\\s*[-*] \\[[xX]\\] ")) then .
@@ -274,6 +276,18 @@ def review_feedback($watch):
            and any((.comments.nodes // [])[]; (.body | startswith("**Agent") | not) and (.createdAt | epoch) > ($ready.createdAt | epoch)) )
          or (($watch[.identifier].unresolved // 0) > 0));
 
+# True for a merged ticket with a comment the agent hasn't answered: Done, the agent's work (a
+# PR-ready comment or agent:review), and the newest comment not the agent's and newer than the
+# merge, so a "merging" note or a gate answer before it is no pick. A first comment, a yes and a
+# correction read alike; the session tells them apart from its own last reply. An open ticket is
+# never one, so nothing here is listed twice.
+def merged_comment:
+  .state.type == "completed" and .completedAt != null
+  and (agent_label == "agent:review"
+       or any((.comments.nodes // [])[]; .body | startswith("**Agent: PR ready**")))
+  and answered
+  and (((.comments.nodes // []) | sort_by(.createdAt) | last | .createdAt | epoch) > (.completedAt | epoch));
+
 # Sort key for ready tickets: status, then priority (none last), then oldest first
 def queue_order:
   [ ({ started: 0, unstarted: 1, backlog: 2, triage: 3 }[.state.type] // 4),
@@ -388,6 +402,10 @@ def queue_view($now; $limit; $watch; $session; $waits):
      | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "conflicts with main",
              detail: ($watch[.identifier].pr | if . == null then null else "PR #\(.)" end) })) as $conf
+  # Not open review feedback: the PR merged, so the comment gets a suggestion, never a new commit
+  | ([ $all[] | select(merged_comment and (.identifier | IN($parkIds[]) | not)) ]
+     | sort_by(queue_order)
+     | map({ ticket: .identifier, reason: "merged comment", detail: null })) as $mc
   | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not)) ] | sort_by(queue_order)
      | map(.identifier)) as $rdy
   | ($lu.used >= $limit) as $full
@@ -400,7 +418,7 @@ def queue_view($now; $limit; $watch; $session; $waits):
       at: ($now | todateiso8601),
       limit: { used: $lu.used, max: $limit },
       session: $session,
-      next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb + $conf
+      next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb + $conf + $mc
              + (if $full then [] else $rdy | map({ ticket: ., reason: "ready", detail: null }) end)),
       held: {
         tickets: (if $full then $rdy else [] end),

@@ -119,6 +119,38 @@ describe('handoffs', () => {
     ).toEqual(['a']);
   });
 
+  describe('dropped items', () => {
+    it('a struck unticked item is not returned', () => {
+      expect(
+        h(ready('Hand-off checklist:\n- [ ] ~~gone~~\n- [ ] open'))
+      ).toEqual(['open']);
+    });
+
+    it('a struck item with a trailing reason is not returned', () => {
+      expect(
+        h(
+          ready(
+            'Hand-off checklist:\n- [ ] ~~gone~~ dropped: CI covers it\n- [ ] open'
+          )
+        )
+      ).toEqual(['open']);
+    });
+
+    it('only struck items give []', () => {
+      expect(h(ready('Hand-off checklist:\n- [ ] ~~gone~~'))).toEqual([]);
+    });
+
+    it('a hint line after the items adds no item', () => {
+      expect(
+        h(
+          ready(
+            'Hand-off checklist:\n- [ ] open\nDrop one: strike it through, or say why in a comment.'
+          )
+        )
+      ).toEqual(['open']);
+    });
+  });
+
   it('newest PR-ready comment wins', () => {
     expect(
       h(
@@ -186,6 +218,17 @@ describe('handoffs', () => {
             '| 4 | Hand-off: first | Done |',
             '| 5 | Hand-off: second | Planned |',
             '| 6 | Hand-off: third | Done 2026-10-31 |'
+          )
+        )
+      ).toEqual(['second']);
+    });
+
+    it('skips rows whose Status starts with Dropped', () => {
+      expect(
+        t(
+          table(
+            '| 4 | Hand-off: first | Dropped: CI covers it |',
+            '| 5 | Hand-off: second | Planned |'
           )
         )
       ).toEqual(['second']);
@@ -1536,6 +1579,164 @@ describe('attended picks', () => {
     });
   });
 
+  describe('merged comment', () => {
+    const doneRev = (
+      label: string | null,
+      comments: Array<{ body: string; createdAt: string }>,
+      over: Record<string, unknown> = {}
+    ) =>
+      node('COD-5', label, {
+        state: { type: 'completed' },
+        completedAt: '2026-09-01T12:00:00Z',
+        comments: { nodes: comments },
+        ...over
+      });
+    const human = (body: string, createdAt: string) => ({ body, createdAt });
+    const suggestion = {
+      body: '**Agent: suggestion** try X',
+      createdAt: '2026-09-03T00:00:00Z'
+    };
+
+    it('a human comment after PR ready on a Done ticket', () => {
+      const r = attended([
+        doneRev('agent:review', [
+          prReady(false),
+          human('one more thing', '2026-09-02T00:00:00Z')
+        ])
+      ]);
+      expect(r).toMatchObject({
+        verdict: 'run',
+        ticket: 'COD-5',
+        reason: 'merged comment'
+      });
+    });
+
+    it('a yes after an agent suggestion', () => {
+      const r = attended([
+        doneRev('agent:review', [
+          prReady(false),
+          suggestion,
+          human('yes', '2026-09-04T00:00:00Z')
+        ])
+      ]);
+      expect(r.reason).toBe('merged comment');
+    });
+
+    it('a correction after the yes', () => {
+      const r = attended([
+        doneRev('agent:review', [
+          prReady(false),
+          suggestion,
+          human('yes', '2026-09-04T00:00:00Z'),
+          human('no, use Y instead', '2026-09-05T00:00:00Z')
+        ])
+      ]);
+      expect(r.reason).toBe('merged comment');
+    });
+
+    it('the agent having the last word is no pick', () => {
+      const r = attended([
+        doneRev('agent:review', [
+          prReady(false),
+          human('yes', '2026-09-02T00:00:00Z'),
+          suggestion
+        ])
+      ]);
+      expect(r.verdict).toBe('idle');
+    });
+
+    it('a canceled ticket is no pick', () => {
+      const r = attended([
+        doneRev(
+          'agent:review',
+          [prReady(false), human('hi', '2026-09-02T00:00:00Z')],
+          { state: { type: 'canceled' } }
+        )
+      ]);
+      expect(r.verdict).toBe('idle');
+    });
+
+    it('an open ticket with an open PR is review feedback', () => {
+      const r = attended(
+        [
+          review('COD-5', {
+            comments: {
+              nodes: [prReady(false), human('hi', '2026-09-02T00:00:00Z')]
+            }
+          })
+        ],
+        5,
+        { 'COD-5': { state: 'open' } }
+      );
+      expect(r.reason).toBe('review feedback');
+    });
+
+    it('a comment from before the merge is no pick', () => {
+      const r = attended([
+        doneRev('agent:review', [
+          prReady(false),
+          human('looks good, merging', '2026-09-01T06:00:00Z')
+        ])
+      ]);
+      expect(r.verdict).toBe('idle');
+    });
+
+    it('an open ticket whose PR merged waits for Done', () => {
+      const r = attended(
+        [
+          review('COD-5', {
+            comments: {
+              nodes: [prReady(false), human('hi', '2026-09-02T00:00:00Z')]
+            }
+          })
+        ],
+        5,
+        { 'COD-5': { state: 'merged' } }
+      );
+      expect(r.verdict).toBe('idle');
+    });
+
+    it('a Done ticket without an agent label but a PR-ready comment', () => {
+      const r = attended([
+        doneRev(null, [prReady(false), human('hi', '2026-09-02T00:00:00Z')])
+      ]);
+      expect(r.reason).toBe('merged comment');
+    });
+
+    it('a Done ticket without PR ready or agent:review is no pick', () => {
+      const r = attended([
+        doneRev(null, [human('hi', '2026-09-02T00:00:00Z')])
+      ]);
+      expect(r.verdict).toBe('idle');
+    });
+
+    it('a Done agent:review ticket without a PR-ready comment is a pick', () => {
+      const r = attended([
+        doneRev('agent:review', [human('hi', '2026-09-02T00:00:00Z')])
+      ]);
+      expect(r.reason).toBe('merged comment');
+    });
+
+    it('comes after review feedback and before ready', () => {
+      const next = run(
+        `queue_view(${NOW}; 5; {}; null; {}) | .next | map(.reason)`,
+        [
+          ready('COD-9'),
+          doneRev('agent:review', [
+            prReady(false),
+            human('hi', '2026-09-02T00:00:00Z')
+          ]),
+          review('COD-4', {
+            comments: {
+              nodes: [prReady(false), human('fix', '2026-09-02T00:00:00Z')]
+            }
+          })
+        ]
+      );
+      expect(next).toEqual(['review feedback', 'merged comment', 'ready']);
+    });
+  });
+
   describe('limit', () => {
     const done = (id: string, daysAgo: number) =>
       review(id, {
@@ -2347,6 +2548,21 @@ describe('attended picks', () => {
       ]);
     });
 
+    it('does not list a completed review whose unticked items are struck', () => {
+      const struck = {
+        body: `**Agent: PR ready**: ${PR}/1\n\nHand-off checklist:\n- [ ] ~~gone~~ dropped: CI covers it`,
+        createdAt: '2026-09-01T00:00:00Z'
+      };
+      const r = view([
+        node('COD-3', 'agent:review', {
+          state: { type: 'completed' },
+          completedAt: iso(DAY),
+          comments: { nodes: [struck] }
+        })
+      ]);
+      expect(r.table.after).toEqual([]);
+    });
+
     it('ignores tickets of other repos', () => {
       const other = (label: string, repo: string, over = {}) =>
         node('COD-1', label, {
@@ -2861,6 +3077,7 @@ describe('launch', () => {
     ['answered', 'answered', null],
     ['review feedback', 'review feedback', null],
     ['conflicts with main', 'conflicts with main', null],
+    ['merged comment', 'merged comment', null],
     ['take over', 'take over', null],
     ['answered, session state none', 'answered', { state: 'none' }],
     ['answered, session state stopped', 'answered', { state: 'stopped' }]
