@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { payloadRuntime } from '../../../security/payload-runtime';
 import { refuseUnlessHuman } from '../../../security/public-submit';
+import { errorKind } from '../../../utils/error-kind';
 
 type Body = {
   humanCheck?: HumanCheckFields;
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message, message }, { status });
     }
 
-    console.error('Tour signup error:', error);
+    console.error(`Tour signup error (${errorKind(error)})`);
 
     return NextResponse.json(
       { error: 'Failed to submit signup', message: 'Failed to submit signup' },

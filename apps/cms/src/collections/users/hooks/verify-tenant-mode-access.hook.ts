@@ -42,7 +42,7 @@ export const verifyTenantModeAccessHook: CollectionAfterLoginHook<
 
   if (!isAllowed) {
     payload.logger.warn(
-      `[verifyTenantModeAccess] User '${user.email}' attempted login from unauthorized tenant '${tenant.slug}'`
+      `[verifyTenantModeAccess] User '${user.id}' attempted login from unauthorized tenant '${tenant.slug}'`
     );
 
     // Throw error with 403 status
@@ -55,7 +55,7 @@ export const verifyTenantModeAccessHook: CollectionAfterLoginHook<
 
   // Access granted
   payload.logger.info(
-    `[verifyTenantModeAccess] User '${user.email}' authorized to access tenant '${tenant.slug}'`
+    `[verifyTenantModeAccess] User '${user.id}' authorized to access tenant '${tenant.slug}'`
   );
 
   return user;
