@@ -641,13 +641,13 @@ watch_prs() {
 
 # Parent close: a parent whose agent split finished is closed by the scheduler, since no session
 # may come by (an implement-only run stops before the skill's clean-up). Read from the sub-issues
-# closed in the last 14 days, each with its parent and the parent's sub-issues; watch.jq
-# `parents_to_close` decides. Linear's own parent auto-close stays off.
+# closed in the last 14 days under a parent still open, each with its parent and the parent's
+# sub-issues; watch.jq `parents_to_close` decides. Linear's own parent auto-close stays off.
 read -r -d '' PARENTS <<'GQL' || true
 query {
   issues(first: 50, orderBy: updatedAt, filter: {
     team: { key: { eq: "COD" } }
-    parent: { null: false }
+    parent: { null: false, state: { type: { nin: ["completed", "canceled"] } } }
     state: { type: { in: ["completed", "canceled"] } }
     updatedAt: { gt: "-P14D" }
   }) {
@@ -681,8 +681,8 @@ GQL
 # close_parents: sets each finished parent Done, then posts its **Agent: closed** comment. A
 # failed close is a warn and is tried again on the next run; the comment follows only a close
 # Linear took, so it is never posted twice, and a failed one only warns. closed-parents keeps
-# every parent closed here, one per line, so one Håkan reopens stays open. The page is read newest
-# first, so a full one leaves out the oldest closes.
+# every parent closed here, one per line, so one Håkan reopens stays open. The page holds only
+# sub-issues of open parents, read newest first, so a full one leaves out the oldest closes.
 close_parents() {
   setopt local_options no_err_exit
   local file="$HOME_DIR/closed-parents" resp todo state p id vars closed
@@ -690,7 +690,7 @@ close_parents() {
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
     { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
   [[ "$(jq '.data.issues.nodes | length' <<<"$resp")" -lt 50 ]] ||
-    { note "warn: close: 50 closed sub-issues, the page limit; older ones are not read"; record warn "" "close: page limit reached"; }
+    { note "warn: close: 50 closed sub-issues of open parents, the page limit; older ones are not read"; record warn "" "close: page limit reached"; }
   closed='[]'
   [[ -r "$file" ]] && closed="$(jq -Rsc 'split("\n") | map(select(length > 0))' "$file")"
   todo="$(watch -c --argjson closed "$closed" 'include "watch"; parents_to_close($closed)' <<<"$resp")" ||
