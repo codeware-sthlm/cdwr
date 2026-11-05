@@ -117,11 +117,12 @@ describe('run.sh', () => {
   // The verdict comes from watch.jq, never from logic copied into run.sh
   it('computes the attended line with watch.jq', () => {
     expect(SCRIPT).toContain(
-      `'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits)'`
+      `'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate)'`
     );
     expect(SCRIPT).toContain(
-      `'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits)'`
+      `'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits; $renovate)'`
     );
+    expect(SCRIPT).toContain('--argjson renovate "$renovate"');
   });
 
   // The desk sets the limit in a file; no literal 5 may bypass it
@@ -213,9 +214,9 @@ describe('run.sh without Linear documents', () => {
     expect(code.replace(body, '')).not.toContain(`$${name}`);
   });
 
-  it('closes parents after the watch, never on --check', () => {
+  it('closes parents after the watches, never on --check', () => {
     expect(code).toMatch(
-      /if ! \$check; then\n {2}err="\$\(watch_prs\)"[^\n]*\n {2}err="\$\(close_parents\)" \|\| \{/
+      /if ! \$check; then\n {2}err="\$\(watch_prs\)"[^\n]*\n {2}err="\$\(watch_renovate\)"[^\n]*\n {2}err="\$\(close_parents\)" \|\| \{/
     );
   });
 
@@ -378,9 +379,14 @@ describe('run.sh telemetry', () => {
       /^record_queue_state\(\) \{\n {2}\$check && return 0\n {2}telemetry_on \|\| return 0/m
     );
     expect(SCRIPT).toMatch(/\( telemetry_queue_state "\$last" [^)]*\) &!/s);
-    expect(SCRIPT).toMatch(/telemetry_queue_state [^)]*"\$watch" \) &!/s);
+    expect(SCRIPT).toMatch(
+      /telemetry_queue_state [^)]*"\$watch" "\$renovate" \) &!/s
+    );
     expect(SCRIPT).toContain(
       'watch="$(cat "$HOME_DIR/watch.json" 2>/dev/null)"'
+    );
+    expect(SCRIPT).toContain(
+      'renovate="$(cat "$HOME_DIR/renovate.json" 2>/dev/null)"'
     );
   });
 
@@ -486,7 +492,8 @@ describe('run.sh GitHub identity', () => {
     expect(SCRIPT).toContain(
       'waits="$(gh_identity || true; parked_waits <<<"$resp")"'
     );
-    expect(SCRIPT.match(/^ *gh_identity_or_note$/gm)).toHaveLength(1);
+    // watch_prs and watch_renovate, each inside a command substitution of its caller
+    expect(SCRIPT.match(/^ *gh_identity_or_note$/gm)).toHaveLength(2);
   });
 
   it('reads through gh_read', () => {
@@ -901,6 +908,241 @@ describe('run.sh close_parents', () => {
       expect(read('closed-parents')).toBe('');
     }
   );
+});
+
+describe('run.sh watch_prs', () => {
+  const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  const source = SCRIPT.slice(
+    SCRIPT.indexOf('watch_prs() {'),
+    SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('watch_prs() {')) + 3
+  );
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  let root: string;
+
+  const ticket = {
+    identifier: 'COD-5',
+    labels: { nodes: [{ name: 'agent:working' }] },
+    description: null,
+    attachments: {
+      nodes: [
+        {
+          url: 'https://github.com/codeware-sthlm/cdwr/pull/754',
+          createdAt: '2026-01-01T00:00:00Z'
+        }
+      ]
+    }
+  };
+
+  // Runs watch_prs with a fake Linear and a GraphQL answer for the PR
+  const run = (headRefName: string) => {
+    writeFileSync(
+      join(root, 'linear.json'),
+      JSON.stringify({ data: { issues: { nodes: [ticket] } } })
+    );
+    writeFileSync(
+      join(root, 'pr.json'),
+      JSON.stringify({
+        headRefName,
+        state: 'OPEN',
+        mergedAt: null,
+        mergeable: 'MERGEABLE',
+        reviewThreads: { nodes: [] },
+        commits: { nodes: [] }
+      })
+    );
+    const script = [
+      `ROOT="${root}"; HOME_DIR="${root}"; OTHER_REPOS='[]'; WATCHED=w; PR_QUERY=q`,
+      `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
+      `record() { print -r -- "$*" >> "$ROOT/records"; }`,
+      `notice() { print -r -- "$*" >> "$ROOT/notices"; }`,
+      `watch() { jq -L "${DIR}" "$@"; }`,
+      'watch_err() { :; }',
+      'gh_identity_or_note() { :; }',
+      'gh_read() { cat "$ROOT/pr.json"; }',
+      'relabel_merged() { print -r -- "$*" >> "$ROOT/relabels"; }',
+      'linear() { cat "$ROOT/linear.json"; }',
+      source,
+      'watch_prs; print -r -- "rc=$?"'
+    ].join('\n');
+    return spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+  };
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'watch-prs-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('asks for the head branch name of the PR', () => {
+    expect(SCRIPT).toContain('headRefName');
+  });
+
+  it.skipIf(!canRun)('watches a ticket whose PR is not Renovate’s', () => {
+    const result = run('feature/cod-5');
+    expect(result.stdout).toContain('rc=0');
+    expect(Object.keys(JSON.parse(read('watch.json')))).toEqual(['COD-5']);
+  });
+
+  it.skipIf(!canRun)(
+    'skips a ticket whose attached PR is a renovate/ branch',
+    () => {
+      const result = run('renovate/zod-4.x');
+      expect(result.stdout).toContain('rc=0');
+      expect(JSON.parse(read('watch.json'))).toEqual({});
+      expect(read('notices')).toBe('');
+      expect(read('relabels')).toBe('');
+      expect(read('records')).toBe('');
+    }
+  );
+});
+
+describe('run.sh watch_renovate', () => {
+  const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  const source = SCRIPT.slice(
+    SCRIPT.indexOf("read -r -d '' RENOVATE_TICKETS"),
+    SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('watch_renovate() {')) + 3
+  );
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  let root: string;
+
+  const PRS = [
+    {
+      number: 754,
+      title: 'chore(deps): update zod',
+      url: 'https://github.com/codeware-sthlm/cdwr/pull/754',
+      headRefOid: 'abc',
+      mergeable: 'MERGEABLE',
+      statusCheckRollup: [{ conclusion: 'FAILURE' }],
+      commits: []
+    }
+  ];
+
+  // Runs watch_renovate with a fake gh and Linear; `prs` is what gh pr list answers
+  const run = (
+    prs: unknown,
+    linear: unknown = { data: { issues: { nodes: [] } } }
+  ) => {
+    writeFileSync(join(root, 'prs.json'), JSON.stringify(prs));
+    writeFileSync(join(root, 'linear.json'), JSON.stringify(linear));
+    const script = [
+      `ROOT="${root}"; HOME_DIR="${root}"`,
+      `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
+      `record() { print -r -- "$*" >> "$ROOT/records"; }`,
+      `notice() { print -r -- "$*" >> "$ROOT/notices"; }`,
+      `watch() { jq -L "${DIR}" "$@"; }`,
+      'watch_err() { :; }',
+      'gh_identity_or_note() { :; }',
+      'gh_read() { print -r -- "$*" >> "$ROOT/gh"; cat "$ROOT/prs.json"; }',
+      'linear() { cat "$ROOT/linear.json"; }',
+      source,
+      'watch_renovate; print -r -- "rc=$?"'
+    ].join('\n');
+    return spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+  };
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'watch-renovate-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    expect(source).toContain('watch_renovate() {');
+    expect(source).toContain("read -r -d '' RENOVATE_TICKETS");
+  });
+
+  it('reads only: the PR list and the renovate tickets', () => {
+    expect(source).toContain('gh_read gh pr list --repo codeware-sthlm/cdwr');
+    expect(source).toContain('--author app/renovate');
+    expect(source).toContain('labels: { some: { name: { eq: "renovate" } } }');
+    expect(source).not.toContain('mutation');
+  });
+
+  it('runs after watch_prs and before close_parents, never on --check', () => {
+    const block =
+      SCRIPT.match(
+        /if ! \$check; then\n {2}err="\$\(watch_prs\)"[\s\S]*?\nfi\n/
+      )?.[0] ?? '';
+    const prs = block.indexOf('watch_prs)');
+    const ren = block.indexOf('watch_renovate)');
+    const close = block.indexOf('close_parents)');
+    expect(prs).toBeGreaterThan(-1);
+    expect(ren).toBeGreaterThan(prs);
+    expect(close).toBeGreaterThan(ren);
+  });
+
+  it.skipIf(!canRun)(
+    'writes renovate.json from the first run without a notice',
+    () => {
+      const result = run(PRS);
+      expect(result.stdout).toContain('rc=0');
+      expect(read('notices')).toBe('');
+      expect(JSON.parse(read('renovate.json'))['754'].state).toBe('failing');
+    }
+  );
+
+  it.skipIf(!canRun)(
+    'writes renovate.json from renovate_step and notices a broken PR',
+    () => {
+      writeFileSync(join(root, 'renovate.json'), '{}');
+      const result = run(PRS);
+      expect(result.stdout).toContain('rc=0');
+      expect(read('gh')).toContain('pr list');
+      const state = JSON.parse(read('renovate.json'));
+      expect(state['754']).toMatchObject({
+        pr: 754,
+        state: 'failing',
+        ticket: null
+      });
+      expect(read('notices')).toBe(
+        'info Renovate PR #754 has failing checks: chore(deps): update zod\n'
+      );
+    }
+  );
+
+  it.skipIf(!canRun)('sends no second notice while the state holds', () => {
+    writeFileSync(join(root, 'renovate.json'), '{}');
+    run(PRS);
+    rmSync(join(root, 'notices'));
+    const result = run(PRS);
+    expect(result.stdout).toContain('rc=0');
+    expect(read('notices')).toBe('');
+    expect(JSON.parse(read('renovate.json'))['754'].state).toBe('failing');
+  });
+
+  it.skipIf(!canRun)(
+    'sends no notice when renovate.json cannot be written',
+    () => {
+      writeFileSync(join(root, 'renovate.json'), '{}');
+      mkdirSync(join(root, 'renovate.json.tmp'));
+      const result = run(PRS);
+      expect(result.stdout).toContain('could not write renovate.json');
+      expect(result.stdout).toContain('rc=1');
+      expect(read('notices')).toBe('');
+      expect(read('renovate.json')).toBe('{}');
+    }
+  );
+
+  it('records the failure as a warn in the run', () => {
+    expect(SCRIPT).toContain(
+      'record warn "" "renovate watch failed: ${err:-unknown}"'
+    );
+  });
+
+  it.skipIf(!canRun)('leaves renovate.json as it was when gh fails', () => {
+    writeFileSync(join(root, 'renovate.json'), '{}');
+    run(PRS);
+    const before = read('renovate.json');
+    const result = run({ not: 'an array' });
+    expect(result.stdout).toContain('rc=1');
+    expect(read('renovate.json')).toBe(before);
+  });
 });
 
 describe('run.sh session files from another host', () => {

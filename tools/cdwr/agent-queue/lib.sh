@@ -183,14 +183,20 @@ scheduler_here() {
   return 1
 }
 
-# For the Mac's attended side when the scheduler runs elsewhere: prints {host, at, watch} for the
-# freshest queue_state row of another host that carries a watch, or nothing. A Mac row from before
-# an uninstall has no watch, so it never wins. Needs supabase_select (telemetry.sh), sourced by the
-# caller; without it, or on any failure, it prints nothing. Always succeeds.
+# For the Mac's attended side when the scheduler runs elsewhere: prints {host, at, watch, renovate}
+# for the freshest queue_state row of another host that carries a watch, or nothing. A Mac row from
+# before an uninstall has no watch, so it never wins. Needs supabase_select (telemetry.sh), sourced
+# by the caller; without it, or on any failure, it prints nothing. Always succeeds.
 remote_watch() {
   (( $+functions[supabase_select] )) || return 0
-  supabase_select queue_state "select=host,at,watch&watch=not.is.null&host=neq.$(jq -rn --arg h "$(host_id)" '$h | @uri')&order=at.desc&limit=1" |
-    jq -c '.[0] | select(. != null and (.watch | type == "object")) | {host, at, watch}' 2>/dev/null
+  local filter="watch=not.is.null&host=neq.$(jq -rn --arg h "$(host_id)" '$h | @uri')&order=at.desc&limit=1" cols out
+  # Without the renovate column (its migration not applied yet) the select fails: read the rest
+  for cols in host,at,watch,renovate host,at,watch; do
+    out="$(supabase_select queue_state "select=$cols&$filter" |
+      jq -c '.[0] | select(. != null and (.watch | type == "object"))
+        | {host, at, watch} + (if .renovate != null then {renovate} else {} end)' 2>/dev/null)"
+    [[ -n "$out" ]] && { print -r -- "$out"; return 0; }
+  done
   return 0
 }
 
@@ -202,9 +208,12 @@ fi
 # watch_state <watch.json>: sets WATCH_STATE to the watch state as compact JSON, and WATCH_SOURCE
 # to where it came from. The file where the scheduler runs (`local`); elsewhere the freshest other
 # host's, from remote_watch (`<host> · <at>`); unreadable, the file as before (`local, remote
-# unreadable`). Globals, not output: a `$(watch_state)` call would keep the source in a subshell
+# unreadable`). RENOVATE_STATE is the Renovate state from the same place: renovate.json beside the
+# watch file, or the row's renovate. Globals, not output: a `$(watch_state)` call would keep the
+# source in a subshell
 WATCH_SOURCE=""
 WATCH_STATE="{}"
+RENOVATE_STATE="{}"
 watch_state() {
   local remote
   if scheduler_here; then
@@ -213,11 +222,16 @@ watch_state() {
        jq -e '.watch | type == "object"' >/dev/null <<<"$remote" 2>/dev/null; then
     WATCH_SOURCE="$(jq -r '"\(.host) · \(.at)"' <<<"$remote")"
     WATCH_STATE="$(jq -c '.watch' <<<"$remote")"
+    RENOVATE_STATE="$(jq -c '.renovate | if type == "object" then . else {} end' <<<"$remote" 2>/dev/null || print '{}')"
     return 0
   else
     WATCH_SOURCE="local, remote unreadable"
   fi
   WATCH_STATE="$(jq -c 'if type == "object" then . else {} end' "$1" 2>/dev/null || print '{}')"
+  RENOVATE_STATE="$(jq -c 'if type == "object" then . else {} end' "${1:h}/renovate.json" 2>/dev/null || print '{}')"
+  # An empty file reads as nothing with success, and `--argjson` refuses an empty value
+  [[ -n "$WATCH_STATE" ]] || WATCH_STATE='{}'
+  [[ -n "$RENOVATE_STATE" ]] || RENOVATE_STATE='{}'
   return 0
 }
 

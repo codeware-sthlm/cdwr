@@ -92,15 +92,18 @@ remember() {
 # pick: the attended verdict as JSON; fails on a Linear or jq error. The watch state comes from
 # watch_state (lib.sh): the local file where the scheduler runs, else the NUC's row
 pick() {
-  local resp watch waits
+  local resp watch waits renovate
   resp="$(linear "$ATTENDED_QUERY" | attended_nodes)" || return 1
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null || return 1
   watch_state "$WATCH_FILE"
   watch="$WATCH_STATE"
   [[ -n "$watch" ]] || watch='{}'
+  renovate="$RENOVATE_STATE"
+  [[ -n "$renovate" ]] || renovate='{}'
   waits="$(parked_waits <<<"$resp")"
   jq -L "$HERE" -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$BASE")" --argjson watch "$watch" --argjson waits "$waits" \
-    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits)' <<<"$resp"
+    --argjson renovate "$renovate" \
+    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate)' <<<"$resp"
 }
 # What the printed line shows: waiting and the limit only for an idle pick. A running line's
 # detail is this session's own Next line, so it stays out
