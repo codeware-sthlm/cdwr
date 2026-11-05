@@ -423,9 +423,11 @@ ticket that carries the PR as an attachment tends it, and the queue never offers
    (`agent:working`) and work it as in **Per ticket**, with a short plan it approves itself.
 5. Whichever way it comes, the fix goes on the ticket's own branch, never on Renovate's:
    Renovate automerges an edited non-major PR once it is green, so a fix pushed there merges
-   unreviewed. Before the first commit, fast-forward the new branch to Renovate's:
-   `git merge --ff-only origin/<renovate branch>`. The PR closes the ticket, and Renovate closes
-   its own PR once main has the update.
+   unreviewed. The ticket's worktree starts at `origin/main`, so before the first commit point
+   the fresh branch at Renovate's head, `git reset --hard origin/<renovate branch>`; it holds
+   nothing yet. When the PR conflicts with main, rebase that branch onto `origin/main` as in
+   **A PR that conflicts with main**, steps 1–3, never touching Renovate's branch. The PR closes
+   the ticket, and Renovate closes its own PR once main has the update.
 
 ## A PR that conflicts with main
 
