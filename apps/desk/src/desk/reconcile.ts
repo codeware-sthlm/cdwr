@@ -47,6 +47,7 @@ const NEXT: ReadonlyMap<string, Rule> = new Map([
   ['parked wait resolved', parked],
   ['answered', notAnswered],
   ['review feedback', notReview],
+  ['conflicts with main', notReview],
   ['ready', notReady]
 ]);
 

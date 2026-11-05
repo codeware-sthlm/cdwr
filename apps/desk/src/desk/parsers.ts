@@ -229,7 +229,7 @@ export function parseJob(text: string | null | undefined): Job | null {
 const VERDICTS: readonly AttendedVerdict[] = ['running', 'run now', 'idle'];
 
 // Attended (COD-545): watch.jq `attended_line`, what an attended /work-queue would take now.
-// "running: COD-1 · <Next line>", "run now: COD-2 answered" (or review feedback, ready, take over COD-3 …),
+// "running: COD-1 · <Next line>", "run now: COD-2 answered" (or review feedback, conflicts with main, ready, take over COD-3 …),
 // "idle: waits on …; limit 3/5". Missing when the scheduler couldn't compute one. Linear may wrap ids in mention tags.
 export function parseAttended(
   text: string | null | undefined

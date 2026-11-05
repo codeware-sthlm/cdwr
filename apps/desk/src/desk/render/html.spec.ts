@@ -33,6 +33,9 @@ describe('html helpers', () => {
     expect(reasonChip('take over')).toBe(
       '<span class="chip takeover">take over</span>'
     );
+    expect(reasonChip('conflicts with main')).toBe(
+      '<span class="chip conflict">conflicts with main</span>'
+    );
     expect(reasonChip('odd')).toBe('<span class="chip resume">odd</span>');
     expect(reasonChip(undefined)).toBe('<span class="chip resume"></span>');
   });
