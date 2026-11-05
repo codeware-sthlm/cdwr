@@ -15,6 +15,7 @@ import { type BasePayload, getPayload } from 'payload';
 import { verifyEmailMail } from '../../../collections/users/verify-email';
 import config from '../../../payload.config';
 import { refuseUnlessHuman } from '../../../security/public-submit';
+import { errorKind } from '../../../utils/error-kind';
 import {
   REFUSAL_STATUS,
   SIGNUP_RATE_LIMIT,
@@ -30,7 +31,6 @@ import {
 
 const refuse = (refusal: SignupRefusal) =>
   NextResponse.json({ error: refusal }, { status: REFUSAL_STATUS[refusal] });
-
 /** Run `work` in a transaction of its own, committed only when it returns */
 async function inTransaction<T>(
   payload: BasePayload,
@@ -272,12 +272,14 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const reason = signupRefusal(error);
     if (reason === 'failed') {
-      // Drizzle wraps the database's own message as the error's cause
-      const cause =
-        error instanceof Error && error.cause
-          ? ` (${String(error.cause)})`
-          : '';
-      payload.logger.error(`[signup] Signup failed: ${String(error)}${cause}`);
+      // Drizzle wraps the database's own error as the cause, and both its
+      // message (`Failed query: … params: …`) and the driver's `detail` carry
+      // the submitted values, so only the error's class and the cause's
+      // SQLSTATE code are logged
+      const cause = error instanceof Error ? error.cause : undefined;
+      payload.logger.error(
+        `[signup] Signup failed (${errorKind(error)}, cause ${cause === undefined ? 'none' : errorKind(cause)}), details withheld`
+      );
     }
     return refuse(reason);
   }
@@ -289,7 +291,8 @@ export async function POST(request: NextRequest) {
       ? sendMails(payload, parsed.input, created)
       : sendAccountExists(payload, parsed.input)
   ).catch((error) =>
-    payload.logger.error(`[signup] Mails failed: ${String(error)}`)
+    // A mail error's message can name the recipient, so only its kind is logged
+    payload.logger.error(`[signup] Mails failed (${errorKind(error)})`)
   );
 
   return NextResponse.json({ ok: true }, { status: 201 });
