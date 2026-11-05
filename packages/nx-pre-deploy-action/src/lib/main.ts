@@ -1,4 +1,5 @@
 import * as core from '@actions/core';
+import { maskSecretsIn, redactConfig } from '@codeware/shared/util/github';
 
 import { preDeploy } from './pre-deploy';
 import {
@@ -27,7 +28,8 @@ export async function run(): Promise<void> {
         undefined) as ActionInputs['manualEnvironment']
     } satisfies ActionInputs);
 
-    core.debug(`Inputs:\n${JSON.stringify(inputs, null, 2)}`);
+    maskSecretsIn(inputs);
+    core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     const { apps, environment, appTenants } = await preDeploy(inputs);
 

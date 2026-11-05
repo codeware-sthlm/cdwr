@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import * as core from '@actions/core';
+import { maskSecretsIn, redactConfig } from '@codeware/shared/util/github';
 
 import { nxChangelog } from './nx-changelog';
 import { ActionInputsSchema } from './schemas/action-inputs.schema';
@@ -37,7 +38,8 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     });
 
-    core.debug(`Inputs:\n${JSON.stringify(inputs, null, 2)}`);
+    maskSecretsIn(inputs);
+    core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     const { changelogs, failedReleases } = await nxChangelog(inputs);
 

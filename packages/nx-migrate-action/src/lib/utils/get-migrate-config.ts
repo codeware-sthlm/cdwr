@@ -2,6 +2,7 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import {
   getRepositoryDefaultBranch,
+  redactConfig,
   withGitHub
 } from '@codeware/shared/util/github';
 
@@ -100,7 +101,7 @@ export const getMigrateConfig = async (
     skipE2E,
     token
   };
-  core.info(JSON.stringify(config, null, 2));
+  core.info(JSON.stringify(redactConfig(config), null, 2));
 
   // Validate and return migrate configuration
   return MigrateConfigSchema.parse(config);

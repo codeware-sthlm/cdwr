@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import * as core from '@actions/core';
+import { maskSecretsIn, redactConfig } from '@codeware/shared/util/github';
 
 import { flyDeployment } from './fly-deployment';
 import {
@@ -22,7 +23,13 @@ const parsePrNumber = (value: string): number | undefined => {
 export async function run(): Promise<void> {
   try {
     const appDetailsInput = core.getInput('app-details');
-    const appDetails = appDetailsInput ? JSON.parse(appDetailsInput) : {};
+    let appDetails = {};
+    try {
+      appDetails = appDetailsInput ? JSON.parse(appDetailsInput) : {};
+    } catch {
+      // The parser's message quotes the input, which holds tenant secrets
+      throw new Error('app-details is not valid JSON');
+    }
 
     // Prefer images-path over images to avoid GitHub Actions secret scanning
     // suppressing the images job output when it matches a registered secret pattern.
@@ -52,7 +59,8 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     } satisfies ActionInputs);
 
-    core.debug(`Inputs:\n${JSON.stringify(inputs, null, 2)}`);
+    maskSecretsIn(inputs);
+    core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     const { environment, projects } = await flyDeployment(inputs);
 

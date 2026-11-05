@@ -26,8 +26,14 @@ export const setGitCredentials = async (
 
   // Update remote URL to use HTTPS token authentication
   // Note! Needed for local testing, but works for all use cases.
+  // The url holds the token, so the command is not echoed and the log line
+  // names the url without it
   const remoteUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
-  await exec.exec('git', ['remote', 'set-url', 'origin', remoteUrl]);
+  await exec.exec('git', ['remote', 'set-url', 'origin', remoteUrl], {
+    silent: true
+  });
 
-  core.info(`Git remote URL set to '${remoteUrl}'`);
+  core.info(
+    `Git remote URL set to 'https://x-access-token:[redacted]@github.com/${owner}/${repo}.git'`
+  );
 };
