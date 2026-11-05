@@ -1,7 +1,7 @@
+import { readSearchParam } from '@codeware/app-headless/util/routing';
 import { createMemoryHistory, createRouter } from '@tanstack/react-router';
 
 import { getRouterOptions } from './router';
-import { readSearchParam } from './search-param';
 
 async function load(entry: string) {
   const router = createRouter({

@@ -1,6 +1,6 @@
+import { sitemapXml } from '@codeware/app-headless/util/seo';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { sitemapXml } from '../crawl-files';
 import { getEnv } from '../env.server';
 import { loadSitemapEntries } from '../server/sitemap-entries';
 

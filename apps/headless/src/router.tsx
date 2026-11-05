@@ -1,9 +1,12 @@
+import {
+  nonceFrom,
+  parseSearch,
+  stringifySearch
+} from '@codeware/app-headless/util/routing';
 import { createRouter } from '@tanstack/react-router';
 import { getGlobalStartContext } from '@tanstack/react-start';
 
-import { nonceFrom } from './nonce';
 import { routeTree } from './routeTree.gen';
-import { parseSearch, stringifySearch } from './search-param';
 import { initSentryClient } from './sentry-client';
 
 export function getRouterOptions() {

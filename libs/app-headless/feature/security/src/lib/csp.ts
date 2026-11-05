@@ -1,3 +1,4 @@
+import type { Env } from '@codeware/app-headless/util/env-schema';
 import {
   type CspHeaders,
   createCspNonce,
@@ -5,8 +6,6 @@ import {
   sentryCspReportUri,
   toOrigin
 } from '@codeware/shared/util/csp';
-
-import type { Env } from '../env.schema';
 
 export { createCspNonce };
 

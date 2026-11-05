@@ -1,6 +1,6 @@
+import { robotsTxt } from '@codeware/app-headless/util/seo';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { robotsTxt } from '../crawl-files';
 import { getEnv } from '../env.server';
 import { loadSiteOrigin } from '../server/sitemap-entries';
 

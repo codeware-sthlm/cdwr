@@ -1,6 +1,6 @@
+import { EnvSchema } from '@codeware/app-headless/util/env-schema';
 import * as Sentry from '@sentry/tanstackstart-react';
 
-import { EnvSchema } from '../env.schema';
 import { sentryOptions } from '../sentry';
 
 const SentryEnv = EnvSchema.pick({

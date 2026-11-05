@@ -1,8 +1,8 @@
+import { docHead } from '@codeware/app-headless/util/seo';
 import { RenderDoc } from '@codeware/shared/ui/cms-renderer';
 import type { DocData } from '@codeware/shared/util/payload-utils';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 
-import { docHead } from '../doc-head';
 import { loadDoc } from '../server/load-doc';
 import type { Site } from '../server/load-site';
 

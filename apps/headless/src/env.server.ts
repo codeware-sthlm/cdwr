@@ -1,4 +1,4 @@
-import { type Env, EnvSchema } from './env.schema';
+import { type Env, EnvSchema } from '@codeware/app-headless/util/env-schema';
 
 let resolved: Env | undefined;
 
