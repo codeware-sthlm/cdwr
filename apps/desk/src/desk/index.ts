@@ -34,7 +34,7 @@ import {
 import { renderSession } from './render/session';
 import { SHEETS } from './render/sheets';
 import { renderTiles } from './render/tiles';
-import { renderWaiting, snoozeUi } from './render/waiting';
+import { forgetLabelled, renderWaiting, snoozeUi } from './render/waiting';
 import { spendDays } from './spend';
 import {
   type Connection,
@@ -163,6 +163,7 @@ function renderLive(m: Model, now: Date): void {
 function renderMain(): void {
   const now = new Date();
   const m = model(state, now);
+  forgetLabelled(state.controls.labelled, m.v ? m.toLabel : null);
   renderLive(m, now);
   $('capacity').innerHTML = renderCapacity(m);
   $('more').innerHTML = renderTiles(m, state, now);
@@ -370,19 +371,30 @@ function clickLabel(target: Element): boolean {
   if (!labeller || !ticket || button.disabled || c.labelling.has(ticket))
     return true;
   const region = button.closest('[id]');
-  // Once labelled the button is gone; the row's Snooze is the nearest control
+  // Once labelled the button is gone; the row's Snooze, or Wake in the snoozed fold, is nearest
   const refocus = (): void =>
-    focusIn(region, [`[data-label="${ticket}"]`, `[data-snooze="${ticket}"]`]);
+    focusIn(region, [
+      `[data-label="${ticket}"]`,
+      `[data-snooze="${ticket}"]`,
+      `[data-wake="${ticket}"]`
+    ]);
   const asked = c.labelConfirm.get(ticket);
   // A double-click is not a confirmation: the second press has to be deliberate
   if (asked !== undefined && Date.now() - asked < DOUBLE_CLICK_MS) return true;
   if (asked === undefined || Date.now() - asked >= CONFIRM_MS) {
-    c.labelConfirm.set(ticket, Date.now());
+    const askedAt = Date.now();
+    c.labelConfirm.set(ticket, askedAt);
     c.labelNotes.delete(ticket);
     render();
     refocus();
-    // Nothing else redraws the row when the confirmation lapses
-    setTimeout(render, CONFIRM_MS + 50);
+    // Nothing else redraws the row when this confirmation lapses; one that was consumed or
+    // renewed meanwhile is left alone, and the button keeps the focus
+    setTimeout(() => {
+      if (c.labelConfirm.get(ticket) !== askedAt) return;
+      c.labelConfirm.delete(ticket);
+      render();
+      refocus();
+    }, CONFIRM_MS + 50);
     return true;
   }
   c.labelConfirm.delete(ticket);
