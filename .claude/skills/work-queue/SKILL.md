@@ -354,22 +354,21 @@ merged one no new commit: further work always goes in a new ticket, related to i
 A comment on a merged ticket still gets an answer (**What to take next**, step 6). Nothing
 here needs the worktree; the answer comes from reading the code on `origin/main`.
 
-1. Read the ticket, its comments and the agent's own newest comment. When that is not an
-   `**Agent: suggestion**` with follow-ups or drops, the human comment is new: go to step 2.
-   After such a suggestion, a one-word yes (`yes`, `ok`, `go`, `👍`) applies it (step 3).
-   Anything else is a correction: suggest again (step 2), taking it into account.
-2. Check the code on main against the comment, and reply with one comment:
+1. Read the ticket, its comments and the agent's own newest reply, skipping housekeeping
+   (`**Agent: label cleared**`, `**Agent: closed**`, `**Agent: took over**`): clean-up may post
+   one between a suggestion and its answer. When that reply is not an `**Agent: suggestion**`
+   with follow-ups or drops, the human comment is new: go to step 2. After such a suggestion,
+   a one-word yes (`yes`, `ok`, `go`, `👍`) applies it (step 3). Anything else is a correction:
+   suggest again (step 2), taking it into account.
+2. Check the code on main against the comment, and reply with one comment. It holds either
+   "nothing to do" with the reason (the file or commit that shows it), or a numbered list of
+   follow-up tickets, hand-offs to drop, or both:
 
-   ```md
+   ```text
    **Agent: suggestion** <one line: what the comment is about>
 
-   <Nothing to do: the reason, with the file or commit that shows it.>
-   — or —
-
    1. **<follow-up ticket title>**: <short scope, one or two lines>
-   2. …
-      — and/or —
-      Drop hand-off "<item>": <reason>
+   2. Drop hand-off "<item>": <reason>
 
    Reply yes to create these, or correct me.
    ```
@@ -378,9 +377,11 @@ here needs the worktree; the answer comes from reading the code on `origin/main`
 
 3. On yes, create each suggested ticket in team Codeware, `relatedTo` the merged ticket, with
    no agent label: Håkan sets `agent:ready`, as for a split. Write the scope as its report.
-   Strike each dropped hand-off through in the PR-ready comment and add the reason after it
-   (`- [ ] ~~item~~ dropped: <reason>`), edited in place. Then post
-   `**Agent:** Created COD-n, COD-m` (and what was dropped).
+   Drop each hand-off where it is read from: strike it through in the PR-ready comment and add
+   the reason after it (`- [ ] ~~item~~ dropped: <reason>`), edited in place. A ticket merged
+   from a gate has no PR-ready comment: set the hand-off's Status cell in the description to
+   `Dropped: <reason>` instead. Then post `**Agent:** Created COD-n, COD-m` (and what was
+   dropped).
 4. When that leaves every hand-off ticked or dropped, clear `agent:review` as clean-up does.
    A ticket merged from a gate, with no PR-ready comment, keeps the label: the attended query
    finds it only by its agent label.
