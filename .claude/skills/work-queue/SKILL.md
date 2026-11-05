@@ -42,7 +42,7 @@ on: working (from the start of each turn), waiting on a prompt, stopped, polling
 whether a session is alive, and only then stays quiet about work waiting for one.
 
 The file also names the ticket in hand. Run `tools/cdwr/agent-queue/session.sh ticket COD-123`
-when a ticket is claimed or resumed (**Per ticket** step 1, **What to take next** steps 1–5),
+when a ticket is claimed or resumed (**Per ticket** step 1, **What to take next** steps 1–6),
 and `tools/cdwr/agent-queue/session.sh ticket -` before going back to **What to take next**.
 
 Run both markers on their own or chained with commands that succeed: a Bash call that exits
@@ -98,20 +98,25 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
 5. **A review PR that conflicts with main** (`run now: COD-1 conflicts with main`): the PR
    watch read `mergeable` as `CONFLICTING`. Rebase it as in **A PR that conflicts with main**.
    The ticket stays `agent:review`.
-6. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
+6. **A comment on a merged ticket**: Done, with the agent's work on it (a `**Agent: PR ready**`
+   comment or `agent:review`), and its newest comment does not start with `**Agent` and is newer
+   than the merge (`completedAt`). Canceled tickets never count. See **Merged ticket comments**.
+7. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
    removes anything. It only removes ticket worktrees whose PR merged or closed and that
    have nothing uncommitted. Clear `agent:working` or `agent:needs-input` from a Done or
    Canceled ticket (`list_issues` with that label in those states; pass the full label list
    without it) and post `**Agent: label cleared**` naming the label. Skip a ticket that blocks
    an open issue with no agent label: `to_label` needs the blocker's agent label to list that
-   issue as ready to label, so clear it once the issue is labelled. Leave `agent:review` and
-   every other label: a merged ticket keeps `agent:review` for its hand-offs, the PR watch and
-   the Desk. Then close each parent ticket whose sub-issues are all Done or Canceled: set it
+   issue as ready to label, so clear it once the issue is labelled. Clear `agent:review` the same
+   way from a Done ticket whose PR merged, that has a `**Agent: PR ready**` comment, and whose
+   hand-offs are all ticked or dropped (none unticked and not struck through, see **Per ticket**
+   step 6), so it leaves the Desk. Until then a merged ticket keeps `agent:review` for its
+   hand-offs, the PR watch and the Desk. Leave every other label. Then close each parent ticket whose sub-issues are all Done or Canceled: set it
    Done and post `**Agent: closed**` naming the sub-issues. Linear's own
    parent auto-close stays off, so nothing else closes it.
-7. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
+8. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
    starts: go to **Nothing workable**.
-8. **A new `agent:ready` ticket** by the queue rule.
+9. **A new `agent:ready` ticket** by the queue rule.
 
 Nothing matched: go to **Nothing workable**.
 
@@ -164,7 +169,7 @@ fits in the 10-minute limit.
 | `agent:ready`       | eligible; the queue lists unblocked sub-issues to label | Håkan           |
 | `agent:working`     | a session is on it; status In Progress                  | agent, on claim |
 | `agent:needs-input` | blocked on Håkan; the question is the latest comment    | agent           |
-| `agent:review`      | PR open; status In Review                               | agent           |
+| `agent:review`      | PR open, or merged with hand-offs left; In Review/Done  | agent           |
 
 Replacing the label means passing the full label list without the old agent label. Never
 remove the ticket's other labels.
@@ -213,7 +218,7 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
    One ticket, one PR, so every PR maps to a ticket of its own. Work that needs more than
    one PR becomes sub-issues of the ticket, one per PR, each on its own branch and worked
    as a ticket. The parent holds the overview and opens no PR; the agent closes it once all its
-   sub-issues are done (**What to take next**, step 6).
+   sub-issues are done (**What to take next**, step 7).
 
 3. **Plan approval, in Linear.** Post `**Agent: plan ready**` with the decisions most worth
    checking and any open questions as numbered options (the format in **How a gate asks**).
@@ -245,7 +250,15 @@ claim's age. The 2-hour take-over rule stays for a session that left no heartbea
 
    Write the checklist as a line `Hand-off checklist:` followed by one `- [ ] <item>` per
    line, with nothing else in between. The scheduler watches the PR after the gate and, on
-   merge, sends the unticked items as a notice, so keep each item to one line.
+   merge, sends the unticked items as a notice, so keep each item to one line. After the items,
+   a blank line and then this hint, word for word:
+
+   ```md
+   _To drop an item without doing it, strike it through and leave it unticked, or say why in a comment._
+   ```
+
+   An unticked item struck through (`- [ ] ~~item~~`, a reason may follow) is dropped: it no
+   longer waits, in the merge notice, on the Desk or in "Queue waiting on you".
 
    The checklist holds what Håkan does after the merge, nothing else. A question or an open
    review thread goes under what is left open for him: once answered, the agent handles it,
@@ -332,6 +345,49 @@ Håkan reviews after the PR-ready comment. Handle it between tickets.
    unticked shows as still waiting on Håkan.
 
 Thread replies and resolving use the GraphQL calls in **Copilot review**.
+
+## Merged ticket comments
+
+A merged PR closes its ticket for good. A Done ticket gets no new branch, commit or PR, and a
+merged one no new commit: further work always goes in a new ticket, related to it.
+
+A comment on a merged ticket still gets an answer (**What to take next**, step 6). Nothing
+here needs the worktree; the answer comes from reading the code on `origin/main`.
+
+1. Read the ticket, its comments and the agent's own newest comment. When that is not an
+   `**Agent: suggestion**` with follow-ups or drops, the human comment is new: go to step 2.
+   After such a suggestion, a one-word yes (`yes`, `ok`, `go`, `👍`) applies it (step 3).
+   Anything else is a correction: suggest again (step 2), taking it into account.
+2. Check the code on main against the comment, and reply with one comment:
+
+   ```md
+   **Agent: suggestion** <one line: what the comment is about>
+
+   <Nothing to do: the reason, with the file or commit that shows it.>
+   — or —
+
+   1. **<follow-up ticket title>**: <short scope, one or two lines>
+   2. …
+      — and/or —
+      Drop hand-off "<item>": <reason>
+
+   Reply yes to create these, or correct me.
+   ```
+
+   A "nothing to do" reply needs no yes: the ticket rests until the next comment.
+
+3. On yes, create each suggested ticket in team Codeware, `relatedTo` the merged ticket, with
+   no agent label: Håkan sets `agent:ready`, as for a split. Write the scope as its report.
+   Strike each dropped hand-off through in the PR-ready comment and add the reason after it
+   (`- [ ] ~~item~~ dropped: <reason>`), edited in place. Then post
+   `**Agent:** Created COD-n, COD-m` (and what was dropped).
+4. When that leaves every hand-off ticked or dropped, clear `agent:review` as clean-up does.
+   A ticket merged from a gate, with no PR-ready comment, keeps the label: the attended query
+   finds it only by its agent label.
+
+The attended query keeps a merged ticket in view for 14 days after it went Done, label or not
+(the `merged` alias in `lib.sh`). A comment after that goes unanswered. It also reads only the
+first 50 comments of a ticket, so on a longer ticket the newest are not seen.
 
 ## A PR that conflicts with main
 
@@ -459,8 +515,10 @@ and no session is alive. Nobody is at the terminal, and the permissions deny any
 listed.
 
 1. Start and claim as usual. In **What to take next**, take only the steps before **The limit**:
-   never a new `agent:ready` ticket. An unanswered plan stays a gate; this mode never approves
-   its own plan, even though no one is watching.
+   never a new `agent:ready` ticket. A merged-ticket comment is taken here too; it claims
+   nothing and needs no worktree, since it only writes comments, tickets and the struck line.
+   An unanswered plan stays a gate; this mode never approves its own plan, even though no one
+   is watching.
 2. Edit and Write work only inside the ticket worktrees. Read reaches anything. There is no
    `rm` or `mv`: delete a file with `git -C <worktree> rm <path>` and rename with `git mv`.
    Nothing under `.claude/` can be edited, even in a worktree: Claude Code guards that
@@ -525,8 +583,8 @@ A scheduled run gets read tools and Linear only. It can't edit files, run shell 
 push, and it shouldn't try.
 
 1. Take the first `agent:ready` ticket by the queue rule. Skip resuming: `agent:working`,
-   answered `agent:needs-input` and review feedback wait for an attended session, and the
-   limit doesn't apply.
+   answered `agent:needs-input`, review feedback and merged-ticket comments wait for an attended
+   session, and the limit doesn't apply.
 2. Investigate with Read, Grep and Glob against the checked-out `origin/main`. There is no
    shell, so no git history; note in the plan where history would have helped. A plan that
    needs a new implement permission reads the installed `implement.sh` and `job.json` in the
