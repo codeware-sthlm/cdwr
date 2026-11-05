@@ -186,6 +186,13 @@ export default [
               ]
             },
             {
+              sourceTag: 'scope:fly-conditions-action',
+              onlyDependOnLibsWithTags: [
+                'scope:fly-conditions-action',
+                'scope:shared'
+              ]
+            },
+            {
               sourceTag: 'scope:fly-destroy-action',
               onlyDependOnLibsWithTags: [
                 'scope:fly-destroy-action',

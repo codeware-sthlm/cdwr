@@ -1,5 +1,8 @@
 import * as core from '@actions/core';
-import { getRepositoryDefaultBranch } from '@codeware/shared/util/github';
+import {
+  getRepositoryDefaultBranch,
+  redactConfig
+} from '@codeware/shared/util/github';
 
 import type { ActionInputs } from '../schemas/action-inputs.schema';
 import { type Config, ConfigSchema } from '../schemas/config.schema';
@@ -50,7 +53,7 @@ export const normalizeInputs = async (
     token
   };
 
-  core.info(JSON.stringify(config, null, 2));
+  core.info(JSON.stringify(redactConfig(config), null, 2));
 
   // Validate and return the configuration
   return ConfigSchema.parse(config);

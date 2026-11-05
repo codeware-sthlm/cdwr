@@ -101,10 +101,14 @@ export async function fetchAppSentry(
     if (error instanceof Error) {
       core.error(`[fetch-app-sentry] Error: ${error.message}`);
       if (error.cause) {
-        core.error(`[fetch-app-sentry] Cause: ${JSON.stringify(error.cause)}`);
+        const cause =
+          error.cause instanceof Error
+            ? error.cause.message
+            : 'non-Error cause';
+        core.error(`[fetch-app-sentry] Cause: ${cause}`);
       }
     } else {
-      core.error(`[fetch-app-sentry] Unknown error: ${JSON.stringify(error)}`);
+      core.error(`[fetch-app-sentry] Unknown error of type ${typeof error}`);
     }
     throw error;
   }
