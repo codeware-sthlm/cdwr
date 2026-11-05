@@ -1,4 +1,5 @@
 import type { Adapter } from '../data';
+import { LinearError, linearMessage } from '../linear';
 import type { IssueEventRow } from '../supabase';
 
 import {
@@ -9,7 +10,7 @@ import {
   type ControlKind,
   sendCommand
 } from './commands';
-import { AGENT_AVATAR } from './constants';
+import { AGENT_AVATAR, CONFIRM_MS } from './constants';
 import { type Loader, createLoader } from './load';
 import { type Model, model, shipped } from './model';
 import { notice } from './notice';
@@ -40,6 +41,7 @@ import {
   type View,
   bucketsLoaded,
   createState,
+  emptyControls,
   isFilter,
   sheetIdOf,
   viewOf
@@ -48,6 +50,9 @@ import {
 const state = createState(); // everything the page shows and the viewer chose; survives a settings re-start
 let adapter: Adapter | null = null; // set by start()
 let loader: Loader | null = null;
+let labeller: ((ticket: string) => Promise<void>) | null = null; // set by setLabeller()
+/** A second press this soon after the first is a double-click, not a confirmation */
+const DOUBLE_CLICK_MS = 300;
 
 const $ = (id: string): HTMLElement => {
   const el = document.getElementById(id);
@@ -251,8 +256,6 @@ function copyRow(button: Element): void {
   navigator.clipboard.writeText(text).catch(() => selectText(raw));
 }
 
-const CONFIRM_MS = 4000;
-
 /** The first enabled, visible match in the region, for focus after a render replaced the node */
 function focusIn(region: Element | null, selectors: string[]): void {
   const root = region?.id ? document.getElementById(region.id) : null;
@@ -358,6 +361,55 @@ function clickSnooze(target: Element): boolean {
   return true;
 }
 
+/** Handles a Label button's click; true when the click was one */
+function clickLabel(target: Element): boolean {
+  const button = target.closest<HTMLButtonElement>('[data-label]');
+  if (!button) return false;
+  const ticket = button.dataset.label;
+  const c = state.controls;
+  if (!labeller || !ticket || button.disabled || c.labelling.has(ticket))
+    return true;
+  const region = button.closest('[id]');
+  // Once labelled the button is gone; the row's Snooze is the nearest control
+  const refocus = (): void =>
+    focusIn(region, [`[data-label="${ticket}"]`, `[data-snooze="${ticket}"]`]);
+  const asked = c.labelConfirm.get(ticket);
+  // A double-click is not a confirmation: the second press has to be deliberate
+  if (asked !== undefined && Date.now() - asked < DOUBLE_CLICK_MS) return true;
+  if (asked === undefined || Date.now() - asked >= CONFIRM_MS) {
+    c.labelConfirm.set(ticket, Date.now());
+    c.labelNotes.delete(ticket);
+    render();
+    refocus();
+    // Nothing else redraws the row when the confirmation lapses
+    setTimeout(render, CONFIRM_MS + 50);
+    return true;
+  }
+  c.labelConfirm.delete(ticket);
+  c.labelling.add(ticket);
+  render();
+  labeller(ticket)
+    .then(() => {
+      c.labelled.set(ticket, Date.now());
+    })
+    .catch((error: unknown) => {
+      c.labelNotes.set(
+        ticket,
+        error instanceof LinearError
+          ? linearMessage(error)
+          : error instanceof Error
+            ? error.message
+            : 'The label failed.'
+      );
+    })
+    .finally(() => {
+      c.labelling.delete(ticket);
+      render();
+      refocus();
+    });
+  return true;
+}
+
 // `toggle` doesn't bubble, so it is caught on the way down; a render then keeps the fold as the viewer left it
 document.addEventListener(
   'toggle',
@@ -390,7 +442,8 @@ document.addEventListener('click', (e) => {
     else if (action.dataset.action === 'copy-row') copyRow(action);
     return;
   }
-  if (clickControl(e.target) || clickSnooze(e.target)) return;
+  if (clickControl(e.target) || clickSnooze(e.target) || clickLabel(e.target))
+    return;
   const problem = e.target.closest<HTMLElement>('[data-problem]');
   if (problem) {
     showView('desk', false);
@@ -584,16 +637,13 @@ export function start(next: Adapter | null): void {
 
 /** Turns the controls on with a target, or off with null; the token never reaches the model */
 export function setControls(target: CommandTarget | null): void {
-  state.controls = {
-    target,
-    drafts: {},
-    sending: new Set(),
-    failed: new Map(),
-    awaiting: new Map(),
-    confirm: null,
-    snoozing: new Set(),
-    snoozeNotes: new Map()
-  };
+  state.controls = emptyControls(target);
+  render();
+}
+
+/** Sets what a confirmed Label click calls; the buttons themselves show with the controls */
+export function setLabeller(fn: (ticket: string) => Promise<void>): void {
+  labeller = fn;
   render();
 }
 

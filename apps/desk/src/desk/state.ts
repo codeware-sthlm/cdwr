@@ -169,6 +169,14 @@ export type ControlsUi = {
   snoozing: Set<string>;
   /** Ticket -> why its last snooze or wake did not go through, shown until it is used again */
   snoozeNotes: Map<string, string>;
+  /** Ticket -> when its Label button asked for confirmation, in ms */
+  labelConfirm: Map<string, number>;
+  /** Tickets whose label request is in flight */
+  labelling: Set<string>;
+  /** Ticket -> when it was labelled, in ms */
+  labelled: Map<string, number>;
+  /** Ticket -> why its last label request failed, shown until it is used again */
+  labelNotes: Map<string, string>;
 };
 
 export type DeskState = {
@@ -226,14 +234,21 @@ export const createState = (): DeskState => ({
     view: 'desk',
     snoozedOpen: false
   },
-  controls: {
-    target: null,
-    drafts: {},
-    sending: new Set(),
-    failed: new Map(),
-    awaiting: new Map(),
-    confirm: null,
-    snoozing: new Set(),
-    snoozeNotes: new Map()
-  }
+  controls: emptyControls(null)
+});
+
+/** The controls with nothing in flight, aimed at `target` (null: the controls are off) */
+export const emptyControls = (target: ControlsUi['target']): ControlsUi => ({
+  target,
+  drafts: {},
+  sending: new Set(),
+  failed: new Map(),
+  awaiting: new Map(),
+  confirm: null,
+  snoozing: new Set(),
+  snoozeNotes: new Map(),
+  labelConfirm: new Map(),
+  labelling: new Set(),
+  labelled: new Map(),
+  labelNotes: new Map()
 });
