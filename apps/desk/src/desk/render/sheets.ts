@@ -119,7 +119,9 @@ export const whyLine = (m: Model, x: QueueNext): string => {
           : 'The live session takes it after its current step.'
         : x.reason === 'ready'
           ? `The scheduler plans it at ${nextAt(m)}.`
-          : `The scheduler starts a session for it at ${nextAt(m)}.`;
+          : x.reason === 'renovate' && x.detail === 'conflicting'
+            ? 'The scheduler leaves a Renovate conflict to an attended session: start one.'
+            : `The scheduler starts a session for it at ${nextAt(m)}.`;
   return [
     (x.reason !== undefined && WHY.get(x.reason)) || '',
     who,

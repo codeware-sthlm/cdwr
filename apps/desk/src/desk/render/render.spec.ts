@@ -43,7 +43,7 @@ import {
   tickText
 } from './problems';
 import { headline, renderSession } from './session';
-import { SHEETS } from './sheets';
+import { SHEETS, whyLine } from './sheets';
 import { renderTiles } from './tiles';
 import {
   countedRows,
@@ -880,6 +880,19 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(html).toContain('Tended by');
     expect(html).toContain('/issue/COD-740"');
     expect(html).not.toContain('/issue/PR 754');
+  });
+
+  it('tell a conflicting Renovate PR waits for an attended session', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        next: [{ ticket: 'PR 800', reason: 'renovate', detail: 'conflicting' }]
+      })
+    );
+    const m = model(state, NOW);
+    expect(
+      whyLine({ ...m, session: { state: 'none' }, stuck: null }, m.next[0])
+    ).toContain('leaves a Renovate conflict to an attended session');
   });
 
   it('list the review sheet in merge order, queued without an event', () => {
