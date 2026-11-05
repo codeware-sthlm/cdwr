@@ -2648,14 +2648,15 @@ describe('snoozed waiting rows', () => {
       expect(html).toContain('<span class="wnote">no &lt;label&gt;</span>');
     });
 
-    it('puts the button beside the sheet link, and keeps only the link without controls', () => {
+    it('puts the button beside a sheet link reading Open ticket, and keeps only the label link without controls', () => {
       const s = on(snoozed());
       const html = SHEETS.before.body(model(s, NOW), s, NOW);
       expect(html).toContain(
         '<button type="button" class="act secondary" data-label="COD-6"'
       );
       // The link stays: it is how the ticket is checked before confirming
-      expect(html).toContain('>Label agent:ready</a>');
+      expect(html).toContain('>Open ticket</a>');
+      expect(html).not.toContain('>Label agent:ready</a>');
       const off = snoozed();
       const plain = SHEETS.before.body(model(off, NOW), off, NOW);
       expect(plain).toContain('>Label agent:ready</a>');
@@ -2685,7 +2686,7 @@ describe('snoozed waiting rows', () => {
       const s = on(snoozed());
       const html = SHEETS.before.body(model(s, NOW), s, NOW);
       const acts = actions(cardOf(html, 'COD-6'));
-      expect(acts).toContain('>Label agent:ready</a>');
+      expect(acts).toContain('>Open ticket</a>');
       expect(acts).toContain('data-label="COD-6"');
       expect(acts).toContain('data-snooze="COD-6"');
       expect(acts.indexOf('<a ')).toBeLessThan(acts.indexOf('data-label'));
