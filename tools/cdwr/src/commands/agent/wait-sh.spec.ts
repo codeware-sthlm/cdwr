@@ -758,6 +758,30 @@ describe.skipIf(!hasZsh)('lib.sh attended_nodes', () => {
     });
   });
 
+  it('folds the merged tickets in before the sub-issues, once each', () => {
+    expect(
+      fold({
+        data: {
+          issues: { nodes: [{ identifier: 'COD-1' }] },
+          merged: {
+            nodes: [{ identifier: 'COD-1' }, { identifier: 'COD-3' }]
+          },
+          subissues: { nodes: [{ identifier: 'COD-2' }] }
+        }
+      })
+    ).toEqual({
+      data: {
+        issues: {
+          nodes: [
+            { identifier: 'COD-1' },
+            { identifier: 'COD-3' },
+            { identifier: 'COD-2' }
+          ]
+        }
+      }
+    });
+  });
+
   // An empty queue made from an error would read as nothing to do
   it('leaves an error answer as it came', () => {
     const error = { errors: [{ message: 'rate limited' }] };
