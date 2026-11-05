@@ -1,4 +1,6 @@
 import type { SnoozeRow } from '../../supabase';
+import { PENDING_MAX_MS } from '../commands';
+import { CONFIRM_MS } from '../constants';
 import { esc, shortAge } from '../format';
 import { type Blocker, type Model, prOf } from '../model';
 import type { ControlsUi, Detail } from '../state';
@@ -66,14 +68,30 @@ export type SnoozeUi = {
   busy: ReadonlySet<string>;
   notes: ReadonlyMap<string, string>;
   open: boolean;
+  label: LabelUi;
 };
+
+/** What the Label buttons need: the viewer's side of the controls */
+export type LabelUi = Pick<
+  ControlsUi,
+  'labelConfirm' | 'labelling' | 'labelled' | 'labelNotes'
+>;
+
+export type LabelState =
+  'idle' | 'confirming' | 'labelling' | 'labelled' | { note: string };
 
 /** No controls: no buttons, though a fold of snoozed rows still shows */
 export const SNOOZE_OFF: SnoozeUi = {
   on: false,
   busy: new Set(),
   notes: new Map(),
-  open: false
+  open: false,
+  label: {
+    labelConfirm: new Map(),
+    labelling: new Set(),
+    labelled: new Map(),
+    labelNotes: new Map()
+  }
 };
 
 /** The snooze buttons' state from the model and the viewer's side of the controls */
@@ -81,7 +99,8 @@ export const snoozeUi = (m: Model, c: ControlsUi, open = false): SnoozeUi => ({
   on: m.controls !== null,
   busy: c.snoozing,
   notes: c.snoozeNotes,
-  open
+  open,
+  label: c
 });
 
 /** The Snooze or Wake button for a row, with the note a refusal left; empty without controls. Keep it outside the row's link */
@@ -94,6 +113,53 @@ export const snoozeControls = (r: WaitRow, ui: SnoozeUi): string => {
     : `<button type="button" class="wsnooze" data-snooze="${id}" data-kind="${esc(r.kind)}" data-event-at="${esc(r.gateAt ?? '')}" aria-label="Snooze ${id} until it changes"${busy}>Snooze</button>`;
   const note = ui.notes.get(r.id);
   return button + (note ? `<span class="wnote">${esc(note)}</span>` : '');
+};
+
+/** Where a ticket's Label button stands: asking to confirm, in flight, done for a while, or refused with a note */
+export const labelState = (
+  ticket: string,
+  ui: LabelUi,
+  now: number,
+  gateAt: string | null = null
+): LabelState => {
+  if (ui.labelling.has(ticket)) return 'labelling';
+  const labelled = ui.labelled.get(ticket);
+  // Labelled from here, until the queue drops the row; a row whose gate moved on since came
+  // back as ready to label and is live again
+  if (
+    labelled !== undefined &&
+    now - labelled <= PENDING_MAX_MS &&
+    (gateAt === null || Date.parse(gateAt) <= labelled)
+  )
+    return 'labelled';
+  const note = ui.labelNotes.get(ticket);
+  if (note) return { note };
+  const asked = ui.labelConfirm.get(ticket);
+  return asked !== undefined && now - asked < CONFIRM_MS
+    ? 'confirming'
+    : 'idle';
+};
+
+/** The Label agent:ready button for a ready-to-label row, or what became of it; empty without controls. Keep it outside the row's link */
+export const labelControls = (
+  r: WaitRow,
+  ui: SnoozeUi,
+  now: number,
+  className = 'wsnooze'
+): string => {
+  if (!ui.on) return '';
+  const state = labelState(r.id, ui.label, now, r.gateAt);
+  if (state === 'labelled')
+    return '<span class="wnote">labelled · waiting for the queue</span>';
+  const id = esc(r.id);
+  const button = (text: string, extra = ''): string =>
+    `<button type="button" class="${className}" data-label="${id}"${extra}>${text}</button>`;
+  if (state === 'labelling') return button('labelling…', ' disabled');
+  if (state === 'confirming') return button('Confirm label');
+  const label = button('Label agent:ready');
+  return typeof state === 'object'
+    ? label + `<span class="wnote">${esc(state.note)}</span>`
+    : label;
 };
 
 /** The fold of snoozed rows, collapsed unless the viewer opened it; empty when none are */
@@ -183,7 +249,7 @@ export const countedRows = (rows: readonly WaitRow[]): WaitRow[] =>
   rows.filter((r) => r.kind !== 'approved' && !r.snoozed);
 
 const rowHTML =
-  (m: Model, details: ReadonlyMap<string, Detail>, ui: SnoozeUi) =>
+  (m: Model, details: ReadonlyMap<string, Detail>, ui: SnoozeUi, now: number) =>
   (r: WaitRow): string => {
     const tone = prTone(
       livePr(m, details, { ticket: r.id, pr: r.pr }).live?.state ?? null
@@ -195,7 +261,7 @@ const rowHTML =
     ]
       .filter(Boolean)
       .join(' · ');
-    return `<li class="wrow-li${approved ? ' approved' : ''}"><a class="wrow" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="id">${esc(r.id)}</span><span class="t">${esc(r.title)}</span><span class="kind">${esc(rowLabel(r))}</span>${r.age === null ? '' : `<time>${esc(shortAge(r.age))}</time>`}</a>${prn(r.pr, tone)}${snoozeControls(r, ui)}${note ? `<span class="wnote">${note}</span>` : ''}</li>`;
+    return `<li class="wrow-li${approved ? ' approved' : ''}"><a class="wrow" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="id">${esc(r.id)}</span><span class="t">${esc(r.title)}</span><span class="kind">${esc(rowLabel(r))}</span>${r.age === null ? '' : `<time>${esc(shortAge(r.age))}</time>`}</a>${prn(r.pr, tone)}${r.kind === 'ready to label' ? labelControls(r, ui, now) : ''}${snoozeControls(r, ui)}${note ? `<span class="wnote">${note}</span>` : ''}</li>`;
   };
 
 export const renderWaiting = (
@@ -209,7 +275,7 @@ export const renderWaiting = (
   const rows = all.filter((r) => !r.snoozed);
   const snoozed = all.filter((r) => r.snoozed);
   const count = countedRows(all).length;
-  const li = rowHTML(m, details, ui);
+  const li = rowHTML(m, details, ui, now.getTime());
   // One button for both widths: CSS shows it and picks the count per breakpoint
   const desk = rows.length > DESKTOP_ROWS;
   const more =

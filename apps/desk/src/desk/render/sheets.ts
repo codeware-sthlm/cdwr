@@ -66,6 +66,7 @@ import { headline } from './session';
 import {
   type SnoozeUi,
   type WaitRow,
+  labelControls,
   rowLabel,
   snoozeControls,
   snoozeUi,
@@ -184,7 +185,7 @@ const itemHTML = (
 
 /** One card per waiting item, with the one thing to do about it */
 const waitCard =
-  (ui: SnoozeUi) =>
+  (ui: SnoozeUi, now: number) =>
   (r: WaitRow): string => {
     const act =
       r.kind === 'review' && r.pr
@@ -210,7 +211,7 @@ const waitCard =
     <div class="wc-head"><span class="id">${esc(r.id)}</span><span class="kind k-${esc(r.kind.replace(/ /g, '-'))}">${esc(rowLabel(r))}</span>${prn(r.pr)}${r.age === null ? '' : `<time>waiting ${esc(shortAge(r.age))}</time>`}</div>
     <div class="wc-title">${esc(r.title)}</div>
     ${note ? `<div class="wc-note">${note}</div>` : ''}
-    <a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>
+    <a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>${r.kind === 'ready to label' ? labelControls(r, ui, now, 'act secondary') : ''}
     ${snoozeControls(r, ui)}
   </article>`;
   };
@@ -218,7 +219,7 @@ const waitCard =
 const renderBefore = (m: Model, state: DeskState, now: Date): string => {
   if (!m.v) return empty('No queue view yet.');
   const ui = snoozeUi(m, state.controls, state.ui.snoozedOpen);
-  const card = waitCard(ui);
+  const card = waitCard(ui, now.getTime());
   // Ideas wait on you too, but their card below carries the evidence to decide on
   const all = waitRows(m, state.details, now);
   const rows = all.filter((r) => !r.snoozed);
