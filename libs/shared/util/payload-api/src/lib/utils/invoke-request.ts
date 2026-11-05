@@ -107,11 +107,14 @@ export async function invokeRequest<Target extends RestApiTarget>(
   requestInit.body =
     method === 'POST' ? JSON.stringify(options.body) : undefined;
 
+  // Logged without its query, whose `where` can name what a visitor submitted
+  const loggedUrl = getEndpointUrl(apiUrl, target);
+
   if (debug) {
     // Named, not printed: the body carries whatever a visitor typed and the
     // headers carry the credentials this request is made with. Debug logging
     // is for seeing that a request went out, not for reading its contents
-    console.log(`[PAYLOAD REQUEST] ${method} ${requestUrl}`, {
+    console.log(`[PAYLOAD REQUEST] ${method} ${loggedUrl}`, {
       ...requestInit,
       body: requestInit.body ? '[redacted]' : undefined,
       headers: Object.keys(requestInit.headers ?? {})
@@ -121,13 +124,10 @@ export async function invokeRequest<Target extends RestApiTarget>(
   const response = await fetch(requestUrl, requestInit);
 
   if (debug) {
-    const responseHeaders: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      responseHeaders[key] = value;
-    });
+    // Names only, as for the request: `set-cookie` carries a session token
     console.log(
-      `[PAYLOAD RESPONSE] ${response.status} ${response.statusText} | ${requestUrl}`,
-      responseHeaders
+      `[PAYLOAD RESPONSE] ${response.status} ${response.statusText} | ${loggedUrl}`,
+      [...response.headers.keys()]
     );
   }
 
