@@ -1,19 +1,17 @@
-import {
-  type SitemapEntry,
-  resolveSiteOrigin
-} from '@codeware/app-headless/util/seo';
+import { resolveSiteOrigin } from '@codeware/app-headless/util/seo';
 import {
   findPages,
   findPosts,
   findTours
 } from '@codeware/shared/util/payload-api';
-import { sitePath } from '@codeware/shared/util/payload-utils';
+import {
+  SITEMAP_LIMIT,
+  type SitemapEntry,
+  sitemapEntries
+} from '@codeware/shared/util/payload-utils';
 
 import { payloadRequestOptions } from './payload-request';
 import type { ServerContext } from './server-context';
-
-/** Most documents of a kind a sitemap lists; the protocol allows 50 000 URLs */
-const LIMIT = 5000;
 
 /**
  * The site's origin and the addresses its sitemap lists.
@@ -50,7 +48,7 @@ export async function loadSitemapEntries(
     const options = {
       ...base,
       locale: tenantConfig.locale,
-      limit: LIMIT,
+      limit: SITEMAP_LIMIT,
       // Paths and dates are the document's own fields
       depth: 0
     };
@@ -60,21 +58,15 @@ export async function loadSitemapEntries(
       findTours(options)
     ]);
 
-    const landingId = tenantConfig.landingPage.id;
-    const at = (path: string, lastModified: string | null | undefined) => ({
-      url: new URL(path, origin).toString(),
-      lastModified
-    });
-
     return {
       origin,
-      entries: [
-        ...pages.map((doc) =>
-          at(sitePath('pages', doc, landingId), doc.updatedAt)
-        ),
-        ...posts.map((doc) => at(sitePath('posts', doc), doc.updatedAt)),
-        ...tours.map((doc) => at(sitePath('tours', doc), doc.updatedAt))
-      ]
+      entries: sitemapEntries({
+        pages,
+        posts,
+        tours,
+        landingId: tenantConfig.landingPage.id,
+        origin
+      })
     };
   } catch (error) {
     console.error('Failed to load sitemap entries:', error);

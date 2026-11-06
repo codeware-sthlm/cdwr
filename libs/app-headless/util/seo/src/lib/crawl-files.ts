@@ -1,10 +1,7 @@
-/** One address a sitemap lists */
-export type SitemapEntry = {
-  /** Absolute */
-  url: string;
-  /** When the document last changed, as the cms states it */
-  lastModified?: string | null;
-};
+import {
+  type SitemapEntry,
+  robotsRules
+} from '@codeware/shared/util/payload-utils';
 
 const ESCAPES: Record<string, string> = {
   '&': '&amp;',
@@ -20,24 +17,17 @@ const escapeXml = (value: string): string =>
 /**
  * The sitemap protocol's document for the given addresses.
  *
- * An address listed twice, such as a page that is also the landing page, is
- * listed once, at its first place.
+ * Lists what it is given: `sitemapEntries` has already listed each address once.
  */
 export function sitemapXml(entries: ReadonlyArray<SitemapEntry>): string {
-  const seen = new Set<string>();
-  const urls = entries.flatMap(({ url, lastModified }) => {
-    if (seen.has(url)) {
-      return [];
-    }
-    seen.add(url);
-    return [
+  const urls = entries.map(
+    ({ url, lastModified }) =>
       `  <url>\n    <loc>${escapeXml(url)}</loc>${
         lastModified
           ? `\n    <lastmod>${escapeXml(lastModified)}</lastmod>`
           : ''
       }\n  </url>`
-    ];
-  });
+  );
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -49,26 +39,21 @@ export function sitemapXml(entries: ReadonlyArray<SitemapEntry>): string {
 }
 
 /**
- * What crawlers are told about the site.
+ * What crawlers are told about the site, as robots.txt.
  *
- * A gated site keeps them out altogether; an open one welcomes them and names
- * its sitemap when its own origin is known.
+ * The rules are `robotsRules`; this only writes them out.
  */
-export function robotsTxt({
-  gated,
-  origin
-}: {
+export function robotsTxt(options: {
   gated: boolean;
   origin?: string | null;
 }): string {
-  if (gated) {
-    return 'User-agent: *\nDisallow: /\n';
-  }
+  const { allow, disallow, sitemap } = robotsRules(options);
 
   return [
     'User-agent: *',
-    'Allow: /',
-    ...(origin ? [`Sitemap: ${origin}/sitemap.xml`] : []),
+    ...(allow ? [`Allow: ${allow}`] : []),
+    ...disallow.map((path) => `Disallow: ${path}`),
+    ...(sitemap ? [`Sitemap: ${sitemap}`] : []),
     ''
   ].join('\n');
 }

@@ -1,6 +1,6 @@
 import {
   type DocData,
-  type DocumentMeta,
+  docMeta,
   documentSeo,
   sitePath
 } from '@codeware/shared/util/payload-utils';
@@ -18,22 +18,6 @@ export type HeadSite = {
 
 /** The root route's data, as far as the head is concerned */
 export type HeadRoot = { ok: true; site: HeadSite } | { ok: false };
-
-/** What a page, post or tour states about itself, whichever it is */
-export const docMeta = (data: DocData): DocumentMeta => {
-  switch (data.collection) {
-    case 'pages':
-      return { name: data.doc.name, meta: data.doc.meta };
-    case 'posts':
-      return { name: data.doc.title, meta: data.doc.meta };
-    case 'tours':
-      return {
-        name: data.doc.title,
-        meta: data.doc.meta,
-        summary: data.doc.summary
-      };
-  }
-};
 
 /**
  * The head of a document's page: title, description, canonical link and the
