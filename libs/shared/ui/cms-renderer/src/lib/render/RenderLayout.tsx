@@ -144,11 +144,11 @@ export function RenderLayout({
           <div className="top-0 z-10 h-16 pt-6">
             <Container className="w-full">
               <div ref={headerRow} className="relative flex gap-4">
-                <div className="flex flex-1">
+                <div className="flex min-w-0 flex-1">
                   <div
                     ref={brand}
                     className={cn(
-                      'flex h-10 items-center backdrop-blur',
+                      'flex h-10 min-w-0 items-center backdrop-blur',
                       !brandLabel && 'w-10'
                     )}
                   >
@@ -163,7 +163,7 @@ export function RenderLayout({
                       }}
                       className={cn(
                         'pointer-events-auto',
-                        brandLabel && 'flex items-center gap-2'
+                        brandLabel && 'flex min-w-0 items-center gap-2'
                       )}
                       // A visible label names the link
                       aria-label={brandLabel ? undefined : 'Home'}
@@ -174,7 +174,7 @@ export function RenderLayout({
                         <House size={40} />
                       )}
                       {brandLabel && (
-                        <span className="text-core-headline truncate font-semibold whitespace-nowrap">
+                        <span className="text-core-headline max-w-[40vw] truncate font-semibold whitespace-nowrap sm:max-w-xs">
                           {brandLabel}
                         </span>
                       )}

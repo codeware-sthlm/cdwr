@@ -379,10 +379,15 @@ export function PayloadProvider({ children, value }: PayloadProviderProps) {
         if (!newTab && path.startsWith('#')) {
           const id = path.slice(1);
           if (!anchorTargets.open(id)) {
-            document
-              .getElementById(id)
-              ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            history.replaceState(null, '', path);
+            const element = document.getElementById(id);
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              history.replaceState(null, '', path);
+            } else {
+              // Nothing to scroll to yet: an overlay that registers later
+              // listens for the hash change and can still open
+              window.location.hash = id;
+            }
           }
           return;
         }

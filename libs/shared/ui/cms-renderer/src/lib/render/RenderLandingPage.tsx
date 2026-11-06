@@ -1,6 +1,7 @@
 import { t } from '@codeware/shared/util/i18n';
 import type { Page } from '@codeware/shared/util/payload-types';
 import type { BlocksData } from '@codeware/shared/util/payload-utils';
+import { cn } from '@codeware/shared/util/ui';
 
 import { ErrorContainer } from '../error/ErrorContainer';
 import { ContainerInner, ContainerOuter } from '../layout/Container';
@@ -57,7 +58,12 @@ export function RenderLandingPage({
   return (
     // The outer layer only: each block brings the inner one, so a band can
     // sit between the two and span the sheet
-    <ContainerOuter className="mt-16 has-[[data-opens-full]]:mt-0 sm:mt-32 sm:has-[[data-opens-full]]:mt-0">
+    <ContainerOuter
+      className={cn('mt-16 sm:mt-32', {
+        'has-[[data-opens-full]]:mt-0 sm:has-[[data-opens-full]]:mt-0':
+          !landingPage?.header
+      })}
+    >
       {landingPage?.header && (
         <ContainerInner>
           <header className="max-w-2xl">
@@ -67,7 +73,11 @@ export function RenderLandingPage({
           </header>
         </ContainerInner>
       )}
-      <article className="mt-16 has-[[data-opens-full]]:mt-0">
+      <article
+        className={cn('mt-16', {
+          'has-[[data-opens-full]]:mt-0': !landingPage?.header
+        })}
+      >
         {landingPage?.layout ? (
           <RenderBlocks
             framed
