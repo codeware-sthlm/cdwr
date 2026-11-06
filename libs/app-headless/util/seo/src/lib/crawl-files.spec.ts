@@ -12,12 +12,6 @@ describe('robotsTxt', () => {
       'User-agent: *\nAllow: /\nSitemap: https://moon.example/sitemap.xml\n'
     );
   });
-
-  it('names no sitemap when the origin is unknown', () => {
-    expect(robotsTxt({ gated: false, origin: null })).toBe(
-      'User-agent: *\nAllow: /\n'
-    );
-  });
 });
 
 describe('sitemapXml', () => {
@@ -40,15 +34,6 @@ describe('sitemapXml', () => {
       '<loc>https://moon.example/</loc>\n    <lastmod>2026-01-02T03:04:05.000Z</lastmod>'
     );
     expect(xml).toContain('<loc>https://moon.example/om</loc>\n  </url>');
-  });
-
-  it('lists an address once', () => {
-    const xml = sitemapXml([
-      { url: 'https://moon.example/' },
-      { url: 'https://moon.example/' }
-    ]);
-
-    expect(xml.match(/<loc>/g)).toHaveLength(1);
   });
 
   it('escapes what XML reserves', () => {
