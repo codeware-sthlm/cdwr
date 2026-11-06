@@ -1,3 +1,5 @@
+import type { DocData } from './doc-data';
+
 /** The generated card a page without an image of its own is shared with */
 export const DEFAULT_OG_IMAGE_PATH = '/og-image.png';
 
@@ -26,6 +28,26 @@ export type DocumentMeta = {
   } | null;
   /** A description to fall back on, such as a tour's summary */
   summary?: string | null;
+};
+
+/** A fetched document and its collection, whatever else was loaded with it */
+export type DocMetaSource = {
+  [K in DocData['collection']]: Pick<
+    Extract<DocData, { collection: K }>,
+    'collection' | 'doc'
+  >;
+}[DocData['collection']];
+
+/** What a page, post or tour states about itself, whichever it is */
+export const docMeta = ({ collection, doc }: DocMetaSource): DocumentMeta => {
+  switch (collection) {
+    case 'pages':
+      return { name: doc.name, meta: doc.meta };
+    case 'posts':
+      return { name: doc.title, meta: doc.meta };
+    case 'tours':
+      return { name: doc.title, meta: doc.meta, summary: doc.summary };
+  }
 };
 
 /** What a client needs to render a document's head, free of any framework */

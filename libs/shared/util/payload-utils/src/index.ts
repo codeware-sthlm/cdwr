@@ -30,13 +30,22 @@ export {
 } from './lib/adoptable-domains';
 export {
   DEFAULT_OG_IMAGE_PATH,
+  type DocMetaSource,
   type DocumentMeta,
   type DocumentSeo,
+  docMeta,
   documentSeo,
   ogLocale,
   siteOrigin
 } from './lib/document-seo';
 export { publicVisibilityWhere } from './lib/public-visibility';
+export {
+  type RobotsRules,
+  SITEMAP_LIMIT,
+  type SitemapEntry,
+  robotsRules,
+  sitemapEntries
+} from './lib/site-crawl';
 export { sitePath, type SiteCollection } from './lib/site-path';
 export {
   type DocData,
