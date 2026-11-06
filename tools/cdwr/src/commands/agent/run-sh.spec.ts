@@ -230,7 +230,13 @@ describe('run.sh without Linear documents', () => {
     expect(watched).toContain('id');
     expect(watched).toContain('description');
     expect(watched).toContain('labels { nodes { id name } }');
-    expect(watched).toContain('issueLabels(');
+    expect(watched).toContain('after: $after');
+    expect(watched).toContain('pageInfo { hasNextPage endCursor }');
+    expect(watched).not.toContain('issueLabels(');
+    const labels = code.match(
+      /read -r -d '' WATCH_LABELS <<'GQL' \|\| true\n([\s\S]*?)\nGQL\n/
+    )?.[1];
+    expect(labels).toContain('issueLabels(');
   });
 
   it('keeps lib.sh free of mutations', () => {
@@ -935,11 +941,33 @@ describe('run.sh watch_prs', () => {
     }
   };
 
-  // Runs watch_prs with a fake Linear and a GraphQL answer for the PR
-  const run = (headRefName: string) => {
-    writeFileSync(
-      join(root, 'linear.json'),
-      JSON.stringify({ data: { issues: { nodes: [ticket] } } })
+  // Runs watch_prs with a fake Linear and a GraphQL answer for the PR. Each page answers the
+  // cursor of the one before it (the first answers no cursor); a page given as `null` is a
+  // Linear error.
+  const run = (
+    headRefName: string,
+    pages: ((typeof ticket)[] | null)[] = [[ticket]],
+    more = false
+  ) => {
+    pages.forEach((nodes, i) =>
+      writeFileSync(
+        join(root, `page-${i + 1}.json`),
+        JSON.stringify(
+          nodes === null
+            ? { errors: [{ message: 'boom' }] }
+            : {
+                data: {
+                  issues: {
+                    pageInfo: {
+                      hasNextPage: more || i < pages.length - 1,
+                      endCursor: String(i + 2)
+                    },
+                    nodes
+                  }
+                }
+              }
+        )
+      )
     );
     writeFileSync(
       join(root, 'pr.json'),
@@ -953,7 +981,7 @@ describe('run.sh watch_prs', () => {
       })
     );
     const script = [
-      `ROOT="${root}"; HOME_DIR="${root}"; OTHER_REPOS='[]'; WATCHED=w; PR_QUERY=q`,
+      `ROOT="${root}"; HOME_DIR="${root}"; OTHER_REPOS='[]'; WATCHED=w; WATCH_LABELS=l; PR_QUERY=q`,
       `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
       `record() { print -r -- "$*" >> "$ROOT/records"; }`,
       `notice() { print -r -- "$*" >> "$ROOT/notices"; }`,
@@ -962,7 +990,7 @@ describe('run.sh watch_prs', () => {
       'gh_identity_or_note() { :; }',
       'gh_read() { cat "$ROOT/pr.json"; }',
       'relabel_merged() { print -r -- "$*" >> "$ROOT/relabels"; }',
-      'linear() { cat "$ROOT/linear.json"; }',
+      `linear() { [[ "$1" == l ]] && { print -r -- '{"data":{"issueLabels":{"nodes":[]}}}'; return 0; }; cat "$ROOT/page-$(jq -r '.after // "1"' <<<"$2").json"; }`,
       source,
       'watch_prs; print -r -- "rc=$?"'
     ].join('\n');
@@ -1008,6 +1036,53 @@ describe('run.sh watch_prs', () => {
       const result = run('renovate/zod-4.x');
       expect(result.stdout).toContain('rc=0');
       expect(JSON.parse(read('watch.json'))).toEqual({});
+    }
+  );
+
+  const tickets = (...ids: number[]) =>
+    ids.map((n) => ({ ...ticket, identifier: `COD-${n}` }));
+
+  it.skipIf(!canRun)('watches the tickets of every page, with no warn', () => {
+    const result = run('feature/cod-5', [tickets(5), tickets(6)]);
+    expect(result.stdout).toContain('rc=0');
+    expect(Object.keys(JSON.parse(read('watch.json'))).sort()).toEqual([
+      'COD-5',
+      'COD-6'
+    ]);
+    expect(read('records')).toBe('');
+    expect(read('notes')).toBe('');
+    expect(existsSync(join(root, 'watch-pages.jsonl'))).toBe(false);
+  });
+
+  it.skipIf(!canRun)('watches a ticket on two pages once', () => {
+    const result = run('feature/cod-5', [tickets(5, 6), tickets(6)]);
+    expect(result.stdout).toContain('rc=0');
+    expect(Object.keys(JSON.parse(read('watch.json'))).sort()).toEqual([
+      'COD-5',
+      'COD-6'
+    ]);
+  });
+
+  it.skipIf(!canRun)('warns once when more than 5 pages remain', () => {
+    const result = run(
+      'feature/cod-5',
+      [1, 2, 3, 4, 5].map((n) => tickets(n)),
+      true
+    );
+    expect(result.stdout).toContain('rc=0');
+    expect(Object.keys(JSON.parse(read('watch.json')))).toHaveLength(5);
+    expect(read('records')).toBe('warn  watch: page limit reached\n');
+  });
+
+  it.skipIf(!canRun)(
+    'fails on a Linear error past the first page, leaving watch.json as it was',
+    () => {
+      const before = JSON.stringify({ 'COD-9': { pr: 1, state: 'open' } });
+      writeFileSync(join(root, 'watch.json'), before);
+      const result = run('feature/cod-5', [tickets(5), null]);
+      expect(result.stdout).toContain('Linear error "boom"');
+      expect(result.stdout).toContain('rc=1');
+      expect(read('watch.json')).toBe(before);
     }
   );
 });
