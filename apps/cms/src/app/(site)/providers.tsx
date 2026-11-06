@@ -28,6 +28,7 @@ type ProvidersProps = {
 } & Pick<
   PayloadValue,
   | 'appInfo'
+  | 'brandLabel'
   | 'humanCheckSiteKey'
   | 'iconConfig'
   | 'locale'
@@ -44,6 +45,7 @@ type ProvidersProps = {
 export function Providers({
   children,
   appInfo,
+  brandLabel,
   chrome,
   colorScheme,
   humanCheckSiteKey,
@@ -74,6 +76,7 @@ export function Providers({
     >
       <PayloadProviderInner
         appInfo={appInfo}
+        brandLabel={brandLabel}
         chrome={chrome}
         colorScheme={colorScheme}
         humanCheckSiteKey={humanCheckSiteKey}
@@ -93,6 +96,7 @@ export function Providers({
 function PayloadProviderInner({
   children,
   appInfo,
+  brandLabel,
   chrome,
   colorScheme: colorSchemePolicy,
   humanCheckSiteKey,
@@ -116,6 +120,7 @@ function PayloadProviderInner({
     <PayloadProvider
       value={{
         appInfo,
+        brandLabel,
         getCurrentPath: () => pathname,
         getSearchParam: (name) => searchParams.get(name),
         humanCheckSiteKey,

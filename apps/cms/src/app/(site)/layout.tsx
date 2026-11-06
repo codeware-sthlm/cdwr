@@ -143,6 +143,7 @@ export default async function RootLayout({
       <body>
         <Providers
           appInfo={getAppInfo(env)}
+          brandLabel={runtime.tenantConfig?.brandLabel ?? null}
           iconConfig={runtime.tenantConfig?.icon ?? null}
           humanCheckSiteKey={env.HUMAN_CHECK?.siteKey ?? null}
           locale={runtime.tenantConfig?.locale ?? 'en'}

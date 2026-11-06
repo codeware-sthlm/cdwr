@@ -13,6 +13,8 @@ export const FALLBACK_THEME = 'spotlight';
 
 type Response = {
   appName: string;
+  /** Text shown next to the icon in the header, if any */
+  brandLabel: string | null;
   /** How the header and its controls are drawn */
   chrome: SiteSettingsGeneral['chrome'];
   /** Light/dark: `system` lets the visitor choose, otherwise it is locked */
@@ -72,6 +74,7 @@ export async function getGeneralSiteSettings(
   const {
     general: {
       appName,
+      brandLabel,
       chrome,
       colorScheme,
       customThemes,
@@ -119,6 +122,7 @@ export async function getGeneralSiteSettings(
 
   return {
     appName,
+    brandLabel: brandLabel?.trim() || null,
     chrome: chrome ?? 'outlined',
     colorScheme: colorScheme ?? 'system',
     customThemeIds,

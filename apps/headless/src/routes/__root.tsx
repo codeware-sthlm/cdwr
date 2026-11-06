@@ -171,6 +171,7 @@ function RootComponent() {
             : 'system',
         getCurrentPath: () => location.pathname,
         getSearchParam: (name) => readSearchParam(location.searchStr, name),
+        brandLabel: site.brandLabel,
         iconConfig: site.iconConfig,
         locale: site.locale,
         lockedColorScheme: locked,

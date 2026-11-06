@@ -32,25 +32,31 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = ({
       : []
   );
 
+  // Without a heading the photos open the block, and read as part of the
+  // section above rather than as one of their own
+  const hasHeader = !!(eyebrow || heading || intro);
+
   return (
     <section>
-      <div className="max-w-2xl">
-        {eyebrow && (
-          <p className="text-core-link text-sm font-semibold tracking-[0.14em] uppercase">
-            {eyebrow}
-          </p>
-        )}
-        {heading && (
-          <h2 className="text-core-headline mt-3 text-3xl font-semibold tracking-tight">
-            {heading}
-          </h2>
-        )}
-        {intro && (
-          <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
-            {intro}
-          </p>
-        )}
-      </div>
+      {hasHeader && (
+        <div className="max-w-2xl">
+          {eyebrow && (
+            <p className="text-core-link text-sm font-semibold tracking-[0.14em] uppercase">
+              {eyebrow}
+            </p>
+          )}
+          {heading && (
+            <h2 className="text-core-headline mt-3 text-3xl font-semibold tracking-tight">
+              {heading}
+            </h2>
+          )}
+          {intro && (
+            <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
+              {intro}
+            </p>
+          )}
+        </div>
+      )}
 
       {photos.length > 0 && (
         // The slight rotations and the card frames are what make the collage
@@ -58,7 +64,7 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = ({
         // filled around instead of leaving holes in the grid
         <div
           className={cn(
-            'mt-8',
+            hasHeader && 'mt-8',
             isRow
               ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3'
               : 'grid grid-flow-dense auto-rows-[120px] grid-cols-2 gap-3.5 md:auto-rows-[160px] md:grid-cols-4 md:gap-4.5'

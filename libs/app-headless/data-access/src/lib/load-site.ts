@@ -27,6 +27,7 @@ import type { ServerContext } from './server-context';
 /** What the document needs from the tenant, with nothing that is secret */
 export type SiteChrome = HeadSite & {
   appInfo: AppInfo;
+  brandLabel: PayloadValue['brandLabel'];
   chrome: PayloadValue['chrome'];
   colorSchemePolicy: 'system' | 'light' | 'dark';
   customCss: string;
@@ -100,6 +101,7 @@ export async function loadSiteData(
           deployEnv: env.DEPLOY_ENV,
           buildTime: env.APP_BUILD_TIME ?? ''
         },
+        brandLabel: tenantConfig.brandLabel,
         chrome: tenantConfig.chrome ?? 'outlined',
         colorSchemePolicy: tenantConfig.colorScheme,
         customCss: customThemeCss(tenantConfig.customThemes),

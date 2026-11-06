@@ -81,7 +81,7 @@ describe('the kajstroberg.se definition', () => {
     expect(hero).toMatchObject({
       blockType: 'hero',
       layout: 'fill',
-      decoration: 'vineyard-rows',
+      decoration: 'horizon-lines',
       actions: [{ link: { type: 'custom', url: '#kontakt' } }]
     });
     expect('media' in hero).toBe(false);
@@ -116,7 +116,7 @@ describe('the kajstroberg.se definition', () => {
     const icon = ksVininfo.siteSettings?.general?.icon;
 
     expect(icon?.source).toBe('svg');
-    expect(icon?.svgCode).toContain('currentColor');
+    expect(icon?.svgCode).toContain('var(--primary');
     expect(icon?.svgCode).toContain('fill-rule="evenodd"');
   });
 

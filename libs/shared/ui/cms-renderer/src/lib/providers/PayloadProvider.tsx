@@ -105,6 +105,11 @@ export type PayloadValue = {
   iconConfig: TenantIconConfig | null;
 
   /**
+   * Text shown next to the icon in the header. `null` shows the icon only.
+   */
+  brandLabel: string | null;
+
+  /**
    * Provide a function that returns the current URL path.
    * This is used for active route detection in navigation components.
    *

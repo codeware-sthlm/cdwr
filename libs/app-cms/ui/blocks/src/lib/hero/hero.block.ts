@@ -90,8 +90,8 @@ export const heroBlock: Block = {
       options: [
         { label: { en: 'None', sv: 'Ingen' }, value: 'none' },
         {
-          label: { en: 'Vineyard rows', sv: 'Vinrader' },
-          value: 'vineyard-rows'
+          label: { en: 'Horizon lines', sv: 'Horisontlinjer' },
+          value: 'horizon-lines'
         }
       ],
       defaultValue: 'none',

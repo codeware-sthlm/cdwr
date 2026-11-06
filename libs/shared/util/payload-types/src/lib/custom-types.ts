@@ -188,6 +188,8 @@ export type TenantRuntimeConfig = {
   tenant: Tenant;
   appName: string;
   icon: TenantIconConfig | null;
+  /** Text shown next to the icon in the header, if any */
+  brandLabel: string | null;
   locale: TypedLocale;
   fallbackLocale: TypedFallbackLocale;
   landingPage: TypeWithID & {
