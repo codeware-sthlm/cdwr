@@ -97,6 +97,8 @@ describe('FormBlock overlay', () => {
 
     fireEvent.click(screen.getByText('go #nowhere'));
     expect(navigate).not.toHaveBeenCalled();
+    // Left on the hash, so an overlay that registers later can still open
+    expect(window.location.hash).toBe('#nowhere');
 
     fireEvent.click(screen.getByText('go /about'));
     expect(navigate).toHaveBeenCalledWith('/about', undefined);

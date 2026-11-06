@@ -91,32 +91,6 @@ describe('ensureSiteSetting', () => {
     expect(updates[0]['general']).toMatchObject({ icon });
   });
 
-  it('fills in a brand label on an otherwise complete row', async () => {
-    const updates: Array<Record<string, unknown>> = [];
-    const payload = {
-      find: async () => ({
-        totalDocs: 1,
-        docs: [{ ...stored, general: { ...stored.general, brandLabel: null } }]
-      }),
-      update: async ({ data }: { data: Record<string, unknown> }) => {
-        updates.push(data);
-        return {};
-      }
-    } as unknown as Payload;
-
-    await ensureSiteSetting(
-      payload,
-      {
-        ...data,
-        general: { ...data.general, brandLabel: 'Kaj Ströberg' }
-      } as typeof data,
-      base
-    );
-
-    expect(updates).toHaveLength(1);
-    expect(updates[0]['general']).toMatchObject({ brandLabel: 'Kaj Ströberg' });
-  });
-
   describe('themes on an existing row', () => {
     const holding = (general: Record<string, unknown>) => {
       const updates: Array<Record<string, unknown>> = [];

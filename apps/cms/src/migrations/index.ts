@@ -89,6 +89,7 @@ import * as migration_20261018_224435_users_stats_account from './20261018_22443
 import * as migration_20261025_215835_idle_workspace_cleanup from './20261025_215835_idle_workspace_cleanup';
 import * as migration_20261025_222138_idle_workspace_jobs from './20261025_222138_idle_workspace_jobs';
 import * as migration_20261026_181739_totp from './20261026_181739_totp';
+import * as migration_20261106_185215_cod_717_blocks from './20261106_185215_cod_717_blocks';
 
 export const migrations = [
   {
@@ -545,5 +546,10 @@ export const migrations = [
     up: migration_20261026_181739_totp.up,
     down: migration_20261026_181739_totp.down,
     name: '20261026_181739_totp'
+  },
+  {
+    up: migration_20261106_185215_cod_717_blocks.up,
+    down: migration_20261106_185215_cod_717_blocks.down,
+    name: '20261106_185215_cod_717_blocks'
   }
 ];

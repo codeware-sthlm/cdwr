@@ -109,14 +109,10 @@ export async function ensureSiteSetting(
 
     const themes = themeGaps(general, generalFromProps);
 
-    // Filled in like the icon: a label the definition names and the row lacks
-    const hasBrandLabel = !generalFromProps.brandLabel || !!general.brandLabel;
-
     if (
       general.appName &&
       general.landingPage &&
       hasIconContent &&
-      hasBrandLabel &&
       !Object.keys(themes).length &&
       hasFooterContent &&
       hasFormsContent &&
@@ -155,7 +151,6 @@ export async function ensureSiteSetting(
         general: {
           ...general,
           appName: general.appName ?? generalFromProps.appName,
-          brandLabel: general.brandLabel || generalFromProps.brandLabel,
           icon: storedIcon ?? generalFromProps.icon,
           landingPage: general.landingPage ?? generalFromProps.landingPage,
           ...themes

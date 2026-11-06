@@ -232,9 +232,9 @@ type Props = {
   nested?: boolean;
 };
 
-/** A form kept out of the flow until a link opens it */
+/** A form kept out of the flow until a link opens it, as FormBlock decides */
 const isOverlay = (block: Props['blocks'][number]) =>
-  block.blockType === 'form' && block.display === 'overlay';
+  block.blockType === 'form' && block.display === 'overlay' && !!block.anchor;
 
 const isHeroWithLines = (block: Props['blocks'][number]) =>
   block.blockType === 'hero' && block.decoration === 'horizon-lines';
@@ -262,6 +262,12 @@ export const RenderBlocks: React.FC<Props> = ({
   const hasBlocks = blocks && Array.isArray(blocks) && blocks.length > 0;
 
   if (hasBlocks) {
+    // An overlay form draws nothing in the flow, so it is no neighbour: the
+    // first, last and previous blocks are the visible ones
+    const visible = blocks.filter((block) => !isOverlay(block));
+    const firstVisible = visible[0];
+    const lastVisible = visible[visible.length - 1];
+
     return (
       <div
         id={refId ?? undefined}
@@ -270,7 +276,7 @@ export const RenderBlocks: React.FC<Props> = ({
         // A page that ends on a band spanning it meets the footer directly,
         // which the layout reads from here
         data-ends-on-band={
-          framed && !nested && bandOf(blocks[blocks.length - 1]) !== 'none'
+          framed && !nested && !!lastVisible && bandOf(lastVisible) !== 'none'
             ? ''
             : undefined
         }
@@ -279,8 +285,8 @@ export const RenderBlocks: React.FC<Props> = ({
         data-opens-full={
           framed &&
           !nested &&
-          blocks[0].blockType === 'hero' &&
-          blocks[0].layout === 'fill'
+          firstVisible?.blockType === 'hero' &&
+          firstVisible.layout === 'fill'
             ? ''
             : undefined
         }
@@ -309,22 +315,28 @@ export const RenderBlocks: React.FC<Props> = ({
 
             const band = bandOf(block);
 
+            // The block before it that is drawn in the flow
+            let previous: (typeof blocks)[number] | undefined;
+            for (let i = index - 1; i >= 0 && !previous; i--) {
+              if (!isOverlay(blocks[i])) previous = blocks[i];
+            }
+
             // Two bands spanning the page meet edge to edge: each carries its
             // own padding, and the gap between them read as a stray strip.
             // Contained bands are rounded panels and keep their distance
             const followsBand =
               framed &&
-              index > 0 &&
+              !!previous &&
               band !== 'none' &&
-              bandOf(blocks[index - 1]) !== 'none';
+              bandOf(previous) !== 'none';
 
             // A hero's horizon lines run down to its bottom edge, so a band
             // after it meets them instead of leaving a strip of page between
             const followsLines =
               framed &&
-              index > 0 &&
+              !!previous &&
               band !== 'none' &&
-              isHeroWithLines(blocks[index - 1]);
+              isHeroWithLines(previous);
 
             // Do not set any margins around spacing block since it has its own margin options.
             // For all other blocks, set a top margin unless it's the first block.

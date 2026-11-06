@@ -41,7 +41,7 @@ const blocks: Record<BlockSlug, boolean> = {
   'feature-section': false,
   'file-area': false,
   form: false,
-  gallery: true,
+  gallery: false,
   hero: false,
   'pill-list': false,
   posts: false,
