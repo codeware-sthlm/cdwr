@@ -475,14 +475,16 @@ $check || CHECKIN_ID="$(checkin in_progress)"
 # The decisions live in watch.jq, installed next to this file. It watches every ticket an agent
 # label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write. The
 # scheduler's other write is the parent close after it (CLOSE_PARENT, CLOSE_COMMENT).
+# Paged, since done tickets keep agent:review for 14 days and alone fill a page.
 read -r -d '' WATCHED <<'GQL' || true
-query {
-  issues(first: 100, filter: {
+query($after: String) {
+  issues(first: 100, after: $after, filter: {
     team: { key: { eq: "COD" } }
     labels: { some: { name: { in: ["agent:working", "agent:needs-input", "agent:review"] } } }
     state: { type: { neq: "canceled" } }
     or: [{ completedAt: { null: true } }, { completedAt: { gt: "-P14D" } }]
   }) {
+    pageInfo { hasNextPage endCursor }
     nodes {
       id
       identifier
@@ -492,6 +494,11 @@ query {
       comments(first: 50, orderBy: createdAt) { nodes { body createdAt } }
     }
   }
+}
+GQL
+# Read once, not on every page of WATCHED
+read -r -d '' WATCH_LABELS <<'GQL' || true
+query {
   issueLabels(filter: { name: { eq: "agent:review" } }) { nodes { id team { key } } }
 }
 GQL
@@ -593,24 +600,38 @@ relabel_merged() {
 watch_prs() {
   # One PR failing to read skips that PR, not the rest.
   setopt local_options no_err_exit
-  local file="$HOME_DIR/watch.json" resp nodes state node id label pr now out level msg review why
+  local file="$HOME_DIR/watch.json" pages="$HOME_DIR/watch-pages.jsonl" after=null page
+  local resp nodes state node id label pr now out level msg review why
   gh_identity_or_note
-  resp="$(linear "$WATCHED")" || { print -r -- "Linear did not answer"; return 1; }
-  jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
-    { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
-  # A full page means tickets beyond it go unwatched
-  [[ "$(jq '.data.issues.nodes | length' <<<"$resp")" -lt 100 ]] ||
-    { note "warn: watch: 100 tickets, the page limit; later ones are not watched"; record warn "" "watch: page limit reached"; }
+  # Every page up to 5, through a file as in record_activity; only tickets past the cap go unwatched
+  : > "$pages"
+  for page in {1..5}; do
+    resp="$(linear "$WATCHED" "$(jq -nc --argjson a "$after" '{after: $a}')")" ||
+      { print -r -- "Linear did not answer"; return 1; }
+    jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
+      { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
+    jq -c '.data.issues.nodes' <<<"$resp" >> "$pages"
+    [[ "$(jq -r '.data.issues.pageInfo.hasNextPage' <<<"$resp")" == true ]] || break
+    after="$(jq -c '.data.issues.pageInfo.endCursor' <<<"$resp")"
+    (( page == 5 )) &&
+      { note "warn: watch: more than 5 pages of tickets, the rest not watched"; record warn "" "watch: page limit reached"; }
+  done
   # Same repo rule as planning: tickets labelled for another repo have no PR here.
-  nodes="$(jq -c --argjson other "$OTHER_REPOS" '[.data.issues.nodes[]
-    | select((.labels.nodes | map(.name | IN($other[])) | any) | not)]' <<<"$resp")"
+  # A ticket on two pages is watched once.
+  nodes="$(jq -cs --argjson other "$OTHER_REPOS" '[add[]
+    | select((.labels.nodes | map(.name | IN($other[])) | any) | not)] | unique_by(.identifier)' "$pages")"
+  rm -f "$pages"
   # A missing or broken state file counts as empty; tickets no longer watched drop out.
   state="$(jq -c 'if type == "object" then . else {} end' "$file" 2>/dev/null || print '{}')"
   state="$(watch -c --argjson ids "$(jq -c 'map(.identifier)' <<<"$nodes")" \
     'include "watch"; prune($ids)' <<<"$state")" || { print -r -- "watch.jq failed$(watch_err)"; return 1; }
-  # The team's own agent:review label before a workspace one
+  # The team's own agent:review label before a workspace one. Unread, it stays empty and
+  # relabel_merged warns for each ticket it would relabel.
+  resp="$(linear "$WATCH_LABELS")"
+  jq -e '.data.issueLabels.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
+    note "warn: watch: the agent:review label was not read ($(jq -c '.errors[0].message // "no answer"' <<<"$resp" 2>/dev/null))"
   review="$(jq -r '[.data.issueLabels.nodes[]? | select(.team == null or .team.key == "COD")]
-    | sort_by(.team == null) | first | .id // empty' <<<"$resp")"
+    | sort_by(.team == null) | first | .id // empty' <<<"$resp" 2>/dev/null)"
 
   for node in ${(f)"$(jq -c '.[]' <<<"$nodes")"}; do
     id="$(jq -r '.identifier' <<<"$node")"
