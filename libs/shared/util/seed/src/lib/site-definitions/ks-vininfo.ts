@@ -131,7 +131,7 @@ export const ksVininfo: SiteDefinition = {
         {
           blockType: 'hero',
           layout: 'fill',
-          decoration: 'vineyard-rows',
+          decoration: 'horizon-lines',
           badge: 'Vinresor i Europa',
           heading: 'Vinresor med Kaj Ströberg',
           lede: 'Resor till Europas vinregioner, med besök hos gästfria producenter och tid för det lokala köket.',
@@ -179,8 +179,7 @@ export const ksVininfo: SiteDefinition = {
         {
           blockType: 'gallery',
           layout: 'collage',
-          eyebrow: 'Från resorna',
-          heading: 'Vinberg, byar och långa middagar',
+          // No heading: the photos continue the trips section above it
           items: [
             {
               image: { lookupFilename: 'ks-vininfo-terraces.jpg' },
@@ -264,6 +263,7 @@ export const ksVininfo: SiteDefinition = {
   siteSettings: {
     general: {
       appName: 'kajstroberg.se',
+      brandLabel: 'kajstroberg.se',
       landingPage: { lookupSlug: 'hem' },
       icon: { source: 'svg', svgCode: ksVininfoIconSvg },
       themes: ['lingon'],

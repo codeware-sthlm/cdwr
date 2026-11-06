@@ -73,7 +73,7 @@ export function RenderLayout({
   navigationTree,
   session
 }: RenderLayoutProps) {
-  const { navigate, iconConfig } = usePayload();
+  const { navigate, iconConfig, brandLabel } = usePayload();
 
   const headerRow = useRef<HTMLDivElement>(null);
   const brand = useRef<HTMLDivElement>(null);
@@ -147,7 +147,10 @@ export function RenderLayout({
                 <div className="flex flex-1">
                   <div
                     ref={brand}
-                    className="flex h-10 w-10 items-center backdrop-blur"
+                    className={cn(
+                      'flex h-10 items-center backdrop-blur',
+                      !brandLabel && 'w-10'
+                    )}
                   >
                     {/* An anchor, not a button: a real href keeps
                         middle-click, right-click → copy link, and crawlers
@@ -158,13 +161,22 @@ export function RenderLayout({
                         if (!handleAsRoute(e)) return;
                         navigate('/');
                       }}
-                      className="pointer-events-auto"
-                      aria-label="Home"
+                      className={cn(
+                        'pointer-events-auto',
+                        brandLabel && 'flex items-center gap-2'
+                      )}
+                      // A visible label names the link
+                      aria-label={brandLabel ? undefined : 'Home'}
                     >
                       {iconConfig ? (
                         <TenantIcon config={iconConfig} size={40} />
                       ) : (
                         <House size={40} />
+                      )}
+                      {brandLabel && (
+                        <span className="text-core-headline truncate font-semibold whitespace-nowrap">
+                          {brandLabel}
+                        </span>
                       )}
                     </a>
                   </div>

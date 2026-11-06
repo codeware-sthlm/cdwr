@@ -27,10 +27,11 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
   // Whitespace left in a cleared field is not a drawing
   const fill = layout === 'fill';
   const drawing = !fill && illustration?.trim() ? illustration : null;
-  const decorated = decoration === 'vineyard-rows';
+  const decorated = decoration === 'horizon-lines';
 
-  // Rows converge on a point above the block, as vines do toward the horizon
-  const rows = Array.from({ length: 21 }, (_, i) => -560 + i * 120);
+  // Lines converge on a point above the block and fan out past both edges of
+  // the drawing, so a crop on a narrow screen never shows an empty side
+  const lines = Array.from({ length: 27 }, (_, i) => 1200 - 1560 + i * 120);
 
   const buttons = !!actions?.length && (
     <div
@@ -56,42 +57,56 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
   );
 
   // Spans the band reach so it crosses the sheet like a band does, and fades
-  // into the content background token so it meets the page at any theme
-  const rowsDrawing = decorated && (
-    <svg
-      viewBox="0 0 1280 260"
-      preserveAspectRatio="none"
+  // into the content background token so it meets the page at any theme.
+  // Sliced from the centre rather than stretched: the lines keep their angle,
+  // the sides are cropped on a narrow screen and the meeting point stays put
+  //
+  // The box is a div, not the svg itself: an absolutely positioned svg is a
+  // replaced element, so it takes its width from the viewBox's aspect ratio
+  // and ignores `right`, which pushed the meeting point off to the side
+  const linesDrawing = decorated && (
+    <div
       aria-hidden="true"
       // Behind the text: the fade is painted in the page colour, and over the
       // button it would wash it out
       className="inset-x-band-reach pointer-events-none absolute bottom-0 -z-10 h-36 md:h-56"
     >
-      <defs>
-        <linearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
-          <stop
-            offset="0"
-            stopColor="var(--core-background-content)"
-            stopOpacity="1"
-          />
-          <stop
-            offset="1"
-            stopColor="var(--core-background-content)"
-            stopOpacity="0"
-          />
-        </linearGradient>
-      </defs>
-      <g
-        fill="none"
-        stroke="var(--primary)"
-        strokeOpacity="0.18"
-        strokeWidth="1.5"
+      <svg
+        viewBox="0 0 2400 260"
+        preserveAspectRatio="xMidYMax slice"
+        className="block size-full"
       >
-        {rows.map((x2) => (
-          <path key={x2} d={`M640 0 L${x2} 260`} />
-        ))}
-      </g>
-      <rect width="1280" height="120" fill={`url(#${fadeId})`} />
-    </svg>
+        <defs>
+          <linearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
+            <stop
+              offset="0"
+              stopColor="var(--core-background-content)"
+              stopOpacity="1"
+            />
+            <stop
+              offset="1"
+              stopColor="var(--core-background-content)"
+              stopOpacity="0"
+            />
+          </linearGradient>
+        </defs>
+        <g
+          fill="none"
+          stroke="var(--primary)"
+          strokeOpacity="0.18"
+          strokeWidth="1.5"
+        >
+          {lines.map((x2) => (
+            <path
+              key={x2}
+              d={`M1200 0 L${x2} 260`}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </g>
+        <rect width="2400" height="120" fill={`url(#${fadeId})`} />
+      </svg>
+    </div>
   );
 
   if (fill) {
@@ -100,7 +115,7 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
         className={cn(
           // The header is 4rem; the rest of the first screen is the hero's
           'relative isolate flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center text-center',
-          // Room for the rows, so the centred text stays clear of them
+          // Room for the lines, so the centred text stays clear of them
           decorated && 'pb-36 md:pb-56'
         )}
       >
@@ -116,7 +131,7 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
           {lede}
         </p>
         {buttons}
-        {rowsDrawing}
+        {linesDrawing}
       </section>
     );
   }
@@ -154,7 +169,7 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
           <ImageBlock media={media} hideCaption />
         </div>
       )}
-      {rowsDrawing}
+      {linesDrawing}
     </section>
   );
 };

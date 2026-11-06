@@ -1692,7 +1692,7 @@ export interface HeroBlock {
   /**
    * A static drawing in the theme’s own colour along the bottom of the block, fading upward.
    */
-  decoration?: ('none' | 'vineyard-rows') | null;
+  decoration?: ('none' | 'horizon-lines') | null;
   /**
    * Shown below the actions. What makes the claim above checkable rather than asserted.
    */
@@ -2306,6 +2306,10 @@ export interface SiteSetting {
  */
 export interface SiteSettingsGeneral {
   appName: string;
+  /**
+   * Shown next to the icon in the header. Leave empty to show the icon only.
+   */
+  brandLabel?: string | null;
   /**
    * The page that will be used as the landing page for the application.
    */
@@ -3424,6 +3428,7 @@ export interface SiteSettingsSelect<T extends boolean = true> {
  */
 export interface SiteSettingsGeneralSelect<T extends boolean = true> {
   appName?: T;
+  brandLabel?: T;
   landingPage?: T;
   icon?:
     | T

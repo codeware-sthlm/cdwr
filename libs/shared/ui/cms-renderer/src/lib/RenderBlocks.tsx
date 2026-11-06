@@ -236,6 +236,9 @@ type Props = {
 const isOverlay = (block: Props['blocks'][number]) =>
   block.blockType === 'form' && block.display === 'overlay';
 
+const isHeroWithLines = (block: Props['blocks'][number]) =>
+  block.blockType === 'hero' && block.decoration === 'horizon-lines';
+
 /** A block's band, `none` for a block that has none or cannot have one */
 const bandOf = (block: Props['blocks'][number]): SectionBand =>
   isOverlay(block) ? 'none' : (('band' in block ? block.band : null) ?? 'none');
@@ -315,11 +318,19 @@ export const RenderBlocks: React.FC<Props> = ({
               band !== 'none' &&
               bandOf(blocks[index - 1]) !== 'none';
 
+            // A hero's horizon lines run down to its bottom edge, so a band
+            // after it meets them instead of leaving a strip of page between
+            const followsLines =
+              framed &&
+              index > 0 &&
+              band !== 'none' &&
+              isHeroWithLines(blocks[index - 1]);
+
             // Do not set any margins around spacing block since it has its own margin options.
             // For all other blocks, set a top margin unless it's the first block.
             const spacing = cn({
               'not-first:mt-16 md:not-first:mt-24':
-                !isSpacingBlockOrFollowing && !followsBand
+                !isSpacingBlockOrFollowing && !followsBand && !followsLines
             });
 
             // Its own blocks are framed one by one, so it takes no frame here

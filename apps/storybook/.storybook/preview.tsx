@@ -51,6 +51,7 @@ const withPayload: Decorator = (Story, context) => {
         getCurrentPath: () => window.location.pathname,
         getSearchParam: (name) =>
           new URLSearchParams(window.location.search).get(name),
+        brandLabel: null,
         iconConfig: { source: 'svg', svgCode: cdwrCloudSvg },
         navigate: (path, newTab) => {
           if (newTab) {

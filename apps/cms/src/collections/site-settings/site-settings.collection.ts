@@ -87,6 +87,20 @@ const siteSettings: CollectionConfig = {
               required: true
             },
             {
+              name: 'brandLabel',
+              type: 'text',
+              // Not localized: the site reads these settings before it knows
+              // its locale, which is one of them, so a localized label would
+              // be read in the default locale and come back empty
+              label: { en: 'Brand label', sv: 'Varumärkestext' },
+              admin: {
+                description: {
+                  en: 'Shown next to the icon in the header. Leave empty to show the icon only.',
+                  sv: 'Visas bredvid ikonen i sidhuvudet. Lämna tomt för att bara visa ikonen.'
+                }
+              }
+            },
+            {
               name: 'landingPage',
               type: 'relationship',
               relationTo: 'pages',
