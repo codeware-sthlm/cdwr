@@ -1,7 +1,8 @@
 import { getPages, getPosts, getTours } from '@codeware/app-cms/data-access';
 import {
+  SITEMAP_LIMIT,
   publicVisibilityWhere,
-  sitePath
+  sitemapEntries
 } from '@codeware/shared/util/payload-utils';
 import type { MetadataRoute } from 'next';
 
@@ -10,9 +11,6 @@ import { isSiteGated } from '../../utils/site-gated';
 
 /** Answered per request: the gate and the content only exist at runtime */
 export const dynamic = 'force-dynamic';
-
-/** Most documents of a kind a sitemap lists; the protocol allows 50 000 URLs */
-const LIMIT = 5000;
 
 /**
  * The tenant's published, public pages, posts and tours.
@@ -39,7 +37,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [];
   }
 
-  const query = { depth: 0, limit: LIMIT };
+  const query = { depth: 0, limit: SITEMAP_LIMIT };
   // Tours have no visibility field, and Payload refuses a query on one
   const visible = { ...query, where: publicVisibilityWhere };
   const [pages, posts, tours] = await Promise.all([
@@ -48,33 +46,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     getTours(runtime, query)
   ]);
 
-  const landingId = runtime.tenantConfig.landingPage.id;
-  const entries = [
-    ...(pages?.docs ?? []).map((doc) => ({
-      path: sitePath('pages', doc, landingId),
-      doc
-    })),
-    ...(posts?.docs ?? []).map((doc) => ({
-      path: sitePath('posts', doc),
-      doc
-    })),
-    ...(tours?.docs ?? []).map((doc) => ({
-      path: sitePath('tours', doc),
-      doc
-    }))
-  ];
-
-  const seen = new Set<string>();
-  return entries.flatMap(({ path, doc }) => {
-    if (seen.has(path)) {
-      return [];
-    }
-    seen.add(path);
-    return [
-      {
-        url: new URL(path, origin).toString(),
-        lastModified: doc.updatedAt
-      }
-    ];
-  });
+  return sitemapEntries({
+    pages: pages?.docs ?? [],
+    posts: posts?.docs ?? [],
+    tours: tours?.docs ?? [],
+    landingId: runtime.tenantConfig.landingPage.id,
+    origin
+  }).map(({ url, lastModified }) => ({
+    url,
+    ...(lastModified && { lastModified })
+  }));
 }

@@ -1,5 +1,5 @@
 import { getPost, getPostsListingPath } from '@codeware/app-cms/data-access';
-import { sitePath } from '@codeware/shared/util/payload-utils';
+import { docMeta, sitePath } from '@codeware/shared/util/payload-utils';
 import type { Metadata } from 'next';
 import { draftMode } from 'next/headers';
 import { notFound } from 'next/navigation';
@@ -22,16 +22,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getPost(runtime, slug.join('/'), { draft });
 
   return post
-    ? documentMetadata(
-        { name: post.title, meta: post.meta },
-        {
-          siteName: runtime.tenantConfig?.appName,
-          origin: runtime.payload.config.serverURL,
-          path: sitePath('posts', post),
-          kind: 'article',
-          locale: runtime.tenantConfig?.locale
-        }
-      )
+    ? documentMetadata(docMeta({ collection: 'posts', doc: post }), {
+        siteName: runtime.tenantConfig?.appName,
+        origin: runtime.payload.config.serverURL,
+        path: sitePath('posts', post),
+        kind: 'article',
+        locale: runtime.tenantConfig?.locale
+      })
     : {};
 }
 
