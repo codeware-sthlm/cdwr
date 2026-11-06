@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_OG_IMAGE_PATH,
+  type DocMetaSource,
+  docMeta,
   documentSeo,
   ogLocale,
   siteOrigin
@@ -81,6 +83,34 @@ describe('documentSeo', () => {
       locale: 'sv_SE',
       siteName: 'Codeware'
     });
+  });
+});
+
+describe('docMeta', () => {
+  const meta = { title: 'SEO', description: 'Beskrivning' };
+
+  it('names a page by its name and a post by its title', () => {
+    expect(
+      docMeta({
+        collection: 'pages',
+        doc: { name: 'Om', meta }
+      } as DocMetaSource)
+    ).toEqual({ name: 'Om', meta });
+    expect(
+      docMeta({
+        collection: 'posts',
+        doc: { title: 'Nyhet', meta }
+      } as DocMetaSource)
+    ).toEqual({ name: 'Nyhet', meta });
+  });
+
+  it('reads a tour SEO group and keeps its summary to fall back on', () => {
+    expect(
+      docMeta({
+        collection: 'tours',
+        doc: { title: 'Fjällen', summary: 'Sammanfattning', meta }
+      } as DocMetaSource)
+    ).toEqual({ name: 'Fjällen', meta, summary: 'Sammanfattning' });
   });
 });
 
