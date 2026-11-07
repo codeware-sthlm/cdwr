@@ -1,10 +1,14 @@
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
+import { nxReadySignal } from '@nx/vite/plugins/nx-ready-signal.plugin';
 
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/tools/cdwr',
-  plugins: [tsconfigPaths({ projects: ['../../tsconfig.base.json'] })],
+  plugins: [
+    tsconfigPaths({ projects: ['../../tsconfig.base.json'] }),
+    nxReadySignal()
+  ],
   test: {
     name: 'cdwr',
     watch: false,
