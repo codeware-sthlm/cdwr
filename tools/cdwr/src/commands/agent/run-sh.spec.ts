@@ -24,10 +24,18 @@ const SCRIPT = readFileSync(
 
 const READS = [/^gh pr list /, /^gh api graphql -f query="\$PR_QUERY" /];
 
-describe('run.sh', () => {
-  const calls = SCRIPT.split('\n')
+// The desk's copilot and merge commands are run.sh's only GitHub writes, all in desk_pr_act
+const DESK_PR_ACT =
+  SCRIPT.match(/^desk_pr_act\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
+
+const ghCalls = (text: string) =>
+  text
+    .split('\n')
     .filter((line) => !line.trim().startsWith('#'))
     .flatMap((line) => line.match(/\bgh\s.*/g) ?? []);
+
+describe('run.sh', () => {
+  const calls = ghCalls(SCRIPT.replace(DESK_PR_ACT, ''));
 
   it('calls gh', () => {
     expect(calls.length).toBeGreaterThan(0);
@@ -35,6 +43,23 @@ describe('run.sh', () => {
 
   it.each(calls)('only reads: %s', (call) => {
     expect(READS.some((read) => read.test(call))).toBe(true);
+  });
+
+  it('writes to GitHub only in desk_pr_act, as the app', () => {
+    expect(DESK_PR_ACT).not.toBe('');
+    const writes = ghCalls(DESK_PR_ACT).filter(
+      (call) => !READS.some((read) => read.test(call))
+    );
+    expect(writes).toEqual([
+      'gh api -X POST "repos/codeware-sthlm/cdwr/pulls/$pr/requested_reviewers"',
+      'gh api graphql -f query="$ENQUEUE" -f id="$id" -f oid="$oid" 2>&1)" && return 0 ;;'
+    ]);
+    // The app's token first, with no fallback to the signed-in user
+    expect(DESK_PR_ACT.indexOf('gh_identity ||')).toBeLessThan(
+      DESK_PR_ACT.indexOf('case "$kind"')
+    );
+    expect(DESK_PR_ACT).not.toContain('gh_read');
+    expect(SCRIPT.split('"$ENQUEUE"')).toHaveLength(2);
   });
 
   // The suggest session reads review threads through the read-only wrapper, never raw GraphQL
@@ -187,9 +212,12 @@ describe('run.sh without Linear documents', () => {
     )?.[1];
 
   // The scheduler's Linear writes: the watch relabels a ticket whose PR merged outside review,
-  // and a parent whose agent split finished is closed with a comment. Nothing else.
+  // and a parent whose agent split finished is closed with a comment. Nothing else. The fourth
+  // mutation is GitHub's, the desk's merge (ENQUEUE).
   it('holds exactly three Linear mutations, each in its named query', () => {
-    expect(code.match(/mutation\b/gi)).toHaveLength(3);
+    expect(code.match(/mutation\b/gi)).toHaveLength(4);
+    expect(gql('ENQUEUE')).toMatch(/^mutation\([\s\S]*enqueuePullRequest\(/);
+    expect(code.match(/"\$ENQUEUE"/g)).toHaveLength(1);
     expect(gql('RELABEL')).toMatch(/^mutation\(/);
     expect(gql('RELABEL')).toContain('issueUpdate(');
     expect(gql('CLOSE_PARENT')).toMatch(/^mutation\(/);
@@ -1819,6 +1847,7 @@ describe('run.sh apply_commands', () => {
     value?: unknown;
     ageMs?: number;
     at?: string;
+    args?: Record<string, unknown>;
   };
   type Opts = {
     check?: boolean;
@@ -1826,6 +1855,8 @@ describe('run.sh apply_commands', () => {
     lost?: number[];
     paused?: boolean;
     files?: Record<string, string>;
+    // Shell lines defining desk_pr_check and desk_pr_act, the GitHub side
+    stubs?: string[];
   };
 
   // PostgREST form: 2026-11-02T10:59:03.621+00:00
@@ -1838,7 +1869,7 @@ describe('run.sh apply_commands', () => {
       id: r.id,
       at: r.at ?? stamp(r.ageMs ?? 60_000),
       kind: r.kind,
-      args: r.value === undefined ? {} : { value: r.value },
+      args: r.args ?? (r.value === undefined ? {} : { value: r.value }),
       actor: 'mac'
     }));
     writeFileSync(join(home, 'rows.json'), JSON.stringify(json));
@@ -1864,6 +1895,7 @@ describe('run.sh apply_commands', () => {
       `supabase_upsert() { print -r -- "$1|$2|$3|$4" >> "${t('upsert')}"; }`,
       `note() { print -r -- "$*" >> "${t('note')}"; }`,
       `say() { print -r -- "$*" >> "${t('say')}"; }`,
+      ...(opts.stubs ?? []),
       fn('apply_commands'),
       'apply_commands'
     ].join('\n');
@@ -2093,4 +2125,202 @@ describe('run.sh apply_commands', () => {
     expect(r.patches).toEqual([]);
     expect(file('paused')).toBeNull();
   });
+
+  describe('copilot and merge', () => {
+    // The stubs record their arguments, so the order of check, ack and write shows
+    const stubs = (check: string, act: string) => [
+      `desk_pr_check() { print -r -- "check $*" >> "${join(home, 't-note')}"; print -r -- "${check}"; }`,
+      `desk_pr_act() { print -r -- "act $*" >> "${join(home, 't-note')}"; ${act}; }`
+    ];
+    const pr = { ticket: 'COD-7', pr: 42 };
+
+    it.skipIf(!canRun)(
+      'checks, acks, then writes, with the ticket on the activity row',
+      () => {
+        const r = apply(
+          [
+            { id: 1, kind: 'merge', args: pr },
+            { id: 2, kind: 'copilot', args: pr }
+          ],
+          { stubs: stubs('ok PR_node abc123', 'return 0') }
+        );
+        expect(statuses(r)).toEqual([
+          ['applied', null],
+          ['applied', null]
+        ]);
+        expect(r.notes.filter((n) => /^(check|act) /.test(n))).toEqual([
+          'check merge COD-7 42',
+          'act merge 42 PR_node abc123',
+          'check copilot COD-7 42',
+          'act copilot 42 PR_node abc123'
+        ]);
+        expect(changes(r)).toEqual([
+          'PR 42 added to the merge queue from the desk (mac)',
+          'Copilot review requested on PR 42 from the desk (mac)'
+        ]);
+        expect(r.upserts.map((u) => u.body['ticket'])).toEqual([
+          'COD-7',
+          'COD-7'
+        ]);
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'refuses with the check reason and writes nothing',
+      () => {
+        const r = apply([{ id: 1, kind: 'merge', args: pr }], {
+          stubs: stubs('checks pending', 'return 0')
+        });
+        expect(statuses(r)).toEqual([['refused', 'checks pending']]);
+        expect(r.notes.some((n) => n.startsWith('act '))).toBe(false);
+        expect(changes(r)).toEqual([
+          'merge refused from the desk (mac): checks pending'
+        ]);
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'turns an acked row refused when the GitHub write fails',
+      () => {
+        const r = apply([{ id: 1, kind: 'copilot', args: pr }], {
+          stubs: stubs(
+            'ok PR_node abc123',
+            'print -r -- "GitHub did not add Copilot as a reviewer"; return 1'
+          )
+        });
+        expect(r.patches.map((p) => [p.query, p.body['status']])).toEqual([
+          ['id=eq.1&status=eq.pending', 'applied'],
+          ['id=eq.1', 'refused']
+        ]);
+        expect(r.patches[1]?.body['note']).toBe(
+          'GitHub did not add Copilot as a reviewer'
+        );
+        expect(changes(r)).toEqual([
+          'copilot refused from the desk (mac): GitHub did not add Copilot as a reviewer'
+        ]);
+      }
+    );
+
+    it.skipIf(!canRun)('writes nothing when the ack was lost', () => {
+      const r = apply([{ id: 1, kind: 'merge', args: pr }], {
+        lost: [1],
+        stubs: stubs('ok PR_node abc123', 'return 0')
+      });
+      expect(r.notes.some((n) => n.startsWith('act '))).toBe(false);
+      expect(r.upserts).toEqual([]);
+    });
+
+    it.skipIf(!canRun)(
+      'keeps a limit value after the empty ticket and pr',
+      () => {
+        const r = apply([{ id: 1, kind: 'limit', value: 9 }]);
+        expect(file('limit')).toBe('9');
+        expect(r.upserts.map((u) => u.body['ticket'])).toEqual([null]);
+      }
+    );
+  });
+});
+
+// The scheduler's verdict on a desk command, from the PR it just read; desk_pr_check prints it
+describe('watch.jq desk_verdict', () => {
+  const canRun = spawnSync('jq', ['--version']).status === 0;
+  const dir = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  const verdict = (kind: string, pr: Record<string, unknown>) =>
+    execFileSync(
+      'jq',
+      [
+        '-L',
+        dir,
+        '-r',
+        '--arg',
+        'kind',
+        kind,
+        'include "watch"; desk_verdict($kind)'
+      ],
+      { input: JSON.stringify(pr), encoding: 'utf8' }
+    ).trim();
+  const ready = (over: Record<string, unknown> = {}) => ({
+    id: 'PR_node',
+    headRefOid: 'abc123',
+    state: 'OPEN',
+    isDraft: false,
+    mergeable: 'MERGEABLE',
+    mergeQueueEntry: null,
+    commits: {
+      nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }]
+    },
+    reviewThreads: { nodes: [] },
+    reviewRequests: { nodes: [] },
+    reviews: { nodes: [] },
+    ...over
+  });
+
+  it.skipIf(!canRun)('lets a ready PR through with its node and head', () => {
+    expect(verdict('merge', ready())).toBe('ok PR_node abc123');
+    expect(verdict('copilot', ready())).toBe('ok PR_node abc123');
+  });
+
+  it.skipIf(!canRun).each([
+    [{ state: 'MERGED' }, 'PR is merged'],
+    [{ isDraft: true }, 'PR is a draft'],
+    [{ mergeQueueEntry: { state: 'QUEUED' } }, 'already in the merge queue'],
+    [{ mergeable: 'CONFLICTING' }, 'conflicts with main'],
+    [{ mergeable: 'UNKNOWN' }, 'GitHub has not checked for conflicts yet'],
+    [
+      {
+        commits: {
+          nodes: [{ commit: { statusCheckRollup: { state: 'PENDING' } } }]
+        }
+      },
+      'checks pending'
+    ],
+    [{ commits: { nodes: [] } }, 'checks missing'],
+    [
+      {
+        reviewThreads: {
+          nodes: [
+            {
+              isResolved: false,
+              comments: {
+                nodes: [{ author: { __typename: 'Bot' }, body: 'x' }]
+              }
+            }
+          ]
+        }
+      },
+      '1 unresolved thread'
+    ]
+  ])('refuses a merge: %j', (over, why) => {
+    expect(verdict('merge', ready(over))).toBe(why);
+  });
+
+  it.skipIf(!canRun)(
+    'refuses a Copilot request once one is asked or done',
+    () => {
+      expect(
+        verdict(
+          'copilot',
+          ready({
+            reviewRequests: {
+              nodes: [
+                {
+                  requestedReviewer: { login: 'copilot-pull-request-reviewer' }
+                }
+              ]
+            }
+          })
+        )
+      ).toBe('Copilot review already requested');
+      expect(
+        verdict(
+          'copilot',
+          ready({
+            reviews: {
+              nodes: [{ author: { login: 'copilot-pull-request-reviewer' } }]
+            }
+          })
+        )
+      ).toBe('Copilot has reviewed it');
+    }
+  );
 });
