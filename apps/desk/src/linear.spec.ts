@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { LinearError, type LinearErrorCode, createLinear } from './linear';
+import {
+  LinearError,
+  type LinearErrorCode,
+  createLinear,
+  linearMessage
+} from './linear';
 
 const NOW = new Date('2026-10-28T12:00:00.000Z');
 
@@ -424,6 +429,24 @@ describe('addLabel', () => {
       { code: 'unauthorized' }
     );
   });
+
+  it('throws forbidden when a read-only key writes', async () => {
+    const { linear } = setup(
+      labels(label()),
+      issueId(),
+      json({
+        errors: [
+          {
+            message: 'Invalid scope: `write` or `issues:create` required',
+            extensions: { code: 'FORBIDDEN' }
+          }
+        ]
+      })
+    );
+    await expect(linear.addLabel('COD-1', 'agent:ready')).rejects.toMatchObject(
+      { code: 'forbidden' }
+    );
+  });
 });
 
 describe('errors', () => {
@@ -440,6 +463,11 @@ describe('errors', () => {
     ['HTTP 429', () => json({}, 429), 'rate_limited'],
     ['GraphQL RATELIMITED', () => gql('RATELIMITED'), 'rate_limited'],
     ['a rejected fetch', () => new TypeError('offline'), 'network'],
+    [
+      'a GraphQL invalid scope error',
+      () => json({ errors: [{ message: 'Invalid scope: `write` required' }] }),
+      'forbidden'
+    ],
     ['other GraphQL errors', () => gql('INVALID_INPUT'), 'tool_error'],
     [
       'a GraphQL error without extensions',
@@ -465,5 +493,19 @@ describe('errors', () => {
     expect(error).toBeInstanceOf(LinearError);
     expect(error).toMatchObject({ code });
     expect(error).toHaveProperty('message', expect.stringMatching(/\S/));
+  });
+});
+
+describe('linearMessage', () => {
+  it.each<[LinearErrorCode, string]>([
+    ['unauthorized', 'Linear rejected this key.'],
+    [
+      'forbidden',
+      'This Linear key is read-only; labelling needs a key with write scope.'
+    ],
+    ['network', "Can't reach Linear. Check the connection."],
+    ['tool_error', 'raw']
+  ])('%s reads %s', (code, expected) => {
+    expect(linearMessage(new LinearError(code, 'raw'))).toBe(expected);
   });
 });

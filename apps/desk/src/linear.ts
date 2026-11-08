@@ -15,7 +15,12 @@ export const IDEA_WINDOW_DAYS = 60;
 export const CLOSED_WINDOW_DAYS = 30;
 
 export type LinearErrorCode =
-  'unauthorized' | 'rate_limited' | 'network' | 'bad_response' | 'tool_error';
+  | 'unauthorized'
+  | 'forbidden'
+  | 'rate_limited'
+  | 'network'
+  | 'bad_response'
+  | 'tool_error';
 
 export class LinearError extends Error {
   readonly code: LinearErrorCode;
@@ -31,9 +36,11 @@ export class LinearError extends Error {
 export const linearMessage = (error: LinearError): string =>
   error.code === 'unauthorized'
     ? 'Linear rejected this key.'
-    : error.code === 'network'
-      ? "Can't reach Linear. Check the connection."
-      : error.message;
+    : error.code === 'forbidden'
+      ? 'This Linear key is read-only; labelling needs a key with write scope.'
+      : error.code === 'network'
+        ? "Can't reach Linear. Check the connection."
+        : error.message;
 
 const statusTypeSchema = z.enum([
   'triage',
@@ -315,6 +322,10 @@ export const createLinear = ({
       }
       if (codes.includes('RATELIMITED')) {
         throw new LinearError('rate_limited', message);
+      }
+      // A read-only key on a write: "Invalid scope: `write` or `issues:create` required"
+      if (errors.some((e) => /invalid scope/i.test(e.message))) {
+        throw new LinearError('forbidden', message);
       }
       throw new LinearError('tool_error', message);
     }
