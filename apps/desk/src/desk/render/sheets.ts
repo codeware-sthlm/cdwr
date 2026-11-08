@@ -3,7 +3,6 @@ import { CLOSED_WINDOW_DAYS, IDEA_WINDOW_DAYS, type Issue } from '../../linear';
 import {
   AGENT_AVATAR,
   LIMIT,
-  LINEAR_ISSUE,
   ROLES,
   SHIP_DAYS,
   STUCK_MIN,
@@ -53,6 +52,8 @@ import {
   empty,
   hostName,
   idLink,
+  isTicketId,
+  linkIds,
   livePr,
   loadMeter,
   parkedText,
@@ -126,7 +127,7 @@ export const whyLine = (m: Model, x: QueueNext): string => {
   return [
     (x.reason !== undefined && WHY.get(x.reason)) || '',
     who,
-    x.detail ? inline(x.detail) : ''
+    x.detail ? linkIds(inline(x.detail)) : ''
   ]
     .filter(Boolean)
     .join(' ');
@@ -146,8 +147,6 @@ const PRIO_MARK: ReadonlyMap<number, string> = new Map([
   [4, '▽'],
   [0, '–']
 ]);
-
-const TICKET_ID = /^[A-Z]+-\d+$/;
 
 type ItemOpts = {
   /** The row's class: an Agent state or `plain` */
@@ -173,7 +172,7 @@ const itemHTML = (
   const next = opts.note
     ? `<div class="meta">${opts.note}</div>`
     : d?.next && opts.showNext
-      ? `<div class="next">${txt(d.next)}</div>`
+      ? `<div class="next">${linkIds(txt(d.next))}</div>`
       : '';
   const prio = i.priority?.value ?? 0;
   const prioName = PRIO.get(prio) ?? PRIO.get(0);
@@ -290,9 +289,9 @@ const freeHTML = (m: Model): string => {
   return `<ul class="knobs">${m.held.free
     .map((f) =>
       f.action === 'review'
-        ? `<li><b>Review ${f.pr ? '#' + esc(f.pr) : esc(f.ticket)}</b><span>Merging or closing ${esc(f.ticket)} frees a slot</span></li>`
+        ? `<li><b>Review ${f.pr ? '#' + esc(f.pr) : idLink(f.ticket)}</b><span>Merging or closing ${idLink(f.ticket)} frees a slot</span></li>`
         : f.action === 'wait'
-          ? `<li><b>${esc(f.ticket)} waits on ${f.pr ? '#' + esc(f.pr) : 'its PR'}</b><span>Its slot frees when that PR merges or closes</span></li>`
+          ? `<li><b>${idLink(f.ticket)} waits on ${f.pr ? '#' + esc(f.pr) : 'its PR'}</b><span>Its slot frees when that PR merges or closes</span></li>`
           : `<li><b>Run with <code>limit=${esc(f.value)}</code></b><span>Raises the limit for that session only</span></li>`
     )
     .join('')}</ul>`;
@@ -345,7 +344,7 @@ const handoffCard = (
   return `<article class="ho">
     <a class="title" href="${esc(i.url)}" target="_blank" rel="noopener"><span class="id">${esc(i.id)}</span>${esc(i.title)}</a>
     <div class="meta">${when}${prOf(details, x.ticket) ? ' · ' + prn(prOf(details, x.ticket)) : ''}</div>
-    <ul class="checks">${(x.items || []).map((t) => `<li><span>${inline(t)}</span></li>`).join('')}</ul>
+    <ul class="checks">${(x.items || []).map((t) => `<li><span>${linkIds(inline(t))}</span></li>`).join('')}</ul>
   </article>`;
 };
 
@@ -366,7 +365,7 @@ const renderReview = (m: Model, state: DeskState, now: Date): string => {
         .join('. ');
       const i = m.get(x.ticket);
       return `<li class="pr-row${blocked ? ' blocked' : ''}" data-pr="${esc(n ?? '')}">
-        <div class="line">${m.prs.length > 1 ? `<span class="rank">${rank + 1}</span>` : ''}<span class="prnum">${prn(n)}</span><span class="id">${esc(x.ticket)}</span><a class="title" href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
+        <div class="line">${m.prs.length > 1 ? `<span class="rank">${rank + 1}</span>` : ''}<span class="prnum">${prn(n)}</span>${idLink(x.ticket)}<a class="title" href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
         <div class="meta">${pill}${blocked ? '<span class="chip blocked">merge later</span>' : ''}${age}</div>
         ${note ? `<div class="meta">${note}</div>` : ''}
       </li>`;
@@ -503,8 +502,8 @@ const renderRuns = (m: Model): string => {
     .map(
       (r) => `<li class="item ${isProblem(r.outcome) ? 'blocked' : 'ready'}">
       <span class="rank"></span>
-      <div class="main"><div><b>${esc(r.outcome)}</b>${r.ticket ? ` <span class="id">${txt(r.ticket)}</span>` : ''}</div>
-      <div class="meta">${inline(r.detail)}</div></div>
+      <div class="main"><div><b>${esc(r.outcome)}</b>${r.ticket ? ` ${idLink(r.ticket)}` : ''}</div>
+      <div class="meta">${linkIds(inline(r.detail))}</div></div>
       <span class="side">${esc(r.when)}</span></li>`
     )
     .join('');
@@ -782,12 +781,8 @@ const actorHTML = (a: string): string =>
         ? `<span class="actor-unknown">unknown</span>`
         : esc(a);
 
-const ticketHTML = (t: string): string =>
-  TICKET_ID.test(t)
-    ? `<a class="id" href="${LINEAR_ISSUE + t}" target="_blank" rel="noopener">${esc(t)}</a>`
-    : `<span class="id">${esc(t || '—')}</span>`;
-
-const changeHTML = (c: string): string => inline(c.replace(/\*\*/g, ''));
+const changeHTML = (c: string): string =>
+  linkIds(inline(c.replace(/\*\*/g, '')));
 
 const activityTable = (
   rows: readonly {
@@ -800,7 +795,7 @@ const activityTable = (
   `<div class="tblwrap"><table class="act"><thead><tr><th>When</th><th>Ticket</th><th>Actor</th><th>Change</th></tr></thead><tbody>${rows
     .map(
       (r) =>
-        `<tr><td><time>${esc(r.when)}</time></td><td>${ticketHTML(r.ticket)}</td><td>${actorHTML(r.actor)}</td><td>${changeHTML(r.change)}</td></tr>`
+        `<tr><td><time>${esc(r.when)}</time></td><td>${idLink(r.ticket)}</td><td>${actorHTML(r.actor)}</td><td>${changeHTML(r.change)}</td></tr>`
     )
     .join('')}</tbody></table></div>`;
 
@@ -821,9 +816,7 @@ const renderActivity = (m: Model, state: DeskState): string => {
   if (!activity) return empty("The activity table hasn't loaded yet.");
   if (activityMissing(activity)) return empty(NO_ACTIVITY);
   const tickets = [
-    ...new Set(
-      activity.rows.map((r) => r.ticket).filter((t) => TICKET_ID.test(t))
-    )
+    ...new Set(activity.rows.map((r) => r.ticket).filter(isTicketId))
   ].sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]));
   // A filter on a ticket that has left the window shows everything
   const picked = tickets.includes(state.ui.actFilter)
@@ -949,7 +942,7 @@ const renderTicketCost = (usage: Usage, rows: readonly TicketCost[]): string =>
     <div class="group"><h3>Every ticket with usage</h3>${tableHTML(
       ['Ticket', ...ROLES, 'Total', 'Output', 'Cache read'],
       usage.tickets.map((t) => [
-        txt(t.ticket),
+        isTicketId(t.ticket) ? idLink(t.ticket) : txt(t.ticket),
         ...ROLES.map((r) => usd(t[r], 2)),
         usd(t.total, 2),
         mtok(t.output),
@@ -1023,12 +1016,15 @@ const ideaCard = (state: DeskState, i: Issue, controls = ''): string => {
       ? part(
           'Evidence',
           d.evidence.length
-            ? `<ul>${d.evidence.map((e) => `<li>${inline(e)}</li>`).join('')}</ul>`
+            ? `<ul>${d.evidence.map((e) => `<li>${linkIds(inline(e))}</li>`).join('')}</ul>`
             : ''
         ) +
-        part('What changes', d.change ? `<p>${inline(d.change)}</p>` : '') +
-        part('Cost', d.cost ? `<p>${inline(d.cost)}</p>` : '') +
-        part('Why now', d.why ? `<p>${inline(d.why)}</p>` : '')
+        part(
+          'What changes',
+          d.change ? `<p>${linkIds(inline(d.change))}</p>` : ''
+        ) +
+        part('Cost', d.cost ? `<p>${linkIds(inline(d.cost))}</p>` : '') +
+        part('Why now', d.why ? `<p>${linkIds(inline(d.why))}</p>` : '')
       : `<p class="rule">The ticket doesn't follow the suggestion shape; read it in Linear.</p>`
     : `<p class="rule">Loading the ticket…</p>`;
   return `<article class="idea">

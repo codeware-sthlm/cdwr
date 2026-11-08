@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   empty,
   idLink,
+  isTicketId,
+  linkIds,
   parkedText,
   prn,
   pvMore,
@@ -51,6 +53,27 @@ describe('html helpers', () => {
       'CI done, resumes next'
     );
     expect(parkedText({ ticket: 'A', wait: 'x<' })).toBe('waits on x&lt;');
+  });
+
+  it('link a ticket id to Linear, and show anything else as a plain id', () => {
+    expect(idLink('COD-12')).toBe(
+      '<a class="id" href="https://linear.app/codeware/issue/COD-12" target="_blank" rel="noopener">COD-12</a>'
+    );
+    expect(idLink('cod-12')).toBe('<span class="id">cod-12</span>');
+    expect(idLink('')).toBe('<span class="id">—</span>');
+    expect(isTicketId('COD-1')).toBe(true);
+    expect(isTicketId('COD-1 x')).toBe(false);
+  });
+
+  it('link the ticket ids in text, but not in tags, inside a link, or another prefix', () => {
+    const out = linkIds(
+      'After COD-7 · PR 9, <code>COD-8</code>; UTF-8 <a href="x/COD-9">COD-9</a> then COD-10.'
+    );
+    expect(out).toBe(
+      `After ${idLink('COD-7')} · PR 9, <code>${idLink('COD-8')}</code>; UTF-8 <a href="x/COD-9">COD-9</a> then ${idLink('COD-10')}.`
+    );
+    expect(linkIds('XCOD-1 COD-1x')).toBe('XCOD-1 COD-1x');
+    expect(linkIds('')).toBe('');
   });
 
   it('count what a preview leaves out', () => {

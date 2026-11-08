@@ -60,6 +60,10 @@ import {
 // Local-time dates, so the specs read the same in every time zone
 const NOW = new Date('2026-10-29T12:00:00');
 
+/** A ticket id as the desk links it to Linear */
+const LINK = (id: string): string =>
+  `<a class="id" href="https://linear.app/codeware/issue/${id}" target="_blank" rel="noopener">${id}</a>`;
+
 const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
   id,
   title: `Title of ${id}`,
@@ -1047,6 +1051,7 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(html).toContain('<b>1</b><span>failed</span>');
     expect(html).toContain('Recent runs that did something, last 30 days');
     expect(html).toContain('idle runs are left out');
+    expect(html).toContain(`<b>failed</b> ${LINK('COD-1')}`);
     expect(SHEETS.scheduler.body(m, state, NOW)).not.toContain(
       'Recent runs that did something'
     );
@@ -1058,6 +1063,27 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(html).toContain('Every ticket with usage');
     expect(html).toContain('By model');
     expect(html).toContain('data-chart="spend"');
+    expect(html).toContain(`<td>${LINK('COD-30')}</td>`);
+  });
+
+  it('link the ticket ids of the review sheet, the limit hints and a run detail', () => {
+    const state = filled();
+    const m = model(state, NOW);
+    expect(SHEETS.review.body(m, state, NOW)).toContain(`<span class="prnum">`);
+    expect(SHEETS.review.body(m, state, NOW)).toContain(LINK('COD-3'));
+    expect(SHEETS.next.body(m, state, NOW)).toContain(
+      `Merging or closing ${LINK('COD-3')} frees a slot`
+    );
+    const detailed = {
+      ...m,
+      runs: m.runs && {
+        ...m.runs,
+        rows: [{ ...m.runs.rows[0], detail: 'after COD-7 in `COD-8`' }]
+      }
+    } as typeof m;
+    expect(SHEETS.runs.body(detailed, state, NOW)).toContain(
+      `after ${LINK('COD-7')} in <code>${LINK('COD-8')}</code>`
+    );
   });
 
   it('show a parked review only as its open PR', () => {
@@ -2028,14 +2054,16 @@ describe('problems', () => {
     expect(out).toContain(' · limit ');
     expect(out).toContain('data-fmt="silent"');
     expect(out).toContain(
-      `COD-1 started ${hhmm(at(10))} and has no finished_at.`
+      `${LINK('COD-1')} started ${hhmm(at(10))} and has no finished_at.`
     );
     expect(out).toContain('from the CLI or with a control token in Settings');
     expect(out).not.toContain('data-cmd');
     const card = renderUnknownSession(m);
     expect(card).toContain('STATE UNKNOWN');
     expect(card).toContain('Last known: nuc');
-    expect(card).toContain('running <span class="mono">COD-1</span>');
+    expect(card).toContain(
+      `running <span class="mono">${LINK('COD-1')}</span>`
+    );
     expect(card).toContain('Nothing here is assumed to be running.');
     expect(renderUnknownSession(model(fresh(base()), NOW))).toBe('');
   });

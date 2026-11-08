@@ -17,6 +17,7 @@ import type { SessionState } from '../types';
 
 import {
   idLink,
+  linkIds,
   livePr,
   parkedText,
   pr,
@@ -150,12 +151,12 @@ const feedTone = (p: Pulse): string =>
       : '';
 
 const feedRow = (p: Pulse, now: Date): string =>
-  `<li><i class="dot ${feedTone(p)}" aria-hidden="true"></i><span class="what">${esc(p.subject)} · ${esc(p.what)}</span><time>${esc(shortAge((now.getTime() - p.at) / 6e4))} ago</time></li>`;
+  `<li><i class="dot ${feedTone(p)}" aria-hidden="true"></i><span class="what">${linkIds(esc(p.subject))} · ${esc(p.what)}</span><time>${esc(shortAge((now.getTime() - p.at) / 6e4))} ago</time></li>`;
 
 /** "Step 3 of 5" with a bar and the next step, for the working ticket; empty without a plan */
 const stepLine = (d: Detail | undefined): string =>
   d && d.steps
-    ? `<div class="ct-step"><div class="bar" aria-hidden="true"><i style="width:${Math.round((d.done / d.steps) * 100)}%"></i></div><span>Step ${Math.min(d.done + 1, d.steps)} of ${d.steps}</span>${d.next ? `<span class="ct-next">${txt(d.next)}</span>` : ''}</div>`
+    ? `<div class="ct-step"><div class="bar" aria-hidden="true"><i style="width:${Math.round((d.done / d.steps) * 100)}%"></i></div><span>Step ${Math.min(d.done + 1, d.steps)} of ${d.steps}</span>${d.next ? `<span class="ct-next">${linkIds(txt(d.next))}</span>` : ''}</div>`
     : '';
 
 /** What the working ticket is parked on, and for how long; empty when it is not parked */
