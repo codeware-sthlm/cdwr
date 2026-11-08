@@ -236,7 +236,7 @@ const copilotControl = (
 ): string => {
   const view = copilotView(entry);
   if (view === null) return '';
-  const key = prCommandKey(r.id, 'copilot');
+  const key = prCommandKey(r.id, entry.pr, 'copilot');
   const sent = ui.commands.get(key);
   const button = (text: string, extra = ''): string =>
     `<button type="button" class="wsnooze" data-copilot="${esc(r.id)}" data-pr="${esc(entry.pr)}" data-host="${esc(host)}"${extra}>${text}</button>`;
@@ -258,7 +258,7 @@ const mergeControl = (
   ui: PrUi,
   now: number
 ): string => {
-  const key = prCommandKey(r.id, 'merge');
+  const key = prCommandKey(r.id, entry.pr, 'merge');
   const sent = ui.commands.get(key);
   const button = (text: string, extra = ''): string =>
     `<button type="button" class="wsnooze" data-merge="${esc(r.id)}" data-pr="${esc(entry.pr)}" data-host="${esc(host)}"${extra}>${text}</button>`;

@@ -443,7 +443,7 @@ function clickPr(target: Element): boolean {
   const kind: PrCommandKind = copilot === undefined ? 'merge' : 'copilot';
   const c = state.controls;
   if (!c.target || !ticket || !pr || !host || button.disabled) return true;
-  const key = prCommandKey(ticket, kind);
+  const key = prCommandKey(ticket, pr, kind);
   if (c.prSending.has(key)) return true;
   const region = button.closest('[id]');
   // The render replaces the button; the row's Snooze is nearest once it is gone
@@ -781,7 +781,7 @@ function sendPr(
 ): void {
   const c = state.controls;
   if (!c.target) return;
-  const key = prCommandKey(ticket, kind);
+  const key = prCommandKey(ticket, pr, kind);
   c.prSending.add(key);
   c.prNotes.delete(key);
   render();
