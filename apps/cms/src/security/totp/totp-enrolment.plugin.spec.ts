@@ -304,6 +304,27 @@ describe('totpEnrolmentPlugin', () => {
     ]);
   });
 
+  it('registers our setup view under both of the plugin keys, keeping other views', async () => {
+    const dashboard = { Component: 'existing#Dashboard' };
+    const result = await apply(
+      build({
+        admin: { components: { views: { dashboard } } }
+      } as Partial<Config>)
+    );
+    const views = result.admin?.components?.views ?? {};
+    const setup = {
+      Component: '@codeware/apps/cms/components/admin/totp/TotpSetupView',
+      exact: true,
+      path: '/setup-totp',
+      sensitive: false,
+      strict: true
+    };
+
+    expect(views['dashboard']).toBe(dashboard);
+    expect(views['SetupTOTP']).toEqual(setup);
+    expect(views['SetupTOTPBackslash']).toEqual(setup);
+  });
+
   it('handles a config without collections, globals or providers', async () => {
     const result = await apply({} as Config);
 

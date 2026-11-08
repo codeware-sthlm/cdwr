@@ -1,12 +1,12 @@
 import { getSiteSettingsForTenant } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import type { SiteSetting, User } from '@codeware/shared/util/payload-types';
+import { siteIconUrl } from '@codeware/app-cms/util/email';
+import { getUserTenantIDs } from '@codeware/app-cms/util/misc';
 import type { PayloadRequest } from 'payload';
 
 import { resolveScopedTenant } from '../resolve-scoped-tenant';
 
-/** The issuer when no single tenant names the entry */
-export const PLATFORM_TOTP_ISSUER = 'Codeware';
+import { PLATFORM_TOTP_ISSUER } from './totp-options';
 
 export type TotpIssuer = {
   /** The name the authenticator app shows for the entry */
@@ -36,26 +36,8 @@ async function entryTenant(
     return tenant ? { id: tenant.id, ownApp: true } : null;
   }
 
-  const tenants = (req.user as User | null)?.tenants ?? [];
-  if (tenants.length !== 1) {
-    return null;
-  }
-  const { tenant } = tenants[0];
-  return { id: typeof tenant === 'object' ? tenant.id : tenant, ownApp: false };
-}
-
-/**
- * The icon url, only where the app serves the tenant's site: `/site-icon.png`
- * answers for an SVG mark and 404s otherwise, as for the reset mail's logo
- */
-function iconUrl(
-  settings: SiteSetting,
-  serverURL: string | undefined
-): string | undefined {
-  const { icon } = settings.general;
-  return serverURL && icon?.source === 'svg' && icon.svgCode?.trim()
-    ? `${serverURL.replace(/\/+$/, '')}/site-icon.png?size=64`
-    : undefined;
+  const tenantIds = getUserTenantIDs(req.user);
+  return tenantIds.length === 1 ? { id: tenantIds[0], ownApp: false } : null;
 }
 
 /**
@@ -81,8 +63,9 @@ export async function resolveTotpIssuer(
       return fallback;
     }
 
+    // Only the tenant's own app serves its `/site-icon.png`
     const image = tenant.ownApp
-      ? iconUrl(settings, req.payload.config.serverURL)
+      ? siteIconUrl(settings, req.payload.config.serverURL)
       : undefined;
     return image ? { issuer, image } : { issuer };
   } catch (error) {

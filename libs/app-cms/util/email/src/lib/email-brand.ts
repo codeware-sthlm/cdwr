@@ -71,6 +71,20 @@ function themeAccent(
 }
 
 /**
+ * The url of the tenant's icon on its own app, where it serves one:
+ * `/site-icon.png` answers for an SVG mark and 404s otherwise.
+ */
+export function siteIconUrl(
+  settings: Pick<SiteSetting, 'general'>,
+  serverURL: string | undefined
+): string | undefined {
+  const { icon } = settings.general;
+  return serverURL && icon?.source === 'svg' && icon.svgCode?.trim()
+    ? `${serverURL.replace(/\/+$/, '')}/site-icon.png?size=64`
+    : undefined;
+}
+
+/**
  * The sender identity for a tenant's mail, from its site settings.
  *
  * The accent is the default theme's light `--primary`; one that cannot be read,
@@ -89,14 +103,10 @@ export function emailBrandFromSettings(
   }
 ): EmailBrand {
   const { general } = settings;
-  const { icon } = general;
 
   return {
     name: general.appName || options.fallbackName,
-    logoUrl:
-      options.serverURL && icon?.source === 'svg' && icon.svgCode?.trim()
-        ? `${options.serverURL.replace(/\/+$/, '')}/site-icon.png?size=64`
-        : undefined,
+    logoUrl: siteIconUrl(settings, options.serverURL),
     accent: themeAccent(general, options.builtInTokens) ?? NEUTRAL_ACCENT
   };
 }

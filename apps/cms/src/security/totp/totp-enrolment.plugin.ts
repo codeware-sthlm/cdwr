@@ -122,13 +122,26 @@ function wrapPayloadCollections(payload: Payload) {
 }
 
 /**
+ * The setup view, under both keys `payload-totp` registers it as. The plugin
+ * spreads the config's views after its own, so these win.
+ */
+const setupView = {
+  Component: '@codeware/apps/cms/components/admin/totp/TotpSetupView',
+  exact: true,
+  path: '/setup-totp',
+  sensitive: false,
+  strict: true
+} as const;
+
+/**
  * TOTP enrolment for system users and workspace admins only.
  *
  * `payload-totp` enforces enrolment for a whole collection or nobody, so it
  * runs with `forceSetup` off and this plugin, registered right before it,
  * decides who must enrol: it holds such a user back everywhere and sends the
  * admin to the setup view. Custom endpoints are refused to any session that
- * owes a code, which the plugin does not cover.
+ * owes a code, which the plugin does not cover. Its setup view is replaced by
+ * ours, which names the authenticator entry after the tenant.
  */
 export const totpEnrolmentPlugin =
   ({ collection }: { collection: string }): Plugin =>
@@ -141,7 +154,12 @@ export const totpEnrolmentPlugin =
         providers: [
           ...(config.admin?.components?.providers ?? []),
           '@codeware/apps/cms/components/admin/totp/TotpEnrolmentRedirect#TotpEnrolmentRedirect'
-        ]
+        ],
+        views: {
+          ...config.admin?.components?.views,
+          SetupTOTP: setupView,
+          SetupTOTPBackslash: setupView
+        }
       }
     },
     collections: (config.collections ?? []).map((entity) => ({

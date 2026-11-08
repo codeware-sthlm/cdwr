@@ -53,6 +53,7 @@ export { renderSeatsFreedMail } from './lib/templates/tour-signup/seats-freed';
 export {
   type BuiltInThemes,
   PLATFORM_EMAIL_BRAND,
-  emailBrandFromSettings
+  emailBrandFromSettings,
+  siteIconUrl
 } from './lib/email-brand';
 export { withTextPart } from './lib/with-text-part';
