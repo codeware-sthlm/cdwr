@@ -1,6 +1,6 @@
 import type { payloadTotp } from 'payload-totp';
 
-type TotpPluginOptions = Parameters<typeof payloadTotp>[0];
+export type TotpPluginOptions = Parameters<typeof payloadTotp>[0];
 
 /** The issuer when no single tenant names the entry */
 export const PLATFORM_TOTP_ISSUER = 'Codeware';
