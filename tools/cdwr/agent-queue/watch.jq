@@ -64,16 +64,23 @@ def handoffs:
         end
     end;
 
-# Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved, conflicting,
-# mergeStateStatus }.
-# unresolved counts open review threads a person spoke last in: bots (Copilot) and the agent's
-# own replies, which leave a thread open on purpose, don't count.
+# Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved, copilot,
+# conflicting, mergeStateStatus }.
+# unresolved counts open review threads a person or Copilot spoke last in, and copilot the
+# Copilot share of them: other bots and the agent's own replies, which leave a thread open on
+# purpose, don't count.
 # conflicting is true for CONFLICTING, false for MERGEABLE and null for UNKNOWN (GitHub computes
 # it lazily), which step resolves to the previous value. A conflict beats failing checks: they are
 # stale, and the rebase reruns them. mergeStateStatus is only recorded.
+def copilot_login: "copilot-pull-request-reviewer";
+
 def pr_state:
   (.timelineItems.nodes // [] | last) as $r
   | ((.commits.nodes // [] | last | .commit.statusCheckRollup.state) // null) as $ci
+  | [ (.reviewThreads.nodes // [])[] | select(.isResolved | not)
+      | (.comments.nodes // [] | last)
+      | select(. != null and ((.body // "") | startswith("**Agent") | not))
+      | select(.author.__typename != "Bot" or .author.login == copilot_login) ] as $open
   | {
       state: (
         if .state == "MERGED" then "merged"
@@ -85,10 +92,8 @@ def pr_state:
         end),
       removedAt: ($r.createdAt // null),
       removedReason: ($r.reason // null),
-      unresolved: [ (.reviewThreads.nodes // [])[] | select(.isResolved | not)
-                    | (.comments.nodes // [] | last)
-                    | select(. != null and .author.__typename != "Bot"
-                             and ((.body // "") | startswith("**Agent") | not)) ] | length,
+      unresolved: ($open | length),
+      copilot: ([ $open[] | select(.author.login == copilot_login) ] | length),
       conflicting: (if .mergeable == "CONFLICTING" then true elif .mergeable == "MERGEABLE" then false else null end),
       mergeStateStatus: (.mergeStateStatus // null)
     };
@@ -139,7 +144,7 @@ def step:
       entry: ({ pr: $pr,
                 state: (if $review or ($now.state | IN("merged", "closed")) then $now.state else $prev.state end),
                 removedAt: (if $review then $now.removedAt // $prev.removedAt else $prev.removedAt end),
-                unresolved: ($now.unresolved // 0), conflicting: $conflicting,
+                unresolved: ($now.unresolved // 0), copilot: ($now.copilot // 0), conflicting: $conflicting,
                 mergeStateStatus: ($now.mergeStateStatus // null), at: $in.at }
               + (if $prev.relabelled == true then { relabelled: true } else {} end))
     };
@@ -314,15 +319,23 @@ def answered:
 # True when a human commented after the newest PR-ready or review-addressed comment, or review
 # threads are unresolved.
 # Only while the PR is open: once the watch has seen it merged or closed there is nothing to address.
-def review_feedback($watch):
+def review_comment:
   ((.comments.nodes // [])
    | map(select(.body | startswith("**Agent: PR ready**") or startswith("**Agent: review addressed**")))
    | sort_by(.createdAt) | last) as $ready
-  | ($watch[.identifier].state // "open") as $pr
+  | $ready != null
+    and any((.comments.nodes // [])[]; (.body | startswith("**Agent") | not) and (.createdAt | epoch) > ($ready.createdAt | epoch));
+
+def review_feedback($watch):
+  ($watch[.identifier].state // "open") as $pr
   | ($pr != "merged" and $pr != "closed")
-    and (( $ready != null
-           and any((.comments.nodes // [])[]; (.body | startswith("**Agent") | not) and (.createdAt | epoch) > ($ready.createdAt | epoch)) )
-         or (($watch[.identifier].unresolved // 0) > 0));
+    and (review_comment or (($watch[.identifier].unresolved // 0) > 0));
+
+# "Copilot review" when Copilot's threads are the only review feedback, else null
+def review_feedback_detail($watch):
+  ($watch[.identifier] // {}) as $w
+  | if (review_comment | not) and ($w.copilot // 0) > 0 and ($w.copilot // 0) == ($w.unresolved // 0)
+    then "Copilot review" else null end;
 
 # True for a merged ticket with a comment the agent hasn't answered: Done, the agent's work (a
 # PR-ready comment or agent:review), and the newest comment not the agent's and newer than the
@@ -442,7 +455,7 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
                          blockers: [ open_blockers[] | .identifier // "unknown" ] })) as $blocked
   | ([ $all[] | select(agent_label == "agent:review" and is_open and (.identifier | IN($parkIds[]) | not)
                        and review_feedback($watch)) ] | sort_by(queue_order)
-     | map({ ticket: .identifier, reason: "review feedback", detail: null })) as $fb
+     | map({ ticket: .identifier, reason: "review feedback", detail: review_feedback_detail($watch) })) as $fb
   # A review PR that conflicts with main is rebased; with review feedback it is listed there only
   | ($fb | map(.ticket)) as $fbIds
   | ([ $all[] | select(agent_label == "agent:review" and is_open
@@ -521,6 +534,7 @@ def attended_line:
     if .reason == "take over" then "run now: take over \(.ticket) (\(.detail))"
     # The outcome decides what the session does next: advance, fix CI, or read a timeout
     elif .reason == "parked wait resolved" then "run now: \(.ticket) parked wait resolved (\(.detail))"
+    elif .reason == "review feedback" and .detail != null then "run now: \(.ticket) review feedback (\(.detail))"
     else "run now: \(.ticket) \(.reason)" end
   else
     "idle: " + (if (.waiting | length) > 0 then "waits on \(.waiting | join(", "))" else "nothing waiting" end)

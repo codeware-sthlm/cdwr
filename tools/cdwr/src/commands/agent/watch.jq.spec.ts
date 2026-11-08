@@ -336,6 +336,7 @@ describe('pr_state', () => {
       removedAt: '2026-01-01T00:00:00Z',
       removedReason: 'FAILED_CHECKS',
       unresolved: 0,
+      copilot: 0,
       conflicting: null,
       mergeStateStatus: null
     });
@@ -347,6 +348,7 @@ describe('pr_state', () => {
       removedAt: null,
       removedReason: null,
       unresolved: 0,
+      copilot: 0,
       conflicting: null,
       mergeStateStatus: null
     });
@@ -437,17 +439,37 @@ describe('pr_state', () => {
     });
   });
 
-  const thread = (resolved: boolean, type: string, body: string) => ({
+  const COPILOT = 'copilot-pull-request-reviewer';
+  const thread = (
+    resolved: boolean,
+    type: string,
+    body: string,
+    login = type === 'Bot' ? 'renovate' : 'hakalb'
+  ) => ({
     isResolved: resolved,
-    comments: { nodes: [{ author: { __typename: type }, body }] }
+    comments: { nodes: [{ author: { __typename: type, login }, body }] }
   });
   it.each([
-    ['a person spoke last', [thread(false, 'User', 'Please rename')], 1],
-    ['resolved threads', [thread(true, 'User', 'Please rename')], 0],
-    ['Copilot threads', [thread(false, 'Bot', 'Consider…')], 0],
+    ['a person spoke last', [thread(false, 'User', 'Please rename')], 1, 0],
+    ['resolved threads', [thread(true, 'User', 'Please rename')], 0, 0],
+    ['Copilot threads', [thread(false, 'Bot', 'Consider…', COPILOT)], 1, 1],
+    [
+      'resolved Copilot threads',
+      [thread(true, 'Bot', 'Consider…', COPILOT)],
+      0,
+      0
+    ],
+    ['other bots', [thread(false, 'Bot', 'Consider…')], 0, 0],
     [
       'threads the agent left open',
       [thread(false, 'User', '**Agent:** My reading: …')],
+      0,
+      0
+    ],
+    [
+      'threads the agent app answered',
+      [thread(false, 'Bot', '**Agent:** Fixed in abc', 'codeware-agent')],
+      0,
       0
     ],
     [
@@ -458,26 +480,31 @@ describe('pr_state', () => {
           comments: { nodes: [{ author: null, body: 'x' }] }
         }
       ],
-      1
+      1,
+      0
     ],
     [
       'several',
       [
         thread(false, 'User', 'a'),
         thread(false, 'User', 'b'),
-        thread(false, 'Bot', 'c')
+        thread(false, 'Bot', 'c'),
+        thread(false, 'Bot', 'd', COPILOT)
       ],
-      2
+      3,
+      1
     ]
-  ])('counts unresolved review threads: %s', (_name, nodes, expected) => {
-    expect(
-      (
+  ])(
+    'counts unresolved review threads: %s',
+    (_name, nodes, unresolved, copilot) => {
+      expect(
         run('pr_state', pr({ reviewThreads: { nodes } })) as {
           unresolved: number;
+          copilot: number;
         }
-      ).unresolved
-    ).toBe(expected);
-  });
+      ).toMatchObject({ unresolved, copilot });
+    }
+  );
 });
 
 describe('step', () => {
@@ -486,6 +513,7 @@ describe('step', () => {
     removedAt: string | null;
     removedReason: string | null;
     unresolved?: number;
+    copilot?: number;
     conflicting?: boolean | null;
     mergeStateStatus?: string | null;
   };
@@ -778,10 +806,10 @@ describe('step', () => {
   });
 
   describe('entry', () => {
-    it('carries the unresolved review threads', () => {
+    it('carries the unresolved review threads and the Copilot share', () => {
       expect(
-        step(now('open', { unresolved: 2 }), null).entry['unresolved']
-      ).toBe(2);
+        step(now('open', { unresolved: 2, copilot: 1 }), null).entry
+      ).toMatchObject({ unresolved: 2, copilot: 1 });
     });
 
     it('records pr, state, removedAt and at', () => {
@@ -798,6 +826,7 @@ describe('step', () => {
         state: 'queued',
         removedAt: '2026-04-01T00:00:00Z',
         unresolved: 0,
+        copilot: 0,
         conflicting: false,
         mergeStateStatus: null,
         at: '2026-05-01T00:00:00Z'
@@ -812,6 +841,7 @@ describe('step', () => {
         state: 'open',
         removedAt: '2026-03-01T00:00:00Z',
         unresolved: 0,
+        copilot: 0,
         conflicting: false,
         mergeStateStatus: null,
         at: '2026-05-01T00:00:00Z'
@@ -1433,6 +1463,35 @@ describe('attended picks', () => {
       }
     );
 
+    it('only Copilot threads name a Copilot review', () => {
+      const r = attended([rev(prReady(false))], 5, {
+        'COD-4': { unresolved: 2, copilot: 2 }
+      });
+      expect(r).toMatchObject({
+        reason: 'review feedback',
+        detail: 'Copilot review'
+      });
+    });
+
+    it.each([
+      [
+        'a thread of a person beside Copilot',
+        [],
+        { unresolved: 2, copilot: 1 }
+      ],
+      [
+        'a ticket comment beside Copilot',
+        [{ body: 'fix this', createdAt: '2026-09-02T00:00:00Z' }],
+        { unresolved: 1, copilot: 1 }
+      ],
+      ['a watch without a Copilot share', [], { unresolved: 1 }]
+    ])('no detail with %s', (_name, comments, entry) => {
+      const r = attended([rev(prReady(false), ...comments)], 5, {
+        'COD-4': entry
+      });
+      expect(r).toMatchObject({ reason: 'review feedback', detail: null });
+    });
+
     it('a completed review ticket is not feedback', () => {
       const r = attended(
         [review('COD-4', { state: { type: 'completed' } })],
@@ -1970,6 +2029,11 @@ describe('attended picks', () => {
       expect(
         line([review('COD-544')], 5, { 'COD-544': { unresolved: 1 } })
       ).toBe('run now: COD-544 review feedback');
+      expect(
+        line([review('COD-548')], 5, {
+          'COD-548': { unresolved: 1, copilot: 1 }
+        })
+      ).toBe('run now: COD-548 review feedback (Copilot review)');
       expect(
         line([review('COD-547')], 5, {
           'COD-547': { pr: 8, conflicting: true }

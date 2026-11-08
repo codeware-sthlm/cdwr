@@ -521,7 +521,7 @@ query($n: Int!) {
       mergeQueueEntry { state }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
       reviewThreads(first: 100) {
-        nodes { isResolved comments(last: 1) { nodes { author { __typename } body } } }
+        nodes { isResolved comments(last: 1) { nodes { author { __typename login } body } } }
       }
       timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
         nodes { ... on RemovedFromMergeQueueEvent { reason createdAt } }
