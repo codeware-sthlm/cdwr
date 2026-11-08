@@ -91,10 +91,12 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    the answer then. An answer given while planning (no Status table yet) is taken as usual. A
    ticket that has started (any Status row other than `Planned`) and gets a blocker mid-way keeps
    going: name the blocker in the PR-ready comment instead.
-4. **Håkan's review on an `agent:review` ticket** whose PR is still open: an unresolved review
-   thread on the PR by someone other than a bot, or a ticket comment not starting with
-   `**Agent` that is newer than the agent's newest `**Agent: PR ready**` or
-   `**Agent: review addressed**` comment. See **Review feedback**.
+4. **Review feedback on an `agent:review` ticket** whose PR is still open: an unresolved review
+   thread on the PR whose last comment is by a person or by Copilot
+   (`copilot-pull-request-reviewer`) and doesn't start with `**Agent`, or a ticket comment not
+   starting with `**Agent` that is newer than the agent's newest `**Agent: PR ready**` or
+   `**Agent: review addressed**` comment. The pick reads `review feedback (Copilot review)`
+   when Copilot's threads are the only feedback. See **Review feedback**.
 5. **A review PR that conflicts with main** (`run now: COD-1 conflicts with main`): the PR
    watch read `mergeable` as `CONFLICTING`. Rebase it as in **A PR that conflicts with main**.
    The ticket stays `agent:review`.
@@ -329,7 +331,8 @@ to retry.
 
 ## Review feedback
 
-Håkan reviews after the PR-ready comment. Handle it between tickets.
+Håkan reviews after the PR-ready comment, and may start a Copilot review on the PR too.
+Handle it between tickets.
 
 1. Work in the ticket's worktree (`worktree add` again if it is gone) and pull the branch.
    When `gh pr view <n> --json mergeable` reads `CONFLICTING`, rebase first (**A PR that
@@ -337,6 +340,9 @@ Håkan reviews after the PR-ready comment. Handle it between tickets.
 2. Each point is its own commit on top; review fixes stack, they aren't squashed.
 3. Reply in each thread `**Agent:** Fixed in <sha>: <what changed>` and resolve it. A point
    you aren't sure about gets your reading and stays unresolved.
+   Judge a Copilot thread as in **Copilot review** step 3: fix what is valid, reply with the
+   concrete reason and resolve what doesn't apply, and for a design question leave your reading,
+   keep the thread unresolved and list it in the `review addressed` comment.
 4. A point raised as a ticket comment gets a reply comment starting `**Agent:**`.
 5. Run the narrow checks for what changed, push, park on `CI` (see **Parking**) and go to
    **What to take next**. A failure on resume is fixed and parked again.
