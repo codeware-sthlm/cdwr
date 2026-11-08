@@ -175,6 +175,22 @@ describe('resolveTotpIssuer', () => {
     });
   });
 
+  it.each([
+    // 100 encoded characters fit, 101 don't
+    { name: 'a long ascii name', appName: 'A'.repeat(100), fits: true },
+    { name: 'a too long ascii name', appName: 'A'.repeat(101), fits: false },
+    // `å` encodes to six characters, so 17 of them are 102
+    { name: 'a short non-ascii name', appName: 'å'.repeat(16), fits: true },
+    { name: 'a too long non-ascii name', appName: 'å'.repeat(17), fits: false }
+  ])('bounds the encoded length for $name', async ({ appName, fits }) => {
+    mode('host');
+    fetchSettings.mockResolvedValue(settings({ appName }));
+
+    expect(await resolveTotpIssuer(request(member(7)).req)).toEqual({
+      issuer: fits ? appName : 'cdwr'
+    });
+  });
+
   it('takes the colons out of the name', async () => {
     mode('host');
     fetchSettings.mockResolvedValue(settings({ appName: ' Titan: Tours ' }));

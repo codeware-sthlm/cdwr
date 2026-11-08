@@ -23,6 +23,16 @@ const cleanIssuer = (name: string | null | undefined): string =>
   (name ?? '').replace(/:/g, ' ').replace(/\s+/g, ' ').trim();
 
 /**
+ * The longest issuer, URI-encoded, the QR code takes. It goes into the URI
+ * twice, label and parameter, so an unbounded `appName` could outgrow the
+ * code's capacity and break the setup view. A longer name falls back.
+ */
+const MAX_ENCODED_ISSUER_LENGTH = 100;
+
+const fitsQrCode = (issuer: string): boolean =>
+  encodeURIComponent(issuer).length <= MAX_ENCODED_ISSUER_LENGTH;
+
+/**
  * The tenant that names the entry: the user's only tenant, and in tenant
  * mode only when that is the app's own. A user in several tenants, or a
  * system user in none, signs in with one code on every site, so the entry
@@ -64,7 +74,7 @@ export async function resolveTotpIssuer(
 
     const settings = await getSiteSettingsForTenant(req.payload, tenant.id);
     const issuer = cleanIssuer(settings?.general.appName);
-    if (!settings || !issuer) {
+    if (!settings || !issuer || !fitsQrCode(issuer)) {
       return fallback;
     }
 
