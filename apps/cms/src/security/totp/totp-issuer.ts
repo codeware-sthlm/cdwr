@@ -23,21 +23,26 @@ const cleanIssuer = (name: string | null | undefined): string =>
   (name ?? '').replace(/:/g, ' ').replace(/\s+/g, ' ').trim();
 
 /**
- * The tenant that names the entry: in tenant mode the app's own, in host
- * mode the user's only tenant. A user in several tenants, or a system user
- * in none, signs in with one code on every site, so the entry keeps the
- * platform's name.
+ * The tenant that names the entry: the user's only tenant, and in tenant
+ * mode only when that is the app's own. A user in several tenants, or a
+ * system user in none, signs in with one code on every site, so the entry
+ * keeps the platform's name.
  */
 async function entryTenant(
   req: PayloadRequest
 ): Promise<{ id: number; ownApp: boolean } | null> {
+  const tenantIds = getUserTenantIDs(req.user);
+  if (tenantIds.length !== 1) {
+    return null;
+  }
+  const [id] = tenantIds;
+
   if (getEnv().APP_MODE.type === 'tenant') {
     const tenant = await resolveScopedTenant(req.payload);
-    return tenant ? { id: tenant.id, ownApp: true } : null;
+    return tenant?.id === id ? { id, ownApp: true } : null;
   }
 
-  const tenantIds = getUserTenantIDs(req.user);
-  return tenantIds.length === 1 ? { id: tenantIds[0], ownApp: false } : null;
+  return { id, ownApp: false };
 }
 
 /**

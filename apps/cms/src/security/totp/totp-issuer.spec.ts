@@ -71,7 +71,7 @@ describe('resolveTotpIssuer', () => {
         settings({ appName: 'Titan Tours', icon: svgIcon })
       );
 
-      expect(await resolveTotpIssuer(request(member(9, 10)).req)).toEqual({
+      expect(await resolveTotpIssuer(request(member(7)).req)).toEqual({
         issuer: 'Titan Tours',
         image: 'https://titan.example/site-icon.png?size=64'
       });
@@ -85,7 +85,7 @@ describe('resolveTotpIssuer', () => {
     ])('leaves the image out for $name', async ({ icon }) => {
       fetchSettings.mockResolvedValue(settings({ appName: 'Titan', icon }));
 
-      expect(await resolveTotpIssuer(request().req)).toEqual({
+      expect(await resolveTotpIssuer(request(member(7)).req)).toEqual({
         issuer: 'Titan'
       });
     });
@@ -93,7 +93,20 @@ describe('resolveTotpIssuer', () => {
     it('falls back without a tenant', async () => {
       scopedTenant.mockResolvedValue(undefined);
 
-      expect(await resolveTotpIssuer(request().req)).toEqual({
+      expect(await resolveTotpIssuer(request(member(7)).req)).toEqual({
+        issuer: 'cdwr'
+      });
+      expect(fetchSettings).not.toHaveBeenCalled();
+    });
+
+    // One entry signs them in everywhere, so it can't carry this site's name
+    it.each([
+      { name: "several tenants, the app's among them", user: member(7, 8) },
+      { name: "one tenant that isn't the app's", user: member(8) },
+      { name: 'a system user', user: { id: 1, role: 'system-user' } },
+      { name: 'no user', user: null }
+    ])('keeps the platform name for $name', async ({ user }) => {
+      expect(await resolveTotpIssuer(request(user).req)).toEqual({
         issuer: 'cdwr'
       });
       expect(fetchSettings).not.toHaveBeenCalled();
@@ -174,7 +187,7 @@ describe('resolveTotpIssuer', () => {
   it('falls back and warns when the settings cannot be read', async () => {
     mode('tenant');
     scopedTenant.mockRejectedValue(new Error('db down'));
-    const { req, warn } = request();
+    const { req, warn } = request(member(7));
 
     expect(await resolveTotpIssuer(req)).toEqual({
       issuer: 'cdwr'

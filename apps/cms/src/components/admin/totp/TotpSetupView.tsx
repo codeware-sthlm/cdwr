@@ -16,7 +16,8 @@ const Setup = TOTPSetup as unknown as React.FC<
 
 /**
  * `payload-totp`'s setup view, with the authenticator entry named after the
- * tenant, and its icon where the app serves the tenant's site. The plugin
+ * user's only tenant, and its icon where the app serves that tenant's site.
+ * Anyone else gets the platform's name. The plugin
  * reads one issuer for every request; this view works it out per request and
  * hands the plugin's own view its options with that issuer, so the form, the
  * secret and the endpoint stay the plugin's.
