@@ -1,5 +1,6 @@
 'use client';
 
+import { type FaqTopic, isFaqTopic } from '@codeware/app-cms/util/definitions';
 import type {
   TranslationsKeys,
   TranslationsObject
@@ -27,11 +28,10 @@ import Link from 'next/link';
 import type { TypedLocale } from 'payload';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-/**
- * Custom event that opens the help drawer from anywhere in the admin,
- * e.g. the command palette quick action.
- */
-export const OPEN_HELP_EVENT = 'cdwr:open-help';
+import { groupFaqByTopic } from './faq-groups';
+import { OPEN_HELP_EVENT, type OpenHelpDetail } from './help-events';
+
+export { OPEN_HELP_EVENT, openHelp } from './help-events';
 
 type FetchStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -65,12 +65,41 @@ export function HelpDrawer() {
   // only when the drawer is reopened or the admin language changes.
   const attemptedLocale = useRef<string>(undefined);
 
-  // Let the command palette (or anything else) open the drawer
+  // Groups open in the outer accordion, and a topic still to scroll into view
+  const [openTopics, setOpenTopics] = useState<Array<string>>([]);
+  const pendingTopic = useRef<FaqTopic>(undefined);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Let the command palette (or anything else) open the drawer, optionally
+  // on one topic. An unknown topic is ignored and opens the drawer as usual.
   useEffect(() => {
-    const openDrawer = () => setOpen(true);
+    const openDrawer = (event: Event) => {
+      const topic = (event as CustomEvent<OpenHelpDetail>).detail?.topic;
+      const valid = isFaqTopic(topic) ? topic : undefined;
+      setOpenTopics(valid ? [valid] : []);
+      pendingTopic.current = valid;
+      setOpen(true);
+    };
     window.addEventListener(OPEN_HELP_EVENT, openDrawer);
     return () => window.removeEventListener(OPEN_HELP_EVENT, openDrawer);
   }, []);
+
+  const groups = useMemo(() => groupFaqByTopic(faqs), [faqs]);
+
+  // Scroll the requested group's heading into view once the entries are
+  // rendered. An event that arrives before the fetch finishes just waits in
+  // `pendingTopic` until `status` turns `success`. The event also sets state,
+  // so the effect reruns for an event that arrives after the load.
+  useEffect(() => {
+    const topic = pendingTopic.current;
+    if (!topic || !open || status !== 'success') {
+      return;
+    }
+    pendingTopic.current = undefined;
+    listRef.current
+      ?.querySelector(`[data-topic="${topic}"]`)
+      ?.scrollIntoView({ block: 'start' });
+  }, [open, status, groups, openTopics]);
 
   // Fetch entries lazily on first open and when the admin language changes
   useEffect(() => {
@@ -162,7 +191,7 @@ export function HelpDrawer() {
               </DrawerClose>
             </div>
           </DrawerHeader>
-          <div className="flex-1 overflow-y-auto p-6">
+          <div ref={listRef} className="flex-1 overflow-y-auto p-6">
             {status === 'loading' && (
               <p className="text-muted-foreground text-sm">
                 {t('help:loading')}
@@ -177,14 +206,34 @@ export function HelpDrawer() {
               <p className="text-muted-foreground text-sm">{t('help:empty')}</p>
             )}
             {status === 'success' && faqs.length > 0 && (
-              <Accordion type="single" collapsible className="-mt-2">
-                {faqs.map((faq) => (
-                  <AccordionItem key={faq.id} value={String(faq.id)}>
-                    <AccordionTrigger>{faq.question}</AccordionTrigger>
+              <Accordion
+                type="multiple"
+                value={openTopics}
+                onValueChange={setOpenTopics}
+                className="-mt-2"
+              >
+                {groups.map(({ topic, entries }) => (
+                  <AccordionItem
+                    key={topic.value}
+                    value={topic.value}
+                    data-topic={topic.value}
+                  >
+                    <AccordionTrigger className="font-semibold">
+                      {topic.label[language === 'sv' ? 'sv' : 'en']}
+                    </AccordionTrigger>
                     <AccordionContent>
-                      <p className="text-muted-foreground whitespace-pre-line">
-                        {faq.answer}
-                      </p>
+                      <Accordion type="single" collapsible>
+                        {entries.map((faq) => (
+                          <AccordionItem key={faq.id} value={String(faq.id)}>
+                            <AccordionTrigger>{faq.question}</AccordionTrigger>
+                            <AccordionContent>
+                              <p className="text-muted-foreground whitespace-pre-line">
+                                {faq.answer}
+                              </p>
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
                     </AccordionContent>
                   </AccordionItem>
                 ))}

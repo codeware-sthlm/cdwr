@@ -45,7 +45,7 @@ import {
 } from '../dashboard/dashboard-preferences';
 import { hasCreatePermission } from '../dashboard/has-create-permission';
 import { SHOW_GETTING_STARTED_EVENT } from '../dashboard/use-getting-started';
-import { OPEN_HELP_EVENT } from '../HelpDrawer.client';
+import { openHelp } from '../help-events';
 import { useCollectionLabel } from '../utils/use-collection-label';
 import { useVisibleCollections } from '../utils/use-visible-collections';
 
@@ -209,7 +209,7 @@ export function usePaletteItems(query: string): {
             label: t('palette:actionHelp'),
             icon: QuestionMarkCircleIcon,
             run: () => {
-              window.dispatchEvent(new CustomEvent(OPEN_HELP_EVENT));
+              openHelp();
             }
           }
         ]
