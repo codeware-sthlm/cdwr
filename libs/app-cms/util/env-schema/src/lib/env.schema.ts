@@ -82,6 +82,13 @@ export const EnvSchema = withEnvVars(
         .int()
         .positive()
         .default(60),
+      // Set by the env loader alone, never as a secret: the folder the
+      // Turnstile pair came from, for the half-pair warning at boot
+      HUMAN_CHECK_SOURCE: z
+        .string({
+          description: 'Where the loader took the Turnstile pair from'
+        })
+        .optional(),
 
       // Payload configuration
       CORS_URLS: z

@@ -443,7 +443,7 @@ export default buildConfig({
     }
     if (env.HUMAN_CHECK_MISSING) {
       payload.logger.warn(
-        `[human-check] Only one Turnstile key is set — ${env.HUMAN_CHECK_MISSING} is missing, so the pair is ignored and no widget is drawn`
+        `[human-check] Only one Turnstile key is set${env.HUMAN_CHECK_SOURCE ? ` in ${env.HUMAN_CHECK_SOURCE}` : ''} — ${env.HUMAN_CHECK_MISSING} is missing, so the pair is ignored and no widget is drawn`
       );
     }
 

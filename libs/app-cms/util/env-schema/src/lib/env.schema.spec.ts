@@ -101,4 +101,18 @@ describe('EnvSchema', () => {
       }
     );
   });
+
+  describe('Turnstile', () => {
+    it('keeps the source of a half pair for the boot warning', () => {
+      const result = parse({
+        TURNSTILE_SITE_KEY: 'site',
+        HUMAN_CHECK_SOURCE: '/tenants/moon'
+      });
+      expect(result.success && result.data).toMatchObject({
+        HUMAN_CHECK: undefined,
+        HUMAN_CHECK_MISSING: 'TURNSTILE_SECRET_KEY',
+        HUMAN_CHECK_SOURCE: '/tenants/moon'
+      });
+    });
+  });
 });
