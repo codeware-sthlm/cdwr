@@ -1,0 +1,53 @@
+diff --git a/dist/components/QRCode/index.d.ts b/dist/components/QRCode/index.d.ts
+--- a/dist/components/QRCode/index.d.ts
++++ b/dist/components/QRCode/index.d.ts
+@@ -1,7 +1,8 @@
+ import type { TOTP } from 'otpauth';
+ type Args = {
+     forceWhiteBackgroundOnQrCode?: boolean;
++    image?: string;
+     totp: TOTP;
+ };
+-export default function QRCode({ forceWhiteBackgroundOnQrCode, totp }: Args): Promise<import("react").JSX.Element>;
++export default function QRCode({ forceWhiteBackgroundOnQrCode, image, totp }: Args): Promise<import("react").JSX.Element>;
+ export {};
+diff --git a/dist/components/QRCode/index.js b/dist/components/QRCode/index.js
+--- a/dist/components/QRCode/index.js
++++ b/dist/components/QRCode/index.js
+@@ -2,8 +2,10 @@
+ import { toDataURL } from 'qrcode';
+ import { cn } from '../../utilities/cn.js';
+ import styles from './index.module.css';
+-export default async function QRCode({ forceWhiteBackgroundOnQrCode, totp }) {
+-    const src = await toDataURL(totp.toString(), {
++export default async function QRCode({ forceWhiteBackgroundOnQrCode, image, totp }) {
++    // Not in the Key URI Format, but read by the authenticator apps that show an icon
++    const uri = image ? `${totp.toString()}&image=${encodeURIComponent(image)}` : totp.toString();
++    const src = await toDataURL(uri, {
+         color: {
+             dark: '#fff',
+             light: '#000'
+diff --git a/dist/components/views/Setup/index.js b/dist/components/views/Setup/index.js
+--- a/dist/components/views/Setup/index.js
++++ b/dist/components/views/Setup/index.js
+@@ -56,6 +56,7 @@
+                 children: [
+                     /*#__PURE__*/ _jsx(QRCode, {
+                         forceWhiteBackgroundOnQrCode: pluginOptions.forceWhiteBackgroundOnQrCode,
++                        image: pluginOptions.totp?.image,
+                         totp: totp
+                     }),
+                     /*#__PURE__*/ _jsx(ShowSecret, {
+diff --git a/dist/types.d.ts b/dist/types.d.ts
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -6,5 +6,8 @@
+     disabled?: boolean;
+     forceSetup?: boolean;
+     forceWhiteBackgroundOnQrCode?: boolean;
+-    totp?: Partial<Pick<TOTP, 'algorithm' | 'digits' | 'issuer' | 'period'>>;
++    totp?: Partial<Pick<TOTP, 'algorithm' | 'digits' | 'issuer' | 'period'>> & {
++        /** An icon url for the entry, added to the QR code as the `image` parameter */
++        image?: string;
++    };
+ };

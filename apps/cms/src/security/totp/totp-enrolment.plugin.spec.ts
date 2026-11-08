@@ -313,7 +313,8 @@ describe('totpEnrolmentPlugin', () => {
     );
     const views = result.admin?.components?.views ?? {};
     const setup = {
-      Component: '@codeware/apps/cms/components/admin/totp/TotpSetupView',
+      Component:
+        '@codeware/apps/cms/components/admin/totp/TotpSetupView#TotpSetupView',
       exact: true,
       path: '/setup-totp',
       sensitive: false,

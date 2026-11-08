@@ -38,6 +38,11 @@ overrides:
   # GHSA-8r5x-fm3f-whwj, GHSA-xw65-4hp5-5hc7
   "@verdaccio/hooks>handlebars": ">=4.7.10 <5"
 
+# The authenticator entry's icon (COD-739), until payload-totp takes an image
+# option of its own. Pinned to the version: an upgrade has to drop or redo it.
+patchedDependencies:
+  payload-totp@3.0.6: patches/payload-totp@3.0.6.patch
+
 allowBuilds:
   "@evilmartians/lefthook": true
   "@homebridge/node-pty-prebuilt-multiarch": true

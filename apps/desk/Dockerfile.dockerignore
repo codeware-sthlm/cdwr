@@ -4,6 +4,7 @@
 !/package.json
 !/pnpm-lock.yaml
 !/pnpm-workspace.yaml
+!/patches
 !/tsconfig.base.json
 !/apps/desk
 /apps/desk/src-tauri/target
