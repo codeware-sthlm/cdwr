@@ -15,6 +15,7 @@ RUN npm install -g pnpm@11.23.0
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 
 # The workspace's one lockfile: the desk's build needs vite and the tauri api package, which
 # are root dependencies, so the install is the root's. No postinstall scripts: nothing the

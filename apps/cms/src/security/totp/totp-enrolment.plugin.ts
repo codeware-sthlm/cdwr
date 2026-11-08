@@ -126,7 +126,8 @@ function wrapPayloadCollections(payload: Payload) {
  * spreads the config's views after its own, so these win.
  */
 const setupView = {
-  Component: '@codeware/apps/cms/components/admin/totp/TotpSetupView',
+  Component:
+    '@codeware/apps/cms/components/admin/totp/TotpSetupView#TotpSetupView',
   exact: true,
   path: '/setup-totp',
   sensitive: false,
