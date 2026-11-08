@@ -230,6 +230,18 @@ const whyNot = (
 ): string =>
   ui.controls.prNotes.get(key) ?? (sent?.state === 'refused' ? sent.note : '');
 
+/** True while the command was applied and no watch snapshot newer than that has arrived to say what became of it */
+const awaitsWatch = (
+  sent: PrCommandState | undefined,
+  entry: WatchEntry
+): boolean =>
+  sent?.state === 'applied' &&
+  !(
+    sent.at !== null &&
+    entry.at !== null &&
+    Date.parse(entry.at) > Date.parse(sent.at)
+  );
+
 /** The Copilot review button for a PR, or where its review stands; empty when the watch does not say */
 const copilotControl = (
   r: WaitRow,
@@ -248,7 +260,7 @@ const copilotControl = (
     return button('Copilot…', ' disabled');
   if (view !== 'button') return note(view.note);
   // Asked, but the watch has not caught up with it yet
-  if (sent?.state === 'applied') return note('Copilot asked');
+  if (awaitsWatch(sent, entry)) return note('Copilot asked');
   const why = whyNot(key, ui, sent);
   return button('Copilot review') + (why ? note(why) : '');
 };
@@ -268,8 +280,8 @@ const mergeControl = (
     `<span class="wnote">${esc(text)}</span>`;
   if (ui.controls.prSending.has(key) || sent?.state === 'pending')
     return button('merging…', ' disabled');
-  // Applied, until the watch says queued or merged
-  if (sent?.state === 'applied') return note('in the merge queue');
+  // Applied, until a newer watch says what became of it
+  if (awaitsWatch(sent, entry)) return note('in the merge queue');
   const blocker = mergeBlocker(entry);
   if (blocker !== null)
     return button('Merge', ` disabled title="${esc(blocker)}"`) + note(blocker);
