@@ -9,7 +9,8 @@ import type {
   PlanProgress,
   QueueView,
   Suggested,
-  ViewIssue
+  ViewIssue,
+  WatchEntry
 } from './types';
 
 // Line and description parsers for the queue_state, runs and usage text. Nothing here touches the DOM.
@@ -367,6 +368,51 @@ export const validateQueueView = (v: unknown): QueueView | null => {
   const { at, limit, session, next, held, parked, blocked, renovate, table } =
     parsed.data;
   return { at, limit, session, next, held, parked, blocked, renovate, table };
+};
+
+const WATCH_STATES: readonly WatchEntry['state'][] = [
+  'open',
+  'queued',
+  'failing',
+  'conflicting',
+  'merged',
+  'closed'
+];
+const COPILOT_STATES: readonly NonNullable<WatchEntry['copilot']>[] = [
+  'none',
+  'requested',
+  'reviewed'
+];
+
+const num = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isFinite(v) ? v : null;
+
+/**
+ * A host's watch.json by ticket. An entry without a PR number or a known state is dropped alone;
+ * a field of the wrong type reads as missing, and older entries lack `ci`, `threads` and `copilot`.
+ */
+export const parseWatch = (json: unknown): Map<string, WatchEntry> => {
+  const entries = new Map<string, WatchEntry>();
+  if (typeof json !== 'object' || json === null || Array.isArray(json))
+    return entries;
+  for (const [ticket, raw] of Object.entries(json)) {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) continue;
+    const e: Record<string, unknown> = { ...raw };
+    const pr = num(e.pr);
+    const state = WATCH_STATES.find((s) => s === e.state);
+    if (pr === null || state === undefined) continue;
+    entries.set(ticket, {
+      pr,
+      state,
+      unresolved: num(e.unresolved) ?? 0,
+      threads: num(e.threads),
+      conflicting: typeof e.conflicting === 'boolean' ? e.conflicting : null,
+      ci: typeof e.ci === 'string' ? e.ci : null,
+      copilot: COPILOT_STATES.find((s) => s === e.copilot) ?? null,
+      at: typeof e.at === 'string' ? e.at : null
+    });
+  }
+  return entries;
 };
 
 /** The paths a view fails to parse at; `missing` when the field is absent rather than mistyped */

@@ -395,6 +395,24 @@ describe('toRuns', () => {
     });
   });
 
+  it('carries the watch of every publishing host that has one', () => {
+    const now = new Date('2026-10-28T10:30:00.000Z');
+    const watch = { 'COD-1': { pr: 5, state: 'open' } };
+    const result = toRuns(
+      [
+        state({ host: 'nuc', at: '2026-10-28T10:00:00.000Z', watch }),
+        state({ host: 'mbp', at: '2026-10-28T10:20:00.000Z' }),
+        state({ host: 'old', at: '2026-10-28T08:00:00.000Z', watch })
+      ],
+      [],
+      [],
+      now
+    );
+    expect(result?.watches).toEqual([
+      { host: 'nuc', at: '2026-10-28T10:00:00.000Z', watch }
+    ]);
+  });
+
   it('carries the row time as `at`', () => {
     expect(toRuns([state()], [])?.at).toBe('2026-10-28T10:00:00.000Z');
   });

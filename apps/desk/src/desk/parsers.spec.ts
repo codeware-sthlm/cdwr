@@ -8,6 +8,7 @@ import {
   parseJob,
   parsePlan,
   parseSuggested,
+  parseWatch,
   queueViewIssues,
   validateQueueView
 } from './parsers';
@@ -705,5 +706,95 @@ describe('queueViewIssues', () => {
 
   it('names the view itself when it is not an object', () => {
     expect(queueViewIssues(null)).toEqual([{ path: '', missing: false }]);
+  });
+});
+
+describe('parseWatch', () => {
+  const full = {
+    pr: 812,
+    state: 'open',
+    unresolved: 2,
+    threads: 1,
+    conflicting: false,
+    ci: 'SUCCESS',
+    copilot: 'requested',
+    mergeStateStatus: 'CLEAN',
+    at: '2026-11-08T10:00:00Z',
+    removedAt: null
+  };
+
+  it('keeps the known fields of an entry', () => {
+    expect(parseWatch({ 'COD-1': full }).get('COD-1')).toEqual({
+      pr: 812,
+      state: 'open',
+      unresolved: 2,
+      threads: 1,
+      conflicting: false,
+      ci: 'SUCCESS',
+      copilot: 'requested',
+      at: '2026-11-08T10:00:00Z'
+    });
+  });
+
+  it('reads the fields an older entry lacks as unknown', () => {
+    expect(
+      parseWatch({ 'COD-1': { pr: 5, state: 'queued' } }).get('COD-1')
+    ).toEqual({
+      pr: 5,
+      state: 'queued',
+      unresolved: 0,
+      threads: null,
+      conflicting: null,
+      ci: null,
+      copilot: null,
+      at: null
+    });
+  });
+
+  it('reads a field of the wrong type as missing', () => {
+    expect(
+      parseWatch({
+        'COD-1': {
+          ...full,
+          unresolved: 'x',
+          threads: '1',
+          conflicting: 'no',
+          ci: 3,
+          copilot: 'maybe',
+          at: 7
+        }
+      }).get('COD-1')
+    ).toEqual({
+      pr: 812,
+      state: 'open',
+      unresolved: 0,
+      threads: null,
+      conflicting: null,
+      ci: null,
+      copilot: null,
+      at: null
+    });
+  });
+
+  it('drops an entry without a PR number or a known state, alone', () => {
+    const watch = parseWatch({
+      'COD-1': { ...full, pr: '812' },
+      'COD-2': { ...full, state: 'merging' },
+      'COD-3': 'open',
+      'COD-4': null,
+      'COD-5': [full],
+      'COD-6': full
+    });
+    expect([...watch.keys()]).toEqual(['COD-6']);
+  });
+
+  it.each([
+    ['null', null],
+    ['a string', 'x'],
+    ['a number', 3],
+    ['an array', [full]],
+    ['undefined', undefined]
+  ])('is empty for %s', (_name, input) => {
+    expect(parseWatch(input).size).toBe(0);
   });
 });

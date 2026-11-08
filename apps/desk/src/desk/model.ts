@@ -14,8 +14,10 @@ import {
   type CommandRowLike,
   type Control,
   type ControlState,
+  type PrCommandState,
   type Reported,
-  controlStates
+  controlStates,
+  prCommandStates
 } from './commands';
 import {
   AGENT,
@@ -65,7 +67,7 @@ import {
   sessionEnded,
   silentAfter
 } from './live';
-import { byCreated } from './parsers';
+import { byCreated, parseWatch } from './parsers';
 import { reconcileView } from './reconcile';
 import type { DeskData, DeskState, Detail } from './state';
 import type {
@@ -80,7 +82,8 @@ import type {
   QueueRenovate,
   QueueView,
   SessionState,
-  Suggested
+  Suggested,
+  WatchEntry
 } from './types';
 
 // The model: everything the renderers read, computed from the state. Nothing here touches the DOM.
@@ -277,6 +280,10 @@ export type Model = {
   gateAt: Map<string, string>;
   /** Every snoozed ticket, by ticket */
   snoozes: readonly SnoozeRow[];
+  /** Ticket id -> the host that watches its PR and what that host's watch.json says */
+  watch: Map<string, WatchRef>;
+  /** `prCommandKey` -> where a ticket's Copilot or Merge command stands */
+  prCommands: Map<string, PrCommandState>;
   /** The agent's PRs as GitHub last told, newest first */
   agentPrs: AgentPr[];
   /** Live sessions per host, newest first */
@@ -289,6 +296,23 @@ export type Model = {
   feed: Pulse[];
   problems: Problem[];
   health: HealthCheck[];
+};
+
+/** A ticket's watch entry with the host whose scheduler wrote it, the host a PR command goes to */
+export type WatchRef = { host: string; entry: WatchEntry };
+
+/** Every ticket's watch entry from the hosts' rows; when two hosts carry a ticket the newer row's wins */
+export const watchByTicket = (
+  watches: RunsPayload['watches']
+): Map<string, WatchRef> => {
+  const byTicket = new Map<string, WatchRef>();
+  const oldestFirst = [...watches].sort(
+    (a, b) => Date.parse(a.at) - Date.parse(b.at)
+  );
+  for (const { host, watch } of oldestFirst)
+    for (const [ticket, entry] of parseWatch(watch))
+      byTicket.set(ticket, { host, entry });
+  return byTicket;
 };
 
 export type RunsToday = {
@@ -1281,6 +1305,8 @@ export const model = (
     // Ideas get a gate time too, so a snoozed idea wakes on activity; their age stays their createdAt
     gateAt: gateTimes([...waiting, ...ideasPending.map((i) => i.id)], activity),
     snoozes: data.snoozes ?? [],
+    watch: watchByTicket(runs?.watches ?? []),
+    prCommands: prCommandStates(data.deskCommands ?? [], nowMs),
     agentPrs: agentPrs(data.githubEvents, prTickets, (id) => get(id).title),
     hostSessions: sessions,
     handBack: hand,

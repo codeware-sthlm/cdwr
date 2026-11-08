@@ -68,6 +68,7 @@ import {
   type SnoozeUi,
   type WaitRow,
   labelControls,
+  prControls,
   rowLabel,
   snoozeControls,
   snoozeUi,
@@ -231,7 +232,7 @@ const waitCard =
     <div class="wc-title">${esc(r.title)}</div>
     ${pr ? `<div class="wc-pr">${pr.pill}${pr.age}</div>` : ''}
     ${note ? `<div class="wc-note">${note}</div>` : ''}
-    <div class="wc-actions"><a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>${r.kind === 'ready to label' ? labelControls(r, ui, now.getTime(), 'act secondary') : ''}${snoozeControls(r, ui)}</div>
+    <div class="wc-actions"><a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>${r.kind === 'ready to label' ? labelControls(r, ui, now.getTime(), 'act secondary') : ''}${prControls(r, ui, now.getTime())}${snoozeControls(r, ui)}</div>
   </article>`;
   };
 

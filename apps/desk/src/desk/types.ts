@@ -111,6 +111,24 @@ export type QueueAfter = {
   items?: string[];
 };
 
+/**
+ * What a host's watch.json says of one agent ticket's PR (the `queue_state` row's `watch`). The
+ * fields older rows lack are null: `ci` (GitHub's rollup: SUCCESS, PENDING, FAILURE, ERROR,
+ * EXPECTED), `threads` (unresolved review threads) and `copilot`.
+ */
+export type WatchEntry = {
+  pr: number;
+  state: 'open' | 'queued' | 'failing' | 'conflicting' | 'merged' | 'closed';
+  unresolved: number;
+  threads: number | null;
+  /** null: GitHub has not checked yet */
+  conflicting: boolean | null;
+  ci: string | null;
+  copilot: 'none' | 'requested' | 'reviewed' | null;
+  /** When the host last wrote the entry, ISO; null without one */
+  at: string | null;
+};
+
 /** The queue view (watch.jq `queue_view`) after the page's defaults are applied */
 export type QueueView = {
   at: string | undefined;

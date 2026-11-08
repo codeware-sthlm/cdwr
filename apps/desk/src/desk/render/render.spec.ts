@@ -21,7 +21,7 @@ import {
   sheetIdOf,
   viewOf
 } from '../state';
-import type { QueueView, SessionState } from '../types';
+import type { QueueView, SessionState, WatchEntry } from '../types';
 
 import { renderCapacity } from './capacity';
 import {
@@ -46,10 +46,12 @@ import { headline, renderSession } from './session';
 import { SHEETS, whyLine } from './sheets';
 import { renderTiles } from './tiles';
 import {
+  copilotView,
   countedRows,
   forgetLabelled,
   isSnoozed,
   labelState,
+  mergeBlocker,
   renderWaiting,
   snoozeUi,
   waitRows
@@ -115,6 +117,7 @@ const runs = (qv: QueueView | null): RunsPayload => ({
   at: new Date('2026-10-29T11:55:00').toISOString(),
   host: 'nuc',
   others: [],
+  watches: [],
   main: { image: null, desk: null, deskWeb: null },
   rows: [
     {
@@ -2729,6 +2732,294 @@ describe('snoozed waiting rows', () => {
       expect(renderWaiting(model(off, NOW), off.details, NOW)).not.toContain(
         'data-label'
       );
+    });
+  });
+
+  describe('mergeBlocker and copilotView', () => {
+    const entry = (over: Partial<WatchEntry> = {}): WatchEntry => ({
+      pr: 7,
+      state: 'open',
+      unresolved: 0,
+      threads: 0,
+      conflicting: false,
+      ci: 'SUCCESS',
+      copilot: 'none',
+      at: null,
+      ...over
+    });
+
+    it.each([
+      ['nothing in the way', {}, null],
+      ['in the merge queue', { state: 'queued' }, 'already in the merge queue'],
+      [
+        'queued beats a conflict',
+        { state: 'queued', conflicting: true },
+        'already in the merge queue'
+      ],
+      ['a conflict state', { state: 'conflicting' }, 'conflicts with main'],
+      ['a conflict flag', { conflicting: true }, 'conflicts with main'],
+      [
+        'conflicts not checked yet',
+        { conflicting: null },
+        'GitHub has not checked for conflicts yet'
+      ],
+      ['no ci data', { ci: null }, 'no check data yet'],
+      ['no thread data', { threads: null }, 'no check data yet'],
+      ['checks pending', { ci: 'PENDING' }, 'checks pending'],
+      ['checks failing', { ci: 'FAILURE' }, 'checks failure'],
+      ['checks erroring', { ci: 'ERROR' }, 'checks error'],
+      ['checks expected', { ci: 'EXPECTED' }, 'checks expected'],
+      ['one thread', { threads: 1 }, '1 unresolved thread'],
+      ['threads', { threads: 3 }, '3 unresolved threads'],
+      [
+        'checks before threads',
+        { ci: 'PENDING', threads: 2 },
+        'checks pending'
+      ],
+      ['merged', { state: 'merged' }, 'PR is merged'],
+      ['closed', { state: 'closed' }, 'PR is closed']
+    ] as const)('mergeBlocker: %s', (_name, over, expected) => {
+      expect(mergeBlocker(entry(over))).toBe(expected);
+    });
+
+    it.each([
+      ['none', 'button'],
+      ['requested', { note: 'Copilot asked' }],
+      ['reviewed', { note: 'Copilot reviewed' }],
+      [null, null]
+    ] as const)('copilotView: %s', (copilot, expected) => {
+      expect(copilotView(entry({ copilot }))).toEqual(expected);
+    });
+  });
+
+  describe('Copilot and Merge buttons', () => {
+    const t = NOW.getTime();
+    const ENTRY = {
+      pr: 7,
+      state: 'open',
+      unresolved: 0,
+      threads: 0,
+      conflicting: false,
+      ci: 'SUCCESS',
+      copilot: 'none',
+      at: NOW.toISOString()
+    };
+    // COD-3 is the review row with PR 7; `over` changes what the host's watch.json says of it
+    const watched = (
+      over: Record<string, unknown> = {},
+      ticket = 'COD-3'
+    ): DeskState => {
+      const s = on(filled());
+      s.data.runs = {
+        ...runs(view()),
+        watches: [
+          {
+            host: 'nuc',
+            at: NOW.toISOString(),
+            watch: { [ticket]: { ...ENTRY, ...over } }
+          }
+        ]
+      };
+      return s;
+    };
+    const waiting = (s: DeskState): string => {
+      const m = model(s, NOW);
+      return renderWaiting(m, s.details, NOW, ui(s, m));
+    };
+    const rowOf = (html: string, id: string): string =>
+      html
+        .split('<li class="wrow-li')
+        .find((c) => c.includes(`<span class="id">${id}</span>`)) ?? '';
+    const sent = (
+      id: number,
+      kind: string,
+      status: string,
+      note: string | null = null
+    ): DeskCommandRow => ({
+      id,
+      at: NOW.toISOString(),
+      host: 'nuc',
+      kind,
+      args: { ticket: 'COD-3', pr: 7 },
+      actor: 'desk',
+      status,
+      applied_at: status === 'pending' ? null : NOW.toISOString(),
+      note
+    });
+    const COPILOT =
+      '<button type="button" class="wsnooze" data-copilot="COD-3" data-pr="7" data-host="nuc"';
+    const MERGE =
+      '<button type="button" class="wsnooze" data-merge="COD-3" data-pr="7" data-host="nuc"';
+
+    it('draws both buttons on a review row, after the PR link and before Snooze', () => {
+      const row = rowOf(waiting(watched()), 'COD-3');
+      expect(row).toContain(`${COPILOT}>Copilot review</button>`);
+      expect(row).toContain(`${MERGE}>Merge</button>`);
+      expect(row.indexOf('class="prn')).toBeLessThan(
+        row.indexOf('data-copilot')
+      );
+      expect(row.indexOf('data-copilot')).toBeLessThan(
+        row.indexOf('data-merge')
+      );
+      expect(row.indexOf('data-merge')).toBeLessThan(
+        row.indexOf('data-snooze')
+      );
+      expect(row).not.toContain('disabled');
+    });
+
+    it('draws nothing without controls, though the watch is there', () => {
+      const s = watched();
+      s.controls.target = null;
+      const m = model(s, NOW);
+      for (const html of [
+        renderWaiting(m, s.details, NOW),
+        renderWaiting(m, s.details, NOW, ui(s, m))
+      ]) {
+        expect(html).not.toContain('data-copilot');
+        expect(html).not.toContain('data-merge');
+      }
+    });
+
+    it('draws nothing on a row that is not a review, or whose PR the watch does not name', () => {
+      // COD-5 waits on hand-offs, and COD-3's PR is 7, not 8
+      for (const html of [
+        waiting(watched({}, 'COD-5')),
+        waiting(watched({ pr: 8 })),
+        waiting(watched({}, 'COD-99'))
+      ]) {
+        expect(html).not.toContain('data-copilot');
+        expect(html).not.toContain('data-merge');
+      }
+    });
+
+    it('draws nothing once the PR is merged or closed', () => {
+      for (const state of ['merged', 'closed']) {
+        const html = waiting(watched({ state }));
+        expect(html).not.toContain('data-copilot');
+        expect(html).not.toContain('data-merge');
+      }
+    });
+
+    it('draws the buttons on the sheet card too, and not without controls', () => {
+      const s = watched();
+      const m = model(s, NOW);
+      const card = SHEETS.before.body(m, s, NOW);
+      expect(card).toContain(`${COPILOT}>Copilot review</button>`);
+      expect(card).toContain(`${MERGE}>Merge</button>`);
+      const off = watched();
+      off.controls.target = null;
+      const plain = SHEETS.before.body(model(off, NOW), off, NOW);
+      expect(plain).not.toContain('data-merge');
+    });
+
+    it.each([
+      ['in the merge queue', { state: 'queued' }, 'already in the merge queue'],
+      ['conflicting', { state: 'conflicting' }, 'conflicts with main'],
+      ['a conflict flag', { conflicting: true }, 'conflicts with main'],
+      [
+        'conflicts not checked',
+        { conflicting: null },
+        'GitHub has not checked for conflicts yet'
+      ],
+      ['pending checks', { ci: 'PENDING' }, 'checks pending'],
+      ['no check data', { ci: null }, 'no check data yet'],
+      ['one thread', { threads: 1 }, '1 unresolved thread'],
+      ['threads', { threads: 2 }, '2 unresolved threads']
+    ])('disables Merge with the reason: %s', (_name, over, reason) => {
+      const row = rowOf(waiting(watched(over)), 'COD-3');
+      expect(row).toContain(
+        `${MERGE} disabled title="${reason}">Merge</button><span class="wnote">${reason}</span>`
+      );
+    });
+
+    it('shows where Copilot stands instead of its button', () => {
+      const asked = rowOf(waiting(watched({ copilot: 'requested' })), 'COD-3');
+      expect(asked).not.toContain('data-copilot');
+      expect(asked).toContain('<span class="wnote">Copilot asked</span>');
+      const reviewed = rowOf(
+        waiting(watched({ copilot: 'reviewed' })),
+        'COD-3'
+      );
+      expect(reviewed).not.toContain('data-copilot');
+      expect(reviewed).toContain('<span class="wnote">Copilot reviewed</span>');
+    });
+
+    it('offers no Copilot button when the watch does not say, but still Merge', () => {
+      const row = rowOf(waiting(watched({ copilot: undefined })), 'COD-3');
+      expect(row).not.toContain('Copilot');
+      expect(row).toContain(`${MERGE}>Merge</button>`);
+    });
+
+    it('asks to confirm a merge for a few seconds', () => {
+      const s = watched();
+      s.controls.mergeConfirm.set('COD-3', t - 1000);
+      expect(rowOf(waiting(s), 'COD-3')).toContain(
+        `${MERGE}>Confirm merge</button>`
+      );
+      s.controls.mergeConfirm.set('COD-3', t - 5000);
+      expect(rowOf(waiting(s), 'COD-3')).toContain(`${MERGE}>Merge</button>`);
+    });
+
+    it('does not ask to confirm a merge that is blocked', () => {
+      const s = watched({ ci: 'PENDING' });
+      s.controls.mergeConfirm.set('COD-3', t - 1000);
+      expect(rowOf(waiting(s), 'COD-3')).not.toContain('Confirm merge');
+    });
+
+    it('disables each button while its command is pending or in flight', () => {
+      const s = watched();
+      s.data.deskCommands = [
+        sent(1, 'merge', 'pending'),
+        sent(2, 'copilot', 'pending')
+      ];
+      const row = rowOf(waiting(s), 'COD-3');
+      expect(row).toContain(`${COPILOT} disabled>Copilot…</button>`);
+      expect(row).toContain(`${MERGE} disabled>merging…</button>`);
+      const flying = watched();
+      flying.controls.prSending.add('COD-3 merge');
+      const inFlight = rowOf(waiting(flying), 'COD-3');
+      expect(inFlight).toContain(`${MERGE} disabled>merging…</button>`);
+      expect(inFlight).toContain(`${COPILOT}>Copilot review</button>`);
+    });
+
+    it('says in the merge queue once applied, and Copilot asked until the watch catches up', () => {
+      const s = watched();
+      s.data.deskCommands = [
+        sent(1, 'merge', 'applied'),
+        sent(2, 'copilot', 'applied')
+      ];
+      const row = rowOf(waiting(s), 'COD-3');
+      expect(row).not.toContain('data-merge');
+      expect(row).not.toContain('data-copilot');
+      expect(row).toContain('<span class="wnote">in the merge queue</span>');
+      expect(row).toContain('<span class="wnote">Copilot asked</span>');
+    });
+
+    it('shows a refusal beside the button, escaped', () => {
+      const s = watched();
+      s.data.deskCommands = [
+        sent(1, 'merge', 'refused', 'checks <pending>'),
+        sent(2, 'copilot', 'refused', 'Copilot review already requested')
+      ];
+      const row = rowOf(waiting(s), 'COD-3');
+      expect(row).toContain(`${MERGE}>Merge</button>`);
+      expect(row).toContain(
+        '<span class="wnote">checks &lt;pending&gt;</span>'
+      );
+      expect(row).toContain(`${COPILOT}>Copilot review</button>`);
+      expect(row).toContain(
+        '<span class="wnote">Copilot review already requested</span>'
+      );
+    });
+
+    it('shows the note a failed send left, escaped, over a refusal', () => {
+      const s = watched();
+      s.data.deskCommands = [sent(1, 'merge', 'refused', 'old')];
+      s.controls.prNotes.set('COD-3 merge', 'no <network>');
+      s.controls.prNotes.set('COD-3 copilot', 'no <network>');
+      const row = rowOf(waiting(s), 'COD-3');
+      expect(row.match(/no &lt;network&gt;/g)).toHaveLength(2);
+      expect(row).not.toContain('>old<');
     });
   });
 
