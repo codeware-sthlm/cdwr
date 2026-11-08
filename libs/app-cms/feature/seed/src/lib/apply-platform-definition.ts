@@ -249,12 +249,11 @@ export async function applyPlatformDefinition(
       );
     }
 
+    // The same upsert the host boot runs (`applyPlatformFaq`), so a tenant-mode
+    // cms in development, which has no host boot, still gets the FAQ
     for (const faq of definition.faq) {
-      record(
-        'faq',
-        faq.question.en,
-        await ensureFaq(payload, faq, { transactionID })
-      );
+      const { action } = await ensureFaq(payload, faq, { transactionID });
+      outcomes.push({ collection: 'faq', identifier: faq.question.en, action });
     }
 
     const keep = unresolved.length === 0;
