@@ -281,8 +281,8 @@ export const faq: ReadonlyArray<FaqDefinition> = [
       sv: 'Var hamnar meddelandena från mina formulär?'
     },
     answer: {
-      en: 'Press Read new messages on the start page, or look under Forms & Messages in the menu. Messages are also emailed to the addresses set under Notify these addresses on the Forms tab in Site Settings.',
-      sv: 'Tryck på Läs nya meddelanden på startsidan, eller titta under Formulär & Meddelanden i menyn. Meddelandena mejlas också till adresserna under Meddela dessa adresser på fliken Formulär i Webbplatsinställningar.'
+      en: 'Press Read new messages on the start page, or look under Forms & Messages in the menu. Each form can also email them: a notification email goes to the address in its Email To. One left without Email To goes to the addresses under Notify these addresses on the Forms tab in Site Settings.',
+      sv: 'Tryck på Läs nya meddelanden på startsidan, eller titta under Formulär & Meddelanden i menyn. Varje formulär kan också mejla dem: ett notismejl går till adressen i dess E-post till. Ett notismejl utan E-post till går till adresserna under Meddela dessa adresser på fliken Formulär i Webbplatsinställningar.'
     }
   },
   {
