@@ -9,7 +9,9 @@ export const KINDS = [
   'cap',
   'abandon',
   'snooze',
-  'wake'
+  'wake',
+  'copilot',
+  'merge'
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -49,12 +51,14 @@ export type Command = {
   kind: Kind;
   /**
    * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
-   * snooze and wake, with the row's `kind` and newest gate event `eventAt` for snooze
+   * snooze and wake, with the row's `kind` and newest gate event `eventAt` for snooze; `ticket`
+   * and `pr` for copilot and merge
    */
   args: {
     value?: number;
     session?: string;
     ticket?: string;
+    pr?: number;
     kind?: RowKind;
     eventAt?: string | null;
   };
@@ -165,6 +169,22 @@ export const parseCommand = (payload: unknown): Command | string => {
       return 'wake takes only a ticket';
     return { host, kind, args: { ticket } };
   }
+  if (kind === 'copilot' || kind === 'merge') {
+    const ticket = isRecord(args) ? args['ticket'] : undefined;
+    const pr = isRecord(args) ? args['pr'] : undefined;
+    if (
+      !isRecord(args) ||
+      Object.keys(args).length !== 2 ||
+      typeof ticket !== 'string' ||
+      !TICKET.test(ticket) ||
+      typeof pr !== 'number' ||
+      !Number.isInteger(pr) ||
+      pr < 1 ||
+      pr > 999999
+    )
+      return `${kind} takes a ticket and a PR number`;
+    return { host, kind, args: { ticket, pr } };
+  }
   if (kind === 'snooze') {
     const message = 'snooze takes a ticket, a row kind and a gate time or null';
     if (!isRecord(args)) return message;
@@ -228,7 +248,9 @@ export const changeText = (
       ? `snoozed ${ticket} from the desk (${device})`
       : command.kind === 'wake'
         ? `woke ${ticket} from the desk (${device})`
-        : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
+        : command.kind === 'copilot' || command.kind === 'merge'
+          ? `${command.kind} for ${ticket} asked from the desk (${device})`
+          : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -392,6 +414,8 @@ export const createHandler = ({
           command.host,
           command.kind === 'abandon'
         );
+        if (command.kind === 'copilot' || command.kind === 'merge')
+          ticket = command.args.ticket ?? null;
         if (!known) {
           status = 'refused';
           note = `no scheduler reports from ${command.host}`;
