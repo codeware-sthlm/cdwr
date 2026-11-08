@@ -2276,6 +2276,10 @@ describe('watch.jq desk_verdict', () => {
     ],
     [{ commits: { nodes: [] } }, 'checks missing'],
     [
+      { reviewThreads: { pageInfo: { hasNextPage: true }, nodes: [] } },
+      'too many review threads to check them all'
+    ],
+    [
       {
         reviewThreads: {
           nodes: [
