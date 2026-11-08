@@ -130,8 +130,38 @@ export const pr = (n: PrRef | null | undefined): string =>
     ? `<a class="id" href="${GH_PR + n}" target="_blank" rel="noopener">#${esc(n)}</a>`
     : '';
 
-export const idLink = (id: string): string =>
-  `<a class="id" href="${LINEAR_ISSUE + esc(id)}" target="_blank" rel="noopener">${esc(id)}</a>`;
+const TICKET_ID = /^[A-Z]+-\d+$/;
+
+/** Whether a string is a well-formed ticket id such as COD-123 */
+export const isTicketId = (id: string): boolean => TICKET_ID.test(id);
+
+/** A ticket id as a link to Linear; anything else as a plain id, a dash when empty */
+export const idLink = (id = ''): string =>
+  isTicketId(id)
+    ? `<a class="id" href="${LINEAR_ISSUE + id}" target="_blank" rel="noopener">${id}</a>`
+    : `<span class="id">${esc(id || '—')}</span>`;
+
+// The team's ids only: free text also holds UTF-8 and SHA-256
+const TEXT_ID = /\bCOD-\d+\b/g;
+
+/**
+ * Links every ticket id in the text of HTML that is already escaped. Tags are left alone, and so
+ * is the text inside a link, since a link inside a link is invalid HTML
+ */
+export const linkIds = (html: string): string => {
+  let inLink = 0;
+  return html
+    .split(/(<[^>]*>)/)
+    .map((part) => {
+      if (part.startsWith('<')) {
+        if (/^<a[\s>]/i.test(part)) inLink++;
+        else if (/^<\/a>/i.test(part)) inLink = Math.max(0, inLink - 1);
+        return part;
+      }
+      return inLink ? part : part.replace(TEXT_ID, (id) => idLink(id));
+    })
+    .join('');
+};
 
 /** A ticket's id and title as a link */
 export const tLink = (i: { id: string; title: string; url: string }): string =>

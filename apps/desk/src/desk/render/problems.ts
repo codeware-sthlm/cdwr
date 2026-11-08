@@ -11,6 +11,7 @@ import {
 import type { Model } from '../model';
 
 import { busy, status } from './controls';
+import { idLink } from './html';
 
 // The "something is wrong" state: the alert band, one card per problem, and the card that replaces the session's when its state is unknown. Long and short texts sit side by side for the phone.
 
@@ -236,7 +237,7 @@ const unknownCard = (
 ): Card => {
   const open =
     p.ticket && p.started !== null
-      ? `${esc(p.ticket)} started ${esc(hhmm(p.started))} and has no finished_at. `
+      ? `${idLink(p.ticket)} started ${esc(hhmm(p.started))} and has no finished_at. `
       : '';
   return {
     pill: 'UNKNOWN STATE',
@@ -323,7 +324,9 @@ export const renderProblems = (m: Model): string => {
 export const renderUnknownSession = (m: Model): string => {
   const p = ofKind(m.problems, 'unknown')[0];
   if (!p) return '';
-  const ticket = p.ticket ? `<span class="mono">${esc(p.ticket)}</span>` : '';
+  const ticket = p.ticket
+    ? `<span class="mono">${idLink(p.ticket)}</span>`
+    : '';
   return `<section class="state-unknown" aria-label="Session state unknown">
     <span class="p-pill solid">STATE UNKNOWN</span>
     <div class="su-text">
