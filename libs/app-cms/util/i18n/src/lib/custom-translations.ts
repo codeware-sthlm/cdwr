@@ -384,6 +384,15 @@ const customTranslationsSchema = z.object({
     refusal: z.string(),
     title: z.string()
   }),
+  themesList: z.object({
+    baseTitle: z.string(),
+    bodyFontTitle: z.string(),
+    brandTitle: z.string(),
+    headingFontTitle: z.string(),
+    overridesNoneTitle: z.string(),
+    overridesTitle: z.string(),
+    surfaceTitle: z.string()
+  }),
   tourSignups: z.object({
     anonymize: z.string(),
     anonymizeConfirm: z.string(),
@@ -921,6 +930,17 @@ You can assign multiple tags to a file.`,
       primaryColourTitle: 'Primary colour — {{colour}}',
       refusal: 'Platform themes are managed by system administrators.',
       title: 'Theme library'
+    },
+    themesList: {
+      baseTitle: 'Base colour — surfaces, borders, neutral text',
+      bodyFontTitle: 'Body typeface',
+      brandTitle: 'Brand colour — buttons, focus rings, links',
+      headingFontTitle: 'Heading typeface',
+      overridesNoneTitle:
+        'No hand-edited tokens — this theme is exactly what its recipe generates',
+      overridesTitle:
+        'Tokens hand-edited in the studio, departing from the recipe',
+      surfaceTitle: 'Page surface — whether content sits on its own layer'
     },
     tourSignups: {
       anonymize: 'Clear passenger data',
@@ -1490,6 +1510,17 @@ Du kan tilldela flera etiketter till en fil.`,
       primaryColourTitle: 'Primärfärg — {{colour}}',
       refusal: 'Plattformens teman hanteras av systemadministratörer.',
       title: 'Temabibliotek'
+    },
+    themesList: {
+      baseTitle: 'Basfärg — ytor, kanter, neutral text',
+      bodyFontTitle: 'Typsnitt för brödtext',
+      brandTitle: 'Varumärkesfärg — knappar, fokusringar, länkar',
+      headingFontTitle: 'Typsnitt för rubriker',
+      overridesNoneTitle:
+        'Inga handredigerade tokens — temat är exakt vad receptet genererar',
+      overridesTitle:
+        'Tokens som redigerats för hand i studion och avviker från receptet',
+      surfaceTitle: 'Sidyta — om innehållet ligger på ett eget lager'
     },
     tourSignups: {
       anonymize: 'Rensa passageraruppgifter',
