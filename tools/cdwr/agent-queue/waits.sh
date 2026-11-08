@@ -43,7 +43,7 @@ parked_waits() {
       | { ticket: .identifier, pr: parked.pr } ]' <<<"$resp" 2>/dev/null)" || { print -r -- '{}'; return 0; }
   [[ "$(jq 'length' <<<"$tickets" 2>/dev/null)" -gt 0 ]] 2>/dev/null || { print -r -- '{}'; return 0; }
   query="$(jq -r '"query { repository(owner: \"codeware-sthlm\", name: \"cdwr\") { "
-    + ([ to_entries[] | "t\(.key): pullRequest(number: \(.value.pr)) { state reviews(first: 50) { nodes { author { login } } } commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } } }" ] | join(" "))
+    + ([ to_entries[] | "t\(.key): pullRequest(number: \(.value.pr)) { state reviews(last: 50) { nodes { author { login } } } commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } } }" ] | join(" "))
     + " } }"' <<<"$tickets")" || { print -r -- '{}'; return 0; }
   out="$(gh_query "$query" 2>/dev/null)" || { print -r -- '{}'; return 0; }
   jq -ec --argjson t "$tickets" '
