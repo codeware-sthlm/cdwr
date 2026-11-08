@@ -2303,7 +2303,7 @@ describe('pull requests on the waiting rows and the session card', () => {
     expect(html).toContain('<b class="count">6</b>');
     expect(html).toContain('<span class="kind">hand-offs · 2</span>');
     expect(html).toContain(
-      '<span class="kind">approved · waits on COD-2</span>'
+      '<span class="kind" title="approved · waits on COD-2">approved · waits on COD-2</span>'
     );
     expect(html).toContain('wrow-li approved');
     expect(html).toContain(
