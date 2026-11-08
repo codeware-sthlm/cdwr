@@ -32,6 +32,7 @@ import {
 import { validateTenantsArrayAccessHook } from './hooks/validate-tenants-array-access.hook';
 import { verifyOnlySelfServeHook } from './hooks/verify-only-self-serve.hook';
 import { verifyTenantModeAccessHook } from './hooks/verify-tenant-mode-access.hook';
+import { userTotpResetEndpoint } from './totp-reset.endpoint';
 import { verifyEmailMail } from './verify-email';
 
 /**
@@ -122,6 +123,7 @@ const users: CollectionConfig<'users'> = {
     update: adminAccessToAllDocTenants('allowSelf'),
     delete: adminAccessToAllDocTenants('denySelf')
   },
+  endpoints: [userTotpResetEndpoint],
   hooks: {
     beforeOperation: [
       loginThrottleHook,
