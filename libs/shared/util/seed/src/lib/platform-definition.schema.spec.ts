@@ -184,7 +184,10 @@ describe('PlatformDefinitionSchema', () => {
   });
 
   it('refuses a FAQ entry without a topic, or with an unknown one', () => {
-    const { topic: _, ...withoutTopic } = faqEntry;
+    const withoutTopic = {
+      question: faqEntry.question,
+      answer: faqEntry.answer
+    };
     for (const entry of [withoutTopic, { ...faqEntry, topic: 'other' }]) {
       expect(errorsOf({ ...minimal, faq: [entry] }).length).toBeGreaterThan(0);
     }
