@@ -449,7 +449,7 @@ record_run() {
 # Every handled outcome exits 0, so a non-zero exit is a failure nothing recorded.
 on_exit() {
   local st=$1
-  rm -f "$LOGS/gh-read-fallback.$$" "$LOGS/watch.$$.err"
+  rm -f "$LOGS/gh-read-fallback.$$" "$LOGS/watch.$$.err" "$LOGS/renovate.$$.err"
   if (( st != 0 )); then
     note "fail: run.sh exited $st"
     record failed "" "run.sh exited $st, see scheduler.log"
@@ -768,16 +768,38 @@ query {
 }
 GQL
 
+# gh_err <file>: gh_read's stderr as the first line of each attempt, each cut to 120 characters:
+# "<line>", plus "; as user: <line>" after its fallback; "(no stderr)" for an attempt that said nothing
+gh_err() {
+  setopt local_options no_err_exit extended_glob
+  local line app="" user="" fell=false
+  while IFS= read -r line; do
+    line="${${line##[[:space:]]#}%%[[:space:]]#}"
+    [[ -z "$line" ]] && continue
+    if [[ "$line" == "$GH_READ_FALLBACK" ]]; then fell=true
+    elif $fell; then [[ -n "$user" ]] || user="${line[1,120]}"
+    else [[ -n "$app" ]] || app="${line[1,120]}"
+    fi
+  done < "$1"
+  print -rn -- "${app:-(no stderr)}"
+  $fell && print -rn -- "; as user: ${user:-(no stderr)}"
+  return 0
+}
+
 # watch_renovate: Renovate's open PRs against the renovate tickets, through watch.jq
 # `renovate_step`, into renovate.json in the queue home; one info notice when a PR turns broken. It
-# never touches watch.json, whose entries are tickets. A failure leaves the file as it was.
+# never touches watch.json, whose entries are tickets. A failure leaves the file as it was and says
+# why: gh's own error (gh_err), or the start of an answer that is no list, on one line.
 watch_renovate() {
   setopt local_options no_err_exit
-  local file="$HOME_DIR/renovate.json" prs resp prev out level msg
+  local file="$HOME_DIR/renovate.json" errf="$LOGS/renovate.$$.err" prs resp prev out level msg
   gh_identity_or_note
   prs="$(gh_read gh pr list --repo codeware-sthlm/cdwr --author app/renovate --state open --limit 100 \
-    --json number,title,url,headRefOid,mergeable,statusCheckRollup,commits)" || { print -r -- "no Renovate PR list"; return 1; }
-  jq -e 'type == "array"' >/dev/null 2>&1 <<<"$prs" || { print -r -- "no Renovate PR list"; return 1; }
+    --json number,title,url,headRefOid,mergeable,statusCheckRollup,commits 2> "$errf")" ||
+    { print -r -- "GitHub: $(gh_err "$errf")"; return 1; }
+  # jq reads an empty answer as no input and passes it
+  [[ -n "$prs" ]] && jq -e 'type == "array"' >/dev/null 2>&1 <<<"$prs" ||
+    { prs="${prs//[[:cntrl:]]/ }"; print -r -- "not a list: ${${prs[1,80]}:-(empty)}"; return 1; }
   resp="$(linear "$RENOVATE_TICKETS")" || { print -r -- "Linear did not answer"; return 1; }
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
     { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
