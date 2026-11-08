@@ -6,6 +6,7 @@ export {
   type CodeLanguage,
   type MonacoLanguage
 } from './lib/code-languages';
+export { type FaqTopic, FAQ_TOPICS, isFaqTopic } from './lib/faq-topics';
 export {
   type GlobalCollectionSlug,
   globalCollectionSlugs,

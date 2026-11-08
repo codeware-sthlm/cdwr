@@ -1,4 +1,5 @@
 import type {
+  Faq,
   PlatformLabel,
   Tenant,
   TenantRole,
@@ -44,6 +45,8 @@ export type StockMediaDefinition = {
 };
 
 export type FaqDefinition = {
+  /** The help drawer group, one of `FAQ_TOPICS` in `@codeware/app-cms/util/definitions` */
+  topic: Faq['topic'];
   question: { en: string; sv: string };
   answer: { en: string; sv: string };
 };
