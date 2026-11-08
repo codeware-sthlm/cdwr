@@ -7,8 +7,15 @@ import type { UserAny } from '@codeware/shared/util/payload-types';
  */
 type SessionUser = UserAny & { _strategy?: string; hasTotp?: boolean };
 
-/** Strategies that already satisfy the second factor */
-const verifiedStrategies: ReadonlyArray<string> = ['totp', 'api-key'];
+/**
+ * Whether the request's strategy already satisfies the second factor.
+ *
+ * `totp` counts only while the user has a secret: its cookie outlives a reset
+ * (`resetTotp`) and would otherwise vouch for the user's next password session,
+ * skipping the enrolment the reset asks for.
+ */
+const isVerifiedStrategy = ({ _strategy, hasTotp }: SessionUser): boolean =>
+  _strategy === 'api-key' || (_strategy === 'totp' && Boolean(hasTotp));
 
 /**
  * The seeded users, when the environment asks for it. The env schema allows the
@@ -39,8 +46,8 @@ export const isTotpSetupPending = (
   if (!isUser(user ?? null)) {
     return false;
   }
-  const { _strategy, hasTotp } = user as SessionUser;
-  if (!_strategy || verifiedStrategies.includes(_strategy) || hasTotp) {
+  const session = user as SessionUser;
+  if (!session._strategy || isVerifiedStrategy(session) || session.hasTotp) {
     return false;
   }
   return mustEnrolTotp(user ?? null);
@@ -58,9 +65,9 @@ export const isSecondFactorPending = (
   if (!isUser(user ?? null)) {
     return false;
   }
-  const { _strategy, hasTotp } = user as SessionUser;
-  if (!_strategy || verifiedStrategies.includes(_strategy)) {
+  const session = user as SessionUser;
+  if (!session._strategy || isVerifiedStrategy(session)) {
     return false;
   }
-  return Boolean(hasTotp) || isTotpSetupPending(user);
+  return Boolean(session.hasTotp) || isTotpSetupPending(user);
 };
