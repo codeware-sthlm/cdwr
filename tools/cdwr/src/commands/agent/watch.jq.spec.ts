@@ -339,6 +339,8 @@ describe('pr_state', () => {
       copilotThreads: 0,
       threads: 0,
       conflicting: null,
+      draft: false,
+      mergeable: null,
       mergeStateStatus: null,
       ci: null,
       copilot: 'none'
@@ -354,6 +356,8 @@ describe('pr_state', () => {
       copilotThreads: 0,
       threads: 0,
       conflicting: null,
+      draft: false,
+      mergeable: null,
       mergeStateStatus: null,
       ci: null,
       copilot: 'none'
@@ -438,6 +442,24 @@ describe('pr_state', () => {
         out(conflict('MERGEABLE', { mergeStateStatus: 'CLEAN' }))
           .mergeStateStatus
       ).toBe('CLEAN');
+    });
+
+    it('carries draft and the raw mergeable value', () => {
+      const r = run(
+        'pr_state',
+        pr({ isDraft: true, mergeable: 'UNKNOWN' })
+      ) as { draft: boolean; mergeable: string | null };
+      expect(r.draft).toBe(true);
+      expect(r.mergeable).toBe('UNKNOWN');
+    });
+
+    it('is not a draft, with no mergeable, when missing', () => {
+      const r = run('pr_state', pr()) as {
+        draft: boolean;
+        mergeable: string | null;
+      };
+      expect(r.draft).toBe(false);
+      expect(r.mergeable).toBeNull();
     });
 
     it('mergeStateStatus is null when missing', () => {
@@ -602,6 +624,8 @@ describe('step', () => {
     unresolved?: number;
     copilotThreads?: number;
     conflicting?: boolean | null;
+    draft?: boolean;
+    mergeable?: string | null;
     mergeStateStatus?: string | null;
     ci?: string | null;
     copilot?: string;
@@ -918,6 +942,8 @@ describe('step', () => {
         unresolved: 0,
         copilotThreads: 0,
         conflicting: false,
+        draft: false,
+        mergeable: null,
         ci: null,
         copilot: 'none',
         threads: 0,
@@ -950,6 +976,8 @@ describe('step', () => {
         unresolved: 0,
         copilotThreads: 0,
         conflicting: false,
+        draft: false,
+        mergeable: null,
         ci: null,
         copilot: 'none',
         threads: 0,
@@ -960,6 +988,15 @@ describe('step', () => {
 
     it('is null removedAt when neither has one', () => {
       expect(step(now('open'), null).entry['removedAt']).toBeNull();
+    });
+
+    it('carries draft and mergeable', () => {
+      const e = step(
+        now('open', { draft: true, mergeable: 'UNKNOWN' }),
+        null
+      ).entry;
+      expect(e['draft']).toBe(true);
+      expect(e['mergeable']).toBe('UNKNOWN');
     });
 
     it('carries mergeStateStatus', () => {

@@ -123,6 +123,10 @@ export type WatchEntry = {
   threads: number | null;
   /** null: GitHub has not checked yet */
   conflicting: boolean | null;
+  /** The PR is a draft; false for an entry without the field */
+  draft: boolean;
+  /** GitHub's raw mergeability (`UNKNOWN` while it computes it); null for an entry without the field */
+  mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN' | null;
   ci: string | null;
   copilot: 'none' | 'requested' | 'reviewed' | null;
   /** When the host last wrote the entry, ISO; null without one */
