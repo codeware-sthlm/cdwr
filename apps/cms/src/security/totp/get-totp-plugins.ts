@@ -3,6 +3,7 @@ import type { Access, Plugin } from 'payload';
 import { payloadTotp, totpAccess } from 'payload-totp';
 
 import { totpEnrolmentPlugin } from './totp-enrolment.plugin';
+import { totpOptions } from './totp-options';
 
 /**
  * Upload collections whose files visitors load without a user: images on
@@ -69,9 +70,5 @@ export const getTotpPlugins = (): Array<Plugin> => [
   // as well as payload-totp's, while every other read keeps both
   totpEnrolmentPlugin({ collection: 'users' }),
   publicFiles,
-  payloadTotp({
-    collection: 'users',
-    forceSetup: false,
-    totp: { issuer: 'Codeware' }
-  })
+  payloadTotp(totpOptions)
 ];

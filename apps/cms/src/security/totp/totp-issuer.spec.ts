@@ -4,8 +4,14 @@ import type { PayloadRequest } from 'payload';
 
 import { resolveScopedTenant } from '../resolve-scoped-tenant';
 
-import { PLATFORM_TOTP_ISSUER, resolveTotpIssuer } from './totp-issuer';
+import { resolveTotpIssuer } from './totp-issuer';
+import { PLATFORM_TOTP_ISSUER } from './totp-options';
 
+// The email and misc barrels reach modules Jest cannot load
+jest.mock('@payloadcms/email-nodemailer', () => ({}));
+jest.mock('nodemailer', () => ({}));
+jest.mock('@sentry/nextjs', () => ({}));
+jest.mock('@payloadcms/plugin-multi-tenant/utilities', () => ({}));
 jest.mock('@codeware/app-cms/data-access', () => ({
   getSiteSettingsForTenant: jest.fn()
 }));
@@ -116,6 +122,21 @@ describe('resolveTotpIssuer', () => {
         expect(scopedTenant).not.toHaveBeenCalled();
       }
     );
+
+    it('skips a membership whose tenant is gone', async () => {
+      fetchSettings.mockResolvedValue(settings({ appName: 'Titan Tours' }));
+      const user = {
+        ...member(7),
+        tenants: [
+          { tenant: null, role: 'user' },
+          { tenant: 7, role: 'admin' }
+        ]
+      };
+
+      expect(await resolveTotpIssuer(request(user).req)).toEqual({
+        issuer: 'Titan Tours'
+      });
+    });
 
     it.each([
       { name: 'several tenants', user: member(7, 8) },
