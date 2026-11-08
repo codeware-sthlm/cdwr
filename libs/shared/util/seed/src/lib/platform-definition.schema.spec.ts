@@ -25,6 +25,12 @@ const inviteCode = {
   maxUses: 1
 };
 
+const faqEntry = {
+  topic: 'drafts' as const,
+  question: { en: 'What is a draft?', sv: 'Vad är ett utkast?' },
+  answer: { en: 'A saved version.', sv: 'En sparad version.' }
+};
+
 const errorsOf = (definition: unknown): Array<string> => {
   const result = PlatformDefinitionSchema.safeParse(definition);
   return result.success
@@ -169,6 +175,28 @@ describe('PlatformDefinitionSchema', () => {
     };
 
     expect(errorsOf(definition).join(' ')).toContain("'hut'");
+  });
+
+  it('accepts a FAQ entry with a known topic', () => {
+    const definition = { ...minimal, faq: [faqEntry] };
+
+    expect(errorsOf(definition)).toEqual([]);
+  });
+
+  it('refuses a FAQ entry without a topic, or with an unknown one', () => {
+    const { topic: _, ...withoutTopic } = faqEntry;
+    for (const entry of [withoutTopic, { ...faqEntry, topic: 'other' }]) {
+      expect(errorsOf({ ...minimal, faq: [entry] }).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('refuses two FAQ entries sharing an English question', () => {
+    const definition = {
+      ...minimal,
+      faq: [faqEntry, { ...faqEntry, topic: 'pages' as const }]
+    };
+
+    expect(errorsOf(definition).join(' ')).toContain("'What is a draft?'");
   });
 
   it('accepts a well-formed invite code', () => {
