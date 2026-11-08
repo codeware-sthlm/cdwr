@@ -121,16 +121,29 @@ export const snoozeUi = (m: Model, c: ControlsUi, open = false): SnoozeUi => ({
   pr: { watch: m.watch, commands: m.prCommands, controls: c }
 });
 
-/** The Snooze or Wake button for a row, with the note a refusal left; empty without controls. Keep it outside the row's link */
-export const snoozeControls = (r: WaitRow, ui: SnoozeUi): string => {
-  if (!ui.on) return '';
+/** A control's buttons and its note, apart: a card shows the notes with its statuses and the buttons on one row */
+export type Control = { button: string; note: string };
+
+const NO_CONTROL: Control = { button: '', note: '' };
+
+const noteHTML = (text: string | undefined): string =>
+  text ? `<span class="wnote">${esc(text)}</span>` : '';
+
+/** Both halves of several controls, in order */
+export const joinControls = (...cs: readonly Control[]): Control => ({
+  button: cs.map((c) => c.button).join(''),
+  note: cs.map((c) => c.note).join('')
+});
+
+/** The Snooze or Wake button for a row, with the note a refusal left; empty without controls. Keep it outside any link */
+export const snoozeControls = (r: WaitRow, ui: SnoozeUi): Control => {
+  if (!ui.on) return NO_CONTROL;
   const id = esc(r.id);
   const busy = ui.busy.has(r.id) ? ' disabled' : '';
   const button = r.snoozed
     ? `<button type="button" class="wsnooze" data-wake="${id}" aria-label="Wake ${id}"${busy}>Wake</button>`
     : `<button type="button" class="wsnooze" data-snooze="${id}" data-kind="${esc(r.kind)}" data-event-at="${esc(r.gateAt ?? '')}" aria-label="Snooze ${id} until it changes"${busy}>Snooze</button>`;
-  const note = ui.notes.get(r.id);
-  return button + (note ? `<span class="wnote">${esc(note)}</span>` : '');
+  return { button, note: noteHTML(ui.notes.get(r.id)) };
 };
 
 /** Where a ticket's Label button stands: asking to confirm, in flight, done for a while, or refused with a note */
@@ -172,26 +185,28 @@ export const forgetLabelled = (
     if (!listed.has(ticket)) labelled.delete(ticket);
 };
 
-/** The Label agent:ready button for a ready-to-label row, or what became of it; empty without controls. Keep it outside the row's link */
+/** The Label agent:ready button for a ready-to-label row, or what became of it; empty without controls. Keep it outside any link */
 export const labelControls = (
   r: WaitRow,
   ui: SnoozeUi,
   now: number,
   className = 'wsnooze'
-): string => {
-  if (!ui.on) return '';
+): Control => {
+  if (!ui.on) return NO_CONTROL;
   const state = labelState(r.id, ui.label, now, r.gateAt);
   if (state === 'labelled')
-    return '<span class="wnote">labelled · waiting for the queue</span>';
+    return { button: '', note: noteHTML('labelled · waiting for the queue') };
   const id = esc(r.id);
   const button = (text: string, extra = ''): string =>
     `<button type="button" class="${className}" data-label="${id}"${extra}>${text}</button>`;
-  if (state === 'labelling') return button('labelling…', ' disabled');
-  if (state === 'confirming') return button('Confirm label');
-  const label = button('Label agent:ready');
-  return typeof state === 'object'
-    ? label + `<span class="wnote">${esc(state.note)}</span>`
-    : label;
+  if (state === 'labelling')
+    return { button: button('labelling…', ' disabled'), note: '' };
+  if (state === 'confirming')
+    return { button: button('Confirm label'), note: '' };
+  return {
+    button: button('Label agent:ready'),
+    note: typeof state === 'object' ? noteHTML(state.note) : ''
+  };
 };
 
 /** Why the scheduler would refuse to merge the PR, in its words (watch.jq `desk_verdict`); null when it would not */
@@ -247,22 +262,26 @@ const copilotControl = (
   r: WaitRow,
   { host, entry }: WatchRef,
   ui: PrUi
-): string => {
+): Control => {
   const view = copilotView(entry);
-  if (view === null) return '';
+  if (view === null) return NO_CONTROL;
   const key = prCommandKey(r.id, entry.pr, 'copilot');
   const sent = ui.commands.get(key);
   const button = (text: string, extra = ''): string =>
     `<button type="button" class="wsnooze" data-copilot="${esc(r.id)}" data-pr="${esc(entry.pr)}" data-host="${esc(host)}"${extra}>${text}</button>`;
-  const note = (text: string): string =>
-    `<span class="wnote">${esc(text)}</span>`;
+  const note = (text: string): Control => ({
+    button: '',
+    note: noteHTML(text)
+  });
   if (ui.controls.prSending.has(key) || sent?.state === 'pending')
-    return button('Copilot…', ' disabled');
+    return { button: button('Copilot…', ' disabled'), note: '' };
   if (view !== 'button') return note(view.note);
   // Asked, but the watch has not caught up with it yet
   if (awaitsWatch(sent, entry)) return note('Copilot asked');
-  const why = whyNot(key, ui, sent);
-  return button('Copilot review') + (why ? note(why) : '');
+  return {
+    button: button('Copilot review'),
+    note: noteHTML(whyNot(key, ui, sent))
+  };
 };
 
 /** The Merge button for a PR, asking to confirm first, or why it cannot be pressed or what became of it */
@@ -271,40 +290,41 @@ const mergeControl = (
   { host, entry }: WatchRef,
   ui: PrUi,
   now: number
-): string => {
+): Control => {
   const key = prCommandKey(r.id, entry.pr, 'merge');
   const sent = ui.commands.get(key);
   const button = (text: string, extra = ''): string =>
     `<button type="button" class="wsnooze" data-merge="${esc(r.id)}" data-pr="${esc(entry.pr)}" data-host="${esc(host)}"${extra}>${text}</button>`;
-  const note = (text: string): string =>
-    `<span class="wnote">${esc(text)}</span>`;
   if (ui.controls.prSending.has(key) || sent?.state === 'pending')
-    return button('merging…', ' disabled');
+    return { button: button('merging…', ' disabled'), note: '' };
   // Applied, until a newer watch says what became of it
-  if (awaitsWatch(sent, entry)) return note('in the merge queue');
+  if (awaitsWatch(sent, entry))
+    return { button: '', note: noteHTML('in the merge queue') };
   const blocker = mergeBlocker(entry);
   if (blocker !== null)
-    return button('Merge', ` disabled title="${esc(blocker)}"`) + note(blocker);
+    return {
+      button: button('Merge', ` disabled title="${esc(blocker)}"`),
+      note: noteHTML(blocker)
+    };
   const asked = ui.controls.mergeConfirm.get(r.id);
   if (asked !== undefined && now - asked < CONFIRM_MS)
-    return button('Confirm merge');
-  const why = whyNot(key, ui, sent);
-  return button('Merge') + (why ? note(why) : '');
+    return { button: button('Confirm merge'), note: '' };
+  return { button: button('Merge'), note: noteHTML(whyNot(key, ui, sent)) };
 };
 
 /**
- * The Copilot review and Merge buttons of a review row whose PR a host watches, after the PR
- * link; empty without controls, for any other row, or once the PR is merged or closed. Keep it
- * outside the row's link
+ * The Copilot review and Merge buttons of a review row whose PR a host watches; empty without
+ * controls, for any other row, or once the PR is merged or closed. Keep it outside any link
  */
-export const prControls = (r: WaitRow, ui: SnoozeUi, now: number): string => {
-  if (!ui.on || r.kind !== 'review' || r.pr === null) return '';
+export const prControls = (r: WaitRow, ui: SnoozeUi, now: number): Control => {
+  if (!ui.on || r.kind !== 'review' || r.pr === null) return NO_CONTROL;
   const watched = ui.pr.watch.get(r.id);
-  if (!watched || String(watched.entry.pr) !== String(r.pr)) return '';
+  if (!watched || String(watched.entry.pr) !== String(r.pr)) return NO_CONTROL;
   if (watched.entry.state === 'merged' || watched.entry.state === 'closed')
-    return '';
-  return (
-    copilotControl(r, watched, ui.pr) + mergeControl(r, watched, ui.pr, now)
+    return NO_CONTROL;
+  return joinControls(
+    copilotControl(r, watched, ui.pr),
+    mergeControl(r, watched, ui.pr, now)
   );
 };
 
@@ -394,20 +414,14 @@ export const waitRows = (
 export const countedRows = (rows: readonly WaitRow[]): WaitRow[] =>
   rows.filter((r) => r.kind !== 'approved' && !r.snoozed);
 
+/** One line per row: the row links to the ticket, the PR number beside it tinted by its state. Notes and buttons are the panel's */
 const rowHTML =
-  (m: Model, details: ReadonlyMap<string, Detail>, ui: SnoozeUi, now: number) =>
+  (m: Model, details: ReadonlyMap<string, Detail>) =>
   (r: WaitRow): string => {
     const tone = prTone(
       livePr(m, details, { ticket: r.id, pr: r.pr }).live?.state ?? null
     );
-    const approved = r.kind === 'approved';
-    const note = [
-      !approved && r.blockers ? esc('after ' + r.blockers) : '',
-      r.wait
-    ]
-      .filter(Boolean)
-      .join(' · ');
-    return `<li class="wrow-li${approved ? ' approved' : ''}"><a class="wrow" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="id">${esc(r.id)}</span><span class="t">${esc(r.title)}</span><span class="kind">${esc(rowLabel(r))}</span>${r.age === null ? '' : `<time>${esc(shortAge(r.age))}</time>`}</a>${prn(r.pr, tone)}${prControls(r, ui, now)}${r.kind === 'ready to label' ? labelControls(r, ui, now) : ''}${snoozeControls(r, ui)}${note ? `<span class="wnote">${note}</span>` : ''}</li>`;
+    return `<li class="wrow-li${r.kind === 'approved' ? ' approved' : ''}"><a class="wrow" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="id">${esc(r.id)}</span><span class="t">${esc(r.title)}</span><span class="kind">${esc(rowLabel(r))}</span>${r.age === null ? '' : `<time>${esc(shortAge(r.age))}</time>`}</a>${prn(r.pr, tone)}</li>`;
   };
 
 export const renderWaiting = (
@@ -421,7 +435,7 @@ export const renderWaiting = (
   const rows = all.filter((r) => !r.snoozed);
   const snoozed = all.filter((r) => r.snoozed);
   const count = countedRows(all).length;
-  const li = rowHTML(m, details, ui, now.getTime());
+  const li = rowHTML(m, details);
   // One button for both widths: CSS shows it and picks the count per breakpoint
   const desk = rows.length > DESKTOP_ROWS;
   const more =

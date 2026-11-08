@@ -1055,6 +1055,8 @@ table.act {
   font: 600 12px var(--font-mono);
 }
 .wrow .t {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
@@ -1161,9 +1163,10 @@ table.act {
 .prn.bad {
   color: var(--block);
 }
+/* One line per ticket: the notes and buttons are the panel's */
 .wrow-li {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -1221,12 +1224,13 @@ details.snoozed .wrow .kind {
   background: none;
   border-color: var(--line);
 }
-/* Its label carries the blocker list, so it shrinks and wraps instead of pushing the age off a phone */
+/* Its label carries the blocker list, so it shrinks to an ellipsis instead of pushing the age off a phone */
 .wrow-li.approved .wrow .kind {
   flex: 0 1 auto;
   min-width: 0;
-  overflow-wrap: anywhere;
-  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--muted);
 }
 .chip.plan {
@@ -2035,16 +2039,16 @@ details.snoozed .wrow .kind {
   gap: 12px;
 }
 @media (max-width: 600px) {
+  /* The full screen; the handle stays first and drags it closed */
   .sheet {
-    top: auto;
+    top: 0;
     left: 0;
     width: auto;
-    height: 71dvh;
-    max-height: 90dvh;
-    border: 1px solid var(--line-strong);
-    border-bottom: 0;
-    border-radius: 18px 18px 0 0;
-    padding-top: 0;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top, 0px);
   }
   .sheet-handle {
     display: flex;
@@ -2259,7 +2263,16 @@ button.act.secondary {
   font: 10px var(--font-mono);
   color: var(--muted);
 }
-/* The card's buttons share one compact row; a note wraps to its own line under them */
+/* The card's statuses above its buttons: the PR, its notes, blockers and any refusal */
+.wcard .wc-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wc-status .wnote {
+  padding: 0;
+}
+/* The card's buttons share one compact row, and wrap only when it is too narrow */
 .wc-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2285,9 +2298,6 @@ button.act.secondary {
   .wc-actions .wsnooze {
     min-height: var(--tap);
   }
-}
-.wc-actions .wnote {
-  padding: 0;
 }
 
 .group {

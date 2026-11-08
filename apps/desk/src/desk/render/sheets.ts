@@ -226,12 +226,25 @@ const waitCard =
     ]
       .filter(Boolean)
       .join('. ');
+    const prCtl = prControls(r, ui, now.getTime());
+    const label =
+      r.kind === 'ready to label'
+        ? labelControls(r, ui, now.getTime(), 'act secondary')
+        : { button: '', note: '' };
+    const snooze = snoozeControls(r, ui);
+    // The statuses, top to bottom: the PR, its Copilot and merge notes, blockers and review fixes, then any refusal
+    const status = [
+      pr ? `<div class="wc-pr">${pr.pill}${pr.age}</div>` : '',
+      prCtl.note,
+      note ? `<div class="wc-note">${linkIds(note)}</div>` : '',
+      label.note,
+      snooze.note
+    ].join('');
     return `<article class="wcard${r.kind === 'approved' ? ' approved' : ''}">
-    <div class="wc-head"><span class="id">${esc(r.id)}</span><span class="kind k-${esc(r.kind.replace(/ /g, '-'))}">${esc(rowLabel(r))}</span>${prn(r.pr)}${r.age === null ? '' : `<time>waiting ${esc(shortAge(r.age))}</time>`}</div>
+    <div class="wc-head">${idLink(r.id)}<span class="kind k-${esc(r.kind.replace(/ /g, '-'))}">${linkIds(esc(rowLabel(r)))}</span>${prn(r.pr)}${r.age === null ? '' : `<time>waiting ${esc(shortAge(r.age))}</time>`}</div>
     <div class="wc-title">${esc(r.title)}</div>
-    ${pr ? `<div class="wc-pr">${pr.pill}${pr.age}</div>` : ''}
-    ${note ? `<div class="wc-note">${note}</div>` : ''}
-    <div class="wc-actions"><a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>${r.kind === 'ready to label' ? labelControls(r, ui, now.getTime(), 'act secondary') : ''}${prControls(r, ui, now.getTime())}${snoozeControls(r, ui)}</div>
+    ${status ? `<div class="wc-status">${status}</div>` : ''}
+    <div class="wc-actions"><a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>${prCtl.button}${label.button}${snooze.button}</div>
   </article>`;
   };
 
@@ -255,7 +268,8 @@ const renderBefore = (m: Model, state: DeskState, now: Date): string => {
   const awakeIdeas = m.ideasPending.filter((i) => ideaRows.has(i.id));
   const ideaHTML = (i: Issue): string => {
     const r = ideaRows.get(i.id);
-    return ideaCard(state, i, r ? snoozeControls(r, ui) : '');
+    const c = r ? snoozeControls(r, ui) : null;
+    return ideaCard(state, i, c ? c.button + c.note : '');
   };
   const ideasHTML = awakeIdeas.length
     ? `<div class="group"><h3>Ideas to decide · ${awakeIdeas.length}</h3>${awakeIdeas.map(ideaHTML).join('')}</div>`
