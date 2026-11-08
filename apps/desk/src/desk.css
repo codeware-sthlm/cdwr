@@ -1179,8 +1179,6 @@ table.act {
   flex-shrink: 0;
 }
 .wnote {
-  flex-basis: 100%;
-  padding: 0 14px;
   font: 11px var(--font-mono);
   color: var(--muted);
 }
@@ -2039,16 +2037,11 @@ details.snoozed .wrow .kind {
   gap: 12px;
 }
 @media (max-width: 600px) {
-  /* The full screen; the handle stays first and drags it closed */
+  /* The full screen, inside the safe areas; the handle stays first and drags it closed */
   .sheet {
-    top: 0;
     left: 0;
     width: auto;
-    height: 100dvh;
-    max-height: none;
     border: 0;
-    border-radius: 0;
-    padding-top: env(safe-area-inset-top, 0px);
   }
   .sheet-handle {
     display: flex;
@@ -2268,9 +2261,6 @@ button.act.secondary {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.wc-status .wnote {
-  padding: 0;
 }
 /* The card's buttons share one compact row, and wrap only when it is too narrow */
 .wc-actions {

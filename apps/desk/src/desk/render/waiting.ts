@@ -421,7 +421,7 @@ const rowHTML =
     const tone = prTone(
       livePr(m, details, { ticket: r.id, pr: r.pr }).live?.state ?? null
     );
-    return `<li class="wrow-li${r.kind === 'approved' ? ' approved' : ''}"><a class="wrow" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="id">${esc(r.id)}</span><span class="t">${esc(r.title)}</span><span class="kind">${esc(rowLabel(r))}</span>${r.age === null ? '' : `<time>${esc(shortAge(r.age))}</time>`}</a>${prn(r.pr, tone)}</li>`;
+    return `<li class="wrow-li${r.kind === 'approved' ? ' approved' : ''}"><a class="wrow" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="id">${esc(r.id)}</span><span class="t">${esc(r.title)}</span><span class="kind"${r.kind === 'approved' ? ` title="${esc(rowLabel(r))}"` : ''}>${esc(rowLabel(r))}</span>${r.age === null ? '' : `<time>${esc(shortAge(r.age))}</time>`}</a>${prn(r.pr, tone)}</li>`;
   };
 
 export const renderWaiting = (
