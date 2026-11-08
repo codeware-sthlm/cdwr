@@ -1,4 +1,5 @@
 export { applyPlatformDefinition } from './lib/apply-platform-definition';
+export { applyPlatformFaq } from './lib/apply-platform-faq';
 export type {
   ApplyPlatformOptions,
   PlatformApplyReport

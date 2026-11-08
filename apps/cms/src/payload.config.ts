@@ -2,7 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import { seed } from '@codeware/app-cms/feature/seed';
+import { applyPlatformFaq, seed } from '@codeware/app-cms/feature/seed';
 import {
   aboutBlock,
   blockGalleryBlock,
@@ -448,6 +448,13 @@ export default buildConfig({
     }
 
     payload.logger.info('Payload is ready');
+
+    // Platform content, not seed data: every environment, production too, and
+    // `SEED_SOURCE=off` doesn't stop it. Logs and never throws
+    if (env.APP_MODE.type === 'host') {
+      await applyPlatformFaq(payload);
+    }
+
     if (
       env.APP_MODE.type === 'host' ||
       env.NX_RUN_TARGET === 'seed' ||
