@@ -336,9 +336,12 @@ describe('pr_state', () => {
       removedAt: '2026-01-01T00:00:00Z',
       removedReason: 'FAILED_CHECKS',
       unresolved: 0,
-      copilot: 0,
+      copilotThreads: 0,
+      threads: 0,
       conflicting: null,
-      mergeStateStatus: null
+      mergeStateStatus: null,
+      ci: null,
+      copilot: 'none'
     });
   });
 
@@ -348,9 +351,12 @@ describe('pr_state', () => {
       removedAt: null,
       removedReason: null,
       unresolved: 0,
-      copilot: 0,
+      copilotThreads: 0,
+      threads: 0,
       conflicting: null,
-      mergeStateStatus: null
+      mergeStateStatus: null,
+      ci: null,
+      copilot: 'none'
     });
   });
 
@@ -496,15 +502,96 @@ describe('pr_state', () => {
     ]
   ])(
     'counts unresolved review threads: %s',
-    (_name, nodes, unresolved, copilot) => {
+    (_name, nodes, unresolved, copilotThreads) => {
       expect(
         run('pr_state', pr({ reviewThreads: { nodes } })) as {
           unresolved: number;
-          copilot: number;
+          copilotThreads: number;
         }
-      ).toMatchObject({ unresolved, copilot });
+      ).toMatchObject({ unresolved, copilotThreads });
     }
   );
+
+  it('threads counts every unresolved thread, bot and agent ones too', () => {
+    const nodes = [
+      thread(false, 'User', 'a'),
+      thread(false, 'Bot', 'b'),
+      thread(false, 'User', '**Agent:** reply'),
+      thread(true, 'User', 'done')
+    ];
+    const r = run('pr_state', pr({ reviewThreads: { nodes } })) as {
+      threads: number;
+      unresolved: number;
+    };
+    expect(r.threads).toBe(3);
+    expect(r.unresolved).toBe(1);
+  });
+
+  it('threads is 0 without review threads', () => {
+    expect((run('pr_state', pr()) as { threads: number }).threads).toBe(0);
+  });
+
+  it.each([
+    ['SUCCESS', 'SUCCESS'],
+    ['FAILURE', 'FAILURE'],
+    ['PENDING', 'PENDING'],
+    [null, null]
+  ])('ci passes the rollup through: %s', (rollup, expected) => {
+    expect((run('pr_state', pr({}, rollup)) as { ci: string | null }).ci).toBe(
+      expected
+    );
+  });
+
+  describe('copilot', () => {
+    const copilot = (over: Record<string, unknown>) =>
+      (run('pr_state', pr(over)) as { copilot: string }).copilot;
+    const reviewer = (login: string) => ({
+      nodes: [{ requestedReviewer: { __typename: 'Bot', login } }]
+    });
+
+    it('is none without reviews or requests', () => {
+      expect(copilot({})).toBe('none');
+    });
+
+    it('is none for other reviewers', () => {
+      expect(
+        copilot({
+          reviews: {
+            nodes: [{ author: { login: 'someone' } }, { author: null }]
+          },
+          reviewRequests: reviewer('someone')
+        })
+      ).toBe('none');
+    });
+
+    it.each(['copilot-pull-request-reviewer', 'Copilot'])(
+      'is requested for reviewer %s',
+      (login) => {
+        expect(copilot({ reviewRequests: reviewer(login) })).toBe('requested');
+      }
+    );
+
+    it('is reviewed once a Copilot review exists', () => {
+      expect(
+        copilot({
+          reviews: {
+            nodes: [{ author: { login: 'copilot-pull-request-reviewer' } }]
+          }
+        })
+      ).toBe('reviewed');
+    });
+
+    it('reviewed beats requested', () => {
+      expect(
+        copilot({
+          reviews: {
+            nodes: [{ author: { login: 'copilot-pull-request-reviewer[bot]' } }]
+          },
+          reviewRequests: reviewer('Copilot')
+        })
+      ).toBe('reviewed');
+    });
+  });
 });
 
 describe('step', () => {
@@ -513,9 +600,12 @@ describe('step', () => {
     removedAt: string | null;
     removedReason: string | null;
     unresolved?: number;
-    copilot?: number;
+    copilotThreads?: number;
     conflicting?: boolean | null;
     mergeStateStatus?: string | null;
+    ci?: string | null;
+    copilot?: string;
+    threads?: number;
   };
   type Prev = {
     pr: number;
@@ -808,8 +898,8 @@ describe('step', () => {
   describe('entry', () => {
     it('carries the unresolved review threads and the Copilot share', () => {
       expect(
-        step(now('open', { unresolved: 2, copilot: 1 }), null).entry
-      ).toMatchObject({ unresolved: 2, copilot: 1 });
+        step(now('open', { unresolved: 2, copilotThreads: 1 }), null).entry
+      ).toMatchObject({ unresolved: 2, copilotThreads: 1 });
     });
 
     it('records pr, state, removedAt and at', () => {
@@ -826,11 +916,28 @@ describe('step', () => {
         state: 'queued',
         removedAt: '2026-04-01T00:00:00Z',
         unresolved: 0,
-        copilot: 0,
+        copilotThreads: 0,
         conflicting: false,
+        ci: null,
+        copilot: 'none',
+        threads: 0,
         mergeStateStatus: null,
         at: '2026-05-01T00:00:00Z'
       });
+    });
+
+    it('carries ci, copilot and threads whatever the label', () => {
+      const n = now('open', {
+        ci: 'PENDING',
+        copilot: 'requested',
+        threads: 3
+      });
+      for (const label of ['agent:review', 'agent:working']) {
+        const e = step(n, null, [], label).entry;
+        expect(e['ci']).toBe('PENDING');
+        expect(e['copilot']).toBe('requested');
+        expect(e['threads']).toBe(3);
+      }
     });
 
     it('keeps the old removedAt without a new event', () => {
@@ -841,8 +948,11 @@ describe('step', () => {
         state: 'open',
         removedAt: '2026-03-01T00:00:00Z',
         unresolved: 0,
-        copilot: 0,
+        copilotThreads: 0,
         conflicting: false,
+        ci: null,
+        copilot: 'none',
+        threads: 0,
         mergeStateStatus: null,
         at: '2026-05-01T00:00:00Z'
       });
@@ -1465,7 +1575,7 @@ describe('attended picks', () => {
 
     it('only Copilot threads name a Copilot review', () => {
       const r = attended([rev(prReady(false))], 5, {
-        'COD-4': { unresolved: 2, copilot: 2 }
+        'COD-4': { unresolved: 2, copilotThreads: 2 }
       });
       expect(r).toMatchObject({
         reason: 'review feedback',
@@ -1477,12 +1587,12 @@ describe('attended picks', () => {
       [
         'a thread of a person beside Copilot',
         [],
-        { unresolved: 2, copilot: 1 }
+        { unresolved: 2, copilotThreads: 1 }
       ],
       [
         'a ticket comment beside Copilot',
         [{ body: 'fix this', createdAt: '2026-09-02T00:00:00Z' }],
-        { unresolved: 1, copilot: 1 }
+        { unresolved: 1, copilotThreads: 1 }
       ],
       ['a watch without a Copilot share', [], { unresolved: 1 }]
     ])('no detail with %s', (_name, comments, entry) => {
@@ -2031,7 +2141,7 @@ describe('attended picks', () => {
       ).toBe('run now: COD-544 review feedback');
       expect(
         line([review('COD-548')], 5, {
-          'COD-548': { unresolved: 1, copilot: 1 }
+          'COD-548': { unresolved: 1, copilotThreads: 1 }
         })
       ).toBe('run now: COD-548 review feedback (Copilot review)');
       expect(

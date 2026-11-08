@@ -64,9 +64,13 @@ def handoffs:
         end
     end;
 
-# Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved, copilot,
-# conflicting, mergeStateStatus }.
-# unresolved counts open review threads a person or Copilot spoke last in, and copilot the
+# Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved,
+# copilotThreads, threads, conflicting, mergeStateStatus, ci, copilot }.
+# ci is the checks rollup state of the last commit (string or null). copilot is "reviewed" once
+# Copilot has a review on the PR, "requested" while it is a requested reviewer, else "none".
+# threads counts every unresolved review thread, whoever spoke last: main's ruleset needs them all
+# resolved to merge.
+# unresolved counts open review threads a person or Copilot spoke last in, and copilotThreads the
 # Copilot share of them: other bots and the agent's own replies, which leave a thread open on
 # purpose, don't count.
 # conflicting is true for CONFLICTING, false for MERGEABLE and null for UNKNOWN (GitHub computes
@@ -93,9 +97,17 @@ def pr_state:
       removedAt: ($r.createdAt // null),
       removedReason: ($r.reason // null),
       unresolved: ($open | length),
-      copilot: ([ $open[] | select(.author.login == copilot_login) ] | length),
+      copilotThreads: ([ $open[] | select(.author.login == copilot_login) ] | length),
+      threads: ([ (.reviewThreads.nodes // [])[] | select(.isResolved | not) ] | length),
       conflicting: (if .mergeable == "CONFLICTING" then true elif .mergeable == "MERGEABLE" then false else null end),
-      mergeStateStatus: (.mergeStateStatus // null)
+      mergeStateStatus: (.mergeStateStatus // null),
+      ci: $ci,
+      copilot: (
+        if any((.reviews.nodes // [])[]; (.author.login // "") | startswith("copilot-pull-request-reviewer")) then "reviewed"
+        elif any((.reviewRequests.nodes // [])[];
+                 (.requestedReviewer.login // "" | ascii_downcase) as $l
+                 | ($l | startswith("copilot-pull-request-reviewer")) or $l == "copilot") then "requested"
+        else "none" end)
     };
 
 # One watch step: notices to send, whether to relabel, and the entry to store for the ticket.
@@ -139,15 +151,36 @@ def step:
       notices: ($removal + $change),
       relabel: ($now.state == "merged" and ($review | not) and ($prev.relabelled != true)),
       # Outside review only a merge or a close is stored, so a check that failed or a removal
-      # from the merge queue still notifies once the ticket reaches review. conflicting is stored
-      # whatever the label, so the queue view sees it.
+      # from the merge queue still notifies once the ticket reaches review. conflicting, ci,
+      # copilot and threads are stored whatever the label, so the queue view sees them.
       entry: ({ pr: $pr,
                 state: (if $review or ($now.state | IN("merged", "closed")) then $now.state else $prev.state end),
                 removedAt: (if $review then $now.removedAt // $prev.removedAt else $prev.removedAt end),
-                unresolved: ($now.unresolved // 0), copilot: ($now.copilot // 0), conflicting: $conflicting,
+                unresolved: ($now.unresolved // 0), copilotThreads: ($now.copilotThreads // 0),
+                conflicting: $conflicting,
+                ci: ($now.ci // null), copilot: ($now.copilot // "none"), threads: ($now.threads // 0),
                 mergeStateStatus: ($now.mergeStateStatus // null), at: $in.at }
               + (if $prev.relabelled == true then { relabelled: true } else {} end))
     };
+
+# The scheduler's verdict on a desk copilot or merge command, from the pullRequest node it just read
+# (run.sh desk_pr_check): `ok <node id> <head oid>`, else why not. The desk's buttons use the same
+# rules on the watch entry (apps/desk), so a refusal here means the PR changed since the desk read it.
+def desk_verdict($kind):
+  pr_state as $s
+  | if .state != "OPEN" then "PR is \((.state // "unknown") | ascii_downcase)"
+    elif $kind == "copilot" then
+      if $s.copilot == "reviewed" then "Copilot has reviewed it"
+      elif $s.copilot == "requested" then "Copilot review already requested"
+      else "ok \(.id) \(.headRefOid)" end
+    elif $kind != "merge" then "unknown kind"
+    elif .isDraft == true then "PR is a draft"
+    elif .mergeQueueEntry != null then "already in the merge queue"
+    elif .mergeable == "CONFLICTING" then "conflicts with main"
+    elif .mergeable != "MERGEABLE" then "GitHub has not checked for conflicts yet"
+    elif $s.ci != "SUCCESS" then "checks \(($s.ci // "missing") | ascii_downcase)"
+    elif $s.threads > 0 then "\($s.threads) unresolved \(if $s.threads == 1 then "thread" else "threads" end)"
+    else "ok \(.id) \(.headRefOid)" end;
 
 # The description with its first "**Next:** " line saying the PR merged at $when (ISO time) and
 # what is handed off; the line is appended when there is none
@@ -334,7 +367,7 @@ def review_feedback($watch):
 # "Copilot review" when Copilot's threads are the only review feedback, else null
 def review_feedback_detail($watch):
   ($watch[.identifier] // {}) as $w
-  | if (review_comment | not) and ($w.copilot // 0) > 0 and ($w.copilot // 0) == ($w.unresolved // 0)
+  | if (review_comment | not) and ($w.copilotThreads // 0) > 0 and ($w.copilotThreads // 0) == ($w.unresolved // 0)
     then "Copilot review" else null end;
 
 # True for a merged ticket with a comment the agent hasn't answered: Done, the agent's work (a
