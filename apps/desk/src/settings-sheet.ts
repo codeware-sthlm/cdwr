@@ -134,7 +134,7 @@ export const openSettingsSheet = ({
     el(
       'p',
       { className: 'settings-note' },
-      'Create a read-only personal API key in Linear (Settings → Account → Security & access). The desk never writes to Linear.'
+      'Create a personal API key in Linear (Settings → Account → Security & access). Give it write scope (or issues:create) to use Label agent:ready; a read-only key works for everything else.'
     ),
     el(
       'p',
