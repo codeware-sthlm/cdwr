@@ -3028,6 +3028,26 @@ describe('snoozed waiting rows', () => {
       expect(row).toContain('<span class="wnote">Copilot asked</span>');
     });
 
+    it('renders the actual PR once a watch newer than the applied command arrives', () => {
+      const later = new Date(t + 60_000).toISOString();
+      // Removed from the merge queue, and Copilot never added: the buttons come back
+      const s = watched({ at: later });
+      s.data.deskCommands = [
+        sent(1, 'merge', 'applied'),
+        sent(2, 'copilot', 'applied')
+      ];
+      const row = rowOf(waiting(s), 'COD-3');
+      expect(row).toContain(`${MERGE}>Merge</button>`);
+      expect(row).toContain(`${COPILOT}>Copilot review</button>`);
+      expect(row).not.toContain('in the merge queue');
+      expect(row).not.toContain('Copilot asked');
+      const queued = watched({ at: later, state: 'queued' });
+      queued.data.deskCommands = [sent(1, 'merge', 'applied')];
+      expect(rowOf(waiting(queued), 'COD-3')).toContain(
+        '<span class="wnote">already in the merge queue</span>'
+      );
+    });
+
     it('shows a refusal beside the button, escaped', () => {
       const s = watched();
       s.data.deskCommands = [
