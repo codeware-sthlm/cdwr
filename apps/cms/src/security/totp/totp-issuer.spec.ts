@@ -5,7 +5,6 @@ import type { PayloadRequest } from 'payload';
 import { resolveScopedTenant } from '../resolve-scoped-tenant';
 
 import { resolveTotpIssuer } from './totp-issuer';
-import { PLATFORM_TOTP_ISSUER } from './totp-options';
 
 // The email and misc barrels reach modules Jest cannot load
 jest.mock('@payloadcms/email-nodemailer', () => ({}));
@@ -95,7 +94,7 @@ describe('resolveTotpIssuer', () => {
       scopedTenant.mockResolvedValue(undefined);
 
       expect(await resolveTotpIssuer(request().req)).toEqual({
-        issuer: PLATFORM_TOTP_ISSUER
+        issuer: 'cdwr'
       });
       expect(fetchSettings).not.toHaveBeenCalled();
     });
@@ -144,7 +143,7 @@ describe('resolveTotpIssuer', () => {
       { name: 'no user', user: null }
     ])('keeps the platform name for $name', async ({ user }) => {
       expect(await resolveTotpIssuer(request(user).req)).toEqual({
-        issuer: PLATFORM_TOTP_ISSUER
+        issuer: 'cdwr'
       });
       expect(fetchSettings).not.toHaveBeenCalled();
     });
@@ -159,7 +158,7 @@ describe('resolveTotpIssuer', () => {
     fetchSettings.mockResolvedValue(value);
 
     expect(await resolveTotpIssuer(request(member(7)).req)).toEqual({
-      issuer: PLATFORM_TOTP_ISSUER
+      issuer: 'cdwr'
     });
   });
 
@@ -178,7 +177,7 @@ describe('resolveTotpIssuer', () => {
     const { req, warn } = request();
 
     expect(await resolveTotpIssuer(req)).toEqual({
-      issuer: PLATFORM_TOTP_ISSUER
+      issuer: 'cdwr'
     });
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('db down'));
   });
