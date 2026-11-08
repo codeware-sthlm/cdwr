@@ -197,10 +197,12 @@ export const labelControls = (
 /** Why the scheduler would refuse to merge the PR, in its words (watch.jq `desk_verdict`); null when it would not */
 export const mergeBlocker = (e: WatchEntry): string | null => {
   if (e.state === 'merged' || e.state === 'closed') return `PR is ${e.state}`;
+  if (e.draft) return 'PR is a draft';
   if (e.state === 'queued') return 'already in the merge queue';
   if (e.conflicting === true || e.state === 'conflicting')
     return 'conflicts with main';
-  if (e.conflicting === null) return 'GitHub has not checked for conflicts yet';
+  if (e.conflicting === null || e.mergeable === 'UNKNOWN')
+    return 'GitHub has not checked for conflicts yet';
   if (e.ci === null || e.threads === null) return 'no check data yet';
   if (e.ci !== 'SUCCESS') return `checks ${e.ci.toLowerCase()}`;
   if (e.threads > 0)

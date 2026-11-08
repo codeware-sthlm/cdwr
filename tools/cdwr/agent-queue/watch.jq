@@ -65,7 +65,7 @@ def handoffs:
     end;
 
 # Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved,
-# copilotThreads, threads, conflicting, mergeStateStatus, ci, copilot }.
+# copilotThreads, threads, conflicting, draft, mergeable, mergeStateStatus, ci, copilot }.
 # ci is the checks rollup state of the last commit (string or null). copilot is "reviewed" once
 # Copilot has a review on the PR, "requested" while it is a requested reviewer, else "none".
 # threads counts every unresolved review thread, whoever spoke last: main's ruleset needs them all
@@ -75,7 +75,8 @@ def handoffs:
 # purpose, don't count.
 # conflicting is true for CONFLICTING, false for MERGEABLE and null for UNKNOWN (GitHub computes
 # it lazily), which step resolves to the previous value. A conflict beats failing checks: they are
-# stale, and the rebase reruns them. mergeStateStatus is only recorded.
+# stale, and the rebase reruns them. draft and mergeable (the raw value, null when missing) and
+# mergeStateStatus are only recorded: the desk reads draft and UNKNOWN as reasons not to merge.
 def copilot_login: "copilot-pull-request-reviewer";
 
 def pr_state:
@@ -100,6 +101,8 @@ def pr_state:
       copilotThreads: ([ $open[] | select(.author.login == copilot_login) ] | length),
       threads: ([ (.reviewThreads.nodes // [])[] | select(.isResolved | not) ] | length),
       conflicting: (if .mergeable == "CONFLICTING" then true elif .mergeable == "MERGEABLE" then false else null end),
+      draft: (.isDraft == true),
+      mergeable: (.mergeable // null),
       mergeStateStatus: (.mergeStateStatus // null),
       ci: $ci,
       copilot: (
@@ -158,6 +161,7 @@ def step:
                 removedAt: (if $review then $now.removedAt // $prev.removedAt else $prev.removedAt end),
                 unresolved: ($now.unresolved // 0), copilotThreads: ($now.copilotThreads // 0),
                 conflicting: $conflicting,
+                draft: ($now.draft // false), mergeable: ($now.mergeable // null),
                 ci: ($now.ci // null), copilot: ($now.copilot // "none"), threads: ($now.threads // 0),
                 mergeStateStatus: ($now.mergeStateStatus // null), at: $in.at }
               + (if $prev.relabelled == true then { relabelled: true } else {} end))

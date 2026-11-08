@@ -384,12 +384,18 @@ const COPILOT_STATES: readonly NonNullable<WatchEntry['copilot']>[] = [
   'reviewed'
 ];
 
+const MERGEABLE_STATES: readonly NonNullable<WatchEntry['mergeable']>[] = [
+  'MERGEABLE',
+  'CONFLICTING',
+  'UNKNOWN'
+];
+
 const num = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null;
 
 /**
  * A host's watch.json by ticket. An entry without a PR number or a known state is dropped alone;
- * a field of the wrong type reads as missing, and older entries lack `ci`, `threads` and `copilot`.
+ * a field of the wrong type reads as missing, and older entries lack `ci`, `threads`, `copilot`, `draft` and `mergeable`.
  */
 export const parseWatch = (json: unknown): Map<string, WatchEntry> => {
   const entries = new Map<string, WatchEntry>();
@@ -407,6 +413,8 @@ export const parseWatch = (json: unknown): Map<string, WatchEntry> => {
       unresolved: num(e.unresolved) ?? 0,
       threads: num(e.threads),
       conflicting: typeof e.conflicting === 'boolean' ? e.conflicting : null,
+      draft: e.draft === true,
+      mergeable: MERGEABLE_STATES.find((s) => s === e.mergeable) ?? null,
       ci: typeof e.ci === 'string' ? e.ci : null,
       copilot: COPILOT_STATES.find((s) => s === e.copilot) ?? null,
       at: typeof e.at === 'string' ? e.at : null

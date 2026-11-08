@@ -716,6 +716,8 @@ describe('parseWatch', () => {
     unresolved: 2,
     threads: 1,
     conflicting: false,
+    draft: true,
+    mergeable: 'MERGEABLE',
     ci: 'SUCCESS',
     copilot: 'requested',
     mergeStateStatus: 'CLEAN',
@@ -730,6 +732,8 @@ describe('parseWatch', () => {
       unresolved: 2,
       threads: 1,
       conflicting: false,
+      draft: true,
+      mergeable: 'MERGEABLE',
       ci: 'SUCCESS',
       copilot: 'requested',
       at: '2026-11-08T10:00:00Z'
@@ -745,6 +749,8 @@ describe('parseWatch', () => {
       unresolved: 0,
       threads: null,
       conflicting: null,
+      draft: false,
+      mergeable: null,
       ci: null,
       copilot: null,
       at: null
@@ -759,6 +765,8 @@ describe('parseWatch', () => {
           unresolved: 'x',
           threads: '1',
           conflicting: 'no',
+          draft: 'yes',
+          mergeable: 'MAYBE',
           ci: 3,
           copilot: 'maybe',
           at: 7
@@ -770,6 +778,8 @@ describe('parseWatch', () => {
       unresolved: 0,
       threads: null,
       conflicting: null,
+      draft: false,
+      mergeable: null,
       ci: null,
       copilot: null,
       at: null

@@ -2742,6 +2742,8 @@ describe('snoozed waiting rows', () => {
       unresolved: 0,
       threads: 0,
       conflicting: false,
+      draft: false,
+      mergeable: 'MERGEABLE',
       ci: 'SUCCESS',
       copilot: 'none',
       at: null,
@@ -2762,6 +2764,17 @@ describe('snoozed waiting rows', () => {
         'conflicts not checked yet',
         { conflicting: null },
         'GitHub has not checked for conflicts yet'
+      ],
+      [
+        'mergeability unknown',
+        { mergeable: 'UNKNOWN' },
+        'GitHub has not checked for conflicts yet'
+      ],
+      ['a draft', { draft: true }, 'PR is a draft'],
+      [
+        'a draft in the merge queue',
+        { draft: true, state: 'queued' },
+        'PR is a draft'
       ],
       ['no ci data', { ci: null }, 'no check data yet'],
       ['no thread data', { threads: null }, 'no check data yet'],
@@ -2922,6 +2935,12 @@ describe('snoozed waiting rows', () => {
         { conflicting: null },
         'GitHub has not checked for conflicts yet'
       ],
+      [
+        'mergeability unknown',
+        { mergeable: 'UNKNOWN' },
+        'GitHub has not checked for conflicts yet'
+      ],
+      ['a draft', { draft: true }, 'PR is a draft'],
       ['pending checks', { ci: 'PENDING' }, 'checks pending'],
       ['no check data', { ci: null }, 'no check data yet'],
       ['one thread', { threads: 1 }, '1 unresolved thread'],
