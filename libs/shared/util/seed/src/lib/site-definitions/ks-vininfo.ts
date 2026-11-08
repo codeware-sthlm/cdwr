@@ -262,7 +262,7 @@ export const ksVininfo: SiteDefinition = {
 
   siteSettings: {
     general: {
-      appName: 'kajstroberg.se',
+      appName: 'KS Vininfo',
       brandLabel: 'kajstroberg.se',
       landingPage: { lookupSlug: 'hem' },
       icon: { source: 'svg', svgCode: ksVininfoIconSvg },
