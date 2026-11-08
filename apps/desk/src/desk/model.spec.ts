@@ -392,7 +392,7 @@ describe('model', () => {
         }),
         NOW
       );
-      expect(m.prCommands.get('COD-1 merge')).toEqual({ state: 'pending' });
+      expect(m.prCommands.get('COD-1 5 merge')).toEqual({ state: 'pending' });
     });
   });
 

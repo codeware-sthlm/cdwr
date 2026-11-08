@@ -298,12 +298,21 @@ const ticketOf = (args: unknown): string | null =>
     ? args.ticket
     : null;
 
-/** The key a ticket's command is kept under in `prCommandStates` */
-export const prCommandKey = (ticket: string, kind: PrCommandKind): string =>
-  `${ticket} ${kind}`;
+const prOf = (args: unknown): number | null => {
+  if (typeof args !== 'object' || args === null || !('pr' in args)) return null;
+  const pr = Number(args.pr);
+  return Number.isInteger(pr) ? pr : null;
+};
+
+/** The key a ticket's command for a PR is kept under in `prCommandStates` */
+export const prCommandKey = (
+  ticket: string,
+  pr: number | string,
+  kind: PrCommandKind
+): string => `${ticket} ${Number(pr)} ${kind}`;
 
 /**
- * Each ticket's Copilot and Merge command from its newest row, keyed by `prCommandKey`. A pending
+ * Each ticket PR's Copilot and Merge command from its newest row, keyed by `prCommandKey`. A pending
  * row shows for PENDING_MAX_MS, a refusal or an applied row for REFUSED_SHOW_MS; older ones are
  * absent, and the watch says what became of the PR.
  */
@@ -314,8 +323,9 @@ export const prCommandStates = (
   const newest = new Map<string, CommandRowLike>();
   for (const row of rows) {
     const ticket = ticketOf(row.args);
-    if (ticket === null || !isPrKind(row.kind)) continue;
-    const key = prCommandKey(ticket, row.kind);
+    const pr = prOf(row.args);
+    if (ticket === null || pr === null || !isPrKind(row.kind)) continue;
+    const key = prCommandKey(ticket, pr, row.kind);
     const seen = newest.get(key);
     if (!seen || row.id > seen.id) newest.set(key, row);
   }

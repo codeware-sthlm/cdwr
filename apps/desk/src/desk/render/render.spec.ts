@@ -2834,13 +2834,14 @@ describe('snoozed waiting rows', () => {
       id: number,
       kind: string,
       status: string,
-      note: string | null = null
+      note: string | null = null,
+      pr = 7
     ): DeskCommandRow => ({
       id,
       at: NOW.toISOString(),
       host: 'nuc',
       kind,
-      args: { ticket: 'COD-3', pr: 7 },
+      args: { ticket: 'COD-3', pr },
       actor: 'desk',
       status,
       applied_at: status === 'pending' ? null : NOW.toISOString(),
@@ -2976,10 +2977,23 @@ describe('snoozed waiting rows', () => {
       expect(row).toContain(`${COPILOT} disabled>Copilot…</button>`);
       expect(row).toContain(`${MERGE} disabled>merging…</button>`);
       const flying = watched();
-      flying.controls.prSending.add('COD-3 merge');
+      flying.controls.prSending.add('COD-3 7 merge');
       const inFlight = rowOf(waiting(flying), 'COD-3');
       expect(inFlight).toContain(`${MERGE} disabled>merging…</button>`);
       expect(inFlight).toContain(`${COPILOT}>Copilot review</button>`);
+    });
+
+    it('ignores a command for an earlier PR of the ticket', () => {
+      const s = watched();
+      s.data.deskCommands = [
+        sent(1, 'merge', 'applied', null, 6),
+        sent(2, 'copilot', 'pending', null, 6),
+        sent(3, 'merge', 'refused', 'old pr', 6)
+      ];
+      const row = rowOf(waiting(s), 'COD-3');
+      expect(row).toContain(`${MERGE}>Merge</button>`);
+      expect(row).toContain(`${COPILOT}>Copilot review</button>`);
+      expect(row).not.toContain('old pr');
     });
 
     it('says in the merge queue once applied, and Copilot asked until the watch catches up', () => {
@@ -3015,8 +3029,8 @@ describe('snoozed waiting rows', () => {
     it('shows the note a failed send left, escaped, over a refusal', () => {
       const s = watched();
       s.data.deskCommands = [sent(1, 'merge', 'refused', 'old')];
-      s.controls.prNotes.set('COD-3 merge', 'no <network>');
-      s.controls.prNotes.set('COD-3 copilot', 'no <network>');
+      s.controls.prNotes.set('COD-3 7 merge', 'no <network>');
+      s.controls.prNotes.set('COD-3 7 copilot', 'no <network>');
       const row = rowOf(waiting(s), 'COD-3');
       expect(row.match(/no &lt;network&gt;/g)).toHaveLength(2);
       expect(row).not.toContain('>old<');
