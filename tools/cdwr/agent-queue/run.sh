@@ -95,6 +95,149 @@ telemetry_env_search "$REPO"
 # Where session-hook.sh finds the key: the path goes to the sessions, never the key
 [[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
 
+source "${0:A:h}/github-app.sh"
+
+# One PR as the watch and the desk's copilot and merge commands read it
+read -r -d '' PR_QUERY <<'GQL' || true
+query($n: Int!) {
+  repository(owner: "codeware-sthlm", name: "cdwr") {
+    pullRequest(number: $n) {
+      id
+      headRefName
+      headRefOid
+      state
+      isDraft
+      mergedAt
+      mergeable
+      mergeStateStatus
+      mergeQueueEntry { state }
+      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+      reviewThreads(first: 100) {
+        nodes { isResolved comments(last: 1) { nodes { author { __typename login } body } } }
+      }
+      reviewRequests(first: 20) {
+        nodes { requestedReviewer { __typename ... on Bot { login } ... on User { login } } }
+      }
+      reviews(first: 50) { nodes { author { login } } }
+      timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
+        nodes { ... on RemovedFromMergeQueueEvent { reason createdAt } }
+      }
+    }
+  }
+}
+GQL
+# The desk's merge: the PR joins main's merge queue, only while its head is the one checked
+read -r -d '' ENQUEUE <<'GQL' || true
+mutation($id: ID!, $oid: GitObjectID) {
+  enqueuePullRequest(input: { pullRequestId: $id, expectedHeadOid: $oid }) { mergeQueueEntry { state } }
+}
+GQL
+
+# jq's stderr goes to a file, since every call that can fail runs in a command substitution; each
+# call overwrites it, and a failure still prints it for the calls nobody checks. watch_err prints
+# its first line as " (<line>)", cut to 120 characters, or nothing.
+# watch.jq sits beside this script: the installed copy under the queue home, or the checkout's
+# when an attended-only machine's `status` runs the checkout's run.sh
+WATCH_DIR="${0:A:h}"
+watch() {
+  jq -L "$WATCH_DIR" "$@" 2> "$LOGS/watch.$$.err" && return 0
+  local st=$?
+  cat "$LOGS/watch.$$.err" >&2
+  return $st
+}
+watch_err() {
+  setopt local_options no_err_exit extended_glob
+  local line=""
+  [[ -s "$LOGS/watch.$$.err" ]] && IFS= read -r line < "$LOGS/watch.$$.err"
+  line="${${line##[[:space:]]#}%%[[:space:]]#}"
+  [[ -n "$line" ]] && print -rn -- " (${line[1,120]})"
+  return 0
+}
+
+# gh_identity: exports the GitHub App's token for the reads of the calling subshell, so call it
+# only inside a command substitution. On failure sets gh_reason and returns 1, leaving the reads
+# to the machine's own login.
+gh_reason=""
+gh_identity() {
+  # Its own file: implement.sh writes github-app.err and may run at the same time
+  local errf="$LOGS/github-app.run.$$.err"
+  if { app_env "$REPO/tools/cdwr/.env" && app_token; } 2> "$errf"; then
+    rm -f "$errf"; return 0
+  fi
+  gh_reason="$(tr '\n' ' ' < "$errf" | sed 's/ *$//')"
+  rm -f "$errf"
+  return 1
+}
+# Same, with the fallback noted; --check logs nothing
+gh_identity_or_note() {
+  gh_identity && return 0
+  $check || note "warn: GitHub reads as the signed-in user: ${gh_reason:-no reason given}"
+  return 0
+}
+
+# Håkan's fine-grained token for the Copilot request, used only when the app is refused: the env,
+# else its line in tools/cdwr/.env, read as text and never sourced. Empty when there is none.
+copilot_token() {
+  setopt local_options no_err_exit
+  local line=""
+  if [[ -n "${AGENT_COPILOT_TOKEN:-}" ]]; then print -r -- "$AGENT_COPILOT_TOKEN"; return 0; fi
+  [[ -r "$REPO/tools/cdwr/.env" ]] || return 0
+  line="$(grep -m1 '^AGENT_COPILOT_TOKEN=' "$REPO/tools/cdwr/.env")"
+  line="${line#*=}"
+  print -r -- "${${line#[\"\']}%[\"\']}"
+}
+
+# desk_pr_check <copilot|merge> <ticket> <pr>: prints `ok <node id> <head oid>` when the command
+# may go ahead, else the reason to refuse it. Only a PR the watch already holds for that ticket is
+# touched, so a desk token reaches no other PR, and the PR is read again here, as the app, so a desk
+# showing old data can't merge a PR that changed since. Run it in a command substitution.
+desk_pr_check() {
+  setopt local_options no_err_exit
+  local kind=$1 ticket=$2 pr=$3 node
+  [[ "$ticket" == COD-<-> && "$pr" == <-> ]] || { print -r -- "bad ticket or PR"; return 0; }
+  jq -e --arg t "$ticket" --argjson pr "$pr" '.[$t].pr == $pr' "$HOME_DIR/watch.json" >/dev/null 2>&1 ||
+    { print -r -- "PR $pr is not watched for $ticket"; return 0; }
+  gh_identity || { print -r -- "no GitHub app"; return 0; }
+  node="$(gh api graphql -f query="$PR_QUERY" -F n="$pr" --jq '.data.repository.pullRequest' 2>/dev/null)"
+  [[ -n "$node" && "$node" != null ]] || { print -r -- "could not read PR $pr"; return 0; }
+  watch -r --arg kind "$kind" 'include "watch"; desk_verdict($kind)' <<<"$node" ||
+    print -r -- "watch.jq failed$(watch_err)"
+}
+
+# True when the PR, read again as the app, has Copilot requested or reviewed (pr_state.copilot)
+copilot_asked() {
+  local s
+  s="$(gh api graphql -f query="$PR_QUERY" -F n="$1" --jq '.data.repository.pullRequest' 2>/dev/null |
+    watch -r 'include "watch"; pr_state.copilot')"
+  [[ "$s" == requested || "$s" == reviewed ]]
+}
+
+# desk_pr_act <copilot|merge> <pr> <node id> <head oid>: the GitHub write, always as the app. The
+# Copilot request falls back on copilot_token when the app is refused, or when GitHub takes the call
+# without adding Copilot (an author with no Copilot seat). Prints the reason and returns 1 on
+# failure. Run it in a command substitution.
+desk_pr_act() {
+  setopt local_options no_err_exit
+  local kind=$1 pr=$2 id=$3 oid=$4 out="" token
+  local -a request=(gh api -X POST "repos/codeware-sthlm/cdwr/pulls/$pr/requested_reviewers"
+    -f 'reviewers[]=copilot-pull-request-reviewer[bot]' --silent)
+  gh_identity || { print -r -- "no GitHub app"; return 1; }
+  case "$kind" in
+    merge)
+      out="$(gh api graphql -f query="$ENQUEUE" -f id="$id" -f oid="$oid" 2>&1)" && return 0 ;;
+    copilot)
+      out="$("${request[@]}" 2>&1)" && copilot_asked "$pr" && return 0
+      token="$(copilot_token)"
+      if [[ -n "$token" ]]; then
+        out="$(GH_TOKEN="$token" GITHUB_TOKEN="$token" "${request[@]}" 2>&1)" && copilot_asked "$pr" && return 0
+      fi
+      [[ -n "$out" ]] || out="GitHub did not add Copilot as a reviewer" ;;
+    *) out="unknown kind" ;;
+  esac
+  print -r -- "${${(f)out}[1][1,160]:-GitHub refused}"
+  return 1
+}
+
 # A pending desk command older than this is refused as expired, never replayed: the desk-command
 # function's STALE_MS, so a host back from a long silence fires no old run, pause or cap
 DESK_STALE_SECS=7200
@@ -107,19 +250,21 @@ DESK_STALE_SECS=7200
 apply_commands() {
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local host rows line id kind actor at value verdict why change effect body acked stamp now
+  local host rows line id kind actor at ticket pr value verdict why change effect body acked stamp now target
   host="$(telemetry_host)"
   rows="$(supabase_select desk_commands "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor")"
   if $check; then say "commands: $(jq 'length' <<<"$rows" 2>/dev/null || print 0) pending"; return 0; fi
   now="$(date +%s)"
-  # One line per row: id, kind, actor, at in epoch seconds (0 when unreadable, so expired), value
+  # One line per row: id, kind, actor, at in epoch seconds (0 when unreadable, so expired), ticket
+  # and pr (`-` when absent: a tab is whitespace to read, so an empty field would shift the rest), value
   for line in "${(@f)$(jq -r '.[] | [.id, .kind, (.actor // "unknown"),
       (.at | tostring | sub("\\.[0-9]+"; "") | sub("\\+00(:00)?$"; "Z") | fromdateiso8601? // 0),
+      (.args.ticket // "-" | tostring), (.args.pr // "-" | tostring),
       (.args.value // "" | tostring)] | @tsv' <<<"$rows" 2>/dev/null)}"; do
     [[ -n "$line" ]] || continue
-    IFS=$'\t' read -r id kind actor at value <<<"$line"
+    IFS=$'\t' read -r id kind actor at ticket pr value <<<"$line"
     [[ "$id" == <-> ]] || continue
-    verdict=applied why="" change="" effect=""
+    verdict=applied why="" change="" effect="" target=""
     if [[ "$at" != <-> ]] || (( now - at > DESK_STALE_SECS )); then
       verdict=refused why=expired
     else
@@ -144,6 +289,14 @@ apply_commands() {
           if [[ "$value" == <->(|.<->) ]] && (( value <= 500 )); then
             effect=implement-cap change="implement cap set to \$$value from the desk ($actor)"
           else verdict=refused why="bad value"; fi ;;
+        copilot|merge)
+          # Checked against a fresh read before the ack; the write itself follows it
+          why="$(desk_pr_check "$kind" "$ticket" "$pr")"
+          if [[ "$why" == ok\ * ]]; then
+            target="${why#ok }" why="" effect="$kind"
+            if [[ "$kind" == merge ]]; then change="PR $pr added to the merge queue from the desk ($actor)"
+            else change="Copilot review requested on PR $pr from the desk ($actor)"; fi
+          else verdict=refused; [[ -n "$why" ]] || why="no answer"; fi ;;
         *) verdict=refused why="unknown kind" ;;
       esac
     fi
@@ -162,9 +315,17 @@ apply_commands() {
       limit|implement-cap)
         print -r -- "$value" > "$HOME_DIR/$effect.tmp" && mv "$HOME_DIR/$effect.tmp" "$HOME_DIR/$effect" ;;
     esac || { note "warn: desk command $id ($kind): acked, but $effect could not be written"; record warn "" "desk command $id: $effect not written"; }
+    # A GitHub write that fails after the ack turns the row refused, with GitHub's reason
+    if [[ "$effect" == (copilot|merge) ]] && ! why="$(desk_pr_act "$kind" "$pr" ${=target})"; then
+      [[ -n "$why" ]] || why="GitHub refused"
+      verdict=refused change="$kind refused from the desk ($actor): $why"
+      supabase_patch desk_commands "id=eq.$id" "$(jq -nc --arg n "$why" '{status: "refused", note: $n}')" >/dev/null
+    fi
     note "desk command $id ($kind): $verdict${why:+ ($why)}"
+    [[ "$ticket" == - ]] && ticket=""
     supabase_upsert activity event_id "$(jq -nc --arg id "desk:$id" --arg at "$stamp" --arg change "$change" --arg host "$host" \
-      '{event_id: $id, at: $at, ticket: null, actor: "human", change: $change, host: $host}')" merge
+      --arg ticket "$ticket" \
+      '{event_id: $id, at: $at, ticket: (if $ticket == "" then null else $ticket end), actor: "human", change: $change, host: $host}')" merge
   done
   return 0
 }
@@ -182,7 +343,6 @@ CHECKIN_ID=""
 
 source "${0:A:h}/lib.sh"
 source "${0:A:h}/waits.sh"
-source "${0:A:h}/github-app.sh"
 
 # Job state for queue_state and the run row: the interval launchd uses and whether the installed copy
 # matches origin/main. Keep INTERVAL_SED in step with the line in agent.logic.ts.
@@ -471,10 +631,11 @@ trap 'st=$?; on_exit $st; exit $st' EXIT
 # Opened only once on_exit can close it; earlier skips send nothing, so a missing key shows as missed check-ins
 $check || CHECKIN_ID="$(checkin in_progress)"
 
-# PR watch: gh runs as Håkan, so only reads (gh pr list, gh api graphql with a query).
+# PR watch: only reads (gh pr list, gh api graphql with a query), as the app or else Håkan.
 # The decisions live in watch.jq, installed next to this file. It watches every ticket an agent
 # label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write. The
-# scheduler's other write is the parent close after it (CLOSE_PARENT, CLOSE_COMMENT).
+# scheduler's other write is the parent close after it (CLOSE_PARENT, CLOSE_COMMENT). Its only
+# GitHub writes are the desk's copilot and merge commands (desk_pr_act), always as the app.
 # Paged, since done tickets keep agent:review for 14 days and alone fill a page.
 read -r -d '' WATCHED <<'GQL' || true
 query($after: String) {
@@ -509,69 +670,7 @@ mutation($id: String!, $add: [String!], $remove: [String!], $d: String) {
   issueUpdate(id: $id, input: { addedLabelIds: $add, removedLabelIds: $remove, description: $d }) { success }
 }
 GQL
-read -r -d '' PR_QUERY <<'GQL' || true
-query($n: Int!) {
-  repository(owner: "codeware-sthlm", name: "cdwr") {
-    pullRequest(number: $n) {
-      headRefName
-      state
-      mergedAt
-      mergeable
-      mergeStateStatus
-      mergeQueueEntry { state }
-      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-      reviewThreads(first: 100) {
-        nodes { isResolved comments(last: 1) { nodes { author { __typename login } body } } }
-      }
-      timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
-        nodes { ... on RemovedFromMergeQueueEvent { reason createdAt } }
-      }
-    }
-  }
-}
-GQL
-
-# jq's stderr goes to a file, since every call that can fail runs in a command substitution; each
-# call overwrites it, and a failure still prints it for the calls nobody checks. watch_err prints
-# its first line as " (<line>)", cut to 120 characters, or nothing.
-# watch.jq sits beside this script: the installed copy under the queue home, or the checkout's
-# when an attended-only machine's `status` runs the checkout's run.sh
-WATCH_DIR="${0:A:h}"
-watch() {
-  jq -L "$WATCH_DIR" "$@" 2> "$LOGS/watch.$$.err" && return 0
-  local st=$?
-  cat "$LOGS/watch.$$.err" >&2
-  return $st
-}
-watch_err() {
-  setopt local_options no_err_exit extended_glob
-  local line=""
-  [[ -s "$LOGS/watch.$$.err" ]] && IFS= read -r line < "$LOGS/watch.$$.err"
-  line="${${line##[[:space:]]#}%%[[:space:]]#}"
-  [[ -n "$line" ]] && print -rn -- " (${line[1,120]})"
-  return 0
-}
-
-# gh_identity: exports the GitHub App's token for the reads of the calling subshell, so call it
-# only inside a command substitution. On failure sets gh_reason and returns 1, leaving the reads
-# to the machine's own login.
-gh_reason=""
-gh_identity() {
-  # Its own file: implement.sh writes github-app.err and may run at the same time
-  local errf="$LOGS/github-app.run.$$.err"
-  if { app_env "$REPO/tools/cdwr/.env" && app_token; } 2> "$errf"; then
-    rm -f "$errf"; return 0
-  fi
-  gh_reason="$(tr '\n' ' ' < "$errf" | sed 's/ *$//')"
-  rm -f "$errf"
-  return 1
-}
-# Same, with the fallback noted; --check logs nothing
-gh_identity_or_note() {
-  gh_identity && return 0
-  $check || note "warn: GitHub reads as the signed-in user: ${gh_reason:-no reason given}"
-  return 0
-}
+# PR_QUERY, watch, watch_err and gh_identity sit above apply_commands, which uses them too.
 
 # relabel_merged <node> <merged at> <agent:review label id>: the watch's one Linear write, for a
 # ticket whose PR merged outside review: agent:review in, its other agent label out, and the Next
