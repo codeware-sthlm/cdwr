@@ -12,7 +12,8 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
+  DialogTrigger
 } from '@codeware/shared/ui/shadcn/components/dialog';
 import {
   toast,
@@ -61,9 +62,6 @@ export const TotpReset: React.FC = () => {
 
   return (
     <div className="codeware-admin twp mb-6">
-      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
-        {t('totpReset:button')}
-      </Button>
       {/* Held open while the reset runs, so closing it never reads as a cancel */}
       <Dialog
         open={open}
@@ -73,6 +71,12 @@ export const TotpReset: React.FC = () => {
           }
         }}
       >
+        {/* The trigger is where focus returns when the dialog closes */}
+        <DialogTrigger asChild>
+          <Button type="button" variant="outline">
+            {t('totpReset:button')}
+          </Button>
+        </DialogTrigger>
         <DialogContent className="codeware-admin twp">
           <DialogHeader>
             <DialogTitle>{t('totpReset:title')}</DialogTitle>
