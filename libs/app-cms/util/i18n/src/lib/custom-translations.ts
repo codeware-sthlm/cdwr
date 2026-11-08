@@ -393,6 +393,14 @@ const customTranslationsSchema = z.object({
     overridesTitle: z.string(),
     surfaceTitle: z.string()
   }),
+  totpReset: z.object({
+    button: z.string(),
+    title: z.string(),
+    description: z.string(),
+    confirm: z.string(),
+    done: z.string(),
+    failed: z.string()
+  }),
   tourSignups: z.object({
     anonymize: z.string(),
     anonymizeConfirm: z.string(),
@@ -941,6 +949,15 @@ You can assign multiple tags to a file.`,
       overridesTitle:
         'Tokens hand-edited in the studio, departing from the recipe',
       surfaceTitle: 'Page surface — whether content sits on its own layer'
+    },
+    totpReset: {
+      button: 'Reset two-factor',
+      title: 'Reset two-factor login?',
+      description:
+        "{{name}}'s authenticator setup is removed and they are signed out everywhere. If two-factor login is required for them, the next sign-in asks them to set it up again.",
+      confirm: 'Reset',
+      done: 'Two-factor login reset for {{name}}.',
+      failed: 'Could not reset two-factor login.'
     },
     tourSignups: {
       anonymize: 'Clear passenger data',
@@ -1521,6 +1538,15 @@ Du kan tilldela flera etiketter till en fil.`,
       overridesTitle:
         'Tokens som redigerats för hand i studion och avviker från receptet',
       surfaceTitle: 'Sidyta — om innehållet ligger på ett eget lager'
+    },
+    totpReset: {
+      button: 'Återställ tvåstegsinloggning',
+      title: 'Återställ tvåstegsinloggning?',
+      description:
+        'Kopplingen till autentiseringsappen tas bort för {{name}}, som också loggas ut överallt. Om tvåstegsinloggning krävs får {{name}} ställa in den på nytt vid nästa inloggning.',
+      confirm: 'Återställ',
+      done: 'Tvåstegsinloggningen är återställd för {{name}}.',
+      failed: 'Det gick inte att återställa tvåstegsinloggningen.'
     },
     tourSignups: {
       anonymize: 'Rensa passageraruppgifter',
