@@ -11,6 +11,8 @@ import {
   type CommandTarget,
   type Control,
   type ControlKind,
+  type PrCommandKind,
+  prCommandKey,
   sendCommand
 } from './commands';
 import { AGENT_AVATAR, CONFIRM_MS } from './constants';
@@ -430,6 +432,53 @@ function clickLabel(target: Element): boolean {
   return true;
 }
 
+/** Handles a Copilot review or Merge button's click; true when the click was one */
+function clickPr(target: Element): boolean {
+  const button = target.closest<HTMLButtonElement>(
+    '[data-copilot], [data-merge]'
+  );
+  if (!button) return false;
+  const { copilot, merge, pr, host } = button.dataset;
+  const ticket = copilot ?? merge;
+  const kind: PrCommandKind = copilot === undefined ? 'merge' : 'copilot';
+  const c = state.controls;
+  if (!c.target || !ticket || !pr || !host || button.disabled) return true;
+  const key = prCommandKey(ticket, kind);
+  if (c.prSending.has(key)) return true;
+  const region = button.closest('[id]');
+  // The render replaces the button; the row's Snooze is nearest once it is gone
+  const refocus = (): void =>
+    focusIn(region, [
+      `[data-${kind}="${ticket}"]`,
+      `[data-snooze="${ticket}"]`
+    ]);
+  if (kind === 'merge') {
+    const asked = c.mergeConfirm.get(ticket);
+    // A double-click is not a confirmation: the second press has to be deliberate
+    if (asked !== undefined && Date.now() - asked < DOUBLE_CLICK_MS)
+      return true;
+    if (asked === undefined || Date.now() - asked >= CONFIRM_MS) {
+      const askedAt = Date.now();
+      c.mergeConfirm.set(ticket, askedAt);
+      c.prNotes.delete(key);
+      render();
+      refocus();
+      // Nothing else redraws the row when this confirmation lapses; one that was consumed or
+      // renewed meanwhile is left alone, and the button keeps the focus
+      setTimeout(() => {
+        if (c.mergeConfirm.get(ticket) !== askedAt) return;
+        c.mergeConfirm.delete(ticket);
+        render();
+        refocus();
+      }, CONFIRM_MS + 50);
+      return true;
+    }
+    c.mergeConfirm.delete(ticket);
+  }
+  sendPr(ticket, kind, host, Number(pr), refocus);
+  return true;
+}
+
 // `toggle` doesn't bubble, so it is caught on the way down; a render then keeps the fold as the viewer left it
 document.addEventListener(
   'toggle',
@@ -462,7 +511,12 @@ document.addEventListener('click', (e) => {
     else if (action.dataset.action === 'copy-row') copyRow(action);
     return;
   }
-  if (clickControl(e.target) || clickSnooze(e.target) || clickLabel(e.target))
+  if (
+    clickControl(e.target) ||
+    clickSnooze(e.target) ||
+    clickLabel(e.target) ||
+    clickPr(e.target)
+  )
     return;
   const problem = e.target.closest<HTMLElement>('[data-problem]');
   if (problem) {
@@ -712,6 +766,57 @@ function sendSnooze(
     })
     .finally(() => {
       c.snoozing.delete(ticket);
+      render();
+      refocus();
+    });
+}
+
+/** Asks a host's scheduler to request Copilot's review of a ticket's PR or to merge it; its answer, a note if it refused, then shows beside the button */
+function sendPr(
+  ticket: string,
+  kind: PrCommandKind,
+  host: string,
+  pr: number,
+  refocus: () => void
+): void {
+  const c = state.controls;
+  if (!c.target) return;
+  const key = prCommandKey(ticket, kind);
+  c.prSending.add(key);
+  c.prNotes.delete(key);
+  render();
+  sendCommand(c.target, host, kind, { ticket, pr })
+    .then((reply) => {
+      if (reply.status === 'refused')
+        c.prNotes.set(key, reply.note ?? 'refused');
+      // The reply stands in for its row until Realtime delivers it, so the button does not flicker back
+      const stored = state.data.deskCommands;
+      if (stored && !stored.some((row) => row.id === reply.id)) {
+        const at = new Date().toISOString();
+        state.data.deskCommands = [
+          ...stored,
+          {
+            id: reply.id,
+            at,
+            host,
+            kind,
+            args: { ticket, pr },
+            actor: 'desk',
+            status: reply.status,
+            applied_at: reply.status === 'pending' ? null : at,
+            note: reply.note
+          }
+        ];
+      }
+    })
+    .catch((error: unknown) => {
+      c.prNotes.set(
+        key,
+        error instanceof CommandError ? error.message : 'The command failed.'
+      );
+    })
+    .finally(() => {
+      c.prSending.delete(key);
       render();
       refocus();
     });

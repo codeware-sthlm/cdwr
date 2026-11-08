@@ -1,16 +1,32 @@
 // Sends desk commands to the desk-command Edge Function with the device token as the bearer
 
 export type CommandKind =
-  'pause' | 'resume' | 'run' | 'limit' | 'cap' | 'abandon' | 'snooze' | 'wake';
+  | 'pause'
+  | 'resume'
+  | 'run'
+  | 'limit'
+  | 'cap'
+  | 'abandon'
+  | 'snooze'
+  | 'wake'
+  | 'copilot'
+  | 'merge';
 
-/** The kinds behind a control; snooze and wake are answered at once and stay in no control's state */
-export type ControlKind = Exclude<CommandKind, 'snooze' | 'wake'>;
+/** The kinds a PR's buttons send; they belong to a ticket's review row, like snooze and wake */
+export type PrCommandKind = 'copilot' | 'merge';
+
+/** The kinds behind a control; snooze, wake, copilot and merge belong to a ticket and stay in no control's state */
+export type ControlKind = Exclude<
+  CommandKind,
+  'snooze' | 'wake' | 'copilot' | 'merge'
+>;
 
 export type CommandStatus = 'pending' | 'applied' | 'refused';
 
 /**
  * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
- * snooze and wake, and `kind` (a waiting row's kind) with `eventAt` (ISO, or null) for snooze
+ * snooze, wake, copilot and merge, and `kind` (a waiting row's kind) with `eventAt` (ISO, or
+ * null) for snooze; `pr` (the number) for copilot and merge
  */
 export type CommandArgs = {
   value?: number;
@@ -18,6 +34,7 @@ export type CommandArgs = {
   ticket?: string;
   kind?: string;
   eventAt?: string | null;
+  pr?: number;
 };
 
 /** The function's answer to a stored command */
@@ -260,6 +277,58 @@ export const controlStates = (
       age <= PENDING_MAX_MS
     )
       states[control] = { state: 'pending', kind };
+  }
+  return states;
+};
+
+/** Where a ticket's Copilot or Merge command stands; `at` is when the scheduler applied it, ISO */
+export type PrCommandState =
+  | { state: 'pending' }
+  | { state: 'refused'; note: string }
+  | { state: 'applied'; at: string | null };
+
+const isPrKind = (value: string): value is PrCommandKind =>
+  value === 'copilot' || value === 'merge';
+
+const ticketOf = (args: unknown): string | null =>
+  typeof args === 'object' &&
+  args !== null &&
+  'ticket' in args &&
+  typeof args.ticket === 'string'
+    ? args.ticket
+    : null;
+
+/** The key a ticket's command is kept under in `prCommandStates` */
+export const prCommandKey = (ticket: string, kind: PrCommandKind): string =>
+  `${ticket} ${kind}`;
+
+/**
+ * Each ticket's Copilot and Merge command from its newest row, keyed by `prCommandKey`. A pending
+ * row shows for PENDING_MAX_MS, a refusal or an applied row for REFUSED_SHOW_MS; older ones are
+ * absent, and the watch says what became of the PR.
+ */
+export const prCommandStates = (
+  rows: readonly CommandRowLike[],
+  now: number
+): Map<string, PrCommandState> => {
+  const newest = new Map<string, CommandRowLike>();
+  for (const row of rows) {
+    const ticket = ticketOf(row.args);
+    if (ticket === null || !isPrKind(row.kind)) continue;
+    const key = prCommandKey(ticket, row.kind);
+    const seen = newest.get(key);
+    if (!seen || row.id > seen.id) newest.set(key, row);
+  }
+  const states = new Map<string, PrCommandState>();
+  for (const [key, row] of newest) {
+    const age = now - Date.parse(row.applied_at ?? row.at);
+    if (row.status === 'pending') {
+      if (age <= PENDING_MAX_MS) states.set(key, { state: 'pending' });
+    } else if (row.status === 'refused') {
+      if (age <= REFUSED_SHOW_MS)
+        states.set(key, { state: 'refused', note: row.note ?? 'refused' });
+    } else if (row.status === 'applied' && age <= REFUSED_SHOW_MS)
+      states.set(key, { state: 'applied', at: row.applied_at });
   }
   return states;
 };

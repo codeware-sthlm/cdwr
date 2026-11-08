@@ -7,6 +7,7 @@ import {
   type Reported,
   checkToken,
   controlStates,
+  prCommandStates,
   sendCommand
 } from './commands';
 
@@ -242,5 +243,114 @@ describe('controlStates', () => {
       row(3, 'toString', 'pending')
     ]);
     expect(Object.values(all).every((s) => s.state === 'idle')).toBe(true);
+  });
+
+  it('ignores copilot and merge rows', () => {
+    const all = states([
+      row(1, 'copilot', 'pending', { args: { ticket: 'COD-1', pr: 7 } }),
+      row(2, 'merge', 'refused', { args: { ticket: 'COD-1', pr: 7 } })
+    ]);
+    expect(Object.values(all).every((s) => s.state === 'idle')).toBe(true);
+  });
+});
+
+describe('prCommandStates', () => {
+  const AT = '2026-11-02T20:00:00Z';
+  const NOW = Date.parse('2026-11-02T20:05:00Z');
+  const row = (
+    id: number,
+    kind: string,
+    status: string,
+    extra: Partial<{
+      applied_at: string | null;
+      note: string;
+      args: unknown;
+    }> = {}
+  ) => ({
+    id,
+    at: AT,
+    args: 'args' in extra ? extra.args : { ticket: 'COD-1', pr: 7 },
+    host: 'nuc',
+    kind,
+    status,
+    applied_at: extra.applied_at ?? null,
+    note: extra.note ?? null
+  });
+
+  it('is empty without rows', () => {
+    expect(prCommandStates([], NOW).size).toBe(0);
+  });
+
+  it('keeps a pending row for the scheduler expiry', () => {
+    const rows = [row(1, 'merge', 'pending')];
+    expect(prCommandStates(rows, NOW).get('COD-1 merge')).toEqual({
+      state: 'pending'
+    });
+    expect(
+      prCommandStates(rows, NOW + PENDING_MAX_MS + 1000).has('COD-1 merge')
+    ).toBe(false);
+  });
+
+  it('shows a refusal with its note for a while', () => {
+    const rows = [
+      row(1, 'copilot', 'refused', { applied_at: AT, note: 'checks pending' })
+    ];
+    expect(prCommandStates(rows, NOW).get('COD-1 copilot')).toEqual({
+      state: 'refused',
+      note: 'checks pending'
+    });
+    expect(
+      prCommandStates(rows, Date.parse(AT) + REFUSED_SHOW_MS + 1000).has(
+        'COD-1 copilot'
+      )
+    ).toBe(false);
+  });
+
+  it('says refused when the refusal has no note', () => {
+    const rows = [row(1, 'merge', 'refused', { applied_at: AT })];
+    expect(prCommandStates(rows, NOW).get('COD-1 merge')).toEqual({
+      state: 'refused',
+      note: 'refused'
+    });
+  });
+
+  it('shows an applied row for a while with when it was applied', () => {
+    const rows = [row(1, 'merge', 'applied', { applied_at: AT })];
+    expect(prCommandStates(rows, NOW).get('COD-1 merge')).toEqual({
+      state: 'applied',
+      at: AT
+    });
+    expect(
+      prCommandStates(rows, Date.parse(AT) + REFUSED_SHOW_MS + 1000).has(
+        'COD-1 merge'
+      )
+    ).toBe(false);
+  });
+
+  it('reads the newest row per ticket and kind', () => {
+    const rows = [
+      row(2, 'merge', 'pending'),
+      row(1, 'merge', 'refused', { applied_at: AT, note: 'old' }),
+      row(3, 'copilot', 'applied', { applied_at: AT }),
+      row(4, 'merge', 'pending', { args: { ticket: 'COD-2', pr: 8 } })
+    ];
+    const states = prCommandStates(rows, NOW);
+    expect(states.get('COD-1 merge')).toEqual({ state: 'pending' });
+    expect(states.get('COD-1 copilot')?.state).toBe('applied');
+    expect(states.get('COD-2 merge')).toEqual({ state: 'pending' });
+    expect(states.size).toBe(3);
+  });
+
+  it('ignores other kinds and rows without a ticket', () => {
+    const states = prCommandStates(
+      [
+        row(1, 'snooze', 'pending'),
+        row(2, 'run', 'pending'),
+        row(3, 'merge', 'pending', { args: {} }),
+        row(4, 'merge', 'pending', { args: null })
+      ],
+      NOW
+    );
+    expect(states.size).toBe(0);
   });
 });

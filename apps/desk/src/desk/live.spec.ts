@@ -140,6 +140,7 @@ const runs = (
   at,
   host: 'nuc',
   others: [],
+  watches: [],
   main: { image: null, desk: null, deskWeb: null },
   rows
 });

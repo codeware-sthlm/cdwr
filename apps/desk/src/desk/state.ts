@@ -177,6 +177,12 @@ export type ControlsUi = {
   labelled: Map<string, number>;
   /** Ticket -> why its last label request failed, shown until it is used again */
   labelNotes: Map<string, string>;
+  /** Ticket -> when its Merge button asked for confirmation, in ms */
+  mergeConfirm: Map<string, number>;
+  /** `prCommandKey`s whose Copilot or Merge request is in flight */
+  prSending: Set<string>;
+  /** `prCommandKey` -> why its last request failed or was refused, shown until it is used again */
+  prNotes: Map<string, string>;
 };
 
 export type DeskState = {
@@ -250,5 +256,8 @@ export const emptyControls = (target: ControlsUi['target']): ControlsUi => ({
   labelConfirm: new Map(),
   labelling: new Set(),
   labelled: new Map(),
-  labelNotes: new Map()
+  labelNotes: new Map(),
+  mergeConfirm: new Map(),
+  prSending: new Set(),
+  prNotes: new Map()
 });

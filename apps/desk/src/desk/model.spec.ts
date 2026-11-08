@@ -33,7 +33,8 @@ import {
   ticketsByPr,
   usageBurn,
   versions,
-  waitAges
+  waitAges,
+  watchByTicket
 } from './model';
 import { type DeskState, type Detail, createState } from './state';
 import type { QueueView } from './types';
@@ -92,6 +93,7 @@ const runsPayload = (over: Partial<RunsPayload> = {}): RunsPayload => ({
   at: '2026-10-29T11:55:00.000Z',
   host: 'nuc',
   others: [],
+  watches: [],
   main: { image: null, desk: null, deskWeb: null },
   rows: [],
   ...over
@@ -319,6 +321,79 @@ describe('model', () => {
     const m = model(state, NOW);
     expect(m.get('COD-1').title).toBe('Open one');
     expect(m.get('COD-2').title).toBe('Closed one');
+  });
+
+  describe('watch and PR commands', () => {
+    const entry = (pr: number) => ({ pr, state: 'open', ci: 'SUCCESS' });
+
+    it('has none before anything arrived', () => {
+      const m = model(createState(), NOW);
+      expect(m.watch.size).toBe(0);
+      expect(m.prCommands.size).toBe(0);
+    });
+
+    it('reads each ticket from the hosts watch.json with its host', () => {
+      const m = model(
+        withState((s) => {
+          s.data.runs = runsPayload({
+            watches: [
+              {
+                host: 'nuc',
+                at: '2026-10-29T11:55:00Z',
+                watch: { 'COD-1': entry(5), 'COD-2': { pr: 'x' } }
+              }
+            ]
+          });
+        }),
+        NOW
+      );
+      expect([...m.watch.keys()]).toEqual(['COD-1']);
+      expect(m.watch.get('COD-1')).toMatchObject({
+        host: 'nuc',
+        entry: { pr: 5, state: 'open', ci: 'SUCCESS' }
+      });
+    });
+
+    it('takes the newer row when two hosts carry a ticket', () => {
+      const watches = [
+        {
+          host: 'new',
+          at: '2026-10-29T11:55:00Z',
+          watch: { 'COD-1': entry(6) }
+        },
+        {
+          host: 'old',
+          at: '2026-10-29T11:50:00Z',
+          watch: { 'COD-1': entry(5), 'COD-2': entry(8) }
+        }
+      ];
+      const watch = watchByTicket(watches);
+      expect(watch.get('COD-1')?.host).toBe('new');
+      expect(watch.get('COD-1')?.entry.pr).toBe(6);
+      expect(watch.get('COD-2')?.host).toBe('old');
+    });
+
+    it('reads the desk commands of a ticket PR', () => {
+      const m = model(
+        withState((s) => {
+          s.data.deskCommands = [
+            {
+              id: 1,
+              at: new Date(NOW.getTime() - 2 * 6e4).toISOString(),
+              host: 'nuc',
+              kind: 'merge',
+              args: { ticket: 'COD-1', pr: 5 },
+              actor: 'mac',
+              status: 'pending',
+              applied_at: null,
+              note: null
+            }
+          ];
+        }),
+        NOW
+      );
+      expect(m.prCommands.get('COD-1 merge')).toEqual({ state: 'pending' });
+    });
   });
 
   describe('with a queue view', () => {
