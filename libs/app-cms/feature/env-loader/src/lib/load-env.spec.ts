@@ -202,18 +202,21 @@ describe('loadEnv', () => {
       });
     });
 
-    it('takes a missing app folder as setting nothing', async () => {
-      serve({
-        '/apps/cms': { PAYLOAD_SECRET_KEY: 'x', ...pair('shared') },
-        '/tenants/moon/apps/cms': 'missing'
-      });
+    it.each(['/tenants/moon/apps/cms', '/tenants/moon'])(
+      'takes a missing %s as setting nothing',
+      async (path) => {
+        serve({
+          '/apps/cms': { PAYLOAD_SECRET_KEY: 'x', ...pair('shared') },
+          [path]: 'missing'
+        });
 
-      expect(turnstile(await loadEnv())).toEqual({
-        ...pair('shared'),
-        HUMAN_CHECK_SOURCE: '/apps/cms'
-      });
-      expect(console.warn).not.toHaveBeenCalled();
-    });
+        expect(turnstile(await loadEnv())).toEqual({
+          ...pair('shared'),
+          HUMAN_CHECK_SOURCE: '/apps/cms'
+        });
+        expect(console.warn).not.toHaveBeenCalled();
+      }
+    );
 
     it.each(['/tenants/moon/apps/cms', '/tenants/moon'])(
       'leaves no pair when %s cannot be read',

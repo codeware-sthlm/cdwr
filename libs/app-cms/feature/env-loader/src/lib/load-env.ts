@@ -28,14 +28,18 @@ const turnstileKeys = (
   );
 
 /**
- * Read one folder without injecting it. A folder that doesn't exist sets
+ * Read one folder, injecting it on request. A folder that doesn't exist sets
  * nothing; any other failure is null, so it isn't mistaken for an empty one.
  */
-const readFolder = async (path: string): Promise<Array<Secret> | null> => {
+const readFolder = async (
+  path: string,
+  { injectEnv = false } = {}
+): Promise<Array<Secret> | null> => {
   try {
     return await withInfisical({
       environment: process.env['DEPLOY_ENV'],
-      filter: { path, recurse: false }
+      filter: { path, recurse: false },
+      injectEnv
     });
   } catch (error) {
     if (isNotFound(error)) {
@@ -141,20 +145,11 @@ export const loadEnv = async (): Promise<Env | undefined> => {
     const tenantAppPath = `/tenants/${tenantId}/apps/cms`;
     const [tenantSecrets, tenantAppSecrets] = await Promise.all([
       // Shallow load to prevent loading secrets from apps folder
-      withInfisical({
-        environment: process.env['DEPLOY_ENV'],
-        filter: { path: `/tenants/${tenantId}`, recurse: false },
-        injectEnv: true,
-        silent: true
-      }),
+      readFolder(`/tenants/${tenantId}`, { injectEnv: true }),
       // Read for the Turnstile pair only. The deploy pushes this folder as Fly
       // secrets, which the shared folder above has already overwritten
       readFolder(tenantAppPath)
     ]);
-
-    if (!tenantSecrets) {
-      console.warn(`[ENV] Could not load tenant secrets for: ${tenantId}`);
-    }
 
     turnstileSources.push(
       { source: tenantAppPath, keys: turnstileKeys(tenantAppSecrets) },
