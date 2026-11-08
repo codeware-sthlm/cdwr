@@ -165,12 +165,12 @@ export function HelpDrawer() {
       </Button>
       <Drawer open={open} onOpenChange={setOpen} direction="right">
         {/* Floating inset panel: the same-variant overrides replace the base
-            edge-anchored classes. `sm:max-w-100` uses the pinned spacing
-            scale (400px); named rem sizes like `max-w-sm` shrink under
-            Payload's 13px root font */}
+            edge-anchored classes. `sm:max-w-140` uses the pinned spacing
+            scale (560px, room for the grouped FAQ); named rem sizes like
+            `max-w-sm` shrink under Payload's 13px root font */}
         {/* `after:hidden` removes vaul's over-drag filler pseudo-element,
             which otherwise paints a solid strip in the floating gap */}
-        <DrawerContent className="codeware-admin twp after:hidden data-[vaul-drawer-direction=right]:inset-y-2 data-[vaul-drawer-direction=right]:right-2 data-[vaul-drawer-direction=right]:rounded-xl data-[vaul-drawer-direction=right]:border data-[vaul-drawer-direction=right]:sm:max-w-100">
+        <DrawerContent className="codeware-admin twp after:hidden data-[vaul-drawer-direction=right]:inset-y-2 data-[vaul-drawer-direction=right]:right-2 data-[vaul-drawer-direction=right]:rounded-xl data-[vaul-drawer-direction=right]:border data-[vaul-drawer-direction=right]:sm:max-w-140">
           <DrawerHeader className="border-border border-b">
             <div className="flex items-start justify-between gap-2">
               <div className="flex flex-col gap-0.5">
@@ -223,10 +223,12 @@ export function HelpDrawer() {
                     </AccordionTrigger>
                     {/* h-auto: a fixed height would clip a question opened inside */}
                     <AccordionContent className="h-auto">
+                      {/* w-auto: the base w-full plus ml-1 ran 4px past the
+                          topic panel, whose overflow-hidden clipped the text */}
                       <Accordion
                         type="single"
                         collapsible
-                        className="border-border ml-1 border-l pl-4"
+                        className="border-border ml-1 w-auto border-l pl-4"
                       >
                         {entries.map((faq) => (
                           <AccordionItem key={faq.id} value={String(faq.id)}>
@@ -235,7 +237,7 @@ export function HelpDrawer() {
                                 topic's content height before measuring its own,
                                 which clips a long answer */}
                             <AccordionContent className="h-auto">
-                              <p className="text-muted-foreground whitespace-pre-line">
+                              <p className="text-muted-foreground wrap-break-word whitespace-pre-line">
                                 {faq.answer}
                               </p>
                             </AccordionContent>
