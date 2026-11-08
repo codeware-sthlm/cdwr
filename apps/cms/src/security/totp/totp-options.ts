@@ -2,8 +2,11 @@ import type { payloadTotp } from 'payload-totp';
 
 export type TotpPluginOptions = Parameters<typeof payloadTotp>[0];
 
-/** The issuer when no single tenant names the entry */
-export const PLATFORM_TOTP_ISSUER = 'Codeware';
+/**
+ * The issuer when no single tenant names the entry: the platform's name.
+ * Codeware is a tenant of its own, so it is not this name.
+ */
+export const PLATFORM_TOTP_ISSUER = 'cdwr';
 
 /**
  * The options `payloadTotp` runs with. Our setup view renders the plugin's
