@@ -895,6 +895,26 @@ describe('waiting card, queue sheets and tiles', () => {
     ).toContain('leaves a Renovate conflict to an attended session');
   });
 
+  it('name a Copilot review on a review feedback row', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        next: [
+          {
+            ticket: 'COD-4',
+            reason: 'review feedback',
+            detail: 'Copilot review'
+          }
+        ]
+      })
+    );
+    const m = model(state, NOW);
+    expect(
+      whyLine({ ...m, session: { state: 'none' }, stuck: null }, m.next[0])
+    ).toMatch(/^Its PR has review comments to address\. .*Copilot review$/);
+    expect(SHEETS.next.body(m, state, NOW)).toContain('Copilot review');
+  });
+
   it('list the review sheet in merge order, queued without an event', () => {
     const state = filled();
     state.data.runs = runs(
