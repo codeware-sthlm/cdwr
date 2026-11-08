@@ -1,4 +1,5 @@
 import {
+  canResetTotp,
   editorUserAccess,
   systemUserAccess,
   systemUserOrTenantAdminAccess
@@ -212,6 +213,18 @@ const users: CollectionConfig<'users'> = {
         position: 'sidebar'
       },
       maxLength: 200
+    },
+    {
+      name: 'totpReset',
+      type: 'ui',
+      admin: {
+        position: 'sidebar',
+        disableListColumn: true,
+        condition: (data, _, { user }) => canResetTotp(user, data),
+        components: {
+          Field: '@codeware/apps/cms/components/admin/users/TotpReset.client'
+        }
+      }
     },
     statsAccountField()
   ]
