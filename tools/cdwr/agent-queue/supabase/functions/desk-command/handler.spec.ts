@@ -219,6 +219,30 @@ describe('parseCommand', () => {
     );
   });
 
+  it.each(['copilot', 'merge'])('accepts %s with a ticket and a PR', (kind) => {
+    expect(
+      parseCommand({ host: 'nuc', kind, args: { ticket: 'COD-742', pr: 812 } })
+    ).toEqual({ host: 'nuc', kind, args: { ticket: 'COD-742', pr: 812 } });
+  });
+
+  it.each(['copilot', 'merge'])('refuses %s with a bad payload', (kind) => {
+    const message = `${kind} takes a ticket and a PR number`;
+    for (const args of [
+      undefined,
+      { ticket: 'COD-1' },
+      { pr: 5 },
+      { ticket: 'COD-1', pr: 1.5 },
+      { ticket: 'COD-1', pr: '5' },
+      { ticket: 'COD-1', pr: 0 },
+      { ticket: 'COD-1', pr: -3 },
+      { ticket: 'COD-1', pr: 1_000_000 },
+      { ticket: 'cod-1', pr: 5 },
+      { ticket: 'ENG-1', pr: 5 },
+      { ticket: 'COD-1', pr: 5, value: 1 }
+    ])
+      expect(parseCommand({ host: 'nuc', kind, args })).toBe(message);
+  });
+
   it('accepts snooze and normalises the gate time', () => {
     expect(
       parseCommand({
@@ -712,6 +736,46 @@ describe('createHandler', () => {
     expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
       ticket: 'COD-9',
       change: 'wake refused from the desk (mac): not snoozed'
+    });
+  });
+
+  const MERGE = {
+    host: 'nuc',
+    kind: 'merge',
+    args: { ticket: 'COD-9', pr: 812 }
+  };
+
+  it('stores a merge pending for a known host, with no RPC and no activity', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(post(MERGE));
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ id: 7, status: 'pending', note: null });
+    expect(callsTo(fetch, 'rpc/')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toEqual({
+      host: 'nuc',
+      kind: 'merge',
+      args: { ticket: 'COD-9', pr: 812 },
+      at: AT,
+      actor: 'mac',
+      status: 'pending',
+      applied_at: null,
+      note: null
+    });
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
+  });
+
+  it('refuses a merge for a host nothing reports from, naming the ticket', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(post(MERGE));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'no scheduler reports from nuc'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      ticket: 'COD-9',
+      change: 'merge refused from the desk (mac): no scheduler reports from nuc'
     });
   });
 
