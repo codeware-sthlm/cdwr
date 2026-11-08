@@ -221,7 +221,8 @@ export function HelpDrawer() {
                     <AccordionTrigger className="font-semibold">
                       {topic.label[language === 'sv' ? 'sv' : 'en']}
                     </AccordionTrigger>
-                    <AccordionContent>
+                    {/* h-auto: a fixed height would clip a question opened inside */}
+                    <AccordionContent className="h-auto">
                       <Accordion type="single" collapsible>
                         {entries.map((faq) => (
                           <AccordionItem key={faq.id} value={String(faq.id)}>
