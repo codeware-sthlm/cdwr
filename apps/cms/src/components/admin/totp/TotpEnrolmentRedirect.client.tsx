@@ -4,11 +4,10 @@ import { useAuth } from '@payloadcms/ui';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
 
-type TotpUser = {
-  _strategy?: string;
-  hasTotp?: boolean;
-  totpRequired?: boolean;
-};
+import {
+  type TotpUser,
+  needsEnrolmentRedirect
+} from './needs-enrolment-redirect';
 
 /**
  * The client half of the setup redirect: signing in navigates on the client,
@@ -26,15 +25,7 @@ export function TotpEnrolmentRedirectClient({
   const router = useRouter();
 
   useEffect(() => {
-    const strategy = user?._strategy;
-    if (
-      user?.totpRequired &&
-      !user.hasTotp &&
-      strategy &&
-      strategy !== 'totp' &&
-      strategy !== 'api-key' &&
-      pathname.replace(/\/$/, '') !== setupUrl
-    ) {
+    if (needsEnrolmentRedirect(user, pathname, setupUrl)) {
       router.push(`${setupUrl}?back=${encodeURIComponent(pathname)}`);
     }
   }, [user, pathname, router, setupUrl]);
