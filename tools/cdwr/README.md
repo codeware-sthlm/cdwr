@@ -291,7 +291,7 @@ The desk steers the queue through a third Edge Function, `desk-command`. Anon ma
 desk posts `{host, kind, args}` with a per-device bearer token, and the function checks the token's
 SHA-256 against `DESK_CONTROL_TOKENS`, a JSON object of `{device: hex sha256}`; the device name is
 the actor, so one device is revoked on its own. Kinds are `pause`, `resume`, `run`, `limit`
-(`{value}` 1–20) and `cap` (`{value}` 0–500 dollars), which it stores `pending` in `desk_commands`
+(`{value}` 1–20), `cap` (`{value}` 0–500 dollars), `copilot` and `merge` (`{ticket, pr}`), which it stores `pending` in `desk_commands`
 for the scheduler on that host to apply, and `abandon`, which it applies itself through `desk_abandon`, a database function that ends the
 session row the host's last snapshot calls alive or waiting; that is the desk's record only, since the
 host reads its own session files. The function stores the command in the same transaction. A host whose `queue_state` row is missing or more than 2 hours old,
@@ -324,6 +324,20 @@ where they came from. Each command is acked `applied` or `refused` with a note, 
 writes its `activity` row. A list that can't be read applies nothing that tick, and an ack that
 fails changes nothing and leaves the row for the next. A `resume` sent while `cdwr agent deploy` holds the container paused applies too; at worst it
 delays the deploy by one run.
+
+`copilot` and `merge` (`{ticket, pr}`) are the buttons on a review row in **Waiting on you**, and
+the scheduler's only GitHub writes. It acts only on a PR that its `watch.json` already holds for
+that ticket, reads the PR again as the `codeware-agent` app (never your login), and checks it with
+`desk_verdict` in `watch.jq` before the ack: a merge needs green checks, no conflict, every review
+thread resolved and no merge-queue entry, and a Copilot request needs no Copilot review asked or
+done. The desk greys the buttons out by the same rules, read from `queue_state.watch`. A `merge`
+adds the PR to main's merge queue (`enqueuePullRequest` with the head it checked), so it ends like a
+merge on GitHub: the watch sees it merged and the hand-offs stay. A `copilot` asks for
+`copilot-pull-request-reviewer[bot]` and reads the PR back. When the app is refused, or GitHub
+takes the request without adding Copilot (the app has no Copilot seat), it tries again with
+`AGENT_COPILOT_TOKEN`, a fine-grained token of yours on `cdwr` with pull requests read and write,
+from the environment or `tools/cdwr/.env`. A GitHub call that fails after the ack turns the row
+`refused` with GitHub's reason.
 
 The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
 
