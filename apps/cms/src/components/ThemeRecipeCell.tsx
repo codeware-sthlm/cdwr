@@ -1,3 +1,4 @@
+import { customT } from '@codeware/app-cms/util/i18n';
 import { fontById, normaliseRecipe } from '@codeware/shared/util/color';
 import type { DefaultServerCellComponentProps } from 'payload';
 
@@ -20,8 +21,9 @@ const capitalise = (value: string) =>
  */
 export const ThemeRecipeCell: React.FC<
   DefaultServerCellComponentProps<never, never>
-> = ({ cellData }) => {
+> = ({ cellData, i18n }) => {
   const recipe = normaliseRecipe(cellData);
+  const t = customT(i18n.t);
 
   // Each value is one word out of context, so the label says what it decides —
   // not what it is, which is already on screen. A native `title` rather than a
@@ -29,31 +31,36 @@ export const ThemeRecipeCell: React.FC<
   // one-word value does not need a client bundle.
   const parts = [
     {
-      label: 'Base colour — surfaces, borders, neutral text',
+      id: 'base',
+      label: t('themesList:baseTitle'),
       value: capitalise(recipe.baseFamily)
     },
     {
-      label: 'Brand colour — buttons, focus rings, links',
+      id: 'brand',
+      label: t('themesList:brandTitle'),
       value: capitalise(recipe.brandFamily)
     },
     {
-      label: 'Heading typeface',
+      id: 'heading',
+      label: t('themesList:headingFontTitle'),
       value: fontById(recipe.fontHeading)?.label ?? recipe.fontHeading
     },
     {
-      label: 'Body typeface',
+      id: 'body',
+      label: t('themesList:bodyFontTitle'),
       value: fontById(recipe.fontBody)?.label ?? recipe.fontBody
     },
     {
-      label: 'Page surface — whether content sits on its own layer',
+      id: 'surface',
+      label: t('themesList:surfaceTitle'),
       value: capitalise(recipe.surface)
     }
   ];
 
   return (
     <span className="text-muted-foreground flex flex-wrap items-center gap-1 text-xs">
-      {parts.map(({ label, value }, index) => (
-        <span key={label} className="whitespace-nowrap">
+      {parts.map(({ id, label, value }, index) => (
+        <span key={id} className="whitespace-nowrap">
           <span title={label}>{value}</span>
           {index < parts.length - 1 && (
             <span aria-hidden className="px-1 opacity-40">

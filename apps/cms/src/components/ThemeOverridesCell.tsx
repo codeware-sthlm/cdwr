@@ -1,3 +1,4 @@
+import { customT } from '@codeware/app-cms/util/i18n';
 import type { DefaultServerCellComponentProps } from 'payload';
 
 /**
@@ -13,7 +14,9 @@ import type { DefaultServerCellComponentProps } from 'payload';
  */
 export const ThemeOverridesCell: React.FC<
   DefaultServerCellComponentProps<never, never>
-> = ({ cellData }) => {
+> = ({ cellData, i18n }) => {
+  const t = customT(i18n.t);
+
   const overrides =
     cellData && typeof cellData === 'object' && !Array.isArray(cellData)
       ? (cellData as Record<string, unknown>)
@@ -34,7 +37,7 @@ export const ThemeOverridesCell: React.FC<
     return (
       <span
         className="text-muted-foreground opacity-40"
-        title="No hand-edited tokens — this theme is exactly what its recipe generates"
+        title={t('themesList:overridesNoneTitle')}
       >
         —
       </span>
@@ -44,7 +47,7 @@ export const ThemeOverridesCell: React.FC<
   return (
     <span
       className="text-muted-foreground text-xs whitespace-nowrap"
-      title="Tokens hand-edited in the studio, departing from the recipe"
+      title={t('themesList:overridesTitle')}
     >
       ✓ {count}
     </span>
