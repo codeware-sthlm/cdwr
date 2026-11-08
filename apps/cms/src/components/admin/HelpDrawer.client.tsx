@@ -223,11 +223,18 @@ export function HelpDrawer() {
                     </AccordionTrigger>
                     {/* h-auto: a fixed height would clip a question opened inside */}
                     <AccordionContent className="h-auto">
-                      <Accordion type="single" collapsible>
+                      <Accordion
+                        type="single"
+                        collapsible
+                        className="border-border ml-1 border-l pl-4"
+                      >
                         {entries.map((faq) => (
                           <AccordionItem key={faq.id} value={String(faq.id)}>
                             <AccordionTrigger>{faq.question}</AccordionTrigger>
-                            <AccordionContent>
+                            {/* h-auto here too: a nested panel inherits the
+                                topic's content height before measuring its own,
+                                which clips a long answer */}
+                            <AccordionContent className="h-auto">
                               <p className="text-muted-foreground whitespace-pre-line">
                                 {faq.answer}
                               </p>
