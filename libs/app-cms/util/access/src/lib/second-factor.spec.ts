@@ -93,7 +93,11 @@ describe('isTotpSetupPending', () => {
         make,
         _strategy,
         hasTotp,
-        expected: mustEnrol && _strategy === 'local-jwt' && !hasTotp
+        // `totp` without a secret is a cookie left over from before a reset
+        expected:
+          mustEnrol &&
+          (_strategy === 'local-jwt' || _strategy === 'totp') &&
+          !hasTotp
       }))
     )
   );
@@ -119,7 +123,8 @@ describe('isSecondFactorPending', () => {
         const isRealUser = !['null', 'undefined', 'a tenant api key'].includes(
           name
         );
-        const requestAuthenticated = _strategy === 'local-jwt';
+        const requestAuthenticated =
+          _strategy === 'local-jwt' || (_strategy === 'totp' && !hasTotp);
         return {
           name,
           make,
@@ -152,6 +157,26 @@ describe('isSecondFactorPending', () => {
         })
       )
     ).toBe(true);
+  });
+
+  it('holds back a workspace admin whose totp cookie outlived a reset', () => {
+    const admin = user('user', [{ tenant: 7, role: 'admin' }], {
+      _strategy: 'totp',
+      hasTotp: false
+    });
+    expect(isSecondFactorPending(admin)).toBe(true);
+    expect(isTotpSetupPending(admin)).toBe(true);
+  });
+
+  it('lets a member whose totp cookie outlived a reset through', () => {
+    expect(
+      isSecondFactorPending(
+        user('user', [{ tenant: 7, role: 'user' }], {
+          _strategy: 'totp',
+          hasTotp: false
+        })
+      )
+    ).toBe(false);
   });
 });
 
