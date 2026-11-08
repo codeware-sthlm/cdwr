@@ -45,8 +45,8 @@ export const faq: ReadonlyArray<FaqDefinition> = [
       sv: 'Kan jag se hur min sida ser ut på en mobil?'
     },
     answer: {
-      en: 'Yes. Open the page and press Live Preview, then choose Mobile. The preview follows your changes while you write.',
-      sv: 'Ja. Öppna sidan och tryck på Förhandsgranskning, och välj sedan Mobile. Förhandsgranskningen följer dina ändringar medan du skriver.'
+      en: "Yes, when you sign in to the admin at your own site's address; the shared admin has no preview. Open the page and press Live Preview, then choose Mobile. The preview follows your changes while you write.",
+      sv: 'Ja, när du loggar in i administrationen på din egen webbplats adress; den gemensamma administrationen har ingen förhandsgranskning. Öppna sidan och tryck på Förhandsgranskning, och välj sedan Mobile. Förhandsgranskningen följer dina ändringar medan du skriver.'
     }
   },
 
