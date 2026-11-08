@@ -1,5 +1,5 @@
 import { isSecondFactorPending } from '@codeware/app-cms/util/access';
-import type { Access, Plugin } from 'payload';
+import type { Access, Plugin, Where } from 'payload';
 import { payloadTotp, totpAccess } from 'payload-totp';
 
 import { totpEnrolmentPlugin } from './totp-enrolment.plugin';
@@ -61,6 +61,40 @@ const publicFiles: Plugin = (config) => ({
   )
 });
 
+/** Every document has an id, so this matches none */
+const noDocuments: Where = { id: { exists: false } };
+
+/**
+ * A session that owes its code finds no tenants instead of being refused.
+ * The multi-tenant plugin's tenant selector reads them on every admin view,
+ * the code step included, and a refusal there throws and takes the view down.
+ */
+export const pendingTenantsAccess =
+  (inner: Access | undefined): Access =>
+  (args) =>
+    isSecondFactorPending(args.req.user)
+      ? noDocuments
+      : totpAccess(inner)(args);
+
+const pendingTenants: Plugin = (config) => ({
+  ...config,
+  collections: (config.collections ?? []).map((collection) =>
+    collection.slug === 'tenants'
+      ? {
+          ...collection,
+          access: {
+            ...collection.access,
+            read: pendingTenantsAccess(collection.access?.read)
+          },
+          custom: {
+            ...collection.custom,
+            totp: { disableAccessWrapper: { read: true } }
+          }
+        }
+      : collection
+  )
+});
+
 /**
  * TOTP as a second factor on the `users` login. Enrolment is enforced for
  * system users and workspace admins, optional for everyone else.
@@ -70,5 +104,8 @@ export const getTotpPlugins = (): Array<Plugin> => [
   // as well as payload-totp's, while every other read keeps both
   totpEnrolmentPlugin({ collection: 'users' }),
   publicFiles,
+  // After the enrolment wrapper too, so a session owing setup finds no
+  // tenants rather than being refused
+  pendingTenants,
   payloadTotp(totpOptions)
 ];

@@ -1,7 +1,11 @@
 import type { Access, Config } from 'payload';
 import { payloadTotp, totpAccess } from 'payload-totp';
 
-import { getTotpPlugins, publicFileAccess } from './get-totp-plugins';
+import {
+  getTotpPlugins,
+  pendingTenantsAccess,
+  publicFileAccess
+} from './get-totp-plugins';
 
 jest.mock('payload-totp', () => {
   const wrapped = jest.fn();
@@ -95,16 +99,58 @@ describe('publicFileAccess', () => {
   });
 });
 
+describe('pendingTenantsAccess', () => {
+  beforeEach(() => {
+    totpAccessMock.mockClear();
+    wrapped.mockReset().mockReturnValue('totp-result');
+  });
+
+  const session = (extra: Record<string, unknown>) => ({
+    id: 1,
+    role: 'system-user',
+    tenants: [],
+    _strategy: 'local-jwt',
+    ...extra
+  });
+
+  it.each([
+    { name: 'owes its code', user: session({ hasTotp: true }) },
+    { name: 'owes its setup', user: session({ hasTotp: false }) }
+  ])('finds no tenants for a session that $name', ({ user }) => {
+    const innerAccess = jest.fn();
+
+    expect(pendingTenantsAccess(innerAccess)(args(user, false))).toEqual({
+      id: { exists: false }
+    });
+    expect(innerAccess).not.toHaveBeenCalled();
+    expect(totpAccessMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { name: 'a verified session', user: session({ _strategy: 'totp' }) },
+    { name: 'an api key', user: session({ _strategy: 'api-key' }) },
+    { name: 'an anonymous request', user: null }
+  ])('delegates $name to totpAccess', ({ user }) => {
+    const innerAccess = jest.fn();
+    const call = args(user, false);
+
+    expect(pendingTenantsAccess(innerAccess)(call)).toBe('totp-result');
+    expect(totpAccessMock).toHaveBeenCalledWith(innerAccess);
+    expect(wrapped).toHaveBeenCalledWith(call);
+  });
+});
+
 describe('getTotpPlugins', () => {
-  it('runs the enrolment wrapper first, public files next and payloadTotp last', () => {
+  it('runs the enrolment wrapper first, the read wrappers next and payloadTotp last', () => {
     const plugins = getTotpPlugins();
 
     // A visitor's file read must skip the enrolment wrapper too, so public
     // files wraps it rather than the other way round
-    expect(plugins).toHaveLength(3);
+    expect(plugins).toHaveLength(4);
     expect(plugins[0]).toBe('enrolment-plugin');
     expect(plugins[1]).toEqual(expect.any(Function));
-    expect(plugins[2]).toBe('payload-totp-plugin');
+    expect(plugins[2]).toEqual(expect.any(Function));
+    expect(plugins[3]).toBe('payload-totp-plugin');
     expect(payloadTotp).toHaveBeenCalledWith(
       expect.objectContaining({ collection: 'users', forceSetup: false })
     );
@@ -132,6 +178,30 @@ describe('getTotpPlugins', () => {
       totp: { disableAccessWrapper: { read: true } }
     });
     expect(stock.custom).toEqual({
+      totp: { disableAccessWrapper: { read: true } }
+    });
+    expect(pages.access.read).toBe(read);
+    expect(pages.custom).toBeUndefined();
+  });
+
+  it('makes tenants skip the totp read wrapper and nothing else', async () => {
+    const [, , pendingTenants] = getTotpPlugins();
+    const read = jest.fn();
+    const config = {
+      collections: [
+        { slug: 'tenants', access: { read } },
+        { slug: 'pages', access: { read } }
+      ]
+    } as unknown as Config;
+
+    const result = await (pendingTenants as (c: Config) => Config)(config);
+    const [tenants, pages] = result.collections as Array<{
+      access: { read: unknown };
+      custom?: unknown;
+    }>;
+
+    expect(tenants.access.read).not.toBe(read);
+    expect(tenants.custom).toEqual({
       totp: { disableAccessWrapper: { read: true } }
     });
     expect(pages.access.read).toBe(read);

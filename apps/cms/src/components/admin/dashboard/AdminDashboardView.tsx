@@ -10,6 +10,7 @@ import {
 } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import type { RecentDoc } from '@codeware/app-cms/ui/dashboard';
+import { isSecondFactorPending } from '@codeware/app-cms/util/access';
 import { hasRole } from '@codeware/app-cms/util/misc';
 import type { SupportedLocale } from '@codeware/shared/util/i18n';
 import type {
@@ -78,7 +79,10 @@ const AdminDashboardView: React.FC<ServerProps> = async ({
   // The platform tab is system-only, and one fact decides both whether it is
   // rendered and whether its data is fetched — two checks could drift into a
   // visible but empty tab, or a fetch nobody sees
-  const canSeePlatform = hasRole(user ?? null, 'system-user');
+  // A session owing its code is on its way to the code step, and its reads
+  // are refused
+  const canSeePlatform =
+    hasRole(user ?? null, 'system-user') && !isSecondFactorPending(user);
   const draftsWhere: Where = {
     and: [
       ...(tenantWhere ? [tenantWhere] : []),
