@@ -119,7 +119,7 @@ query($n: Int!) {
       reviewRequests(first: 20) {
         nodes { requestedReviewer { __typename ... on Bot { login } ... on User { login } } }
       }
-      reviews(first: 50) { nodes { author { login } } }
+      reviews(last: 50) { nodes { author { login } } }
       timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
         nodes { ... on RemovedFromMergeQueueEvent { reason createdAt } }
       }
