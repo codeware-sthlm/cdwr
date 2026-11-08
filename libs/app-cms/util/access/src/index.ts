@@ -1,5 +1,6 @@
 export { editorUserAccess } from './lib/editor-user.access';
 export { authenticatedAccess } from './lib/authenticated.access';
+export { type TotpResetTarget, canResetTotp } from './lib/can-reset-totp';
 export { contentVisibilityWhere } from './lib/content-visibility';
 export {
   isSecondFactorPending,
