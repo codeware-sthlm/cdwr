@@ -239,9 +239,10 @@ The queue also writes telemetry to its own Supabase project, `agent-queue` (tabl
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
 queue writes no Linear document; the Agent Desk reads these tables. The `queue_state` row also
 carries `watch`, the host's `watch.json` (the PRs of agent-labelled tickets with their state and
-the unresolved review threads a person or Copilot spoke last in, Copilot's share as `copilot`; a
-review ticket with only Copilot threads open reads `review feedback (Copilot review)`), written in
-its own patch after the row; it needs the migration `20261105120000_queue_state_watch.sql`. It carries `renovate`, the host's `renovate.json`, the same
+the unresolved review threads a person or Copilot spoke last in, Copilot's share as
+`copilotThreads`; a review ticket with only Copilot threads open reads `review feedback (Copilot
+review)`), written in its own patch after the row; it needs the migration
+`20261105120000_queue_state_watch.sql`. It carries `renovate`, the host's `renovate.json`, the same
 way, after `20261105210000_queue_state_renovate.sql`; until that is applied only its patch fails, and
 a Mac reads the row without it.
 
