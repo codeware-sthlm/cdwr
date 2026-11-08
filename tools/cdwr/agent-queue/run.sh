@@ -113,6 +113,7 @@ query($n: Int!) {
       mergeQueueEntry { state }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
       reviewThreads(first: 100) {
+        pageInfo { hasNextPage }
         nodes { isResolved comments(last: 1) { nodes { author { __typename login } body } } }
       }
       reviewRequests(first: 20) {

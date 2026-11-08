@@ -65,11 +65,12 @@ def handoffs:
     end;
 
 # Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved,
-# copilotThreads, threads, conflicting, draft, mergeable, mergeStateStatus, ci, copilot }.
+# copilotThreads, threads, threadsTruncated, conflicting, draft, mergeable, mergeStateStatus, ci, copilot }.
 # ci is the checks rollup state of the last commit (string or null). copilot is "reviewed" once
 # Copilot has a review on the PR, "requested" while it is a requested reviewer, else "none".
 # threads counts every unresolved review thread, whoever spoke last: main's ruleset needs them all
-# resolved to merge.
+# resolved to merge. threadsTruncated is true when the query saw only the first page of threads, so
+# threads may undercount and desk_verdict refuses to merge.
 # unresolved counts open review threads a person or Copilot spoke last in, and copilotThreads the
 # Copilot share of them: other bots and the agent's own replies, which leave a thread open on
 # purpose, don't count.
@@ -100,6 +101,7 @@ def pr_state:
       unresolved: ($open | length),
       copilotThreads: ([ $open[] | select(.author.login == copilot_login) ] | length),
       threads: ([ (.reviewThreads.nodes // [])[] | select(.isResolved | not) ] | length),
+      threadsTruncated: (.reviewThreads.pageInfo.hasNextPage == true),
       conflicting: (if .mergeable == "CONFLICTING" then true elif .mergeable == "MERGEABLE" then false else null end),
       draft: (.isDraft == true),
       mergeable: (.mergeable // null),
@@ -183,6 +185,7 @@ def desk_verdict($kind):
     elif .mergeable == "CONFLICTING" then "conflicts with main"
     elif .mergeable != "MERGEABLE" then "GitHub has not checked for conflicts yet"
     elif $s.ci != "SUCCESS" then "checks \(($s.ci // "missing") | ascii_downcase)"
+    elif $s.threadsTruncated then "too many review threads to check them all"
     elif $s.threads > 0 then "\($s.threads) unresolved \(if $s.threads == 1 then "thread" else "threads" end)"
     else "ok \(.id) \(.headRefOid)" end;
 

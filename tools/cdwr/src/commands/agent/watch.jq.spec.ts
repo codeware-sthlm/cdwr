@@ -338,6 +338,7 @@ describe('pr_state', () => {
       unresolved: 0,
       copilotThreads: 0,
       threads: 0,
+      threadsTruncated: false,
       conflicting: null,
       draft: false,
       mergeable: null,
@@ -355,6 +356,7 @@ describe('pr_state', () => {
       unresolved: 0,
       copilotThreads: 0,
       threads: 0,
+      threadsTruncated: false,
       conflicting: null,
       draft: false,
       mergeable: null,
@@ -547,6 +549,19 @@ describe('pr_state', () => {
     };
     expect(r.threads).toBe(3);
     expect(r.unresolved).toBe(1);
+  });
+
+  it('threadsTruncated is true only when GitHub has another page of threads', () => {
+    const truncated = (reviewThreads: unknown) =>
+      (run('pr_state', pr({ reviewThreads })) as { threadsTruncated: boolean })
+        .threadsTruncated;
+    expect(truncated({ pageInfo: { hasNextPage: true }, nodes: [] })).toBe(
+      true
+    );
+    expect(truncated({ pageInfo: { hasNextPage: false }, nodes: [] })).toBe(
+      false
+    );
+    expect(truncated({ nodes: [] })).toBe(false);
   });
 
   it('threads is 0 without review threads', () => {
