@@ -6,11 +6,14 @@ WAITS_DIR="${0:A:h}"
 
 # gh_read <gh command…>: runs a gh read; when it fails with an App token set (the App may lack a
 # permission), retries once as the signed-in user and notes it once per run (a file keyed on the
-# run's pid, since reads run in subshells; run.sh removes it on exit).
+# run's pid, since reads run in subshells; run.sh removes it on exit). Before the retry it prints
+# GH_READ_FALLBACK to stderr, so a caller keeping stderr tells the two attempts' errors apart.
+GH_READ_FALLBACK="gh_read: retrying as the signed-in user"
 gh_read() {
   local flag="${LOGS:-}/gh-read-fallback.$$" out rc
   out="$("$@")"; rc=$?
   if (( rc != 0 )) && [[ -n "${GH_TOKEN:-}" ]]; then
+    print -ru2 -- "$GH_READ_FALLBACK"
     out="$(GH_TOKEN= GITHUB_TOKEN= "$@")"; rc=$?
     if [[ -n "${LOGS:-}" && ! -e "$flag" ]]; then
       : > "$flag"

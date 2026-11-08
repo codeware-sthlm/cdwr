@@ -1110,22 +1110,33 @@ describe('run.sh watch_renovate', () => {
     }
   ];
 
-  // Runs watch_renovate with a fake gh and Linear; `prs` is what gh pr list answers
+  const WAITS_SH = fileURLToPath(
+    new URL('../../../agent-queue/waits.sh', import.meta.url)
+  );
+
+  // Runs watch_renovate with the real gh_read over a fake gh and Linear; `prs` is what gh pr list
+  // answers (a string as it is), `gh` replaces the fake gh's body, `token` sets an App token
   const run = (
     prs: unknown,
-    linear: unknown = { data: { issues: { nodes: [] } } }
+    linear: unknown = { data: { issues: { nodes: [] } } },
+    { gh, token }: { gh?: string; token?: boolean } = {}
   ) => {
-    writeFileSync(join(root, 'prs.json'), JSON.stringify(prs));
+    writeFileSync(
+      join(root, 'prs.json'),
+      typeof prs === 'string' ? prs : JSON.stringify(prs)
+    );
     writeFileSync(join(root, 'linear.json'), JSON.stringify(linear));
     const script = [
-      `ROOT="${root}"; HOME_DIR="${root}"`,
+      `ROOT="${root}"; HOME_DIR="${root}"; LOGS="${root}"`,
+      `source "${WAITS_SH}"`,
+      token ? 'export GH_TOKEN=ghs_x GITHUB_TOKEN=ghs_x' : 'unset GH_TOKEN',
       `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
       `record() { print -r -- "$*" >> "$ROOT/records"; }`,
       `notice() { print -r -- "$*" >> "$ROOT/notices"; }`,
       `watch() { jq -L "${DIR}" "$@"; }`,
       'watch_err() { :; }',
       'gh_identity_or_note() { :; }',
-      'gh_read() { print -r -- "$*" >> "$ROOT/gh"; cat "$ROOT/prs.json"; }',
+      `gh() { ${gh ?? 'print -r -- "$*" >> "$ROOT/gh"; cat "$ROOT/prs.json"'}; }`,
       'linear() { cat "$ROOT/linear.json"; }',
       source,
       'watch_renovate; print -r -- "rc=$?"'
@@ -1223,13 +1234,79 @@ describe('run.sh watch_renovate', () => {
     );
   });
 
-  it.skipIf(!canRun)('leaves renovate.json as it was when gh fails', () => {
-    writeFileSync(join(root, 'renovate.json'), '{}');
-    run(PRS);
-    const before = read('renovate.json');
-    const result = run({ not: 'an array' });
-    expect(result.stdout).toContain('rc=1');
-    expect(read('renovate.json')).toBe(before);
+  it.skipIf(!canRun)(
+    'leaves renovate.json as it was when the answer is no list',
+    () => {
+      writeFileSync(join(root, 'renovate.json'), '{}');
+      run(PRS);
+      const before = read('renovate.json');
+      const result = run({ not: 'an array' });
+      expect(result.stdout).toContain('not a list: {"not":"an array"}\n');
+      expect(result.stdout).toContain('rc=1');
+      expect(read('renovate.json')).toBe(before);
+    }
+  );
+
+  it.skipIf(!canRun)(
+    'names an empty or long answer on one line, cut to 80 characters',
+    () => {
+      expect(run('').stdout).toContain('not a list: (empty)\n');
+      const long = `<html>\r\n\t${'x'.repeat(100)}`;
+      expect(run(long).stdout).toContain(
+        `not a list: <html>   ${'x'.repeat(71)}\n`
+      );
+    }
+  );
+
+  it.skipIf(!canRun)(
+    "names gh's first error line and leaves renovate.json as it was",
+    () => {
+      writeFileSync(join(root, 'renovate.json'), '{}');
+      const result = run(PRS, undefined, {
+        gh: `print -ru2 -- "  HTTP 403: Resource not accessible by integration"; print -ru2 -- "second line"; return 1`
+      });
+      expect(result.stdout).toContain(
+        'GitHub: HTTP 403: Resource not accessible by integration\nrc=1'
+      );
+      expect(read('renovate.json')).toBe('{}');
+    }
+  );
+
+  it.skipIf(!canRun)('says when gh failed without a word', () => {
+    const result = run(PRS, undefined, { gh: 'return 1' });
+    expect(result.stdout).toContain('GitHub: (no stderr)\nrc=1');
+  });
+
+  it.skipIf(!canRun)(
+    "names both attempts' errors when the signed-in fallback fails too",
+    () => {
+      const result = run(PRS, undefined, {
+        token: true,
+        gh: `[[ -n "\${GH_TOKEN:-}" ]] && { print -ru2 -- "HTTP 403: app"; return 1; }; print -ru2 -- "To get started with GitHub CLI, please run: gh auth login"; return 4`
+      });
+      expect(result.stdout).toContain(
+        'GitHub: HTTP 403: app; as user: To get started with GitHub CLI, please run: gh auth login\nrc=1'
+      );
+      expect(read('notes')).toContain(
+        'warn: GitHub read fell back to the signed-in user'
+      );
+    }
+  );
+
+  it.skipIf(!canRun)('cuts each error line to 120 characters', () => {
+    const result = run(PRS, undefined, {
+      gh: `print -ru2 -- "${'e'.repeat(150)}"; return 1`
+    });
+    expect(result.stdout).toContain(`GitHub: ${'e'.repeat(120)}\nrc=1`);
+  });
+
+  it.skipIf(!canRun)('reads nothing more when the fallback succeeds', () => {
+    const result = run(PRS, undefined, {
+      token: true,
+      gh: `[[ -n "\${GH_TOKEN:-}" ]] && { print -ru2 -- "HTTP 403: app"; return 1; }; cat "$ROOT/prs.json"`
+    });
+    expect(result.stdout).toContain('rc=0');
+    expect(JSON.parse(read('renovate.json'))['754'].state).toBe('failing');
   });
 });
 
