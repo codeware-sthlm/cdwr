@@ -2096,7 +2096,7 @@ export interface CustomTheme {
   createdAt: string;
 }
 /**
- * Questions and answers shown to all users in the admin help drawer.
+ * Questions and answers shown to all users in the admin help drawer, grouped by topic. The platform entries are restored from the code at every start, so change them there; an edit here is overwritten.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "faq".
@@ -2104,6 +2104,16 @@ export interface CustomTheme {
 export interface Faq {
   id: number;
   _order?: string | null;
+  topic:
+    | 'pages'
+    | 'drafts'
+    | 'navigation'
+    | 'site-settings'
+    | 'search-help'
+    | 'account'
+    | 'statistics'
+    | 'media'
+    | 'forms';
   question: string;
   /**
    * Plain text; line breaks are preserved.
@@ -3140,6 +3150,7 @@ export interface CustomThemesSelect<T extends boolean = true> {
  */
 export interface FaqSelect<T extends boolean = true> {
   _order?: T;
+  topic?: T;
   question?: T;
   answer?: T;
   updatedAt?: T;

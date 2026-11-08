@@ -1,14 +1,19 @@
 import type { FaqDefinition } from '../platform-definition';
 
 /**
- * Curated FAQ entries for the admin help drawer.
+ * Curated FAQ entries for the admin help drawer, grouped by topic.
  *
  * Static content rather than generated, since the entries must make sense
- * to a non-technical editor in dev and QA environments. The list also
- * doubles as the copy-source for one-time manual entry in production.
+ * to a non-technical editor. This list is the source in every environment,
+ * production included: `applyPlatformFaq` creates or updates each entry at
+ * host boot, matched on its English question, and never deletes one. An
+ * edit made through the admin is overwritten at the next boot, so change
+ * the text here. Within a topic the drawer follows the admin order, and a
+ * new entry is added last.
  */
 export const faq: ReadonlyArray<FaqDefinition> = [
   {
+    topic: 'drafts',
     question: {
       en: 'What is a draft?',
       sv: 'Vad är ett utkast?'
@@ -19,6 +24,7 @@ export const faq: ReadonlyArray<FaqDefinition> = [
     }
   },
   {
+    topic: 'drafts',
     question: {
       en: 'Who can see my changes?',
       sv: 'Vem kan se mina ändringar?'
@@ -29,6 +35,7 @@ export const faq: ReadonlyArray<FaqDefinition> = [
     }
   },
   {
+    topic: 'search-help',
     question: {
       en: 'Where did my page go?',
       sv: 'Var tog min sida vägen?'
@@ -39,6 +46,7 @@ export const faq: ReadonlyArray<FaqDefinition> = [
     }
   },
   {
+    topic: 'media',
     question: {
       en: 'How do I add a picture?',
       sv: 'Hur lägger jag till en bild?'
@@ -49,6 +57,7 @@ export const faq: ReadonlyArray<FaqDefinition> = [
     }
   },
   {
+    topic: 'drafts',
     question: {
       en: 'Can I undo a mistake?',
       sv: 'Kan jag ångra ett misstag?'

@@ -1,4 +1,5 @@
 import type {
+  Faq,
   PlatformLabel,
   Tenant,
   TenantRole,
@@ -47,6 +48,19 @@ const LabelSchema = z.object({
 const LocalizedTextSchema = z.object({ en: z.string(), sv: z.string() });
 
 const FaqSchema = z.object({
+  topic: enumOf<Faq['topic']>()(
+    z.enum([
+      'pages',
+      'drafts',
+      'navigation',
+      'site-settings',
+      'search-help',
+      'account',
+      'statistics',
+      'media',
+      'forms'
+    ])
+  ),
   question: LocalizedTextSchema,
   answer: LocalizedTextSchema
 });
@@ -142,6 +156,13 @@ export const PlatformDefinitionSchema = z
       (filename) =>
         problem(`Two stock media entries share the filename '${filename}'`, [
           'stockMedia'
+        ])
+    );
+    // The apply matches an entry on its English question
+    duplicates(definition.faq.map(({ question }) => question.en)).forEach(
+      (question) =>
+        problem(`Two FAQ entries share the English question '${question}'`, [
+          'faq'
         ])
     );
     // The collection keys a code on its first half alone
