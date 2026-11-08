@@ -80,3 +80,4 @@ export {
 export { getTourSignups } from './lib/collections/get-tour-signups';
 
 export { getUser } from './lib/collections/get-user';
+export { resetTotp } from './lib/collections/reset-totp';
