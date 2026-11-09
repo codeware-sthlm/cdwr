@@ -23,7 +23,7 @@ vi.mock('@tauri-apps/plugin-http', () => ({ fetch: tauriFetch }));
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: tauriOpenUrl }));
 vi.mock('@tauri-apps/plugin-store', () => ({ load: tauriLoad }));
 
-import { platform } from './platform';
+const { platform } = await import('./platform');
 
 beforeEach(() => {
   localStorage.clear();

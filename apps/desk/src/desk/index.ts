@@ -187,10 +187,10 @@ function setHash(): void {
   const hash =
     state.ui.openSheet ?? (state.ui.view === 'desk' ? '' : state.ui.view);
   try {
-    history.replaceState(
+    window.history.replaceState(
       null,
       '',
-      hash ? '#' + hash : location.pathname + location.search
+      hash ? '#' + hash : window.location.pathname + window.location.search
     );
   } catch {
     // Some webviews refuse to change the URL
@@ -507,7 +507,7 @@ document.addEventListener('click', (e) => {
   const action = e.target.closest<HTMLElement>('[data-action]');
   if (action) {
     if (action.dataset.action === 'reconnect') void adapter?.reconnect();
-    else if (action.dataset.action === 'reload') location.reload();
+    else if (action.dataset.action === 'reload') window.location.reload();
     else if (action.dataset.action === 'copy-row') copyRow(action);
     return;
   }
@@ -678,7 +678,7 @@ document
     img.src = AGENT_AVATAR;
   });
 render();
-const startHash = (location.hash || '').slice(1);
+const startHash = (window.location.hash || '').slice(1);
 if (viewOf(startHash)) showView('platform', false);
 else {
   const startSheet = sheetIdOf(startHash);
