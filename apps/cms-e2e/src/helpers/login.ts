@@ -44,7 +44,20 @@ type LoginOptions = {
    * @default false
    */
   navigate?: boolean;
+
+  /**
+   * Whether the onboarding tour may open on the dashboard.
+   *
+   * The tour opens as a modal on a user's first dashboard visit and would
+   * block every other admin spec, so by default it is marked as seen. `true`
+   * clears that mark instead, so the user meets the tour as a new user does.
+   * @default false
+   */
+  tour?: boolean;
 };
+
+/** Payload preference the onboarding tour stores its state under. */
+const ONBOARDING_PREFERENCE = '/api/payload-preferences/admin-onboarding';
 
 /**
  * Log in to the Payload admin panel via REST API as the given user.
@@ -64,7 +77,7 @@ type LoginOptions = {
 export async function loginAs(
   page: Page,
   user: TestUser,
-  { navigate = true }: LoginOptions = {}
+  { navigate = true, tour = false }: LoginOptions = {}
 ): Promise<void> {
   const { email, password } = TEST_USERS[user];
 
@@ -105,6 +118,18 @@ export async function loginAs(
   // the CSRF check for `page.request.*` calls. Browser navigations still
   // continue to use the cookie since they do send proper headers.
   await page.context().setExtraHTTPHeaders({ Authorization: `JWT ${token}` });
+
+  // Best effort: a user the admin refuses (a reader) has no tour to mark, and
+  // deleting a preference that was never stored is a 404. A system user never
+  // gets the tour by itself. Marked without `navigate` too, since a spec may
+  // open the admin itself.
+  if (userData.role !== 'system-user') {
+    await (tour
+      ? page.request.delete(ONBOARDING_PREFERENCE)
+      : page.request.post(ONBOARDING_PREFERENCE, {
+          data: { value: { tourSeenAt: new Date().toISOString() } }
+        }));
+  }
 
   if (navigate) {
     await page.goto('/admin');
