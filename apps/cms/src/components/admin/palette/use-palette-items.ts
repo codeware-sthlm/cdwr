@@ -18,6 +18,7 @@ import {
   HomeIcon,
   InformationCircleIcon,
   LanguageIcon,
+  MapIcon,
   MoonIcon,
   PhotoIcon,
   QuestionMarkCircleIcon,
@@ -46,6 +47,7 @@ import {
 import { hasCreatePermission } from '../dashboard/has-create-permission';
 import { SHOW_GETTING_STARTED_EVENT } from '../dashboard/use-getting-started';
 import { openHelp } from '../help-events';
+import { openTour } from '../onboarding/tour-events';
 import { useCollectionLabel } from '../utils/use-collection-label';
 import { useVisibleCollections } from '../utils/use-visible-collections';
 
@@ -210,6 +212,19 @@ export function usePaletteItems(query: string): {
             icon: QuestionMarkCircleIcon,
             run: () => {
               openHelp();
+            }
+          }
+        ]
+      : []),
+    // Onboarding tour (always present; the steps follow the user's permissions)
+    ...(matches(t('onboarding:takeTour'))
+      ? [
+          {
+            value: 'action:open-tour',
+            label: t('onboarding:takeTour'),
+            icon: MapIcon,
+            run: () => {
+              openTour();
             }
           }
         ]
