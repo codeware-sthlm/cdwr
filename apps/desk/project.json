@@ -4,6 +4,50 @@
   "sourceRoot": "apps/desk/src",
   "projectType": "application",
   "tags": ["scope:desk", "type:app"],
-  "// targets": "to see all targets run: nx show project desk --web",
-  "targets": {}
+  "// targets": "build, serve, preview, typecheck, lint and test are inferred; what is written here is the Tauri delta",
+  "targets": {
+    "build": {
+      "inputs": [
+        "production",
+        "^production",
+        { "externalDependencies": ["vite"] },
+        { "env": "VITE_DESK_SHA" }
+      ]
+    },
+    "tauri-dev": {
+      "metadata": {
+        "description": "Opens the desktop app in development, starting the Vite dev server first"
+      },
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["serve"],
+      "options": {
+        "command": "tauri dev",
+        "cwd": "apps/desk"
+      }
+    },
+    "tauri-build": {
+      "metadata": {
+        "description": "Builds the desktop app for this machine, the .app only; --configuration release adds the .dmg, as CI does"
+      },
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "inputs": [
+        "default",
+        "{projectRoot}/src-tauri/**/*",
+        "!{projectRoot}/src-tauri/target/**/*",
+        { "env": "VITE_DESK_SHA" }
+      ],
+      "outputs": ["{projectRoot}/src-tauri/target/*/bundle/**/*"],
+      "options": {
+        "command": "tauri build --bundles app",
+        "cwd": "apps/desk"
+      },
+      "configurations": {
+        "release": {
+          "command": "tauri build --bundles app,dmg"
+        }
+      }
+    }
+  }
 }

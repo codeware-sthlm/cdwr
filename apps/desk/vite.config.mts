@@ -1,25 +1,29 @@
 /// <reference types='vitest' />
-import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
-import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
+import { defineConfig } from 'vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
+// The shape @nx/react:application writes, plus what Tauri needs: the dev server on the port
+// tauri.conf.json's devUrl names, and only that port; no screen clearing, so Tauri's own
+// output stays readable; and VITE_ as the only prefix the page reads from the environment
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/apps/desk',
+  clearScreen: false,
+  envPrefix: ['VITE_'],
   server: {
-    port: 4200,
+    port: 1420,
+    strictPort: true,
     host: 'localhost'
   },
   preview: {
-    port: 4300,
+    port: 1420,
+    strictPort: true,
     host: 'localhost'
   },
-  plugins: [react(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //   plugins: () => [ nxViteTsPaths() ],
-  // },
+  // vite-tsconfig-paths as every Vite config in the repo: the Docker build runs vite without
+  // nx and without a project graph, which Nx's own paths plugin asks for
+  plugins: [react(), tsconfigPaths({ projects: ['../../tsconfig.base.json'] })],
   build: {
     outDir: '../../dist/apps/desk',
     emptyOutDir: true,
@@ -32,8 +36,9 @@ export default defineConfig(() => ({
     name: 'desk',
     watch: false,
     globals: true,
-    environment: 'jsdom',
-    include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    // The data layer's specs are pure; a component spec asks for jsdom in its docblock
+    environment: 'node',
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     reporters: ['default'],
     coverage: {
       reportsDirectory: '../../coverage/apps/desk',
