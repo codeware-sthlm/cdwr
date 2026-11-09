@@ -108,3 +108,4 @@ tools/cdwr/.env
 
 # The agent host's secrets
 apps/agent-host/.env
+.vitest
