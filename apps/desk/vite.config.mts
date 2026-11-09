@@ -1,4 +1,5 @@
 /// <reference types='vitest' />
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -23,7 +24,11 @@ export default defineConfig(() => ({
   },
   // vite-tsconfig-paths as every Vite config in the repo: the Docker build runs vite without
   // nx and without a project graph, which Nx's own paths plugin asks for
-  plugins: [react(), tsconfigPaths({ projects: ['../../tsconfig.base.json'] })],
+  plugins: [
+    react(),
+    tailwindcss(),
+    tsconfigPaths({ projects: ['../../tsconfig.base.json'] })
+  ],
   build: {
     outDir: '../../dist/apps/desk',
     emptyOutDir: true,
