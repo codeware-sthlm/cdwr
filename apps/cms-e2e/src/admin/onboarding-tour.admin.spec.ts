@@ -15,12 +15,29 @@ import { loginAs } from '../helpers/login';
 test.describe('/admin — onboarding tour', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
+  // A first admin visit compiles the dashboard under `next dev`
+  test.describe.configure({ timeout: 90_000 });
+
   test('opens on the first visit, stays closed once finished, opens from the palette', async ({
     page
   }) => {
-    await loginAs(page, 'multiAdmin', { navigate: true, tour: true });
+    await loginAs(page, 'multiAdmin', { navigate: false, tour: true });
 
-    const tour = page.getByRole('dialog', { name: 'Take a tour' });
+    // The user starts as a new one: nothing stored for the tour
+    const cleared = await page.request.get(
+      '/api/payload-preferences/admin-onboarding'
+    );
+    expect(cleared.status()).toBe(200);
+    expect(((await cleared.json()) as { value?: unknown }).value ?? null).toBe(
+      null
+    );
+
+    await page.goto('/admin');
+    await expect(page.getByRole('tab', { name: 'Home' })).toBeVisible();
+
+    const tour = page.getByRole('dialog', {
+      name: /Take a tour|Ta en rundtur/
+    });
     await expect(tour).toBeVisible({ timeout: 30_000 });
 
     // Walk to the closing card; an admin sees all five steps

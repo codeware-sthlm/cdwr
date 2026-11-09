@@ -27,7 +27,7 @@ import {
   ONBOARDING_PREFERENCES_KEY,
   type OnboardingPreferences
 } from './onboarding-preferences';
-import { OPEN_TOUR_EVENT } from './tour-events';
+import { OPEN_TOUR_EVENT, takePendingTour } from './tour-events';
 import { TOUR_MORE, type TourShowMe, visibleTourSteps } from './tour-steps';
 
 /**
@@ -53,8 +53,15 @@ export function OnboardingTourHost() {
   // Opening never moves the step, so a second open event (the dashboard's,
   // arriving late) leaves an open tour where it is; closing resets it
   useEffect(() => {
-    const handler = () => setOpen(true);
+    const handler = () => {
+      takePendingTour();
+      setOpen(true);
+    };
     window.addEventListener(OPEN_TOUR_EVENT, handler);
+    // The dashboard may have asked before this mounted
+    if (takePendingTour()) {
+      handler();
+    }
     return () => window.removeEventListener(OPEN_TOUR_EVENT, handler);
   }, []);
 
