@@ -2,7 +2,7 @@ import { isFaqTopic } from '@codeware/app-cms/util/definitions';
 import type { useAuth } from '@payloadcms/ui';
 
 import { shouldAutoOpenTour } from './onboarding-preferences';
-import { OPEN_TOUR_EVENT, openTour } from './tour-events';
+import { OPEN_TOUR_EVENT, openTour, takePendingTour } from './tour-events';
 import { TOUR_MORE, TOUR_STEPS, visibleTourSteps } from './tour-steps';
 
 type Permissions = ReturnType<typeof useAuth>['permissions'];
@@ -100,5 +100,13 @@ describe('openTour', () => {
     window.removeEventListener(OPEN_TOUR_EVENT, listener);
 
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the request for a tour that mounts later, once', () => {
+    takePendingTour();
+    expect(takePendingTour()).toBe(false);
+    openTour();
+    expect(takePendingTour()).toBe(true);
+    expect(takePendingTour()).toBe(false);
   });
 });
