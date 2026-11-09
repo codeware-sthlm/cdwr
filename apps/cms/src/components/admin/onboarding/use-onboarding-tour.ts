@@ -12,14 +12,14 @@ import {
 import { openTour } from './tour-events';
 
 /**
- * Opens the onboarding tour once on the dashboard Home tab, for a user who
- * hasn't seen it (see {@link shouldAutoOpenTour}).
+ * Opens the onboarding tour once on the dashboard, whatever tab it opens on, for
+ * a user who hasn't seen it (see {@link shouldAutoOpenTour}).
  *
  * Payload's `getPreference` resolves a refused read as "nothing stored", so a
  * read that fails on the server opens the tour too. Every way out of the tour
  * writes the preference, so it stays closed once a read succeeds again.
  *
- * @param showBuildSite - Whether the Home tab is asking for a first site.
+ * @param showBuildSite - Whether the dashboard is asking for a first site.
  */
 export function useOnboardingTour(showBuildSite: boolean): void {
   const { user } = useAuth<User>();
