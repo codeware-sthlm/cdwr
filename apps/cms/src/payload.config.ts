@@ -121,7 +121,10 @@ export default buildConfig({
           // resolved server-side at config load and passed as client props.
           path: '@codeware/apps/cms/components/admin/AboutDialogHost.client',
           clientProps: { appInfo: getAppInfo(env) }
-        }
+        },
+        // Onboarding tour, mounted (invisibly) like the About dialog; opened
+        // on `OPEN_TOUR_EVENT` by the dashboard, the palette and the help drawer
+        '@codeware/apps/cms/components/admin/onboarding/OnboardingTourHost.client'
       ],
       // The login screen is where a refused session lands, so it is the one
       // place the warning has to reach even when nothing else renders

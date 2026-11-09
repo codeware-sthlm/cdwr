@@ -77,6 +77,7 @@ import { default as default_84801fdbb38ee83f29d6ca3070e6c648 } from '@codeware/a
 import { default as default_221d51dba9c38b54ffc2c5a41546df9e } from '@codeware/apps/cms/components/admin/palette/PaletteTrigger.client';
 import { default as default_a700d0a80144b7c5d2f038a255456e2a } from '@codeware/apps/cms/components/admin/PerfStatsLink.client';
 import { default as default_c095f786e1e127492688aadc0a2d34be } from '@codeware/apps/cms/components/admin/AboutDialogHost.client';
+import { default as default_20afdc83f96cb435a26796ec9a0797da } from '@codeware/apps/cms/components/admin/onboarding/OnboardingTourHost.client';
 import { GlobalViewRedirect as GlobalViewRedirect_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
 import { default as default_8fe5ada615ff9a31e77d123d0245a9e6 } from '@codeware/apps/cms/components/admin/AfterLogin';
 import { default as default_f1aa315e58788dc8980ed4850402b8bb } from '@codeware/apps/cms/components/admin/DomainMismatchNotice';
@@ -252,6 +253,8 @@ export const importMap = {
     default_a700d0a80144b7c5d2f038a255456e2a,
   '@codeware/apps/cms/components/admin/AboutDialogHost.client#default':
     default_c095f786e1e127492688aadc0a2d34be,
+  '@codeware/apps/cms/components/admin/onboarding/OnboardingTourHost.client#default':
+    default_20afdc83f96cb435a26796ec9a0797da,
   '@payloadcms/plugin-multi-tenant/rsc#GlobalViewRedirect':
     GlobalViewRedirect_d6d5f193a167989e2ee7d14202901e62,
   '@codeware/apps/cms/components/admin/AfterLogin#default':
