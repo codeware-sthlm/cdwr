@@ -21,7 +21,11 @@ import {
   DrawerTitle
 } from '@codeware/shared/ui/shadcn/components/drawer';
 import type { Config, Faq, User } from '@codeware/shared/util/payload-types';
-import { QuestionMarkCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import {
+  MapIcon,
+  QuestionMarkCircleIcon,
+  XMarkIcon
+} from '@heroicons/react/24/outline';
 import { PayloadSDK } from '@payloadcms/sdk';
 import { useAuth, useConfig, useTranslation } from '@payloadcms/ui';
 import Link from 'next/link';
@@ -30,6 +34,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { groupFaqByTopic } from './faq-groups';
 import { OPEN_HELP_EVENT, type OpenHelpDetail } from './help-events';
+import { openTour } from './onboarding/tour-events';
 
 export { OPEN_HELP_EVENT, openHelp } from './help-events';
 
@@ -192,6 +197,18 @@ export function HelpDrawer() {
             </div>
           </DrawerHeader>
           <div ref={listRef} className="flex-1 overflow-y-auto p-6">
+            <Button
+              variant="outline"
+              size="sm"
+              className="mb-4 gap-1.5"
+              onClick={() => {
+                setOpen(false);
+                openTour();
+              }}
+            >
+              <MapIcon className="size-4" aria-hidden />
+              {t('onboarding:takeTour')}
+            </Button>
             {status === 'loading' && (
               <p className="text-muted-foreground text-sm">
                 {t('help:loading')}
