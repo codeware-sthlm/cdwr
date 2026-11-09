@@ -19,7 +19,7 @@ import { openSettingsSheet } from './settings-sheet';
 import { SupabaseError, createSupabase } from './supabase';
 
 import './fonts.css';
-import './desk.css';
+import './styles.css';
 
 // Links open in the system browser in Tauri, in a new tab elsewhere
 document.addEventListener('click', (event) => {

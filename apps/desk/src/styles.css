@@ -1,1 +1,69 @@
-/* You can add global styles to this file, and also import other style files */
+/* Tailwind for the regions that have moved to React, beside desk.css, which still styles
+   everything else. No Preflight until the cleanup step, so nothing drawn today changes.
+
+   desk.css sits in its own cascade layer, below the utilities: a utility on a component then
+   wins over a desk.css rule that still reaches it, whatever the selectors. Today nothing
+   competes, so the layer changes nothing visible. */
+@layer theme, base, desk, components, utilities;
+@import 'tailwindcss/theme' layer(theme);
+@import './desk.css' layer(desk);
+@import 'tailwindcss/utilities' layer(utilities);
+
+/* Enter/exit animation utilities the shared shadcn overlays use */
+@import 'tw-animate-css';
+
+/* Tailwind scans the app by default; the shared components live in the lib */
+@source '../../../libs/shared/ui/shadcn/src';
+
+/* The Radix state variants shadcn's components use, as libs/shared/theme's tailwind-setup.css
+   defines them. The desk imports none of that file: it carries the site webfaces, the brand
+   palette and the core tokens, and theme-sync and theme-export parse it. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
+@custom-variant data-active (&:is([data-state=active], [data-active=true]));
+@custom-variant data-open (&[data-state=open]);
+@custom-variant data-closed (&[data-state=closed]);
+@custom-variant data-checked (&[data-state=checked]);
+@custom-variant data-disabled (&[data-disabled]);
+@custom-variant data-highlighted (&[data-highlighted]);
+@custom-variant data-placeholder (&[data-placeholder]);
+@custom-variant data-selected (&[data-selected=true]);
+@custom-variant data-horizontal (&[data-orientation=horizontal]);
+@custom-variant data-vertical (&[data-orientation=vertical]);
+@custom-variant data-inset (&[data-inset]);
+
+/* The shadcn variables the components read with var() directly, on the desk's palette. Only
+   names the desk does not use itself: --accent and --muted stay the desk's blue and text colour,
+   which is why the colours below map Tailwind's names straight onto the palette instead. */
+:root {
+  --foreground: var(--fg);
+  --secondary: var(--control);
+  --radius: var(--r-row);
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--raised);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--bg);
+  --color-secondary: var(--control);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--sunk);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--control);
+  --color-accent-foreground: var(--fg);
+  --color-destructive: var(--block);
+  --color-destructive-foreground: var(--alert-fg);
+  --color-border: var(--line);
+  --color-input: var(--line-strong);
+  --color-ring: var(--accent);
+
+  /* The rounding scale shadcn's components reach for, from the desk's row radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
