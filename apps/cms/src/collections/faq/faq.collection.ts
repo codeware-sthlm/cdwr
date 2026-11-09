@@ -45,7 +45,13 @@ const faq: CollectionConfig = {
       type: 'select',
       label: { en: 'Topic', sv: 'Ämne' },
       options: FAQ_TOPICS.map(({ value, label }) => ({ value, label })),
-      required: true
+      required: true,
+      admin: {
+        components: {
+          // In the list, labelled in the content locale like the question
+          Cell: '@codeware/apps/cms/components/FaqTopicCell.client'
+        }
+      }
     },
     {
       name: 'question',

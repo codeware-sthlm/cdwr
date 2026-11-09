@@ -5,6 +5,7 @@ import { default as default_a97dcd6ef1fbecb583cc71d0fff14d6e } from '@codeware/a
 import { default as default_a002f2d84101c6c675bbd597489a2d3f } from '@codeware/apps/cms/components/ThemeRecipeCell';
 import { default as default_be685d15f7420cc176c5de08321cf13b } from '@codeware/app-cms/ui/fields/theme-studio/ThemeStudioField.client';
 import { default as default_9449f087f0287fc073e73d89e75c9ce1 } from '@codeware/apps/cms/components/ThemeOverridesCell';
+import { default as default_e1186934773e626d9d68023e71a7e063 } from '@codeware/apps/cms/components/FaqTopicCell.client';
 import { default as default_ed01dfc9f6618207b2182e1d3d6146e4 } from '@codeware/apps/cms/components/admin/invite-codes/GenerateCode';
 import { RscEntryLexicalCell as RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
 import { RscEntryLexicalField as RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
@@ -107,6 +108,8 @@ export const importMap = {
     default_be685d15f7420cc176c5de08321cf13b,
   '@codeware/apps/cms/components/ThemeOverridesCell#default':
     default_9449f087f0287fc073e73d89e75c9ce1,
+  '@codeware/apps/cms/components/FaqTopicCell.client#default':
+    default_e1186934773e626d9d68023e71a7e063,
   '@codeware/apps/cms/components/admin/invite-codes/GenerateCode#default':
     default_ed01dfc9f6618207b2182e1d3d6146e4,
   '@payloadcms/richtext-lexical/rsc#RscEntryLexicalCell':
