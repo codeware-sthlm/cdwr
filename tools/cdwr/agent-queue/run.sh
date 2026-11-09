@@ -893,13 +893,17 @@ gh_err() {
 watch_renovate() {
   setopt local_options no_err_exit
   local file="$HOME_DIR/renovate.json" errf="$LOGS/renovate.$$.err" prs resp prev out level msg
+  # gh asks for 100 commits × 100 authors per PR, and GitHub refuses a query over 500k nodes
+  local renovate_limit=30
   gh_identity_or_note
-  prs="$(gh_read gh pr list --repo codeware-sthlm/cdwr --author app/renovate --state open --limit 100 \
+  prs="$(gh_read gh pr list --repo codeware-sthlm/cdwr --author app/renovate --state open --limit "$renovate_limit" \
     --json number,title,url,headRefOid,mergeable,statusCheckRollup,commits 2> "$errf")" ||
     { print -r -- "GitHub: $(gh_err "$errf")"; return 1; }
   # jq reads an empty answer as no input and passes it
   [[ -n "$prs" ]] && jq -e 'type == "array"' >/dev/null 2>&1 <<<"$prs" ||
     { prs="${prs//[[:cntrl:]]/ }"; print -r -- "not a list: ${${prs[1,80]}:-(empty)}"; return 1; }
+  [[ "$(jq 'length' <<<"$prs")" -lt "$renovate_limit" ]] ||
+    { note "warn: renovate: $renovate_limit open Renovate PRs, the page limit; older ones are not read"; record warn "" "renovate: PR page limit reached"; }
   resp="$(linear "$RENOVATE_TICKETS")" || { print -r -- "Linear did not answer"; return 1; }
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
     { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
