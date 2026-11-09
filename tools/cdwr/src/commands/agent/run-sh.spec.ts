@@ -1191,6 +1191,44 @@ describe('run.sh watch_renovate', () => {
     expect(source).not.toContain('mutation');
   });
 
+  it("asks for few enough PRs to stay under GitHub's 500k node limit", () => {
+    const limit = Number(source.match(/renovate_limit=(\d+)/)?.[1]);
+    expect(limit).toBe(30);
+    expect(source).toContain('--limit "$renovate_limit"');
+    expect(source).not.toContain('--limit 100');
+    // gh asks for 100 commits per PR and 100 authors per commit
+    expect(limit * 100 * 100).toBeLessThan(500_000);
+  });
+
+  it.skipIf(!canRun)('passes the limit to gh pr list', () => {
+    run(PRS);
+    expect(read('gh')).toContain('--limit 30');
+  });
+
+  it.skipIf(!canRun)(
+    'warns on a full page and still writes renovate.json',
+    () => {
+      const full = Array.from({ length: 30 }, (_, i) => ({
+        ...PRS[0],
+        number: 700 + i
+      }));
+      const result = run(full);
+      expect(result.stdout).toContain('rc=0');
+      expect(read('notes')).toContain(
+        'warn: renovate: 30 open Renovate PRs, the page limit; older ones are not read'
+      );
+      expect(read('records')).toContain(
+        'warn  renovate: PR page limit reached'
+      );
+      expect(Object.keys(JSON.parse(read('renovate.json')))).toHaveLength(30);
+    }
+  );
+
+  it.skipIf(!canRun)('does not warn below the page limit', () => {
+    run(PRS);
+    expect(read('notes')).not.toContain('page limit');
+  });
+
   it('runs after watch_prs and before close_parents, never on --check', () => {
     const block =
       SCRIPT.match(
