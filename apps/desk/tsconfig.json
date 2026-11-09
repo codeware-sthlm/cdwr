@@ -4,6 +4,10 @@
     "allowJs": false,
     "allowSyntheticDefaultImports": true,
     "strict": true,
+    "isolatedModules": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
     "types": ["vite/client", "vitest"]
   },
   "files": [],
