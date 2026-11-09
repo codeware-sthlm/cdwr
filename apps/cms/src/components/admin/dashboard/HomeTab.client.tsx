@@ -33,7 +33,6 @@ import {
 import { useAuth, useTranslation } from '@payloadcms/ui';
 import Link from 'next/link';
 
-import { useOnboardingTour } from '../onboarding/use-onboarding-tour';
 import { formatRelativeTime } from '../utils/relative-time';
 import { useCollectionLabel } from '../utils/use-collection-label';
 
@@ -93,7 +92,6 @@ export function HomeTab({
     usePanelLimits();
   const { showChecklist, checklistSteps, dismissChecklist } =
     useGettingStarted(counts);
-  useOnboardingTour(showBuildSite);
 
   const language = i18n.language;
 
