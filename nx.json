@@ -95,15 +95,15 @@
     "@nx/react": {
       "application": {
         "babel": true,
-        "style": "tailwind",
+        "style": "css",
         "linter": "eslint",
         "bundler": "vite"
       },
       "component": {
-        "style": "tailwind"
+        "style": "css"
       },
       "library": {
-        "style": "tailwind",
+        "style": "css",
         "linter": "eslint",
         "unitTestRunner": "vitest"
       }
