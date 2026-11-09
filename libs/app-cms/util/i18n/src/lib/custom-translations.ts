@@ -236,6 +236,34 @@ const customTranslationsSchema = z.object({
     themeLibrary: z.string(),
     uploadMedia: z.string()
   }),
+  onboarding: z.object({
+    accountBody: z.string(),
+    accountTitle: z.string(),
+    back: z.string(),
+    dialogDescription: z.string(),
+    dialogTitle: z.string(),
+    draftsBody: z.string(),
+    draftsTitle: z.string(),
+    finish: z.string(),
+    moreBody: z.string(),
+    moreTitle: z.string(),
+    navigationBody: z.string(),
+    navigationTitle: z.string(),
+    next: z.string(),
+    pagesBody: z.string(),
+    pagesTitle: z.string(),
+    readMore: z.string(),
+    searchHelpBody: z.string(),
+    searchHelpTitle: z.string(),
+    showMe: z.string(),
+    siteSettingsBody: z.string(),
+    siteSettingsTitle: z.string(),
+    skip: z.string(),
+    statisticsBody: z.string(),
+    statisticsTitle: z.string(),
+    stepLabel: z.string(),
+    takeTour: z.string()
+  }),
   platform: z.object({
     buildTitle: z.string(),
     buildUnstamped: z.string(),
@@ -771,6 +799,41 @@ You can assign multiple tags to a file.`,
       searchPlaceholder: 'Filter menu…',
       themeLibrary: 'Theme library',
       uploadMedia: 'Upload media'
+    },
+    onboarding: {
+      accountBody:
+        'Change your password, set up the authenticator app on a new phone, or pick the language of the admin.',
+      accountTitle: 'Account & sign-in',
+      back: 'Back',
+      dialogDescription: 'The five things that get you going',
+      dialogTitle: 'Take a tour',
+      draftsBody:
+        'Your changes are saved as a draft while you write. Visitors see nothing until you press Publish. Every save keeps a version, so you can bring back an earlier one.',
+      draftsTitle: 'Drafts & versions',
+      finish: 'Done',
+      moreBody: 'Two more things worth knowing.',
+      moreTitle: 'More to discover',
+      navigationBody:
+        'The menu is what visitors use to find their way around your site. A new page shows up there once you add it in Navigation.',
+      navigationTitle: 'Menu',
+      next: 'Next',
+      pagesBody:
+        'A page is built from blocks: a heading with a picture, a text, a form. Add blocks, move them up or down, and use Live Preview to see the page on a phone.',
+      pagesTitle: 'Pages',
+      readMore: 'Read more',
+      searchHelpBody:
+        'Cmd+K / Ctrl+K finds every page, post and setting. Help in the top bar answers common questions, and you can take this tour again from there.',
+      searchHelpTitle: 'Search & help',
+      showMe: 'Show me',
+      siteSettingsBody:
+        "Your site's name and icon, the contact details in the footer and how the site looks are all set here.",
+      siteSettingsTitle: 'Site settings',
+      skip: 'Skip',
+      statisticsBody:
+        'See how many people visit your site. Open Visitors on the start page to get your own statistics login.',
+      statisticsTitle: 'Statistics',
+      stepLabel: 'Step {{step}} of {{total}}',
+      takeTour: 'Take the tour'
     },
     platform: {
       buildTitle: 'Environment & build',
@@ -1360,6 +1423,41 @@ Du kan tilldela flera etiketter till en fil.`,
       searchPlaceholder: 'Filtrera menyn…',
       themeLibrary: 'Temabibliotek',
       uploadMedia: 'Ladda upp media'
+    },
+    onboarding: {
+      accountBody:
+        'Byt lösenord, ställ in autentiseringsappen på en ny mobil eller välj vilket språk administrationen visas på.',
+      accountTitle: 'Konto & inloggning',
+      back: 'Tillbaka',
+      dialogDescription: 'Fem saker som hjälper dig att komma igång',
+      dialogTitle: 'Ta en rundtur',
+      draftsBody:
+        'Dina ändringar sparas som utkast medan du skriver. Besökarna ser ingenting förrän du trycker på Publicera. Varje gång du sparar behålls en version, så du kan ta tillbaka en tidigare.',
+      draftsTitle: 'Utkast & versioner',
+      finish: 'Klar',
+      moreBody: 'Två saker till som är bra att känna till.',
+      moreTitle: 'Mer att upptäcka',
+      navigationBody:
+        'Menyn är det besökarna använder för att hitta på din webbplats. En ny sida syns där när du har lagt till den i Navigation.',
+      navigationTitle: 'Menyn',
+      next: 'Nästa',
+      pagesBody:
+        'En sida byggs av block: en rubrik med bild, en text, ett formulär. Lägg till block, flytta dem upp eller ner, och se hur sidan ser ut på en mobil med Förhandsgranskning.',
+      pagesTitle: 'Sidor',
+      readMore: 'Läs mer',
+      searchHelpBody:
+        'Cmd+K / Ctrl+K hittar alla sidor, inlägg och inställningar. Hjälp i verktygsfältet svarar på vanliga frågor, och där kan du ta rundturen igen.',
+      searchHelpTitle: 'Sök & hjälp',
+      showMe: 'Visa mig',
+      siteSettingsBody:
+        'Här ställer du in webbplatsens namn och ikon, kontaktuppgifterna i sidfoten och hur webbplatsen ser ut.',
+      siteSettingsTitle: 'Webbplatsinställningar',
+      skip: 'Hoppa över',
+      statisticsBody:
+        'Se hur många som besöker din webbplats. Öppna Besökare på startsidan för att skaffa en egen inloggning till statistiken.',
+      statisticsTitle: 'Statistik',
+      stepLabel: 'Steg {{step}} av {{total}}',
+      takeTour: 'Ta rundturen'
     },
     platform: {
       buildTitle: 'Miljö & bygge',
