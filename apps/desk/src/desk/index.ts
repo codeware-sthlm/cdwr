@@ -1,4 +1,6 @@
 import { isTauri } from '@tauri-apps/api/core';
+import { createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 
 import { deskSha } from '../build-info';
 import type { Adapter } from '../data';
@@ -15,6 +17,7 @@ import {
   prCommandKey,
   sendCommand
 } from './commands';
+import { Status } from './components/status';
 import { AGENT_AVATAR, CONFIRM_MS } from './constants';
 import { type Loader, createLoader } from './load';
 import { type Model, model, shipped } from './model';
@@ -27,7 +30,6 @@ import {
   spendChart
 } from './render/charts';
 import { CAP_RANGE, LIMIT_RANGE } from './render/controls';
-import { renderStatus } from './render/header';
 import { renderPlatform } from './render/platform';
 import {
   renderAlert,
@@ -69,6 +71,9 @@ const $ = (id: string): HTMLElement => {
   if (!el) throw new Error(`#${id} is missing from the page`);
   return el;
 };
+
+// The header's status pill is React; the rest of the page is still written as HTML
+const statusRoot = createRoot($('status'));
 
 // ---------- Charts ----------
 
@@ -143,7 +148,13 @@ let shownProblems = false;
 function renderLive(m: Model, now: Date): void {
   shownProblems = m.problems.length > 0;
   const platform = state.ui.view === 'platform';
-  setHtml('status', renderStatus(m, state.data.connection));
+  statusRoot.render(
+    createElement(Status, {
+      m,
+      connection: state.data.connection,
+      onView: (view) => showView(view)
+    })
+  );
   const alert = renderAlert(m);
   setHtml('alert', alert);
   $('alert').hidden = !alert;
