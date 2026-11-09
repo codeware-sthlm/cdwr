@@ -5,9 +5,9 @@
    wins over a desk.css rule that still reaches it, whatever the selectors. Today nothing
    competes, so the layer changes nothing visible. */
 @layer theme, base, desk, components, utilities;
-@import 'tailwindcss/theme' layer(theme);
+@import 'tailwindcss/theme.css' layer(theme);
 @import './desk.css' layer(desk);
-@import 'tailwindcss/utilities' layer(utilities);
+@import 'tailwindcss/utilities.css' layer(utilities);
 
 /* Enter/exit animation utilities the shared shadcn overlays use */
 @import 'tw-animate-css';
