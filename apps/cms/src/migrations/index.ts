@@ -91,6 +91,7 @@ import * as migration_20261025_222138_idle_workspace_jobs from './20261025_22213
 import * as migration_20261026_181739_totp from './20261026_181739_totp';
 import * as migration_20261106_185215_cod_717_blocks from './20261106_185215_cod_717_blocks';
 import * as migration_20261108_123050_cod_708_faq_topic from './20261108_123050_cod_708_faq_topic';
+import * as migration_20261110_225226_cod_769_coming_soon from './20261110_225226_cod_769_coming_soon';
 
 export const migrations = [
   {
@@ -557,5 +558,10 @@ export const migrations = [
     up: migration_20261108_123050_cod_708_faq_topic.up,
     down: migration_20261108_123050_cod_708_faq_topic.down,
     name: '20261108_123050_cod_708_faq_topic'
+  },
+  {
+    up: migration_20261110_225226_cod_769_coming_soon.up,
+    down: migration_20261110_225226_cod_769_coming_soon.down,
+    name: '20261110_225226_cod_769_coming_soon'
   }
 ];
