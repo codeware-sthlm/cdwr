@@ -41,7 +41,7 @@ overrides:
 # The authenticator entry's icon (COD-739), until payload-totp takes an image
 # option of its own. Pinned to the version: an upgrade has to drop or redo it.
 patchedDependencies:
-  payload-totp@3.0.6: patches/payload-totp@3.0.6.patch
+  payload-totp@3.0.7: patches/payload-totp@3.0.7.patch
 
 allowBuilds:
   "@evilmartians/lefthook": true
