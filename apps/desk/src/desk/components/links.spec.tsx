@@ -75,9 +75,21 @@ describe('LinkIds', () => {
     );
     expect(container.querySelector('b')).toBeNull();
   });
+
+  it('links every ticket id, not only the first', () => {
+    const { container } = render(<LinkIds text="After COD-2 · PR 5, COD-1" />);
+    const links = [...container.querySelectorAll('a.id')];
+    expect(links.map((a) => a.textContent)).toEqual(['COD-2', 'COD-1']);
+  });
 });
 
 describe('Inline', () => {
+  it('puts every backtick span in <code>, not only the first', () => {
+    const { container } = render(<Inline text="`a` then `b`" />);
+    const codes = [...container.querySelectorAll('code')];
+    expect(codes.map((c) => c.textContent)).toEqual(['a', 'b']);
+  });
+
   it('puts backtick spans in <code> and links ids inside and outside them', () => {
     const { container } = render(<Inline text="after COD-7 in `COD-8` now" />);
     const code = container.querySelector('code');
