@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@codeware/shared/ui/shadcn/components/dialog';
+import { Kbd, KbdGroup } from '@codeware/shared/ui/shadcn/components/kbd';
 import type { User } from '@codeware/shared/util/payload-types';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import { useAuth, usePreferences, useTranslation } from '@payloadcms/ui';
@@ -41,6 +42,7 @@ import {
   TOUR_MORE,
   type TourShowMe,
   type TourTone,
+  splitShortcuts,
   visibleTourSteps
 } from './tour-steps';
 
@@ -289,9 +291,10 @@ export function OnboardingTourHost() {
         // Esc, the X and a click outside all count as seen
         onOpenChange={(next) => (next ? setOpen(true) : close())}
       >
-        {/* One size for every step, so the dialog doesn't jump; the body scrolls when it must */}
+        {/* One size for every step, so the dialog doesn't jump; the body scrolls when it must.
+         * In pixels: the admin's root font size is 13px, so rem sizes come out small */}
         <DialogContent
-          className="codeware-admin twp flex h-[min(40rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+          className="codeware-admin twp flex h-[min(720px,calc(100dvh-32px))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]"
           onKeyDown={onKeyDown}
           onCloseAutoFocus={(event) => {
             if (leaving.current) {
@@ -317,7 +320,7 @@ export function OnboardingTourHost() {
                 className={ink({
                   tone,
                   className:
-                    'bg-background/60 flex h-24 items-center justify-center rounded-xl p-2 sm:h-32'
+                    'bg-background/60 flex h-28 items-center justify-center rounded-xl p-2 sm:h-40'
                 })}
               >
                 <Illustration className="h-full w-auto" />
@@ -340,7 +343,19 @@ export function OnboardingTourHost() {
 
           <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
             <p className="text-foreground/80 text-base leading-relaxed">
-              {t(step ? step.bodyKey : 'onboarding:moreBody')}
+              {splitShortcuts(
+                t(step ? step.bodyKey : 'onboarding:moreBody')
+              ).map((part, i) =>
+                typeof part === 'string' ? (
+                  part
+                ) : (
+                  <KbdGroup key={i} className="align-text-bottom">
+                    {part.map((key) => (
+                      <Kbd key={key}>{key}</Kbd>
+                    ))}
+                  </KbdGroup>
+                )
+              )}
             </p>
 
             {step ? (

@@ -9,7 +9,12 @@ import {
   setTourPause,
   subscribeTourPause
 } from './tour-pause';
-import { TOUR_MORE, TOUR_STEPS, visibleTourSteps } from './tour-steps';
+import {
+  TOUR_MORE,
+  TOUR_STEPS,
+  splitShortcuts,
+  visibleTourSteps
+} from './tour-steps';
 
 type Permissions = ReturnType<typeof useAuth>['permissions'];
 
@@ -64,6 +69,21 @@ describe('tour topics', () => {
     for (const { topic } of [...TOUR_STEPS, ...TOUR_MORE]) {
       expect(isFaqTopic(topic)).toBe(true);
     }
+  });
+});
+
+describe('splitShortcuts', () => {
+  it('cuts the key combinations out as keys', () => {
+    expect(splitShortcuts('Cmd+K / Ctrl+K finds every page.')).toEqual([
+      ['⌘', 'K'],
+      ' / ',
+      ['Ctrl', 'K'],
+      ' finds every page.'
+    ]);
+  });
+
+  it('leaves text without a combination whole', () => {
+    expect(splitShortcuts('Press Publish.')).toEqual(['Press Publish.']);
   });
 });
 
