@@ -14,6 +14,7 @@ import { BlockGalleryBlock } from './blocks/block-gallery/BlockGalleryBlock';
 import { CalloutBlock } from './blocks/callout/CalloutBlock';
 import { CardBlock } from './blocks/card/CardBlock';
 import { CodeBlock } from './blocks/code/CodeBlock';
+import { ComingSoonBlock } from './blocks/coming-soon/ComingSoonBlock';
 import { CustomComponentBlock } from './blocks/custom-component/CustomComponentBlock';
 import { FeatureCardsBlock } from './blocks/feature-cards/FeatureCardsBlock';
 import { FeatureSectionBlock } from './blocks/feature-section/FeatureSectionBlock';
@@ -183,6 +184,7 @@ const blocksMap: Record<
   callout: CalloutBlock,
   card: CardBlock,
   code: CodeBlock,
+  'coming-soon': ComingSoonBlock,
   content: ContentBlock,
   'custom-component': CustomComponentBlock,
   'feature-cards': FeatureCardsBlock,
@@ -239,6 +241,11 @@ const isOverlay = (block: Props['blocks'][number]) =>
 const isHeroWithLines = (block: Props['blocks'][number]) =>
   block.blockType === 'hero' && block.decoration === 'horizon-lines';
 
+/** A block filling the first screen: a hero's fill layout, or a coming-soon page */
+const opensFull = (block: Props['blocks'][number]) =>
+  (block.blockType === 'hero' && block.layout === 'fill') ||
+  block.blockType === 'coming-soon';
+
 /** A block's band, `none` for a block that has none or cannot have one */
 const bandOf = (block: Props['blocks'][number]): SectionBand =>
   isOverlay(block) ? 'none' : (('band' in block ? block.band : null) ?? 'none');
@@ -280,13 +287,10 @@ export const RenderBlocks: React.FC<Props> = ({
             ? ''
             : undefined
         }
-        // A page that opens on a hero filling the screen starts right under
+        // A page that opens on a block filling the screen starts right under
         // the header, which the layout reads from here
         data-opens-full={
-          framed &&
-          !nested &&
-          firstVisible?.blockType === 'hero' &&
-          firstVisible.layout === 'fill'
+          framed && !nested && !!firstVisible && opensFull(firstVisible)
             ? ''
             : undefined
         }
