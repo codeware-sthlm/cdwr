@@ -12,6 +12,8 @@ export type TranslationKey =
   | 'colorScheme.select'
   | 'colorScheme.switchTo'
   | 'colorScheme.system'
+  | 'comingSoon.contact'
+  | 'comingSoon.opening'
   | 'error.contactAdmin'
   | 'error.landingPageNotFound'
   | 'error.landingPageNotFoundDescription'
@@ -331,6 +333,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'colorScheme.select': 'Select appearance',
     'colorScheme.switchTo': 'Switch to {{colorScheme}} appearance',
     'colorScheme.system': 'system preference',
+    'comingSoon.contact': 'Get in touch',
+    'comingSoon.opening': 'Opening {{date}}',
     'error.contactAdmin':
       'Please contact the administrator if the problem persists.',
     'error.landingPageNotFound': 'Landing page was not found',
@@ -712,6 +716,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'colorScheme.select': 'Välj utseende',
     'colorScheme.switchTo': 'Byt till {{colorScheme}} utseende',
     'colorScheme.system': 'systeminställning',
+    'comingSoon.contact': 'Kontakta oss',
+    'comingSoon.opening': 'Öppnar {{date}}',
     'error.contactAdmin': 'Kontakta administratören om problemet kvarstår.',
     'error.landingPageNotFound': 'Startsida hittades inte',
     'error.landingPageNotFoundDescription':
