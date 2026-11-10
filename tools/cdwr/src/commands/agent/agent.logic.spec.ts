@@ -29,6 +29,7 @@ import {
   implementBudget,
   implementCap,
   implementCapSource,
+  installWork,
   installedEnv,
   lastImplementRun,
   lastSchedulerLine,
@@ -1410,6 +1411,122 @@ describe('schedulerHere', () => {
     '%s loaded=%s plist=%s -> %s',
     (host, loaded, plist, expected) => {
       expect(schedulerHere(host, { loaded }, plist)).toBe(expected);
+    }
+  );
+});
+
+describe('installWork', () => {
+  const fresh = {
+    schedulerHere: false,
+    schedulerFlag: false,
+    scripts: 'missing' as const,
+    appCredentials: false,
+    linearServerCurrent: false,
+    scheduler: {
+      worktreeExists: false,
+      envCopies: ['tools/cdwr/.env'],
+      depsInstalled: false,
+      plistCurrent: false,
+      jobLoaded: false,
+      jobScriptCurrent: false
+    }
+  };
+  const current = {
+    ...fresh,
+    scripts: 'current' as const,
+    appCredentials: true,
+    linearServerCurrent: true,
+    scheduler: {
+      worktreeExists: true,
+      envCopies: [],
+      depsInstalled: true,
+      plistCurrent: true,
+      jobLoaded: true,
+      jobScriptCurrent: true
+    }
+  };
+
+  it('sets up only the attended side by default', () => {
+    expect(installWork(fresh)).toEqual({
+      scheduler: false,
+      worktree: false,
+      envCopies: [],
+      deps: false,
+      script: true,
+      plist: false,
+      reload: false,
+      credentials: true,
+      mcp: true
+    });
+  });
+
+  it('adds the scheduler with the flag', () => {
+    expect(installWork({ ...fresh, schedulerFlag: true })).toEqual({
+      scheduler: true,
+      worktree: true,
+      envCopies: ['tools/cdwr/.env'],
+      deps: true,
+      script: true,
+      plist: true,
+      reload: true,
+      credentials: true,
+      mcp: true
+    });
+  });
+
+  it('keeps a job already here current without the flag', () => {
+    const work = installWork({
+      ...current,
+      schedulerHere: true,
+      scripts: 'stale',
+      scheduler: { ...current.scheduler, plistCurrent: false }
+    });
+    expect(work).toMatchObject({
+      scheduler: true,
+      script: true,
+      plist: true,
+      reload: true
+    });
+  });
+
+  it('reloads a job that runs another script', () => {
+    expect(
+      installWork({
+        ...current,
+        schedulerHere: true,
+        scheduler: { ...current.scheduler, jobScriptCurrent: false }
+      })
+    ).toMatchObject({ plist: false, reload: true });
+  });
+
+  it('refreshes stale copies on an attended Mac, nothing else', () => {
+    expect(installWork({ ...current, scripts: 'stale' })).toEqual({
+      scheduler: false,
+      worktree: false,
+      envCopies: [],
+      deps: false,
+      script: true,
+      plist: false,
+      reload: false,
+      credentials: false,
+      mcp: false
+    });
+  });
+
+  it.each([false, true])(
+    'has nothing to do when current (scheduler %s)',
+    (here) => {
+      expect(installWork({ ...current, schedulerHere: here })).toEqual({
+        scheduler: here,
+        worktree: false,
+        envCopies: [],
+        deps: false,
+        script: false,
+        plist: false,
+        reload: false,
+        credentials: false,
+        mcp: false
+      });
     }
   );
 });
