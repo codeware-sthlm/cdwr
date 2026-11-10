@@ -5,6 +5,15 @@
 
 LIB_SH="${${(%):-%x}:A}"
 
+# In the container the credential files have fixed places on the tmpfs, so a claude run finds
+# them without the variables that name them: claude_env drops those, and a session cannot read a
+# file through a variable the deny rules never see
+if [[ "${AGENT_QUEUE_HOST:-}" == container ]]; then
+  : "${AGENT_QUEUE_LINEAR_KEY_FILE:=/run/agent/linear.key}"
+  : "${AGENT_QUEUE_LINEAR_APP_FILE:=/run/agent/linear-app.env}"
+  : "${AGENT_QUEUE_LINEAR_TOKEN_FILE:=/run/agent/linear.token}"
+fi
+
 # The static key, kept as the fallback until it is revoked: AGENT_QUEUE_LINEAR_KEY, then the file
 # AGENT_QUEUE_LINEAR_KEY_FILE names (the container's), then on macOS the Keychain
 key="${AGENT_QUEUE_LINEAR_KEY:-}"
@@ -67,8 +76,10 @@ LINEAR_EXCHANGE_HOLD=600
 linear_exchange() {
   linear_credentials || return 1
   local answer token expires
+  # --data-urlencode reads each value from a file and encodes it, so an `&` or `%` in a secret survives
   if ! answer="$(curl -sS -m 20 "$LINEAR_TOKEN_URL" -d grant_type=client_credentials -d "scope=$LINEAR_TOKEN_SCOPE" \
-        -d @<(print -r -- "client_id=$LINEAR_CLIENT_ID&client_secret=$LINEAR_CLIENT_SECRET") 2>/dev/null)" ||
+        --data-urlencode client_id@<(print -rn -- "$LINEAR_CLIENT_ID") \
+        --data-urlencode client_secret@<(print -rn -- "$LINEAR_CLIENT_SECRET") 2>/dev/null)" ||
      ! token="$(jq -er '.access_token | select(type == "string" and length > 0)' <<<"$answer" 2>/dev/null)"; then
     mkdir -p "${LINEAR_TOKEN_FILE:h}" 2>/dev/null || true
     ( umask 077; date +%s > "$LINEAR_TOKEN_FILE.failed" ) 2>/dev/null || true
@@ -154,7 +165,8 @@ LINEAR_MCP_URL=https://mcp.linear.app/mcp
 
 # claude_env: the env prefix for every claude run, without the credentials; the session's wait.sh
 # finds them the same way the helper does
-claude_env=(env -u AGENT_QUEUE_LINEAR_KEY -u AGENT_QUEUE_LINEAR_CLIENT_ID -u AGENT_QUEUE_LINEAR_CLIENT_SECRET)
+claude_env=(env -u AGENT_QUEUE_LINEAR_KEY -u AGENT_QUEUE_LINEAR_CLIENT_ID -u AGENT_QUEUE_LINEAR_CLIENT_SECRET
+  -u AGENT_QUEUE_LINEAR_KEY_FILE -u AGENT_QUEUE_LINEAR_APP_FILE -u AGENT_QUEUE_LINEAR_TOKEN_FILE)
 
 # linear_header: the MCP header as JSON, for the headersHelper; nothing without a token
 linear_header() {

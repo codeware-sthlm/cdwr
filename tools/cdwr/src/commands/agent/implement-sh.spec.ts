@@ -157,6 +157,12 @@ describe('implement.sh', () => {
     expect(denied).toContain('*linear-app.env*');
     expect(isDenied('cat /h/.cdwr/agent-queue/linear.token')).toBe(true);
     expect(isDenied('cat /h/linear-app.env')).toBe(true);
+    expect(isDenied('cat "$AGENT_QUEUE_LINEAR_APP_FILE"')).toBe(true);
+    expect(
+      isDenied(
+        'security find-generic-password -s linear-agent-queue-client-secret -w'
+      )
+    ).toBe(true);
   });
 
   const wt = '/w/codeware-cod-705';

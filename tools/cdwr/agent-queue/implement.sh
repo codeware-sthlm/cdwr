@@ -134,7 +134,7 @@ DENY=(
   # The container's keys live on its tmpfs; the Linear key reaches only the MCP's header helper
   "Read(//run/agent/**)" "Bash(*/run/agent/*)" "Bash(*lib.sh*)"
   # The Mac's token cache and the app's credentials files stay out of the session too
-  "Read(/$HOME_DIR/linear.token*)" "Bash(*linear.token*)" "Bash(*linear-app.env*)" "Bash(*security find-generic-password*)"
+  "Read(/$HOME_DIR/linear.token*)" "Bash(*linear.token*)" "Bash(*linear-app.env*)" "Bash(*security find-generic-password*)" "Bash(*AGENT_QUEUE_LINEAR*)"
 )
 # The ticket worktrees sit beside the agent worktree; `//` anchors the rule at the root
 WT="/${REPO:h}/codeware-cod-*/**"
