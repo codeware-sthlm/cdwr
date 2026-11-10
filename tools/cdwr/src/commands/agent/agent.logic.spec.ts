@@ -1,11 +1,18 @@
 import {
+  KEYCHAIN_CLIENT_ID_SERVICE,
+  KEYCHAIN_CLIENT_SECRET_SERVICE,
   KEYCHAIN_SERVICE,
   LABEL,
+  LINEAR_CLIENT_ID_ENV,
+  LINEAR_CLIENT_SECRET_ENV,
+  LINEAR_KEY_ENV,
   QUEUE_FILES,
   QUEUE_SOURCE_DIR,
   type QueueView,
   STALE_LOCK_MS,
   STALE_WATCH_MS,
+  attendedLinearServer,
+  attendedLinearServerCurrent,
   domainTarget,
   drift,
   filesDrift,
@@ -27,7 +34,7 @@ import {
   lastSchedulerLine,
   latestRunLog,
   launchPath,
-  linearKeySource,
+  linearAuthSource,
   lockState,
   memoryDir,
   nodeMajor,
@@ -125,6 +132,13 @@ describe('constants', () => {
   it('names the job, the keychain item and the queue files', () => {
     expect(LABEL).toBe('se.codeware.agent-queue');
     expect(KEYCHAIN_SERVICE).toBe('linear-agent-queue');
+    expect(KEYCHAIN_CLIENT_ID_SERVICE).toBe('linear-agent-queue-client-id');
+    expect(KEYCHAIN_CLIENT_SECRET_SERVICE).toBe(
+      'linear-agent-queue-client-secret'
+    );
+    expect(LINEAR_KEY_ENV).toBe('AGENT_QUEUE_LINEAR_KEY');
+    expect(LINEAR_CLIENT_ID_ENV).toBe('AGENT_QUEUE_LINEAR_CLIENT_ID');
+    expect(LINEAR_CLIENT_SECRET_ENV).toBe('AGENT_QUEUE_LINEAR_CLIENT_SECRET');
     expect(QUEUE_SOURCE_DIR).toBe('tools/cdwr/agent-queue');
     expect(QUEUE_FILES).toEqual([
       'run.sh',
@@ -140,16 +154,77 @@ describe('constants', () => {
   });
 });
 
-describe('linearKeySource', () => {
+describe('linearAuthSource', () => {
+  const app = {
+    AGENT_QUEUE_LINEAR_CLIENT_ID: 'id',
+    AGENT_QUEUE_LINEAR_CLIENT_SECRET: 'secret'
+  };
   it.each([
-    ['container', { AGENT_QUEUE_LINEAR_KEY: 'k' }, 'env'],
+    ['container', app, 'app-env'],
+    ['container', { ...app, AGENT_QUEUE_LINEAR_KEY: 'k' }, 'app-env'],
+    ['container', { AGENT_QUEUE_LINEAR_CLIENT_ID: 'id' }, 'none'],
+    [
+      'container',
+      { AGENT_QUEUE_LINEAR_CLIENT_ID: 'id', AGENT_QUEUE_LINEAR_KEY: 'k' },
+      'key-env'
+    ],
+    ['container', { AGENT_QUEUE_LINEAR_KEY: 'k' }, 'key-env'],
     ['container', { AGENT_QUEUE_LINEAR_KEY: '' }, 'none'],
     ['container', {}, 'none'],
     ['launchd', {}, 'keychain-possible'],
-    ['launchd', { AGENT_QUEUE_LINEAR_KEY: 'k' }, 'keychain-possible'],
-    [null, { AGENT_QUEUE_LINEAR_KEY: 'k' }, 'none']
+    ['launchd', { ...app, AGENT_QUEUE_LINEAR_KEY: 'k' }, 'keychain-possible'],
+    [null, app, 'none']
   ] as const)('%s with %j -> %s', (host, env, expected) => {
-    expect(linearKeySource(host, env)).toBe(expected);
+    expect(linearAuthSource(host, env)).toBe(expected);
+  });
+});
+
+describe('attendedLinearServer', () => {
+  it('signs Linear calls with the installed lib.sh', () => {
+    expect(attendedLinearServer('/h/.cdwr/agent-queue/lib.sh')).toEqual({
+      type: 'http',
+      url: 'https://mcp.linear.app/mcp',
+      headersHelper: 'zsh /h/.cdwr/agent-queue/lib.sh header'
+    });
+  });
+
+  it('quotes a path the shell would split, as lib.sh does', () => {
+    expect(attendedLinearServer('/Users/Me Too/lib.sh').headersHelper).toBe(
+      'zsh /Users/Me\\ Too/lib.sh header'
+    );
+  });
+});
+
+describe('attendedLinearServerCurrent', () => {
+  const lib = '/h/.cdwr/agent-queue/lib.sh';
+  it('is true when the server matches', () => {
+    expect(
+      attendedLinearServerCurrent(
+        { mcpServers: { agent_linear: attendedLinearServer(lib) } },
+        lib
+      )
+    ).toBe(true);
+  });
+  it.each([
+    ['null', null],
+    ['a string', 'x'],
+    ['no servers', {}],
+    ['another server', { mcpServers: { other: attendedLinearServer(lib) } }],
+    [
+      'another path',
+      { mcpServers: { agent_linear: attendedLinearServer('/x/lib.sh') } }
+    ],
+    [
+      'another url',
+      {
+        mcpServers: {
+          agent_linear: { ...attendedLinearServer(lib), url: 'https://x' }
+        }
+      }
+    ],
+    ['a null server', { mcpServers: { agent_linear: null } }]
+  ])('is false for %s', (_name, config) => {
+    expect(attendedLinearServerCurrent(config, lib)).toBe(false);
   });
 });
 

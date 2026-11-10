@@ -10,7 +10,7 @@ import {
   checkRun,
   implementReport,
   jobState,
-  keyPresent,
+  linearAuth,
   lockAge,
   mirrorTargetOf,
   paths,
@@ -24,8 +24,10 @@ import { symbols, theme } from '../../ui/theme';
 import {
   DEFAULT_QUEUE_LIMIT,
   IMPLEMENT_BUDGET_USD,
-  KEYCHAIN_SERVICE,
-  LINEAR_KEY_ENV,
+  KEYCHAIN_CLIENT_ID_SERVICE,
+  KEYCHAIN_CLIENT_SECRET_SERVICE,
+  LINEAR_CLIENT_ID_ENV,
+  LINEAR_CLIENT_SECRET_ENV,
   RUN_FALLBACK_SECONDS,
   RUN_INTERVAL_SECONDS,
   byFile,
@@ -39,7 +41,7 @@ import {
   formatTable,
   formatWatching,
   lastSchedulerLine,
-  linearKeySource,
+  linearAuthSource,
   lockState,
   parseAttended,
   parseCheck,
@@ -155,21 +157,25 @@ export default defineCommand({
           ? 'action (only what needs you)'
           : report.notifyLevel
       ),
-      report.keyPresent
+      report.linearAuth === 'app'
         ? row(
             true,
-            'Linear key',
-            report.keySource === 'env'
-              ? `from ${LINEAR_KEY_ENV}`
-              : 'in the Keychain'
+            'Linear auth',
+            report.linearAuthSource === 'app-env'
+              ? "the queue's Linear app, from the environment"
+              : "the queue's Linear app"
           )
-        : row(
-            false,
-            'Linear key',
-            report.host === 'container'
-              ? `not set (${LINEAR_KEY_ENV})`
-              : `not set (the Keychain service ${KEYCHAIN_SERVICE})`
-          ),
+        : report.linearAuth === 'key'
+          ? row(
+              'warn',
+              'Linear auth',
+              `the personal key (fallback); the app's client id and secret are missing (${linearAppPlaces(report.host)})`
+            )
+          : row(
+              false,
+              'Linear auth',
+              `not set (${linearAppPlaces(report.host)})`
+            ),
       ...(report.mirror === null
         ? []
         : [row(true, 'Heartbeat mirror', report.mirror)]),
@@ -313,11 +319,11 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
   return ctx.ui.task(
     'Reading the agent queue',
     async () => {
-      const [job, key] = await Promise.all([
+      const [job, auth] = await Promise.all([
         host === 'container'
           ? Promise.resolve({ loaded: false as const })
           : jobState(),
-        keyPresent(ctx.env)
+        linearAuth(ctx.env)
       ]);
       const installed = byFile((file) => readText(queue.files[file]));
       const sources = readQueueSources(ctx.root);
@@ -353,8 +359,8 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         paused: existsSync(queue.paused),
         notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
         host,
-        keySource: linearKeySource(host, ctx.env),
-        keyPresent: key,
+        linearAuth: auth,
+        linearAuthSource: linearAuthSource(host, ctx.env),
         mirror: mirrorTargetOf(queue),
         scheduler,
         script:
@@ -403,6 +409,12 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
     () => 'Read the agent queue'
   );
 }
+
+/** Where the app's client id and secret are read from on this host */
+const linearAppPlaces = (host: 'launchd' | 'container'): string =>
+  host === 'container'
+    ? `${LINEAR_CLIENT_ID_ENV} and ${LINEAR_CLIENT_SECRET_ENV}`
+    : `the Keychain services ${KEYCHAIN_CLIENT_ID_SERVICE} and ${KEYCHAIN_CLIENT_SECRET_SERVICE}`;
 
 /** The remote check alone may take 90 s (`checkRun`); ssh and the vault fetch come on top */
 const REMOTE_TIMEOUT_MS = 150_000;

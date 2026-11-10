@@ -14,8 +14,17 @@ export const RUN_INTERVAL_SECONDS = 600;
 /** Seconds between runs in the container while its listener is live; the image sets the same */
 export const RUN_FALLBACK_SECONDS = 3600;
 export const KEYCHAIN_SERVICE = 'linear-agent-queue';
-/** Env var the Linear key comes from in the container */
+/** Env var the personal Linear key (the fallback) comes from in the container */
 export const LINEAR_KEY_ENV = 'AGENT_QUEUE_LINEAR_KEY';
+/** Keychain service holding the queue's Linear app client id */
+export const KEYCHAIN_CLIENT_ID_SERVICE = 'linear-agent-queue-client-id';
+/** Keychain service holding the queue's Linear app client secret */
+export const KEYCHAIN_CLIENT_SECRET_SERVICE =
+  'linear-agent-queue-client-secret';
+/** Env var the Linear app's client id comes from in the container */
+export const LINEAR_CLIENT_ID_ENV = 'AGENT_QUEUE_LINEAR_CLIENT_ID';
+/** Env var the Linear app's client secret comes from in the container */
+export const LINEAR_CLIENT_SECRET_ENV = 'AGENT_QUEUE_LINEAR_CLIENT_SECRET';
 /** Set to `container` where the queue runs in the agent container instead of launchd */
 export const HOST_ENV = 'AGENT_QUEUE_HOST';
 
@@ -31,20 +40,59 @@ export const hostKind = (
       : null;
 
 /**
- * Where the Linear key would come from for the job on this host. Launchd never forwards a
- * shell-exported key (its plist sets the job's env), so there only the Keychain counts.
+ * Where the Linear credentials would come from for the job on this host. Launchd never
+ * forwards a shell-exported value (its plist sets the job's env), so there only the Keychain counts.
  */
-export const linearKeySource = (
+export const linearAuthSource = (
   host: 'launchd' | 'container' | null,
   env: NodeJS.ProcessEnv
-): 'env' | 'keychain-possible' | 'none' =>
+): 'app-env' | 'key-env' | 'keychain-possible' | 'none' =>
   host === 'container'
-    ? env[LINEAR_KEY_ENV]
-      ? 'env'
-      : 'none'
+    ? env[LINEAR_CLIENT_ID_ENV] && env[LINEAR_CLIENT_SECRET_ENV]
+      ? 'app-env'
+      : env[LINEAR_KEY_ENV]
+        ? 'key-env'
+        : 'none'
     : host === 'launchd'
       ? 'keychain-possible'
       : 'none';
+
+/** A path as zsh's `${(q)…}` writes it, so the helper string matches lib.sh's own */
+export const zshQuote = (path: string): string =>
+  path.replace(/[^\w./-]/g, (char) => `\\${char}`);
+
+/** The `agent_linear` MCP server attended sessions use: Linear's endpoint signed by the installed lib.sh */
+export const attendedLinearServer = (
+  libPath: string
+): { type: 'http'; url: string; headersHelper: string } => ({
+  type: 'http',
+  url: 'https://mcp.linear.app/mcp',
+  headersHelper: `zsh ${zshQuote(libPath)} header`
+});
+
+/** Whether a parsed `~/.claude.json` already holds the expected `agent_linear` server */
+export const attendedLinearServerCurrent = (
+  config: unknown,
+  libPath: string
+): boolean => {
+  const servers =
+    typeof config === 'object' && config !== null
+      ? (config as { mcpServers?: unknown }).mcpServers
+      : undefined;
+  const server =
+    typeof servers === 'object' && servers !== null
+      ? (servers as Record<string, unknown>)['agent_linear']
+      : undefined;
+  const want = attendedLinearServer(libPath);
+  return (
+    typeof server === 'object' &&
+    server !== null &&
+    Object.entries(want).every(
+      ([k, v]) => (server as Record<string, unknown>)[k] === v
+    )
+  );
+};
+
 /** Where the queue's files live in the repo, relative to the workspace root */
 export const QUEUE_SOURCE_DIR = 'tools/cdwr/agent-queue';
 /** The files install puts in the queue home; run.sh loads the rest from beside it */
