@@ -477,6 +477,123 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       }
     ]
   },
+  'coming-soon': {
+    slug: 'coming-soon',
+    label: {
+      en: 'Coming soon',
+      sv: 'Kommer snart'
+    },
+    availableIn: ['pages'],
+    fields: [
+      {
+        name: 'badge',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Badge',
+          sv: 'Etikett'
+        },
+        description: {
+          en: 'A short line above the heading, such as "Opening soon".',
+          sv: 'En kort rad ovanför rubriken, till exempel "Öppnar snart".'
+        }
+      },
+      {
+        name: 'heading',
+        type: 'text',
+        required: true,
+        localized: true,
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
+      },
+      {
+        name: 'message',
+        type: 'textarea',
+        localized: true,
+        label: {
+          en: 'Message',
+          sv: 'Meddelande'
+        }
+      },
+      {
+        name: 'openingDate',
+        type: 'date',
+        label: {
+          en: 'Opening date',
+          sv: 'Öppningsdatum'
+        },
+        description: {
+          en: 'Optional. Shown as "Opening <date>" in the site’s language.',
+          sv: 'Valfritt. Visas som "Öppnar <datum>" på sidans språk.'
+        }
+      },
+      {
+        name: 'contactEmail',
+        type: 'email',
+        label: {
+          en: 'Contact email',
+          sv: 'Kontakt-e-post'
+        }
+      },
+      {
+        name: 'contactPhone',
+        type: 'text',
+        label: {
+          en: 'Contact phone',
+          sv: 'Kontakttelefon'
+        }
+      },
+      {
+        name: 'notifyLabel',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Notify button',
+          sv: 'Aviseringsknapp'
+        },
+        description: {
+          en: 'The label of a button that opens a form, such as "Notify me". Empty means no button.',
+          sv: 'Texten på en knapp som öppnar ett formulär, till exempel "Avisera mig". Tomt betyder ingen knapp.'
+        }
+      },
+      {
+        name: 'notifyAnchor',
+        type: 'text',
+        conditional: true,
+        label: {
+          en: 'Form anchor',
+          sv: 'Formulärets ankare'
+        },
+        description: {
+          en: 'The anchor of a Form block on this page set to Overlay. The button opens that form.',
+          sv: 'Ankaret för ett formulärblock på den här sidan som är satt till Överlägg. Knappen öppnar det formuläret.'
+        }
+      },
+      {
+        name: 'showIllustration',
+        type: 'checkbox',
+        label: {
+          en: 'Show a drawing',
+          sv: 'Visa en teckning'
+        }
+      },
+      {
+        name: 'illustration',
+        type: 'textarea',
+        conditional: true,
+        label: {
+          en: 'Illustration',
+          sv: 'Illustration'
+        },
+        description: {
+          en: 'SVG code drawn in place of the built-in drawing of the site’s pages coming home. Empty keeps the built-in one. Colours can use the theme, such as var(--brand-500).',
+          sv: 'SVG-kod som ritas i stället för den inbyggda teckningen av webbplatsens sidor som kommer hem. Tomt behåller den inbyggda. Färger kan hämtas från temat, till exempel var(--brand-500).'
+        }
+      }
+    ]
+  },
   content: {
     slug: 'content',
     label: {

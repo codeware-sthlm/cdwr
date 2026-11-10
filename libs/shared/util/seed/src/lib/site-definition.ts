@@ -78,8 +78,8 @@ type ReferencingBlock =
  *
  * Nothing in these blocks refers to another document, so there is nothing to
  * resolve and no reason to restate them here — `about`, `block-gallery`,
- * `card`, `code`, `feature-cards`, `posts`, `showcase`, `social-media`,
- * `spacing`, `theme-studio` and `tours`.
+ * `card`, `code`, `coming-soon`, `feature-cards`, `posts`, `showcase`,
+ * `social-media`, `spacing`, `theme-studio` and `tours`.
  */
 export type PlainBlockDefinition = Authored<
   Exclude<LayoutBlock, ReferencingBlock>
@@ -91,6 +91,7 @@ type PlainBlockType =
   | 'block-gallery'
   | 'card'
   | 'code'
+  | 'coming-soon'
   | 'feature-cards'
   | 'posts'
   | 'showcase'

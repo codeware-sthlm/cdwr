@@ -2,6 +2,7 @@ import { sectionBandField } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
 import type { Block, TextFieldSingleValidation } from 'payload';
 
+import { anchorFormat } from '../anchor';
 import { blockImages } from '../block-images';
 
 /** Empty is fine unless the block is an overlay, which a link must reach */
@@ -12,9 +13,7 @@ const validateAnchor: TextFieldSingleValidation = (value, { siblingData }) => {
       ? 'An overlay needs an anchor to be opened by'
       : true;
   }
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
-    ? true
-    : 'Lowercase letters, digits and dashes only';
+  return anchorFormat(value);
 };
 
 /**
