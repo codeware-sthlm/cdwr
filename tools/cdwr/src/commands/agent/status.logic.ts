@@ -41,7 +41,14 @@ const reportShape = z.object({
   notifyLevel: z.enum(NOTIFY_LEVELS),
   host: z.enum(['launchd', 'container']),
   linearAuth: z.enum(['app', 'key', 'none']),
-  linearAuthSource: z.enum(['app-env', 'key-env', 'keychain-possible', 'none']),
+  linearAuthSource: z.enum([
+    'app-env',
+    'app-file',
+    'key-env',
+    'key-file',
+    'keychain-possible',
+    'none'
+  ]),
   mirror: z.string().nullable(),
   script: z.enum(['missing', 'current', 'stale', 'no-source']),
   installedAny: z.boolean(),

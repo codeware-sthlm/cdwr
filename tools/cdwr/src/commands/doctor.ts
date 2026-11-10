@@ -14,7 +14,7 @@ import {
   implementReport,
   jobPathChecks,
   jobState,
-  linearAuth,
+  linearAuthSourceOf,
   mirrorTargetOf,
   paths,
   queueDrift,
@@ -89,7 +89,7 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
     host === 'container'
       ? Promise.resolve({ loaded: true as const })
       : jobState(),
-    linearAuth(ctx.env)
+    linearAuthSourceOf(ctx.env)
   ]);
   const script = queueDrift(queue, ctx.root);
   const worktree = worktreeOf(ctx);
@@ -112,7 +112,7 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
     scheduler,
     mirror: mirrorTargetOf(queue),
     loaded: job.loaded,
-    linearAuth: auth,
+    linearAuth: auth.auth,
     worktree: existsSync(worktree),
     script,
     implement: implementReport(queue, ctx.env),
