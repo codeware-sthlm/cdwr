@@ -1,6 +1,6 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { createElement } from 'react';
-import { createRoot } from 'react-dom/client';
+import { type Root, createRoot } from 'react-dom/client';
 
 import { deskSha } from '../build-info';
 import type { Adapter } from '../data';
@@ -17,6 +17,7 @@ import {
   prCommandKey,
   sendCommand
 } from './commands';
+import { BeforeSheet, type WaitActions } from './components/before';
 import { Cards } from './components/cards';
 import { Status } from './components/status';
 import { AGENT_AVATAR, CONFIRM_MS } from './constants';
@@ -227,15 +228,46 @@ function showView(view: View, focus = true): void {
 
 // ---------- Sheet ----------
 
+// The Waiting on you sheet is React and keeps its root while it is open, so a render updates it in
+// place and keeps focus; every other sheet is still written as HTML
+let sheetRoot: Root | null = null;
+
+function unmountSheet(): void {
+  sheetRoot?.unmount();
+  sheetRoot = null;
+}
+
 function showSheet(value: string, focus = true): void {
   const id = sheetIdOf(value);
   if (!id) return;
   const now = new Date();
   const w = SHEETS[id];
+  const m = model(state, now, DESK, WEB);
   state.ui.openSheet = id;
   $('sheet-title').textContent = w.title;
   $('sheet-sub').textContent = w.sub;
-  $('sheet-body').innerHTML = w.body(model(state, now, DESK, WEB), state, now);
+  if (id === 'before') {
+    if (!sheetRoot) {
+      $('sheet-body').innerHTML = '';
+      sheetRoot = createRoot($('sheet-body'));
+    }
+    sheetRoot.render(
+      createElement(BeforeSheet, {
+        m,
+        state,
+        now,
+        open: state.ui.snoozedOpen,
+        onOpenChange: (open) => {
+          state.ui.snoozedOpen = open;
+          render();
+        },
+        actions: waitActions
+      })
+    );
+  } else {
+    unmountSheet();
+    $('sheet-body').innerHTML = w.body(m, state, now);
+  }
   $('sheet').hidden = false;
   $('scrim').hidden = false;
   $('sheet-body')
@@ -247,6 +279,7 @@ function showSheet(value: string, focus = true): void {
 function hideSheet(): void {
   const was = state.ui.openSheet;
   state.ui.openSheet = null;
+  unmountSheet();
   $('sheet').hidden = true;
   $('scrim').hidden = true;
   setHash();
@@ -355,70 +388,36 @@ function clickControl(target: Element): boolean {
   return true;
 }
 
-/** Handles a Snooze or Wake button's click; true when the click was one */
-function clickSnooze(target: Element): boolean {
-  const button = target.closest<HTMLButtonElement>(
-    '[data-snooze], [data-wake]'
-  );
-  if (!button) return false;
-  const { snooze, wake, kind, eventAt } = button.dataset;
+/** A Snooze or Wake click on a waiting row: `snooze` says what to snooze it on, null wakes it */
+function clickSnooze(
+  ticket: string,
+  snooze: { kind: string; eventAt: string | null } | null
+): void {
   const host = model(state, new Date(), DESK, WEB).controls?.host;
-  const ticket = snooze ?? wake;
-  if (!state.controls.target || !host || !ticket || button.disabled)
-    return true;
-  const region = button.closest('[id]');
-  // The render moves the row; focus goes to its button where it landed, else the fold's summary
-  const refocus = (): void =>
-    focusIn(region, [
-      `[data-snooze="${ticket}"]`,
-      `[data-wake="${ticket}"]`,
-      'details.snoozed > summary, .snoozed-summary'
-    ]);
-  sendSnooze(
-    ticket,
-    host,
-    snooze === undefined
-      ? null
-      : { kind: kind ?? '', eventAt: eventAt || null },
-    refocus
-  );
-  return true;
+  if (!state.controls.target || !host) return;
+  sendSnooze(ticket, host, snooze);
 }
 
-/** Handles a Label button's click; true when the click was one */
-function clickLabel(target: Element): boolean {
-  const button = target.closest<HTMLButtonElement>('[data-label]');
-  if (!button) return false;
-  const ticket = button.dataset.label;
+/** A Label click: the first asks to confirm, a deliberate second one sends */
+function clickLabel(ticket: string): void {
   const c = state.controls;
-  if (!labeller || !ticket || button.disabled || c.labelling.has(ticket))
-    return true;
-  const region = button.closest('[id]');
-  // Once labelled the button is gone; the row's Snooze, or Wake in the snoozed fold, is nearest
-  const refocus = (): void =>
-    focusIn(region, [
-      `[data-label="${ticket}"]`,
-      `[data-snooze="${ticket}"]`,
-      `[data-wake="${ticket}"]`
-    ]);
+  if (!labeller || c.labelling.has(ticket)) return;
   const asked = c.labelConfirm.get(ticket);
   // A double-click is not a confirmation: the second press has to be deliberate
-  if (asked !== undefined && Date.now() - asked < DOUBLE_CLICK_MS) return true;
+  if (asked !== undefined && Date.now() - asked < DOUBLE_CLICK_MS) return;
   if (asked === undefined || Date.now() - asked >= CONFIRM_MS) {
     const askedAt = Date.now();
     c.labelConfirm.set(ticket, askedAt);
     c.labelNotes.delete(ticket);
     render();
-    refocus();
     // Nothing else redraws the row when this confirmation lapses; one that was consumed or
-    // renewed meanwhile is left alone, and the button keeps the focus
+    // renewed meanwhile is left alone
     setTimeout(() => {
       if (c.labelConfirm.get(ticket) !== askedAt) return;
       c.labelConfirm.delete(ticket);
       render();
-      refocus();
     }, CONFIRM_MS + 50);
-    return true;
+    return;
   }
   c.labelConfirm.delete(ticket);
   c.labelling.add(ticket);
@@ -440,70 +439,50 @@ function clickLabel(target: Element): boolean {
     .finally(() => {
       c.labelling.delete(ticket);
       render();
-      refocus();
     });
-  return true;
 }
 
-/** Handles a Copilot review or Merge button's click; true when the click was one */
-function clickPr(target: Element): boolean {
-  const button = target.closest<HTMLButtonElement>(
-    '[data-copilot], [data-merge]'
-  );
-  if (!button) return false;
-  const { copilot, merge, pr, host } = button.dataset;
-  const ticket = copilot ?? merge;
-  const kind: PrCommandKind = copilot === undefined ? 'merge' : 'copilot';
+/** A Copilot review or Merge click: a merge asks to confirm first */
+function clickPr(
+  ticket: string,
+  kind: PrCommandKind,
+  host: string,
+  pr: number
+): void {
   const c = state.controls;
-  if (!c.target || !ticket || !pr || !host || button.disabled) return true;
+  if (!c.target) return;
   const key = prCommandKey(ticket, pr, kind);
-  if (c.prSending.has(key)) return true;
-  const region = button.closest('[id]');
-  // The render replaces the button; the row's Snooze is nearest once it is gone
-  const refocus = (): void =>
-    focusIn(region, [
-      `[data-${kind}="${ticket}"]`,
-      `[data-snooze="${ticket}"]`
-    ]);
+  if (c.prSending.has(key)) return;
   if (kind === 'merge') {
     const asked = c.mergeConfirm.get(ticket);
     // A double-click is not a confirmation: the second press has to be deliberate
-    if (asked !== undefined && Date.now() - asked < DOUBLE_CLICK_MS)
-      return true;
+    if (asked !== undefined && Date.now() - asked < DOUBLE_CLICK_MS) return;
     if (asked === undefined || Date.now() - asked >= CONFIRM_MS) {
       const askedAt = Date.now();
       c.mergeConfirm.set(ticket, askedAt);
       c.prNotes.delete(key);
       render();
-      refocus();
       // Nothing else redraws the row when this confirmation lapses; one that was consumed or
-      // renewed meanwhile is left alone, and the button keeps the focus
+      // renewed meanwhile is left alone
       setTimeout(() => {
         if (c.mergeConfirm.get(ticket) !== askedAt) return;
         c.mergeConfirm.delete(ticket);
         render();
-        refocus();
       }, CONFIRM_MS + 50);
-      return true;
+      return;
     }
     c.mergeConfirm.delete(ticket);
   }
-  sendPr(ticket, kind, host, Number(pr), refocus);
-  return true;
+  sendPr(ticket, kind, host, pr);
 }
 
-// `toggle` doesn't bubble, so it is caught on the way down; a render then keeps the fold as the viewer left it
-document.addEventListener(
-  'toggle',
-  (e) => {
-    if (
-      e.target instanceof HTMLDetailsElement &&
-      e.target.classList.contains('snoozed')
-    )
-      state.ui.snoozedOpen = e.target.open;
-  },
-  true
-);
+/** What the Waiting on you sheet's buttons do */
+const waitActions: WaitActions = {
+  snooze: (r) => clickSnooze(r.id, { kind: r.kind, eventAt: r.gateAt }),
+  wake: (ticket) => clickSnooze(ticket, null),
+  label: clickLabel,
+  pr: clickPr
+};
 
 document.addEventListener('click', (e) => {
   if (!(e.target instanceof Element)) return;
@@ -524,13 +503,7 @@ document.addEventListener('click', (e) => {
     else if (action.dataset.action === 'copy-row') copyRow(action);
     return;
   }
-  if (
-    clickControl(e.target) ||
-    clickSnooze(e.target) ||
-    clickLabel(e.target) ||
-    clickPr(e.target)
-  )
-    return;
+  if (clickControl(e.target)) return;
   const problem = e.target.closest<HTMLElement>('[data-problem]');
   if (problem) {
     showView('desk', false);
@@ -544,8 +517,8 @@ document.addEventListener('click', (e) => {
     showView(v.dataset.view === 'platform' ? 'platform' : 'desk');
     return;
   }
-  // The fold's summary (a <details>'s in the sheet, the card's own trigger) only opens the fold, never the card's sheet
-  if (e.target.closest('details.snoozed > summary, .snoozed-summary')) return;
+  // The fold's trigger only opens the fold, never the card's sheet
+  if (e.target.closest('.snoozed-summary')) return;
   const t = e.target.closest<HTMLElement>('[data-w]');
   if (t?.dataset.w) {
     showSheet(t.dataset.w);
@@ -738,8 +711,7 @@ export function setLabeller(fn: (ticket: string) => Promise<void>): void {
 function sendSnooze(
   ticket: string,
   host: string,
-  snooze: { kind: string; eventAt: string | null } | null,
-  refocus: () => void
+  snooze: { kind: string; eventAt: string | null } | null
 ): void {
   const c = state.controls;
   if (!c.target || c.snoozing.has(ticket)) return;
@@ -780,7 +752,6 @@ function sendSnooze(
     .finally(() => {
       c.snoozing.delete(ticket);
       render();
-      refocus();
     });
 }
 
@@ -789,8 +760,7 @@ function sendPr(
   ticket: string,
   kind: PrCommandKind,
   host: string,
-  pr: number,
-  refocus: () => void
+  pr: number
 ): void {
   const c = state.controls;
   if (!c.target) return;
@@ -831,7 +801,6 @@ function sendPr(
     .finally(() => {
       c.prSending.delete(key);
       render();
-      refocus();
     });
 }
 

@@ -1203,17 +1203,15 @@ button.act:disabled {
 .snoozed {
   margin-top: 4px;
 }
-details.snoozed > summary,
 .snoozed-summary {
   cursor: pointer;
   font-size: 11px;
   color: var(--muted);
 }
-details.snoozed[open] > summary,
 .snoozed[data-state='open'] > .snoozed-summary {
   margin-bottom: 8px;
 }
-/* The card's fold is a button, and this app has no Preflight to reset it */
+/* The fold is a button, and this app has no Preflight to reset it */
 .snoozed-summary {
   background: none;
   border: 0;
@@ -2042,6 +2040,10 @@ details.snoozed[open] > summary,
   flex: none;
   min-width: var(--tap);
   min-height: var(--tap);
+}
+/* The Waiting on you sheet's React root: its cards stay direct children of the sheet's flex column */
+.before-sheet {
+  display: contents;
 }
 .sheet-body {
   flex: 1;
