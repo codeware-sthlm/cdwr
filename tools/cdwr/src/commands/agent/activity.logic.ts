@@ -2,13 +2,17 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type Named = { name?: string | null } | null | undefined;
 
+/** A Linear user; `app` is true for an app user such as the queue's own */
+export type Person =
+  { name?: string | null; app?: boolean | null } | null | undefined;
+
 export type BotActor =
   { name?: string | null; type?: string | null } | null | undefined;
 
 export interface HistoryNode {
   id?: string | null;
   createdAt: string;
-  actor?: Named;
+  actor?: Person;
   botActor?: BotActor;
   fromState?: Named;
   toState?: Named;
@@ -21,7 +25,7 @@ export interface CommentNode {
   id?: string | null;
   createdAt: string;
   body?: string | null;
-  user?: Named;
+  user?: Person;
   botActor?: BotActor;
 }
 
@@ -58,9 +62,9 @@ export interface ActivityEvent {
 const COMMENT_LENGTH = 80;
 
 /**
- * Who did it. The agent and Håkan write through one Linear account, so a
- * comment marked `**Agent` is the only sign of the agent; a bot actor is named
- * by its name, else its type.
+ * Who did it. The agent writes as the queue's own Linear app user; before that
+ * it wrote as Håkan, so a comment marked `**Agent` still reads as the agent's.
+ * A bot actor is named by its name, else its type.
  */
 export const actorOf = ({
   body,
@@ -69,10 +73,11 @@ export const actorOf = ({
   botActor
 }: {
   body?: string | null;
-  user?: Named;
-  actor?: Named;
+  user?: Person;
+  actor?: Person;
   botActor?: BotActor;
 }): string => {
+  if (user?.app === true || actor?.app === true) return 'agent';
   if (body?.trim().startsWith('**Agent')) return 'agent';
   const bot = botActor?.name ?? botActor?.type;
   if (bot) return bot;
