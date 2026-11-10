@@ -48,7 +48,7 @@ import {
   renderUnknownSession,
   tickText
 } from './problems';
-import { headline, renderSession } from './session';
+import { headline, headlineHtml, renderSession } from './session';
 import { SHEETS, whyLine } from './sheets';
 import { renderTiles } from './tiles';
 import {
@@ -840,7 +840,9 @@ describe('waiting card, queue sheets and tiles', () => {
     const review = SHEETS.review.body(m, state, NOW);
     expect(review).toContain('COD-3');
     expect(review).toContain('Review fixes: waits on CI since');
-    expect(headline(m, state.details, NOW).note).toContain('COD-3');
+    expect(headlineHtml(headline(m, state.details, NOW).note)).toContain(
+      'COD-3'
+    );
   });
 
   it('drop a parked ticket a live change moved on from', () => {
@@ -2051,9 +2053,10 @@ describe('pull requests on the waiting rows and the session card', () => {
     );
     state.data.ideas = [];
     const h = headline(model(state, NOW), state.details, NOW);
-    expect(h.text).toContain('1 thing waits');
-    expect(h.text).toContain('starting with');
-    expect(h.text).toContain('COD-5');
+    const text = headlineHtml(h.text);
+    expect(text).toContain('1 thing waits');
+    expect(text).toContain('starting with');
+    expect(text).toContain('COD-5');
     expect(h.tone).toBe('wait');
   });
 
@@ -2096,11 +2099,13 @@ describe('pull requests on the waiting rows and the session card', () => {
     const html = renderSession(m, state.details, NOW);
     expect(html).toContain('COD-1</a> <a class="prn"');
     expect(html).toContain('>#31</a></span>');
-    const text = headline(
-      model(filled({ state: 'alive', detail: 'working' }), NOW),
-      state.details,
-      NOW
-    ).text;
+    const text = headlineHtml(
+      headline(
+        model(filled({ state: 'alive', detail: 'working' }), NOW),
+        state.details,
+        NOW
+      ).text
+    );
     expect(text).toContain('>#31</a>');
   });
 
@@ -2259,9 +2264,9 @@ describe('snoozed waiting rows', () => {
     );
     s.data.snoozes = [snooze('COD-5', 'hand-offs')];
     s.data.ideas = [];
-    expect(headline(model(s, NOW), s.details, NOW).text).toContain(
-      'nothing waits on you'
-    );
+    expect(
+      headlineHtml(headline(model(s, NOW), s.details, NOW).text)
+    ).toContain('nothing waits on you');
   });
 
   it('folds the snoozed rows after the awake ones, only when there are some', () => {
