@@ -296,6 +296,61 @@ export const schedulerHere = (
   plistExists: boolean
 ): boolean => host === 'container' || job.loaded || plistExists;
 
+/** What `install` found on a Mac; the scheduler facts are only read when the scheduler is set up */
+export interface InstallFacts {
+  /** A job is loaded or its plist is left: `schedulerHere` on a Mac */
+  schedulerHere: boolean;
+  /** `--scheduler` was given */
+  schedulerFlag: boolean;
+  scripts: 'missing' | 'current' | 'stale';
+  appCredentials: boolean;
+  linearServerCurrent: boolean;
+  scheduler: {
+    worktreeExists: boolean;
+    envCopies: string[];
+    depsInstalled: boolean;
+    plistCurrent: boolean;
+    jobLoaded: boolean;
+    /** The loaded job runs the installed `run.sh` */
+    jobScriptCurrent: boolean;
+  };
+}
+
+export interface InstallWork {
+  /** The scheduler parts are set up: asked for, or already on this Mac */
+  scheduler: boolean;
+  worktree: boolean;
+  envCopies: string[];
+  deps: boolean;
+  script: boolean;
+  plist: boolean;
+  reload: boolean;
+  credentials: boolean;
+  mcp: boolean;
+}
+
+/**
+ * What `install` does on a Mac. The attended side (the script copies, the Linear app's
+ * credentials, `agent_linear`) always; the scheduler's worktree, plist and load only when
+ * `--scheduler` asks or a job is already here, so a plain install keeps an existing job current.
+ */
+export const installWork = (facts: InstallFacts): InstallWork => {
+  const scheduler = facts.schedulerFlag || facts.schedulerHere;
+  const s = facts.scheduler;
+  const plist = scheduler && !s.plistCurrent;
+  return {
+    scheduler,
+    worktree: scheduler && !s.worktreeExists,
+    envCopies: scheduler ? s.envCopies : [],
+    deps: scheduler && !s.depsInstalled,
+    script: facts.scripts !== 'current',
+    plist,
+    reload: scheduler && (plist || !s.jobLoaded || !s.jobScriptCurrent),
+    credentials: !facts.appCredentials,
+    mcp: !facts.linearServerCurrent
+  };
+};
+
 /**
  * How old a remote `queue_state` row may be before `status` calls its watch stale. Matches `STALE_MS`
  * in the desk-command function and is longer than the NUC's hourly fallback run.
