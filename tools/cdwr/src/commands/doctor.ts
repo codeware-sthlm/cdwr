@@ -18,11 +18,17 @@ import {
   mirrorTargetOf,
   paths,
   queueDrift,
+  readClaudeConfig,
   worktreeOf
 } from '../services/agent-queue';
 import { symbols, theme } from '../ui/theme';
 
-import { formatImplement, hostKind, schedulerHere } from './agent/agent.logic';
+import {
+  formatImplement,
+  hostKind,
+  linearServerState,
+  schedulerHere
+} from './agent/agent.logic';
 import { schedulerRow } from './agent/status.logic';
 import { shellOf } from './completion';
 import { readRecord, treeOf } from './completion.install';
@@ -70,6 +76,8 @@ interface Report {
     linearAuth: 'app' | 'key' | 'none';
     worktree: boolean;
     script: 'missing' | 'current' | 'stale';
+    /** The `agent_linear` MCP server in the user's Claude config */
+    linearServer: ReturnType<typeof linearServerState>;
     implement: ReturnType<typeof implementReport>;
     /** The agent checkout's copy of the env file against this checkout's */
     envCopy: ReturnType<typeof envCopyDrift>;
@@ -115,6 +123,7 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
     linearAuth: auth.auth,
     worktree: existsSync(worktree),
     script,
+    linearServer: linearServerState(readClaudeConfig(), queue.files['lib.sh']),
     implement: implementReport(queue, ctx.env),
     envCopy: envCopyDrift(ctx.root, worktree),
     ...(jobPath === undefined ? {} : { jobPath }),
@@ -319,6 +328,19 @@ export default defineCommand({
         'agent queue',
         where.ok === true ? theme.muted(where.detail) : theme.warn(where.detail)
       ]);
+      // The attended side: agent_linear signs with the installed lib.sh. Never set up is not a problem, so no row
+      const attended = [
+        queue.script === 'stale' && 'installed scripts out of date',
+        queue.linearServer === 'stale' && 'agent_linear out of date'
+      ].filter((p) => p !== false);
+      queueProblems = attended.length;
+      if (attended.length > 0) {
+        rows.push([
+          symbols.warn,
+          'attended',
+          theme.warn(`${attended.join(', ')}; \`cdwr agent install\``)
+        ]);
+      }
       // Optional per machine: never set up is not a problem
     } else if (queue && !queue.loaded && queue.script === 'missing') {
       rows.push([

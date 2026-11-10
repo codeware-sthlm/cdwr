@@ -340,6 +340,12 @@ describe('showsRow', () => {
   ])('keeps %s when the scheduler is elsewhere', (check) => {
     expect(showsRow('elsewhere', check)).toBe(true);
   });
+
+  it('keeps scripts on an attended-only machine with installed copies', () => {
+    expect(showsRow('elsewhere', 'scripts', true)).toBe(true);
+    expect(showsRow('elsewhere', 'scripts', false)).toBe(false);
+    expect(showsRow('elsewhere', 'worktree', true)).toBe(false);
+  });
 });
 
 describe('schedulerRow and attendedSummary', () => {

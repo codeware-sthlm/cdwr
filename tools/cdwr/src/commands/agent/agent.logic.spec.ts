@@ -37,6 +37,7 @@ import {
   launchPath,
   linearAuthSource,
   linearCredentialFiles,
+  linearServerState,
   lockState,
   memoryDir,
   nodeMajor,
@@ -280,6 +281,23 @@ describe('attendedLinearServerCurrent', () => {
     ['a null server', { mcpServers: { agent_linear: null } }]
   ])('is false for %s', (_name, config) => {
     expect(attendedLinearServerCurrent(config, lib)).toBe(false);
+  });
+});
+
+describe('linearServerState', () => {
+  const lib = '/h/.cdwr/agent-queue/lib.sh';
+  it.each([
+    ['current', { mcpServers: { agent_linear: attendedLinearServer(lib) } }],
+    [
+      'stale',
+      { mcpServers: { agent_linear: attendedLinearServer('/x/lib.sh') } }
+    ],
+    ['stale', { mcpServers: { agent_linear: null } }],
+    ['missing', { mcpServers: { other: attendedLinearServer(lib) } }],
+    ['missing', { mcpServers: null }],
+    ['missing', undefined]
+  ])('reads %s from %j', (expected, config) => {
+    expect(linearServerState(config, lib)).toBe(expected);
   });
 });
 
