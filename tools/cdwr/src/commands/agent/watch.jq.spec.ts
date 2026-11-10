@@ -88,13 +88,120 @@ describe('pr_number', () => {
   });
 });
 
+const APP_ID = 'bbbb4a33-e052-486e-8e0f-d3abb5c5c841';
+const PERSON_ID = 'c467d1e2-0000-4000-8000-000000000001';
+
+// A Linear comment node as the attended query reads it; older fixtures leave out the author
+type Comment = {
+  body: string;
+  createdAt: string;
+  user?: { id: string; app: boolean };
+};
+const BEFORE_CUTOVER = '2026-11-10T21:59:59Z';
+const AFTER_CUTOVER = '2026-11-10T22:00:01Z';
+
+describe('is_agent', () => {
+  const agentOf = (comment: Record<string, unknown>) =>
+    run('is_agent', comment);
+  const body = '**Agent: note** hello';
+
+  it('is true for the app user by the app flag', () => {
+    expect(
+      agentOf({
+        body: 'no prefix',
+        createdAt: AFTER_CUTOVER,
+        user: { id: PERSON_ID, app: true }
+      })
+    ).toBe(true);
+  });
+
+  it('is true for the app user by id only', () => {
+    expect(
+      agentOf({
+        body: 'no prefix',
+        createdAt: AFTER_CUTOVER,
+        user: { id: APP_ID }
+      })
+    ).toBe(true);
+  });
+
+  it('is true for a person with the prefix before the cutover', () => {
+    expect(
+      agentOf({
+        body,
+        createdAt: BEFORE_CUTOVER,
+        user: { id: PERSON_ID, app: false }
+      })
+    ).toBe(true);
+  });
+
+  it('is false for a person with the prefix after the cutover', () => {
+    expect(
+      agentOf({
+        body,
+        createdAt: AFTER_CUTOVER,
+        user: { id: PERSON_ID, app: false }
+      })
+    ).toBe(false);
+  });
+
+  it('is false for a person without the prefix', () => {
+    expect(
+      agentOf({
+        body: 'plain',
+        createdAt: BEFORE_CUTOVER,
+        user: { id: PERSON_ID, app: false }
+      })
+    ).toBe(false);
+  });
+
+  it('tests the prefix without a user field', () => {
+    expect(agentOf({ body, createdAt: AFTER_CUTOVER })).toBe(true);
+    expect(agentOf({ body: 'plain', createdAt: BEFORE_CUTOVER })).toBe(false);
+  });
+
+  it('tests the prefix when user is null', () => {
+    expect(agentOf({ body, createdAt: AFTER_CUTOVER, user: null })).toBe(true);
+    expect(
+      agentOf({ body: 'plain', createdAt: AFTER_CUTOVER, user: null })
+    ).toBe(false);
+  });
+});
+
 describe('handoffs', () => {
+  type C = { body: string; createdAt: string; user?: unknown };
   const ready = (body: string, createdAt = '2026-01-01T00:00:00Z') => ({
     body: `**Agent: PR ready**: ${PR}/569\n\n${body}`,
     createdAt
   });
-  const h = (...comments: Array<{ body: string; createdAt: string }>) =>
-    run('handoffs', issue([], comments));
+  const h = (...comments: C[]) => run('handoffs', issue([], comments));
+
+  it('ignores a PR-ready comment a person wrote after the cutover', () => {
+    const c: C = {
+      ...ready('Hand-off checklist:\n- [ ] pasted', AFTER_CUTOVER),
+      user: { id: PERSON_ID, app: false }
+    };
+    expect(h(c)).toEqual([]);
+    // Falls back to the Status table
+    expect(
+      run(
+        'handoffs',
+        issue(
+          [],
+          [c],
+          '| Step | What | Status |\n| -- | -- | -- |\n| 5 | Hand-off: from the table | Planned |'
+        )
+      )
+    ).toEqual(['from the table']);
+  });
+
+  it('takes a PR-ready comment by the app user', () => {
+    const c: C = {
+      ...ready('Hand-off checklist:\n- [ ] real', AFTER_CUTOVER),
+      user: { id: APP_ID, app: true }
+    };
+    expect(h(c)).toEqual(['real']);
+  });
 
   it('parses the real example', () => {
     const c = {
@@ -1295,7 +1402,7 @@ describe('attended picks', () => {
     state: { type: 'unstarted' },
     labels: { nodes: label ? [{ name: label }] : [] },
     description: null as string | null,
-    comments: { nodes: [] as Array<{ body: string; createdAt: string }> },
+    comments: { nodes: [] as Comment[] },
     inverseRelations: { nodes: [] as unknown[] },
     ...over
   });
@@ -1528,6 +1635,30 @@ describe('attended picks', () => {
       expect(attended([input()]).verdict).toBe('idle');
     });
 
+    it('a prefixed comment by a person after the cutover is answered', () => {
+      const n = input();
+      n.comments.nodes = [
+        {
+          body: '**Agent: question** ok?',
+          createdAt: '2026-11-11T00:00:00Z',
+          user: { id: PERSON_ID, app: false }
+        }
+      ];
+      expect(attended([n]).reason).toBe('answered');
+    });
+
+    it('an app comment without the prefix is not answered', () => {
+      const n = input();
+      n.comments.nodes = [
+        {
+          body: 'asking without a prefix',
+          createdAt: '2026-11-11T00:00:00Z',
+          user: { id: APP_ID, app: true }
+        }
+      ];
+      expect(attended([n]).verdict).toBe('idle');
+    });
+
     it('newest by createdAt, not array order', () => {
       const n = input();
       n.comments.nodes = [
@@ -1539,7 +1670,7 @@ describe('attended picks', () => {
   });
 
   describe('review feedback', () => {
-    const rev = (...comments: Array<{ body: string; createdAt: string }>) =>
+    const rev = (...comments: Comment[]) =>
       review('COD-4', { comments: { nodes: comments } });
 
     it('human comment after PR ready', () => {
@@ -1554,6 +1685,21 @@ describe('attended picks', () => {
         ticket: 'COD-4',
         reason: 'review feedback'
       });
+    });
+
+    it('a human pasting the PR ready marker after the cutover is no PR ready', () => {
+      const pasted = {
+        body: `**Agent: PR ready**: ${PR}/1`,
+        createdAt: '2026-11-11T00:00:00Z',
+        user: { id: PERSON_ID, app: false }
+      };
+      const r = attended([
+        rev(pasted, {
+          body: 'fix this',
+          createdAt: '2026-11-11T02:00:00Z'
+        })
+      ]);
+      expect(r.verdict).toBe('idle');
     });
 
     it('human comment before PR ready is not feedback', () => {
@@ -2090,6 +2236,79 @@ describe('attended picks', () => {
         labels: { nodes: [{ name: 'agent:working' }, { name: 'enjinex' }] }
       });
       expect(attended([n]).verdict).toBe('idle');
+    });
+  });
+
+  describe('ready guard', () => {
+    const entry = (createdAt: string, actor: unknown) => ({
+      createdAt,
+      actor,
+      addedLabels: [{ name: 'agent:ready' }]
+    });
+    const app = { id: APP_ID, app: true };
+    const person = { id: PERSON_ID, app: false };
+    const withHistory = (...nodes: unknown[]) =>
+      ready('COD-9', { history: { nodes } });
+    const refused = (issues: Node[]) =>
+      (
+        run(`queue_view(${NOW}; 5; {}; null; {})`, issues) as {
+          next: Array<{ ticket: string }>;
+          refused: Array<{ ticket: string; reason: string }>;
+        }
+      ).refused;
+
+    it('does not pick a ticket the app made ready, and lists it as refused', () => {
+      const n = withHistory(entry('2026-10-01T00:00:00Z', app));
+      expect(attended([n]).verdict).toBe('idle');
+      expect(refused([n])).toEqual([
+        { ticket: 'COD-9', reason: 'agent:ready set by the app' }
+      ]);
+    });
+
+    it('a refused ticket is not in next or held', () => {
+      const v = run(`queue_view(${NOW}; 5; {}; null; {})`, [
+        withHistory(entry('2026-10-01T00:00:00Z', app))
+      ]) as { next: unknown[]; held: { tickets: unknown[] } };
+      expect(v.next).toEqual([]);
+      expect(v.held.tickets).toEqual([]);
+    });
+
+    it('picks a ticket a person made ready', () => {
+      const n = withHistory(entry('2026-10-01T00:00:00Z', person));
+      expect(attended([n])).toMatchObject({ verdict: 'run', ticket: 'COD-9' });
+      expect(refused([n])).toEqual([]);
+    });
+
+    it('the newest entry wins: app then person is picked', () => {
+      const n = withHistory(
+        entry('2026-10-01T00:00:00Z', app),
+        entry('2026-10-02T00:00:00Z', person)
+      );
+      expect(attended([n]).ticket).toBe('COD-9');
+      expect(refused([n])).toEqual([]);
+    });
+
+    it('the newest entry wins: person then app is refused', () => {
+      const n = withHistory(
+        entry('2026-10-01T00:00:00Z', person),
+        entry('2026-10-02T00:00:00Z', app)
+      );
+      expect(attended([n]).verdict).toBe('idle');
+      expect(refused([n])).toHaveLength(1);
+    });
+
+    it('ignores history entries that add other labels', () => {
+      const n = withHistory(entry('2026-10-01T00:00:00Z', person), {
+        createdAt: '2026-10-02T00:00:00Z',
+        actor: app,
+        addedLabels: [{ name: 'bug' }]
+      });
+      expect(attended([n]).ticket).toBe('COD-9');
+    });
+
+    it('is picked without history', () => {
+      expect(attended([ready('COD-9')]).ticket).toBe('COD-9');
+      expect(refused([ready('COD-9')])).toEqual([]);
     });
   });
 
@@ -2691,7 +2910,7 @@ describe('attended picks', () => {
     const agent = (body: string) => [
       { body, createdAt: '2026-10-01T00:00:00Z' }
     ];
-    const needsInput = (id: string, comments: typeof human) =>
+    const needsInput = (id: string, comments: Comment[]) =>
       node(id, 'agent:needs-input', { comments: { nodes: comments } });
     const done = (id: string) =>
       review(id, {
@@ -2772,6 +2991,19 @@ describe('attended picks', () => {
         { ticket: 'COD-1', kind: 'plan' },
         { ticket: 'COD-2', kind: 'question' }
       ]);
+    });
+
+    it('reads a plan ready comment by the app user as a plan', () => {
+      const r = view([
+        needsInput('COD-1', [
+          {
+            body: '**Agent: plan ready**\n\nPlan',
+            createdAt: '2026-11-11T00:00:00Z',
+            user: { id: APP_ID, app: true }
+          }
+        ])
+      ]);
+      expect(r.table.before).toEqual([{ ticket: 'COD-1', kind: 'plan' }]);
     });
 
     it('lists open reviews, then hand-off tickets with unticked items', () => {
@@ -3726,7 +3958,7 @@ describe('renovate in the queue', () => {
     state: { type: 'unstarted' },
     labels: { nodes: label ? [{ name: label }] : [] },
     description: null as string | null,
-    comments: { nodes: [] as Array<{ body: string; createdAt: string }> },
+    comments: { nodes: [] as Comment[] },
     inverseRelations: { nodes: [] as unknown[] },
     ...over
   });

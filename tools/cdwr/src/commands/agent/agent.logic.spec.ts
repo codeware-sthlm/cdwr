@@ -21,6 +21,7 @@ import {
   formatImplement,
   formatNext,
   formatParked,
+  formatRefused,
   formatRenovate,
   formatTable,
   formatWatchSource,
@@ -889,6 +890,7 @@ const EMPTY_VIEW: QueueView = {
   next: [],
   held: { tickets: [], free: [] },
   blocked: [],
+  refused: [],
   parked: [],
   renovate: [],
   table: { before: [], after: [], label: [] }
@@ -918,6 +920,10 @@ const FILLED_VIEW: QueueView = {
   blocked: [
     { ticket: 'COD-702', blockers: ['COD-701'] },
     { ticket: 'COD-710', blockers: ['COD-703', 'COD-704'] }
+  ],
+  refused: [
+    { ticket: 'COD-11', reason: 'agent:ready set by the app' },
+    { ticket: 'COD-12', reason: 'agent:ready set by the app' }
   ],
   parked: [
     {
@@ -970,6 +976,11 @@ describe('parseQueueView', () => {
 
   it('reads a view from before parked existed', () => {
     const { parked: _parked, ...old } = EMPTY_VIEW;
+    expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads a view from before refused existed', () => {
+    const { refused: _refused, ...old } = EMPTY_VIEW;
     expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
   });
 
@@ -1087,6 +1098,18 @@ describe('formatBlocked', () => {
 
   it('says nothing when empty', () => {
     expect(formatBlocked(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('formatRefused', () => {
+  it('names each ticket with its reason', () => {
+    expect(formatRefused(FILLED_VIEW)).toBe(
+      'COD-11 (agent:ready set by the app), COD-12 (agent:ready set by the app)'
+    );
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatRefused(EMPTY_VIEW)).toBe('nothing');
   });
 });
 

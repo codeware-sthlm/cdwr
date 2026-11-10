@@ -37,6 +37,7 @@ import {
   formatImplement,
   formatNext,
   formatParked,
+  formatRefused,
   formatRenovate,
   formatTable,
   formatWatching,
@@ -291,6 +292,11 @@ export default defineCommand({
                 formatHeld(report.queueView)
               ),
               row(true, 'blocked', formatBlocked(report.queueView)),
+              row(
+                report.queueView.refused.length > 0 ? 'warn' : true,
+                'refused',
+                formatRefused(report.queueView)
+              ),
               row(true, 'parked', formatParked(report.queueView)),
               row(true, 'renovate', formatRenovate(report.queueView)),
               row(true, 'on your table', formatTable(report.queueView))
