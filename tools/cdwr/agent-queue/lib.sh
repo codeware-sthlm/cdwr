@@ -1,11 +1,12 @@
 #!/bin/zsh
-# Shared by run.sh, implement.sh and wait.sh: the Linear key, the GraphQL call, the Linear MCP
-# the claude runs use, and the attended query.
+# Shared by run.sh, implement.sh and wait.sh: the Linear credentials, the GraphQL call, the Linear
+# MCP the claude runs use, and the attended query.
 # Read-only on purpose: no gh call and no mutation belong here.
 
-# The key comes from AGENT_QUEUE_LINEAR_KEY, then the file AGENT_QUEUE_LINEAR_KEY_FILE names (the
-# container's), then on macOS the Keychain
 LIB_SH="${${(%):-%x}:A}"
+
+# The static key, kept as the fallback until it is revoked: AGENT_QUEUE_LINEAR_KEY, then the file
+# AGENT_QUEUE_LINEAR_KEY_FILE names (the container's), then on macOS the Keychain
 key="${AGENT_QUEUE_LINEAR_KEY:-}"
 if [[ -z "$key" && -n "${AGENT_QUEUE_LINEAR_KEY_FILE:-}" && -r "$AGENT_QUEUE_LINEAR_KEY_FILE" ]]; then
   key="$(<"$AGENT_QUEUE_LINEAR_KEY_FILE")"
@@ -14,31 +15,152 @@ if [[ -z "$key" && "$(uname)" == Darwin ]]; then
   key="$(security find-generic-password -s linear-agent-queue -w 2>/dev/null || true)"
 fi
 
-# linear <query> [variables as JSON]
-linear() {
-  local vars="${2:-}"; [[ -z "$vars" ]] && vars='{}'
-  jq -n --arg q "$1" --argjson v "$vars" '{query: $q, variables: $v}' |
-    curl -sS -m 20 https://api.linear.app/graphql \
-      -H @<(print -r -- "Authorization: $key") -H 'Content-Type: application/json' --data @-
+# The queue's own Linear app, which writes as the app user rather than as its owner. Its client
+# id and secret come from the environment, then the file AGENT_QUEUE_LINEAR_APP_FILE names (the
+# container's, two KEY=value lines), then on macOS the Keychain. The token they buy lasts 30 days
+# and is cached in LINEAR_TOKEN_FILE, mode 600, shared by the scheduler and the helper on a host;
+# it is bought again a day before it expires, or when Linear refuses it. Nothing here runs at
+# source time: the specs and wait.sh source this file without a network.
+LINEAR_TOKEN_URL=https://api.linear.app/oauth/token
+LINEAR_TOKEN_SCOPE="read,write,comments:create,issues:create"
+LINEAR_TOKEN_FILE="${AGENT_QUEUE_LINEAR_TOKEN_FILE:-${AGENT_QUEUE_HOME:-$HOME/.cdwr/agent-queue}/linear.token}"
+LINEAR_TOKEN_MARGIN=86400
+LINEAR_CLIENT_ID="" LINEAR_CLIENT_SECRET=""
+
+# linear_credentials: true with the app's client id and secret in LINEAR_CLIENT_ID and _SECRET
+linear_credentials() {
+  [[ -n "$LINEAR_CLIENT_ID" && -n "$LINEAR_CLIENT_SECRET" ]] && return 0
+  LINEAR_CLIENT_ID="${AGENT_QUEUE_LINEAR_CLIENT_ID:-}"
+  LINEAR_CLIENT_SECRET="${AGENT_QUEUE_LINEAR_CLIENT_SECRET:-}"
+  if [[ ( -z "$LINEAR_CLIENT_ID" || -z "$LINEAR_CLIENT_SECRET" ) &&
+        -n "${AGENT_QUEUE_LINEAR_APP_FILE:-}" && -r "$AGENT_QUEUE_LINEAR_APP_FILE" ]]; then
+    local line
+    while IFS= read -r line; do
+      case "$line" in
+        AGENT_QUEUE_LINEAR_CLIENT_ID=*) LINEAR_CLIENT_ID="${line#*=}" ;;
+        AGENT_QUEUE_LINEAR_CLIENT_SECRET=*) LINEAR_CLIENT_SECRET="${line#*=}" ;;
+      esac
+    done < "$AGENT_QUEUE_LINEAR_APP_FILE"
+  fi
+  if [[ ( -z "$LINEAR_CLIENT_ID" || -z "$LINEAR_CLIENT_SECRET" ) && "$(uname)" == Darwin ]]; then
+    LINEAR_CLIENT_ID="$(security find-generic-password -s linear-agent-queue-client-id -w 2>/dev/null || true)"
+    LINEAR_CLIENT_SECRET="$(security find-generic-password -s linear-agent-queue-client-secret -w 2>/dev/null || true)"
+  fi
+  [[ -n "$LINEAR_CLIENT_ID" && -n "$LINEAR_CLIENT_SECRET" ]]
 }
 
-# The Linear MCP the claude runs get. connector: the claude.ai connector of an interactive login,
-# as on the Mac. key: Linear's own server signed with the key, for a host without that login, as
-# the container; it is the default there. The key reaches neither argv, the config nor claude's
-# environment: claude runs under `claude_env`, and the config's headersHelper asks lib.sh for the
-# header, which finds the key in the file or the Keychain.
-LINEAR_MCP="${AGENT_QUEUE_LINEAR_MCP:-}"
-[[ -n "$LINEAR_MCP" ]] || { [[ "${AGENT_QUEUE_HOST:-}" == container ]] && LINEAR_MCP=key || LINEAR_MCP=connector; }
+# linear_auth: true when something can sign a Linear call: the app's credentials, or the key
+linear_auth() { linear_credentials || [[ -n "$key" ]]; }
+
+# linear_cached_token: prints the cached token while it has more than a day left
+linear_cached_token() {
+  [[ -r "$LINEAR_TOKEN_FILE" ]] || return 1
+  jq -er --argjson now "$(date +%s)" --argjson margin "$LINEAR_TOKEN_MARGIN" \
+    'select((.expiresAt | type) == "number" and .expiresAt - $now > $margin)
+     | .token | select(type == "string" and length > 0)' "$LINEAR_TOKEN_FILE" 2>/dev/null
+}
+
+# linear_exchange: buys a token with the app's credentials, caches it and prints it. The secret
+# reaches curl through a file, never argv. A failed exchange is remembered beside the cache for
+# LINEAR_EXCHANGE_HOLD seconds, so a run with the token endpoint down pays its timeout once.
+LINEAR_EXCHANGE_HOLD=600
+linear_exchange() {
+  linear_credentials || return 1
+  local answer token expires
+  if ! answer="$(curl -sS -m 20 "$LINEAR_TOKEN_URL" -d grant_type=client_credentials -d "scope=$LINEAR_TOKEN_SCOPE" \
+        -d @<(print -r -- "client_id=$LINEAR_CLIENT_ID&client_secret=$LINEAR_CLIENT_SECRET") 2>/dev/null)" ||
+     ! token="$(jq -er '.access_token | select(type == "string" and length > 0)' <<<"$answer" 2>/dev/null)"; then
+    mkdir -p "${LINEAR_TOKEN_FILE:h}" 2>/dev/null || true
+    ( umask 077; date +%s > "$LINEAR_TOKEN_FILE.failed" ) 2>/dev/null || true
+    return 1
+  fi
+  rm -f "$LINEAR_TOKEN_FILE.failed" 2>/dev/null
+  expires="$(jq -er '.expires_in | select(type == "number")' <<<"$answer" 2>/dev/null)" || expires=2592000
+  mkdir -p "${LINEAR_TOKEN_FILE:h}" 2>/dev/null || true
+  # Renamed into place: the scheduler and a session's helper may refresh at once
+  if ( umask 077; jq -n --arg t "$token" --argjson e "$(( $(date +%s) + expires ))" \
+        '{token: $t, expiresAt: $e}' > "$LINEAR_TOKEN_FILE.$$" ); then
+    mv -f "$LINEAR_TOKEN_FILE.$$" "$LINEAR_TOKEN_FILE" 2>/dev/null || rm -f "$LINEAR_TOKEN_FILE.$$"
+  fi
+  print -r -- "$token"
+}
+
+# linear_exchange_held: true while a recent failed exchange says not to try again yet
+linear_exchange_held() {
+  local at
+  [[ -r "$LINEAR_TOKEN_FILE.failed" ]] || return 1
+  at="$(<"$LINEAR_TOKEN_FILE.failed")"
+  [[ "$at" == <-> ]] && (( $(date +%s) - at < LINEAR_EXCHANGE_HOLD ))
+}
+
+# linear_token [force]: prints what signs a Linear call: the cached app token, else a fresh one,
+# else the static key. `force` skips the cache and the hold, for a token Linear has just refused.
+linear_token() {
+  local t
+  if [[ "${1:-}" != force ]] && t="$(linear_cached_token)"; then print -r -- "$t"; return 0; fi
+  if { [[ "${1:-}" == force ]] || ! linear_exchange_held; } && t="$(linear_exchange)"; then
+    print -r -- "$t"; return 0
+  fi
+  [[ -n "$key" ]] || return 1
+  # Credentials that bought nothing are worth a line: the key stands in only until it is revoked
+  if linear_credentials; then
+    print -ru2 -- "linear: no app token (the exchange failed or is on hold); signing with the personal key"
+  fi
+  print -r -- "$key"
+}
+
+# linear_graphql <token> <query> <variables>: one GraphQL call; prints the answer. Returns 11 when
+# Linear refused the token (a 401, or an AUTHENTICATION_ERROR among its errors), 1 when curl failed.
+# The personal key goes bare: Linear's GraphQL refuses it behind a Bearer prefix.
+linear_graphql() {
+  local auth="Bearer $1" answer code body
+  [[ -n "$key" && "$1" == "$key" ]] && auth="$1"
+  answer="$(jq -n --arg q "$2" --argjson v "$3" '{query: $q, variables: $v}' |
+    curl -sS -m 20 -w $'\n%{http_code}' https://api.linear.app/graphql \
+      -H @<(print -r -- "Authorization: $auth") -H 'Content-Type: application/json' --data @-)" || return 1
+  code="${answer##*$'\n'}"
+  body="${answer%$'\n'*}"
+  print -r -- "$body"
+  if [[ "$code" == 401 ]] ||
+     jq -e '(.errors // []) | any(.extensions.code? == "AUTHENTICATION_ERROR")' <<<"$body" >/dev/null 2>&1; then
+    return 11
+  fi
+  return 0
+}
+
+# linear <query> [variables as JSON]: the GraphQL call, signed with linear_token; a refused token
+# is bought again once and the call made again. Fails only when curl does. Written so a caller
+# under errexit survives the refusal: the status is taken on the assignment itself.
+linear() {
+  local vars="${2:-}" token body rc=0; [[ -z "$vars" ]] && vars='{}'
+  token="$(linear_token)" || return 1
+  body="$(linear_graphql "$token" "$1" "$vars")" || rc=$?
+  if (( rc == 11 )) && token="$(linear_token force)"; then
+    rc=0
+    body="$(linear_graphql "$token" "$1" "$vars")" || rc=$?
+  fi
+  (( rc == 1 )) && return 1
+  print -r -- "$body"
+}
+
+# The Linear MCP the claude runs get. key, the default on every host: Linear's own server signed
+# by linear_token, so the runs write as the app. connector: the claude.ai connector of an
+# interactive login, which writes as its owner; an explicit opt-out. No credential reaches argv,
+# the config or claude's environment: claude runs under `claude_env`, and the config's
+# headersHelper asks lib.sh for the header, which finds the token in the cache, the files or the
+# Keychain.
+LINEAR_MCP="${AGENT_QUEUE_LINEAR_MCP:-key}"
 LINEAR_MCP_URL=https://mcp.linear.app/mcp
 
-# claude_env: the env prefix for every claude run, without the key; the session's wait.sh finds it
-# the same way the helper does
-claude_env=(env -u AGENT_QUEUE_LINEAR_KEY)
+# claude_env: the env prefix for every claude run, without the credentials; the session's wait.sh
+# finds them the same way the helper does
+claude_env=(env -u AGENT_QUEUE_LINEAR_KEY -u AGENT_QUEUE_LINEAR_CLIENT_ID -u AGENT_QUEUE_LINEAR_CLIENT_SECRET)
 
-# linear_header: the MCP header as JSON, for the headersHelper; nothing without a key
+# linear_header: the MCP header as JSON, for the headersHelper; nothing without a token
 linear_header() {
-  [[ -n "$key" ]] || return 1
-  jq -nc --arg k "Bearer $key" '{Authorization: $k}'
+  local t
+  t="$(linear_token)" || return 1
+  jq -nc --arg k "Bearer $t" '{Authorization: $k}'
 }
 
 # The helper command, as claude's shell runs it: this file, run rather than sourced
@@ -64,18 +186,23 @@ linear_mcp() {
 # AGENT_QUEUE_LINEAR_TOOLS_CMD replaces the check in specs.
 linear_tools() {
   if [[ -n "${AGENT_QUEUE_LINEAR_TOOLS_CMD:-}" ]]; then eval "$AGENT_QUEUE_LINEAR_TOOLS_CMD"; return 0; fi
-  local answer code header
+  local answer code header attempt
   case "$LINEAR_MCP" in
     key)
-      # The header claude will get: the helper run as claude runs it, without the key in its env
-      header="$("${claude_env[@]}" sh -c "$LINEAR_HEADERS_HELPER" 2>/dev/null | jq -r '.Authorization // empty' 2>/dev/null)" || true
-      [[ -n "$header" ]] || { print -r -- "key: no Linear API key for the header helper"; return 0; }
-      answer="$(curl -sS -m 20 -w '\n%{http_code}' "$LINEAR_MCP_URL" \
-        -H @<(print -r -- "Authorization: $header") \
-        -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-        --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agent-queue","version":"1"}}}' \
-        2>/dev/null)" || true
-      code="${answer##*$'\n'}"
+      # Twice at most: a 401 buys a new token first, so a revoked one never blocks a launch
+      for attempt in 1 2; do
+        # The header claude will get: the helper run as claude runs it, without credentials in its env
+        header="$("${claude_env[@]}" sh -c "$LINEAR_HEADERS_HELPER" 2>/dev/null | jq -r '.Authorization // empty' 2>/dev/null)" || true
+        [[ -n "$header" ]] || { print -r -- "key: no Linear credentials for the header helper"; return 0; }
+        answer="$(curl -sS -m 20 -w '\n%{http_code}' "$LINEAR_MCP_URL" \
+          -H @<(print -r -- "Authorization: $header") \
+          -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+          --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agent-queue","version":"1"}}}' \
+          2>/dev/null)" || true
+        code="${answer##*$'\n'}"
+        if [[ "$code" == 401 && "$attempt" == 1 ]] && linear_token force >/dev/null 2>&1; then continue; fi
+        break
+      done
       # A JSON-RPC error comes with a 200 too; only an initialize result counts
       if [[ "$code" != 200 ]]; then print -r -- "key: Linear's MCP answered ${code:-nothing}"
       elif [[ "$answer" != *'"result"'*'"protocolVersion"'* ]]; then print -r -- "key: Linear's MCP refused initialize"

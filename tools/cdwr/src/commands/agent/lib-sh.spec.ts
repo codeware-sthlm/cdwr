@@ -1,11 +1,13 @@
 import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,11 +22,16 @@ const REAL_LIB = realpathSync(LIB);
 const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
 
 describe('lib.sh', () => {
-  it('keeps the key out of the curl command line', () => {
-    expect(SCRIPT).not.toContain('-H "Authorization: $key"');
-    expect(SCRIPT).not.toContain('-H "Authorization: Bearer $key"');
-    expect(SCRIPT).toContain('-H @<(print -r -- "Authorization: $key")');
+  it('keeps the credentials out of the curl command line', () => {
+    expect(SCRIPT).not.toContain('-H "Authorization:');
+    expect(SCRIPT).not.toContain('-d "client_secret=');
+    expect(SCRIPT).not.toContain('-d client_secret=');
+    expect(SCRIPT).not.toContain('--data "client_secret');
+    expect(SCRIPT).toContain('-H @<(print -r -- "Authorization: $auth")');
     expect(SCRIPT).toContain('-H @<(print -r -- "Authorization: $header")');
+    expect(SCRIPT).toContain(
+      '-d @<(print -r -- "client_id=$LINEAR_CLIENT_ID&client_secret=$LINEAR_CLIENT_SECRET")'
+    );
   });
 
   describe.skipIf(!hasZsh)('Linear MCP', () => {
@@ -58,7 +65,7 @@ describe('lib.sh', () => {
       });
 
     it.each([
-      ['connector by default', {}, 'connector'],
+      ['key by default', {}, 'key'],
       ['key on the container host', { AGENT_QUEUE_HOST: 'container' }, 'key'],
       [
         'the explicit mode over the host',
@@ -77,7 +84,10 @@ describe('lib.sh', () => {
     it('connector: prefixes the claude.ai tools and adds no flags', () => {
       const out = run(
         `linear_mcp "${dir}"; print -r -- "$L|\${#LINEAR_MCP_ARGS[@]}"`,
-        { AGENT_QUEUE_LINEAR_KEY: 'sekret' }
+        {
+          AGENT_QUEUE_LINEAR_MCP: 'connector',
+          AGENT_QUEUE_LINEAR_KEY: 'sekret'
+        }
       ).stdout.trim();
       expect(out).toBe('mcp__claude_ai_Linear|0');
     });
@@ -177,7 +187,7 @@ describe('lib.sh', () => {
           AGENT_QUEUE_LINEAR_MCP: 'key',
           AGENT_QUEUE_LINEAR_KEY: ''
         }).stdout.trim()
-      ).toBe('key: no Linear API key for the header helper');
+      ).toBe('key: no Linear credentials for the header helper');
     });
 
     // claude runs without the env key, so the helper cannot use it either
@@ -187,7 +197,17 @@ describe('lib.sh', () => {
           AGENT_QUEUE_LINEAR_MCP: 'key',
           AGENT_QUEUE_LINEAR_KEY: 'k'
         }).stdout.trim()
-      ).toBe('key: no Linear API key for the header helper');
+      ).toBe('key: no Linear credentials for the header helper');
+    });
+
+    it('key: environment client credentials alone do not count either', () => {
+      expect(
+        run('linear_tools', {
+          AGENT_QUEUE_LINEAR_MCP: 'key',
+          AGENT_QUEUE_LINEAR_CLIENT_ID: 'id',
+          AGENT_QUEUE_LINEAR_CLIENT_SECRET: 'sekret'
+        }).stdout.trim()
+      ).toBe('key: no Linear credentials for the header helper');
     });
 
     // Under errexit, as the scripts run: a curl that fails is a reason, not an exit
@@ -251,6 +271,207 @@ describe('lib.sh', () => {
           AGENT_QUEUE_LINEAR_TOOLS_CMD: 'print -r -- custom'
         }).stdout.trim()
       ).toBe('custom');
+    });
+
+    describe('the app token', () => {
+      const creds = {
+        AGENT_QUEUE_LINEAR_CLIENT_ID: 'id',
+        AGENT_QUEUE_LINEAR_CLIENT_SECRET: 'sekret'
+      };
+      const now = (): number => Math.floor(Date.now() / 1000);
+      const tokenFile = (): string => join(dir, 'linear.token');
+      const cache = (token: string, expiresAt: number): void =>
+        writeFileSync(tokenFile(), JSON.stringify({ token, expiresAt }));
+      const readCache = (): { token: string; expiresAt: number } =>
+        JSON.parse(readFileSync(tokenFile(), 'utf8'));
+      const seen = (name: string): string =>
+        readFileSync(join(dir, name), 'utf8');
+
+      const runApp = (script: string, env: Record<string, string> = {}) =>
+        run(script, {
+          AGENT_QUEUE_LINEAR_TOKEN_FILE: tokenFile(),
+          AGENT_QUEUE_HOME: dir,
+          ...env
+        });
+
+      beforeEach(() => {
+        const fake = [
+          '#!/bin/sh',
+          `d="${dir}"`,
+          'printf \'%s\\n\' "$@" >> "$d/argv"',
+          'url= out= lasth=',
+          'while [ $# -gt 0 ]; do',
+          '  case "$1" in',
+          '    http*) url="$1" ;;',
+          '    -o) out="$2"; shift ;;',
+          '    -d) case "$2" in @*) cat "${2#@}" >> "$d/seen-token"; echo >> "$d/seen-token" ;; esac; shift ;;',
+          '    -H) case "$2" in @*) lasth="$(cat "${2#@}")"; printf \'%s\\n\' "$lasth" >> "$d/seen-headers" ;; esac; shift ;;',
+          '    --data) cat > /dev/null; shift ;;',
+          '  esac',
+          '  shift',
+          'done',
+          'case "$url" in',
+          '  *oauth/token)',
+          '    n=$(cat "$d/exchanges" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$d/exchanges"',
+          '    printf \'{"access_token":"tok%s","token_type":"Bearer","expires_in":2592000}\' "$n" ;;',
+          '  *mcp.linear.app*)',
+          '    if [ -e "$d/mcp-401-once" ]; then rm -f "$d/mcp-401-once"; printf \'\\n401\'',
+          '    else printf \'data: {"result":{"protocolVersion":"x"}}\\n200\'; fi ;;',
+          '  *)',
+          '    case "$lasth" in',
+          '      *"Bearer bogus")',
+          '        printf \'%s\\n401\' \'{"errors":[{"message":"Authentication required, not authenticated","extensions":{"code":"AUTHENTICATION_ERROR","statusCode":401}}]}\' ;;',
+          '      *) printf \'%s\\n200\' \'{"data":{"viewer":{"id":"u"}}}\' ;;',
+          '    esac ;;',
+          'esac',
+          ''
+        ].join('\n');
+        writeFileSync(join(bin(), 'curl'), fake);
+        chmodSync(join(bin(), 'curl'), 0o755);
+      });
+
+      it('buys a token with env credentials and caches it at mode 600', () => {
+        const result = runApp('linear_token', creds);
+        expect(result.stdout.trim()).toBe('tok1');
+        expect(statSync(tokenFile()).mode & 0o777).toBe(0o600);
+        const cached = readCache();
+        expect(cached.token).toBe('tok1');
+        expect(Math.abs(cached.expiresAt - (now() + 2592000))).toBeLessThan(60);
+        expect(seen('seen-token')).toContain(
+          'client_id=id&client_secret=sekret'
+        );
+        expect(seen('argv')).not.toContain('sekret');
+      });
+
+      it('reuses the cache within one run', () => {
+        const result = runApp('linear_token; linear_token', creds);
+        expect(result.stdout.trim().split('\n')).toEqual(['tok1', 'tok1']);
+        expect(seen('exchanges').trim()).toBe('1');
+      });
+
+      it('buys again when the cache has less than a day left', () => {
+        cache('stale', now() + 3600);
+        expect(runApp('linear_token', creds).stdout.trim()).toBe('tok1');
+        expect(seen('exchanges').trim()).toBe('1');
+        expect(readCache().token).toBe('tok1');
+      });
+
+      it('force skips a fresh cache', () => {
+        cache('cached', now() + 2000000);
+        expect(runApp('linear_token force', creds).stdout.trim()).toBe('tok1');
+      });
+
+      it('falls back to the key without credentials', () => {
+        const result = runApp('linear_token', {
+          AGENT_QUEUE_LINEAR_KEY_FILE: keyFile
+        });
+        expect(result.stdout.trim()).toBe('k');
+        expect(existsSync(join(dir, 'exchanges'))).toBe(false);
+      });
+
+      // Linear's GraphQL refuses a personal key behind a Bearer prefix
+      it('linear: sends the personal key bare, and a ticket text naming the auth error is no refusal', () => {
+        const file = join(dir, 'linear.key');
+        writeFileSync(file, 'k\n');
+        const result = runApp(
+          'linear \'{ viewer { id } }\'; print -r -- "exchanges: $(cat "$AGENT_QUEUE_HOME/exchanges" 2>/dev/null || echo none)"',
+          { AGENT_QUEUE_LINEAR_KEY_FILE: file }
+        );
+        expect(result.stdout.trim().split('\n')).toEqual([
+          '{"data":{"viewer":{"id":"u"}}}',
+          'exchanges: none'
+        ]);
+        const headers = readFileSync(join(dir, 'seen-headers'), 'utf8');
+        expect(headers).toContain('Authorization: k');
+        expect(headers).not.toContain('Bearer k');
+      });
+
+      it('fails with nothing printed when nothing can sign', () => {
+        expect(runApp('linear_token; print -r -- "rc=$?"').stdout).toBe(
+          'rc=1\n'
+        );
+        const auth = (env: Record<string, string>): string =>
+          runApp('linear_auth && print yes || print no', env).stdout.trim();
+        expect(auth({})).toBe('no');
+        expect(auth({ AGENT_QUEUE_LINEAR_KEY_FILE: keyFile })).toBe('yes');
+        expect(auth(creds)).toBe('yes');
+      });
+
+      it('reads the credentials from the app file', () => {
+        const file = join(dir, 'linear-app.env');
+        writeFileSync(
+          file,
+          'AGENT_QUEUE_LINEAR_CLIENT_ID=fid\nAGENT_QUEUE_LINEAR_CLIENT_SECRET=fsec\n'
+        );
+        expect(
+          runApp('linear_token', {
+            AGENT_QUEUE_LINEAR_APP_FILE: file
+          }).stdout.trim()
+        ).toBe('tok1');
+        expect(seen('seen-token')).toContain(
+          'client_id=fid&client_secret=fsec'
+        );
+      });
+
+      it('linear: buys a new token when Linear refuses the cached one', () => {
+        cache('bogus', now() + 2000000);
+        const result = runApp("linear '{ viewer { id } }'", creds);
+        expect(result.stdout.trim()).toBe('{"data":{"viewer":{"id":"u"}}}');
+        expect(seen('exchanges').trim()).toBe('1');
+        expect(readCache().token).toBe('tok1');
+      });
+
+      it('linear: fails with nothing printed when curl does', () => {
+        writeFileSync(join(bin(), 'curl'), '#!/bin/sh\nexit 28\n');
+        const result = runApp(
+          'linear \'{ viewer { id } }\'; print -r -- "rc=$?"',
+          {
+            AGENT_QUEUE_LINEAR_KEY_FILE: keyFile
+          }
+        );
+        expect(result.stdout).toBe('rc=1\n');
+      });
+
+      it('header: prints the token as the helper does, with and without credentials', () => {
+        const direct = spawnSync('zsh', [LIB, 'header'], {
+          encoding: 'utf8',
+          env: {
+            PATH: `${bin()}:${process.env['PATH'] ?? ''}`,
+            HOME: dir,
+            AGENT_QUEUE_LINEAR_TOKEN_FILE: tokenFile(),
+            AGENT_QUEUE_HOME: dir,
+            ...creds
+          }
+        });
+        expect(direct.stdout.trim()).toBe('{"Authorization":"Bearer tok1"}');
+        cache('cached', now() + 2000000);
+        const stripped = runApp(
+          '"${claude_env[@]}" sh -c "$LINEAR_HEADERS_HELPER"',
+          creds
+        );
+        expect(stripped.stdout.trim()).toBe(
+          '{"Authorization":"Bearer cached"}'
+        );
+      });
+
+      it('claude_env strips the key and the client credentials', () => {
+        const result = runApp(
+          `"\${claude_env[@]}" sh -c 'echo "\${AGENT_QUEUE_LINEAR_KEY:-u}|\${AGENT_QUEUE_LINEAR_CLIENT_ID:-u}|\${AGENT_QUEUE_LINEAR_CLIENT_SECRET:-u}"'`,
+          { ...creds, AGENT_QUEUE_LINEAR_KEY: 'k' }
+        );
+        expect(result.stdout.trim()).toBe('u|u|u');
+      });
+
+      it('linear_tools: a refused MCP token is bought again once', () => {
+        cache('bogus', now() + 2000000);
+        writeFileSync(join(dir, 'mcp-401-once'), '');
+        const result = runApp('linear_tools', {
+          ...creds,
+          AGENT_QUEUE_LINEAR_MCP: 'key'
+        });
+        expect(result.stdout).toBe('');
+        expect(seen('exchanges').trim()).toBe('1');
+      });
     });
   });
 
