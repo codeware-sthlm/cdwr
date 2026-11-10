@@ -191,11 +191,18 @@ const ATTENDED_ROWS: ReadonlySet<string> = new Set([
   'on your table'
 ]);
 
-/** Whether the status row `check` shows for a machine with this scheduler */
+/**
+ * Whether the status row `check` shows for a machine with this scheduler. An attended-only machine
+ * shows `scripts` once copies are installed, since `agent_linear` signs with the installed `lib.sh`
+ */
 export const showsRow = (
   scheduler: RemoteReport['scheduler'],
-  check: string
-): boolean => scheduler !== 'elsewhere' || ATTENDED_ROWS.has(check);
+  check: string,
+  scriptsInstalled = false
+): boolean =>
+  scheduler !== 'elsewhere' ||
+  ATTENDED_ROWS.has(check) ||
+  (check === 'scripts' && scriptsInstalled);
 
 /** The `scheduler` row of an attended-only machine; `mirror` is the mirror target, if one is set */
 export const schedulerRow = (

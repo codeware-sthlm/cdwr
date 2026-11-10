@@ -35,12 +35,12 @@ import {
   QUEUE_FILES,
   WORKTREE_PREF,
   attendedLinearServer,
-  attendedLinearServerCurrent,
   byFile,
   domainTarget,
   filesDrift,
   installWork,
   launchPath,
+  linearServerState,
   memoryDir,
   renderPlist,
   schedulerHere,
@@ -49,15 +49,6 @@ import {
 } from './agent.logic';
 
 const LEGACY_HOME = join(homedir(), '.claude', 'agent-queue');
-
-const hasLinearServer = (config: unknown): boolean =>
-  typeof config === 'object' &&
-  config !== null &&
-  typeof (config as { mcpServers?: unknown }).mcpServers === 'object' &&
-  (config as { mcpServers: Record<string, unknown> | null }).mcpServers !==
-    null &&
-  'agent_linear' in
-    (config as { mcpServers: Record<string, unknown> }).mcpServers;
 
 const expand = (path: string): string =>
   resolve(path.replace(/^~(?=$|\/)/, homedir()));
@@ -142,7 +133,10 @@ export default defineCommand({
       }
     }
     const auth = await linearAuth(ctx.env);
-    const claudeConfig = readClaudeConfig();
+    const linearServer = linearServerState(
+      readClaudeConfig(),
+      queue.files['lib.sh']
+    );
     const work = installWork({
       schedulerHere: here,
       schedulerFlag,
@@ -151,10 +145,7 @@ export default defineCommand({
         source
       ),
       appCredentials: auth === 'app',
-      linearServerCurrent: attendedLinearServerCurrent(
-        claudeConfig,
-        queue.files['lib.sh']
-      ),
+      linearServerCurrent: linearServer === 'current',
       scheduler: {
         worktreeExists,
         envCopies: withScheduler
@@ -218,7 +209,7 @@ export default defineCommand({
       work,
       wasLoaded: job.loaded,
       legacy: existsSync(LEGACY_HOME),
-      mcpExists: hasLinearServer(claudeConfig)
+      mcpExists: linearServer !== 'missing'
     };
     if (steps.length === 0) {
       return {

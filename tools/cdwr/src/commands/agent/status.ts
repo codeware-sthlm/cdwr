@@ -296,7 +296,9 @@ export default defineCommand({
               row(true, 'on your table', formatTable(report.queueView))
             ])
     ];
-    const shown = allRows.filter((r) => showsRow(report.scheduler, r[1] ?? ''));
+    const shown = allRows.filter((r) =>
+      showsRow(report.scheduler, r[1] ?? '', report.installedAny)
+    );
     ctx.ui.table(['', 'check', 'detail'], shown);
 
     const problems = shown.filter((r) => r[0] === symbols.fail).length;

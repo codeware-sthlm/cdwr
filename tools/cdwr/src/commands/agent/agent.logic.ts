@@ -120,6 +120,23 @@ export const attendedLinearServerCurrent = (
   );
 };
 
+/** The `agent_linear` server in a parsed `~/.claude.json`: absent, as expected, or another shape */
+export const linearServerState = (
+  config: unknown,
+  libPath: string
+): 'missing' | 'current' | 'stale' => {
+  if (attendedLinearServerCurrent(config, libPath)) return 'current';
+  const servers =
+    typeof config === 'object' && config !== null
+      ? (config as { mcpServers?: unknown }).mcpServers
+      : undefined;
+  return typeof servers === 'object' &&
+    servers !== null &&
+    'agent_linear' in servers
+    ? 'stale'
+    : 'missing';
+};
+
 /** Where the queue's files live in the repo, relative to the workspace root */
 export const QUEUE_SOURCE_DIR = 'tools/cdwr/agent-queue';
 /** The files install puts in the queue home; run.sh loads the rest from beside it */

@@ -6,7 +6,7 @@ import { memoryPrefs } from '../cli/prefs';
 import { runCommand } from '../cli/run';
 import { fakeUi } from '../testing/fake-ui';
 
-import type { QueuePaths } from './agent/agent.logic';
+import { type QueuePaths, attendedLinearServer } from './agent/agent.logic';
 
 vi.mock('../cli/preflight', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../cli/preflight')>();
@@ -23,6 +23,8 @@ vi.mock('./agent/agent.logic', async (importOriginal) => ({
 
 let loaded = false;
 let queue: QueuePaths;
+let drift: 'missing' | 'current' | 'stale' = 'missing';
+let claudeConfig: unknown;
 const jobPathChecks = vi.fn();
 const githubAppCheck = vi.fn();
 
@@ -34,7 +36,8 @@ vi.mock('../services/agent-queue', async (importOriginal) => ({
     source: 'app-env' as const
   }),
   paths: () => queue,
-  queueDrift: () => 'missing',
+  queueDrift: () => drift,
+  readClaudeConfig: () => claudeConfig,
   worktreeOf: () => '/nowhere',
   envCopyDrift: () => 'current',
   implementReport: () => ({ spent: undefined, cap: 40, last: undefined }),
@@ -49,11 +52,14 @@ describe('doctor on a machine without the scheduler', () => {
     jobPathChecks.mockReset();
     githubAppCheck.mockReset();
     loaded = false;
+    drift = 'missing';
+    claudeConfig = undefined;
     dir = mkdtempSync(join(tmpdir(), 'cdwr-doctor-'));
     queue = {
       home: join(dir, 'agent-queue'),
       mirror: join(dir, 'agent-queue', 'mirror'),
-      plist: join(dir, 'queue.plist')
+      plist: join(dir, 'queue.plist'),
+      files: { 'lib.sh': join(dir, 'agent-queue', 'lib.sh') }
     } as QueuePaths;
   });
 
@@ -92,5 +98,26 @@ describe('doctor on a machine without the scheduler', () => {
     const text = await doctor();
     expect(text).toContain('not on this machine');
     expect(text).not.toContain('cdwr agent install');
+  });
+
+  it('stays quiet about an attended side that is current', async () => {
+    drift = 'current';
+    claudeConfig = {
+      mcpServers: { agent_linear: attendedLinearServer(queue.files['lib.sh']) }
+    };
+    const text = await doctor();
+    expect(text).not.toContain('attended');
+  });
+
+  it('warns about stale copies and a stale agent_linear', async () => {
+    drift = 'stale';
+    claudeConfig = {
+      mcpServers: { agent_linear: attendedLinearServer('/x/lib.sh') }
+    };
+    const text = await doctor();
+    expect(text).toContain(
+      'installed scripts out of date, agent_linear out of date; `cdwr agent install`'
+    );
+    expect(jobPathChecks).not.toHaveBeenCalled();
   });
 });
