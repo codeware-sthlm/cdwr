@@ -113,6 +113,23 @@ export const TOUR_MORE: readonly TourMoreLink[] = [
   }
 ];
 
+// A key combination as the texts write it: `Cmd+K`, `Ctrl+K`
+const SHORTCUT = /((?:Cmd|Ctrl)\+[A-Z])/;
+
+/**
+ * A step's text cut at its key combinations, so each can be drawn as keys:
+ * plain text stays a string, a combination becomes its keys, with Cmd as ⌘.
+ */
+export const splitShortcuts = (text: string): Array<string | string[]> =>
+  text
+    .split(SHORTCUT)
+    .filter(Boolean)
+    .map((part) =>
+      SHORTCUT.test(part)
+        ? part.split('+').map((key) => (key === 'Cmd' ? '⌘' : key))
+        : part
+    );
+
 /** The steps the user can follow: those whose area they can't change are skipped. */
 export const visibleTourSteps = (
   permissions: ReturnType<typeof useAuth>['permissions']
