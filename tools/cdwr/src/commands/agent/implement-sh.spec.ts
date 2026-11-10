@@ -151,6 +151,14 @@ describe('implement.sh', () => {
     expect(matches('git * push * main', 'git push origin main')).toBe(false);
   });
 
+  it('keeps the token cache and the app credentials out of the session', () => {
+    expect(code).toContain('"Read(/$HOME_DIR/linear.token*)"');
+    expect(denied).toContain('*linear.token*');
+    expect(denied).toContain('*linear-app.env*');
+    expect(isDenied('cat /h/.cdwr/agent-queue/linear.token')).toBe(true);
+    expect(isDenied('cat /h/linear-app.env')).toBe(true);
+  });
+
   const wt = '/w/codeware-cod-705';
   const branch = 'cod-705-let-attended-sessions-force-push';
 
@@ -213,13 +221,12 @@ describe('implement.sh', () => {
     expect(code).not.toContain('gh run rerun');
   });
 
-  it.each([
-    'Read(//run/agent/**)',
-    'Bash(*/run/agent/*)',
-    'Bash(*lib.sh header*)'
-  ])('denies reaching the container keys with %s', (rule) => {
-    expect(code).toContain(`"${rule}"`);
-  });
+  it.each(['Read(//run/agent/**)', 'Bash(*/run/agent/*)', 'Bash(*lib.sh*)'])(
+    'denies reaching the container keys with %s',
+    (rule) => {
+      expect(code).toContain(`"${rule}"`);
+    }
+  );
 
   describe.skipIf(!hasZsh)('run', () => {
     let dir: string;
@@ -485,9 +492,9 @@ describe('implement.sh', () => {
         expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
       });
 
-      it('uses the connector by default', () => {
+      it('uses the connector when asked for', () => {
         fakeArgvClaude();
-        expect(start().status).toBe(0);
+        expect(start({ AGENT_QUEUE_LINEAR_MCP: 'connector' }).status).toBe(0);
         const argv = readFileSync(argvFile(), 'utf8');
         expect(argv).toContain('mcp__claude_ai_Linear__get_issue');
         expect(argv).not.toContain('--mcp-config');
