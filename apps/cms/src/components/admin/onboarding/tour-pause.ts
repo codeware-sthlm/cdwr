@@ -5,8 +5,11 @@
  * Kept in session storage, so it survives the navigation and a reload, and
  * read through {@link subscribeTourPause} and {@link getTourPause} with
  * `useSyncExternalStore`: the server has no storage and renders no card.
+ *
+ * Session storage outlives a logout, so the pause names the user who left it,
+ * and nobody else sees it.
  */
-export type TourPause = { step: number };
+export type TourPause = { step: number; user: string };
 
 /** Session storage key of the pause. */
 export const TOUR_PAUSE_KEY = 'cdwr:tour-paused';
@@ -28,9 +31,12 @@ export const parseTourPause = (raw: string | null): TourPause | undefined => {
       value !== null &&
       'step' in value &&
       Number.isInteger(value.step) &&
-      (value.step as number) >= 0
+      (value.step as number) >= 0 &&
+      'user' in value &&
+      typeof value.user === 'string' &&
+      value.user !== ''
     ) {
-      return { step: value.step as number };
+      return { step: value.step as number, user: value.user };
     }
   } catch {
     // Nothing stored, or not ours
@@ -46,13 +52,17 @@ const readRaw = (): string | null => {
   }
 };
 
-/** The current pause, or `undefined`. */
-export const getTourPause = (): TourPause | undefined => {
+/** The pause `user` left, or `undefined`; another user's pause is none. */
+export const getTourPause = (
+  user: string | undefined
+): TourPause | undefined => {
   const raw = readRaw();
   if (raw !== cache.raw) {
     cache = { raw, pause: parseTourPause(raw) };
   }
-  return cache.pause;
+  return user !== undefined && cache.pause?.user === user
+    ? cache.pause
+    : undefined;
 };
 
 /** Stores a pause, or clears it with `undefined`, and tells the subscribers. */
