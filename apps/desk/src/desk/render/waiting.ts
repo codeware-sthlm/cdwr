@@ -1,12 +1,12 @@
 import type { SnoozeRow } from '../../supabase';
 import { PENDING_MAX_MS, type PrCommandState, prCommandKey } from '../commands';
 import { CONFIRM_MS } from '../constants';
-import { esc, shortAge } from '../format';
+import { esc } from '../format';
 import { type Blocker, type Model, type WatchRef, prOf } from '../model';
 import type { ControlsUi, Detail } from '../state';
 import type { PrRef, WatchEntry } from '../types';
 
-import { livePr, prTone, prWaitText, prn, queuePr } from './html';
+import { prWaitText, queuePr } from './html';
 
 // The Waiting on you card: everything that waits on you, furthest along first, each with how long it has waited
 
@@ -87,29 +87,6 @@ export type LabelUi = Pick<
 
 export type LabelState =
   'idle' | 'confirming' | 'labelling' | 'labelled' | { note: string };
-
-/** No controls: no buttons, though a fold of snoozed rows still shows */
-export const SNOOZE_OFF: SnoozeUi = {
-  on: false,
-  busy: new Set(),
-  notes: new Map(),
-  open: false,
-  label: {
-    labelConfirm: new Map(),
-    labelling: new Set(),
-    labelled: new Map(),
-    labelNotes: new Map()
-  },
-  pr: {
-    watch: new Map(),
-    commands: new Map(),
-    controls: {
-      mergeConfirm: new Map(),
-      prSending: new Set(),
-      prNotes: new Map()
-    }
-  }
-};
 
 /** The snooze buttons' state from the model and the viewer's side of the controls */
 export const snoozeUi = (m: Model, c: ControlsUi, open = false): SnoozeUi => ({
@@ -413,48 +390,3 @@ export const waitRows = (
 /** The rows that count toward the card's badge; approved rows only wait on a blocker, snoozed ones on a change */
 export const countedRows = (rows: readonly WaitRow[]): WaitRow[] =>
   rows.filter((r) => r.kind !== 'approved' && !r.snoozed);
-
-/** One line per row: the row links to the ticket, the PR number beside it tinted by its state. Notes and buttons are the panel's */
-const rowHTML =
-  (m: Model, details: ReadonlyMap<string, Detail>) =>
-  (r: WaitRow): string => {
-    const tone = prTone(
-      livePr(m, details, { ticket: r.id, pr: r.pr }).live?.state ?? null
-    );
-    return `<li class="wrow-li${r.kind === 'approved' ? ' approved' : ''}"><a class="wrow" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="id">${esc(r.id)}</span><span class="t">${esc(r.title)}</span><span class="kind"${r.kind === 'approved' ? ` title="${esc(rowLabel(r))}"` : ''}>${esc(rowLabel(r))}</span>${r.age === null ? '' : `<time>${esc(shortAge(r.age))}</time>`}</a>${prn(r.pr, tone)}</li>`;
-  };
-
-export const renderWaiting = (
-  m: Model,
-  details: ReadonlyMap<string, Detail>,
-  now: Date,
-  ui: SnoozeUi = SNOOZE_OFF
-): string => {
-  const loading = !m.runs;
-  const all = loading ? [] : waitRows(m, details, now);
-  const rows = all.filter((r) => !r.snoozed);
-  const snoozed = all.filter((r) => r.snoozed);
-  const count = countedRows(all).length;
-  const li = rowHTML(m, details);
-  // One button for both widths: CSS shows it and picks the count per breakpoint
-  const desk = rows.length > DESKTOP_ROWS;
-  const more =
-    rows.length > PHONE_ROWS
-      ? `<button type="button" class="more-all${desk ? ' more-desk' : ''}" aria-haspopup="dialog">+ <span class="more-n phone">${rows.length - PHONE_ROWS}</span>${desk ? `<span class="more-n desk">${rows.length - DESKTOP_ROWS}</span>` : ''} more — open all</button>`
-      : '';
-  const fold = snoozedFold(
-    snoozed.length,
-    `<ul class="wrows">${snoozed.map(li).join('')}</ul>`,
-    ui.open
-  );
-  const body = loading
-    ? '<p class="none">Loading…</p>'
-    : (rows.length
-        ? `<ul class="wrows">${rows.map(li).join('')}</ul>${more}`
-        : '<p class="none">Nothing waits on you.</p>') + fold;
-  return `<article class="card-top waiting${count ? ' has' : ''}" data-w="before">
-    <div class="ct-head"><button type="button" class="open state" aria-haspopup="dialog">Waiting on you</button><b class="count">${loading ? '–' : count}</b></div>
-    ${body}
-    ${rows.length ? '<p class="foot">wait age from activity gate events · answering unblocks the next run</p>' : ''}
-  </article>`;
-};

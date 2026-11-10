@@ -319,19 +319,3 @@ export const renderProblems = (m: Model): string => {
   });
   return `<h2 class="problems-h">PROBLEMS · ${m.problems.length}</h2>${cards.join('')}`;
 };
-
-/** The dashed, striped card that stands in for the session card while its state is unknown */
-export const renderUnknownSession = (m: Model): string => {
-  const p = ofKind(m.problems, 'unknown')[0];
-  if (!p) return '';
-  const ticket = p.ticket
-    ? `<span class="mono">${idLink(p.ticket)}</span>`
-    : '';
-  return `<section class="state-unknown" aria-label="Session state unknown">
-    <span class="p-pill solid">STATE UNKNOWN</span>
-    <div class="su-text">
-      <b class="su-title">Last known: ${esc(p.host)} ${p.ticket ? both(`running ${ticket}`, `on ${ticket}`) : 'with a session open'}</b>
-      <span class="su-sub wide">Shown greyed until a heartbeat or a fresh snapshot confirms it. Nothing here is assumed to be running.</span>
-    </div>
-  </section>`;
-};
