@@ -4,6 +4,31 @@
 
 def trim: gsub("^\\s+|\\s+$"; "");
 
+# Seconds since epoch from an ISO timestamp, with or without milliseconds or seconds
+def epoch:
+  sub("\\.[0-9]+Z$"; "Z") | sub("T(?<hm>[0-9]{2}:[0-9]{2})Z$"; "T\(.hm):00Z") | fromdateiso8601;
+
+# --- Who wrote a Linear comment ---
+# The queue writes to Linear as its own app user. Before the cutover it wrote as Håkan, so an older
+# comment by him that carries the `**Agent` prefix is still the agent's. The prefix fallback can go
+# 14 days after the cutover.
+def agent_user_id: "bbbb4a33-e052-486e-8e0f-d3abb5c5c841";
+def agent_cutover: "2026-11-10T22:00:00Z";
+
+def agent_prefixed: (.body // "") | trim | startswith("**Agent");
+
+# True for a comment node the agent wrote: by the app user, or prefixed and older than the cutover.
+# A node without a user (a query that didn't ask, an older installed lib.sh) falls back to the prefix.
+def is_agent:
+  if (.user | type) != "object" then agent_prefixed
+  elif .user.app == true or .user.id == agent_user_id then true
+  else agent_prefixed and ((.createdAt | epoch) < (agent_cutover | epoch))
+  end;
+
+# True for the agent's comment of a kind, such as "**Agent: PR ready**": a person pasting the
+# marker fakes no gate
+def agent_kind($marker): is_agent and ((.body // "") | trim | startswith($marker));
+
 # The number of a cdwr pull URL, else null
 def pull_number:
   (capture("^https://github\\.com/codeware-sthlm/cdwr/pull/(?<n>[0-9]+)(?:[/?#]|$)") | .n | tonumber)? // null;
@@ -41,7 +66,7 @@ def status_handoffs:
 # struck through (`- [ ] ~~item~~`, a reason may follow) is dropped, not waiting. A ticket that
 # never got one (merged from a gate) falls back to the Status table's hand-off rows.
 def handoffs:
-  ([ (.comments.nodes // [])[] | select(.body | startswith("**Agent: PR ready**")) ]
+  ([ (.comments.nodes // [])[] | select(agent_kind("**Agent: PR ready**")) ]
     | sort_by(.createdAt) | last) as $c
   | if $c == null then status_handoffs
     else
@@ -256,10 +281,6 @@ def prune($ids): (. // {}) | with_entries(select(.key as $k | $ids | index($k) !
 # --- Attended-session pick: what an interactive /work-queue session would take next ---
 # Input is an array of Linear issue nodes; mirrors "What to take next" and "The limit" in the skill.
 
-# Seconds since epoch from an ISO timestamp, with or without milliseconds or seconds
-def epoch:
-  sub("\\.[0-9]+Z$"; "Z") | sub("T(?<hm>[0-9]{2}:[0-9]{2})Z$"; "T\(.hm):00Z") | fromdateiso8601;
-
 # { id, at } from the first "**Claim:** <id> · <path> · <time>" line of the description, else null
 def claim:
   [ (.description // "") | split("\n")[]
@@ -354,17 +375,17 @@ def plan_unstarted:
 # True when the newest comment is not the agent's
 def answered:
   ((.comments.nodes // []) | sort_by(.createdAt) | last) as $c
-  | $c != null and (($c.body | trim | startswith("**Agent")) | not);
+  | $c != null and ($c | is_agent | not);
 
 # True when a human commented after the newest PR-ready or review-addressed comment, or review
 # threads are unresolved.
 # Only while the PR is open: once the watch has seen it merged or closed there is nothing to address.
 def review_comment:
   ((.comments.nodes // [])
-   | map(select(.body | startswith("**Agent: PR ready**") or startswith("**Agent: review addressed**")))
+   | map(select(agent_kind("**Agent: PR ready**") or agent_kind("**Agent: review addressed**")))
    | sort_by(.createdAt) | last) as $ready
   | $ready != null
-    and any((.comments.nodes // [])[]; (.body | startswith("**Agent") | not) and (.createdAt | epoch) > ($ready.createdAt | epoch));
+    and any((.comments.nodes // [])[]; (is_agent | not) and (.createdAt | epoch) > ($ready.createdAt | epoch));
 
 def review_feedback($watch):
   ($watch[.identifier].state // "open") as $pr
@@ -385,7 +406,7 @@ def review_feedback_detail($watch):
 def merged_comment:
   .state.type == "completed" and .completedAt != null
   and (agent_label == "agent:review"
-       or any((.comments.nodes // [])[]; .body | startswith("**Agent: PR ready**")))
+       or any((.comments.nodes // [])[]; agent_kind("**Agent: PR ready**")))
   and answered
   and (((.comments.nodes // []) | sort_by(.createdAt) | last | .createdAt | epoch) > (.completedAt | epoch));
 
@@ -396,6 +417,14 @@ def queue_order:
     .createdAt ];
 
 def is_open: .state.type != "completed" and .state.type != "canceled";
+
+# True when the app added the ticket's agent:ready: the newest history entry adding it has the app
+# user as its actor. Only Håkan makes a ticket ready. No such entry in the page read counts as his:
+# a guard that hides real work is worse than one that misses.
+def ready_by_app:
+  ([ (.history.nodes // [])[] | select(any((.addedLabels // [])[]; .name == "agent:ready")) ]
+   | sort_by(.createdAt) | last) as $h
+  | $h != null and ($h.actor.app == true or $h.actor.id == agent_user_id);
 
 # --- Parent close: the scheduler's second Linear write (run.sh `close_parents`) ---
 
@@ -454,10 +483,10 @@ def limit_used($now; $limit):
       | .identifier ] as $hand
   | { used: ($open | length), open: $open, handoffs: $hand };
 
-# The whole queue: { at, limit, session, next, held, blocked, parked, renovate, table }. `next` is
-# every actionable item in the order the skill takes them; `held` is what the limit keeps from
-# starting; `blocked` is each answered plan not yet started that waits on its open blockers;
-# `parked` is every ticket waiting on a PR check or Copilot; `renovate` is every Renovate PR that is
+# The whole queue: { at, limit, session, next, held, blocked, refused, parked, renovate, table }.
+# `next` is every actionable item in the order the skill takes them; `held` is what the limit keeps
+# from starting; `blocked` is each answered plan not yet started that waits on its open blockers;
+# `refused` is each ready ticket whose agent:ready the app added, never started; `parked` is every ticket waiting on a PR check or Copilot; `renovate` is every Renovate PR that is
 # broken or tended; `table` is what waits on Håkan: before and after implementation, and sub-issues
 # ready to label. $session comes from session_state, or null. $waits comes from waits.sh, keyed by
 # identifier. $renovate is renovate.json (renovate_step's state); an untended broken PR is a `next`
@@ -509,8 +538,11 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
   | ([ $all[] | select(merged_comment and (.identifier | IN($parkIds[]) | not)) ]
      | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "merged comment", detail: null })) as $mc
-  | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not)) ] | sort_by(queue_order)
-     | map(.identifier)) as $rdy
+  | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not) and (ready_by_app | not)) ]
+     | sort_by(queue_order) | map(.identifier)) as $rdy
+  # Listed rather than dropped silently, so the desk and status show why it doesn't start
+  | ([ $all[] | select(agent_label == "agent:ready" and is_open and ready_by_app) ] | sort_by(queue_order)
+     | map({ ticket: .identifier, reason: "agent:ready set by the app" })) as $refused
   | ([ ($renovate // {} | if type == "object" then . else {} end)[]
        | select(.state | IN("failing", "conflicting", "tended")) ] | sort_by(.pr)) as $ren
   # Failing first: launch reads only the first pick, and implement-only runs take failing ones only
@@ -518,8 +550,8 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
   | ($lu.used >= $limit) as $full
   | ([ $all[] | select(agent_label == "agent:needs-input" and is_open and (answered | not)) ] | sort_by(queue_order)
      | map({ ticket: .identifier,
-             kind: (if ((.comments.nodes // []) | sort_by(.createdAt) | last | .body // "" | trim
-                        | startswith("**Agent: plan ready**")) then "plan" else "question" end) })) as $before
+             kind: (if ((.comments.nodes // []) | sort_by(.createdAt) | last // {}
+                        | agent_kind("**Agent: plan ready**")) then "plan" else "question" end) })) as $before
   | ($all | map({ key: .identifier, value: . }) | from_entries) as $by
   | {
       at: ($now | todateiso8601),
@@ -536,6 +568,7 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
                else [] end)
       },
       blocked: $blocked,
+      refused: $refused,
       parked: ($park | map({ ticket: .identifier, wait: .park.wait, pr: .park.pr,
                              since: (.park.since | todateiso8601),
                              resolved: .ws.resolved, outcome: .ws.outcome })),

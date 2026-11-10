@@ -334,6 +334,7 @@ describe('showsRow', () => {
     'next',
     'held',
     'blocked',
+    'refused',
     'parked',
     'renovate',
     'on your table'

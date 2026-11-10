@@ -283,7 +283,10 @@ fragment queued on IssueConnection {
     parent { identifier state { type } }
     state { type }
     labels { nodes { name } }
-    comments(first: 50, orderBy: createdAt) { nodes { body createdAt } }
+    # The author tells the agent's comments from Håkan's (watch.jq `is_agent`)
+    comments(first: 50, orderBy: createdAt) { nodes { body createdAt user { id app } } }
+    # Who added agent:ready (watch.jq `ready_by_app`)
+    history(first: 50) { nodes { createdAt actor { id app } addedLabels { name } } }
     inverseRelations { nodes { type issue { identifier state { type } labels(first: 20) { nodes { name } } } } }
   }
 }

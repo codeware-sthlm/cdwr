@@ -1110,6 +1110,10 @@ export const queueViewSchema = z.object({
   blocked: z
     .array(z.object({ ticket: ticketSchema, blockers: z.array(ticketSchema) }))
     .default([]),
+  // Older queue views have no refused
+  refused: z
+    .array(z.object({ ticket: ticketSchema, reason: z.string() }))
+    .default([]),
   // Older queue views have no parked
   parked: z
     .array(
@@ -1201,6 +1205,9 @@ export const formatBlocked = (view: QueueView): string =>
   view.blocked
     .map((b) => `${b.ticket} after ${b.blockers.join(', ')}`)
     .join('; ') || 'nothing';
+
+export const formatRefused = (view: QueueView): string =>
+  view.refused.map((r) => `${r.ticket} (${r.reason})`).join(', ') || 'nothing';
 
 export const formatParked = (view: QueueView): string =>
   view.parked
