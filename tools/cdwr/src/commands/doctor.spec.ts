@@ -29,7 +29,7 @@ const githubAppCheck = vi.fn();
 vi.mock('../services/agent-queue', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/agent-queue')>()),
   jobState: async () => ({ loaded }),
-  keyPresent: async () => true,
+  linearAuth: async () => 'app' as const,
   paths: () => queue,
   queueDrift: () => 'missing',
   worktreeOf: () => '/nowhere',

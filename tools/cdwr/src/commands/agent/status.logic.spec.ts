@@ -24,8 +24,8 @@ const report = {
   paused: false,
   notifyLevel: 'action',
   host: 'container',
-  keySource: 'env',
-  keyPresent: true,
+  linearAuth: 'app',
+  linearAuthSource: 'app-env',
   mirror: null,
   script: 'current',
   installedAny: true,
@@ -77,7 +77,7 @@ describe('parseRemoteStatus', () => {
   ])('reads %s', (_name, stdout) => {
     expect(parseRemoteStatus(stdout)).toMatchObject({
       kind: 'report',
-      report: { host: 'container', keyPresent: true }
+      report: { host: 'container', linearAuth: 'app' }
     });
   });
 
@@ -325,7 +325,7 @@ describe('showsRow', () => {
   it.each([
     'scheduler',
     'notify',
-    'Linear key',
+    'Linear auth',
     'Heartbeat mirror',
     'attended',
     'linear tools',

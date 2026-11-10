@@ -10,6 +10,8 @@ import {
   type CapSource,
   HOST_ENV,
   type JobState,
+  KEYCHAIN_CLIENT_ID_SERVICE,
+  KEYCHAIN_CLIENT_SECRET_SERVICE,
   KEYCHAIN_SERVICE,
   QUEUE_FILES,
   QUEUE_SOURCE_DIR,
@@ -23,7 +25,7 @@ import {
   implementCapSource,
   installedEnv,
   lastImplementRun,
-  linearKeySource,
+  linearAuthSource,
   nodeMajor,
   parseLaunchctlPrint,
   plistPath,
@@ -80,20 +82,29 @@ export async function jobState(
   }
 }
 
-/** Whether the Linear key is in the container's env or the Keychain; the secret itself is never read */
-export async function keyPresent(
+/**
+ * Which Linear credentials the job would use: the queue's app, the personal key (fallback) or none.
+ * In the container the env decides, on a Mac the Keychain; the secret values are never read
+ */
+export async function linearAuth(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
-): Promise<boolean> {
-  const source = linearKeySource(hostKind(platform, env), env);
-  if (source === 'env') return true;
-  if (source === 'none') return false;
-  try {
-    await run('security', ['find-generic-password', '-s', KEYCHAIN_SERVICE]);
-    return true;
-  } catch {
-    return false;
-  }
+): Promise<'app' | 'key' | 'none'> {
+  const source = linearAuthSource(hostKind(platform, env), env);
+  if (source === 'app-env') return 'app';
+  if (source === 'key-env') return 'key';
+  if (source === 'none') return 'none';
+  const has = (service: string) =>
+    run('security', ['find-generic-password', '-s', service]).then(
+      () => true,
+      () => false
+    );
+  const [id, secret] = await Promise.all([
+    has(KEYCHAIN_CLIENT_ID_SERVICE),
+    has(KEYCHAIN_CLIENT_SECRET_SERVICE)
+  ]);
+  if (id && secret) return 'app';
+  return (await has(KEYCHAIN_SERVICE)) ? 'key' : 'none';
 }
 
 /**

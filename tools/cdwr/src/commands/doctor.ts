@@ -14,7 +14,7 @@ import {
   implementReport,
   jobPathChecks,
   jobState,
-  keyPresent,
+  linearAuth,
   mirrorTargetOf,
   paths,
   queueDrift,
@@ -67,7 +67,7 @@ interface Report {
     mirror: string | null;
     /** Always true in the container, which has no launchd job to load */
     loaded: boolean;
-    keyPresent: boolean;
+    linearAuth: 'app' | 'key' | 'none';
     worktree: boolean;
     script: 'missing' | 'current' | 'stale';
     implement: ReturnType<typeof implementReport>;
@@ -85,11 +85,11 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
   const host = hostKind(process.platform, ctx.env);
   if (host === null) return undefined;
   const queue = paths(ctx.env);
-  const [job, key] = await Promise.all([
+  const [job, auth] = await Promise.all([
     host === 'container'
       ? Promise.resolve({ loaded: true as const })
       : jobState(),
-    keyPresent(ctx.env)
+    linearAuth(ctx.env)
   ]);
   const script = queueDrift(queue, ctx.root);
   const worktree = worktreeOf(ctx);
@@ -112,7 +112,7 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
     scheduler,
     mirror: mirrorTargetOf(queue),
     loaded: job.loaded,
-    keyPresent: key,
+    linearAuth: auth,
     worktree: existsSync(worktree),
     script,
     implement: implementReport(queue, ctx.env),
@@ -329,7 +329,7 @@ export default defineCommand({
     } else if (queue) {
       const problems = [
         !queue.loaded && 'job not loaded',
-        !queue.keyPresent && 'no Linear key',
+        queue.linearAuth === 'none' && 'no Linear credentials',
         !queue.worktree && 'no worktree',
         queue.script === 'missing' && 'script not installed',
         queue.script === 'stale' && 'script out of date',
@@ -356,6 +356,15 @@ export default defineCommand({
               )
             ]
       );
+      if (queue.linearAuth === 'key') {
+        rows.push([
+          symbols.warn,
+          'Linear',
+          theme.warn(
+            "the personal key is the fallback; store the app's client id and secret"
+          )
+        ]);
+      }
       const implement = formatImplement(
         queue.implement.spent,
         queue.implement.cap,
