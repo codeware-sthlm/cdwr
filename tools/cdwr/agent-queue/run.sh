@@ -535,12 +535,12 @@ query($after: String) {
       identifier
       history(first: 100) {
         nodes {
-          id createdAt actor { name } botActor { name type }
+          id createdAt actor { name app } botActor { name type }
           fromState { name } toState { name }
           addedLabels { name } removedLabels { name } updatedDescription
         }
       }
-      comments(first: 50) { nodes { id createdAt body user { name } botActor { name type } } }
+      comments(first: 50) { nodes { id createdAt body user { name app } botActor { name type } } }
     }
   }
 }

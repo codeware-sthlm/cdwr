@@ -137,7 +137,14 @@ describe('actorOf', () => {
     ['user', { user: { name: 'Håkan' } }, 'Håkan'],
     ['actor', { actor: { name: 'Håkan' } }, 'Håkan'],
     ['unknown', { user: null, botActor: null }, 'unknown'],
-    ['not the marker', { body: 'Agent said', user: { name: 'H' } }, 'H']
+    ['not the marker', { body: 'Agent said', user: { name: 'H' } }, 'H'],
+    ['app user', { user: { name: 'CDWR Agent', app: true } }, 'agent'],
+    ['app actor', { actor: { name: 'CDWR Agent', app: true } }, 'agent'],
+    [
+      'a person who is not an app',
+      { user: { name: 'Håkan', app: false } },
+      'Håkan'
+    ]
   ])('%s', (_name, args, expected) => {
     expect(actorOf(args)).toBe(expected);
   });
