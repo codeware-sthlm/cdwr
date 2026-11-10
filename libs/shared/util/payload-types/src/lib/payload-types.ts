@@ -165,6 +165,7 @@ export interface Config {
     callout: CalloutBlock;
     card: CardBlock;
     code: CodeBlock;
+    'coming-soon': ComingSoonBlock;
     content: ContentBlock;
     'custom-component': CustomComponentBlock;
     'feature-cards': FeatureCardsBlock;
@@ -682,6 +683,7 @@ export interface Page {
     | CalloutBlock
     | CardBlock
     | CodeBlock
+    | ComingSoonBlock
     | CustomComponentBlock
     | ContentBlock
     | FeatureCardsBlock
@@ -925,6 +927,40 @@ export interface CodeBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'code';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ComingSoonBlock".
+ */
+export interface ComingSoonBlock {
+  /**
+   * A short line above the heading, such as "Opening soon".
+   */
+  badge?: string | null;
+  heading: string;
+  message?: string | null;
+  /**
+   * Optional. Shown as "Opening <date>" in the site’s language.
+   */
+  openingDate?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  /**
+   * The label of a button that opens a form, such as "Notify me". Empty means no button.
+   */
+  notifyLabel?: string | null;
+  /**
+   * The anchor of a Form block on this page set to Overlay. The button opens that form.
+   */
+  notifyAnchor?: string | null;
+  showIllustration?: boolean | null;
+  /**
+   * SVG code drawn in place of the built-in drawing of the site’s pages coming home. Empty keeps the built-in one. Colours can use the theme, such as var(--brand-500).
+   */
+  illustration?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'coming-soon';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

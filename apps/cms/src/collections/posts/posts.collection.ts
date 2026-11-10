@@ -36,6 +36,7 @@ const blocks: Record<BlockSlug, boolean> = {
   'theme-studio': false,
   // Unsupported blocks
   callout: false,
+  'coming-soon': false,
   content: false,
   'feature-cards': false,
   'feature-section': false,

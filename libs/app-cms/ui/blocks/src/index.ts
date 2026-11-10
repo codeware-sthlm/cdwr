@@ -3,6 +3,7 @@ export { blockGalleryBlock } from './lib/block-gallery/block-gallery.block';
 export { calloutBlock } from './lib/callout/callout.block';
 export { cardBlock } from './lib/card/card.block';
 export { codeBlock } from './lib/code/code.block';
+export { comingSoonBlock } from './lib/coming-soon/coming-soon.block';
 export { contentBlock } from './lib/content/content.block';
 export { customComponentBlock } from './lib/custom-component/custom-component.block';
 export { featureCardsBlock } from './lib/feature-cards/feature-cards.block';

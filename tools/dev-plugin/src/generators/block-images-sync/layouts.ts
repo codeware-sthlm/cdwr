@@ -135,6 +135,20 @@ export const BLOCK_IMAGES: Record<string, BlockImages> = {
     ],
     icon: ['m18 16 4-4-4-4', 'm6 8-4 4 4 4', 'm14.5 4-5 16']
   },
+  'coming-soon': {
+    thumbnail: [
+      ...ring(240, 76, 22),
+      ...avatar(240, 76, 8),
+      ...eyebrow(210, 118, 60),
+      ...heading(150, 142, 180),
+      ...textLines(170, 174, 140, 2),
+      ...button(192, 222, 96, 36)
+    ],
+    icon: [
+      'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8',
+      'M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'
+    ]
+  },
   content: {
     thumbnail: [28, 178, 328].flatMap((x) => [
       ...heading(x, 56, 90),
