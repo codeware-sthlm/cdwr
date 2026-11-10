@@ -207,22 +207,31 @@ unattended until the next `install`; `status` and `doctor` say when that copy is
 Each run also writes its own verdict to `job.json` there (`differs` names the scripts that differ
 from `origin/main`), which a session reads to tell a denial that a deploy fixes. The
 script holds the guardrails (read-only tools, Linear the only writable server, no API key), so
-review a change to it as one. The launchd job's Linear key is the Keychain's `linear-agent-queue`
-(a shell-exported `AGENT_QUEUE_LINEAR_KEY` never reaches the job; the container gets that variable
-from compose and files it at start); cdwr checks that it is there and never reads it. `install` asks for the key when it is
-missing, and only does what differs, so run it again after the script changes.
+review a change to it as one. The queue signs its Linear calls as its own Linear app, the app user
+`Codeware Agent`, so what it writes is not Håkan's. The launchd job reads the app's client id and
+secret from the Keychain items `linear-agent-queue-client-id` and `linear-agent-queue-client-secret`
+(a shell-exported `AGENT_QUEUE_LINEAR_CLIENT_ID` or `_SECRET` never reaches the job; the container
+gets those variables from Infisical and files them at start). With them `lib.sh` buys a 30-day
+token, cached with mode 600 in `~/.cdwr/agent-queue/linear.token` (the container's
+`/run/agent/linear.token`) and bought again a day before it expires or when Linear refuses it. The
+personal key, the Keychain's `linear-agent-queue` or `AGENT_QUEUE_LINEAR_KEY`, stays as the fallback
+until it is revoked. cdwr checks that the credentials are there and never reads them. `install`
+asks for the client id and secret when they are missing, and only does what differs, so run it
+again after the script changes.
 
 The claude runs reach Linear through one of two MCP servers, picked by `AGENT_QUEUE_LINEAR_MCP`
-(`lib.sh`). `connector`, the default on the Mac, is the claude.ai connector of the interactive login.
-`key`, the default in the container, is Linear's own server at `https://mcp.linear.app/mcp`, signed with
-the queue's key: the runs load it with `--strict-mcp-config --mcp-config ~/.cdwr/agent-queue/linear-mcp.json`,
-whose `headersHelper` runs `zsh ~/.cdwr/agent-queue/lib.sh header`. That reads the key from
-`AGENT_QUEUE_LINEAR_KEY_FILE` (the container's `/run/agent/linear.key`, tmpfs, mode 600) or the Keychain,
-so the key is never in the config or on a command line. Claude itself runs without the key in its
-environment, and implement-only runs deny reading `/run/agent`. Its tools are `mcp__agent_linear__*`; the allowlists
-take the prefix from the same place. The key writes as its owner, as the connector does. Before each
-claude run the scripts check that the server answers (`claude mcp list` for the connector, an MCP
-`initialize` for the key); without it nothing starts, the run is recorded as `no Linear tools`, one notice
+(`lib.sh`). `key`, the default on both hosts, is Linear's own server at `https://mcp.linear.app/mcp`,
+signed with the app's token: the runs load it with `--strict-mcp-config --mcp-config ~/.cdwr/agent-queue/linear-mcp.json`,
+whose `headersHelper` runs `zsh ~/.cdwr/agent-queue/lib.sh header`. That returns the cached token,
+buys one from the credentials in `AGENT_QUEUE_LINEAR_APP_FILE` (the container's `/run/agent/linear-app.env`,
+tmpfs, mode 600) or the Keychain, or falls back to the key in `AGENT_QUEUE_LINEAR_KEY_FILE` or the
+Keychain, so no credential is ever in the config or on a command line. Claude itself runs without
+them in its environment, and implement-only runs deny reading `/run/agent` and the token cache. Its
+tools are `mcp__agent_linear__*`; the allowlists take the prefix from the same place. `install` adds
+the same server as `agent_linear` to the Mac's user Claude config, so an attended session can use
+the app too. `connector`, an explicit opt-out, is the claude.ai connector of the interactive login,
+which writes as its owner. Before each claude run the scripts check that the server answers (an MCP
+`initialize` for `key`, `claude mcp list` for the connector); without it nothing starts, the run is recorded as `no Linear tools`, one notice
 goes out, and `status` shows a `linear tools` warning. Notices go
 through `agent-queue/notify.sh "<message>"`, which posts to the webhook in `SLACK_WEBHOOK_URL` (or
 `CLAUDE_SLACK_WEBHOOK`, or `~/.claude/slack-webhook`) and does nothing without one. It also reads
@@ -357,7 +366,10 @@ list, so a workflow change still reaches main only through a reviewed PR.
 
 The agent container (`apps/agent-host`) reads its secrets from Infisical at start: `secrets.sh`, its
 entrypoint, logs in with a machine identity, exports production `/agent-queue` and then execs the run
-loop, so the loop is still the process `docker compose stop` signals. The folder lives in its own
+loop, so the loop is still the process `docker compose stop` signals. For Linear the folder holds
+`AGENT_QUEUE_LINEAR_CLIENT_ID` and `AGENT_QUEUE_LINEAR_CLIENT_SECRET`, the queue's Linear app, and
+until it is revoked the fallback `AGENT_QUEUE_LINEAR_KEY`; the entrypoint files them on `/run/agent`
+and unsets them before the loop starts. The folder lives in its own
 Infisical project, `agent-host`, which holds nothing else, and the identity is a Viewer there and a
 member of no other project: the free plan cannot limit an identity to a folder, so the project is
 the limit. The NUC holds only the identity (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`,
