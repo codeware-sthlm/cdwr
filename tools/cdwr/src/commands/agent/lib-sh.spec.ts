@@ -30,7 +30,10 @@ describe('lib.sh', () => {
     expect(SCRIPT).toContain('-H @<(print -r -- "Authorization: $auth")');
     expect(SCRIPT).toContain('-H @<(print -r -- "Authorization: $header")');
     expect(SCRIPT).toContain(
-      '-d @<(print -r -- "client_id=$LINEAR_CLIENT_ID&client_secret=$LINEAR_CLIENT_SECRET")'
+      '--data-urlencode client_id@<(print -rn -- "$LINEAR_CLIENT_ID")'
+    );
+    expect(SCRIPT).toContain(
+      '--data-urlencode client_secret@<(print -rn -- "$LINEAR_CLIENT_SECRET")'
     );
   });
 
@@ -210,13 +213,25 @@ describe('lib.sh', () => {
       ).toBe('key: no Linear credentials for the header helper');
     });
 
+    // The helper runs under claude_env, without the key variables: it signs with the token cache
+    const cachedToken = (token: string): Record<string, string> => {
+      writeFileSync(
+        join(dir, 'linear.token'),
+        JSON.stringify({
+          token,
+          expiresAt: Math.floor(Date.now() / 1000) + 2_000_000
+        })
+      );
+      return { AGENT_QUEUE_HOME: dir };
+    };
+
     // Under errexit, as the scripts run: a curl that fails is a reason, not an exit
     it('key: names a failed request', () => {
       writeFileSync(join(dir, 'bin', 'curl'), '#!/bin/sh\nexit 28\n');
       chmodSync(join(dir, 'bin', 'curl'), 0o755);
       const result = run(
         'set -euo pipefail; why="$(linear_tools)"; print -r -- "after: $why"',
-        { AGENT_QUEUE_LINEAR_MCP: 'key', AGENT_QUEUE_LINEAR_KEY_FILE: keyFile }
+        { AGENT_QUEUE_LINEAR_MCP: 'key', ...cachedToken('k') }
       );
       expect(result.status).toBe(0);
       expect(result.stdout.trim()).toBe(
@@ -233,12 +248,12 @@ describe('lib.sh', () => {
       expect(
         run('linear_tools', {
           AGENT_QUEUE_LINEAR_MCP: 'key',
-          AGENT_QUEUE_LINEAR_KEY_FILE: keyFile
+          ...cachedToken('k')
         }).stdout.trim()
       ).toBe("key: Linear's MCP refused initialize");
     });
 
-    it('key: sends the header from the file to Linear', () => {
+    it('key: sends the header from the token cache to Linear', () => {
       const seen = join(dir, 'seen');
       writeFileSync(
         join(bin(), 'curl'),
@@ -247,7 +262,7 @@ describe('lib.sh', () => {
       chmodSync(join(bin(), 'curl'), 0o755);
       run('linear_tools', {
         AGENT_QUEUE_LINEAR_MCP: 'key',
-        AGENT_QUEUE_LINEAR_KEY_FILE: keyFile
+        ...cachedToken('k')
       });
       expect(readFileSync(seen, 'utf8').trim()).toBe('Authorization: Bearer k');
     });
@@ -305,6 +320,7 @@ describe('lib.sh', () => {
           '    http*) url="$1" ;;',
           '    -o) out="$2"; shift ;;',
           '    -d) case "$2" in @*) cat "${2#@}" >> "$d/seen-token"; echo >> "$d/seen-token" ;; esac; shift ;;',
+          '    --data-urlencode) case "$2" in *@*) printf \'%s=%s\\n\' "${2%%@*}" "$(cat "${2#*@}")" >> "$d/seen-token" ;; esac; shift ;;',
           '    -H) case "$2" in @*) lasth="$(cat "${2#@}")"; printf \'%s\\n\' "$lasth" >> "$d/seen-headers" ;; esac; shift ;;',
           '    --data) cat > /dev/null; shift ;;',
           '  esac',
@@ -337,9 +353,8 @@ describe('lib.sh', () => {
         const cached = readCache();
         expect(cached.token).toBe('tok1');
         expect(Math.abs(cached.expiresAt - (now() + 2592000))).toBeLessThan(60);
-        expect(seen('seen-token')).toContain(
-          'client_id=id&client_secret=sekret'
-        );
+        expect(seen('seen-token')).toContain('client_id=id');
+        expect(seen('seen-token')).toContain('client_secret=sekret');
         expect(seen('argv')).not.toContain('sekret');
       });
 
@@ -408,9 +423,8 @@ describe('lib.sh', () => {
             AGENT_QUEUE_LINEAR_APP_FILE: file
           }).stdout.trim()
         ).toBe('tok1');
-        expect(seen('seen-token')).toContain(
-          'client_id=fid&client_secret=fsec'
-        );
+        expect(seen('seen-token')).toContain('client_id=fid');
+        expect(seen('seen-token')).toContain('client_secret=fsec');
       });
 
       it('linear: buys a new token when Linear refuses the cached one', () => {
@@ -456,10 +470,25 @@ describe('lib.sh', () => {
 
       it('claude_env strips the key and the client credentials', () => {
         const result = runApp(
-          `"\${claude_env[@]}" sh -c 'echo "\${AGENT_QUEUE_LINEAR_KEY:-u}|\${AGENT_QUEUE_LINEAR_CLIENT_ID:-u}|\${AGENT_QUEUE_LINEAR_CLIENT_SECRET:-u}"'`,
-          { ...creds, AGENT_QUEUE_LINEAR_KEY: 'k' }
+          `"\${claude_env[@]}" sh -c 'echo "\${AGENT_QUEUE_LINEAR_KEY:-u}|\${AGENT_QUEUE_LINEAR_CLIENT_ID:-u}|\${AGENT_QUEUE_LINEAR_CLIENT_SECRET:-u}|\${AGENT_QUEUE_LINEAR_KEY_FILE:-u}|\${AGENT_QUEUE_LINEAR_APP_FILE:-u}|\${AGENT_QUEUE_LINEAR_TOKEN_FILE:-u}"'`,
+          {
+            ...creds,
+            AGENT_QUEUE_LINEAR_KEY: 'k',
+            AGENT_QUEUE_LINEAR_KEY_FILE: 'f',
+            AGENT_QUEUE_LINEAR_APP_FILE: 'g'
+          }
         );
-        expect(result.stdout.trim()).toBe('u|u|u');
+        expect(result.stdout.trim()).toBe('u|u|u|u|u|u');
+      });
+
+      it('in the container the credential files have their fixed places without the variables', () => {
+        const result = run(
+          'print -r -- "$LINEAR_TOKEN_FILE|${AGENT_QUEUE_LINEAR_KEY_FILE}|${AGENT_QUEUE_LINEAR_APP_FILE}"',
+          { AGENT_QUEUE_HOST: 'container' }
+        );
+        expect(result.stdout.trim()).toBe(
+          '/run/agent/linear.token|/run/agent/linear.key|/run/agent/linear-app.env'
+        );
       });
 
       it('linear_tools: a refused MCP token is bought again once', () => {
