@@ -288,8 +288,9 @@ export function OnboardingTourHost() {
         // Esc, the X and a click outside all count as seen
         onOpenChange={(next) => (next ? setOpen(true) : close())}
       >
+        {/* One size for every step, so the dialog doesn't jump; the body scrolls when it must */}
         <DialogContent
-          className="codeware-admin twp max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-lg"
+          className="codeware-admin twp flex h-[min(32rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
           onKeyDown={onKeyDown}
           onCloseAutoFocus={(event) => {
             if (leaving.current) {
@@ -298,7 +299,10 @@ export function OnboardingTourHost() {
             }
           }}
         >
-          <div className={band({ tone })} aria-live="polite">
+          <div
+            className={band({ tone, className: 'shrink-0' })}
+            aria-live="polite"
+          >
             <DialogHeader className="gap-1">
               <DialogTitle className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
                 {t('onboarding:dialogTitle')}
@@ -322,7 +326,7 @@ export function OnboardingTourHost() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-5 px-6 py-5">
+          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
             <p className="text-foreground/80 text-base leading-relaxed">
               {t(step ? step.bodyKey : 'onboarding:moreBody')}
             </p>
@@ -357,21 +361,23 @@ export function OnboardingTourHost() {
                           aria-hidden
                         />
                       </span>
-                      <div className="flex min-w-0 flex-col gap-1">
-                        <span className="text-foreground text-base font-medium">
-                          {t(more.titleKey)}
-                        </span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-foreground text-base font-medium">
+                            {t(more.titleKey)}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="-my-1 -mr-1 shrink-0"
+                            onClick={() => readMore(more.topic)}
+                          >
+                            {t('onboarding:readMore')}
+                          </Button>
+                        </div>
                         <span className="text-muted-foreground">
                           {t(more.bodyKey)}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="-ml-2 self-start"
-                          onClick={() => readMore(more.topic)}
-                        >
-                          {t('onboarding:readMore')}
-                        </Button>
                       </div>
                     </li>
                   );
@@ -380,7 +386,7 @@ export function OnboardingTourHost() {
             )}
           </div>
 
-          <div className="bg-muted/40 flex flex-wrap items-center justify-between gap-3 border-t px-6 py-4">
+          <div className="bg-muted/40 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-6 py-4">
             <Button variant="ghost" onClick={close}>
               {t('onboarding:skip')}
             </Button>
