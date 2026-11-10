@@ -65,17 +65,6 @@ import {
   sessionLabel
 } from './html';
 import { headline, headlineHtml } from './session';
-import {
-  type SnoozeUi,
-  type WaitRow,
-  labelControls,
-  prControls,
-  rowLabel,
-  snoozeControls,
-  snoozeUi,
-  snoozedFold,
-  waitRows
-} from './waiting';
 
 // The sheets: one per card, pill and tile. A sheet body is a pure function of the model and the state.
 
@@ -187,104 +176,7 @@ const itemHTML = (
   </li>`;
 };
 
-// ---------- Waiting on you, next, after ----------
-
-/** One card per waiting item, with the one thing to do about it */
-const waitCard =
-  (
-    m: Pick<Model, 'agentPrs'>,
-    details: ReadonlyMap<string, Detail>,
-    ui: SnoozeUi,
-    now: Date
-  ) =>
-  (r: WaitRow): string => {
-    const pr =
-      r.kind === 'review' && r.pr
-        ? prPill(m, details, { ticket: r.id, pr: r.pr }, now)
-        : null;
-    const act =
-      r.kind === 'review' && r.pr
-        ? { text: 'Review on GitHub', href: GH_PR + r.pr }
-        : r.kind === 'review'
-          ? { text: 'Open ticket', href: r.url }
-          : r.kind === 'hand-offs'
-            ? { text: 'Open checklist', href: r.url }
-            : r.kind === 'approved'
-              ? { text: 'Open ticket', href: r.url }
-              : r.kind === 'ready to label'
-                ? // Beside the label button the link only opens the ticket
-                  {
-                    text: ui.on ? 'Open ticket' : 'Label agent:ready',
-                    href: r.url
-                  }
-                : { text: 'Answer in Linear', href: r.url };
-    const secondary = r.kind === 'ready to label' || r.kind === 'approved';
-    const note = [
-      // An approved card already names its blockers in its kind
-      r.blockers && r.kind !== 'approved' ? esc('After ' + r.blockers) : '',
-      r.wait
-    ]
-      .filter(Boolean)
-      .join('. ');
-    const prCtl = prControls(r, ui, now.getTime());
-    const label =
-      r.kind === 'ready to label'
-        ? labelControls(r, ui, now.getTime(), 'act secondary')
-        : { button: '', note: '' };
-    const snooze = snoozeControls(r, ui);
-    // The statuses, top to bottom: the PR, its Copilot and merge notes, blockers and review fixes, then any refusal
-    const status = [
-      pr ? `<div class="wc-pr">${pr.pill}${pr.age}</div>` : '',
-      prCtl.note,
-      note ? `<div class="wc-note">${linkIds(note)}</div>` : '',
-      label.note,
-      snooze.note
-    ].join('');
-    return `<article class="wcard${r.kind === 'approved' ? ' approved' : ''}">
-    <div class="wc-head">${idLink(r.id)}<span class="kind k-${esc(r.kind.replace(/ /g, '-'))}">${linkIds(esc(rowLabel(r)))}</span>${prn(r.pr)}${r.age === null ? '' : `<time>waiting ${esc(shortAge(r.age))}</time>`}</div>
-    <div class="wc-title">${esc(r.title)}</div>
-    ${status ? `<div class="wc-status">${status}</div>` : ''}
-    <div class="wc-actions"><a class="act ${secondary ? 'secondary' : 'primary'}" href="${esc(act.href)}" target="_blank" rel="noopener">${act.text}</a>${prCtl.button}${label.button}${snooze.button}</div>
-  </article>`;
-  };
-
-const renderBefore = (m: Model, state: DeskState, now: Date): string => {
-  if (!m.v) return empty('No queue view yet.');
-  const ui = snoozeUi(m, state.controls, state.ui.snoozedOpen);
-  const card = waitCard(m, state.details, ui, now);
-  // Ideas wait on you too, but their card below carries the evidence to decide on
-  const all = waitRows(m, state.details, now);
-  const rows = all.filter((r) => !r.snoozed);
-  const snoozed = all.filter((r) => r.snoozed);
-  const cards = (kinds: (k: WaitRow['kind']) => boolean) =>
-    rows
-      .filter((r) => kinds(r.kind))
-      .map(card)
-      .join('');
-  // A snoozed idea sits in the fold, not among the ideas to decide
-  const ideaRows = new Map(
-    rows.filter((r) => r.kind === 'idea').map((r) => [r.id, r])
-  );
-  const awakeIdeas = m.ideasPending.filter((i) => ideaRows.has(i.id));
-  const ideaHTML = (i: Issue): string => {
-    const r = ideaRows.get(i.id);
-    const c = r ? snoozeControls(r, ui) : null;
-    return ideaCard(state, i, c ? c.button + c.note : '');
-  };
-  const ideasHTML = awakeIdeas.length
-    ? `<div class="group"><h3>Ideas to decide · ${awakeIdeas.length}</h3>${awakeIdeas.map(ideaHTML).join('')}</div>`
-    : '';
-  const fold = snoozedFold(snoozed.length, snoozed.map(card).join(''), ui.open);
-  // Approved plans only wait on a blocker, so they come after everything that waits on you
-  const awake =
-    cards((k) => k !== 'idea' && k !== 'approved') +
-    ideasHTML +
-    cards((k) => k === 'approved');
-  return (
-    awake + fold ||
-    empty('No PR, hand-off, plan, question, label or idea waits for you.')
-  );
-};
+// ---------- Next, review, hand-offs ----------
 
 /** The row class for why a ticket is queued */
 const reasonState = (x: QueueNext): string =>
@@ -1016,8 +908,8 @@ const renderAll = (m: Model, state: DeskState): string => {
 
 // ---------- Suggestions ----------
 
-/** An idea with its evidence; `controls` is the Snooze button the Waiting sheet gives it */
-const ideaCard = (state: DeskState, i: Issue, controls = ''): string => {
+/** An idea with its evidence; the Waiting sheet's React twin is `IdeaCard` in components/before.tsx */
+const ideaCard = (state: DeskState, i: Issue): string => {
   const d = state.details.get(i.id)?.idea;
   const when = new Date(i.createdAt).toLocaleDateString([], {
     month: 'short',
@@ -1044,7 +936,6 @@ const ideaCard = (state: DeskState, i: Issue, controls = ''): string => {
   return `<article class="idea">
     <a class="title" href="${esc(i.url)}" target="_blank" rel="noopener"><span class="id">${esc(i.id)}</span>${esc(i.title)}</a>
     <div class="meta"><span>suggested ${esc(when)}</span>${d?.focus ? `<span>· ${esc(d.focus)}</span>` : ''}</div>
-    ${controls}
     ${body}
     <p class="rule">Accept: set <code>agent:ready</code> on the ticket. Discard: cancel it with one word in a comment, such as <i>already decided</i>, <i>not worth it</i>, <i>wrong direction</i> or <i>later</i>. The agent reads the word before its next idea.</p>
   </article>`;
@@ -1141,7 +1032,8 @@ export const SHEETS: Record<SheetId, SheetDef> = {
   before: {
     title: 'Waiting on you, furthest along first',
     sub: "PRs to review, hand-offs to tick, plans to approve and questions to answer. Reply in the ticket's newest Agent comment.",
-    body: renderBefore
+    // Rendered as React: components/before.tsx
+    body: () => ''
   },
   next: {
     title: 'What the agent takes next',

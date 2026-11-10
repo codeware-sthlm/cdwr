@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { model } from '../model';
 import { NOW, filled } from '../render/fixtures';
 
-import { IdLink, LinkIds, PrLink, PrPill, Prn } from './links';
+import { IdLink, Inline, LinkIds, PrLink, PrPill, Prn } from './links';
 
 describe('IdLink', () => {
   it('links a well-formed ticket id to Linear', () => {
@@ -74,6 +74,29 @@ describe('LinkIds', () => {
       'after COD-1 lands, SHA-256 and UTF-8 stay <b>'
     );
     expect(container.querySelector('b')).toBeNull();
+  });
+});
+
+describe('Inline', () => {
+  it('puts backtick spans in <code> and links ids inside and outside them', () => {
+    const { container } = render(<Inline text="after COD-7 in `COD-8` now" />);
+    const code = container.querySelector('code');
+    expect(code?.textContent).toBe('COD-8');
+    expect(code?.querySelector('a.id')?.textContent).toBe('COD-8');
+    expect(container.querySelectorAll('a.id')).toHaveLength(2);
+    expect(container.textContent).toBe('after COD-7 in COD-8 now');
+  });
+
+  it('names the links in the text, and leaves markup as text', () => {
+    const { container } = render(
+      <Inline text="see https://linear.app/codeware/issue/COD-3 <b>" />
+    );
+    expect(container.textContent).toBe('see COD-3 <b>');
+    expect(container.querySelector('b')).toBeNull();
+  });
+
+  it('renders nothing for no text', () => {
+    expect(render(<Inline text={null} />).container.innerHTML).toBe('');
   });
 });
 

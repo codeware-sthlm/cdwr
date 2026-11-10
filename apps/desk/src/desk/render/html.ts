@@ -222,11 +222,15 @@ export const parkedPlain = (p: QueueParked): string =>
 export const parkedText = (p: QueueParked): string => esc(parkedPlain(p));
 
 /** "Review fixes: waits on CI since 17:20" for an open PR whose ticket is parked; empty otherwise */
-export const prWaitText = (m: Pick<Model, 'prWaits'>, id: string): string => {
+export const prWaitPlain = (m: Pick<Model, 'prWaits'>, id: string): string => {
   const p = m.prWaits.get(id);
   if (!p) return '';
-  return `Review fixes: ${parkedText(p)}${p.since && !p.resolved ? ' since ' + hhmm(Date.parse(p.since)) : ''}`;
+  return `Review fixes: ${parkedPlain(p)}${p.since && !p.resolved ? ' since ' + hhmm(Date.parse(p.since)) : ''}`;
 };
+
+/** `prWaitPlain` as escaped HTML */
+export const prWaitText = (m: Pick<Model, 'prWaits'>, id: string): string =>
+  esc(prWaitPlain(m, id));
 
 /** The meter under the limit: green, then amber one below the limit, then red */
 export const loadMeter = (m: Pick<Model, 'limit'>): string => {

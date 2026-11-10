@@ -45,10 +45,9 @@ import {
   renderAlert,
   renderFrozenLabel,
   renderProblems,
-  renderUnknownSession,
   tickText
 } from './problems';
-import { headline, headlineHtml, renderSession } from './session';
+import { headline, headlineHtml } from './session';
 import { SHEETS, whyLine } from './sheets';
 import { renderTiles } from './tiles';
 import {
@@ -58,8 +57,6 @@ import {
   isSnoozed,
   labelState,
   mergeBlocker,
-  renderWaiting,
-  snoozeUi,
   waitRows
 } from './waiting';
 
@@ -106,7 +103,8 @@ describe('sheets', () => {
       createState()
     ]) {
       const html = SHEETS[id].body(model(state, NOW), state, NOW);
-      expect(html.length).toBeGreaterThan(0);
+      // The Waiting on you sheet is React (components/before.tsx)
+      if (id !== 'before') expect(html.length).toBeGreaterThan(0);
       expect(html).not.toContain('undefined');
       expect(html).not.toContain('[object');
     }
@@ -350,34 +348,6 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(SHEETS.review.body(model(state, NOW), state, NOW)).toContain(
       '<span class="pill bad">checks failed</span>'
     );
-  });
-
-  it('give each thing that waits on you a card with its action', () => {
-    const state = filled();
-    state.data.activity = {
-      ...activity,
-      rows: [
-        {
-          when: '2026-10-29 10:00',
-          ticket: 'COD-4',
-          actor: 'agent',
-          change: 'comment: **Agent: plan ready**'
-        }
-      ]
-    };
-    const html = SHEETS.before.body(model(state, NOW), state, NOW);
-    expect(html.match(/class="wcard"/g)).toHaveLength(4);
-    expect(html).toMatch(/class="act primary"[^>]*>Review on GitHub<\/a>/);
-    expect(html).toContain('pull/7');
-    expect(html).toMatch(/class="act primary"[^>]*>Open checklist<\/a>/);
-    expect(html).toContain('class="kind k-plan">plan</span>');
-    expect(html).toContain('<time>waiting 2 h</time>');
-    expect(html).toMatch(/class="act primary"[^>]*>Answer in Linear<\/a>/);
-    expect(html).toContain(
-      'class="kind k-ready-to-label">ready to label</span>'
-    );
-    expect(html).toMatch(/class="act secondary"[^>]*>Label agent:ready<\/a>/);
-    expect(html).toContain('Ideas to decide · 1');
   });
 
   it('list the hosts with live sessions on the session sheet', () => {
@@ -1622,10 +1592,9 @@ describe('pull requests on the waiting rows and the session card', () => {
       pr: 7,
       blockers: 'COD-2 · PR 5, COD-1'
     });
-    const panel = SHEETS.before.body(m, state, NOW);
-    expect(panel).toContain(`After ${LINK('COD-2')} · PR 5, ${LINK('COD-1')}`);
-    expect(panel).toContain(`After ${LINK('COD-1')}`);
-    expect(panel).toContain('Review fixes: waits on');
+    expect(rows.find((r) => r.id === 'COD-3')?.wait).toBe(
+      'Review fixes: waits on CI'
+    );
   });
 
   it('count the wait rows and name the first in the idle headline, hand-offs included', () => {
@@ -1647,22 +1616,6 @@ describe('pull requests on the waiting rows and the session card', () => {
     expect(text).toContain('starting with');
     expect(text).toContain('COD-5');
     expect(h.tone).toBe('wait');
-  });
-
-  it('show an approved plan on the sheet with its blockers and only an open link', () => {
-    const state = filled();
-    state.data.runs = runs(
-      view({
-        blocked: [{ ticket: 'COD-9', blockers: ['COD-2'] }],
-        table: { before: [], label: [], after: [] }
-      })
-    );
-    state.data.ideas = [];
-    const html = SHEETS.before.body(model(state, NOW), state, NOW);
-    expect(html).toContain('wcard approved');
-    expect(html).toContain(`approved · waits on ${LINK('COD-2')}`);
-    expect(html).not.toContain('Waits on');
-    expect(html).toMatch(/class="act secondary"[^>]*>Open ticket<\/a>/);
   });
 
   it('put the PR in the takes-next headline', () => {
@@ -1770,22 +1723,6 @@ describe('snoozed waiting rows', () => {
     ];
     return s;
   };
-  const on = (s: DeskState): DeskState => {
-    s.controls.target = {
-      supabaseUrl: 'https://x.supabase.co',
-      controlToken: 't'
-    };
-    return s;
-  };
-  const ui = (s: DeskState, m: ReturnType<typeof model>) =>
-    snoozeUi(m, s.controls);
-  const cardOf = (html: string, id: string): string =>
-    html.split('<article class="wcard').find((c) => c.includes(LINK(id))) ?? '';
-  const actions = (card: string): string =>
-    card.match(/<div class="wc-actions">(.*?)<\/div>/s)?.[1] ?? '';
-  const status = (card: string): string =>
-    card.match(/<div class="wc-status">(.*?)<div class="wc-actions">/s)?.[1] ??
-    '';
 
   it('marks the snoozed rows, those whose kind still matches', () => {
     const s = snoozed();
@@ -1824,87 +1761,8 @@ describe('snoozed waiting rows', () => {
     ).toContain('nothing waits on you');
   });
 
-  it('folds the snoozed rows of the sheet after the awake ones, only when there are some', () => {
-    const s = snoozed();
-    const html = SHEETS.before.body(model(s, NOW), s, NOW);
-    expect(html).toContain(
-      '<details class="snoozed"><summary>Snoozed · 2</summary>'
-    );
-    expect(html.indexOf('COD-5')).toBeLessThan(html.indexOf('class="snoozed"'));
-    expect(html.indexOf('COD-3')).toBeGreaterThan(
-      html.indexOf('class="snoozed"')
-    );
-    const plain = filled();
-    expect(SHEETS.before.body(model(plain, NOW), plain, NOW)).not.toContain(
-      'snoozed'
-    );
-  });
-
-  it('keeps the sheet fold open once the viewer opened it', () => {
-    const s = snoozed();
-    s.ui.snoozedOpen = true;
-    const m = model(s, NOW);
-    expect(SHEETS.before.body(m, s, NOW)).toContain(
-      '<details class="snoozed" open><summary>Snoozed · 2</summary>'
-    );
-  });
-
-  it('draws Snooze and Wake buttons in the panel cards, and none on the rows, when controls are on', () => {
-    const s = on(snoozed());
-    const m = model(s, NOW);
-    const html = SHEETS.before.body(m, s, NOW);
-    expect(html).toContain(
-      '<button type="button" class="wsnooze" data-snooze="COD-5" data-kind="hand-offs" data-event-at="" aria-label="Snooze COD-5 until it changes">Snooze</button>'
-    );
-    expect(html).toContain(
-      '<button type="button" class="wsnooze" data-wake="COD-3" aria-label="Wake COD-3">Wake</button>'
-    );
-    for (const a of html.match(/<a class="wrow"[\s\S]*?<\/a>/g) ?? [])
-      expect(a).not.toContain('<button');
-  });
-
-  it('draws no buttons without controls, but still folds', () => {
-    const s = snoozed();
-    const m = model(s, NOW);
-    const html = SHEETS.before.body(m, s, NOW);
-    expect(html).not.toContain('wsnooze');
-    expect(html).toContain('Snoozed · 2');
-  });
-
-  it('disables a button in flight and shows the note a refusal left', () => {
-    const s = on(snoozed());
-    s.controls.snoozing.add('COD-5');
-    s.controls.snoozeNotes.set('COD-3', 'not <snoozed>');
-    const m = model(s, NOW);
-    const card = SHEETS.before.body(m, s, NOW);
-    expect(card).toMatch(/data-snooze="COD-5"[^>]*disabled>/);
-    expect(card).not.toMatch(/data-wake="COD-3"[^>]*disabled>/);
-    expect(card).toContain('<span class="wnote">not &lt;snoozed&gt;</span>');
-  });
-
-  it('carries the gate time on the button so the snooze wakes on a newer event', () => {
-    const s = on(snoozed());
-    s.data.activity = {
-      ...activity,
-      rows: [
-        {
-          when: '2026-10-29 10:00',
-          ticket: 'COD-5',
-          actor: 'agent',
-          change: 'comment: **Agent: plan ready**'
-        }
-      ]
-    };
-    const m = model(s, NOW);
-    const html = SHEETS.before.body(m, s, NOW);
-    expect(html).toMatch(
-      /data-snooze="COD-5"[^>]*data-event-at="[^"]+T[^"]+Z"/
-    );
-  });
-
   describe('Label button', () => {
     const t = NOW.getTime();
-    const label = (s: DeskState) => SHEETS.before.body(model(s, NOW), s, NOW);
 
     it('forgets a label once the queue no longer lists the ticket', () => {
       const labelled = new Map([
@@ -1918,8 +1776,7 @@ describe('snoozed waiting rows', () => {
     });
 
     it('reads the state from the controls', () => {
-      const s = on(snoozed());
-      const c = s.controls;
+      const c = snoozed().controls;
       expect(labelState('COD-6', c, t)).toBe('idle');
       c.labelConfirm.set('COD-6', t - 1000);
       expect(labelState('COD-6', c, t)).toBe('confirming');
@@ -1938,53 +1795,6 @@ describe('snoozed waiting rows', () => {
       expect(labelState('COD-6', c, t, new Date(t).toISOString())).toBe('idle');
       c.labelNotes.set('COD-6', 'no');
       expect(labelState('COD-6', c, t + 3 * 3600_000)).toEqual({ note: 'no' });
-    });
-
-    it('offers the button on a ready-to-label card only, never on the row', () => {
-      const s = on(snoozed());
-      const html = label(s);
-      expect(html).toContain('data-label="COD-6"');
-      expect(html).toContain('>Label agent:ready</button>');
-      expect(html.match(/data-label=/g)).toHaveLength(1);
-    });
-
-    it('asks to confirm, then disables the button in flight', () => {
-      const s = on(snoozed());
-      s.controls.labelConfirm.set('COD-6', t - 1000);
-      expect(label(s)).toContain('>Confirm label</button>');
-      s.controls.labelling.add('COD-6');
-      expect(label(s)).toMatch(/data-label="COD-6"[^>]*disabled>labelling…</);
-    });
-
-    it('replaces the button with a note once labelled', () => {
-      const s = on(snoozed());
-      s.controls.labelled.set('COD-6', t - 1000);
-      const html = label(s);
-      expect(html).not.toContain('data-label');
-      expect(html).toContain('labelled · waiting for the queue');
-    });
-
-    it('shows the note a failure left beside the button', () => {
-      const s = on(snoozed());
-      s.controls.labelNotes.set('COD-6', 'no <label>');
-      const html = label(s);
-      expect(html).toContain('data-label="COD-6"');
-      expect(html).toContain('<span class="wnote">no &lt;label&gt;</span>');
-    });
-
-    it('puts the button beside a sheet link reading Open ticket, and keeps only the label link without controls', () => {
-      const s = on(snoozed());
-      const html = SHEETS.before.body(model(s, NOW), s, NOW);
-      expect(html).toContain(
-        '<button type="button" class="act secondary" data-label="COD-6"'
-      );
-      // The link stays: it is how the ticket is checked before confirming
-      expect(html).toContain('>Open ticket</a>');
-      expect(html).not.toContain('>Label agent:ready</a>');
-      const off = snoozed();
-      const plain = SHEETS.before.body(model(off, NOW), off, NOW);
-      expect(plain).toContain('>Label agent:ready</a>');
-      expect(plain).not.toContain('data-label');
     });
   });
 
@@ -2056,421 +1866,6 @@ describe('snoozed waiting rows', () => {
     ] as const)('copilotView: %s', (copilot, expected) => {
       expect(copilotView(entry({ copilot }))).toEqual(expected);
     });
-  });
-
-  describe('Copilot and Merge buttons', () => {
-    const t = NOW.getTime();
-    const ENTRY = {
-      pr: 7,
-      state: 'open',
-      unresolved: 0,
-      threads: 0,
-      conflicting: false,
-      ci: 'SUCCESS',
-      copilot: 'none',
-      at: NOW.toISOString()
-    };
-    // COD-3 is the review row with PR 7; `over` changes what the host's watch.json says of it
-    const watched = (
-      over: Record<string, unknown> = {},
-      ticket = 'COD-3'
-    ): DeskState => {
-      const s = on(filled());
-      s.data.runs = {
-        ...runs(view()),
-        watches: [
-          {
-            host: 'nuc',
-            at: NOW.toISOString(),
-            watch: { [ticket]: { ...ENTRY, ...over } }
-          }
-        ]
-      };
-      return s;
-    };
-    const panel = (s: DeskState): string =>
-      SHEETS.before.body(model(s, NOW), s, NOW);
-    const sent = (
-      id: number,
-      kind: string,
-      status: string,
-      note: string | null = null,
-      pr = 7
-    ): DeskCommandRow => ({
-      id,
-      at: NOW.toISOString(),
-      host: 'nuc',
-      kind,
-      args: { ticket: 'COD-3', pr },
-      actor: 'desk',
-      status,
-      applied_at: status === 'pending' ? null : NOW.toISOString(),
-      note
-    });
-    const COPILOT =
-      '<button type="button" class="wsnooze" data-copilot="COD-3" data-pr="7" data-host="nuc"';
-    const MERGE =
-      '<button type="button" class="wsnooze" data-merge="COD-3" data-pr="7" data-host="nuc"';
-
-    it('draws both buttons on a review card, after the link and before Snooze', () => {
-      const acts = actions(cardOf(panel(watched()), 'COD-3'));
-      expect(acts).toContain(`${COPILOT}>Copilot review</button>`);
-      expect(acts).toContain(`${MERGE}>Merge</button>`);
-      expect(acts.indexOf('<a ')).toBeLessThan(acts.indexOf('data-copilot'));
-      expect(acts.indexOf('data-copilot')).toBeLessThan(
-        acts.indexOf('data-merge')
-      );
-      expect(acts.indexOf('data-merge')).toBeLessThan(
-        acts.indexOf('data-snooze')
-      );
-      expect(acts).not.toContain('disabled');
-    });
-
-    it('stacks head, title, status and actions, with the link before the buttons', () => {
-      const card = cardOf(panel(watched({ ci: 'PENDING' })), 'COD-3');
-      const at = (needle: string) => card.indexOf(needle);
-      expect(at('wc-head')).toBeGreaterThan(-1);
-      expect(at('wc-head')).toBeLessThan(at('wc-title'));
-      expect(at('wc-title')).toBeLessThan(at('wc-status'));
-      expect(at('wc-status')).toBeLessThan(at('wc-actions'));
-      const acts = actions(card);
-      expect(acts.indexOf('<a class="act')).toBe(0);
-      expect(acts.indexOf('<a class="act')).toBeLessThan(
-        acts.indexOf('data-copilot')
-      );
-      expect(acts.indexOf('data-copilot')).toBeLessThan(
-        acts.indexOf('data-merge')
-      );
-      expect(acts.indexOf('data-merge')).toBeLessThan(
-        acts.indexOf('data-snooze')
-      );
-      expect(status(card)).toContain(
-        '<span class="wnote">checks pending</span>'
-      );
-      expect(acts).not.toContain('wnote');
-      expect(status(card).indexOf('wc-pr')).toBeLessThan(
-        status(card).indexOf('wnote')
-      );
-    });
-
-    it('stacks the link, the label button and Snooze on a ready-to-label card', () => {
-      const s = on(snoozed());
-      const card = cardOf(panel(s), 'COD-6');
-      const acts = actions(card);
-      expect(acts.indexOf('<a class="act')).toBe(0);
-      expect(acts.indexOf('<a class="act')).toBeLessThan(
-        acts.indexOf('data-label')
-      );
-      expect(acts.indexOf('data-label')).toBeLessThan(
-        acts.indexOf('data-snooze')
-      );
-      expect(card.indexOf('wc-title')).toBeLessThan(card.indexOf('wc-actions'));
-    });
-
-    it('draws nothing without controls, though the watch is there', () => {
-      const s = watched();
-      s.controls.target = null;
-      const html = panel(s);
-      expect(html).not.toContain('data-copilot');
-      expect(html).not.toContain('data-merge');
-    });
-
-    it('draws nothing on a card that is not a review, or whose PR the watch does not name', () => {
-      // COD-5 waits on hand-offs, and COD-3's PR is 7, not 8
-      for (const html of [
-        panel(watched({}, 'COD-5')),
-        panel(watched({ pr: 8 })),
-        panel(watched({}, 'COD-99'))
-      ]) {
-        expect(html).not.toContain('data-copilot');
-        expect(html).not.toContain('data-merge');
-      }
-    });
-
-    it('draws nothing once the PR is merged or closed', () => {
-      for (const state of ['merged', 'closed']) {
-        const html = panel(watched({ state }));
-        expect(html).not.toContain('data-copilot');
-        expect(html).not.toContain('data-merge');
-      }
-    });
-
-    it.each([
-      ['in the merge queue', { state: 'queued' }, 'already in the merge queue'],
-      ['conflicting', { state: 'conflicting' }, 'conflicts with main'],
-      ['a conflict flag', { conflicting: true }, 'conflicts with main'],
-      [
-        'conflicts not checked',
-        { conflicting: null },
-        'GitHub has not checked for conflicts yet'
-      ],
-      [
-        'mergeability unknown',
-        { mergeable: 'UNKNOWN' },
-        'GitHub has not checked for conflicts yet'
-      ],
-      ['a draft', { draft: true }, 'PR is a draft'],
-      ['pending checks', { ci: 'PENDING' }, 'checks pending'],
-      ['no check data', { ci: null }, 'no check data yet'],
-      ['one thread', { threads: 1 }, '1 unresolved thread'],
-      ['threads', { threads: 2 }, '2 unresolved threads']
-    ])('disables Merge with the reason: %s', (_name, over, reason) => {
-      const card = cardOf(panel(watched(over)), 'COD-3');
-      expect(actions(card)).toContain(
-        `${MERGE} disabled title="${reason}">Merge</button>`
-      );
-      expect(status(card)).toContain(`<span class="wnote">${reason}</span>`);
-      expect(actions(card)).not.toContain('wnote');
-    });
-
-    it('shows where Copilot stands instead of its button', () => {
-      const asked = cardOf(panel(watched({ copilot: 'requested' })), 'COD-3');
-      expect(asked).not.toContain('data-copilot');
-      expect(status(asked)).toContain(
-        '<span class="wnote">Copilot asked</span>'
-      );
-      const reviewed = cardOf(panel(watched({ copilot: 'reviewed' })), 'COD-3');
-      expect(reviewed).not.toContain('data-copilot');
-      expect(status(reviewed)).toContain(
-        '<span class="wnote">Copilot reviewed</span>'
-      );
-    });
-
-    it('offers no Copilot button when the watch does not say, but still Merge', () => {
-      const card = cardOf(panel(watched({ copilot: undefined })), 'COD-3');
-      expect(card).not.toContain('Copilot');
-      expect(actions(card)).toContain(`${MERGE}>Merge</button>`);
-    });
-
-    it('asks to confirm a merge for a few seconds', () => {
-      const s = watched();
-      s.controls.mergeConfirm.set('COD-3', t - 1000);
-      expect(actions(cardOf(panel(s), 'COD-3'))).toContain(
-        `${MERGE}>Confirm merge</button>`
-      );
-      s.controls.mergeConfirm.set('COD-3', t - 5000);
-      expect(actions(cardOf(panel(s), 'COD-3'))).toContain(
-        `${MERGE}>Merge</button>`
-      );
-    });
-
-    it('does not ask to confirm a merge that is blocked', () => {
-      const s = watched({ ci: 'PENDING' });
-      s.controls.mergeConfirm.set('COD-3', t - 1000);
-      expect(cardOf(panel(s), 'COD-3')).not.toContain('Confirm merge');
-    });
-
-    it('disables each button while its command is pending or in flight', () => {
-      const s = watched();
-      s.data.deskCommands = [
-        sent(1, 'merge', 'pending'),
-        sent(2, 'copilot', 'pending')
-      ];
-      const acts = actions(cardOf(panel(s), 'COD-3'));
-      expect(acts).toContain(`${COPILOT} disabled>Copilot…</button>`);
-      expect(acts).toContain(`${MERGE} disabled>merging…</button>`);
-      const flying = watched();
-      flying.controls.prSending.add('COD-3 7 merge');
-      const inFlight = actions(cardOf(panel(flying), 'COD-3'));
-      expect(inFlight).toContain(`${MERGE} disabled>merging…</button>`);
-      expect(inFlight).toContain(`${COPILOT}>Copilot review</button>`);
-    });
-
-    it('ignores a command for an earlier PR of the ticket', () => {
-      const s = watched();
-      s.data.deskCommands = [
-        sent(1, 'merge', 'applied', null, 6),
-        sent(2, 'copilot', 'pending', null, 6),
-        sent(3, 'merge', 'refused', 'old pr', 6)
-      ];
-      const card = cardOf(panel(s), 'COD-3');
-      expect(actions(card)).toContain(`${MERGE}>Merge</button>`);
-      expect(actions(card)).toContain(`${COPILOT}>Copilot review</button>`);
-      expect(card).not.toContain('old pr');
-    });
-
-    it('says in the merge queue once applied, and Copilot asked until the watch catches up', () => {
-      const s = watched();
-      s.data.deskCommands = [
-        sent(1, 'merge', 'applied'),
-        sent(2, 'copilot', 'applied')
-      ];
-      const card = cardOf(panel(s), 'COD-3');
-      expect(card).not.toContain('data-merge');
-      expect(card).not.toContain('data-copilot');
-      expect(status(card)).toContain(
-        '<span class="wnote">in the merge queue</span>'
-      );
-      expect(status(card)).toContain(
-        '<span class="wnote">Copilot asked</span>'
-      );
-    });
-
-    it('renders the actual PR once a watch newer than the applied command arrives', () => {
-      const later = new Date(t + 60_000).toISOString();
-      // Removed from the merge queue, and Copilot never added: the buttons come back
-      const s = watched({ at: later });
-      s.data.deskCommands = [
-        sent(1, 'merge', 'applied'),
-        sent(2, 'copilot', 'applied')
-      ];
-      const card = cardOf(panel(s), 'COD-3');
-      expect(actions(card)).toContain(`${MERGE}>Merge</button>`);
-      expect(actions(card)).toContain(`${COPILOT}>Copilot review</button>`);
-      expect(card).not.toContain('in the merge queue');
-      expect(card).not.toContain('Copilot asked');
-      const queued = watched({ at: later, state: 'queued' });
-      queued.data.deskCommands = [sent(1, 'merge', 'applied')];
-      expect(status(cardOf(panel(queued), 'COD-3'))).toContain(
-        '<span class="wnote">already in the merge queue</span>'
-      );
-    });
-
-    it('shows a refusal in the status part above the buttons, escaped', () => {
-      const s = watched();
-      s.data.deskCommands = [
-        sent(1, 'merge', 'refused', 'checks <pending>'),
-        sent(2, 'copilot', 'refused', 'Copilot review already requested')
-      ];
-      const card = cardOf(panel(s), 'COD-3');
-      expect(actions(card)).toContain(`${MERGE}>Merge</button>`);
-      expect(actions(card)).toContain(`${COPILOT}>Copilot review</button>`);
-      expect(actions(card)).not.toContain('wnote');
-      expect(status(card)).toContain(
-        '<span class="wnote">checks &lt;pending&gt;</span>'
-      );
-      expect(status(card)).toContain(
-        '<span class="wnote">Copilot review already requested</span>'
-      );
-    });
-
-    it('shows the note a failed send left, escaped, over a refusal', () => {
-      const s = watched();
-      s.data.deskCommands = [sent(1, 'merge', 'refused', 'old')];
-      s.controls.prNotes.set('COD-3 7 merge', 'no <network>');
-      s.controls.prNotes.set('COD-3 7 copilot', 'no <network>');
-      const status3 = status(cardOf(panel(s), 'COD-3'));
-      expect(status3.match(/no &lt;network&gt;/g)).toHaveLength(2);
-      expect(status3).not.toContain('>old<');
-    });
-  });
-
-  describe('waiting card', () => {
-    const event = (action: string, minutesAgo: number) =>
-      ({
-        pr: 7,
-        subject: 'x',
-        action,
-        updated_at: new Date(NOW.getTime() - minutesAgo * 6e4).toISOString()
-      }) as never;
-
-    it('keeps the action, the label controls and the snooze in one actions row', () => {
-      const s = on(snoozed());
-      const html = SHEETS.before.body(model(s, NOW), s, NOW);
-      const acts = actions(cardOf(html, 'COD-6'));
-      expect(acts).toContain('>Open ticket</a>');
-      expect(acts).toContain('data-label="COD-6"');
-      expect(acts).toContain('data-snooze="COD-6"');
-      expect(acts.indexOf('<a ')).toBeLessThan(acts.indexOf('data-label'));
-      expect(acts.indexOf('data-label')).toBeLessThan(
-        acts.indexOf('data-snooze')
-      );
-    });
-
-    it('puts a snooze note in the status part, not in the actions row', () => {
-      const s = on(snoozed());
-      s.controls.snoozeNotes.set('COD-6', 'not <snoozed>');
-      const html = SHEETS.before.body(model(s, NOW), s, NOW);
-      const card = cardOf(html, 'COD-6');
-      expect(status(card)).toContain(
-        '<span class="wnote">not &lt;snoozed&gt;</span>'
-      );
-      expect(actions(card)).not.toContain('wnote');
-    });
-
-    it('shows a review card its PR state and age from a live github event', () => {
-      const s = filled();
-      s.data.githubEvents = [event('pull_request_review:copilot', 2)];
-      const html = SHEETS.before.body(model(s, NOW), s, NOW);
-      const card = cardOf(html, 'COD-3');
-      expect(card).toContain('<div class="wc-pr">');
-      expect(card).toContain(
-        '<span class="pill wait">Copilot reviewed — your turn</span>'
-      );
-      expect(card).toContain('<time>2 m ago</time>');
-    });
-
-    it('says queued, with no age, when a review card has no live event', () => {
-      const s = filled();
-      const html = SHEETS.before.body(model(s, NOW), s, NOW);
-      const pr = cardOf(html, 'COD-3').match(
-        /<div class="wc-pr">(.*?)<\/div>/s
-      )?.[1];
-      expect(pr).toBe('<span class="pill neutral">queued</span>');
-    });
-
-    /** COD-3 a review held up by COD-2 and a review-fix wait, COD-6 ready to label, controls on */
-    const crowded = (): DeskState => {
-      const s = on(snoozed());
-      s.data.snoozes = [];
-      s.data.runs = runs(
-        view({
-          parked: [{ ticket: 'COD-3', wait: 'ci', pr: 7 }],
-          table: {
-            before: [],
-            label: [{ ticket: 'COD-6', parent: 'COD-<1>', blockers: [] }],
-            after: [{ ticket: 'COD-3', kind: 'pr', pr: 7 }]
-          }
-        })
-      );
-      s.details.set('COD-3', {
-        steps: 0,
-        done: 0,
-        next: null,
-        idea: null,
-        blockedBy: ['COD-2'],
-        pr: 7,
-        prAt: null
-      });
-      return s;
-    };
-
-    it('links the ticket id in the card head, and the blockers in its note', () => {
-      const s = crowded();
-      const card = cardOf(SHEETS.before.body(model(s, NOW), s, NOW), 'COD-3');
-      expect(card).toContain(`<div class="wc-head">${LINK('COD-3')}`);
-      expect(status(card)).toContain(
-        `<div class="wc-note">After ${LINK('COD-2')}`
-      );
-      expect(status(card)).toContain('Review fixes: waits on');
-    });
-
-    it('gives a card that is not a review no PR row', () => {
-      const s = filled();
-      const html = SHEETS.before.body(model(s, NOW), s, NOW);
-      expect(cardOf(html, 'COD-5')).not.toBe('');
-      expect(cardOf(html, 'COD-5')).not.toContain('wc-pr');
-      expect(cardOf(html, 'COD-6')).not.toContain('wc-pr');
-    });
-  });
-
-  it('shows the same fold and buttons on the all-rows sheet', () => {
-    const s = on(snoozed());
-    const html = SHEETS.before.body(model(s, NOW), s, NOW);
-    expect(html).toContain(
-      '<details class="snoozed"><summary>Snoozed · 2</summary>'
-    );
-    expect(html).toContain('data-snooze="COD-5"');
-    expect(html).toContain('data-wake="COD-3"');
-    expect(html).toContain('data-wake="COD-50"');
-    // The snoozed idea moved to the fold, so no idea card is left to decide
-    expect(html).not.toContain('Ideas to decide');
-    s.data.snoozes = [];
-    expect(SHEETS.before.body(model(s, NOW), s, NOW)).toMatch(
-      /<article class="idea">[\s\S]*data-snooze="COD-50" data-kind="idea"/
-    );
-    for (const a of html.match(/<a class="act[\s\S]*?<\/a>/g) ?? [])
-      expect(a).not.toContain('<button');
   });
 });
 

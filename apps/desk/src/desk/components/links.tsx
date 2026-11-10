@@ -1,4 +1,5 @@
 import { GH_PR, LINEAR_ISSUE } from '../constants';
+import { tidy } from '../format';
 import type { Model } from '../model';
 import { type PrTone, isTicketId, prPillData } from '../render/html';
 import type { Detail } from '../state';
@@ -56,6 +57,7 @@ export const PrLink = ({ n }: { n: PrRef | null | undefined }) =>
 
 // The team's ids only: free text also holds UTF-8 and SHA-256
 const TEXT_ID = /(\bCOD-\d+\b)/;
+const CODE_SPAN = /`([^`]+)`/;
 
 /** Plain text with every ticket id in it linked */
 export const LinkIds = ({ text }: { text: string }) => (
@@ -64,6 +66,24 @@ export const LinkIds = ({ text }: { text: string }) => (
       // split with a capture group puts the ids at the odd indexes
       i % 2 ? <IdLink key={i} id={part} /> : part
     )}
+  </>
+);
+
+/** Text from Linear as `inline` shows it: links named, `code` spans in <code>, ticket ids linked */
+export const Inline = ({ text }: { text: string | null | undefined }) => (
+  <>
+    {tidy(text)
+      .split(CODE_SPAN)
+      .map((part, i) =>
+        // split with a capture group puts the code spans at the odd indexes
+        i % 2 ? (
+          <code key={i}>
+            <LinkIds text={part} />
+          </code>
+        ) : (
+          <LinkIds key={i} text={part} />
+        )
+      )}
   </>
 );
 
