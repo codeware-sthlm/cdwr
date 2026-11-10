@@ -1,22 +1,50 @@
 import { planWhen, shortAge, tidy } from '../format';
+import type { Pulse } from '../live';
 import type { Model, PlanWindow } from '../model';
 import { livePr, parkedPlain, prTone, queuePr } from '../render/html';
 import { ofKind } from '../render/problems';
-import {
-  type Part,
-  alsoText,
-  feedTone,
-  headline,
-  idPr,
-  status,
-  whereText
-} from '../render/session';
+import { type Part, headline, idPr, whereText } from '../render/session';
 import type { Detail } from '../state';
 import type { SessionState } from '../types';
 
 import { IdLink, LinkIds, PrLink, PrPill, Prn } from './links';
 
 // The session card: what the session does, where it runs, and the newest live events
+
+type Status = {
+  label: string;
+  tone: 'live' | 'wait' | 'block' | 'idle';
+};
+
+/** The session pill's label and tone */
+const status = (m: Model): Status => {
+  const s = m.session?.state ?? 'none';
+  if (m.stuck !== null) return { label: 'Session stuck', tone: 'block' };
+  if (s === 'alive') return { label: 'Session live', tone: 'live' };
+  if (s === 'waiting') return { label: 'Waiting on a prompt', tone: 'wait' };
+  if (s === 'stopped') return { label: 'Session stopped', tone: 'idle' };
+  return { label: 'No session', tone: 'idle' };
+};
+
+/** A feed row's dot: green for a good outcome, red for a failed one, else neutral */
+const feedTone = (p: Pulse): string =>
+  /failed|closed/.test(p.what)
+    ? 'block'
+    : /passed|merged|reviewed/.test(p.what)
+      ? 'live'
+      : '';
+
+/** "also: implement on agent-host · attended on mac", the live sessions besides the one the card names, at most two */
+const alsoText = (m: Pick<Model, 'session' | 'hostSessions'>): string => {
+  const all = m.hostSessions.flatMap((h) =>
+    h.sessions.map((x) => ({ id: x.id, text: `${x.kind} on ${h.host}` }))
+  );
+  const id = m.session?.id;
+  const picked = (id && all.find((x) => x.id === id)) || all[0];
+  const rest = all.filter((x) => x !== picked).map((x) => x.text);
+  if (!rest.length) return '';
+  return `also: ${rest.slice(0, 2).join(' · ')}${rest.length > 2 ? ` +${rest.length - 2} more` : ''}`;
+};
 
 /** A headline's parts: text, ticket ids, PRs and code */
 export const Parts = ({ parts }: { parts: Part[] }) => (
@@ -123,7 +151,7 @@ const PlanLine = ({ m, now }: { m: Model; now: Date }) => {
   );
   const stale = [five, seven].some((w) => w?.stale);
   return (
-    <div className={`ct-plan${stale ? 'stale' : ''}`}>
+    <div className={stale ? 'ct-plan stale' : 'ct-plan'}>
       Plan:{' '}
       {five ? (
         <>

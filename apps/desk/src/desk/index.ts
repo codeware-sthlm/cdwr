@@ -17,6 +17,7 @@ import {
   prCommandKey,
   sendCommand
 } from './commands';
+import { Cards } from './components/cards';
 import { Status } from './components/status';
 import { AGENT_AVATAR, CONFIRM_MS } from './constants';
 import { type Loader, createLoader } from './load';
@@ -35,13 +36,11 @@ import {
   renderAlert,
   renderFrozenLabel,
   renderProblems,
-  renderUnknownSession,
   updateTicks
 } from './render/problems';
-import { renderSession } from './render/session';
 import { SHEETS } from './render/sheets';
 import { renderTiles } from './render/tiles';
-import { forgetLabelled, renderWaiting, snoozeUi } from './render/waiting';
+import { forgetLabelled } from './render/waiting';
 import { spendDays } from './spend';
 import {
   type Connection,
@@ -72,8 +71,9 @@ const $ = (id: string): HTMLElement => {
   return el;
 };
 
-// The header's status pill is React; the rest of the page is still written as HTML
+// The header's status pill and the two cards are React; the rest of the page is still written as HTML
 const statusRoot = createRoot($('status'));
+const cardsRoot = createRoot($('cards'));
 
 // ---------- Charts ----------
 
@@ -165,15 +165,17 @@ function renderLive(m: Model, now: Date): void {
   const label = renderFrozenLabel(m);
   $('frozen-label').textContent = label;
   $('frozen-label').hidden = platform || !label;
-  setHtml(
-    'cards',
-    (renderUnknownSession(m) || renderSession(m, state.details, now)) +
-      renderWaiting(
-        m,
-        state.details,
-        now,
-        snoozeUi(m, state.controls, state.ui.snoozedOpen)
-      )
+  cardsRoot.render(
+    createElement(Cards, {
+      m,
+      details: state.details,
+      now,
+      snoozedOpen: state.ui.snoozedOpen,
+      onSnoozedOpen: (open) => {
+        state.ui.snoozedOpen = open;
+        render();
+      }
+    })
   );
   $('capacity').classList.toggle('frozen', Boolean(label));
   $('more').classList.toggle('frozen', Boolean(label));
@@ -370,7 +372,7 @@ function clickSnooze(target: Element): boolean {
     focusIn(region, [
       `[data-snooze="${ticket}"]`,
       `[data-wake="${ticket}"]`,
-      'details.snoozed > summary'
+      'details.snoozed > summary, .snoozed-summary'
     ]);
   sendSnooze(
     ticket,
@@ -542,8 +544,8 @@ document.addEventListener('click', (e) => {
     showView(v.dataset.view === 'platform' ? 'platform' : 'desk');
     return;
   }
-  // The fold's summary only opens the fold, never the card's sheet
-  if (e.target.closest('details.snoozed > summary')) return;
+  // The fold's summary (a <details>'s in the sheet, the card's own trigger) only opens the fold, never the card's sheet
+  if (e.target.closest('details.snoozed > summary, .snoozed-summary')) return;
   const t = e.target.closest<HTMLElement>('[data-w]');
   if (t?.dataset.w) {
     showSheet(t.dataset.w);

@@ -271,6 +271,15 @@ describe('SessionCard', () => {
     ).toBeNull();
   });
 
+  it('takes the PR the queue view names when the ticket has no details yet', () => {
+    const session = working('COD-1');
+    const s = filled(session);
+    s.data.runs = runs(
+      view({ session, parked: [{ ticket: 'COD-1', wait: 'CI', pr: 77 }] })
+    );
+    expect(card(s).querySelector('.big a.prn')?.textContent).toBe('#77');
+  });
+
   it("names what comes next, skipping the session's own ticket", () => {
     const s = filled(working('COD-1'));
     expect(card(s).querySelector('.ct-then')).toBeNull();

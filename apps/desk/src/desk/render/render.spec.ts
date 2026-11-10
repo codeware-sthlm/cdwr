@@ -137,300 +137,6 @@ describe('sheets', () => {
   });
 });
 
-describe('session card', () => {
-  it.each([
-    [{ state: 'alive', detail: 'polling' }, 'Session live', 'live'],
-    [{ state: 'waiting' }, 'Waiting on a prompt', 'wait'],
-    [{ state: 'stopped' }, 'Session stopped', 'idle'],
-    [{ state: 'none' }, 'No session', 'idle']
-  ] satisfies [SessionState, string, string][])(
-    'shows the session %j',
-    (session, label, tone) => {
-      const state = filled(session);
-      const html = renderSession(model(state, NOW), state.details, NOW);
-      expect(html).toContain(label);
-      expect(html).toContain(`session ${tone}" data-w="session"`);
-    }
-  );
-
-  it('says it is loading before the runs arrive', () => {
-    expect(renderSession(model(createState(), NOW), new Map(), NOW)).toContain(
-      'Loading the runs…'
-    );
-  });
-
-  it('names the ticket, its reason and where the session runs', () => {
-    const state = filled({
-      state: 'alive',
-      detail: 'working',
-      id: 's1',
-      ticket: 'COD-1',
-      lastSeen: '2026-10-29T11:59:30'
-    });
-    state.data.sessions = [
-      {
-        id: 's1',
-        host: 'mac',
-        kind: 'attended',
-        last_seen: new Date('2026-10-29T11:59:30').toISOString()
-      } as never
-    ];
-    const html = renderSession(model(state, NOW), state.details, NOW);
-    expect(html).toContain('Working on');
-    expect(html).toContain('COD-1</a>');
-    expect(html).toContain('ready · Title of COD-1');
-    expect(html).toContain('<b class="attended">attended on mac</b>');
-    expect(html).toContain('seen 30 s ago');
-  });
-
-  it('says the session is stuck', () => {
-    const state = filled({
-      state: 'alive',
-      detail: 'polling',
-      lastSeen: '2026-10-29T10:00:00'
-    });
-    const html = renderSession(model(state, NOW), state.details, NOW);
-    expect(html).toContain('Session stuck');
-    expect(html).toContain('session block"');
-  });
-
-  it('lists the newest event of each live table, and says when there is none', () => {
-    const state = filled();
-    expect(renderSession(model(state, NOW), state.details, NOW)).toContain(
-      'No live event yet'
-    );
-    state.data.githubEvents = [
-      {
-        pr: 7,
-        subject: 'x',
-        action: 'check_suite:failure',
-        updated_at: new Date('2026-10-29T11:59:00').toISOString()
-      } as never
-    ];
-    state.data.connection.lastIssue = {
-      issue_id: 'u',
-      identifier: 'COD-<5>',
-      action: 'update',
-      updated_at: new Date('2026-10-29T11:50:00').toISOString()
-    };
-    const html = renderSession(model(state, NOW), state.details, NOW);
-    expect(html.match(/<li>/g)).toHaveLength(2);
-    expect(html).toContain('dot block');
-    expect(html).toContain('#7 · checks failed');
-    expect(html).toContain('COD-&lt;5&gt; · update');
-    expect(html.indexOf('#7')).toBeLessThan(html.indexOf('COD-&lt;5'));
-  });
-
-  describe('more lines', () => {
-    const working = (ticket: string): SessionState => ({
-      state: 'alive',
-      detail: 'working',
-      id: 's1',
-      ticket,
-      lastSeen: '2026-10-29T11:59:30'
-    });
-    const html = (s: DeskState): string =>
-      renderSession(model(s, NOW), s.details, NOW);
-    const detail = (done: number, steps = 5, next: string | null = null) => ({
-      steps,
-      done,
-      next,
-      idea: null,
-      blockedBy: [],
-      pr: null,
-      prAt: null
-    });
-    const host = (id: string, host: string, kind: string, ago = 1) =>
-      ({
-        id,
-        host,
-        kind,
-        last_seen: new Date(NOW.getTime() - ago * 6e4).toISOString()
-      }) as never;
-
-    it('shows the step the working ticket is on, with its next step', () => {
-      const s = filled(working('COD-1'));
-      s.details.set('COD-1', detail(2, 5, 'wire the bar <now>'));
-      const out = html(s);
-      expect(out).toContain('<i style="width:40%"></i>');
-      expect(out).toContain('<span>Step 3 of 5</span>');
-      expect(out).toContain(
-        '<span class="ct-next">wire the bar &lt;now&gt;</span>'
-      );
-    });
-
-    it('caps the step at the last one, and leaves the next out when there is none', () => {
-      const s = filled(working('COD-1'));
-      s.details.set('COD-1', detail(5));
-      const out = html(s);
-      expect(out).toContain('Step 5 of 5');
-      expect(out).not.toContain('ct-next');
-    });
-
-    it('leaves the step out without a plan, and when no ticket is being worked', () => {
-      const s = filled(working('COD-1'));
-      expect(html(s)).not.toContain('ct-step');
-      s.details.set('COD-1', detail(0, 0));
-      expect(html(s)).not.toContain('ct-step');
-      const idle = filled({ state: 'alive', detail: 'polling' });
-      idle.details.set('COD-1', detail(2));
-      expect(html(idle)).not.toContain('ct-step');
-    });
-
-    it('says what the working ticket waits on, and for how long', () => {
-      const s = filled(working('COD-2'));
-      s.data.runs = runs(
-        view({
-          session: working('COD-2'),
-          parked: [
-            { ticket: 'COD-2', wait: 'ci', pr: 5, since: '2026-10-29T11:48:00' }
-          ]
-        })
-      );
-      const out = html(s);
-      expect(out).toMatch(
-        /<div class="ct-wait">waits on CI on .*#5.* for 12 m<\/div>/
-      );
-      expect(html(filled(working('COD-1')))).not.toContain('ct-wait');
-      expect(html(filled())).not.toContain('ct-wait');
-    });
-
-    it('drops the age of a resolved wait', () => {
-      const s = filled(working('COD-2'));
-      s.data.runs = runs(
-        view({
-          session: working('COD-2'),
-          parked: [
-            {
-              ticket: 'COD-2',
-              wait: 'ci',
-              pr: 5,
-              since: '2026-10-29T11:48:00',
-              resolved: true
-            }
-          ]
-        })
-      );
-      const out = html(s);
-      expect(out).toContain('ct-wait');
-      expect(out).not.toContain(' for 12 m');
-    });
-
-    it('opens the feed with the own PR and its state, under a heading', () => {
-      const s = filled(working('COD-2'));
-      s.data.githubEvents = [
-        {
-          pr: 5,
-          subject: 'x',
-          action: 'check_suite:success',
-          updated_at: new Date('2026-10-29T11:56:00').toISOString()
-        } as never
-      ];
-      const out = html(s);
-      expect(out).toContain('<h4 class="feed-h">Latest events</h4>');
-      expect(out).toMatch(
-        /<ul class="feed"><li class="own"><a class="prn[^>]*>#5<\/a> <span class="pill ok">checks passed<\/span><time>4 m ago<\/time><\/li><li>/
-      );
-    });
-
-    it('says queued for an own PR with no event, and keeps the fallback otherwise', () => {
-      const s = filled(working('COD-2'));
-      expect(html(s)).toContain('<li class="own">');
-      expect(html(s)).toContain('<span class="pill neutral">queued</span>');
-      expect(html(s)).not.toContain('No live event yet');
-      const idle = html(filled());
-      expect(idle).toContain('No live event yet');
-      expect(idle).not.toContain('class="own"');
-      expect(html(filled(working('COD-1')))).not.toContain('class="own"');
-    });
-
-    it("names what comes next, skipping the session's own ticket", () => {
-      const s = filled(working('COD-1'));
-      expect(html(s)).not.toContain('ct-then');
-      s.data.runs = runs(
-        view({
-          session: working('COD-1'),
-          next: [
-            { ticket: 'COD-1', reason: 'ready' },
-            { ticket: 'COD-4', reason: 'answered' }
-          ]
-        })
-      );
-      expect(html(s)).toMatch(
-        /<div class="ct-then">Then: <a[^>]*>COD-4<\/a> \(answered\)<\/div>/
-      );
-      expect(html(filled())).not.toContain('ct-then');
-    });
-
-    it('shows the plan headroom, the 7-day share only when it has one', () => {
-      const s = filled();
-      const both = html(s);
-      expect(both).toContain('Plan: 5h <span class="">30%</span> · resets ');
-      expect(both).toContain(' · 7d <span class="">18%</span></div>');
-      s.data.planUsage = [planSample('five_hour', 2, 30)];
-      expect(html(s)).toContain('Plan: 5h');
-      expect(html(s)).not.toContain('7d');
-    });
-
-    it('marks a window bad when it runs out, and shows nothing without a live window', () => {
-      const s = filled();
-      s.data.planUsage = [
-        planSample('five_hour', 2, 70),
-        planSample('seven_day', 100, 18)
-      ];
-      const out = html(s);
-      expect(out).toContain('5h <span class="bad">70%</span>');
-      expect(out).toContain('7d <span class="">18%</span>');
-      s.data.planUsage = [planSample('five_hour', -1, 90, 200)];
-      expect(html(s)).not.toContain('ct-plan');
-    });
-
-    it('keeps the 7-day share when the 5-hour window has reset', () => {
-      const s = filled();
-      s.data.planUsage = [
-        planSample('five_hour', -1, 90, 200),
-        planSample('seven_day', 100, 18)
-      ];
-      expect(html(s)).toContain(
-        '<div class="ct-plan">Plan: 7d <span class="">18%</span></div>'
-      );
-    });
-
-    it('marks the plan line stale when its sample is old', () => {
-      const s = filled();
-      s.data.planUsage = [planSample('five_hour', 2, 30, 90)];
-      expect(html(s)).toContain('<div class="ct-plan stale">');
-      s.data.planUsage = [planSample('five_hour', 2, 30)];
-      expect(html(s)).not.toContain('ct-plan stale');
-    });
-
-    it('lists the other live sessions, two at most', () => {
-      const s = filled(working('COD-1'));
-      s.data.sessions = [host('s1', 'mac', 'attended')];
-      expect(html(s)).not.toContain('ct-also');
-      s.data.sessions = [
-        host('s1', 'mac', 'attended'),
-        host('s2', 'nuc', 'implement', 2)
-      ];
-      expect(html(s)).toContain(
-        '<div class="ct-also">also: implement on nuc</div>'
-      );
-      s.data.sessions = [
-        host('s1', 'mac', 'attended'),
-        host('s2', 'nuc', 'implement', 2),
-        host('s3', 'nuc', 'plan', 3),
-        host('s4', 'mac', 'attended', 4),
-        host('s5', 'mac', 'attended', 5)
-      ];
-      const out = html(s);
-      // Five live sessions, one of them the card's own: four others, two shown
-      expect(out.match(/also: ([^<]*)</)?.[1]).toMatch(
-        /^[^·]+ · [^·]+ \+2 more$/
-      );
-    });
-  });
-});
-
 describe('header', () => {
   it('counts failing checks and run problems, and a dash while loading', () => {
     const state = filled();
@@ -474,14 +180,7 @@ describe('header', () => {
 });
 
 describe('waiting card, queue sheets and tiles', () => {
-  it('show a placeholder while loading', () => {
-    const html = renderWaiting(model(createState(), NOW), new Map(), NOW);
-    expect(html).toContain('Loading…');
-    expect(html).toContain('<b class="count">–</b>');
-    expect(html).not.toContain('waiting has');
-  });
-
-  it('list what waits on the viewer, with its kind and age', () => {
+  it('list what waits on the viewer, furthest along first', () => {
     const state = filled();
     state.data.activity = {
       ...activity,
@@ -502,88 +201,6 @@ describe('waiting card, queue sheets and tiles', () => {
       ['COD-6', 'ready to label'],
       ['COD-50', 'idea']
     ]);
-    const html = renderWaiting(m, state.details, NOW);
-    expect(html).toContain('waiting has" data-w="before"');
-    expect(html).toContain('<b class="count">5</b>');
-    expect(html).toContain('<span class="kind">hand-offs · 1</span>');
-    expect(html).toContain('<span class="kind">plan</span><time>2 h</time>');
-    expect(html).toContain('href="https://linear.app/codeware/issue/COD-6"');
-    expect(html).toContain('wait age from activity gate events');
-  });
-
-  it('render every row and hide all but two behind open all on a phone', () => {
-    const state = filled();
-    state.data.runs = runs(
-      view({
-        table: {
-          before: [
-            { ticket: 'COD-4', kind: 'plan' },
-            { ticket: 'COD-<7>', kind: 'question' }
-          ],
-          label: [],
-          after: []
-        }
-      })
-    );
-    const m = model(state, NOW);
-    const html = renderWaiting(m, state.details, NOW);
-    expect(html.match(/class="wrow"/g)).toHaveLength(3);
-    expect(html).toContain(
-      '<button type="button" class="more-all" aria-haspopup="dialog">+ <span class="more-n phone">1</span> more — open all</button>'
-    );
-    expect(html).toContain('COD-&lt;7&gt;');
-    expect(html).not.toContain('COD-<7>');
-  });
-
-  it.each([
-    [0, null],
-    [2, null],
-    [3, 'more-all'],
-    [4, 'more-all'],
-    [5, 'more-all more-desk'],
-    [8, 'more-all more-desk']
-  ])('with %i rows, show the more button as %s', (n, cls) => {
-    const state = filled();
-    state.data.ideas = [];
-    state.data.runs = runs(
-      view({
-        table: {
-          before: Array.from({ length: n }, (_, i) => ({
-            ticket: `COD-${10 + i}`,
-            kind: 'plan' as const
-          })),
-          label: [],
-          after: []
-        }
-      })
-    );
-    const html = renderWaiting(model(state, NOW), state.details, NOW);
-    expect(html.match(/class="wrow"/g) ?? []).toHaveLength(n);
-    if (cls === null) {
-      expect(html).not.toContain('more-all');
-      return;
-    }
-    expect(html).toContain(
-      `<button type="button" class="${cls}" aria-haspopup="dialog">+ <span class="more-n phone">${n - 2}</span>${n > 4 ? `<span class="more-n desk">${n - 4}</span>` : ''} more — open all</button>`
-    );
-    // Inside the card, so a click opens the full Waiting on you sheet
-    expect(html.indexOf('more-all')).toBeGreaterThan(
-      html.indexOf('data-w="before"')
-    );
-    expect(html.indexOf('more-all')).toBeLessThan(html.indexOf('</article>'));
-  });
-
-  it('stay in place, neutral, when nothing waits', () => {
-    const state = filled();
-    state.data.ideas = [];
-    state.data.runs = runs(
-      view({ table: { before: [], label: [], after: [] } })
-    );
-    const html = renderWaiting(model(state, NOW), state.details, NOW);
-    expect(html).toContain('Nothing waits on you.');
-    expect(html).toContain('<b class="count">0</b>');
-    expect(html).not.toContain('waiting has');
-    expect(html).not.toContain('open all');
   });
 
   it('show a parked ticket on the next sheet, open PRs on the review sheet and hand-offs on their own', () => {
@@ -1767,7 +1384,7 @@ describe('problems', () => {
     expect(out).not.toContain('data-action');
   });
 
-  it('draws the unknown problem and swaps the session card', () => {
+  it('draws the unknown problem', () => {
     const m = model(silent(base()), NOW);
     const out = renderProblems(m);
     expect(out).toContain('nuc silent with a run open');
@@ -1779,14 +1396,6 @@ describe('problems', () => {
     );
     expect(out).toContain('from the CLI or with a control token in Settings');
     expect(out).not.toContain('data-cmd');
-    const card = renderUnknownSession(m);
-    expect(card).toContain('STATE UNKNOWN');
-    expect(card).toContain('Last known: nuc');
-    expect(card).toContain(
-      `running <span class="mono">${LINK('COD-1')}</span>`
-    );
-    expect(card).toContain('Nothing here is assumed to be running.');
-    expect(renderUnknownSession(model(fresh(base()), NOW))).toBe('');
   });
 
   it('counts the problems in the alert and says when the numbers froze', () => {
@@ -1825,7 +1434,6 @@ describe('problems', () => {
     expect(renderAlert(m)).toBe('');
     expect(renderProblems(m)).toBe('');
     expect(renderFrozenLabel(m)).toBe('');
-    expect(renderUnknownSession(m)).toBe('');
   });
 
   it('links a failing health check to its problem card', () => {
@@ -1955,11 +1563,6 @@ describe('pull requests on the waiting rows and the session card', () => {
       'COD-9': null,
       'COD-50': null
     });
-    const html = renderWaiting(m, state.details, NOW);
-    expect(html).toContain('</a><a class="prn" href="https://github.com/');
-    expect(html).toContain('>#21</a></li>');
-    expect(html).toContain('>#22</a></li>');
-    expect(html.match(/class="prn/g)).toHaveLength(2);
   });
 
   it('order every kind furthest along first, approved plans last and uncounted', () => {
@@ -1991,17 +1594,7 @@ describe('pull requests on the waiting rows and the session card', () => {
       ['COD-50', 'idea'],
       ['COD-9', 'approved']
     ]);
-    const html = renderWaiting(m, state.details, NOW);
-    expect(html).toContain('<b class="count">6</b>');
-    expect(html).toContain('<span class="kind">hand-offs · 2</span>');
-    expect(html).toContain(
-      '<span class="kind" title="approved · waits on COD-2">approved · waits on COD-2</span>'
-    );
-    expect(html).toContain('wrow-li approved');
-    expect(html).toContain(
-      'class="more-all more-desk" aria-haspopup="dialog">+ <span class="more-n phone">5</span><span class="more-n desk">3</span> more'
-    );
-    expect(html.match(/class="wrow"/g)).toHaveLength(7);
+    expect(countedRows(rows)).toHaveLength(6);
   });
 
   it('keep a parked PR listed, with its PR number, blockers and wait', () => {
@@ -2029,10 +1622,6 @@ describe('pull requests on the waiting rows and the session card', () => {
       pr: 7,
       blockers: 'COD-2 · PR 5, COD-1'
     });
-    const html = renderWaiting(m, state.details, NOW);
-    expect(html).toContain('>#7</a>');
-    expect(html).not.toContain('wnote');
-    expect(html).not.toContain('Review fixes');
     const panel = SHEETS.before.body(m, state, NOW);
     expect(panel).toContain(`After ${LINK('COD-2')} · PR 5, ${LINK('COD-1')}`);
     expect(panel).toContain(`After ${LINK('COD-1')}`);
@@ -2076,7 +1665,7 @@ describe('pull requests on the waiting rows and the session card', () => {
     expect(html).toMatch(/class="act secondary"[^>]*>Open ticket<\/a>/);
   });
 
-  it('put the PR beside Working on and the takes-next headline', () => {
+  it('put the PR in the takes-next headline', () => {
     const session: SessionState = {
       state: 'alive',
       detail: 'working',
@@ -2095,10 +1684,6 @@ describe('pull requests on the waiting rows and the session card', () => {
     );
     state.details.set('COD-1', withPr(31));
     state.details.set('COD-2', withPr(32));
-    const m = model(state, NOW);
-    const html = renderSession(m, state.details, NOW);
-    expect(html).toContain('COD-1</a> <a class="prn"');
-    expect(html).toContain('>#31</a></span>');
     const text = headlineHtml(
       headline(
         model(filled({ state: 'alive', detail: 'working' }), NOW),
@@ -2107,34 +1692,6 @@ describe('pull requests on the waiting rows and the session card', () => {
       ).text
     );
     expect(text).toContain('>#31</a>');
-  });
-
-  it('take the PR the queue view names when the ticket has no details yet', () => {
-    const session: SessionState = {
-      state: 'alive',
-      detail: 'working',
-      ticket: 'COD-1',
-      lastSeen: '2026-10-29T11:59:30'
-    };
-    const state = filled(session);
-    state.data.runs = runs(
-      view({ session, parked: [{ ticket: 'COD-1', wait: 'CI', pr: 77 }] })
-    );
-    expect(renderSession(model(state, NOW), state.details, NOW)).toContain(
-      '>#77</a>'
-    );
-  });
-
-  it('add no PR link to the session card without one', () => {
-    const state = filled({
-      state: 'alive',
-      detail: 'working',
-      ticket: 'COD-1',
-      lastSeen: '2026-10-29T11:59:30'
-    });
-    expect(renderSession(model(state, NOW), state.details, NOW)).not.toContain(
-      'class="prn'
-    );
   });
 });
 
@@ -2250,8 +1807,6 @@ describe('snoozed waiting rows', () => {
       'COD-4',
       'COD-6'
     ]);
-    const html = renderWaiting(m, s.details, NOW);
-    expect(html).toContain('<b class="count">3</b>');
     s.data.runs = runs(
       view({
         next: [],
@@ -2269,9 +1824,9 @@ describe('snoozed waiting rows', () => {
     ).toContain('nothing waits on you');
   });
 
-  it('folds the snoozed rows after the awake ones, only when there are some', () => {
+  it('folds the snoozed rows of the sheet after the awake ones, only when there are some', () => {
     const s = snoozed();
-    const html = renderWaiting(model(s, NOW), s.details, NOW);
+    const html = SHEETS.before.body(model(s, NOW), s, NOW);
     expect(html).toContain(
       '<details class="snoozed"><summary>Snoozed · 2</summary>'
     );
@@ -2280,50 +1835,23 @@ describe('snoozed waiting rows', () => {
       html.indexOf('class="snoozed"')
     );
     const plain = filled();
-    expect(renderWaiting(model(plain, NOW), plain.details, NOW)).not.toContain(
+    expect(SHEETS.before.body(model(plain, NOW), plain, NOW)).not.toContain(
       'snoozed'
     );
   });
 
-  it('keeps the fold open once the viewer opened it', () => {
+  it('keeps the sheet fold open once the viewer opened it', () => {
     const s = snoozed();
     s.ui.snoozedOpen = true;
     const m = model(s, NOW);
-    const open = '<details class="snoozed" open><summary>Snoozed · 2</summary>';
-    expect(
-      renderWaiting(m, s.details, NOW, snoozeUi(m, s.controls, true))
-    ).toContain(open);
-    expect(SHEETS.before.body(m, s, NOW)).toContain(open);
-  });
-
-  it('says nothing waits when every row is snoozed, and keeps the fold', () => {
-    const s = filled();
-    s.data.activity = { ...activity, rows: [] };
-    s.data.ideas = [];
-    s.data.runs = runs(
-      view({
-        table: {
-          before: [{ ticket: 'COD-4', kind: 'plan' }],
-          label: [],
-          after: []
-        }
-      })
+    expect(SHEETS.before.body(m, s, NOW)).toContain(
+      '<details class="snoozed" open><summary>Snoozed · 2</summary>'
     );
-    s.data.snoozes = [snooze('COD-4', 'plan')];
-    const html = renderWaiting(model(s, NOW), s.details, NOW);
-    expect(html).toContain('Nothing waits on you.');
-    expect(html).toContain('Snoozed · 1');
-    expect(html).toContain('<b class="count">0</b>');
-    expect(html).not.toContain('class="foot"');
   });
 
   it('draws Snooze and Wake buttons in the panel cards, and none on the rows, when controls are on', () => {
     const s = on(snoozed());
     const m = model(s, NOW);
-    const rows = renderWaiting(m, s.details, NOW, ui(s, m));
-    expect(rows).not.toContain('wsnooze');
-    expect(rows).not.toContain('data-snooze');
-    expect(rows).not.toContain('data-wake');
     const html = SHEETS.before.body(m, s, NOW);
     expect(html).toContain(
       '<button type="button" class="wsnooze" data-snooze="COD-5" data-kind="hand-offs" data-event-at="" aria-label="Snooze COD-5 until it changes">Snooze</button>'
@@ -2338,14 +1866,9 @@ describe('snoozed waiting rows', () => {
   it('draws no buttons without controls, but still folds', () => {
     const s = snoozed();
     const m = model(s, NOW);
-    for (const html of [
-      renderWaiting(m, s.details, NOW),
-      renderWaiting(m, s.details, NOW, ui(s, m)),
-      SHEETS.before.body(m, s, NOW)
-    ]) {
-      expect(html).not.toContain('wsnooze');
-      expect(html).toContain('Snoozed · 2');
-    }
+    const html = SHEETS.before.body(m, s, NOW);
+    expect(html).not.toContain('wsnooze');
+    expect(html).toContain('Snoozed · 2');
   });
 
   it('disables a button in flight and shows the note a refusal left', () => {
@@ -2353,8 +1876,6 @@ describe('snoozed waiting rows', () => {
     s.controls.snoozing.add('COD-5');
     s.controls.snoozeNotes.set('COD-3', 'not <snoozed>');
     const m = model(s, NOW);
-    const html = renderWaiting(m, s.details, NOW, ui(s, m));
-    expect(html).not.toContain('wnote');
     const card = SHEETS.before.body(m, s, NOW);
     expect(card).toMatch(/data-snooze="COD-5"[^>]*disabled>/);
     expect(card).not.toMatch(/data-wake="COD-3"[^>]*disabled>/);
@@ -2425,10 +1946,6 @@ describe('snoozed waiting rows', () => {
       expect(html).toContain('data-label="COD-6"');
       expect(html).toContain('>Label agent:ready</button>');
       expect(html.match(/data-label=/g)).toHaveLength(1);
-      const m = model(s, NOW);
-      expect(renderWaiting(m, s.details, NOW, ui(s, m))).not.toContain(
-        'data-label'
-      );
     });
 
     it('asks to confirm, then disables the button in flight', () => {
@@ -2468,9 +1985,6 @@ describe('snoozed waiting rows', () => {
       const plain = SHEETS.before.body(model(off, NOW), off, NOW);
       expect(plain).toContain('>Label agent:ready</a>');
       expect(plain).not.toContain('data-label');
-      expect(renderWaiting(model(off, NOW), off.details, NOW)).not.toContain(
-        'data-label'
-      );
     });
   });
 
@@ -2574,10 +2088,6 @@ describe('snoozed waiting rows', () => {
       };
       return s;
     };
-    const rows = (s: DeskState): string => {
-      const m = model(s, NOW);
-      return renderWaiting(m, s.details, NOW, ui(s, m));
-    };
     const panel = (s: DeskState): string =>
       SHEETS.before.body(model(s, NOW), s, NOW);
     const sent = (
@@ -2655,12 +2165,6 @@ describe('snoozed waiting rows', () => {
         acts.indexOf('data-snooze')
       );
       expect(card.indexOf('wc-title')).toBeLessThan(card.indexOf('wc-actions'));
-    });
-
-    it('draws no button on a row, though the watch is there', () => {
-      const html = rows(watched());
-      expect(html).not.toContain('data-copilot');
-      expect(html).not.toContain('data-merge');
     });
 
     it('draws nothing without controls, though the watch is there', () => {
@@ -2930,36 +2434,6 @@ describe('snoozed waiting rows', () => {
       });
       return s;
     };
-
-    it('keeps each row to id, title, kind, age and the PR link, whatever waits on it', () => {
-      const s = crowded();
-      const m = model(s, NOW);
-      const html = renderWaiting(m, s.details, NOW, ui(s, m));
-      expect(html).not.toContain('<li class="wrow-li"><button');
-      expect(html).not.toContain('wnote');
-      expect(html).not.toContain('wsnooze');
-      expect(html).not.toContain('data-label');
-      expect(html).not.toContain('After');
-      expect(html).not.toContain('Review fixes');
-      for (const id of ['COD-3', 'COD-6']) {
-        const li = html
-          .split('<li class="wrow-li')
-          .find((c) => c.includes(`<span class="id">${id}</span>`)) as string;
-        expect(li).toBeDefined();
-        expect(li).not.toContain('<button');
-        const link = li.match(/<a class="wrow".*?<\/a>/s)?.[0] ?? '';
-        expect(link).toContain(`<span class="id">${id}</span>`);
-        expect(link).toContain('<span class="t">');
-        expect(link).toContain('<span class="kind">');
-      }
-      const review = html
-        .split('<li class="wrow-li')
-        .find((c) => c.includes('<span class="id">COD-3</span>')) as string;
-      expect(review).toContain('<span class="t">Title of COD-3</span>');
-      expect(review).toMatch(
-        /<span class="kind">review<\/span>(?:<time>[^<]*<\/time>)?<\/a><a class="prn"[^>]*>#7<\/a><\/li>/
-      );
-    });
 
     it('links the ticket id in the card head, and the blockers in its note', () => {
       const s = crowded();

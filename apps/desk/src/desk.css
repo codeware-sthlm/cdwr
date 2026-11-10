@@ -1200,22 +1200,38 @@ button.act:disabled {
   opacity: 0.5;
 }
 /* Snoozed rows: folded away, quieter than the ones that wait */
-details.snoozed {
+.snoozed {
   margin-top: 4px;
 }
-details.snoozed > summary {
+details.snoozed > summary,
+.snoozed-summary {
   cursor: pointer;
   font-size: 11px;
   color: var(--muted);
 }
-details.snoozed[open] > summary {
+details.snoozed[open] > summary,
+.snoozed[data-state='open'] > .snoozed-summary {
   margin-bottom: 8px;
 }
-details.snoozed .wrow {
+/* The card's fold is a button, and this app has no Preflight to reset it */
+.snoozed-summary {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  text-align: left;
+}
+.snoozed-summary::before {
+  content: '▸ ';
+}
+.snoozed[data-state='open'] > .snoozed-summary::before {
+  content: '▾ ';
+}
+.snoozed .wrow {
   background: none;
   border-color: var(--line);
 }
-details.snoozed .wrow .kind {
+.snoozed .wrow .kind {
   color: var(--muted);
 }
 .wrow-li.approved .wrow {
