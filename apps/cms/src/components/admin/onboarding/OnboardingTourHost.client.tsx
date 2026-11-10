@@ -35,6 +35,7 @@ import {
   type OnboardingPreferences
 } from './onboarding-preferences';
 import { OPEN_TOUR_EVENT, openTour, takePendingTour } from './tour-events';
+import { TOUR_ILLUSTRATIONS } from './tour-illustrations';
 import { getTourPause, setTourPause, subscribeTourPause } from './tour-pause';
 import {
   TOUR_MORE,
@@ -72,8 +73,7 @@ const tile = cva('flex shrink-0 items-center justify-center', {
       primary: 'bg-primary/15 text-primary'
     } satisfies Record<TourTone, string>,
     size: {
-      sm: 'size-10 rounded-lg',
-      lg: 'size-14 rounded-2xl'
+      sm: 'size-10 rounded-lg'
     }
   }
 });
@@ -244,6 +244,7 @@ export function OnboardingTourHost() {
   };
 
   const Icon = step?.icon ?? SparklesIcon;
+  const Illustration = TOUR_ILLUSTRATIONS[step?.topic ?? 'more'];
   const tone: TourTone = step?.tone ?? 'primary';
 
   return (
@@ -290,7 +291,7 @@ export function OnboardingTourHost() {
       >
         {/* One size for every step, so the dialog doesn't jump; the body scrolls when it must */}
         <DialogContent
-          className="codeware-admin twp flex h-[min(32rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+          className="codeware-admin twp flex h-[min(40rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
           onKeyDown={onKeyDown}
           onCloseAutoFocus={(event) => {
             if (leaving.current) {
@@ -311,9 +312,20 @@ export function OnboardingTourHost() {
                 {t('onboarding:dialogDescription')}
               </DialogDescription>
             </DialogHeader>
-            <div className="flex items-center gap-4">
-              <span className={tile({ tone, size: 'lg' })}>
-                <Icon className="size-8" strokeWidth={1.5} aria-hidden />
+            {Illustration && (
+              <div
+                className={ink({
+                  tone,
+                  className:
+                    'bg-background/60 flex h-24 items-center justify-center rounded-xl p-2 sm:h-32'
+                })}
+              >
+                <Illustration className="h-full w-auto" />
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <span className={tile({ tone, size: 'sm' })}>
+                <Icon className="size-5" strokeWidth={1.5} aria-hidden />
               </span>
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-muted-foreground text-sm">
