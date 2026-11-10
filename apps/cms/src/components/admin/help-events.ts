@@ -9,6 +9,12 @@ export const OPEN_HELP_EVENT = 'cdwr:open-help';
 
 export type OpenHelpDetail = { topic: FaqTopic } | undefined;
 
+/**
+ * Custom event the help drawer sends when it closes, so a tour that sent the
+ * user there can come back.
+ */
+export const HELP_CLOSED_EVENT = 'cdwr:help-closed';
+
 /** Opens the help drawer, optionally on one FAQ topic. */
 export const openHelp = (topic?: FaqTopic) => {
   window.dispatchEvent(

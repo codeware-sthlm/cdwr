@@ -2,7 +2,8 @@
  * Admin UI — onboarding tour
  *
  * A workspace admin who hasn't seen the tour meets it on the dashboard. Every
- * way out marks it as seen, and the palette brings it back.
+ * way out marks it as seen, and the palette brings it back. Read more and
+ * Show me only step aside: the tour comes back on the step it stood on.
  *
  * Runs as `multiAdmin`, whom no other admin spec drives through the UI:
  * clearing the preference here would otherwise open the tour in a spec
@@ -73,5 +74,27 @@ test.describe('/admin — onboarding tour', () => {
 
     await palette.getByRole('option', { name: 'Take the tour' }).click();
     await expect(tour).toBeVisible();
+
+    // Read more steps aside for the help drawer and comes back on its step
+    await tour.getByRole('button', { name: 'Next' }).click();
+    await expect(tour.getByText('Step 2 of 6')).toBeVisible();
+    await tour.getByRole('button', { name: 'Read more' }).click();
+    const help = page.getByRole('dialog', { name: 'Help' });
+    await expect(help).toBeVisible();
+    await expect(tour).toBeHidden();
+    await help.getByRole('button', { name: 'Close' }).click();
+    await expect(help).toBeHidden();
+    await expect(tour.getByText('Step 2 of 6')).toBeVisible();
+
+    // Show me leaves a card on the page it leads to, which continues the tour
+    await tour.getByRole('button', { name: 'Back' }).click();
+    await tour.getByRole('button', { name: 'Show me' }).click();
+    await expect(page).toHaveURL(/\/admin\/collections\/pages/);
+    await expect(tour).toBeHidden();
+    const card = page.getByRole('region', { name: 'Take a tour' });
+    await expect(card.getByText('Step 1 of 6')).toBeVisible();
+    await card.getByRole('button', { name: 'Continue the tour' }).click();
+    await expect(card).toBeHidden();
+    await expect(tour.getByText('Step 1 of 6')).toBeVisible();
   });
 });

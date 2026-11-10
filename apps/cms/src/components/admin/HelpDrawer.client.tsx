@@ -33,7 +33,11 @@ import type { TypedLocale } from 'payload';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { groupFaqByTopic } from './faq-groups';
-import { OPEN_HELP_EVENT, type OpenHelpDetail } from './help-events';
+import {
+  HELP_CLOSED_EVENT,
+  OPEN_HELP_EVENT,
+  type OpenHelpDetail
+} from './help-events';
 import { openTour } from './onboarding/tour-events';
 
 export { OPEN_HELP_EVENT, openHelp } from './help-events';
@@ -88,6 +92,15 @@ export function HelpDrawer() {
     window.addEventListener(OPEN_HELP_EVENT, openDrawer);
     return () => window.removeEventListener(OPEN_HELP_EVENT, openDrawer);
   }, []);
+
+  // Say when the drawer closes, whichever way: a paused tour comes back then
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !open) {
+      window.dispatchEvent(new CustomEvent(HELP_CLOSED_EVENT));
+    }
+    wasOpen.current = open;
+  }, [open]);
 
   const groups = useMemo(() => groupFaqByTopic(faqs), [faqs]);
 
