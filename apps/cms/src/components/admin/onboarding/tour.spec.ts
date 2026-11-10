@@ -141,25 +141,31 @@ describe('tour pause', () => {
   beforeEach(() => setTourPause(undefined));
 
   it('keeps the step across a page change', () => {
-    setTourPause({ step: 2 });
-    expect(getTourPause()).toEqual({ step: 2 });
+    setTourPause({ step: 2, user: '7' });
+    expect(getTourPause('7')).toEqual({ step: 2, user: '7' });
+  });
+
+  it("hides another user's pause", () => {
+    setTourPause({ step: 2, user: '7' });
+    expect(getTourPause('8')).toBeUndefined();
+    expect(getTourPause(undefined)).toBeUndefined();
   });
 
   it('returns the same snapshot while nothing changed', () => {
-    setTourPause({ step: 3 });
-    expect(getTourPause()).toBe(getTourPause());
+    setTourPause({ step: 3, user: '7' });
+    expect(getTourPause('7')).toBe(getTourPause('7'));
   });
 
   it('clears the pause', () => {
-    setTourPause({ step: 1 });
+    setTourPause({ step: 1, user: '7' });
     setTourPause(undefined);
-    expect(getTourPause()).toBeUndefined();
+    expect(getTourPause('7')).toBeUndefined();
   });
 
   it('tells its subscribers', () => {
     const listener = jest.fn();
     const unsubscribe = subscribeTourPause(listener);
-    setTourPause({ step: 0 });
+    setTourPause({ step: 0, user: '7' });
     unsubscribe();
     setTourPause(undefined);
 
@@ -172,8 +178,11 @@ describe('tour pause', () => {
       '',
       'nope',
       'null',
-      '{"step":-1}',
-      '{"step":1.5}'
+      '{"step":-1,"user":"7"}',
+      '{"step":1.5,"user":"7"}',
+      '{"step":1}',
+      '{"step":1,"user":""}',
+      '{"step":1,"user":7}'
     ]) {
       expect(parseTourPause(raw)).toBeUndefined();
     }

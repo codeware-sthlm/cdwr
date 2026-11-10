@@ -127,10 +127,12 @@ export function OnboardingTourHost() {
   const [index, setIndex] = useState(0);
   // Stepped aside for the help drawer or the palette, back when it closes
   const [waitFor, setWaitFor] = useState<'help' | 'palette'>();
+  // The pause is this user's only: session storage outlives a logout
+  const userKey = user ? String(user.id) : undefined;
   // Left for another page through "Show me": a card there offers to continue
   const pagePause = useSyncExternalStore(
     subscribeTourPause,
-    getTourPause,
+    () => getTourPause(userKey),
     () => undefined
   );
   // Leaving for another overlay: don't hand focus back to the page behind
@@ -142,7 +144,7 @@ export function OnboardingTourHost() {
   useEffect(() => {
     const handler = () => {
       takePendingTour();
-      const paused = getTourPause();
+      const paused = getTourPause(userKey);
       if (paused) {
         setIndex(paused.step);
         setTourPause(undefined);
@@ -156,7 +158,7 @@ export function OnboardingTourHost() {
       handler();
     }
     return () => window.removeEventListener(OPEN_TOUR_EVENT, handler);
-  }, []);
+  }, [userKey]);
 
   // Back from the help drawer
   useEffect(() => {
@@ -218,7 +220,7 @@ export function OnboardingTourHost() {
       setWaitFor('palette');
       openPalette();
     } else {
-      setTourPause({ step: current });
+      setTourPause({ step: current, user: String(user.id) });
       router.push(target.href);
     }
   };
