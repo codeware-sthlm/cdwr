@@ -79,7 +79,9 @@ per-run budget (`AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, $15) and a daily cap
 answered or reviewed work only, and never starts a new ticket. It reaches Linear on both hosts
 through Linear's own MCP server, signed with a token of the queue's own Linear app, so its writes
 are the app user's and not Håkan's (`AGENT_QUEUE_LINEAR_MCP`, the credentials and the token cache
-are in `tools/cdwr/README.md`); a run without Linear tools doesn't start. On GitHub it acts as the
+are in `tools/cdwr/README.md`); a run without Linear tools doesn't start. The queue tells its own
+comments from Håkan's by that author (`is_agent` in `watch.jq`), and never starts a ticket whose
+`agent:ready` the app added (`refused` in the queue view). On GitHub it acts as the
 `codeware-agent` app (`github-app.sh`, credentials in `tools/cdwr/.env`), never as Håkan, so
 main's rulesets apply to it; without the app it does not start. After two launches that change
 nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops

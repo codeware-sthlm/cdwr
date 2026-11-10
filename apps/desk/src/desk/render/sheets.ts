@@ -735,7 +735,7 @@ const renderActivity = (m: Model, state: DeskState): string => {
   return `<div class="act-bar"><label>Ticket <select data-af aria-label="Filter by ticket"><option value="all"${picked === 'all' ? ' selected' : ''}>All</option>${tickets.map((t) => `<option value="${esc(t)}"${t === picked ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label><span>${plural(rows.length, 'event', 'events')}</span></div>
     ${activity.dropped ? `<p class="rule">${esc(activity.dropped)}</p>` : ''}
     ${rows.length ? activityTable(rows) : empty('No events for this ticket in the window.')}
-    <p class="rule">From Linear's issue history of tickets that carried an <code>agent:*</code> label, and the scheduler's own runs. The agent and Håkan write through the same Linear account, so only comments starting <code>**Agent</code> say <b>agent</b>; other changes from that account carry its name. Updated ${activityHead(m, activity.header)}.</p>`;
+    <p class="rule">From Linear's issue history of tickets that carried an <code>agent:*</code> label, and the scheduler's own runs. The agent writes as the queue's own Linear app user, and those changes say <b>agent</b>; so do older comments starting <code>**Agent</code>, from when it wrote as Håkan. Other changes carry their author's name. Updated ${activityHead(m, activity.header)}.</p>`;
 };
 
 // ---------- Closed, spend, cost per ticket ----------

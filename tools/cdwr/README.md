@@ -222,6 +222,15 @@ until it is revoked. cdwr checks that the credentials are there and never reads 
 asks for the client id and secret when they are missing, and only does what differs, so run it
 again after the script changes.
 
+The queue tells the agent's Linear comments from Håkan's by their author: a comment is the agent's
+when the app user wrote it (`is_agent` in `watch.jq`, which the attended query feeds with each
+comment's `user { id app }`). Before the switch the agent wrote as Håkan, so a comment of his that
+starts with `**Agent` and is older than `agent_cutover` still counts as the agent's; that fallback
+can go 14 days after the cutover. The `**Agent` prefix stays as the comment's kind (`**Agent: PR
+ready**`), and a kind counts only on the agent's own comment, so pasting the marker fakes no gate.
+Only Håkan makes a ticket ready: when the newest history entry adding `agent:ready` has the app user
+as its actor, the queue doesn't start the ticket and lists it under `refused`, which `status` shows.
+
 The claude runs reach Linear through one of two MCP servers, picked by `AGENT_QUEUE_LINEAR_MCP`
 (`lib.sh`). `key`, the default on both hosts, is Linear's own server at `https://mcp.linear.app/mcp`,
 signed with the app's token: the runs load it with `--strict-mcp-config --mcp-config ~/.cdwr/agent-queue/linear-mcp.json`,
