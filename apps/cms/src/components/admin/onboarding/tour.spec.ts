@@ -3,6 +3,12 @@ import type { useAuth } from '@payloadcms/ui';
 
 import { shouldAutoOpenTour } from './onboarding-preferences';
 import { OPEN_TOUR_EVENT, openTour, takePendingTour } from './tour-events';
+import {
+  getTourPause,
+  parseTourPause,
+  setTourPause,
+  subscribeTourPause
+} from './tour-pause';
 import { TOUR_MORE, TOUR_STEPS, visibleTourSteps } from './tour-steps';
 
 type Permissions = ReturnType<typeof useAuth>['permissions'];
@@ -108,5 +114,48 @@ describe('openTour', () => {
     openTour();
     expect(takePendingTour()).toBe(true);
     expect(takePendingTour()).toBe(false);
+  });
+});
+
+describe('tour pause', () => {
+  beforeEach(() => setTourPause(undefined));
+
+  it('keeps the step across a page change', () => {
+    setTourPause({ step: 2 });
+    expect(getTourPause()).toEqual({ step: 2 });
+  });
+
+  it('returns the same snapshot while nothing changed', () => {
+    setTourPause({ step: 3 });
+    expect(getTourPause()).toBe(getTourPause());
+  });
+
+  it('clears the pause', () => {
+    setTourPause({ step: 1 });
+    setTourPause(undefined);
+    expect(getTourPause()).toBeUndefined();
+  });
+
+  it('tells its subscribers', () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribeTourPause(listener);
+    setTourPause({ step: 0 });
+    unsubscribe();
+    setTourPause(undefined);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a value it did not write', () => {
+    for (const raw of [
+      null,
+      '',
+      'nope',
+      'null',
+      '{"step":-1}',
+      '{"step":1.5}'
+    ]) {
+      expect(parseTourPause(raw)).toBeUndefined();
+    }
   });
 });
