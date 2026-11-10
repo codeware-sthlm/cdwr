@@ -42,8 +42,13 @@
  *
  * Without this fix, Tailwind's spacing scale is 0.75x too small (e.g. p-4 is 12px instead of 16px),
  * and all font sizes are also 0.75x too small (e.g. text-base is 12px instead of 16px).
+ *
+ * A dialog or sheet portals out of the `.twp` scope, so it gets the same
+ * values by its slot: without them its text shrinks to 11px.
  */
-.twp {
+.twp,
+div[role='dialog'][data-slot='dialog-content'],
+div[role='dialog'][data-slot='sheet-content'] {
   --spacing: 4px;
   --text-xs: 12px;
   --text-xs--line-height: 16px;

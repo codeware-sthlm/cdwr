@@ -38,7 +38,7 @@ export function AboutDialogHost({ appInfo }: { appInfo: AppInfo }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
+      <DialogContent className="codeware-admin twp gap-5 p-6 sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('palette:aboutTitle')}</DialogTitle>
           <DialogDescription>{t('palette:aboutDescription')}</DialogDescription>
