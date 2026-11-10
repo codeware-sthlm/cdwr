@@ -362,7 +362,11 @@ export default defineCommand({
           'job PATH unknown (plist not installed)',
         queue.jobPath?.node === false && 'node 22 not on the job PATH',
         queue.jobPath?.gh === false && 'gh not logged in',
-        queue.jobPath?.claude === false && 'claude does not run'
+        queue.jobPath?.claude === false && 'claude does not run',
+        // A Mac with the job is attended too; never added stays quiet, as without the job
+        queue.host === 'launchd' &&
+          queue.linearServer === 'stale' &&
+          'agent_linear out of date'
       ].filter((p) => p !== false);
       queueProblems = problems.length;
       rows.push(

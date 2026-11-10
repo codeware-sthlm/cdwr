@@ -120,4 +120,21 @@ describe('doctor on a machine without the scheduler', () => {
     );
     expect(jobPathChecks).not.toHaveBeenCalled();
   });
+
+  it('warns about a stale agent_linear on a Mac with the job', async () => {
+    loaded = true;
+    drift = 'current';
+    claudeConfig = {
+      mcpServers: { agent_linear: attendedLinearServer('/x/lib.sh') }
+    };
+    const text = await doctor();
+    expect(text).toContain('agent_linear out of date');
+  });
+
+  it('stays quiet about agent_linear never added on a Mac with the job', async () => {
+    loaded = true;
+    drift = 'current';
+    const text = await doctor();
+    expect(text).not.toContain('agent_linear');
+  });
 });
