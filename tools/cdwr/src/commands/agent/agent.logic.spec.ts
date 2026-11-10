@@ -35,6 +35,7 @@ import {
   latestRunLog,
   launchPath,
   linearAuthSource,
+  linearCredentialFiles,
   lockState,
   memoryDir,
   nodeMajor,
@@ -176,6 +177,59 @@ describe('linearAuthSource', () => {
     [null, app, 'none']
   ] as const)('%s with %j -> %s', (host, env, expected) => {
     expect(linearAuthSource(host, env)).toBe(expected);
+  });
+
+  it.each([
+    ['container', app, { app: true, key: true }, 'app-env'],
+    ['container', {}, { app: true, key: true }, 'app-file'],
+    [
+      'container',
+      { AGENT_QUEUE_LINEAR_CLIENT_ID: 'id' },
+      { app: true, key: false },
+      'app-file'
+    ],
+    [
+      'container',
+      { AGENT_QUEUE_LINEAR_KEY: 'k' },
+      { app: true, key: false },
+      'app-file'
+    ],
+    [
+      'container',
+      { AGENT_QUEUE_LINEAR_KEY: 'k' },
+      { app: false, key: true },
+      'key-env'
+    ],
+    ['container', {}, { app: false, key: true }, 'key-file'],
+    ['container', {}, { app: false, key: false }, 'none'],
+    ['launchd', {}, { app: true, key: true }, 'keychain-possible'],
+    [null, {}, { app: true, key: true }, 'none']
+  ] as const)('%s with %j and files %j -> %s', (host, env, files, expected) => {
+    expect(linearAuthSource(host, env, files)).toBe(expected);
+  });
+});
+
+describe('linearCredentialFiles', () => {
+  it('falls back on the container paths', () => {
+    expect(linearCredentialFiles({})).toEqual({
+      app: '/run/agent/linear-app.env',
+      key: '/run/agent/linear.key'
+    });
+  });
+
+  it('takes the paths from the env', () => {
+    expect(
+      linearCredentialFiles({
+        AGENT_QUEUE_LINEAR_APP_FILE: '/a/app.env',
+        AGENT_QUEUE_LINEAR_KEY_FILE: '/a/key'
+      })
+    ).toEqual({ app: '/a/app.env', key: '/a/key' });
+  });
+
+  it('ignores empty values', () => {
+    expect(linearCredentialFiles({ AGENT_QUEUE_LINEAR_APP_FILE: '' }).app).toBe(
+      '/run/agent/linear-app.env'
+    );
   });
 });
 

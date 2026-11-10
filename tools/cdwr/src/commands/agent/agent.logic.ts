@@ -25,6 +25,14 @@ export const KEYCHAIN_CLIENT_SECRET_SERVICE =
 export const LINEAR_CLIENT_ID_ENV = 'AGENT_QUEUE_LINEAR_CLIENT_ID';
 /** Env var the Linear app's client secret comes from in the container */
 export const LINEAR_CLIENT_SECRET_ENV = 'AGENT_QUEUE_LINEAR_CLIENT_SECRET';
+/** Env var naming the file the container's Linear app client id and secret are written to */
+export const LINEAR_APP_FILE_ENV = 'AGENT_QUEUE_LINEAR_APP_FILE';
+/** Env var naming the file the container's fallback Linear key is written to */
+export const LINEAR_KEY_FILE_ENV = 'AGENT_QUEUE_LINEAR_KEY_FILE';
+/** Where the image puts the Linear app file, the default for `LINEAR_APP_FILE_ENV` */
+export const CONTAINER_LINEAR_APP_FILE = '/run/agent/linear-app.env';
+/** Where the image puts the Linear key file, the default for `LINEAR_KEY_FILE_ENV` */
+export const CONTAINER_LINEAR_KEY_FILE = '/run/agent/linear.key';
 /** Set to `container` where the queue runs in the agent container instead of launchd */
 export const HOST_ENV = 'AGENT_QUEUE_HOST';
 
@@ -45,17 +53,36 @@ export const hostKind = (
  */
 export const linearAuthSource = (
   host: 'launchd' | 'container' | null,
-  env: NodeJS.ProcessEnv
-): 'app-env' | 'key-env' | 'keychain-possible' | 'none' =>
+  env: NodeJS.ProcessEnv,
+  files: { app: boolean; key: boolean } = { app: false, key: false }
+):
+  | 'app-env'
+  | 'app-file'
+  | 'key-env'
+  | 'key-file'
+  | 'keychain-possible'
+  | 'none' =>
   host === 'container'
     ? env[LINEAR_CLIENT_ID_ENV] && env[LINEAR_CLIENT_SECRET_ENV]
       ? 'app-env'
-      : env[LINEAR_KEY_ENV]
-        ? 'key-env'
-        : 'none'
+      : files.app
+        ? 'app-file'
+        : env[LINEAR_KEY_ENV]
+          ? 'key-env'
+          : files.key
+            ? 'key-file'
+            : 'none'
     : host === 'launchd'
       ? 'keychain-possible'
       : 'none';
+
+/** The files the container's Linear credentials are read from: the env's paths, else the image's */
+export const linearCredentialFiles = (
+  env: NodeJS.ProcessEnv
+): { app: string; key: string } => ({
+  app: env[LINEAR_APP_FILE_ENV] || CONTAINER_LINEAR_APP_FILE,
+  key: env[LINEAR_KEY_FILE_ENV] || CONTAINER_LINEAR_KEY_FILE
+});
 
 /** A path as zsh's `${(q)…}` writes it, so the helper string matches lib.sh's own */
 export const zshQuote = (path: string): string =>

@@ -26,6 +26,7 @@ import {
   installedEnv,
   lastImplementRun,
   linearAuthSource,
+  linearCredentialFiles,
   nodeMajor,
   parseLaunchctlPrint,
   plistPath,
@@ -83,17 +84,33 @@ export async function jobState(
 }
 
 /**
- * Which Linear credentials the job would use: the queue's app, the personal key (fallback) or none.
- * In the container the env decides, on a Mac the Keychain; the secret values are never read
+ * Which Linear credentials the job would use: the queue's app, the personal key (fallback) or none,
+ * and where they come from. In the container the env or the credential files decide (only their
+ * existence is checked), on a Mac the Keychain; the secret values are never read
  */
-export async function linearAuth(
+export async function linearAuthSourceOf(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
-): Promise<'app' | 'key' | 'none'> {
-  const source = linearAuthSource(hostKind(platform, env), env);
-  if (source === 'app-env') return 'app';
-  if (source === 'key-env') return 'key';
-  if (source === 'none') return 'none';
+): Promise<{
+  auth: 'app' | 'key' | 'none';
+  source: ReturnType<typeof linearAuthSource>;
+}> {
+  const host = hostKind(platform, env);
+  const paths = linearCredentialFiles(env);
+  const source = linearAuthSource(
+    host,
+    env,
+    host === 'container'
+      ? { app: existsSync(paths.app), key: existsSync(paths.key) }
+      : undefined
+  );
+  if (source === 'app-env' || source === 'app-file') {
+    return { auth: 'app', source };
+  }
+  if (source === 'key-env' || source === 'key-file') {
+    return { auth: 'key', source };
+  }
+  if (source === 'none') return { auth: 'none', source };
   const has = (service: string) =>
     run('security', ['find-generic-password', '-s', service]).then(
       () => true,
@@ -103,8 +120,16 @@ export async function linearAuth(
     has(KEYCHAIN_CLIENT_ID_SERVICE),
     has(KEYCHAIN_CLIENT_SECRET_SERVICE)
   ]);
-  if (id && secret) return 'app';
-  return (await has(KEYCHAIN_SERVICE)) ? 'key' : 'none';
+  if (id && secret) return { auth: 'app', source };
+  return { auth: (await has(KEYCHAIN_SERVICE)) ? 'key' : 'none', source };
+}
+
+/** Which Linear credentials the job would use: the queue's app, the personal key (fallback) or none */
+export async function linearAuth(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): Promise<'app' | 'key' | 'none'> {
+  return (await linearAuthSourceOf(env, platform)).auth;
 }
 
 /**

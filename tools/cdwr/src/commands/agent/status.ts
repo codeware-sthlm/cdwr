@@ -10,7 +10,7 @@ import {
   checkRun,
   implementReport,
   jobState,
-  linearAuth,
+  linearAuthSourceOf,
   lockAge,
   mirrorTargetOf,
   paths,
@@ -41,7 +41,6 @@ import {
   formatTable,
   formatWatching,
   lastSchedulerLine,
-  linearAuthSource,
   lockState,
   parseAttended,
   parseCheck,
@@ -163,7 +162,9 @@ export default defineCommand({
             'Linear auth',
             report.linearAuthSource === 'app-env'
               ? "the queue's Linear app, from the environment"
-              : "the queue's Linear app"
+              : report.linearAuthSource === 'app-file'
+                ? "the queue's Linear app, from its file"
+                : "the queue's Linear app"
           )
         : report.linearAuth === 'key'
           ? row(
@@ -323,7 +324,7 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         host === 'container'
           ? Promise.resolve({ loaded: false as const })
           : jobState(),
-        linearAuth(ctx.env)
+        linearAuthSourceOf(ctx.env)
       ]);
       const installed = byFile((file) => readText(queue.files[file]));
       const sources = readQueueSources(ctx.root);
@@ -359,8 +360,8 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         paused: existsSync(queue.paused),
         notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
         host,
-        linearAuth: auth,
-        linearAuthSource: linearAuthSource(host, ctx.env),
+        linearAuth: auth.auth,
+        linearAuthSource: auth.source,
         mirror: mirrorTargetOf(queue),
         scheduler,
         script:
