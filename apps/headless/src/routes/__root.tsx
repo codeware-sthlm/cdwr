@@ -9,6 +9,7 @@ import {
   RenderLayout
 } from '@codeware/shared/ui/cms-renderer';
 import { NotFound } from '@codeware/shared/ui/primitives';
+import { t } from '@codeware/shared/util/i18n';
 import { ogLocale } from '@codeware/shared/util/payload-utils';
 import { STATS_PATH, statsScript } from '@codeware/shared/util/umami';
 import * as Sentry from '@sentry/tanstackstart-react';
@@ -227,6 +228,10 @@ function RootNotFound() {
 }
 
 function RootError({ error }: ErrorComponentProps) {
+  const data = Route.useLoaderData();
+  // Without the site, when its own loader failed, the page stays in English
+  const locale = data?.ok ? data.site.locale : 'en';
+
   // The message can carry internals; the server log and Sentry have them
   console.error('Route failed:', error);
 
@@ -235,8 +240,8 @@ function RootError({ error }: ErrorComponentProps) {
   }, [error]);
 
   return (
-    <ErrorContainer severity="error">
-      Something went wrong. Please try again later.
+    <ErrorContainer severity="error" locale={locale}>
+      {t(locale, 'error.unableToLoadContent')}
     </ErrorContainer>
   );
 }
