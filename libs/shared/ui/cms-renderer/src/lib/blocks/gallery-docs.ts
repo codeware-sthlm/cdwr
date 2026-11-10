@@ -4,6 +4,7 @@ import { aboutGallery } from './about/AboutBlock.gallery';
 import { calloutGallery } from './callout/CalloutBlock.gallery';
 import { cardGallery } from './card/CardBlock.gallery';
 import { codeGallery } from './code/CodeBlock.gallery';
+import { comingSoonGallery } from './coming-soon/ComingSoonBlock.gallery';
 import { contentGallery } from './content/ContentBlock.gallery';
 import { customComponentGallery } from './custom-component/CustomComponentBlock.gallery';
 import { featureCardsGallery } from './feature-cards/FeatureCardsBlock.gallery';
@@ -41,6 +42,7 @@ export const galleryDocs: Partial<Record<BlockSlug, AnyBlockGalleryDoc>> = {
   callout: calloutGallery,
   card: cardGallery,
   code: codeGallery,
+  'coming-soon': comingSoonGallery,
   content: contentGallery,
   'custom-component': customComponentGallery,
   'feature-cards': featureCardsGallery,
