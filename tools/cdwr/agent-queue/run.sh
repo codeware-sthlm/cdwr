@@ -484,7 +484,7 @@ if $paused; then
   exit 0
 fi
 
-[[ -z "$key" ]] && { say "skip: no Linear API key (AGENT_QUEUE_LINEAR_KEY or Keychain service linear-agent-queue)"; exit 0; }
+linear_auth || { say "skip: no Linear credentials (AGENT_QUEUE_LINEAR_CLIENT_ID and _SECRET, the Keychain items linear-agent-queue-client-id and -client-secret, or the key AGENT_QUEUE_LINEAR_KEY / Keychain linear-agent-queue)"; exit 0; }
 # No network is not a Linear failure: no record, no warn rows, the next run catches up
 if offline; then say "skip: offline (Mac asleep?)"; exit 0; fi
 

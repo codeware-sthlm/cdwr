@@ -489,7 +489,7 @@ describe('run.sh Sentry check-ins', () => {
     );
     const at = SCRIPT.indexOf('if $paused; then\n  last_outcome=paused');
     expect(at).toBeGreaterThan(SCRIPT.indexOf('mkdir "$HOME_DIR/lock"'));
-    expect(at).toBeLessThan(SCRIPT.indexOf('[[ -z "$key" ]]'));
+    expect(at).toBeLessThan(SCRIPT.indexOf('linear_auth || {'));
     expect(at).toBeLessThan(SCRIPT.indexOf('if offline; then'));
     expect(SCRIPT).toContain('$check || CHECKIN_ID="$(checkin in_progress)"');
     expect(SCRIPT).toContain('if ! $check; then');
