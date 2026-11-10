@@ -3,7 +3,6 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   renameSync,
   rmdirSync,
   writeFileSync
@@ -20,6 +19,7 @@ import {
   jobState,
   linearAuth,
   paths,
+  readClaudeConfig,
   readQueueSources,
   readText,
   requireHost,
@@ -39,23 +39,16 @@ import {
   byFile,
   domainTarget,
   filesDrift,
+  installWork,
   launchPath,
   memoryDir,
   renderPlist,
+  schedulerHere,
   serviceTarget,
   suggestSettings
 } from './agent.logic';
 
 const LEGACY_HOME = join(homedir(), '.claude', 'agent-queue');
-
-/** The user's Claude config, parsed; a missing or unparsable file reads as absent */
-const readClaudeConfig = (): unknown => {
-  try {
-    return JSON.parse(readFileSync(join(homedir(), '.claude.json'), 'utf8'));
-  } catch {
-    return undefined;
-  }
-};
 
 const hasLinearServer = (config: unknown): boolean =>
   typeof config === 'object' &&
@@ -70,30 +63,48 @@ const expand = (path: string): string =>
   resolve(path.replace(/^~(?=$|\/)/, homedir()));
 
 export default defineCommand({
-  summary: 'Set up the scheduled planner on this machine',
+  summary: 'Set up the agent queue on this Mac; --scheduler adds the planner',
   description:
-    'Creates the worktree the queue plans in, copies the env files and installs its dependencies, installs the queue scripts and the launchd job, and stores the Linear app client id and secret in the Keychain when they are missing and adds the agent_linear MCP server to your Claude config. Run it again after the scripts change; it only does what differs.',
+    'Installs the queue scripts, stores the Linear app client id and secret in the Keychain when they are missing and adds the agent_linear MCP server to your Claude config. With --scheduler, or when a launchd job is already here, it also creates the worktree the queue plans in, copies the env files, installs its dependencies and installs and loads the launchd job. Run it again after the scripts change; it only does what differs.',
   danger: 'mutate',
   needs: ['claude', 'jq', 'gh'],
   inputs: {
+    scheduler: input.boolean({
+      flag: 'scheduler',
+      short: 'S',
+      prompt: 'Set up the scheduled planner too?',
+      description:
+        'Also set up the scheduled planner: its worktree and the launchd job; a Mac that has the job keeps it current without the flag',
+      default: false,
+      flagOnly: true
+    }),
     agentWorktree: input.optional(
       input.string({
         flag: 'worktree',
         prompt: 'Where should the agent worktree live?',
         short: 'w',
         description:
-          'Checkout the queue plans in; defaults to codeware-agent beside this one, remembered once given',
+          'Checkout the scheduler plans in; defaults to codeware-agent beside this one, remembered once given',
         flagOnly: true
       }),
       () => true
     )
   },
 
-  async plan(ctx, { agentWorktree }) {
+  async plan(ctx, { scheduler: schedulerFlag, agentWorktree }) {
     requireHost(['launchd'], ctx.env);
     const job = await jobState();
+    const queue = paths(ctx.env);
+    const here = schedulerHere('launchd', job, existsSync(queue.plist));
+    const withScheduler = schedulerFlag || here;
+    if (agentWorktree !== undefined && !withScheduler) {
+      throw new UsageError(
+        '--worktree is where the scheduler plans, and no scheduler is set up here',
+        'Add --scheduler to set it up'
+      );
+    }
     // bootout would kill a session halfway through a plan
-    if (job.loaded && job.running) {
+    if (withScheduler && job.loaded && job.running) {
       throw new CliError(
         'A planning run is in progress',
         undefined,
@@ -101,7 +112,6 @@ export default defineCommand({
       );
     }
 
-    const queue = paths(ctx.env);
     const worktree = expand(agentWorktree ?? worktreeOf(ctx));
     const sources = readQueueSources(ctx.root);
     if ('missing' in sources) {
@@ -109,46 +119,58 @@ export default defineCommand({
     }
     const { source } = sources;
 
-    const dirs = QUEUE_BINARIES.map((binary) => {
-      const dir = locate(binary, ctx.env);
-      if (!dir) throw new CliError(`${binary} is not on PATH`);
-      return dir;
-    });
-    const plist = renderPlist({
-      script: queue.script,
-      home: queue.home,
-      repo: worktree,
-      path: launchPath(dirs),
-      memoryDir:
-        ctx.env['AGENT_QUEUE_MEMORY_DIR'] || memoryDir(homedir(), ctx.root),
-      suggest: suggestSettings(ctx.env)
-    });
-
-    const worktreeExists = existsSync(worktree);
-    if (worktreeExists && !existsSync(join(worktree, '.git'))) {
-      throw new CliError(`${worktree} exists and is not a git checkout`);
+    let plist = '';
+    let worktreeExists = false;
+    if (withScheduler) {
+      const dirs = QUEUE_BINARIES.map((binary) => {
+        const dir = locate(binary, ctx.env);
+        if (!dir) throw new CliError(`${binary} is not on PATH`);
+        return dir;
+      });
+      plist = renderPlist({
+        script: queue.script,
+        home: queue.home,
+        repo: worktree,
+        path: launchPath(dirs),
+        memoryDir:
+          ctx.env['AGENT_QUEUE_MEMORY_DIR'] || memoryDir(homedir(), ctx.root),
+        suggest: suggestSettings(ctx.env)
+      });
+      worktreeExists = existsSync(worktree);
+      if (worktreeExists && !existsSync(join(worktree, '.git'))) {
+        throw new CliError(`${worktree} exists and is not a git checkout`);
+      }
     }
-    const envCopies = ENV_COPIES.filter((file) => {
-      const ours = readText(join(ctx.root, file));
-      return ours !== undefined && ours !== readText(join(worktree, file));
-    });
     const auth = await linearAuth(ctx.env);
     const claudeConfig = readClaudeConfig();
-    const work = {
-      worktree: !worktreeExists,
-      envCopies,
-      deps: !existsSync(join(worktree, 'node_modules')),
-      script:
-        filesDrift(
-          byFile((file) => readText(queue.files[file])),
-          source
-        ) !== 'current',
-      plist: readText(queue.plist) !== plist,
-      reload: false,
-      credentials: auth !== 'app',
-      mcp: !attendedLinearServerCurrent(claudeConfig, queue.files['lib.sh'])
-    };
-    work.reload = work.plist || !job.loaded || job.script !== queue.script;
+    const work = installWork({
+      schedulerHere: here,
+      schedulerFlag,
+      scripts: filesDrift(
+        byFile((file) => readText(queue.files[file])),
+        source
+      ),
+      appCredentials: auth === 'app',
+      linearServerCurrent: attendedLinearServerCurrent(
+        claudeConfig,
+        queue.files['lib.sh']
+      ),
+      scheduler: {
+        worktreeExists,
+        envCopies: withScheduler
+          ? ENV_COPIES.filter((file) => {
+              const ours = readText(join(ctx.root, file));
+              return (
+                ours !== undefined && ours !== readText(join(worktree, file))
+              );
+            })
+          : [],
+        depsInstalled: existsSync(join(worktree, 'node_modules')),
+        plistCurrent: readText(queue.plist) === plist,
+        jobLoaded: job.loaded,
+        jobScriptCurrent: job.loaded && job.script === queue.script
+      }
+    });
 
     if (work.credentials && (!ctx.ui.interactive || ctx.flags.nonInteractive)) {
       throw new UsageError(
@@ -162,7 +184,10 @@ export default defineCommand({
         label: 'Create the worktree at origin/main',
         detail: worktree
       },
-      ...envCopies.map((file) => ({ label: `Copy ${file}`, detail: worktree })),
+      ...work.envCopies.map((file) => ({
+        label: `Copy ${file}`,
+        detail: worktree
+      })),
       work.deps && { label: 'Install dependencies', detail: 'pnpm install' },
       work.script && {
         label: 'Install the queue scripts',
@@ -198,13 +223,19 @@ export default defineCommand({
     if (steps.length === 0) {
       return {
         steps,
-        nothing: 'The agent queue is installed and current',
+        nothing: work.scheduler
+          ? 'The agent queue and its launchd job are installed and current'
+          : 'The attended side is installed and current; no launchd job here (`--scheduler` adds one)',
         data
       };
     }
     return {
       steps,
-      notes: ['The job runs every 10 minutes; `cdwr agent pause` holds it'],
+      notes: [
+        work.scheduler
+          ? 'The job runs every 10 minutes; `cdwr agent pause` holds it'
+          : 'No launchd job is set up here; `--scheduler` adds one'
+      ],
       data
     };
   },
@@ -360,7 +391,9 @@ export default defineCommand({
       );
     }
     return {
-      summary: 'The agent queue is installed',
+      summary: work.scheduler
+        ? 'The agent queue and its launchd job are installed'
+        : 'The attended side of the agent queue is installed',
       next,
       json: { worktree, script: queue.script, plist: queue.plist, work }
     };

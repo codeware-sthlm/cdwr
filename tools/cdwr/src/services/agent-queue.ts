@@ -217,6 +217,15 @@ export function readText(file: string): string | undefined {
   }
 }
 
+/** The user's Claude config, parsed; a missing or unparsable file reads as absent */
+export function readClaudeConfig(): unknown {
+  try {
+    return JSON.parse(readFileSync(join(homedir(), '.claude.json'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
 /** The queue's files in the repo; names the first one that is missing otherwise */
 export function readQueueSources(
   root: string
