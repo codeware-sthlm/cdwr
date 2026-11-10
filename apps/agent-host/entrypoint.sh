@@ -3,9 +3,13 @@
 setopt err_exit pipe_fail no_unset
 
 typeset -a missing
-for v in AGENT_GITHUB_APP_ID AGENT_GITHUB_APP_INSTALLATION_ID AGENT_GITHUB_APP_KEY AGENT_QUEUE_LINEAR_KEY CLAUDE_CODE_OAUTH_TOKEN; do
+for v in AGENT_GITHUB_APP_ID AGENT_GITHUB_APP_INSTALLATION_ID AGENT_GITHUB_APP_KEY CLAUDE_CODE_OAUTH_TOKEN; do
   [[ -n "${(P)v:-}" ]] || missing+=("$v")
 done
+# Linear: the app's client id and secret, or the key they replace until it is revoked
+if [[ -z "${AGENT_QUEUE_LINEAR_CLIENT_ID:-}" || -z "${AGENT_QUEUE_LINEAR_CLIENT_SECRET:-}" ]] && [[ -z "${AGENT_QUEUE_LINEAR_KEY:-}" ]]; then
+  missing+=("AGENT_QUEUE_LINEAR_CLIENT_ID and AGENT_QUEUE_LINEAR_CLIENT_SECRET (or AGENT_QUEUE_LINEAR_KEY)")
+fi
 if (( ${#missing} )); then
   print -ru2 -- "agent-host: missing ${(j:, :)missing}"
   exit 1
@@ -24,13 +28,26 @@ chmod 600 "$KEY_PATH"
 unset AGENT_GITHUB_APP_KEY
 
 # The Linear key the same way, where the image's AGENT_QUEUE_LINEAR_KEY_FILE points: lib.sh reads
-# the file, and no process inherits the key itself
+# the file, and no process inherits the key itself. The key is the fallback until it is revoked
 : "${AGENT_QUEUE_LINEAR_KEY_FILE:=/run/agent/linear.key}"
 export AGENT_QUEUE_LINEAR_KEY_FILE
 mkdir -p "${AGENT_QUEUE_LINEAR_KEY_FILE:h}"
-(umask 077; print -r -- "$AGENT_QUEUE_LINEAR_KEY" > "$AGENT_QUEUE_LINEAR_KEY_FILE")
-chmod 600 "$AGENT_QUEUE_LINEAR_KEY_FILE"
+if [[ -n "${AGENT_QUEUE_LINEAR_KEY:-}" ]]; then
+  (umask 077; print -r -- "$AGENT_QUEUE_LINEAR_KEY" > "$AGENT_QUEUE_LINEAR_KEY_FILE")
+  chmod 600 "$AGENT_QUEUE_LINEAR_KEY_FILE"
+fi
 unset AGENT_QUEUE_LINEAR_KEY
+
+# The app's client id and secret the same way, where AGENT_QUEUE_LINEAR_APP_FILE points: lib.sh buys
+# its token from that file and keeps the token in AGENT_QUEUE_LINEAR_TOKEN_FILE on the same tmpfs
+: "${AGENT_QUEUE_LINEAR_APP_FILE:=/run/agent/linear-app.env}"
+export AGENT_QUEUE_LINEAR_APP_FILE
+if [[ -n "${AGENT_QUEUE_LINEAR_CLIENT_ID:-}" && -n "${AGENT_QUEUE_LINEAR_CLIENT_SECRET:-}" ]]; then
+  (umask 077; print -rl -- "AGENT_QUEUE_LINEAR_CLIENT_ID=$AGENT_QUEUE_LINEAR_CLIENT_ID" \
+    "AGENT_QUEUE_LINEAR_CLIENT_SECRET=$AGENT_QUEUE_LINEAR_CLIENT_SECRET" > "$AGENT_QUEUE_LINEAR_APP_FILE")
+  chmod 600 "$AGENT_QUEUE_LINEAR_APP_FILE"
+fi
+unset AGENT_QUEUE_LINEAR_CLIENT_ID AGENT_QUEUE_LINEAR_CLIENT_SECRET
 
 # The identity on the tmpfs too: the credential helper reads it, and it exists before the first clone
 (umask 077; print -rl -- "AGENT_GITHUB_APP_ID=$AGENT_GITHUB_APP_ID" \
