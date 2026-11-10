@@ -161,15 +161,18 @@ rollover covers every pull request's apps. The token is never printed.
 ## The agent queue
 
 The scheduler runs in the NUC's agent container, every 10 minutes, `/work-queue` plan-only against a
-separate worktree. A Mac is attended-only; it can still run the same loop as a launchd job
-(`se.codeware.agent-queue`, worktree `codeware-agent` beside this checkout), and `cdwr agent uninstall`
-removes that job. Without it, `status` shows the attended rows and names the host, and `pause`, `resume`
+separate worktree. A Mac is attended-only: `cdwr agent install` sets up its attended side, the
+script copies in `~/.cdwr/agent-queue/`, the Linear app's Keychain items and the `agent_linear` MCP
+server, and nothing more. It can still run the same loop as a launchd job (`se.codeware.agent-queue`,
+worktree `codeware-agent` beside this checkout): `install --scheduler` adds that job, a plain
+`install` keeps one already there current, and `cdwr agent uninstall` removes it. Without it, `status` shows the attended rows and names the host, and `pause`, `resume`
 and `run` refuse and name their `--host` line. With `--host <name>`, `status`, `notify`, `pause`,
 `resume` and `run` act on the queue in the agent container over ssh: the plan is the container's own
 `--dry-run`, and applying runs it there; `--json` passes the container's result through.
 
 ```sh
-cdwr agent install        # worktree, env files, deps, script, launchd job, Keychain key
+cdwr agent install        # the attended side: scripts, Keychain items, agent_linear; keeps an existing job current
+cdwr agent install --scheduler   # plus the launchd job: worktree, env files, deps, plist, load
 cdwr agent uninstall      # unload and remove the launchd job; --worktree-remove takes the planner checkout
 cdwr agent status         # loaded, paused, key, scripts current, watched PRs, next run
 cdwr agent run            # start a planning run now; in the container, wake its loop
@@ -348,7 +351,7 @@ takes the request without adding Copilot (the app has no Copilot seat), it tries
 from the environment or `tools/cdwr/.env`. A GitHub call that fails after the ack turns the row
 `refused` with GitHub's reason.
 
-The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
+The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install --scheduler` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install --scheduler` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
 
 A launched implementing session acts on GitHub as the `codeware-agent` GitHub App, never as you:
 you sit in the `release` team that bypasses main's rulesets, and an app in no bypass list gets
