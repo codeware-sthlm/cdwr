@@ -64,7 +64,7 @@ import {
   reasonChip,
   sessionLabel
 } from './html';
-import { headline } from './session';
+import { headline, headlineHtml } from './session';
 import {
   type SnoozeUi,
   type WaitRow,
@@ -409,7 +409,7 @@ const renderAttended = (
 ): string => {
   const s = m.session;
   const h = headline(m, details, now);
-  const head = `<div class="group"><h3>Now</h3><div class="verdict">${h.text}</div>${h.note ? `<p class="rule">${h.note}</p>` : ''}</div>`;
+  const head = `<div class="group"><h3>Now</h3><div class="verdict">${headlineHtml(h.text)}</div>${h.note.length ? `<p class="rule">${headlineHtml(h.note)}</p>` : ''}</div>`;
   const facts = s
     ? `<div class="group"><h3>Heartbeat</h3><dl class="kv">
       <dt>State</dt><dd>${esc(sessionLabel(s.state))}${s.detail ? ' · ' + esc(s.detail) : ''}</dd>

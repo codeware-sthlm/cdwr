@@ -13,12 +13,14 @@ import {
 import type { Pulse } from '../live';
 import type { Model, PlanWindow } from '../model';
 import type { Detail } from '../state';
-import type { SessionState } from '../types';
+import type { PrRef, SessionState } from '../types';
 
 import {
+  type PrTone,
   idLink,
   linkIds,
   livePr,
+  parkedPlain,
   parkedText,
   pr,
   prPill,
@@ -32,18 +34,42 @@ import { countedRows, waitRows } from './waiting';
 
 export type Tone = '' | 'wait' | 'block';
 
-export type Headline = { tone: Tone; text: string; note: string };
+/** One piece of a headline: plain text, a ticket id, a PR (tinted `prn`, or a plain id link), or code */
+export type Part =
+  | string
+  | { id: string }
+  | { prn: PrRef; tone: PrTone }
+  | { pr: PrRef }
+  | { code: string };
 
-/** A ticket's id link, then its PR, tinted by its live tone, when it has one */
-const idPr = (
+export type Headline = { tone: Tone; text: Part[]; note: Part[] };
+
+/** A headline's parts as HTML; the strings in them are escaped here */
+export const headlineHtml = (parts: Part[]): string =>
+  parts
+    .map((p) =>
+      typeof p === 'string'
+        ? esc(p)
+        : 'id' in p
+          ? idLink(p.id)
+          : 'prn' in p
+            ? prn(p.prn, p.tone)
+            : 'pr' in p
+              ? pr(p.pr)
+              : `<code>${esc(p.code)}</code>`
+    )
+    .join('');
+
+/** A ticket's id, then its PR, tinted by its live tone, when it has one */
+export const idPr = (
   m: Model,
   details: ReadonlyMap<string, Detail>,
   id: string
-): string => {
+): Part[] => {
   const { n, live } = livePr(m, details, { ticket: id, pr: queuePr(m, id) });
   return n
-    ? `${idLink(id)} ${prn(n, prTone(live?.state ?? null))}`
-    : idLink(id);
+    ? [{ id }, ' ', { prn: n, tone: prTone(live?.state ?? null) }]
+    : [{ id }];
 };
 
 /** One sentence for what happens next, from the session and the head of the queue */
@@ -53,12 +79,16 @@ export const headline = (
   now: Date
 ): Headline => {
   const { v, runs } = m;
-  if (!runs) return { tone: '', text: 'Loading the runs…', note: '' };
+  if (!runs) return { tone: '', text: ['Loading the runs…'], note: [] };
   if (!v)
     return {
       tone: 'wait',
-      text: 'The scheduler has recorded no queue view yet. Run <code>cdwr agent install</code> from main.',
-      note: ''
+      text: [
+        'The scheduler has recorded no queue view yet. Run ',
+        { code: 'cdwr agent install' },
+        ' from main.'
+      ],
+      note: []
     };
   const s: SessionState = m.session ?? { state: 'none' };
   const first = m.next[0];
@@ -67,60 +97,91 @@ export const headline = (
     : m.nextRun
       ? '~' + hhmm(m.nextRun)
       : 'its next run';
-  const on = s.ticket ? ' on ' + idLink(s.ticket) : '';
+  const on: Part[] = s.ticket ? [' on ', { id: s.ticket }] : [];
   let tone: Tone = '',
-    text: string;
+    text: Part[];
   if (s.state === 'waiting') {
     tone = 'wait';
-    text = `The session${on} waits on a prompt in your terminal.`;
+    text = ['The session', ...on, ' waits on a prompt in your terminal.'];
   } else if (m.stuck !== null && first) {
     tone = 'block';
-    text = `The session has polled for ${span(m.stuck)} while ${idLink(first.ticket)} (${esc(first.reason)}) waits. Its wait missed it: type anything in its terminal.`;
+    text = [
+      `The session has polled for ${span(m.stuck)} while `,
+      { id: first.ticket },
+      ` (${first.reason}) waits. Its wait missed it: type anything in its terminal.`
+    ];
   } else if (s.state === 'alive') {
-    text = `A session is ${s.detail === 'polling' ? 'polling for changes' : 'working'}${on}.`;
+    text = [
+      `A session is ${s.detail === 'polling' ? 'polling for changes' : 'working'}`,
+      ...on,
+      '.'
+    ];
     if (first)
-      text += ` It takes ${idPr(m, details, first.ticket)} next (${esc(first.reason)}).`;
+      text.push(
+        ' It takes ',
+        ...idPr(m, details, first.ticket),
+        ` next (${first.reason}).`
+      );
   } else if (first) {
     text =
       first.reason === 'ready'
-        ? `No session is running. The scheduler plans ${idPr(m, details, first.ticket)} at ${when}.`
-        : `No session is running. The scheduler starts one for ${idPr(m, details, first.ticket)} (${esc(first.reason)}) at ${when}, unless today's cap or the back-off holds it.`;
+        ? [
+            'No session is running. The scheduler plans ',
+            ...idPr(m, details, first.ticket),
+            ` at ${when}.`
+          ]
+        : [
+            'No session is running. The scheduler starts one for ',
+            ...idPr(m, details, first.ticket),
+            ` (${first.reason}) at ${when}, unless today's cap or the back-off holds it.`
+          ];
   } else {
     const rows = countedRows(waitRows(m, details, now));
     const yours = rows.length;
     tone = rows.some((r) => r.kind !== 'review') ? 'wait' : '';
-    const head = rows[0]
-      ? (rows[0].kind === 'idea' ? 'the idea ' : '') + idLink(rows[0].id)
-      : '';
     text = yours
-      ? `Nothing for the agent. ${plural(yours, 'thing waits', 'things wait')} on you${head ? ', starting with ' + head : ''}.`
-      : 'Nothing for the agent, and nothing waits on you.';
+      ? [
+          `Nothing for the agent. ${plural(yours, 'thing waits', 'things wait')} on you`,
+          ...(rows[0]
+            ? [
+                ', starting with ',
+                ...(rows[0].kind === 'idea' ? ['the idea '] : []),
+                { id: rows[0].id }
+              ]
+            : []),
+          '.'
+        ]
+      : ['Nothing for the agent, and nothing waits on you.'];
   }
-  const parked = [...m.parked, ...m.prWaits.values()]
-    .map(
-      (p) =>
-        `${idLink(p.ticket)} ${parkedText(p)}${p.pr ? ' on ' + pr(p.pr) : ''}`
-    )
-    .join(' · ');
+  const parked: Part[][] = [...m.parked, ...m.prWaits.values()].map((p) => [
+    { id: p.ticket },
+    ` ${parkedPlain(p)}`,
+    ...(p.pr ? [' on ', { pr: p.pr }] : [])
+  ]);
   const asOf = runs.last
-    ? `Snapshot from the scheduler run at ${esc(runs.last.when.slice(11))}, ${esc(ageText((now.getTime() - runTime(runs.last.when)) / 6e4))}. A live session can be ahead of it`
+    ? `Snapshot from the scheduler run at ${runs.last.when.slice(11)}, ${ageText((now.getTime() - runTime(runs.last.when)) / 6e4)}. A live session can be ahead of it`
     : '';
   const seen =
     s.lastSeen && s.state !== 'none'
-      ? `session seen ${esc(seenAgo(s.lastSeen, now))}`
+      ? `session seen ${seenAgo(s.lastSeen, now)}`
       : '';
+  const snapshot = [asOf, seen].filter(Boolean).join(', ');
   return {
     tone,
     text,
-    note: [parked, [asOf, seen].filter(Boolean).join(', ')]
-      .filter(Boolean)
-      .join(' · ')
+    note: [...parked, ...(snapshot ? [[snapshot]] : [])].flatMap((p, i) =>
+      i ? [' · ', ...p] : p
+    )
   };
 };
 
-type Status = { label: string; tone: 'live' | 'wait' | 'block' | 'idle' };
+export type Status = {
+  label: string;
+  tone: 'live' | 'wait' | 'block' | 'idle';
+};
 
-const status = (m: Model): Status => {
+/** The session pill's label and tone */
+export const status = (m: Model): Status => {
   const s = m.session?.state ?? 'none';
   if (m.stuck !== null) return { label: 'Session stuck', tone: 'block' };
   if (s === 'alive') return { label: 'Session live', tone: 'live' };
@@ -143,7 +204,7 @@ export const whereText = (
 };
 
 /** A feed row's dot: green for a good outcome, red for a failed one, else neutral */
-const feedTone = (p: Pulse): string =>
+export const feedTone = (p: Pulse): string =>
   /failed|closed/.test(p.what)
     ? 'block'
     : /passed|merged|reviewed/.test(p.what)
@@ -203,7 +264,9 @@ const planLine = (m: Model, now: Date): string => {
 };
 
 /** "also: implement on agent-host · attended on mac", the live sessions besides the one the card names, at most two */
-const alsoText = (m: Pick<Model, 'session' | 'hostSessions'>): string => {
+export const alsoText = (
+  m: Pick<Model, 'session' | 'hostSessions'>
+): string => {
   const all = m.hostSessions.flatMap((h) =>
     h.sessions.map((x) => ({ id: x.id, text: `${x.kind} on ${h.host}` }))
   );
@@ -240,11 +303,11 @@ export const renderSession = (
     ? m.next.find((x) => x.ticket === s.ticket)?.reason
     : undefined;
   const big = working
-    ? `Working on <span class="mono">${idPr(m, details, s.ticket ?? '')}</span>`
-    : h.text;
+    ? `Working on <span class="mono">${headlineHtml(idPr(m, details, s.ticket ?? ''))}</span>`
+    : headlineHtml(h.text);
   const sub = working
     ? [reason, m.get(s.ticket ?? '').title].filter(Boolean).map(esc).join(' · ')
-    : h.note;
+    : headlineHtml(h.note);
   const ticket = working ? (s.ticket ?? '') : '';
   const own = ticket ? ownPrRow(m, details, ticket, now) : '';
   const rows =

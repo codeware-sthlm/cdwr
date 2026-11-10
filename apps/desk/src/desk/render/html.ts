@@ -65,6 +65,21 @@ export const prTone = (state: PrStateName | null): PrTone =>
 export const prStateText = (state: PrStateName): string =>
   state === 'Copilot reviewed' ? 'Copilot reviewed — your turn' : state;
 
+/** The PR pill as data: its tone and text, and how long ago a github event landed, null without one */
+export const prPillData = (
+  m: Pick<Model, 'agentPrs'>,
+  details: ReadonlyMap<string, Detail>,
+  x: { ticket: string; pr?: PrRef | null },
+  now: Date
+): { tone: PrTone; text: string; age: string | null } => {
+  const { live } = livePr(m, details, x);
+  return {
+    tone: live ? prTone(live.state) : 'neutral',
+    text: !live ? 'queued' : live.state ? prStateText(live.state) : live.action,
+    age: live ? `${shortAge((now.getTime() - live.at) / 6e4)} ago` : null
+  };
+};
+
 /** The PR's state pill and, when a github event landed, how long ago; two strings so a caller can put a chip between */
 export const prPill = (
   m: Pick<Model, 'agentPrs'>,
@@ -72,18 +87,10 @@ export const prPill = (
   x: { ticket: string; pr?: PrRef | null },
   now: Date
 ): { pill: string; age: string } => {
-  const { live } = livePr(m, details, x);
-  const tone = live ? prTone(live.state) : 'neutral';
-  const text = !live
-    ? 'queued'
-    : live.state
-      ? prStateText(live.state)
-      : live.action;
+  const { tone, text, age } = prPillData(m, details, x, now);
   return {
     pill: `<span class="pill ${tone}">${esc(text)}</span>`,
-    age: live
-      ? `<time>${esc(shortAge((now.getTime() - live.at) / 6e4))} ago</time>`
-      : ''
+    age: age === null ? '' : `<time>${esc(age)}</time>`
   };
 };
 
@@ -205,11 +212,14 @@ export const reasonChip = (reason: string | undefined): string => {
   return chip(kind, esc(text));
 };
 
-/** What a parked ticket waits on, or what it waited on and how that went */
-export const parkedText = (p: QueueParked): string =>
+/** What a parked ticket waits on, or what it waited on and how that went, as plain text */
+export const parkedPlain = (p: QueueParked): string =>
   p.resolved
-    ? `${waitName(p.wait) || esc(p.wait)} ${esc(p.outcome || 'done')}, resumes next`
-    : `waits on ${waitName(p.wait) || esc(p.wait)}`;
+    ? `${waitName(p.wait) || p.wait} ${p.outcome || 'done'}, resumes next`
+    : `waits on ${waitName(p.wait) || p.wait}`;
+
+/** `parkedPlain` as escaped HTML */
+export const parkedText = (p: QueueParked): string => esc(parkedPlain(p));
 
 /** "Review fixes: waits on CI since 17:20" for an open PR whose ticket is parked; empty otherwise */
 export const prWaitText = (m: Pick<Model, 'prWaits'>, id: string): string => {
