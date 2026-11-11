@@ -14,19 +14,33 @@ export const PUBLIC_RESOLVERS = [
   { name: 'Quad9', address: '9.9.9.9' }
 ] as const;
 
+/**
+ * What one name answers, per record type.
+ *
+ * Every type is asked for every name: an apex can only use A and AAAA, but a
+ * subdomain may use either those or a CNAME, and asking one type alone reads a
+ * subdomain served by address as having no answer at all. Each list is sorted
+ * and lowercased so two answers compare directly.
+ */
+export type RecordSet = {
+  a: Array<string>;
+  aaaa: Array<string>;
+  cname: Array<string>;
+};
+
 /** One resolver's answer, or the reason it did not give one */
 export type ResolverAnswer = {
   resolver: string;
-  /** What it resolved, sorted and lowercased so two answers compare directly */
-  records: Array<string>;
-  /** Set when the query failed or timed out, in which case `records` is empty */
+  /** What the domain itself answers */
+  records: RecordSet;
+  /** The CNAME at `_acme-challenge.<hostname>`, Fly's validation record */
+  challenge: Array<string>;
+  /** Set when a query failed or timed out, in which case the lists are empty */
   error?: string;
 };
 
 export type ResolverComparison = {
   hostname: string;
-  /** Which record type was asked for, decided by whether the domain is an apex */
-  recordType: 'CNAME' | 'A';
   answers: Array<ResolverAnswer>;
   /**
    * Whether every resolver that answered agreed.
@@ -44,7 +58,37 @@ export type ResolverComparison = {
    * after the record is created. Turns "try waiting a bit" into a number.
    */
   negativeCacheTtl: number | null;
+  /**
+   * The zone the domain lives in and the name servers it is served by, or
+   * null when they could not be read.
+   *
+   * The one fact that explains records created at one provider and never
+   * seen: the domain is still served by another, so nothing created at the
+   * first ever reaches a resolver.
+   */
+  nameServers: { zone: string; servers: Array<string> } | null;
+  /**
+   * What a `*` record in the zone answers, or null when there is none.
+   *
+   * Found by asking for a name nobody created; anything that answers it is the
+   * wildcard. Harmless for the names on the card, since an exact record wins,
+   * but it sends every other subdomain wherever it points.
+   */
+  wildcard: RecordSet | null;
 };
+
+/** An empty answer, for a name that has no records of any kind */
+export const emptyRecordSet = (): RecordSet => ({ a: [], aaaa: [], cname: [] });
+
+/** Whether a record set holds anything at all */
+export const hasRecords = ({ a, aaaa, cname }: RecordSet): boolean =>
+  a.length + aaaa.length + cname.length > 0;
+
+/** One answer as a single string, so two answers compare directly */
+const fingerprint = ({ records, challenge }: ResolverAnswer): string =>
+  [records.a, records.aaaa, records.cname, challenge]
+    .map((list) => list.join(','))
+    .join('|');
 
 /**
  * Whether every resolver that actually answered gave the same answer.
@@ -61,9 +105,7 @@ export const resolversAgree = (answers: Array<ResolverAnswer>): boolean => {
   const first = answered.at(0);
   return (
     !first ||
-    answered.every(
-      (answer) => answer.records.join(',') === first.records.join(',')
-    )
+    answered.every((answer) => fingerprint(answer) === fingerprint(first))
   );
 };
 

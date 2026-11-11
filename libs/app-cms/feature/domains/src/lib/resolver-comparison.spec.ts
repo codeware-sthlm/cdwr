@@ -6,11 +6,21 @@ import {
   resolversAgree
 } from './resolver-comparison';
 
+/** A resolver's answer with `cname` as the domain's CNAME */
 const answer = (
   resolver: string,
-  records: Array<string>,
-  error?: string
-): ResolverAnswer => ({ resolver, records, error });
+  cname: Array<string>,
+  error?: string,
+  extra: Partial<Pick<ResolverAnswer, 'challenge'>> & {
+    a?: Array<string>;
+    aaaa?: Array<string>;
+  } = {}
+): ResolverAnswer => ({
+  resolver,
+  records: { a: extra.a ?? [], aaaa: extra.aaaa ?? [], cname },
+  challenge: extra.challenge ?? [],
+  error
+});
 
 describe('normaliseRecords', () => {
   it('ignores case, the root dot and order', () => {
@@ -53,6 +63,26 @@ describe('resolversAgree', () => {
       resolversAgree([
         answer('Cloudflare', ['app.fly.dev']),
         answer('Google', [])
+      ])
+    ).toBe(false);
+  });
+
+  it('disagrees when only the AAAA records differ', () => {
+    expect(
+      resolversAgree([
+        answer('Cloudflare', [], undefined, { a: ['1.2.3.4'], aaaa: ['::1'] }),
+        answer('Google', [], undefined, { a: ['1.2.3.4'] })
+      ])
+    ).toBe(false);
+  });
+
+  it('disagrees when only the challenge record differs', () => {
+    expect(
+      resolversAgree([
+        answer('Cloudflare', ['app.fly.dev'], undefined, {
+          challenge: ['x.flydns.net']
+        }),
+        answer('Google', ['app.fly.dev'])
       ])
     ).toBe(false);
   });
