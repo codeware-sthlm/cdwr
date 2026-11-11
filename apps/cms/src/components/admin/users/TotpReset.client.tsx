@@ -44,10 +44,10 @@ export const TotpReset: React.FC = () => {
   const reset = async () => {
     setBusy(true);
     try {
-      const res = await fetch(
-        `${config.serverURL ?? ''}${config.routes.api}/users/${id}/totp-reset`,
-        { method: 'POST', credentials: 'include' }
-      );
+      const res = await fetch(`${config.routes.api}/users/${id}/totp-reset`, {
+        method: 'POST',
+        credentials: 'include'
+      });
       if (!res.ok) {
         throw new Error(res.statusText);
       }

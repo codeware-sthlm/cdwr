@@ -64,10 +64,12 @@ export const DefaultThemeField: React.FC<TextFieldClientProps> = ({
   const sdk = useMemo(
     () =>
       new PayloadSDK<Config>({
-        baseURL: `${config.serverURL ?? ''}/api`,
+        // Same origin as the page: serverURL is the adopted domain, which is
+        // cross-site, without the session cookie, on the Fly url
+        baseURL: config.routes.api,
         baseInit: token ? { headers: { Authorization: `JWT ${token}` } } : {}
       }),
-    [config.serverURL, token]
+    [config.routes.api, token]
   );
 
   // Keyed by the ids so re-selecting the same themes does not refetch
