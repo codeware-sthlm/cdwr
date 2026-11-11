@@ -1,14 +1,13 @@
 import {
   Alert,
-  AlertDescription,
-  AlertTitle
+  AlertDescription
 } from '@codeware/shared/ui/shadcn/components/alert';
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { Card, CardContent } from '@codeware/shared/ui/shadcn/components/card';
 import {
   ArrowPathIcon,
+  DocumentMagnifyingGlassIcon,
   ExclamationTriangleIcon,
-  GlobeAltIcon,
   ShieldCheckIcon,
   TrashIcon
 } from '@heroicons/react/24/outline';
@@ -18,15 +17,11 @@ import {
   type DomainCertificateStatus,
   DomainStatusBadge
 } from './domain-status-badge';
-import {
-  type IssuedCertificate,
-  IssuedCertificates
-} from './issued-certificates';
-import { ResolverReport, type ResolverReportProps } from './resolver-report';
 
 export type { DomainCertificateStatus };
 
-export type DomainAction = 'request' | 'check' | 'remove' | 'resolvers';
+export type DomainAction =
+  'request' | 'check' | 'remove' | 'resolvers' | 'details';
 
 export type DomainCardProps = {
   hostname: string;
@@ -42,38 +37,13 @@ export type DomainCardProps = {
   checkedLabel?: string | null;
   /** Pre-composed sentence naming when the rate limit lifts */
   pausedMessage?: string | null;
-  /** The records to create at the registrar, until the certificate is active */
-  dns?: DnsRecordProps['validation'] | null;
   /**
-   * What Fly has issued, once it has issued anything.
-   *
-   * Empty for every certificate stored before this was recorded, which is why
-   * the block renders on having rows rather than on the status being active.
+   * The one thing to do next, pre-composed from Fly's status and whatever
+   * the resolvers turned up. None once the domain is settled.
    */
-  issued?: Array<IssuedCertificate> | null;
-  /** Who signed them, e.g. `lets_encrypt` */
-  certificateAuthority?: string | null;
-  /**
-   * What the public resolvers said, once someone has asked.
-   *
-   * Live and slow, so it is never fetched with the rest of the card — an
-   * untouched card has nothing here, and that is the normal state.
-   */
-  resolvers?: Omit<ResolverReportProps, 'labels'> | null;
-  /**
-   * What Fly resolved the last time it was asked, and what it objected to.
-   *
-   * Only known after a check — it is live resolution rather than stored state,
-   * so an untouched card has nothing to say here.
-   */
-  check?: {
-    /** Fly's own validation issues, already phrased for the domain's owner */
-    issues?: Array<string> | null;
-    /** Value for the `_fly-ownership` TXT record */
-    ownershipRecord?: string | null;
-    /** What Fly's last check found already in place */
-    confirmed?: DnsRecordProps['confirmed'];
-  } | null;
+  nextStep?: string | null;
+  /** The records the domain needs, for as long as it has a certificate */
+  dns?: Omit<DnsRecordProps, 'labels'> | null;
   /** A row the server does not have yet cannot be acted on */
   saved: boolean;
   /** The action running on this row, which is the one that spins */
@@ -89,29 +59,9 @@ export type DomainCardProps = {
     request: string;
     check: string;
     remove: string;
+    details: string;
     copyRecord: string;
-    dnsLede: string;
-    dnsNameHint: string;
-    dnsOwnershipLede: string;
-    dnsTrafficLede: string;
-    dnsValidationLede: string;
-    issuesHeading: string;
-    /** Heading for the same box, once the certificate is issued and answering */
-    issuesActiveHeading: string;
-    apexNote: string;
-    /** Hint for an apex stored before its addresses were known */
-    apexAddressesPending: string;
-    /** The dns block's lede once the certificate is issued and clean */
-    dnsSettledLede: string;
-    issuedHeading: string;
-    /** Prefixes the certificate authority, e.g. "issued by" */
-    issuedBy: string;
-    compareResolvers: string;
-    resolversHeading: string;
-    resolversAgree: string;
-    resolversDisagree: string;
-    resolversNoAnswer: string;
-    resolversUnreachable: string;
+    moreInfo: string;
   };
   onAction: (action: DomainAction) => void;
 };
@@ -121,8 +71,10 @@ export type DomainCardProps = {
  *
  * A custom domain needs two halves, and neither side can finish alone: the
  * platform asks Fly for a certificate, and whoever owns the domain creates the
- * dns records that let it validate. The card drives the first half and spells
- * out the second — which record to create and whether Fly can see it yet.
+ * dns records that let it validate. The card leads with three things: Fly's
+ * status, the one step left, and the records to create. Diagnostics, optional
+ * records and the resolver report sit behind **Details**, so what matters is
+ * not lost among them.
  *
  * Presentational and hook-free: every label arrives translated and every date
  * pre-formatted, so the same card renders in the admin and in Storybook.
@@ -134,11 +86,8 @@ export function DomainCard({
   statusDetail,
   checkedLabel,
   pausedMessage,
+  nextStep,
   dns,
-  issued,
-  certificateAuthority,
-  resolvers,
-  check,
   saved,
   runningAction,
   disabled = false,
@@ -146,11 +95,6 @@ export function DomainCard({
   onAction
 }: DomainCardProps) {
   const requested = status !== 'not-requested';
-  const active = status === 'active';
-  // Issued, with no known outstanding issue — true both when a check ran
-  // clean and when none has run yet (a fresh page load has no `check` at
-  // all), as opposed to an active certificate Fly is still objecting to
-  const settled = active && !check?.issues?.length;
 
   return (
     <Card variant="bordered" className="gap-0 py-0">
@@ -180,53 +124,7 @@ export function DomainCard({
           </Alert>
         )}
 
-        {/* Fly's own diagnosis, set apart in its own box so it never reads as
-          part of the suggestion below it — the two describe the problem
-          differently (missing AAAA vs. a CNAME to create) without disagreeing.
-          Neutral once active: nothing a live check reports on an already-
-          issued certificate is fatal by definition, so it must not read as
-          an error the way it does before the domain is answering */}
-        {requested && check?.issues?.length ? (
-          <Alert variant={active ? 'default' : 'destructive'}>
-            <ExclamationTriangleIcon />
-            <AlertTitle>
-              {active ? labels.issuesActiveHeading : labels.issuesHeading}
-            </AlertTitle>
-            <AlertDescription>
-              <ul className="flex flex-col gap-1">
-                {check.issues.map((issue) => (
-                  <li key={issue}>{issue}</li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        {resolvers && (
-          <ResolverReport
-            answers={resolvers.answers}
-            agree={resolvers.agree}
-            negativeCacheNote={resolvers.negativeCacheNote}
-            labels={{
-              heading: labels.resolversHeading,
-              agreeLede: labels.resolversAgree,
-              disagreeLede: labels.resolversDisagree,
-              noAnswer: labels.resolversNoAnswer,
-              unreachable: labels.resolversUnreachable
-            }}
-          />
-        )}
-
-        {issued?.length ? (
-          <IssuedCertificates
-            certificates={issued}
-            authority={certificateAuthority}
-            labels={{
-              heading: labels.issuedHeading,
-              issuedBy: labels.issuedBy
-            }}
-          />
-        ) : null}
+        {requested && nextStep && <p>{nextStep}</p>}
 
         {/* Stays visible for the life of the domain, not just until the
           certificate validates — the records are still what the domain
@@ -234,22 +132,10 @@ export function DomainCard({
           case (green, but still not loading) this block exists to catch */}
         {requested && dns && (
           <DnsRecord
-            hostname={hostname}
-            app={app}
-            validation={dns}
-            ownershipRecord={check?.ownershipRecord}
-            confirmed={check?.confirmed}
-            settled={settled}
+            {...dns}
             labels={{
-              trafficLede: labels.dnsTrafficLede,
-              validationLede: labels.dnsValidationLede,
-              ownershipLede: labels.dnsOwnershipLede,
-              instructionsLede: labels.dnsLede,
-              apexNote: labels.apexNote,
-              apexAddressesPending: labels.apexAddressesPending,
-              nameHint: labels.dnsNameHint,
-              settledLede: labels.dnsSettledLede,
-              copyRecord: labels.copyRecord
+              copyRecord: labels.copyRecord,
+              moreInfo: labels.moreInfo
             }}
           />
         )}
@@ -283,20 +169,14 @@ export function DomainCard({
                   />
                   {labels.check}
                 </Button>
-                {/* Its own button rather than part of a check: three dns
-                    queries and an SOA lookup are slow, and the answer only
-                    matters once something already looks wrong */}
+                {/* Opens the sheet, so it never locks with the others */}
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={disabled}
-                  onClick={() => onAction('resolvers')}
+                  onClick={() => onAction('details')}
                 >
-                  <ActionIcon
-                    idle={GlobeAltIcon}
-                    running={runningAction === 'resolvers'}
-                  />
-                  {labels.compareResolvers}
+                  <DocumentMagnifyingGlassIcon className="size-4" />
+                  {labels.details}
                 </Button>
                 <Button
                   variant="ghost"
@@ -329,7 +209,7 @@ type IconComponent = React.ComponentType<{ className?: string }>;
  * Per action rather than per row: with one shared flag, asking for a check
  * would spin the remove button too.
  */
-function ActionIcon({
+export function ActionIcon({
   idle: Idle,
   running
 }: {
