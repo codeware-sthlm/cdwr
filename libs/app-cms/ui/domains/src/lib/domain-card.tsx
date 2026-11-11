@@ -140,10 +140,13 @@ export function DomainCard({
           />
         )}
 
+        {/* Every button is `type="button"`: the card sits inside Payload's
+          edit form, where a bare button would also save the document */}
         {saved ? (
           <div className="flex flex-wrap items-center gap-2 pt-0.5">
             {!requested ? (
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 disabled={disabled}
@@ -158,6 +161,7 @@ export function DomainCard({
             ) : (
               <>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   disabled={disabled}
@@ -171,6 +175,7 @@ export function DomainCard({
                 </Button>
                 {/* Opens the sheet, so it never locks with the others */}
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => onAction('details')}
@@ -179,6 +184,7 @@ export function DomainCard({
                   {labels.details}
                 </Button>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   disabled={disabled}

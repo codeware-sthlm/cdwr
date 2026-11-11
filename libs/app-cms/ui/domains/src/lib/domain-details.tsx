@@ -119,6 +119,7 @@ export function DomainDetails({
         {/* Its own button rather than part of a check: a dozen dns queries
             are slow, and the answer only matters once something looks wrong */}
         <Button
+          type="button"
           variant="outline"
           size="sm"
           className="self-start"
