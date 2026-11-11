@@ -1,6 +1,7 @@
 import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+import type { RecordClue, RequiredRecord } from './dns-record';
 import { DomainCard, type DomainCardProps } from './domain-card';
 
 const meta = {
@@ -14,41 +15,32 @@ const labels: DomainCardProps['labels'] = {
   pending: 'Waiting for DNS',
   notRequested: 'No certificate yet',
   paused: 'Paused',
-  saveFirst: 'Save the workspace to request a certificate for this domain.',
+  saveFirst: 'Save to request a certificate for this domain.',
   request: 'Request certificate',
   check: 'Check now',
   remove: 'Remove certificate',
-  copyRecord: 'Copy DNS target',
-  dnsLede: 'Create this record where the domain’s DNS is managed:',
-  dnsNameHint:
-    'Record names are written in full — a registrar that appends the domain itself only wants the part before it.',
-  dnsOwnershipLede:
-    'Only needed if the app has no IPv6 address, or if traffic reaches it through a CDN or proxy:',
-  issuesHeading:
-    'Fly’s own diagnosis from its last check — it doesn’t have to match the records suggested below:',
-  issuesActiveHeading:
-    'The certificate is issued, and Fly’s last check still had this to say about the domain:',
-  dnsTrafficLede:
-    'Point the domain at the app, where the domain’s DNS is managed. Without this record the domain answers nowhere, certificate or not:',
-  dnsValidationLede:
-    'Optional, and only worth adding to have the certificate issued before the domain points here:',
-  dnsSettledLede:
-    'These are the records the domain runs on. They stay needed — remove one and the domain stops answering, certificate or not:',
-  apexNote:
-    'This is the domain itself rather than a subdomain, so a CNAME is not allowed — it needs A and AAAA records pointing at the app’s IP addresses.',
-  apexAddressesPending:
-    'No addresses known yet. Press Check now to fetch them; if none appear, the app has no public address and needs one allocated in Fly.',
-  issuedHeading: 'Issued certificates',
-  issuedBy: 'Issued by',
-  compareResolvers: 'Compare resolvers',
-  resolversHeading: 'What the public resolvers see',
-  resolversAgree:
-    'Every resolver agrees. If the domain still will not load for you, the stale answer is on your own side — your router, your ISP or this machine.',
-  resolversDisagree:
-    'The resolvers do not agree yet, which is what a record still spreading looks like.',
-  resolversNoAnswer: 'no record yet',
-  resolversUnreachable: 'could not be reached'
+  details: 'Details',
+  copyRecord: 'Copy the DNS target',
+  moreInfo: 'More about this'
 };
+
+const apexNote =
+  'This is the domain itself rather than a subdomain, so a CNAME is not allowed — it needs A and AAAA records pointing at the app’s IP addresses.';
+const subdomainNote =
+  'A subdomain points at the app with this CNAME, or with A and AAAA records at the app’s addresses, which Fly accepts too. A CNAME cannot sit beside other records on the same name.';
+const wildcardAdvice =
+  'A * record answers for every subdomain nobody created. It doesn’t affect the names on this card, since an exact record wins, but it sends every other subdomain wherever it points; pointed at the app, they reach it without a certificate. Remove * unless the site needs it.';
+const nextStepCreate =
+  'Create these records where DNS for codeware.se is served, then press Check now.';
+const nextStepWaitFly =
+  'Public DNS answers as expected; Fly has not confirmed it yet. Press Check now.';
+const nextStepNameServers =
+  'DNS for kajstroberg.se is served by ns01.one.com, ns02.one.com, which doesn’t answer with these records yet. Create or change them there, then press Check now.';
+
+const apexNameHelp = (name: string) =>
+  `The domain itself, ${name}. Most registrars write it as @; some want the name left empty.`;
+const subNameHelp = (name: string, label: string) =>
+  `In full: ${name}. A registrar that appends the domain itself wants only ${label}.`;
 
 const base = {
   hostname: 'pr-test.codeware.se',
@@ -58,13 +50,19 @@ const base = {
   onAction: () => undefined
 } satisfies Partial<DomainCardProps>;
 
+const cname = (extra: Partial<RequiredRecord> = {}): RequiredRecord => ({
+  type: 'CNAME',
+  registrarName: 'pr-test',
+  nameHelp: subNameHelp('pr-test.codeware.se', 'pr-test'),
+  target: 'cdwr-cms-pr-477-demo.fly.dev',
+  ...extra
+});
+
 const dns = {
-  name: '_acme-challenge.pr-test.codeware.se',
-  target: 'pr-test.codeware.se.w0608qd.flydns.net.',
-  // Fly repeats the record in prose; the card must not print it twice
-  instructions:
-    'CNAME _acme-challenge.pr-test.codeware.se ⇒ pr-test.codeware.se.w0608qd.flydns.net.'
-};
+  records: [cname()],
+  note: subdomainNote,
+  wildcard: { advice: wildcardAdvice }
+} satisfies DomainCardProps['dns'];
 
 /** The card takes its width from the panel, so the frame only caps it */
 const Frame = ({
@@ -85,90 +83,98 @@ export const Lifecycle: StoryObj = {
         status="pending"
         statusDetail="Awaiting configuration"
         checkedLabel="Checked 14 Aug 22:42"
+        nextStep={nextStepCreate}
         dns={dns}
       />
       <DomainCard
         {...base}
         status="active"
         checkedLabel="Checked 14 Aug 22:44"
-        dns={dns}
+        dns={{ ...dns, records: [cname({ confirmed: true })] }}
       />
     </Frame>
   )
 };
 
+const mismatch: RecordClue = {
+  verdict: 'mismatch',
+  label: 'Points at the wrong server',
+  detail: 'Answers 46.30.213.129, should be cdwr-cms-pr-477-demo.fly.dev.'
+};
+
 /**
- * After a check: Fly's own diagnosis, boxed apart from the suggestion below
- * it, plus the ownership record that answers it when Fly cannot read the
- * app's address off the domain. The first card is exactly the case that
- * looks contradictory without the framing — Fly complains about AAAA, the
- * suggestion below is a CNAME — and the box is what explains why that's fine.
+ * After a check: what Fly confirmed shows as a checkmark, what public DNS
+ * answers as a clue beside the record, and the next step says what is left.
+ * Fly's own diagnosis lives behind Details.
  */
 export const CheckedWithIssues: StoryObj = {
   render: () => (
     <Frame>
+      {/* Not in place, and public DNS has nothing for it */}
       <DomainCard
         {...base}
         status="pending"
         statusDetail="Awaiting configuration"
         checkedLabel="Checked 15 Aug 00:40"
-        dns={dns}
-        check={{
-          issues: ['No AAAA records were found for your domain'],
-          ownershipRecord: 'app-w0608qd'
+        nextStep={nextStepCreate}
+        dns={{
+          ...dns,
+          records: [
+            cname({
+              clue: {
+                verdict: 'missing',
+                label: 'Record missing',
+                detail:
+                  'Public DNS has no CNAME record for pr-test.codeware.se yet.'
+              }
+            })
+          ]
         }}
       />
+      {/* Pointing somewhere else */}
       <DomainCard
         {...base}
         status="pending"
         statusDetail="Awaiting configuration"
         checkedLabel="Checked 15 Aug 00:40"
-        dns={dns}
-        check={{
-          issues: [
-            'No AAAA records were found for your domain',
-            'The CNAME record points at an app that does not serve this hostname'
-          ],
-          ownershipRecord: 'app-w0608qd'
-        }}
+        nextStep="Fly reports a problem with this domain. See Details."
+        dns={{ ...dns, records: [cname({ clue: mismatch })] }}
       />
-      {/* The traffic record resolves; the ACME challenge one has not been
-          created yet — a checkmark tells them apart without another read */}
+      {/* Public DNS is right, Fly has not caught up */}
       <DomainCard
         {...base}
         status="pending"
         statusDetail="Awaiting configuration"
         checkedLabel="Checked 15 Aug 00:40"
-        dns={dns}
-        check={{
-          issues: ['DNS not configured for certificate validation'],
-          confirmed: { traffic: true, validation: false }
+        nextStep={nextStepWaitFly}
+        dns={{
+          ...dns,
+          records: [
+            cname({
+              clue: {
+                verdict: 'match',
+                label: 'Answers as expected',
+                detail: nextStepWaitFly
+              }
+            })
+          ]
         }}
       />
-      {/* Active, but Fly still has something to say — the challenge record is
-          commonly removed once issued, so this is a normal end state, not a
-          fault. The box reads neutral rather than red, and the dns block
-          below keeps its setup voice since something here is still unconfirmed */}
+      {/* Active and Fly still reports something: the next step points at
+          Details, the record stays confirmed */}
       <DomainCard
         {...base}
         status="active"
         checkedLabel="Checked 15 Aug 00:41"
-        dns={dns}
-        check={{
-          issues: [
-            'No TXT record was found at _acme-challenge for your domain'
-          ],
-          confirmed: { traffic: true, validation: false }
-        }}
+        nextStep="Fly reports a problem with this domain. See Details."
+        dns={{ ...dns, records: [cname({ confirmed: true })] }}
       />
-      {/* Active and clean: no issues box, and the dns block switches to its
-          settled voice — the pair above and below is what a reviewer compares */}
+      {/* Active and clean: no next step */}
       <DomainCard
         {...base}
         status="active"
         checkedLabel="Checked 15 Aug 00:41"
-        dns={dns}
-        check={{ confirmed: { traffic: true, validation: true } }}
+        dns={{ ...dns, records: [cname({ confirmed: true })] }}
       />
     </Frame>
   )
@@ -183,6 +189,7 @@ export const NeedsAttention: StoryObj = {
         status="paused"
         checkedLabel="Checked 14 Aug 22:42"
         pausedMessage="Let’s Encrypt has paused new attempts for this domain until 15 Aug 08:00. Retrying before then only extends the pause."
+        dns={dns}
       />
       <DomainCard
         {...base}
@@ -195,21 +202,44 @@ export const NeedsAttention: StoryObj = {
   )
 };
 
-const apexDns = {
-  isApex: true,
-  name: '_acme-challenge.example.com',
-  target: 'example.com.abc123.flydns.net',
-  instructions:
-    'CNAME _acme-challenge.example.com => example.com.abc123.flydns.net.',
-  addresses: [
-    { type: 'A' as const, address: '192.0.2.10' },
-    { type: 'AAAA' as const, address: '2001:db8:1::19b:2e4e:0' }
-  ]
+/** A settled subdomain Fly itself has confirmed, with nothing left to do */
+export const ConfirmedByFly: StoryObj = {
+  render: () => (
+    <Frame>
+      <DomainCard
+        {...base}
+        status="active"
+        checkedLabel="Checked 14 Aug 22:44"
+        dns={{ ...dns, records: [cname({ confirmed: true })] }}
+      />
+    </Frame>
+  )
 };
+
+const apexRecords: Array<RequiredRecord> = [
+  {
+    type: 'A',
+    registrarName: '@',
+    nameHelp: apexNameHelp('example.com'),
+    target: '192.0.2.10'
+  },
+  {
+    type: 'AAAA',
+    registrarName: '@',
+    nameHelp: apexNameHelp('example.com'),
+    target: '2001:db8:1::19b:2e4e:0'
+  }
+];
+
+const apexDns = {
+  records: apexRecords,
+  note: apexNote,
+  wildcard: { advice: wildcardAdvice }
+} satisfies DomainCardProps['dns'];
 
 /**
  * An apex domain cannot use a CNAME, so the A and AAAA records stand in for
- * it. The second card has been checked: the A record resolves, AAAA does not.
+ * it. The second card has been checked: the A record is in place, AAAA is not.
  * The third was stored before the addresses were known.
  */
 export const ApexDomain: StoryObj = {
@@ -220,6 +250,7 @@ export const ApexDomain: StoryObj = {
         hostname="example.com"
         status="pending"
         statusDetail="Awaiting configuration"
+        nextStep="Create these records where DNS for example.com is served, then press Check now."
         dns={apexDns}
       />
       <DomainCard
@@ -228,14 +259,20 @@ export const ApexDomain: StoryObj = {
         status="pending"
         statusDetail="Awaiting configuration"
         checkedLabel="Checked 15 Aug 00:40"
-        dns={apexDns}
-        check={{
-          issues: ['No AAAA records were found for your domain'],
-          confirmed: {
-            traffic: false,
-            validation: false,
-            addresses: ['192.0.2.10']
-          }
+        nextStep="Create these records where DNS for example.com is served, then press Check now."
+        dns={{
+          ...apexDns,
+          records: [
+            { ...apexRecords[0], confirmed: true },
+            {
+              ...apexRecords[1],
+              clue: {
+                verdict: 'missing',
+                label: 'Missing IPv6 record',
+                detail: 'Public DNS has no AAAA record for example.com yet.'
+              }
+            }
+          ]
         }}
       />
       <DomainCard
@@ -243,7 +280,137 @@ export const ApexDomain: StoryObj = {
         hostname="example.com"
         status="pending"
         statusDetail="Awaiting configuration"
-        dns={{ ...apexDns, addresses: undefined }}
+        dns={{
+          ...apexDns,
+          records: [],
+          pendingNote:
+            'No addresses known yet. Press Check now to fetch them; if none appear, the app has no public address and needs one allocated in Fly.'
+        }}
+      />
+    </Frame>
+  )
+};
+
+const kajstrobergApp = 'cdwr-cms-ks-vininfo';
+
+const kajstrobergBase = {
+  ...base,
+  app: kajstrobergApp,
+  status: 'pending',
+  statusDetail: 'Awaiting configuration',
+  checkedLabel: 'Checked 15 Aug 00:40'
+} satisfies Partial<DomainCardProps>;
+
+const kajstrobergWildcard = {
+  advice: wildcardAdvice,
+  found: 'A * record answers 46.30.213.129, 2a02:2350:5:100::1.'
+};
+
+const wwwNameHelp = subNameHelp('www.kajstroberg.se', 'www');
+
+/**
+ * An apex whose DNS is served by another provider: the A record points at a
+ * foreign server, the AAAA record is absent, and the next step names where
+ * the records have to be created.
+ */
+export const KajstrobergApex: StoryObj = {
+  render: () => (
+    <Frame>
+      <DomainCard
+        {...kajstrobergBase}
+        hostname="kajstroberg.se"
+        nextStep={nextStepNameServers}
+        dns={{
+          records: [
+            {
+              type: 'A',
+              registrarName: '@',
+              nameHelp: apexNameHelp('kajstroberg.se'),
+              target: '66.241.124.125',
+              clue: {
+                verdict: 'mismatch',
+                label: 'Points at the wrong server',
+                detail: 'Answers 46.30.213.129, should be 66.241.124.125.'
+              }
+            },
+            {
+              type: 'AAAA',
+              registrarName: '@',
+              nameHelp: apexNameHelp('kajstroberg.se'),
+              target: '2a09:8280:1::d1:eaa0:0',
+              clue: {
+                verdict: 'missing',
+                label: 'Missing IPv6 record',
+                detail: 'Public DNS has no AAAA record for kajstroberg.se yet.'
+              }
+            }
+          ],
+          note: apexNote,
+          wildcard: kajstrobergWildcard
+        }}
+      />
+    </Frame>
+  )
+};
+
+/**
+ * A www host whose name already carries an A record elsewhere: a CNAME cannot
+ * sit beside it, so the clue says what to remove first.
+ */
+export const KajstrobergWwwForeignA: StoryObj = {
+  render: () => (
+    <Frame>
+      <DomainCard
+        {...kajstrobergBase}
+        hostname="www.kajstroberg.se"
+        nextStep={nextStepNameServers}
+        dns={{
+          records: [
+            {
+              type: 'CNAME',
+              registrarName: 'www',
+              nameHelp: wwwNameHelp,
+              target: `${kajstrobergApp}.fly.dev`,
+              clue: {
+                verdict: 'mismatch',
+                label: 'Points at the wrong server',
+                detail: `Answers 46.30.213.129, should be ${kajstrobergApp}.fly.dev. Remove what www.kajstroberg.se has now first: a CNAME cannot sit beside other records. Or point its A and AAAA records at the app’s addresses instead.`
+              }
+            }
+          ],
+          note: subdomainNote,
+          wildcard: kajstrobergWildcard
+        }}
+      />
+    </Frame>
+  )
+};
+
+/** The www host already answers with the app's addresses; Fly has not caught up */
+export const KajstrobergWwwByAddress: StoryObj = {
+  render: () => (
+    <Frame>
+      <DomainCard
+        {...kajstrobergBase}
+        hostname="www.kajstroberg.se"
+        nextStep={nextStepWaitFly}
+        dns={{
+          records: [
+            {
+              type: 'CNAME',
+              registrarName: 'www',
+              nameHelp: wwwNameHelp,
+              target: `${kajstrobergApp}.fly.dev`,
+              clue: {
+                verdict: 'match',
+                label: 'Answers as expected',
+                detail: nextStepWaitFly
+              }
+            }
+          ],
+          note: subdomainNote,
+          wildcard: kajstrobergWildcard
+        }}
       />
     </Frame>
   )
@@ -263,6 +430,7 @@ export const Working: StoryObj = {
         {...base}
         status="pending"
         statusDetail="Awaiting configuration"
+        nextStep={nextStepCreate}
         dns={dns}
         runningAction="check"
         disabled
@@ -286,22 +454,27 @@ export const Narrow: StoryObj = {
         status="pending"
         statusDetail="Awaiting configuration"
         checkedLabel="Checked 14 Aug 22:42"
+        nextStep="Create these records where DNS for kulturhuset-vasterbotten.se is served, then press Check now."
         dns={{
-          name: '_acme-challenge.gallerier-och-utstallningar.kulturhuset-vasterbotten.se',
-          target:
-            'gallerier-och-utstallningar.kulturhuset-vasterbotten.se.w0608qd.flydns.net.'
+          ...dns,
+          records: [
+            {
+              type: 'CNAME',
+              registrarName: 'gallerier-och-utstallningar',
+              nameHelp: subNameHelp(
+                'gallerier-och-utstallningar.kulturhuset-vasterbotten.se',
+                'gallerier-och-utstallningar'
+              ),
+              target: 'cdwr-web-kulturhuset-vasterbotten-prod.fly.dev'
+            }
+          ]
         }}
       />
     </Frame>
   )
 };
 
-/**
- * A settled domain carrying everything it can carry.
- *
- * The two issued rows share an expiry — Fly renews the RSA and ECDSA pair
- * together — which is why they are rows rather than a table.
- */
+/** A settled domain: the records it runs on, confirmed, and nothing to do */
 export const Settled: StoryObj = {
   render: () => (
     <Frame>
@@ -309,64 +482,19 @@ export const Settled: StoryObj = {
         {...base}
         status="active"
         checkedLabel="Checked 14 Aug 22:42"
-        dns={dns}
-        certificateAuthority="lets_encrypt"
-        issued={[
-          { type: 'RSA', expiresLabel: '15 November 2026' },
-          { type: 'ECDSA', expiresLabel: '15 November 2026' }
-        ]}
+        dns={{ ...dns, records: [cname({ confirmed: true })] }}
       />
-      {/* Renewal has quietly stopped working — the one case the expiry is
-          worth printing for */}
       <DomainCard
         {...base}
+        hostname="example.com"
         status="active"
         checkedLabel="Checked 14 Aug 22:42"
-        dns={dns}
-        certificateAuthority="lets_encrypt"
-        issued={[
-          { type: 'RSA', expiresLabel: '28 August 2026', expiringSoon: true },
-          { type: 'ECDSA', expiresLabel: '28 August 2026', expiringSoon: true }
-        ]}
-      />
-    </Frame>
-  )
-};
-
-/** Green everywhere, and still not loading — what the comparison is for */
-export const ResolversCompared: StoryObj = {
-  render: () => (
-    <Frame>
-      <DomainCard
-        {...base}
-        status="active"
-        checkedLabel="Checked 14 Aug 22:42"
-        dns={dns}
-        resolvers={{
-          agree: true,
-          answers: [
-            { resolver: 'Cloudflare', records: ['cdwr-cms-demo.fly.dev'] },
-            { resolver: 'Google', records: ['cdwr-cms-demo.fly.dev'] },
-            { resolver: 'Quad9', records: ['cdwr-cms-demo.fly.dev'] }
-          ],
-          negativeCacheNote:
-            'This zone tells resolvers to remember a “does not exist” answer for up to 3600 seconds, so a record created recently can stay invisible that long.'
-        }}
-      />
-      <DomainCard
-        {...base}
-        status="pending"
-        statusDetail="Awaiting configuration"
-        checkedLabel="Checked 14 Aug 22:42"
-        dns={dns}
-        resolvers={{
-          agree: false,
-          answers: [
-            { resolver: 'Cloudflare', records: ['cdwr-cms-demo.fly.dev'] },
-            { resolver: 'Google', records: [] },
-            { resolver: 'Quad9', records: [], error: 'ETIMEOUT' }
-          ],
-          negativeCacheNote: null
+        dns={{
+          ...apexDns,
+          records: apexRecords.map((record) => ({
+            ...record,
+            confirmed: true
+          }))
         }}
       />
     </Frame>
@@ -399,13 +527,13 @@ export const IssuesAdminDark = a11yStory(
 );
 export const SettledAdminLight = a11yStory(Settled, 'payload-admin', 'light');
 export const SettledAdminDark = a11yStory(Settled, 'payload-admin', 'dark');
-export const ResolversAdminLight = a11yStory(
-  ResolversCompared,
+export const KajstrobergAdminLight = a11yStory(
+  KajstrobergApex,
   'payload-admin',
   'light'
 );
-export const ResolversAdminDark = a11yStory(
-  ResolversCompared,
+export const KajstrobergAdminDark = a11yStory(
+  KajstrobergApex,
   'payload-admin',
   'dark'
 );
