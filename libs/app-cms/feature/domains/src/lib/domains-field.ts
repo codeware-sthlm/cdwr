@@ -116,8 +116,9 @@ export const domainsField = ({ override }: Props = {}): ArrayField => {
               ]
             },
             {
-              // The A and AAAA records an apex points at, mapped from the app's
-              // addresses: an apex cannot use the CNAME a subdomain does
+              // The A and AAAA records that point at the app, mapped from its
+              // addresses: an apex cannot use a CNAME, and a subdomain may
+              // point here instead of using one
               name: 'addresses',
               type: 'array',
               fields: [
