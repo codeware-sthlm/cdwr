@@ -22,6 +22,19 @@
       "inputs": ["default", "^production", "{workspaceRoot}/pnpm-lock.yaml"],
       "outputs": ["{projectRoot}/public/studio-types.json"]
     },
+    "typecheck": {
+      "metadata": {
+        "description": "Type-check the cms without a Next build. `next typegen` first writes next-env.d.ts and the route types in .next/types, which tsc reads."
+      },
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "options": {
+        "commands": ["next typegen", "tsc --noEmit -p tsconfig.json"],
+        "cwd": "apps/cms",
+        "parallel": false
+      }
+    },
     "dev": {
       "executor": "dev-plugin:infisical-run",
       "options": {
