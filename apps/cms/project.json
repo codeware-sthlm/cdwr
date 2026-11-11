@@ -28,7 +28,7 @@
       },
       "executor": "nx:run-commands",
       "cache": true,
-      "inputs": ["default", "^default"],
+      "inputs": ["default", "^default", "{workspaceRoot}/pnpm-lock.yaml"],
       "options": {
         "commands": ["next typegen", "tsc --noEmit -p tsconfig.json"],
         "cwd": "apps/cms",
