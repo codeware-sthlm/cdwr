@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { RunsPayload, SnoozeRow } from '../../supabase';
+import type { SnoozeRow } from '../../supabase';
 import { hhmm } from '../format';
 import { model } from '../model';
 import {
@@ -11,9 +11,8 @@ import {
   sheetIdOf,
   viewOf
 } from '../state';
-import type { QueueView, SessionState, WatchEntry } from '../types';
+import type { SessionState, WatchEntry } from '../types';
 
-import { renderCapacity } from './capacity';
 import {
   chartHeight,
   chartKind,
@@ -48,7 +47,6 @@ import {
 } from './problems';
 import { headline, headlineHtml } from './session';
 import { SHEETS, whyLine } from './sheets';
-import { renderTiles } from './tiles';
 import {
   copilotView,
   countedRows,
@@ -176,7 +174,7 @@ describe('header', () => {
   });
 });
 
-describe('waiting card, queue sheets and tiles', () => {
+describe('waiting card and queue sheets', () => {
   it('list what waits on the viewer, furthest along first', () => {
     const state = filled();
     state.data.activity = {
@@ -460,162 +458,6 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(SHEETS.next.body(m, state, NOW)).not.toContain('Parked on a wait');
   });
 
-  const tileOf = (html: string, id: string): string =>
-    html.match(
-      new RegExp(`<button[^>]*data-w="${id}"[^>]*>.*?</button>`)
-    )?.[0] ?? '';
-
-  it('give every tile a sheet, with the plan and timers among them and no interim row', () => {
-    const state = filled();
-    const html = renderTiles(model(state, NOW), state, NOW);
-    expect(html).toContain('<h2>Everything else</h2>');
-    for (const id of [
-      'next',
-      'review',
-      'handoffs',
-      'session',
-      'runs',
-      'activity',
-      'shipped',
-      'effort',
-      'plan',
-      'timers',
-      'all',
-      'ideas'
-    ])
-      expect(html).toContain(`data-w="${id}"`);
-    // The limit and the NUC moved to the Capacity row
-    expect(html).not.toContain('data-w="limit"');
-    expect(html).not.toContain('data-w="nuc"');
-    expect(html).not.toContain('Until the Platform view');
-    expect(html).not.toContain('tiles small');
-    expect(html.indexOf('data-w="effort"')).toBeLessThan(
-      html.indexOf('data-w="plan"')
-    );
-    expect(html.indexOf('data-w="timers"')).toBeLessThan(
-      html.indexOf('data-w="all"')
-    );
-  });
-
-  it('show the value and sub-line of each of the ten tiles', () => {
-    const state = filled();
-    state.data.sessions = [
-      {
-        id: 's1',
-        host: 'nuc',
-        kind: 'implement',
-        last_seen: new Date(NOW.getTime() - 3 * 6e4).toISOString()
-      } as never,
-      {
-        id: 's2',
-        host: 'mac',
-        kind: 'attended',
-        last_seen: new Date(NOW.getTime() - 1 * 6e4).toISOString()
-      } as never
-    ];
-    const html = renderTiles(model(state, NOW), state, NOW);
-    const tile = (id: string, value: string, sub: string) => {
-      const t = tileOf(html, id);
-      expect(t).toContain(`<b class="v">${value}</b>`);
-      expect(t).toContain(`<span class="s">${sub}</span>`);
-    };
-    tile('next', '1', 'COD-1 · ready');
-    tile('review', '1', '0 await you · live');
-    tile('handoffs', '1', 'merged, steps remain');
-    tile('session', '2', 'mac attended · nuc implement');
-    tile('runs', '1', 'median – · 1 failed');
-    tile('activity', '1', 'agent 1 · you 0');
-    tile('shipped', '1', '≈ 0.0 per day');
-    tile('effort', '$6', 'simulated · $6 per ticket');
-    tile('all', '4', 'via Linear poll, 5 min');
-    tile('ideas', '1', 'COD-50 · accept?');
-    expect(tileOf(html, 'next')).toContain('class="tile"');
-  });
-
-  it('omit the sub-line of a tile that has none, and show dashes before the runs', () => {
-    const state = createState();
-    const html = renderTiles(model(state, NOW), state, NOW);
-    expect(tileOf(html, 'next')).toContain('<b class="v">–</b>');
-    expect(tileOf(html, 'next')).not.toContain('class="s"');
-  });
-
-  it('mark the review tile bad when checks failed, and the runs tile bad on a failure', () => {
-    const state = filled();
-    state.data.githubEvents = [
-      {
-        pr: 7,
-        subject: 'x',
-        action: 'check_suite:failure',
-        updated_at: new Date('2026-10-29T11:59:00').toISOString()
-      } as never
-    ];
-    let html = renderTiles(model(state, NOW), state, NOW);
-    expect(tileOf(html, 'review')).toContain('class="tile bad"');
-    expect(tileOf(html, 'runs')).toContain('class="tile bad"');
-
-    state.data.githubEvents = [
-      {
-        pr: 7,
-        subject: 'x',
-        action: 'pull_request_review:copilot',
-        updated_at: new Date('2026-10-29T11:59:00').toISOString()
-      } as never
-    ];
-    state.data.runs = runs(view());
-    state.data.runs.rows = [];
-    html = renderTiles(model(state, NOW), state, NOW);
-    expect(tileOf(html, 'review')).not.toContain('tile bad');
-    expect(tileOf(html, 'review')).toContain('1 await you · live');
-    expect(tileOf(html, 'runs')).not.toContain('tile bad');
-    expect(tileOf(html, 'runs')).toContain('median – · 0 failed');
-  });
-
-  it('show the plan tile as both used shares', () => {
-    const state = filled();
-    const html = renderTiles(model(state, NOW), state, NOW);
-    expect(html).toMatch(
-      /tile" data-w="plan"[^>]*>.*<b class="v">5h 30% · 7d 18%<\/b>/
-    );
-  });
-
-  it('show a reset or missing plan window as a dash, and no data at all as one', () => {
-    const reset = filled();
-    reset.data.planUsage = [
-      planSample('five_hour', -1, 90, 200),
-      planSample('seven_day', 100, 18)
-    ];
-    expect(renderTiles(model(reset, NOW), reset, NOW)).toMatch(
-      /data-w="plan"[^>]*>.*<b class="v">5h – · 7d 18%<\/b>/
-    );
-    const none = filled();
-    none.data.planUsage = [];
-    expect(renderTiles(model(none, NOW), none, NOW)).toMatch(
-      /data-w="plan"[^>]*>.*<b class="v">5h – · 7d –<\/b>/
-    );
-  });
-
-  it('append the age to a stale plan tile', () => {
-    const state = filled();
-    state.data.planUsage = [
-      planSample('five_hour', 2, 30, 180),
-      planSample('seven_day', 100, 18, 90)
-    ];
-    expect(renderTiles(model(state, NOW), state, NOW)).toMatch(
-      /data-w="plan"[^>]*>.*<b class="v">5h 30% · 7d 18% · 3 h ago<\/b>/
-    );
-  });
-
-  it('mark the plan tile bad when a window will run out before its reset', () => {
-    const state = filled();
-    state.data.planUsage = [
-      planSample('five_hour', 2, 70),
-      planSample('seven_day', 100, 18)
-    ];
-    expect(renderTiles(model(state, NOW), state, NOW)).toMatch(
-      /tile bad" data-w="plan"/
-    );
-  });
-
   it('draw the plan sheet with a bar and a projection per window', () => {
     const state = filled();
     const html = SHEETS.plan.body(model(state, NOW), state, NOW);
@@ -682,207 +524,6 @@ describe('waiting card, queue sheets and tiles', () => {
     expect(empty).toContain('cdwr agent statusline install');
     expect(empty).toContain('No hourly usage yet');
     expect(empty).toContain('a proxy for what the plan counts');
-  });
-});
-
-describe('capacity row', () => {
-  const GIB = 2 ** 30;
-  const jobWith = (
-    over: Partial<NonNullable<RunsPayload['job']>>,
-    limit?: QueueView['limit']
-  ): DeskState => {
-    const s = filled();
-    const base = runs(limit ? view({ limit }) : view());
-    s.data.runs = { ...base, job: base.job && { ...base.job, ...over } };
-    return s;
-  };
-  const html = (s: DeskState): string => renderCapacity(model(s, NOW));
-  const session = (host: string, kind: string, ago: number) =>
-    ({
-      id: `${host}-${kind}`,
-      host,
-      kind,
-      last_seen: new Date(NOW.getTime() - ago * 6e4).toISOString()
-    }) as never;
-
-  it('show the PRs in flight against the limit, with the free slots', () => {
-    const out = html(filled());
-    expect(out).toContain('LIMITS');
-    expect(out).toContain('data-w="limit"');
-    expect(out).toContain('Agent PRs in flight');
-    expect(out).toContain('<b class="cap-v">2 / 5</b>');
-    expect(out).toContain('3 slots free · merges free a slot live');
-    expect(out).toContain('cap-meter cap-btn neutral');
-    expect(out).toContain('<i class="neutral" style="width:40.0%"');
-  });
-
-  it('turn the PRs meter amber one below the limit and say when no slot is free', () => {
-    const one = html(jobWith({}, { used: 4, max: 5 }));
-    expect(one).toContain('1 slot free · merges free a slot live');
-    expect(one).toContain('cap-meter cap-btn wait');
-    const full = html(jobWith({}, { used: 5, max: 5 }));
-    expect(full).toContain('no slot free');
-    expect(full).not.toContain('slots free');
-    expect(full).toContain('cap-meter cap-btn wait');
-  });
-
-  it.each([
-    [23, '57%', 'ok'],
-    [32, '80%', 'wait'],
-    [40, '100%', 'bad']
-  ])('show an effort of %d dollars as %s, tone %s', (spent, value, tone) => {
-    const out = html(jobWith({ effort: { spent, cap: 40 } }));
-    expect(out).toContain(`<b class="cap-v">${value}</b>`);
-    expect(out).toContain(`class="cap-meter ${tone}"`);
-    expect(out).toContain(
-      `$${spent} of the $40 cap · simulated, nothing billed · resets 00:00`
-    );
-  });
-
-  it('say the effort is not published yet when the job line has none', () => {
-    const out = html(filled());
-    expect(out).toContain(
-      'not published yet: the scheduler sends it after its next deploy'
-    );
-    expect(out).toMatch(/Agent effort today<\/span><b class="cap-v">–<\/b>/);
-  });
-
-  it('say whether the queue runs or is paused', () => {
-    expect(html(filled())).toContain('<p class="cap-queue">Queue running</p>');
-    const paused = html(jobWith({ paused: true }));
-    expect(paused).toContain(
-      '<p class="cap-queue wait">Queue paused · cdwr agent resume</p>'
-    );
-    expect(paused).not.toContain('Queue running');
-  });
-
-  it('show dashes while the runs load', () => {
-    const out = html(createState());
-    expect(out).toMatch(/Agent PRs in flight<\/span><b class="cap-v">–<\/b>/);
-    expect(out).toMatch(/Agent effort today<\/span><b class="cap-v">–<\/b>/);
-    expect(out).not.toContain('slot');
-    expect(out).not.toContain('Queue running');
-    expect(out).toContain('no samples yet');
-  });
-
-  it('show the NUC bars as percents, and a hint when memory is the container', () => {
-    const out = html(filled());
-    expect(out).toContain('HOSTS');
-    expect(out).toContain('host_metrics · live');
-    expect(out).toContain('data-view="platform"');
-    expect(out).toContain('busy · heartbeat 0 s ago');
-    expect(out).toMatch(/>CPU<\/span>.*?<b class="cap-pct">25%<\/b>/s);
-    expect(out).toMatch(/>Memory<\/span>.*?<b class="cap-pct">25%<\/b>/s);
-    expect(out).toMatch(/>Disk<\/span>.*?<b class="cap-pct">40%<\/b>/s);
-    expect(out).toContain('cap-dot ok');
-    expect(out).not.toContain('cap-hint');
-    const s = filled();
-    s.data.hostMetrics = [
-      hostSample(0, {
-        cgroup_mem_current: 3 * GIB,
-        cgroup_mem_max: 4 * GIB
-      })
-    ];
-    const container = html(s);
-    expect(container).toContain('<small class="cap-hint">container</small>');
-    expect(container).toMatch(/>Memory.*?<b class="cap-pct">75%<\/b>/s);
-  });
-
-  it('turn a bar amber over its threshold and cap it at the track', () => {
-    const s = filled();
-    s.data.hostMetrics = [
-      hostSample(0, { mem_available: 0.2 * GIB, load1: 6 })
-    ];
-    const out = html(s);
-    expect(out).toContain('<i class="wait" style="width:97.5%"');
-    // Load 6 on 4 cores is 150%: shown as it is, drawn full
-    expect(out).toContain('<i class="wait" style="width:100.0%"');
-    expect(out).toContain('<b class="cap-pct">150%</b>');
-    expect(out).toContain('cap-dot bad');
-    const disk = filled();
-    disk.data.hostMetrics = [hostSample(0, { disk_free: 5 * GIB })];
-    expect(html(disk)).toContain('<i class="wait" style="width:95.0%"');
-  });
-
-  it('say a silent NUC is silent, and no samples at all', () => {
-    const stale = filled();
-    stale.data.hostMetrics = [hostSample(30)];
-    const out = html(stale);
-    expect(out).toContain('silent · last sample 30 m ago');
-    expect(out).toContain('cap-dot stale');
-    const none = filled();
-    none.data.hostMetrics = [];
-    const empty = html(none);
-    expect(empty).toContain('no samples yet');
-    expect(empty).not.toContain('cap-rows');
-  });
-
-  it('show the Mac block only with a Mac host, and mark the current step', () => {
-    expect(html(filled())).not.toContain('cap-strip');
-    expect(html(filled())).not.toContain('ATTENDED');
-    const s = filled({
-      state: 'alive',
-      detail: 'working',
-      ticket: 'COD-1',
-      lastSeen: '2026-10-29T11:59:00'
-    });
-    s.data.sessions = [
-      session('mac', 'attended', 1),
-      session('nuc', 'implement', 3)
-    ];
-    const out = html(s);
-    expect(out).toContain('<b class="cap-name">mac</b>');
-    expect(out).toContain('<span class="cap-chip">ATTENDED</span>');
-    expect(out).toContain('seen 1 m ago · COD-1');
-    expect(out).toContain('no host_metrics on this host');
-    expect(out).toContain(
-      'role="img" aria-label="Hand-back to the NUC: attended'
-    );
-    expect(out).toContain('<span class="on"><i></i>attended</span>');
-    expect(out).toContain('<span class=""><i></i>handing back</span>');
-    const back = filled();
-    back.data.sessions = [session('mac', 'attended', 10)];
-    const handing = html(back);
-    expect(handing).not.toContain('ATTENDED');
-    expect(handing).toContain('<span class="on"><i></i>handing back</span>');
-    expect(handing).toContain('<span class=""><i></i>attended</span>');
-    expect(handing).not.toContain('· COD-1');
-  });
-
-  it('draw the CPU day with its stats and peak, but only from two samples', () => {
-    const out = html(filled());
-    expect(out).toContain('nuc CPU, 24 h · shaded = agent runs');
-    expect(out).toContain('in runs avg 25% · peak 25%');
-    expect(out).not.toContain('idle 25%');
-    expect(out).toContain('Peak during COD-1 at ');
-    expect(out).toContain('<polyline');
-    const one = filled();
-    one.data.hostMetrics = [hostSample(0)];
-    const few = html(one);
-    expect(few).not.toContain('cap-cpu');
-    expect(few).not.toContain('<polyline');
-  });
-
-  it('show the phone card with four meters and a foot line', () => {
-    const s = filled();
-    s.data.sessions = [
-      session('mac', 'attended', 1),
-      session('nuc', 'implement', 3)
-    ];
-    const out = html(s);
-    expect(out).toContain(
-      'data-view="platform" aria-label="Capacity: tap for hosts"'
-    );
-    expect(out.match(/class="cap-mini /g)).toHaveLength(4);
-    expect(out).toContain('PRs in flight</span><b class="cap-v">2/5</b>');
-    expect(out).toContain('Effort today</span><b class="cap-v">–</b>');
-    expect(out).toContain('nuc CPU</span><b class="cap-v">25%</b>');
-    expect(out).toContain('nuc memory</span><b class="cap-v">25%</b>');
-    expect(out).toContain(
-      'mac attended · nuc busy, heartbeat 0 s — tap for hosts'
-    );
-    expect(html(filled())).toContain('nuc busy, heartbeat 0 s — tap for hosts');
-    expect(html(filled())).not.toContain('mac attended');
   });
 });
 
@@ -1621,17 +1262,6 @@ describe('controls on', () => {
     build(s);
     return s;
   };
-
-  it('offer resume while paused on the limits card', () => {
-    const s = on((x) => {
-      const r = x.data.runs;
-      if (r?.job) r.job = { ...r.job, paused: true };
-    });
-    const cap = renderCapacity(model(s, NOW));
-    expect(cap).toContain('Queue paused');
-    expect(cap).toContain('data-cmd="resume"');
-    expect(cap).toContain('data-cmd="run"');
-  });
 
   it('ask for a confirmation before abandoning', () => {
     const silentState = (confirming: boolean): DeskState => {
