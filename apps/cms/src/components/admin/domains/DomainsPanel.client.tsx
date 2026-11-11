@@ -511,6 +511,14 @@ export const DomainsPanel: React.FC<{
           ...current,
           [hostname]: body.check ?? null
         }));
+        // The comparison was judged against the certificate as it was; the
+        // action may have changed what the domain should answer, so it would
+        // read as current while it no longer is
+        setResolvers((current) => {
+          const next = { ...current };
+          delete next[hostname];
+          return next;
+        });
       } catch {
         setError(t('domains:actionFailed'));
       } finally {
