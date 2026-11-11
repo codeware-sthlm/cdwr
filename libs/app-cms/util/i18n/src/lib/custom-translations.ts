@@ -87,15 +87,13 @@ const customTranslationsSchema = z.object({
     apexAddressesPending: z.string(),
     apexNote: z.string(),
     check: z.string(),
+    challengeHelp: z.string(),
     checkedAt: z.string(),
     compareResolvers: z.string(),
     copyRecord: z.string(),
+    details: z.string(),
+    detailsSub: z.string(),
     dnsLede: z.string(),
-    dnsNameHint: z.string(),
-    dnsOwnershipLede: z.string(),
-    dnsSettledLede: z.string(),
-    dnsTrafficLede: z.string(),
-    dnsValidationLede: z.string(),
     hasIssues: z.string(),
     heading: z.string(),
     issuedBy: z.string(),
@@ -106,10 +104,19 @@ const customTranslationsSchema = z.object({
     mismatchForceLogout: z.string(),
     mismatchHeading: z.string(),
     mismatchOpenExpected: z.string(),
+    moreInfo: z.string(),
+    nameHelp: z.string(),
+    nameHelpApex: z.string(),
     neverChecked: z.string(),
+    nextStepCreate: z.string(),
+    nextStepIssues: z.string(),
+    nextStepNameServers: z.string(),
+    nextStepWaitFly: z.string(),
     notRequested: z.string(),
+    optionalHeading: z.string(),
     ownerPlatform: z.string(),
     ownerWorkspace: z.string(),
+    ownershipHelp: z.string(),
     paused: z.string(),
     pending: z.string(),
     rateLimited: z.string(),
@@ -118,12 +125,25 @@ const customTranslationsSchema = z.object({
     resolversAgree: z.string(),
     resolversDisagree: z.string(),
     resolversHeading: z.string(),
+    resolversNameServers: z.string(),
     resolversNegativeCache: z.string(),
     resolversNoAnswer: z.string(),
     resolversUnreachable: z.string(),
     restart: z.string(),
     restartHint: z.string(),
-    saveFirst: z.string()
+    saveFirst: z.string(),
+    subdomainNote: z.string(),
+    verdictBlocking: z.string(),
+    verdictMatch: z.string(),
+    verdictMatchDetail: z.string(),
+    verdictMissing: z.string(),
+    verdictMissingDetail: z.string(),
+    verdictMissingIpv4: z.string(),
+    verdictMissingIpv6: z.string(),
+    verdictWrong: z.string(),
+    verdictWrongDetail: z.string(),
+    wildcardAdvice: z.string(),
+    wildcardFound: z.string()
   }),
   firstSite: z.object({
     back: z.string(),
@@ -627,21 +647,15 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
         'No addresses known yet. Press Check now to fetch them; if none appear, the app has no public address and needs one allocated in Fly.',
       apexNote:
         'This is the domain itself rather than a subdomain, so a CNAME is not allowed — it needs A and AAAA records pointing at the app’s IP addresses.',
+      challengeHelp:
+        'Lets Fly issue the certificate before the domain points here. Only worth adding then; the records on the card are what make the domain answer.',
       check: 'Check now',
       checkedAt: 'Checked {{when}}',
       compareResolvers: 'Compare resolvers',
       copyRecord: 'Copy the DNS target',
+      details: 'Details',
+      detailsSub: 'What Fly and the public resolvers say about this domain.',
       dnsLede: 'Create this record where the domain’s DNS is managed:',
-      dnsNameHint:
-        'Record names are written in full — a registrar that appends the domain itself only wants the part before it.',
-      dnsOwnershipLede:
-        'Only needed if the app has no IPv6 address, or if traffic reaches it through a CDN or proxy:',
-      dnsSettledLede:
-        'These are the records the domain runs on. They stay needed — remove one and the domain stops answering, certificate or not:',
-      dnsTrafficLede:
-        'Point the domain at the app, where the domain’s DNS is managed. Without this record the domain answers nowhere, certificate or not:',
-      dnsValidationLede:
-        'Optional, and only worth adding to have the certificate issued before the domain points here:',
       hasIssues: 'has issues',
       heading: 'Certificates',
       issuedBy: 'Issued by',
@@ -655,10 +669,25 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       mismatchForceLogout: 'Clear the session and sign in again',
       mismatchHeading: 'This is not the address the app answers as',
       mismatchOpenExpected: 'Open the address it answers as',
+      moreInfo: 'More about this',
+      nameHelp:
+        'In full: {{name}}. A registrar that appends the domain itself wants only {{label}}.',
+      nameHelpApex:
+        'The domain itself, {{name}}. Most registrars write it as @; some want the name left empty.',
       neverChecked: 'never checked',
+      nextStepCreate:
+        'Create these records where DNS for {{zone}} is served, then press Check now.',
+      nextStepIssues: 'Fly reports a problem with this domain. See Details.',
+      nextStepNameServers:
+        'DNS for {{zone}} is served by {{servers}}, which doesn’t answer with these records yet. Create or change them there, then press Check now.',
+      nextStepWaitFly:
+        'Public DNS answers as expected; Fly has not confirmed it yet. Press Check now.',
       notRequested: 'No certificate yet',
+      optionalHeading: 'Optional records',
       ownerPlatform: 'the platform',
       ownerWorkspace: 'the workspace',
+      ownershipHelp:
+        'Only needed if the app has no IPv6 address, or if traffic reaches it through a CDN or proxy.',
       paused: 'Paused',
       pending: 'Waiting for DNS',
       rateLimited:
@@ -669,6 +698,7 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       resolversDisagree:
         'The resolvers do not agree yet, which is what a record still spreading looks like. Give it time rather than changing anything.',
       resolversHeading: 'What the public resolvers see',
+      resolversNameServers: 'DNS for {{zone}} is served by {{servers}}.',
       resolversNegativeCache:
         'This zone tells resolvers to remember a “does not exist” answer for up to {{seconds}} seconds, so a record created recently can stay invisible that long.',
       resolversNoAnswer: 'no record yet',
@@ -677,7 +707,24 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       restart: 'Restart app',
       restartHint:
         'A newly validated domain only takes effect after the app restarts.',
-      saveFirst: 'Save to request a certificate for this domain.'
+      saveFirst: 'Save to request a certificate for this domain.',
+      subdomainNote:
+        'A subdomain points at the app with this CNAME, or with A and AAAA records at the app’s addresses, which Fly accepts too. A CNAME cannot sit beside other records on the same name.',
+      verdictBlocking:
+        'Remove what {{name}} has now first: a CNAME cannot sit beside other records. Or point its A and AAAA records at the app’s addresses instead.',
+      verdictMatch: 'Answers as expected',
+      verdictMatchDetail:
+        'Public DNS answers as expected; Fly has not confirmed it yet. Press Check now.',
+      verdictMissing: 'Record missing',
+      verdictMissingDetail:
+        'Public DNS has no {{type}} record for {{name}} yet.',
+      verdictMissingIpv4: 'Missing IPv4 record',
+      verdictMissingIpv6: 'Missing IPv6 record',
+      verdictWrong: 'Points at the wrong server',
+      verdictWrongDetail: 'Answers {{actual}}, should be {{expected}}.',
+      wildcardAdvice:
+        'A * record answers for every subdomain nobody created. It doesn’t affect the names on this card, since an exact record wins, but it sends every other subdomain wherever it points; pointed at the app, they reach it without a certificate. Remove * unless the site needs it.',
+      wildcardFound: 'A * record answers {{values}}.'
     },
     firstSite: {
       back: 'Back',
@@ -1254,21 +1301,15 @@ Supported locales: {{locales}}`,
         'Inga adresser är kända ännu. Tryck på Kontrollera nu för att hämta dem. Om inga adresser visas har appen ingen publik adress, och en adress behöver tilldelas i Fly.',
       apexNote:
         'Det här är själva domänen och inte en underdomän, så CNAME är inte tillåtet — den behöver A- och AAAA-poster som pekar på appens IP-adresser.',
+      challengeHelp:
+        'Låter Fly utfärda certifikatet innan domänen pekar hit. Bara värd att lägga till då; posterna på kortet är det som får domänen att svara.',
       check: 'Kontrollera nu',
       checkedAt: 'Kontrollerad {{when}}',
       compareResolvers: 'Jämför DNS-servrar',
       copyRecord: 'Kopiera DNS-målet',
+      details: 'Detaljer',
+      detailsSub: 'Vad Fly och de publika DNS-servrarna säger om domänen.',
       dnsLede: 'Skapa den här posten där domänens DNS hanteras:',
-      dnsNameHint:
-        'Postnamnen skrivs fullständigt — hos en registrar som lägger till domänen själv anges bara delen före den.',
-      dnsOwnershipLede:
-        'Behövs bara om appen saknar IPv6-adress, eller om trafiken når den via ett CDN eller en proxy:',
-      dnsSettledLede:
-        'Det här är posterna domänen vilar på. De behövs fortsatt — tas någon bort slutar domänen svara, certifikat eller inte:',
-      dnsTrafficLede:
-        'Peka domänen mot appen, där domänens DNS hanteras. Utan den här posten svarar domänen ingenstans, certifikat eller inte:',
-      dnsValidationLede:
-        'Valfri, och behövs bara för att få certifikatet utfärdat innan domänen pekar hit:',
       hasIssues: 'har problem',
       heading: 'Certifikat',
       issuedBy: 'Utfärdat av',
@@ -1282,10 +1323,25 @@ Supported locales: {{locales}}`,
       mismatchForceLogout: 'Rensa sessionen och logga in igen',
       mismatchHeading: 'Det här är inte adressen appen svarar som',
       mismatchOpenExpected: 'Öppna adressen den svarar som',
+      moreInfo: 'Mer om det här',
+      nameHelp:
+        'Fullständigt: {{name}}. En registrar som lägger till domänen själv vill bara ha {{label}}.',
+      nameHelpApex:
+        'Själva domänen, {{name}}. De flesta registrarer skriver den som @; vissa vill att namnet lämnas tomt.',
       neverChecked: 'aldrig kontrollerad',
+      nextStepCreate:
+        'Skapa posterna där DNS för {{zone}} hanteras, och tryck sedan på Kontrollera nu.',
+      nextStepIssues: 'Fly rapporterar ett problem med domänen. Se Detaljer.',
+      nextStepNameServers:
+        'DNS för {{zone}} hanteras av {{servers}}, som inte svarar med de här posterna ännu. Skapa eller ändra dem där, och tryck sedan på Kontrollera nu.',
+      nextStepWaitFly:
+        'Publik DNS svarar som väntat, men Fly har inte bekräftat det ännu. Tryck på Kontrollera nu.',
       notRequested: 'Inget certifikat ännu',
+      optionalHeading: 'Valfria poster',
       ownerPlatform: 'plattformen',
       ownerWorkspace: 'arbetsytan',
+      ownershipHelp:
+        'Behövs bara om appen saknar IPv6-adress, eller om trafiken når den via ett CDN eller en proxy.',
       paused: 'Pausat',
       pending: 'Väntar på DNS',
       rateLimited:
@@ -1296,6 +1352,7 @@ Supported locales: {{locales}}`,
       resolversDisagree:
         'DNS-servrarna är inte överens ännu, vilket är precis hur en post som fortfarande sprids ser ut. Vänta hellre än att ändra något.',
       resolversHeading: 'Vad de publika DNS-servrarna ser',
+      resolversNameServers: 'DNS för {{zone}} hanteras av {{servers}}.',
       resolversNegativeCache:
         'Zonen ber DNS-servrar minnas ett ”finns inte”-svar i upp till {{seconds}} sekunder, så en nyss skapad post kan vara osynlig så länge.',
       resolversNoAnswer: 'ingen post ännu',
@@ -1304,7 +1361,24 @@ Supported locales: {{locales}}`,
       restart: 'Starta om app',
       restartHint:
         'En nyligen validerad domän börjar gälla först efter att appen har startats om.',
-      saveFirst: 'Spara för att begära ett certifikat för domänen.'
+      saveFirst: 'Spara för att begära ett certifikat för domänen.',
+      subdomainNote:
+        'En underdomän pekar på appen med den här CNAME-posten, eller med A- och AAAA-poster mot appens adresser, vilket Fly också godtar. En CNAME kan inte ligga bredvid andra poster på samma namn.',
+      verdictBlocking:
+        'Ta först bort det {{name}} har nu: en CNAME kan inte ligga bredvid andra poster. Eller peka dess A- och AAAA-poster mot appens adresser i stället.',
+      verdictMatch: 'Svarar som väntat',
+      verdictMatchDetail:
+        'Publik DNS svarar som väntat, men Fly har inte bekräftat det ännu. Tryck på Kontrollera nu.',
+      verdictMissing: 'Posten saknas',
+      verdictMissingDetail:
+        'Publik DNS har ingen {{type}}-post för {{name}} ännu.',
+      verdictMissingIpv4: 'IPv4-post saknas',
+      verdictMissingIpv6: 'IPv6-post saknas',
+      verdictWrong: 'Pekar på fel server',
+      verdictWrongDetail: 'Svarar {{actual}}, borde vara {{expected}}.',
+      wildcardAdvice:
+        'En *-post svarar för varje underdomän som ingen har skapat. Den påverkar inte namnen på kortet, eftersom en exakt post vinner, men den skickar alla andra underdomäner dit den pekar; pekar den på appen når de den utan certifikat. Ta bort * om inte webbplatsen behöver den.',
+      wildcardFound: 'En *-post svarar {{values}}.'
     },
     firstSite: {
       back: 'Tillbaka',
