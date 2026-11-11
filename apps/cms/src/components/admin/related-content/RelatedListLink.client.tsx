@@ -9,16 +9,18 @@ type Props = {
   children: React.ReactNode;
   className?: string;
   href: string;
-  tenantId: number | string;
+  /** The workspace to select first; none leaves the selection as it is */
+  tenantId?: number | string;
 };
 
 /**
- * A link to a list filtered on a workspace. The list also keeps to the
- * workspace picked in the selector, so following the link selects this one
- * first; otherwise the list could come up empty next to a count that says
- * otherwise. The selection is a cookie, so a new tab gets it too.
+ * A link to a list filtered on a document. The list also keeps to the
+ * workspace picked in the selector, so following the link selects the
+ * document's workspace first; otherwise the list could come up empty next to
+ * a count that says otherwise. The selection is a cookie, so a new tab gets
+ * it too.
  */
-export const WorkspaceListLink: React.FC<Props> = ({
+export const RelatedListLink: React.FC<Props> = ({
   ariaLabel,
   children,
   className,
@@ -28,7 +30,11 @@ export const WorkspaceListLink: React.FC<Props> = ({
   const router = useRouter();
   const { setTenant } = useTenantSelection();
 
-  const select = () => setTenant({ id: tenantId, refresh: false });
+  const select = () => {
+    if (tenantId !== undefined) {
+      setTenant({ id: tenantId, refresh: false });
+    }
+  };
 
   const onClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     select();

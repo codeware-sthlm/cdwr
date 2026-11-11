@@ -9,6 +9,7 @@ import {
 } from '@codeware/app-cms/util/definitions';
 import type { CollectionConfig } from 'payload';
 
+import { relatedContentAdmin } from '../../components/admin/related-content/related-content-admin';
 import { userOnlyAccess } from '../../security/user-only-access';
 import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
 
@@ -24,7 +25,12 @@ const tags: CollectionConfig = {
     description: {
       en: 'Labels are used to organize photos and files so they are easy to find and select.',
       sv: 'Etiketter används för att organisera bilder och filer så att de är enkla att hitta och välja.'
-    }
+    },
+    ...relatedContentAdmin({
+      description: 'relatedContent:tagDescription',
+      sources: [{ collection: 'media', path: 'tags' }],
+      workspace: 'tenant'
+    })
   },
   access: {
     read: userOrApiKeyAccess(),
@@ -78,22 +84,6 @@ const tags: CollectionConfig = {
               }
             })
           ]
-        }
-      ]
-    },
-    {
-      type: 'group',
-      name: 'relations',
-      virtual: true,
-      label: { en: 'The tag is used here', sv: 'Här används etiketten' },
-      fields: [
-        {
-          name: 'relatedMedia',
-          label: { en: 'Related Media', sv: 'Relaterad Media' },
-          type: 'join',
-          collection: 'media',
-          on: 'tags',
-          admin: { allowCreate: false, disableListColumn: true }
         }
       ]
     }

@@ -7,9 +7,11 @@ import { slugField } from '@codeware/app-cms/ui/fields';
 import { systemUserAccess } from '@codeware/app-cms/util/access';
 import { enumName } from '@codeware/app-cms/util/db';
 import { adminGroups } from '@codeware/app-cms/util/definitions';
-import { customT } from '@codeware/app-cms/util/i18n';
 import { hasNoAdminRoles } from '@codeware/app-cms/util/misc';
 import type { CollectionConfig } from 'payload';
+
+import { workspaceSources } from '../../components/admin/related-content/related-content';
+import { relatedContentAdmin } from '../../components/admin/related-content/related-content-admin';
 
 import { restrictToTenantInTenantMode } from './access/restrict-to-tenant-in-tenant-mode';
 import { deploymentField } from './fields/deployment.field';
@@ -56,23 +58,11 @@ const tenants: CollectionConfig = {
     },
     // Hide from regular users
     hidden: ({ user }) => hasNoAdminRoles(user),
-    components: {
-      views: {
-        edit: {
-          content: {
-            Component:
-              '@codeware/apps/cms/components/admin/workspace-content/WorkspaceContentView',
-            path: '/content',
-            // Between Edit (100) and Versions (300)
-            tab: {
-              label: ({ t }) => customT(t)('workspaceContent:tab'),
-              href: '/content',
-              order: 200
-            }
-          }
-        }
-      }
-    }
+    ...relatedContentAdmin({
+      description: 'relatedContent:workspaceDescription',
+      sources: workspaceSources,
+      workspace: 'self'
+    })
   },
   labels: {
     singular: { en: 'Workspace', sv: 'Arbetsyta' },
