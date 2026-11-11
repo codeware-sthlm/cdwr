@@ -1,5 +1,6 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { createElement } from 'react';
+import { flushSync } from 'react-dom';
 import { type Root, createRoot } from 'react-dom/client';
 
 import { deskSha } from '../build-info';
@@ -19,10 +20,11 @@ import {
 } from './commands';
 import { BeforeSheet, type WaitActions } from './components/before';
 import { Cards } from './components/cards';
+import { Platform, type PlatformActions } from './components/platform';
 import { Status } from './components/status';
 import { AGENT_AVATAR, CONFIRM_MS } from './constants';
 import { type Loader, createLoader } from './load';
-import { type Model, model, shipped } from './model';
+import { type ControlsModel, type Model, model, shipped } from './model';
 import { notice } from './notice';
 import { renderCapacity } from './render/capacity';
 import {
@@ -32,7 +34,6 @@ import {
   spendChart
 } from './render/charts';
 import { CAP_RANGE, LIMIT_RANGE } from './render/controls';
-import { renderPlatform } from './render/platform';
 import {
   renderAlert,
   renderFrozenLabel,
@@ -72,9 +73,11 @@ const $ = (id: string): HTMLElement => {
   return el;
 };
 
-// The header's status pill and the two cards are React; the rest of the page is still written as HTML
+// The header's status pill, the two cards and the Platform view are React; the rest of the page is
+// still written as HTML
 const statusRoot = createRoot($('status'));
 const cardsRoot = createRoot($('cards'));
+const platformRoot = createRoot($('platform'));
 
 // ---------- Charts ----------
 
@@ -180,8 +183,11 @@ function renderLive(m: Model, now: Date): void {
   );
   $('capacity').classList.toggle('frozen', Boolean(label));
   $('more').classList.toggle('frozen', Boolean(label));
-  // Its ages move by the minute; the cache rewrites it only when the text changed
-  if (platform) setHtml('platform', renderPlatform(m, now));
+  // Its ages move by the minute
+  if (platform)
+    platformRoot.render(
+      createElement(Platform, { m, now, actions: platformActions })
+    );
 }
 
 function renderMain(): void {
@@ -191,7 +197,6 @@ function renderMain(): void {
   renderLive(m, now);
   $('capacity').innerHTML = renderCapacity(m);
   $('more').innerHTML = renderTiles(m, state, now);
-  if (state.ui.view === 'platform') setHtml('platform', renderPlatform(m, now));
 }
 
 // ---------- View ----------
@@ -219,7 +224,8 @@ function showView(view: View, focus = true): void {
   $('capacity').hidden = platform;
   $('more').hidden = platform;
   $('platform').hidden = !platform;
-  renderMain();
+  // A render is asynchronous: flushed here, the view's title exists before it takes focus
+  flushSync(renderMain);
   setHash();
   if (!focus) return;
   if (platform) $('platform-title').focus();
@@ -327,6 +333,64 @@ function focusIn(region: Element | null, selectors: string[]): void {
   }
 }
 
+/** The controls as the model sees them now; null when the desk cannot send */
+function controlsNow(): ControlsModel | null {
+  return state.controls.target
+    ? model(state, new Date(), DESK, WEB).controls
+    : null;
+}
+
+// The controls' actions, shared by the capacity row's delegated clicks and the Platform view
+
+function pauseQueue(kind: 'pause' | 'resume'): void {
+  const m = controlsNow();
+  if (m) sendControl('pause', m.host, kind);
+}
+
+function runNow(): void {
+  const m = controlsNow();
+  if (m) sendControl('run', m.host, 'run');
+}
+
+/** Moves a stepper's draft within its range */
+function stepDraft(control: 'limit' | 'cap', delta: number): void {
+  const m = controlsNow();
+  if (!m) return;
+  const range = control === 'limit' ? LIMIT_RANGE : CAP_RANGE;
+  const next = (m[control].draft ?? 0) + delta;
+  state.controls.drafts[control] = Math.min(
+    range.max,
+    Math.max(range.min, next)
+  );
+  render();
+}
+
+function applyDraft(control: 'limit' | 'cap'): void {
+  const m = controlsNow();
+  const draft = m?.[control].draft ?? null;
+  if (m && draft !== null)
+    sendControl(control, m.host, control, { value: draft });
+}
+
+/** Scrolls to a problem's card on the desk */
+function showProblem(id: string): void {
+  showView('desk', false);
+  const card = document.getElementById(id);
+  card?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth' });
+  card?.focus({ preventScroll: true });
+}
+
+/** What the Platform view's buttons do */
+const platformActions: PlatformActions = {
+  desk: () => showView('desk'),
+  problem: showProblem,
+  sheet: (id) => showSheet(id),
+  pause: pauseQueue,
+  run: runNow,
+  step: stepDraft,
+  apply: applyDraft
+};
+
 /** Handles a control button's click; true when the click was one */
 function clickControl(target: Element): boolean {
   const button = target.closest<HTMLButtonElement>(
@@ -334,8 +398,8 @@ function clickControl(target: Element): boolean {
   );
   if (!button) return false;
   const c = state.controls;
-  const m = model(state, new Date(), DESK, WEB).controls;
-  if (!c.target || !m || button.disabled) return true;
+  const m = controlsNow();
+  if (!m || button.disabled) return true;
   const { cmd, step, apply } = button.dataset;
   // The render replaces the button; keyboard focus goes back to it, or to the control's next part
   const region = button.closest('[id]');
@@ -355,35 +419,23 @@ function clickControl(target: Element): boolean {
     render();
     refocus('[data-cmd="abandon"]');
   } else if (cmd === 'pause' || cmd === 'resume') {
-    sendControl('pause', m.host, cmd);
+    pauseQueue(cmd);
     refocus('[data-cmd="pause"]', '[data-cmd="resume"]');
   } else if (cmd === 'run') {
-    sendControl('run', m.host, 'run');
+    runNow();
     refocus('[data-cmd="run"]');
   } else if (step) {
     const [control, delta] = step.split(':');
-    if (control === 'limit') {
-      const next = (m.limit.draft ?? 0) + Number(delta);
-      c.drafts.limit = Math.min(
-        LIMIT_RANGE.max,
-        Math.max(LIMIT_RANGE.min, next)
-      );
-    } else if (control === 'cap') {
-      const next = (m.cap.draft ?? 0) + Number(delta);
-      c.drafts.cap = Math.min(CAP_RANGE.max, Math.max(CAP_RANGE.min, next));
-    }
-    render();
+    if (control === 'limit' || control === 'cap')
+      stepDraft(control, Number(delta));
     refocus(
       `[data-step="${step}"]`,
       `[data-apply="${control}"]`,
       `[data-step^="${control}:"]`
     );
-  } else if (apply === 'limit' && m.limit.draft !== null) {
-    sendControl('limit', m.host, 'limit', { value: m.limit.draft });
-    refocus('[data-apply="limit"]', '[data-step^="limit:"]');
-  } else if (apply === 'cap' && m.cap.draft !== null) {
-    sendControl('cap', m.host, 'cap', { value: m.cap.draft });
-    refocus('[data-apply="cap"]', '[data-step^="cap:"]');
+  } else if (apply === 'limit' || apply === 'cap') {
+    applyDraft(apply);
+    refocus(`[data-apply="${apply}"]`, `[data-step^="${apply}:"]`);
   }
   return true;
 }
@@ -486,6 +538,8 @@ const waitActions: WaitActions = {
 
 document.addEventListener('click', (e) => {
   if (!(e.target instanceof Element)) return;
+  // The Platform view is React and handles its own clicks
+  if (e.target.closest('#platform')) return;
   if (e.target.closest('[data-see-problems]')) {
     e.preventDefault();
     // The alert shows on the Platform view too, where the problems are hidden
@@ -506,10 +560,7 @@ document.addEventListener('click', (e) => {
   if (clickControl(e.target)) return;
   const problem = e.target.closest<HTMLElement>('[data-problem]');
   if (problem) {
-    showView('desk', false);
-    const card = document.getElementById(problem.dataset.problem ?? '');
-    card?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth' });
-    card?.focus({ preventScroll: true });
+    showProblem(problem.dataset.problem ?? '');
     return;
   }
   const v = e.target.closest<HTMLElement>('[data-view]');
