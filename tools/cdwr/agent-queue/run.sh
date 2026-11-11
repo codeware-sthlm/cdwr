@@ -653,7 +653,7 @@ query($after: String) {
       description
       labels { nodes { id name } }
       attachments { nodes { url createdAt } }
-      comments(first: 50, orderBy: createdAt) { nodes { body createdAt } }
+      comments(first: 50, orderBy: createdAt) { nodes { body createdAt user { id app } } }
     }
   }
 }
