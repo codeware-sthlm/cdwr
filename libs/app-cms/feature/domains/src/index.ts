@@ -20,8 +20,11 @@ export { guardDomainConflicts } from './lib/guard-domain-conflicts';
 export { normalizeDomains } from './lib/normalize-domains';
 export {
   PUBLIC_RESOLVERS,
+  type RecordSet,
   type ResolverAnswer,
   type ResolverComparison,
+  emptyRecordSet,
+  hasRecords,
   normaliseRecords,
   resolversAgree
 } from './lib/resolver-comparison';
