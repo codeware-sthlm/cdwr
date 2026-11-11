@@ -19,13 +19,20 @@ export {
 export { guardDomainConflicts } from './lib/guard-domain-conflicts';
 export { normalizeDomains } from './lib/normalize-domains';
 export {
+  type ExpectedRecords,
   PUBLIC_RESOLVERS,
+  type RecordJudgement,
   type RecordSet,
+  type RecordVerdict,
+  type RecordsJudgement,
   type ResolverAnswer,
   type ResolverComparison,
   emptyRecordSet,
+  guessZone,
   hasRecords,
+  judgeRecords,
   normaliseRecords,
+  registrarName,
   resolversAgree
 } from './lib/resolver-comparison';
 export {
