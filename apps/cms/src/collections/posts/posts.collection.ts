@@ -92,6 +92,10 @@ const posts: CollectionConfig<'posts'> = {
       }
     },
     {
+      type: 'row',
+      fields: [slugField({ sourceField: 'title' }), visibilityField()]
+    },
+    {
       type: 'tabs',
       tabs: [
         {
@@ -127,11 +131,24 @@ const posts: CollectionConfig<'posts'> = {
           label: { en: 'Meta', sv: 'Metadata' },
           fields: [
             {
+              name: 'authors',
+              label: { en: 'Authors', sv: 'Författare' },
+              type: 'relationship',
+              relationTo: 'users',
+              hasMany: true,
+              filterOptions: ({ req }) => filterByTenantScope(req, 'users'),
+              admin: {
+                description: {
+                  en: 'The authors of the post.',
+                  sv: 'Författare till inlägget.'
+                }
+              }
+            },
+            {
               name: 'relatedPosts',
               type: 'relationship',
               label: { en: 'Related Posts', sv: 'Relaterade inlägg' },
               admin: {
-                position: 'sidebar',
                 disableListColumn: true
               },
               filterOptions: ({ id }) => ({ id: { not_in: [id] } }),
@@ -142,9 +159,6 @@ const posts: CollectionConfig<'posts'> = {
               name: 'categories',
               type: 'relationship',
               label: { en: 'Categories', sv: 'Kategorier' },
-              admin: {
-                position: 'sidebar'
-              },
               hasMany: true,
               relationTo: 'categories'
             }
@@ -152,24 +166,7 @@ const posts: CollectionConfig<'posts'> = {
         },
         seoTab()
       ]
-    },
-    {
-      name: 'authors',
-      label: { en: 'Authors', sv: 'Författare' },
-      type: 'relationship',
-      relationTo: 'users',
-      hasMany: true,
-      filterOptions: ({ req }) => filterByTenantScope(req, 'users'),
-      admin: {
-        description: {
-          en: 'The authors of the post.',
-          sv: 'Författare till inlägget.'
-        },
-        position: 'sidebar'
-      }
-    },
-    slugField({ sourceField: 'title' }),
-    visibilityField()
+    }
   ],
   versions: {
     drafts: {

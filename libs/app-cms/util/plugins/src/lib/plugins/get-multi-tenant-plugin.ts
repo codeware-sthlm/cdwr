@@ -37,6 +37,9 @@ export const getMultiTenantPlugin = () =>
     tenantsSlug: 'tenants',
     tenantField: {
       name: 'tenant',
+      // The plugin defaults to the sidebar; collections keep every field in
+      // the main form
+      admin: { position: undefined },
       // Prevent users from assigning content to a tenant they don't belong to.
       // System users are unrestricted.
       // `siblingData.tenant` holds the incoming tenant ID (number) for top-level

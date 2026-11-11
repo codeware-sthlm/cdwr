@@ -45,6 +45,7 @@ const tags: CollectionConfig = {
       maxLength: 20,
       label: { en: 'Name', sv: 'Namn' }
     },
+    slugField({ sourceField: 'name', maxLength: 20 }),
     {
       name: 'brand',
       type: 'group',
@@ -95,8 +96,7 @@ const tags: CollectionConfig = {
           admin: { allowCreate: false, disableListColumn: true }
         }
       ]
-    },
-    slugField({ sourceField: 'name', maxLength: 20 })
+    }
   ]
 };
 

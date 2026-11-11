@@ -189,6 +189,30 @@ const users: CollectionConfig<'users'> = {
               },
               required: true,
               defaultValue: 'user'
+            },
+            {
+              name: 'description',
+              type: 'textarea',
+              label: { en: 'Description', sv: 'Beskrivning' },
+              admin: {
+                description: {
+                  en: 'Short description of the user.',
+                  sv: 'Kort beskrivning av användaren.'
+                }
+              },
+              maxLength: 200
+            },
+            {
+              name: 'totpReset',
+              type: 'ui',
+              admin: {
+                disableListColumn: true,
+                condition: (data, _, { user }) => canResetTotp(user, data),
+                components: {
+                  Field:
+                    '@codeware/apps/cms/components/admin/users/TotpReset.client'
+                }
+              }
             }
           ]
         },
@@ -200,31 +224,6 @@ const users: CollectionConfig<'users'> = {
           }
         }
       ]
-    },
-    {
-      name: 'description',
-      type: 'textarea',
-      label: { en: 'Description', sv: 'Beskrivning' },
-      admin: {
-        description: {
-          en: 'Short description of the user.',
-          sv: 'Kort beskrivning av användaren.'
-        },
-        position: 'sidebar'
-      },
-      maxLength: 200
-    },
-    {
-      name: 'totpReset',
-      type: 'ui',
-      admin: {
-        position: 'sidebar',
-        disableListColumn: true,
-        condition: (data, _, { user }) => canResetTotp(user, data),
-        components: {
-          Field: '@codeware/apps/cms/components/admin/users/TotpReset.client'
-        }
-      }
     },
     statsAccountField()
   ]

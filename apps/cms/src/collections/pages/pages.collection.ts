@@ -83,6 +83,10 @@ const pages: CollectionConfig<'pages'> = {
       }
     },
     {
+      type: 'row',
+      fields: [slugField({ sourceField: 'name' }), visibilityField()]
+    },
+    {
       type: 'tabs',
       tabs: [
         {
@@ -126,9 +130,7 @@ const pages: CollectionConfig<'pages'> = {
         },
         seoTab()
       ]
-    },
-    slugField({ sourceField: 'name' }),
-    visibilityField()
+    }
   ],
   versions: {
     drafts: {
