@@ -84,15 +84,9 @@ export function DnsRecord({
     /* Deliberately not a `Card`: this is a surface nested inside one, and
        `bg-card` on both would flatten the nesting the muted tint exists to
        show. shadcn has no inset-panel primitive to reach for instead. */
-    <div className="bg-muted/40 relative flex flex-col gap-2 rounded-md px-3.5 py-3">
-      {note && (
-        <span className="absolute top-2 right-2">
-          <InfoPopover label={labels.moreInfo}>{note}</InfoPopover>
-        </span>
-      )}
-
+    <div className="bg-muted/40 flex flex-col gap-2 rounded-md px-3.5 py-3">
       {pendingNote ? (
-        <p className="text-muted-foreground pr-6 text-xs">{pendingNote}</p>
+        <p className="text-muted-foreground text-xs">{pendingNote}</p>
       ) : (
         records.map((record) => (
           <RecordRow
@@ -103,11 +97,16 @@ export function DnsRecord({
         ))
       )}
 
-      <div className="text-muted-foreground flex items-center gap-1 text-xs">
-        {wildcard.found && <span>{wildcard.found}</span>}
-        <InfoPopover label={labels.moreInfo} trigger="*">
-          {wildcard.advice}
-        </InfoPopover>
+      {/* Below the records rather than in a corner, where it would sit on
+          the first record's copy button */}
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        {note && <InfoPopover label={labels.moreInfo}>{note}</InfoPopover>}
+        <span className="flex items-center gap-1">
+          {wildcard.found && <span>{wildcard.found}</span>}
+          <InfoPopover label={labels.moreInfo} trigger="*">
+            {wildcard.advice}
+          </InfoPopover>
+        </span>
       </div>
     </div>
   );
