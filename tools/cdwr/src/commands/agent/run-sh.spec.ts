@@ -258,6 +258,8 @@ describe('run.sh without Linear documents', () => {
     expect(watched).toContain('id');
     expect(watched).toContain('description');
     expect(watched).toContain('labels { nodes { id name } }');
+    // is_agent tells the agent's comments by their author
+    expect(watched).toContain('nodes { body createdAt user { id app } }');
     expect(watched).toContain('after: $after');
     expect(watched).toContain('pageInfo { hasNextPage endCursor }');
     expect(watched).not.toContain('issueLabels(');
