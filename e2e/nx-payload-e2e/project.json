@@ -7,20 +7,18 @@
   "implicitDependencies": ["create-nx-payload", "nx-payload"],
   "targets": {
     "e2e": {
-      "executor": "@nx/jest:jest",
       "options": {
-        "jestConfig": "e2e/nx-payload-e2e/jest.config.ts",
         "runInBand": true
       },
       "configurations": {
         "docker": {
-          "testPathPatterns": ["\\.docker\\.spec", "\\.ui\\.spec"]
+          "testPathPatterns": "\"\\.docker\\.spec|\\.ui\\.spec\""
         },
         "main": {
-          "testPathPatterns": ["\\.main\\.spec"]
+          "testPathPatterns": "\\.main\\.spec"
         },
         "quick": {
-          "testPathPatterns": ["\\.quick\\.spec"]
+          "testPathPatterns": "\\.quick\\.spec"
         }
       }
     }
