@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { nxReadySignal } from '@nx/vite/plugins/nx-ready-signal.plugin';
 
 // The shape @nx/react:application writes, plus what Tauri needs: the dev server on the port
 // tauri.conf.json's devUrl names, and only that port; no screen clearing, so Tauri's own
@@ -27,7 +28,8 @@ export default defineConfig(() => ({
   plugins: [
     react(),
     tailwindcss(),
-    tsconfigPaths({ projects: ['../../tsconfig.base.json'] })
+    tsconfigPaths({ projects: ['../../tsconfig.base.json'] }),
+    nxReadySignal()
   ],
   build: {
     outDir: '../../dist/apps/desk',
