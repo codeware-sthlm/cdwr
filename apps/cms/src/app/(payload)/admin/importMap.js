@@ -1,5 +1,6 @@
 import { TenantField as TenantField_1d0591e3cf4f332c83a86da13a0de59a } from '@payloadcms/plugin-multi-tenant/client';
 import { AssignTenantFieldTrigger as AssignTenantFieldTrigger_1d0591e3cf4f332c83a86da13a0de59a } from '@payloadcms/plugin-multi-tenant/client';
+import { default as default_3c6d8e1b2f78530e0b6c4a0b66e4b9e3 } from '@codeware/apps/cms/components/admin/related-content/RelatedContentView';
 import { default as default_4bdeffbda8fb55e8ecbca19e6487b048 } from '@codeware/app-cms/ui/fields/component-studio/InputRowLabel.client';
 import { default as default_a97dcd6ef1fbecb583cc71d0fff14d6e } from '@codeware/app-cms/ui/fields/component-studio/ComponentStudio.client';
 import { default as default_a002f2d84101c6c675bbd597489a2d3f } from '@codeware/apps/cms/components/ThemeRecipeCell';
@@ -53,14 +54,13 @@ import { default as default_771cb2e65e9273cda2ffcd43d25ab990 } from '@codeware/a
 import { default as default_9065a5455c84dbd8ae8166c5fe123c4e } from '@codeware/apps/cms/components/admin/provisioning/InfisicalField';
 import { default as default_ffad2613f85c06fc034f71b32fc48271 } from '@codeware/apps/cms/components/admin/domains/DomainsField';
 import { WatchTenantCollection as WatchTenantCollection_1d0591e3cf4f332c83a86da13a0de59a } from '@payloadcms/plugin-multi-tenant/client';
-import { default as default_2dd172341f33da56ab5ff8f8d4ed03c3 } from '@codeware/apps/cms/components/admin/workspace-content/WorkspaceContentView';
 import { default as default_bf7300e11b2198b95b954ecadbd3c445 } from '@codeware/apps/cms/components/admin/tour-signups/TourFilterField';
 import { default as default_c09482d250ab6d202838d64026b532c8 } from '@codeware/apps/cms/components/TourItineraryRowLabel';
 import { default as default_684605a40f01e98600c1b5e22bd87007 } from '@codeware/apps/cms/components/admin/tour-signups/TourSignupsField';
 import { default as default_83b1e477403db97f7c64cd4eca1f0fbb } from '@codeware/apps/cms/components/TourSignupsCell';
+import { default as default_615a41ecbb6403a934156338fd4ee907 } from '@codeware/apps/cms/components/admin/users/TotpReset.client';
 import { default as default_4a3552dc4f000a1797b4eb36166f8ff8 } from '@codeware/apps/cms/components/TenantsArrayField';
 import { default as default_dec1059b7bb8eb8da3a9f0fc400fffbd } from '@codeware/apps/cms/components/TenantsArrayRowLabel';
-import { default as default_615a41ecbb6403a934156338fd4ee907 } from '@codeware/apps/cms/components/admin/users/TotpReset.client';
 import { TOTPField as TOTPField_4eaf6cb33cfb75be01716613e3c9a512 } from 'payload-totp/rsc';
 import { default as default_5c4721952cea6137a5b655132d82172f } from '@codeware/apps/cms/components/admin/forms/FormNotificationRecipientField';
 import { default as default_aa577ffa11e4f1931cf9142a4eed30a6 } from '@codeware/apps/cms/components/SubmissionCountCell';
@@ -100,6 +100,8 @@ export const importMap = {
     TenantField_1d0591e3cf4f332c83a86da13a0de59a,
   '@payloadcms/plugin-multi-tenant/client#AssignTenantFieldTrigger':
     AssignTenantFieldTrigger_1d0591e3cf4f332c83a86da13a0de59a,
+  '@codeware/apps/cms/components/admin/related-content/RelatedContentView#default':
+    default_3c6d8e1b2f78530e0b6c4a0b66e4b9e3,
   '@codeware/app-cms/ui/fields/component-studio/InputRowLabel.client#default':
     default_4bdeffbda8fb55e8ecbca19e6487b048,
   '@codeware/app-cms/ui/fields/component-studio/ComponentStudio.client#default':
@@ -206,8 +208,6 @@ export const importMap = {
     default_ffad2613f85c06fc034f71b32fc48271,
   '@payloadcms/plugin-multi-tenant/client#WatchTenantCollection':
     WatchTenantCollection_1d0591e3cf4f332c83a86da13a0de59a,
-  '@codeware/apps/cms/components/admin/workspace-content/WorkspaceContentView#default':
-    default_2dd172341f33da56ab5ff8f8d4ed03c3,
   '@codeware/apps/cms/components/admin/tour-signups/TourFilterField#default':
     default_bf7300e11b2198b95b954ecadbd3c445,
   '@codeware/apps/cms/components/TourItineraryRowLabel#default':
@@ -216,12 +216,12 @@ export const importMap = {
     default_684605a40f01e98600c1b5e22bd87007,
   '@codeware/apps/cms/components/TourSignupsCell#default':
     default_83b1e477403db97f7c64cd4eca1f0fbb,
+  '@codeware/apps/cms/components/admin/users/TotpReset.client#default':
+    default_615a41ecbb6403a934156338fd4ee907,
   '@codeware/apps/cms/components/TenantsArrayField#default':
     default_4a3552dc4f000a1797b4eb36166f8ff8,
   '@codeware/apps/cms/components/TenantsArrayRowLabel#default':
     default_dec1059b7bb8eb8da3a9f0fc400fffbd,
-  '@codeware/apps/cms/components/admin/users/TotpReset.client#default':
-    default_615a41ecbb6403a934156338fd4ee907,
   'payload-totp/rsc#TOTPField': TOTPField_4eaf6cb33cfb75be01716613e3c9a512,
   '@codeware/apps/cms/components/admin/forms/FormNotificationRecipientField#default':
     default_5c4721952cea6137a5b655132d82172f,

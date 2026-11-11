@@ -348,6 +348,14 @@ const customTranslationsSchema = z.object({
     stateUnreadable: z.string(),
     title: z.string()
   }),
+  relatedContent: z.object({
+    categoryDescription: z.string(),
+    open: z.string(),
+    tab: z.string(),
+    tagDescription: z.string(),
+    unsaved: z.string(),
+    workspaceDescription: z.string()
+  }),
   statistics: z.object({
     bounceRate: z.string(),
     countries: z.string(),
@@ -521,12 +529,6 @@ const customTranslationsSchema = z.object({
     themesRequired: z.string(),
     tourClosedForSignups: z.string(),
     urlInvalid: z.string()
-  }),
-  workspaceContent: z.object({
-    description: z.string(),
-    open: z.string(),
-    tab: z.string(),
-    unsaved: z.string()
   })
 });
 
@@ -930,6 +932,17 @@ You can assign multiple tags to a file.`,
       stateUnreadable: 'Cannot read',
       title: 'Infisical setup'
     },
+    relatedContent: {
+      categoryDescription:
+        'Content that uses this category. Each count opens the list filtered on it.',
+      open: 'Open list',
+      tab: 'Content',
+      tagDescription:
+        'Content that uses this tag. Each count opens the list filtered on it.',
+      unsaved: 'Save the document to see its content.',
+      workspaceDescription:
+        'Documents that belong to this workspace. Each count opens the list filtered on it.'
+    },
     statistics: {
       bounceRate: 'Bounce rate',
       countries: 'Countries',
@@ -1146,13 +1159,6 @@ Supported locales: {{locales}}`,
         'Select at least one theme, either a built-in one or one of your own.',
       tourClosedForSignups: 'This tour is closed for signups.',
       urlInvalid: 'Please enter a valid URL'
-    },
-    workspaceContent: {
-      description:
-        'Documents that belong to this workspace. Each count opens the list filtered on it.',
-      open: 'Open list',
-      tab: 'Content',
-      unsaved: 'Save the workspace to see its content.'
     }
   },
   sv: {
@@ -1556,6 +1562,17 @@ Du kan tilldela flera etiketter till en fil.`,
       stateUnreadable: 'Kan inte läsas',
       title: 'Konfiguration i Infisical'
     },
+    relatedContent: {
+      categoryDescription:
+        'Innehåll som använder den här kategorin. Varje antal öppnar listan filtrerad på den.',
+      open: 'Öppna listan',
+      tab: 'Innehåll',
+      tagDescription:
+        'Innehåll som använder den här etiketten. Varje antal öppnar listan filtrerad på den.',
+      unsaved: 'Spara dokumentet för att se dess innehåll.',
+      workspaceDescription:
+        'Dokument som hör till den här arbetsytan. Varje antal öppnar listan filtrerad på den.'
+    },
     statistics: {
       bounceRate: 'Avvisningsfrekvens',
       countries: 'Länder',
@@ -1775,13 +1792,6 @@ Språk som stöds: {{locales}}`,
         'Välj minst ett tema, antingen ett inbyggt eller ett eget.',
       tourClosedForSignups: 'Resan är stängd för anmälan.',
       urlInvalid: 'Ange en giltig webbadress'
-    },
-    workspaceContent: {
-      description:
-        'Dokument som hör till den här arbetsytan. Varje antal öppnar listan filtrerad på den.',
-      open: 'Öppna listan',
-      tab: 'Innehåll',
-      unsaved: 'Spara arbetsytan för att se dess innehåll.'
     }
   }
 };

@@ -5,6 +5,7 @@ import {
 } from '@codeware/app-cms/util/definitions';
 import type { CollectionConfig } from 'payload';
 
+import { relatedContentAdmin } from '../../components/admin/related-content/related-content-admin';
 import { userOnlyAccess } from '../../security/user-only-access';
 import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
 
@@ -20,7 +21,12 @@ const categories: CollectionConfig = {
     description: {
       en: 'Categories makes it possible to group blog posts by topic for better overview.',
       sv: 'Kategorier gör det möjligt att gruppera inlägg efter ämne för bättre överblick.'
-    }
+    },
+    ...relatedContentAdmin({
+      description: 'relatedContent:categoryDescription',
+      sources: [{ collection: 'posts', path: 'categories' }],
+      workspace: 'tenant'
+    })
   },
   access: {
     read: userOrApiKeyAccess(),
@@ -47,23 +53,7 @@ const categories: CollectionConfig = {
         }
       }
     },
-    slugField({ sourceField: 'name' }),
-    {
-      type: 'group',
-      name: 'relations',
-      virtual: true,
-      label: { en: 'The category is used here', sv: 'Här används kategorin' },
-      fields: [
-        {
-          name: 'relatedPosts',
-          label: { en: 'Related Posts', sv: 'Relaterade Inlägg' },
-          type: 'join',
-          collection: 'posts',
-          on: 'categories',
-          admin: { allowCreate: false, disableListColumn: true }
-        }
-      ]
-    }
+    slugField({ sourceField: 'name' })
   ]
 };
 

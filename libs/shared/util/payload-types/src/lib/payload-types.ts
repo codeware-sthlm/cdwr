@@ -215,14 +215,7 @@ export interface Config {
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
   };
-  collectionsJoins: {
-    categories: {
-      'relations.relatedPosts': 'posts';
-    };
-    tags: {
-      'relations.relatedMedia': 'media';
-    };
-  };
+  collectionsJoins: {};
   collectionsSelect: {
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     'custom-components':
@@ -614,23 +607,16 @@ export interface Tag {
   managedBy?: string | null;
   name: string;
   /**
+   * Used for url paths. Will be automatically generated from name if left empty.
+   */
+  slug?: string | null;
+  /**
    * Select an icon and color that represent the tag.
    */
   brand?: {
     icon?: string | null;
     color?: string | null;
   };
-  relations?: {
-    relatedMedia?: {
-      docs?: (number | Media)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-  };
-  /**
-   * Used for url paths. Will be automatically generated from name if left empty.
-   */
-  slug?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -670,6 +656,14 @@ export interface Page {
    * The name of the page used for navigation links.
    */
   name: string;
+  /**
+   * Used for url paths. Will be automatically generated from name if left empty.
+   */
+  slug?: string | null;
+  /**
+   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
+   */
+  visibility: 'public' | 'members';
   /**
    * A pre-designed header on top of the page. Provide for a consistent look and feel or customize everything in layout builder.
    */
@@ -711,14 +705,6 @@ export interface Page {
     image?: (number | null) | Media;
     description?: string | null;
   };
-  /**
-   * Used for url paths. Will be automatically generated from name if left empty.
-   */
-  slug?: string | null;
-  /**
-   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
-   */
-  visibility: 'public' | 'members';
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
@@ -796,6 +782,14 @@ export interface Post {
    * The title of the post and name used in navigation.
    */
   title: string;
+  /**
+   * Used for url paths. Will be automatically generated from title if left empty.
+   */
+  slug?: string | null;
+  /**
+   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
+   */
+  visibility: 'public' | 'members';
   heroImage?: (number | null) | Media;
   content: {
     root: {
@@ -812,6 +806,10 @@ export interface Post {
     };
     [k: string]: unknown;
   };
+  /**
+   * The authors of the post.
+   */
+  authors?: (number | User)[] | null;
   relatedPosts?: (number | Post)[] | null;
   categories?: (number | Category)[] | null;
   meta?: {
@@ -822,49 +820,9 @@ export interface Post {
     image?: (number | null) | Media;
     description?: string | null;
   };
-  /**
-   * The authors of the post.
-   */
-  authors?: (number | User)[] | null;
-  /**
-   * Used for url paths. Will be automatically generated from title if left empty.
-   */
-  slug?: string | null;
-  /**
-   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
-   */
-  visibility: 'public' | 'members';
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
-}
-/**
- * Categories makes it possible to group blog posts by topic for better overview.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  managedBy?: string | null;
-  /**
-   * The name of the category.
-   */
-  name: string;
-  relations?: {
-    relatedPosts?: {
-      docs?: (number | Post)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-  };
-  /**
-   * Used for url paths. Will be automatically generated from name if left empty.
-   */
-  slug?: string | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * Manage users and their access to workspaces.
@@ -879,11 +837,11 @@ export interface User {
    * System users have access to manage the whole system and do not need to be members of a workspace. For normal users, it is a requirement to be members of a workspace.
    */
   role: 'user' | 'system-user';
-  tenants?: TenantsArrayField;
   /**
    * Short description of the user.
    */
   description?: string | null;
+  tenants?: TenantsArrayField;
   statsAccount?: {
     umamiUserId?: string | null;
     createdAt?: string | null;
@@ -912,6 +870,27 @@ export interface User {
     | null;
   password?: string | null;
   collection: 'users';
+}
+/**
+ * Categories makes it possible to group blog posts by topic for better overview.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
+  /**
+   * The name of the category.
+   */
+  name: string;
+  /**
+   * Used for url paths. Will be automatically generated from name if left empty.
+   */
+  slug?: string | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2695,6 +2674,10 @@ export interface Tour {
    */
   title: string;
   /**
+   * Used for url paths. Will be automatically generated from title if left empty.
+   */
+  slug: string;
+  /**
    * Pick a shared image to set the mood, or upload your own photo of the actual places for an accurate one.
    */
   heroImage:
@@ -2792,10 +2775,6 @@ export interface Tour {
     image?: (number | null) | Media;
     description?: string | null;
   };
-  /**
-   * Used for url paths. Will be automatically generated from title if left empty.
-   */
-  slug: string;
   seatsTaken?: number | null;
   seatsWaiting?: number | null;
   seatsLeft?: number | null;
@@ -3123,11 +3102,6 @@ export interface CategoriesSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   name?: T;
-  relations?:
-    | T
-    | {
-        relatedPosts?: T;
-      };
   slug?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -3329,6 +3303,8 @@ export interface PagesSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   name?: T;
+  slug?: T;
+  visibility?: T;
   header?: T;
   layout?: T | {};
   meta?:
@@ -3338,8 +3314,6 @@ export interface PagesSelect<T extends boolean = true> {
         image?: T;
         description?: T;
       };
-  slug?: T;
-  visibility?: T;
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
@@ -3425,8 +3399,11 @@ export interface PostsSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   title?: T;
+  slug?: T;
+  visibility?: T;
   heroImage?: T;
   content?: T;
+  authors?: T;
   relatedPosts?: T;
   categories?: T;
   meta?:
@@ -3436,9 +3413,6 @@ export interface PostsSelect<T extends boolean = true> {
         image?: T;
         description?: T;
       };
-  authors?: T;
-  slug?: T;
-  visibility?: T;
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
@@ -3648,18 +3622,13 @@ export interface TagsSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   name?: T;
+  slug?: T;
   brand?:
     | T
     | {
         icon?: T;
         color?: T;
       };
-  relations?:
-    | T
-    | {
-        relatedMedia?: T;
-      };
-  slug?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -3751,6 +3720,7 @@ export interface ToursSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   title?: T;
+  slug?: T;
   heroImage?: T;
   summary?: T;
   destination?: T;
@@ -3784,7 +3754,6 @@ export interface ToursSelect<T extends boolean = true> {
         image?: T;
         description?: T;
       };
-  slug?: T;
   seatsTaken?: T;
   seatsWaiting?: T;
   seatsLeft?: T;
@@ -3811,8 +3780,8 @@ export interface TourItinerarySelect<T extends boolean = true> {
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
   role?: T;
-  tenants?: T | TenantsArrayFieldSelect<T>;
   description?: T;
+  tenants?: T | TenantsArrayFieldSelect<T>;
   statsAccount?:
     | T
     | {

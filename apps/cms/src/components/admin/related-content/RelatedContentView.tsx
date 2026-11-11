@@ -6,19 +6,22 @@ import type { DocumentViewServerProps } from 'payload';
 import React from 'react';
 
 import {
-  workspaceListHref,
-  workspaceSources,
-  workspaceWhere
-} from './workspace-content-rows';
-import { WorkspaceListLink } from './WorkspaceListLink.client';
+  readRelatedContent,
+  relatedListHref,
+  relatedWhere,
+  relatedWorkspaceId
+} from './related-content';
+import { RelatedListLink } from './RelatedListLink.client';
 
 /**
- * Document tab on a workspace showing how much content belongs to it.
+ * Document tab showing how much content points at the document: what belongs
+ * to a workspace, or what uses a category or a tag. The collection names its
+ * sources in `admin.custom` (`relatedContentAdmin`).
  *
  * Runs only when the tab is opened. Counts respect the viewer's access, and a
  * count that is refused shows a dash instead of failing the view.
  */
-const WorkspaceContentView: React.FC<DocumentViewServerProps> = async ({
+const RelatedContentView: React.FC<DocumentViewServerProps> = async ({
   doc,
   i18n,
   initPageResult,
@@ -26,24 +29,31 @@ const WorkspaceContentView: React.FC<DocumentViewServerProps> = async ({
 }) => {
   const t = customT(i18n.t);
   const adminRoute = payload.config.routes?.admin ?? '/admin';
-  const slug = initPageResult.collectionConfig?.slug ?? 'tenants';
-  const tenantId = doc?.id;
-  const title = typeof doc?.name === 'string' ? doc.name : undefined;
+  const collectionConfig = initPageResult.collectionConfig;
+  const slug = collectionConfig?.slug ?? '';
+  const config = readRelatedContent(collectionConfig?.admin?.custom);
+  const docId = doc?.id as number | string | undefined;
+  const titleField = collectionConfig?.admin?.useAsTitle ?? 'id';
+  const title =
+    typeof doc?.[titleField] === 'string' ? doc[titleField] : undefined;
+  const tenantId = config
+    ? relatedWorkspaceId(doc, config.workspace)
+    : undefined;
 
   const collectionLabel = getTranslation(
-    initPageResult.collectionConfig?.labels?.plural ?? slug,
+    collectionConfig?.labels?.plural ?? slug,
     i18n
   );
 
   const rows =
-    tenantId === undefined
+    docId === undefined || !config
       ? []
       : await Promise.all(
-          workspaceSources.map(async ({ collection, path }) => {
+          config.sources.map(async ({ collection, path }) => {
             const count = await payload
               .count({
                 collection,
-                where: workspaceWhere(path, tenantId),
+                where: relatedWhere(path, docId),
                 overrideAccess: false,
                 // The request's own user; the `user` prop is reduced by field access
                 req: initPageResult.req
@@ -52,7 +62,7 @@ const WorkspaceContentView: React.FC<DocumentViewServerProps> = async ({
               .catch((error: unknown) => {
                 payload.logger.warn(
                   { err: error },
-                  `Workspace content: could not count ${collection}`
+                  `Related content: could not count ${collection} on ${slug}`
                 );
                 return null;
               });
@@ -64,18 +74,13 @@ const WorkspaceContentView: React.FC<DocumentViewServerProps> = async ({
                 payload.collections[collection].config.labels.plural,
                 i18n
               ),
-              href: workspaceListHref({
-                adminRoute,
-                collection,
-                path,
-                tenantId
-              })
+              href: relatedListHref({ adminRoute, collection, docId, path })
             };
           })
         );
 
   return (
-    <div className="collection-default collection-default--workspace-content">
+    <div className="collection-default collection-default--related-content">
       <SetStepNav
         nav={[
           { label: collectionLabel, url: `${adminRoute}/collections/${slug}` },
@@ -84,12 +89,12 @@ const WorkspaceContentView: React.FC<DocumentViewServerProps> = async ({
       />
       <Gutter>
         <div className="codeware-admin twp text-foreground">
-          {tenantId === undefined ? (
-            <p>{t('workspaceContent:unsaved')}</p>
+          {docId === undefined || !config ? (
+            <p>{t('relatedContent:unsaved')}</p>
           ) : (
             <>
               <p className="text-muted-foreground mb-4">
-                {t('workspaceContent:description')}
+                {t(config.description)}
               </p>
               <Card>
                 <CardContent>
@@ -100,14 +105,14 @@ const WorkspaceContentView: React.FC<DocumentViewServerProps> = async ({
                         className="flex items-center justify-between py-3"
                       >
                         <span>{label}</span>
-                        <WorkspaceListLink
+                        <RelatedListLink
                           href={href}
                           tenantId={tenantId}
                           className="tabular-nums underline underline-offset-4"
-                          ariaLabel={`${label}: ${count ?? '–'}. ${t('workspaceContent:open')}`}
+                          ariaLabel={`${label}: ${count ?? '–'}. ${t('relatedContent:open')}`}
                         >
                           {count ?? '–'}
-                        </WorkspaceListLink>
+                        </RelatedListLink>
                       </li>
                     ))}
                   </ul>
@@ -121,4 +126,4 @@ const WorkspaceContentView: React.FC<DocumentViewServerProps> = async ({
   );
 };
 
-export default WorkspaceContentView;
+export default RelatedContentView;
