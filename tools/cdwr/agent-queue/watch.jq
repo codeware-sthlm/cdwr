@@ -17,11 +17,12 @@ def agent_cutover: "2026-11-10T22:00:00Z";
 
 def agent_prefixed: (.body // "") | trim | startswith("**Agent");
 
-# True for a comment node the agent wrote: by the app user, or prefixed and older than the cutover.
-# A node without a user (a query that didn't ask, an older installed lib.sh) falls back to the prefix.
+# True for a comment node the agent wrote: by the queue's app user, or prefixed and older than the
+# cutover. Another app user (a Linear integration) is not the agent. A node without a user (a query
+# that didn't ask, an older installed lib.sh) falls back to the prefix.
 def is_agent:
   if (.user | type) != "object" then agent_prefixed
-  elif .user.app == true or .user.id == agent_user_id then true
+  elif .user.id == agent_user_id then true
   else agent_prefixed and ((.createdAt | epoch) < (agent_cutover | epoch))
   end;
 
@@ -418,8 +419,8 @@ def queue_order:
 
 def is_open: .state.type != "completed" and .state.type != "canceled";
 
-# True when the app added the ticket's agent:ready: the newest history entry adding it has the app
-# user as its actor. Only Håkan makes a ticket ready. No such entry in the page read counts as his:
+# True when an app added the ticket's agent:ready: the newest history entry adding it has an app
+# user as its actor, the queue's own or any other integration. Only Håkan makes a ticket ready. No such entry in the page read counts as his:
 # a guard that hides real work is worse than one that misses.
 def ready_by_app:
   ([ (.history.nodes // [])[] | select(any((.addedLabels // [])[]; .name == "agent:ready")) ]
