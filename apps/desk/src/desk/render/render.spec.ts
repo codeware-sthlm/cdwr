@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DeskCommandRow, RunsPayload, SnoozeRow } from '../../supabase';
-import { dayTime, hhmm } from '../format';
+import type { RunsPayload, SnoozeRow } from '../../supabase';
+import { hhmm } from '../format';
 import { model } from '../model';
 import {
   type DeskState,
@@ -40,7 +40,6 @@ import {
   view
 } from './fixtures';
 import { platform } from './header';
-import { renderPlatform } from './platform';
 import {
   renderAlert,
   renderFrozenLabel,
@@ -937,231 +936,6 @@ describe('cpu chart', () => {
   });
 });
 
-describe('platform view', () => {
-  const OLD = 'abc1234' + '0'.repeat(33);
-  const NEW = 'def5678' + '0'.repeat(33);
-  const jobWith = (
-    over: Partial<NonNullable<RunsPayload['job']>>,
-    main: RunsPayload['main'] = { image: null, desk: null, deskWeb: null }
-  ): DeskState => {
-    const s = filled();
-    const base = runs(view());
-    s.data.runs = { ...base, main, job: base.job && { ...base.job, ...over } };
-    return s;
-  };
-  const html = (s: DeskState, desk: string | null = null): string =>
-    renderPlatform(model(s, NOW, desk), NOW);
-  const session = (host: string, kind: string, ago: number) =>
-    ({
-      id: `${host}-${kind}`,
-      host,
-      kind,
-      last_seen: new Date(NOW.getTime() - ago * 6e4).toISOString()
-    }) as never;
-
-  it('draw the four sections with a back link and the head counts', () => {
-    const out = html(filled());
-    for (const label of [
-      'CONTROLS',
-      'HOSTS &amp; HEARTBEAT',
-      'VERSIONS &amp; UPDATES',
-      'HEALTH CHECKS'
-    ])
-      expect(out).toContain(`>${label}</h2>`);
-    expect(out).toContain('data-view="desk"');
-    expect(out).toContain('<h1 id="platform-title"');
-    expect(out).toContain('controls need a control token in Settings');
-    expect(out).toContain('Read-only here: add a control token');
-    expect(out).not.toContain('data-cmd');
-    // Realtime is not connected in the fixture
-    expect(out).toMatch(/pf-stat bad">\d+ failing/);
-  });
-
-  it('say whether the queue runs or is paused, and the limits it sets', () => {
-    const out = html(filled());
-    expect(out).toContain('<b class="pf-val ">Running</b>');
-    expect(out).toContain(
-      '2 open now · set per session with /work-queue limit=N'
-    );
-    expect(out).toContain('last run ');
-    expect(html(jobWith({ paused: true }))).toContain(
-      '<b class="pf-val wait">Paused</b>'
-    );
-    expect(html(jobWith({ live: true }))).toContain('on events');
-  });
-
-  it('show the effort cap, and a dash when it is not published', () => {
-    expect(html(filled())).toContain('<b class="pf-val ">–</b>');
-    const out = html(jobWith({ effort: { spent: 32, cap: 40 } }));
-    expect(out).toContain('<b class="pf-val ">$40</b>');
-    expect(out).toContain('80% used today');
-  });
-
-  it('chip the image, the desk and the scripts against main', () => {
-    const behind = html(
-      jobWith(
-        { host: 'container', rev: 'sha-abc1234' },
-        { image: NEW, desk: NEW, deskWeb: null }
-      ),
-      OLD
-    );
-    expect(behind).toContain('update available');
-    expect(behind).toContain('sha-abc1234 → sha-def5678');
-    expect(behind).toContain('out of date');
-    expect(behind).toContain('cdwr agent desk install');
-    const current = html(
-      jobWith(
-        { host: 'container', rev: 'sha-abc1234' },
-        { image: OLD, desk: OLD, deskWeb: null }
-      ),
-      OLD
-    );
-    expect(current).toContain('up to date');
-    expect(current).not.toContain('update available');
-    expect(current).not.toContain('reload the desk');
-    expect(current).toContain('matches main');
-    const unknown = html(filled());
-    expect(unknown).toContain('pf-chip muted">unknown');
-  });
-
-  it('say the scripts are out of date with their items, or unknown', () => {
-    const stale = html(
-      jobWith({ install: 'stale', items: 'watch.jq, waits.sh' })
-    );
-    expect(stale).toContain('out of date (watch.jq, waits.sh)');
-    expect(html(jobWith({ install: 'unknown' }))).toContain(
-      'Scheduler scripts'
-    );
-    expect(html(jobWith({ install: 'unknown' }))).not.toContain('matches main');
-  });
-
-  it('list a check per row, with the problem text of a failing one', () => {
-    const s = filled();
-    s.data.hostMetrics = [hostSample(0)];
-    s.data.connection.downSince = NOW.getTime() - 60e3;
-    const out = html(s);
-    expect(out).toContain('Realtime');
-    expect(out).toContain('queue_state parses');
-    expect(out).toContain('nuc heartbeat');
-    expect(out).toContain('github_events last event');
-    expect(out).toContain('Linear poll');
-    expect(out).toContain('Realtime is not connected; polling every 5 min');
-    expect(out).toContain('cap-dot bad');
-    expect(out).toContain('never');
-    // A check no other problem explains links to its own card
-    expect(out).toContain(
-      'data-problem="problem-check-github-events-last-event">not loaded</button>'
-    );
-  });
-
-  it('say which PR change the webhook missed, on the row and the CHECK card', () => {
-    const at = (min: number) => NOW.getTime() - min * 6e4;
-    const s = filled();
-    s.data.hostMetrics = [hostSample(0)];
-    s.data.githubEvents = [
-      {
-        pr: 7,
-        subject: 'pr/7',
-        action: 'pull_request:opened',
-        updated_at: new Date(at(120)).toISOString()
-      } as never
-    ];
-    s.details.set('COD-2', {
-      steps: 0,
-      done: 0,
-      next: null,
-      idea: null,
-      blockedBy: [],
-      pr: 42,
-      prAt: at(60)
-    });
-    const text = `PR #42 (COD-2) changed ${dayTime(at(60), NOW.getTime())}, newest webhook event ${dayTime(at(120), NOW.getTime())}`;
-    const out = html(s);
-    expect(out).toContain(
-      `data-problem="problem-check-github-events-last-event">${text}</button>`
-    );
-    const card = renderProblems(model(s, NOW));
-    expect(card).toContain('id="problem-check-github-events-last-event"');
-    expect(card).toContain(text);
-  });
-
-  it('say quiet on the webhook row when no PR changed', () => {
-    const s = filled();
-    s.data.githubEvents = [];
-    expect(html(s)).toMatch(
-      /github_events last event<\/span><small class="pf-note">quiet<\/small>/
-    );
-  });
-
-  it('show the Mac panel only with a Mac host', () => {
-    const none = html(filled());
-    expect(none).not.toContain('pf-box mac');
-    expect(none).not.toContain('pf-strip');
-    expect(none).not.toContain('mac today');
-    const s = filled({
-      state: 'alive',
-      detail: 'working',
-      ticket: 'COD-1',
-      lastSeen: '2026-10-29T11:59:00'
-    });
-    s.data.sessions = [
-      session('mac', 'attended', 1),
-      session('nuc', 'implement', 3)
-    ];
-    const out = html(s);
-    expect(out).toContain('pf-box mac');
-    expect(out).toContain('<b class="cap-name">mac</b>');
-    expect(out).toContain('pf-chip work on">ATTENDED');
-    expect(out).toContain(
-      'you are on COD-1 · the queue schedules nothing here'
-    );
-    expect(out).toContain('heartbeat within 5 min');
-    expect(out).toContain('no heartbeat for 5–30 min');
-    expect(out).toContain('<span class="on"><i></i><b>attended</b>');
-    const back = filled();
-    back.data.sessions = [session('mac', 'attended', 10)];
-    const handing = html(back);
-    expect(handing).not.toContain('ATTENDED');
-    expect(handing).toContain('pf-chip muted">HANDING BACK');
-    expect(handing).toContain('seen 10 m ago');
-  });
-
-  it('give the NUC a verdict chip and its heartbeat line', () => {
-    expect(html(filled())).toContain('pf-chip ok">BUSY');
-    expect(html(filled())).toContain(
-      'heartbeat 0 s ago · every 10 min · CPU 25%'
-    );
-    const idle = jobWith({});
-    idle.data.runs = runs(view());
-    idle.data.runs.rows = [];
-    expect(html(idle)).toContain('pf-chip ok">IDLE');
-    const stale = filled();
-    stale.data.hostMetrics = [hostSample(30)];
-    expect(html(stale)).toContain('pf-chip muted">STALE');
-    const bad = filled();
-    bad.data.hostMetrics = [hostSample(0, { mem_available: 0.2 * 2 ** 30 })];
-    expect(html(bad)).toContain('pf-chip bad">BAD');
-    const empty = filled();
-    empty.data.hostMetrics = [];
-    expect(html(empty)).toContain('no samples yet');
-  });
-
-  it("list the Mac's sessions of today, and say when there are none", () => {
-    const s = filled();
-    s.data.sessions = [
-      session('mac', 'attended', 1),
-      session('nuc', 'implement', 3)
-    ];
-    const out = html(s);
-    expect(out).toContain('mac today');
-    expect(out).toContain('attended session · last seen');
-    expect(out).toContain('<span class="pf-t">now</span>');
-    const old = filled();
-    old.data.sessions = [session('mac', 'attended', 20 * 60)];
-    expect(html(old)).toContain('no sessions today');
-  });
-});
-
 describe('problems', () => {
   // Every health check passes, so only the problem under test shows
   const base = (): DeskState => {
@@ -1240,15 +1014,9 @@ describe('problems', () => {
     expect(alert).toContain('a health check is failing');
     expect(alert).toContain('1 check failing · see Platform');
     expect(renderFrozenLabel(m)).toBe('');
-    const pf = renderPlatform(m, NOW);
-    expect(pf).toMatch(
-      /mac heartbeat[\s\S]*?data-problem="problem-check-mac-heartbeat"/
-    );
   });
 
-  it('passes a host whose session ended, and the Platform row says so', () => {
-    const m = model(live(crashed(base())), NOW);
-    void m;
+  it('passes a host whose session ended', () => {
     const s = live(base());
     s.data.sessions = [
       {
@@ -1260,11 +1028,7 @@ describe('problems', () => {
         detail: null
       }
     ];
-    const ended = model(s, NOW);
-    expect(ended.problems).toEqual([]);
-    expect(renderPlatform(ended, NOW)).toMatch(
-      /mac heartbeat<\/span><small class="pf-note">no session<\/small>/
-    );
+    expect(model(s, NOW).problems).toEqual([]);
   });
 
   it('draws the connection problem with its timer, status and retry', () => {
@@ -1404,26 +1168,6 @@ describe('problems', () => {
     expect(renderAlert(m)).toBe('');
     expect(renderProblems(m)).toBe('');
     expect(renderFrozenLabel(m)).toBe('');
-  });
-
-  it('links a failing health check to its problem card', () => {
-    const failing = renderPlatform(model(down(base()), NOW), NOW);
-    expect(failing).toContain('data-problem="problem-connection"');
-    const ok = renderPlatform(model(live(fresh(base())), NOW), NOW);
-    expect(ok).not.toContain('data-problem="problem-connection"');
-    const frozen = parse(base());
-    if (frozen.data.runs)
-      frozen.data.runs = {
-        ...frozen.data.runs,
-        at: new Date(at(60 * 24 * 5)).toISOString()
-      };
-    const both = renderPlatform(model(frozen, NOW), NOW);
-    expect(both).toMatch(
-      /queue_state parses[\s\S]*?data-problem="problem-data-parse"/
-    );
-    expect(both).toMatch(
-      /Snapshot age[\s\S]*?data-problem="problem-data-stale"/
-    );
   });
 });
 
@@ -1871,77 +1615,22 @@ describe('snoozed waiting rows', () => {
 
 describe('controls on', () => {
   const target = { supabaseUrl: 'https://x.supabase.co', controlToken: 't' };
-  const row = (
-    id: number,
-    kind: string,
-    status = 'pending',
-    note: string | null = null
-  ): DeskCommandRow => ({
-    id,
-    at: NOW.toISOString(),
-    host: 'nuc',
-    kind,
-    args: {},
-    actor: 'mac',
-    status,
-    applied_at: status === 'pending' ? null : NOW.toISOString(),
-    note
-  });
   const on = (build: (s: DeskState) => void = () => undefined): DeskState => {
     const s = filled();
     s.controls.target = target;
     build(s);
     return s;
   };
-  const platformHtml = (s: DeskState): string =>
-    renderPlatform(model(s, NOW, null), NOW);
 
-  it('draw the buttons and steppers with their data attributes', () => {
-    const out = platformHtml(on());
-    expect(out).toContain('data-cmd="pause"');
-    expect(out).toContain('data-cmd="run"');
-    expect(out).toContain('data-step="limit:-1"');
-    expect(out).toContain('data-step="limit:1"');
-    expect(out).toContain('data-step="cap:-5"');
-    expect(out).toContain('data-step="cap:5"');
-    expect(out).toContain('data-apply="limit"');
-    expect(out).not.toContain('read-only');
-    expect(out).not.toContain('COD-680');
-  });
-
-  it('offer resume while paused, on the limits card too', () => {
+  it('offer resume while paused on the limits card', () => {
     const s = on((x) => {
       const r = x.data.runs;
       if (r?.job) r.job = { ...r.job, paused: true };
     });
-    expect(platformHtml(s)).toContain('data-cmd="resume"');
     const cap = renderCapacity(model(s, NOW));
     expect(cap).toContain('Queue paused');
     expect(cap).toContain('data-cmd="resume"');
     expect(cap).toContain('data-cmd="run"');
-  });
-
-  it('show the draft and enable Apply only when it differs', () => {
-    expect(platformHtml(on())).toMatch(/data-apply="limit" disabled/);
-    const out = platformHtml(on((s) => (s.controls.drafts = { limit: 7 })));
-    expect(out).toContain('<b class="ctl-draft">7</b>');
-    expect(out).not.toMatch(/data-apply="limit" disabled/);
-  });
-
-  it('disable a pending control and say so', () => {
-    const out = platformHtml(
-      on((s) => (s.data.deskCommands = [row(1, 'run')]))
-    );
-    expect(out).toMatch(/data-cmd="run" disabled/);
-    expect(out).toContain('pending…');
-  });
-
-  it('show a refused note', () => {
-    const out = platformHtml(
-      on((s) => (s.data.deskCommands = [row(1, 'run', 'refused', 'paused')]))
-    );
-    expect(out).toContain('role="status">paused</small>');
-    expect(out).not.toMatch(/data-cmd="run" disabled/);
   });
 
   it('ask for a confirmation before abandoning', () => {
