@@ -319,8 +319,16 @@ export const judgeRecords = (
     (address) => !ours.has(canonicalAddress(address))
   );
   // A + AAAA at the app is a setup Fly accepts, so it is as good as the
-  // CNAME; anything else is in the way of one
-  const byAddress = a.verdict === 'match' && aaaa.verdict !== 'mismatch';
+  // CNAME; anything else is in the way of one. Every family the app has must
+  // answer with it, and nothing foreign may sit beside them
+  const families = [
+    ofType('A').length ? a : null,
+    ofType('AAAA').length ? aaaa : null
+  ].filter((judgement) => judgement !== null);
+  const byAddress =
+    families.length > 0 &&
+    families.every((judgement) => judgement.verdict === 'match') &&
+    !blockingAddresses.length;
 
   return {
     a,
