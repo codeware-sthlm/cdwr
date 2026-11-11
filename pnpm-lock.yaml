@@ -31,7 +31,7 @@ overrides:
   '@verdaccio/hooks>handlebars': '>=4.7.10 <5'
 
 patchedDependencies:
-  payload-totp@3.0.7: f362255b749ea68b8f171bfc34691151672f4e4998a4629b11cb9b4bb889d719
+  payload-totp@3.0.7: ce9829ef4a8b20be59674cffa46d394cbb783e257297647e2920e4ed71e41151
 
 importers:
 
@@ -261,7 +261,7 @@ importers:
         version: 3.90.2(graphql@16.14.2)(supports-color@5.5.0)(typescript@6.0.3)
       payload-totp:
         specifier: 3.0.7
-        version: 3.0.7(patch_hash=f362255b749ea68b8f171bfc34691151672f4e4998a4629b11cb9b4bb889d719)(0d82149d45056e987a6bb0f387ea4dc9)
+        version: 3.0.7(patch_hash=ce9829ef4a8b20be59674cffa46d394cbb783e257297647e2920e4ed71e41151)(0d82149d45056e987a6bb0f387ea4dc9)
       prettier:
         specifier: ~3.9.0
         version: 3.9.9
@@ -12211,6 +12211,7 @@ packages:
 
   node-abort-controller@3.1.1:
     resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
+    deprecated: This package is no longer needed on supported Node.js versions. Node.js 16+ includes AbortController and AbortSignal as built-in globals. All Node.js versions requiring this polyfill are end-of-life. Use the built-in globals instead.
 
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
@@ -29543,7 +29544,7 @@ snapshots:
 
   pathval@2.0.1: {}
 
-  payload-totp@3.0.7(patch_hash=f362255b749ea68b8f171bfc34691151672f4e4998a4629b11cb9b4bb889d719)(0d82149d45056e987a6bb0f387ea4dc9):
+  payload-totp@3.0.7(patch_hash=ce9829ef4a8b20be59674cffa46d394cbb783e257297647e2920e4ed71e41151)(0d82149d45056e987a6bb0f387ea4dc9):
     dependencies:
       '@payloadcms/next': 3.90.2(@types/react@19.3.0)(graphql@16.14.2)(monaco-editor@0.57.0)(next@16.4.3(@babel/core@7.29.7(supports-color@5.5.0))(@opentelemetry/api@1.9.1)(@playwright/test@1.65.0)(@types/node@22.20.5)(babel-plugin-macros@3.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.105.1))(payload@3.90.2(graphql@16.14.2)(supports-color@5.5.0)(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@5.5.0)(typescript@6.0.3)
       '@payloadcms/translations': 3.90.2
