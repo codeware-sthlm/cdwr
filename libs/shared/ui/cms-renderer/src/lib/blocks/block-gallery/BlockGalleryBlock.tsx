@@ -180,7 +180,7 @@ export const BlockGalleryBlock: React.FC<
     return first?.meta.slug ?? null;
   };
   const [selected, setSelected] = useState(opening);
-  // Up here rather than in the entry, which is remounted for every block
+  // Up here rather than in the entry, so the way back to the list closes it
   const [expanded, setExpanded] = useState(false);
 
   // `RenderBlocks` keys by position, so a navigation that leaves the gallery
@@ -201,10 +201,9 @@ export const BlockGalleryBlock: React.FC<
 
     return (
       <section>
+        {/* Not keyed by block: a remount per step closed and reopened the
+            full screen dialog, which flashed. The band choice carries over */}
         <BlockGalleryEntry
-          // One entry per block: stepping to another must not carry the last
-          // one's band choice across. Full screen is the gallery's, so it stays
-          key={entry.meta.slug}
           meta={entry.meta}
           doc={entry.doc}
           render={render}
