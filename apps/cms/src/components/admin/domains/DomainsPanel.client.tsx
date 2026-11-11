@@ -3,17 +3,25 @@
 import type { HostnameCheck } from '@cdwr/fly-node/api';
 import type {
   CertificateState,
+  RecordJudgement,
+  RecordSet,
   ResolverComparison,
   TenantDomain
 } from '@codeware/app-cms/feature/domains';
 import {
   CERTIFICATE_ACTIONS,
-  describeCertificateIssues
+  describeCertificateIssues,
+  guessZone,
+  judgeRecords,
+  registrarName
 } from '@codeware/app-cms/feature/domains';
 import {
   type DomainAction,
   DomainCard,
   type DomainCertificateStatus,
+  DomainDetails,
+  type RecordClue,
+  type RequiredRecord,
   RestartCard,
   isExpiringSoon
 } from '@codeware/app-cms/ui/domains';
@@ -21,6 +29,13 @@ import type {
   TranslationsKeys,
   TranslationsObject
 } from '@codeware/app-cms/util/i18n';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle
+} from '@codeware/shared/ui/shadcn/components/sheet';
 import { ShieldCheckIcon } from '@heroicons/react/24/outline';
 import { useDocumentInfo, useFormFields, useTranslation } from '@payloadcms/ui';
 import { getDataByPath } from 'payload/shared';
@@ -82,6 +97,242 @@ const restartKey = (app: string) => `restart:${app}`;
 
 /** Identifies a row by the pair both endpoints act on */
 const domainKey = (hostname: string, app: string) => `${hostname}|${app}`;
+
+type Translate = ReturnType<
+  typeof useTranslation<TranslationsObject, TranslationsKeys>
+>['t'];
+
+/** Every value a record set holds, CNAME first, as one readable list */
+const listRecords = ({ a, aaaa, cname }: RecordSet) =>
+  [...cname, ...a, ...aaaa].join(', ');
+
+/**
+ * A live judgement as the clue next to its record, in plain words.
+ *
+ * `null` when there is nothing to say, which is also what a record Fly has
+ * confirmed shows: Fly's verdict wins, so the clue only explains a no.
+ */
+const toClue = (
+  t: Translate,
+  judgement: RecordJudgement,
+  record: { type: string; name: string; target: string },
+  blocking?: string | null
+): RecordClue | null => {
+  switch (judgement.verdict) {
+    case 'match':
+      return {
+        verdict: 'match',
+        label: t('domains:verdictMatch'),
+        detail: t('domains:verdictMatchDetail')
+      };
+    case 'mismatch':
+      return {
+        verdict: 'mismatch',
+        label: t('domains:verdictWrong'),
+        detail: [
+          t('domains:verdictWrongDetail', {
+            actual: judgement.actual.join(', '),
+            expected: record.target
+          }),
+          blocking
+        ]
+          .filter(Boolean)
+          .join(' ')
+      };
+    case 'missing':
+      return {
+        verdict: 'missing',
+        label:
+          record.type === 'A'
+            ? t('domains:verdictMissingIpv4')
+            : record.type === 'AAAA'
+              ? t('domains:verdictMissingIpv6')
+              : t('domains:verdictMissing'),
+        detail: t('domains:verdictMissingDetail', {
+          type: record.type,
+          name: record.name
+        })
+      };
+    default:
+      return null;
+  }
+};
+
+/**
+ * What a domain's card and details sheet show, composed from the stored
+ * certificate, Fly's last check and the resolvers, once they were asked.
+ *
+ * The status and the green ticks stay Fly's own. The resolvers only add
+ * clues: why Fly still says no, in words a domain owner can act on.
+ */
+const composeDomainView = (
+  t: Translate,
+  row: Row,
+  comparison: ResolverComparison | null
+) => {
+  const { hostname, app, certificate, check } = row;
+  const isApex = Boolean(certificate?.isApex);
+  const zone = comparison?.nameServers?.zone ?? guessZone(hostname, isApex);
+  const addresses = (certificate?.addresses ?? []).filter(
+    (entry): entry is { type: 'A' | 'AAAA'; address: string } =>
+      Boolean(entry?.address) && (entry?.type === 'A' || entry?.type === 'AAAA')
+  );
+  const cname = `${app}.fly.dev`;
+  const judgement = judgeRecords(comparison, {
+    isApex,
+    cname,
+    addresses,
+    challenge: certificate?.dnsValidationTarget
+  });
+  const confirmedAddresses = new Set(
+    [...(check?.aRecords ?? []), ...(check?.aaaaRecords ?? [])].map((address) =>
+      address.toLowerCase()
+    )
+  );
+
+  const nameHelp = (name: string) => {
+    const label = registrarName(name, zone);
+    return label === '@'
+      ? t('domains:nameHelpApex', { name })
+      : t('domains:nameHelp', { name, label });
+  };
+
+  const records: Array<RequiredRecord> = isApex
+    ? addresses.map(({ type, address }) => {
+        // Fly's own verdict counts too: a proxied domain or a differently
+        // written v6 never matches the address as text
+        const confirmed =
+          Boolean(check?.dnsConfigured) ||
+          confirmedAddresses.has(address.toLowerCase());
+        return {
+          type,
+          registrarName: registrarName(hostname, zone),
+          nameHelp: nameHelp(hostname),
+          target: address,
+          confirmed,
+          clue: confirmed
+            ? null
+            : toClue(t, type === 'A' ? judgement.a : judgement.aaaa, {
+                type,
+                name: hostname,
+                target: address
+              })
+        };
+      })
+    : [
+        {
+          type: 'CNAME',
+          registrarName: registrarName(hostname, zone),
+          nameHelp: nameHelp(hostname),
+          target: cname,
+          confirmed: Boolean(check?.dnsConfigured),
+          clue: check?.dnsConfigured
+            ? null
+            : toClue(
+                t,
+                judgement.traffic,
+                { type: 'CNAME', name: hostname, target: cname },
+                judgement.blockingAddresses.length
+                  ? t('domains:verdictBlocking', { name: hostname })
+                  : null
+              )
+        }
+      ];
+
+  const issues = describeCertificateIssues(certificate, check);
+  const status = certificateStatus(certificate);
+  const awaiting = records.filter((record) => !record.confirmed);
+
+  const nextStep = (() => {
+    if (status === 'active') {
+      return issues.length ? t('domains:nextStepIssues') : null;
+    }
+    if (status !== 'pending') {
+      return null;
+    }
+    if (
+      awaiting.length &&
+      awaiting.every((record) => record.clue?.verdict === 'match')
+    ) {
+      return t('domains:nextStepWaitFly');
+    }
+    return comparison?.nameServers
+      ? t('domains:nextStepNameServers', {
+          zone: comparison.nameServers.zone,
+          servers: comparison.nameServers.servers.join(', ')
+        })
+      : t('domains:nextStepCreate', { zone });
+  })();
+
+  const challengeName = certificate?.dnsValidationHostname;
+  const challengeTarget = certificate?.dnsValidationTarget;
+  const challenge: RequiredRecord | null =
+    challengeName && challengeTarget
+      ? {
+          type: 'CNAME',
+          registrarName: registrarName(challengeName, zone),
+          nameHelp: nameHelp(challengeName),
+          target: challengeTarget,
+          confirmed: Boolean(check?.acmeDnsConfigured),
+          clue: check?.acmeDnsConfigured
+            ? null
+            : toClue(t, judgement.challenge, {
+                type: 'CNAME',
+                name: challengeName,
+                target: challengeTarget
+              })
+        }
+      : null;
+
+  const ownershipName = `_fly-ownership.${hostname}`;
+  const ownership: RequiredRecord | null = check?.dnsVerificationRecord
+    ? {
+        type: 'TXT',
+        registrarName: registrarName(ownershipName, zone),
+        nameHelp: nameHelp(ownershipName),
+        target: check.dnsVerificationRecord
+      }
+    : null;
+
+  const wildcardFound = comparison?.wildcard
+    ? t('domains:wildcardFound', { values: listRecords(comparison.wildcard) })
+    : null;
+
+  return {
+    status,
+    issues,
+    nextStep,
+    dns: {
+      records,
+      pendingNote:
+        isApex && !addresses.length ? t('domains:apexAddressesPending') : null,
+      note: isApex ? t('domains:apexNote') : t('domains:subdomainNote'),
+      wildcard: { advice: t('domains:wildcardAdvice'), found: wildcardFound }
+    },
+    challenge,
+    instructions: certificate?.dnsValidationInstructions ?? null,
+    ownership,
+    resolvers: comparison
+      ? {
+          answers: comparison.answers,
+          agree: comparison.agree,
+          nameServersNote: comparison.nameServers
+            ? t('domains:resolversNameServers', {
+                zone: comparison.nameServers.zone,
+                servers: comparison.nameServers.servers.join(', ')
+              })
+            : null,
+          wildcardNote: wildcardFound,
+          negativeCacheNote:
+            comparison.negativeCacheTtl === null
+              ? null
+              : t('domains:resolversNegativeCache', {
+                  seconds: comparison.negativeCacheTtl
+                })
+        }
+      : null
+  };
+};
 
 /**
  * Certificate state and dns instructions for a workspace's custom domains.
@@ -158,6 +409,8 @@ export const DomainsPanel: React.FC<{
   >({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The domain whose Details sheet is open, if any */
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
 
   const dateFormat = useMemo(
     () =>
@@ -194,14 +447,14 @@ export const DomainsPanel: React.FC<{
    * state the other actions all write back.
    */
   const runResolvers = useCallback(
-    async (hostname: string, isApex: boolean) => {
+    async (hostname: string) => {
       setBusy(actionKey(hostname, 'resolvers'));
       setError(null);
       try {
         const response = await sdk.request({
           method: 'POST',
           path: '/domain-dns-comparison',
-          json: { hostname, isApex }
+          json: { hostname }
         });
         const body = (await response.json()) as ResolverComparison & {
           error?: string;
@@ -359,32 +612,52 @@ export const DomainsPanel: React.FC<{
       request: t('domains:request'),
       check: t('domains:check'),
       remove: t('domains:remove'),
+      details: t('domains:details'),
       copyRecord: t('domains:copyRecord'),
-      dnsLede: t('domains:dnsLede'),
-      dnsNameHint: t('domains:dnsNameHint'),
-      dnsOwnershipLede: t('domains:dnsOwnershipLede'),
-      dnsSettledLede: t('domains:dnsSettledLede'),
-      dnsTrafficLede: t('domains:dnsTrafficLede'),
-      dnsValidationLede: t('domains:dnsValidationLede'),
-      compareResolvers: t('domains:compareResolvers'),
-      issuedBy: t('domains:issuedBy'),
-      issuedHeading: t('domains:issuedHeading'),
-      issuesActiveHeading: t('domains:issuesActiveHeading'),
-      issuesHeading: t('domains:issuesHeading'),
-      resolversAgree: t('domains:resolversAgree'),
-      resolversDisagree: t('domains:resolversDisagree'),
-      resolversHeading: t('domains:resolversHeading'),
-      resolversNoAnswer: t('domains:resolversNoAnswer'),
-      resolversUnreachable: t('domains:resolversUnreachable'),
-      apexNote: t('domains:apexNote'),
-      apexAddressesPending: t('domains:apexAddressesPending')
+      moreInfo: t('domains:moreInfo')
     }),
     [t]
+  );
+
+  const detailsLabels = useMemo(
+    () => ({
+      issuesHeading: t('domains:issuesHeading'),
+      issuesActiveHeading: t('domains:issuesActiveHeading'),
+      compareResolvers: t('domains:compareResolvers'),
+      resolversHeading: t('domains:resolversHeading'),
+      resolversAgree: t('domains:resolversAgree'),
+      resolversDisagree: t('domains:resolversDisagree'),
+      resolversNoAnswer: t('domains:resolversNoAnswer'),
+      resolversUnreachable: t('domains:resolversUnreachable'),
+      issuedHeading: t('domains:issuedHeading'),
+      issuedBy: t('domains:issuedBy'),
+      optionalHeading: t('domains:optionalHeading'),
+      challengeHelp: t('domains:challengeHelp'),
+      ownershipHelp: t('domains:ownershipHelp'),
+      instructionsLede: t('domains:dnsLede'),
+      copyRecord: t('domains:copyRecord'),
+      moreInfo: t('domains:moreInfo')
+    }),
+    [t]
+  );
+
+  const views = useMemo(
+    () =>
+      new Map(
+        rows.map((row) => [
+          row.hostname,
+          composeDomainView(t, row, resolvers[row.hostname] ?? null)
+        ])
+      ),
+    [resolvers, rows, t]
   );
 
   if (!rows.length) {
     return null;
   }
+
+  const detailsRow = rows.find((row) => row.hostname === detailsFor);
+  const detailsView = detailsRow ? views.get(detailsRow.hostname) : undefined;
 
   return (
     // Payload's own fields carry their spacing in the admin stylesheet; a
@@ -397,9 +670,7 @@ export const DomainsPanel: React.FC<{
 
       {rows.map((row) => {
         const { certificate } = row;
-        // Certificate-level prose survives a reload; a live check's codes do
-        // not, so this can have something to say even before one is run
-        const issues = describeCertificateIssues(certificate, row.check);
+        const view = views.get(row.hostname);
 
         return (
           <DomainCard
@@ -422,54 +693,8 @@ export const DomainsPanel: React.FC<{
                   })
                 : null
             }
-            issued={(certificate?.issuedCertificates ?? [])
-              .filter(
-                (
-                  entry
-                ): entry is { type: string; expiresAt: string; id?: unknown } =>
-                  Boolean(entry?.type) && Boolean(entry?.expiresAt)
-              )
-              .map((entry) => ({
-                type: entry.type,
-                expiresLabel: expiryFormat.format(new Date(entry.expiresAt)),
-                expiringSoon: isExpiringSoon(entry.expiresAt)
-              }))}
-            certificateAuthority={certificate?.certificateAuthority ?? null}
-            dns={
-              certificate
-                ? {
-                    name: certificate.dnsValidationHostname,
-                    target: certificate.dnsValidationTarget,
-                    instructions: certificate.dnsValidationInstructions,
-                    isApex: certificate.isApex ?? false,
-                    addresses: (certificate.addresses ?? []).filter(
-                      (
-                        entry
-                      ): entry is { type: 'A' | 'AAAA'; address: string } =>
-                        Boolean(entry?.address) &&
-                        (entry?.type === 'A' || entry?.type === 'AAAA')
-                    )
-                  }
-                : null
-            }
-            check={
-              row.check || issues.length
-                ? {
-                    issues,
-                    ownershipRecord: row.check?.dnsVerificationRecord ?? null,
-                    confirmed: row.check
-                      ? {
-                          traffic: Boolean(row.check.dnsConfigured),
-                          validation: Boolean(row.check.acmeDnsConfigured),
-                          addresses: [
-                            ...(row.check.aRecords ?? []),
-                            ...(row.check.aaaaRecords ?? [])
-                          ]
-                        }
-                      : null
-                  }
-                : null
-            }
+            nextStep={view?.nextStep ?? null}
+            dns={certificate ? (view?.dns ?? null) : null}
             saved={row.saved}
             runningAction={
               CERTIFICATE_ACTIONS.find(
@@ -478,25 +703,9 @@ export const DomainsPanel: React.FC<{
             }
             disabled={busy !== null}
             labels={labels}
-            resolvers={(() => {
-              const comparison = resolvers[row.hostname];
-              if (!comparison) {
-                return null;
-              }
-              return {
-                answers: comparison.answers,
-                agree: comparison.agree,
-                negativeCacheNote:
-                  comparison.negativeCacheTtl === null
-                    ? null
-                    : t('domains:resolversNegativeCache', {
-                        seconds: comparison.negativeCacheTtl
-                      })
-              };
-            })()}
             onAction={(action) =>
-              action === 'resolvers'
-                ? void runResolvers(row.hostname, Boolean(certificate?.isApex))
+              action === 'details'
+                ? setDetailsFor(row.hostname)
                 : void run(row.hostname, action)
             }
           />
@@ -517,6 +726,68 @@ export const DomainsPanel: React.FC<{
           {error}
         </p>
       )}
+
+      {/* One sheet for the panel, showing whichever card asked for it */}
+      <Sheet
+        open={Boolean(detailsRow)}
+        onOpenChange={(open) => !open && setDetailsFor(null)}
+      >
+        <SheetContent size="lg" className="codeware-admin twp gap-0">
+          {detailsRow && detailsView && (
+            <>
+              <SheetHeader>
+                <SheetTitle>{detailsRow.hostname}</SheetTitle>
+                <SheetDescription>{t('domains:detailsSub')}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-4">
+                <DomainDetails
+                  active={detailsView.status === 'active'}
+                  issues={detailsView.issues}
+                  resolvers={detailsView.resolvers}
+                  issued={(detailsRow.certificate?.issuedCertificates ?? [])
+                    .filter(
+                      (
+                        entry
+                      ): entry is {
+                        type: string;
+                        expiresAt: string;
+                        id?: unknown;
+                      } => Boolean(entry?.type) && Boolean(entry?.expiresAt)
+                    )
+                    .map((entry) => ({
+                      type: entry.type,
+                      expiresLabel: expiryFormat.format(
+                        new Date(entry.expiresAt)
+                      ),
+                      expiringSoon: isExpiringSoon(entry.expiresAt)
+                    }))}
+                  certificateAuthority={
+                    detailsRow.certificate?.certificateAuthority ?? null
+                  }
+                  challenge={detailsView.challenge}
+                  instructions={detailsView.instructions}
+                  ownership={detailsView.ownership}
+                  comparing={
+                    busy === actionKey(detailsRow.hostname, 'resolvers')
+                  }
+                  disabled={busy !== null}
+                  labels={detailsLabels}
+                  onCompare={() => void runResolvers(detailsRow.hostname)}
+                />
+                {/* The sheet covers the panel, so its error shows here too */}
+                {error && (
+                  <p
+                    role="alert"
+                    className="text-sm text-(--destructive-subtle)"
+                  >
+                    {error}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
