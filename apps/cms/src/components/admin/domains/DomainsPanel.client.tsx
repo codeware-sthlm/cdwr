@@ -250,13 +250,31 @@ const composeDomainView = (
     if (status !== 'pending') {
       return null;
     }
-    if (
-      awaiting.length &&
-      awaiting.every((record) => record.clue?.verdict === 'match')
-    ) {
+    // An apex whose addresses are not known yet has no records to judge;
+    // its pending note already says what to do
+    if (!records.length) {
+      return t('domains:nextStepCreate', { zone });
+    }
+    // Fly found every record in place; only the certificate is left
+    if (!awaiting.length) {
+      return t('domains:nextStepIssuing');
+    }
+    // The clues read one resolver, so while they disagree a match there
+    // says little and a mismatch may already be on its way out
+    if (comparison && !comparison.agree) {
+      return t('domains:nextStepSpreading');
+    }
+    if (awaiting.every((record) => record.clue?.verdict === 'match')) {
       return t('domains:nextStepWaitFly');
     }
-    return comparison?.nameServers
+    // Only name the servers as the place to fix it once a record there is
+    // known to be wrong or missing, not merely unknown
+    const wrong = awaiting.some(
+      (record) =>
+        record.clue?.verdict === 'mismatch' ||
+        record.clue?.verdict === 'missing'
+    );
+    return wrong && comparison?.nameServers
       ? t('domains:nextStepNameServers', {
           zone: comparison.nameServers.zone,
           servers: comparison.nameServers.servers.join(', ')

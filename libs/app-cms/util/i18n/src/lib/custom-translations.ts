@@ -110,7 +110,9 @@ const customTranslationsSchema = z.object({
     neverChecked: z.string(),
     nextStepCreate: z.string(),
     nextStepIssues: z.string(),
+    nextStepIssuing: z.string(),
     nextStepNameServers: z.string(),
+    nextStepSpreading: z.string(),
     nextStepWaitFly: z.string(),
     notRequested: z.string(),
     optionalHeading: z.string(),
@@ -678,8 +680,12 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       nextStepCreate:
         'Create these records where DNS for {{zone}} is served, then press Check now.',
       nextStepIssues: 'Fly reports a problem with this domain. See Details.',
+      nextStepIssuing:
+        'Fly sees the records and is issuing the certificate. Press Check now in a minute or two.',
       nextStepNameServers:
         'DNS for {{zone}} is served by {{servers}}, which doesn’t answer with these records yet. Create or change them there, then press Check now.',
+      nextStepSpreading:
+        'The public resolvers don’t agree yet, so the records are still spreading. Give it time, then press Check now.',
       nextStepWaitFly:
         'Public DNS answers as expected; Fly has not confirmed it yet. Press Check now.',
       notRequested: 'No certificate yet',
@@ -1332,8 +1338,12 @@ Supported locales: {{locales}}`,
       nextStepCreate:
         'Skapa posterna där DNS för {{zone}} hanteras, och tryck sedan på Kontrollera nu.',
       nextStepIssues: 'Fly rapporterar ett problem med domänen. Se Detaljer.',
+      nextStepIssuing:
+        'Fly ser posterna och utfärdar certifikatet. Tryck på Kontrollera nu om en minut eller två.',
       nextStepNameServers:
         'DNS för {{zone}} hanteras av {{servers}}, som inte svarar med de här posterna ännu. Skapa eller ändra dem där, och tryck sedan på Kontrollera nu.',
+      nextStepSpreading:
+        'De publika resolvrarna är inte överens ännu, så posterna sprids fortfarande. Ge det tid, och tryck sedan på Kontrollera nu.',
       nextStepWaitFly:
         'Publik DNS svarar som väntat, men Fly har inte bekräftat det ännu. Tryck på Kontrollera nu.',
       notRequested: 'Inget certifikat ännu',
