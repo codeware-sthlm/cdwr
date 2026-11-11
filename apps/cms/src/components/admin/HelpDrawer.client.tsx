@@ -60,10 +60,11 @@ export function HelpDrawer() {
   const sdk = useMemo(
     () =>
       new PayloadSDK<Config>({
-        baseURL: `${config.serverURL ?? ''}/api`,
+        // Same origin as the page, not serverURL (see usePayloadSdk)
+        baseURL: config.routes.api,
         baseInit: token ? { headers: { Authorization: `JWT ${token}` } } : {}
       }),
-    [config.serverURL, token]
+    [config.routes.api, token]
   );
 
   const [open, setOpen] = useState(false);
