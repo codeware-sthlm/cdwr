@@ -218,6 +218,23 @@ describe('judgeRecords', () => {
     expect(judgement.blockingAddresses).toEqual([]);
   });
 
+  it('does not accept a subdomain by address while its AAAA is missing', () => {
+    const judgement = judgeRecords(comparison({ a: ['66.241.124.125'] }), www);
+
+    expect(judgement.byAddress).toBe(false);
+    expect(judgement.traffic.verdict).toBe('mismatch');
+  });
+
+  it('does not accept a foreign AAAA beside the app’s A', () => {
+    const judgement = judgeRecords(
+      comparison({ a: ['66.241.124.125'], aaaa: ['2a02:2350:5:100::1'] }),
+      { ...www, addresses: [flyAddresses[0]] }
+    );
+
+    expect(judgement.byAddress).toBe(false);
+    expect(judgement.blockingAddresses).toEqual(['2a02:2350:5:100::1']);
+  });
+
   it('matches a subdomain CNAME, ignoring the addresses it leads to', () => {
     const judgement = judgeRecords(
       comparison(
