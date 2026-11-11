@@ -2,6 +2,7 @@ import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { adoptableDomains } from '@codeware/shared/util/payload-utils';
 import type { Payload } from 'payload';
 
+import { dropStaleClientConfigs } from './client-config-cache';
 import { isSchemaNotReady } from './schema-not-ready';
 
 /**
@@ -66,6 +67,7 @@ export const adoptPlatformDomains = async (payload: Payload): Promise<void> => {
     // be fixed from there
     if (primary && !env.DISABLE_DOMAIN_ADOPTION) {
       config.serverURL = primary;
+      dropStaleClientConfigs(primary);
       payload.logger.info(`[platform-domains] Serving as ${primary}`);
     }
 
