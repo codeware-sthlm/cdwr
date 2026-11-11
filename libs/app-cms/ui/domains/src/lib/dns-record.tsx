@@ -1,215 +1,211 @@
 import { CopyButton } from '@codeware/shared/ui/copy-button';
-import { CheckCircleIcon } from '@heroicons/react/24/outline';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from '@codeware/shared/ui/shadcn/components/popover';
+import {
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  MinusCircleIcon
+} from '@heroicons/react/24/outline';
+
+/**
+ * The admin's styling scope. A popover portals out of the panel, so it has to
+ * carry the scope itself, as the admin's sheets and menus do.
+ */
+const PORTAL_SCOPE = 'codeware-admin twp';
+
+/**
+ * What public dns answers for a record now, as a clue next to it.
+ *
+ * Never a verdict: whether the domain is set up is Fly's call, so a `match`
+ * reads as "answers as expected", not as done.
+ */
+export type RecordClue = {
+  verdict: 'match' | 'mismatch' | 'missing';
+  /** Plain words, e.g. "Points at the wrong server" */
+  label: string;
+  /** The sentence behind it, e.g. "Answers 46.30.213.129, should be …" */
+  detail: string;
+};
+
+/** One record the domain's owner creates, as a registrar's form wants it */
+export type RequiredRecord = {
+  type: 'CNAME' | 'TXT' | 'A' | 'AAAA';
+  /** The name relative to the zone: `@` for the domain itself, else `www` */
+  registrarName: string;
+  /** What the name field takes and why, behind the name's popover */
+  nameHelp: string;
+  target: string;
+  /** Whether Fly's last check found it in place, which is what counts */
+  confirmed?: boolean;
+  /** What public dns answers, once resolvers have been compared */
+  clue?: RecordClue | null;
+};
 
 export type DnsRecordProps = {
-  /** The domain the records are created for */
-  hostname: string;
-  /** Fly app that serves it, which the traffic record points at */
-  app: string;
-  /** What Fly wants for the ownership challenge */
-  validation: {
-    /** Hostname the record is created for */
-    name?: string | null;
-    /** What it points at */
-    target?: string | null;
-    /** Fly's own phrasing, for the cases it describes better than a CNAME row */
-    instructions?: string | null;
-    /** The domain itself rather than a subdomain, which cannot use a CNAME */
-    isApex?: boolean;
-    /** The A and AAAA records an apex points at, in place of a CNAME */
-    addresses?: Array<{ type: 'A' | 'AAAA'; address: string }>;
+  /** The records the domain needs, in the order they are created */
+  records: Array<RequiredRecord>;
+  /** Shown in place of the records while they cannot be known yet */
+  pendingNote?: string | null;
+  /** Why these records and not others, behind the block's info icon */
+  note?: string | null;
+  /** What to do with a `*` record, and what one answers when it was found */
+  wildcard: {
+    advice: string;
+    /** Pre-composed "A * record answers …", only once one was found */
+    found?: string | null;
   };
-  /**
-   * Value for the `_fly-ownership` TXT record, when Fly has offered one.
-   *
-   * Fly's fallback proof of ownership, for the cases where it cannot read the
-   * app's address off the domain itself — no IPv6, or a proxy in front.
-   */
-  ownershipRecord?: string | null;
-  /**
-   * What Fly's last check found already in place, when one has been run.
-   *
-   * A record can be exactly what was suggested and still be unconfirmed —
-   * this only reflects what Fly itself has seen, not whether the copy above
-   * was followed.
-   */
-  confirmed?: {
-    traffic?: boolean | null;
-    validation?: boolean | null;
-    /** The addresses Fly found the domain resolving to */
-    addresses?: Array<string> | null;
-  } | null;
-  /**
-   * The certificate is issued, with no known outstanding issue — true both
-   * once a check has run clean and before any check has run at all, not
-   * only when a check has actively confirmed the domain.
-   *
-   * The records themselves stay needed forever — removing one still breaks
-   * the domain, certificate or not — only the *voice* changes: instructional
-   * ledes read as unfinished work under a green status, so a settled block
-   * says what the records are for instead of what to do with them.
-   */
-  settled?: boolean;
   labels: {
-    trafficLede: string;
-    validationLede: string;
-    ownershipLede: string;
-    /** Lede for Fly's prose, which is not always the validation record */
-    instructionsLede: string;
-    apexNote: string;
-    /** Hint shown with the note while the addresses are not yet known */
-    apexAddressesPending: string;
-    nameHint: string;
-    /** The one line a settled block shows instead of the instructional ledes */
-    settledLede: string;
     /** Accessible name for the copy button */
     copyRecord: string;
+    /** Accessible name for an info icon */
+    moreInfo: string;
   };
 };
 
 /**
- * The dns records the domain's owner has to create, laid out to be copied into
- * a registrar.
+ * The dns records the domain needs, laid out to be copied into a registrar.
  *
- * Two of them, and only one is optional — the reverse of what it looks like
- * from here. The traffic record is what makes the domain answer at all; the
- * challenge record only lets the certificate be issued ahead of it. Showing the
- * challenge alone would let a domain go green while resolving nowhere.
+ * Only what has to be created: the traffic record, which is what makes the
+ * domain answer at all. Optional records and every explanation sit one tap
+ * away, so the records themselves are what the eye lands on.
  */
 export function DnsRecord({
-  hostname,
-  app,
-  validation,
-  ownershipRecord,
-  confirmed,
-  settled = false,
+  records,
+  pendingNote,
+  note,
+  wildcard,
   labels
 }: DnsRecordProps) {
-  const { name, target, instructions, isApex } = validation;
-  const hasChallenge = Boolean(name && target);
-  const addresses = validation.addresses ?? [];
-  const confirmedAddresses = new Set(
-    (confirmed?.addresses ?? []).map((address) => address.toLowerCase())
-  );
-
   return (
     /* Deliberately not a `Card`: this is a surface nested inside one, and
        `bg-card` on both would flatten the nesting the muted tint exists to
        show. shadcn has no inset-panel primitive to reach for instead. */
-    <div className="bg-muted/40 flex flex-col gap-3 rounded-md px-3.5 py-3">
-      {settled && <p className="text-muted-foreground">{labels.settledLede}</p>}
+    <div className="bg-muted/40 relative flex flex-col gap-2 rounded-md px-3.5 py-3">
+      {note && (
+        <span className="absolute top-2 right-2">
+          <InfoPopover label={labels.moreInfo}>{note}</InfoPopover>
+        </span>
+      )}
 
-      <section className="flex flex-col gap-1.5">
-        {!settled && (
-          <p className="text-muted-foreground">{labels.trafficLede}</p>
-        )}
-        {isApex ? (
-          // An apex needs addresses rather than a name
-          <>
-            <p className="text-muted-foreground">{labels.apexNote}</p>
-            {addresses.length === 0 ? (
-              <p className="text-muted-foreground text-xs">
-                {labels.apexAddressesPending}
-              </p>
-            ) : (
-              addresses.map(({ type, address }) => (
-                <Record
-                  key={`${type}-${address}`}
-                  type={type}
-                  name={hostname}
-                  target={address}
-                  copyLabel={labels.copyRecord}
-                  confirmed={
-                    // Fly's own verdict counts too: a proxied domain or a
-                    // differently written v6 never matches the address as text
-                    Boolean(confirmed?.traffic) ||
-                    confirmedAddresses.has(address.toLowerCase())
-                  }
-                />
-              ))
-            )}
-          </>
-        ) : (
-          <Record
-            name={hostname}
-            target={`${app}.fly.dev`}
-            copyLabel={labels.copyRecord}
-            confirmed={confirmed?.traffic ?? false}
-          />
-        )}
-      </section>
-
-      {hasChallenge ? (
-        <section className="flex flex-col gap-1.5">
-          {!settled && (
-            <p className="text-muted-foreground">{labels.validationLede}</p>
-          )}
-          <Record
-            name={name ?? ''}
-            target={target ?? ''}
-            copyLabel={labels.copyRecord}
-            confirmed={confirmed?.validation ?? false}
-          />
-        </section>
+      {pendingNote ? (
+        <p className="text-muted-foreground pr-6 text-xs">{pendingNote}</p>
       ) : (
-        instructions && (
-          // Fly falls back to prose when the record is not a plain CNAME, and
-          // what it describes there is not always the challenge
-          <section className="flex flex-col gap-1.5">
-            {!settled && (
-              <p className="text-muted-foreground">{labels.instructionsLede}</p>
-            )}
-            <p className="whitespace-pre-line">{instructions}</p>
-          </section>
-        )
-      )}
-
-      {ownershipRecord && (
-        <section className="flex flex-col gap-1.5">
-          <p className="text-muted-foreground">{labels.ownershipLede}</p>
-          <Record
-            type="TXT"
-            name={`_fly-ownership.${hostname}`}
-            target={ownershipRecord}
-            copyLabel={labels.copyRecord}
+        records.map((record) => (
+          <RecordRow
+            key={`${record.type}-${record.target}`}
+            record={record}
+            labels={labels}
           />
-        </section>
+        ))
       )}
 
-      {!settled && (
-        <p className="text-muted-foreground text-xs">{labels.nameHint}</p>
-      )}
+      <div className="text-muted-foreground flex items-center gap-1 text-xs">
+        {wildcard.found && <span>{wildcard.found}</span>}
+        <InfoPopover label={labels.moreInfo} trigger="*">
+          {wildcard.advice}
+        </InfoPopover>
+      </div>
     </div>
   );
 }
 
 /** One record row, with its value ready to copy */
-function Record({
-  type = 'CNAME',
-  name,
-  target,
-  copyLabel,
-  confirmed
+export function RecordRow({
+  record,
+  labels
 }: {
-  type?: 'CNAME' | 'TXT' | 'A' | 'AAAA';
-  name: string;
-  target: string;
-  copyLabel: string;
-  /** Whether Fly's last check actually found this one in place */
-  confirmed?: boolean;
+  record: RequiredRecord;
+  labels: DnsRecordProps['labels'];
 }) {
+  const { type, registrarName, nameHelp, target, confirmed, clue } = record;
+
   return (
     <div className="relative flex items-start gap-1.5 pr-12">
-      {confirmed && (
-        <CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-(--success-subtle)" />
-      )}
+      <span className="mt-0.5 size-4 shrink-0">
+        {confirmed ? (
+          // Fly's own verdict, the only one that marks a record done
+          <CheckCircleIcon className="size-4 text-(--success-subtle)" />
+        ) : clue ? (
+          <ClueIcon clue={clue} />
+        ) : null}
+      </span>
       <div className="font-mono text-xs break-all">
         <div>
-          {type} {name}
+          {type}{' '}
+          <Popover>
+            <PopoverTrigger className="cursor-help underline decoration-dotted underline-offset-2">
+              {registrarName}
+            </PopoverTrigger>
+            <PopoverContent className={`${PORTAL_SCOPE} font-sans text-xs`}>
+              {nameHelp}
+            </PopoverContent>
+          </Popover>
         </div>
         <div className="text-muted-foreground">→ {target}</div>
       </div>
-      <CopyButton code={target} label={copyLabel} />
+      <CopyButton code={target} label={labels.copyRecord} />
     </div>
+  );
+}
+
+/** A live clue as one icon, whose popover says it in full */
+function ClueIcon({ clue }: { clue: RecordClue }) {
+  const Icon =
+    clue.verdict === 'match'
+      ? CheckCircleIcon
+      : clue.verdict === 'missing'
+        ? MinusCircleIcon
+        : ExclamationTriangleIcon;
+  const tone =
+    clue.verdict === 'match'
+      ? 'text-muted-foreground'
+      : 'text-(--warning-subtle)';
+
+  return (
+    <Popover>
+      <PopoverTrigger aria-label={clue.label} className="cursor-help">
+        <Icon className={`size-4 ${tone}`} />
+      </PopoverTrigger>
+      <PopoverContent className={`${PORTAL_SCOPE} text-xs`}>
+        <p className="font-medium">{clue.label}</p>
+        <p className="text-muted-foreground">{clue.detail}</p>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * A short explanation one tap away from what it explains.
+ *
+ * A popover rather than a tooltip, since a tooltip never opens on a touch
+ * screen.
+ */
+export function InfoPopover({
+  label,
+  trigger,
+  children
+}: {
+  label: string;
+  /** Text to show beside the icon, e.g. `*` */
+  trigger?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        aria-label={label}
+        className="text-muted-foreground inline-flex cursor-help items-center gap-0.5"
+      >
+        {trigger && <span className="font-mono">{trigger}</span>}
+        <InformationCircleIcon className="size-4" />
+      </PopoverTrigger>
+      <PopoverContent className={`${PORTAL_SCOPE} text-xs`}>
+        {children}
+      </PopoverContent>
+    </Popover>
   );
 }
