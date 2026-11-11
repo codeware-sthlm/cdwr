@@ -98,7 +98,7 @@ describe('collections', () => {
       .map(String)
       .filter((file) => /\.tsx?$/.test(file) && !/\.spec\.tsx?$/.test(file))
       .filter((file) =>
-        /position:\s*'sidebar'/.test(
+        /position\s*:\s*['"`]sidebar['"`]/.test(
           stripComments(readFileSync(join(collectionsDir, file), 'utf8'))
         )
       );
