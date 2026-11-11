@@ -123,28 +123,31 @@ const stockMedia: CollectionConfig<'stock-media'> = {
       }
     },
     {
-      name: 'credit',
-      type: 'text',
-      label: { en: 'Credit', sv: 'Fotograf' },
-      admin: {
-        description: {
-          en: 'Photographer or source, where the licence requires attribution.',
-          sv: 'Fotograf eller källa, när licensen kräver att den anges.'
+      type: 'row',
+      fields: [
+        {
+          name: 'credit',
+          type: 'text',
+          label: { en: 'Credit', sv: 'Fotograf' },
+          admin: {
+            description: {
+              en: 'Photographer or source, where the licence requires attribution.',
+              sv: 'Fotograf eller källa, när licensen kräver att den anges.'
+            }
+          }
         },
-        position: 'sidebar'
-      }
-    },
-    {
-      name: 'licence',
-      type: 'text',
-      label: { en: 'Licence', sv: 'Licens' },
-      admin: {
-        description: {
-          en: 'The licence this image is used under, so its terms can be checked later.',
-          sv: 'Licensen bilden används under, så villkoren kan kontrolleras senare.'
-        },
-        position: 'sidebar'
-      }
+        {
+          name: 'licence',
+          type: 'text',
+          label: { en: 'Licence', sv: 'Licens' },
+          admin: {
+            description: {
+              en: 'The licence this image is used under, so its terms can be checked later.',
+              sv: 'Licensen bilden används under, så villkoren kan kontrolleras senare.'
+            }
+          }
+        }
+      ]
     }
   ]
 };

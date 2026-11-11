@@ -91,6 +91,21 @@ describe('collections', () => {
     expect(slugs).toHaveLength(new Set(slugs).size);
   });
 
+  it('keeps every field out of the sidebar', () => {
+    // The edit view's sidebar takes space the form needs (COD-770); a field
+    // belongs in the main form, usually in a tab
+    const inSidebar = readdirSync(collectionsDir, { recursive: true })
+      .map(String)
+      .filter((file) => /\.tsx?$/.test(file) && !/\.spec\.tsx?$/.test(file))
+      .filter((file) =>
+        /position:\s*'sidebar'/.test(
+          stripComments(readFileSync(join(collectionsDir, file), 'utf8'))
+        )
+      );
+
+    expect(inSidebar).toEqual([]);
+  });
+
   describe('access control', () => {
     it('scopes by tenant only where a tenant field exists', () => {
       // A tenant-scoped helper returns a `Where` naming the `tenant` field. On

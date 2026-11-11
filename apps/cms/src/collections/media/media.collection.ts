@@ -209,8 +209,7 @@ const media: CollectionConfig = {
         description: {
           en: 'Allow external access to the file without authentication. For example, this is required for file areas and document images.',
           sv: 'Tillåt extern åtkomst till filen utan autentisering. Detta krävs till exempel för filytor och bilder i dokument.'
-        },
-        position: 'sidebar'
+        }
       },
       defaultValue: false
     }

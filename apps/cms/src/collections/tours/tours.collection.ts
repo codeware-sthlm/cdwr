@@ -94,6 +94,7 @@ const tours: CollectionConfig<'tours'> = {
         }
       }
     },
+    slugField({ sourceField: 'title', required: true }),
     {
       type: 'tabs',
       tabs: [
@@ -492,7 +493,6 @@ const tours: CollectionConfig<'tours'> = {
         }
       ]
     },
-    slugField({ sourceField: 'title', required: true }),
     // Capacity as the site needs it: derived on read by `populateTourCapacity`,
     // never stored. Virtual so no column exists to drift from the signups.
     {

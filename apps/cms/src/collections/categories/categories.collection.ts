@@ -47,6 +47,7 @@ const categories: CollectionConfig = {
         }
       }
     },
+    slugField({ sourceField: 'name' }),
     {
       type: 'group',
       name: 'relations',
@@ -62,8 +63,7 @@ const categories: CollectionConfig = {
           admin: { allowCreate: false, disableListColumn: true }
         }
       ]
-    },
-    slugField({ sourceField: 'name' })
+    }
   ]
 };
 
