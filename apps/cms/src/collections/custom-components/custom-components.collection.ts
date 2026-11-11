@@ -59,8 +59,6 @@ const componentSlugField: TextField = {
   label: { en: 'Slug', sv: 'Slug' },
   admin: {
     ...base.admin,
-    // The studio's row sits beside the name, not in the sidebar
-    position: undefined,
     width: '40%',
     description: {
       en: `Names the component's element, which becomes ${COMPONENT_TAG_PREFIX}<slug>. Generated from the name if left empty.`,
