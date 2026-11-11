@@ -195,7 +195,12 @@ export type RecordsJudgement = {
 
 const UNKNOWN: RecordJudgement = { verdict: 'unknown', actual: [] };
 
-/** Judge one address type against the app's addresses of that type */
+/**
+ * Judge one address type against the app's addresses of that type.
+ *
+ * A match is the same set both ways: a foreign address sends some visitors
+ * elsewhere, and a missing one of the app's is a record still to create.
+ */
 const judgeAddresses = (
   actual: Array<string>,
   expected: Array<string>
@@ -207,12 +212,11 @@ const judgeAddresses = (
     return { verdict: 'missing', actual };
   }
   const ours = new Set(expected.map(canonicalAddress));
-  return {
-    verdict: actual.every((address) => ours.has(canonicalAddress(address)))
-      ? 'match'
-      : 'mismatch',
-    actual
-  };
+  const theirs = new Set(actual.map(canonicalAddress));
+  const same =
+    [...theirs].every((address) => ours.has(address)) &&
+    [...ours].every((address) => theirs.has(address));
+  return { verdict: same ? 'match' : 'mismatch', actual };
 };
 
 /** Judge a CNAME against its one expected target */

@@ -184,6 +184,18 @@ describe('judgeRecords', () => {
     expect(judgement.aaaa.verdict).toBe('match');
   });
 
+  it('does not match when only some of the app’s addresses answer', () => {
+    const judgement = judgeRecords(comparison({ a: ['66.241.124.125'] }), {
+      ...apex,
+      addresses: [...flyAddresses, { type: 'A', address: '66.241.124.126' }]
+    });
+
+    expect(judgement.a).toEqual({
+      verdict: 'mismatch',
+      actual: ['66.241.124.125']
+    });
+  });
+
   it('flags a subdomain whose A points elsewhere, which blocks the CNAME', () => {
     const judgement = judgeRecords(comparison({ a: ['46.30.213.129'] }), www);
 
