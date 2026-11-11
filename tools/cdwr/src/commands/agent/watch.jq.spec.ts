@@ -105,14 +105,14 @@ describe('is_agent', () => {
     run('is_agent', comment);
   const body = '**Agent: note** hello';
 
-  it('is true for the app user by the app flag', () => {
+  it('is false for another app user', () => {
     expect(
       agentOf({
         body: 'no prefix',
         createdAt: AFTER_CUTOVER,
         user: { id: PERSON_ID, app: true }
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('is true for the app user by id only', () => {
