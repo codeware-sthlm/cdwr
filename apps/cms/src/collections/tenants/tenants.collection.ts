@@ -148,7 +148,7 @@ const tenants: CollectionConfig = {
               hasMany: true,
               required: true
             },
-            slugField({ sourceField: 'name', position: undefined }),
+            slugField({ sourceField: 'name' }),
             statusField,
             idleWarnedAtField,
             idleReportedAtField
