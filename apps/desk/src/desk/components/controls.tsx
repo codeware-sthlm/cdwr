@@ -1,8 +1,7 @@
 import type { ControlView } from '../model';
 import { busy, statusText } from '../render/controls';
 
-// The desk's control buttons as components; shown only with a control token. The capacity row
-// still writes the string versions in `render/controls.ts`.
+// The desk's control buttons as components; shown only with a control token
 
 /** What the state says next to its button; nothing when idle */
 export const ControlStatus = ({ view }: { view: ControlView }) => {

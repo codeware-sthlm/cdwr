@@ -19,14 +19,15 @@ import {
   sendCommand
 } from './commands';
 import { BeforeSheet, type WaitActions } from './components/before';
+import { Capacity } from './components/capacity';
 import { Cards } from './components/cards';
 import { Platform, type PlatformActions } from './components/platform';
 import { Status } from './components/status';
+import { Tiles } from './components/tiles';
 import { AGENT_AVATAR, CONFIRM_MS } from './constants';
 import { type Loader, createLoader } from './load';
 import { type ControlsModel, type Model, model, shipped } from './model';
 import { notice } from './notice';
-import { renderCapacity } from './render/capacity';
 import {
   chartHeight,
   chartKind,
@@ -41,7 +42,6 @@ import {
   updateTicks
 } from './render/problems';
 import { SHEETS } from './render/sheets';
-import { renderTiles } from './render/tiles';
 import { forgetLabelled } from './render/waiting';
 import { spendDays } from './spend';
 import {
@@ -73,10 +73,12 @@ const $ = (id: string): HTMLElement => {
   return el;
 };
 
-// The header's status pill, the two cards and the Platform view are React; the rest of the page is
-// still written as HTML
+// The header's status pill, the two cards, the capacity row, the tiles and the Platform view are
+// React; the rest of the page is still written as HTML
 const statusRoot = createRoot($('status'));
 const cardsRoot = createRoot($('cards'));
+const capacityRoot = createRoot($('capacity'));
+const tilesRoot = createRoot($('more'));
 const platformRoot = createRoot($('platform'));
 
 // ---------- Charts ----------
@@ -195,8 +197,23 @@ function renderMain(): void {
   const m = model(state, now, DESK, WEB);
   forgetLabelled(state.controls.labelled, m.v ? m.toLabel : null);
   renderLive(m, now);
-  $('capacity').innerHTML = renderCapacity(m);
-  $('more').innerHTML = renderTiles(m, state, now);
+  capacityRoot.render(
+    createElement(Capacity, {
+      m,
+      onSheet: (id) => showSheet(id),
+      onView: (view) => showView(view),
+      pause: pauseQueue,
+      run: runNow
+    })
+  );
+  tilesRoot.render(
+    createElement(Tiles, {
+      m,
+      state,
+      now,
+      onSheet: (id) => showSheet(id)
+    })
+  );
 }
 
 // ---------- View ----------
@@ -340,7 +357,7 @@ function controlsNow(): ControlsModel | null {
     : null;
 }
 
-// The controls' actions, shared by the capacity row's delegated clicks and the Platform view
+// The controls' actions, shared by the capacity row and the Platform view
 
 function pauseQueue(kind: 'pause' | 'resume'): void {
   const m = controlsNow();
@@ -391,52 +408,28 @@ const platformActions: PlatformActions = {
   apply: applyDraft
 };
 
-/** Handles a control button's click; true when the click was one */
+/** Handles the abandon button's click, the one control still written as HTML; true when the click was one */
 function clickControl(target: Element): boolean {
-  const button = target.closest<HTMLButtonElement>(
-    '[data-cmd], [data-step], [data-apply]'
-  );
+  const button = target.closest<HTMLButtonElement>('[data-cmd="abandon"]');
   if (!button) return false;
   const c = state.controls;
   const m = controlsNow();
   if (!m || button.disabled) return true;
-  const { cmd, step, apply } = button.dataset;
-  // The render replaces the button; keyboard focus goes back to it, or to the control's next part
+  // The render replaces the button; keyboard focus goes back to it
   const region = button.closest('[id]');
-  const refocus = (...selectors: string[]): void => focusIn(region, selectors);
-  if (cmd === 'abandon') {
-    if (!m.confirming)
-      c.confirm = { until: Date.now() + CONFIRM_MS, session: m.session };
-    else {
-      c.confirm = null;
-      sendControl(
-        'abandon',
-        m.host,
-        'abandon',
-        m.session === null ? {} : { session: m.session }
-      );
-    }
-    render();
-    refocus('[data-cmd="abandon"]');
-  } else if (cmd === 'pause' || cmd === 'resume') {
-    pauseQueue(cmd);
-    refocus('[data-cmd="pause"]', '[data-cmd="resume"]');
-  } else if (cmd === 'run') {
-    runNow();
-    refocus('[data-cmd="run"]');
-  } else if (step) {
-    const [control, delta] = step.split(':');
-    if (control === 'limit' || control === 'cap')
-      stepDraft(control, Number(delta));
-    refocus(
-      `[data-step="${step}"]`,
-      `[data-apply="${control}"]`,
-      `[data-step^="${control}:"]`
+  if (!m.confirming)
+    c.confirm = { until: Date.now() + CONFIRM_MS, session: m.session };
+  else {
+    c.confirm = null;
+    sendControl(
+      'abandon',
+      m.host,
+      'abandon',
+      m.session === null ? {} : { session: m.session }
     );
-  } else if (apply === 'limit' || apply === 'cap') {
-    applyDraft(apply);
-    refocus(`[data-apply="${apply}"]`, `[data-step^="${apply}:"]`);
   }
+  render();
+  focusIn(region, ['[data-cmd="abandon"]']);
   return true;
 }
 
@@ -538,8 +531,8 @@ const waitActions: WaitActions = {
 
 document.addEventListener('click', (e) => {
   if (!(e.target instanceof Element)) return;
-  // The Platform view is React and handles its own clicks
-  if (e.target.closest('#platform')) return;
+  // The Platform view, the capacity row and the tiles are React and handle their own clicks
+  if (e.target.closest('#platform, #capacity, #more')) return;
   if (e.target.closest('[data-see-problems]')) {
     e.preventDefault();
     // The alert shows on the Platform view too, where the problems are hidden
