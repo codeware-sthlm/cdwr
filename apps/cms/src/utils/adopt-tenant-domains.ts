@@ -4,6 +4,7 @@ import type { Payload } from 'payload';
 
 import { resolveScopedTenant } from '../security/resolve-scoped-tenant';
 
+import { dropStaleClientConfigs } from './client-config-cache';
 import { isSchemaNotReady } from './schema-not-ready';
 
 /**
@@ -69,6 +70,7 @@ export const adoptTenantDomains = async (payload: Payload): Promise<void> => {
     // be fixed from there
     if (primary && !env.DISABLE_DOMAIN_ADOPTION) {
       config.serverURL = primary;
+      dropStaleClientConfigs(primary);
       payload.logger.info(`[domains] Serving as ${primary}`);
     }
 
