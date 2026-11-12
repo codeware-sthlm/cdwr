@@ -1,6 +1,7 @@
+import type { SiteDefinition } from '../site-definition';
 import { SiteDefinitionSchema } from '../site-definition.schema';
 
-import { cdwrIo } from './cdwr-io';
+import { cdwrIo, defineCdwrIo } from './cdwr-io';
 import { cdwrIoPrivacyMarkdown } from './cdwr-io-legal';
 
 /**
@@ -51,7 +52,6 @@ describe('the cdwr.io definition', () => {
       'studio',
       'components',
       'architecture',
-      'devlog',
       'start',
       'privacy'
     ]);
@@ -172,12 +172,78 @@ describe('the cdwr.io definition', () => {
         )
       },
       expect.objectContaining({
-        reference: { relationTo: 'pages', lookupSlug: 'devlog' }
-      }),
-      expect.objectContaining({
         reference: { relationTo: 'pages', lookupSlug: 'start' },
         appearance: 'button'
       })
+    ]);
+  });
+
+  it('seeds no posts: entries are drafted elsewhere and published on approval', () => {
+    expect(cdwrIo.posts ?? []).toEqual([]);
+  });
+});
+
+describe('the cdwr.io devlog switch', () => {
+  const slugsOf = (definition: SiteDefinition) =>
+    definition.pages.map(({ slug }) => slug);
+  const hasPostsBlock = (definition: SiteDefinition) =>
+    definition.pages.some(({ layout }) =>
+      layout.some((block) => block.blockType === 'posts')
+    );
+  const navSlugsOf = (definition: SiteDefinition) =>
+    (definition.navigation ?? [])
+      .flatMap((item) => ('children' in item ? item.children : [item]))
+      .map(({ reference }) => reference.lookupSlug);
+
+  it('is off for the definition that is applied', () => {
+    expect(cdwrIo).toEqual(defineCdwrIo({ devlog: false }));
+  });
+
+  it.each([false, true])(
+    'states a valid definition with devlog %s',
+    (devlog) => {
+      const definition = defineCdwrIo({ devlog });
+
+      expect(SiteDefinitionSchema.safeParse(definition).success).toBe(true);
+      for (const slug of navSlugsOf(definition)) {
+        expect(slugsOf(definition)).toContain(slug);
+      }
+    }
+  );
+
+  it('off: no Devlog page, no posts block and no nav item', () => {
+    const definition = defineCdwrIo({ devlog: false });
+
+    expect(slugsOf(definition)).not.toContain('devlog');
+    expect(hasPostsBlock(definition)).toBe(false);
+    expect(navSlugsOf(definition)).not.toContain('devlog');
+  });
+
+  it('on: all three are back, the page between Architecture and Get started', () => {
+    const definition = defineCdwrIo({ devlog: true });
+
+    expect(slugsOf(definition)).toEqual([
+      'home',
+      'blocks',
+      'studio',
+      'components',
+      'architecture',
+      'devlog',
+      'start',
+      'privacy'
+    ]);
+    expect(
+      definition.pages
+        .find(({ slug }) => slug === 'home')
+        ?.layout.some((block) => block.blockType === 'posts')
+    ).toBe(true);
+    expect(navSlugsOf(definition)).toEqual([
+      'blocks',
+      'studio',
+      'components',
+      'architecture',
+      'devlog',
+      'start'
     ]);
   });
 });

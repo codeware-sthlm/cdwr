@@ -1,6 +1,6 @@
 import { cdwrCloudSvg } from '@codeware/shared/util/ui';
 
-import type { SiteDefinition } from '../site-definition';
+import type { PageDefinition, SiteDefinition } from '../site-definition';
 
 import { cdwrIoThemeSwatchSource } from './cdwr-io-components';
 import { cdwrIoPrivacyMarkdown } from './cdwr-io-legal';
@@ -14,6 +14,31 @@ import {
   themingIllustration
 } from './illustrations';
 import { infisicalLogo, playwrightLogo } from './tech-logos';
+
+/** The devlog's listing page, stated only while `devlog` is on */
+const devlogPage: PageDefinition = {
+  name: 'Devlog',
+  slug: 'devlog',
+  meta: {
+    title: 'What shipped, and why',
+    description:
+      'Short entries when something lands. Written once, dated, and not edited afterwards.'
+  },
+  layout: [
+    {
+      blockType: 'hero',
+      badge: 'Devlog',
+      heading: 'What shipped, and why',
+      lede: 'Short entries when something lands. Written once, dated, and not edited afterwards — which makes this the honest answer to whether the platform is maintained.'
+    },
+    {
+      blockType: 'posts',
+      title: 'Entries',
+      description: 'Newest first.',
+      limit: 10
+    }
+  ]
+};
 
 /**
  * `cdwr.io` — the platform showcase, as data.
@@ -37,910 +62,815 @@ import { infisicalLogo, playwrightLogo } from './tech-logos';
  *
  * The gallery's own index and browser pages are route chrome built from the
  * block registry, so they are not authored here — `/blocks` is.
+ *
+ * `devlog` puts the Devlog page, its nav item and the home page's recent
+ * posts back in place. The definition seeds no posts of its own: entries are
+ * drafted elsewhere and published on approval (COD-776).
  */
-export const cdwrIo: SiteDefinition = {
-  name: 'cdwr.io',
-  description: 'The platform showcase — a live demo, not a description of one',
+export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
+  return {
+    name: 'cdwr.io',
+    description:
+      'The platform showcase — a live demo, not a description of one',
 
-  categories: [
-    { name: 'Themes', slug: 'themes' },
-    { name: 'Palette', slug: 'palette' },
-    { name: 'Studio', slug: 'studio' },
-    { name: 'Design system', slug: 'design-system' },
-    { name: 'Accessibility', slug: 'accessibility' },
-    { name: 'Multi-tenancy', slug: 'multi-tenancy' }
-  ],
+    categories: [
+      { name: 'Themes', slug: 'themes' },
+      { name: 'Palette', slug: 'palette' },
+      { name: 'Studio', slug: 'studio' },
+      { name: 'Design system', slug: 'design-system' },
+      { name: 'Accessibility', slug: 'accessibility' },
+      { name: 'Multi-tenancy', slug: 'multi-tenancy' }
+    ],
 
-  // The platform's own look, made the way any tenant would make one: a recipe
-  // the studio reopens. Violet on slate with a brand-coloured primary, which
-  // none of the built-in themes use, so switching away from it shows at once
-  customThemes: [
-    {
-      name: 'cdwr',
-      slug: 'cdwr',
-      recipe: {
-        baseFamily: 'slate',
-        brandFamily: 'violet',
-        surface: 'flat',
-        radius: '0.75rem',
-        linkShade: { light: '700', dark: '400' },
-        primarySource: 'brand',
-        linkSource: 'brand',
-        chartSource: 'brand',
-        fontBody: 'inter',
-        fontHeading: 'inter'
+    // The platform's own look, made the way any tenant would make one: a recipe
+    // the studio reopens. Violet on slate with a brand-coloured primary, which
+    // none of the built-in themes use, so switching away from it shows at once
+    customThemes: [
+      {
+        name: 'cdwr',
+        slug: 'cdwr',
+        recipe: {
+          baseFamily: 'slate',
+          brandFamily: 'violet',
+          surface: 'flat',
+          radius: '0.75rem',
+          linkShade: { light: '700', dark: '400' },
+          primarySource: 'brand',
+          linkSource: 'brand',
+          chartSource: 'brand',
+          fontBody: 'inter',
+          fontHeading: 'inter'
+        }
+      }
+    ],
+
+    pages: [
+      // ── The landing page: the show ─────────────────────────────────────────
+      {
+        name: 'Home',
+        slug: 'home',
+        meta: {
+          title: 'Every site its own. One platform underneath.',
+          description:
+            'A content platform built on Payload and Next.js. Each site gets its own domain, its own theme and its own editors.'
+        },
+        layout: [
+          {
+            blockType: 'hero',
+            badge: 'Themes you author in the admin',
+            heading: 'Every site its own. One platform underneath.',
+            illustration: heroIllustration,
+            lede: 'A content platform built on Payload and Next.js. Each site gets its own domain, its own theme and its own editors — and this page is one of them.',
+            actions: [
+              {
+                link: {
+                  type: 'custom',
+                  url: '/studio',
+                  label: 'Try the theme studio'
+                },
+                emphasis: 'primary'
+              },
+              {
+                link: {
+                  type: 'custom',
+                  url: '/architecture',
+                  label: 'How it is built'
+                },
+                emphasis: 'secondary'
+              }
+            ]
+          },
+          {
+            blockType: 'feature-cards',
+            eyebrow: 'What you get',
+            band: 'subtle',
+            heading: 'Four things, each of them demonstrable',
+            columns: '2',
+            items: [
+              {
+                title: 'Each site is its own deployment',
+                description:
+                  'Its own domain, certificate and secrets, from one shared build. Sites are isolated without a build per customer.'
+              },
+              {
+                title: 'The look is a setting, not a stylesheet',
+                description:
+                  'A site chooses its palette, its light or dark scheme and whether visitors may switch. Changed in the admin, live at once.'
+              },
+              {
+                title: 'Pages are built from blocks',
+                description:
+                  'Composable blocks — prose, media, code, forms, tours. Editors compose; nothing is hand-coded per site.'
+              },
+              {
+                title: 'Every change is reviewed running',
+                description:
+                  'Each pull request gets a site of its own with its own database. Content and code are checked the same way: by using them.'
+              }
+            ]
+          },
+          {
+            blockType: 'feature-section',
+            eyebrow: 'Theming',
+            heading: 'Change the look. Nothing reloads.',
+            illustration: themingIllustration,
+            intro:
+              'A site chooses its palette, its colour scheme, and whether visitors may switch at all. Set in the admin, not in a stylesheet.',
+            enableLink: true,
+            link: {
+              type: 'custom',
+              url: '/studio',
+              label: 'See how themes work'
+            },
+            subFeatures: [
+              {
+                title: 'Chosen in settings',
+                body: 'A site with one theme shows no switcher. Give it several and the control appears on its own.'
+              },
+              {
+                title: 'Light, dark, or fixed',
+                body: 'A site can be held to one scheme when the brand demands it.'
+              },
+              {
+                title: 'Decided on the server',
+                body: 'The choice ships with the page, so nothing flashes the wrong colour on first paint.'
+              }
+            ]
+          },
+          {
+            blockType: 'feature-section',
+            eyebrow: 'Theme studio',
+            band: 'gradient',
+            heading: 'A theme you cannot save until it is readable',
+            intro:
+              'Pick a brand colour and the studio derives the rest — surfaces, borders, charts, prose. Every pairing is checked for readability as you go, and one that fails cannot be published.',
+            enableLink: true,
+            link: { type: 'custom', url: '/studio', label: 'Open the studio' },
+            subFeatures: [
+              {
+                title: 'The whole palette from one colour',
+                body: 'Surfaces, borders, charts and prose all follow from the brand colour, by a recipe you can read back.'
+              },
+              {
+                title: 'Start from a built-in',
+                body: 'Open a platform theme, change what you need, keep the rest.'
+              },
+              {
+                title: 'The randomiser cannot fail',
+                body: 'It re-rolls until the result passes, so it never hands you an unreadable theme.'
+              }
+            ]
+          },
+          {
+            blockType: 'content',
+            columns: [
+              {
+                size: 'full',
+                richText: {
+                  markdown:
+                    'An inaccessible colour theme cannot be published on this platform. Each site runs on its own app, isolated from the others, and every app is hosted in Stockholm, in the EU.'
+                }
+              }
+            ]
+          },
+          {
+            blockType: 'feature-section',
+            eyebrow: 'Custom components',
+            heading: 'When no block fits, write one',
+            intro:
+              'A developer writes a component in the admin, saving it builds it, and an editor places it on a page like any other block. This site runs one that reads the colours of the active theme.',
+            enableLink: true,
+            link: {
+              type: 'custom',
+              url: '/components',
+              label: 'See the component'
+            }
+          },
+          {
+            blockType: 'custom-component',
+            component: { lookupSlug: 'theme-swatch' },
+            props: {
+              title: 'The colours on this page',
+              description: 'Read from the active theme as it changes'
+            }
+          },
+          {
+            blockType: 'feature-section',
+            eyebrow: 'Content',
+            heading: 'Every block, rendered by the renderer that serves it',
+            illustration: blocksIllustration,
+            intro:
+              'Each on its own page, with the production component and a paragraph on when to reach for it. Editors compose pages from these; a block that renders badly is visible to everyone, immediately.',
+            enableLink: true,
+            link: {
+              type: 'custom',
+              url: '/blocks',
+              label: 'Browse the gallery'
+            }
+          },
+          {
+            blockType: 'pill-list',
+            eyebrow: 'Built on',
+            heading: 'Nothing exotic, and nothing hidden',
+            intro:
+              'The interesting decisions are in how these fit together, not in the list itself.',
+            band: 'subtle',
+            items: [
+              {
+                label: 'Payload CMS',
+                url: 'https://payloadcms.com',
+                icon: 'payload'
+              },
+              { label: 'Next.js', url: 'https://nextjs.org', icon: 'nextjs' },
+              {
+                label: 'Supabase',
+                url: 'https://supabase.com',
+                icon: 'supabase'
+              },
+              { label: 'Fly.io', url: 'https://fly.io', icon: 'flyio' },
+              {
+                label: 'Infisical',
+                url: 'https://infisical.com',
+                logo: { source: 'svg', svgCode: infisicalLogo }
+              },
+              { label: 'Nx', url: 'https://nx.dev', icon: 'nx' },
+              {
+                label: 'Tailwind',
+                url: 'https://tailwindcss.com',
+                icon: 'tailwind'
+              },
+              {
+                label: 'Playwright',
+                url: 'https://playwright.dev',
+                logo: { source: 'svg', svgCode: playwrightLogo }
+              },
+              { label: 'Sentry', url: 'https://sentry.io', icon: 'sentry' },
+              {
+                label: 'GitHub',
+                url: 'https://github.com/codeware-sthlm/cdwr',
+                icon: 'github'
+              }
+            ]
+          },
+          ...(devlog
+            ? [
+                {
+                  blockType: 'posts' as const,
+                  title: 'What shipped recently',
+                  description:
+                    'Short entries when something lands. The honest answer to whether the platform is maintained.',
+                  limit: 3
+                }
+              ]
+            : []),
+          {
+            blockType: 'callout',
+            showMark: true,
+            heading: 'Build on the same platform',
+            body: 'The plugin, the preset and the deployment tooling behind this site are published. One command starts a workspace of your own.',
+            link: { type: 'custom', url: '/start', label: 'Get started' }
+          }
+        ]
+      },
+
+      // ── The gallery: route chrome built from the registry ──────────────────
+      {
+        name: 'Blocks',
+        slug: 'blocks',
+        meta: {
+          title: 'Every block, rendered by the renderer that serves it',
+          description:
+            'Not a gallery of screenshots. Each example is the production component, drawing from the same content API a site uses.'
+        },
+        layout: [
+          {
+            blockType: 'block-gallery',
+            eyebrow: 'Every block',
+            heading: 'Rendered by the renderer that serves it',
+            intro:
+              'Not a gallery of screenshots. Each example below is the production component, drawing from the same content API a site uses — so a block that renders badly under a theme is visible here, to everyone, immediately.',
+            mode: 'index'
+          }
+        ]
+      },
+
+      // ── The other pages: tell it plainly ───────────────────────────────────
+      {
+        name: 'Studio',
+        slug: 'studio',
+        meta: {
+          title: 'A theme you cannot save until it is readable',
+          description:
+            'Pick a brand colour. The studio derives every other colour from it and checks each pairing for readability while you work.'
+        },
+        layout: [
+          {
+            blockType: 'hero',
+            badge: 'Theme studio',
+            heading: 'A theme you cannot save until it is readable',
+            lede: 'Pick a brand colour. The studio derives every other colour from it and checks each pairing for readability while you work. A theme that fails cannot be published.'
+          },
+          {
+            // What the fact cards below leave out: the rule that makes the claim
+            blockType: 'feature-section',
+            eyebrow: 'Readability',
+            heading: 'Readable is a number, so it can be checked',
+            illustration: contrastIllustration,
+            intro:
+              'A theme here is a recipe, not a stylesheet written by hand, and every colour it produces is measured against the colour it sits on.',
+            subFeatures: [
+              {
+                title: 'Measured while you work',
+                body: 'Each pairing is checked against the accessibility standard as the theme changes, not in a review afterwards.'
+              },
+              {
+                title: 'A line, not a feeling',
+                body: '4.5:1 for text and 3:1 for large headings: the levels the standard sets, applied to every pair a visitor reads.'
+              },
+              {
+                title: 'Saving stays off until it passes',
+                body: 'While any pair is below the line the theme cannot be saved, so it never reaches a visitor.'
+              }
+            ]
+          },
+          {
+            // The prose above has already said what this is, so no header —
+            // just the studio, opened on the theme this site runs
+            blockType: 'theme-studio',
+            startFrom: 'spotlight',
+            note: 'Live — the studio itself, not a screenshot of it. Nothing you do here leaves your browser.'
+          },
+          {
+            blockType: 'feature-cards',
+            eyebrow: 'Three facts',
+            heading: 'What the studio guarantees',
+            columns: '3',
+            items: [
+              {
+                title: 'A handful of decisions',
+                description:
+                  'Brand, base, surface, radius and typefaces, and where links and charts take their colour. Everything else follows.'
+              },
+              {
+                title: 'Overrides are marked',
+                description:
+                  'Any single value can be pinned by hand, and the studio shows which ones were.'
+              },
+              {
+                title: 'Reopens as the recipe',
+                description:
+                  'A saved theme parses back to what made it, so it can be changed rather than only overwritten.'
+              }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Components',
+        slug: 'components',
+        meta: {
+          title: 'A component written in the admin',
+          description:
+            'When no block does what a page needs, a developer writes one in the component studio. Saving it builds it, and an editor places it on a page.'
+        },
+        layout: [
+          {
+            blockType: 'hero',
+            badge: 'Custom components',
+            heading: 'A component written in the admin',
+            lede: 'When no block does what a page needs, a developer writes one in the component studio. Saving it builds it, and an editor places it on a page like any other block.'
+          },
+          {
+            blockType: 'feature-section',
+            eyebrow: 'How it works',
+            heading: 'Written, saved, placed',
+            intro:
+              'A component is source typed in the admin, not a release to deploy. The site it belongs to is the only one that sees it.',
+            subFeatures: [
+              {
+                title: 'Written in the admin',
+                body: 'The studio type-checks against the same declarations the build uses, so a mistake shows while you type.'
+              },
+              {
+                title: 'Built on save',
+                body: 'Saving builds the component, and a page shows it once the build has finished.'
+              },
+              {
+                title: 'Placed by an editor',
+                body: 'It is a block with its own fields, so putting it on a page needs no code and no release.'
+              }
+            ]
+          },
+          {
+            blockType: 'custom-component',
+            component: { lookupSlug: 'theme-swatch' },
+            props: {
+              title: 'The colours on this page',
+              description: 'Read from the active theme as it changes'
+            }
+          },
+          {
+            blockType: 'code',
+            language: 'tsx',
+            code: cdwrIoThemeSwatchSource
+          },
+          {
+            blockType: 'feature-cards',
+            eyebrow: 'Three facts',
+            heading: 'What a component can and cannot do',
+            columns: '3',
+            items: [
+              {
+                title: 'Built in a sandbox',
+                description:
+                  "The source is built apart from the site that runs it, from a fixed set of packages and the site's own primitives."
+              },
+              {
+                title: 'Typed props',
+                description:
+                  'Its fields are declared with it, so an editor fills in a form instead of writing props.'
+              },
+              {
+                title: 'Belongs to one site',
+                description:
+                  'A component lives in the site that wrote it. Another site does not see it, and cannot break it.'
+              }
+            ]
+          },
+          {
+            blockType: 'callout',
+            showMark: true,
+            heading: 'Start with the platform',
+            body: 'The component studio is part of what the setup scaffolds. Start from it and write the first component on your own site.',
+            link: { type: 'custom', url: '/start', label: 'Get started' }
+          }
+        ]
+      },
+      {
+        name: 'Architecture',
+        slug: 'architecture',
+        meta: {
+          title: 'Every site is its own deployment',
+          description:
+            'A site is an app of its own, on its own domain, with its own certificate and its own secrets, built once and run many times.'
+        },
+        layout: [
+          {
+            blockType: 'hero',
+            badge: 'Architecture',
+            heading: 'Every site is its own deployment',
+            lede: 'A site is not a row in a table with a theme name. It is an app of its own, on its own domain, with its own certificate and its own secrets — built once and run many times.'
+          },
+          {
+            blockType: 'feature-section',
+            eyebrow: 'One build',
+            heading: 'Built once, started for every site',
+            illustration: oneBuildIllustration,
+            intro:
+              'The platform is built once, when a change is merged. That one build is then started as many times as there are sites, and each start is told which site it is.',
+            subFeatures: [
+              {
+                title: 'Told who it is at start',
+                body: 'The domain, the certificate and the secrets arrive when a site starts, rather than being baked into the build.'
+              },
+              {
+                title: 'One database, kept apart',
+                body: 'The sites share one database, and the platform keeps each site to its own content.'
+              },
+              {
+                title: 'The same software, twice',
+                body: 'codeware.se and cdwr.io are the same build. A third site would be that build again, with different everything else.'
+              }
+            ]
+          },
+          {
+            blockType: 'feature-cards',
+            eyebrow: 'Three facts',
+            heading: 'What a pull request gets',
+            columns: '3',
+            items: [
+              {
+                title: 'Its own database',
+                description:
+                  'From a dedicated preview cluster, seeded on first boot, dropped with the branch.'
+              },
+              {
+                title: 'Migrations run first',
+                description:
+                  'A schema change that would fail on deploy fails on the pull request instead.'
+              },
+              {
+                title: 'A visual review too',
+                description:
+                  'Every component renders in every theme on every change, and the difference is a picture.'
+              }
+            ]
+          },
+          {
+            // Infisical and Playwright are not in the icon set, and feature
+            // cards take no logo of their own yet, so they carry an icon
+            blockType: 'feature-cards',
+            eyebrow: 'Built on',
+            heading: 'What it is built on, and why',
+            columns: '3',
+            items: [
+              {
+                brand: { tech: 'payload' },
+                title: 'Payload CMS',
+                description:
+                  'The editor and the content API. Open source, and the whole admin is code we can change.'
+              },
+              {
+                brand: { tech: 'nextjs' },
+                title: 'Next.js',
+                description: 'Serves the sites and the admin from one app.'
+              },
+              {
+                brand: { tech: 'supabase' },
+                title: 'Supabase',
+                description:
+                  'Postgres and file storage. One database per environment, shared by every site in it; the platform keeps each site to its own content.'
+              },
+              {
+                brand: { tech: 'flyio' },
+                title: 'Fly.io',
+                description:
+                  'Runs each site as its own app, close to its visitors.'
+              },
+              {
+                brand: { logo: { source: 'svg', svgCode: infisicalLogo } },
+                title: 'Infisical',
+                description:
+                  'Holds every secret, one folder per site, so nothing lives in the repository.'
+              },
+              {
+                brand: { tech: 'nx' },
+                title: 'Nx',
+                description:
+                  'One repository for the platform, its tools and its published packages.'
+              },
+              {
+                brand: { tech: 'tailwind' },
+                title: 'Tailwind',
+                description: 'The styling the themes compile down to.'
+              },
+              {
+                brand: { logo: { source: 'svg', svgCode: playwrightLogo } },
+                title: 'Playwright',
+                description: 'The tests that open the running site and use it.'
+              }
+            ]
+          },
+          {
+            // How the list above fits together, run from one tool. The tool is
+            // drawn, not named: it is not published, and a name would invite
+            // the question of where to get it
+            blockType: 'feature-section',
+            eyebrow: 'Connected',
+            heading: 'How the pieces fit together',
+            intro:
+              'A merged change becomes a running site; secrets arrive when it starts; data lives in one database; errors are watched. All of it is operated from one tool, which shows what it will do before it does it.',
+            illustration: stackIllustration
+          }
+        ]
+      },
+      ...(devlog ? [devlogPage] : []),
+      {
+        name: 'Get started',
+        slug: 'start',
+        meta: {
+          title: 'Get a site on the platform',
+          description:
+            'The platform hosts sites now, by invitation. Sign up with an invite code, or start a workspace of your own from the published packages.'
+        },
+        layout: [
+          {
+            blockType: 'hero',
+            badge: 'Get started',
+            heading: 'Get a site on the platform',
+            lede: 'The platform hosts sites now. Signup is by invitation: with an invite code you can create a workspace, choose a starter and have a site live without running anything yourself.',
+            illustration: startIllustration
+          },
+          {
+            blockType: 'feature-cards',
+            eyebrow: 'Hosted, by invitation',
+            band: 'subtle',
+            heading: 'From invite code to live site',
+            columns: '2',
+            items: [
+              {
+                title: '1. Get an invite code',
+                description:
+                  'Signup is by invitation for now. A code lets you create an account.'
+              },
+              {
+                title: '2. Sign up',
+                description:
+                  'Enter the code on the signup page and create your account.'
+              },
+              {
+                title: '3. Follow the first-site guide',
+                description:
+                  'The guide applies a starter to your workspace: pages, theme and footer you can edit afterwards.'
+              },
+              {
+                title: '4. We set it up, and it goes live',
+                description:
+                  'We provision the site. It runs as its own app, apart from every other site.'
+              }
+            ]
+          },
+          {
+            blockType: 'content',
+            columns: [
+              {
+                size: 'full',
+                richText: {
+                  markdown:
+                    'Signup is by invitation for now. To ask for a code, write to [hello@codeware.se](mailto:hello@codeware.se).'
+                }
+              }
+            ]
+          },
+          {
+            blockType: 'content',
+            columns: [
+              {
+                size: 'full',
+                richText: {
+                  markdown:
+                    '## Or build your own\n\nThe plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace with Payload, Postgres and the deployment wiring already connected.'
+                }
+              }
+            ]
+          },
+          {
+            blockType: 'code',
+            language: 'plaintext',
+            code: [
+              'npx create-nx-payload@latest my-platform',
+              'cd my-platform && nx dev cms'
+            ].join('\n')
+          },
+          {
+            blockType: 'feature-cards',
+            eyebrow: 'Three packages, published',
+            heading: 'Usable on their own, without adopting anything else here',
+            columns: '3',
+            items: [
+              {
+                brand: { tech: 'nx' },
+                title: '@cdwr/nx-payload',
+                description:
+                  'An Nx plugin adding Payload generators and executors to any workspace. Scaffold an app, run migrations, build for deploy.'
+              },
+              {
+                brand: { tech: 'payload' },
+                title: 'create-nx-payload',
+                description:
+                  'The preset behind the command above — a new workspace with Payload, Postgres and the deployment wiring already connected.'
+              },
+              {
+                brand: { tech: 'flyio' },
+                title: '@cdwr/fly-node',
+                description:
+                  'A programmatic Node wrapper around the Fly CLI. What the deployment tooling here is built on.'
+              }
+            ]
+          },
+          {
+            blockType: 'callout',
+            showMark: true,
+            heading: 'The source is open',
+            body: 'Read how it is built, follow along as it changes, or open an issue when something does not work the way this site says it does.',
+            link: {
+              type: 'custom',
+              url: 'https://github.com/codeware-sthlm/cdwr',
+              label: 'Open the repository',
+              newTab: true
+            }
+          }
+        ]
+      },
+      {
+        name: 'Privacy',
+        slug: 'privacy',
+        layout: [
+          {
+            blockType: 'content',
+            columns: [
+              { size: 'full', richText: { markdown: cdwrIoPrivacyMarkdown } }
+            ]
+          }
+        ]
+      }
+    ],
+
+    customComponents: [
+      {
+        name: 'Theme swatch',
+        slug: 'theme-swatch',
+        source: cdwrIoThemeSwatchSource,
+        propsSchema: [
+          { name: 'title', type: 'text', required: true },
+          { name: 'description', type: 'text' },
+          { name: 'tokens', type: 'textarea' }
+        ]
+      }
+    ],
+
+    navigation: [
+      {
+        label: 'Platform',
+        children: [
+          {
+            reference: { relationTo: 'pages', lookupSlug: 'blocks' },
+            label: 'Blocks'
+          },
+          {
+            reference: { relationTo: 'pages', lookupSlug: 'studio' },
+            label: 'Studio'
+          },
+          {
+            reference: { relationTo: 'pages', lookupSlug: 'components' },
+            label: 'Components'
+          },
+          {
+            reference: { relationTo: 'pages', lookupSlug: 'architecture' },
+            label: 'Architecture'
+          }
+        ]
+      },
+      ...(devlog
+        ? [
+            {
+              reference: { relationTo: 'pages' as const, lookupSlug: 'devlog' },
+              label: 'Devlog'
+            }
+          ]
+        : []),
+      {
+        reference: { relationTo: 'pages', lookupSlug: 'start' },
+        label: 'Get started',
+        appearance: 'button'
+      }
+    ],
+
+    siteSettings: {
+      general: {
+        appName: 'cdwr.io',
+        landingPage: { lookupSlug: 'home' },
+        chrome: 'flat',
+        icon: { source: 'svg', svgCode: cdwrCloudSvg },
+        // Every built-in beside its own: here the theme switch is the demo
+        themes: [
+          'frost',
+          'spotlight',
+          'codeware',
+          'archipelago',
+          'midsummer',
+          'lingon',
+          'granite',
+          'aurora',
+          'cement'
+        ],
+        customThemes: [{ lookupSlug: 'cdwr' }],
+        defaultTheme: 'cdwr'
+      },
+      // The legal pages are linked by the legal settings, not listed here
+      footer: {
+        variant: 'expanded',
+        linkSource: 'custom',
+        links: [
+          {
+            link: {
+              type: 'custom',
+              newTab: true,
+              url: 'https://github.com/codeware-sthlm/cdwr/blob/main/LICENSING.md',
+              label: 'Source-available under FSL-1.1-MIT, MIT after two years'
+            }
+          }
+        ],
+        contact: [
+          { platform: 'email', email: 'hello@codeware.se' },
+          { platform: 'github', url: 'https://github.com/codeware-sthlm' },
+          { platform: 'npm', url: 'https://www.npmjs.com/org/cdwr' }
+        ],
+        showCopyright: true,
+        copyright: '© {year} Codeware Sthlm AB',
+        // The platform shows its own release line
+        showVersion: true
+      },
+      legal: {
+        privacyPage: { lookupSlug: 'privacy' }
       }
     }
-  ],
+  };
+}
 
-  pages: [
-    // ── The landing page: the show ─────────────────────────────────────────
-    {
-      name: 'Home',
-      slug: 'home',
-      meta: {
-        title: 'Every site its own. One platform underneath.',
-        description:
-          'A content platform built on Payload and Next.js. Each site gets its own domain, its own theme and its own editors.'
-      },
-      layout: [
-        {
-          blockType: 'hero',
-          badge: 'Themes you author in the admin',
-          heading: 'Every site its own. One platform underneath.',
-          illustration: heroIllustration,
-          lede: 'A content platform built on Payload and Next.js. Each site gets its own domain, its own theme and its own editors — and this page is one of them.',
-          actions: [
-            {
-              link: {
-                type: 'custom',
-                url: '/studio',
-                label: 'Try the theme studio'
-              },
-              emphasis: 'primary'
-            },
-            {
-              link: {
-                type: 'custom',
-                url: '/architecture',
-                label: 'How it is built'
-              },
-              emphasis: 'secondary'
-            }
-          ]
-        },
-        {
-          blockType: 'feature-cards',
-          eyebrow: 'What you get',
-          band: 'subtle',
-          heading: 'Four things, each of them demonstrable',
-          columns: '2',
-          items: [
-            {
-              title: 'Each site is its own deployment',
-              description:
-                'Its own domain, certificate and secrets, from one shared build. Sites are isolated without a build per customer.'
-            },
-            {
-              title: 'The look is a setting, not a stylesheet',
-              description:
-                'A site chooses its palette, its light or dark scheme and whether visitors may switch. Changed in the admin, live at once.'
-            },
-            {
-              title: 'Pages are built from blocks',
-              description:
-                'Composable blocks — prose, media, code, forms, tours. Editors compose; nothing is hand-coded per site.'
-            },
-            {
-              title: 'Every change is reviewed running',
-              description:
-                'Each pull request gets a site of its own with its own database. Content and code are checked the same way: by using them.'
-            }
-          ]
-        },
-        {
-          blockType: 'feature-section',
-          eyebrow: 'Theming',
-          heading: 'Change the look. Nothing reloads.',
-          illustration: themingIllustration,
-          intro:
-            'A site chooses its palette, its colour scheme, and whether visitors may switch at all. Set in the admin, not in a stylesheet.',
-          enableLink: true,
-          link: {
-            type: 'custom',
-            url: '/studio',
-            label: 'See how themes work'
-          },
-          subFeatures: [
-            {
-              title: 'Chosen in settings',
-              body: 'A site with one theme shows no switcher. Give it several and the control appears on its own.'
-            },
-            {
-              title: 'Light, dark, or fixed',
-              body: 'A site can be held to one scheme when the brand demands it.'
-            },
-            {
-              title: 'Decided on the server',
-              body: 'The choice ships with the page, so nothing flashes the wrong colour on first paint.'
-            }
-          ]
-        },
-        {
-          blockType: 'feature-section',
-          eyebrow: 'Theme studio',
-          band: 'gradient',
-          heading: 'A theme you cannot save until it is readable',
-          intro:
-            'Pick a brand colour and the studio derives the rest — surfaces, borders, charts, prose. Every pairing is checked for readability as you go, and one that fails cannot be published.',
-          enableLink: true,
-          link: { type: 'custom', url: '/studio', label: 'Open the studio' },
-          subFeatures: [
-            {
-              title: 'The whole palette from one colour',
-              body: 'Surfaces, borders, charts and prose all follow from the brand colour, by a recipe you can read back.'
-            },
-            {
-              title: 'Start from a built-in',
-              body: 'Open a platform theme, change what you need, keep the rest.'
-            },
-            {
-              title: 'The randomiser cannot fail',
-              body: 'It re-rolls until the result passes, so it never hands you an unreadable theme.'
-            }
-          ]
-        },
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown:
-                  'An inaccessible colour theme cannot be published on this platform. Each site runs on its own app, isolated from the others, and every app is hosted in Stockholm, in the EU.'
-              }
-            }
-          ]
-        },
-        {
-          blockType: 'feature-section',
-          eyebrow: 'Custom components',
-          heading: 'When no block fits, write one',
-          intro:
-            'A developer writes a component in the admin, saving it builds it, and an editor places it on a page like any other block. This site runs one that reads the colours of the active theme.',
-          enableLink: true,
-          link: {
-            type: 'custom',
-            url: '/components',
-            label: 'See the component'
-          }
-        },
-        {
-          blockType: 'custom-component',
-          component: { lookupSlug: 'theme-swatch' },
-          props: {
-            title: 'The colours on this page',
-            description: 'Read from the active theme as it changes'
-          }
-        },
-        {
-          blockType: 'feature-section',
-          eyebrow: 'Content',
-          heading: 'Every block, rendered by the renderer that serves it',
-          illustration: blocksIllustration,
-          intro:
-            'Each on its own page, with the production component and a paragraph on when to reach for it. Editors compose pages from these; a block that renders badly is visible to everyone, immediately.',
-          enableLink: true,
-          link: { type: 'custom', url: '/blocks', label: 'Browse the gallery' }
-        },
-        {
-          blockType: 'pill-list',
-          eyebrow: 'Built on',
-          heading: 'Nothing exotic, and nothing hidden',
-          intro:
-            'The interesting decisions are in how these fit together, not in the list itself.',
-          band: 'subtle',
-          items: [
-            {
-              label: 'Payload CMS',
-              url: 'https://payloadcms.com',
-              icon: 'payload'
-            },
-            { label: 'Next.js', url: 'https://nextjs.org', icon: 'nextjs' },
-            {
-              label: 'Supabase',
-              url: 'https://supabase.com',
-              icon: 'supabase'
-            },
-            { label: 'Fly.io', url: 'https://fly.io', icon: 'flyio' },
-            {
-              label: 'Infisical',
-              url: 'https://infisical.com',
-              logo: { source: 'svg', svgCode: infisicalLogo }
-            },
-            { label: 'Nx', url: 'https://nx.dev', icon: 'nx' },
-            {
-              label: 'Tailwind',
-              url: 'https://tailwindcss.com',
-              icon: 'tailwind'
-            },
-            {
-              label: 'Playwright',
-              url: 'https://playwright.dev',
-              logo: { source: 'svg', svgCode: playwrightLogo }
-            },
-            { label: 'Sentry', url: 'https://sentry.io', icon: 'sentry' },
-            {
-              label: 'GitHub',
-              url: 'https://github.com/codeware-sthlm/cdwr',
-              icon: 'github'
-            }
-          ]
-        },
-        {
-          blockType: 'posts',
-          title: 'What shipped recently',
-          description:
-            'Short entries when something lands. The honest answer to whether the platform is maintained.',
-          limit: 3
-        },
-        {
-          blockType: 'callout',
-          showMark: true,
-          heading: 'Build on the same platform',
-          body: 'The plugin, the preset and the deployment tooling behind this site are published. One command starts a workspace of your own.',
-          link: { type: 'custom', url: '/start', label: 'Get started' }
-        }
-      ]
-    },
+/** Off until the agent drafts entries worth publishing (COD-776) */
+const devlog = false;
 
-    // ── The gallery: route chrome built from the registry ──────────────────
-    {
-      name: 'Blocks',
-      slug: 'blocks',
-      meta: {
-        title: 'Every block, rendered by the renderer that serves it',
-        description:
-          'Not a gallery of screenshots. Each example is the production component, drawing from the same content API a site uses.'
-      },
-      layout: [
-        {
-          blockType: 'block-gallery',
-          eyebrow: 'Every block',
-          heading: 'Rendered by the renderer that serves it',
-          intro:
-            'Not a gallery of screenshots. Each example below is the production component, drawing from the same content API a site uses — so a block that renders badly under a theme is visible here, to everyone, immediately.',
-          mode: 'index'
-        }
-      ]
-    },
-
-    // ── The other pages: tell it plainly ───────────────────────────────────
-    {
-      name: 'Studio',
-      slug: 'studio',
-      meta: {
-        title: 'A theme you cannot save until it is readable',
-        description:
-          'Pick a brand colour. The studio derives every other colour from it and checks each pairing for readability while you work.'
-      },
-      layout: [
-        {
-          blockType: 'hero',
-          badge: 'Theme studio',
-          heading: 'A theme you cannot save until it is readable',
-          lede: 'Pick a brand colour. The studio derives every other colour from it and checks each pairing for readability while you work. A theme that fails cannot be published.'
-        },
-        {
-          // What the fact cards below leave out: the rule that makes the claim
-          blockType: 'feature-section',
-          eyebrow: 'Readability',
-          heading: 'Readable is a number, so it can be checked',
-          illustration: contrastIllustration,
-          intro:
-            'A theme here is a recipe, not a stylesheet written by hand, and every colour it produces is measured against the colour it sits on.',
-          subFeatures: [
-            {
-              title: 'Measured while you work',
-              body: 'Each pairing is checked against the accessibility standard as the theme changes, not in a review afterwards.'
-            },
-            {
-              title: 'A line, not a feeling',
-              body: '4.5:1 for text and 3:1 for large headings: the levels the standard sets, applied to every pair a visitor reads.'
-            },
-            {
-              title: 'Saving stays off until it passes',
-              body: 'While any pair is below the line the theme cannot be saved, so it never reaches a visitor.'
-            }
-          ]
-        },
-        {
-          // The prose above has already said what this is, so no header —
-          // just the studio, opened on the theme this site runs
-          blockType: 'theme-studio',
-          startFrom: 'spotlight',
-          note: 'Live — the studio itself, not a screenshot of it. Nothing you do here leaves your browser.'
-        },
-        {
-          blockType: 'feature-cards',
-          eyebrow: 'Three facts',
-          heading: 'What the studio guarantees',
-          columns: '3',
-          items: [
-            {
-              title: 'A handful of decisions',
-              description:
-                'Brand, base, surface, radius and typefaces, and where links and charts take their colour. Everything else follows.'
-            },
-            {
-              title: 'Overrides are marked',
-              description:
-                'Any single value can be pinned by hand, and the studio shows which ones were.'
-            },
-            {
-              title: 'Reopens as the recipe',
-              description:
-                'A saved theme parses back to what made it, so it can be changed rather than only overwritten.'
-            }
-          ]
-        }
-      ]
-    },
-    {
-      name: 'Components',
-      slug: 'components',
-      meta: {
-        title: 'A component written in the admin',
-        description:
-          'When no block does what a page needs, a developer writes one in the component studio. Saving it builds it, and an editor places it on a page.'
-      },
-      layout: [
-        {
-          blockType: 'hero',
-          badge: 'Custom components',
-          heading: 'A component written in the admin',
-          lede: 'When no block does what a page needs, a developer writes one in the component studio. Saving it builds it, and an editor places it on a page like any other block.'
-        },
-        {
-          blockType: 'feature-section',
-          eyebrow: 'How it works',
-          heading: 'Written, saved, placed',
-          intro:
-            'A component is source typed in the admin, not a release to deploy. The site it belongs to is the only one that sees it.',
-          subFeatures: [
-            {
-              title: 'Written in the admin',
-              body: 'The studio type-checks against the same declarations the build uses, so a mistake shows while you type.'
-            },
-            {
-              title: 'Built on save',
-              body: 'Saving builds the component, and a page shows it once the build has finished.'
-            },
-            {
-              title: 'Placed by an editor',
-              body: 'It is a block with its own fields, so putting it on a page needs no code and no release.'
-            }
-          ]
-        },
-        {
-          blockType: 'custom-component',
-          component: { lookupSlug: 'theme-swatch' },
-          props: {
-            title: 'The colours on this page',
-            description: 'Read from the active theme as it changes'
-          }
-        },
-        {
-          blockType: 'code',
-          language: 'tsx',
-          code: cdwrIoThemeSwatchSource
-        },
-        {
-          blockType: 'feature-cards',
-          eyebrow: 'Three facts',
-          heading: 'What a component can and cannot do',
-          columns: '3',
-          items: [
-            {
-              title: 'Built in a sandbox',
-              description:
-                "The source is built apart from the site that runs it, from a fixed set of packages and the site's own primitives."
-            },
-            {
-              title: 'Typed props',
-              description:
-                'Its fields are declared with it, so an editor fills in a form instead of writing props.'
-            },
-            {
-              title: 'Belongs to one site',
-              description:
-                'A component lives in the site that wrote it. Another site does not see it, and cannot break it.'
-            }
-          ]
-        },
-        {
-          blockType: 'callout',
-          showMark: true,
-          heading: 'Start with the platform',
-          body: 'The component studio is part of what the setup scaffolds. Start from it and write the first component on your own site.',
-          link: { type: 'custom', url: '/start', label: 'Get started' }
-        }
-      ]
-    },
-    {
-      name: 'Architecture',
-      slug: 'architecture',
-      meta: {
-        title: 'Every site is its own deployment',
-        description:
-          'A site is an app of its own, on its own domain, with its own certificate and its own secrets, built once and run many times.'
-      },
-      layout: [
-        {
-          blockType: 'hero',
-          badge: 'Architecture',
-          heading: 'Every site is its own deployment',
-          lede: 'A site is not a row in a table with a theme name. It is an app of its own, on its own domain, with its own certificate and its own secrets — built once and run many times.'
-        },
-        {
-          blockType: 'feature-section',
-          eyebrow: 'One build',
-          heading: 'Built once, started for every site',
-          illustration: oneBuildIllustration,
-          intro:
-            'The platform is built once, when a change is merged. That one build is then started as many times as there are sites, and each start is told which site it is.',
-          subFeatures: [
-            {
-              title: 'Told who it is at start',
-              body: 'The domain, the certificate and the secrets arrive when a site starts, rather than being baked into the build.'
-            },
-            {
-              title: 'One database, kept apart',
-              body: 'The sites share one database, and the platform keeps each site to its own content.'
-            },
-            {
-              title: 'The same software, twice',
-              body: 'codeware.se and cdwr.io are the same build. A third site would be that build again, with different everything else.'
-            }
-          ]
-        },
-        {
-          blockType: 'feature-cards',
-          eyebrow: 'Three facts',
-          heading: 'What a pull request gets',
-          columns: '3',
-          items: [
-            {
-              title: 'Its own database',
-              description:
-                'From a dedicated preview cluster, seeded on first boot, dropped with the branch.'
-            },
-            {
-              title: 'Migrations run first',
-              description:
-                'A schema change that would fail on deploy fails on the pull request instead.'
-            },
-            {
-              title: 'A visual review too',
-              description:
-                'Every component renders in every theme on every change, and the difference is a picture.'
-            }
-          ]
-        },
-        {
-          // Infisical and Playwright are not in the icon set, and feature
-          // cards take no logo of their own yet, so they carry an icon
-          blockType: 'feature-cards',
-          eyebrow: 'Built on',
-          heading: 'What it is built on, and why',
-          columns: '3',
-          items: [
-            {
-              brand: { tech: 'payload' },
-              title: 'Payload CMS',
-              description:
-                'The editor and the content API. Open source, and the whole admin is code we can change.'
-            },
-            {
-              brand: { tech: 'nextjs' },
-              title: 'Next.js',
-              description: 'Serves the sites and the admin from one app.'
-            },
-            {
-              brand: { tech: 'supabase' },
-              title: 'Supabase',
-              description:
-                'Postgres and file storage. One database per environment, shared by every site in it; the platform keeps each site to its own content.'
-            },
-            {
-              brand: { tech: 'flyio' },
-              title: 'Fly.io',
-              description:
-                'Runs each site as its own app, close to its visitors.'
-            },
-            {
-              brand: { logo: { source: 'svg', svgCode: infisicalLogo } },
-              title: 'Infisical',
-              description:
-                'Holds every secret, one folder per site, so nothing lives in the repository.'
-            },
-            {
-              brand: { tech: 'nx' },
-              title: 'Nx',
-              description:
-                'One repository for the platform, its tools and its published packages.'
-            },
-            {
-              brand: { tech: 'tailwind' },
-              title: 'Tailwind',
-              description: 'The styling the themes compile down to.'
-            },
-            {
-              brand: { logo: { source: 'svg', svgCode: playwrightLogo } },
-              title: 'Playwright',
-              description: 'The tests that open the running site and use it.'
-            }
-          ]
-        },
-        {
-          // How the list above fits together, run from one tool. The tool is
-          // drawn, not named: it is not published, and a name would invite
-          // the question of where to get it
-          blockType: 'feature-section',
-          eyebrow: 'Connected',
-          heading: 'How the pieces fit together',
-          intro:
-            'A merged change becomes a running site; secrets arrive when it starts; data lives in one database; errors are watched. All of it is operated from one tool, which shows what it will do before it does it.',
-          illustration: stackIllustration
-        }
-      ]
-    },
-    {
-      name: 'Devlog',
-      slug: 'devlog',
-      meta: {
-        title: 'What shipped, and why',
-        description:
-          'Short entries when something lands. Written once, dated, and not edited afterwards.'
-      },
-      layout: [
-        {
-          blockType: 'hero',
-          badge: 'Devlog',
-          heading: 'What shipped, and why',
-          lede: 'Short entries when something lands. Written once, dated, and not edited afterwards — which makes this the honest answer to whether the platform is maintained.'
-        },
-        {
-          blockType: 'posts',
-          title: 'Entries',
-          description: 'Newest first.',
-          limit: 10
-        }
-      ]
-    },
-    {
-      name: 'Get started',
-      slug: 'start',
-      meta: {
-        title: 'Get a site on the platform',
-        description:
-          'The platform hosts sites now, by invitation. Sign up with an invite code, or start a workspace of your own from the published packages.'
-      },
-      layout: [
-        {
-          blockType: 'hero',
-          badge: 'Get started',
-          heading: 'Get a site on the platform',
-          lede: 'The platform hosts sites now. Signup is by invitation: with an invite code you can create a workspace, choose a starter and have a site live without running anything yourself.',
-          illustration: startIllustration
-        },
-        {
-          blockType: 'feature-cards',
-          eyebrow: 'Hosted, by invitation',
-          band: 'subtle',
-          heading: 'From invite code to live site',
-          columns: '2',
-          items: [
-            {
-              title: '1. Get an invite code',
-              description:
-                'Signup is by invitation for now. A code lets you create an account.'
-            },
-            {
-              title: '2. Sign up',
-              description:
-                'Enter the code on the signup page and create your account.'
-            },
-            {
-              title: '3. Follow the first-site guide',
-              description:
-                'The guide applies a starter to your workspace: pages, theme and footer you can edit afterwards.'
-            },
-            {
-              title: '4. We set it up, and it goes live',
-              description:
-                'We provision the site. It runs as its own app, apart from every other site.'
-            }
-          ]
-        },
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown:
-                  'Signup is by invitation for now. To ask for a code, write to [hello@codeware.se](mailto:hello@codeware.se).'
-              }
-            }
-          ]
-        },
-        {
-          blockType: 'content',
-          columns: [
-            {
-              size: 'full',
-              richText: {
-                markdown:
-                  '## Or build your own\n\nThe plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace with Payload, Postgres and the deployment wiring already connected.'
-              }
-            }
-          ]
-        },
-        {
-          blockType: 'code',
-          language: 'plaintext',
-          code: [
-            'npx create-nx-payload@latest my-platform',
-            'cd my-platform && nx dev cms'
-          ].join('\n')
-        },
-        {
-          blockType: 'feature-cards',
-          eyebrow: 'Three packages, published',
-          heading: 'Usable on their own, without adopting anything else here',
-          columns: '3',
-          items: [
-            {
-              brand: { tech: 'nx' },
-              title: '@cdwr/nx-payload',
-              description:
-                'An Nx plugin adding Payload generators and executors to any workspace. Scaffold an app, run migrations, build for deploy.'
-            },
-            {
-              brand: { tech: 'payload' },
-              title: 'create-nx-payload',
-              description:
-                'The preset behind the command above — a new workspace with Payload, Postgres and the deployment wiring already connected.'
-            },
-            {
-              brand: { tech: 'flyio' },
-              title: '@cdwr/fly-node',
-              description:
-                'A programmatic Node wrapper around the Fly CLI. What the deployment tooling here is built on.'
-            }
-          ]
-        },
-        {
-          blockType: 'callout',
-          showMark: true,
-          heading: 'The source is open',
-          body: 'Read how it is built, follow along as it changes, or open an issue when something does not work the way this site says it does.',
-          link: {
-            type: 'custom',
-            url: 'https://github.com/codeware-sthlm/cdwr',
-            label: 'Open the repository',
-            newTab: true
-          }
-        }
-      ]
-    },
-    {
-      name: 'Privacy',
-      slug: 'privacy',
-      layout: [
-        {
-          blockType: 'content',
-          columns: [
-            { size: 'full', richText: { markdown: cdwrIoPrivacyMarkdown } }
-          ]
-        }
-      ]
-    }
-  ],
-
-  customComponents: [
-    {
-      name: 'Theme swatch',
-      slug: 'theme-swatch',
-      source: cdwrIoThemeSwatchSource,
-      propsSchema: [
-        { name: 'title', type: 'text', required: true },
-        { name: 'description', type: 'text' },
-        { name: 'tokens', type: 'textarea' }
-      ]
-    }
-  ],
-
-  posts: [
-    {
-      title: 'The queue that works while I sleep',
-      slug: 'the-queue-that-works-while-i-sleep',
-      draft: true,
-      meta: {
-        title: 'The queue that works while I sleep',
-        description:
-          'An AI agent works through a ticket queue on a small machine at home. A human approves each plan. What that changed about working alone.'
-      },
-      categories: [{ lookupSlug: 'multi-tenancy' }],
-      content:
-        'Most of this platform is built by one person, so the work waits when that person is asleep. A small machine at home now takes tickets from the queue and works on them in the meantime.\n\nThe tickets live in Linear. The agent reads one, writes its plan into the ticket and stops. A human reads the plan and approves it, or changes it. Nothing is built before that.\n\nOnce the plan is approved, the agent implements it and opens a pull request on GitHub. The pull request is reviewed by Copilot and then by a second pass of the agent itself, before it reaches a person.\n\nWhat changed is mostly the plan. Writing it down in the ticket, in words someone else can check, turned out to be the useful part, whoever carries it out. The morning starts with pull requests to read instead of a blank page.'
-    },
-    {
-      title: 'Every app releases itself',
-      slug: 'every-app-releases-itself',
-      draft: true,
-      meta: {
-        title: 'Every app releases itself',
-        description:
-          'Conventional commits decide versions, every pull request gets a preview, and production deploys when an app has actually changed.'
-      },
-      categories: [{ lookupSlug: 'multi-tenancy' }],
-      content:
-        'Nobody decides when an app is released. The commit messages do.\n\nEvery commit follows the conventional commit format. Nx release reads them and works out the next version for each app: a fix is a patch, a feature is a minor, a breaking change is a major.\n\nEvery pull request gets a preview of its own, with its own database, so a change is used before it is merged.\n\nProduction is deployed when an app gets a new version and its code has actually changed since the last release. A bump from a documentation edit alone deploys nothing. Each release is also published as a GitHub release for that app, with its changelog.'
-    },
-    {
-      title: 'The Codeware blue finally has a name',
-      slug: 'codeware-blue-has-a-name',
-      meta: {
-        title: 'The Codeware blue finally has a name',
-        description:
-          "The admin's brand ramp was eleven hand-cut hex values that no palette shipped. It is now a named family, so the studio shows the real brand."
-      },
-      createdAt: '2026-09-06T09:00:00.000Z',
-      categories: [{ lookupSlug: 'themes' }, { lookupSlug: 'palette' }],
-      content:
-        "The admin's brand ramp was eleven hand-cut hex values that no palette shipped, so the theme parser could not recognise it — it fell back to neutral and reported every step as an override. It is now a named family, which means the studio shows the real brand instead of a lie."
-    },
-    {
-      title: 'Naming the variants the admin had been copying by hand',
-      slug: 'naming-the-variants',
-      meta: {
-        title: 'Naming the variants the admin had been copying by hand',
-        description:
-          'Eight cards, three toolbar buttons and four status badges carried the same pasted class lists. Each is now a named variant.'
-      },
-      createdAt: '2026-09-06T08:00:00.000Z',
-      categories: [
-        { lookupSlug: 'design-system' },
-        { lookupSlug: 'accessibility' }
-      ],
-      content:
-        'Eight cards, three toolbar buttons and four status badges were carrying the same class lists pasted between files. Each is now a named variant, which means Storybook shows what the admin actually renders — and an accessibility test caught a brand button that failed contrast on one theme before anyone saw it.'
-    },
-    {
-      title: 'Pick a colour instead of typing one',
-      slug: 'pick-a-colour-instead-of-typing-one',
-      meta: {
-        title: 'Pick a colour instead of typing one',
-        description:
-          "The theme studio's fine-tuning panel edited ninety CSS values through a text field. It now has a real colour picker."
-      },
-      createdAt: '2026-09-05T09:00:00.000Z',
-      categories: [{ lookupSlug: 'studio' }],
-      content:
-        "The theme studio's fine-tuning panel edited ninety CSS values through a text field. It now has a real colour picker that writes back in the same notation the rest of the theme uses, so the contrast report keeps working on what you picked."
-    },
-    {
-      title: 'Platform themes can be forked from the admin',
-      slug: 'platform-themes-can-be-forked',
-      meta: {
-        title: 'Platform themes can be forked from the admin',
-        description:
-          'The studio could export a theme but never open one. A system administrator can now fork a built-in and change what they need.'
-      },
-      createdAt: '2026-09-03T09:00:00.000Z',
-      categories: [{ lookupSlug: 'studio' }, { lookupSlug: 'themes' }],
-      content:
-        'Until now the studio could export a theme but never open one. A system administrator can now fork a built-in, change what they need, and either save it to a site or take the committed CSS back to the repository.'
-    },
-    {
-      title: 'A site picks its own themes',
-      slug: 'a-site-picks-its-own-themes',
-      meta: {
-        title: 'A site picks its own themes',
-        description:
-          'Theme was a build-time import, so every site compiled to the same stylesheet. It is now a setting: each site chooses the themes it offers.'
-      },
-      createdAt: '2026-08-28T09:00:00.000Z',
-      categories: [{ lookupSlug: 'themes' }, { lookupSlug: 'multi-tenancy' }],
-      content:
-        'Theme was a build-time import, which meant every site compiled to the same stylesheet. It is now a setting: choose the themes a site offers, and the switcher appears only when there is more than one to switch to.'
-    }
-  ],
-
-  navigation: [
-    {
-      label: 'Platform',
-      children: [
-        {
-          reference: { relationTo: 'pages', lookupSlug: 'blocks' },
-          label: 'Blocks'
-        },
-        {
-          reference: { relationTo: 'pages', lookupSlug: 'studio' },
-          label: 'Studio'
-        },
-        {
-          reference: { relationTo: 'pages', lookupSlug: 'components' },
-          label: 'Components'
-        },
-        {
-          reference: { relationTo: 'pages', lookupSlug: 'architecture' },
-          label: 'Architecture'
-        }
-      ]
-    },
-    {
-      reference: { relationTo: 'pages', lookupSlug: 'devlog' },
-      label: 'Devlog'
-    },
-    {
-      reference: { relationTo: 'pages', lookupSlug: 'start' },
-      label: 'Get started',
-      appearance: 'button'
-    }
-  ],
-
-  siteSettings: {
-    general: {
-      appName: 'cdwr.io',
-      landingPage: { lookupSlug: 'home' },
-      chrome: 'flat',
-      icon: { source: 'svg', svgCode: cdwrCloudSvg },
-      // Every built-in beside its own: here the theme switch is the demo
-      themes: [
-        'frost',
-        'spotlight',
-        'codeware',
-        'archipelago',
-        'midsummer',
-        'lingon',
-        'granite',
-        'aurora',
-        'cement'
-      ],
-      customThemes: [{ lookupSlug: 'cdwr' }],
-      defaultTheme: 'cdwr'
-    },
-    // The legal pages are linked by the legal settings, not listed here
-    footer: {
-      variant: 'expanded',
-      linkSource: 'custom',
-      links: [
-        {
-          link: {
-            type: 'custom',
-            newTab: true,
-            url: 'https://github.com/codeware-sthlm/cdwr/blob/main/LICENSING.md',
-            label: 'Source-available under FSL-1.1-MIT, MIT after two years'
-          }
-        }
-      ],
-      contact: [
-        { platform: 'email', email: 'hello@codeware.se' },
-        { platform: 'github', url: 'https://github.com/codeware-sthlm' },
-        { platform: 'npm', url: 'https://www.npmjs.com/org/cdwr' }
-      ],
-      showCopyright: true,
-      copyright: '© {year} Codeware Sthlm AB',
-      // The platform shows its own release line
-      showVersion: true
-    },
-    legal: {
-      privacyPage: { lookupSlug: 'privacy' }
-    }
-  }
-};
+export const cdwrIo = defineCdwrIo({ devlog });
 
 export default cdwrIo;
