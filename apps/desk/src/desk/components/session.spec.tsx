@@ -9,6 +9,7 @@ import type { SessionState } from '../types';
 import {
   NOW,
   at,
+  carries,
   filled,
   hostSample,
   planSample,
@@ -16,6 +17,7 @@ import {
   view
 } from '../view/fixtures';
 
+import { CARD } from './card-ui';
 import { Parts, SessionCard, UnknownSession } from './session';
 
 const card = (s: DeskState) =>
@@ -94,7 +96,7 @@ describe('SessionCard', () => {
       const c = card(filled(session));
       const article = c.querySelector('article');
       expect(article?.getAttribute('data-w')).toBe('session');
-      expect(article?.classList.contains('card-top')).toBe(true);
+      expect(carries(article, CARD)).toBe(true);
       expect(article?.classList.contains('session')).toBe(true);
       expect(article?.classList.contains(tone)).toBe(true);
       const button = c.querySelector('button.open.state');

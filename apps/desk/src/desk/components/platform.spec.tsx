@@ -11,6 +11,7 @@ import {
   NOW,
   OLD,
   at,
+  carries,
   down,
   filled,
   hostSample,
@@ -19,6 +20,7 @@ import {
   view
 } from '../view/fixtures';
 
+import { HEAD, PANEL } from './card-ui';
 import { Platform, type PlatformActions } from './platform';
 import { Problems } from './problems';
 
@@ -121,6 +123,16 @@ const mount = (
 };
 
 describe('Platform', () => {
+  it('frames each section as a card', () => {
+    const c = mount(base());
+    const sections = c.all('section.pf-card');
+    expect(sections).toHaveLength(4);
+    for (const el of sections) {
+      expect(carries(el, PANEL)).toBe(true);
+      expect(carries(el.querySelector(':scope > .ct-head'), HEAD)).toBe(true);
+    }
+  });
+
   it('draws the four sections with a back link and the head counts', () => {
     const p = mount(filled());
     expect(p.all('h2.cap-label').map((e) => e.textContent)).toEqual([

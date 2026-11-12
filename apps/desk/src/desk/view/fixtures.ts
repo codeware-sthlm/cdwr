@@ -288,3 +288,10 @@ export const behind = (
   };
   return state;
 };
+
+/** Every utility of a shared class string, such as `CARD`, is on the element */
+export const carries = (el: Element | null, classes: string): boolean =>
+  classes
+    .trim()
+    .split(/\s+/)
+    .every((c) => el?.classList.contains(c) ?? false);
