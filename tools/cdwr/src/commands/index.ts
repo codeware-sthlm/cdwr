@@ -95,6 +95,13 @@ export const ENTRIES: Entry[] = [
     load: () => import('./tenant/snapshot').then((m) => m.default)
   },
   {
+    path: ['tenant', 'audit'],
+    summary:
+      "Audit a site's pages: status, console errors, axe, links, OG tags, 404",
+    danger: 'read',
+    load: () => import('./tenant/audit').then((m) => m.default)
+  },
+  {
     path: ['tenant', 'create'],
     summary: 'Create an empty workspace in Payload',
     danger: 'mutate',
