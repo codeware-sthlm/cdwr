@@ -165,7 +165,11 @@ export const App = () => {
               rel="noreferrer"
               title="Commits, pull requests and review replies are made as this GitHub App"
             >
-              <img className="av" src={AGENT_AVATAR} alt="" />
+              <img
+                className="size-5 flex-none rounded-full"
+                src={AGENT_AVATAR}
+                alt=""
+              />
               on GitHub as codeware-agent[bot]
             </a>
             <span

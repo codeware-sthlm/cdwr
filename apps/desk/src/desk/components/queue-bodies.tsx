@@ -10,6 +10,7 @@ import { livePr } from '../view/pr';
 
 import { Chip, Empty, Item, LoadMeter, ReasonChip } from './items';
 import { IdLink, Inline, PrPill, Prn } from './links';
+import { KNOBS, PV_STATS } from './sheet-ui';
 
 // The queue sheets: what the agent takes next, the open PRs, the hand-offs left and the limit
 
@@ -94,7 +95,7 @@ const reasonState = (x: QueueNext): string =>
 /** What would free a slot under the limit */
 const Free = ({ m }: { m: Model }) =>
   m.held.free.length ? (
-    <ul className="knobs">
+    <ul className={KNOBS}>
       {m.held.free.map((f, n) => (
         <li key={n}>
           {f.action === 'review' ? (
@@ -398,7 +399,7 @@ export const LimitBody = ({ m, state }: BodyProps) => {
   const max = m.limit.max || LIMIT;
   return (
     <>
-      <div className="pv-stats">
+      <div className={PV_STATS}>
         <div>
           <b>{`${m.limit.used} of ${max}`}</b>
           <span>agent PRs in flight</span>

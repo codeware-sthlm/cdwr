@@ -7,6 +7,7 @@ import type { Detail } from '../state';
 import { reasonChipData } from '../view/labels';
 
 import { LinkIds } from './links';
+import { PV_MORE, TBL, TBL_CELL, TBL_HEAD } from './sheet-ui';
 
 // The row helpers of the sheets, with the same elements and classes the HTML versions had
 
@@ -120,8 +121,12 @@ export const LoadMeter = ({ m }: { m: Pick<Model, 'limit'> }) => {
   const n = m.limit.used,
     max = m.limit.max || LIMIT;
   return (
-    <div className="meter" aria-hidden="true">
+    <div
+      className="h-2 overflow-hidden rounded-[4px] bg-[color:var(--sunk)]"
+      aria-hidden="true"
+    >
       <i
+        className="block h-full"
         style={{
           width: `${Math.min(100, (n / max) * 100)}%`,
           background: `var(${n >= max ? '--block' : n >= max - 1 ? '--wait' : '--ok'})`
@@ -133,7 +138,7 @@ export const LoadMeter = ({ m }: { m: Pick<Model, 'limit'> }) => {
 
 /** "+ 3 more" under a preview; nothing when all fit */
 export const PvMore = ({ n }: { n: number }) =>
-  n > 0 ? <p className="pv-more">+ {n} more</p> : null;
+  n > 0 ? <p className={PV_MORE}>+ {n} more</p> : null;
 
 /** A table of cells, in a box that scrolls sideways when it must */
 export const Table = ({
@@ -143,12 +148,14 @@ export const Table = ({
   head: readonly string[];
   rows: readonly (readonly ReactNode[])[];
 }) => (
-  <div className="tblwrap">
-    <table className="tbl">
+  <div className="overflow-x-auto">
+    <table className={TBL}>
       <thead>
         <tr>
           {head.map((h) => (
-            <th key={h}>{h}</th>
+            <th key={h} className={TBL_HEAD}>
+              {h}
+            </th>
           ))}
         </tr>
       </thead>
@@ -156,7 +163,9 @@ export const Table = ({
         {rows.map((r, n) => (
           <tr key={n}>
             {r.map((c, k) => (
-              <td key={k}>{c}</td>
+              <td key={k} className={TBL_CELL}>
+                {c}
+              </td>
             ))}
           </tr>
         ))}

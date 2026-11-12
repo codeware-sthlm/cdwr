@@ -22,6 +22,7 @@ import { IdeaCard } from './before';
 import { ShippedChart, SpendChart } from './charts';
 import { Chip, Empty, Item, PvMore, Table } from './items';
 import { IdLink, Inline } from './links';
+import { KNOBS, PV_STATS, ROLE_BG, STALE } from './sheet-ui';
 
 // The sheets of the page's data: the activity table, what shipped, what it cost, every open ticket and the suggestions
 
@@ -40,16 +41,40 @@ const FILTERS: readonly (readonly [Filter, string])[] = [
 const NO_ACTIVITY =
   'No activity yet. The scheduler publishes it after its next run.';
 
+/** A discarded idea's reason; the spec reads the class */
+const REASON = 'reason text-[0.8rem] text-[color:var(--muted)] italic';
+
+/** An actor's pill; the caller adds the colours */
+const TAG =
+  'inline-block rounded-[999px] px-[7px] text-[0.72rem] font-semibold';
+
+/** The activity table's cells: the Change column wraps, the rest stay on one line; its ticket links show the underline on hover only */
+const ACT_CELL =
+  'border-b border-[color:var(--line)] px-1.5 py-[5px] text-left align-baseline [&_a.id]:no-underline [&_a.id:hover]:underline';
+const ACT_TH = `${ACT_CELL} font-semibold text-[color:var(--muted)]`;
+const ACT_TD = `${ACT_CELL} whitespace-nowrap`;
+const ACT_TD_LAST = `${ACT_CELL} w-full [overflow-wrap:anywhere]`;
+
 const Actor = ({ a }: { a: string }) =>
   a === 'agent' ? (
-    <span className="tag agent">
-      <img className="av inline-block" src={AGENT_AVATAR} alt="" />
+    <span
+      className={`${TAG} bg-[color:var(--accent-soft)] text-[color:var(--accent)]`}
+    >
+      <img
+        className="-mt-0.5 mr-1 -ml-1 inline-block size-3.5 flex-none rounded-full"
+        src={AGENT_AVATAR}
+        alt=""
+      />
       agent
     </span>
   ) : a === 'scheduler' ? (
-    <span className="tag scheduler">{a}</span>
+    <span
+      className={`${TAG} bg-[color:var(--work-soft)] text-[color:var(--work)]`}
+    >
+      {a}
+    </span>
   ) : a === 'unknown' ? (
-    <span className="actor-unknown">unknown</span>
+    <span className="text-[color:var(--muted)]">unknown</span>
   ) : (
     a
   );
@@ -62,7 +87,7 @@ const ActivityHead = ({ m, header }: { m: Model; header: string }) => {
       ? `The scheduler hasn't published for ${ageText(age)}. It stops while the Mac sleeps.`
       : '';
   return (
-    <span className={warning ? 'stale' : ''} title={warning}>
+    <span className={warning ? STALE : ''} title={warning}>
       {header}
     </span>
   );
@@ -94,10 +119,11 @@ export const ActivityBody = ({
       : activity.rows.filter((r) => r.ticket === picked);
   return (
     <>
-      <div className="act-bar">
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 text-[0.85rem] text-[color:var(--muted)]">
         <label>
           Ticket{' '}
           <select
+            className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-2 py-[5px] font-[family-name:var(--font-ui)] text-[0.85rem] leading-[normal] font-normal text-[color:var(--fg)]"
             aria-label="Filter by ticket"
             value={picked}
             onChange={(e) => onActFilter(e.target.value)}
@@ -114,29 +140,31 @@ export const ActivityBody = ({
       </div>
       {activity.dropped ? <p className="rule">{activity.dropped}</p> : null}
       {rows.length ? (
-        <div className="tblwrap">
-          <table className="act">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[0.8rem]">
             <thead>
               <tr>
-                <th>When</th>
-                <th>Ticket</th>
-                <th>Actor</th>
-                <th>Change</th>
+                <th className={ACT_TH}>When</th>
+                <th className={ACT_TH}>Ticket</th>
+                <th className={ACT_TH}>Actor</th>
+                <th className={ACT_TH}>Change</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, n) => (
                 <tr key={n}>
-                  <td>
-                    <time>{r.when}</time>
+                  <td className={ACT_TD}>
+                    <time className="font-[family-name:var(--font-mono)] text-[0.76rem] leading-[normal] text-[color:var(--muted)] tabular-nums">
+                      {r.when}
+                    </time>
                   </td>
-                  <td>
+                  <td className={ACT_TD}>
                     <IdLink id={r.ticket} />
                   </td>
-                  <td>
+                  <td className={ACT_TD}>
                     <Actor a={r.actor} />
                   </td>
-                  <td>
+                  <td className={ACT_TD_LAST}>
                     <Inline text={r.change.replace(/\*\*/g, '')} />
                   </td>
                 </tr>
@@ -169,7 +197,7 @@ export const ShippedBody = ({
   const daysWith = s.days.filter((d) => d.items.length).reverse();
   return (
     <>
-      <div className="pv-stats">
+      <div className={PV_STATS}>
         <div>
           <b>{s.total}</b>
           <span>last {SHIP_DAYS} days</span>
@@ -205,10 +233,13 @@ export const ShippedBody = ({
 };
 
 const Legend = () => (
-  <div className="legend">
+  <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[0.78rem] text-[color:var(--muted)]">
     {ROLES.map((r) => (
-      <span key={r}>
-        <i className={`seg-${r}`} aria-hidden="true"></i>
+      <span key={r} className="inline-flex items-center gap-1.5">
+        <i
+          className={`inline-block size-2.5 rounded-[3px] ${ROLE_BG[r]}`}
+          aria-hidden="true"
+        ></i>
         {r}
       </span>
     ))}
@@ -219,10 +250,10 @@ const HBars = ({ rows, max }: { rows: readonly TicketCost[]; max: number }) => {
   const top = Math.max(1, ...rows.map((r) => r.total));
   return (
     <>
-      <div className="hbars">
+      <div className="grid gap-1.5 text-[0.8rem]">
         {rows.slice(0, max).map((r) => (
           <div
-            className="hbar"
+            className="grid grid-cols-[5.6em_minmax(0,1fr)_4.6em] items-center gap-2"
             key={r.i.id}
             title={
               `${r.i.id}: ` +
@@ -230,23 +261,28 @@ const HBars = ({ rows, max }: { rows: readonly TicketCost[]; max: number }) => {
             }
           >
             <a
-              className="id"
+              className="id mr-0"
               href={r.i.url}
               target="_blank"
               rel="noopener noreferrer"
             >
               {r.i.id}
             </a>
-            <span className="track" aria-hidden="true">
+            <span
+              className="flex h-2.5 min-w-0 gap-0.5 [&_i:last-child]:rounded-r-[4px]"
+              aria-hidden="true"
+            >
               {ROLES.filter((k) => r[k] > 0).map((k) => (
                 <i
                   key={k}
-                  className={`seg-${k}`}
+                  className={`block h-full min-w-0 ${ROLE_BG[k]}`}
                   style={{ width: `${(r[k] / top) * 100}%` }}
                 ></i>
               ))}
             </span>
-            <b>{usd(r.total)}</b>
+            <b className="text-right font-semibold tabular-nums">
+              {usd(r.total)}
+            </b>
           </div>
         ))}
       </div>
@@ -310,7 +346,7 @@ const Spend = ({
   const unattributed = unattributedTotal(usage);
   return (
     <>
-      <div className="pv-stats">
+      <div className={PV_STATS}>
         <div>
           <b>{usd(s.total)}</b>
           <span>last {SHIP_DAYS} days</span>
@@ -361,7 +397,7 @@ const Spend = ({
       </div>
       <div className="group">
         <h3>What moves it</h3>
-        <ul className="knobs">
+        <ul className={KNOBS}>
           <li>
             <b>Model per role</b>
             <span>
@@ -599,7 +635,7 @@ export const IdeasBody = ({ m, state, now }: BodyProps) => {
           </Empty>
         </div>
       )}
-      <div className="pv-stats">
+      <div className={PV_STATS}>
         <div>
           <b>{recent(m.ideasAccepted, (i) => i.completedAt)}</b>
           <span>accepted, 30 days</span>
@@ -647,9 +683,9 @@ export const IdeasBody = ({ m, state, now }: BodyProps) => {
                   side={i.canceledAt ? dayLabel(i.canceledAt.slice(0, 10)) : ''}
                   note={
                     reason === undefined ? null : reason ? (
-                      <span className="reason">{`“${reason}”`}</span>
+                      <span className={REASON}>{`“${reason}”`}</span>
                     ) : (
-                      <span className="reason">no reason given</span>
+                      <span className={REASON}>no reason given</span>
                     )
                   }
                 />

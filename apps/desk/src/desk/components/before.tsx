@@ -331,6 +331,15 @@ const WaitCard = ({
   );
 };
 
+/** A suggestion's card: the ticket's Evidence, What changes, Cost and Why now; its paragraphs, headings and bullets */
+const IDEA =
+  'idea grid min-w-0 gap-2.5 rounded-[10px] border border-l-4 border-[color:var(--line)] border-l-[color:var(--accent)] px-3.5 py-3';
+const IDEA_H4 =
+  'mb-[3px] text-[0.7rem] font-semibold tracking-[0.08em] text-[color:var(--muted)] uppercase';
+const IDEA_P = 'text-[0.88rem] [overflow-wrap:anywhere]';
+const IDEA_LI =
+  "relative pl-3.5 text-[0.85rem] [overflow-wrap:anywhere] before:absolute before:top-[0.55em] before:left-0 before:size-1.5 before:rounded-full before:bg-[color:var(--accent)] before:content-['']";
+
 /** An idea with its evidence; `controls` is the Snooze button the sheet gives it */
 export const IdeaCard = ({
   i,
@@ -349,14 +358,14 @@ export const IdeaCard = ({
   const part = (h: string, text: string | null | undefined) =>
     text ? (
       <div>
-        <h4>{h}</h4>
-        <p>
+        <h4 className={IDEA_H4}>{h}</h4>
+        <p className={IDEA_P}>
           <Inline text={text} />
         </p>
       </div>
     ) : null;
   return (
-    <article className="idea">
+    <article className={IDEA}>
       <a
         className="title"
         href={i.url}
@@ -376,10 +385,10 @@ export const IdeaCard = ({
           <>
             {d.evidence.length ? (
               <div>
-                <h4>Evidence</h4>
-                <ul>
+                <h4 className={IDEA_H4}>Evidence</h4>
+                <ul className="gap-1">
                   {d.evidence.map((e, n) => (
-                    <li key={n}>
+                    <li key={n} className={IDEA_LI}>
                       <Inline text={e} />
                     </li>
                   ))}
@@ -391,16 +400,16 @@ export const IdeaCard = ({
             {part('Why now', d.why)}
           </>
         ) : (
-          <p className="rule">
+          <p className={`rule ${IDEA_P}`}>
             {
               "The ticket doesn't follow the suggestion shape; read it in Linear."
             }
           </p>
         )
       ) : (
-        <p className="rule">Loading the ticket…</p>
+        <p className={`rule ${IDEA_P}`}>Loading the ticket…</p>
       )}
-      <p className="rule">
+      <p className={`rule ${IDEA_P}`}>
         Accept: set <code>agent:ready</code> on the ticket. Discard: cancel it
         with one word in a comment, such as <i>already decided</i>,{' '}
         <i>not worth it</i>, <i>wrong direction</i> or <i>later</i>. The agent

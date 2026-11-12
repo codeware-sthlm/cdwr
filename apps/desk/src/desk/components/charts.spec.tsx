@@ -217,9 +217,9 @@ describe('Gauge', () => {
 
   it('fills to its share, clamped, and marks a bad one', () => {
     expect(fill(0.5, false)?.getAttribute('width')).toBe('50');
-    expect(fill(0.5, false)?.getAttribute('class')).toBe('fill');
+    expect(fill(0.5, false)?.classList.contains('bad')).toBe(false);
     expect(fill(3, true)?.getAttribute('width')).toBe('100');
-    expect(fill(3, true)?.getAttribute('class')).toBe('fill bad');
+    expect(fill(3, true)?.classList.contains('bad')).toBe(true);
     expect(fill(-1, false)?.getAttribute('width')).toBe('0');
   });
 });
