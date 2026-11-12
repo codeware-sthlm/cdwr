@@ -119,18 +119,21 @@ export const marksIn = (
   return ticket === undefined ? { registered } : { registered, ticket };
 };
 
-/** The ticket in hand at a moment, or undefined before the first marker and after a clear */
+/**
+ * The ticket in hand at a moment: undefined before the first marker, so the caller falls back
+ * on the git branch, and `null` after a clear, when the session holds no ticket
+ */
 export const ticketAt = (
   marks: TicketMark[],
   timestamp: string
-): string | undefined => {
+): string | null | undefined => {
   const at = Date.parse(timestamp);
-  let ticket: string | null = null;
+  let ticket: string | null | undefined;
   for (const mark of marks) {
     if (Date.parse(mark.timestamp) > at) break;
     ticket = mark.ticket;
   }
-  return ticket ?? undefined;
+  return ticket;
 };
 
 /** `claude-haiku-4-5-20251001` → `claude-haiku-4-5` */
