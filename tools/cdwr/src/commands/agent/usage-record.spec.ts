@@ -3,6 +3,8 @@ import { memoryPrefs } from '../../cli/prefs';
 import { runCommand } from '../../cli/run';
 import { fakeUi } from '../../testing/fake-ui';
 
+import { localDay } from './usage.logic';
+
 vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
 const NOW = '2026-10-27T10:00:00.000Z';
@@ -62,6 +64,8 @@ const URL = 'https://x.supabase.co';
 describe('agent usage-record', () => {
   let ui: ReturnType<typeof fakeUi>;
   const fetchMock = vi.fn<typeof fetch>();
+  /** This host's day rows as the read-back finds them */
+  let stored: Record<string, unknown>[] = [];
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -69,7 +73,12 @@ describe('agent usage-record', () => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockReset();
     findCalls.length = 0;
-    fetchMock.mockResolvedValue(new Response(null, { status: 201 }));
+    stored = [];
+    fetchMock.mockImplementation(async (_url, init) =>
+      init?.method === 'GET'
+        ? new Response(JSON.stringify(stored), { status: 200 })
+        : new Response(null, { status: 201 })
+    );
     ui = fakeUi([]);
   });
 
@@ -121,7 +130,7 @@ describe('agent usage-record', () => {
     });
     expect(exit).toBe(EXIT.ok);
     expect(fetchMock).toHaveBeenCalledTimes(4);
-    const [url, init] = fetchMock.mock.calls[1] ?? [];
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
     expect(url).toBe(
       `${URL}/rest/v1/usage?on_conflict=day,ticket,model,role,host`
     );
@@ -178,25 +187,54 @@ describe('agent usage-record', () => {
     const { exit } = await record(['--yes', '--json', '--kind', 'day'], env);
     expect(exit).toBe(EXIT.ok);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/rest/v1/usage?');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/rest/v1/usage?');
     expect(findCalls[0]).toBeUndefined();
   });
 
-  it("replaces this host's day rows from the window's first local day", async () => {
+  it("deletes after the upsert only this host's rows the send no longer has", async () => {
+    const sentDay = localDay('2026-10-27T09:00:00.000Z');
+    stored = [
+      {
+        day: sentDay,
+        ticket: 'COD-1',
+        model: 'claude-opus-4-7',
+        role: 'orchestrating'
+      },
+      { day: sentDay, ticket: null, model: 'claude-opus-4-7', role: 'planning' }
+    ];
     const { exit } = await record(
       ['--yes', '--json', '--kind', 'day', '--days', '2'],
       env
     );
     expect(exit).toBe(EXIT.ok);
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
-    const first = new Date(2026, 9, 25);
-    const day = `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}-${String(first.getDate()).padStart(2, '0')}`;
-    expect(String(url)).toMatch(
-      new RegExp(
-        `^https://x\\.supabase\\.co/rest/v1/usage\\?host=eq\\.[^&]+&day=gte\\.${day}$`
-      )
+    expect(fetchMock.mock.calls.map((c) => c[1]?.method)).toEqual([
+      'POST',
+      'GET',
+      'DELETE'
+    ]);
+    const first = localDay(new Date(2026, 9, 25).toISOString());
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      `&day=gte.${first}&`
     );
-    expect(init).toMatchObject({ method: 'DELETE' });
+    const [url] = fetchMock.mock.calls[2] ?? [];
+    expect(decodeURIComponent(String(url).split('&or=')[1] ?? '')).toBe(
+      `(and(day.eq.${sentDay},ticket.is.null,model.eq."claude-opus-4-7",role.eq.planning))`
+    );
+    expect(String(url)).toMatch(
+      /^https:\/\/x\.supabase\.co\/rest\/v1\/usage\?host=eq\.[^&]+&or=/
+    );
+  });
+
+  it('deletes nothing when the upsert fails', async () => {
+    fetchMock.mockImplementation(
+      async () => new Response('nope', { status: 500 })
+    );
+    stored = [
+      { day: '2026-10-26', ticket: null, model: 'm', role: 'planning' }
+    ];
+    const { exit } = await record(['--yes', '--kind', 'day'], env);
+    expect(exit).toBe(EXIT.failed);
+    expect(fetchMock.mock.calls.map((c) => c[1]?.method)).toEqual(['POST']);
   });
 
   it('shows the delete in the dry-run plan', async () => {
@@ -210,8 +248,8 @@ describe('agent usage-record', () => {
   it('sends day rows, hour rows and the cleanup by default', async () => {
     await record(['--yes', '--json'], env);
     expect(fetchMock.mock.calls.map((c) => c[1]?.method)).toEqual([
-      'DELETE',
       'POST',
+      'GET',
       'POST',
       'DELETE'
     ]);

@@ -23,6 +23,18 @@ const HOUR_CONFLICT = 'hour,model,role,host';
 const BATCH = 500;
 const DEADLINE_MS = 60_000;
 const KEEP_HOURS_DAYS = 14;
+/** PostgREST's default max-rows: a shorter page is the last */
+const PAGE = 1000;
+const STALE_BATCH = 50;
+
+type DayKey = Pick<UsageTelemetryRow, 'day' | 'ticket' | 'model' | 'role'>;
+
+const dayKey = (r: DayKey): string =>
+  [r.day, r.ticket ?? '', r.model, r.role].join('\t');
+
+/** One row's key as a PostgREST `and(…)`, values quoted */
+const keyFilter = (r: DayKey): string =>
+  `and(day.eq.${r.day},ticket.${r.ticket === null ? 'is.null' : `eq."${r.ticket}"`},model.eq."${r.model}",role.eq.${r.role})`;
 
 const KINDS = ['day', 'hour', 'both'] as const;
 
@@ -39,7 +51,7 @@ interface Data {
 
 export default defineCommand({
   summary: 'Send the agent workflow spend to the telemetry database',
-  description: `Upserts the local usage into the usage table (API-equivalent cost, tokens, by day, ticket, model and role) and the usage_hours table (by whole UTC hour, model and role, covering every Claude project on this host) of the agent-queue Supabase project, through PostgREST with the service key. This host's day rows from the window's first day on are deleted first, so a role or ticket read differently since leaves no stale row; with no rows to send nothing is deleted. Hour rows older than ${KEEP_HOURS_DAYS} days are deleted for this host. Needs ${URL_ENV} and ${KEY_ENV}; without them it does nothing. Rows already sent are overwritten with the recomputed numbers, so running it again is safe. Only numbers, model names and ticket ids leave the machine.`,
+  description: `Upserts the local usage into the usage table (API-equivalent cost, tokens, by day, ticket, model and role) and the usage_hours table (by whole UTC hour, model and role, covering every Claude project on this host) of the agent-queue Supabase project, through PostgREST with the service key. After the upsert, this host's day rows from the window's first day on that the send doesn't have are deleted, so a role or ticket read differently since leaves no stale row; a failed send deletes nothing, and with no rows to send nothing is deleted. Hour rows older than ${KEEP_HOURS_DAYS} days are deleted for this host. Needs ${URL_ENV} and ${KEY_ENV}; without them it does nothing. Rows already sent are overwritten with the recomputed numbers, so running it again is safe. Only numbers, model names and ticket ids leave the machine.`,
   danger: 'mutate',
   // The scheduler runs it every run
   history: false,
@@ -156,13 +168,13 @@ export default defineCommand({
     }
     const steps = [];
     if (rows.length > 0) {
-      // A key that gets no replies any more (a role or ticket read differently) keeps no stale sum
-      steps.push({
-        label: `Delete this host's usage rows from ${fromDay} on`,
-        detail: `${endpoint}/rest/v1/usage`
-      });
       steps.push({
         label: `Upsert ${rows.length} usage rows`,
+        detail: `${endpoint}/rest/v1/usage`
+      });
+      // A key that gets no replies any more (a role or ticket read differently) keeps no stale sum
+      steps.push({
+        label: `Delete this host's usage rows from ${fromDay} on that this send doesn't have`,
         detail: `${endpoint}/rest/v1/usage`
       });
     }
@@ -235,10 +247,44 @@ export default defineCommand({
         );
       }
     };
+    /** This host's day rows from `fromDay` on that this send no longer has */
+    const staleRows = async (): Promise<DayKey[]> => {
+      const found: DayKey[] = [];
+      for (let offset = 0; ; offset += PAGE) {
+        const response = await fetch(
+          `${base}/rest/v1/usage?select=day,ticket,model,role&host=eq.${encodeURIComponent(host)}&day=gte.${fromDay}&order=day,ticket,model,role&limit=${PAGE}&offset=${offset}`,
+          {
+            method: 'GET',
+            headers: { apikey: key, Authorization: `Bearer ${key}` },
+            signal: signal()
+          }
+        );
+        if (!response.ok) {
+          throw new Error(
+            `Supabase answered ${response.status} for the usage read: ${(await response.text()).slice(0, 200)}`
+          );
+        }
+        const page = (await response.json()) as DayKey[];
+        found.push(...page);
+        if (page.length < PAGE) break;
+      }
+      const sent = new Set(rows.map(dayKey));
+      return found.filter((r) => !sent.has(dayKey(r)));
+    };
     try {
-      // Only with rows to send, so an empty read never wipes what was sent before
-      if (rows.length > 0) await remove('usage', `day=gte.${fromDay}`);
       await upsert('usage', CONFLICT, rows);
+      // Only after the upsert, so a failed send leaves the old rows rather than none; and only
+      // with rows to send, so an empty read never wipes what was sent before
+      if (rows.length > 0) {
+        const stale = await staleRows();
+        for (let i = 0; i < stale.length; i += STALE_BATCH) {
+          const keys = stale.slice(i, i + STALE_BATCH).map(keyFilter);
+          await remove(
+            'usage',
+            `or=${encodeURIComponent(`(${keys.join(',')})`)}`
+          );
+        }
+      }
       await upsert('usage_hours', HOUR_CONFLICT, hours);
       if (prune) {
         const cutoff = new Date(
