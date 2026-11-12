@@ -22,6 +22,7 @@ import {
   capDot,
   percent
 } from './capacity';
+import { HEAD, PANEL } from './card-ui';
 import { CmdButton, ControlStatus, MINI, Stepper } from './controls';
 
 // The Platform view: hosts, versions and health, with the queue's controls when the desk has a
@@ -86,8 +87,8 @@ const Section = ({
   src?: string;
   children: ReactNode;
 }) => (
-  <section className="card-top pf-card cursor-default gap-[14px]">
-    <div className="ct-head">
+  <section className={`${PANEL} pf-card`}>
+    <div className={HEAD}>
       <h2 className={`cap-label ${CAP_LABEL}`}>{label}</h2>
       {src ? <span className={`cap-src ${CAP_SRC}`}>{src}</span> : null}
     </div>
