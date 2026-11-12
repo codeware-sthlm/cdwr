@@ -45,6 +45,13 @@ const matches = (rule: string, command: string): boolean => {
 const isDenied = (command: string): boolean =>
   denied.some((rule) => matches(rule, command));
 
+// The Bash rules of --allowedTools, `Bash(...)` stripped
+const allowed: string[] = [
+  ...(
+    /--allowedTools \\\n([\s\S]*?)> "\$result"/.exec(code)?.[1] ?? ''
+  ).matchAll(/"Bash\(([^"]*)\)"/g)
+].map((m) => m[1] ?? '');
+
 describe('implement.sh', () => {
   it('stops on the first error', () => {
     expect(SCRIPT).toMatch(/^set -euo pipefail$/m);
@@ -219,6 +226,25 @@ describe('implement.sh', () => {
     `tools/cdwr/agent-queue/force-push.sh ${wt} ${branch} 0123abcd`
   ])('leaves %s to the allow list', (command) => {
     expect(isDenied(command)).toBe(false);
+  });
+
+  // `cdwr agent exec` hands the vault's keys to what it runs in the container: Håkan's,
+  // never a session's. Neither it nor ssh is on the allow list, so dontAsk denies them.
+  it.each([
+    'pnpm cdwr agent exec --host agent-host -- agent status',
+    `pnpm -C ${wt} cdwr agent exec --host agent-host -- agent status`,
+    'node tools/cdwr/bin/cdwr.mjs agent exec --host agent-host -- agent status',
+    'ssh agent-host docker exec cdwr-agent /opt/agent-host/secrets.sh node tools/cdwr/bin/cdwr.mjs agent status',
+    'docker exec cdwr-agent /opt/agent-host/secrets.sh env'
+  ])('allows no rule for %s', (command) => {
+    expect(allowed.filter((rule) => matches(rule, command))).toEqual([]);
+  });
+
+  it('reads the allow rules', () => {
+    expect(allowed).toContain('pnpm cdwr agent worktree *');
+    expect(
+      allowed.some((rule) => matches(rule, `git -C ${wt} push origin HEAD`))
+    ).toBe(true);
   });
 
   it('reads a failed job log but cannot rerun it', () => {
