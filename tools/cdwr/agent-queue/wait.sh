@@ -2,6 +2,8 @@
 # Background watcher for an attended /work-queue session: re-picks from Linear and exits when the
 # attended pick changes, or after --max seconds so the session can re-arm it. A `run` pick it has
 # not reported to this session yet (<id>.seen) exits at once, so work that landed before it started is not missed.
+# So does the session's own ticket running (the session file's `ticket`), reported as `resume: <ticket> · <detail>`:
+# the session is polling, so its own work is what it picks up again. `--now` reads the same way.
 # It wakes on events: it starts `cdwr agent listen --notify-pid $$` from its own checkout, with a
 # state file of its own, and re-picks on SIGUSR1. While that listener is live (its file says so,
 # with a beat under 2 min), the clock re-picks only every --fallback seconds; without it (no
@@ -52,19 +54,12 @@ WATCH_FILE="$BASE/watch.json"
 file=""
 watcher=""
 
-# The registered session: among the session files whose pid is one of our ancestors, skip the
-# ended ones and take the newest lastSeen
+# The registered session, by session.sh id: the newest live file whose pid is one of our ancestors
 find_session() {
   setopt local_options no_err_exit no_nomatch
-  [[ -d "$SESSIONS" ]] || return 0
-  local pid=$$ hit
-  while [[ "$pid" == <-> ]] && (( pid > 1 )); do
-    hit="$(jq -rs --argjson pid "$pid" \
-      '[.[] | select(.pid == $pid and .state != "ended" and (.id | type == "string"))] | sort_by(.lastSeen) | last | .id // empty' \
-      "$SESSIONS"/*.json 2>/dev/null)"
-    [[ -n "$hit" && "$hit" != *[^A-Za-z0-9_-]* ]] && { file="$SESSIONS/$hit.json"; return 0; }
-    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
-  done
+  local hit
+  hit="$("$HERE/session.sh" id 2>/dev/null)"
+  [[ -n "$hit" && "$hit" != *[^A-Za-z0-9_-]* && -f "$SESSIONS/$hit.json" ]] && file="$SESSIONS/$hit.json"
   return 0
 }
 
@@ -102,17 +97,36 @@ pick() {
   [[ -n "$renovate" ]] || renovate='{}'
   waits="$(parked_waits <<<"$resp")"
   jq -L "$HERE" -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$BASE")" --argjson watch "$watch" --argjson waits "$waits" \
-    --argjson renovate "$renovate" \
-    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate)' <<<"$resp"
+    --argjson renovate "$renovate" --argjson session "$session_json" \
+    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)' <<<"$resp"
 }
 # What the printed line shows: waiting and the limit only for an idle pick. A running line's
 # detail is this session's own Next line, so it stays out
 key_of() { jq -c '{verdict, ticket, reason} + (if .verdict == "idle" then {waiting, used, limit} else {} end)' <<<"$1"; }
 line_of() { jq -r -L "$HERE" 'include "watch"; attended_line' <<<"$1"; }
+# The session's own ticket is among the resumable ones
+own() { [[ -n "$ticket" ]] && jq -e --arg t "$ticket" -L "$HERE" 'include "watch"; own_pick($t)' <<<"$1" >/dev/null; }
+# <prefix>: <line>, or the resume line for the session's own ticket
+report() {
+  if own "$2"; then jq -r --arg t "$ticket" -L "$HERE" 'include "watch"; resume_line($t)' <<<"$2"
+  else print -r -- "$1: $(line_of "$2")"; fi
+}
+
+# find_session needs nothing below, so --now can read it first
+find_session
+ticket=""
+sid=""
+if [[ -n "$file" ]]; then
+  ticket="$(jq -r '.ticket // empty' "$file" 2>/dev/null)"
+  sid="$(jq -r '.id // empty' "$file" 2>/dev/null)"
+fi
+session_json=null
+[[ -n "$file" ]] && session_json="$(jq -nc --arg id "$sid" --arg t "$ticket" \
+  '{state: "alive", detail: "polling", id: $id, ticket: (if $t == "" then null else $t end)}')"
 
 if $NOW; then
   now="$(pick)" || { offline && print -r -- "wait: offline" || print -r -- "wait: Linear did not answer"; exit 0; }
-  line_of "$now"
+  if own "$now"; then jq -r --arg t "$ticket" -L "$HERE" 'include "watch"; resume_line($t)' <<<"$now"; else line_of "$now"; fi
   exit 0
 fi
 
@@ -190,7 +204,6 @@ nap() {
   return 0
 }
 
-find_session
 write_watcher
 trap 'stop_listener; remove_watcher' EXIT
 trap 'exit 0' INT TERM HUP
@@ -207,9 +220,9 @@ done
 # A wake that landed during the start pick (the listener's catch-up on subscribe) is spent on it
 woken=0
 start_key="$(key_of "$start")"
-if [[ "$(jq -r '.verdict' <<<"$start")" == run && "$start_key" != "$(seen_key)" ]]; then
+if [[ "$start_key" != "$(seen_key)" ]] && { [[ "$(jq -r '.verdict' <<<"$start")" == run ]] || own "$start"; }; then
   remember "$start_key"
-  print -r -- "changed: $(line_of "$start")"
+  report changed "$start"
   exit 0
 fi
 
@@ -233,11 +246,11 @@ while true; do
   now="$(pick)" || { (( SECONDS >= MAX )) && break; continue; }
   if [[ "$(key_of "$now")" != "$start_key" ]]; then
     remember "$(key_of "$now")"
-    print -r -- "changed: $(line_of "$now")"
+    report changed "$now"
     exit 0
   fi
   last="$now"
 done
 remember "$(key_of "${last:-$start}")"
-print -r -- "timeout: $(line_of "${last:-$start}")"
+report timeout "${last:-$start}"
 exit 0
