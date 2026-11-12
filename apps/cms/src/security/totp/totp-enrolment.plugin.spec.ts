@@ -304,6 +304,34 @@ describe('totpEnrolmentPlugin', () => {
     ]);
   });
 
+  it('runs the multi-tenant provider through the pending-safe wrapper', async () => {
+    const clientProps = { tenantsCollectionSlug: 'tenants' };
+    const result = await apply(
+      build({
+        admin: {
+          components: {
+            providers: [
+              'existing#Provider',
+              {
+                clientProps,
+                path: '@payloadcms/plugin-multi-tenant/rsc#TenantSelectionProvider'
+              }
+            ]
+          }
+        }
+      })
+    );
+
+    expect(result.admin?.components?.providers).toEqual([
+      'existing#Provider',
+      {
+        clientProps,
+        path: '@codeware/apps/cms/components/admin/totp/PendingSafeTenantSelectionProvider#PendingSafeTenantSelectionProvider'
+      },
+      '@codeware/apps/cms/components/admin/totp/TotpEnrolmentRedirect#TotpEnrolmentRedirect'
+    ]);
+  });
+
   it('registers our setup view under both of the plugin keys, keeping other views', async () => {
     const dashboard = { Component: 'existing#Dashboard' };
     const result = await apply(

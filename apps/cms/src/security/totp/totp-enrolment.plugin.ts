@@ -10,6 +10,7 @@ import type {
   Endpoint,
   GlobalConfig,
   Payload,
+  PayloadComponent,
   Plugin
 } from 'payload';
 
@@ -134,6 +135,22 @@ const setupView = {
   strict: true
 } as const;
 
+const tenantSelectionProvider =
+  '@payloadcms/plugin-multi-tenant/rsc#TenantSelectionProvider';
+
+/**
+ * The multi-tenant plugin's provider, run by our wrapper instead: it is
+ * nested outside the redirects to verify and setup, and its tenants read as
+ * a session that owes the code throws `Forbidden`.
+ */
+const pendingSafeProvider = (provider: PayloadComponent): PayloadComponent =>
+  typeof provider === 'object' && provider.path === tenantSelectionProvider
+    ? {
+        ...provider,
+        path: '@codeware/apps/cms/components/admin/totp/PendingSafeTenantSelectionProvider#PendingSafeTenantSelectionProvider'
+      }
+    : provider;
+
 /**
  * TOTP enrolment for system users and workspace admins only.
  *
@@ -142,7 +159,8 @@ const setupView = {
  * decides who must enrol: it holds such a user back everywhere and sends the
  * admin to the setup view. Custom endpoints are refused to any session that
  * owes a code, which the plugin does not cover. Its setup view is replaced by
- * ours, which names the authenticator entry after the tenant.
+ * ours, which names the authenticator entry after the tenant, and the
+ * multi-tenant provider skips its tenants read for such a session.
  */
 export const totpEnrolmentPlugin =
   ({ collection }: { collection: string }): Plugin =>
@@ -153,7 +171,9 @@ export const totpEnrolmentPlugin =
       components: {
         ...config.admin?.components,
         providers: [
-          ...(config.admin?.components?.providers ?? []),
+          ...(config.admin?.components?.providers ?? []).map(
+            pendingSafeProvider
+          ),
           '@codeware/apps/cms/components/admin/totp/TotpEnrolmentRedirect#TotpEnrolmentRedirect'
         ],
         views: {
