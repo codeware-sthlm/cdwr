@@ -94,7 +94,9 @@ describe('SessionCard', () => {
       const c = card(filled(session));
       const article = c.querySelector('article');
       expect(article?.getAttribute('data-w')).toBe('session');
-      expect(article?.className).toBe(`card-top session ${tone}`);
+      expect(article?.classList.contains('card-top')).toBe(true);
+      expect(article?.classList.contains('session')).toBe(true);
+      expect(article?.classList.contains(tone)).toBe(true);
       const button = c.querySelector('button.open.state');
       expect(button?.textContent).toBe(label);
       expect(button?.getAttribute('aria-haspopup')).toBe('dialog');

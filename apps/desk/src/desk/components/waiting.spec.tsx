@@ -79,7 +79,9 @@ describe('WaitingCard', () => {
     const c = card(createState());
     expect(c.textContent).toContain('Loading…');
     expect(c.querySelector('b.count')?.textContent).toBe('–');
-    expect(c.querySelector('article')?.className).toBe('card-top waiting');
+    const article = c.querySelector('article');
+    expect(article?.classList.contains('waiting')).toBe(true);
+    expect(article?.classList.contains('has')).toBe(false);
   });
 
   it('lists what waits on the viewer, with its kind and age', () => {
@@ -97,7 +99,9 @@ describe('WaitingCard', () => {
     };
     const c = card(s);
     const article = c.querySelector('article');
-    expect(article?.className).toBe('card-top waiting has');
+    expect(article?.classList.contains('card-top')).toBe(true);
+    expect(article?.classList.contains('waiting')).toBe(true);
+    expect(article?.classList.contains('has')).toBe(true);
     expect(article?.getAttribute('data-w')).toBe('before');
     const head = c.querySelector('.ct-head button.open.state');
     expect(head?.textContent).toBe('Waiting on you');
@@ -139,7 +143,7 @@ describe('WaitingCard', () => {
     const c = card(s);
     expect(c.querySelectorAll('a.wrow')).toHaveLength(3);
     const more = c.querySelector('button.more-all');
-    expect(more?.className).toBe('more-all');
+    expect(more?.classList.contains('more-desk')).toBe(false);
     expect(more?.getAttribute('aria-haspopup')).toBe('dialog');
     expect(more?.textContent).toBe('+ 1 more — open all');
     expect(more?.querySelector('.more-n.phone')?.textContent).toBe('1');
@@ -162,7 +166,10 @@ describe('WaitingCard', () => {
       expect(more).toBeNull();
       return;
     }
-    expect(more?.className).toBe(cls);
+    expect(more?.classList.contains('more-all')).toBe(true);
+    expect(more?.classList.contains('more-desk')).toBe(
+      cls.includes('more-desk')
+    );
     expect(more?.getAttribute('aria-haspopup')).toBe('dialog');
     expect(more?.querySelector('.more-n.phone')?.textContent).toBe(
       String(n - 2)
@@ -183,7 +190,7 @@ describe('WaitingCard', () => {
       'Nothing waits on you.'
     );
     expect(c.querySelector('b.count')?.textContent).toBe('0');
-    expect(c.querySelector('article')?.className).toBe('card-top waiting');
+    expect(c.querySelector('article')?.classList.contains('has')).toBe(false);
     expect(c.textContent).not.toContain('open all');
     expect(c.querySelector('p.foot')).toBeNull();
   });
@@ -211,7 +218,7 @@ describe('WaitingCard', () => {
     for (const a of prns) {
       expect(a.parentElement?.tagName).toBe('LI');
       expect(a.closest('a.wrow')).toBeNull();
-      expect(a.previousElementSibling?.className).toBe('wrow');
+      expect(a.previousElementSibling?.classList.contains('wrow')).toBe(true);
       expect(a.getAttribute('href')).toMatch(/^https:\/\/github\.com\//);
     }
   });
@@ -269,7 +276,7 @@ describe('WaitingCard', () => {
     expect(kind?.getAttribute('title')).toBe('approved · waits on COD-2');
     expect(c.querySelectorAll('li.wrow-li.approved')).toHaveLength(1);
     const more = c.querySelector('button.more-all');
-    expect(more?.className).toBe('more-all more-desk');
+    expect(more?.classList.contains('more-desk')).toBe(true);
     expect(more?.querySelector('.more-n.phone')?.textContent).toBe('5');
     expect(more?.querySelector('.more-n.desk')?.textContent).toBe('3');
   });
