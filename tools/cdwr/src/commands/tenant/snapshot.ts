@@ -1,20 +1,21 @@
 import { mkdirSync } from 'fs';
 import { join, relative } from 'path';
-import { pathToFileURL } from 'url';
 
 import { THEME_COOKIE } from '@codeware/shared/theme';
 
 import { defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
-import {
-  definitionInput,
-  resolveDefinition
-} from '../../services/site-definitions';
+import { definitionInput } from '../../services/site-definitions';
 
+import {
+  assertAnswers,
+  gatePasswordInput,
+  routesFrom,
+  stamp
+} from './site-pages';
 import {
   COLOR_SCHEMES,
   type ColorScheme,
-  type RoutedDefinition,
   SNAPSHOT_THEMES,
   type Shot,
   type ShotResult,
@@ -25,68 +26,10 @@ import {
   type ViewportName,
   fileName,
   findStrips,
+  gateCookies,
   hostFolder,
-  isRoutedDefinition,
-  parseRoutes,
-  routesOf,
   shotsOf
 } from './snapshot.logic';
-
-const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
-
-async function loadDefinition(path: string): Promise<RoutedDefinition> {
-  const imported = (await import(pathToFileURL(path).href)) as {
-    default?: unknown;
-  };
-  if (!isRoutedDefinition(imported.default)) {
-    throw new Error(
-      `${path} does not export a site definition with pages as its default`
-    );
-  }
-  return imported.default;
-}
-
-/** `--routes` when given, otherwise the pages of the definition */
-async function routesFrom(
-  root: string,
-  routes: string | undefined,
-  definition: string | undefined
-): Promise<Array<string>> {
-  if (routes?.trim()) {
-    return parseRoutes(routes);
-  }
-  if (!definition) {
-    throw new Error('Name a definition, or pass --routes');
-  }
-  return routesOf(
-    await loadDefinition(await resolveDefinition(root, definition))
-  );
-}
-
-/** How long the first request may take: a dev server compiles on demand */
-const FIRST_ANSWER_MS = 60_000;
-
-/**
- * Fails early and plainly when there is no site to look at.
- *
- * Nothing listening and a server still compiling its first page need different
- * advice, and only the timeout tells them apart: a refused connection is
- * immediate.
- */
-async function assertAnswers(url: string): Promise<void> {
-  try {
-    await fetch(url, { signal: AbortSignal.timeout(FIRST_ANSWER_MS) });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new Error(
-        `${url} did not answer within ${FIRST_ANSWER_MS / 1000}s. A dev server compiles a page on its first request; open it once, then run this again.`
-      );
-    }
-    throw new Error(
-      `Nothing answers at ${url}. Start the site first, for example with \`nx dev cms\`.`
-    );
-  }
-}
 
 /** A key per browser setting, so a run of routes shares one context */
 const settingOf = ({ theme, colorScheme, viewport }: Shot) =>
@@ -109,6 +52,7 @@ export default defineCommand<
     themes: ReturnType<typeof input.multiselect<SnapshotTheme>>;
     colorSchemes: ReturnType<typeof input.multiselect<ColorScheme>>;
     viewports: ReturnType<typeof input.multiselect<ViewportName>>;
+    gatePassword: ReturnType<typeof input.secret>;
   },
   { url: string; shots: Array<Shot>; dir: string }
 >({
@@ -170,7 +114,8 @@ export default defineCommand<
         })),
       default: [...VIEWPORT_NAMES],
       min: 1
-    })
+    }),
+    gatePassword: gatePasswordInput()
   },
 
   async plan(
@@ -193,7 +138,8 @@ export default defineCommand<
     };
   },
 
-  async apply(ctx, { url, shots, dir }) {
+  // The password stays out of the plan, which `--json` prints
+  async apply(ctx, { url, shots, dir }, { gatePassword }) {
     mkdirSync(dir, { recursive: true });
     // Only this command needs a browser, so the others never load it
     const { chromium } = await import('playwright');
@@ -214,6 +160,7 @@ export default defineCommand<
               viewport: VIEWPORTS[viewport],
               colorScheme
             });
+            await context.addCookies(gateCookies(url, gatePassword));
             // No cookie for `default`: that is the visitor who has chosen nothing
             if (theme !== 'default') {
               await context.addCookies([
