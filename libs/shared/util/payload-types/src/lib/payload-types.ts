@@ -156,6 +156,7 @@ export type SupportedTimezones =
 
 export interface Config {
   auth: {
+    agents: AgentAuthOperations;
     tenants: TenantAuthOperations;
     users: UserAuthOperations;
   };
@@ -186,6 +187,7 @@ export interface Config {
     tours: ToursBlock;
   };
   collections: {
+    agents: Agent;
     categories: Category;
     'custom-components': CustomComponent;
     'custom-themes': CustomTheme;
@@ -217,6 +219,7 @@ export interface Config {
   };
   collectionsJoins: {};
   collectionsSelect: {
+    agents: AgentsSelect<false> | AgentsSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     'custom-components':
       CustomComponentsSelect<false> | CustomComponentsSelect<true>;
@@ -273,7 +276,7 @@ export interface Config {
   widgets: {
     collections: CollectionsWidget;
   };
-  user: Tenant | User;
+  user: Agent | Tenant | User;
   jobs: {
     tasks: {
       'anonymize-tour-signups': TaskAnonymizeTourSignups;
@@ -286,6 +289,24 @@ export interface Config {
       };
     };
     workflows: unknown;
+  };
+}
+export interface AgentAuthOperations {
+  forgotPassword: {
+    email: string;
+    password: string;
+  };
+  login: {
+    email: string;
+    password: string;
+  };
+  registerFirstUser: {
+    email: string;
+    password: string;
+  };
+  unlock: {
+    email: string;
+    password: string;
   };
 }
 export interface TenantAuthOperations {
@@ -2045,6 +2066,27 @@ export interface ToursBlock {
   blockType: 'tours';
 }
 /**
+ * Agents draft content through an API key. They can never publish.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "agents".
+ */
+export interface Agent {
+  id: number;
+  name: string;
+  /**
+   * The only workspace the agent can draft in.
+   */
+  tenant: number | Tenant;
+  updatedAt: string;
+  createdAt: string;
+  enableAPIKey?: boolean | null;
+  apiKey?: string | null;
+  apiKeyIndex?: string | null;
+  hasAPIKey?: boolean | null;
+  collection: 'agents';
+}
+/**
  * Your own themes. Select them in Site Settings to make them available on the site.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2955,6 +2997,10 @@ export interface PayloadLockedDocument {
   id: number;
   document?:
     | ({
+        relationTo: 'agents';
+        value: number | Agent;
+      } | null)
+    | ({
         relationTo: 'categories';
         value: number | Category;
       } | null)
@@ -3045,6 +3091,10 @@ export interface PayloadLockedDocument {
   globalSlug?: string | null;
   user:
     | {
+        relationTo: 'agents';
+        value: number | Agent;
+      }
+    | {
         relationTo: 'tenants';
         value: number | Tenant;
       }
@@ -3062,6 +3112,10 @@ export interface PayloadLockedDocument {
 export interface PayloadPreference {
   id: number;
   user:
+    | {
+        relationTo: 'agents';
+        value: number | Agent;
+      }
     | {
         relationTo: 'tenants';
         value: number | Tenant;
@@ -3093,6 +3147,20 @@ export interface PayloadMigration {
   batch?: number | null;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "agents_select".
+ */
+export interface AgentsSelect<T extends boolean = true> {
+  name?: T;
+  tenant?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  enableAPIKey?: T;
+  apiKey?: T;
+  apiKeyIndex?: T;
+  hasAPIKey?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
