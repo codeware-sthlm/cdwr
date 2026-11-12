@@ -180,6 +180,7 @@ cdwr agent pause|resume   # hold or release the schedule
 cdwr agent status|notify|pause|resume|run --host <name>   # the same, in the agent container over ssh
 cdwr agent logs [--run]   # the scheduler log, or the latest run
 cdwr agent logs --host <name> [--run]   # the same, from the agent container over ssh
+cdwr agent exec --host <name> -- <cdwr args>   # any cdwr command in the agent container, with its vault secrets
 cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ticket, from local transcripts
 cdwr agent usage-record [--days 3] [--kind both] [--hours 6]   # upsert that spend into the telemetry database: day rows (this repo) and hour rows (every Claude project); --dry-run prints the rows
 … | cdwr agent activity [--runs <file>]   # activity rows and a table from a Linear history response on stdin
@@ -622,6 +623,20 @@ Nothing is cached offline: without Tailscale connected the page does not load, a
 `cdwr agent status --host agent-host` reads the queue's status from the Mac: it runs `agent status`
 in the container over ssh, through `/opt/agent-host/secrets.sh` so the report sees the vault's
 secrets, and renders the answer as a local run would.
+
+Any other `cdwr` command in the container goes through `cdwr agent exec`. The container's keys are
+not in its environment: the entrypoint's `secrets.sh` reads them from Infisical `/agent-queue` and
+hands them only to the process it starts, so a plain `ssh agent-host docker exec cdwr-agent node
+tools/cdwr/bin/cdwr.mjs …` sees none of them (`AGENT_SUPABASE_URL and AGENT_SUPABASE_SERVICE_KEY
+are not both set`). `exec` runs the command in the planner checkout through `secrets.sh`, streams
+its output and exits with its exit code. It runs `cdwr` only, never another binary. The remote has
+no terminal, so pass every input as a flag, `--yes` included. Global flags before `--` are `exec`'s
+own (`-d` prints the ssh line and stops); after it they go to the remote command. Write a hand-off
+that runs a `cdwr` command on the NUC this way, never as a raw `docker exec`:
+
+```sh
+cdwr agent exec --host agent-host -- agent usage-record --days 30 --kind day --dry-run
+```
 
 An attended `/work-queue` on the Mac stays visible to the NUC through its session file, which the
 Mac's session hook copies into the container at every change and at least once a minute. That way
