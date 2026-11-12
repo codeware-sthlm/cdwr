@@ -190,6 +190,13 @@ untouched, so a wrong key never marks posts deleted.
 It needs `CMS_URL` and `CMS_AGENT_API_KEY` in `tools/cdwr/.env`, and `CMS_SIGNATURE_SECRET` when the
 cms runs in host mode. `cdwr doctor` doesn't check them.
 
+The `/devlog-draft` skill (`.claude/skills/devlog-draft`) is what writes the drafts: it reads the
+covered file and the pull requests merged since the newest covered one, keeps what a visitor or
+tenant would notice, writes at most two drafts under `devlog-drafts/` in the queue home and posts
+each with `cdwr devlog draft`. It ends with `DRAFTED <post id> <title>` per draft or
+`nothing this week`. Run it by hand as `/devlog-draft home=<queue home>`; the scheduler's weekly
+slot is a later step.
+
 ## The agent queue
 
 The scheduler runs in the NUC's agent container, every 10 minutes, `/work-queue` plan-only against a
