@@ -230,7 +230,11 @@ export const Tiles = ({ m, state, now, onSheet }: Props) => {
               />
             </span>
             <b
-              className={`v font-[family-name:var(--font-mono)] text-[24px] leading-none font-semibold max-[600px]:text-[18px]${t.bad ? 'text-[color:var(--block)]' : ''}`}
+              className={
+                t.bad
+                  ? 'v font-[family-name:var(--font-mono)] text-[24px] leading-none font-semibold text-[color:var(--block)] max-[600px]:text-[18px]'
+                  : 'v font-[family-name:var(--font-mono)] text-[24px] leading-none font-semibold max-[600px]:text-[18px]'
+              }
             >
               {t.value}
             </b>
