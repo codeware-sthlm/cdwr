@@ -1,7 +1,13 @@
 import {
+  SITE_GATE_COOKIE,
+  verifySiteGateToken
+} from '@codeware/shared/util/site-gate';
+
+import {
   type RoutedDefinition,
   fileName,
   findStrips,
+  gateCookies,
   hostFolder,
   isRoutedDefinition,
   parseRoutes,
@@ -14,6 +20,34 @@ const definition = (landing?: string): RoutedDefinition => ({
   ...(landing && {
     siteSettings: { general: { landingPage: { lookupSlug: landing } } }
   })
+});
+
+describe('gateCookies', () => {
+  const url = 'https://cdwr.io';
+  const now = Date.UTC(2026, 10, 12);
+
+  it('sends no cookie without a password', () => {
+    expect(gateCookies(url, undefined)).toEqual([]);
+    expect(gateCookies(url, '')).toEqual([]);
+  });
+
+  it('mints a gate cookie the site accepts, scoped to the site', () => {
+    const [cookie] = gateCookies(url, 'open sesame', now);
+
+    expect(cookie).toMatchObject({ name: SITE_GATE_COOKIE, url });
+    expect(verifySiteGateToken(cookie.value, 'open sesame', { now })).toBe(
+      true
+    );
+    expect(verifySiteGateToken(cookie.value, 'another', { now })).toBe(false);
+  });
+
+  it('lasts an hour, not the visitor week', () => {
+    const [{ value }] = gateCookies(url, 'open sesame', now);
+    const later = (minutes: number) => ({ now: now + minutes * 60_000 });
+
+    expect(verifySiteGateToken(value, 'open sesame', later(59))).toBe(true);
+    expect(verifySiteGateToken(value, 'open sesame', later(61))).toBe(false);
+  });
 });
 
 describe('isRoutedDefinition', () => {

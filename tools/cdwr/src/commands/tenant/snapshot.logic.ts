@@ -1,4 +1,8 @@
 import { SITE_THEMES } from '@codeware/shared/theme';
+import {
+  SITE_GATE_COOKIE,
+  createSiteGateToken
+} from '@codeware/shared/util/site-gate';
 
 import {
   COLOR_SCHEMES,
@@ -193,6 +197,38 @@ export const fileName = ({
   viewport
 }: Shot): string =>
   `${routeName(route)}--${theme}-${colorScheme}-${viewport}.png`;
+
+/** How long a minted gate cookie lasts: one run, with room for a slow site */
+const GATE_COOKIE_SECONDS = 60 * 60;
+
+/**
+ * The cookie that lets a browser through a site's gate, as a visitor who typed
+ * the password would have it.
+ *
+ * Minted here with the same signing the site verifies, so no form is sent and
+ * the password never travels. Without a password there is no cookie, and a
+ * gated site shows its gate page.
+ *
+ * @param url - The site, so the cookie is scoped to its host
+ * @param password - The site gate password for this tenant and environment
+ */
+export const gateCookies = (
+  url: string,
+  password: string | undefined,
+  now = Date.now()
+): Array<{ name: string; value: string; url: string }> =>
+  password
+    ? [
+        {
+          name: SITE_GATE_COOKIE,
+          value: createSiteGateToken(password, {
+            maxAgeSeconds: GATE_COOKIE_SECONDS,
+            now
+          }),
+          url
+        }
+      ]
+    : [];
 
 /** `localhost:3000` as a folder name */
 export const hostFolder = (url: string): string =>
