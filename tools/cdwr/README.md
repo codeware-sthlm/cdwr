@@ -111,6 +111,24 @@ preference. A theme the site does not offer, or a scheme it locks, is reported a
 than saved under a name that claims otherwise. With `--json`, each shot carries its path, the page's
 HTTP status and any console errors, which is what an agent reads first after changing something.
 
+A gated site shows every visitor its gate page. `--gate-password` (the site's `SITE_GATE_PASSWORD`)
+sends the cookie an invited visitor would have, minted with the same signing the site checks and
+valid for an hour, so the password itself is never sent.
+
+`cdwr tenant audit` looks at the same pages before a site opens. Per page: the HTTP status, console
+errors, axe violations and every same-site link that answers 400 or worse. Once per site: the home
+page's `og:title`, `og:description` and `og:image` (and that the image answers), and a path no site
+has answering 404 in each of `--locales` (`sv,en` by default). It takes `--gate-password` too, and
+writes `audit.json` and `audit.md` (a table to paste into a ticket) into a new folder under
+`.site-snapshots/<host>/`.
+
+```sh
+cdwr tenant audit --url https://cdwr.io --definition cdwr-io --gate-password …
+```
+
+Lighthouse is not part of it. Run it by hand on a gated site with the cookie as a header, or after
+opening with PageSpeed Insights.
+
 ## Seeing a story
 
 `cdwr storybook snapshot --story <id,…>` renders Storybook stories to PNG, so UI can be reviewed
