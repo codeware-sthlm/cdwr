@@ -163,7 +163,7 @@ export AGENT_QUEUE_SESSION_KIND=implement
     "Bash(pnpm -C * add *)" "Bash(pnpm -C * remove *)" \
     "Bash(pnpm cdwr agent worktree *)" \
     "Bash(jq *)" "Bash(uuidgen*)" "Bash(cut *)" "Bash(date *)" "Bash(wc -c *)" \
-    "Bash(tools/cdwr/agent-queue/session.sh register)" "Bash(tools/cdwr/agent-queue/session.sh ticket *)" \
+    "Bash(tools/cdwr/agent-queue/session.sh register)" "Bash(tools/cdwr/agent-queue/session.sh ticket *)" "Bash(tools/cdwr/agent-queue/session.sh id)" \
     "Bash(tools/cdwr/agent-queue/wait.sh*)" \
     "Bash(tools/cdwr/agent-queue/notify.sh *)" "Bash(~/.claude/hooks/notify-slack.sh)" "Bash($HOME/.claude/hooks/notify-slack.sh)" \
     "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels "$L"__get_attachment \

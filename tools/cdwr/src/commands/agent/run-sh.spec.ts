@@ -107,7 +107,16 @@ describe('run.sh', () => {
     expect(SCRIPT).toContain('\'include "watch"; launch($g)\'');
     expect(SCRIPT).toContain('nohup "$HOME_DIR/implement.sh"');
     expect(SCRIPT).toContain('print -r -- "launch: ');
+    expect(SCRIPT).not.toContain('launch-pick:');
     expect(SCRIPT).toContain('AGENT_QUEUE_IMPLEMENT_CAP_USD:-40');
+  });
+
+  it('keys attended.json by the launch candidate and keeps the pick in the fallback', () => {
+    expect(SCRIPT).toContain('pick: ($d.pick | if . == null then null else');
+    expect(SCRIPT).toContain('session: $s.state, launch: $a}');
+    expect(SCRIPT).toContain(
+      '{action: "skip", reason: $r, key: null, pick: (if .verdict == "run"'
+    );
   });
 
   it('keeps the start notice as the fallback when a guard refuses', () => {
@@ -142,7 +151,14 @@ describe('run.sh', () => {
   // The verdict comes from watch.jq, never from logic copied into run.sh
   it('computes the attended line with watch.jq', () => {
     expect(SCRIPT).toContain(
-      `'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate)'`
+      `'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)'`
+    );
+    expect(SCRIPT).toContain('--argjson session "$session"');
+    // The session is read before the pick, which takes it
+    expect(SCRIPT.indexOf('session_state($now)')).toBeLessThan(
+      SCRIPT.indexOf(
+        'attended($now; $limit; $watch; $waits; $renovate; $session)'
+      )
     );
     expect(SCRIPT).toContain(
       `'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits; $renovate)'`
