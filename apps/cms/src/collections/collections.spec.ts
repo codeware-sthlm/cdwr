@@ -157,5 +157,22 @@ describe('collections', () => {
 
       expect(incomplete).toEqual([]);
     });
+
+    it('never schedules a publish where an agent may write', () => {
+      // A scheduled publish is performed by the job queue, not by the agent's
+      // request, so it would get past the draft-only hooks
+      const agentWritable = collections.filter(({ source }) =>
+        source.includes('agentOr(')
+      );
+
+      // Guard against matching nothing
+      expect(agentWritable.map(({ slug }) => slug)).toContain('posts');
+
+      const scheduling = agentWritable
+        .filter(({ source }) => source.includes('schedulePublish'))
+        .map(({ slug }) => slug);
+
+      expect(scheduling).toEqual([]);
+    });
   });
 });
