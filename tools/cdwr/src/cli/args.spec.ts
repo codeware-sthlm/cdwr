@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { flagUsage, parseCommandArgs, splitMulti } from './args';
+import { flagUsage, parseCommandArgs, splitMulti, splitRest } from './args';
 import { UsageError } from './errors';
 import { input } from './inputs';
 
@@ -109,6 +109,22 @@ describe('splitMulti', () => {
   it('splits commas and repeats alike', () => {
     expect(splitMulti('a,b, c')).toEqual(['a', 'b', 'c']);
     expect(splitMulti(['a', 'b,c'])).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('splitRest', () => {
+  it('splits at the first -- and keeps any later one in the rest', () => {
+    expect(splitRest(['--host', 'h', '--', 'a', '--', '-d'])).toEqual({
+      own: ['--host', 'h'],
+      rest: ['a', '--', '-d']
+    });
+  });
+
+  it('has no rest without --', () => {
+    expect(splitRest(['--host', 'h'])).toEqual({
+      own: ['--host', 'h'],
+      rest: []
+    });
   });
 });
 

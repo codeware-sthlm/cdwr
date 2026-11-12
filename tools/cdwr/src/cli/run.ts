@@ -4,7 +4,7 @@ import { createTerminalUi } from '../ui/terminal';
 import { symbols, theme } from '../ui/theme';
 import type { Ui } from '../ui/ui';
 
-import { parseCommandArgs } from './args';
+import { parseCommandArgs, splitRest } from './args';
 import { type AnyCommand, type Plan, confirmFor, planDanger } from './command';
 import type { Context, Flags } from './context';
 import { Cancelled, CliError, EXIT, UsageError, messageOf } from './errors';
@@ -83,9 +83,13 @@ export async function runCommand(options: RunOptions): Promise<number> {
   const stdout =
     options.stdout ?? ((text: string) => process.stdout.write(`${text}\n`));
 
+  // Without `rest`, a `--` stays in argv and its arguments are refused as before
+  const { own, rest } = command.rest
+    ? splitRest(argv)
+    : { own: argv, rest: [] };
   let parsed;
   try {
-    parsed = parseCommandArgs(argv, command.inputs);
+    parsed = parseCommandArgs(own, command.inputs);
   } catch (error) {
     return fail(error, false, stdout, false, options.ui);
   }
@@ -113,7 +117,7 @@ export async function runCommand(options: RunOptions): Promise<number> {
       : flags.nonInteractive
         ? createPlainUi(stdout)
         : createTerminalUi());
-  const ctx: Context = { root, env, prefs, ui, flags, command: name };
+  const ctx: Context = { root, env, prefs, ui, flags, command: name, rest };
   const record = options.history ?? recordHistory;
   const started = Date.now();
   let inputs: Record<string, unknown> = {};

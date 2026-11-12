@@ -126,6 +126,19 @@ export function parseCommandArgs(
   return { globals, values };
 }
 
+/**
+ * Split argv at the first `--`: the flags before it are the command's own, and
+ * everything after it is handed over untouched, global flags included
+ */
+export const splitRest = (
+  argv: string[]
+): { own: string[]; rest: string[] } => {
+  const at = argv.indexOf('--');
+  return at === -1
+    ? { own: argv, rest: [] }
+    : { own: argv.slice(0, at), rest: argv.slice(at + 1) };
+};
+
 /** Split a comma-joined or repeated multiselect flag into values */
 export const splitMulti = (value: string | string[]): string[] =>
   (Array.isArray(value) ? value : [value])
