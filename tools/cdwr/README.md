@@ -204,6 +204,14 @@ open the app; the settings live outside it and survive. An expired or missing ar
 plan with the fix: `gh workflow run desk.yml` (`--ref <branch>` for a PR) or `nx tauri-build desk`.
 macOS arm64 only.
 
+`usage` and `usage-record` read role and ticket from each transcript. A session that ran
+`session.sh register` orchestrates, wherever it runs; its subagents implement, and so does every
+subagent outside the planner checkout. The rest of `<base>-agent` (plan-only runs,
+`/suggest-improvement`) plans. A reply's ticket is the one its session last named with `session.sh
+ticket` (a subagent takes its parent's at its first reply), else its git branch. `usage-record`
+replaces this host's day rows from the window's first day, so `--days 30 --kind day` re-sends a
+month under the current reading.
+
 The script's source is `agent-queue/run.sh`. Launchd runs the copy `install` puts in
 `~/.cdwr/agent-queue/`, beside its pause flag and logs, so a merged change does nothing
 unattended until the next `install`; `status` and `doctor` say when that copy is out of date.
