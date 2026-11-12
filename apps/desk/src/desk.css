@@ -77,7 +77,10 @@ body {
   background: var(--bg);
   color: var(--fg);
   font: 15px/1.45 var(--font-ui);
-  /* The page padding, grown to the phone's safe areas when standalone; the alert band cancels it */
+}
+/* The page padding, grown to the phone's safe areas when standalone; the alert band cancels it.
+   On #root, not body: a sheet's scroll lock rewrites body's padding with an unlayered rule */
+#root {
   --pad-top: max(var(--pad-block), env(safe-area-inset-top));
   --pad-bottom: max(calc(var(--pad-block) + 8px), env(safe-area-inset-bottom));
   --pad-left: max(var(--pad-inline), env(safe-area-inset-left));
