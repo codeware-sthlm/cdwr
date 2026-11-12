@@ -74,7 +74,7 @@ export const LinkIds = ({ text }: { text: string }) => (
   </>
 );
 
-/** Text from Linear with its links named,links named, `code` spans in <code>, ticket ids linked */
+/** Text from Linear with its links named, `code` spans in <code>, ticket ids linked */
 export const Inline = ({ text }: { text: string | null | undefined }) => (
   <>
     {tidy(text)
