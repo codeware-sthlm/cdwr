@@ -1,8 +1,14 @@
-// The utilities the session card and the Waiting on you card share
+// The utilities the desk's cards share: the session and Waiting on you cards, and the capacity and Platform cards built on the frame
 
-/** The card: padding, gap and frame; the callers add the flex basis and the tone */
-export const CARD =
-  'card-top flex min-w-0 cursor-pointer flex-col gap-3 rounded-[var(--r-card)] border px-[22px] py-5 max-[600px]:gap-2 max-[600px]:px-4 max-[600px]:py-3.5';
+/** The card frame: padding, radius and border, a column; the callers add the display, the cursor, the gap, the flex basis and the tone */
+export const FRAME =
+  'card-top min-w-0 flex-col rounded-[var(--r-card)] border px-[22px] py-5 max-[600px]:px-4 max-[600px]:py-3.5';
+
+/** A clickable card on the frame: shown, with the pointer and the card gap */
+export const CARD = `${FRAME} flex cursor-pointer gap-3 max-[600px]:gap-2`;
+
+/** A card that is not a control, the capacity and Platform cards: shown, the default cursor, the wider gap and the plain tone */
+export const PANEL = `${FRAME} flex cursor-default gap-[14px] border-[color:var(--line)] bg-[color:var(--surface)]`;
 
 /** The card's head: the pill on the left, the count or where it runs on the right */
 export const HEAD = 'ct-head flex min-w-0 items-center justify-between gap-3';
