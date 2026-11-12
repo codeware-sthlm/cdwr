@@ -1,11 +1,12 @@
-/* Tailwind for the regions that have moved to React, beside desk.css, which still styles
-   everything else. No Preflight until the cleanup step, so nothing drawn today changes.
+/* Tailwind beside desk.css, which holds the desk's own look. Preflight is on, in `base`, below
+   the `desk` layer: a desk.css rule still wins over it, so only what desk.css leaves unset is
+   reset (margins, list markers, link colour and underline, replaced elements as blocks).
 
-   desk.css sits in its own cascade layer, below the utilities: a utility on a component then
-   wins over a desk.css rule that still reaches it, whatever the selectors. Today nothing
-   competes, so the layer changes nothing visible. */
+   desk.css sits in its own cascade layer, below the utilities: a utility on a component wins
+   over a desk.css rule that reaches it, whatever the selectors. */
 @layer theme, base, desk, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
 @import './desk.css' layer(desk);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
