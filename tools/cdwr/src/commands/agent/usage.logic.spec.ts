@@ -118,7 +118,7 @@ describe('ticketAt', () => {
     ['2026-10-06T09:59:00.000Z', undefined],
     ['2026-10-06T10:00:00.000Z', 'COD-1'],
     ['2026-10-06T10:30:00.000Z', 'COD-1'],
-    ['2026-10-06T11:30:00.000Z', undefined],
+    ['2026-10-06T11:30:00.000Z', null],
     ['2026-10-06T13:00:00.000Z', 'COD-2']
   ])('%s → %s', (timestamp, expected) => {
     expect(ticketAt(marks, timestamp)).toBe(expected);

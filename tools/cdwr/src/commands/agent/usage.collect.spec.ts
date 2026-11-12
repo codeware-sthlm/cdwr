@@ -121,6 +121,20 @@ describe('readReplies', () => {
     ]);
   });
 
+  it('keeps a cleared ticket unattributed in a ticket worktree', () => {
+    const dirName = '-work-codeware-cod-9';
+    const file = write(dirName, 's5.jsonl', [
+      marker('2026-11-12T06:00:00.000Z', 'work-queue ticket COD-9'),
+      reply('2026-11-12T06:01:00.000Z', 'a', 'cod-9-thing'),
+      marker('2026-11-12T06:02:00.000Z', 'work-queue ticket -'),
+      reply('2026-11-12T06:03:00.000Z', 'b', 'cod-9-thing')
+    ]);
+    expect(read([{ file, dirName, subagent: false }])).toEqual([
+      ['a', 'orchestrating', 'COD-9'],
+      ['b', 'orchestrating', 'unattributed']
+    ]);
+  });
+
   it('reads another project as other, whatever it printed', () => {
     const dirName = '-work-elsewhere';
     const file = write(dirName, 's4.jsonl', [

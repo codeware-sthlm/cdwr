@@ -126,7 +126,8 @@ export const parentOf = (file: string): string => {
 
 /**
  * Every assistant reply in the transcripts, not yet de-duplicated. A reply's ticket is the one
- * its session named last with `session.sh ticket`, else its git branch; a subagent takes its
+ * its session named last with `session.sh ticket` (none after `ticket -`), else, before the
+ * first marker, its git branch; a subagent takes its
  * parent's ticket at its own first reply, and its parent's registration for the role. The parent
  * is read even when it is outside the window.
  */
@@ -179,15 +180,21 @@ export const readReplies = (
       firstReply ??= parsed.timestamp;
       const created = num(usage.cache_creation_input_tokens);
       const split = usage.cache_creation;
+      const marked = ticketAt(
+        marks.tickets,
+        subagent ? firstReply : parsed.timestamp
+      );
       records.push({
         id: message.id,
         requestId: parsed.requestId,
         output: num(usage.output_tokens),
         timestamp: parsed.timestamp,
         role,
+        // A cleared ticket stays cleared; only a session that never named one falls back
         ticket:
-          ticketAt(marks.tickets, subagent ? firstReply : parsed.timestamp) ??
-          ticketOf(parsed.gitBranch),
+          marked === undefined
+            ? ticketOf(parsed.gitBranch)
+            : (marked ?? 'unattributed'),
         model: normaliseModel(message.model),
         speed: usage.speed,
         tokens: {
