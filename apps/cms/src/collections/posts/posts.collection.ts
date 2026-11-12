@@ -10,6 +10,7 @@ import {
   managedByField
 } from '@codeware/app-cms/util/definitions';
 import { filterByTenantScope } from '@codeware/app-cms/util/filters';
+import { isAgent } from '@codeware/app-cms/util/misc';
 import type { BlockSlug } from '@codeware/shared/util/payload-types';
 import { getActiveKeys } from '@codeware/shared/util/pure';
 import { BlocksFeature } from '@payloadcms/richtext-lexical';
@@ -18,6 +19,16 @@ import type { CollectionConfig } from 'payload';
 
 import { userOnlyAccess } from '../../security/user-only-access';
 import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
+
+import {
+  agentDraftsWhere,
+  agentMayCreate,
+  agentOr
+} from './access/agent-post-access';
+import {
+  agentDraftOnly,
+  agentNeverPublishes
+} from './hooks/agent-draft-only.hook';
 
 /**
  * Define which blocks are available for the rich text editor.
@@ -65,13 +76,27 @@ const posts: CollectionConfig<'posts'> = {
       sv: 'Inlägg är fristående sidor som exempelvis artiklar eller bloggposter. Arbeta med utkast och publicera när det är klart.'
     }
   },
+  // An agent creates drafts and reads back the ones it drafted, trashed ones
+  // included; it never updates, trashes or deletes, so it can't publish
+  // through a version restore either
   access: {
-    read: userOrApiKeyAccess({ hasStatus: true, hasVisibility: true }),
-    readVersions: userOnlyAccess({ tenantPath: 'version.tenant' }),
-    create: userOnlyAccess(),
+    read: agentOr(
+      userOrApiKeyAccess({ hasStatus: true, hasVisibility: true }),
+      agentDraftsWhere()
+    ),
+    readVersions: agentOr(
+      userOnlyAccess({ tenantPath: 'version.tenant' }),
+      agentDraftsWhere('version')
+    ),
+    create: agentOr(userOnlyAccess(), agentMayCreate),
     update: userOnlyAccess(),
     delete: userOnlyAccess()
   },
+  hooks: {
+    beforeOperation: [agentDraftOnly],
+    beforeChange: [agentNeverPublishes]
+  },
+  trash: true,
   labels: {
     singular: { en: 'Post', sv: 'Inlägg' },
     plural: { en: 'Posts', sv: 'Inlägg' }
@@ -161,6 +186,26 @@ const posts: CollectionConfig<'posts'> = {
               label: { en: 'Categories', sv: 'Kategorier' },
               hasMany: true,
               relationTo: 'categories'
+            },
+            {
+              // Set by `agentDraftOnly` alone: no user can set it, and no edit
+              // can clear it, so an agent always finds its own drafts
+              name: 'draftedBy',
+              type: 'relationship',
+              label: { en: 'Drafted by', sv: 'Utkast av' },
+              relationTo: 'agents',
+              access: {
+                create: ({ req: { user } }) => isAgent(user),
+                update: () => false
+              },
+              admin: {
+                readOnly: true,
+                condition: (data) => Boolean(data?.['draftedBy']),
+                description: {
+                  en: 'The agent that drafted the post.',
+                  sv: 'Agenten som skrev utkastet.'
+                }
+              }
             }
           ]
         },

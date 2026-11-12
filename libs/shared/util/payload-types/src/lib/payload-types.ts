@@ -833,6 +833,10 @@ export interface Post {
   authors?: (number | User)[] | null;
   relatedPosts?: (number | Post)[] | null;
   categories?: (number | Category)[] | null;
+  /**
+   * The agent that drafted the post.
+   */
+  draftedBy?: (number | null) | Agent;
   meta?: {
     title?: string | null;
     /**
@@ -843,6 +847,7 @@ export interface Post {
   };
   updatedAt: string;
   createdAt: string;
+  deletedAt?: string | null;
   _status?: ('draft' | 'published') | null;
 }
 /**
@@ -912,6 +917,27 @@ export interface Category {
   slug?: string | null;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * Agents draft content through an API key. They can never publish.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "agents".
+ */
+export interface Agent {
+  id: number;
+  name: string;
+  /**
+   * The only workspace the agent can draft in.
+   */
+  tenant: number | Tenant;
+  updatedAt: string;
+  createdAt: string;
+  enableAPIKey?: boolean | null;
+  apiKey?: string | null;
+  apiKeyIndex?: string | null;
+  hasAPIKey?: boolean | null;
+  collection: 'agents';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2064,27 +2090,6 @@ export interface ToursBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'tours';
-}
-/**
- * Agents draft content through an API key. They can never publish.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "agents".
- */
-export interface Agent {
-  id: number;
-  name: string;
-  /**
-   * The only workspace the agent can draft in.
-   */
-  tenant: number | Tenant;
-  updatedAt: string;
-  createdAt: string;
-  enableAPIKey?: boolean | null;
-  apiKey?: string | null;
-  apiKeyIndex?: string | null;
-  hasAPIKey?: boolean | null;
-  collection: 'agents';
 }
 /**
  * Your own themes. Select them in Site Settings to make them available on the site.
@@ -3474,6 +3479,7 @@ export interface PostsSelect<T extends boolean = true> {
   authors?: T;
   relatedPosts?: T;
   categories?: T;
+  draftedBy?: T;
   meta?:
     | T
     | {
@@ -3483,6 +3489,7 @@ export interface PostsSelect<T extends boolean = true> {
       };
   updatedAt?: T;
   createdAt?: T;
+  deletedAt?: T;
   _status?: T;
 }
 /**

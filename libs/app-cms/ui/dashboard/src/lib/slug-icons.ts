@@ -4,6 +4,7 @@ import {
   ClipboardDocumentListIcon,
   CodeBracketSquareIcon,
   Cog6ToothIcon,
+  CpuChipIcon,
   DocumentIcon,
   DocumentTextIcon,
   FolderIcon,
@@ -27,6 +28,7 @@ import {
 import type { IconComponent } from './types';
 
 const SLUG_ICON: Record<CollectionSlug, IconComponent> = {
+  agents: CpuChipIcon,
   categories: RectangleGroupIcon,
   'custom-components': CodeBracketSquareIcon,
   'custom-themes': PaintBrushIcon,

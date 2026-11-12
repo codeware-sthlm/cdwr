@@ -4,11 +4,13 @@ import {
 } from '@codeware/app-cms/util/definitions';
 import {
   editorTenantRoles,
+  getId,
   getUserTenantIDs,
   hasRole,
+  isAgent,
   isTenant
 } from '@codeware/app-cms/util/misc';
-import type { Config } from '@codeware/shared/util/payload-types';
+import type { Config, Tenant } from '@codeware/shared/util/payload-types';
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant';
 
 // Map global collections to the multi-tenant collections config
@@ -51,6 +53,10 @@ export const getMultiTenantPlugin = () =>
         create: ({ req: { user }, siblingData }) => {
           if (!user) return false;
           if (hasRole(user, 'system-user')) return true;
+          // An agent writes to its own workspace only
+          if (isAgent(user)) {
+            return getId<Tenant>(user.tenant) === siblingData?.['tenant'];
+          }
           const userTenantIds = getUserTenantIDs(user, editorTenantRoles);
           return userTenantIds.includes(siblingData?.['tenant'] as number);
         },
@@ -75,6 +81,9 @@ export const getMultiTenantPlugin = () =>
     // access wrapper applies to `users` alone, and its filters already leave a
     // user without assigned tenants unfiltered. The tenant field's create
     // access above still keeps a key from choosing the value itself.
+    //
+    // An agent counts the same way, for the workspace `agentDraftOnly` stamps
+    // on its drafts; the posts access does its scoping.
     userHasAccessToAllTenants: (user) =>
-      hasRole(user, 'system-user') || isTenant(user)
+      hasRole(user, 'system-user') || isTenant(user) || isAgent(user)
   });
