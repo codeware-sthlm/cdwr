@@ -110,12 +110,14 @@ export async function runCommand(options: RunOptions): Promise<number> {
     }),
     verbose: parsed.globals.verbose
   };
+  const stderr = (line: string) => process.stderr.write(`${line}\n`);
+  // A rest command hands stdout to the command it runs, so `-- … --json` stays parseable
   const ui =
     options.ui ??
     (flags.json
-      ? createSilentUi((line) => process.stderr.write(`${line}\n`))
+      ? createSilentUi(stderr)
       : flags.nonInteractive
-        ? createPlainUi(stdout)
+        ? createPlainUi(command.rest ? stderr : stdout)
         : createTerminalUi());
   const ctx: Context = { root, env, prefs, ui, flags, command: name, rest };
   const record = options.history ?? recordHistory;
