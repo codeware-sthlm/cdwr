@@ -204,11 +204,14 @@ const REASON: ReadonlyMap<string, readonly [string, string]> = new Map([
   ['ready', ['ready', 'ready']]
 ]);
 
+/** The chip's text and class for why a ticket is queued; a reason the page does not list shows as it is */
+export const reasonChipData = (
+  reason: string | undefined
+): readonly [text: string | undefined, kind: string] =>
+  (reason !== undefined && REASON.get(reason)) || [reason, 'resume'];
+
 export const reasonChip = (reason: string | undefined): string => {
-  const [text, kind] = (reason !== undefined && REASON.get(reason)) || [
-    reason,
-    'resume'
-  ];
+  const [text, kind] = reasonChipData(reason);
   return chip(kind, esc(text));
 };
 

@@ -6,7 +6,9 @@ import { issue } from '../render/fixtures';
 
 import {
   CpuChart,
+  Gauge,
   ShippedChart,
+  Sparkline,
   SpendChart,
   barPath,
   frame,
@@ -204,5 +206,60 @@ describe('CpuChart', () => {
       render(<CpuChart day={{ ...day, points: [day.points[0]] }} />).container
         .innerHTML
     ).toBe('');
+  });
+});
+
+describe('Gauge', () => {
+  const fill = (share: number, bad: boolean) =>
+    render(<Gauge share={share} bad={bad} />).container.querySelector(
+      'rect.fill'
+    );
+
+  it('fills to its share, clamped, and marks a bad one', () => {
+    expect(fill(0.5, false)?.getAttribute('width')).toBe('50');
+    expect(fill(0.5, false)?.getAttribute('class')).toBe('fill');
+    expect(fill(3, true)?.getAttribute('width')).toBe('100');
+    expect(fill(3, true)?.getAttribute('class')).toBe('fill bad');
+    expect(fill(-1, false)?.getAttribute('width')).toBe('0');
+  });
+});
+
+describe('Sparkline', () => {
+  it('draws a line over the window with the limit marked', () => {
+    const { container } = render(
+      <Sparkline
+        points={[
+          { at: 0, value: 0 },
+          { at: 100, value: 1 }
+        ]}
+        from={0}
+        to={100}
+        max={1}
+        limit={0.5}
+        label="Load"
+      />
+    );
+    expect(container.querySelector('polyline')?.getAttribute('points')).toBe(
+      '0.0,40.0 240.0,0.0'
+    );
+    expect(container.querySelector('line.limit')).not.toBeNull();
+    expect(container.querySelector('svg')?.getAttribute('aria-label')).toBe(
+      'Load'
+    );
+  });
+
+  it('leaves out the line for fewer than two points', () => {
+    const { container } = render(
+      <Sparkline
+        points={[{ at: 5, value: 1 }]}
+        from={0}
+        to={10}
+        max={1}
+        limit={null}
+        label="x"
+      />
+    );
+    expect(container.querySelector('polyline')).toBeNull();
+    expect(container.querySelector('line.limit')).toBeNull();
   });
 });

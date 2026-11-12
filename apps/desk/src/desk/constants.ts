@@ -28,6 +28,8 @@ export const STUCK_MIN = 5; // a session polling this long while the queue has w
 export const QUEUE_WRITER_MIN = 120; // a queue_state row written within this counts as a host still publishing
 export const INSTALL_MINUTES = 10; // what cdwr agent install writes (RUN_INTERVAL_SECONDS 600), assumed until the Job line says
 export const LIMIT = 5; // the default limit of open agent PRs, used until the queue view says
+export const ACTIVITY_STALE_MIN = 30; // the activity table's last update older than this shows in the warning colour
+export const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
 export const SHIP_DAYS = 30; // agent tickets closed per day over this many days, the one trend on the page
 
 export const HOST_WINDOW_MIN = 30; // the host's averages, and the span its swap must grow over
