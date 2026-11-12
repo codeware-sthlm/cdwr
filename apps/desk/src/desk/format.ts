@@ -4,16 +4,6 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type Text = string | number | null | undefined;
 
-const ESCAPES: ReadonlyMap<string, string> = new Map([
-  ['&', '&amp;'],
-  ['<', '&lt;'],
-  ['>', '&gt;'],
-  ['"', '&quot;']
-]);
-
-export const esc = (s: Text): string =>
-  String(s ?? '').replace(/[&<>"]/g, (c) => ESCAPES.get(c) ?? c);
-
 // Links in text from Linear can't be followed here, so show their name: [text](url) → text,
 // a Linear issue URL → its id (COD-123), a GitHub PR or issue URL → #n, any other URL → host and path
 const linkName = (u: string): string => {
@@ -37,11 +27,6 @@ export const tidy = (s: Text): string =>
       (u) =>
         linkName(u.replace(/[.,;:]+$/, '')) + (u.match(/[.,;:]+$/)?.[0] || '')
     );
-
-export const txt = (s: Text): string => esc(tidy(s));
-
-export const inline = (s: Text): string =>
-  txt(s).replace(/`([^`]+)`/g, '<code>$1</code>');
 
 export const plural = (n: number, one: string, many: string): string =>
   `${n} ${n === 1 ? one : many}`;

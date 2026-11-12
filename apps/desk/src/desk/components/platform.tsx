@@ -9,8 +9,8 @@ import {
   problemOf
 } from '../live';
 import type { Model, VersionState } from '../model';
-import { CAP_RANGE, LIMIT_RANGE } from '../render/controls';
-import { platform } from '../render/header';
+import { CAP_RANGE, LIMIT_RANGE } from '../view/controls';
+import { platform } from '../view/header';
 
 import { STEPS, percent } from './capacity';
 import { CmdButton, ControlStatus, Stepper } from './controls';

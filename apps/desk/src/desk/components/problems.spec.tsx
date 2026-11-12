@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { hhmm } from '../format';
 import { type Model, model } from '../model';
+import type { DeskState } from '../state';
 import {
   NOW,
   at,
@@ -13,8 +14,7 @@ import {
   live,
   runs,
   view
-} from '../render/fixtures';
-import type { DeskState } from '../state';
+} from '../view/fixtures';
 
 import {
   Alert,

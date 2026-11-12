@@ -3,10 +3,11 @@ import type { MouseEventHandler } from 'react';
 import { planWhen, shortAge, tidy } from '../format';
 import { type Pulse, ofKind } from '../live';
 import type { Model, PlanWindow } from '../model';
-import { livePr, parkedPlain, prTone, queuePr } from '../render/html';
-import { type Part, headline, idPr, whereText } from '../render/session';
 import type { Detail } from '../state';
 import type { SessionState } from '../types';
+import { parkedPlain } from '../view/parked';
+import { livePr, prTone, queuePr } from '../view/pr';
+import { type Part, headline, idPr, whereText } from '../view/session';
 
 import { IdLink, LinkIds, PrLink, PrPill, Prn } from './links';
 

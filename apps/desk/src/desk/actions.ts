@@ -24,7 +24,6 @@ import type { SheetActions } from './components/sheets';
 import { CONFIRM_MS } from './constants';
 import { type Loader, createLoader } from './load';
 import { type ControlsModel, type Model, model } from './model';
-import { CAP_RANGE, LIMIT_RANGE } from './render/controls';
 import {
   type Connection,
   type SheetId,
@@ -36,6 +35,7 @@ import {
   viewOf
 } from './state';
 import { createStore } from './store';
+import { CAP_RANGE, LIMIT_RANGE } from './view/controls';
 
 // This build, and whether it is the web desk the NUC serves rather than the Mac app: that
 // decides which workflow's build main is compared with

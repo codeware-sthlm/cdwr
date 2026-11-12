@@ -12,10 +12,10 @@ import {
 } from '../format';
 import { DETAIL_STALE_MS, HANDOFF_STALE_MS, REASON_STALE_MS } from '../load';
 import { BURN_ROLES, type Model, type PlanWindow, isProblem } from '../model';
-import { hostName, sessionLabel } from '../render/html';
-import { headline } from '../render/session';
 import type { DeskState } from '../state';
 import type { Job } from '../types';
+import { hostName, sessionLabel } from '../view/labels';
+import { headline } from '../view/session';
 
 import { Gauge, Sparkline } from './charts';
 import { Empty, Table } from './items';

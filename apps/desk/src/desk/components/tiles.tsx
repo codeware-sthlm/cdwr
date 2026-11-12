@@ -9,9 +9,11 @@ import {
   usd
 } from '../format';
 import { type Model, activityMissing, ideaVerdict, shipped } from '../model';
-import { ICON, type IconName, livePr, prTone } from '../render/html';
 import { perTicketAverage, spendStats, ticketCosts } from '../spend';
 import { type DeskState, type SheetId, bucketsLoaded } from '../state';
+import { livePr, prTone } from '../view/pr';
+
+import { Icon, type IconName } from './icon';
 
 // The tiles under the cards, each opening a sheet
 
@@ -27,20 +29,6 @@ type Tile = {
 };
 
 type TileValue = { value: string; bad?: boolean };
-
-/** One of the desk's line icons; the paths are constants */
-export const Icon = ({ name }: { name: IconName }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-    dangerouslySetInnerHTML={{ __html: ICON[name] }}
-  />
-);
 
 /** The tile's value and whether it's a problem: an idea to decide first, else what the last suggest run did */
 const ideaTile = (m: Model, state: DeskState, now: Date): TileValue => {

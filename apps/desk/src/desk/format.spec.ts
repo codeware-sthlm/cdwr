@@ -4,8 +4,6 @@ import {
   ageText,
   bytes,
   dayKey,
-  esc,
-  inline,
   mtok,
   niceCeil,
   plural,
@@ -14,20 +12,10 @@ import {
   shortAge,
   span,
   tidy,
-  txt,
   usd
 } from './format';
 
-describe('esc', () => {
-  it('escapes the four characters and takes nothing', () => {
-    expect(esc('a & <b> "c"')).toBe('a &amp; &lt;b&gt; &quot;c&quot;');
-    expect(esc(null)).toBe('');
-    expect(esc(undefined)).toBe('');
-    expect(esc(7)).toBe('7');
-  });
-});
-
-describe('tidy, txt and inline', () => {
+describe('tidy', () => {
   it.each([
     ['[the plan](https://example.com/x)', 'the plan'],
     [
@@ -39,14 +27,6 @@ describe('tidy, txt and inline', () => {
     ['https://linear.app/codeware/issue/COD-5/title,', 'COD-5,']
   ])('%s -> %s', (input, expected) => {
     expect(tidy(input)).toBe(expected);
-  });
-
-  it('escapes after tidying', () => {
-    expect(txt('<b>[a](https://x.io)</b>')).toBe('&lt;b&gt;a&lt;/b&gt;');
-  });
-
-  it('wraps backticks in code', () => {
-    expect(inline('run `cdwr` now')).toBe('run <code>cdwr</code> now');
   });
 });
 

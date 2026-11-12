@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DeskCommandRow, RunsPayload } from '../../supabase';
 import { dayTime } from '../format';
 import { model } from '../model';
+import type { DeskState } from '../state';
 import {
   NEW,
   NOW,
@@ -16,8 +17,7 @@ import {
   live,
   runs,
   view
-} from '../render/fixtures';
-import type { DeskState } from '../state';
+} from '../view/fixtures';
 
 import { Platform, type PlatformActions } from './platform';
 import { Problems } from './problems';

@@ -41,9 +41,9 @@ import { Tiles } from './components/tiles';
 import { AGENT_AVATAR } from './constants';
 import type { Model } from './model';
 import { notice } from './notice';
-import { forgetLabelled } from './render/waiting';
 import { type DeskState, bucketsLoaded } from './state';
 import { useStore } from './store';
+import { forgetLabelled } from './view/waiting';
 
 // The timers and the connection's grace move without an event. A healthy page checks every 15th tick: a host can go silent without one.
 const QUIET_TICKS = 15;

@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import { LIMIT } from '../constants';
 import { tidy } from '../format';
 import type { Model, TicketRef } from '../model';
-import { reasonChipData } from '../render/html';
 import type { Detail } from '../state';
+import { reasonChipData } from '../view/labels';
 
 import { LinkIds } from './links';
 

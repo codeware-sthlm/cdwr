@@ -5,7 +5,8 @@ import { type Blocker, type Model, type WatchRef, prOf } from '../model';
 import type { ControlsUi, Detail } from '../state';
 import type { PrRef, WatchEntry } from '../types';
 
-import { prWaitPlain, queuePr } from './html';
+import { prWaitPlain } from './parked';
+import { queuePr } from './pr';
 
 // The Waiting on you card: everything that waits on you, furthest along first, each with how long it has waited
 

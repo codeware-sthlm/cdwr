@@ -1,5 +1,5 @@
 import type { ControlView } from '../model';
-import { busy, statusText } from '../render/controls';
+import { busy, statusText } from '../view/controls';
 
 // The desk's control buttons as components; shown only with a control token
 

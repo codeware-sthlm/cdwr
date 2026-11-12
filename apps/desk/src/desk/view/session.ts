@@ -1,18 +1,10 @@
-import { ageText, esc, hhmm, plural, runTime, seenAgo, span } from '../format';
+import { ageText, hhmm, plural, runTime, seenAgo, span } from '../format';
 import type { Model } from '../model';
 import type { Detail } from '../state';
 import type { PrRef, SessionState } from '../types';
 
-import {
-  type PrTone,
-  idLink,
-  livePr,
-  parkedPlain,
-  pr,
-  prTone,
-  prn,
-  queuePr
-} from './html';
+import { parkedPlain } from './parked';
+import { type PrTone, livePr, prTone, queuePr } from './pr';
 import { countedRows, waitRows } from './waiting';
 
 // The session card: what the session does, where it runs, and the newest live events
@@ -28,22 +20,6 @@ export type Part =
   | { code: string };
 
 export type Headline = { tone: Tone; text: Part[]; note: Part[] };
-
-/** A headline's parts as HTML; the strings in them are escaped here */
-export const headlineHtml = (parts: Part[]): string =>
-  parts
-    .map((p) =>
-      typeof p === 'string'
-        ? esc(p)
-        : 'id' in p
-          ? idLink(p.id)
-          : 'prn' in p
-            ? prn(p.prn, p.tone)
-            : 'pr' in p
-              ? pr(p.pr)
-              : `<code>${esc(p.code)}</code>`
-    )
-    .join('');
 
 /** A ticket's id, then its PR, tinted by its live tone, when it has one */
 export const idPr = (

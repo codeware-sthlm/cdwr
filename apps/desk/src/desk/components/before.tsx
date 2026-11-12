@@ -15,6 +15,7 @@ import { type PrCommandKind, prCommandKey } from '../commands';
 import { CONFIRM_MS, GH_PR } from '../constants';
 import { shortAge } from '../format';
 import type { Model, WatchRef } from '../model';
+import type { DeskState, Detail } from '../state';
 import {
   type PrUi,
   type SnoozeUi,
@@ -27,8 +28,7 @@ import {
   snoozeUi,
   waitRows,
   whyNot
-} from '../render/waiting';
-import type { DeskState, Detail } from '../state';
+} from '../view/waiting';
 
 import { IdLink, Inline, LinkIds, PrPill, Prn } from './links';
 

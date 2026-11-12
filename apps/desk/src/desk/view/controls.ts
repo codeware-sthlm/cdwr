@@ -1,8 +1,7 @@
-import { esc } from '../format';
 import type { ControlView } from '../model';
 
 // What the desk's control buttons share; shown only with a control token, and they send through
-// `sendControl`. `status` is the string version the problems' abandon button still writes.
+// `sendControl`.
 
 /** The ranges the scheduler accepts, and the cap's step */
 export const LIMIT_RANGE = { min: 1, max: 20, step: 1 } as const;
@@ -21,10 +20,3 @@ export const statusText = (view: ControlView): string =>
       : view.state === 'refused'
         ? view.note
         : '';
-
-export const status = (view: ControlView): string => {
-  const text = statusText(view);
-  return text
-    ? `<small class="ctl-status ${view.state}" role="status">${esc(text)}</small>`
-    : '';
-};
