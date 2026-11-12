@@ -19,6 +19,7 @@ export const GROUPS: Group[] = [
   { name: 'builder', summary: 'The component build service' },
   { name: 'media', summary: 'Showcase imagery' },
   { name: 'storybook', summary: 'Storybook: story snapshots for review' },
+  { name: 'devlog', summary: 'Agent-drafted devlog posts for cdwr.io' },
   { name: 'agent', summary: 'The scheduled agent queue on this machine' }
 ];
 
@@ -207,6 +208,18 @@ export const ENTRIES: Entry[] = [
     summary: 'Render Storybook stories to PNG for review',
     danger: 'read',
     load: () => import('./storybook/snapshot').then((m) => m.default)
+  },
+  {
+    path: ['devlog', 'draft'],
+    summary: 'Post a devlog draft to the cms as the agent',
+    danger: 'mutate',
+    load: () => import('./devlog/draft').then((m) => m.default)
+  },
+  {
+    path: ['devlog', 'covered'],
+    summary: 'Which drafted posts were published, kept or deleted',
+    danger: 'read',
+    load: () => import('./devlog/covered').then((m) => m.default)
   },
   {
     path: ['agent', 'status'],
