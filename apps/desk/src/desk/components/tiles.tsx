@@ -87,6 +87,13 @@ const sessionSub = (m: Model): string =>
     )
     .join(' · ');
 
+// The tile button: the shared button rule's look reset to a flat card. A problem tile keeps its red border on hover and focus.
+const TILE =
+  'flex min-w-0 cursor-pointer flex-col items-start gap-[9px] rounded-[var(--r-tile)] border bg-[color:var(--surface)] p-4 text-left text-inherit [font:inherit] max-[600px]:min-h-[86px] max-[600px]:gap-[6px] max-[600px]:p-3';
+const OK =
+  'border-[color:var(--line)] hover:border-[color:var(--line-strong)] focus-visible:border-[color:var(--line-strong)]';
+const BAD = 'border-[color:var(--block)]';
+
 type Props = {
   m: Model;
   state: DeskState;
@@ -198,26 +205,43 @@ export const Tiles = ({ m, state, now, onSheet }: Props) => {
   ];
   return (
     <>
-      <div className="grid-head">
-        <h2>Everything else</h2>
-        <span>each widget opens a sheet</span>
+      <div className="grid-head flex items-baseline justify-between gap-3">
+        <h2 className="font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-medium tracking-[0.14em] text-[color:var(--muted)] uppercase">
+          Everything else
+        </h2>
+        <span className="text-[11px] text-[color:var(--muted)]">
+          each widget opens a sheet
+        </span>
       </div>
-      <div className="tiles">
+      <div className="tiles grid grid-cols-[repeat(auto-fit,minmax(min(196px,100%),1fr))] gap-3 max-[600px]:grid-cols-[repeat(3,minmax(0,1fr))] max-[600px]:gap-[10px]">
         {tiles.map((t) => (
           <button
             key={t.sheet}
             type="button"
-            className={t.bad ? 'tile bad' : 'tile'}
+            className={t.bad ? `tile bad ${TILE} ${BAD}` : `tile ${TILE} ${OK}`}
             data-w={t.sheet}
             aria-haspopup="dialog"
             onClick={() => onSheet(t.sheet)}
           >
             <span className="ico">
-              <Icon name={t.icon} />
+              <Icon
+                name={t.icon}
+                className="size-5 stroke-[color:var(--muted)] max-[600px]:size-[17px]"
+              />
             </span>
-            <b className="v">{t.value}</b>
-            <span className="l">{t.label}</span>
-            {t.sub ? <span className="s">{t.sub}</span> : null}
+            <b
+              className={`v font-[family-name:var(--font-mono)] text-[24px] leading-none font-semibold max-[600px]:text-[18px]${t.bad ? 'text-[color:var(--block)]' : ''}`}
+            >
+              {t.value}
+            </b>
+            <span className="l text-[12px] text-[color:var(--muted)] max-[600px]:text-[10px]">
+              {t.label}
+            </span>
+            {t.sub ? (
+              <span className="s max-w-full overflow-hidden text-[11px] text-ellipsis whitespace-nowrap text-[color:var(--faint)] max-[600px]:hidden">
+                {t.sub}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>

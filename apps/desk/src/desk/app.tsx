@@ -144,17 +144,17 @@ export const App = () => {
           <Alert m={m} onSeeProblems={problemActions.seeProblems} />
         </div>
       ) : null}
-      <div className="wrap">
-        <header className="top">
-          <div className="brand">
+      <div className="wrap mx-auto flex max-w-[1360px] flex-col gap-[var(--gap)]">
+        <header className="top flex flex-wrap items-center justify-between gap-3">
+          <div className="brand flex flex-wrap items-baseline gap-[14px]">
             <h1>Agent Desk</h1>
-            <span className="sub">
+            <span className="sub text-[12px] text-[color:var(--muted)] max-[600px]:hidden">
               cdwr · what the work queue does next, and what waits on you
             </span>
           </div>
-          <div className="tools">
+          <div className="tools flex flex-wrap items-center gap-[14px] text-[12px] text-[color:var(--muted)] max-[600px]:gap-[6px]">
             <a
-              className="who"
+              className="who inline-flex items-center gap-[6px] text-[12px] text-[color:var(--muted)] hover:text-[color:var(--fg)] max-[600px]:hidden"
               href="https://github.com/apps/codeware-agent"
               target="_blank"
               rel="noreferrer"
@@ -163,18 +163,24 @@ export const App = () => {
               <img className="av" src={AGENT_AVATAR} alt="" />
               on GitHub as codeware-agent[bot]
             </a>
-            <span id="status" className="status" aria-live="polite">
+            <span
+              id="status"
+              className="status flex flex-wrap items-center gap-[14px] text-[12px] text-[color:var(--muted)] max-[600px]:gap-[6px]"
+              aria-live="polite"
+            >
               <Status
                 m={m}
                 connection={state.data.connection}
                 onView={(view) => showView(view)}
               />
             </span>
-            <span id="fresh">{fresh(state)}</span>
+            <span id="fresh" className="max-[600px]:hidden">
+              {fresh(state)}
+            </span>
             <button
               id="refresh"
               type="button"
-              className="tool"
+              className="tool min-h-[var(--tap)] px-[14px] py-0"
               onClick={refresh}
             >
               Refresh
@@ -182,7 +188,7 @@ export const App = () => {
             <button
               id="settings"
               type="button"
-              className="tool"
+              className="tool min-h-[var(--tap)] px-[14px] py-0"
               aria-label="Settings"
               onClick={clickSettings}
             >
@@ -245,7 +251,11 @@ export const App = () => {
               />
             </section>
             <nav
-              className={label ? 'more frozen' : 'more'}
+              className={
+                label
+                  ? 'more frozen flex flex-col gap-3'
+                  : 'more flex flex-col gap-3'
+              }
               id="more"
               aria-label="More detail"
             >

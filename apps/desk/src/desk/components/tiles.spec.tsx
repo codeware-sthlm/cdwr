@@ -83,7 +83,8 @@ describe('Tiles', () => {
     tile('effort', '$6', 'simulated · $6 per ticket');
     tile('all', '4', 'via Linear poll, 5 min');
     tile('ideas', '1', 'COD-50 · accept?');
-    expect(t.tile('next')?.className).toBe('tile');
+    expect(t.tile('next')?.classList.contains('tile')).toBe(true);
+    expect(t.tile('next')?.classList.contains('bad')).toBe(false);
   });
 
   it('omits the sub-line of a tile that has none, and shows dashes before the runs', () => {
@@ -103,8 +104,8 @@ describe('Tiles', () => {
       } as never
     ];
     const bad = mount(state);
-    expect(bad.tile('review')?.className).toBe('tile bad');
-    expect(bad.tile('runs')?.className).toBe('tile bad');
+    expect(bad.tile('review')?.classList.contains('bad')).toBe(true);
+    expect(bad.tile('runs')?.classList.contains('bad')).toBe(true);
 
     state.data.githubEvents = [
       {
@@ -117,9 +118,9 @@ describe('Tiles', () => {
     state.data.runs = runs(view());
     state.data.runs.rows = [];
     const ok = mount(state);
-    expect(ok.tile('review')?.className).toBe('tile');
+    expect(ok.tile('review')?.classList.contains('bad')).toBe(false);
     expect(ok.tile('review')?.textContent).toContain('1 await you · live');
-    expect(ok.tile('runs')?.className).toBe('tile');
+    expect(ok.tile('runs')?.classList.contains('bad')).toBe(false);
     expect(ok.tile('runs')?.textContent).toContain('median – · 0 failed');
   });
 
@@ -154,7 +155,7 @@ describe('Tiles', () => {
       planSample('five_hour', 2, 70),
       planSample('seven_day', 100, 18)
     ];
-    expect(mount(state).tile('plan')?.className).toBe('tile bad');
+    expect(mount(state).tile('plan')?.classList.contains('bad')).toBe(true);
   });
 
   it('opens the sheet of the tile clicked', () => {

@@ -282,26 +282,31 @@ export const UnknownSession = ({ m }: { m: Model }) => {
   const p = ofKind(m.problems, 'unknown')[0];
   if (!p) return null;
   const ticket = p.ticket ? (
-    <span className="mono">
+    <span className="mono font-[family-name:var(--font-mono)]">
       <IdLink id={p.ticket} />
     </span>
   ) : null;
   return (
-    <section className="state-unknown" aria-label="Session state unknown">
+    <section
+      className="state-unknown flex flex-[1_1_100%] flex-wrap items-center gap-x-6 gap-y-3 rounded-[var(--r-card)] border border-dashed border-[color:var(--unknown-line)] bg-[image:repeating-linear-gradient(135deg,var(--sunk)_0_10px,var(--surface)_10px_20px)] px-[22px] py-5 max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-1.5 max-[600px]:px-3.5 max-[600px]:py-3"
+      aria-label="Session state unknown"
+    >
       <span className="p-pill solid">STATE UNKNOWN</span>
-      <div className="su-text">
-        <b className="su-title">
+      <div className="su-text flex min-w-0 flex-[1_1_400px] flex-col gap-1 max-[600px]:basis-auto">
+        <b className="su-title text-[22px] font-bold max-[600px]:text-[15px]">
           Last known: {p.host}{' '}
           {ticket ? (
             <>
-              <span className="long">running {ticket}</span>
-              <span className="short">on {ticket}</span>
+              <span className="long max-[600px]:hidden">running {ticket}</span>
+              <span className="short hidden max-[600px]:inline">
+                on {ticket}
+              </span>
             </>
           ) : (
             'with a session open'
           )}
         </b>
-        <span className="su-sub wide">
+        <span className="su-sub wide text-[13px] text-[color:var(--muted)] max-[600px]:hidden">
           Shown greyed until a heartbeat or a fresh snapshot confirms it.
           Nothing here is assumed to be running.
         </span>
