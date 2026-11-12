@@ -83,7 +83,7 @@ import { default as default_8fe5ada615ff9a31e77d123d0245a9e6 } from '@codeware/a
 import { default as default_f1aa315e58788dc8980ed4850402b8bb } from '@codeware/apps/cms/components/admin/DomainMismatchNotice';
 import { TenantSelector as TenantSelector_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
 import { default as default_67bc1060da1a6ada71dd6ec10de05eed } from '@codeware/apps/cms/components/admin/palette/PaletteProvider.client';
-import { TenantSelectionProvider as TenantSelectionProvider_d6d5f193a167989e2ee7d14202901e62 } from '@payloadcms/plugin-multi-tenant/rsc';
+import { PendingSafeTenantSelectionProvider as PendingSafeTenantSelectionProvider_a3e380dc7e9a2070c1369fab0cb4c7a6 } from '@codeware/apps/cms/components/admin/totp/PendingSafeTenantSelectionProvider';
 import { TotpEnrolmentRedirect as TotpEnrolmentRedirect_c1e80e642755ba0bdf1b09237145d9bb } from '@codeware/apps/cms/components/admin/totp/TotpEnrolmentRedirect';
 import { TOTPProvider as TOTPProvider_4eaf6cb33cfb75be01716613e3c9a512 } from 'payload-totp/rsc';
 import { TotpSetupView as TotpSetupView_8986633cda10c09f34d50fb0261d6653 } from '@codeware/apps/cms/components/admin/totp/TotpSetupView';
@@ -265,8 +265,8 @@ export const importMap = {
     TenantSelector_d6d5f193a167989e2ee7d14202901e62,
   '@codeware/apps/cms/components/admin/palette/PaletteProvider.client#default':
     default_67bc1060da1a6ada71dd6ec10de05eed,
-  '@payloadcms/plugin-multi-tenant/rsc#TenantSelectionProvider':
-    TenantSelectionProvider_d6d5f193a167989e2ee7d14202901e62,
+  '@codeware/apps/cms/components/admin/totp/PendingSafeTenantSelectionProvider#PendingSafeTenantSelectionProvider':
+    PendingSafeTenantSelectionProvider_a3e380dc7e9a2070c1369fab0cb4c7a6,
   '@codeware/apps/cms/components/admin/totp/TotpEnrolmentRedirect#TotpEnrolmentRedirect':
     TotpEnrolmentRedirect_c1e80e642755ba0bdf1b09237145d9bb,
   'payload-totp/rsc#TOTPProvider':
