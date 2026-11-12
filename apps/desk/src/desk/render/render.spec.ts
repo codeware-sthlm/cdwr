@@ -5,11 +5,9 @@ import { model } from '../model';
 import { type DeskState, viewOf } from '../state';
 import type { SessionState, WatchEntry } from '../types';
 
-import { chartHeight, chartKind } from './charts';
 import { NOW, activity, filled, runs, view } from './fixtures';
 import { platform } from './header';
 import { headline, headlineHtml } from './session';
-import { renderActivity, renderAll, renderEffort } from './sheets';
 import {
   copilotView,
   countedRows,
@@ -20,10 +18,6 @@ import {
   waitRows
 } from './waiting';
 
-/** A ticket id as the desk links it to Linear */
-const LINK = (id: string): string =>
-  `<a class="id" href="https://linear.app/codeware/issue/${id}" target="_blank" rel="noopener">${id}</a>`;
-
 describe('sheets', () => {
   it('name the Platform view from its hash, and from the old nuc link', () => {
     expect(viewOf('platform')).toBe('platform');
@@ -31,29 +25,6 @@ describe('sheets', () => {
     expect(viewOf('scheduler')).toBeNull();
     expect(viewOf('')).toBeNull();
     expect(viewOf(null)).toBeNull();
-  });
-
-  it('escape the text of an activity row', () => {
-    const state = filled();
-    const html = renderActivity(model(state, NOW), state);
-    expect(html).toContain('moved &lt;b&gt;');
-    expect(html).not.toContain('moved <b>');
-  });
-
-  it('show everything when the activity filter names a ticket that has left', () => {
-    const state = filled();
-    state.ui.actFilter = 'COD-1234';
-    const html = renderActivity(model(state, NOW), state);
-    expect(html).toContain('1 event');
-    expect(state.ui.actFilter).toBe('COD-1234');
-  });
-
-  it('mark the pressed filter on the All sheet', () => {
-    const state = filled();
-    state.ui.filter = 'agent';
-    const html = renderAll(model(state, NOW), state);
-    expect(html).toContain('data-f="agent" aria-pressed="true"');
-    expect(html).toContain('data-f="all" aria-pressed="false"');
   });
 });
 
@@ -91,25 +62,6 @@ describe('waiting card and queue sheets', () => {
       ['COD-6', 'ready to label'],
       ['COD-50', 'idea']
     ]);
-  });
-
-  it('put the cost per ticket and the spend per day on the effort sheet', () => {
-    const state = filled();
-    const html = renderEffort(state, NOW);
-    expect(html).toContain('Every ticket with usage');
-    expect(html).toContain('By model');
-    expect(html).toContain('data-chart="spend"');
-    expect(html).toContain(`<td>${LINK('COD-30')}</td>`);
-  });
-});
-
-describe('charts', () => {
-  it('read the placeholder attributes', () => {
-    expect(chartKind('spend')).toBe('spend');
-    expect(chartKind('')).toBe('shipped');
-    expect(chartKind(undefined)).toBe('shipped');
-    expect(chartHeight('200')).toBe(200);
-    expect(chartHeight(undefined)).toBe(150);
   });
 });
 

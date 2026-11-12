@@ -8,7 +8,7 @@ import type { Detail } from '../state';
 
 import { LinkIds } from './links';
 
-// React mirrors of the row helpers in render/sheets.ts and render/html.ts, with the same elements and classes
+// The row helpers of the sheets, with the same elements and classes the HTML versions had
 
 const PRIO: ReadonlyMap<number, string> = new Map([
   [1, 'Urgent'],

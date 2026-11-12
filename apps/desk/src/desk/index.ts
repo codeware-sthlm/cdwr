@@ -516,6 +516,19 @@ const sheetActions: SheetActions = {
   onSnoozedOpen: (open) => {
     state.ui.snoozedOpen = open;
     render();
+  },
+  onActFilter: (ticket) => {
+    state.ui.actFilter = ticket;
+    render();
+  },
+  onFilter: (filter) => {
+    state.ui.filter = filter;
+    try {
+      localStorage.setItem('aq-filter', state.ui.filter);
+    } catch {
+      // Storage is unavailable: the filter lasts until the page closes
+    }
+    render();
   }
 };
 
@@ -543,24 +556,6 @@ document.addEventListener('click', (e) => {
     showSheet(t.dataset.w);
     return;
   }
-  const f = e.target.closest<HTMLElement>('[data-f]');
-  if (f) {
-    const filter = f.dataset.f;
-    if (isFilter(filter)) state.ui.filter = filter;
-    try {
-      localStorage.setItem('aq-filter', state.ui.filter);
-    } catch {
-      // Storage is unavailable: the filter lasts until the page closes
-    }
-    render();
-  }
-});
-document.addEventListener('change', (e) => {
-  const s = e.target instanceof Element ? e.target.closest('[data-af]') : null;
-  if (!(s instanceof HTMLSelectElement)) return;
-  state.ui.actFilter = s.value;
-  render();
-  document.querySelector<HTMLElement>('[data-af]')?.focus();
 });
 document.addEventListener('keydown', (e) => {
   // An open sheet closes on its own Escape, which marks the event handled

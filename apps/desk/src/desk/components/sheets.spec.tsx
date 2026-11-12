@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
@@ -30,7 +30,9 @@ import { SHEETS, type SheetActions } from './sheets';
 
 const actions: SheetActions = {
   wait: { snooze: vi.fn(), wake: vi.fn(), label: vi.fn(), pr: vi.fn() },
-  onSnoozedOpen: vi.fn()
+  onSnoozedOpen: vi.fn(),
+  onActFilter: vi.fn(),
+  onFilter: vi.fn()
 };
 
 /** A sheet's body rendered from the state; `m` stands in for the model when a test shapes it */
@@ -486,5 +488,85 @@ describe('scheduler sheets', () => {
     expect(empty).toContain('cdwr agent statusline install');
     expect(empty).toContain('No hourly usage yet');
     expect(empty).toContain('a proxy for what the plan counts');
+  });
+});
+
+describe('data sheets', () => {
+  it('escape the text of an activity row', () => {
+    const c = body('activity', filled());
+    expect(c.querySelector('tbody td:last-child')?.textContent).toBe(
+      'moved <b>'
+    );
+    expect(c.querySelector('tbody td:last-child b')).toBeNull();
+  });
+
+  it('show everything when the activity filter names a ticket that has left', () => {
+    const state = filled();
+    state.ui.actFilter = 'COD-1234';
+    const c = body('activity', state);
+    expect(text(c)).toContain('1 event');
+    expect(c.querySelector('select')?.value).toBe('all');
+    expect(state.ui.actFilter).toBe('COD-1234');
+  });
+
+  it('tell the page which ticket the activity select picked', () => {
+    const c = body('activity', filled());
+    const select = c.querySelector('select') as HTMLSelectElement;
+    expect(select.getAttribute('aria-label')).toBe('Filter by ticket');
+    expect([...select.options].map((o) => o.value)).toEqual(['all', 'COD-30']);
+    fireEvent.change(select, { target: { value: 'COD-30' } });
+    expect(actions.onActFilter).toHaveBeenCalledWith('COD-30');
+  });
+
+  it('mark the pressed filter on the All sheet and tell the page about a press', () => {
+    const state = filled();
+    state.ui.filter = 'agent';
+    const c = body('all', state);
+    const pressed = Object.fromEntries(
+      [...c.querySelectorAll('.filters button')].map((b) => [
+        text(b),
+        b.getAttribute('aria-pressed')
+      ])
+    );
+    expect(pressed).toEqual({
+      'All open': 'false',
+      'Todo + In Progress': 'false',
+      'Agent only': 'true'
+    });
+    expect(c.querySelector('.filters')?.getAttribute('role')).toBe('group');
+    fireEvent.click(
+      [...c.querySelectorAll('.filters button')].find(
+        (b) => text(b) === 'All open'
+      ) as Element
+    );
+    expect(actions.onFilter).toHaveBeenCalledWith('all');
+  });
+
+  it('put the cost per ticket and the spend per day on the effort sheet', () => {
+    const c = body('effort', filled());
+    expect(text(c)).toContain('Every ticket with usage');
+    expect(text(c)).toContain('By model');
+    expect(c.querySelectorAll('.chart-slot')).toHaveLength(1);
+    expect(
+      c.querySelector(
+        'td a.id[href="https://linear.app/codeware/issue/COD-30"]'
+      )
+    ).not.toBeNull();
+  });
+
+  it('draw the closed chart in its slot above the days with closed tickets', () => {
+    const c = body('shipped', filled());
+    expect(c.querySelectorAll('.chart-slot')).toHaveLength(1);
+    expect(text(c)).toContain('last 30 days');
+    expect(text(c)).toContain('COD-30');
+  });
+
+  it('list the suggestions to decide, accepted and discarded, with the reason', () => {
+    const c = body('ideas', filled());
+    expect(text(c)).toContain('To decide · 1');
+    expect(c.querySelectorAll('article.idea')).toHaveLength(1);
+    expect(text(c)).toContain('Discarded · 1');
+    expect(c.querySelector('.reason')?.textContent).toBe('“not worth it”');
+    expect(text(c)).toContain('1of them "not worth it"');
   });
 });
