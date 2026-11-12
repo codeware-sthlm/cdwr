@@ -83,30 +83,7 @@
       ></main>
     </div>
 
-    <div class="scrim" id="scrim" hidden></div>
-    <aside
-      class="sheet"
-      id="sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="sheet-title"
-      hidden
-    >
-      <button
-        type="button"
-        class="sheet-handle"
-        id="sheet-handle"
-        aria-label="Close"
-      ></button>
-      <div class="sheet-head">
-        <div>
-          <h2 id="sheet-title"></h2>
-          <p id="sheet-sub"></p>
-        </div>
-        <button type="button" id="sheet-close">Close</button>
-      </div>
-      <div class="sheet-body" id="sheet-body"></div>
-    </aside>
+    <div id="sheet-root"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

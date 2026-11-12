@@ -40,6 +40,17 @@
   --radius: var(--r-row);
 }
 
+/* The sheet frame's overlay is the desk's scrim, without the drawer's blur, and the side sheet
+   takes the desk's shadow. Unlayered, so they win over the components' own utilities. */
+[data-slot='sheet-overlay'],
+[data-slot='drawer-overlay'] {
+  background: var(--scrim);
+  backdrop-filter: none;
+}
+[data-slot='sheet-content'] {
+  box-shadow: var(--shadow);
+}
+
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--fg);
