@@ -233,8 +233,10 @@ describe('WaitingCard', () => {
         updated_at: new Date('2026-10-29T11:56:00').toISOString()
       } as never
     ];
-    expect(card(s).querySelector('a.prn')?.className).toBe('prn ok');
-    expect(card(filled()).querySelector('a.prn')?.className).toBe('prn');
+    expect(card(s).querySelector('a.prn.ok')).not.toBeNull();
+    const plain = card(filled()).querySelector('a.prn');
+    expect(plain).not.toBeNull();
+    expect(plain?.classList.contains('ok')).toBe(false);
   });
 
   it('orders every kind furthest along first, approved plans last and uncounted', () => {

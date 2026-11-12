@@ -30,9 +30,50 @@ import {
   whyNot
 } from '../view/waiting';
 
+import { EMPTY, GROUP, ID, META, TITLE } from './items-ui';
 import { IdLink, Inline, LinkIds, PrPill, Prn } from './links';
 
 // The Waiting on you sheet: one card per thing that waits on you, furthest along first, each with the one thing to do about it
+
+// A card: a frame of the raised fill; an approved one is dimmed
+const WCARD =
+  'wcard flex min-w-0 flex-col gap-[9px] rounded-[var(--r-card)] border border-[color:var(--line-strong)] bg-[color:var(--raised)] px-3.5 py-[13px]';
+const WCARD_APPROVED = `${WCARD} approved opacity-70`;
+// The head: the ticket id, what it waits on, the PR number and how long; the ids and the time are small here
+const WC_HEAD =
+  'wc-head flex items-baseline gap-2 [&_.id]:mr-0 [&_.id]:font-[family-name:var(--font-mono)] [&_.id]:text-[12px] [&_.id]:leading-[normal] [&_.id]:font-semibold [&_.id]:text-[color:var(--fg)] [&_time]:ml-auto [&_time]:font-[family-name:var(--font-mono)] [&_time]:text-[10px] [&_time]:leading-[normal] [&_time]:font-normal [&_time]:text-[color:var(--muted)]';
+// What the head's label says, the amber ones being the work that is yours to do
+const AMBER_KINDS: ReadonlySet<string> = new Set([
+  'plan',
+  'question',
+  'review',
+  'hand-offs',
+  'idea'
+]);
+const KIND = 'text-[11px] text-[color:var(--wait)]';
+const KIND_QUIET = 'text-[11px] text-[color:var(--muted)]';
+const WC_TITLE =
+  'wc-title min-w-0 overflow-hidden text-[13px] font-normal text-ellipsis whitespace-nowrap text-[color:var(--fg)]';
+// The statuses above the buttons, and the PR line among them
+const WC_STATUS = 'wc-status flex flex-col gap-1.5';
+const WC_PR =
+  'wc-pr flex items-center gap-1.5 [&_time]:font-[family-name:var(--font-mono)] [&_time]:text-[10px] [&_time]:leading-[normal] [&_time]:font-normal [&_time]:text-[color:var(--muted)]';
+// A small note in the panel's mono: a card's own, and the one a button leaves
+const WC_NOTE =
+  'wc-note font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-normal text-[color:var(--muted)]';
+const WNOTE =
+  'wnote font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-normal text-[color:var(--muted)]';
+// The buttons share one compact row, and wrap only when it is too narrow
+const WC_ACTIONS = 'wc-actions flex flex-wrap items-center gap-2';
+const ACT =
+  'act inline-flex min-h-8 items-center self-auto rounded-[10px] px-3.5 py-0 text-[12px] font-semibold max-[600px]:min-h-[var(--tap)]';
+const ACT_PRIMARY = `${ACT} primary bg-[color:var(--wait)] text-[#231803]`;
+const ACT_SECONDARY = `${ACT} secondary border border-[color:var(--wait-line)] bg-transparent text-[color:var(--wait)] disabled:opacity-50`;
+// The small quiet buttons: Snooze, Wake, Copilot review and Merge; in a card's button row, or alone under an idea
+const WSNOOZE_TONE =
+  'wsnooze border border-[color:var(--line)] bg-transparent text-[color:var(--muted)] hover:enabled:border-[color:var(--wait-dash)] hover:enabled:text-[color:var(--fg)] disabled:opacity-50';
+const WSNOOZE = `${WSNOOZE_TONE} flex-none rounded-[var(--r-row)] px-2 py-0.5 text-[11px]`;
+const WSNOOZE_CARD = `${WSNOOZE_TONE} inline-flex min-h-8 flex-none items-center self-auto rounded-[10px] px-3 py-0 text-[12px] max-[600px]:min-h-[var(--tap)]`;
 
 /** What the sheet's buttons do; the page sends the commands and renders again */
 export type WaitActions = {
@@ -48,7 +89,7 @@ type Control = { button: ReactNode; note: ReactNode };
 const NO_CONTROL: Control = { button: null, note: null };
 
 const noteOf = (text: string | undefined): ReactNode =>
-  text ? <span className="wnote">{text}</span> : null;
+  text ? <span className={WNOTE}>{text}</span> : null;
 
 /** Both halves of two controls, in order */
 const joinControls = (a: Control, b: Control): Control => ({
@@ -67,18 +108,20 @@ const joinControls = (a: Control, b: Control): Control => ({
     )
 });
 
-/** The Snooze or Wake button for a row, with the note a refusal left; nothing without controls */
+/** The Snooze or Wake button for a row, with the note a refusal left; nothing without controls. `inCard` sizes it for a card's button row */
 const snoozeControl = (
   r: WaitRow,
   ui: SnoozeUi,
-  actions: WaitActions
+  actions: WaitActions,
+  inCard = false
 ): Control => {
   if (!ui.on) return NO_CONTROL;
   const busy = ui.busy.has(r.id);
+  const className = inCard ? WSNOOZE_CARD : WSNOOZE;
   const button = r.snoozed ? (
     <button
       type="button"
-      className="wsnooze"
+      className={className}
       data-wake={r.id}
       aria-label={`Wake ${r.id}`}
       disabled={busy}
@@ -89,7 +132,7 @@ const snoozeControl = (
   ) : (
     <button
       type="button"
-      className="wsnooze"
+      className={className}
       data-snooze={r.id}
       aria-label={`Snooze ${r.id} until it changes`}
       disabled={busy}
@@ -115,7 +158,7 @@ const labelControl = (
   const button = (text: string, disabled = false) => (
     <button
       type="button"
-      className="act secondary"
+      className={ACT_SECONDARY}
       data-label={r.id}
       disabled={disabled}
       onClick={() => actions.label(r.id)}
@@ -147,7 +190,7 @@ const copilotControl = (
   const button = (text: string, disabled = false) => (
     <button
       type="button"
-      className="wsnooze"
+      className={WSNOOZE_CARD}
       data-copilot={r.id}
       disabled={disabled}
       onClick={() => actions.pr(r.id, 'copilot', host, entry.pr)}
@@ -180,7 +223,7 @@ const mergeControl = (
   const button = (text: string, disabled = false, title?: string) => (
     <button
       type="button"
-      className="wsnooze"
+      className={WSNOOZE_CARD}
       data-merge={r.id}
       disabled={disabled}
       title={title}
@@ -273,7 +316,7 @@ const WaitCard = ({
     r.kind === 'ready to label'
       ? labelControl(r, ui, now.getTime(), actions)
       : NO_CONTROL;
-  const snooze = snoozeControl(r, ui, actions);
+  const snooze = snoozeControl(r, ui, actions, true);
   const hasStatus =
     hasPr ||
     prCtl.note !== null ||
@@ -281,21 +324,23 @@ const WaitCard = ({
     label.note !== null ||
     snooze.note !== null;
   return (
-    <article className={r.kind === 'approved' ? 'wcard approved' : 'wcard'}>
-      <div className="wc-head">
+    <article className={r.kind === 'approved' ? WCARD_APPROVED : WCARD}>
+      <div className={WC_HEAD}>
         <IdLink id={r.id} />
-        <span className={`kind k-${r.kind.replace(/ /g, '-')}`}>
+        <span
+          className={`kind k-${r.kind.replace(/ /g, '-')} ${AMBER_KINDS.has(r.kind) ? KIND : KIND_QUIET}`}
+        >
           <LinkIds text={rowLabel(r)} />
         </span>
         <Prn n={r.pr} />
         {r.age === null ? null : <time>{`waiting ${shortAge(r.age)}`}</time>}
       </div>
-      <div className="wc-title">{r.title}</div>
+      <div className={WC_TITLE}>{r.title}</div>
       {hasStatus ? (
         // The statuses, top to bottom: the PR, its Copilot and merge notes, blockers and review fixes, then any refusal
-        <div className="wc-status">
+        <div className={WC_STATUS}>
           {hasPr ? (
-            <div className="wc-pr">
+            <div className={WC_PR}>
               <PrPill
                 m={m}
                 details={details}
@@ -306,7 +351,7 @@ const WaitCard = ({
           ) : null}
           {prCtl.note}
           {note ? (
-            <div className="wc-note">
+            <div className={WC_NOTE}>
               <LinkIds text={note} />
             </div>
           ) : null}
@@ -314,9 +359,9 @@ const WaitCard = ({
           {snooze.note}
         </div>
       ) : null}
-      <div className="wc-actions">
+      <div className={WC_ACTIONS}>
         <a
-          className={secondary ? 'act secondary' : 'act primary'}
+          className={secondary ? ACT_SECONDARY : ACT_PRIMARY}
           href={act.href}
           target="_blank"
           rel="noopener noreferrer"
@@ -337,6 +382,7 @@ const IDEA =
 const IDEA_H4 =
   'mb-[3px] text-[0.7rem] font-semibold tracking-[0.08em] text-[color:var(--muted)] uppercase';
 const IDEA_P = 'text-[0.88rem] [overflow-wrap:anywhere]';
+const IDEA_RULE = `rule text-[color:var(--muted)] ${IDEA_P}`;
 const IDEA_LI =
   "relative pl-3.5 text-[0.85rem] [overflow-wrap:anywhere] before:absolute before:top-[0.55em] before:left-0 before:size-1.5 before:rounded-full before:bg-[color:var(--accent)] before:content-['']";
 
@@ -367,15 +413,15 @@ export const IdeaCard = ({
   return (
     <article className={IDEA}>
       <a
-        className="title"
+        className={TITLE}
         href={i.url}
         target="_blank"
         rel="noopener noreferrer"
       >
-        <span className="id">{i.id}</span>
+        <span className={ID}>{i.id}</span>
         {i.title}
       </a>
-      <div className="meta">
+      <div className={META}>
         <span>{`suggested ${when}`}</span>
         {d?.focus ? <span>{`· ${d.focus}`}</span> : null}
       </div>
@@ -400,16 +446,16 @@ export const IdeaCard = ({
             {part('Why now', d.why)}
           </>
         ) : (
-          <p className={`rule ${IDEA_P}`}>
+          <p className={IDEA_RULE}>
             {
               "The ticket doesn't follow the suggestion shape; read it in Linear."
             }
           </p>
         )
       ) : (
-        <p className={`rule ${IDEA_P}`}>Loading the ticket…</p>
+        <p className={IDEA_RULE}>Loading the ticket…</p>
       )}
-      <p className={`rule ${IDEA_P}`}>
+      <p className={IDEA_RULE}>
         Accept: set <code>agent:ready</code> on the ticket. Discard: cancel it
         with one word in a comment, such as <i>already decided</i>,{' '}
         <i>not worth it</i>, <i>wrong direction</i> or <i>later</i>. The agent
@@ -485,7 +531,7 @@ export const BeforeSheet = ({
   };
 
   const body = (() => {
-    if (!m.v) return <div className="empty">No queue view yet.</div>;
+    if (!m.v) return <div className={EMPTY}>No queue view yet.</div>;
     const ui = snoozeUi(m, state.controls);
     const { details } = state;
     const card = (r: WaitRow) => (
@@ -511,7 +557,7 @@ export const BeforeSheet = ({
     );
     const awakeIdeas = m.ideasPending.filter((i) => ideaRows.has(i.id));
     const ideas = awakeIdeas.length ? (
-      <div className="group">
+      <div className={GROUP}>
         <h3>{`Ideas to decide · ${awakeIdeas.length}`}</h3>
         {awakeIdeas.map((i) => {
           const r = ideaRows.get(i.id);
@@ -537,7 +583,7 @@ export const BeforeSheet = ({
     const approved = cards((k) => k === 'approved');
     if (!awake.length && !ideas && !approved.length && !snoozed.length)
       return (
-        <div className="empty">
+        <div className={EMPTY}>
           No PR, hand-off, plan, question, label or idea waits for you.
         </div>
       );
@@ -562,9 +608,9 @@ export const BeforeSheet = ({
     );
   })();
 
-  // `display: contents` keeps the sheet's own flow: the cards stay its direct children
+  // `contents` keeps the sheet's own flow: the cards stay its direct children
   return (
-    <div className="before-sheet" ref={root} onFocusCapture={remember}>
+    <div className="contents" ref={root} onFocusCapture={remember}>
       {body}
     </div>
   );

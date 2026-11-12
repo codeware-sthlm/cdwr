@@ -6,10 +6,25 @@ import type { Model, TicketRef } from '../model';
 import type { Detail } from '../state';
 import { reasonChipData } from '../view/labels';
 
+import {
+  BAR,
+  CHIP,
+  CHIP_KIND,
+  EMPTY,
+  ID,
+  MAIN,
+  META,
+  NEXT,
+  PRIO_TEXT,
+  RANK,
+  SIDE,
+  TITLE,
+  itemClass
+} from './items-ui';
 import { LinkIds } from './links';
 import { PV_MORE, TBL, TBL_CELL, TBL_HEAD } from './sheet-ui';
 
-// The row helpers of the sheets, with the same elements and classes the HTML versions had
+// The row helpers of the sheets; their utilities are in items-ui.ts
 
 const PRIO: ReadonlyMap<number, string> = new Map([
   [1, 'Urgent'],
@@ -51,29 +66,29 @@ export const Item = ({
   const prio = i.priority?.value ?? 0;
   const prioName = PRIO.get(prio) ?? PRIO.get(0);
   return (
-    <li className={`item ${state || ''}`.trim()}>
-      <span className="rank">{rank ?? ''}</span>
-      <div className="main">
+    <li className={itemClass(state || '')}>
+      <span className={RANK}>{rank ?? ''}</span>
+      <div className={MAIN}>
         <a
-          className="title"
+          className={TITLE}
           href={i.url}
           target="_blank"
           rel="noopener noreferrer"
         >
-          <span className="id">{i.id}</span>
+          <span className={ID}>{i.id}</span>
           {i.title}
         </a>
         {i.status ? (
-          <div className="meta">
-            <span className="prio" title={prioName}>
+          <div className={META}>
+            <span className={PRIO_TEXT} title={prioName}>
               {PRIO_MARK.get(prio) ?? PRIO_MARK.get(0)} {prioName}
             </span>
             <span>· {i.status}</span>
           </div>
         ) : null}
         {d && d.steps ? (
-          <div className="meta">
-            <div className="bar" aria-hidden="true">
+          <div className={META}>
+            <div className={`${BAR} w-[120px]`} aria-hidden="true">
               <i
                 style={{ width: `${Math.round((d.done / d.steps) * 100)}%` }}
               ></i>
@@ -84,31 +99,33 @@ export const Item = ({
           </div>
         ) : null}
         {note ? (
-          <div className="meta">{note}</div>
+          <div className={META}>{note}</div>
         ) : d?.next && showNext ? (
-          <div className="next">
+          <div className={NEXT}>
             <LinkIds text={tidy(d.next)} />
           </div>
         ) : null}
       </div>
-      <span className="side">{side}</span>
+      <span className={SIDE}>{side}</span>
     </li>
   );
 };
 
 /** A line standing in for a list with nothing in it */
 export const Empty = ({ children }: { children: ReactNode }) => (
-  <div className="empty">{children}</div>
+  <div className={EMPTY}>{children}</div>
 );
 
-/** A small label; `kind` is its class */
+/** A small label; `kind` is its class and picks its colours */
 export const Chip = ({
   kind,
   children
 }: {
   kind: string;
   children: ReactNode;
-}) => <span className={`chip ${kind}`}>{children}</span>;
+}) => (
+  <span className={`${CHIP} ${kind} ${CHIP_KIND[kind] ?? ''}`}>{children}</span>
+);
 
 /** Why a ticket is queued, as a chip */
 export const ReasonChip = ({ reason }: { reason: string | undefined }) => {

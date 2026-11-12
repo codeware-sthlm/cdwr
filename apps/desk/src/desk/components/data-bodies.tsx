@@ -21,6 +21,7 @@ import { isTicketId } from '../view/ids';
 import { IdeaCard } from './before';
 import { ShippedChart, SpendChart } from './charts';
 import { Chip, Empty, Item, PvMore, Table } from './items';
+import { EMPTY, GROUP, ID_LINK_FLUSH, RULE } from './items-ui';
 import { IdLink, Inline } from './links';
 import { KNOBS, PV_STATS, ROLE_BG, STALE } from './sheet-ui';
 
@@ -138,7 +139,7 @@ export const ActivityBody = ({
         </label>
         <span>{plural(rows.length, 'event', 'events')}</span>
       </div>
-      {activity.dropped ? <p className="rule">{activity.dropped}</p> : null}
+      {activity.dropped ? <p className={RULE}>{activity.dropped}</p> : null}
       {rows.length ? (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[0.8rem]">
@@ -175,7 +176,7 @@ export const ActivityBody = ({
       ) : (
         <Empty>No events for this ticket in the window.</Empty>
       )}
-      <p className="rule">
+      <p className={RULE}>
         From Linear&apos;s issue history of tickets that carried an{' '}
         <code>agent:*</code> label, and the scheduler&apos;s own runs. The agent
         writes as the queue&apos;s own Linear app user, and those changes say{' '}
@@ -212,7 +213,7 @@ export const ShippedBody = ({
       </div>
       {daysWith.length ? (
         daysWith.map((d) => (
-          <div className="group" key={d.key}>
+          <div className={GROUP} key={d.key}>
             <h3>{`${dayLabel(d.key)} · ${d.items.length}`}</h3>
             <ul>
               {d.items.map((i) => (
@@ -224,7 +225,7 @@ export const ShippedBody = ({
       ) : (
         <Empty>No agent ticket closed in the last {SHIP_DAYS} days.</Empty>
       )}
-      <p className="rule">
+      <p className={RULE}>
         Tickets that carried an agent label when they closed, by the day they
         closed.
       </p>
@@ -261,7 +262,7 @@ const HBars = ({ rows, max }: { rows: readonly TicketCost[]; max: number }) => {
             }
           >
             <a
-              className="id mr-0"
+              className={ID_LINK_FLUSH}
               href={r.i.url}
               target="_blank"
               rel="noopener noreferrer"
@@ -311,7 +312,7 @@ const TicketCosts = ({
         No agent ticket closed in the last {SHIP_DAYS} days has usage recorded.
       </Empty>
     )}
-    <div className="group">
+    <div className={GROUP}>
       <h3>Every ticket with usage</h3>
       <Table
         head={['Ticket', ...ROLES, 'Total', 'Output', 'Cache read']}
@@ -324,7 +325,7 @@ const TicketCosts = ({
         ])}
       />
     </div>
-    <p className="rule">
+    <p className={RULE}>
       Closed agent tickets from the last {SHIP_DAYS} days, by the API-equivalent
       cost of sessions on their branch over the last {usage.windowDays} days.
       Work before that window isn&apos;t counted.
@@ -371,7 +372,7 @@ const Spend = ({
       <div className="chart-slot">
         <SpendChart days={spendDays(usage, days)} height={CHART_HEIGHT} />
       </div>
-      <div className="group">
+      <div className={GROUP}>
         <h3>By model</h3>
         <Table
           head={[
@@ -395,7 +396,7 @@ const Spend = ({
             ])}
         />
       </div>
-      <div className="group">
+      <div className={GROUP}>
         <h3>What moves it</h3>
         <ul className={KNOBS}>
           <li>
@@ -441,7 +442,7 @@ const Spend = ({
           </li>
         </ul>
       </div>
-      <div className="group">
+      <div className={GROUP}>
         <h3>Per day</h3>
         <Table
           head={['Day', ...ROLES, 'Total']}
@@ -455,7 +456,7 @@ const Spend = ({
             ])}
         />
       </div>
-      <p className="rule">
+      <p className={RULE}>
         API-equivalent cost of the local Claude Code transcripts of this repo
         and its worktrees, at prices from {usage.pricesDate}. Nothing is billed
         on Max; the cost is the weight the allowance follows. Planning is the
@@ -518,11 +519,16 @@ export const AllBody = ({
   );
   return (
     <>
-      <div className="filters" role="group" aria-label="Filter">
+      <div
+        className="filters flex flex-wrap gap-1.5"
+        role="group"
+        aria-label="Filter"
+      >
         {FILTERS.map(([f, label]) => (
           <button
             key={f}
             type="button"
+            className="aria-[pressed=false]:border-[color:var(--line)] aria-[pressed=false]:bg-transparent aria-[pressed=false]:text-[color:var(--muted)]"
             aria-pressed={filter === f}
             onClick={() => onFilter(f)}
           >
@@ -556,7 +562,7 @@ export const AllBody = ({
       ) : (
         <Empty>No tickets match this filter.</Empty>
       )}
-      <p className="rule">
+      <p className={RULE}>
         Manual drag order in a Linear view isn&apos;t exposed through the
         connector.
       </p>
@@ -609,25 +615,25 @@ export const IdeasBody = ({ m, state, now }: BodyProps) => {
   ).length;
   return (
     <>
-      <div className="group">
+      <div className={GROUP}>
         <h3>Last suggest run</h3>
         <div
           className={
-            s && ['cap', 'failed', 'other'].includes(s.kind) ? 'empty' : 'rule'
+            s && ['cap', 'failed', 'other'].includes(s.kind) ? EMPTY : RULE
           }
         >
           {lastText}
         </div>
       </div>
       {m.ideasPending.length ? (
-        <div className="group">
+        <div className={GROUP}>
           <h3>{`To decide · ${m.ideasPending.length}`}</h3>
           {m.ideasPending.map((i) => (
             <IdeaCard key={i.id} i={i} details={details} />
           ))}
         </div>
       ) : (
-        <div className="group">
+        <div className={GROUP}>
           <h3>To decide</h3>
           <Empty>
             Nothing to decide. The next idea comes in the first idle run after
@@ -650,7 +656,7 @@ export const IdeasBody = ({ m, state, now }: BodyProps) => {
         </div>
       </div>
       {m.ideasAccepted.length ? (
-        <div className="group">
+        <div className={GROUP}>
           <h3>{`Accepted · ${m.ideasAccepted.length}`}</h3>
           <ul>
             {m.ideasAccepted.map((i) => {
@@ -669,7 +675,7 @@ export const IdeasBody = ({ m, state, now }: BodyProps) => {
         </div>
       ) : null}
       {m.ideasDiscarded.length ? (
-        <div className="group">
+        <div className={GROUP}>
           <h3>{`Discarded · ${m.ideasDiscarded.length}`}</h3>
           <ul>
             {m.ideasDiscarded.map((i) => {
@@ -694,7 +700,7 @@ export const IdeasBody = ({ m, state, now }: BodyProps) => {
           </ul>
         </div>
       ) : null}
-      <p className="rule">
+      <p className={RULE}>
         Tickets with the <code>Source: agent-idea</code> label from the last 60
         days. The scheduler proposes nothing while one waits on your verdict.
         From 2026-11-16 the skill reviews the month: more than half discarded as

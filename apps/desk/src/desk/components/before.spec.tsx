@@ -88,6 +88,11 @@ const statusOf = (card: Element): HTMLElement =>
   card.querySelector('.wc-status') as HTMLElement;
 const kids = (el: Element): HTMLElement[] =>
   Array.from(el.children) as HTMLElement[];
+/** Whether the element carries all of these marker classes */
+const has = (el: Element | null | undefined, ...names: string[]): boolean =>
+  !!el && names.every((n) => el.classList.contains(n));
+/** The first class of each child: the card's parts by their markers */
+const marks = (el: Element): string[] => kids(el).map((k) => k.classList[0]);
 const notes = (el: Element): string[] =>
   Array.from(el.querySelectorAll('.wnote')).map((n) => n.textContent ?? '');
 /** The buttons and link of an actions row, by what they are */
@@ -131,23 +136,23 @@ describe('BeforeSheet cards', () => {
     expect(c.querySelectorAll('article.wcard')).toHaveLength(4);
     expect(c.querySelectorAll('article.wcard.approved')).toHaveLength(0);
     const review = cardOf(c, 'COD-3').querySelector('a.act');
-    expect(review?.className).toBe('act primary');
+    expect(has(review, 'act', 'primary')).toBe(true);
     expect(review?.textContent).toBe('Review on GitHub');
     expect(review?.getAttribute('href')).toContain('pull/7');
     expect(review?.getAttribute('rel')).toBe('noopener noreferrer');
     const handoffs = cardOf(c, 'COD-5').querySelector('a.act');
-    expect(handoffs?.className).toBe('act primary');
+    expect(has(handoffs, 'act', 'primary')).toBe(true);
     expect(handoffs?.textContent).toBe('Open checklist');
     const plan = cardOf(c, 'COD-4');
     expect(plan.querySelector('.kind.k-plan')?.textContent).toBe('plan');
     expect(plan.querySelector('time')?.textContent).toBe('waiting 2 h');
-    expect(plan.querySelector('a.act')?.className).toBe('act primary');
+    expect(has(plan.querySelector('a.act'), 'act', 'primary')).toBe(true);
     expect(plan.querySelector('a.act')?.textContent).toBe('Answer in Linear');
     const label = cardOf(c, 'COD-6');
     expect(label.querySelector('.kind.k-ready-to-label')?.textContent).toBe(
       'ready to label'
     );
-    expect(label.querySelector('a.act')?.className).toBe('act secondary');
+    expect(has(label.querySelector('a.act'), 'act', 'secondary')).toBe(true);
     expect(label.querySelector('a.act')?.textContent).toBe('Label agent:ready');
     expect(c.querySelector('.group h3')?.textContent).toBe(
       'Ideas to decide · 1'
@@ -194,12 +199,12 @@ describe('BeforeSheet cards', () => {
     s.data.ideas = [];
     const c = sheet(s);
     const card = cardOf(c, 'COD-9');
-    expect(card.className).toBe('wcard approved');
+    expect(has(card, 'wcard', 'approved')).toBe(true);
     const kind = card.querySelector('.kind');
     expect(kind?.textContent).toBe('approved · waits on COD-2');
     expect(kind?.querySelector('a.id')?.textContent).toBe('COD-2');
     const link = card.querySelector('a.act');
-    expect(link?.className).toBe('act secondary');
+    expect(has(link, 'act', 'secondary')).toBe(true);
     expect(link?.textContent).toBe('Open ticket');
     // The blockers are in the kind, so the note does not repeat them
     expect(card.querySelector('.wc-note')).toBeNull();
@@ -435,7 +440,7 @@ describe('BeforeSheet snooze buttons', () => {
   it('draws Snooze and Wake in the cards when controls are on', () => {
     const c = sheet(on(snoozed()), { open: true });
     const snoozeBtn = button(c, '[data-snooze="COD-5"]');
-    expect(snoozeBtn.className).toBe('wsnooze');
+    expect(has(snoozeBtn, 'wsnooze')).toBe(true);
     expect(snoozeBtn.getAttribute('type')).toBe('button');
     expect(snoozeBtn.textContent).toBe('Snooze');
     expect(snoozeBtn.getAttribute('aria-label')).toBe(
@@ -443,7 +448,7 @@ describe('BeforeSheet snooze buttons', () => {
     );
     expect(snoozeBtn.disabled).toBe(false);
     const wake = button(c, '[data-wake="COD-3"]');
-    expect(wake.className).toBe('wsnooze');
+    expect(has(wake, 'wsnooze')).toBe(true);
     expect(wake.textContent).toBe('Wake');
     expect(wake.getAttribute('aria-label')).toBe('Wake COD-3');
     expect(wake.closest('.snoozed')).not.toBeNull();
@@ -485,7 +490,7 @@ describe('BeforeSheet Label button', () => {
     expect(c.querySelectorAll('[data-label]')).toHaveLength(1);
     const label = button(cardOf(c, 'COD-6'), '[data-label="COD-6"]');
     expect(label.textContent).toBe('Label agent:ready');
-    expect(label.className).toBe('act secondary');
+    expect(has(label, 'act', 'secondary')).toBe(true);
     expect(label.disabled).toBe(false);
   });
 
@@ -588,25 +593,22 @@ describe('BeforeSheet Copilot and Merge buttons', () => {
     const acts = actionsOf(card);
     expect(order(acts)).toEqual(['link', 'copilot', 'merge', 'snooze']);
     expect(copilot(acts)?.textContent).toBe('Copilot review');
-    expect(copilot(acts)?.className).toBe('wsnooze');
+    expect(has(copilot(acts), 'wsnooze')).toBe(true);
     expect(merge(acts)?.textContent).toBe('Merge');
-    expect(merge(acts)?.className).toBe('wsnooze');
+    expect(has(merge(acts), 'wsnooze')).toBe(true);
     expect(merge(acts)?.getAttribute('title')).toBeNull();
     expect(acts.querySelector('[disabled]')).toBeNull();
   });
 
   it('stacks head, title, status and actions, with the PR before the notes', () => {
     const card = card3(watched({ ci: 'PENDING' }));
-    expect(kids(card).map((el) => el.className)).toEqual([
+    expect(marks(card)).toEqual([
       'wc-head',
       'wc-title',
       'wc-status',
       'wc-actions'
     ]);
-    expect(kids(statusOf(card)).map((el) => el.className)).toEqual([
-      'wc-pr',
-      'wnote'
-    ]);
+    expect(marks(statusOf(card))).toEqual(['wc-pr', 'wnote']);
     expect(notes(statusOf(card))).toEqual(['checks pending']);
     expect(notes(actionsOf(card))).toEqual([]);
   });

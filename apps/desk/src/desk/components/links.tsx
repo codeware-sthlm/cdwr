@@ -8,13 +8,15 @@ import type { PrRef } from '../types';
 import { isTicketId } from '../view/ids';
 import { type PrTone, prPillData } from '../view/pr';
 
+import { ID, ID_LINK, PILL, PILL_TONE, PRN, PRN_TONE } from './items-ui';
+
 // The desk's links, pills and chips: ticket ids, pull requests and Linear text
 
 /** A ticket id as a link to Linear; anything else as a plain id, a dash when empty */
 export const IdLink = ({ id = '' }: { id?: string }) =>
   isTicketId(id) ? (
     <a
-      className="id"
+      className={ID_LINK}
       href={LINEAR_ISSUE + id}
       target="_blank"
       rel="noopener noreferrer"
@@ -22,7 +24,7 @@ export const IdLink = ({ id = '' }: { id?: string }) =>
       {id}
     </a>
   ) : (
-    <span className="id">{id || '—'}</span>
+    <span className={ID}>{id || '—'}</span>
   );
 
 /** The pull request's number as a link, tinted by its live tone; nothing without one */
@@ -35,7 +37,7 @@ export const Prn = ({
 }) =>
   n ? (
     <a
-      className={`prn${tone && tone !== 'neutral' ? ' ' + tone : ''}`}
+      className={`${PRN} ${PRN_TONE[tone ?? 'neutral']}${tone && tone !== 'neutral' ? ' ' + tone : ''}`}
       href={GH_PR + n}
       target="_blank"
       rel="noopener noreferrer"
@@ -49,7 +51,7 @@ export const Prn = ({
 export const PrLink = ({ n }: { n: PrRef | null | undefined }) =>
   n ? (
     <a
-      className="id"
+      className={ID_LINK}
       href={GH_PR + n}
       target="_blank"
       rel="noopener noreferrer"
@@ -107,7 +109,7 @@ export const PrPill = ({
   const { tone, text, age } = prPillData(m, details, x, now);
   return (
     <>
-      <span className={`pill ${tone}`}>{text}</span>
+      <span className={`${PILL} ${tone} ${PILL_TONE[tone]}`}>{text}</span>
       {children}
       {age === null ? null : <time>{age}</time>}
     </>

@@ -57,7 +57,7 @@ const Row = ({
   return (
     <li className={approved ? `${li} approved` : li}>
       <a className={row} href={r.url} target="_blank" rel="noopener noreferrer">
-        <span className="id flex-none font-[family-name:var(--font-mono)] text-[12px] leading-[normal] font-semibold">
+        <span className="id mr-1.5 flex-none font-[family-name:var(--font-mono)] text-[12px] leading-[normal] font-semibold text-[color:var(--muted)]">
           {r.id}
         </span>
         <span className="t min-w-0 flex-[1_1_auto] overflow-hidden text-[12px] text-ellipsis whitespace-nowrap text-[color:var(--muted)]">

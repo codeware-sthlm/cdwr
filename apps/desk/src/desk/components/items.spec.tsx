@@ -18,7 +18,9 @@ describe('Item', () => {
         />
       </ul>
     );
-    expect(container.querySelector('li')?.className).toBe('item ready');
+    const li = container.querySelector('li');
+    expect(li?.classList.contains('item')).toBe(true);
+    expect(li?.classList.contains('ready')).toBe(true);
     expect(container.querySelector('.rank')?.textContent).toBe('3');
     const a = container.querySelector('a.title');
     expect(a?.getAttribute('href')).toBe(

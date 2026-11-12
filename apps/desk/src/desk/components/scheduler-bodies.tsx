@@ -19,6 +19,18 @@ import { headline } from '../view/session';
 
 import { Gauge, Sparkline } from './charts';
 import { Empty, Table } from './items';
+import {
+  EMPTY,
+  GROUP,
+  MAIN,
+  META,
+  PRN,
+  PRN_TONE,
+  RANK,
+  RULE,
+  SIDE,
+  itemClass
+} from './items-ui';
 import { IdLink, Inline } from './links';
 import { Parts } from './session';
 import { FIG, FIGH, FIGS, KNOBS, KV, PV_STATS, STALE } from './sheet-ui';
@@ -35,7 +47,7 @@ const DEPLOY = <code>cdwr agent deploy --host agent-host</code>;
 /** A `sha-abc1234` linked to its commit on GitHub */
 const ShaLink = ({ sha }: { sha: string }) => (
   <a
-    className="prn"
+    className={`${PRN} ${PRN_TONE.neutral}`}
     href={GH_COMMIT + sha.slice(4)}
     target="_blank"
     rel="noopener noreferrer"
@@ -49,7 +61,7 @@ export const SessionBody = ({ m, state, now }: BodyProps) => {
   const h = headline(m, state.details, now);
   return (
     <>
-      <div className="group">
+      <div className={GROUP}>
         <h3>Hosts</h3>
         {m.hostSessions.length ? (
           <ul className={KNOBS}>
@@ -64,19 +76,19 @@ export const SessionBody = ({ m, state, now }: BodyProps) => {
           <Empty>No live session on any host.</Empty>
         )}
       </div>
-      <div className="group">
+      <div className={GROUP}>
         <h3>Now</h3>
         <div className="font-[family-name:var(--font-ui)] text-[1.05rem] leading-[1.35] font-semibold [overflow-wrap:anywhere] [&_a.id]:text-[0.9rem] [&_a.id]:no-underline [&_a.id:hover]:underline">
           <Parts parts={h.text} />
         </div>
         {h.note.length ? (
-          <p className="rule">
+          <p className={RULE}>
             <Parts parts={h.note} />
           </p>
         ) : null}
       </div>
       {s ? (
-        <div className="group">
+        <div className={GROUP}>
           <h3>Heartbeat</h3>
           <dl className={KV}>
             <dt>State</dt>
@@ -110,7 +122,7 @@ export const SessionBody = ({ m, state, now }: BodyProps) => {
           </dl>
         </div>
       ) : null}
-      <div className="group">
+      <div className={GROUP}>
         <h3>What the states mean</h3>
         <ul className={KNOBS}>
           <li>
@@ -148,7 +160,7 @@ export const SessionBody = ({ m, state, now }: BodyProps) => {
           </li>
         </ul>
       </div>
-      <p className="rule">
+      <p className={RULE}>
         From the queue view the scheduler publishes on every run that changes
         it, so it is as fresh as the last run and stops while the Mac sleeps.{' '}
         <code>cdwr agent status</code> shows the same.
@@ -212,9 +224,9 @@ export const SchedulerBody = ({ m }: Pick<BodyProps, 'm'>) => {
   return (
     <>
       {last ? (
-        <div className="group">
+        <div className={GROUP}>
           <h3>Last run</h3>
-          <div className={m.schedulerStale ? 'empty' : 'rule'}>
+          <div className={m.schedulerStale ? EMPTY : RULE}>
             {`${last.when} · ${last.outcome}`}
             {m.schedulerStale ? (
               <>
@@ -226,7 +238,7 @@ export const SchedulerBody = ({ m }: Pick<BodyProps, 'm'>) => {
           </div>
         </div>
       ) : null}
-      <div className="group">
+      <div className={GROUP}>
         <h3>Job</h3>
         {job?.host ? (
           <dl className={KV}>
@@ -245,20 +257,20 @@ export const SchedulerBody = ({ m }: Pick<BodyProps, 'm'>) => {
             ) : null}
           </dl>
         ) : null}
-        <div className={!job || job.install === 'stale' ? 'empty' : 'rule'}>
+        <div className={!job || job.install === 'stale' ? EMPTY : RULE}>
           <JobText job={job} />
         </div>
         {m.imageBehind ? (
-          <div className="empty">
+          <div className={EMPTY}>
             agent-host runs <ShaLink sha={m.imageBehind.runs} />, main has{' '}
             <ShaLink sha={m.imageBehind.main} />: run {DEPLOY}.
           </div>
         ) : null}
       </div>
       {m.deskBehind ? (
-        <div className="group">
+        <div className={GROUP}>
           <h3>Desk</h3>
-          <div className="empty">
+          <div className={EMPTY}>
             This desk is <ShaLink sha={m.deskBehind.runs} />, main has{' '}
             <ShaLink sha={m.deskBehind.main} />:{' '}
             {m.web ? (
@@ -272,7 +284,7 @@ export const SchedulerBody = ({ m }: Pick<BodyProps, 'm'>) => {
           </div>
         </div>
       ) : null}
-      <p className="rule">
+      <p className={RULE}>
         Idle runs update the last-run and job lines at most once an hour. The
         scheduler plans new tickets itself. For answers, reviews and parked work
         it starts an implementing session when none is alive (
@@ -312,17 +324,19 @@ export const RunsBody = ({ m }: Pick<BodyProps, 'm'>) => {
           <span>failed</span>
         </div>
       </div>
-      <div className="group">
+      <div className={GROUP}>
         <h3>{`Recent runs that did something, last ${RUNS_WINDOW_DAYS} days`}</h3>
         {m.runs.rows.length ? (
           <ul>
             {m.runs.rows.map((r, n) => (
               <li
                 key={n}
-                className={`item ${isProblem(r.outcome) ? 'blocked' : 'ready'}`}
+                className={itemClass(
+                  isProblem(r.outcome) ? 'blocked' : 'ready'
+                )}
               >
-                <span className="rank"></span>
-                <div className="main">
+                <span className={RANK}></span>
+                <div className={MAIN}>
                   <div>
                     <b>{r.outcome}</b>
                     {r.ticket ? (
@@ -332,11 +346,11 @@ export const RunsBody = ({ m }: Pick<BodyProps, 'm'>) => {
                       </>
                     ) : null}
                   </div>
-                  <div className="meta">
+                  <div className={META}>
                     <Inline text={r.detail} />
                   </div>
                 </div>
-                <span className="side">{r.when}</span>
+                <span className={SIDE}>{r.when}</span>
               </li>
             ))}
           </ul>
@@ -344,7 +358,7 @@ export const RunsBody = ({ m }: Pick<BodyProps, 'm'>) => {
           <Empty>None yet.</Empty>
         )}
       </div>
-      <p className="rule">
+      <p className={RULE}>
         The figures above count the runs that did something since local
         midnight; idle runs are left out of them and of the list. The list
         reaches back {RUNS_WINDOW_DAYS} days. A failed run is any outcome other
@@ -520,21 +534,21 @@ const timerGroups = (m: Model): [string, TimerRow[]][] => {
 export const TimersBody = ({ m }: Pick<BodyProps, 'm'>) => (
   <>
     {timerGroups(m).map(([h, rows]) => (
-      <div className="group" key={h}>
+      <div className={GROUP} key={h}>
         <h3>{h}</h3>
         <ul>
           {rows.map(([what, value, src]) => (
-            <li className="item plain" key={what}>
-              <span className="rank"></span>
-              <div className="main">
+            <li className={itemClass('plain')} key={what}>
+              <span className={RANK}></span>
+              <div className={MAIN}>
                 <div>
                   <b>{what}</b>
                 </div>
-                <div className="meta">
+                <div className={META}>
                   <Inline text={src} />
                 </div>
               </div>
-              <span className="side">{value}</span>
+              <span className={SIDE}>{value}</span>
             </li>
           ))}
         </ul>
@@ -556,7 +570,7 @@ const PlanWindowFigure = ({ w, now }: { w: PlanWindow; now: Date }) => {
           <span>{`reset ${planWhen(w.resetsAt, now)}`}</span>
         </div>
         <Gauge share={0} bad={false} />
-        <p className="rule">
+        <p className={RULE}>
           The window has reset. The next sample from an interactive session
           starts a new one.
         </p>
@@ -577,7 +591,7 @@ const PlanWindowFigure = ({ w, now }: { w: PlanWindow; now: Date }) => {
         <span>{`resets ${planWhen(w.resetsAt, now)}`}</span>
       </div>
       <Gauge share={w.used / 100} bad={bad} />
-      <p className="rule">
+      <p className={RULE}>
         {`${projection}. `}
         <span className={w.stale ? STALE : ''}>
           {`Sample ${ageText(w.ageMin)}.`}
@@ -668,7 +682,7 @@ export const PlanBody = ({ m, state, now }: BodyProps) => (
   <>
     <PlanWindows m={m} state={state} now={now} />
     <PlanBurn m={m} state={state} />
-    <p className="rule">
+    <p className={RULE}>
       Hourly figures are API-equivalent dollars across every Claude project on
       the hosts, a proxy for what the plan counts. The percentages come from
       Claude Code&apos;s status line on an interactive session, so they age
