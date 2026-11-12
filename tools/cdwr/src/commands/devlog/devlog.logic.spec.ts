@@ -142,14 +142,22 @@ describe('covered file', () => {
 });
 
 describe('assertCanDraft', () => {
-  const allowed = { collections: { posts: { create: { permission: true } } } };
+  // Payload sanitizes a granted permission to `true`
+  const allowed = { collections: { posts: { create: true } } };
 
   it('accepts a key that may create posts', () => {
     expect(() => assertCanDraft(200, allowed)).not.toThrow();
   });
 
+  it('accepts the scoped object form too', () => {
+    const scoped = { collections: { posts: { create: { permission: true } } } };
+    expect(() => assertCanDraft(200, scoped)).not.toThrow();
+  });
+
   it.each([
+    [200, { collections: { posts: { create: false } } }],
     [200, { collections: { posts: { create: { permission: false } } } }],
+    [200, { collections: { posts: {} } }],
     [200, { collections: {} }],
     [200, null],
     [401, null],

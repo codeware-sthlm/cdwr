@@ -38,9 +38,10 @@ const row = (postId: number, prs: number[]) => ({
   at: '2026-01-01T00:00:00.000Z'
 });
 
-const canDraft = (permission = true) =>
+// Payload sanitizes a granted permission to `true` and leaves a denied one out
+const canDraft = (granted = true) =>
   new Response(
-    JSON.stringify({ collections: { posts: { create: { permission } } } }),
+    JSON.stringify({ collections: { posts: granted ? { create: true } : {} } }),
     { status: 200 }
   );
 
