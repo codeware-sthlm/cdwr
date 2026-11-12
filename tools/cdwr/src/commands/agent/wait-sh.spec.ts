@@ -25,6 +25,7 @@ const ticket = (identifier: string, state: string) => ({
   priority: 2,
   createdAt: '2026-10-01T00:00:00Z',
   completedAt: null,
+  updatedAt: '2026-10-01T00:00:00Z',
   description: '',
   state: { type: state },
   labels: { nodes: [{ name: 'agent:ready' }] },
@@ -52,12 +53,18 @@ const rollup = (state: string) =>
       }
     }
   });
-const session = (id: string, state: string, lastSeen: string) => ({
+const session = (
+  id: string,
+  state: string,
+  lastSeen: string,
+  ticket?: string
+) => ({
   id,
   pid: process.pid,
   state,
   lastSeen,
-  startedAt: lastSeen
+  startedAt: lastSeen,
+  ...(ticket ? { ticket } : {})
 });
 const response = (...nodes: ReturnType<typeof ticket>[]) =>
   JSON.stringify({ data: { issues: { nodes } } });
@@ -507,6 +514,87 @@ while true; do beat "$1" "$2"; sleep 1; done`
       ['--interval', '1', '--max', '3']
     );
     expect(result.stdout).toMatch(/^timeout: running/);
+  });
+
+  describe("the session's own ticket", () => {
+    const working = (claim: boolean) => ({
+      ...ticket('COD-9', 'started'),
+      labels: { nodes: [{ name: 'agent:working' }] },
+      description: claim
+        ? `**Claim:** s · /w · ${new Date().toISOString().slice(0, 16)}Z\n**Next:** step 2\n`
+        : ''
+    });
+    const register = (ticketId = 'COD-9') => {
+      mkdirSync(join(dir, 'sessions'));
+      writeFileSync(
+        join(dir, 'sessions', 'cur.json'),
+        JSON.stringify(
+          session('cur', 'stopped', '2026-10-11T10:00:00Z', ticketId)
+        )
+      );
+    };
+    const args = ['--interval', '1', '--max', '2'];
+
+    it('exits at once with a resume line, then waits once seen', () => {
+      register();
+      const answers = [response(working(true))];
+      const t0 = Date.now();
+      expect(run(answers, args).stdout).toBe('resume: COD-9 · step 2\n');
+      expect(Date.now() - t0).toBeLessThan(1000);
+      const t1 = Date.now();
+      expect(run(answers, args).stdout).toBe('resume: COD-9 · step 2\n');
+      expect(Date.now() - t1).toBeGreaterThanOrEqual(1000);
+    });
+
+    it('reads a ticket without a claim line', () => {
+      register();
+      expect(run([response(working(false))], args).stdout).toBe(
+        'resume: COD-9 · no claim line\n'
+      );
+    });
+
+    it('--now prints the resume line', () => {
+      register();
+      expect(run([response(working(true))], ['--now']).stdout).toBe(
+        'resume: COD-9 · step 2\n'
+      );
+    });
+
+    it("finds its own ticket behind another session's fresher claim", () => {
+      register();
+      writeFileSync(
+        join(dir, 'sessions', 'other.json'),
+        JSON.stringify({
+          ...session('other', 'working', '2026-10-11T10:00:00Z', 'COD-8'),
+          pid: 1
+        })
+      );
+      const claimed = (id: string, agoMs: number, next: string) => ({
+        ...ticket(id, 'started'),
+        labels: { nodes: [{ name: 'agent:working' }] },
+        description: `**Claim:** s · /w · ${new Date(Date.now() - agoMs).toISOString().slice(0, 16)}Z\n**Next:** ${next}\n`
+      });
+      const answers = [
+        response(
+          claimed('COD-8', 0, 'step 1'),
+          claimed('COD-9', 20 * 60_000, 'step 5')
+        )
+      ];
+      expect(run(answers, args).stdout).toBe('resume: COD-9 · step 5\n');
+    });
+
+    it('a session on another ticket does not see it as its own', () => {
+      register('COD-1');
+      expect(run([response(working(true))], args).stdout).toMatch(
+        /^timeout: running/
+      );
+    });
+
+    it('without a session file the running pick still times out', () => {
+      expect(run([response(working(true))], args).stdout).toMatch(
+        /^timeout: running/
+      );
+    });
   });
 
   it("wakes when a parked ticket's CI resolves between ticks", () => {
