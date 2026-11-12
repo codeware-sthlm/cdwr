@@ -11,6 +11,7 @@ import {
 const okReport = (): AuditReport => ({
   url: 'https://cdwr.io',
   at: '2026-11-12T10:00:00.000Z',
+  gateCookie: true,
   pages: [
     { route: '/', status: 200, consoleErrors: [], axe: [], brokenLinks: [] }
   ],
@@ -151,7 +152,15 @@ describe('auditMarkdown', () => {
     expect(markdown).toContain('| / | 200 | 0 | 0 | 0 |');
     expect(markdown).toContain('OG: title, description and image (200)');
     expect(markdown).toContain('404 in sv: 404, lang sv');
+    expect(markdown).toContain('Gate cookie: sent');
     expect(markdown).toContain('No findings');
+  });
+
+  it('says when no gate cookie was sent', () => {
+    const report = okReport();
+    report.gateCookie = false;
+
+    expect(auditMarkdown(report)).toContain('Gate cookie: not sent');
   });
 
   it('lists the findings when there are some', () => {

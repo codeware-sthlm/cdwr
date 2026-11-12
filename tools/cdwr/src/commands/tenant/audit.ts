@@ -21,6 +21,7 @@ import {
 } from './audit.logic';
 import {
   assertAnswers,
+  assertPastGate,
   gatePasswordInput,
   routesFrom,
   stamp
@@ -108,16 +109,25 @@ export default defineCommand<
 
   // The password stays out of the plan, which `--json` prints
   async apply(ctx, { url, routes, locales, dir }, { gatePassword }) {
-    mkdirSync(dir, { recursive: true });
     // Only this command needs a browser, so the others never load it
     const { chromium } = await import('playwright');
     const { default: AxeBuilder } = await import('@axe-core/playwright');
     const browser = await chromium.launch();
+    let gateCookie = false;
     const pages: Array<PageAudit> = [];
     const notFound: Array<NotFoundCheck> = [];
     let og = ogCheck({}, null);
 
     try {
+      gateCookie = await assertPastGate(
+        ctx,
+        browser,
+        url,
+        routes[0] ?? '/',
+        gatePassword
+      );
+      mkdirSync(dir, { recursive: true });
+
       const context = await browser.newContext({
         viewport: { width: 1280, height: 800 }
       });
@@ -258,6 +268,7 @@ export default defineCommand<
       url,
       at: new Date().toISOString(),
       pages,
+      gateCookie,
       og,
       notFound
     };
