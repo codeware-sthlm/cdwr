@@ -1,14 +1,29 @@
 import { type ReactElement, useLayoutEffect, useRef } from 'react';
 import { type Root, createRoot } from 'react-dom/client';
 
+import { SHIP_DAYS } from '../constants';
 import { type Model, shipped } from '../model';
 import { chartHeight, chartKind } from '../render/charts';
-import { SHEETS as HTML_SHEETS } from '../render/sheets';
+import {
+  renderActivity,
+  renderAll,
+  renderEffort,
+  renderIdeas,
+  renderShipped
+} from '../render/sheets';
 import { spendDays } from '../spend';
 import type { DeskState, SheetId } from '../state';
 
 import { BeforeSheet, type WaitActions } from './before';
 import { ShippedChart, SpendChart } from './charts';
+import { HandoffsBody, LimitBody, NextBody, ReviewBody } from './queue-bodies';
+import {
+  PlanBody,
+  RunsBody,
+  SchedulerBody,
+  SessionBody,
+  TimersBody
+} from './scheduler-bodies';
 
 /** What a sheet's controls do; the state they change stays with the page */
 export type SheetActions = {
@@ -81,23 +96,23 @@ const LegacyBody = ({
   return <div ref={ref} className="contents" />;
 };
 
-const legacy = (id: Exclude<SheetId, 'before'>): SheetDef => ({
-  title: HTML_SHEETS[id].title,
-  sub: HTML_SHEETS[id].sub,
+const legacy = (
+  title: string,
+  sub: string,
+  html: (m: Model, state: DeskState, now: Date) => string
+): SheetDef => ({
+  title,
+  sub,
   Body: ({ m, state, now }) => (
-    <LegacyBody
-      html={HTML_SHEETS[id].body(m, state, now)}
-      state={state}
-      now={now}
-    />
+    <LegacyBody html={html(m, state, now)} state={state} now={now} />
   )
 });
 
 /** Every sheet by id; a new SheetId fails to compile until it has an entry */
 export const SHEETS: Record<SheetId, SheetDef> = {
   before: {
-    title: HTML_SHEETS.before.title,
-    sub: HTML_SHEETS.before.sub,
+    title: 'Waiting on you, furthest along first',
+    sub: "PRs to review, hand-offs to tick, plans to approve and questions to answer. Reply in the ticket's newest Agent comment.",
     Body: ({ m, state, now, actions }) => (
       <BeforeSheet
         m={m}
@@ -109,18 +124,74 @@ export const SHEETS: Record<SheetId, SheetDef> = {
       />
     )
   },
-  next: legacy('next'),
-  review: legacy('review'),
-  handoffs: legacy('handoffs'),
-  session: legacy('session'),
-  limit: legacy('limit'),
-  scheduler: legacy('scheduler'),
-  runs: legacy('runs'),
-  timers: legacy('timers'),
-  plan: legacy('plan'),
-  activity: legacy('activity'),
-  shipped: legacy('shipped'),
-  effort: legacy('effort'),
-  all: legacy('all'),
-  ideas: legacy('ideas')
+  next: {
+    title: 'What the agent takes next',
+    sub: "In the order a session takes them, from the scheduler's queue view",
+    Body: NextBody
+  },
+  review: {
+    title: 'Review & check',
+    sub: 'Open agent PRs · live via github_events',
+    Body: ReviewBody
+  },
+  handoffs: {
+    title: 'Hand-offs left',
+    sub: "Unticked hand-off items of merged agent tickets, from each ticket's latest Agent: PR ready comment. Tick them in Linear.",
+    Body: HandoffsBody
+  },
+  session: {
+    title: 'Session',
+    sub: "The work-queue session's heartbeat, and how the next step is decided",
+    Body: SessionBody
+  },
+  limit: {
+    title: 'Limit',
+    sub: "Agent PRs in flight count: open reviews and tickets parked on their PR's checks. At the limit no new ticket starts; answers, reviews and parked work still resume.",
+    Body: LimitBody
+  },
+  scheduler: {
+    title: 'Scheduler',
+    sub: 'The scheduled runs, from the runs table',
+    Body: SchedulerBody
+  },
+  runs: {
+    title: 'Runs today',
+    sub: 'The scheduler runs that did something since midnight, from the runs table; idle runs are left out',
+    Body: RunsBody
+  },
+  timers: {
+    title: 'Timers',
+    sub: "Every interval, window and timeout the queue runs on, and where it's set",
+    Body: TimersBody
+  },
+  plan: {
+    title: 'Plan usage',
+    sub: "The Claude plan's 5-hour and 7-day usage with a projection to each reset, and what the last 24 hours cost",
+    Body: PlanBody
+  },
+  activity: legacy(
+    'Activity',
+    "Every status, label, description and comment change on agent tickets, plus the scheduler's runs, newest first",
+    renderActivity
+  ),
+  shipped: legacy(
+    'Closed by the agent',
+    `Agent tickets closed per day, last ${SHIP_DAYS} days`,
+    (_m, state, now) => renderShipped(state, now)
+  ),
+  effort: legacy(
+    'Effort, 30 days',
+    'API-equivalent cost, simulated on Max: per closed ticket, then per day and model',
+    (_m, state, now) => renderEffort(state, now)
+  ),
+  all: legacy(
+    'All open tickets',
+    'Same order as the agent: status, priority, then age',
+    renderAll
+  ),
+  ideas: legacy(
+    'Agent suggestions',
+    'One evidence-led idea a day, from the first idle run after 06:00. Accept it with agent:ready; discard it by cancelling with one word in a comment.',
+    renderIdeas
+  )
 };

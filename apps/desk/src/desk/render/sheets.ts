@@ -1,37 +1,25 @@
-import { REFRESH_MS } from '../../data';
-import { CLOSED_WINDOW_DAYS, IDEA_WINDOW_DAYS, type Issue } from '../../linear';
+import type { Issue } from '../../linear';
 import {
+  ACTIVITY_STALE_MIN,
   AGENT_AVATAR,
-  LIMIT,
   ROLES,
-  SHIP_DAYS,
-  STUCK_MIN,
-  waitName
+  SHIP_DAYS
 } from '../constants';
 import {
   ageText,
   dayLabel,
   esc,
-  hhmm,
   inline,
   mtok,
-  planWhen,
   plural,
-  seenAgo,
-  shortAge,
   txt,
   usd
 } from '../format';
-import { DETAIL_STALE_MS, HANDOFF_STALE_MS, REASON_STALE_MS } from '../load';
 import {
-  BURN_ROLES,
   type Model,
-  type PlanWindow,
   type TicketRef,
   activityMissing,
   agentState,
-  isProblem,
-  prOf,
   shipped
 } from '../model';
 import {
@@ -42,85 +30,12 @@ import {
   tokenTotals,
   unattributedTotal
 } from '../spend';
-import type { DeskState, Detail, SheetId } from '../state';
-import type { Job, QueueNext, QueueRenovate, SessionState } from '../types';
+import type { DeskState, Detail } from '../state';
 
-import { chartSlot, gauge, sparkline } from './charts';
-import {
-  GH_PR,
-  chip,
-  empty,
-  hostName,
-  idLink,
-  isTicketId,
-  linkIds,
-  livePr,
-  loadMeter,
-  parkedText,
-  prPill,
-  prWaitText,
-  prn,
-  pvMore,
-  reasonChip,
-  sessionLabel
-} from './html';
-import { headline, headlineHtml } from './session';
+import { chartSlot } from './charts';
+import { empty, idLink, isTicketId, linkIds, pvMore } from './html';
 
-// The sheets: one per card, pill and tile. A sheet body is a pure function of the model and the state.
-
-const MINUTE_MS = 60 * 1000;
-const ACTIVITY_STALE_MIN = 30; // the activity table's last update older than this shows in the warning colour
-const RUNS_WINDOW_DAYS = 30; // the runs payload reaches back this far (see the Runs table history timer)
-const GH_COMMIT = 'https://github.com/codeware-sthlm/cdwr/commit/';
-
-const WHY: ReadonlyMap<string, string> = new Map([
-  ['answered', 'Your reply is in.'],
-  ['review feedback', 'Its PR has review comments to address.'],
-  ['conflicts with main', 'Its PR conflicts with main and needs a rebase.'],
-  ['merged comment', 'A comment on its merged ticket waits for a suggestion.'],
-  ['renovate', 'This Renovate PR needs a hand.'],
-  ['take over', 'Its claim went stale.'],
-  ['resume', ''],
-  ['ready', '']
-]);
-
-const nextAt = (m: Pick<Model, 'nextRun'>): string =>
-  m.nextRun ? hhmm(m.nextRun) : 'its next run';
-
-/** "merge #617 (COD-566) first", or a blocker without a PR yet; empty when nothing holds the PR back */
-export const blockedText = (m: Pick<Model, 'prBlockers'>, id: string): string =>
-  (m.prBlockers.get(id) || [])
-    .map((b) =>
-      b.pr
-        ? `merge ${prn(b.pr)} (${idLink(b.ticket)}) first`
-        : `${idLink(b.ticket)} has no PR yet`
-    )
-    .join('; ');
-
-/** Who takes a queued item and when: the live session, or the scheduler on its next run */
-export const whyLine = (m: Model, x: QueueNext): string => {
-  const s: SessionState = m.session ?? { state: 'none' };
-  const live = s.state === 'alive' || s.state === 'waiting';
-  const who =
-    m.stuck !== null
-      ? 'The live session should have taken it; it is stuck polling.'
-      : live
-        ? s.ticket === x.ticket
-          ? 'The live session is on it.'
-          : 'The live session takes it after its current step.'
-        : x.reason === 'ready'
-          ? `The scheduler plans it at ${nextAt(m)}.`
-          : x.reason === 'renovate' && x.detail === 'conflicting'
-            ? 'The scheduler leaves a Renovate conflict to an attended session: start one.'
-            : `The scheduler starts a session for it at ${nextAt(m)}.`;
-  return [
-    (x.reason !== undefined && WHY.get(x.reason)) || '',
-    who,
-    x.detail ? linkIds(inline(x.detail)) : ''
-  ]
-    .filter(Boolean)
-    .join(' ');
-};
+// The sheets still written as HTML, until they move to components. A body is a pure function of the model and the state.
 
 const PRIO: ReadonlyMap<number, string> = new Map([
   [1, 'Urgent'],
@@ -176,503 +91,6 @@ const itemHTML = (
   </li>`;
 };
 
-// ---------- Next, review, hand-offs ----------
-
-/** The row class for why a ticket is queued */
-const reasonState = (x: QueueNext): string =>
-  x.reason === 'ready'
-    ? 'ready'
-    : x.reason === 'answered'
-      ? 'answered'
-      : x.reason === 'review feedback' ||
-          x.reason === 'conflicts with main' ||
-          x.reason === 'merged comment'
-        ? 'review'
-        : 'working';
-
-const freeHTML = (m: Model): string => {
-  if (!m.held.free.length) return '';
-  return `<ul class="knobs">${m.held.free
-    .map((f) =>
-      f.action === 'review'
-        ? `<li><b>Review ${f.pr ? '#' + esc(f.pr) : idLink(f.ticket)}</b><span>Merging or closing ${idLink(f.ticket)} frees a slot</span></li>`
-        : f.action === 'wait'
-          ? `<li><b>${idLink(f.ticket)} waits on ${f.pr ? '#' + esc(f.pr) : 'its PR'}</b><span>Its slot frees when that PR merges or closes</span></li>`
-          : `<li><b>Run with <code>limit=${esc(f.value)}</code></b><span>Raises the limit for that session only</span></li>`
-    )
-    .join('')}</ul>`;
-};
-
-/** One Renovate PR: its number and title link to GitHub, and the ticket tending it to Linear */
-const renovateHTML = (r: QueueRenovate): string => `<li class="item working">
-    <span class="rank"></span>
-    <div class="main">
-      <a class="title" href="${GH_PR + esc(r.pr)}" target="_blank" rel="noopener"><span class="id">#${esc(r.pr)}</span>${esc(r.title)}</a>
-      <div class="meta">${r.state === 'tended' && r.ticket ? `Tended by ${idLink(r.ticket)}` : r.state === 'conflicting' ? 'Conflicts with main' : 'Checks failed'}</div>
-    </div>
-    <span class="side">${chip(r.state === 'tended' ? 'resume' : 'conflict', esc(r.state))}</span>
-  </li>`;
-
-const renderNext = (m: Model, state: DeskState): string => {
-  if (!m.v) return empty('No queue view yet.');
-  const { details } = state;
-  const next = m.next.length
-    ? `<ol>${m.next.map((x, n) => itemHTML(details, m.get(x.ticket), { state: reasonState(x), rank: n + 1, side: `${prn(prOf(details, x.ticket))} ${reasonChip(x.reason)}`, note: whyLine(m, x) })).join('')}</ol>`
-    : empty(
-        'Nothing to take. In Linear, add <code>agent:ready</code> to a ticket as the last step of refining it.'
-      );
-  const parked = m.parked.length
-    ? `<div class="group"><h3>Parked on a wait · ${m.parked.length}</h3><ul>${m.parked.map((p) => itemHTML(details, m.get(p.ticket), { state: 'working', side: `${prn(prOf(details, p.ticket, p.pr))} <span class="chip parked">${esc(waitName(p.wait) || p.wait)}</span>`, note: `${parkedText(p)}${p.pr ? ' for #' + esc(p.pr) : ''}, since ${p.since ? hhmm(Date.parse(p.since)) : '?'}. It resumes when that finishes.` })).join('')}</ul></div>`
-    : '';
-  const renovate = m.renovate.length
-    ? `<div class="group"><h3>Renovate PRs · ${m.renovate.length}</h3><ul>${m.renovate.map((r) => renovateHTML(r)).join('')}</ul></div>`
-    : '';
-  const held = m.held.tickets.length
-    ? `<div class="group"><h3>Held by the limit · ${m.held.tickets.length}</h3><ul>${m.held.tickets.map((id) => itemHTML(details, m.get(id), { state: 'plain', side: '<span class="chip held">held</span>' })).join('')}</ul>${freeHTML(m)}</div>`
-    : '';
-  return `<div class="group"><h3>Next · ${m.next.length}</h3>${next}</div>${parked}${renovate}${held}
-    <p class="rule">A session resumes its own work first, then takes over stale claims, answered tickets and review feedback, then rebases a review PR that conflicts with main, then answers comments on merged tickets, then takes new <code>agent:ready</code> tickets while the limit has room. A ticket parked on CI or a Copilot review resumes when the wait resolves. With no session alive, the scheduler starts one for anything but a new ready ticket, which it plans itself.</p>`;
-};
-
-const handoffCard = (
-  m: Model,
-  details: ReadonlyMap<string, Detail>,
-  x: { ticket: string; items?: string[] }
-): string => {
-  const i = m.get(x.ticket);
-  const when = i.completedAt
-    ? 'closed ' +
-      new Date(i.completedAt).toLocaleDateString([], {
-        month: 'short',
-        day: 'numeric'
-      })
-    : esc(i.status);
-  return `<article class="ho">
-    <a class="title" href="${esc(i.url)}" target="_blank" rel="noopener"><span class="id">${esc(i.id)}</span>${esc(i.title)}</a>
-    <div class="meta">${when}${prOf(details, x.ticket) ? ' · ' + prn(prOf(details, x.ticket)) : ''}</div>
-    <ul class="checks">${(x.items || []).map((t) => `<li><span>${linkIds(inline(t))}</span></li>`).join('')}</ul>
-  </article>`;
-};
-
-/** One card per open PR in merge order, its state and age from the newest github event */
-const renderReview = (m: Model, state: DeskState, now: Date): string => {
-  if (!m.v) return empty('No queue view yet.');
-  const { details } = state;
-  const rows = m.prs
-    .map((x, rank) => {
-      const { n } = livePr(m, details, x);
-      const blocked = blockedText(m, x.ticket);
-      const { pill, age } = prPill(m, details, x, now);
-      const note = [
-        blocked ? 'Merge order: ' + blocked : '',
-        prWaitText(m, x.ticket)
-      ]
-        .filter(Boolean)
-        .join('. ');
-      const i = m.get(x.ticket);
-      return `<li class="pr-row${blocked ? ' blocked' : ''}" data-pr="${esc(n ?? '')}">
-        <div class="line">${m.prs.length > 1 ? `<span class="rank">${rank + 1}</span>` : ''}<span class="prnum">${prn(n)}</span>${idLink(x.ticket)}<a class="title" href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
-        <div class="meta">${pill}${blocked ? '<span class="chip blocked">merge later</span>' : ''}${age}</div>
-        ${note ? `<div class="meta">${note}</div>` : ''}
-      </li>`;
-    })
-    .join('');
-  return `${rows ? `<ul class="pr-rows">${rows}</ul>` : empty('No open agent PR.')}
-    <p class="rule">Rows update in place as github_events lands — parked Copilot and CI waits resolve here, not at the next scheduler snapshot.</p>`;
-};
-
-const renderHandoffs = (m: Model, state: DeskState): string => {
-  if (!m.v) return empty('No queue view yet.');
-  const { details } = state;
-  return (
-    (m.handoffs.length
-      ? `<div class="group"><h3>Merged, hand-offs left · ${m.handoffItems}</h3>${m.handoffs.map((x) => handoffCard(m, details, x)).join('')}</div>`
-      : empty('No hand-off left.')) +
-    `<p class="rule">Hand-offs come from agent tickets merged in the last 14 days. They don't count toward the limit. The heading must read exactly <code>Hand-off checklist:</code>.</p>`
-  );
-};
-
-// ---------- Session, limit, scheduler, timers ----------
-
-const renderAttended = (
-  m: Model,
-  details: ReadonlyMap<string, Detail>,
-  now: Date
-): string => {
-  const s = m.session;
-  const h = headline(m, details, now);
-  const head = `<div class="group"><h3>Now</h3><div class="verdict">${headlineHtml(h.text)}</div>${h.note.length ? `<p class="rule">${headlineHtml(h.note)}</p>` : ''}</div>`;
-  const facts = s
-    ? `<div class="group"><h3>Heartbeat</h3><dl class="kv">
-      <dt>State</dt><dd>${esc(sessionLabel(s.state))}${s.detail ? ' · ' + esc(s.detail) : ''}</dd>
-      <dt>Ticket</dt><dd>${s.ticket ? idLink(s.ticket) : 'none claimed'}</dd>
-      <dt>Last seen</dt><dd>${s.lastSeen ? esc(new Date(s.lastSeen).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })) + ' · ' + esc(seenAgo(s.lastSeen, now)) : '–'}</dd>
-      ${s.id ? `<dt>Session</dt><dd><code>${esc(s.id.slice(0, 8))}</code></dd>` : ''}
-    </dl></div>`
-    : '';
-  const hosts = `<div class="group"><h3>Hosts</h3>${
-    m.hostSessions.length
-      ? `<ul class="knobs">${m.hostSessions
-          .map(
-            (h) =>
-              `<li><b>${esc(h.host)}</b><span>${esc(plural(h.sessions.length, 'session', 'sessions'))} · ${esc([...new Set(h.sessions.map((s) => s.kind))].join(', '))} · newest heartbeat ${esc(shortAge(h.ageMin))} ago</span></li>`
-          )
-          .join('')}</ul>`
-      : empty('No live session on any host.')
-  }</div>`;
-  return (
-    hosts +
-    head +
-    facts +
-    `<div class="group"><h3>What the states mean</h3><ul class="knobs">
-      <li><b>Live</b><span>Hooks stamped the session recently. <i>working</i> runs tools, <i>polling</i> waits in <code>wait.sh</code> for the queue to change, which costs no turns.</span></li>
-      <li><b>Stuck</b><span>Polling for ${STUCK_MIN} min or more while the queue has work for it: its wait missed the change. Type anything in its terminal.</span></li>
-      <li><b>Waits on you</b><span>A permission prompt or an idle prompt in the terminal. Nothing moves until you answer it.</span></li>
-      <li><b>Stopped</b><span>The session ended its turn or exited. With work waiting, the scheduler starts an implementing session on its next run.</span></li>
-      <li><b>No session</b><span>No work-queue session registered on this Mac.</span></li>
-    </ul></div>
-    <p class="rule">From the queue view the scheduler publishes on every run that changes it, so it is as fresh as the last run and stops while the Mac sleeps. <code>cdwr agent status</code> shows the same.</p>`
-  );
-};
-
-const renderLoad = (m: Model, state: DeskState): string => {
-  const { details } = state;
-  const max = m.limit.max || LIMIT;
-  return `<div class="pv-stats"><div><b>${m.limit.used} of ${max}</b><span>agent PRs in flight</span></div><div><b>${m.held.tickets.length}</b><span>ready tickets held</span></div></div>${loadMeter(m)}
-    <div class="group"><h3>Holding a slot · ${m.slots.length}</h3>${m.slots.length ? `<ul>${m.slots.map((x) => itemHTML(details, m.get(x.ticket), { state: 'review', side: prn(prOf(details, x.ticket, x.pr)), note: esc(x.why) })).join('')}</ul>` : empty('None.')}</div>
-    ${m.held.tickets.length ? `<div class="group"><h3>Held · ${m.held.tickets.length}</h3><ul>${m.held.tickets.map((id) => itemHTML(details, m.get(id), { state: 'plain' })).join('')}</ul>${freeHTML(m)}</div>` : ''}
-    <p class="rule">Each open <code>agent:review</code> PR counts one, and so does a ticket parked on its PR's CI or Copilot review, since its PR is already open. Hand-offs don't count. At ${max}, <code>/work-queue</code> stops starting new tickets but still resumes your answers, reviews and parked work. A session's <code>limit=N</code> isn't visible here, so the queue view's limit applies.</p>`;
-};
-
-/** "Container · sha-9c7a20d" (the commit links to GitHub), "Mac · launchd", or nothing before the line says */
-const hostHTML = (job: Job): string => {
-  if (!job.host) return '';
-  const rev = job.rev
-    ? ` · <a class="prn" href="${GH_COMMIT + esc(job.rev.slice(4))}" target="_blank" rel="noopener">${esc(job.rev)}</a>`
-    : '';
-  return esc(hostName(job.host)) + rev;
-};
-
-/** What to do about scripts that differ from main: pull a newer image, or reinstall on the Mac */
-const updateHint = (job: Job): string =>
-  job.host === 'container'
-    ? 'run <code>cdwr agent deploy --host agent-host</code>'
-    : 'run <code>cdwr agent install</code>';
-
-/** A `sha-abc1234` linked to its commit on GitHub */
-const shaLink = (sha: string): string =>
-  `<a class="prn" href="${GH_COMMIT + esc(sha.slice(4))}" target="_blank" rel="noopener">${esc(sha)}</a>`;
-
-const renderScheduler = (m: Model): string => {
-  if (!m.runs)
-    return empty(
-      "The runs haven't loaded yet. The scheduled planner records them in Supabase after every run."
-    );
-  const last = m.runs.last;
-  const head = last
-    ? `<div class="group"><h3>Last run</h3><div class="${m.schedulerStale ? 'empty' : 'rule'}">${esc(last.when)} · ${esc(last.outcome)}${m.schedulerStale ? `. Nothing for ${Math.floor(m.lastRunAge ?? 0)} hours: check that the Mac is awake, and <code>cdwr agent status</code> for a paused or unloaded job.` : ''}</div></div>`
-    : '';
-  const job = m.runs.job;
-  const jobText = !job
-    ? 'Not reported yet. The installed run.sh predates the Job line: run <code>cdwr agent install</code>.'
-    : job.install === 'stale'
-      ? `${esc(job.line)}. The ${job.host === 'container' ? "image's" : 'installed'} copy differs from main${job.items ? ` (${esc(job.items)})` : ''}: ${updateHint(job)}.`
-      : job.install === 'unknown'
-        ? `${esc(job.line)}. The scheduler couldn't read origin/main to compare.`
-        : esc(job.line);
-  const hostRow = job?.host
-    ? `<dl class="kv"><dt>Runs on</dt><dd>${hostHTML(job)}</dd>${job.host === 'container' && !job.rev ? `<dt>Image</dt><dd>No commit on the Job line: a local build, or an image built before it reported one. <code>cdwr agent deploy --host agent-host</code> installs main's.</dd>` : ''}</dl>`
-    : '';
-  const imageBehind = m.imageBehind
-    ? `<div class="empty">agent-host runs ${shaLink(m.imageBehind.runs)}, main has ${shaLink(m.imageBehind.main)}: run <code>cdwr agent deploy --host agent-host</code>.</div>`
-    : '';
-  const jobHTML = `<div class="group"><h3>Job</h3>${hostRow}<div class="${!job || job.install === 'stale' ? 'empty' : 'rule'}">${jobText}</div>${imageBehind}</div>`;
-  const deskHTML = m.deskBehind
-    ? `<div class="group"><h3>Desk</h3><div class="empty">This desk is ${shaLink(m.deskBehind.runs)}, main has ${shaLink(m.deskBehind.main)}: ${m.web ? 'run <code>cdwr agent deploy --host agent-host</code> on the Mac, then reload this page' : 'run <code>cdwr agent desk install</code>'}.</div></div>`
-    : '';
-  return (
-    head +
-    jobHTML +
-    deskHTML +
-    `<p class="rule">Idle runs update the last-run and job lines at most once an hour. The scheduler plans new tickets itself. For answers, reviews and parked work it starts an implementing session when none is alive (<code>launched</code>, then <code>implemented</code>, <code>cap</code> or <code>failed</code>). A problem is any outcome other than planned, idle, launched, implemented, suggested, nothing or skip, for example a failed run or one that planned nothing. It turns the Platform pill red until a later run goes well. The runs themselves are on the Runs today sheet. Full logs: <code>cdwr agent logs</code>.</p>`
-  );
-};
-
-const renderRuns = (m: Model): string => {
-  if (!m.runs)
-    return empty(
-      "The runs haven't loaded yet. The scheduled planner records them in Supabase after every run."
-    );
-  const t = m.runsToday;
-  const rows = m.runs.rows
-    .map(
-      (r) => `<li class="item ${isProblem(r.outcome) ? 'blocked' : 'ready'}">
-      <span class="rank"></span>
-      <div class="main"><div><b>${esc(r.outcome)}</b>${r.ticket ? ` ${idLink(r.ticket)}` : ''}</div>
-      <div class="meta">${linkIds(inline(r.detail))}</div></div>
-      <span class="side">${esc(r.when)}</span></li>`
-    )
-    .join('');
-  return `<div class="pv-stats"><div><b>${t.count}</b><span>runs today</span></div><div><b>${t.medianMs === null ? '–' : esc(shortAge(t.medianMs / 6e4))}</b><span>median duration</span></div><div><b>${t.failed}</b><span>failed</span></div></div>
-    <div class="group"><h3>Recent runs that did something, last ${RUNS_WINDOW_DAYS} days</h3>${rows ? `<ul>${rows}</ul>` : empty('None yet.')}</div>
-    <p class="rule">The figures above count the runs that did something since local midnight; idle runs are left out of them and of the list. The list reaches back ${RUNS_WINDOW_DAYS} days. A failed run is any outcome other than planned, idle, launched, implemented, suggested, nothing or skip.</p>`;
-};
-
-type TimerRow = readonly [what: string, value: string, source: string];
-
-// Kept by hand in step with run.sh, the work-queue skill and agent.logic.ts; only the interval is read live
-const timerGroups = (m: Model): [string, TimerRow[]][] => {
-  const min = m.runs?.job?.minutes;
-  const assumed = min ? '' : ' (assumed: no Job line yet)';
-  return [
-    [
-      'Scheduler (launchd, run.sh)',
-      [
-        [
-          'Scheduled run',
-          m.live
-            ? `on events, fallback every ${m.runMinutes} min`
-            : `every ${m.runMinutes} min`,
-          `launchd StartInterval, from RUN_INTERVAL_SECONDS in agent.logic.ts (600 s). The live value comes from the Job line${assumed}`
-        ],
-        [
-          'First run after install',
-          'one interval later',
-          'RunAtLoad is off; cdwr agent run starts one now'
-        ],
-        [
-          'Next run',
-          m.live
-            ? `on events, fallback about ${m.nextRun ? hhmm(m.nextRun) : '?'}`
-            : m.nextRun
-              ? 'about ' + hhmm(m.nextRun)
-              : 'unknown',
-          'last run plus whole intervals; sleep shifts it'
-        ],
-        [
-          'Runs table',
-          'every run',
-          'run.sh record_run, one row per run; a warn is a row of its own; the desk hides idle runs'
-        ],
-        [
-          'Runs table history',
-          '30 days, at most 500 runs',
-          'the desk reads that window'
-        ],
-        [
-          'Usage table',
-          'at most once an hour',
-          "run.sh record_usage runs `cdwr agent usage-record` from the planner's checkout"
-        ],
-        [
-          'Activity table',
-          'every run',
-          "run.sh record_activity: 7 days, newest 200 events, from Linear's issue history via `cdwr agent activity`"
-        ],
-        [
-          'Queue view',
-          'every run',
-          'run.sh, watch.jq `queue_view`; a change is written to queue_state at once'
-        ],
-        [
-          'Daily suggestion',
-          'first idle run after 06:00',
-          'run.sh suggest_gate; AGENT_QUEUE_SUGGEST_DAYS between runs (0 switches it off), its own budget; an idea still waiting on you blocks the next'
-        ],
-        [
-          'Implementing session',
-          '$15 per run, $40 per day',
-          'implement.sh `AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, run.sh `AGENT_QUEUE_IMPLEMENT_CAP_USD`; two launches that change nothing stop it for that ticket'
-        ],
-        ['Linear API call', '20 s timeout', 'run.sh curl -m 20'],
-        [
-          'Offline check',
-          '5 s, before any Linear call',
-          'lib.sh `offline`: no network (a dark wake from sleep) skips the run without a record'
-        ],
-        [
-          'Lock called stale',
-          'after 10 min',
-          'STALE_LOCK_MS in agent.logic.ts, read by cdwr agent status'
-        ]
-      ]
-    ],
-    [
-      'PR watch (every run)',
-      [
-        [
-          'agent:review tickets watched',
-          'open, or closed ≤ 14 days',
-          'run.sh WATCHED query'
-        ]
-      ]
-    ],
-    [
-      'Attended /work-queue (skill)',
-      [
-        [
-          'Session heartbeat',
-          'every tool call',
-          'hooks stamp the session file; Stop and SessionEnd mark it stopped'
-        ],
-        [
-          'Claim take-over',
-          'after 2 h',
-          'only for a session that left no heartbeat'
-        ],
-        [
-          'Copilot and CI waits',
-          'parked, polled every 60 s',
-          'wait.sh wakes the session when the wait resolves'
-        ],
-        [
-          'Limit',
-          'open agent PRs, default ' + LIMIT,
-          'hand-offs no longer count; they show for 14 days after merge'
-        ]
-      ]
-    ],
-    [
-      'This page',
-      [
-        [
-          'Linear refresh',
-          `every ${REFRESH_MS / MINUTE_MS} min`,
-          'ticket lists, the runs, usage and activity tables; Refresh forces it'
-        ],
-        [
-          'Activity called stale',
-          `after ${ACTIVITY_STALE_MIN} min`,
-          'its Updated line turns the warning colour'
-        ],
-        [
-          'Ticket details',
-          `cached ${DETAIL_STALE_MS / 1000} s`,
-          'plan progress and Next lines in the sheets'
-        ],
-        [
-          'Suggestions',
-          `every ${REFRESH_MS / MINUTE_MS} min`,
-          `agent-idea tickets of the last ${IDEA_WINDOW_DAYS} days; the discard word of a cancelled one is its last comment, cached ${REASON_STALE_MS / MINUTE_MS} min`
-        ],
-        [
-          'Hand-off ticks',
-          `with each refresh, cached ${HANDOFF_STALE_MS / 1000} s`,
-          "read from the ticket's PR ready comment, ahead of the scheduler; a newly merged ticket still waits for its run"
-        ],
-        [
-          'Session stuck',
-          `polling ≥ ${STUCK_MIN} min with work queued`,
-          "its last heartbeat to the queue view's time; the band turns red"
-        ],
-        [
-          'Scheduler silent',
-          `after ${m.staleHours} h`,
-          "2 h, or twice the interval plus an hour when that's longer"
-        ],
-        ['Run problems', 'last 24 h', 'until a later run goes well'],
-        [
-          'Titles of closed tickets',
-          `closed ≤ ${CLOSED_WINDOW_DAYS} days`,
-          'CLOSED_WINDOW_DAYS in linear.ts'
-        ]
-      ]
-    ]
-  ];
-};
-
-const renderTimers = (m: Model): string =>
-  timerGroups(m)
-    .map(
-      ([h, rows]) =>
-        `<div class="group"><h3>${esc(h)}</h3><ul>${rows
-          .map(
-            ([what, value, src]) =>
-              `<li class="item plain"><span class="rank"></span><div class="main"><div><b>${esc(what)}</b></div><div class="meta">${inline(src)}</div></div><span class="side">${esc(value)}</span></li>`
-          )
-          .join('')}</ul></div>`
-    )
-    .join('');
-
-// ---------- Plan usage ----------
-
-const WINDOW_TITLE = { five_hour: '5-hour window', seven_day: '7-day window' };
-
-const planWindowHTML = (w: PlanWindow, now: Date): string => {
-  const title = WINDOW_TITLE[w.kind];
-  if (w.reset)
-    return `<div class="fig"><div class="figh"><h3>${title}</h3><b>–</b><span>reset ${esc(planWhen(w.resetsAt, now))}</span></div>
-      ${gauge(0, false)}
-      <p class="rule">The window has reset. The next sample from an interactive session starts a new one.</p></div>`;
-  const bad = w.verdict !== 'ok';
-  const projection =
-    w.verdict === 'bad'
-      ? `Used up until ${planWhen(w.resetsAt, now)}`
-      : w.verdict === 'warn' && w.runsOutAt
-        ? `Runs out ~${planWhen(w.runsOutAt, now)}, before the ${planWhen(w.resetsAt, now)} reset`
-        : `At this rate ${Math.round(w.projected)}% at reset`;
-  return `<div class="fig"><div class="figh"><h3>${title}</h3><b class="${bad ? 'bad' : ''}">${Math.round(w.used)}%</b><span>resets ${esc(planWhen(w.resetsAt, now))}</span></div>
-    ${gauge(w.used / 100, bad)}
-    <p class="rule">${esc(projection)}. <span class="${w.stale ? 'stale' : ''}">Sample ${esc(ageText(w.ageMin))}.</span></p></div>`;
-};
-
-const planWindows = (m: Model, state: DeskState, now: Date): string => {
-  if (!state.data.planUsage)
-    return empty(
-      state.errors.has('planUsage')
-        ? "The plan_usage table couldn't load from Supabase."
-        : 'Loading the plan samples…'
-    );
-  const windows = [m.plan.five_hour, m.plan.seven_day].flatMap((w) =>
-    w ? [w] : []
-  );
-  if (!windows.length)
-    return empty(
-      'No plan sample yet. Run <code>cdwr agent statusline install</code> on the Mac, then use an interactive session.'
-    );
-  return `<div class="figs">${windows.map((w) => planWindowHTML(w, now)).join('')}</div>`;
-};
-
-const planBurn = (m: Model, state: DeskState): string => {
-  if (!state.data.usageHours)
-    return empty(
-      state.errors.has('usageHours')
-        ? "The usage_hours table couldn't load from Supabase."
-        : 'Loading the hourly usage…'
-    );
-  if (!state.data.usageHours.length)
-    return empty(
-      'No hourly usage yet. The hosts write the <code>usage_hours</code> table as their sessions run.'
-    );
-  const { hourly, fiveHour, sevenDay } = m.burn;
-  const day = hourly.reduce((n, h) => n + h.cost, 0);
-  const peak = Math.max(0, ...hourly.map((h) => h.cost));
-  const max = Math.max(1, peak); // the chart's scale keeps a floor of 1
-  const table = tableHTML(
-    ['Role', '5-hour window', '7 days'],
-    [...BURN_ROLES, 'total' as const].map((r) => [
-      esc(r),
-      esc(usd(fiveHour[r], 2)),
-      esc(usd(sevenDay[r], 2))
-    ])
-  );
-  return `<div class="fig"><div class="figh"><h3>Last 24 hours</h3><b>${esc(usd(day, 2))}</b><span>per hour, peak ${esc(usd(peak, 2))}</span></div>
-    ${sparkline(
-      hourly.map((h) => ({ at: h.hour, value: h.cost })),
-      hourly[0].hour,
-      hourly[hourly.length - 1].hour,
-      max,
-      null,
-      'API-equivalent dollars per hour, last 24 hours'
-    )}</div>
-    ${table}`;
-};
-
-const renderPlan = (m: Model, state: DeskState, now: Date): string =>
-  `${planWindows(m, state, now)}
-  ${planBurn(m, state)}
-  <p class="rule">Hourly figures are API-equivalent dollars across every Claude project on the hosts, a proxy for what the plan counts. The percentages come from Claude Code's status line on an interactive session, so they age while only the NUC runs.</p>`;
-
 // ---------- Activity ----------
 
 const NO_ACTIVITY =
@@ -717,7 +135,7 @@ const activityHead = (m: Model, header: string): string => {
   return `<span class="${warning ? 'stale' : ''}" title="${warning}">${esc(header)}</span>`;
 };
 
-const renderActivity = (m: Model, state: DeskState): string => {
+export const renderActivity = (m: Model, state: DeskState): string => {
   const { activity } = state.data;
   if (!activity) return empty("The activity table hasn't loaded yet.");
   if (activityMissing(activity)) return empty(NO_ACTIVITY);
@@ -740,7 +158,7 @@ const renderActivity = (m: Model, state: DeskState): string => {
 
 // ---------- Closed, spend, cost per ticket ----------
 
-const renderShipped = (state: DeskState, now: Date): string => {
+export const renderShipped = (state: DeskState, now: Date): string => {
   const s = shipped(state.data.closed, now);
   const daysWith = s.days.filter((d) => d.items.length).reverse();
   const listHTML = daysWith
@@ -858,7 +276,7 @@ const renderTicketCost = (usage: Usage, rows: readonly TicketCost[]): string =>
     <p class="rule">Closed agent tickets from the last ${SHIP_DAYS} days, by the API-equivalent cost of sessions on their branch over the last ${usage.windowDays} days. Work before that window isn't counted.</p>`;
 
 /** Cost per closed ticket, then the spend per day and model, from one usage table */
-const renderEffort = (state: DeskState, now: Date): string => {
+export const renderEffort = (state: DeskState, now: Date): string => {
   const { usage, closed } = state.data;
   if (!usage) return noUsage();
   const { days } = shipped(closed, now);
@@ -872,7 +290,7 @@ const renderEffort = (state: DeskState, now: Date): string => {
 
 // ---------- All open tickets ----------
 
-const renderAll = (m: Model, state: DeskState): string => {
+export const renderAll = (m: Model, state: DeskState): string => {
   const { filter } = state.ui;
   const queuePos = new Map(m.next.map((x, n) => [x.ticket, n + 1]));
   const shown = m.all.filter((i) =>
@@ -941,7 +359,7 @@ const ideaCard = (state: DeskState, i: Issue): string => {
   </article>`;
 };
 
-const renderIdeas = (m: Model, state: DeskState, now: Date): string => {
+export const renderIdeas = (m: Model, state: DeskState, now: Date): string => {
   const { ideas } = state.data;
   if (!ideas)
     return empty(
@@ -1017,92 +435,4 @@ const renderIdeas = (m: Model, state: DeskState, now: Date): string => {
     discarded +
     `<p class="rule">Tickets with the <code>Source: agent-idea</code> label from the last 60 days. The scheduler proposes nothing while one waits on your verdict. From 2026-11-16 the skill reviews the month: more than half discarded as "not worth it" and its one idea of the day is to go weekly.</p>`
   );
-};
-
-// ---------- The registry ----------
-
-export type SheetDef = {
-  title: string;
-  sub: string;
-  body: (m: Model, state: DeskState, now: Date) => string;
-};
-
-/** Every sheet by id; a new SheetId fails to compile until it has an entry */
-export const SHEETS: Record<SheetId, SheetDef> = {
-  before: {
-    title: 'Waiting on you, furthest along first',
-    sub: "PRs to review, hand-offs to tick, plans to approve and questions to answer. Reply in the ticket's newest Agent comment.",
-    // Rendered as React: components/before.tsx
-    body: () => ''
-  },
-  next: {
-    title: 'What the agent takes next',
-    sub: "In the order a session takes them, from the scheduler's queue view",
-    body: renderNext
-  },
-  review: {
-    title: 'Review & check',
-    sub: 'Open agent PRs · live via github_events',
-    body: renderReview
-  },
-  handoffs: {
-    title: 'Hand-offs left',
-    sub: "Unticked hand-off items of merged agent tickets, from each ticket's latest Agent: PR ready comment. Tick them in Linear.",
-    body: renderHandoffs
-  },
-  session: {
-    title: 'Session',
-    sub: "The work-queue session's heartbeat, and how the next step is decided",
-    body: (m, state, now) => renderAttended(m, state.details, now)
-  },
-  limit: {
-    title: 'Limit',
-    sub: "Agent PRs in flight count: open reviews and tickets parked on their PR's checks. At the limit no new ticket starts; answers, reviews and parked work still resume.",
-    body: renderLoad
-  },
-  scheduler: {
-    title: 'Scheduler',
-    sub: 'The scheduled runs, from the runs table',
-    body: renderScheduler
-  },
-  runs: {
-    title: 'Runs today',
-    sub: 'The scheduler runs that did something since midnight, from the runs table; idle runs are left out',
-    body: renderRuns
-  },
-  timers: {
-    title: 'Timers',
-    sub: "Every interval, window and timeout the queue runs on, and where it's set",
-    body: renderTimers
-  },
-  plan: {
-    title: 'Plan usage',
-    sub: "The Claude plan's 5-hour and 7-day usage with a projection to each reset, and what the last 24 hours cost",
-    body: renderPlan
-  },
-  activity: {
-    title: 'Activity',
-    sub: "Every status, label, description and comment change on agent tickets, plus the scheduler's runs, newest first",
-    body: renderActivity
-  },
-  shipped: {
-    title: 'Closed by the agent',
-    sub: `Agent tickets closed per day, last ${SHIP_DAYS} days`,
-    body: (_m, state, now) => renderShipped(state, now)
-  },
-  effort: {
-    title: 'Effort, 30 days',
-    sub: 'API-equivalent cost, simulated on Max: per closed ticket, then per day and model',
-    body: (_m, state, now) => renderEffort(state, now)
-  },
-  all: {
-    title: 'All open tickets',
-    sub: 'Same order as the agent: status, priority, then age',
-    body: renderAll
-  },
-  ideas: {
-    title: 'Agent suggestions',
-    sub: 'One evidence-led idea a day, from the first idle run after 06:00. Accept it with agent:ready; discard it by cancelling with one word in a comment.',
-    body: renderIdeas
-  }
 };

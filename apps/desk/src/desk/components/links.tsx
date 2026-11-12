@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { GH_PR, LINEAR_ISSUE } from '../constants';
 import { tidy } from '../format';
 import type { Model } from '../model';
@@ -87,22 +89,25 @@ export const Inline = ({ text }: { text: string | null | undefined }) => (
   </>
 );
 
-/** The PR's state pill and, when a github event landed, how long ago */
+/** The PR's state pill and, when a github event landed, how long ago; `children` sit between the two */
 export const PrPill = ({
   m,
   details,
   x,
-  now
+  now,
+  children
 }: {
   m: Pick<Model, 'agentPrs'>;
   details: ReadonlyMap<string, Detail>;
   x: { ticket: string; pr?: PrRef | null };
   now: Date;
+  children?: ReactNode;
 }) => {
   const { tone, text, age } = prPillData(m, details, x, now);
   return (
     <>
       <span className={`pill ${tone}`}>{text}</span>
+      {children}
       {age === null ? null : <time>{age}</time>}
     </>
   );
