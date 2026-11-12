@@ -176,6 +176,20 @@ restarts, so nothing is refused on the way. Progress lives in the three Infisica
 interrupted run resumes where it stopped. Preview shares one Infisical environment, so a preview
 rollover covers every pull request's apps. The token is never printed.
 
+## The devlog
+
+`cdwr devlog draft --file post.md --covers 412,415` posts a markdown file to the cms as a draft post,
+signed in as the agent user. The first `# ` line is the title and the rest the body; a code fence is
+refused, since a post takes code as a cms block that markdown can't produce. It never publishes: a
+person reviews the draft in the admin. Each draft is recorded with the pull requests it covers in
+`devlog-covered.jsonl` in the agent queue home, and `cdwr devlog covered` reads every post back and
+writes its outcome there (draft, published or deleted; `--no-check` lists without asking the cms).
+It first checks that the key may create posts, and a read the cms refuses leaves the file
+untouched, so a wrong key never marks posts deleted.
+
+It needs `CMS_URL` and `CMS_AGENT_API_KEY` in `tools/cdwr/.env`, and `CMS_SIGNATURE_SECRET` when the
+cms runs in host mode. `cdwr doctor` doesn't check them.
+
 ## The agent queue
 
 The scheduler runs in the NUC's agent container, every 10 minutes, `/work-queue` plan-only against a
