@@ -18,72 +18,7 @@
     <title>Agent Desk</title>
   </head>
   <body>
-    <div id="alert" hidden></div>
-    <div class="wrap">
-      <header class="top">
-        <div class="brand">
-          <h1>Agent Desk</h1>
-          <span class="sub"
-            >cdwr · what the work queue does next, and what waits on you</span
-          >
-        </div>
-        <div class="tools">
-          <a
-            class="who"
-            href="https://github.com/apps/codeware-agent"
-            target="_blank"
-            rel="noopener"
-            title="Commits, pull requests and review replies are made as this GitHub App"
-            ><img class="av" src="" data-agent-avatar alt="" />on GitHub as
-            codeware-agent[bot]</a
-          ><span id="status" class="status" aria-live="polite"></span
-          ><span id="fresh">Loading…</span
-          ><button id="refresh" type="button" class="tool">Refresh</button
-          ><button
-            id="settings"
-            type="button"
-            class="tool"
-            aria-label="Settings"
-          >
-            Settings
-          </button>
-        </div>
-      </header>
-
-      <div id="notice" hidden></div>
-
-      <section
-        class="cards"
-        id="cards"
-        aria-label="Session and what waits on you"
-      ></section>
-
-      <section
-        class="problems"
-        id="problems"
-        aria-label="Problems"
-        hidden
-      ></section>
-
-      <h2 class="frozen-label" id="frozen-label" hidden></h2>
-
-      <section
-        class="capacity"
-        id="capacity"
-        aria-label="Capacity: limits and hosts"
-      ></section>
-
-      <nav class="more" id="more" aria-label="More detail"></nav>
-
-      <main
-        id="platform"
-        class="platform-view"
-        hidden
-        aria-labelledby="platform-title"
-      ></main>
-    </div>
-
-    <div id="sheet-root"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

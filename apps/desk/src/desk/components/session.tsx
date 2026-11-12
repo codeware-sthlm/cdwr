@@ -1,3 +1,5 @@
+import type { MouseEventHandler } from 'react';
+
 import { planWhen, shortAge, tidy } from '../format';
 import { type Pulse, ofKind } from '../live';
 import type { Model, PlanWindow } from '../model';
@@ -167,10 +169,12 @@ type Props = {
   m: Model;
   details: ReadonlyMap<string, Detail>;
   now: Date;
+  /** A click on the card, which opens its sheet */
+  onClick?: MouseEventHandler<HTMLElement>;
 };
 
 /** The session card */
-export const SessionCard = ({ m, details, now }: Props) => {
+export const SessionCard = ({ m, details, now, onClick }: Props) => {
   const s: SessionState = m.session ?? { state: 'none' };
   const st = status(m);
   const h = headline(m, details, now);
@@ -194,7 +198,11 @@ export const SessionCard = ({ m, details, now }: Props) => {
   const hasOwn =
     ticket && livePr(m, details, { ticket, pr: queuePr(m, ticket) }).n;
   return (
-    <article className={`card-top session ${st.tone}`} data-w="session">
+    <article
+      className={`card-top session ${st.tone}`}
+      data-w="session"
+      onClick={onClick}
+    >
       <div className="ct-head">
         <button type="button" className="open state" aria-haspopup="dialog">
           <i className="dot" aria-hidden="true"></i>
