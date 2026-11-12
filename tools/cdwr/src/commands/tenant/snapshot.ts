@@ -147,13 +147,7 @@ export default defineCommand<
     const results: Array<ShotResult> = [];
 
     try {
-      await assertPastGate(
-        ctx,
-        browser,
-        url,
-        shots[0]?.route ?? '/',
-        gatePassword
-      );
+      await assertPastGate(ctx, browser, url, gatePassword);
       mkdirSync(dir, { recursive: true });
 
       const settings = [...new Set(shots.map(settingOf))];

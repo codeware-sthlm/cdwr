@@ -119,13 +119,7 @@ export default defineCommand<
     let og = ogCheck({}, null);
 
     try {
-      gateCookie = await assertPastGate(
-        ctx,
-        browser,
-        url,
-        routes[0] ?? '/',
-        gatePassword
-      );
+      gateCookie = await assertPastGate(ctx, browser, url, gatePassword);
       mkdirSync(dir, { recursive: true });
 
       const context = await browser.newContext({

@@ -77,15 +77,16 @@ export async function assertAnswers(url: string): Promise<void> {
 /**
  * Fails before any work when the gate page answers instead of the site.
  *
- * Opens the first route once, with the same cookie the run will use, and reads
- * the proxy's `x-robots-tag` and the gate's password field. Returns whether a
- * gate cookie was sent, for the run's output and the audit report.
+ * Opens the home page once, with the same cookie the run will use, and reads
+ * the proxy's `x-robots-tag` and the gate's password field. The home page,
+ * not the first route: `/admin`, `/api` and assets are open paths that show
+ * no gate, and `--routes` may start with one. Returns whether a gate cookie
+ * was sent, for the run's output and the audit report.
  */
 export async function assertPastGate(
   ctx: Pick<Context, 'ui'>,
   browser: Browser,
   url: string,
-  route: string,
   gatePassword: string | undefined
 ): Promise<boolean> {
   return ctx.ui.task(
@@ -100,7 +101,7 @@ export async function assertPastGate(
         await context.addCookies(cookies);
         const page = await context.newPage();
         // As long as the commands wait for a page: a dev server compiles on demand
-        const response = await page.goto(new URL(route, url).href, {
+        const response = await page.goto(new URL('/', url).href, {
           waitUntil: 'domcontentloaded',
           timeout: 90_000
         });
