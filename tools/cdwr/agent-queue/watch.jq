@@ -282,10 +282,11 @@ def prune($ids): (. // {}) | with_entries(select(.key as $k | $ids | index($k) !
 # --- Attended-session pick: what an interactive /work-queue session would take next ---
 # Input is an array of Linear issue nodes; mirrors "What to take next" and "The limit" in the skill.
 
-# { id, at } from the first "**Claim:** <id> · <path> · <time>" line of the description, else null
+# { id, at } from the first "**Claim:** <id> · <path> · <time>" line of the description, else null.
+# The first " · <time>" after the path counts; a note after it is tolerated.
 def claim:
   [ (.description // "") | split("\n")[]
-    | capture("^\\s*\\*\\*Claim:\\*\\* (?<id>.+?) · (?<path>.+) · (?<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z)\\s*$") ]
+    | capture("^\\s*\\*\\*Claim:\\*\\* (?<id>.+?) · (?<path>.+?) · (?<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z)(\\s.*)?$") ]
   | first
   | if . == null then null else { id, at: (.at | epoch) } end;
 
@@ -499,19 +500,30 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
                        and is_open and parked != null)
        | . + { park: parked, ws: wait_state($now; $waits) } ] | sort_by(.park.since)) as $park
   | ($park | map(.identifier)) as $parkIds
+  | (($session.tickets // [ $session.ticket ]) | map(select(. != null))) as $sessionTickets
   | ([ $park[] | select(agent_label == "agent:working") ]) as $parkWorking
   # A parked working ticket holds a slot like an open review
   | ($lu0 + { used: ($lu0.used + ($parkWorking | length)) }) as $lu
-  | ([ $all[] | select(agent_label == "agent:working" and is_open) | . + { claim: claim } ]) as $working
+  | ($all | map(. + { claim: claim })) as $allC
+  | ([ $allC[] | select(agent_label == "agent:working" and is_open) ]) as $working
   | ([ $working[] | select(.claim != null and ($now - .claim.at) < 7200 and (.identifier | IN($parkIds[]) | not)) ]
      | sort_by(.claim.at) | reverse
      | map({ ticket: .identifier, reason: "resume", detail: next_line })) as $fresh
-  # No readable claim is no proof the session is gone: the skill takes over only a claim 2 h old
+  # No readable claim is no proof the session is gone: the skill takes over only a claim 2 h old.
+  # An unclaimed ticket untouched for 30 minutes is taken over too, unless the live session holds it.
   | ([ $working[] | select(.claim == null and (.identifier | IN($parkIds[]) | not)) ] | sort_by(queue_order)
-     | map({ ticket: .identifier, reason: "resume", detail: "no claim line" })) as $unclaimed
+     | map(. + { idle: (if .updatedAt == null or (.identifier | IN($sessionTickets[])) then null
+                        else ($now - (.updatedAt | epoch)) end) })) as $unc
+  | ($unc | map(select(.idle == null or .idle < 1800)
+                | { ticket: .identifier, reason: "resume", detail: "no claim line" })) as $unclaimed
   | ([ $working[] | select(.claim != null and ($now - .claim.at) >= 7200) ] | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "take over",
-             detail: "claim \((($now - .claim.at) / 3600 | floor)) h old" })) as $stale
+             detail: "claim \((($now - .claim.at) / 3600 | floor)) h old" })
+     + ($unc | map(select(.idle != null and .idle >= 1800)
+                   | { ticket: .identifier, reason: "take over",
+                       detail: "no claim line, \((.idle / 60 | floor)) min" }))) as $stale
+  | ([ $allC[] | select(.claim != null) | { key: .identifier, value: .claim.id } ]
+     | from_entries) as $holders
   # A stale parked ticket is taken over, not listed twice
   | ($stale | map(.ticket)) as $staleIds
   | ([ $park[] | select(.ws.resolved and (.identifier | IN($staleIds[]) | not))
@@ -558,6 +570,7 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
       at: ($now | todateiso8601),
       limit: { used: $lu.used, max: $limit },
       session: $session,
+      holders: $holders,
       next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb + $conf + $mc
              + (if $full then [] else $renNext + ($rdy | map({ ticket: ., reason: "ready", detail: null })) end)),
       held: {
@@ -587,19 +600,35 @@ def queue_view($now; $limit; $watch; $session): queue_view($now; $limit; $watch;
 
 # The pick: { verdict: running|run|idle, ticket, reason, detail, waiting, used, limit }, the first
 # of queue_view's `next`. A resumable ticket reads as running: a session may hold it.
-def attended($now; $limit; $watch; $waits; $renovate):
-  queue_view($now; $limit; $watch; null; $waits; $renovate) as $q
+# `runnable` is the `next` items an implementing session may take: not resume or ready, and not held
+# by the live session (its own ticket, or one its claim id is a prefix of the session id for).
+def attended($now; $limit; $watch; $waits; $renovate; $session):
+  queue_view($now; $limit; $watch; $session; $waits; $renovate) as $q
   | ($q.table.before | map(.ticket + " input")) as $inputs
   | ($q.table.after | map(.ticket + (if .kind == "pr" then " PR" else " hand-offs" end))) as $after
   | ($q.table["label"] | map(.ticket + " label")) as $labels
-  | { used: $q.limit.used, limit: $limit, waiting: ($inputs + $after + $labels) }
+  | ([ $q.next[]
+       | select(.reason != "resume" and .reason != "ready")
+       | ($q.holders[.ticket] // null) as $holder
+       | select(($session != null
+                 and ((.ticket | IN(($session.tickets // [ $session.ticket ])[]))
+                      or ($holder | type) == "string" and (($session.id // "") | startswith($holder)))) | not) ]) as $runnable
+  | { used: $q.limit.used, limit: $limit, waiting: ($inputs + $after + $labels), runnable: $runnable,
+      resuming: [ $q.next[] | select(.reason == "resume") | { ticket, detail } ] }
     + ($q.next[0] as $n
        | if $n == null then { verdict: "idle", ticket: null, reason: null, detail: null }
          elif $n.reason == "resume" then { verdict: "running", ticket: $n.ticket, reason: "working", detail: $n.detail }
          else { verdict: "run", ticket: $n.ticket, reason: $n.reason, detail: $n.detail }
          end);
+def attended($now; $limit; $watch; $waits; $renovate): attended($now; $limit; $watch; $waits; $renovate; null);
 def attended($now; $limit; $watch; $waits): attended($now; $limit; $watch; $waits; {});
 def attended($now; $limit; $watch): attended($now; $limit; $watch; {});
+
+# The session's own ticket is among the resumable ones, whichever ranks first
+def own_pick($ticket): any(.resuming[]?; .ticket == $ticket);
+
+def resume_line($ticket): ([ .resuming[]? | select(.ticket == $ticket) ] | first)
+  | "resume: \(.ticket)" + (if .detail != null then " · \(.detail)" else "" end);
 
 # One line for the attended pick object
 def attended_line:
@@ -635,14 +664,17 @@ def session_state($now):
              and (.watcherAlive or .state == "waiting"
                   or (.state != "stopped" and ($now - (.lastSeen | epoch)) < 900))
         end) ] as $alive
-  | ($alive | sort_by(.lastSeen | epoch) | last) as $s
+  | ($alive | sort_by(.lastSeen | epoch)) as $sorted
+  | ($sorted | last) as $s
   | if $s != null then
-      { id: $s.id, ticket: ($s.ticket // null), lastSeen: ($s.lastSeen // null) }
+      { id: $s.id, ticket: ($s.ticket // null),
+        tickets: ([ $sorted[] | .ticket // empty ] | reduce .[] as $t ([]; if index([$t]) then . else . + [$t] end)),
+        lastSeen: ($s.lastSeen // null) }
       + if $s.state == "waiting" then { state: "waiting", detail: $s.detail }
         else { state: "alive", detail: (if $s.watcherAlive then "polling" else $s.state end) }
         end
-    elif any($open[]; .pidAlive) then { state: "stopped", detail: null, id: null, ticket: null, lastSeen: null }
-    else { state: "none", detail: null, id: null, ticket: null, lastSeen: null }
+    elif any($open[]; .pidAlive) then { state: "stopped", detail: null, id: null, ticket: null, tickets: [], lastSeen: null }
+    else { state: "none", detail: null, id: null, ticket: null, tickets: [], lastSeen: null }
     end;
 
 # Short text for the session_state object
@@ -660,21 +692,32 @@ def session_prefix:
 # previous launch, or null) }. Output: { action: launch|notify|skip, reason, key }, plus `last`,
 # the state to store, only when the action is launch.
 def launch($guards):
+  # Old callers pass a bare pick: a `run` verdict is the one runnable item
+  (.runnable // (if .verdict == "run" and .reason != "ready" then [{ ticket, reason, detail }] else [] end)) as $runnable
+  | ($guards.session.state // "none") as $st
+  | (if .verdict == "run" then { ticket, reason, detail } else null end) as $top
+  # A polling session takes the top run pick itself, so a launch takes what waits behind it; one at
+  # a prompt or in a turn leaves only a merged comment to a launch
+  | (if $st == "none" or $st == "stopped" then $runnable
+     elif $st == "alive" and $guards.session.detail == "polling" then [ $runnable[] | select(. != $top) ]
+     elif $st == "alive" or $st == "waiting" then [ $runnable[] | select(.reason == "merged comment") ]
+     else [] end) as $cands
+  | ($cands | first) as $item
   # implement.sh takes the key's first word as the ticket, so a Renovate pick's `PR 754` is `PR-754`
-  (if .ticket == null then null else "\(.ticket | gsub(" "; "-")) \(.reason)" end) as $key
+  | (if $item == null then null else "\($item.ticket | gsub(" "; "-")) \($item.reason)" end) as $key
   | ($guards.last // {}) as $prev
   # Counted per ticket and reason, so new work on a ticket starts fresh. A `take over` of the
   # ticket last launched is the same miss: a launched session that dies turns its pick into one.
-  | (if $prev.key == $key
-        or (.reason == "take over" and ($prev.key // "" | split(" ")[0]) == .ticket)
+  | (if $item == null then 0
+     elif $prev.key == $key
+        or ($item.reason == "take over" and ($prev.key // "" | split(" ")[0]) == $item.ticket)
      then ($prev.launches // 0) else 0 end) as $done
-  | { key: $key }
-    + if .verdict != "run" or .reason == "ready" or $key == null then { action: "skip", reason: "nothing to implement" }
+  | { key: $key, pick: $item }
+    + if ($runnable | length) == 0 then { action: "skip", reason: "nothing to implement" }
+      elif $item == null then { action: "skip", reason: "a session is alive" }
       # An implement-only run files a ticket for a failing Renovate PR; a conflict on a modified
       # branch is attended work
-      elif .reason == "renovate" and .detail != "failing" then { action: "skip", reason: "a Renovate conflict waits for an attended session" }
-      elif ($guards.session.state // "none") == "alive" or ($guards.session.state // "none") == "waiting"
-        then { action: "skip", reason: "a session is alive" }
+      elif $item.reason == "renovate" and $item.detail != "failing" then { action: "skip", reason: "a Renovate conflict waits for an attended session" }
       elif $guards.locked then { action: "skip", reason: "a launched session is still running" }
       # No cap is no licence to spend: fail safe
       elif ($guards.cap | type) != "number" then { action: "notify", reason: "no daily implement cap set" }

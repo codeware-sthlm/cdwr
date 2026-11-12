@@ -242,6 +242,7 @@ describe('implement.sh', () => {
 
   it('reads the allow rules', () => {
     expect(allowed).toContain('pnpm cdwr agent worktree *');
+    expect(allowed).toContain('tools/cdwr/agent-queue/session.sh id');
     expect(
       allowed.some((rule) => matches(rule, `git -C ${wt} push origin HEAD`))
     ).toBe(true);

@@ -279,7 +279,7 @@ query {
 }
 fragment queued on IssueConnection {
   nodes {
-    identifier priority createdAt completedAt description
+    identifier priority createdAt completedAt updatedAt description
     parent { identifier state { type } }
     state { type }
     labels { nodes { name } }

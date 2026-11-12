@@ -968,12 +968,6 @@ attended() {
   fi
   # The fallback was already noted by watch_prs, so this one stays quiet
   waits="$(gh_identity || true; parked_waits <<<"$resp")"
-  verdict="$(watch -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$HOME_DIR")" --argjson watch "$state" --argjson waits "$waits" \
-    --argjson renovate "$renovate" \
-    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate)' <<<"$resp")" ||
-    { note "warn: attended: watch.jq failed$(watch_err)"; return 0; }
-  attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
-  [[ "$(jq -r '.verdict' <<<"$verdict" 2>/dev/null)" == idle ]] && attended_work=false || attended_work=true
   # Session heartbeat files, with the process checks jq can't do. Never stops the run.
   local SESSIONS="$HOME_DIR/sessions" f w pid wpid sessions_json="[]" session sstate=none
   if [[ -d "$SESSIONS" ]]; then
@@ -1013,6 +1007,12 @@ attended() {
   fi
   session="$(watch -c --argjson now "$(date +%s)" 'include "watch"; session_state($now)' <<<"$sessions_json" 2>/dev/null)" ||
     session='{"state":"none","detail":null,"id":null,"ticket":null,"lastSeen":null}'
+  verdict="$(watch -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$HOME_DIR")" --argjson watch "$state" --argjson waits "$waits" \
+    --argjson renovate "$renovate" --argjson session "$session" \
+    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)' <<<"$resp")" ||
+    { note "warn: attended: watch.jq failed$(watch_err)"; return 0; }
+  attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
+  [[ "$(jq -r '.verdict' <<<"$verdict" 2>/dev/null)" == idle ]] && attended_work=false || attended_work=true
   attended_line="$(watch -r 'include "watch"; session_prefix' <<<"$session") · $attended_line"
   # The whole queue for queue_state and `cdwr agent status`; the pick above stays the
   # line and the notice
@@ -1044,7 +1044,7 @@ attended() {
     '{session: $session, locked: $locked, spent: $spent, cap: $cap, last: $last}')"
   decision="$(watch -c --argjson g "$guards" 'include "watch"; launch($g)' <<<"$verdict" 2>/dev/null)" ||
     { local why="watch.jq failed$(watch_err)"; note "warn: launch: $why"
-      decision="$(jq -nc --arg r "$why" '{action: "skip", reason: $r, key: null}')"; }
+      decision="$(jq -c --arg r "$why" '{action: "skip", reason: $r, key: null, pick: (if .verdict == "run" and .reason != "ready" then {ticket, reason, detail} else null end)}' <<<"$verdict")"; }
   if $check; then
     print -r -- "attended: $attended_line"
     print -r -- "launch: $(jq -r '.action + (if .reason then " (" + .reason + ")" else "" end)' <<<"$decision")"
@@ -1063,7 +1063,7 @@ attended() {
     # The key goes to the launcher alone; implement.sh un-exports it before claude starts.
     AGENT_SUPABASE_SERVICE_KEY="${AGENT_SUPABASE_SERVICE_KEY:-}" nohup "$HOME_DIR/implement.sh" "$(jq -r '.key' <<<"$decision")" >/dev/null 2>&1 &
     note "launch: $(jq -r '.key' <<<"$decision") (pid $!)"
-    notice info "Agent queue: started an implementing session, ${attended_line#*run now: }."
+    notice info "Agent queue: started an implementing session, $(watch -r 'include "watch"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision")."
     return 0
   fi
   # Once per change, only with no live session (a live one picks the work up), and not for a
@@ -1074,15 +1074,16 @@ attended() {
     launch_note="$(jq -r '.reason' <<<"$decision")"
     why=" Not launched: $launch_note."
   fi
-  key="$(jq -c --argjson s "$session" --arg a "$action" '{verdict, ticket, reason, session: $s.state, launch: $a}' <<<"$verdict")"
+  key="$(jq -c --argjson s "$session" --argjson d "$decision" --arg a "$action" \
+    '{verdict, ticket, reason, pick: ($d.pick | if . == null then null else "\(.ticket) \(.reason)" end), session: $s.state, launch: $a}' <<<"$verdict")"
   prev="$(cat "$file" 2>/dev/null)"
   if [[ "$key" != "$prev" ]]; then
     print -r -- "$key" > "$file"
     sstate="$(jq -r '.state' <<<"$session")"
-    if [[ "$(jq -r '.verdict' <<<"$verdict")" == run && "$(jq -r '.reason' <<<"$verdict")" != ready &&
+    if [[ -n "$(jq -r '.pick.ticket // empty' <<<"$decision")" &&
           ( "$sstate" == none || "$sstate" == stopped ) && ! $locked ]]; then
       note "attended: $attended_line"
-      notice action "Agent queue: no session running, ${attended_line#*run now: }.$why Start /work-queue."
+      notice action "Agent queue: no session running, $(watch -r 'include "watch"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision").$why Start /work-queue."
     fi
   fi
 }

@@ -1452,6 +1452,19 @@ describe('attended picks', () => {
       });
     });
 
+    // The first time after the path counts; a note after it is tolerated
+    it('reads the first time when a note follows it', () => {
+      expect(
+        run(
+          'claim',
+          node('COD-1', null, {
+            description:
+              '**Claim:** s · `/w` · 2026-10-11T10:30Z (was x · /y · 2026-10-11T08:00Z)'
+          })
+        )
+      ).toEqual({ id: 's', at: Date.parse('2026-10-11T10:30:00Z') / 1000 });
+    });
+
     it.each([null, 'no claim here', '**Claim:** broken'])(
       'null for %j',
       (description) => {
@@ -1480,6 +1493,122 @@ describe('attended picks', () => {
         })
       )
     ).toBe('step 3');
+  });
+
+  describe('runnable and own_pick', () => {
+    type Pick = {
+      verdict: string;
+      ticket: string | null;
+      reason: string | null;
+      runnable: Array<{ ticket: string; reason: string }>;
+    };
+    const withSession = (issues: Node[], session: unknown) =>
+      run(
+        `attended(${NOW}; 5; {}; {}; {}; ${JSON.stringify(session)})`,
+        issues
+      ) as Pick;
+    const issues = () => [
+      node('COD-1', 'agent:working', { description: claimLine(HOUR) }),
+      node('COD-2', 'agent:needs-input', {
+        comments: {
+          nodes: [{ body: 'yes', createdAt: '2026-10-01T00:00:00Z' }]
+        }
+      }),
+      node('COD-3', 'agent:working', {
+        description: claimLine(5 * HOUR, '`/w`', 'sess-1')
+      }),
+      node('COD-4', 'agent:working', {
+        description: claimLine(5 * HOUR, '`/w`', 'other')
+      }),
+      ready('COD-5')
+    ];
+
+    it('leaves out resume and ready items and keeps the rest in order', () => {
+      const r = withSession(issues(), null);
+      expect(r.runnable.map((i) => i.ticket)).toEqual([
+        'COD-3',
+        'COD-4',
+        'COD-2'
+      ]);
+      expect(r).toMatchObject({ verdict: 'running', ticket: 'COD-1' });
+    });
+
+    it("leaves out the session's own ticket", () => {
+      const r = withSession(issues(), { id: 's9', ticket: 'COD-4' });
+      expect(r.runnable.map((i) => i.ticket)).toEqual(['COD-3', 'COD-2']);
+    });
+
+    it('leaves out a ticket whose claim id starts the session id', () => {
+      const r = withSession(issues(), { id: 'sess-1abc', ticket: null });
+      expect(r.runnable.map((i) => i.ticket)).toEqual(['COD-4', 'COD-2']);
+    });
+
+    it("leaves out a ticket named in the session's tickets", () => {
+      const r = withSession(issues(), {
+        id: 's9',
+        ticket: 'COD-3',
+        tickets: ['COD-3', 'COD-4']
+      });
+      expect(r.runnable.map((i) => i.ticket)).toEqual(['COD-2']);
+    });
+
+    it('the five-argument form has no session to hold anything', () => {
+      expect(
+        (run(`attended(${NOW}; 5; {}; {}; {})`, issues()) as Pick).runnable.map(
+          (i) => i.ticket
+        )
+      ).toEqual(['COD-3', 'COD-4', 'COD-2']);
+    });
+
+    it.each([
+      ['first of the resuming', [{ ticket: 'COD-1', detail: null }], true],
+      [
+        'second behind another claim',
+        [
+          { ticket: 'COD-2', detail: null },
+          { ticket: 'COD-1', detail: null }
+        ],
+        true
+      ],
+      ['not resuming', [{ ticket: 'COD-2', detail: null }], false],
+      ['none resuming', [], false]
+    ])('own_pick is %s', (_name, resuming, expected) => {
+      expect(run('own_pick("COD-1")', { resuming })).toBe(expected);
+    });
+
+    it("own_pick finds the session's ticket behind a fresher claim", () => {
+      expect(
+        run(`attended(${NOW}; 5; {}) | own_pick("COD-1")`, [
+          node('COD-1', 'agent:working', { description: claimLine(HOUR) }),
+          node('COD-2', 'agent:working', { description: claimLine(HOUR / 2) })
+        ])
+      ).toBe(true);
+    });
+
+    it.each([
+      [
+        { resuming: [{ ticket: 'COD-1', detail: 'step 2' }] },
+        'COD-1',
+        'resume: COD-1 · step 2'
+      ],
+      [
+        { resuming: [{ ticket: 'COD-1', detail: null }] },
+        'COD-1',
+        'resume: COD-1'
+      ],
+      [
+        {
+          resuming: [
+            { ticket: 'COD-2', detail: 'step 9' },
+            { ticket: 'COD-1', detail: 'step 2' }
+          ]
+        },
+        'COD-1',
+        'resume: COD-1 · step 2'
+      ]
+    ])('resume_line for %j', (p, ticket, expected) => {
+      expect(run(`resume_line("${ticket}")`, p)).toBe(expected);
+    });
   });
 
   describe('running and take over', () => {
@@ -2955,6 +3084,71 @@ describe('attended picks', () => {
       ]);
     });
 
+    describe('unclaimed working tickets', () => {
+      const unclaimed = (updatedAgo: number | null) =>
+        node('COD-5', 'agent:working', {
+          ...(updatedAgo === null ? {} : { updatedAt: iso(updatedAgo) })
+        });
+
+      it('is taken over after 30 minutes without a session', () => {
+        expect(view([unclaimed(45 * 60)]).next).toEqual([
+          {
+            ticket: 'COD-5',
+            reason: 'take over',
+            detail: 'no claim line, 45 min'
+          }
+        ]);
+      });
+
+      it('stays a resume when the live session holds the ticket', () => {
+        const session = { state: 'alive', id: 's1', ticket: 'COD-5' };
+        expect(view([unclaimed(45 * 60)], 5, {}, session).next).toEqual([
+          { ticket: 'COD-5', reason: 'resume', detail: 'no claim line' }
+        ]);
+      });
+
+      it('stays a resume when the session tickets name it', () => {
+        const session = {
+          state: 'alive',
+          id: 's1',
+          ticket: 'COD-7',
+          tickets: ['COD-5', 'COD-7']
+        };
+        expect(view([unclaimed(45 * 60)], 5, {}, session).next).toEqual([
+          { ticket: 'COD-5', reason: 'resume', detail: 'no claim line' }
+        ]);
+      });
+
+      it.each([
+        ['updated 10 minutes ago', 10 * 60],
+        ['without updatedAt', null]
+      ])('stays a resume %s', (_name, ago) => {
+        expect(view([unclaimed(ago)]).next).toEqual([
+          { ticket: 'COD-5', reason: 'resume', detail: 'no claim line' }
+        ]);
+      });
+
+      it('lists stale claims before stale unclaimed tickets', () => {
+        const r = view([
+          unclaimed(45 * 60),
+          node('COD-6', 'agent:working', { description: claimLine(5 * HOUR) })
+        ]);
+        expect(r.next.map((i) => i.ticket)).toEqual(['COD-6', 'COD-5']);
+      });
+    });
+
+    it('holders maps claimed tickets to their claim ids', () => {
+      const r = view([
+        node('COD-1', 'agent:working', { description: claimLine(HOUR) }),
+        node('COD-2', 'agent:review', {
+          description: claimLine(DAY, '`/w`', 'sess-2')
+        }),
+        node('COD-3', 'agent:working'),
+        ready('COD-4')
+      ]) as unknown as { holders: Record<string, string> };
+      expect(r.holders).toEqual({ 'COD-1': 'sess-1', 'COD-2': 'sess-2' });
+    });
+
     it('holds ready tickets when the limit is full', () => {
       const r = view(
         [review('COD-1'), review('COD-2'), ready('COD-9'), ready('COD-8')],
@@ -3303,7 +3497,14 @@ describe('session_state and session_prefix', () => {
     [
       'empty',
       [],
-      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'none',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'alive working',
@@ -3313,6 +3514,7 @@ describe('session_state and session_prefix', () => {
         detail: 'working',
         id: 's1',
         ticket: null,
+        tickets: [],
         lastSeen: iso(60)
       }
     ],
@@ -3324,6 +3526,7 @@ describe('session_state and session_prefix', () => {
         detail: 'polling',
         id: 's1',
         ticket: null,
+        tickets: [],
         lastSeen: iso(7200)
       }
     ],
@@ -3335,23 +3538,45 @@ describe('session_state and session_prefix', () => {
         detail: 'permission_prompt',
         id: 's1',
         ticket: null,
+        tickets: [],
         lastSeen: iso(60)
       }
     ],
     [
       'stopped: process up, old heartbeat, no watcher',
       [sess({ state: 'stopped', lastSeen: iso(7200) })],
-      { state: 'stopped', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'stopped',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'ended is none',
       [sess({ state: 'ended' })],
-      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'none',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'dead pid is none',
       [sess({ pidAlive: false })],
-      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'none',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'waiting: a prompt open for an hour is still a live session',
@@ -3367,13 +3592,21 @@ describe('session_state and session_prefix', () => {
         detail: 'permission_prompt',
         id: 's1',
         ticket: null,
+        tickets: [],
         lastSeen: iso(3600)
       }
     ],
     [
       'stopped: a turn that just ended without a watcher wakes no one',
       [sess({ state: 'stopped', lastSeen: iso(30) })],
-      { state: 'stopped', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'stopped',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'the newest alive session wins',
@@ -3386,6 +3619,25 @@ describe('session_state and session_prefix', () => {
         detail: 'working',
         id: 'new',
         ticket: null,
+        tickets: [],
+        lastSeen: iso(30)
+      }
+    ],
+    [
+      'tickets lists every alive session once, oldest first; ticket is the newest',
+      [
+        sess({ id: 'a', ticket: 'COD-1', lastSeen: iso(600) }),
+        sess({ id: 'b', ticket: 'COD-2', lastSeen: iso(300) }),
+        sess({ id: 'c', ticket: 'COD-1', lastSeen: iso(200) }),
+        sess({ id: 'd', ticket: null, lastSeen: iso(100) }),
+        sess({ id: 'e', ticket: 'COD-3', lastSeen: iso(30) })
+      ],
+      {
+        state: 'alive',
+        detail: 'working',
+        id: 'e',
+        ticket: 'COD-3',
+        tickets: ['COD-1', 'COD-2', 'COD-3'],
         lastSeen: iso(30)
       }
     ],
@@ -3397,13 +3649,21 @@ describe('session_state and session_prefix', () => {
         detail: 'working',
         id: 's1',
         ticket: null,
+        tickets: [],
         lastSeen: iso(300)
       }
     ],
     [
       'a mirrored working session with a stale heartbeat is none',
       [sess({ pidAlive: null, watcherAlive: null, lastSeen: iso(1200) })],
-      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'none',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'a mirrored session waiting at a prompt stays alive for three hours',
@@ -3421,6 +3681,7 @@ describe('session_state and session_prefix', () => {
         detail: 'permission_prompt',
         id: 's1',
         ticket: null,
+        tickets: [],
         lastSeen: iso(7200)
       }
     ],
@@ -3435,7 +3696,14 @@ describe('session_state and session_prefix', () => {
           lastSeen: iso(10900)
         })
       ],
-      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'none',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'a mirrored polling session that has not re-mirrored for three hours is none',
@@ -3447,7 +3715,14 @@ describe('session_state and session_prefix', () => {
           lastSeen: iso(10900)
         })
       ],
-      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'none',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'a mirrored polling session stays alive for three hours',
@@ -3464,18 +3739,33 @@ describe('session_state and session_prefix', () => {
         detail: 'polling',
         id: 's1',
         ticket: null,
+        tickets: [],
         lastSeen: iso(7200)
       }
     ],
     [
       'a mirrored session that ended is none',
       [sess({ pidAlive: null, watcherAlive: null, state: 'ended' })],
-      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'none',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'a mirrored stopped session is never alive',
       [sess({ pidAlive: null, watcherAlive: null, state: 'stopped' })],
-      { state: 'none', detail: null, id: null, ticket: null, lastSeen: null }
+      {
+        state: 'none',
+        detail: null,
+        id: null,
+        ticket: null,
+        tickets: [],
+        lastSeen: null
+      }
     ],
     [
       'the ticket is passed through',
@@ -3485,6 +3775,7 @@ describe('session_state and session_prefix', () => {
         detail: 'working',
         id: 's1',
         ticket: 'COD-556',
+        tickets: ['COD-556'],
         lastSeen: iso(60)
       }
     ]
@@ -3536,6 +3827,7 @@ describe('launch', () => {
   const launch = (p: unknown, g: unknown) =>
     run(`launch(${JSON.stringify(g)})`, p) as {
       key: string | null;
+      pick: { ticket: string; reason: string; detail: string | null } | null;
       last: { key: string | null; launches: number };
       action: string;
       reason: string | null;
@@ -3554,19 +3846,145 @@ describe('launch', () => {
     expect(res).toEqual({
       key: `COD-1 ${reason}`,
       last: { key: `COD-1 ${reason}`, launches: 1 },
+      pick: { ticket: 'COD-1', reason, detail: null },
       action: 'launch',
       reason: null
     });
   });
 
+  describe('runnable items and the session', () => {
+    const item = (reason: string, ticket = 'COD-1') => ({
+      ticket,
+      reason,
+      detail: null
+    });
+    const withRunnable = (runnable: unknown[], top = {}) => ({
+      verdict: 'run',
+      ticket: 'COD-1',
+      reason: 'answered',
+      runnable,
+      ...top
+    });
+
+    // The polling session's own wait.sh takes the top run pick
+    it('launches what waits behind the top run pick while the session polls', () => {
+      const res = launch(
+        withRunnable([item('answered'), item('answered', 'COD-2')], {
+          detail: null
+        }),
+        guards({ session: { state: 'alive', detail: 'polling' } })
+      );
+      expect(res).toMatchObject({
+        action: 'launch',
+        key: 'COD-2 answered',
+        pick: item('answered', 'COD-2')
+      });
+    });
+
+    it('skips a lone top run pick while the session polls', () => {
+      const res = launch(
+        pick(),
+        guards({ session: { state: 'alive', detail: 'polling' } })
+      );
+      expect(res).toMatchObject({
+        action: 'skip',
+        reason: 'a session is alive'
+      });
+    });
+
+    it('launches the first runnable item behind a running pick while the session polls', () => {
+      const res = launch(
+        withRunnable([item('answered'), item('answered', 'COD-2')], {
+          verdict: 'running'
+        }),
+        guards({ session: { state: 'alive', detail: 'polling' } })
+      );
+      expect(res).toMatchObject({ action: 'launch', key: 'COD-1 answered' });
+    });
+
+    it.each([
+      ['none', { state: 'none' }],
+      ['stopped', { state: 'stopped' }]
+    ])('launches the top run pick with session %s', (_name, session) => {
+      const res = launch(
+        withRunnable([item('answered'), item('answered', 'COD-2')]),
+        guards({ session })
+      );
+      expect(res).toMatchObject({ action: 'launch', key: 'COD-1 answered' });
+    });
+
+    it.each([
+      ['a session at work', { state: 'alive', detail: 'working' }],
+      ['a session at a prompt', { state: 'waiting', detail: 'question' }]
+    ])('skips answered work behind %s', (_name, session) => {
+      const res = launch(pick(), guards({ session }));
+      expect(res).toMatchObject({
+        action: 'skip',
+        reason: 'a session is alive',
+        key: null,
+        pick: null
+      });
+    });
+
+    it.each([
+      ['a session at work', { state: 'alive', detail: 'working' }],
+      ['a session at a prompt', { state: 'waiting', detail: 'question' }]
+    ])('launches a merged comment behind %s', (_name, session) => {
+      const res = launch(
+        pick({ reason: 'merged comment' }),
+        guards({ session })
+      );
+      expect(res).toMatchObject({
+        action: 'launch',
+        key: 'COD-1 merged comment'
+      });
+    });
+
+    it('takes the merged comment past an answered ticket behind a session', () => {
+      const res = launch(
+        withRunnable([item('answered'), item('merged comment', 'COD-2')]),
+        guards({ session: { state: 'alive', detail: 'working' } })
+      );
+      expect(res.pick).toEqual(item('merged comment', 'COD-2'));
+      expect(res.key).toBe('COD-2 merged comment');
+    });
+
+    it('skips with nothing to implement on an empty runnable', () => {
+      const res = launch(withRunnable([]), guards());
+      expect(res).toMatchObject({
+        action: 'skip',
+        reason: 'nothing to implement',
+        key: null,
+        pick: null
+      });
+    });
+
+    // attended already drops held items, so a running top pick can have runnable work behind it
+    it('launches the first runnable item behind a running pick', () => {
+      const res = launch(
+        withRunnable([item('answered', 'COD-7'), item('take over', 'COD-8')], {
+          verdict: 'running',
+          ticket: 'COD-1',
+          reason: 'working'
+        }),
+        guards()
+      );
+      expect(res).toMatchObject({
+        action: 'launch',
+        key: 'COD-7 answered',
+        pick: item('answered', 'COD-7')
+      });
+    });
+  });
+
   it.each([
-    ['verdict running', pick({ verdict: 'running' }), 'COD-1 answered'],
+    ['verdict running', pick({ verdict: 'running' }), null],
     [
       'verdict idle without a ticket',
       pick({ verdict: 'idle', ticket: null, reason: null }),
       null
     ],
-    ['reason ready', pick({ reason: 'ready' }), 'COD-1 ready']
+    ['reason ready', pick({ reason: 'ready' }), null]
   ])('skips, nothing to implement: %s', (_name, p, key) => {
     const res = launch(p, guards());
     expect(res.action).toBe('skip');

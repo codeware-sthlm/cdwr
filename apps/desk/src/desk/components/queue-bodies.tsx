@@ -49,7 +49,7 @@ const WHY: ReadonlyMap<string, string> = new Map([
   ['conflicts with main', 'Its PR conflicts with main and needs a rebase.'],
   ['merged comment', 'A comment on its merged ticket waits for a suggestion.'],
   ['renovate', 'This Renovate PR needs a hand.'],
-  ['take over', 'Its claim went stale.'],
+  ['take over', 'Its claim went stale, or it never had one.'],
   ['resume', ''],
   ['ready', '']
 ]);
