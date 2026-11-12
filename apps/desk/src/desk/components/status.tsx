@@ -1,7 +1,7 @@
 import { hhmm, hhmmss, plural } from '../format';
+import { ofKind } from '../live';
 import type { Model } from '../model';
 import { platform } from '../render/header';
-import { ofKind } from '../render/problems';
 import type { Connection } from '../state';
 
 // The header's live part: the Platform pill and the LIVE dot. The title, bot line, Refresh and Settings are static in index.html.

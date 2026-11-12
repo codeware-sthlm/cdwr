@@ -18,12 +18,20 @@ type CmdProps = {
   label: string;
   view: ControlView;
   onClick: () => void;
+  /** The button's class, where it sits among buttons of another style */
+  className?: string;
 };
 
-export const CmdButton = ({ cmd, label, view, onClick }: CmdProps) => (
+export const CmdButton = ({
+  cmd,
+  label,
+  view,
+  onClick,
+  className = 'pf-mini'
+}: CmdProps) => (
   <button
     type="button"
-    className="pf-mini"
+    className={className}
     data-cmd={cmd}
     disabled={busy(view)}
     onClick={onClick}

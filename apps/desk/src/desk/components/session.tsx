@@ -1,8 +1,7 @@
 import { planWhen, shortAge, tidy } from '../format';
-import type { Pulse } from '../live';
+import { type Pulse, ofKind } from '../live';
 import type { Model, PlanWindow } from '../model';
 import { livePr, parkedPlain, prTone, queuePr } from '../render/html';
-import { ofKind } from '../render/problems';
 import { type Part, headline, idPr, whereText } from '../render/session';
 import type { Detail } from '../state';
 import type { SessionState } from '../types';

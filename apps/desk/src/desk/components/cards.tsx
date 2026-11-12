@@ -1,5 +1,5 @@
+import { ofKind } from '../live';
 import type { Model } from '../model';
-import { ofKind } from '../render/problems';
 import type { Detail } from '../state';
 
 import { SessionCard, UnknownSession } from './session';

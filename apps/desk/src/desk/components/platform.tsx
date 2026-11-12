@@ -2,11 +2,15 @@ import type { ReactNode } from 'react';
 
 import { SESSION_ATTENDED_MIN, SESSION_HANDBACK_MIN } from '../constants';
 import { ageText, hhmm, plural, runTime, shortAge, usd } from '../format';
-import { type HandBackState, type HealthCheck, problemOf } from '../live';
+import {
+  type HandBackState,
+  type HealthCheck,
+  problemId,
+  problemOf
+} from '../live';
 import type { Model, VersionState } from '../model';
 import { CAP_RANGE, LIMIT_RANGE } from '../render/controls';
 import { platform } from '../render/header';
-import { problemId } from '../render/problems';
 
 import { STEPS, percent } from './capacity';
 import { CmdButton, ControlStatus, Stepper } from './controls';

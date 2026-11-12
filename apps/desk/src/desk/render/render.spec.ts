@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SnoozeRow } from '../../supabase';
-import { hhmm } from '../format';
 import { model } from '../model';
 import {
   type DeskState,
@@ -19,24 +18,14 @@ import {
   NOW,
   OLD,
   activity,
-  at,
   behind,
-  down,
   filled,
-  hostSample,
   issue,
-  live,
   planSample,
   runs,
   view
 } from './fixtures';
 import { platform } from './header';
-import {
-  renderAlert,
-  renderFrozenLabel,
-  renderProblems,
-  tickText
-} from './problems';
 import { headline, headlineHtml } from './session';
 import { SHEETS, whyLine } from './sheets';
 import {
@@ -519,241 +508,6 @@ describe('waiting card and queue sheets', () => {
   });
 });
 
-describe('problems', () => {
-  // Every health check passes, so only the problem under test shows
-  const base = (): DeskState => {
-    const s = filled();
-    s.data.githubEvents = [
-      {
-        pr: null,
-        subject: 'push',
-        action: 'push',
-        updated_at: new Date(at(5)).toISOString()
-      }
-    ];
-    s.data.storedAt = at(1);
-    return s;
-  };
-  const parse = (s: DeskState) => {
-    s.data.runs = {
-      ...runs(view()),
-      qv: view(),
-      viewInvalid: true,
-      view: { limit: 1 },
-      viewIssues: [
-        { path: 'session', missing: true },
-        { path: 'limit', missing: false }
-      ]
-    };
-    return s;
-  };
-  const stale = (s: DeskState) => {
-    const base = runs(view());
-    s.data.runs = { ...base, at: new Date(at(60)).toISOString() };
-    return s;
-  };
-  const writers = (s: DeskState) => {
-    s.data.runs = {
-      ...runs(view()),
-      others: [
-        { host: 'mbp', at: new Date(at(30)).toISOString(), paused: true }
-      ]
-    };
-    return s;
-  };
-  const silent = (s: DeskState) => {
-    s.data.runs = runs(view({ session: { state: 'alive', ticket: 'COD-1' } }));
-    s.data.hostMetrics = [hostSample(60), hostSample(50)];
-    return s;
-  };
-  const fresh = (s: DeskState) => {
-    s.data.runs = runs(view());
-    return s;
-  };
-
-  const crashed = (s: DeskState) => {
-    s.data.sessions = [
-      {
-        id: 'm1',
-        host: 'mac',
-        kind: 'attended',
-        last_seen: new Date(at(42)).toISOString(),
-        state: 'working',
-        detail: null
-      }
-    ];
-    return s;
-  };
-
-  it('draws a card for a failing check no other problem explains, without freezing numbers', () => {
-    const m = model(live(crashed(base())), NOW);
-    expect(m.problems.map((p) => p.kind)).toEqual(['check']);
-    const out = renderProblems(m);
-    expect(out).toContain('id="problem-check-mac-heartbeat" data-kind="check"');
-    expect(out).toContain('mac heartbeat');
-    expect(out).toContain('no heartbeat for 42 m while a turn was running');
-    expect(out).toContain('data-view="platform"');
-    const alert = renderAlert(m);
-    expect(alert).toContain('a health check is failing');
-    expect(alert).toContain('1 check failing · see Platform');
-    expect(renderFrozenLabel(m)).toBe('');
-  });
-
-  it('passes a host whose session ended', () => {
-    const s = live(base());
-    s.data.sessions = [
-      {
-        id: 'm1',
-        host: 'mac',
-        kind: 'attended',
-        last_seen: new Date(at(42)).toISOString(),
-        state: 'ended',
-        detail: null
-      }
-    ];
-    expect(model(s, NOW).problems).toEqual([]);
-  });
-
-  it('draws the connection problem with its timer, status and retry', () => {
-    const m = model(down(base()), NOW);
-    const out = renderProblems(m);
-    expect(out).toContain('PROBLEMS · 1');
-    expect(out).toContain('id="problem-connection" data-kind="connection"');
-    expect(out).toContain('Realtime channel closed');
-    const since = NOW.getTime() - 2.7 * 6e4;
-    expect(out).toContain(`data-fmt="for" data-from="${since}"`);
-    expect(out).toContain(
-      `data-fmt="next" data-from="${NOW.getTime() + 16000}"`
-    );
-    expect(out).toContain('CHANNEL_ERROR · dropped 2×<span class="tick"');
-    expect(out).toContain('The desk polls instead');
-    expect(out).toContain('Dropped 2×. Polling; numbers may lag.');
-    expect(out).toContain('data-action="reconnect"');
-    expect(out).toContain('data-action="reload"');
-    const idle = renderProblems(
-      model(down(base(), { status: null, retries: 0, nextAt: null }), NOW)
-    );
-    expect(idle).toContain('>not connected</span>');
-    expect(idle).not.toContain('dropped');
-    expect(idle).not.toContain('data-fmt="next"');
-    expect(idle).toContain('Realtime channel not connected');
-    expect(idle).toContain('Live updates have not connected since ');
-    expect(idle).toContain('Not connected. Polling; numbers may lag.');
-  });
-
-  it('holds the cards still from second to second and ticks the timers by text', () => {
-    const m = model(down(base()), NOW);
-    expect(renderProblems(m)).not.toMatch(/class="tick"[^>]*>[^<]/);
-    const since = NOW.getTime() - 2.7 * 6e4;
-    const later = new Date(NOW.getTime() + 1000);
-    expect(tickText('for', since, NOW)).toBe('for 2 m 42 s');
-    expect(tickText('for', since, later)).toBe('for 2 m 43 s');
-    expect(tickText('age', since, NOW)).toBe('2 m 42 s');
-    const next = NOW.getTime() + 16000;
-    expect(tickText('next', next, NOW)).toBe('next refresh in 16 s');
-    expect(tickText('next', next, later)).toBe('next refresh in 15 s');
-    expect(tickText('next', next, new Date(next + 1))).toBe('');
-    const quiet = NOW.getTime() - 50 * 6e4;
-    expect(tickText('silent', quiet, NOW)).toBe('50 m silent');
-    expect(tickText('quiet', quiet, NOW)).toBe('no heartbeat for 50 m');
-  });
-
-  it('draws the parse problem with the raw row and a marker per issue', () => {
-    const out = renderProblems(model(parse(base()), NOW));
-    expect(out).toContain("queue_state doesn't parse");
-    expect(out).toContain('data-kind="data"');
-    expect(out).toContain('The row fails at session, limit.');
-    expect(out).toContain(`from ${hhmm(at(5))}`);
-    expect(out).toContain('<pre class="raw');
-    const raw = /<pre class="raw wide">([\s\S]*?)<\/pre>/.exec(out)?.[1];
-    expect(raw).not.toContain('⟨');
-    expect(out).toContain('<pre class="raw-marks wide">session: <mark>');
-    expect(out).toContain('session: <mark>⟨missing⟩</mark>');
-    expect(out).toContain('limit: <mark>⟨invalid⟩</mark>');
-    expect(out).toContain('data-action="copy-row"');
-  });
-
-  it('draws the writers problem with the fix and no button', () => {
-    const out = renderProblems(model(writers(filled()), NOW));
-    expect(out).toContain('More than one host publishes the queue');
-    expect(out).toContain('mbp (paused, last ');
-    expect(out).toContain('cdwr agent uninstall');
-    expect(out).toContain('stop the agent container');
-    expect(out).not.toContain('<host>');
-    expect(out).toContain('in the last 2 h');
-    expect(out).toContain(`last ${hhmm(at(30))}`);
-    expect(out).not.toContain('data-action');
-  });
-
-  it('words the alert for a second writer alone, and keeps the usual one when mixed', () => {
-    const only = renderAlert(model(live(writers(base())), NOW));
-    expect(only).toContain('1 problem — another host publishes the queue');
-    expect(only).toContain('the desk reads nuc');
-    expect(only).not.toContain("can't vouch");
-    const mixed = renderAlert(model(down(writers(base())), NOW));
-    expect(mixed).toContain("the desk can't vouch for what it shows");
-  });
-
-  it('draws the stale problem without a raw row or a button', () => {
-    const out = renderProblems(model(stale(base()), NOW));
-    expect(out).toContain('queue_state is older than the newest run');
-    expect(out).not.toContain('class="raw');
-    expect(out).not.toContain('data-action');
-  });
-
-  it('draws the unknown problem', () => {
-    const m = model(silent(base()), NOW);
-    const out = renderProblems(m);
-    expect(out).toContain('nuc silent with a run open');
-    expect(out).toContain('data-fmt="quiet"');
-    expect(out).toContain(' · limit ');
-    expect(out).toContain('data-fmt="silent"');
-    expect(out).toContain(
-      `${LINK('COD-1')} started ${hhmm(at(10))} and has no finished_at.`
-    );
-    expect(out).toContain('from the CLI or with a control token in Settings');
-    expect(out).not.toContain('data-cmd');
-  });
-
-  it('counts the problems in the alert and says when the numbers froze', () => {
-    const s = down(parse(base()));
-    const m = model(s, NOW);
-    const out = renderAlert(m);
-    expect(out).toContain('role="alert"');
-    expect(out).toContain(
-      "2 problems — the desk can't vouch for what it shows"
-    );
-    // The parse problem began at the row's time, earlier than the drop
-    expect(out).toContain(
-      `numbers frozen at ${hhmm(at(5))} · channel dropped 2×`
-    );
-    expect(out).toContain('href="#problems" data-see-problems');
-    expect(renderFrozenLabel(m)).toBe(
-      `EVERYTHING ELSE · FROZEN AT ${hhmm(at(5))}`
-    );
-    expect(renderProblems(m)).toContain('PROBLEMS · 2');
-    const closed = renderAlert(model(down(base(), { retries: 0 }), NOW));
-    expect(closed).toContain('1 problem —');
-    expect(closed).toContain('live updates down since ');
-    expect(closed).toContain('numbers may lag');
-    expect(closed).not.toContain('frozen');
-    expect(closed).not.toContain('channel dropped');
-    expect(renderAlert(model(down(base()), NOW))).toContain(
-      'numbers may lag · channel dropped 2×'
-    );
-    expect(renderFrozenLabel(model(down(base()), NOW))).toBe('');
-  });
-
-  it('renders nothing once the state is healthy again', () => {
-    const s = live(fresh(base()));
-    const m = model(s, NOW);
-    expect(m.problems).toEqual([]);
-    expect(renderAlert(m)).toBe('');
-    expect(renderProblems(m)).toBe('');
-    expect(renderFrozenLabel(m)).toBe('');
-  });
-});
-
 describe('charts', () => {
   it('read the placeholder attributes', () => {
     expect(chartKind('spend')).toBe('spend');
@@ -1164,34 +918,5 @@ describe('snoozed waiting rows', () => {
     ] as const)('copilotView: %s', (copilot, expected) => {
       expect(copilotView(entry({ copilot }))).toEqual(expected);
     });
-  });
-});
-
-describe('controls on', () => {
-  const target = { supabaseUrl: 'https://x.supabase.co', controlToken: 't' };
-  const on = (build: (s: DeskState) => void = () => undefined): DeskState => {
-    const s = filled();
-    s.controls.target = target;
-    build(s);
-    return s;
-  };
-
-  it('ask for a confirmation before abandoning', () => {
-    const silentState = (confirming: boolean): DeskState => {
-      const s = on((x) => {
-        x.data.runs = runs(
-          view({ session: { state: 'alive', ticket: 'COD-1' } })
-        );
-        x.data.hostMetrics = [hostSample(60), hostSample(50)];
-        if (confirming)
-          x.controls.confirm = { until: NOW.getTime() + 1000, session: null };
-      });
-      return s;
-    };
-    const plain = renderProblems(model(silentState(false), NOW));
-    expect(plain).toContain('data-cmd="abandon"');
-    expect(plain).toContain('Mark run abandoned</button>');
-    const sure = renderProblems(model(silentState(true), NOW));
-    expect(sure).toContain('Confirm abandon</button>');
   });
 });

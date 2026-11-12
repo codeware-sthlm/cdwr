@@ -395,6 +395,19 @@ export const problemKey = (p: Problem): ProblemKey => {
   }
 };
 
+/** The problems of one kind, narrowed */
+export const ofKind = <K extends ProblemKind>(
+  list: readonly Problem[],
+  kind: K
+): Extract<Problem, { kind: K }>[] =>
+  list.filter((p): p is Extract<Problem, { kind: K }> => p.kind === kind);
+
+/** The id a Platform row links to: one card per check, the first card of any other key */
+export const problemId = (p: Problem): string =>
+  p.kind === 'check'
+    ? `problem-check-${p.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
+    : `problem-${problemKey(p)}`;
+
 /** The earliest `since` of the problems that freeze numbers (data, unknown); a down channel only lags, a second writer leaves the picked row current and a failing check says nothing of the queue, so none of those counts */
 export const frozenAt = (list: readonly Problem[]): number | null => {
   const times = list.flatMap((p) =>
