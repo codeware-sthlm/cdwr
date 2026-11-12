@@ -6,6 +6,7 @@ import {
 import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
 import {
   SITE_GATE_COOKIE,
+  SITE_GATE_FIELD_ID,
   SITE_GATE_MAX_AGE_SECONDS,
   createSiteGateToken,
   isSecureRequest,
@@ -123,9 +124,9 @@ function gatePage(
       <p>${escape(t(locale, 'siteGate.intro'))}</p>
       <form method="post" action="${SITE_GATE_PATH}">
         <input type="hidden" name="from" value="${escape(from)}" />
-        <label for="site-gate-password" hidden>${escape(t(locale, 'siteGate.password'))}</label>
+        <label for="${SITE_GATE_FIELD_ID}" hidden>${escape(t(locale, 'siteGate.password'))}</label>
         <input
-          id="site-gate-password"
+          id="${SITE_GATE_FIELD_ID}"
           type="password"
           name="password"
           autocomplete="current-password"
