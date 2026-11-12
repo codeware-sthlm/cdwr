@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from 'fs';
 import { basename, join, relative } from 'path';
 
+import type { Page, Response } from 'playwright';
+
 import { defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
 import { definitionInput } from '../../services/site-definitions';
@@ -24,6 +26,15 @@ import {
   stamp
 } from './site-pages';
 import { gateCookies, hostFolder } from './snapshot.logic';
+
+/**
+ * Opens a page, or null when it never answers (DNS, TLS, a timeout), so one
+ * page that is down doesn't end the audit of the others
+ */
+const visit = (page: Page, href: string): Promise<Response | null> =>
+  page
+    .goto(href, { waitUntil: 'networkidle', timeout: 90_000 })
+    .catch(() => null);
 
 /** Pages, links and the 404 page of a site, looked at the way a visitor would */
 export default defineCommand<
@@ -140,11 +151,18 @@ export default defineCommand<
           async () => {
             errors = [];
             const abs = new URL(route, url).href;
-            const response = await page.goto(abs, {
-              waitUntil: 'networkidle',
-              timeout: 90_000
-            });
-            const status = response?.status() ?? null;
+            const response = await visit(page, abs);
+            if (!response) {
+              pages.push({
+                route,
+                status: null,
+                consoleErrors: errors,
+                axe: [],
+                brokenLinks: []
+              });
+              return;
+            }
+            const status = response.status();
             const consoleErrors = errors;
 
             const { violations } = await new AxeBuilder({ page }).analyze();
@@ -186,11 +204,10 @@ export default defineCommand<
 
       await ctx.ui.task('OG tags', async () => {
         // The home page, which the routes may not include or end on
-        if (new URL(page.url()).pathname !== '/') {
-          await page.goto(new URL('/', url).href, {
-            waitUntil: 'networkidle',
-            timeout: 90_000
-          });
+        const home = new URL('/', url).href;
+        if (page.url() !== home && !(await visit(page, home))) {
+          // No home page, so every tag is missing
+          return;
         }
         const tags = await page.evaluate(() => ({
           'og:title':
@@ -219,17 +236,16 @@ export default defineCommand<
           await localized.addCookies(gateCookies(url, gatePassword));
           const missing = await localized.newPage();
           const path = notFoundPath(basename(dir));
-          const response = await missing.goto(new URL(path, url).href, {
-            waitUntil: 'networkidle',
-            timeout: 90_000
-          });
+          const response = await visit(missing, new URL(path, url).href);
           notFound.push({
             locale,
             path,
             status: response?.status() ?? null,
-            lang: await missing.evaluate(() =>
-              document.documentElement.getAttribute('lang')
-            )
+            lang: response
+              ? await missing.evaluate(() =>
+                  document.documentElement.getAttribute('lang')
+                )
+              : null
           });
           await localized.close();
         });
