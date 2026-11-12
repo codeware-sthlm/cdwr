@@ -83,47 +83,13 @@ body {
   --pad-right: max(var(--pad-inline), env(safe-area-inset-right));
   padding: var(--pad-top) var(--pad-right) var(--pad-bottom) var(--pad-left);
 }
-.wrap {
-  max-width: 1360px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap);
-}
-/* The header: the title and its line, then the bot, the Platform pill, the LIVE dot, Refresh and Settings */
-.top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.brand {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 14px;
-}
+/* The header is drawn with utilities in app.tsx and components/status.tsx. The title stays here: the Platform view's h1 shares its tracking and case. */
 h1 {
   font: 600 13px var(--font-mono);
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
-.brand .sub {
-  color: var(--muted);
-  font-size: 12px;
-}
-/* The agent's GitHub identity: the codeware-agent App avatar beside its bot name */
-.who {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.who:hover {
-  color: var(--fg);
-}
+/* The agent's GitHub identity avatar: the header's bot line and the data sheets' tags */
 .av {
   width: 20px;
   height: 20px;
@@ -134,109 +100,6 @@ h1 {
   width: 14px;
   height: 14px;
   margin: -2px 4px 0 -4px;
-}
-.tools,
-.status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
-  color: var(--muted);
-  font-size: 12px;
-}
-.tool {
-  min-height: var(--tap);
-  padding: 0 14px;
-}
-.platform {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: var(--tap);
-  padding: 0 16px;
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  font: 12px var(--font-ui);
-}
-.platform svg {
-  color: var(--muted);
-  flex: none;
-}
-.platform .checks.ok {
-  color: var(--live);
-}
-.platform .checks.bad {
-  color: var(--block);
-}
-.platform .updates {
-  color: var(--wait);
-}
-.platform .flag {
-  display: none;
-  position: absolute;
-  top: 9px;
-  right: 9px;
-  width: 7px;
-  height: 7px;
-  border-radius: var(--r-pill);
-  background: var(--wait);
-}
-.platform .flag.bad {
-  background: var(--block);
-}
-.conn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font: 11px var(--font-mono);
-}
-.conn b {
-  font-weight: 400;
-  letter-spacing: 0.1em;
-}
-.conn.on b {
-  color: var(--live);
-}
-.conn.on .dot {
-  background: var(--live);
-}
-/* Not connected: the unknown state, dashed and striped */
-.conn.off .dot {
-  background: var(--unknown);
-  outline: 1px dashed var(--faint);
-  outline-offset: 1px;
-}
-.conn .short {
-  display: none;
-}
-@media (max-width: 600px) {
-  .brand .sub,
-  .who,
-  #fresh,
-  .platform .name,
-  .platform .checks,
-  .platform .updates,
-  .conn .long {
-    display: none;
-  }
-  .conn .short {
-    display: inline;
-  }
-  .platform {
-    width: var(--tap);
-    padding: 0;
-    justify-content: center;
-    border: 0;
-    background: none;
-  }
-  .platform .flag {
-    display: block;
-  }
-  .tools,
-  .status {
-    gap: 6px;
-  }
 }
 button {
   font: 500 0.85rem var(--font-ui);
@@ -631,8 +494,7 @@ table.act {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.card-top .dot,
-.status .dot {
+.card-top .dot {
   width: 8px;
   height: 8px;
   border-radius: var(--r-pill);
@@ -861,8 +723,7 @@ table.act {
   color: var(--muted);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .session.live .open .dot,
-  .conn.on .dot {
+  .session.live .open .dot {
     animation: beat 2s ease-in-out infinite;
   }
 }
@@ -1611,106 +1472,7 @@ button.act:disabled {
   }
 }
 
-/* The tile grid for everything else */
-.more {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.grid-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.grid-head h2 {
-  font: 500 11px var(--font-mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.grid-head span {
-  font-size: 11px;
-  color: var(--muted);
-}
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(196px, 100%), 1fr));
-  gap: 12px;
-}
-.tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 9px;
-  min-width: 0;
-  padding: 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-tile);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.tile:hover,
-.tile:focus-visible {
-  border-color: var(--line-strong);
-}
-.tile:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.tile .ico svg {
-  width: 20px;
-  height: 20px;
-  stroke: var(--muted);
-}
-.tile .v {
-  font: 600 24px/1 var(--font-mono);
-}
-.tile .l {
-  font-size: 12px;
-  color: var(--muted);
-}
-.tile .s {
-  max-width: 100%;
-  font-size: 11px;
-  color: var(--faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tile.bad {
-  border-color: var(--block);
-}
-.tile.bad .v {
-  color: var(--block);
-}
-@media (max-width: 600px) {
-  .tiles {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .tile {
-    gap: 6px;
-    min-height: 86px;
-    padding: 12px;
-  }
-  .tile .ico svg {
-    width: 17px;
-    height: 17px;
-  }
-  .tile .v {
-    font-size: 18px;
-  }
-  .tile .l {
-    font-size: 10px;
-  }
-  .tile .s {
-    display: none;
-  }
-}
+/* The tile grid is drawn with utilities in components/tiles.tsx; `.more.frozen` below dims it */
 .kv {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -2241,7 +2003,7 @@ button:disabled {
   vector-effect: non-scaling-stroke;
 }
 
-/* Something is wrong: the alert band, the problem cards and the state-unknown card; dark only, like the page */
+/* Something is wrong: the alert band and the problem cards; dark only, like the page */
 #alert {
   margin: calc(-1 * var(--pad-top)) calc(-1 * var(--pad-right)) var(--pad-block)
     calc(-1 * var(--pad-left));
@@ -2282,8 +2044,7 @@ button:disabled {
   text-decoration: underline;
 }
 .alert .short,
-.problem .short,
-.state-unknown .short {
+.problem .short {
   display: none;
 }
 .problems {
@@ -2408,39 +2169,6 @@ button:disabled {
   border: 0;
   font-weight: 600;
 }
-.state-unknown {
-  border: 1px dashed var(--unknown-line);
-  border-radius: var(--r-card);
-  padding: 20px 22px;
-  display: flex;
-  flex: 1 1 100%;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 24px;
-  background: repeating-linear-gradient(
-    135deg,
-    var(--sunk) 0 10px,
-    var(--surface) 10px 20px
-  );
-}
-.su-text {
-  flex: 1 1 400px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.su-title {
-  font-size: 22px;
-  font-weight: 700;
-}
-.su-title .mono {
-  font-family: var(--font-mono);
-}
-.su-sub {
-  font-size: 13px;
-  color: var(--muted);
-}
 .capacity.frozen,
 .more.frozen {
   opacity: 0.45;
@@ -2453,20 +2181,6 @@ button:disabled {
 .pf-problem:focus-visible {
   outline: 2px solid var(--block);
   outline-offset: 2px;
-}
-.conn.offline b {
-  color: var(--block);
-}
-.conn.offline .at {
-  color: var(--muted);
-}
-.conn.offline .dot {
-  background: var(--block);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .conn.offline .dot {
-    animation: blink 1s ease-in-out infinite;
-  }
 }
 @keyframes blink {
   0%,
@@ -2496,13 +2210,11 @@ button:disabled {
     display: none;
   }
   .alert .long,
-  .problem .long,
-  .state-unknown .long {
+  .problem .long {
     display: none;
   }
   .alert .short,
-  .problem .short,
-  .state-unknown .short {
+  .problem .short {
     display: inline;
   }
   .problem {
@@ -2534,28 +2246,15 @@ button:disabled {
   .p-body {
     font-size: 12px;
   }
-  .problem .wide,
-  .state-unknown .wide {
+  .problem .wide {
     display: none;
   }
   .p-actions:not(:has(> :not(.wide))) {
     display: none;
   }
-  .state-unknown {
-    padding: 12px 14px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
   .p-pill.solid {
     font-size: 10px;
     padding: 3px 9px;
-  }
-  .su-text {
-    flex-basis: auto;
-  }
-  .su-title {
-    font-size: 15px;
   }
 }
 .ctl-stepper {

@@ -152,8 +152,15 @@ const ICON = {
 export type IconName = keyof typeof ICON;
 
 /** One of the desk's line icons */
-export const Icon = ({ name }: { name: IconName }) => (
+export const Icon = ({
+  name,
+  className
+}: {
+  name: IconName;
+  className?: string;
+}) => (
   <svg
+    className={className}
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
