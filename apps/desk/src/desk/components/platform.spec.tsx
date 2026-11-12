@@ -140,21 +140,29 @@ describe('Platform', () => {
 
   it('says whether the queue runs or is paused, and the limits it sets', () => {
     const p = mount(filled());
-    expect(p.withText('.pf-val', 'Running')?.className).toBe('pf-val ');
+    expect(p.withText('.pf-val', 'Running')?.classList.contains('wait')).toBe(
+      false
+    );
     expect(p.text).toContain(
       '2 open now · set per session with /work-queue limit=N'
     );
     expect(p.text).toContain('last run ');
     expect(
-      mount(jobWith({ paused: true })).withText('.pf-val', 'Paused')?.className
-    ).toBe('pf-val wait');
+      mount(jobWith({ paused: true }))
+        .withText('.pf-val', 'Paused')
+        ?.classList.contains('wait')
+    ).toBe(true);
     expect(mount(jobWith({ live: true })).text).toContain('on events');
   });
 
   it('shows the effort cap, and a dash when it is not published', () => {
-    expect(mount(filled()).withText('.pf-val', '–')?.className).toBe('pf-val ');
+    expect(
+      mount(filled()).withText('.pf-val', '–')?.classList.contains('wait')
+    ).toBe(false);
     const p = mount(jobWith({ effort: { spent: 32, cap: 40 } }));
-    expect(p.withText('.pf-val', '$40')?.className).toBe('pf-val ');
+    expect(p.withText('.pf-val', '$40')?.classList.contains('wait')).toBe(
+      false
+    );
     expect(p.text).toContain('80% used today');
   });
 

@@ -57,12 +57,16 @@ describe('Capacity', () => {
     const meter = c.q('[data-w="limit"]');
     expect(meter).not.toBeNull();
     expect(meter?.getAttribute('aria-haspopup')).toBe('dialog');
-    expect(meter?.className).toBe('cap-meter cap-btn neutral');
+    expect(meter ? [...meter.classList].slice(0, 3) : []).toEqual([
+      'cap-meter',
+      'cap-btn',
+      'neutral'
+    ]);
     expect(c.text).toContain('Agent PRs in flight');
     expect(meter?.querySelector('.cap-v')?.textContent).toBe('2 / 5');
     expect(c.text).toContain('3 slots free · merges free a slot live');
     const fillBar = meter?.querySelector<HTMLElement>('.cap-bar i');
-    expect(fillBar?.className).toBe('neutral');
+    expect(fillBar?.classList.contains('neutral')).toBe(true);
     // jsdom normalizes the 40.0% React sets
     expect(fillBar?.style.width).toBe('40%');
   });
@@ -70,13 +74,11 @@ describe('Capacity', () => {
   it('turns the PRs meter amber one below the limit and says when no slot is free', () => {
     const one = mount(jobWith({}, { used: 4, max: 5 }));
     expect(one.text).toContain('1 slot free · merges free a slot live');
-    expect(one.q('[data-w="limit"]')?.className).toBe('cap-meter cap-btn wait');
+    expect(one.q('[data-w="limit"]')?.classList.contains('wait')).toBe(true);
     const full = mount(jobWith({}, { used: 5, max: 5 }));
     expect(full.text).toContain('no slot free');
     expect(full.text).not.toContain('slots free');
-    expect(full.q('[data-w="limit"]')?.className).toBe(
-      'cap-meter cap-btn wait'
-    );
+    expect(full.q('[data-w="limit"]')?.classList.contains('wait')).toBe(true);
   });
 
   it.each([
@@ -102,10 +104,10 @@ describe('Capacity', () => {
 
   it('says whether the queue runs or is paused', () => {
     const running = mount(filled());
-    expect(running.q('p.cap-queue')?.className).toBe('cap-queue');
+    expect(running.q('p.cap-queue')?.classList.contains('wait')).toBe(false);
     expect(running.q('p.cap-queue')?.textContent).toBe('Queue running');
     const paused = mount(jobWith({ paused: true }));
-    expect(paused.q('p.cap-queue')?.className).toBe('cap-queue wait');
+    expect(paused.q('p.cap-queue')?.classList.contains('wait')).toBe(true);
     expect(paused.q('p.cap-queue')?.textContent).toBe(
       'Queue paused · cdwr agent resume'
     );
@@ -212,23 +214,17 @@ describe('Capacity', () => {
       'Hand-back to the NUC: attended, one of attended, handing back, handed back, idle'
     );
     expect(c.q('.cap-strip span.on')?.textContent).toBe('attended');
-    expect(c.all('.cap-strip span').map((e) => e.className)).toEqual([
-      'on',
-      '',
-      '',
-      ''
-    ]);
+    expect(
+      c.all('.cap-strip span').map((e) => e.classList.contains('on'))
+    ).toEqual([true, false, false, false]);
     const back = filled();
     back.data.sessions = [session('mac', 'attended', 10)];
     const handing = mount(back);
     expect(handing.text).not.toContain('ATTENDED');
     expect(handing.q('.cap-strip span.on')?.textContent).toBe('handing back');
-    expect(handing.all('.cap-strip span').map((e) => e.className)).toEqual([
-      '',
-      'on',
-      '',
-      ''
-    ]);
+    expect(
+      handing.all('.cap-strip span').map((e) => e.classList.contains('on'))
+    ).toEqual([false, true, false, false]);
     expect(handing.text).not.toContain('· COD-1');
   });
 

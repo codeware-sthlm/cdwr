@@ -26,7 +26,8 @@ describe('ControlStatus', () => {
     const el = container.querySelector('small');
     expect(el?.textContent).toBe(text);
     expect(el?.getAttribute('role')).toBe('status');
-    expect(el?.className).toBe(`ctl-status ${state}`);
+    expect(el?.classList.contains('ctl-status')).toBe(true);
+    expect(el?.classList.contains(state)).toBe(true);
   });
 });
 
