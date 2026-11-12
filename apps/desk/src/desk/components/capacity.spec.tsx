@@ -6,9 +6,10 @@ import type { RunsPayload } from '../../supabase';
 import { model } from '../model';
 import { type DeskState, createState } from '../state';
 import type { QueueView } from '../types';
-import { NOW, filled, hostSample, runs, view } from '../view/fixtures';
+import { NOW, carries, filled, hostSample, runs, view } from '../view/fixtures';
 
 import { Capacity } from './capacity';
+import { FRAME, HEAD, PANEL } from './card-ui';
 
 const GIB = 2 ** 30;
 
@@ -51,6 +52,20 @@ const mount = (s: DeskState) => {
 };
 
 describe('Capacity', () => {
+  it('frames the Limits, Hosts and phone cards as the other cards', () => {
+    const c = mount(filled());
+    const limits = c.q('article.cap-limits');
+    const hosts = c.q('article.cap-hosts');
+    const phone = c.q('button.cap-phone');
+    expect(carries(limits, PANEL)).toBe(true);
+    expect(carries(hosts, PANEL)).toBe(true);
+    expect(carries(phone, FRAME)).toBe(true);
+    expect(phone?.classList.contains('border-[color:var(--line)]')).toBe(true);
+    expect(carries(c.q('article.cap-limits .ct-head'), HEAD)).toBe(true);
+    expect(carries(c.q('article.cap-hosts .ct-head'), HEAD)).toBe(true);
+    expect(phone?.classList.contains('cursor-pointer')).toBe(true);
+  });
+
   it('shows the PRs in flight against the limit, with the free slots', () => {
     const c = mount(filled());
     expect(c.text).toContain('LIMITS');

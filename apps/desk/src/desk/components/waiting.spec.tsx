@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SnoozeRow } from '../../supabase';
 import { model } from '../model';
 import { type DeskState, createState } from '../state';
-import { NOW, activity, filled, runs, view } from '../view/fixtures';
+import { NOW, activity, carries, filled, runs, view } from '../view/fixtures';
 
+import { CARD } from './card-ui';
 import { WaitingCard } from './waiting';
 
 const card = (s: DeskState, open = false, onOpenChange = () => undefined) =>
@@ -99,7 +100,7 @@ describe('WaitingCard', () => {
     };
     const c = card(s);
     const article = c.querySelector('article');
-    expect(article?.classList.contains('card-top')).toBe(true);
+    expect(carries(article, CARD)).toBe(true);
     expect(article?.classList.contains('waiting')).toBe(true);
     expect(article?.classList.contains('has')).toBe(true);
     expect(article?.getAttribute('data-w')).toBe('before');
