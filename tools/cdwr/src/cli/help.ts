@@ -49,7 +49,7 @@ export function renderCommandHelp(name: string, command: AnyCommand): string {
   const out: string[] = [
     `${theme.title(`cdwr ${name}`)}  ${command.summary}`,
     '',
-    `${theme.muted('Usage:')} cdwr ${name} ${positional.join(' ')}${positional.length ? ' ' : ''}[flags]`,
+    `${theme.muted('Usage:')} cdwr ${name} ${positional.join(' ')}${positional.length ? ' ' : ''}[flags]${command.rest ? ' [-- <args>]' : ''}`,
     '',
     dangerLine(command.danger, confirmFor(command.danger, command.confirm))
   ];

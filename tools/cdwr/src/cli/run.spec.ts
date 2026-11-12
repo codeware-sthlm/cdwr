@@ -313,3 +313,62 @@ describe('runCommand', () => {
     });
   });
 });
+
+describe('runCommand with rest arguments', () => {
+  const restCommand = (seen: string[][], rest?: true) =>
+    defineCommand({
+      summary: 'Test command',
+      description: 'Test command',
+      danger: 'read',
+      rest,
+      inputs: {},
+      plan: async (ctx) => ({ steps: [], data: ctx.rest ?? [] }),
+      apply: async (_ctx, data) => {
+        seen.push(data);
+        return { summary: 'Done' };
+      }
+    });
+
+  const runRest = (argv: string[], rest?: true) => {
+    const seen: string[][] = [];
+    const stdout: string[] = [];
+    const exit = runCommand({
+      name: 'test rest',
+      command: restCommand(seen, rest),
+      argv,
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([], false),
+      history: () => undefined,
+      stdout: (text) => stdout.push(text)
+    });
+    return { exit, seen, stdout };
+  };
+
+  it('hands everything after -- to a rest command, global flags included', async () => {
+    const r = runRest(['--', 'agent', 'status', '--dry-run', '--json'], true);
+    expect(await r.exit).toBe(EXIT.ok);
+    expect(r.seen).toEqual([['agent', 'status', '--dry-run', '--json']]);
+  });
+
+  it('keeps the global flags before -- for the command itself', async () => {
+    const r = runRest(['--dry-run', '--', 'agent', 'pause'], true);
+    expect(await r.exit).toBe(EXIT.ok);
+    // A dry run stops after the plan
+    expect(r.seen).toEqual([]);
+  });
+
+  it('refuses arguments after -- for a command without rest', async () => {
+    const r = runRest(['--', 'agent', 'status']);
+    expect(await r.exit).toBe(EXIT.usage);
+    expect(r.seen).toEqual([]);
+  });
+
+  it('shows the rest in the usage line', async () => {
+    const r = runRest(['--help'], true);
+    expect(await r.exit).toBe(EXIT.ok);
+    expect(r.stdout[0]).toContain('[flags] [-- <args>]');
+  });
+});

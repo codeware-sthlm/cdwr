@@ -57,6 +57,8 @@ export interface CommandDef<I extends Inputs, D> {
   /** `false` keeps the command out of `cdwr history`, for one a script runs on a schedule */
   history?: false;
   needs?: Need[];
+  /** Takes the arguments after `--` as they are, in `ctx.rest`; other commands refuse them */
+  rest?: true;
   inputs: I;
   /** Reads what it needs and describes the work; must not write anything */
   plan: (ctx: Context, inputs: Resolved<I>) => Promise<Plan<D>>;

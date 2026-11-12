@@ -35,6 +35,20 @@ describe('lookup', () => {
     });
   });
 
+  it('never reads the command path from after --', () => {
+    const found = lookup(
+      ['db', 'backup', '--', 'db', 'test-migration'],
+      groups,
+      entries
+    );
+    expect(found).toMatchObject({
+      kind: 'command',
+      entry: { path: ['db', 'backup'] },
+      rest: ['--', 'db', 'test-migration']
+    });
+    expect(lookup(['db', '--', 'backup'], groups, entries).kind).toBe('group');
+  });
+
   it('returns none for an unknown word', () => {
     expect(lookup(['nope'], groups, entries)).toMatchObject({
       kind: 'none',
