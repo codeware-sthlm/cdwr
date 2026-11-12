@@ -243,6 +243,9 @@ function showSheet(value: string, focus = true): void {
   state.ui.openSheet = id;
   $('sheet-title').textContent = w.title;
   $('sheet-sub').textContent = w.sub;
+  // Shown before the body is written, so a chart measures its real width when it mounts
+  $('sheet').hidden = false;
+  $('scrim').hidden = false;
   if (id === 'before') {
     if (!sheetRoot) {
       unmountCharts();
@@ -266,8 +269,6 @@ function showSheet(value: string, focus = true): void {
     unmountSheet();
     writeSheet(w.body(m, state, now));
   }
-  $('sheet').hidden = false;
-  $('scrim').hidden = false;
   setHash();
   if (focus) $('sheet-close').focus();
 }
