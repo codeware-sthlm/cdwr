@@ -8,6 +8,7 @@ import {
   fileName,
   findStrips,
   gateCookies,
+  gateProblem,
   hostFolder,
   isRoutedDefinition,
   parseRoutes,
@@ -52,6 +53,47 @@ describe('gateCookies', () => {
 
     expect(verifySiteGateToken(value, 'open sesame', later(59))).toBe(true);
     expect(verifySiteGateToken(value, 'open sesame', later(61))).toBe(false);
+  });
+});
+
+describe('gateProblem', () => {
+  const noCookie =
+    "The gate page answered: the site is gated. Pass --gate-password with the site's SITE_GATE_PASSWORD, in single quotes.";
+  const withCookie =
+    "The gate page answered although a gate cookie was sent: the --gate-password does not match this site's SITE_GATE_PASSWORD, or the site answers from another host than --url (the cookie is scoped to it). Pass the production value, in single quotes; zsh rewrites $ and ! in an unquoted one.";
+
+  it('is null when neither signal is there', () => {
+    expect(
+      gateProblem({ robotsTag: null, gateField: false }, false)
+    ).toBeNull();
+  });
+
+  it('is null with only the header', () => {
+    expect(
+      gateProblem({ robotsTag: 'noindex', gateField: false }, false)
+    ).toBeNull();
+  });
+
+  it('is null with only the field', () => {
+    expect(gateProblem({ robotsTag: null, gateField: true }, false)).toBeNull();
+  });
+
+  it('asks for the password when no cookie was sent', () => {
+    expect(gateProblem({ robotsTag: 'noindex', gateField: true }, false)).toBe(
+      noCookie
+    );
+  });
+
+  it('says the password does not match when a cookie was sent', () => {
+    expect(gateProblem({ robotsTag: 'noindex', gateField: true }, true)).toBe(
+      withCookie
+    );
+  });
+
+  it('takes noindex among other directives', () => {
+    expect(
+      gateProblem({ robotsTag: 'noindex, nofollow', gateField: true }, false)
+    ).toBe(noCookie);
   });
 });
 

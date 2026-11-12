@@ -241,6 +241,32 @@ export const gateCookies = (
       ]
     : [];
 
+/** What the first page answered with, read by `assertPastGate` */
+export type GateSignals = {
+  /** The `x-robots-tag` response header, if any */
+  robotsTag: string | null;
+  /** Whether the page has the gate's password field */
+  gateField: boolean;
+};
+
+/**
+ * The reason to stop when the gate page answered instead of the site, or `null`.
+ *
+ * Both signals are required: the proxy's `noindex` header and the gate's
+ * password field. A future noindex page, or a page that mentions the gate,
+ * is not taken for it. The advice depends on whether a cookie was sent.
+ */
+export const gateProblem = (
+  signals: GateSignals,
+  cookieSent: boolean
+): string | null => {
+  if (!signals.robotsTag?.toLowerCase().includes('noindex')) return null;
+  if (!signals.gateField) return null;
+  return cookieSent
+    ? "The gate page answered although a gate cookie was sent: the --gate-password does not match this site's SITE_GATE_PASSWORD, or the site answers from another host than --url (the cookie is scoped to it). Pass the production value, in single quotes; zsh rewrites $ and ! in an unquoted one."
+    : "The gate page answered: the site is gated. Pass --gate-password with the site's SITE_GATE_PASSWORD, in single quotes.";
+};
+
 /** `localhost:3000` as a folder name */
 export const hostFolder = (url: string): string =>
   new URL(url).host.replace(/[^a-z0-9.-]/gi, '-');

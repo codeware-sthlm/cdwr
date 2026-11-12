@@ -1,5 +1,8 @@
 import { t } from '@codeware/shared/util/i18n';
-import { resolveReturnPath } from '@codeware/shared/util/site-gate';
+import {
+  SITE_GATE_FIELD_ID,
+  resolveReturnPath
+} from '@codeware/shared/util/site-gate';
 import { Lock, Unlock } from 'lucide-react';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -83,13 +86,13 @@ export default async function SiteGatePage({ searchParams }: Props) {
         className="relative z-10 mt-8 w-full max-w-md"
       >
         <input type="hidden" name="from" value={resolveReturnPath(from)} />
-        <label htmlFor="site-gate-password" className="sr-only">
+        <label htmlFor={SITE_GATE_FIELD_ID} className="sr-only">
           {t(locale, 'siteGate.password')}
         </label>
         {/* The button sits inside the field, so one centred control carries
             both and the placeholder stays on the page's own axis */}
         <input
-          id="site-gate-password"
+          id={SITE_GATE_FIELD_ID}
           type="password"
           name="password"
           autoComplete="current-password"
