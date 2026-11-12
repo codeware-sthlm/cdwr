@@ -125,7 +125,7 @@ const PrsMeter = ({
   return (
     <button
       type="button"
-      className={`cap-meter cap-btn ${tone} ${METER} cursor-pointer rounded-[var(--r-row)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--accent)]`}
+      className={`cap-meter cap-btn ${tone} ${METER} box-border cursor-pointer rounded-[var(--r-row)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--accent)]`}
       data-w="limit"
       aria-haspopup="dialog"
       onClick={() => onSheet('limit')}

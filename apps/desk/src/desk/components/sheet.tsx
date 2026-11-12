@@ -42,7 +42,7 @@ type Props = {
 
 /**
  * The frame every sheet opens in: a side sheet from the right, or on the phone a full-screen
- * drawer that drags down to close. The head and body keep the desk's own classes.
+ * drawer that drags down to close. The head and body are drawn with utilities here.
  */
 export const Sheet = ({
   open,
@@ -70,22 +70,32 @@ export const Sheet = ({
   };
   const Title = phone ? DrawerTitle : SheetTitle;
   const Sub = phone ? DrawerDescription : SheetDescription;
+  // The title and description take their utilities as props, so they are merged over the shadcn ones
   const parts = (
     <>
-      <div className="sheet-head">
+      <div className="flex items-start justify-between gap-3 border-b border-[color:var(--line)] px-6 pt-[22px] pb-4 max-[600px]:px-5 max-[600px]:pt-2 max-[600px]:pb-3.5">
         <div>
           <Title asChild>
             <h2>{title}</h2>
           </Title>
-          <Sub asChild>
+          <Sub asChild className="mt-0.5 font-[family-name:var(--font-mono)]">
             <p>{sub}</p>
           </Sub>
         </div>
-        <button type="button" id="sheet-close" ref={close} onClick={onClose}>
+        <button
+          type="button"
+          id="sheet-close"
+          className="min-h-[var(--tap)] min-w-[var(--tap)] flex-none"
+          ref={close}
+          onClick={onClose}
+        >
           Close
         </button>
       </div>
-      <div className="sheet-body" id="sheet-body">
+      <div
+        className="sheet-body flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-[18px] pb-[calc(18px_+_env(safe-area-inset-bottom,0px))] max-[600px]:gap-2.5 max-[600px]:px-4 max-[600px]:pt-3.5 max-[600px]:pb-[calc(14px_+_env(safe-area-inset-bottom,0px))]"
+        id="sheet-body"
+      >
         {children}
       </div>
     </>

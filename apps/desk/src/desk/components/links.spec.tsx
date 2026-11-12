@@ -32,7 +32,8 @@ describe('Prn', () => {
   it('links the number, tinted by its tone', () => {
     const { container } = render(<Prn n={31} tone="ok" />);
     const a = container.querySelector('a');
-    expect(a?.className).toBe('prn ok');
+    expect(a?.classList.contains('prn')).toBe(true);
+    expect(a?.classList.contains('ok')).toBe(true);
     expect(a?.getAttribute('href')).toBe(
       'https://github.com/codeware-sthlm/cdwr/pull/31'
     );
@@ -42,9 +43,14 @@ describe('Prn', () => {
 
   it('leaves the tone out when neutral or missing, and renders nothing without a number', () => {
     const neutral = render(<Prn n="7" tone="neutral" />);
-    expect(neutral.container.querySelector('a')?.className).toBe('prn');
+    const tones = ['ok', 'wait', 'bad', 'neutral'];
+    const toneOf = (el: Element | null | undefined) =>
+      tones.filter((t) => el?.classList.contains(t));
+    expect(neutral.container.querySelector('a.prn')).not.toBeNull();
+    expect(toneOf(neutral.container.querySelector('a'))).toEqual([]);
     const bare = render(<Prn n="7" />);
-    expect(bare.container.querySelector('a')?.className).toBe('prn');
+    expect(bare.container.querySelector('a.prn')).not.toBeNull();
+    expect(toneOf(bare.container.querySelector('a'))).toEqual([]);
     const none = render(<Prn n={null} />);
     expect(none.container.innerHTML).toBe('');
   });

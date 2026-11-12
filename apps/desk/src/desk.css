@@ -1,4 +1,5 @@
 /* Layout: one screen. A header, then the session and what waits on you as two cards that wrap to one column on a phone; small tiles open the rest as side sheets. Dark only, as the design's boards. */
+/* What stays here is what cannot be a utility on one component: the palette and spacing tokens, the page, and the rules for bare elements. Every component draws itself with utilities, its shared strings in components/*-ui.ts. */
 :root {
   /* Surfaces */
   --bg: #121110;
@@ -83,7 +84,7 @@ body {
   --pad-right: max(var(--pad-inline), env(safe-area-inset-right));
   padding: var(--pad-top) var(--pad-right) var(--pad-bottom) var(--pad-left);
 }
-/* The header is drawn with utilities in app.tsx and components/status.tsx */
+/* The bare elements: a button looks like the desk's unless a utility says otherwise, and so do code and lists */
 button {
   font: 500 0.85rem var(--font-ui);
   color: var(--fg);
@@ -96,10 +97,22 @@ button {
 button:hover {
   border-color: var(--muted);
 }
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 button:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+/* Buttons drawn entirely with utilities start from nothing, not from the button rules above: the
+   card's pill (`open`), the limits meter (`cap-btn`) and the health check's problem link. The
+   utilities on them win over this reset. */
+.card-top .open,
+.cap-btn,
+.pf-problem {
+  all: unset;
 }
 code {
   font: 0.82rem var(--font-mono);
@@ -108,21 +121,13 @@ code {
   padding: 1px 6px;
   border-radius: 4px;
 }
-
-.notice {
-  padding: 12px 16px;
-  border-radius: 10px;
-  background: var(--wait-soft);
-  color: var(--wait);
-  font-size: 0.9rem;
-}
-.notice.err {
-  background: var(--block-soft);
-  color: var(--block);
+ol,
+ul {
+  display: grid;
+  gap: 6px;
 }
 
-/* The sheets' previews, charts, tables and lists are drawn with utilities in components/charts.tsx, components/data-bodies.tsx, components/scheduler-bodies.tsx, components/items.tsx and components/sheet-ui.ts */
-/* Only the hit bands take the pointer; the highlight and the bars drawn over them would swallow the hover */
+/* The chart sits in an SVG, which a utility cannot reach per child: only the hit bands take the pointer; the highlight and the bars drawn over them would swallow the hover */
 .chart svg * {
   pointer-events: none;
 }
@@ -130,532 +135,11 @@ code {
   pointer-events: all;
 }
 
-/* The session and Waiting on you cards are drawn with utilities in components/session.tsx, components/waiting.tsx and components/card-ui.ts; the pulse is theirs too */
+/* The pulses of the session card and the alert band's frozen label */
 @keyframes beat {
   50% {
     opacity: 0.3;
   }
-}
-/* The card's pill is a button unboxed here; its look is utilities */
-.card-top .open {
-  all: unset;
-}
-.prn {
-  font: 500 0.8rem var(--font-mono);
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-.prn:hover {
-  text-decoration: underline;
-}
-.prn.ok {
-  color: var(--ok);
-}
-.prn.wait {
-  color: var(--wait);
-}
-.prn.bad {
-  color: var(--block);
-}
-/* The waiting rows are utilities in components/waiting.tsx; the notes and buttons are the panel's */
-.wnote {
-  font: 11px var(--font-mono);
-  color: var(--muted);
-}
-.wsnooze {
-  flex: none;
-  padding: 2px 8px;
-  background: none;
-  border: 1px solid var(--line);
-  border-radius: var(--r-row);
-  color: var(--muted);
-  font-size: 11px;
-}
-.wsnooze:hover:not(:disabled) {
-  color: var(--fg);
-  border-color: var(--wait-dash);
-}
-.wsnooze:disabled,
-button.act:disabled {
-  opacity: 0.5;
-}
-.chip.conflict,
-.chip.comment,
-.chip.renovate,
-.chip.feedback {
-  background: var(--review-soft);
-  color: var(--review);
-}
-.chip.resume {
-  background: var(--work-soft);
-  color: var(--work);
-}
-.chip.takeover,
-.chip.parked {
-  background: var(--wait-soft);
-  color: var(--wait);
-}
-.chip.held {
-  background: var(--sunk);
-  color: var(--muted);
-}
-
-/* Capacity: the limits and hosts cards on the desktop, one card button on a phone */
-/* The unboxed button: the limits meter that opens a sheet; its look is utilities in components/capacity.tsx */
-.cap-btn {
-  all: unset;
-  box-sizing: border-box;
-}
-/* The capacity row and the Platform view are drawn with utilities in components/capacity.tsx, components/platform.tsx and components/controls.tsx */
-
-/* The tile grid is drawn with utilities in components/tiles.tsx */
-
-/* Sheet: the frame is components/sheet.tsx, a shadcn Sheet or, on the phone, a Drawer */
-.sheet-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 22px 24px 16px;
-  border-bottom: 1px solid var(--line);
-}
-.sheet-head h2 {
-  font-size: 17px;
-  font-weight: 700;
-}
-.sheet-head p {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font: 11px var(--font-mono);
-}
-#sheet-close {
-  flex: none;
-  min-width: var(--tap);
-  min-height: var(--tap);
-}
-/* The Waiting on you sheet's React root: its cards stay direct children of the sheet's flex column */
-.before-sheet {
-  display: contents;
-}
-.sheet-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 18px 24px calc(18px + env(safe-area-inset-bottom, 0px));
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-@media (max-width: 600px) {
-  .sheet-head {
-    padding: 8px 20px 14px;
-  }
-  .sheet-head h2 {
-    font-size: 16px;
-  }
-  .sheet-body {
-    padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
-    gap: 10px;
-  }
-}
-
-/* Sheet cards: a pull request row and a waiting card */
-.pr-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.pr-row,
-.wcard {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  background: var(--raised);
-  border: 1px solid var(--line-strong);
-  border-radius: 11px;
-  min-width: 0;
-}
-.wcard {
-  gap: 9px;
-  padding: 13px 14px;
-  border-radius: 12px;
-}
-.pr-row .line {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-.pr-row .rank {
-  flex-shrink: 0;
-  font: 11px var(--font-mono);
-  color: var(--muted);
-}
-.pr-row.blocked {
-  border-color: color-mix(in srgb, var(--block) 40%, var(--line-strong));
-}
-.pr-row .prnum {
-  font: 600 13px var(--font-mono);
-}
-.pr-row .id {
-  flex-shrink: 0;
-  margin: 0;
-  font: 11px var(--font-mono);
-  color: var(--muted);
-}
-.pr-row .title,
-.wcard .wc-title {
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--fg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pr-row .meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.pr-row .meta time,
-.wcard .wc-head time {
-  margin-left: auto;
-  font: 11px var(--font-mono);
-  color: var(--muted);
-}
-.wcard .wc-head time {
-  font-size: 10px;
-}
-.pill {
-  display: inline-block;
-  padding: 3px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--r-pill);
-  font-size: 11px;
-}
-.pill.wait {
-  color: var(--wait);
-  background: var(--wait-soft);
-  border-color: var(--wait-line);
-}
-.pill.ok {
-  color: var(--ok);
-  background: var(--ok-soft);
-  border-color: color-mix(in srgb, var(--ok) 30%, var(--ok-soft));
-}
-.pill.bad {
-  color: var(--block);
-  background: var(--block-soft);
-  border-color: color-mix(in srgb, var(--block) 30%, var(--block-soft));
-}
-.pill.neutral {
-  color: var(--muted);
-  background: var(--control);
-  border-color: var(--line-strong);
-}
-.wcard .wc-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.wcard .wc-head .id {
-  margin: 0;
-  font: 600 12px var(--font-mono);
-  color: var(--fg);
-}
-.wcard .kind {
-  font-size: 11px;
-  color: var(--muted);
-}
-.wcard .wc-note {
-  font: 11px var(--font-mono);
-  color: var(--muted);
-}
-.wcard.approved {
-  opacity: 0.7;
-}
-.wcard .kind.k-plan,
-.wcard .kind.k-question,
-.wcard .kind.k-review,
-.wcard .kind.k-hand-offs,
-.wcard .kind.k-idea {
-  color: var(--wait);
-}
-a.act,
-button.act {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  min-height: var(--tap);
-  padding: 0 18px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-}
-button.act {
-  cursor: pointer;
-}
-a.act.primary {
-  background: var(--wait);
-  color: #231803;
-}
-a.act.secondary,
-button.act.secondary {
-  background: none;
-  color: var(--wait);
-  border: 1px solid var(--wait-line);
-}
-.wcard .wc-pr {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.wcard .wc-pr time {
-  font: 10px var(--font-mono);
-  color: var(--muted);
-}
-/* The card's statuses above its buttons: the PR, its notes, blockers and any refusal */
-.wcard .wc-status {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-/* The card's buttons share one compact row, and wrap only when it is too narrow */
-.wc-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.wc-actions .act,
-.wc-actions .wsnooze {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  align-self: auto;
-  min-height: 32px;
-  padding: 0 14px;
-  font-size: 12px;
-}
-.wc-actions .wsnooze {
-  padding: 0 12px;
-  border-radius: 10px;
-}
-@media (max-width: 600px) {
-  .wc-actions .act,
-  .wc-actions .wsnooze {
-    min-height: var(--tap);
-  }
-}
-
-.group {
-  display: grid;
-  gap: 8px;
-}
-.group > h3 {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  font-weight: 600;
-}
-ol,
-ul {
-  display: grid;
-  gap: 6px;
-}
-.item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 4px 12px;
-  align-items: start;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  border-left-width: 4px;
-}
-.item.ready,
-.item.answered {
-  border-left-color: var(--ok);
-}
-.item.working {
-  border-left-color: var(--work);
-}
-.item.needs-input {
-  border-left-color: var(--wait);
-}
-.item.review {
-  border-left-color: var(--review);
-}
-.item.blocked {
-  border-left-color: var(--block);
-}
-.item.plain {
-  border-left-width: 1px;
-}
-.rank {
-  font: 500 0.85rem var(--font-mono);
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  min-width: 1.4em;
-}
-.main {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-.title {
-  color: var(--fg);
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-.title:hover {
-  text-decoration: underline;
-}
-.id {
-  font: 0.78rem var(--font-mono);
-  color: var(--muted);
-  margin-right: 6px;
-}
-/* A ticket or PR link keeps the underline the browser gave it; Preflight takes that off links */
-a.id {
-  text-decoration: underline;
-}
-.meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  align-items: center;
-}
-.side {
-  text-align: right;
-  font-size: 0.78rem;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.chip {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 0.74rem;
-  font-weight: 600;
-}
-.chip.ready,
-.chip.answered {
-  background: var(--ok-soft);
-  color: var(--ok);
-}
-.chip.working {
-  background: var(--work-soft);
-  color: var(--work);
-}
-.chip.needs-input {
-  background: var(--wait-soft);
-  color: var(--wait);
-}
-.chip.review {
-  background: var(--review-soft);
-  color: var(--review);
-}
-.chip.blocked {
-  background: var(--block-soft);
-  color: var(--block);
-}
-.next {
-  font-size: 0.85rem;
-  color: var(--fg);
-  overflow-wrap: anywhere;
-}
-.next::before {
-  content: 'Next ';
-  font-weight: 600;
-  color: var(--muted);
-}
-.bar {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--line);
-  overflow: hidden;
-  width: 120px;
-}
-.bar > i {
-  display: block;
-  height: 100%;
-  background: var(--work);
-}
-.prio {
-  font: 0.78rem var(--font-mono);
-}
-.filters {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.filters button[aria-pressed='false'] {
-  background: transparent;
-  color: var(--muted);
-  border-color: var(--line);
-}
-
-.ho {
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  min-width: 0;
-}
-.checks {
-  gap: 4px;
-}
-.checks li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
-  font-size: 0.88rem;
-  overflow-wrap: anywhere;
-}
-.checks li::before {
-  content: '';
-  width: 12px;
-  height: 12px;
-  margin-top: 4px;
-  border: 1.5px solid var(--wait);
-  border-radius: 3px;
-}
-
-.empty {
-  padding: 16px;
-  border: 1px dashed var(--line);
-  border-radius: 10px;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-.rule {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-/* The settings sheet is drawn with utilities in components/settings.tsx */
-button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-/* The alert band, the problem cards and the frozen label are drawn with utilities in app.tsx and components/problems.tsx */
-.pf-problem {
-  all: unset;
-  cursor: pointer;
-  text-decoration: underline;
-}
-.pf-problem:focus-visible {
-  outline: 2px solid var(--block);
-  outline-offset: 2px;
 }
 @keyframes blink {
   0%,

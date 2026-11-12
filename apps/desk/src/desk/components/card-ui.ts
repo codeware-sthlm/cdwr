@@ -7,7 +7,7 @@ export const CARD =
 /** The card's head: the pill on the left, the count or where it runs on the right */
 export const HEAD = 'ct-head flex min-w-0 items-center justify-between gap-3';
 
-/** The pill, a button unboxed by the `all: unset` rule in desk.css; the caller adds the colour */
+/** The pill, a button unboxed by the `all: unset` rule in desk.css that `open` names; the caller adds the colour */
 export const OPEN =
   'open state -my-3 inline-flex min-h-[var(--tap)] cursor-pointer items-center gap-2 font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-medium tracking-[0.12em] uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]';
 

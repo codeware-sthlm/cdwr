@@ -10,6 +10,7 @@ import { livePr, prTone, queuePr } from '../view/pr';
 import { type Part, headline, idPr, whereText } from '../view/session';
 
 import { CARD, HEAD, NONE, OPEN, TIME } from './card-ui';
+import { BAR } from './items-ui';
 import { IdLink, LinkIds, PrLink, PrPill, Prn } from './links';
 
 // The session card: what the session does, where it runs, and the newest live events
@@ -107,7 +108,7 @@ export const Parts = ({ parts }: { parts: Part[] }) => (
 const StepLine = ({ d }: { d: Detail | undefined }) =>
   d && d.steps ? (
     <div className={`ct-step ${CT_LINE} flex min-w-0 items-center gap-2`}>
-      <div className="bar w-[60px] flex-none" aria-hidden="true">
+      <div className={`${BAR} w-[60px] flex-none`} aria-hidden="true">
         <i style={{ width: `${Math.round((d.done / d.steps) * 100)}%` }}></i>
       </div>
       <span className="flex-none">

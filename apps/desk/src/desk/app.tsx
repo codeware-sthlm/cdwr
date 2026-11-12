@@ -207,7 +207,14 @@ export const App = () => {
         </header>
 
         {note.hidden ? null : (
-          <div id="notice" className={note.severe ? 'notice err' : 'notice'}>
+          <div
+            id="notice"
+            className={
+              note.severe
+                ? 'rounded-[10px] bg-[color:var(--block-soft)] px-4 py-3 text-[0.9rem] text-[color:var(--block)]'
+                : 'rounded-[10px] bg-[color:var(--wait-soft)] px-4 py-3 text-[0.9rem] text-[color:var(--wait)]'
+            }
+          >
             {note.text}
           </div>
         )}

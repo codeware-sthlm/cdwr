@@ -503,7 +503,7 @@ const Why = ({
     <small className={WHY}>
       <button
         type="button"
-        className="pf-problem"
+        className="pf-problem cursor-pointer underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--block)]"
         data-problem={id}
         onClick={() => onProblem(id)}
       >
