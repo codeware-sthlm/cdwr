@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { RunsPayload } from '../../supabase';
 import { model } from '../model';
-import { NOW, filled, hostSample, runs, view } from '../render/fixtures';
 import { type DeskState, createState } from '../state';
 import type { QueueView } from '../types';
+import { NOW, filled, hostSample, runs, view } from '../view/fixtures';
 
 import { Capacity } from './capacity';
 

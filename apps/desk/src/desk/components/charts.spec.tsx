@@ -2,7 +2,7 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { issue } from '../render/fixtures';
+import { issue } from '../view/fixtures';
 
 import {
   CpuChart,

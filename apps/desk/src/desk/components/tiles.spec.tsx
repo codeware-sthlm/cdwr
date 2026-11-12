@@ -3,8 +3,8 @@ import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
-import { NOW, filled, planSample, runs, view } from '../render/fixtures';
 import { type DeskState, createState } from '../state';
+import { NOW, filled, planSample, runs, view } from '../view/fixtures';
 
 import { Tiles } from './tiles';
 

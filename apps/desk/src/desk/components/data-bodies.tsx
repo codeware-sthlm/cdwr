@@ -6,7 +6,6 @@ import {
 } from '../constants';
 import { ageText, dayLabel, mtok, plural, tidy, usd } from '../format';
 import { type Model, activityMissing, agentState, shipped } from '../model';
-import { isTicketId } from '../render/html';
 import {
   type TicketCost,
   perTicketAverage,
@@ -17,6 +16,7 @@ import {
   unattributedTotal
 } from '../spend';
 import type { DeskState, Filter } from '../state';
+import { isTicketId } from '../view/ids';
 
 import { IdeaCard } from './before';
 import { ShippedChart, SpendChart } from './charts';

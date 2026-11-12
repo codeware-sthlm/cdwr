@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { SnoozeRow } from '../../supabase';
 import { model } from '../model';
-import { type DeskState, viewOf } from '../state';
-import type { SessionState, WatchEntry } from '../types';
+import type { DeskState } from '../state';
+import type { WatchEntry } from '../types';
 
 import { NOW, activity, filled, runs, view } from './fixtures';
-import { platform } from './header';
-import { headline, headlineHtml } from './session';
+import { headline } from './session';
 import {
   copilotView,
   countedRows,
@@ -17,28 +16,6 @@ import {
   mergeBlocker,
   waitRows
 } from './waiting';
-
-describe('sheets', () => {
-  it('name the Platform view from its hash, and from the old nuc link', () => {
-    expect(viewOf('platform')).toBe('platform');
-    expect(viewOf('nuc')).toBe('platform');
-    expect(viewOf('scheduler')).toBeNull();
-    expect(viewOf('')).toBeNull();
-    expect(viewOf(null)).toBeNull();
-  });
-});
-
-describe('header', () => {
-  it('counts failing checks and run problems, and a dash while loading', () => {
-    const state = filled();
-    state.data.runs = {
-      ...runs(view()),
-      last: { when: '2026-10-28 01:00', outcome: 'idle' }
-    };
-    const m = model(state, NOW);
-    expect(platform(m).failing).toContain('scheduler silent 35 h');
-  });
-});
 
 describe('waiting card and queue sheets', () => {
   it('list what waits on the viewer, furthest along first', () => {
@@ -65,7 +42,7 @@ describe('waiting card and queue sheets', () => {
   });
 });
 
-describe('pull requests on the waiting rows and the session card', () => {
+describe('pull requests on the waiting rows', () => {
   const withPr = (pr: number | null) => ({
     steps: 0,
     done: 0,
@@ -165,56 +142,6 @@ describe('pull requests on the waiting rows and the session card', () => {
     expect(rows.find((r) => r.id === 'COD-3')?.wait).toBe(
       'Review fixes: waits on CI'
     );
-  });
-
-  it('count the wait rows and name the first in the idle headline, hand-offs included', () => {
-    const state = filled();
-    state.data.runs = runs(
-      view({
-        next: [],
-        table: {
-          before: [],
-          label: [],
-          after: [{ ticket: 'COD-5', kind: 'handoffs', items: ['a'] }]
-        }
-      })
-    );
-    state.data.ideas = [];
-    const h = headline(model(state, NOW), state.details, NOW);
-    const text = headlineHtml(h.text);
-    expect(text).toContain('1 thing waits');
-    expect(text).toContain('starting with');
-    expect(text).toContain('COD-5');
-    expect(h.tone).toBe('wait');
-  });
-
-  it('put the PR in the takes-next headline', () => {
-    const session: SessionState = {
-      state: 'alive',
-      detail: 'working',
-      ticket: 'COD-1',
-      lastSeen: '2026-10-29T11:59:30'
-    };
-    const state = filled(session);
-    state.data.runs = runs(
-      view({
-        session,
-        next: [
-          { ticket: 'COD-1', reason: 'ready' },
-          { ticket: 'COD-2', reason: 'answered' }
-        ]
-      })
-    );
-    state.details.set('COD-1', withPr(31));
-    state.details.set('COD-2', withPr(32));
-    const text = headlineHtml(
-      headline(
-        model(filled({ state: 'alive', detail: 'working' }), NOW),
-        state.details,
-        NOW
-      ).text
-    );
-    expect(text).toContain('>#31</a>');
   });
 });
 
@@ -326,9 +253,9 @@ describe('snoozed waiting rows', () => {
     );
     s.data.snoozes = [snooze('COD-5', 'hand-offs')];
     s.data.ideas = [];
-    expect(
-      headlineHtml(headline(model(s, NOW), s.details, NOW).text)
-    ).toContain('nothing waits on you');
+    expect(headline(model(s, NOW), s.details, NOW).text).toEqual([
+      'Nothing for the agent, and nothing waits on you.'
+    ]);
   });
 
   describe('Label button', () => {

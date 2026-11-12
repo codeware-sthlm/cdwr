@@ -7,7 +7,8 @@ import type { MouseEventHandler } from 'react';
 
 import { shortAge } from '../format';
 import type { Model } from '../model';
-import { livePr, prTone } from '../render/html';
+import type { Detail } from '../state';
+import { livePr, prTone } from '../view/pr';
 import {
   DESKTOP_ROWS,
   PHONE_ROWS,
@@ -15,8 +16,7 @@ import {
   countedRows,
   rowLabel,
   waitRows
-} from '../render/waiting';
-import type { Detail } from '../state';
+} from '../view/waiting';
 
 import { Prn } from './links';
 

@@ -3,6 +3,9 @@ import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { model } from '../model';
+import { createState } from '../state';
+import type { DeskState } from '../state';
+import type { SessionState } from '../types';
 import {
   NOW,
   at,
@@ -11,10 +14,7 @@ import {
   planSample,
   runs,
   view
-} from '../render/fixtures';
-import { createState } from '../state';
-import type { DeskState } from '../state';
-import type { SessionState } from '../types';
+} from '../view/fixtures';
 
 import { Parts, SessionCard, UnknownSession } from './session';
 

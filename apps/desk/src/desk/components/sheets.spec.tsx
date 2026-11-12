@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
 import {
+  type DeskState,
+  SHEET_IDS,
+  type SheetId,
+  createState,
+  isSheetId,
+  sheetIdOf
+} from '../state';
+import {
   NEW,
   NOW,
   OLD,
@@ -13,17 +21,9 @@ import {
   planSample,
   runs,
   view
-} from '../render/fixtures';
-import { platform } from '../render/header';
-import { headline, headlineHtml } from '../render/session';
-import {
-  type DeskState,
-  SHEET_IDS,
-  type SheetId,
-  createState,
-  isSheetId,
-  sheetIdOf
-} from '../state';
+} from '../view/fixtures';
+import { platform } from '../view/header';
+import { headline } from '../view/session';
 
 import { whyLine } from './queue-bodies';
 import { SHEETS, type SheetActions } from './sheets';
@@ -322,9 +322,9 @@ describe('queue sheets', () => {
     const review = text(body('review', state, m));
     expect(review).toContain('COD-3');
     expect(review).toContain('Review fixes: waits on CI since');
-    expect(headlineHtml(headline(m, state.details, NOW).note)).toContain(
-      'COD-3'
-    );
+    expect(headline(m, state.details, NOW).note).toContainEqual({
+      id: 'COD-3'
+    });
   });
 
   it('drop a parked ticket a live change moved on from', () => {

@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
+import { createState } from '../state';
 import {
   NEW,
   NOW,
@@ -15,8 +16,7 @@ import {
   live,
   runs,
   view
-} from '../render/fixtures';
-import { createState } from '../state';
+} from '../view/fixtures';
 
 import { Status } from './status';
 

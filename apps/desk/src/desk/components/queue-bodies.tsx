@@ -3,9 +3,10 @@ import { Fragment, type ReactNode } from 'react';
 import { GH_PR, LIMIT, waitName } from '../constants';
 import { hhmm } from '../format';
 import { type Model, type TicketRef, prOf } from '../model';
-import { livePr, parkedPlain, prWaitPlain } from '../render/html';
 import type { DeskState, Detail } from '../state';
 import type { QueueNext, QueueRenovate, SessionState } from '../types';
+import { parkedPlain, prWaitPlain } from '../view/parked';
+import { livePr } from '../view/pr';
 
 import { Chip, Empty, Item, LoadMeter, ReasonChip } from './items';
 import { IdLink, Inline, PrPill, Prn } from './links';

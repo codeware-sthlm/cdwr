@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DeskCommandRow, SnoozeRow } from '../../supabase';
 import { model } from '../model';
-import { NOW, activity, filled, runs, view } from '../render/fixtures';
 import { type DeskState, createState } from '../state';
+import { NOW, activity, filled, runs, view } from '../view/fixtures';
 
 import { BeforeSheet, type WaitActions } from './before';
 

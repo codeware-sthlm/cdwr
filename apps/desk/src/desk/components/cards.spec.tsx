@@ -3,8 +3,8 @@ import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { model } from '../model';
-import { NOW, at, filled, hostSample, runs, view } from '../render/fixtures';
 import type { DeskState } from '../state';
+import { NOW, at, filled, hostSample, runs, view } from '../view/fixtures';
 
 import { Cards } from './cards';
 

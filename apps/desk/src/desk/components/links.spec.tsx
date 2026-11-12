@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { model } from '../model';
-import { NOW, filled } from '../render/fixtures';
+import { NOW, filled } from '../view/fixtures';
 
 import { IdLink, Inline, LinkIds, PrLink, PrPill, Prn } from './links';
 

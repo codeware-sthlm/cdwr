@@ -3,11 +3,12 @@ import type { ReactNode } from 'react';
 import { GH_PR, LINEAR_ISSUE } from '../constants';
 import { tidy } from '../format';
 import type { Model } from '../model';
-import { type PrTone, isTicketId, prPillData } from '../render/html';
 import type { Detail } from '../state';
 import type { PrRef } from '../types';
+import { isTicketId } from '../view/ids';
+import { type PrTone, prPillData } from '../view/pr';
 
-// React mirrors of the link helpers in render/html.ts, with the same elements, classes and attributes
+// The desk's links, pills and chips: ticket ids, pull requests and Linear text
 
 /** A ticket id as a link to Linear; anything else as a plain id, a dash when empty */
 export const IdLink = ({ id = '' }: { id?: string }) =>
@@ -71,7 +72,7 @@ export const LinkIds = ({ text }: { text: string }) => (
   </>
 );
 
-/** Text from Linear as `inline` shows it: links named, `code` spans in <code>, ticket ids linked */
+/** Text from Linear with its links named,links named, `code` spans in <code>, ticket ids linked */
 export const Inline = ({ text }: { text: string | null | undefined }) => (
   <>
     {tidy(text)
