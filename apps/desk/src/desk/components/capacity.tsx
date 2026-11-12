@@ -7,8 +7,8 @@ import {
 import { hhmm, plural, shortAge, usd } from '../format';
 import type { HandBackState } from '../live';
 import type { Model } from '../model';
-import { cpuChart } from '../render/charts';
 
+import { CpuChart } from './charts';
 import { CmdButton, ControlStatus } from './controls';
 
 // The Capacity row between the cards and the tiles: limits and hosts on the desktop, one card on a phone
@@ -282,8 +282,9 @@ const CpuDay = ({ m }: { m: Model }) => {
         <span>{m.nuc?.host ?? 'nuc'} CPU, 24 h · shaded = agent runs</span>
         <span className="cap-stats">{stats.join(' · ')}</span>
       </div>
-      {/* The chart is numbers and an escaped label, built by the string renderer */}
-      <div dangerouslySetInnerHTML={{ __html: cpuChart(day) }} />
+      <div>
+        <CpuChart day={day} />
+      </div>
       {day.peak ? (
         <p className="cap-sub">
           Peak {day.peak.ticket ? `during ${day.peak.ticket} ` : ''}at{' '}

@@ -21,6 +21,7 @@ import {
 import { BeforeSheet, type WaitActions } from './components/before';
 import { Capacity } from './components/capacity';
 import { Cards } from './components/cards';
+import { ShippedChart, SpendChart } from './components/charts';
 import { Platform, type PlatformActions } from './components/platform';
 import { Status } from './components/status';
 import { Tiles } from './components/tiles';
@@ -28,12 +29,7 @@ import { AGENT_AVATAR, CONFIRM_MS } from './constants';
 import { type Loader, createLoader } from './load';
 import { type ControlsModel, type Model, model, shipped } from './model';
 import { notice } from './notice';
-import {
-  chartHeight,
-  chartKind,
-  shippedChart,
-  spendChart
-} from './render/charts';
+import { chartHeight, chartKind } from './render/charts';
 import { CAP_RANGE, LIMIT_RANGE } from './render/controls';
 import {
   renderAlert,
@@ -80,63 +76,6 @@ const cardsRoot = createRoot($('cards'));
 const capacityRoot = createRoot($('capacity'));
 const tilesRoot = createRoot($('more'));
 const platformRoot = createRoot($('platform'));
-
-// ---------- Charts ----------
-
-// Drawn after layout so text stays at its real size at every width
-function drawChart(el: HTMLElement): void {
-  const { days } = shipped(state.data.closed, new Date());
-  const width = el.clientWidth,
-    height = chartHeight(el.dataset.h);
-  const chart =
-    chartKind(el.dataset.chart) === 'spend'
-      ? spendChart(spendDays(state.data.usage, days), width, height)
-      : shippedChart(days, width, height);
-  el.innerHTML = chart.html;
-  const tip = el.querySelector<HTMLElement>('.tip');
-  if (!tip) return;
-  el.onmousemove = (e) => {
-    const hit =
-      e.target instanceof Element
-        ? e.target.closest<HTMLElement>('[data-day]')
-        : null;
-    const t = hit ? chart.tip(Number(hit.dataset.day)) : null;
-    if (!hit || !t) {
-      tip.hidden = true;
-      return;
-    }
-    tip.innerHTML = t.html;
-    const box = el.getBoundingClientRect(),
-      hb = hit.getBoundingClientRect();
-    tip.style.left =
-      Math.min(
-        box.width - t.edge,
-        Math.max(t.edge, hb.left - box.left + hb.width / 2)
-      ) + 'px';
-    tip.style.top = t.top + 'px';
-    tip.hidden = false;
-  };
-  el.onmouseleave = () => {
-    tip.hidden = true;
-  };
-}
-function drawCharts(): void {
-  document
-    .querySelectorAll<HTMLElement>('[data-chart]')
-    .forEach((el) => drawChart(el));
-}
-let chartWidth = 0;
-try {
-  new ResizeObserver(() => {
-    const w = $('sheet-body').clientWidth;
-    if (w && w !== chartWidth) {
-      chartWidth = w;
-      drawCharts();
-    }
-  }).observe($('sheet-body'));
-} catch {
-  // No ResizeObserver: the charts are drawn when a sheet opens
-}
 
 // ---------- Main view ----------
 
@@ -260,6 +199,44 @@ function unmountSheet(): void {
   sheetRoot = null;
 }
 
+// An HTML sheet's charts are React roots on its `[data-chart]` slots. While a render writes the
+// same HTML the body is left alone and the roots re-render with new data, so a hover survives it.
+let sheetHtml: string | null = null;
+let chartRoots: Root[] = [];
+
+function unmountCharts(): void {
+  for (const root of chartRoots) root.unmount();
+  chartRoots = [];
+  sheetHtml = null;
+}
+
+/** Writes an HTML sheet's body when it changed, then renders its charts */
+function writeSheet(html: string): void {
+  const body = $('sheet-body');
+  if (html !== sheetHtml) {
+    unmountCharts();
+    body.innerHTML = html;
+    sheetHtml = html;
+    chartRoots = Array.from(
+      body.querySelectorAll<HTMLElement>('[data-chart]'),
+      (el) => createRoot(el)
+    );
+  }
+  if (!chartRoots.length) return;
+  const { days } = shipped(state.data.closed, new Date());
+  body.querySelectorAll<HTMLElement>('[data-chart]').forEach((el, n) => {
+    const height = chartHeight(el.dataset.h);
+    chartRoots[n]?.render(
+      chartKind(el.dataset.chart) === 'spend'
+        ? createElement(SpendChart, {
+            days: spendDays(state.data.usage, days),
+            height
+          })
+        : createElement(ShippedChart, { days, height })
+    );
+  });
+}
+
 function showSheet(value: string, focus = true): void {
   const id = sheetIdOf(value);
   if (!id) return;
@@ -271,6 +248,7 @@ function showSheet(value: string, focus = true): void {
   $('sheet-sub').textContent = w.sub;
   if (id === 'before') {
     if (!sheetRoot) {
+      unmountCharts();
       $('sheet-body').innerHTML = '';
       sheetRoot = createRoot($('sheet-body'));
     }
@@ -289,13 +267,10 @@ function showSheet(value: string, focus = true): void {
     );
   } else {
     unmountSheet();
-    $('sheet-body').innerHTML = w.body(m, state, now);
+    writeSheet(w.body(m, state, now));
   }
   $('sheet').hidden = false;
   $('scrim').hidden = false;
-  $('sheet-body')
-    .querySelectorAll<HTMLElement>('[data-chart]')
-    .forEach((el) => drawChart(el));
   setHash();
   if (focus) $('sheet-close').focus();
 }
@@ -303,6 +278,7 @@ function hideSheet(): void {
   const was = state.ui.openSheet;
   state.ui.openSheet = null;
   unmountSheet();
+  unmountCharts();
   $('sheet').hidden = true;
   $('scrim').hidden = true;
   setHash();
