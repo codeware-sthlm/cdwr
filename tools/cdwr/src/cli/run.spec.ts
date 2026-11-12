@@ -366,6 +366,41 @@ describe('runCommand with rest arguments', () => {
     expect(r.seen).toEqual([]);
   });
 
+  it('keeps its own plan and summary off stdout, which the rest command owns', async () => {
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    const stdout: string[] = [];
+    try {
+      const exit = await runCommand({
+        name: 'test rest',
+        command: defineCommand({
+          summary: 'Test command',
+          description: 'Test command',
+          danger: 'read',
+          rest: true,
+          inputs: {},
+          plan: async () => ({ steps: ['Run it remotely'], data: null }),
+          apply: async () => ({ summary: 'Done', details: ['A detail'] })
+        }),
+        argv: ['--', 'agent', 'status', '--json'],
+        root: '/repo',
+        env: {},
+        prefs: memoryPrefs(),
+        interactive: false,
+        history: () => undefined,
+        stdout: (text) => stdout.push(text)
+      });
+      expect(exit).toBe(EXIT.ok);
+      expect(stdout).toEqual([]);
+      const written = stderr.mock.calls.map(([text]) => String(text)).join('');
+      expect(written).toContain('Run it remotely');
+      expect(written).toContain('A detail');
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
   it('shows the rest in the usage line', async () => {
     const r = runRest(['--help'], true);
     expect(await r.exit).toBe(EXIT.ok);
