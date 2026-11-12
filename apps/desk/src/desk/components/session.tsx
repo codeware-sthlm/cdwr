@@ -291,7 +291,9 @@ export const UnknownSession = ({ m }: { m: Model }) => {
       className="state-unknown flex flex-[1_1_100%] flex-wrap items-center gap-x-6 gap-y-3 rounded-[var(--r-card)] border border-dashed border-[color:var(--unknown-line)] bg-[image:repeating-linear-gradient(135deg,var(--sunk)_0_10px,var(--surface)_10px_20px)] px-[22px] py-5 max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-1.5 max-[600px]:px-3.5 max-[600px]:py-3"
       aria-label="Session state unknown"
     >
-      <span className="p-pill solid">STATE UNKNOWN</span>
+      <span className="p-pill solid self-start rounded-[var(--r-pill)] border-0 bg-[color:var(--line-strong)] px-3 py-[5px] font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-normal tracking-[0.12em] text-[color:var(--fg)] max-[600px]:order-1 max-[600px]:px-[9px] max-[600px]:py-[3px] max-[600px]:text-[10px]">
+        STATE UNKNOWN
+      </span>
       <div className="su-text flex min-w-0 flex-[1_1_400px] flex-col gap-1 max-[600px]:basis-auto">
         <b className="su-title text-[22px] font-bold max-[600px]:text-[15px]">
           Last known: {p.host}{' '}

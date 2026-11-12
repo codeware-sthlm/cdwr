@@ -32,15 +32,30 @@ export type ProblemActions = {
   abandon: () => void;
 };
 
+// The phone keeps the short text and drops what carries `wide`
+const WIDE = 'wide max-[600px]:hidden';
+const MONO =
+  'font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-normal text-[color:var(--muted)]';
+const BTN =
+  'p-btn min-h-[var(--tap)] cursor-pointer rounded-[9px] px-4 py-0 text-[13px] disabled:cursor-default disabled:opacity-50';
+const BTN_PLAIN = `${BTN} border border-[color:var(--problem-line)] bg-transparent text-[color:var(--fg)] hover:border-[color:var(--muted)]`;
+const BTN_PRIMARY = `${BTN} primary border-0 bg-[color:var(--block)] font-semibold text-[#2a0d09]`;
+const RAW =
+  'overflow-x-auto border border-[#3a2420] bg-[#151110] px-3 py-2.5 font-[family-name:var(--font-mono)] text-[12px] leading-[normal] font-normal text-[#c8c3ba]';
+const MARK = 'bg-transparent text-[color:var(--block)]';
+const LABEL =
+  'text-[11px] leading-[normal] font-medium font-[family-name:var(--font-mono)] tracking-[0.14em]';
+
 const Both = ({ long, short }: { long: ReactNode; short: ReactNode }) => (
   <>
-    <span className="long">{long}</span>
-    <span className="short">{short}</span>
+    <span className="long max-[600px]:hidden">{long}</span>
+    <span className="short hidden max-[600px]:inline">{short}</span>
   </>
 );
 
 const Warning = () => (
   <svg
+    className="max-[600px]:hidden"
     aria-hidden="true"
     width="18"
     height="18"
@@ -90,7 +105,14 @@ export const Tick = ({
   from: number;
   now: Date;
 }) => (
-  <span className={fmt === 'next' ? 'tick next' : 'tick'}>
+  // The separator shows only while the countdown has text
+  <span
+    className={
+      fmt === 'next'
+        ? "tick next [&:not(:empty)]:before:content-['_·_']"
+        : 'tick'
+    }
+  >
     {tickText(fmt, from, now)}
   </span>
 );
@@ -144,15 +166,21 @@ export const Alert = ({
       />
     );
   return (
-    <div className="alert" role="alert">
-      <div className="alert-in">
+    <div
+      className="alert border-b border-[color:var(--alert-line)] bg-[color:var(--alert-bg)] text-[color:var(--block)] max-[600px]:rounded-[var(--r-card)] max-[600px]:border"
+      role="alert"
+    >
+      {/* The band runs edge to edge; its content stays out of the status bar and the notch */}
+      <div className="alert-in mx-auto flex max-w-[1360px] flex-wrap items-center gap-x-4 gap-y-3 pt-[max(12px,env(safe-area-inset-top))] pr-[var(--pad-right)] pb-3 pl-[var(--pad-left)] max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-1 max-[600px]:pt-3 max-[600px]:pr-3.5 max-[600px]:pb-3 max-[600px]:pl-3.5">
         <Warning />
-        <b className="alert-t">
+        <b className="alert-t text-[14px] font-semibold text-[color:var(--alert-fg)]">
           <Both long={title} short={count} />
         </b>
-        <span className="alert-s">{sub}</span>
+        <span className="alert-s text-[12px] text-[color:var(--alert-sub)]">
+          {sub}
+        </span>
         <a
-          className="alert-link"
+          className="alert-link ml-auto inline-flex min-h-[var(--tap)] items-center text-[13px] font-semibold text-[color:var(--alert-fg)] underline max-[600px]:hidden"
           href="#problems"
           onClick={(e) => {
             e.preventDefault();
@@ -216,7 +244,7 @@ const connectionCard = (
       : `Live updates dropped at ${hhmmss(p.since)}. The desk polls instead, so numbers may lag by up to a minute and Linear by up to 5; PR states and waits update on the next poll.`,
     short: `${never ? 'Not connected.' : `Dropped ${p.retries}×.`} Polling; numbers may lag.`,
     extra: (
-      <span className="p-mono wide">
+      <span className={`p-mono ${WIDE} ${MONO}`}>
         {line}
         {p.nextAt === null ? null : (
           <Tick fmt="next" from={p.nextAt} now={now} />
@@ -227,13 +255,13 @@ const connectionCard = (
       <>
         <button
           type="button"
-          className="p-btn primary"
+          className={BTN_PRIMARY}
           onClick={actions.reconnect}
         >
           Reconnect now
         </button>
-        <span className="wide">
-          <button type="button" className="p-btn" onClick={actions.reload}>
+        <span className={WIDE}>
+          <button type="button" className={BTN_PLAIN} onClick={actions.reload}>
             Reload desk
           </button>
         </span>
@@ -264,15 +292,23 @@ const parseCard = (
         : `Showing the last good snapshot, from ${hhmm(p.goodAt)}.`,
     extra: (
       <>
-        <pre className="raw wide" ref={raw}>
+        <pre
+          className={`raw ${WIDE} ${RAW} max-h-[14em] ${p.issues.length ? 'rounded-t-[8px] rounded-b-none' : 'rounded-[8px]'}`}
+          ref={raw}
+        >
           {JSON.stringify(p.view, null, 2)}
         </pre>
         {p.issues.length ? (
-          <pre className="raw-marks wide">
+          <pre
+            className={`raw-marks ${WIDE} ${RAW} -mt-px rounded-t-none rounded-b-[8px]`}
+          >
             {p.issues.map((i, n) => (
               <span key={`${i.path}-${n}`}>
                 {n ? '\n' : ''}
-                {i.path}: <mark>{i.missing ? '⟨missing⟩' : '⟨invalid⟩'}</mark>
+                {i.path}:{' '}
+                <mark className={MARK}>
+                  {i.missing ? '⟨missing⟩' : '⟨invalid⟩'}
+                </mark>
               </span>
             ))}
           </pre>
@@ -280,10 +316,10 @@ const parseCard = (
       </>
     ),
     actions: (
-      <span className="wide">
+      <span className={WIDE}>
         <button
           type="button"
-          className="p-btn"
+          className={BTN_PLAIN}
           onClick={() => {
             if (raw.current) actions.copyRow(raw.current);
           }}
@@ -329,18 +365,20 @@ const AbandonControl = ({
   const c = m.controls;
   if (!c)
     return (
-      <span className="p-note wide">
+      <span className={`p-note ${WIDE} text-[12px] text-[color:var(--muted)]`}>
         Check the host first, then mark the run abandoned from the CLI or with a
         control token in Settings.
       </span>
     );
   return (
     <>
-      <span className="p-note wide">Check the host first.</span>{' '}
-      <span className="p-ctl">
+      <span className={`p-note ${WIDE} text-[12px] text-[color:var(--muted)]`}>
+        Check the host first.
+      </span>{' '}
+      <span className="p-ctl flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
         <CmdButton
           cmd="abandon"
-          className="p-btn"
+          className={BTN_PLAIN}
           label={c.confirming ? 'Confirm abandon' : 'Mark run abandoned'}
           view={c.states.abandon}
           onClick={onAbandon}
@@ -393,7 +431,7 @@ const checkCard = (
   body: `${p.text}. A failing check says nothing about the queue, so its numbers stand.`,
   short: p.text,
   actions: (
-    <button type="button" className="p-btn" onClick={actions.platform}>
+    <button type="button" className={BTN_PLAIN} onClick={actions.platform}>
       Platform ›
     </button>
   )
@@ -435,21 +473,36 @@ const ProblemCard = ({
   const raw = useRef<HTMLPreElement>(null);
   const c = card(p, { ...rest, raw });
   return (
-    <div className="problem" id={id} data-kind={p.kind} tabIndex={-1}>
-      <div className="p-main">
-        <div className="p-head">
-          <span className="p-pill">{c.pill}</span>
-          <b className="p-title">{c.title}</b>
-          <span className="p-time">
+    <div
+      className="problem flex flex-wrap items-start gap-x-6 gap-y-[14px] rounded-[var(--r-card)] border border-[color:var(--problem-line)] bg-[color:var(--problem-bg)] px-5 py-[18px] max-[600px]:gap-2 max-[600px]:px-3.5 max-[600px]:py-3"
+      id={id}
+      data-kind={p.kind}
+      tabIndex={-1}
+    >
+      <div className="p-main flex min-w-0 flex-[1_1_520px] flex-col gap-1.5 max-[600px]:basis-full">
+        <div className="p-head flex flex-wrap items-center gap-2.5 max-[600px]:gap-2">
+          <span className="p-pill rounded-[var(--r-pill)] border border-[color:var(--alert-line)] px-[9px] py-[3px] font-[family-name:var(--font-mono)] text-[10px] leading-[normal] font-normal tracking-[0.1em] text-[color:var(--block)] max-[600px]:order-1 max-[600px]:px-[7px] max-[600px]:py-[2px] max-[600px]:text-[9px]">
+            {c.pill}
+          </span>
+          <b className="p-title text-[15px] font-semibold max-[600px]:order-3 max-[600px]:basis-full max-[600px]:text-[13px]">
+            {c.title}
+          </b>
+          <span
+            className={`p-time ${MONO} max-[600px]:order-2 max-[600px]:ml-auto max-[600px]:text-[10px]`}
+          >
             <Both long={c.time[0]} short={c.time[1]} />
           </span>
         </div>
-        <span className="p-body">
+        <span className="p-body text-[13px] text-[#c8c3ba] max-[600px]:text-[12px]">
           {c.short ? <Both long={c.body} short={c.short} /> : c.body}
         </span>
         {c.extra}
       </div>
-      {c.actions ? <div className="p-actions">{c.actions}</div> : null}
+      {c.actions ? (
+        <div className="p-actions flex shrink-0 gap-2 max-[600px]:[&:not(:has(>:not(.wide)))]:hidden">
+          {c.actions}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -468,7 +521,9 @@ export const Problems = ({
   const seen = new Set<ProblemKey>();
   return (
     <>
-      <h2 className="problems-h">PROBLEMS · {m.problems.length}</h2>
+      <h2 className={`problems-h ${LABEL} text-[color:var(--block)]`}>
+        PROBLEMS · {m.problems.length}
+      </h2>
       {m.problems.map((p, n) => {
         const key = problemKey(p);
         const first = p.kind === 'check' || !seen.has(key);
