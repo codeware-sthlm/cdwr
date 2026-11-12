@@ -1571,16 +1571,31 @@ describe('attended picks', () => {
         true
       ],
       ['not resuming', [{ ticket: 'COD-2', detail: null }], false],
-      ['none resuming', [], false]
+      ['none resuming', [], false],
+      [
+        'held by this session',
+        [{ ticket: 'COD-1', detail: null, holder: 'sess-1' }],
+        true
+      ],
+      ['without a claim holder', [{ ticket: 'COD-1', holder: null }], true],
+      [
+        'held by another session',
+        [{ ticket: 'COD-1', detail: null, holder: 'other' }],
+        false
+      ]
     ])('own_pick is %s', (_name, resuming, expected) => {
-      expect(run('own_pick("COD-1")', { resuming })).toBe(expected);
+      expect(run('own_pick("COD-1"; "sess-1abc")', { resuming })).toBe(
+        expected
+      );
     });
 
     it("own_pick finds the session's ticket behind a fresher claim", () => {
       expect(
-        run(`attended(${NOW}; 5; {}) | own_pick("COD-1")`, [
+        run(`attended(${NOW}; 5; {}) | own_pick("COD-1"; "sess-1abc")`, [
           node('COD-1', 'agent:working', { description: claimLine(HOUR) }),
-          node('COD-2', 'agent:working', { description: claimLine(HOUR / 2) })
+          node('COD-2', 'agent:working', {
+            description: claimLine(HOUR / 2, undefined, 'other')
+          })
         ])
       ).toBe(true);
     });
@@ -1660,6 +1675,27 @@ describe('attended picks', () => {
         verdict: 'running',
         ticket: 'COD-1',
         detail: 'no claim line'
+      });
+    });
+
+    it("a live session's own ticket resumes whatever its claim age", () => {
+      const issues = [
+        node('COD-1', 'agent:working', { description: claimLine(5 * HOUR) })
+      ];
+      const session = { id: 's9', ticket: 'COD-1', tickets: ['COD-1'] };
+      expect(
+        run(
+          `attended(${NOW}; 5; {}; {}; {}; ${JSON.stringify(session)})`,
+          issues
+        )
+      ).toMatchObject({
+        verdict: 'running',
+        ticket: 'COD-1',
+        detail: 'step 2'
+      });
+      expect(attended(issues)).toMatchObject({
+        verdict: 'run',
+        reason: 'take over'
       });
     });
 

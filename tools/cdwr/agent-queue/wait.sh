@@ -105,7 +105,7 @@ pick() {
 key_of() { jq -c '{verdict, ticket, reason} + (if .verdict == "idle" then {waiting, used, limit} else {} end)' <<<"$1"; }
 line_of() { jq -r -L "$HERE" 'include "watch"; attended_line' <<<"$1"; }
 # The session's own ticket is among the resumable ones
-own() { [[ -n "$ticket" ]] && jq -e --arg t "$ticket" -L "$HERE" 'include "watch"; own_pick($t)' <<<"$1" >/dev/null; }
+own() { [[ -n "$ticket" ]] && jq -e --arg t "$ticket" --arg s "$sid" -L "$HERE" 'include "watch"; own_pick($t; $s)' <<<"$1" >/dev/null; }
 # <prefix>: <line>, or the resume line for the session's own ticket
 report() {
   if own "$2"; then jq -r --arg t "$ticket" -L "$HERE" 'include "watch"; resume_line($t)' <<<"$2"
