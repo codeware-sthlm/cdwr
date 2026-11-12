@@ -43,6 +43,8 @@ export type NotFoundCheck = {
 export type AuditReport = {
   url: string;
   at: string;
+  /** Whether a gate cookie was sent with every request */
+  gateCookie: boolean;
   pages: Array<PageAudit>;
   og: OgCheck;
   notFound: Array<NotFoundCheck>;
@@ -169,6 +171,8 @@ export function auditMarkdown(report: AuditReport): string {
 
   return [
     `### Audit of ${report.url} at ${report.at}`,
+    '',
+    `Gate cookie: ${report.gateCookie ? 'sent' : 'not sent'}`,
     '',
     '| Route | Status | Console errors | Axe | Broken links |',
     '| --- | --- | --- | --- | --- |',

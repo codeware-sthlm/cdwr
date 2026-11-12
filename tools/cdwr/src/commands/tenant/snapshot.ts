@@ -9,6 +9,7 @@ import { definitionInput } from '../../services/site-definitions';
 
 import {
   assertAnswers,
+  assertPastGate,
   gatePasswordInput,
   routesFrom,
   stamp
@@ -140,13 +141,21 @@ export default defineCommand<
 
   // The password stays out of the plan, which `--json` prints
   async apply(ctx, { url, shots, dir }, { gatePassword }) {
-    mkdirSync(dir, { recursive: true });
     // Only this command needs a browser, so the others never load it
     const { chromium } = await import('playwright');
     const browser = await chromium.launch();
     const results: Array<ShotResult> = [];
 
     try {
+      await assertPastGate(
+        ctx,
+        browser,
+        url,
+        shots[0]?.route ?? '/',
+        gatePassword
+      );
+      mkdirSync(dir, { recursive: true });
+
       const settings = [...new Set(shots.map(settingOf))];
 
       for (const setting of settings) {
