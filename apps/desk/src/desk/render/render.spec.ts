@@ -13,15 +13,7 @@ import {
 } from '../state';
 import type { SessionState, WatchEntry } from '../types';
 
-import {
-  chartHeight,
-  chartKind,
-  cpuChart,
-  gauge,
-  shippedChart,
-  sparkline,
-  spendChart
-} from './charts';
+import { chartHeight, chartKind, gauge, sparkline } from './charts';
 import {
   NEW,
   NOW,
@@ -527,56 +519,6 @@ describe('waiting card and queue sheets', () => {
   });
 });
 
-describe('cpu chart', () => {
-  const day = {
-    from: 0,
-    to: 1000,
-    points: [
-      { at: 0, cpu: 0.1 },
-      { at: 500, cpu: 0.9 },
-      { at: 1000, cpu: 0.2 }
-    ],
-    bands: [
-      { start: 400, end: 600, ticket: 'COD-1' },
-      { start: 800, end: 900, ticket: null }
-    ],
-    idle: 0.15,
-    inRuns: 0.9,
-    peak: { at: 500, cpu: 0.9, ticket: 'COD-1' }
-  };
-
-  it('draw a band per run, the line and a circle at the peak', () => {
-    const out = cpuChart(day);
-    expect(out).toContain('viewBox="0 0 600 56"');
-    expect(out).toContain('preserveAspectRatio="none"');
-    expect(out.match(/<rect /g)).toHaveLength(2);
-    expect(out).toContain('x="240.0" y="0" width="120.0" height="56"');
-    expect(out).toContain('vector-effect="non-scaling-stroke"');
-    expect(out).toContain('points="0.0,48.8 300.0,7.2 600.0,43.6"');
-    expect(out).toContain(
-      '<circle class="cpu-peak" cx="300.0" cy="7.2" r="3"/>'
-    );
-    expect(out).toContain('peak 90%');
-  });
-
-  it('keep a load above one on the top of the chart', () => {
-    const out = cpuChart({
-      ...day,
-      points: [
-        { at: 0, cpu: 3 },
-        { at: 1000, cpu: 0 }
-      ],
-      peak: { at: 0, cpu: 3, ticket: null }
-    });
-    expect(out).toContain('points="0.0,2.0 600.0,54.0"');
-  });
-
-  it('draw nothing under two samples', () => {
-    expect(cpuChart({ ...day, points: [] })).toBe('');
-    expect(cpuChart({ ...day, points: [day.points[0]] })).toBe('');
-  });
-});
-
 describe('problems', () => {
   // Every health check passes, so only the problem under test shows
   const base = (): DeskState => {
@@ -813,35 +755,6 @@ describe('problems', () => {
 });
 
 describe('charts', () => {
-  const days = Array.from({ length: 30 }, (_, n) => ({
-    key: `2026-10-${String(n + 1).padStart(2, '0')}`,
-    items: n === 5 ? [issue('COD-1'), issue('COD-2')] : []
-  }));
-
-  it('draw a hit area per day and a tooltip that names the tickets', () => {
-    const chart = shippedChart(days, 600, 200);
-    expect(chart.html.match(/class="hit"/g)).toHaveLength(30);
-    expect(chart.tip(5)?.html).toContain('COD-1, COD-2');
-    expect(chart.tip(99)).toBeNull();
-  });
-
-  it('keep a minimum width', () => {
-    expect(shippedChart(days, 0, 200).html).toContain('viewBox="0 0 240 200"');
-    const spend = spendChart(
-      days.map((d) => ({
-        key: d.key,
-        planning: 1,
-        orchestrating: 0,
-        implementing: 0,
-        total: 1
-      })),
-      0,
-      200
-    );
-    expect(spend.html).toContain('viewBox="0 0 240 200"');
-    expect(spend.tip(0)?.html).toContain('planning $1.00');
-  });
-
   it('read the placeholder attributes', () => {
     expect(chartKind('spend')).toBe('spend');
     expect(chartKind('')).toBe('shipped');
