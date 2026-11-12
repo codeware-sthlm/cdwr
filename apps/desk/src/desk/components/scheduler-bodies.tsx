@@ -21,6 +21,7 @@ import { Gauge, Sparkline } from './charts';
 import { Empty, Table } from './items';
 import { IdLink, Inline } from './links';
 import { Parts } from './session';
+import { FIG, FIGH, FIGS, KNOBS, KV, PV_STATS, STALE } from './sheet-ui';
 
 // The scheduler sheets: the session, the scheduled runs, their timers and the plan's usage
 
@@ -51,7 +52,7 @@ export const SessionBody = ({ m, state, now }: BodyProps) => {
       <div className="group">
         <h3>Hosts</h3>
         {m.hostSessions.length ? (
-          <ul className="knobs">
+          <ul className={KNOBS}>
             {m.hostSessions.map((x) => (
               <li key={x.host}>
                 <b>{x.host}</b>
@@ -65,7 +66,7 @@ export const SessionBody = ({ m, state, now }: BodyProps) => {
       </div>
       <div className="group">
         <h3>Now</h3>
-        <div className="verdict">
+        <div className="font-[family-name:var(--font-ui)] text-[1.05rem] leading-[1.35] font-semibold [overflow-wrap:anywhere] [&_a.id]:text-[0.9rem] [&_a.id]:no-underline [&_a.id:hover]:underline">
           <Parts parts={h.text} />
         </div>
         {h.note.length ? (
@@ -77,7 +78,7 @@ export const SessionBody = ({ m, state, now }: BodyProps) => {
       {s ? (
         <div className="group">
           <h3>Heartbeat</h3>
-          <dl className="kv">
+          <dl className={KV}>
             <dt>State</dt>
             <dd>
               {sessionLabel(s.state)}
@@ -111,7 +112,7 @@ export const SessionBody = ({ m, state, now }: BodyProps) => {
       ) : null}
       <div className="group">
         <h3>What the states mean</h3>
-        <ul className="knobs">
+        <ul className={KNOBS}>
           <li>
             <b>Live</b>
             <span>
@@ -228,7 +229,7 @@ export const SchedulerBody = ({ m }: Pick<BodyProps, 'm'>) => {
       <div className="group">
         <h3>Job</h3>
         {job?.host ? (
-          <dl className="kv">
+          <dl className={KV}>
             <dt>Runs on</dt>
             <dd>
               <HostName job={job} />
@@ -297,7 +298,7 @@ export const RunsBody = ({ m }: Pick<BodyProps, 'm'>) => {
   const t = m.runsToday;
   return (
     <>
-      <div className="pv-stats">
+      <div className={PV_STATS}>
         <div>
           <b>{t.count}</b>
           <span>runs today</span>
@@ -548,8 +549,8 @@ const PlanWindowFigure = ({ w, now }: { w: PlanWindow; now: Date }) => {
   const title = WINDOW_TITLE[w.kind];
   if (w.reset)
     return (
-      <div className="fig">
-        <div className="figh">
+      <div className={FIG}>
+        <div className={FIGH}>
           <h3>{title}</h3>
           <b>–</b>
           <span>{`reset ${planWhen(w.resetsAt, now)}`}</span>
@@ -569,8 +570,8 @@ const PlanWindowFigure = ({ w, now }: { w: PlanWindow; now: Date }) => {
         ? `Runs out ~${planWhen(w.runsOutAt, now)}, before the ${planWhen(w.resetsAt, now)} reset`
         : `At this rate ${Math.round(w.projected)}% at reset`;
   return (
-    <div className="fig">
-      <div className="figh">
+    <div className={FIG}>
+      <div className={FIGH}>
         <h3>{title}</h3>
         <b className={bad ? 'bad' : ''}>{`${Math.round(w.used)}%`}</b>
         <span>{`resets ${planWhen(w.resetsAt, now)}`}</span>
@@ -578,7 +579,7 @@ const PlanWindowFigure = ({ w, now }: { w: PlanWindow; now: Date }) => {
       <Gauge share={w.used / 100} bad={bad} />
       <p className="rule">
         {`${projection}. `}
-        <span className={w.stale ? 'stale' : ''}>
+        <span className={w.stale ? STALE : ''}>
           {`Sample ${ageText(w.ageMin)}.`}
         </span>
       </p>
@@ -606,7 +607,7 @@ const PlanWindows = ({ m, state, now }: BodyProps) => {
       </Empty>
     );
   return (
-    <div className="figs">
+    <div className={FIGS}>
       {windows.map((w) => (
         <PlanWindowFigure key={w.kind} w={w} now={now} />
       ))}
@@ -636,8 +637,8 @@ const PlanBurn = ({ m, state }: Pick<BodyProps, 'm' | 'state'>) => {
   const max = Math.max(1, peak); // the chart's scale keeps a floor of 1
   return (
     <>
-      <div className="fig">
-        <div className="figh">
+      <div className={FIG}>
+        <div className={FIGH}>
           <h3>Last 24 hours</h3>
           <b>{usd(day, 2)}</b>
           <span>{`per hour, peak ${usd(peak, 2)}`}</span>

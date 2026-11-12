@@ -5,6 +5,8 @@ import { dayLabel, niceCeil, usd } from '../format';
 import type { CpuDay as CpuDayData, ShippedDay } from '../model';
 import type { SpendDay } from '../spend';
 
+import { ROLE_BG, ROLE_FILL } from './sheet-ui';
+
 // The two day charts and the CPU line as SVG components. A day chart measures its own box, so text
 // stays at its real size at every width; the geometry is plain functions that read no DOM.
 
@@ -12,6 +14,12 @@ import type { SpendDay } from '../spend';
 const PAD = { l: 38, r: 4, t: 8, b: 20 };
 
 const MIN_WIDTH = 240;
+
+// An axis label and the tooltip; only the hit bands take the pointer (the rule in desk.css)
+const AX =
+  'ax fill-[color:var(--muted)] font-[family-name:var(--font-mono)] text-[10px]';
+const TIP =
+  'tip pointer-events-none absolute z-[2] rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-2.5 py-1.5 text-[0.78rem] whitespace-nowrap text-[color:var(--fg)] [box-shadow:var(--shadow)] [transform:translate(-50%,calc(-100%_-_8px))] [&_b]:tabular-nums';
 
 /** The plot of a day chart at a width: its viewBox, the band per day and the value scale */
 export type Frame = {
@@ -163,7 +171,7 @@ const WeekLabel = ({
   height: number;
 }) =>
   (count - 1 - n) % 7 === 0 ? (
-    <text className="ax" x={cx} y={height - 5} textAnchor="middle">
+    <text className={AX} x={cx} y={height - 5} textAnchor="middle">
       {dayLabel(dayKey)}
     </text>
   ) : null;
@@ -184,9 +192,14 @@ const DayChart = ({
   const f = width === null ? null : frame(keys.length, width, height, max);
   const shown = f && day !== null && day < keys.length ? tip(day) : null;
   return (
-    <div className="chart" ref={ref} onMouseLeave={() => setDay(null)}>
+    <div
+      className="chart relative min-w-0"
+      ref={ref}
+      onMouseLeave={() => setDay(null)}
+    >
       {f ? (
         <svg
+          className="w-full overflow-visible"
           viewBox={`0 0 ${f.W} ${f.H}`}
           height={f.H}
           role="img"
@@ -195,14 +208,18 @@ const DayChart = ({
           {ticks.map((t) => (
             <g key={t}>
               <line
-                className={t === 0 ? 'base' : 'grid'}
+                className={
+                  t === 0
+                    ? 'stroke-[color:var(--muted)] [stroke-width:1] opacity-50'
+                    : 'stroke-[color:var(--line)] [stroke-width:1]'
+                }
                 x1={PAD.l}
                 x2={f.W - PAD.r}
                 y1={f.y(t)}
                 y2={f.y(t)}
               />
               <text
-                className="ax"
+                className={AX}
                 x={PAD.l - 6}
                 y={f.y(t) + 3}
                 textAnchor="end"
@@ -217,7 +234,7 @@ const DayChart = ({
             return (
               <g key={key}>
                 <rect
-                  className="hit"
+                  className="hit peer cursor-default fill-transparent"
                   data-day={n}
                   x={x0}
                   y={PAD.t}
@@ -226,7 +243,11 @@ const DayChart = ({
                   onMouseEnter={() => setDay(n)}
                 />
                 <rect
-                  className={day === n ? 'hl on' : 'hl'}
+                  className={
+                    day === n
+                      ? 'hl on fill-[color:var(--sunk)]'
+                      : 'hl fill-transparent peer-hover:fill-[color:var(--sunk)]'
+                  }
                   x={x0}
                   y={PAD.t}
                   width={f.band}
@@ -247,7 +268,7 @@ const DayChart = ({
       ) : null}
       {f && shown && day !== null ? (
         <div
-          className="tip"
+          className={TIP}
           style={{
             left: tipLeft(f, day, width ?? 0, edge),
             top: Math.max(0, f.y(shown.value) - 2)
@@ -281,7 +302,10 @@ export const ShippedChart = ({
       bars={(n, f, x) => {
         const v = days[n].items.length;
         return v ? (
-          <path className="barm" d={barPath(x, f.bw, f.y(v), f.bottom)} />
+          <path
+            className="barm fill-[color:var(--bar)]"
+            d={barPath(x, f.bw, f.y(v), f.bottom)}
+          />
         ) : null;
       }}
       tip={(n) => {
@@ -292,7 +316,9 @@ export const ShippedChart = ({
           content: (
             <>
               <b>{d.items.length}</b> closed · {dayLabel(d.key)}
-              {ids ? <div className="muted">{ids}</div> : null}
+              {ids ? (
+                <div className="text-[color:var(--muted)]">{ids}</div>
+              ) : null}
             </>
           )
         };
@@ -324,13 +350,13 @@ export const SpendChart = ({
           s.last ? (
             <path
               key={s.role}
-              className={`seg-${s.role}`}
+              className={ROLE_FILL[s.role]}
               d={barPath(x, f.bw, s.top, s.bottom)}
             />
           ) : (
             <rect
               key={s.role}
-              className={`seg-${s.role}`}
+              className={ROLE_FILL[s.role]}
               x={x}
               y={s.top}
               width={f.bw}
@@ -347,8 +373,10 @@ export const SpendChart = ({
             <>
               <b>{usd(d.total, 2)}</b> · {dayLabel(d.key)}
               {ROLES.map((r) => (
-                <div key={r} className="muted">
-                  <i className={`sw seg-${r}`}></i>
+                <div key={r} className="text-[color:var(--muted)]">
+                  <i
+                    className={`mr-1.5 inline-block size-2 rounded-[2px] ${ROLE_BG[r]}`}
+                  ></i>
                   {r} {usd(d[r], 2)}
                 </div>
               ))}
@@ -370,14 +398,23 @@ export type SparkPoint = { at: number; value: number };
 /** A bar filled to `share` of the track, in the warning colour when `bad` */
 export const Gauge = ({ share, bad }: { share: number; bad: boolean }) => (
   <svg
-    className="gauge"
+    className="gauge h-2 w-full"
     viewBox={`0 0 ${GAUGE.w} ${GAUGE.h}`}
     preserveAspectRatio="none"
     aria-hidden="true"
   >
-    <rect className="track" width={GAUGE.w} height={GAUGE.h} rx="4" />
     <rect
-      className={bad ? 'fill bad' : 'fill'}
+      className="fill-[color:var(--sunk)]"
+      width={GAUGE.w}
+      height={GAUGE.h}
+      rx="4"
+    />
+    <rect
+      className={
+        bad
+          ? 'fill bad fill-[color:var(--block)]'
+          : 'fill fill-[color:var(--ok)]'
+      }
       width={Math.max(0, Math.min(1, share)) * GAUGE.w}
       height={GAUGE.h}
       rx="4"
@@ -409,7 +446,7 @@ export const Sparkline = ({
     SPARK.h - Math.min(1, Math.max(0, v / max)) * SPARK.h;
   return (
     <svg
-      className="spark"
+      className="spark h-10 w-full"
       viewBox={`0 0 ${SPARK.w} ${SPARK.h}`}
       preserveAspectRatio="none"
       role="img"
@@ -417,7 +454,7 @@ export const Sparkline = ({
     >
       {limit === null ? null : (
         <line
-          className="limit"
+          className="limit stroke-[color:var(--block)] [stroke-width:1] opacity-60 [stroke-dasharray:3_3] [vector-effect:non-scaling-stroke]"
           x1="0"
           x2={SPARK.w}
           y1={y(limit)}
@@ -426,7 +463,7 @@ export const Sparkline = ({
       )}
       {points.length > 1 ? (
         <polyline
-          className="line"
+          className="fill-none stroke-[color:var(--bar)] [stroke-width:1.5] [vector-effect:non-scaling-stroke]"
           points={points
             .map((p) => `${x(p.at).toFixed(1)},${y(p.value).toFixed(1)}`)
             .join(' ')}
@@ -462,7 +499,7 @@ export const CpuChart = ({ day }: { day: CpuDayData }) => {
       {day.bands.map((b) => (
         <rect
           key={`${b.start}-${b.end}`}
-          className="cpu-band"
+          className="cpu-band fill-[color:var(--line-strong)]"
           x={x(b.start)}
           y="0"
           width={Math.max(1, ((b.end - b.start) / span) * CPU.w).toFixed(1)}
@@ -470,7 +507,7 @@ export const CpuChart = ({ day }: { day: CpuDayData }) => {
         />
       ))}
       <polyline
-        className="cpu-line"
+        className="cpu-line stroke-[color:var(--bar)]"
         fill="none"
         vectorEffect="non-scaling-stroke"
         strokeWidth="1.5"
@@ -478,7 +515,7 @@ export const CpuChart = ({ day }: { day: CpuDayData }) => {
       />
       {day.peak ? (
         <circle
-          className="cpu-peak"
+          className="cpu-peak fill-[color:var(--wait)]"
           cx={x(day.peak.at)}
           cy={y(day.peak.cpu)}
           r="3"
