@@ -3,6 +3,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from '@codeware/shared/ui/shadcn/components/collapsible';
+import type { MouseEventHandler } from 'react';
 
 import { shortAge } from '../format';
 import type { Model } from '../model';
@@ -62,10 +63,19 @@ type Props = {
   /** Whether the fold of snoozed rows is open */
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** A click on the card, which opens its sheet */
+  onClick?: MouseEventHandler<HTMLElement>;
 };
 
 /** The Waiting on you card, with a fold for the snoozed rows */
-export const WaitingCard = ({ m, details, now, open, onOpenChange }: Props) => {
+export const WaitingCard = ({
+  m,
+  details,
+  now,
+  open,
+  onOpenChange,
+  onClick
+}: Props) => {
   const loading = !m.runs;
   const all = loading ? [] : waitRows(m, details, now);
   const rows = all.filter((r) => !r.snoozed);
@@ -77,6 +87,7 @@ export const WaitingCard = ({ m, details, now, open, onOpenChange }: Props) => {
     <article
       className={count ? 'card-top waiting has' : 'card-top waiting'}
       data-w="before"
+      onClick={onClick}
     >
       <div className="ct-head">
         <button type="button" className="open state" aria-haspopup="dialog">

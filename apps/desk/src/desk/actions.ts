@@ -1,7 +1,5 @@
 import { isTauri } from '@tauri-apps/api/core';
-import { createElement } from 'react';
 import { flushSync } from 'react-dom';
-import { createRoot } from 'react-dom/client';
 
 import { deskSha } from '../build-info';
 import type { Adapter } from '../data';
@@ -19,144 +17,67 @@ import {
   sendCommand
 } from './commands';
 import type { WaitActions } from './components/before';
-import { Capacity } from './components/capacity';
-import { Cards } from './components/cards';
-import { Platform, type PlatformActions } from './components/platform';
-import {
-  Alert,
-  FrozenLabel,
-  type ProblemActions,
-  Problems,
-  frozenLabel
-} from './components/problems';
-import {
-  SETTINGS_SUB,
-  SETTINGS_TITLE,
-  SettingsForm,
-  type SettingsOptions
-} from './components/settings';
-import { Sheet } from './components/sheet';
-import { SHEETS, type SheetActions } from './components/sheets';
-import { Status } from './components/status';
-import { Tiles } from './components/tiles';
-import { AGENT_AVATAR, CONFIRM_MS } from './constants';
+import type { PlatformActions } from './components/platform';
+import type { ProblemActions } from './components/problems';
+import type { SettingsOptions } from './components/settings';
+import type { SheetActions } from './components/sheets';
+import { CONFIRM_MS } from './constants';
 import { type Loader, createLoader } from './load';
 import { type ControlsModel, type Model, model } from './model';
-import { notice } from './notice';
 import { CAP_RANGE, LIMIT_RANGE } from './render/controls';
-import { forgetLabelled } from './render/waiting';
 import {
   type Connection,
   type SheetId,
   type View,
-  bucketsLoaded,
   createState,
   emptyControls,
   isFilter,
   sheetIdOf,
   viewOf
 } from './state';
+import { createStore } from './store';
 
 // This build, and whether it is the web desk the NUC serves rather than the Mac app: that
 // decides which workflow's build main is compared with
 const DESK = deskSha();
 const WEB = !isTauri();
 
-const state = createState(); // everything the page shows and the viewer chose; survives a settings re-start
+/** Everything the page shows and the viewer chose; survives a settings re-start */
+export const store = createStore(createState());
+const state = store.state;
+
+/** The model of the state at a moment */
+export const modelAt = (now: Date): Model => model(state, now, DESK, WEB);
+
 let adapter: Adapter | null = null; // set by start()
 let loader: Loader | null = null;
 let labeller: ((ticket: string) => Promise<void>) | null = null; // set by setLabeller()
+let settingsOpener: (() => void) | null = null; // set by setSettingsOpener()
 /** A second press this soon after the first is a double-click, not a confirmation */
 const DOUBLE_CLICK_MS = 300;
 
-const $ = (id: string): HTMLElement => {
-  const el = document.getElementById(id);
-  if (!el) throw new Error(`#${id} is missing from the page`);
-  return el;
+/** What the sheet frame and the header show beyond the state */
+export const frame = {
+  /** The sheet last opened: still drawn while it animates out */
+  shownSheet: 'before' as SheetId,
+  /** Whether the open sheet takes focus; false for one opened by the start hash */
+  sheetFocus: true,
+  /** The settings form, open in the same frame; it is no sheet and has no hash */
+  settings: null as SettingsOptions | null,
+  /** The settings form is drawn while it animates out */
+  settingsShown: false,
+  /** A new key per opening, so the form starts from the saved values */
+  settingsForm: 0,
+  /** Refresh was pressed and nothing has changed since */
+  refreshing: false
 };
+// The sheet that just closed, whose tile or card takes focus back
+let closedSheet: SheetId | null = null;
 
-// The header's status pill, the two cards, the capacity row, the tiles, the Platform view, the
-// alert, the problems, the frozen label and the sheets are React; the rest of the page is still
-// written as HTML
-const statusRoot = createRoot($('status'));
-const cardsRoot = createRoot($('cards'));
-const capacityRoot = createRoot($('capacity'));
-const tilesRoot = createRoot($('more'));
-const platformRoot = createRoot($('platform'));
-const alertRoot = createRoot($('alert'));
-const problemsRoot = createRoot($('problems'));
-const frozenRoot = createRoot($('frozen-label'));
-const sheetRoot = createRoot($('sheet-root'));
-
-// ---------- Main view ----------
-
-let shownProblems = false;
-
-/** The parts that show the problems and the time they have lasted; redrawn every second while any are */
-function renderLive(m: Model, now: Date): void {
-  shownProblems = m.problems.length > 0;
-  const platform = state.ui.view === 'platform';
-  statusRoot.render(
-    createElement(Status, {
-      m,
-      connection: state.data.connection,
-      onView: (view) => showView(view)
-    })
-  );
-  alertRoot.render(
-    createElement(Alert, { m, onSeeProblems: problemActions.seeProblems })
-  );
-  $('alert').hidden = !shownProblems;
-  problemsRoot.render(
-    createElement(Problems, { m, now, actions: problemActions })
-  );
-  $('problems').hidden = platform || !shownProblems;
-  const label = frozenLabel(m);
-  frozenRoot.render(createElement(FrozenLabel, { m }));
-  $('frozen-label').hidden = platform || !label;
-  cardsRoot.render(
-    createElement(Cards, {
-      m,
-      details: state.details,
-      now,
-      snoozedOpen: state.ui.snoozedOpen,
-      onSnoozedOpen: (open) => {
-        state.ui.snoozedOpen = open;
-        render();
-      }
-    })
-  );
-  $('capacity').classList.toggle('frozen', Boolean(label));
-  $('more').classList.toggle('frozen', Boolean(label));
-  // Its ages move by the minute
-  if (platform)
-    platformRoot.render(
-      createElement(Platform, { m, now, actions: platformActions })
-    );
-}
-
-function renderMain(): void {
-  const now = new Date();
-  const m = model(state, now, DESK, WEB);
-  forgetLabelled(state.controls.labelled, m.v ? m.toLabel : null);
-  renderLive(m, now);
-  capacityRoot.render(
-    createElement(Capacity, {
-      m,
-      onSheet: (id) => showSheet(id),
-      onView: (view) => showView(view),
-      pause: pauseQueue,
-      run: runNow
-    })
-  );
-  tilesRoot.render(
-    createElement(Tiles, {
-      m,
-      state,
-      now,
-      onSheet: (id) => showSheet(id)
-    })
-  );
+/** Redraws the page after a change to the state */
+function render(): void {
+  frame.refreshing = false;
+  store.notify();
 }
 
 // ---------- View ----------
@@ -177,88 +98,27 @@ function setHash(): void {
 }
 
 /** Shows the desk or a full-page view in its place */
-function showView(view: View, focus = true): void {
+export function showView(view: View, focus = true): void {
   state.ui.view = view;
-  const platform = view === 'platform';
-  $('cards').hidden = platform;
-  $('capacity').hidden = platform;
-  $('more').hidden = platform;
-  $('platform').hidden = !platform;
   // A render is asynchronous: flushed here, the view's title exists before it takes focus
-  flushSync(renderMain);
+  flushSync(render);
   setHash();
   if (!focus) return;
-  if (platform) $('platform-title').focus();
+  if (view === 'platform') document.getElementById('platform-title')?.focus();
   else document.querySelector<HTMLElement>('.platform')?.focus();
 }
 
 // ---------- Sheet ----------
 
-// The sheet last opened: still drawn while it animates out
-let shownSheet: SheetId = 'before';
-// Whether the open sheet takes focus; false for one opened by the start hash
-let sheetFocus = true;
-// The sheet that just closed, whose tile or card takes focus back
-let closedSheet: SheetId | null = null;
-// The settings form, open in the same frame; it is no sheet and has no hash
-let settings: SettingsOptions | null = null;
-let settingsShown = false; // drawn while it animates out
-let settingsForm = 0; // a new key per opening, so the form starts from the saved values
-
-function closeSettings(): void {
-  settings = null;
-  renderSheet();
+export function closeSettings(): void {
+  frame.settings = null;
+  render();
 }
 
-/** Renders the sheet frame with the shown sheet's body; it updates in place, keeping focus and scroll */
-function renderSheet(): void {
-  if (settingsShown) {
-    sheetRoot.render(
-      createElement(
-        Sheet,
-        {
-          open: settings !== null,
-          title: SETTINGS_TITLE,
-          sub: SETTINGS_SUB,
-          // The form focuses its first field
-          focus: false,
-          onClose: closeSettings,
-          onClosed: () => {
-            settingsShown = false;
-            document.getElementById('settings')?.focus();
-          }
-        },
-        settings &&
-          createElement(SettingsForm, {
-            key: settingsForm,
-            ...settings,
-            onDone: closeSettings
-          })
-      )
-    );
-    return;
-  }
-  const now = new Date();
-  const def = SHEETS[shownSheet];
-  sheetRoot.render(
-    createElement(
-      Sheet,
-      {
-        open: state.ui.openSheet !== null,
-        title: def.title,
-        sub: def.sub,
-        focus: sheetFocus,
-        onClose: hideSheet,
-        onClosed: focusOpener
-      },
-      createElement(def.Body, {
-        m: model(state, now, DESK, WEB),
-        state,
-        now,
-        actions: sheetActions
-      })
-    )
-  );
+/** Once the settings form has animated out: focus goes back to the Settings button */
+export function settingsClosed(): void {
+  frame.settingsShown = false;
+  document.getElementById('settings')?.focus();
 }
 
 /** Opens the settings form in the sheet frame, closing any sheet that is open */
@@ -267,37 +127,58 @@ export function openSettings(options: SettingsOptions): void {
     state.ui.openSheet = null;
     setHash();
   }
-  settings = options;
-  settingsShown = true;
-  settingsForm += 1;
-  renderSheet();
+  frame.settings = options;
+  frame.settingsShown = true;
+  frame.settingsForm += 1;
+  render();
 }
 
-function showSheet(value: string, focus = true): void {
+/** Sets what the header's Settings button opens */
+export function setSettingsOpener(fn: () => void): void {
+  settingsOpener = fn;
+}
+
+export function clickSettings(): void {
+  settingsOpener?.();
+}
+
+export function showSheet(value: string, focus = true): void {
   const id = sheetIdOf(value);
   if (!id) return;
-  if (settings) return;
-  settingsShown = false;
+  if (frame.settings) return;
+  frame.settingsShown = false;
   state.ui.openSheet = id;
-  shownSheet = id;
-  sheetFocus = focus;
-  renderSheet();
+  frame.shownSheet = id;
+  frame.sheetFocus = focus;
+  render();
   setHash();
 }
-function hideSheet(): void {
+
+export function hideSheet(): void {
   closedSheet = state.ui.openSheet;
   state.ui.openSheet = null;
-  renderSheet();
+  render();
   setHash();
 }
+
 /** Puts focus back on the tile or card that opened the sheet */
-function focusOpener(): void {
+export function focusOpener(): void {
   const el = document.querySelector<HTMLElement>(`[data-w="${closedSheet}"]`);
   closedSheet = null;
   (el?.matches('button')
     ? el
     : el?.querySelector<HTMLElement>('.open')
   )?.focus();
+}
+
+/** Opens what the URL hash names at start: the Platform view or a sheet, without taking focus */
+export function openStartHash(): void {
+  const startHash = (window.location.hash || '').slice(1);
+  if (viewOf(startHash)) showView('platform', false);
+  else {
+    const startSheet = sheetIdOf(startHash);
+    if (startSheet) showSheet(startSheet, false);
+  }
 }
 
 const reducedMotion = (): boolean =>
@@ -323,19 +204,17 @@ function copyRow(raw: HTMLElement): void {
 
 /** The controls as the model sees them now; null when the desk cannot send */
 function controlsNow(): ControlsModel | null {
-  return state.controls.target
-    ? model(state, new Date(), DESK, WEB).controls
-    : null;
+  return state.controls.target ? modelAt(new Date()).controls : null;
 }
 
 // The controls' actions, shared by the capacity row and the Platform view
 
-function pauseQueue(kind: 'pause' | 'resume'): void {
+export function pauseQueue(kind: 'pause' | 'resume'): void {
   const m = controlsNow();
   if (m) sendControl('pause', m.host, kind);
 }
 
-function runNow(): void {
+export function runNow(): void {
   const m = controlsNow();
   if (m) sendControl('run', m.host, 'run');
 }
@@ -369,7 +248,7 @@ function showProblem(id: string): void {
 }
 
 /** What the Platform view's buttons do */
-const platformActions: PlatformActions = {
+export const platformActions: PlatformActions = {
   desk: () => showView('desk'),
   problem: showProblem,
   sheet: (id) => showSheet(id),
@@ -399,11 +278,11 @@ function abandonRun(): void {
 }
 
 /** What the alert's link and the problem cards' buttons do */
-const problemActions: ProblemActions = {
+export const problemActions: ProblemActions = {
   seeProblems: () => {
     // The alert shows on the Platform view too, where the problems are hidden
     if (state.ui.view !== 'desk') showView('desk', false);
-    $('problems').scrollIntoView({
+    document.getElementById('problems')?.scrollIntoView({
       behavior: reducedMotion() ? 'auto' : 'smooth'
     });
   },
@@ -419,7 +298,7 @@ function clickSnooze(
   ticket: string,
   snooze: { kind: string; eventAt: string | null } | null
 ): void {
-  const host = model(state, new Date(), DESK, WEB).controls?.host;
+  const host = modelAt(new Date()).controls?.host;
   if (!state.controls.target || !host) return;
   sendSnooze(ticket, host, snooze);
 }
@@ -510,13 +389,16 @@ const waitActions: WaitActions = {
   pr: clickPr
 };
 
+/** Opens or closes the fold of snoozed rows, on the card and in its sheet alike */
+export function setSnoozedOpen(open: boolean): void {
+  state.ui.snoozedOpen = open;
+  render();
+}
+
 /** What the sheets' controls do */
-const sheetActions: SheetActions = {
+export const sheetActions: SheetActions = {
   wait: waitActions,
-  onSnoozedOpen: (open) => {
-    state.ui.snoozedOpen = open;
-    render();
-  },
+  onSnoozedOpen: setSnoozedOpen,
   onActFilter: (ticket) => {
     state.ui.actFilter = ticket;
     render();
@@ -532,99 +414,20 @@ const sheetActions: SheetActions = {
   }
 };
 
-document.addEventListener('click', (e) => {
-  if (!(e.target instanceof Element)) return;
-  // The Platform view, the capacity row, the tiles, the alert and the problems are React and
-  // handle their own clicks
-  if (e.target.closest('#platform, #capacity, #more, #alert, #problems'))
-    return;
-  if (e.target.closest('a')) return;
-  const problem = e.target.closest<HTMLElement>('[data-problem]');
-  if (problem) {
-    showProblem(problem.dataset.problem ?? '');
-    return;
-  }
-  const v = e.target.closest<HTMLElement>('[data-view]');
-  if (v) {
-    showView(v.dataset.view === 'platform' ? 'platform' : 'desk');
-    return;
-  }
-  // The fold's trigger only opens the fold, never the card's sheet
-  if (e.target.closest('.snoozed-summary')) return;
-  const t = e.target.closest<HTMLElement>('[data-w]');
-  if (t?.dataset.w) {
-    showSheet(t.dataset.w);
-    return;
-  }
-});
-document.addEventListener('keydown', (e) => {
-  // An open sheet closes on its own Escape, which marks the event handled
-  if (e.key !== 'Escape' || e.defaultPrevented) return;
-  if (state.ui.view === 'platform') showView('desk');
-});
+// ---------- Load ----------
 
-// ---------- Render and load ----------
-
-function renderNotice(): void {
-  const n = $('notice');
-  const view = notice(state.errors, Boolean(adapter));
-  n.hidden = view.hidden;
-  if (view.hidden) return;
-  n.className = 'notice' + (view.severe ? ' err' : '');
-  n.textContent = view.text;
-}
-
-function render(): void {
-  renderMain();
-  renderSheet();
-  const loaded = bucketsLoaded(state.data);
-  $('fresh').textContent = loaded
-    ? 'Updated ' +
-      new Date(state.data.storedAt || Date.now()).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    : adapter
-      ? 'Loading…'
-      : 'Waiting for settings';
-  renderNotice();
-}
-
-// The timers and the connection's grace move without an event. A healthy page checks every 15th tick: a host can go silent without one.
-const QUIET_TICKS = 15;
-let ticks = 0;
-setInterval(() => {
-  if (document.hidden) return;
-  ticks += 1;
-  if (state.data.connection.live && !shownProblems && ticks % QUIET_TICKS !== 0)
-    return;
-  const now = new Date();
-  renderLive(model(state, now, DESK, WEB), now);
-}, 1000);
-
-$('refresh').onclick = () => {
+export function refresh(): void {
   if (!loader) return;
-  $('fresh').textContent = 'Refreshing…';
+  frame.refreshing = true;
+  store.notify();
   void loader.refresh();
-};
+}
+
 try {
   const f = localStorage.getItem('aq-filter');
   if (isFilter(f)) state.ui.filter = f;
 } catch {
   // Storage is unavailable: the filter starts at its default
-}
-
-document
-  .querySelectorAll<HTMLImageElement>('[data-agent-avatar]')
-  .forEach((img) => {
-    img.src = AGENT_AVATAR;
-  });
-render();
-const startHash = (window.location.hash || '').slice(1);
-if (viewOf(startHash)) showView('platform', false);
-else {
-  const startSheet = sheetIdOf(startHash);
-  if (startSheet) showSheet(startSheet, false);
 }
 
 /** Records the Realtime channel's health for the model's problems and health checks */
@@ -801,3 +604,6 @@ export function sendControl(
       render();
     });
 }
+
+/** Whether the page has an adapter, for the notice */
+export const hasAdapter = (): boolean => adapter !== null;

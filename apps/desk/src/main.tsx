@@ -1,12 +1,18 @@
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+
 import { type Adapter, createAdapter } from './data';
 import {
   openSettings as openSettingsSheet,
+  openStartHash,
   setConnection,
   setControls,
   setLabeller,
   setLastIssue,
+  setSettingsOpener,
   start
-} from './desk';
+} from './desk/actions';
+import { App } from './desk/app';
 import { CommandError, checkToken } from './desk/commands';
 import { LinearError, createLinear, linearMessage } from './linear';
 import { platform } from './platform';
@@ -121,10 +127,20 @@ const boot = async (): Promise<void> => {
       }
     });
 
-  document.getElementById('settings')?.addEventListener('click', openSettings);
+  setSettingsOpener(openSettings);
 
   if (current) startDesk(current);
   else openSettings();
 };
 
+const root = document.getElementById('root');
+if (!root) throw new Error('#root is missing from the page');
+createRoot(root).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+// The data adapter and the settings start outside React, so StrictMode's double effects never
+// start a second loader
+openStartHash();
 void boot();
