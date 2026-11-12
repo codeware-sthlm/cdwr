@@ -66,23 +66,71 @@ export const countsDir = (dirName: string, base: string): boolean => {
   return dirName === encoded || dirName.startsWith(`${encoded}-`);
 };
 
-/** The planner runs in `<base>-agent`, subagents elsewhere implement, the rest orchestrates */
+/**
+ * Subagents implement and sessions orchestrate. In the planner checkout (`<base>-agent`) a session
+ * that never ran `session.sh register` plans (plan-only runs, `/suggest-improvement`), and so do
+ * its subagents. `registered` is the session's own, or the parent's for a subagent.
+ */
 export const roleOf = ({
   dirName,
   base,
-  subagent
+  subagent,
+  registered = false
 }: {
   dirName: string;
   base: string;
   subagent: boolean;
+  registered?: boolean;
 }): Role => {
-  if (dirName === `${encodeProjectPath(base)}-agent`) return 'planning';
+  if (dirName === `${encodeProjectPath(base)}-agent` && !registered) {
+    return 'planning';
+  }
   return subagent ? 'implementing' : 'orchestrating';
 };
 
 export const ticketOf = (gitBranch: string | undefined): string => {
   const match = /^cod-(\d+)/i.exec(gitBranch ?? '');
   return match ? `COD-${match[1]}` : 'unattributed';
+};
+
+/** From `timestamp` on the session holds `ticket`; `null` is `session.sh ticket -` */
+export interface TicketMark {
+  timestamp: string;
+  ticket: string | null;
+}
+
+/** What a session's own transcript says about it, from the lines `session.sh` printed */
+export interface SessionMarks {
+  registered: boolean;
+  tickets: TicketMark[];
+}
+
+/** The `session.sh` markers in one tool result's stdout; the last ticket line wins, as in the hook */
+export const marksIn = (
+  stdout: string
+): { registered: boolean; ticket?: string | null } => {
+  let registered = false;
+  let ticket: string | null | undefined;
+  for (const line of stdout.split('\n')) {
+    if (line === 'registered work-queue session') registered = true;
+    const match = /^work-queue ticket (COD-\d+|-)$/.exec(line);
+    if (match) ticket = match[1] === '-' ? null : match[1];
+  }
+  return ticket === undefined ? { registered } : { registered, ticket };
+};
+
+/** The ticket in hand at a moment, or undefined before the first marker and after a clear */
+export const ticketAt = (
+  marks: TicketMark[],
+  timestamp: string
+): string | undefined => {
+  const at = Date.parse(timestamp);
+  let ticket: string | null = null;
+  for (const mark of marks) {
+    if (Date.parse(mark.timestamp) > at) break;
+    ticket = mark.ticket;
+  }
+  return ticket ?? undefined;
 };
 
 /** `claude-haiku-4-5-20251001` → `claude-haiku-4-5` */

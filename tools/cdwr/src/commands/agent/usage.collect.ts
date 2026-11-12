@@ -1,13 +1,16 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import {
   type Reply,
+  type SessionMarks,
   countsDir,
   familyBase,
+  marksIn,
   normaliseModel,
   roleOf,
+  ticketAt,
   ticketOf
 } from './usage.logic';
 
@@ -80,24 +83,92 @@ export const findTranscripts = (
   return { base, dirs, transcripts };
 };
 
-/** Every assistant reply in the transcripts, not yet de-duplicated */
+/* eslint-disable @typescript-eslint/no-explicit-any -- transcript lines are untyped JSON */
+const parseLines = (file: string): { lines: any[]; skipped: number } => {
+  const lines: any[] = [];
+  let skipped = 0;
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      lines.push(JSON.parse(line));
+    } catch {
+      skipped++;
+    }
+  }
+  return { lines, skipped };
+};
+
+/** The `session.sh` markers a session printed, from its tool results in order */
+export const marksOf = (lines: any[]): SessionMarks => {
+  const marks: SessionMarks = { registered: false, tickets: [] };
+  for (const parsed of lines) {
+    const stdout = parsed?.toolUseResult?.stdout;
+    if (typeof stdout !== 'string' || typeof parsed.timestamp !== 'string') {
+      continue;
+    }
+    const found = marksIn(stdout);
+    if (found.registered) marks.registered = true;
+    if (found.ticket !== undefined) {
+      marks.tickets.push({ timestamp: parsed.timestamp, ticket: found.ticket });
+    }
+  }
+  return marks;
+};
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+const NO_MARKS: SessionMarks = { registered: false, tickets: [] };
+
+/** `<dir>/<session id>/subagents/agent-….jsonl` → `<dir>/<session id>.jsonl` */
+export const parentOf = (file: string): string => {
+  const session = dirname(dirname(file));
+  return join(dirname(session), `${basename(session)}.jsonl`);
+};
+
+/**
+ * Every assistant reply in the transcripts, not yet de-duplicated. A reply's ticket is the one
+ * its session named last with `session.sh ticket`, else its git branch; a subagent takes its
+ * parent's ticket at its own first reply, and its parent's registration for the role. The parent
+ * is read even when it is outside the window.
+ */
 export const readReplies = (
   base: string,
   transcripts: Transcript[]
 ): { records: Entry[]; skippedLines: number } => {
   const records: Entry[] = [];
   let skippedLines = 0;
+  const sessions = new Map<string, SessionMarks>();
+  const parentMarks = (file: string): SessionMarks => {
+    const parent = parentOf(file);
+    let marks = sessions.get(parent);
+    if (!marks) {
+      marks = existsSync(parent) ? marksOf(parseLines(parent).lines) : NO_MARKS;
+      sessions.set(parent, marks);
+    }
+    return marks;
+  };
 
-  for (const { file, dirName, subagent } of transcripts) {
-    for (const line of readFileSync(file, 'utf8').split('\n')) {
-      if (!line.trim()) continue;
-      let parsed;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        skippedLines++;
-        continue;
-      }
+  // Sessions first, so a subagent finds its parent's markers already read
+  const ordered = [
+    ...transcripts.filter((t) => !t.subagent),
+    ...transcripts.filter((t) => t.subagent)
+  ];
+  for (const { file, dirName, subagent } of ordered) {
+    const { lines, skipped } = parseLines(file);
+    skippedLines += skipped;
+    const ours = countsDir(dirName, base);
+    let marks = NO_MARKS;
+    if (ours && !subagent) {
+      marks = marksOf(lines);
+      sessions.set(file, marks);
+    } else if (ours) {
+      marks = parentMarks(file);
+    }
+    const role = ours
+      ? roleOf({ dirName, base, subagent, registered: marks.registered })
+      : 'other';
+    let firstReply: string | undefined;
+
+    for (const parsed of lines) {
       if (parsed?.type !== 'assistant') continue;
       const message = parsed.message;
       const usage = message?.usage;
@@ -105,6 +176,7 @@ export const readReplies = (
       if (typeof message.model !== 'string') continue;
       if (message.model === '<synthetic>') continue;
 
+      firstReply ??= parsed.timestamp;
       const created = num(usage.cache_creation_input_tokens);
       const split = usage.cache_creation;
       records.push({
@@ -112,10 +184,10 @@ export const readReplies = (
         requestId: parsed.requestId,
         output: num(usage.output_tokens),
         timestamp: parsed.timestamp,
-        role: countsDir(dirName, base)
-          ? roleOf({ dirName, base, subagent })
-          : 'other',
-        ticket: ticketOf(parsed.gitBranch),
+        role,
+        ticket:
+          ticketAt(marks.tickets, subagent ? firstReply : parsed.timestamp) ??
+          ticketOf(parsed.gitBranch),
         model: normaliseModel(message.model),
         speed: usage.speed,
         tokens: {

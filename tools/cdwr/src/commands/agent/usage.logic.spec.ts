@@ -10,8 +10,10 @@ import {
   hourOf,
   hourRows,
   localDay,
+  marksIn,
   normaliseModel,
   roleOf,
+  ticketAt,
   ticketOf,
   usageRows,
   wholeDaysSince,
@@ -69,13 +71,61 @@ describe('countsDir', () => {
 
 describe('roleOf', () => {
   it.each([
-    ['-x-codeware-agent', false, 'planning'],
-    ['-x-codeware-agent', true, 'planning'],
-    ['-x-codeware-cod-533', true, 'implementing'],
-    ['-x-codeware-cod-533', false, 'orchestrating'],
-    ['-x-codeware', false, 'orchestrating']
-  ])('%s subagent=%s → %s', (dirName, subagent, expected) => {
-    expect(roleOf({ dirName, base: '/x/codeware', subagent })).toBe(expected);
+    // A plan-only run in the planner checkout, and its subagents
+    ['-x-codeware-agent', false, false, 'planning'],
+    ['-x-codeware-agent', true, false, 'planning'],
+    // The NUC runs queue sessions in the planner checkout too
+    ['-x-codeware-agent', false, true, 'orchestrating'],
+    ['-x-codeware-agent', true, true, 'implementing'],
+    // The Mac's ticket worktrees and attended checkout
+    ['-x-codeware-cod-533', true, false, 'implementing'],
+    ['-x-codeware-cod-533', false, false, 'orchestrating'],
+    ['-x-codeware', false, false, 'orchestrating'],
+    ['-x-codeware-queue', true, true, 'implementing']
+  ])(
+    '%s subagent=%s registered=%s → %s',
+    (dirName, subagent, registered, expected) => {
+      expect(
+        roleOf({ dirName, base: '/x/codeware', subagent, registered })
+      ).toBe(expected);
+    }
+  );
+});
+
+describe('marksIn', () => {
+  it.each([
+    ['registered work-queue session', { registered: true }],
+    ['work-queue ticket COD-7', { registered: false, ticket: 'COD-7' }],
+    ['work-queue ticket -', { registered: false, ticket: null }],
+    [
+      'work-queue ticket COD-1\nwork-queue ticket COD-2',
+      { registered: false, ticket: 'COD-2' }
+    ],
+    ['echo work-queue ticket COD-7', { registered: false }],
+    ['work-queue ticket cod-7', { registered: false }]
+  ])('%j → %j', (stdout, expected) => {
+    expect(marksIn(stdout)).toEqual(expected);
+  });
+});
+
+describe('ticketAt', () => {
+  const marks = [
+    { timestamp: '2026-10-06T10:00:00.000Z', ticket: 'COD-1' },
+    { timestamp: '2026-10-06T11:00:00.000Z', ticket: null },
+    { timestamp: '2026-10-06T12:00:00.000Z', ticket: 'COD-2' }
+  ];
+  it.each([
+    ['2026-10-06T09:59:00.000Z', undefined],
+    ['2026-10-06T10:00:00.000Z', 'COD-1'],
+    ['2026-10-06T10:30:00.000Z', 'COD-1'],
+    ['2026-10-06T11:30:00.000Z', undefined],
+    ['2026-10-06T13:00:00.000Z', 'COD-2']
+  ])('%s → %s', (timestamp, expected) => {
+    expect(ticketAt(marks, timestamp)).toBe(expected);
+  });
+
+  it('is undefined without markers', () => {
+    expect(ticketAt([], '2026-10-06T10:00:00.000Z')).toBeUndefined();
   });
 });
 
