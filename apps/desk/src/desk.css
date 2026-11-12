@@ -1472,7 +1472,7 @@ button.act:disabled {
   }
 }
 
-/* The tile grid is drawn with utilities in components/tiles.tsx; `.more.frozen` below dims it */
+/* The tile grid is drawn with utilities in components/tiles.tsx */
 .kv {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -1917,23 +1917,7 @@ a.id {
   color: var(--muted);
 }
 
-/* Settings sheet */
-.settings {
-  display: grid;
-  gap: 14px;
-}
-.settings-note {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-.settings-actions {
-  display: flex;
-  gap: 10px;
-}
-.settings-status {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
+/* The settings sheet is drawn with utilities in components/settings.tsx */
 button:disabled {
   opacity: 0.6;
   cursor: default;
@@ -2003,176 +1987,7 @@ button:disabled {
   vector-effect: non-scaling-stroke;
 }
 
-/* Something is wrong: the alert band and the problem cards; dark only, like the page */
-#alert {
-  margin: calc(-1 * var(--pad-top)) calc(-1 * var(--pad-right)) var(--pad-block)
-    calc(-1 * var(--pad-left));
-}
-.alert {
-  background: var(--alert-bg);
-  border-bottom: 1px solid var(--alert-line);
-  color: var(--block);
-}
-.alert-in {
-  max-width: 1360px;
-  margin: 0 auto;
-  /* The band runs edge to edge; its content stays out of the status bar and the notch */
-  padding: max(12px, env(safe-area-inset-top)) var(--pad-right) 12px
-    var(--pad-left);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-}
-.alert-t {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--alert-fg);
-}
-.alert-s {
-  font-size: 12px;
-  color: var(--alert-sub);
-}
-.alert-link {
-  margin-left: auto;
-  min-height: var(--tap);
-  display: inline-flex;
-  align-items: center;
-  color: var(--alert-fg);
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: underline;
-}
-.alert .short,
-.problem .short {
-  display: none;
-}
-.problems {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.problems-h,
-.frozen-label {
-  font: 500 11px var(--font-mono);
-  letter-spacing: 0.14em;
-  color: var(--block);
-}
-.frozen-label {
-  color: var(--muted);
-}
-.problem {
-  background: var(--problem-bg);
-  border: 1px solid var(--problem-line);
-  border-radius: var(--r-card);
-  padding: 18px 20px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 24px;
-  align-items: flex-start;
-}
-.p-main {
-  flex: 1 1 520px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.p-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-.p-pill {
-  font: 10px var(--font-mono);
-  letter-spacing: 0.1em;
-  color: var(--block);
-  border: 1px solid var(--alert-line);
-  border-radius: var(--r-pill);
-  padding: 3px 9px;
-}
-.p-pill.solid {
-  align-self: flex-start;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  color: var(--fg);
-  background: var(--line-strong);
-  border: 0;
-  padding: 5px 12px;
-}
-.p-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-.p-time,
-.p-mono {
-  font: 11px var(--font-mono);
-  color: var(--muted);
-}
-/* The separator shows only while the countdown has text */
-.tick.next:not(:empty)::before {
-  content: ' · ';
-}
-.p-body {
-  font-size: 13px;
-  color: #c8c3ba;
-}
-.p-note {
-  font-size: 12px;
-  color: var(--muted);
-}
-.raw,
-.raw-marks {
-  background: #151110;
-  border: 1px solid #3a2420;
-  border-radius: 8px;
-  padding: 10px 12px;
-  font: 12px var(--font-mono);
-  color: #c8c3ba;
-  overflow-x: auto;
-  max-height: 14em;
-}
-.raw:has(+ .raw-marks) {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-.raw-marks {
-  margin-top: -1px;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  max-height: none;
-}
-.raw mark,
-.raw-marks mark {
-  background: none;
-  color: var(--block);
-}
-.p-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.p-btn {
-  min-height: var(--tap);
-  padding: 0 16px;
-  background: none;
-  color: var(--fg);
-  border: 1px solid var(--problem-line);
-  border-radius: 9px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.p-btn.primary {
-  background: var(--block);
-  color: #2a0d09;
-  border: 0;
-  font-weight: 600;
-}
-.capacity.frozen,
-.more.frozen {
-  opacity: 0.45;
-}
+/* The alert band, the problem cards and the frozen label are drawn with utilities in app.tsx and components/problems.tsx */
 .pf-problem {
   all: unset;
   cursor: pointer;
@@ -2189,72 +2004,6 @@ button:disabled {
   }
   50% {
     opacity: 0.35;
-  }
-}
-@media (max-width: 600px) {
-  #alert {
-    margin: 0 0 var(--gap);
-  }
-  .alert {
-    border: 1px solid var(--alert-line);
-    border-radius: var(--r-card);
-  }
-  .alert-in {
-    padding: 12px 14px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-  .alert-in svg,
-  .alert-link {
-    display: none;
-  }
-  .alert .long,
-  .problem .long {
-    display: none;
-  }
-  .alert .short,
-  .problem .short {
-    display: inline;
-  }
-  .problem {
-    padding: 12px 14px;
-    gap: 8px;
-  }
-  .p-main {
-    flex-basis: 100%;
-    gap: 6px;
-  }
-  .p-head {
-    gap: 8px;
-  }
-  .p-pill {
-    font-size: 9px;
-    padding: 2px 7px;
-    order: 1;
-  }
-  .p-time {
-    order: 2;
-    margin-left: auto;
-    font-size: 10px;
-  }
-  .p-title {
-    order: 3;
-    flex-basis: 100%;
-    font-size: 13px;
-  }
-  .p-body {
-    font-size: 12px;
-  }
-  .problem .wide {
-    display: none;
-  }
-  .p-actions:not(:has(> :not(.wide))) {
-    display: none;
-  }
-  .p-pill.solid {
-    font-size: 10px;
-    padding: 3px 9px;
   }
 }
 .ctl-stepper {
@@ -2279,16 +2028,9 @@ button:disabled {
 .ctl-status.refused {
   color: var(--wait);
 }
-.pf-mini:disabled,
-.p-btn:disabled {
+.pf-mini:disabled {
   opacity: 0.5;
   cursor: default;
-}
-.p-ctl {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
 }
 .cap-queue .pf-mini {
   margin-inline: 6px;

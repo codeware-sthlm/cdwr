@@ -26,6 +26,8 @@ export const SETTINGS_TITLE = 'Settings';
 export const SETTINGS_SUB =
   'Kept on this computer. The desk reads Linear and Supabase with them.';
 
+const NOTE = 'text-[0.85rem] text-[color:var(--muted)]';
+
 type FieldSpec = {
   field: SettingsField;
   label: string;
@@ -128,17 +130,17 @@ export const SettingsForm = ({
   };
 
   return (
-    <form className="settings" noValidate onSubmit={submit}>
-      <p className="settings-note">
+    <form className="settings grid gap-[14px]" noValidate onSubmit={submit}>
+      <p className={`settings-note ${NOTE}`}>
         Create a personal API key in Linear (Settings → Account → Security &
         access). Give it write scope (or issues:create) to use Label
         agent:ready; a read-only key works for everything else.
       </p>
-      <p className="settings-note">
+      <p className={`settings-note ${NOTE}`}>
         The anon key is in the Supabase project agent-queue, under Project
         Settings → API.
       </p>
-      <p className="settings-note">
+      <p className={`settings-note ${NOTE}`}>
         The control token lets this desk pause, run and limit the queue. It is
         the device token whose hash is in DESK_CONTROL_TOKENS; leave it empty to
         only watch.
@@ -176,7 +178,7 @@ export const SettingsForm = ({
           </Field>
         );
       })}
-      <div className="settings-actions">
+      <div className="settings-actions flex gap-[10px]">
         <button type="submit" disabled={busy}>
           Save
         </button>
@@ -188,7 +190,7 @@ export const SettingsForm = ({
           {shown ? 'Hide keys' : 'Show keys'}
         </button>
       </div>
-      <p className="settings-status" role="status">
+      <p className={`settings-status ${NOTE}`} role="status">
         {status}
       </p>
     </form>

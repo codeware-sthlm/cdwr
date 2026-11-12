@@ -140,7 +140,10 @@ export const App = () => {
   return (
     <>
       {problems ? (
-        <div id="alert">
+        <div
+          id="alert"
+          className="mt-[calc(-1*var(--pad-top))] mr-[calc(-1*var(--pad-right))] mb-[var(--pad-block)] ml-[calc(-1*var(--pad-left))] max-[600px]:mt-0 max-[600px]:mr-0 max-[600px]:mb-[var(--gap)] max-[600px]:ml-0"
+        >
           <Alert m={m} onSeeProblems={problemActions.seeProblems} />
         </div>
       ) : null}
@@ -228,17 +231,24 @@ export const App = () => {
               />
             </section>
             {problems ? (
-              <section className="problems" id="problems" aria-label="Problems">
+              <section
+                className="problems flex flex-col gap-3"
+                id="problems"
+                aria-label="Problems"
+              >
                 <Problems m={m} now={now} actions={problemActions} />
               </section>
             ) : null}
             {label ? (
-              <h2 className="frozen-label" id="frozen-label">
+              <h2
+                className="frozen-label font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-medium tracking-[0.14em] text-[color:var(--muted)]"
+                id="frozen-label"
+              >
                 <FrozenLabel m={m} />
               </h2>
             ) : null}
             <section
-              className={label ? 'capacity frozen' : 'capacity'}
+              className={label ? 'capacity frozen opacity-[0.45]' : 'capacity'}
               id="capacity"
               aria-label="Capacity: limits and hosts"
             >
@@ -253,7 +263,7 @@ export const App = () => {
             <nav
               className={
                 label
-                  ? 'more frozen flex flex-col gap-3'
+                  ? 'more frozen flex flex-col gap-3 opacity-[0.45]'
                   : 'more flex flex-col gap-3'
               }
               id="more"

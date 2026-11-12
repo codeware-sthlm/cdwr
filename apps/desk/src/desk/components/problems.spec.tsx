@@ -292,7 +292,7 @@ describe('Problems', () => {
       'button[data-cmd="abandon"]'
     );
     expect(button?.textContent).toBe('Mark run abandoned');
-    expect(button?.className).toBe('p-btn');
+    expect(button?.classList.contains('p-btn')).toBe(true);
     expect(p.text).toContain('Check the host first.');
     if (!button) throw new Error('no abandon button');
     fireEvent.click(button);
