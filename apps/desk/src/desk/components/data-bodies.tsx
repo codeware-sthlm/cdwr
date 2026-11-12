@@ -43,7 +43,7 @@ const NO_ACTIVITY =
 const Actor = ({ a }: { a: string }) =>
   a === 'agent' ? (
     <span className="tag agent">
-      <img className="av" src={AGENT_AVATAR} alt="" />
+      <img className="av inline-block" src={AGENT_AVATAR} alt="" />
       agent
     </span>
   ) : a === 'scheduler' ? (
