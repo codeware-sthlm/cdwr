@@ -506,7 +506,10 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
   | ($lu0 + { used: ($lu0.used + ($parkWorking | length)) }) as $lu
   | ($all | map(. + { claim: claim })) as $allC
   | ([ $allC[] | select(agent_label == "agent:working" and is_open) ]) as $working
-  | ([ $working[] | select(.claim != null and ($now - .claim.at) < 7200 and (.identifier | IN($parkIds[]) | not)) ]
+  # The 2-hour rule is for a session that left no heartbeat: a live session's own ticket stays a resume
+  | ([ $working[] | select(.claim != null
+                           and (($now - .claim.at) < 7200 or (.identifier | IN($sessionTickets[])))
+                           and (.identifier | IN($parkIds[]) | not)) ]
      | sort_by(.claim.at) | reverse
      | map({ ticket: .identifier, reason: "resume", detail: next_line })) as $fresh
   # No readable claim is no proof the session is gone: the skill takes over only a claim 2 h old.
@@ -516,7 +519,8 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
                         else ($now - (.updatedAt | epoch)) end) })) as $unc
   | ($unc | map(select(.idle == null or .idle < 1800)
                 | { ticket: .identifier, reason: "resume", detail: "no claim line" })) as $unclaimed
-  | ([ $working[] | select(.claim != null and ($now - .claim.at) >= 7200) ] | sort_by(queue_order)
+  | ([ $working[] | select(.claim != null and ($now - .claim.at) >= 7200
+                           and (.identifier | IN($sessionTickets[]) | not)) ] | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "take over",
              detail: "claim \((($now - .claim.at) / 3600 | floor)) h old" })
      + ($unc | map(select(.idle != null and .idle >= 1800)
@@ -614,7 +618,7 @@ def attended($now; $limit; $watch; $waits; $renovate; $session):
                  and ((.ticket | IN(($session.tickets // [ $session.ticket ])[]))
                       or ($holder | type) == "string" and (($session.id // "") | startswith($holder)))) | not) ]) as $runnable
   | { used: $q.limit.used, limit: $limit, waiting: ($inputs + $after + $labels), runnable: $runnable,
-      resuming: [ $q.next[] | select(.reason == "resume") | { ticket, detail } ] }
+      resuming: [ $q.next[] | select(.reason == "resume") | { ticket, detail, holder: ($q.holders[.ticket] // null) } ] }
     + ($q.next[0] as $n
        | if $n == null then { verdict: "idle", ticket: null, reason: null, detail: null }
          elif $n.reason == "resume" then { verdict: "running", ticket: $n.ticket, reason: "working", detail: $n.detail }
@@ -624,8 +628,11 @@ def attended($now; $limit; $watch; $waits; $renovate): attended($now; $limit; $w
 def attended($now; $limit; $watch; $waits): attended($now; $limit; $watch; $waits; {});
 def attended($now; $limit; $watch): attended($now; $limit; $watch; {});
 
-# The session's own ticket is among the resumable ones, whichever ranks first
-def own_pick($ticket): any(.resuming[]?; .ticket == $ticket);
+# The session's own ticket is among the resumable ones, whichever ranks first, and no other
+# session's claim holds it
+def own_pick($ticket; $sid):
+  any(.resuming[]?; .ticket == $ticket
+                    and (.holder as $h | $h == null or (($sid // "") | startswith($h))));
 
 def resume_line($ticket): ([ .resuming[]? | select(.ticket == $ticket) ] | first)
   | "resume: \(.ticket)" + (if .detail != null then " · \(.detail)" else "" end);

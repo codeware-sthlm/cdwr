@@ -517,11 +517,11 @@ while true; do beat "$1" "$2"; sleep 1; done`
   });
 
   describe("the session's own ticket", () => {
-    const working = (claim: boolean) => ({
+    const working = (claim: boolean, holder = 'cur') => ({
       ...ticket('COD-9', 'started'),
       labels: { nodes: [{ name: 'agent:working' }] },
       description: claim
-        ? `**Claim:** s · /w · ${new Date().toISOString().slice(0, 16)}Z\n**Next:** step 2\n`
+        ? `**Claim:** ${holder} · /w · ${new Date().toISOString().slice(0, 16)}Z\n**Next:** step 2\n`
         : ''
     });
     const register = (ticketId = 'COD-9') => {
@@ -569,18 +569,30 @@ while true; do beat "$1" "$2"; sleep 1; done`
           pid: 1
         })
       );
-      const claimed = (id: string, agoMs: number, next: string) => ({
+      const claimed = (
+        id: string,
+        agoMs: number,
+        next: string,
+        holder = 'cur'
+      ) => ({
         ...ticket(id, 'started'),
         labels: { nodes: [{ name: 'agent:working' }] },
-        description: `**Claim:** s · /w · ${new Date(Date.now() - agoMs).toISOString().slice(0, 16)}Z\n**Next:** ${next}\n`
+        description: `**Claim:** ${holder} · /w · ${new Date(Date.now() - agoMs).toISOString().slice(0, 16)}Z\n**Next:** ${next}\n`
       });
       const answers = [
         response(
-          claimed('COD-8', 0, 'step 1'),
+          claimed('COD-8', 0, 'step 1', 'other'),
           claimed('COD-9', 20 * 60_000, 'step 5')
         )
       ];
       expect(run(answers, args).stdout).toBe('resume: COD-9 · step 5\n');
+    });
+
+    it("a claim held by another session is not the session's own", () => {
+      register();
+      expect(run([response(working(true, 'other'))], args).stdout).toMatch(
+        /^timeout: running/
+      );
     });
 
     it('a session on another ticket does not see it as its own', () => {
