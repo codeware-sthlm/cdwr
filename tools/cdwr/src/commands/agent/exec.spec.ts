@@ -3,7 +3,7 @@ import { memoryPrefs } from '../../cli/prefs';
 import { runCommand } from '../../cli/run';
 import { fakeUi } from '../../testing/fake-ui';
 
-import command, { execArgv } from './exec';
+import command, { execArgv, shownArgs } from './exec';
 
 vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
@@ -65,7 +65,64 @@ describe('execArgv', () => {
   });
 });
 
+describe('shownArgs', () => {
+  const release = async () => (await import('../release')).default;
+
+  it.each([
+    [
+      ['release', '--otp', '123456', '--yes'],
+      ['release', '--otp', '***', '--yes']
+    ],
+    [
+      ['release', '--otp=123456'],
+      ['release', '--otp=***']
+    ],
+    [
+      ['release', '-o', '123456'],
+      ['release', '-o', '***']
+    ],
+    [
+      ['release', '-o123456'],
+      ['release', '-o***']
+    ]
+  ])('hides the value of a secret input in %j', async (args, shown) => {
+    expect(shownArgs(args, await release())).toEqual(shown);
+  });
+
+  it('keeps everything else, and everything for an unknown command', async () => {
+    const args = ['release', '--dry-run', '--json'];
+    expect(shownArgs(args, await release())).toEqual(args);
+    expect(shownArgs(['nope', '--otp', '1'])).toEqual(['nope', '--otp', '1']);
+  });
+});
+
 describe('cdwr agent exec', () => {
+  it('sends a secret to the remote, and shows it nowhere', async () => {
+    const ui = fakeUi([], false);
+    const exit = await runCommand({
+      name: 'agent exec',
+      command,
+      argv: ['-d', '--host', HOST, '--', 'release', '--otp', '123456'],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui,
+      history: () => undefined,
+      stdout: () => undefined
+    });
+    expect(exit).toBe(EXIT.ok);
+    const printed = JSON.stringify(ui.printed);
+    expect(printed).not.toContain('123456');
+    expect(printed).toContain("'--otp' '***'");
+
+    await run(['--host', HOST, '--', 'release', '--otp', '123456']);
+    expect(runInteractive).toHaveBeenCalledWith(
+      'ssh',
+      execArgv(HOST, ['release', '--otp', '123456'])
+    );
+  });
+
   it('runs the args after -- over ssh, global flags included', async () => {
     const exit = await run([
       '--host',

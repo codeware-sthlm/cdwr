@@ -1,8 +1,11 @@
 import { isMainThread } from 'node:worker_threads';
 
-import { defineCommand } from '../../cli/command';
+import { type AnyCommand, defineCommand } from '../../cli/command';
 import { CliError, EXIT, UsageError } from '../../cli/errors';
+import { type Inputs, flagOf } from '../../cli/inputs';
+import { lookup } from '../../cli/registry';
 import { runInteractive, shellQuote } from '../../services/shell';
+import { ENTRIES, GROUPS } from '../index';
 
 import { REMOTE_CONTAINER, remoteCdwr } from './agent.logic';
 import { hostInput } from './remote';
@@ -19,6 +22,52 @@ export const execArgv = (host: string, args: string[]): string[] =>
   remoteCdwr(host, args.map(shellQuote));
 
 const commandOf = (args: string[]) => `cdwr ${args.join(' ')}`;
+
+const HIDDEN = '***';
+
+/**
+ * The args as the plan, the summary and the errors show them: the value given to a
+ * secret input of the remote command is hidden, as the command itself would hide it
+ */
+export const shownArgs = (args: string[], command?: AnyCommand): string[] => {
+  const secret = new Set<string>();
+  const inputs: Inputs = command?.inputs ?? {};
+  for (const [key, spec] of Object.entries(inputs)) {
+    if (spec.kind !== 'secret') continue;
+    secret.add(`--${flagOf(key, spec)}`);
+    if (spec.short) secret.add(`-${spec.short}`);
+  }
+  if (secret.size === 0) return args;
+  let hideNext = false;
+  return args.map((arg) => {
+    if (hideNext) {
+      hideNext = false;
+      return HIDDEN;
+    }
+    const eq = arg.indexOf('=');
+    if (arg.startsWith('--') && eq !== -1 && secret.has(arg.slice(0, eq))) {
+      return `${arg.slice(0, eq)}=${HIDDEN}`;
+    }
+    if (secret.has(arg)) {
+      hideNext = true;
+      return arg;
+    }
+    // A short flag with its value attached, such as -pvalue
+    const short = arg.slice(0, 2);
+    if (!arg.startsWith('--') && arg.length > 2 && secret.has(short)) {
+      return `${short}${HIDDEN}`;
+    }
+    return arg;
+  });
+};
+
+/** The remote command's definition, to know which of its inputs are secret */
+const remoteCommand = async (
+  args: string[]
+): Promise<AnyCommand | undefined> => {
+  const found = lookup(args, GROUPS, ENTRIES);
+  return found.kind === 'command' ? found.entry.load() : undefined;
+};
 
 export default defineCommand({
   summary: 'Run a cdwr command in the agent container, with its vault secrets',
@@ -54,27 +103,27 @@ export default defineCommand({
         'Put --json after -- to have the remote command answer in JSON'
       );
     }
+    const shown = shownArgs(args, await remoteCommand(args));
     if (!isMainThread) {
       throw new CliError(
         'The remote command needs this terminal',
         EXIT.failed,
-        `Run it in a shell: cdwr agent exec --host ${host} -- ${args.join(' ')}`
+        `Run it in a shell: cdwr agent exec --host ${host} -- ${shown.join(' ')}`
       );
     }
-    const argv = execArgv(host, args);
     return {
       steps: [
         {
-          label: `Run ${commandOf(args)} in ${REMOTE_CONTAINER} on ${host}`,
-          detail: `ssh ${argv.join(' ')}`
+          label: `Run ${commandOf(shown)} in ${REMOTE_CONTAINER} on ${host}`,
+          detail: `ssh ${execArgv(host, shown).join(' ')}`
         }
       ],
-      data: { host, args, argv }
+      data: { host, shown, argv: execArgv(host, args) }
     };
   },
 
-  async apply(_ctx, { host, args, argv }) {
-    const command = commandOf(args);
+  async apply(_ctx, { host, shown, argv }) {
+    const command = commandOf(shown);
     const code = await runInteractive('ssh', argv);
     if (code === 0) return { summary: `${command} on ${host} finished` };
     if (code === SSH_FAILED) {
