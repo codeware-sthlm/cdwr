@@ -34,7 +34,12 @@ describe('gateCookies', () => {
   it('mints a gate cookie the site accepts, scoped to the site', () => {
     const [cookie] = gateCookies(url, 'open sesame', now);
 
-    expect(cookie).toMatchObject({ name: SITE_GATE_COOKIE, url });
+    expect(cookie).toMatchObject({
+      name: SITE_GATE_COOKIE,
+      url: 'https://cdwr.io/',
+      httpOnly: true,
+      sameSite: 'Lax'
+    });
     expect(verifySiteGateToken(cookie.value, 'open sesame', { now })).toBe(
       true
     );

@@ -207,7 +207,8 @@ const GATE_COOKIE_SECONDS = 60 * 60;
  *
  * Minted here with the same signing the site verifies, so no form is sent and
  * the password never travels. Without a password there is no cookie, and a
- * gated site shows its gate page.
+ * gated site shows its gate page. `HttpOnly` and `Lax` as the site sets it, so
+ * no script on an audited page can read the token.
  *
  * @param url - The site, so the cookie is scoped to its host
  * @param password - The site gate password for this tenant and environment
@@ -216,7 +217,13 @@ export const gateCookies = (
   url: string,
   password: string | undefined,
   now = Date.now()
-): Array<{ name: string; value: string; url: string }> =>
+): Array<{
+  name: string;
+  value: string;
+  url: string;
+  httpOnly: true;
+  sameSite: 'Lax';
+}> =>
   password
     ? [
         {
@@ -225,7 +232,11 @@ export const gateCookies = (
             maxAgeSeconds: GATE_COOKIE_SECONDS,
             now
           }),
-          url
+          // The root, so the cookie's path is `/`; Playwright takes a url or a
+          // path, not both
+          url: new URL('/', url).href,
+          httpOnly: true,
+          sameSite: 'Lax'
         }
       ]
     : [];
