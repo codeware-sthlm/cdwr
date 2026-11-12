@@ -1,21 +1,17 @@
-import { type ReactElement, useLayoutEffect, useRef } from 'react';
-import { type Root, createRoot } from 'react-dom/client';
+import type { ReactElement } from 'react';
 
 import { SHIP_DAYS } from '../constants';
-import { type Model, shipped } from '../model';
-import { chartHeight, chartKind } from '../render/charts';
-import {
-  renderActivity,
-  renderAll,
-  renderEffort,
-  renderIdeas,
-  renderShipped
-} from '../render/sheets';
-import { spendDays } from '../spend';
-import type { DeskState, SheetId } from '../state';
+import type { Model } from '../model';
+import type { DeskState, Filter, SheetId } from '../state';
 
 import { BeforeSheet, type WaitActions } from './before';
-import { ShippedChart, SpendChart } from './charts';
+import {
+  ActivityBody,
+  AllBody,
+  EffortBody,
+  IdeasBody,
+  ShippedBody
+} from './data-bodies';
 import { HandoffsBody, LimitBody, NextBody, ReviewBody } from './queue-bodies';
 import {
   PlanBody,
@@ -30,6 +26,10 @@ export type SheetActions = {
   wait: WaitActions;
   /** The Waiting on you sheet's snoozed fold */
   onSnoozedOpen: (open: boolean) => void;
+  /** The Activity sheet's ticket filter */
+  onActFilter: (ticket: string) => void;
+  /** The All sheet's filter */
+  onFilter: (filter: Filter) => void;
 };
 
 export type SheetProps = {
@@ -44,69 +44,6 @@ export type SheetDef = {
   sub: string;
   Body: (p: SheetProps) => ReactElement;
 };
-
-/** The chart a `[data-chart]` slot of an HTML body asks for */
-const slotChart = (slot: HTMLElement, state: DeskState, now: Date) => {
-  const { days } = shipped(state.data.closed, now);
-  const height = chartHeight(slot.dataset.h);
-  return chartKind(slot.dataset.chart) === 'spend' ? (
-    <SpendChart days={spendDays(state.data.usage, days)} height={height} />
-  ) : (
-    <ShippedChart days={days} height={height} />
-  );
-};
-
-/**
- * A body still written as HTML, until it moves to a component. The body is rewritten only when
- * its HTML changes; its charts are roots on the `[data-chart]` slots that re-render with new
- * data, so a hover survives a render.
- */
-const LegacyBody = ({
-  html,
-  state,
-  now
-}: {
-  html: string;
-  state: DeskState;
-  now: Date;
-}) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const roots = useRef<Root[]>([]);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.innerHTML = html;
-    const made = Array.from(
-      el.querySelectorAll<HTMLElement>('[data-chart]'),
-      (slot) => createRoot(slot)
-    );
-    roots.current = made;
-    return () => {
-      // Not during this commit: a root can't unmount while React renders
-      queueMicrotask(() => made.forEach((r) => r.unmount()));
-    };
-  }, [html]);
-  useLayoutEffect(() => {
-    ref.current
-      ?.querySelectorAll<HTMLElement>('[data-chart]')
-      .forEach((slot, n) =>
-        roots.current[n]?.render(slotChart(slot, state, now))
-      );
-  });
-  return <div ref={ref} className="contents" />;
-};
-
-const legacy = (
-  title: string,
-  sub: string,
-  html: (m: Model, state: DeskState, now: Date) => string
-): SheetDef => ({
-  title,
-  sub,
-  Body: ({ m, state, now }) => (
-    <LegacyBody html={html(m, state, now)} state={state} now={now} />
-  )
-});
 
 /** Every sheet by id; a new SheetId fails to compile until it has an entry */
 export const SHEETS: Record<SheetId, SheetDef> = {
@@ -169,29 +106,33 @@ export const SHEETS: Record<SheetId, SheetDef> = {
     sub: "The Claude plan's 5-hour and 7-day usage with a projection to each reset, and what the last 24 hours cost",
     Body: PlanBody
   },
-  activity: legacy(
-    'Activity',
-    "Every status, label, description and comment change on agent tickets, plus the scheduler's runs, newest first",
-    renderActivity
-  ),
-  shipped: legacy(
-    'Closed by the agent',
-    `Agent tickets closed per day, last ${SHIP_DAYS} days`,
-    (_m, state, now) => renderShipped(state, now)
-  ),
-  effort: legacy(
-    'Effort, 30 days',
-    'API-equivalent cost, simulated on Max: per closed ticket, then per day and model',
-    (_m, state, now) => renderEffort(state, now)
-  ),
-  all: legacy(
-    'All open tickets',
-    'Same order as the agent: status, priority, then age',
-    renderAll
-  ),
-  ideas: legacy(
-    'Agent suggestions',
-    'One evidence-led idea a day, from the first idle run after 06:00. Accept it with agent:ready; discard it by cancelling with one word in a comment.',
-    renderIdeas
-  )
+  activity: {
+    title: 'Activity',
+    sub: "Every status, label, description and comment change on agent tickets, plus the scheduler's runs, newest first",
+    Body: ({ m, state, actions }) => (
+      <ActivityBody m={m} state={state} onActFilter={actions.onActFilter} />
+    )
+  },
+  shipped: {
+    title: 'Closed by the agent',
+    sub: `Agent tickets closed per day, last ${SHIP_DAYS} days`,
+    Body: ShippedBody
+  },
+  effort: {
+    title: 'Effort, 30 days',
+    sub: 'API-equivalent cost, simulated on Max: per closed ticket, then per day and model',
+    Body: EffortBody
+  },
+  all: {
+    title: 'All open tickets',
+    sub: 'Same order as the agent: status, priority, then age',
+    Body: ({ m, state, actions }) => (
+      <AllBody m={m} state={state} onFilter={actions.onFilter} />
+    )
+  },
+  ideas: {
+    title: 'Agent suggestions',
+    sub: 'One evidence-led idea a day, from the first idle run after 06:00. Accept it with agent:ready; discard it by cancelling with one word in a comment.',
+    Body: IdeasBody
+  }
 };

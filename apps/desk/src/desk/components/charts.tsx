@@ -3,7 +3,6 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { ROLES, SHIP_DAYS } from '../constants';
 import { dayLabel, niceCeil, usd } from '../format';
 import type { CpuDay as CpuDayData, ShippedDay } from '../model';
-import type { SparkPoint } from '../render/charts';
 import type { SpendDay } from '../spend';
 
 // The two day charts and the CPU line as SVG components. A day chart measures its own box, so text
@@ -364,6 +363,9 @@ export const SpendChart = ({
 // The gauge and sparklines: fixed-size SVG that scales with its box, so nothing is measured
 const GAUGE = { w: 100, h: 8 };
 const SPARK = { w: 240, h: 40 };
+
+/** One point of a sparkline: a time in ms and a value */
+export type SparkPoint = { at: number; value: number };
 
 /** A bar filled to `share` of the track, in the warning colour when `bad` */
 export const Gauge = ({ share, bad }: { share: number; bad: boolean }) => (
