@@ -1,7 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { createElement } from 'react';
 import { flushSync } from 'react-dom';
-import { type Root, createRoot } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 
 import { deskSha } from '../build-info';
 import type { Adapter } from '../data';
@@ -18,10 +18,9 @@ import {
   prCommandKey,
   sendCommand
 } from './commands';
-import { BeforeSheet, type WaitActions } from './components/before';
+import type { WaitActions } from './components/before';
 import { Capacity } from './components/capacity';
 import { Cards } from './components/cards';
-import { ShippedChart, SpendChart } from './components/charts';
 import { Platform, type PlatformActions } from './components/platform';
 import {
   Alert,
@@ -30,19 +29,25 @@ import {
   Problems,
   frozenLabel
 } from './components/problems';
+import {
+  SETTINGS_SUB,
+  SETTINGS_TITLE,
+  SettingsForm,
+  type SettingsOptions
+} from './components/settings';
+import { Sheet } from './components/sheet';
+import { SHEETS, type SheetActions } from './components/sheets';
 import { Status } from './components/status';
 import { Tiles } from './components/tiles';
 import { AGENT_AVATAR, CONFIRM_MS } from './constants';
 import { type Loader, createLoader } from './load';
-import { type ControlsModel, type Model, model, shipped } from './model';
+import { type ControlsModel, type Model, model } from './model';
 import { notice } from './notice';
-import { chartHeight, chartKind } from './render/charts';
 import { CAP_RANGE, LIMIT_RANGE } from './render/controls';
-import { SHEETS } from './render/sheets';
 import { forgetLabelled } from './render/waiting';
-import { spendDays } from './spend';
 import {
   type Connection,
+  type SheetId,
   type View,
   bucketsLoaded,
   createState,
@@ -71,7 +76,8 @@ const $ = (id: string): HTMLElement => {
 };
 
 // The header's status pill, the two cards, the capacity row, the tiles, the Platform view, the
-// alert, the problems and the frozen label are React; the rest of the page is still written as HTML
+// alert, the problems, the frozen label and the sheets are React; the rest of the page is still
+// written as HTML
 const statusRoot = createRoot($('status'));
 const cardsRoot = createRoot($('cards'));
 const capacityRoot = createRoot($('capacity'));
@@ -80,6 +86,7 @@ const platformRoot = createRoot($('platform'));
 const alertRoot = createRoot($('alert'));
 const problemsRoot = createRoot($('problems'));
 const frozenRoot = createRoot($('frozen-label'));
+const sheetRoot = createRoot($('sheet-root'));
 
 // ---------- Main view ----------
 
@@ -187,100 +194,106 @@ function showView(view: View, focus = true): void {
 
 // ---------- Sheet ----------
 
-// The Waiting on you sheet is React and keeps its root while it is open, so a render updates it in
-// place and keeps focus; every other sheet is still written as HTML
-let sheetRoot: Root | null = null;
+// The sheet last opened: still drawn while it animates out
+let shownSheet: SheetId = 'before';
+// Whether the open sheet takes focus; false for one opened by the start hash
+let sheetFocus = true;
+// The sheet that just closed, whose tile or card takes focus back
+let closedSheet: SheetId | null = null;
+// The settings form, open in the same frame; it is no sheet and has no hash
+let settings: SettingsOptions | null = null;
+let settingsShown = false; // drawn while it animates out
+let settingsForm = 0; // a new key per opening, so the form starts from the saved values
 
-function unmountSheet(): void {
-  sheetRoot?.unmount();
-  sheetRoot = null;
+function closeSettings(): void {
+  settings = null;
+  renderSheet();
 }
 
-// An HTML sheet's charts are React roots on its `[data-chart]` slots. While a render writes the
-// same HTML the body is left alone and the roots re-render with new data, so a hover survives it.
-let sheetHtml: string | null = null;
-let chartRoots: Root[] = [];
-
-function unmountCharts(): void {
-  for (const root of chartRoots) root.unmount();
-  chartRoots = [];
-  sheetHtml = null;
-}
-
-/** Writes an HTML sheet's body when it changed, then renders its charts */
-function writeSheet(html: string): void {
-  const body = $('sheet-body');
-  if (html !== sheetHtml) {
-    unmountCharts();
-    body.innerHTML = html;
-    sheetHtml = html;
-    chartRoots = Array.from(
-      body.querySelectorAll<HTMLElement>('[data-chart]'),
-      (el) => createRoot(el)
-    );
-  }
-  if (!chartRoots.length) return;
-  const { days } = shipped(state.data.closed, new Date());
-  body.querySelectorAll<HTMLElement>('[data-chart]').forEach((el, n) => {
-    const height = chartHeight(el.dataset.h);
-    chartRoots[n]?.render(
-      chartKind(el.dataset.chart) === 'spend'
-        ? createElement(SpendChart, {
-            days: spendDays(state.data.usage, days),
-            height
+/** Renders the sheet frame with the shown sheet's body; it updates in place, keeping focus and scroll */
+function renderSheet(): void {
+  if (settingsShown) {
+    sheetRoot.render(
+      createElement(
+        Sheet,
+        {
+          open: settings !== null,
+          title: SETTINGS_TITLE,
+          sub: SETTINGS_SUB,
+          // The form focuses its first field
+          focus: false,
+          onClose: closeSettings,
+          onClosed: () => {
+            settingsShown = false;
+            document.getElementById('settings')?.focus();
+          }
+        },
+        settings &&
+          createElement(SettingsForm, {
+            key: settingsForm,
+            ...settings,
+            onDone: closeSettings
           })
-        : createElement(ShippedChart, { days, height })
+      )
     );
-  });
+    return;
+  }
+  const now = new Date();
+  const def = SHEETS[shownSheet];
+  sheetRoot.render(
+    createElement(
+      Sheet,
+      {
+        open: state.ui.openSheet !== null,
+        title: def.title,
+        sub: def.sub,
+        focus: sheetFocus,
+        onClose: hideSheet,
+        onClosed: focusOpener
+      },
+      createElement(def.Body, {
+        m: model(state, now, DESK, WEB),
+        state,
+        now,
+        actions: sheetActions
+      })
+    )
+  );
+}
+
+/** Opens the settings form in the sheet frame, closing any sheet that is open */
+export function openSettings(options: SettingsOptions): void {
+  if (state.ui.openSheet) {
+    state.ui.openSheet = null;
+    setHash();
+  }
+  settings = options;
+  settingsShown = true;
+  settingsForm += 1;
+  renderSheet();
 }
 
 function showSheet(value: string, focus = true): void {
   const id = sheetIdOf(value);
   if (!id) return;
-  const now = new Date();
-  const w = SHEETS[id];
-  const m = model(state, now, DESK, WEB);
+  if (settings) return;
+  settingsShown = false;
   state.ui.openSheet = id;
-  $('sheet-title').textContent = w.title;
-  $('sheet-sub').textContent = w.sub;
-  // Shown before the body is written, so a chart measures its real width when it mounts
-  $('sheet').hidden = false;
-  $('scrim').hidden = false;
-  if (id === 'before') {
-    if (!sheetRoot) {
-      unmountCharts();
-      $('sheet-body').innerHTML = '';
-      sheetRoot = createRoot($('sheet-body'));
-    }
-    sheetRoot.render(
-      createElement(BeforeSheet, {
-        m,
-        state,
-        now,
-        open: state.ui.snoozedOpen,
-        onOpenChange: (open) => {
-          state.ui.snoozedOpen = open;
-          render();
-        },
-        actions: waitActions
-      })
-    );
-  } else {
-    unmountSheet();
-    writeSheet(w.body(m, state, now));
-  }
+  shownSheet = id;
+  sheetFocus = focus;
+  renderSheet();
   setHash();
-  if (focus) $('sheet-close').focus();
 }
 function hideSheet(): void {
-  const was = state.ui.openSheet;
+  closedSheet = state.ui.openSheet;
   state.ui.openSheet = null;
-  unmountSheet();
-  unmountCharts();
-  $('sheet').hidden = true;
-  $('scrim').hidden = true;
+  renderSheet();
   setHash();
-  const el = document.querySelector<HTMLElement>(`[data-w="${was}"]`);
+}
+/** Puts focus back on the tile or card that opened the sheet */
+function focusOpener(): void {
+  const el = document.querySelector<HTMLElement>(`[data-w="${closedSheet}"]`);
+  closedSheet = null;
   (el?.matches('button')
     ? el
     : el?.querySelector<HTMLElement>('.open')
@@ -497,6 +510,15 @@ const waitActions: WaitActions = {
   pr: clickPr
 };
 
+/** What the sheets' controls do */
+const sheetActions: SheetActions = {
+  wait: waitActions,
+  onSnoozedOpen: (open) => {
+    state.ui.snoozedOpen = open;
+    render();
+  }
+};
+
 document.addEventListener('click', (e) => {
   if (!(e.target instanceof Element)) return;
   // The Platform view, the capacity row, the tiles, the alert and the problems are React and
@@ -540,64 +562,10 @@ document.addEventListener('change', (e) => {
   render();
   document.querySelector<HTMLElement>('[data-af]')?.focus();
 });
-$('sheet-close').onclick = hideSheet;
-$('scrim').onclick = hideSheet;
-
-// Drag the bottom sheet down to close it; the same breakpoint as the CSS
-const PHONE = '(max-width: 600px)';
-const DRAG_CLOSE_PX = 80;
-const DRAG_TAP_PX = 4; // a pointer that moved further than this was dragging, not tapping
-{
-  const sheet = $('sheet');
-  let startY: number | null = null;
-  let dy = 0;
-  let dragged = false; // the click that ends a drag must not close the sheet as a tap
-  // A plain tap on the handle closes; the click after a drag is ignored
-  $('sheet-handle').onclick = () => {
-    if (dragged) {
-      dragged = false;
-      return;
-    }
-    hideSheet();
-  };
-  const onDown = (e: PointerEvent): void => {
-    if (!window.matchMedia(PHONE).matches) return;
-    if (e.target instanceof Element && e.target.closest('#sheet-close')) return;
-    startY = e.clientY;
-    dy = 0;
-    dragged = false;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
-  const onMove = (e: PointerEvent): void => {
-    if (startY === null) return;
-    dy = Math.max(0, e.clientY - startY);
-    if (dy > DRAG_TAP_PX) dragged = true;
-    sheet.style.transform = `translateY(${dy}px)`;
-  };
-  const finish = (close: boolean): void => {
-    if (startY === null) return;
-    startY = null;
-    dy = 0;
-    sheet.style.transform = '';
-    if (close) hideSheet();
-  };
-  const onUp = (): void => finish(dy > DRAG_CLOSE_PX);
-  const onCancel = (): void => finish(false);
-  for (const el of [
-    $('sheet-handle'),
-    sheet.querySelector<HTMLElement>('.sheet-head')
-  ]) {
-    if (!el) continue;
-    el.addEventListener('pointerdown', onDown);
-    el.addEventListener('pointermove', onMove);
-    el.addEventListener('pointerup', onUp);
-    el.addEventListener('pointercancel', onCancel);
-  }
-}
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
-  if (state.ui.openSheet) hideSheet();
-  else if (state.ui.view === 'platform') showView('desk');
+  // An open sheet closes on its own Escape, which marks the event handled
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  if (state.ui.view === 'platform') showView('desk');
 });
 
 // ---------- Render and load ----------
@@ -613,11 +581,7 @@ function renderNotice(): void {
 
 function render(): void {
   renderMain();
-  if (state.ui.openSheet) {
-    const scroll = $('sheet-body').scrollTop;
-    showSheet(state.ui.openSheet, false);
-    $('sheet-body').scrollTop = scroll;
-  }
+  renderSheet();
   const loaded = bucketsLoaded(state.data);
   $('fresh').textContent = loaded
     ? 'Updated ' +

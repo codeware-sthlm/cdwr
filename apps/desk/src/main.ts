@@ -1,5 +1,6 @@
 import { type Adapter, createAdapter } from './data';
 import {
+  openSettings as openSettingsSheet,
   setConnection,
   setControls,
   setLabeller,
@@ -15,7 +16,6 @@ import {
   loadSettings,
   saveSettings
 } from './settings';
-import { openSettingsSheet } from './settings-sheet';
 import { SupabaseError, createSupabase } from './supabase';
 
 import './fonts.css';

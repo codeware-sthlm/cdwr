@@ -1994,30 +1994,7 @@ button.act:disabled {
   overflow-wrap: anywhere;
 }
 
-/* Sheet */
-.scrim {
-  position: fixed;
-  inset: 0;
-  background: var(--scrim);
-  z-index: 10;
-}
-.sheet {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(640px, 100%);
-  background: var(--surface);
-  border-left: 1px solid var(--line-strong);
-  box-shadow: var(--shadow);
-  z-index: 11;
-  display: flex;
-  flex-direction: column;
-  padding-top: env(safe-area-inset-top, 0px);
-}
-.sheet-handle {
-  display: none;
-}
+/* Sheet: the frame is components/sheet.tsx, a shadcn Sheet or, on the phone, a Drawer */
 .sheet-head {
   display: flex;
   align-items: flex-start;
@@ -2055,34 +2032,8 @@ button.act:disabled {
   gap: 12px;
 }
 @media (max-width: 600px) {
-  /* The full screen, inside the safe areas; the handle stays first and drags it closed */
-  .sheet {
-    left: 0;
-    width: auto;
-    border: 0;
-  }
-  .sheet-handle {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    height: var(--tap);
-    padding: 0;
-    background: none;
-    border: 0;
-    border-radius: 0;
-    touch-action: none;
-  }
-  .sheet-handle::before {
-    content: '';
-    width: 36px;
-    height: 4px;
-    border-radius: 999px;
-    background: var(--line-strong);
-  }
   .sheet-head {
     padding: 8px 20px 14px;
-    touch-action: none;
   }
   .sheet-head h2 {
     font-size: 16px;
@@ -2090,28 +2041,6 @@ button.act:disabled {
   .sheet-body {
     padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
     gap: 10px;
-  }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .sheet {
-    animation: slide 0.18s ease-out;
-  }
-  @keyframes slide {
-    from {
-      transform: translateX(24px);
-      opacity: 0.6;
-    }
-  }
-  @media (max-width: 600px) {
-    .sheet {
-      animation-name: rise;
-    }
-    @keyframes rise {
-      from {
-        transform: translateY(32px);
-        opacity: 0.6;
-      }
-    }
   }
 }
 
@@ -2510,31 +2439,6 @@ ul {
   margin: 0;
   color: var(--muted);
   font-size: 0.85rem;
-}
-.settings-field {
-  display: grid;
-  gap: 4px;
-}
-.settings-field label {
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-.settings-field input {
-  font: 0.85rem var(--font-mono);
-  color: var(--fg);
-  background: var(--sunk);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-.settings-field input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.settings-error {
-  margin: 0;
-  color: var(--block);
-  font-size: 0.82rem;
 }
 .settings-actions {
   display: flex;
