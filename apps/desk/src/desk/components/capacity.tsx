@@ -8,6 +8,7 @@ import { hhmm, plural, shortAge, usd } from '../format';
 import type { HandBackState } from '../live';
 import type { Model } from '../model';
 
+import { FRAME, HEAD, PANEL } from './card-ui';
 import { CpuChart } from './charts';
 import { CmdButton, ControlStatus, MINI } from './controls';
 
@@ -81,7 +82,6 @@ const VALUE: Record<Tone, string> = {
 const CV = `cap-v ${MONO} text-[13px] font-semibold tabular-nums`;
 const METER = 'flex min-w-0 flex-col gap-1.5';
 const NOTE = `cap-note text-[11px] empty:hidden ${MUTED}`;
-const CARD = 'card-top cap-card cursor-default gap-[14px]';
 const HOST = 'cap-host flex min-w-0 flex-col gap-2';
 const MH = 'cap-mh flex items-baseline justify-between gap-3';
 
@@ -203,8 +203,8 @@ const Queue = ({
 };
 
 const Limits = ({ m, onSheet, pause }: Omit<Props, 'onView' | 'run'>) => (
-  <article className={`${CARD} cap-limits flex-[1_1_360px]`}>
-    <div className="ct-head">
+  <article className={`${PANEL} cap-card cap-limits flex-[1_1_360px]`}>
+    <div className={HEAD}>
       <span className={`cap-label ${CAP_LABEL}`}>LIMITS</span>
     </div>
     <PrsMeter m={m} onSheet={onSheet} />
@@ -379,8 +379,8 @@ const CpuDay = ({ m }: { m: Model }) => {
 };
 
 const Hosts = ({ m, onView, run }: Pick<Props, 'm' | 'onView' | 'run'>) => (
-  <article className={`${CARD} cap-hosts flex-[2_1_560px]`}>
-    <div className="ct-head">
+  <article className={`${PANEL} cap-card cap-hosts flex-[2_1_560px]`}>
+    <div className={HEAD}>
       <span className={`cap-label ${CAP_LABEL}`}>HOSTS</span>
       <span className={`cap-src ${CAP_SRC}`}>
         host_metrics · live
@@ -453,7 +453,7 @@ const Phone = ({
   return (
     <button
       type="button"
-      className="card-top cap-phone hidden w-full text-left [font:inherit] max-[600px]:flex"
+      className={`${FRAME} cap-phone hidden w-full cursor-pointer gap-2 border-[color:var(--line)] bg-[color:var(--surface)] text-left [font:inherit] hover:border-[color:var(--line-strong)] max-[600px]:flex`}
       data-view="platform"
       aria-label="Capacity: tap for hosts"
       onClick={() => onView('platform')}
