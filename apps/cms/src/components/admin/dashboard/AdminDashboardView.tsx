@@ -10,6 +10,7 @@ import {
 } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import type { RecentDoc } from '@codeware/app-cms/ui/dashboard';
+import { isSecondFactorPending } from '@codeware/app-cms/util/access';
 import { hasRole } from '@codeware/app-cms/util/misc';
 import type { SupportedLocale } from '@codeware/shared/util/i18n';
 import type {
@@ -72,6 +73,12 @@ const AdminDashboardView: React.FC<ServerProps> = async ({
   user,
   locale
 }) => {
+  // A session that owes its second factor is refused every read below, and
+  // the providers are already sending it on to verify or setup
+  if (isSecondFactorPending(user)) {
+    return null;
+  }
+
   const runtime = mapToRuntime(payload, user);
   const tenantWhere = await getTenantWhere(user);
 
