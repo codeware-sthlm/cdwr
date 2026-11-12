@@ -3,11 +3,20 @@ import { busy, statusText } from '../view/controls';
 
 // The desk's control buttons as components; shown only with a control token
 
+const MINI_BASE =
+  'min-h-[var(--tap)] text-[12px] disabled:cursor-default disabled:opacity-50';
+/** The compact control button's utilities, after its `pf-mini` class */
+export const MINI = `${MINI_BASE} px-3 py-0`;
+const STEP = `${MINI_BASE} min-w-[var(--tap)] p-0`;
+
 /** What the state says next to its button; nothing when idle */
 export const ControlStatus = ({ view }: { view: ControlView }) => {
   const text = statusText(view);
   return text ? (
-    <small className={`ctl-status ${view.state}`} role="status">
+    <small
+      className={`ctl-status ${view.state} text-[12px] ${view.state === 'refused' ? 'text-[color:var(--wait)]' : 'text-[color:var(--muted)]'}`}
+      role="status"
+    >
       {text}
     </small>
   ) : null;
@@ -27,7 +36,7 @@ export const CmdButton = ({
   label,
   view,
   onClick,
-  className = 'pf-mini'
+  className = `pf-mini ${MINI}`
 }: CmdProps) => (
   <button
     type="button"
@@ -66,10 +75,10 @@ export const Stepper = ({
   const at = draft ?? range.min;
   return (
     <>
-      <span className="ctl-stepper">
+      <span className="ctl-stepper inline-flex items-center gap-1.5">
         <button
           type="button"
-          className="pf-mini ctl-step"
+          className={`pf-mini ctl-step ${STEP}`}
           data-step={`${control}:${-range.step}`}
           aria-label="Decrease"
           disabled={off || at <= range.min}
@@ -77,10 +86,12 @@ export const Stepper = ({
         >
           −
         </button>
-        <b className="ctl-draft">{draft === null ? '–' : fmt(draft)}</b>
+        <b className="ctl-draft min-w-[3ch] text-center font-[family-name:var(--font-mono)] text-[13px] leading-[normal] font-semibold tabular-nums">
+          {draft === null ? '–' : fmt(draft)}
+        </b>
         <button
           type="button"
-          className="pf-mini ctl-step"
+          className={`pf-mini ctl-step ${STEP}`}
           data-step={`${control}:${range.step}`}
           aria-label="Increase"
           disabled={off || at >= range.max}
@@ -90,7 +101,7 @@ export const Stepper = ({
         </button>
         <button
           type="button"
-          className="pf-mini ctl-apply"
+          className={`pf-mini ctl-apply ${MINI}`}
           data-apply={control}
           disabled={off || draft === null || draft === current}
           onClick={onApply}

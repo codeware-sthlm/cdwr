@@ -150,7 +150,9 @@ export const App = () => {
       <div className="wrap mx-auto flex max-w-[1360px] flex-col gap-[var(--gap)]">
         <header className="top flex flex-wrap items-center justify-between gap-3">
           <div className="brand flex flex-wrap items-baseline gap-[14px]">
-            <h1>Agent Desk</h1>
+            <h1 className="font-[family-name:var(--font-mono)] text-[13px] leading-[normal] font-semibold tracking-[0.18em] uppercase">
+              Agent Desk
+            </h1>
             <span className="sub text-[12px] text-[color:var(--muted)] max-[600px]:hidden">
               cdwr · what the work queue does next, and what waits on you
             </span>
@@ -209,7 +211,7 @@ export const App = () => {
         {platform ? (
           <main
             id="platform"
-            className="platform-view"
+            className="platform-view flex flex-col gap-[var(--gap-card)]"
             aria-labelledby="platform-title"
           >
             <Platform m={m} now={now} actions={platformActions} />
