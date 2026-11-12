@@ -2727,7 +2727,7 @@ button:disabled {
   color: var(--muted);
 }
 /* The separator shows only while the countdown has text */
-.tick[data-fmt='next']:not(:empty)::before {
+.tick.next:not(:empty)::before {
   content: ' · ';
 }
 .p-body {

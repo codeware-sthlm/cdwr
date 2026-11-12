@@ -17,10 +17,10 @@ import {
   runs,
   view
 } from '../render/fixtures';
-import { renderProblems } from '../render/problems';
 import type { DeskState } from '../state';
 
 import { Platform, type PlatformActions } from './platform';
+import { Problems } from './problems';
 
 const actions = () =>
   ({
@@ -240,9 +240,24 @@ describe('Platform', () => {
       p.q('[data-problem="problem-check-github-events-last-event"]')
         ?.textContent
     ).toBe(text);
-    const card = renderProblems(model(s, NOW));
-    expect(card).toContain('id="problem-check-github-events-last-event"');
-    expect(card).toContain(text);
+    const { container } = render(
+      <Problems
+        m={model(s, NOW)}
+        now={NOW}
+        actions={{
+          seeProblems: vi.fn(),
+          reconnect: vi.fn(),
+          reload: vi.fn(),
+          copyRow: vi.fn(),
+          platform: vi.fn(),
+          abandon: vi.fn()
+        }}
+      />
+    );
+    expect(
+      container.querySelector('#problem-check-github-events-last-event')
+        ?.textContent
+    ).toContain(text);
   });
 
   it('says quiet on the webhook row when no PR changed', () => {

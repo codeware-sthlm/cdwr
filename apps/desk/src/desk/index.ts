@@ -23,6 +23,13 @@ import { Capacity } from './components/capacity';
 import { Cards } from './components/cards';
 import { ShippedChart, SpendChart } from './components/charts';
 import { Platform, type PlatformActions } from './components/platform';
+import {
+  Alert,
+  FrozenLabel,
+  type ProblemActions,
+  Problems,
+  frozenLabel
+} from './components/problems';
 import { Status } from './components/status';
 import { Tiles } from './components/tiles';
 import { AGENT_AVATAR, CONFIRM_MS } from './constants';
@@ -31,12 +38,6 @@ import { type ControlsModel, type Model, model, shipped } from './model';
 import { notice } from './notice';
 import { chartHeight, chartKind } from './render/charts';
 import { CAP_RANGE, LIMIT_RANGE } from './render/controls';
-import {
-  renderAlert,
-  renderFrozenLabel,
-  renderProblems,
-  updateTicks
-} from './render/problems';
 import { SHEETS } from './render/sheets';
 import { forgetLabelled } from './render/waiting';
 import { spendDays } from './spend';
@@ -69,23 +70,18 @@ const $ = (id: string): HTMLElement => {
   return el;
 };
 
-// The header's status pill, the two cards, the capacity row, the tiles and the Platform view are
-// React; the rest of the page is still written as HTML
+// The header's status pill, the two cards, the capacity row, the tiles, the Platform view, the
+// alert, the problems and the frozen label are React; the rest of the page is still written as HTML
 const statusRoot = createRoot($('status'));
 const cardsRoot = createRoot($('cards'));
 const capacityRoot = createRoot($('capacity'));
 const tilesRoot = createRoot($('more'));
 const platformRoot = createRoot($('platform'));
+const alertRoot = createRoot($('alert'));
+const problemsRoot = createRoot($('problems'));
+const frozenRoot = createRoot($('frozen-label'));
 
 // ---------- Main view ----------
-
-// Skips a write that changes nothing, so a ticking page keeps its selection and a live region its place
-const written = new Map<string, string>();
-function setHtml(id: string, html: string): void {
-  if (written.get(id) === html) return;
-  written.set(id, html);
-  $(id).innerHTML = html;
-}
 
 let shownProblems = false;
 
@@ -100,15 +96,16 @@ function renderLive(m: Model, now: Date): void {
       onView: (view) => showView(view)
     })
   );
-  const alert = renderAlert(m);
-  setHtml('alert', alert);
-  $('alert').hidden = !alert;
-  const problems = renderProblems(m);
-  setHtml('problems', problems);
-  updateTicks($('problems'), now);
-  $('problems').hidden = platform || !problems;
-  const label = renderFrozenLabel(m);
-  $('frozen-label').textContent = label;
+  alertRoot.render(
+    createElement(Alert, { m, onSeeProblems: problemActions.seeProblems })
+  );
+  $('alert').hidden = !shownProblems;
+  problemsRoot.render(
+    createElement(Problems, { m, now, actions: problemActions })
+  );
+  $('problems').hidden = platform || !shownProblems;
+  const label = frozenLabel(m);
+  frozenRoot.render(createElement(FrozenLabel, { m }));
   $('frozen-label').hidden = platform || !label;
   cardsRoot.render(
     createElement(Cards, {
@@ -301,29 +298,13 @@ function selectText(node: Node): void {
   selection?.addRange(range);
 }
 
-function copyRow(button: Element): void {
-  const raw = button.closest('.problem')?.querySelector('.raw');
-  if (!raw) return;
+function copyRow(raw: HTMLElement): void {
   const text = raw.textContent ?? '';
   if (!navigator.clipboard) {
     selectText(raw);
     return;
   }
   navigator.clipboard.writeText(text).catch(() => selectText(raw));
-}
-
-/** The first enabled, visible match in the region, for focus after a render replaced the node */
-function focusIn(region: Element | null, selectors: string[]): void {
-  const root = region?.id ? document.getElementById(region.id) : null;
-  for (const sel of selectors) {
-    const found = Array.from(
-      (root ?? document).querySelectorAll<HTMLButtonElement>(sel)
-    ).find((el) => !el.disabled && el.offsetParent !== null);
-    if (found) {
-      found.focus();
-      return;
-    }
-  }
 }
 
 /** The controls as the model sees them now; null when the desk cannot send */
@@ -384,15 +365,11 @@ const platformActions: PlatformActions = {
   apply: applyDraft
 };
 
-/** Handles the abandon button's click, the one control still written as HTML; true when the click was one */
-function clickControl(target: Element): boolean {
-  const button = target.closest<HTMLButtonElement>('[data-cmd="abandon"]');
-  if (!button) return false;
+/** The abandon button: the first press asks to confirm, the second marks the run abandoned */
+function abandonRun(): void {
   const c = state.controls;
   const m = controlsNow();
-  if (!m || button.disabled) return true;
-  // The render replaces the button; keyboard focus goes back to it
-  const region = button.closest('[id]');
+  if (!m) return;
   if (!m.confirming)
     c.confirm = { until: Date.now() + CONFIRM_MS, session: m.session };
   else {
@@ -405,9 +382,23 @@ function clickControl(target: Element): boolean {
     );
   }
   render();
-  focusIn(region, ['[data-cmd="abandon"]']);
-  return true;
 }
+
+/** What the alert's link and the problem cards' buttons do */
+const problemActions: ProblemActions = {
+  seeProblems: () => {
+    // The alert shows on the Platform view too, where the problems are hidden
+    if (state.ui.view !== 'desk') showView('desk', false);
+    $('problems').scrollIntoView({
+      behavior: reducedMotion() ? 'auto' : 'smooth'
+    });
+  },
+  reconnect: () => void adapter?.reconnect(),
+  reload: () => window.location.reload(),
+  copyRow,
+  platform: () => showView('platform'),
+  abandon: abandonRun
+};
 
 /** A Snooze or Wake click on a waiting row: `snooze` says what to snooze it on, null wakes it */
 function clickSnooze(
@@ -507,26 +498,11 @@ const waitActions: WaitActions = {
 
 document.addEventListener('click', (e) => {
   if (!(e.target instanceof Element)) return;
-  // The Platform view, the capacity row and the tiles are React and handle their own clicks
-  if (e.target.closest('#platform, #capacity, #more')) return;
-  if (e.target.closest('[data-see-problems]')) {
-    e.preventDefault();
-    // The alert shows on the Platform view too, where the problems are hidden
-    if (state.ui.view !== 'desk') showView('desk', false);
-    $('problems').scrollIntoView({
-      behavior: reducedMotion() ? 'auto' : 'smooth'
-    });
+  // The Platform view, the capacity row, the tiles, the alert and the problems are React and
+  // handle their own clicks
+  if (e.target.closest('#platform, #capacity, #more, #alert, #problems'))
     return;
-  }
   if (e.target.closest('a')) return;
-  const action = e.target.closest<HTMLElement>('[data-action]');
-  if (action) {
-    if (action.dataset.action === 'reconnect') void adapter?.reconnect();
-    else if (action.dataset.action === 'reload') window.location.reload();
-    else if (action.dataset.action === 'copy-row') copyRow(action);
-    return;
-  }
-  if (clickControl(e.target)) return;
   const problem = e.target.closest<HTMLElement>('[data-problem]');
   if (problem) {
     showProblem(problem.dataset.problem ?? '');
