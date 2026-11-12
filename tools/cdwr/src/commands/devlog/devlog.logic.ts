@@ -93,18 +93,19 @@ export const accessUrl = (cmsUrl: string): string =>
 /**
  * Payload treats an unknown key as no key at all, and an anonymous read of a
  * draft is a 404, so a wrong key would read every post as deleted. The key
- * must be allowed to create posts before any post is read back. Not
- * `/api/agents/me`: it re-reads the agent, which only system users may do, so
- * it answers 403 for an agent.
+ * must be allowed to create posts before any post is read back. `/api/access`
+ * sanitizes a granted permission to `true` and keeps `{ permission, where }`
+ * for a scoped one; both count. Not `/api/agents/me`: it re-reads the agent,
+ * which only system users may do, so it answers 403 for an agent.
  */
 export function assertCanDraft(status: number, body: unknown): void {
-  const access = body as {
-    collections?: { posts?: { create?: { permission?: unknown } } };
-  } | null;
-  if (
-    status !== 200 ||
-    access?.collections?.posts?.create?.permission !== true
-  ) {
+  const create = (
+    body as { collections?: { posts?: { create?: unknown } } } | null
+  )?.collections?.posts?.create;
+  const granted =
+    create === true ||
+    (create as { permission?: unknown } | undefined)?.permission === true;
+  if (status !== 200 || !granted) {
     throw new Error(
       `The cms does not let CMS_AGENT_API_KEY draft posts (${status})`
     );
