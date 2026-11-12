@@ -74,15 +74,20 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    as in step 2. Carry on where the wait left off: see **Parking**.
 2. **An open `agent:working` ticket you may resume.** Skip one that is parked on a pending wait.
    Read the `**Claim:**` line under its Status table. Resume it when the claim carries this
-   session's id, or is older than 2 hours. A newer claim with another id means another session
-   holds it, even in the same worktree: leave it alone. On a take-over, post
-   `**Agent: took over**` with the old claim line, then continue from the Status table and
-   **Next:** line, checking the branch for commits beyond them. When its PR is open and
-   `gh pr view <n> --json mergeable` reads `CONFLICTING`, rebase first (**A PR that conflicts
-   with main**).
+   session's id, or is older than 2 hours. No claim line, and this session's file names the
+   ticket (`session.sh ticket` set it, or `wait.sh --now` prints `resume: COD-n`): the ticket is
+   yours, so write the claim and go on. A missing claim on a ticket this session never named is
+   taken over once the pick reads `take over … (no claim line, <n> min)`, 30 minutes after the
+   ticket's last update. A newer claim with another id means another session holds it, even in
+   the same worktree: leave it alone. On a take-over, write the new claim line in the same
+   `save_issue` call that updates the ticket and post `**Agent: took over**` with the old claim
+   line, then continue from the Status table and **Next:** line, checking the branch for commits
+   beyond them. When its PR is open and `gh pr view <n> --json mergeable` reads `CONFLICTING`,
+   rebase first (**A PR that conflicts with main**).
 3. **An answered `agent:needs-input` ticket**: its newest comment (or newest reply in the
    agent's thread) does **not** start with `**Agent`. Read the answer. When it is enough,
-   record it under **Decisions** and continue: an approved plan goes to **Per ticket** step 4.
+   record it under **Decisions** and continue: an approved plan goes to **Per ticket** step 4,
+   claiming first as in step 1 there (`agent:working` and the claim line in one call).
    When it isn't, post a narrower follow-up question (see **How a gate asks**) and move on.
    An answered ticket that is blocked by an open issue and has a plan not yet started (a Status
    table with every row `Planned`) is held: the queue lists it under `blocked` and doesn't offer
@@ -156,7 +161,11 @@ Everything waits on Håkan, or the limit is reached.
    the pick from **What to take next** changes (`changed: …`, a parked wait that resolved
    included), at once when it starts on a `run now` pick this session has not been told yet,
    or after 110 minutes (`timeout: …`). On `changed`, check **What to take next** again. On `timeout`, read the
-   line first: `run now` means check **What to take next**; anything else, start it again. Send no new notice while the waiting set is unchanged; send one when it changes.
+   line first: `run now` means check **What to take next**; anything else, start it again.
+   `resume: COD-n · <detail>` means the pick is a `running` ticket this session itself holds
+   (its session file names it): a session never waits on its own ticket, so go on with it from
+   its Status table and **Next:** line, writing the claim first when the detail says
+   `no claim line`. Send no new notice while the waiting set is unchanged; send one when it changes.
    Without `once` or `plan-only`, never end a turn unless the watcher is running: an idle session
    with nothing to wake it stops answering Linear until Håkan types.
 
@@ -196,23 +205,39 @@ implementer prompt. `codeware-agent` belongs to the scheduled planner; never wor
 The claim line sits directly under the Status table:
 
 ```md
-**Claim:** <session id> · <worktree path> · <UTC time, e.g. 2026-10-06T07:40Z>
+**Claim:** <session id> · `<worktree path>` · <UTC time, e.g. 2026-10-06T07:40Z>
 ```
 
+Exactly that, with nothing after the time: `claim` in `watch.jq` reads the line (it tolerates
+a note behind the time, but the line is the contract, and a note once made a claim unreadable).
+The path goes in a code span, since Linear turns `codeware-cod-123` into an issue mention
+otherwise. A take-over's old claim goes in the `**Agent: took over**` comment, not on the line.
+
 The session id tells two sessions apart; the worktree path doesn't, since every session gets
-the same path for a ticket. Use the id in the `Claude-Session` commit attribution when there is
-one, else make one at the first claim (`uuidgen | cut -c1-8`) and keep using it. Set the line
-on claim and refresh it with every Status row update.
+the same path for a ticket. It is the first 8 characters of what
+`tools/cdwr/agent-queue/session.sh id` prints (take them yourself, no `cut`: an implement-only
+run may run that command alone), so a claim names the heartbeat file that holds it and the
+scheduler can tell a ticket this session holds from one it may launch. Set the line on claim
+and refresh it with every Status row update.
 
 The claim has one job: handing a ticket over between sessions or machines. Whether this
 machine's session is still alive comes from its heartbeat file (see **Start**), not from the
 claim's age. The 2-hour take-over rule stays for a session that left no heartbeat.
 
+Two hosts may now act at once: the NUC launches implement runs for tickets a polling Mac
+session doesn't hold, past the pick that session wakes on. The claim arbitrates, and Linear
+has no compare-and-set, so the last writer wins: write the claim, do the next slow thing
+(the worktree), then read the claim back (`get_issue`) before any other write. A line with
+another id means the other side won, and this session leaves the ticket alone and goes back
+to **What to take next**.
+
 ## Per ticket
 
-1. **Claim.** Set `agent:working` and status In Progress. Create or reuse the ticket's
-   worktree, and set the **Claim:** line. Run `session.sh ticket COD-123`. Keep the branch
-   independent of open PRs. Notify `info`: claimed.
+1. **Claim.** Set `agent:working`, status In Progress and the **Claim:** line in one
+   `save_issue` call: the worktree path is known before the worktree exists
+   (`codeware-cod-123` beside this checkout), and a label without a claim reads as nobody's.
+   Read the claim back, then create or reuse the ticket's worktree and run
+   `session.sh ticket COD-123`. Keep the branch independent of open PRs. Notify `info`: claimed.
 2. **Plan (Opus).** Investigate, then write the plan into the ticket **description**: keep
    the original report under its own heading, then `## Plan` with **Decisions**, a
    **Status** table (`| Step | What | Status |`, one row per step), the **Claim:** line, and
@@ -383,6 +408,11 @@ here needs the worktree; the answer comes from reading the code on `origin/main`
 
    A "nothing to do" reply needs no yes: the ticket rests until the next comment.
 
+   Nothing claims a merged ticket, and the NUC may answer one beside a live Mac session, so
+   read the thread again right before posting (`list_comments`): an `**Agent` reply that landed
+   meanwhile means the other side answered, and this session posts nothing and moves on. The
+   same re-read goes before the `Created` comment in step 3.
+
 3. On yes, create each suggested ticket in team Codeware, `relatedTo` the merged ticket, with
    no agent label: Håkan sets `agent:ready`, as for a split. Write the scope as its report.
    Drop each hand-off where it is read from: strike it through in the PR-ready comment and add
@@ -426,7 +456,8 @@ ticket that carries the PR as an attachment tends it, and the queue never offers
    implement-only run stops here; it never writes the fix.
 4. An attended session may skip the question when the fix is mechanical: a type, an import or a
    snapshot the update moved, with nothing to choose. Say so in the report, claim the ticket
-   (`agent:working`) and work it as in **Per ticket**, with a short plan it approves itself.
+   (`agent:working` and the claim line in one call, as in **Per ticket** step 1) and work it as
+   in **Per ticket**, with a short plan it approves itself.
 5. Whichever way it comes, the fix goes on the ticket's own branch, never on Renovate's:
    Renovate automerges an edited non-major PR once it is green, so a fix pushed there merges
    unreviewed. The ticket's worktree starts at `origin/main`, so before the first commit point
