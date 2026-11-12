@@ -219,7 +219,7 @@ export const App = () => {
         ) : (
           <>
             <section
-              className="cards"
+              className="cards flex flex-wrap gap-[var(--gap-card)]"
               id="cards"
               aria-label="Session and what waits on you"
             >

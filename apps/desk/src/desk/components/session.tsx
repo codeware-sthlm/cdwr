@@ -9,6 +9,7 @@ import { parkedPlain } from '../view/parked';
 import { livePr, prTone, queuePr } from '../view/pr';
 import { type Part, headline, idPr, whereText } from '../view/session';
 
+import { CARD, HEAD, NONE, OPEN, TIME } from './card-ui';
 import { IdLink, LinkIds, PrLink, PrPill, Prn } from './links';
 
 // The session card: what the session does, where it runs, and the newest live events
@@ -35,6 +36,41 @@ const feedTone = (p: Pulse): string =>
     : /passed|merged|reviewed/.test(p.what)
       ? 'live'
       : '';
+
+/** The utilities behind each tone: the pill's colour, its dot, and a feed row's dot */
+const OPEN_TONE: Record<Status['tone'], string> = {
+  live: 'text-[color:var(--live)]',
+  wait: 'text-[color:var(--wait)]',
+  block: 'text-[color:var(--block)]',
+  idle: 'text-[color:var(--muted)]'
+};
+const PILL_DOT_TONE: Record<Status['tone'], string> = {
+  live: 'bg-[color:var(--live)] motion-safe:animate-[beat_2s_ease-in-out_infinite]',
+  wait: 'bg-[color:var(--wait)]',
+  block: 'bg-[color:var(--block)]',
+  idle: 'bg-[color:var(--faint)]'
+};
+const FEED_DOT_TONE: Record<string, string> = {
+  live: 'bg-[color:var(--live)]',
+  block: 'bg-[color:var(--block)]',
+  '': 'bg-[color:var(--faint)]'
+};
+
+/** The mono line under the headline: the plan step, what it waits on, what is next, the plan window, the other sessions */
+const CT_LINE =
+  'font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-normal text-[color:var(--muted)]';
+/** A ticket link inside a line that takes the line's colour */
+const ID_INHERIT = '[&_a.id]:text-inherit';
+/** The sub line under the headline */
+const CT_SUB =
+  'ct-sub overflow-hidden text-[13px] text-ellipsis whitespace-nowrap text-[color:var(--muted)] max-[600px]:text-[12px] [&_a.id]:text-inherit [&_a.id]:no-underline [&_a.id:hover]:underline';
+/** A feed row; one row on a phone */
+const FEED_LI =
+  'flex min-w-0 items-center gap-2.5 max-[600px]:nth-[n+2]:hidden';
+const FEED_MONO =
+  'font-[family-name:var(--font-mono)] text-[12px] leading-[normal] font-normal';
+/** A circle before a line: the pill's, then a feed row's at six pixels */
+const DOT = 'dot flex-none rounded-[var(--r-pill)]';
 
 /** "also: implement on agent-host · attended on mac", the live sessions besides the one the card names, at most two */
 const alsoText = (m: Pick<Model, 'session' | 'hostSessions'>): string => {
@@ -70,15 +106,15 @@ export const Parts = ({ parts }: { parts: Part[] }) => (
 /** "Step 3 of 5" with a bar and the next step, for the working ticket; nothing without a plan */
 const StepLine = ({ d }: { d: Detail | undefined }) =>
   d && d.steps ? (
-    <div className="ct-step">
-      <div className="bar" aria-hidden="true">
+    <div className={`ct-step ${CT_LINE} flex min-w-0 items-center gap-2`}>
+      <div className="bar w-[60px] flex-none" aria-hidden="true">
         <i style={{ width: `${Math.round((d.done / d.steps) * 100)}%` }}></i>
       </div>
-      <span>
+      <span className="flex-none">
         Step {Math.min(d.done + 1, d.steps)} of {d.steps}
       </span>
       {d.next ? (
-        <span className="ct-next">
+        <span className="ct-next min-w-0 flex-[0_1_auto] overflow-hidden text-ellipsis whitespace-nowrap">
           <LinkIds text={tidy(d.next)} />
         </span>
       ) : null}
@@ -102,7 +138,7 @@ const WaitLine = ({
       ? ` for ${shortAge((now.getTime() - Date.parse(p.since)) / 6e4)}`
       : '';
   return (
-    <div className="ct-wait">
+    <div className={`ct-wait ${CT_LINE} ${ID_INHERIT}`}>
       {parkedPlain(p)}
       {p.pr ? (
         <>
@@ -131,7 +167,7 @@ const OwnPrRow = ({
   const { n, live } = livePr(m, details, x);
   if (!n) return null;
   return (
-    <li className="own">
+    <li className={`own ${FEED_LI} ${FEED_MONO}`}>
       <Prn n={n} tone={prTone(live?.state ?? null)} />{' '}
       <PrPill m={m} details={details} x={x} now={now} />
     </li>
@@ -147,13 +183,13 @@ const PlanLine = ({ m, now }: { m: Model; now: Date }) => {
   const seven = live(m.plan.seven_day);
   if (!five && !seven) return null;
   const pct = (w: Live) => (
-    <span className={w.verdict === 'ok' ? '' : 'bad'}>
+    <span className={w.verdict === 'ok' ? '' : 'bad text-[color:var(--block)]'}>
       {Math.round(w.used)}%
     </span>
   );
   const stale = [five, seven].some((w) => w?.stale);
   return (
-    <div className={stale ? 'ct-plan stale' : 'ct-plan'}>
+    <div className={stale ? `ct-plan stale ${CT_LINE}` : `ct-plan ${CT_LINE}`}>
       Plan:{' '}
       {five ? (
         <>
@@ -200,19 +236,32 @@ export const SessionCard = ({ m, details, now, onClick }: Props) => {
     ticket && livePr(m, details, { ticket, pr: queuePr(m, ticket) }).n;
   return (
     <article
-      className={`card-top session ${st.tone}`}
+      className={`${CARD} session ${st.tone} flex-[2_1_420px] border-[color:var(--line)] bg-[color:var(--surface)] hover:border-[color:var(--line-strong)]`}
       data-w="session"
       onClick={onClick}
     >
-      <div className="ct-head">
-        <button type="button" className="open state" aria-haspopup="dialog">
-          <i className="dot" aria-hidden="true"></i>
+      <div className={HEAD}>
+        <button
+          type="button"
+          className={`${OPEN} ${OPEN_TONE[st.tone]}`}
+          aria-haspopup="dialog"
+        >
+          <i
+            className={`${DOT} h-2 w-2 ${PILL_DOT_TONE[st.tone]}`}
+            aria-hidden="true"
+          ></i>
           {st.label}
         </button>
         {where || seen ? (
-          <span className="who-runs">
+          <span className="who-runs overflow-hidden text-[12px] text-ellipsis whitespace-nowrap text-[color:var(--muted)]">
             {where ? (
-              <b className={where.startsWith('attended') ? 'attended' : ''}>
+              <b
+                className={
+                  where.startsWith('attended')
+                    ? 'attended font-medium text-[color:var(--attended)]'
+                    : 'font-medium text-[color:var(--fg)]'
+                }
+              >
                 {where}
               </b>
             ) : null}
@@ -221,11 +270,11 @@ export const SessionCard = ({ m, details, now, onClick }: Props) => {
           </span>
         ) : null}
       </div>
-      <div className="big">
+      <div className="big text-[26px] leading-[1.2] font-bold text-pretty [overflow-wrap:anywhere] max-[600px]:text-[18px] max-[600px]:leading-[1.25] [&_a.id]:text-inherit [&_a.id]:no-underline [&_a.id:hover]:underline">
         {working ? (
           <>
             Working on{' '}
-            <span className="mono">
+            <span className="mono font-[family-name:var(--font-mono)] font-semibold [&_a.id]:font-[family-name:var(--font-mono)] [&_a.id]:font-semibold">
               <Parts parts={idPr(m, details, ticket)} />
             </span>
           </>
@@ -235,10 +284,10 @@ export const SessionCard = ({ m, details, now, onClick }: Props) => {
       </div>
       {working ? (
         sub ? (
-          <p className="ct-sub">{sub}</p>
+          <p className={CT_SUB}>{sub}</p>
         ) : null
       ) : h.note.length ? (
-        <p className="ct-sub">
+        <p className={CT_SUB}>
           <Parts parts={h.note} />
         </p>
       ) : null}
@@ -248,31 +297,40 @@ export const SessionCard = ({ m, details, now, onClick }: Props) => {
           <WaitLine m={m} ticket={ticket} now={now} />
         </>
       ) : null}
-      <h4 className="feed-h">Latest events</h4>
-      <ul className="feed">
+      <h4 className="feed-h text-[0.7rem] font-semibold tracking-[0.08em] text-[color:var(--muted)] uppercase max-[600px]:hidden">
+        Latest events
+      </h4>
+      <ul className="feed flex flex-col gap-2 max-[600px]:border-t max-[600px]:border-[color:var(--line)] max-[600px]:pt-2">
         {ticket ? (
           <OwnPrRow m={m} details={details} ticket={ticket} now={now} />
         ) : null}
         {feed.map((p, i) => (
-          <li key={i}>
-            <i className={`dot ${feedTone(p)}`.trim()} aria-hidden="true"></i>
-            <span className="what">
+          <li key={i} className={`${FEED_LI} ${FEED_MONO}`}>
+            <i
+              className={`${DOT} ${feedTone(p)} h-1.5 w-1.5 ${FEED_DOT_TONE[feedTone(p)]}`}
+              aria-hidden="true"
+            ></i>
+            <span className="what overflow-hidden text-ellipsis whitespace-nowrap">
               <LinkIds text={p.subject} /> · {p.what}
             </span>
-            <time>{shortAge((now.getTime() - p.at) / 6e4)} ago</time>
+            <time className={`ml-auto ${TIME}`}>
+              {shortAge((now.getTime() - p.at) / 6e4)} ago
+            </time>
           </li>
         ))}
         {!hasOwn && !feed.length ? (
-          <li className="none">No live event yet</li>
+          <li className={`none ${FEED_LI} ${NONE}`}>No live event yet</li>
         ) : null}
       </ul>
       {then ? (
-        <div className="ct-then">
+        <div className={`ct-then ${CT_LINE} ${ID_INHERIT} max-[600px]:hidden`}>
           Then: <IdLink id={then.ticket} /> ({then.reason})
         </div>
       ) : null}
       <PlanLine m={m} now={now} />
-      {also ? <div className="ct-also">{also}</div> : null}
+      {also ? (
+        <div className={`ct-also ${CT_LINE} max-[600px]:hidden`}>{also}</div>
+      ) : null}
     </article>
   );
 };
@@ -282,7 +340,7 @@ export const UnknownSession = ({ m }: { m: Model }) => {
   const p = ofKind(m.problems, 'unknown')[0];
   if (!p) return null;
   const ticket = p.ticket ? (
-    <span className="mono font-[family-name:var(--font-mono)]">
+    <span className="mono font-[family-name:var(--font-mono)] font-semibold">
       <IdLink id={p.ticket} />
     </span>
   ) : null;
