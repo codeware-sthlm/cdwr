@@ -222,6 +222,13 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/logs').then((m) => m.default)
   },
   {
+    path: ['agent', 'exec'],
+    summary:
+      'Run a cdwr command in the agent container, with its vault secrets',
+    danger: 'mutate',
+    load: () => import('./agent/exec').then((m) => m.default)
+  },
+  {
     path: ['agent', 'usage'],
     summary: 'What the agent workflow spent, by day, role, model and ticket',
     danger: 'read',
