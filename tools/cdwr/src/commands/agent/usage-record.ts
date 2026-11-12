@@ -30,6 +30,8 @@ interface Data {
   rows: UsageTelemetryRow[];
   hours: UsageHourRow[];
   host: string;
+  /** The window's first local day: day rows from it on are replaced */
+  fromDay: string;
   prune: boolean;
   url: string;
   key: string;
@@ -37,7 +39,7 @@ interface Data {
 
 export default defineCommand({
   summary: 'Send the agent workflow spend to the telemetry database',
-  description: `Upserts the local usage into the usage table (API-equivalent cost, tokens, by day, ticket, model and role) and the usage_hours table (by whole UTC hour, model and role, covering every Claude project on this host) of the agent-queue Supabase project, through PostgREST with the service key. Hour rows older than ${KEEP_HOURS_DAYS} days are deleted for this host. Needs ${URL_ENV} and ${KEY_ENV}; without them it does nothing. Rows already sent are overwritten with the recomputed numbers, so running it again is safe. Only numbers, model names and ticket ids leave the machine.`,
+  description: `Upserts the local usage into the usage table (API-equivalent cost, tokens, by day, ticket, model and role) and the usage_hours table (by whole UTC hour, model and role, covering every Claude project on this host) of the agent-queue Supabase project, through PostgREST with the service key. This host's day rows from the window's first day on are deleted first, so a role or ticket read differently since leaves no stale row; with no rows to send nothing is deleted. Hour rows older than ${KEEP_HOURS_DAYS} days are deleted for this host. Needs ${URL_ENV} and ${KEY_ENV}; without them it does nothing. Rows already sent are overwritten with the recomputed numbers, so running it again is safe. Only numbers, model names and ticket ids leave the machine.`,
   danger: 'mutate',
   // The scheduler runs it every run
   history: false,
@@ -76,6 +78,7 @@ export default defineCommand({
           rows: [],
           hours: [],
           host,
+          fromDay: '',
           prune: false,
           url: '',
           key: ''
@@ -84,24 +87,26 @@ export default defineCommand({
     }
     const endpoint = url.replace(/\/$/, '');
     let rows: UsageTelemetryRow[] = [];
+    const since = wholeDaysSince(new Date(), days);
+    const fromDay = localDay(since.toISOString());
     if (kind !== 'hour') {
       const { base, transcripts } = findTranscripts(ctx.root, days);
       const { records } = readReplies(base, transcripts);
       rows = usageRows(dedupeReplies(records), {
-        since: wholeDaysSince(new Date(), days),
+        since,
         host,
         dayOf: localDay
       });
     }
     let hourList: UsageHourRow[] = [];
     if (kind !== 'day') {
-      const since = wholeHoursSince(new Date(), hours);
+      const sinceHour = wholeHoursSince(new Date(), hours);
       const { base, transcripts } = findTranscripts(ctx.root, days, {
         allProjects: true,
-        after: since.getTime()
+        after: sinceHour.getTime()
       });
       const { records } = readReplies(base, transcripts);
-      hourList = hourRows(dedupeReplies(records), { since, host });
+      hourList = hourRows(dedupeReplies(records), { since: sinceHour, host });
     }
     if (ctx.flags.dryRun && rows.length > 0) {
       ctx.ui.table(
@@ -134,6 +139,7 @@ export default defineCommand({
       rows,
       hours: hourList,
       host,
+      fromDay,
       prune: kind !== 'day',
       url,
       key
@@ -150,6 +156,11 @@ export default defineCommand({
     }
     const steps = [];
     if (rows.length > 0) {
+      // A key that gets no replies any more (a role or ticket read differently) keeps no stale sum
+      steps.push({
+        label: `Delete this host's usage rows from ${fromDay} on`,
+        detail: `${endpoint}/rest/v1/usage`
+      });
       steps.push({
         label: `Upsert ${rows.length} usage rows`,
         detail: `${endpoint}/rest/v1/usage`
@@ -170,7 +181,7 @@ export default defineCommand({
     return { steps, data };
   },
 
-  async apply(_ctx, { rows, hours, host, prune, url, key }) {
+  async apply(_ctx, { rows, hours, host, fromDay, prune, url, key }) {
     // One deadline for the whole upload: the abort ends a slow request, the timer a hung process
     const deadline = AbortSignal.timeout(DEADLINE_MS);
     const guard = setTimeout(() => process.exit(1), DEADLINE_MS + 2000);
@@ -205,30 +216,35 @@ export default defineCommand({
         }
       }
     };
+    const remove = async (table: string, filter: string): Promise<void> => {
+      const response = await fetch(
+        `${base}/rest/v1/${table}?host=eq.${encodeURIComponent(host)}&${filter}`,
+        {
+          method: 'DELETE',
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            Prefer: 'return=minimal'
+          },
+          signal: signal()
+        }
+      );
+      if (!response.ok) {
+        throw new Error(
+          `Supabase answered ${response.status} for the ${table} cleanup: ${(await response.text()).slice(0, 200)}`
+        );
+      }
+    };
     try {
+      // Only with rows to send, so an empty read never wipes what was sent before
+      if (rows.length > 0) await remove('usage', `day=gte.${fromDay}`);
       await upsert('usage', CONFLICT, rows);
       await upsert('usage_hours', HOUR_CONFLICT, hours);
       if (prune) {
         const cutoff = new Date(
           Date.now() - KEEP_HOURS_DAYS * 24 * 3_600_000
         ).toISOString();
-        const response = await fetch(
-          `${base}/rest/v1/usage_hours?host=eq.${encodeURIComponent(host)}&hour=lt.${encodeURIComponent(cutoff)}`,
-          {
-            method: 'DELETE',
-            headers: {
-              apikey: key,
-              Authorization: `Bearer ${key}`,
-              Prefer: 'return=minimal'
-            },
-            signal: signal()
-          }
-        );
-        if (!response.ok) {
-          throw new Error(
-            `Supabase answered ${response.status} for the usage_hours cleanup: ${(await response.text()).slice(0, 200)}`
-          );
-        }
+        await remove('usage_hours', `hour=lt.${encodeURIComponent(cutoff)}`);
       }
     } finally {
       clearTimeout(guard);

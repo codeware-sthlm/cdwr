@@ -120,8 +120,8 @@ describe('agent usage-record', () => {
       AGENT_SUPABASE_SERVICE_KEY: KEY
     });
     expect(exit).toBe(EXIT.ok);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const [url, init] = fetchMock.mock.calls[1] ?? [];
     expect(url).toBe(
       `${URL}/rest/v1/usage?on_conflict=day,ticket,model,role,host`
     );
@@ -177,14 +177,40 @@ describe('agent usage-record', () => {
   it('sends only day rows with --kind day', async () => {
     const { exit } = await record(['--yes', '--json', '--kind', 'day'], env);
     expect(exit).toBe(EXIT.ok);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/rest/v1/usage?');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/rest/v1/usage?');
     expect(findCalls[0]).toBeUndefined();
+  });
+
+  it("replaces this host's day rows from the window's first local day", async () => {
+    const { exit } = await record(
+      ['--yes', '--json', '--kind', 'day', '--days', '2'],
+      env
+    );
+    expect(exit).toBe(EXIT.ok);
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    const first = new Date(2026, 9, 25);
+    const day = `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}-${String(first.getDate()).padStart(2, '0')}`;
+    expect(String(url)).toMatch(
+      new RegExp(
+        `^https://x\\.supabase\\.co/rest/v1/usage\\?host=eq\\.[^&]+&day=gte\\.${day}$`
+      )
+    );
+    expect(init).toMatchObject({ method: 'DELETE' });
+  });
+
+  it('shows the delete in the dry-run plan', async () => {
+    await record(['--dry-run', '--kind', 'day'], env);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(ui.printed)).toContain(
+      "Delete this host's usage rows from"
+    );
   });
 
   it('sends day rows, hour rows and the cleanup by default', async () => {
     await record(['--yes', '--json'], env);
     expect(fetchMock.mock.calls.map((c) => c[1]?.method)).toEqual([
+      'DELETE',
       'POST',
       'POST',
       'DELETE'
