@@ -3,6 +3,9 @@ import { adminGroups } from '@codeware/app-cms/util/definitions';
 import { hasNoAdminRoles } from '@codeware/app-cms/util/misc';
 import type { CollectionConfig } from 'payload';
 
+import { enforceApiKeyHook } from '../tenants/hooks/enforce-api-key.hook';
+import { generateApiKeyHook } from '../tenants/hooks/generate-api-key.hook';
+
 /**
  * Agents collection
  *
@@ -26,6 +29,11 @@ const agents: CollectionConfig = {
     read: systemUserAccess,
     unlock: systemUserAccess,
     update: systemUserAccess
+  },
+  // The key is the only way in, so an agent always gets one, enabled
+  hooks: {
+    beforeOperation: [generateApiKeyHook],
+    beforeChange: [enforceApiKeyHook]
   },
   admin: {
     group: adminGroups.settings,
