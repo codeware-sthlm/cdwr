@@ -39,9 +39,11 @@ const systemOnly: ReadonlyArray<string> = systemCollectionSlugs;
 
 /**
  * Identities rather than content — they carry their own access model.
- * Covered by `users-management.spec.ts` and `tenants.spec.ts`.
+ * Covered by `users-management.spec.ts` and `tenants.spec.ts`; an agent's
+ * grants on posts by the cms unit specs beside `agent-post-access.ts`.
  */
 const identities = [
+  'agents',
   'tenants',
   'users'
 ] as const satisfies readonly CollectionSlug[];
