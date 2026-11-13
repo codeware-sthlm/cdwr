@@ -13,6 +13,7 @@ import {
   STALE_WATCH_MS,
   attendedLinearServer,
   attendedLinearServerCurrent,
+  devlogSettings,
   domainTarget,
   drift,
   filesDrift,
@@ -44,6 +45,7 @@ import {
   nodeMajor,
   parseAttended,
   parseCheck,
+  parseDevlog,
   parseLaunchctlPrint,
   parseLinear,
   parseLoopPid,
@@ -387,7 +389,8 @@ describe('renderPlist', () => {
     repo: '/w/codeware-agent',
     path: '/opt/homebrew/bin:/usr/bin',
     memoryDir: '/h/.claude/projects/-w-dev/memory',
-    suggest: { budgetUsd: 5, hour: 6, days: 1 }
+    suggest: { budgetUsd: 5, hour: 6, days: 1 },
+    devlog: { budgetUsd: 5, days: 7 }
   };
 
   it('describes the job', () => {
@@ -409,6 +412,12 @@ describe('renderPlist', () => {
     );
     expect(plist).toContain(
       '<key>AGENT_QUEUE_SUGGEST_DAYS</key>\n    <string>1</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_DEVLOG_BUDGET_USD</key>\n    <string>5</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_DEVLOG_DAYS</key>\n    <string>7</string>'
     );
     expect(plist).toContain(
       '<key>AGENT_QUEUE_MEMORY_DIR</key>\n    <string>/h/.claude/projects/-w-dev/memory</string>'
@@ -441,7 +450,8 @@ describe('renderPlist', () => {
       repo: '/"r"',
       path: "/it's",
       memoryDir: '/m',
-      suggest: { budgetUsd: 5, hour: 6, days: 1 }
+      suggest: { budgetUsd: 5, hour: 6, days: 1 },
+      devlog: { budgetUsd: 5, days: 7 }
     });
     expect(plist).toContain('/a&amp;b/run.sh');
     expect(plist).toContain('/&lt;h&gt;');
@@ -813,6 +823,43 @@ describe('parseSuggest', () => {
   });
 });
 
+describe('parseDevlog', () => {
+  it.each([
+    ['due', 'due'],
+    ['done, next in 6 day(s)', 'done'],
+    ['not before 06:00', 'early'],
+    ['off', 'off'],
+    ['garbage', 'unknown'],
+    ['', 'unknown']
+  ])('%j -> %s', (line, kind) => {
+    expect(parseDevlog(line)).toEqual({ kind, text: line.trim() });
+  });
+});
+
+describe('devlogSettings', () => {
+  it('defaults without the environment', () => {
+    expect(devlogSettings({})).toEqual({ budgetUsd: 5, days: 7 });
+  });
+
+  it('takes the environment, 0 days switching it off', () => {
+    expect(
+      devlogSettings({
+        AGENT_QUEUE_DEVLOG_BUDGET_USD: '3',
+        AGENT_QUEUE_DEVLOG_DAYS: '0'
+      })
+    ).toEqual({ budgetUsd: 3, days: 0 });
+  });
+
+  it('names the variable that is not a non-negative integer', () => {
+    expect(() => devlogSettings({ AGENT_QUEUE_DEVLOG_DAYS: 'weekly' })).toThrow(
+      'AGENT_QUEUE_DEVLOG_DAYS'
+    );
+    expect(() =>
+      devlogSettings({ AGENT_QUEUE_DEVLOG_BUDGET_USD: '-1' })
+    ).toThrow('AGENT_QUEUE_DEVLOG_BUDGET_USD');
+  });
+});
+
 describe('suggestSettings', () => {
   it('defaults without the environment', () => {
     expect(suggestSettings({})).toEqual({ budgetUsd: 5, hour: 6, days: 1 });
@@ -853,7 +900,8 @@ describe('installedEnv', () => {
       repo: '/w/codeware-agent',
       path: '/opt/homebrew/bin:/usr/bin',
       memoryDir: '/h/.claude/projects/-w-dev/memory',
-      suggest: { budgetUsd: 3, hour: 7, days: 0 }
+      suggest: { budgetUsd: 3, hour: 7, days: 0 },
+      devlog: { budgetUsd: 5, days: 7 }
     });
     expect(installedEnv(plist)).toMatchObject({
       AGENT_QUEUE_SUGGEST_BUDGET_USD: '3',
@@ -1343,7 +1391,8 @@ describe('implement spend', () => {
       repo: '/r',
       path: '/a&b/bin:/usr/bin',
       memoryDir: '/m',
-      suggest: { budgetUsd: 5, hour: 6, days: 1 }
+      suggest: { budgetUsd: 5, hour: 6, days: 1 },
+      devlog: { budgetUsd: 5, days: 7 }
     });
     expect(plistPath(plist)).toBe('/a&b/bin:/usr/bin');
   });

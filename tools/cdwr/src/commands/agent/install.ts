@@ -36,6 +36,7 @@ import {
   WORKTREE_PREF,
   attendedLinearServer,
   byFile,
+  devlogSettings,
   domainTarget,
   filesDrift,
   installWork,
@@ -125,7 +126,8 @@ export default defineCommand({
         path: launchPath(dirs),
         memoryDir:
           ctx.env['AGENT_QUEUE_MEMORY_DIR'] || memoryDir(homedir(), ctx.root),
-        suggest: suggestSettings(ctx.env)
+        suggest: suggestSettings(ctx.env),
+        devlog: devlogSettings(ctx.env)
       });
       worktreeExists = existsSync(worktree);
       if (worktreeExists && !existsSync(join(worktree, '.git'))) {
