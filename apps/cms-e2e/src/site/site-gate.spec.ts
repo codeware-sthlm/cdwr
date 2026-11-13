@@ -29,6 +29,20 @@ test.describe('site gate', () => {
     await expect(page.getByText('Look at the silver moon.')).toHaveCount(0);
   });
 
+  // The rendered document, not the markup: Next streams dynamic metadata after the shell
+  for (const [accepted, lang, heading] of [
+    ['sv-SE,sv;q=0.9', 'sv', 'Webbplatsen är inte öppen'],
+    ['en-US,en;q=0.9', 'en', 'This site is not open']
+  ] as const) {
+    test(`answers in ${lang} with a title and lang`, async ({ page }) => {
+      await page.setExtraHTTPHeaders({ 'accept-language': accepted });
+      await page.goto('/');
+
+      await expect(page).toHaveTitle(heading);
+      await expect(page.locator('html')).toHaveAttribute('lang', lang);
+    });
+  }
+
   test('refuses a caller that is not asking for a page', async ({
     request
   }) => {
