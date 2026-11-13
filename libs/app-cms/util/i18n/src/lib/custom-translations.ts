@@ -1871,7 +1871,7 @@ Språk som stöds: {{locales}}`,
       propNameDuplicate:
         'Varje input behöver ett eget namn. Upprepade: {{names}}.',
       propsNotObject: 'Inputs måste vara ett JSON-objekt.',
-      propsRequiredMissing: 'Fyll i de obligatoriska inputs: {{names}}.',
+      propsRequiredMissing: 'Fyll i obligatorisk indata: {{names}}.',
       themeNameBuiltIn:
         '"{{name}}" är redan ett inbyggt tema. Välj ett annat namn.',
       themeNameInvalid:
