@@ -65,6 +65,27 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
     expect(readdirSync(dir)).toEqual([]);
   });
 
+  it('keeps the ticket of a file it registers again', () => {
+    expect(run(REGISTER).status).toBe(0);
+    expect(read().ticket).toBeNull();
+    writeFileSync(
+      join(dir, 'abc.json'),
+      JSON.stringify({ ...read(), ticket: 'COD-7' })
+    );
+    expect(run(REGISTER).status).toBe(0);
+    expect(read()).toMatchObject({ ticket: 'COD-7', state: 'working' });
+  });
+
+  it('starts clean when it registers over an ended file', () => {
+    expect(run(REGISTER).status).toBe(0);
+    writeFileSync(
+      join(dir, 'abc.json'),
+      JSON.stringify({ ...read(), ticket: 'COD-5', state: 'ended' })
+    );
+    expect(run(REGISTER).status).toBe(0);
+    expect(read()).toMatchObject({ ticket: null, state: 'working' });
+  });
+
   it('registers on the marker command', () => {
     expect(run(REGISTER).status).toBe(0);
     expect(read()).toMatchObject({

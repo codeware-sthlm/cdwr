@@ -364,6 +364,133 @@ describe('implement.sh', () => {
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
     });
 
+    describe('a session that could not take its key', () => {
+      const launchFile = (): string => join(queueHome, 'launch.json');
+      const seed = (key: string, launches: number): void => {
+        mkdirSync(queueHome, { recursive: true });
+        writeFileSync(launchFile(), JSON.stringify({ key, launches }));
+      };
+      const launches = (): unknown =>
+        JSON.parse(readFileSync(launchFile(), 'utf8'));
+      const untried = JSON.stringify({
+        total_cost_usd: 0.2,
+        num_turns: 2,
+        result:
+          'looked around\n\nnot tried: COD-1 answered · held by another session\n'
+      });
+
+      it('gives the launch back and records untried', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(0, untried);
+        expect(start().status).toBe(0);
+        expect(launches()).toEqual({
+          key: 'COD-1 answered',
+          launches: 0,
+          refunded: true
+        });
+        const last = rows('runs.jsonl').at(-1);
+        expect(last).toMatchObject({ outcome: 'untried', ticket: 'COD-1' });
+        expect(last?.['detail']).toContain(
+          'COD-1 answered · held by another session'
+        );
+        expect(rows('runs.jsonl').map((r) => r['outcome'])).not.toContain(
+          'implemented'
+        );
+      });
+
+      it('refunds once per key', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(0, untried);
+        start();
+        expect(launches()).toEqual({
+          key: 'COD-1 answered',
+          launches: 0,
+          refunded: true
+        });
+        writeFileSync(
+          launchFile(),
+          JSON.stringify({ key: 'COD-1 answered', launches: 2, refunded: true })
+        );
+        start();
+        expect(launches()).toEqual({
+          key: 'COD-1 answered',
+          launches: 2,
+          refunded: true
+        });
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('untried');
+      });
+
+      it('records no reason given when the line has none', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(
+          0,
+          JSON.stringify({ result: 'not tried: COD-1 answered', num_turns: 1 })
+        );
+        start();
+        expect(rows('runs.jsonl').at(-1)?.['detail']).toContain(
+          'COD-1 answered · no reason given'
+        );
+      });
+
+      it('takes a line naming another key for an implemented run', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(
+          0,
+          JSON.stringify({ result: 'not tried: COD-2 answered · x' })
+        );
+        start();
+        expect(launches()).toEqual({ key: 'COD-1 answered', launches: 1 });
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('implemented');
+      });
+
+      it('records implemented when the result is not JSON', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(0, 'plain text');
+        expect(start().status).toBe(0);
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('implemented');
+      });
+
+      it('never goes below zero', () => {
+        seed('COD-1 answered', 0);
+        fakeClaude(0, untried);
+        start();
+        expect(launches()).toEqual({
+          key: 'COD-1 answered',
+          launches: 0,
+          refunded: true
+        });
+      });
+
+      it('leaves the launch of another key alone', () => {
+        seed('COD-9 answered', 2);
+        fakeClaude(0, untried);
+        start();
+        expect(launches()).toEqual({ key: 'COD-9 answered', launches: 2 });
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('untried');
+      });
+
+      it('counts a normal result as implemented and keeps the launches', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(0, '{"total_cost_usd":1,"num_turns":3,"result":"done"}');
+        start();
+        expect(launches()).toEqual({ key: 'COD-1 answered', launches: 1 });
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('implemented');
+      });
+    });
+
+    it('hands the session its key in the prompt', () => {
+      const argv = join(dir, 'argv');
+      writeFileSync(
+        join(bin, 'claude'),
+        `#!/bin/sh\nprintf '%s\\n' "$@" > "${argv}"\nprintf '%s' '{}'\n`
+      );
+      chmodSync(join(bin, 'claude'), 0o755);
+      expect(start().status).toBe(0);
+      expect(readFileSync(argv, 'utf8').split('\n')).toContain(
+        '/work-queue implement-only once key="COD-1 answered"'
+      );
+    });
+
     it('settles on the reservation day when the session ends after midnight', () => {
       // A date whose day turns over while the session runs; every other format is the real one
       const dayFile = join(dir, 'day');

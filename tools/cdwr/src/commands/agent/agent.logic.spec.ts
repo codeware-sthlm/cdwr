@@ -694,6 +694,10 @@ describe('summarizeSchedulerLine', () => {
     ],
     ['implement: done: COD-579 ($2.10)', 'implement done · COD-579 ($2.10)'],
     [
+      'implement: untried: COD-1 answered · x',
+      'implement untried · COD-1 answered: x'
+    ],
+    [
       'plan: COD-579 COD-580 → /very/long/path/to/the/logs/2026-10-16_1200.log',
       'plan · COD-579 COD-580 → /very/long/path/to/the/logs/2026-10-16_12…'
     ],

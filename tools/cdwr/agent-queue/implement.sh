@@ -9,7 +9,8 @@
 # origin/main under it, which is accepted.
 # On GitHub it acts as the codeware-agent app (github-app.sh beside this script), never as
 # Håkan, whose release team bypasses main's rulesets. No app identity, no session.
-#   implement.sh <key>   started by run.sh with nohup; <key> is the launch key, for the records
+#   implement.sh <key>   started by run.sh with nohup; <key> is the launch key, which the session
+#                        takes first, and the records name
 set -euo pipefail
 
 # Max subscription only: never let an API key or a cloud provider take over billing.
@@ -144,7 +145,9 @@ claude_pid=
 trap '[[ -n "$claude_pid" ]] && kill -TERM $claude_pid 2>/dev/null' TERM INT
 # The session hook tells the sessions table what kind this is
 export AGENT_QUEUE_SESSION_KIND=implement
-"${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/work-queue implement-only once" \
+prompt="/work-queue implement-only once"
+[[ -n "$KEY" ]] && prompt+=" key=\"$KEY\""
+"${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "$prompt" \
   --model opus "${LINEAR_MCP_ARGS[@]}" \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
   --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
@@ -183,9 +186,26 @@ cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
 # rows, so two launches can't slip through.
 settle="$(jq -n --argjson c "$cost" --argjson b "$BUDGET_USD" '$c - $b')"
 [[ "$settle" == 0 ]] || ledger "$settle" settle 2>/dev/null || note "warn: could not settle the spend ledger"
-spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result" 2>/dev/null) turns"
+spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result" 2>/dev/null || print '?') turns"
 
-if (( rc == 0 )); then
+# A session that could not take its key ends with `not tried: <key> · <reason>`
+last=
+(( rc == 0 )) && last="$({ jq -r '.result // empty' "$result" 2>/dev/null || true; } | awk 'NF {l = $0} END {print l}')"
+
+if [[ -n "$KEY" && "$last" == "not tried: $KEY"( · *|) ]]; then
+  # The launch changed nothing by design: give it back once per key, so the next pick may launch
+  # it again, and a session that keeps declining still meets the two-miss stop
+  if [[ "$(jq -r '.key // empty' "$HOME_DIR/launch.json" 2>/dev/null)" == "$KEY" ]]; then
+    jq -c 'if .refunded then . else .launches = ([(.launches // 0) - 1, 0] | max) | .refunded = true end' \
+      "$HOME_DIR/launch.json" > "$HOME_DIR/launch.json.tmp.$$" 2>/dev/null &&
+      mv "$HOME_DIR/launch.json.tmp.$$" "$HOME_DIR/launch.json" 2>/dev/null || rm -f "$HOME_DIR/launch.json.tmp.$$" 2>/dev/null || true
+  fi
+  reason="${${last#not tried: $KEY}# · }"
+  [[ -n "$reason" ]] || reason="no reason given"
+  note "untried: $KEY · $reason"
+  record untried "$KEY · $reason$spent · log $log"
+  telemetry untried "$KEY · $reason$spent · log $log"
+elif (( rc == 0 )); then
   note "done: $KEY$spent"
   record implemented "$KEY$spent · log $log"
   telemetry implemented "$KEY$spent · log $log"

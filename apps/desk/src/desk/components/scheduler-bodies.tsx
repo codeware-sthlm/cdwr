@@ -288,12 +288,13 @@ export const SchedulerBody = ({ m }: Pick<BodyProps, 'm'>) => {
         Idle runs update the last-run and job lines at most once an hour. The
         scheduler plans new tickets itself. For answers, reviews and parked work
         it starts an implementing session when none is alive (
-        <code>launched</code>, then <code>implemented</code>, <code>cap</code>{' '}
-        or <code>failed</code>). A problem is any outcome other than planned,
-        idle, launched, implemented, suggested, nothing or skip, for example a
-        failed run or one that planned nothing. It turns the Platform pill red
-        until a later run goes well. The runs themselves are on the Runs today
-        sheet. Full logs: <code>cdwr agent logs</code>.
+        <code>launched</code>, then <code>implemented</code>,{' '}
+        <code>untried</code>, <code>cap</code> or <code>failed</code>). A
+        problem is any outcome other than planned, idle, launched, implemented,
+        untried, suggested, nothing or skip, for example a failed run or one
+        that planned nothing. It turns the Platform pill red until a later run
+        goes well. The runs themselves are on the Runs today sheet. Full logs:{' '}
+        <code>cdwr agent logs</code>.
       </p>
     </>
   );
@@ -362,7 +363,8 @@ export const RunsBody = ({ m }: Pick<BodyProps, 'm'>) => {
         The figures above count the runs that did something since local
         midnight; idle runs are left out of them and of the list. The list
         reaches back {RUNS_WINDOW_DAYS} days. A failed run is any outcome other
-        than planned, idle, launched, implemented, suggested, nothing or skip.
+        than planned, idle, launched, implemented, untried, suggested, nothing
+        or skip.
       </p>
     </>
   );

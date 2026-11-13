@@ -1552,6 +1552,37 @@ describe('attended picks', () => {
       expect(r.runnable.map((i) => i.ticket)).toEqual(['COD-2']);
     });
 
+    // A resumable ticket ranks first, but the launched session takes what is runnable
+    it('names the answered ticket behind a resumable one, past its stale claim', () => {
+      const queue = [
+        node('COD-782', 'agent:working', {
+          description: claimLine(HOUR, '`/w`', '59a9581d-0000')
+        }),
+        node('COD-792', 'agent:needs-input', {
+          description: claimLine(5 * HOUR, '`/w`', 'ACE90604'),
+          comments: {
+            nodes: [{ body: 'yes', createdAt: '2026-10-11T11:00:00Z' }]
+          }
+        })
+      ];
+      const r = withSession(queue, { id: 'ffff', state: 'alive' });
+      expect(r).toMatchObject({
+        verdict: 'running',
+        ticket: 'COD-782'
+      });
+      expect(r.runnable[0]).toMatchObject({
+        ticket: 'COD-792',
+        reason: 'answered'
+      });
+      const next = (
+        run(
+          `queue_view(${NOW}; 5; {}; null; {}) | .next | map({ticket, reason})`,
+          queue
+        ) as Array<{ ticket: string; reason: string }>
+      )[0];
+      expect(next).toEqual({ ticket: 'COD-782', reason: 'resume' });
+    });
+
     it('the five-argument form has no session to hold anything', () => {
       expect(
         (run(`attended(${NOW}; 5; {}; {}; {})`, issues()) as Pick).runnable.map(
@@ -4067,6 +4098,52 @@ describe('launch', () => {
       const res = launch(pick(), guards({ last }));
       expect(res.action).toBe(action);
       expect(res.last).toEqual({ key: 'COD-1 answered', launches });
+    });
+
+    it.each([
+      [1, 2],
+      [0, 1]
+    ])(
+      'launches the answered ticket again after %i recorded launches',
+      (launches, expected) => {
+        const res = launch(
+          pick(),
+          guards({
+            session: { state: 'none' },
+            last: { key: 'COD-792 answered', launches }
+          })
+        );
+        const again = launch(
+          pick({ ticket: 'COD-792' }),
+          guards({
+            session: { state: 'none' },
+            last: { key: 'COD-792 answered', launches }
+          })
+        );
+        expect(res.last.launches).toBe(1);
+        expect(again).toMatchObject({
+          action: 'launch',
+          key: 'COD-792 answered'
+        });
+        expect(again.last).toEqual({
+          key: 'COD-792 answered',
+          launches: expected
+        });
+      }
+    );
+
+    it.each([
+      [{ key: 'COD-1 answered', launches: 1, refunded: true }, true],
+      [{ key: 'COD-9 answered', launches: 1, refunded: true }, false],
+      [{ key: 'COD-1 answered', launches: 1 }, false]
+    ])('last %j carries the refund: %s', (last, carried) => {
+      const res = launch(pick(), guards({ last }));
+      expect(res.action).toBe('launch');
+      expect(res.last).toEqual({
+        key: 'COD-1 answered',
+        launches: last.key === 'COD-1 answered' ? 2 : 1,
+        ...(carried ? { refunded: true } : {})
+      });
     });
 
     it('counts a take-over after a dead session as the same ticket', () => {

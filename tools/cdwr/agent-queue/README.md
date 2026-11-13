@@ -31,7 +31,7 @@ Once a day, in the first idle run after 06:00, the job runs `/suggest-improvemen
 Once a week, on an idle run the suggestion leaves, it runs `/devlog-draft`, which drafts at most two devlog posts in the cms from the pull requests merged since the last one, or records "nothing this week"; each draft sends an `action` notice to publish or delete it in the admin; the `queue_state` row's `devlog` column holds the last outcome, `cdwr agent status` shows the gate (due, done, not before, off), and `AGENT_QUEUE_DEVLOG_DAYS=0` turns it off.
 
 When that work waits and no session is alive, the job starts one itself: `implement.sh` runs
-`claude -p "/work-queue implement-only once"` detached, with deny-by-default permissions, a
+`claude -p "/work-queue implement-only once key=\"<key>\""` detached, with deny-by-default permissions, a
 per-run budget (`AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, $15) and a daily cap
 (`AGENT_QUEUE_IMPLEMENT_CAP_USD`, $40) kept in `implement-spend.jsonl`. It resumes approved,
 answered or reviewed work only, and never starts a new ticket. It reaches Linear on both hosts
@@ -41,8 +41,10 @@ are in `tools/cdwr/README.md`); a run without Linear tools doesn't start. The qu
 comments from Håkan's by that author (`is_agent` in `watch.jq`), and never starts a ticket whose
 `agent:ready` the app added (`refused` in the queue view). On GitHub it acts as the
 `codeware-agent` app (`github-app.sh`, credentials in `tools/cdwr/.env`), never as Håkan, so
-main's rulesets apply to it; without the app it does not start. After two launches that change
-nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
+main's rulesets apply to it; without the app it does not start. The session takes the key's work
+first (`wait.sh --runnable` lists what it may take); when it can't, it ends with
+`not tried: <key> · <reason>` and the launch is recorded `untried` and not counted. After two
+launches that change nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
 launching too.
 
 An attended Mac session stays visible to the NUC because its session hook copies each session file into the NUC's container (`cdwr agent mirror set --host agent-host`, once). So the NUC launches nothing a live Mac session holds: while that session is polling, any other ticket may launch there; while it is working, only a comment on a merged ticket does. The claim line decides who has a ticket, and a session that loses the race leaves it alone. The hook runs from the checkout the session started in, which must be on a main that includes the mirror support: `cdwr agent attend` does that.

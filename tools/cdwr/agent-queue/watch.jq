@@ -734,5 +734,8 @@ def launch($guards):
         then { action: "notify", reason: "daily implement cap reached ($\($guards.spent) of $\($guards.cap))" }
       # A launch that ended without moving the pick is a miss; two misses on one key stop launching
       elif $done >= 2 then { action: "notify", reason: "\($done) launches changed nothing" }
-      else { action: "launch", reason: null, last: { key: $key, launches: ($done + 1) } }
+      # A launch given back as untried (implement.sh) is given back once per key
+      else { action: "launch", reason: null,
+             last: ({ key: $key, launches: ($done + 1) }
+                    + (if $prev.key == $key and $prev.refunded then { refunded: true } else {} end)) }
       end;

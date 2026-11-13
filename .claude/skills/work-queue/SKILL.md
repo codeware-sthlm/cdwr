@@ -25,6 +25,8 @@ resumes. One ticket is active at a time; others may be parked on a Copilot or CI
   queue home, else 5). See **The limit** below.
 - `implement-only` (launched by the scheduler, with `once`): resume approved, answered or
   reviewed work only, never a new ticket. See **Implement-only runs** below.
+- `key="COD-123 answered"` (with `implement-only`): the scheduler's launch key, the work it
+  launched this run for. See **Implement-only runs**, step 1.
 - `plan-only` (scheduled runs): investigate one ticket and write its plan, nothing else.
   See **Plan-only runs** below.
 
@@ -585,7 +587,7 @@ A plan approval uses the same numbered options under `**Agent: plan ready**`.
 
 ## Implement-only runs
 
-The scheduler starts `claude -p "/work-queue implement-only once"` when work that only an
+The scheduler starts `claude -p "/work-queue implement-only once key=\"<key>\""` when work that only an
 implementing session can do waits (an approved plan, an answer, review feedback, a review PR that conflicts with main, a
 stale claim)
 and no session is alive. Nobody is at the terminal, and the permissions deny anything not
@@ -597,6 +599,22 @@ listed.
    nothing and needs no worktree, since it only writes comments, tickets and the struck line.
    An unanswered plan stays a gate; this mode never approves its own plan, even though no one
    is watching.
+
+   With a `key`, that work comes first, not `wait.sh --now`: the scheduler counts this run
+   against the key, and the pick can name a ticket a live session holds. Run
+   `tools/cdwr/agent-queue/wait.sh --runnable`, which prints what this run may take, one key per
+   line. When the key is listed, take its ticket by the matching step of **What to take next**.
+   When it isn't (the work moved on, or this session's claim lost the race), take nothing else
+   and end the run with this result line, last:
+
+   ```text
+   not tried: <key> · <why, one line>
+   ```
+
+   The scheduler reads that line and gives the launch back, once per key. A run that took the
+   key and changed nothing still counts. When `--runnable` fails (Linear did not answer), end
+   the run without that line: the launch counts.
+
 2. Edit and Write work only inside the ticket worktrees. Read reaches anything. There is no
    `rm` or `mv`: delete a file with `git -C <worktree> rm <path>` and rename with `git mv`.
    Nothing under `.claude/` can be edited, even in a worktree: Claude Code guards that
