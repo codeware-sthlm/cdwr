@@ -6,10 +6,11 @@
 #   telemetry_on                                             succeeds when both are set
 #   telemetry_run <started_at> <outcome> <ticket> <detail> <attended> <kind> <interval> <limit> <version>
 #                                                            one row in `runs`; empty fields become null
-#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json]
+#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json] [devlog]
 #                                                            upserts this host's row in `queue_state`; empty fields become null,
 #                                                            a view that isn't JSON too; a watch and a renovate state, when
-#                                                            given, are each patched on after (empty or invalid: null)
+#                                                            given, are each patched on after (empty or invalid: null), then
+#                                                            a devlog line (empty: null)
 #   telemetry_session <id> <kind> [state] [detail]           upserts the session's heartbeat in `sessions`;
 #                                                            empty fields become null
 #   supabase_delete <table> <query>                          DELETE the rows a PostgREST filter matches
@@ -166,6 +167,10 @@ telemetry_queue_state() {
   (( $# >= 7 )) || return 0
   supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
     "$(jq -nc --arg r "$7" '{renovate: ($r | try fromjson catch null)}')" >/dev/null || return 0
+  # The devlog line too, in a patch of its own for its own migration
+  (( $# >= 8 )) || return 0
+  supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
+    "$(jq -nc --arg d "$8" 'def orNull: if . == "" then null else . end; {devlog: ($d | orNull)}')" >/dev/null || return 0
 }
 
 # telemetry_session <id> <kind> [state] [detail]: an empty or missing state or detail is null

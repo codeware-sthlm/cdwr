@@ -471,6 +471,42 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
       });
     });
 
+    describe('the devlog line', () => {
+      const devlog = '2026-11-13 · nothing this week';
+
+      it('patches it in a patch of its own, after the renovate state', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '${devlog}'`
+        );
+        expect(hits).toHaveLength(4);
+        const host = (JSON.parse(hits[0]?.body ?? '') as { host: string }).host;
+        expect(hits[3]?.method).toBe('PATCH');
+        expect(hits[3]?.url).toBe(
+          `/rest/v1/queue_state?host=eq.${encodeURIComponent(host)}`
+        );
+        expect(JSON.parse(hits[3]?.body ?? '')).toEqual({ devlog });
+      });
+
+      it('patches null when it is empty', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' ''`
+        );
+        expect(hits).toHaveLength(4);
+        expect(JSON.parse(hits[3]?.body ?? '')).toEqual({ devlog: null });
+      });
+
+      it('sends no patch for it when absent', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}'`
+        );
+        expect(hits).toHaveLength(3);
+        expect(hits.every((h) => !h.body.includes('devlog'))).toBe(true);
+      });
+    });
+
     it('sends nothing without the env vars', async () => {
       const out = await zsh({}, `telemetry_queue_state x '' '' '' ''`);
       expect(out.stdout).toBe('rc=0');

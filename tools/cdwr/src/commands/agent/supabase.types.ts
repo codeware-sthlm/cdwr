@@ -167,6 +167,7 @@ export type Database = {
           last_run: string | null;
           attended: string | null;
           suggested: string | null;
+          devlog: string | null;
           job: string | null;
           view: Json | null;
           watch: Json | null;
@@ -177,6 +178,7 @@ export type Database = {
           last_run?: string | null;
           attended?: string | null;
           suggested?: string | null;
+          devlog?: string | null;
           job?: string | null;
           view?: Json | null;
           watch?: Json | null;
@@ -187,6 +189,7 @@ export type Database = {
           last_run?: string | null;
           attended?: string | null;
           suggested?: string | null;
+          devlog?: string | null;
           job?: string | null;
           view?: Json | null;
           watch?: Json | null;
