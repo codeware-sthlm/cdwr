@@ -24,6 +24,10 @@ SUGGEST_BUDGET_USD="${AGENT_QUEUE_SUGGEST_BUDGET_USD:-5}"
 SUGGEST_HOUR="${AGENT_QUEUE_SUGGEST_HOUR:-6}"
 # Days between suggest sessions; 0 switches the feature off.
 SUGGEST_DAYS="${AGENT_QUEUE_SUGGEST_DAYS:-1}"
+# Budget for the weekly devlog session, same reading as above.
+DEVLOG_BUDGET_USD="${AGENT_QUEUE_DEVLOG_BUDGET_USD:-5}"
+# Days between devlog sessions; 0 switches the feature off. It starts after SUGGEST_HOUR too.
+DEVLOG_DAYS="${AGENT_QUEUE_DEVLOG_DAYS:-7}"
 # The dev checkout's Claude memory directory; empty means no memory file is writable.
 MEMORY_DIR="${AGENT_QUEUE_MEMORY_DIR:-}"
 OTHER_REPOS='["nx-plugins","enjinex"]'
@@ -32,6 +36,8 @@ mkdir -p "$LOGS"
 
 # The Suggested line of queue_state: today's date and what happened
 suggested_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/suggested-line"; }
+# The Devlog line of queue_state: the date and what happened
+devlog_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/devlog-line"; }
 note() { print -r -- "$(date '+%F %T') $*" >> "$LOGS/scheduler.log"; }
 say() { note "$*"; $check && print -r -- "$*"; return 0; }
 # Always action-level: a run that planned something or went wrong needs Håkan. No webhook, no-op.
@@ -462,7 +468,7 @@ record_queue_state() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local last attended suggested jl view watch renovate
+  local last attended suggested jl view watch renovate devlog
   last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
   # attended-published is the cache before attended-line, until a verdict replaces it
   attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
@@ -471,7 +477,8 @@ record_queue_state() {
   view="${queue_view:-$(cat "$HOME_DIR/queue-view.json" 2>/dev/null)}"
   watch="$(cat "$HOME_DIR/watch.json" 2>/dev/null)"
   renovate="$(cat "$HOME_DIR/renovate.json" 2>/dev/null)"
-  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" ) &!
+  devlog="$(cat "$HOME_DIR/devlog-line" 2>/dev/null)"
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" "$devlog" ) &!
 }
 
 # A paused tick publishes the last run's Attended line and queue view with a paused job line, so
@@ -1138,18 +1145,23 @@ query {
 }
 GQL
 
+# stamp_age <file>: whole days since the date a stamp file holds; empty when there is no stamp
+stamp_age() {
+  local ran
+  ran="$(cat "$1" 2>/dev/null)"
+  [[ "$ran" == <->-<->-<-> ]] || return 0
+  print $(( ( $(date +%s) - $(date -j -f %F "$ran" +%s 2>/dev/null || date -d "$ran" +%s 2>/dev/null || echo 0) ) / 86400 ))
+}
+
 # suggest_gate: prints due (focus <dx|maintenance|looks>), done today, not before HH:00,
 # skipped, COD-n is open, unavailable (Linear did not answer, so nothing runs), or off.
 suggest_gate() {
   setopt local_options no_err_exit
-  local stamp="$HOME_DIR/suggest-ran-on" ran age open hour ideas
+  local age open hour ideas
   local -a focuses=(dx maintenance looks)
   if [[ "$SUGGEST_DAYS" != <-> || "$SUGGEST_DAYS" == 0 ]]; then print off; return 0; fi
-  ran="$(cat "$stamp" 2>/dev/null)"
-  if [[ "$ran" == <->-<->-<-> ]]; then
-    age=$(( ( $(date +%s) - $(date -j -f %F "$ran" +%s 2>/dev/null || date -d "$ran" +%s 2>/dev/null || echo 0) ) / 86400 ))
-    if (( age < SUGGEST_DAYS )); then print "done today"; return 0; fi
-  fi
+  age="$(stamp_age "$HOME_DIR/suggest-ran-on")"
+  if [[ -n "$age" ]] && (( age < SUGGEST_DAYS )); then print "done today"; return 0; fi
   hour=$(( 10#$(date +%H) ))
   if (( hour < SUGGEST_HOUR )); then printf 'not before %02d:00\n' "$SUGGEST_HOUR"; return 0; fi
   ideas="$(linear "$IDEAS" 2>/dev/null)" && jq -e '.data.issues.nodes' >/dev/null 2>&1 <<<"$ideas" ||
@@ -1160,6 +1172,19 @@ suggest_gate() {
      | .identifier] | first // empty' <<<"$ideas" 2>/dev/null)"
   if [[ -n "$open" ]]; then print "skipped, $open is open"; return 0; fi
   print "due (focus ${focuses[$(( 10#$(date +%j) % 3 + 1 ))]})"
+}
+
+# devlog_gate: prints due, done (next in N day(s)), not before HH:00, or off. It starts after
+# SUGGEST_HOUR like the suggestion, on an idle tick the suggestion leaves.
+devlog_gate() {
+  setopt local_options no_err_exit
+  local age hour
+  if [[ "$DEVLOG_DAYS" != <-> || "$DEVLOG_DAYS" == 0 ]]; then print off; return 0; fi
+  age="$(stamp_age "$HOME_DIR/devlog-ran-on")"
+  if [[ -n "$age" ]] && (( age < DEVLOG_DAYS )); then print "done, next in $(( DEVLOG_DAYS - age )) day(s)"; return 0; fi
+  hour=$(( 10#$(date +%H) ))
+  if (( hour < SUGGEST_HOUR )); then printf 'not before %02d:00\n' "$SUGGEST_HOUR"; return 0; fi
+  print due
 }
 
 # The result handling both claude runs share: appends the readable result to the log, sets
@@ -1246,10 +1271,79 @@ suggest_run() {
   fi
 }
 
+# The once-a-week devlog session: reads the merged pull requests and drafts at most two posts in the cms.
+# It ends with one or more `DRAFTED <post id> <title>` lines, `nothing this week` or `failed: <line>`.
+devlog_run() {
+  local log result rc=0 spent="" outcome line id title count=0 verdict verdicts
+  run_kind=devlog
+  linear_ok || { devlog_line "no Linear tools"; return 0; }
+  cd "$REPO"
+  to_main devlogging
+  log="$LOGS/$(date +%F_%H%M)-devlog.log"
+  result="${log%.log}.json"
+  note "devlog: → $log"
+  # Stamped as soon as it starts, so a crash can't run it twice in a week
+  date +%F > "$HOME_DIR/devlog-ran-on"
+  mkdir -p "$HOME_DIR/devlog-drafts"
+
+  # Same shape as the suggest call; the draft files go under devlog-drafts, written with `//` roots.
+  ( gh_identity_or_note
+  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/devlog-draft home=$HOME_DIR" \
+    --model opus "${LINEAR_MCP_ARGS[@]}" \
+    --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
+    --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
+    --tools "Read,Grep,Glob,Skill,Bash,Write,Edit" \
+    --permission-mode dontAsk --permission-prompts none \
+    --max-budget-usd "$DEVLOG_BUDGET_USD" --output-format json \
+    --allowedTools Skill Read Grep Glob "$L"__get_issue "$L"__list_comments \
+      "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(node tools/cdwr/bin/cdwr.mjs devlog covered*)" "Bash(node tools/cdwr/bin/cdwr.mjs devlog draft *)" \
+      "Write(/$HOME_DIR/devlog-drafts/**)" "Edit(/$HOME_DIR/devlog-drafts/**)"
+  ) > "$result" 2> "$log" || rc=$?
+
+  run_outcome "a devlog run" devlog "$DEVLOG_BUDGET_USD" "$log" "$result" "$rc"
+  case "$outcome" in
+    cap) devlog_line "stopped at the budget"; return 0 ;;
+    failed) devlog_line "failed"; return 0 ;;
+  esac
+
+  # Only verdict lines count, so a code fence or blank lines around them do not matter. Every
+  # draft is recorded before a trailing failure: the cms holds the post whether or not the
+  # second one broke, and Håkan has to hear about it either way
+  verdicts="$(jq -r '.result // empty' "$result" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
+    grep -E '^(DRAFTED .+|nothing this week|failed: .+)$' || true)"
+  while IFS= read -r line; do
+    [[ "$line" == "DRAFTED "* ]] || continue
+    verdict="${line#DRAFTED }"
+    id="${verdict%% *}"; title="${verdict#* }"
+    [[ "$title" == "$verdict" ]] && title=""
+    note "devlog: drafted $id $title"
+    record drafted "$id" "$title$spent"
+    notice action "Devlog draft: ${title:-post $id}. Publish or delete it in the admin."
+    (( ++count ))
+  done <<<"$verdicts"
+  line="$(print -r -- "$verdicts" | tail -n 1)"
+  if [[ "$line" == "failed: "* ]]; then
+    note "fail: devlog: $line"
+    record failed "" "devlog: ${line#failed: }$spent"
+    notice action "Devlog: ${line#failed: }"
+    if (( count > 0 )); then devlog_line "$count draft(s), failed: ${line#failed: }"; else devlog_line "failed: ${line#failed: }"; fi
+  elif (( count > 0 )); then
+    devlog_line "$count draft(s)"
+  elif [[ "$line" == "nothing this week" ]]; then
+    note "devlog: nothing this week"
+    record nothing "" "devlog: nothing this week$spent"
+    devlog_line "nothing this week"
+  else
+    note "warn: devlog: no verdict (see $log)"
+    record warn "" "devlog: no verdict, see $log"
+    devlog_line "no verdict"
+  fi
+}
+
 if [[ -z "$ready" ]]; then
   gate="$(suggest_gate)"
   # The decision stays the last line: status reads it from there
-  if $check; then print -r -- "suggest: $gate"; echo "idle: nothing to plan"; exit 0; fi
+  if $check; then print -r -- "suggest: $gate"; print -r -- "devlog: $(devlog_gate)"; echo "idle: nothing to plan"; exit 0; fi
   case "$gate" in
     due*) suggest_run "${${gate#*focus }%)}" ;;
     skipped*)
@@ -1257,11 +1351,14 @@ if [[ -z "$ready" ]]; then
       record skip "" "suggest: ${${gate#skipped, }%% *} still open"
       suggested_line "${gate#skipped, }" ;;
     unavailable*) note "suggest: $gate" ;;
+    # The weekly devlog takes an idle tick the suggestion leaves: one claude session per run
+    *) if [[ "$(devlog_gate)" == due ]]; then devlog_run; fi ;;
   esac
   exit 0
 fi
 if $check; then
   print -r -- "suggest: $(suggest_gate)"
+  print -r -- "devlog: $(devlog_gate)"
   echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')"; exit 0
 fi
 
