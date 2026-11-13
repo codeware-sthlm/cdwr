@@ -184,27 +184,52 @@ export interface SuggestSettings {
   days: number;
 }
 
-/** The suggest session's settings: the environment when set, the defaults otherwise */
-export const suggestSettings = (env: NodeJS.ProcessEnv): SuggestSettings => {
-  const read = (name: string, fallback: number, max?: number): number => {
-    const value = env[name];
-    if (value === undefined || value === '') return fallback;
-    if (!/^\d+$/.test(value)) {
-      throw new CliError(
-        `${name} must be a non-negative integer, got ${value}`
-      );
-    }
-    if (max !== undefined && Number(value) > max) {
-      throw new CliError(`${name} must be at most ${max}, got ${value}`);
-    }
-    return Number(value);
-  };
-  return {
-    budgetUsd: read('AGENT_QUEUE_SUGGEST_BUDGET_USD', SUGGEST_BUDGET_USD),
-    hour: read('AGENT_QUEUE_SUGGEST_HOUR', SUGGEST_HOUR, 23),
-    days: read('AGENT_QUEUE_SUGGEST_DAYS', SUGGEST_DAYS)
-  };
+const readNonNegativeInt = (
+  env: NodeJS.ProcessEnv,
+  name: string,
+  fallback: number,
+  max?: number
+): number => {
+  const value = env[name];
+  if (value === undefined || value === '') return fallback;
+  if (!/^\d+$/.test(value)) {
+    throw new CliError(`${name} must be a non-negative integer, got ${value}`);
+  }
+  if (max !== undefined && Number(value) > max) {
+    throw new CliError(`${name} must be at most ${max}, got ${value}`);
+  }
+  return Number(value);
 };
+
+/** The suggest session's settings: the environment when set, the defaults otherwise */
+export const suggestSettings = (env: NodeJS.ProcessEnv): SuggestSettings => ({
+  budgetUsd: readNonNegativeInt(
+    env,
+    'AGENT_QUEUE_SUGGEST_BUDGET_USD',
+    SUGGEST_BUDGET_USD
+  ),
+  hour: readNonNegativeInt(env, 'AGENT_QUEUE_SUGGEST_HOUR', SUGGEST_HOUR, 23),
+  days: readNonNegativeInt(env, 'AGENT_QUEUE_SUGGEST_DAYS', SUGGEST_DAYS)
+});
+
+/** Weekly devlog session: budget in USD, days between runs; it starts after SUGGEST_HOUR */
+export const DEVLOG_BUDGET_USD = 5;
+export const DEVLOG_DAYS = 7;
+
+export interface DevlogSettings {
+  budgetUsd: number;
+  days: number;
+}
+
+/** The devlog session's settings: the environment when set, the defaults otherwise */
+export const devlogSettings = (env: NodeJS.ProcessEnv): DevlogSettings => ({
+  budgetUsd: readNonNegativeInt(
+    env,
+    'AGENT_QUEUE_DEVLOG_BUDGET_USD',
+    DEVLOG_BUDGET_USD
+  ),
+  days: readNonNegativeInt(env, 'AGENT_QUEUE_DEVLOG_DAYS', DEVLOG_DAYS)
+});
 
 /** Claude Code names a project's directory after its path, every character but letters and digits becoming `-` */
 export const memoryDir = (userHome: string, repoRoot: string): string =>
@@ -440,6 +465,7 @@ export interface PlistInput {
   /** The dev checkout's Claude memory directory, where the suggest session may write */
   memoryDir: string;
   suggest: SuggestSettings;
+  devlog: DevlogSettings;
 }
 
 export const renderPlist = ({
@@ -448,7 +474,8 @@ export const renderPlist = ({
   repo,
   path,
   memoryDir,
-  suggest
+  suggest,
+  devlog
 }: PlistInput): string => {
   const e = escapeXml;
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -478,6 +505,10 @@ export const renderPlist = ({
     <string>${suggest.hour}</string>
     <key>AGENT_QUEUE_SUGGEST_DAYS</key>
     <string>${suggest.days}</string>
+    <key>AGENT_QUEUE_DEVLOG_BUDGET_USD</key>
+    <string>${devlog.budgetUsd}</string>
+    <key>AGENT_QUEUE_DEVLOG_DAYS</key>
+    <string>${devlog.days}</string>
     <key>AGENT_QUEUE_MEMORY_DIR</key>
     <string>${e(memoryDir)}</string>
   </dict>
@@ -1046,6 +1077,21 @@ export const parseSuggest = (line: string): SuggestCheck => {
   if (due) return { kind: 'due', focus: due[1], text };
   const skipped = /^skipped, ([A-Z][A-Z0-9]*-\d+) is open$/.exec(text);
   if (skipped) return { kind: 'skipped', ticket: skipped[1], text };
+  return { kind: 'unknown', text };
+};
+
+export interface DevlogCheck {
+  kind: 'due' | 'done' | 'early' | 'off' | 'unknown';
+  text: string;
+}
+
+/** Reads the text after `devlog: ` in the `run.sh --check` output */
+export const parseDevlog = (line: string): DevlogCheck => {
+  const text = line.trim();
+  if (text === 'off') return { kind: 'off', text };
+  if (text.startsWith('done')) return { kind: 'done', text };
+  if (text.startsWith('not before ')) return { kind: 'early', text };
+  if (text === 'due') return { kind: 'due', text };
   return { kind: 'unknown', text };
 };
 

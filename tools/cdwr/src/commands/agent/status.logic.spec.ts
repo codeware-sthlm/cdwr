@@ -38,6 +38,7 @@ const report = {
   next: null,
   attended: null,
   suggest: null,
+  devlog: null,
   queueView: null
 };
 const envelope = JSON.stringify({
