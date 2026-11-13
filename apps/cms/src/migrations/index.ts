@@ -93,6 +93,7 @@ import * as migration_20261106_185215_cod_717_blocks from './20261106_185215_cod
 import * as migration_20261108_123050_cod_708_faq_topic from './20261108_123050_cod_708_faq_topic';
 import * as migration_20261110_225226_cod_769_coming_soon from './20261110_225226_cod_769_coming_soon';
 import * as migration_20261112_135923_cod_779_agents from './20261112_135923_cod_779_agents';
+import * as migration_20261113_232648_code_shell from './20261113_232648_code_shell';
 
 export const migrations = [
   {
@@ -569,5 +570,10 @@ export const migrations = [
     up: migration_20261112_135923_cod_779_agents.up,
     down: migration_20261112_135923_cod_779_agents.down,
     name: '20261112_135923_cod_779_agents'
+  },
+  {
+    up: migration_20261113_232648_code_shell.up,
+    down: migration_20261113_232648_code_shell.down,
+    name: '20261113_232648_code_shell'
   }
 ];

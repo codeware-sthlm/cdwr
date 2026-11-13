@@ -6,7 +6,8 @@ export const codeLanguages = {
   plaintext: 'Plain Text',
   tsx: 'TSX',
   js: 'JavaScript',
-  jsx: 'JSX'
+  jsx: 'JSX',
+  shell: 'Shell'
 } as const;
 
 /**
@@ -17,6 +18,7 @@ export const codeLanguages = {
 export const monacoLanguages = [
   'javascript',
   'plaintext',
+  'shell',
   'typescript'
 ] as const;
 
@@ -28,7 +30,8 @@ export const languageMap: Record<CodeLanguage, MonacoLanguage> = {
   ts: 'typescript',
   tsx: 'typescript',
   js: 'javascript',
-  jsx: 'javascript'
+  jsx: 'javascript',
+  shell: 'shell'
 };
 
 /**

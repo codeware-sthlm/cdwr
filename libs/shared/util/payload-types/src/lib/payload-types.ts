@@ -944,7 +944,7 @@ export interface Agent {
  * via the `definition` "CodeBlock".
  */
 export interface CodeBlock {
-  language: 'ts' | 'plaintext' | 'tsx' | 'js' | 'jsx';
+  language: 'ts' | 'plaintext' | 'tsx' | 'js' | 'jsx' | 'shell';
   code: string;
   /**
    * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
