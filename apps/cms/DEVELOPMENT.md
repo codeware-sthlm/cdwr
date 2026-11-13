@@ -4,7 +4,7 @@ Running the cms locally: services, secrets, build and security notes, host and t
 
 ## CMS Development
 
-Ensure Posgres cluster is running.
+Ensure Postgres cluster is running.
 
 ```sh
 # Start Postgres container when needed
