@@ -148,7 +148,7 @@ const customComponents: CollectionConfig = {
     componentStudioField([
       {
         ...tsxSourceField,
-        label: { en: 'Source', sv: 'Source' },
+        label: { en: 'Source', sv: 'Källkod' },
         access: { read: usersOnly },
         admin: {
           ...tsxSourceField.admin,
@@ -175,8 +175,8 @@ const customComponents: CollectionConfig = {
               );
         }) as Validate,
         labels: {
-          singular: { en: 'Input', sv: 'Input' },
-          plural: { en: 'Inputs', sv: 'Inputs' }
+          singular: { en: 'Input', sv: 'Indata' },
+          plural: { en: 'Inputs', sv: 'Indata' }
         },
         admin: {
           initCollapsed: true,
@@ -194,7 +194,7 @@ const customComponents: CollectionConfig = {
             name: 'name',
             type: 'text',
             required: true,
-            label: { en: 'Name', sv: 'Name' },
+            label: { en: 'Name', sv: 'Namn' },
             admin: {
               description: {
                 en: 'The name the component reads the value by.',
@@ -211,7 +211,7 @@ const customComponents: CollectionConfig = {
           {
             name: 'label',
             type: 'text',
-            label: { en: 'Label', sv: 'Label' },
+            label: { en: 'Label', sv: 'Etikett' },
             admin: {
               description: {
                 en: 'Shown to the editor. Falls back to the name.',
@@ -225,7 +225,7 @@ const customComponents: CollectionConfig = {
             required: true,
             defaultValue: 'text',
             enumName: enumName('custom_component_prop_type'),
-            label: { en: 'Type', sv: 'Type' },
+            label: { en: 'Type', sv: 'Typ' },
             options: [
               { label: { en: 'Text', sv: 'Text' }, value: 'text' },
               {
@@ -240,14 +240,14 @@ const customComponents: CollectionConfig = {
             name: 'required',
             type: 'checkbox',
             defaultValue: false,
-            label: { en: 'Required', sv: 'Required' }
+            label: { en: 'Required', sv: 'Obligatorisk' }
           }
         ]
       },
       {
         name: 'build',
         type: 'group',
-        label: { en: 'Build', sv: 'Build' },
+        label: { en: 'Build', sv: 'Bygge' },
         access: neverWritable,
         admin: {
           readOnly: true,

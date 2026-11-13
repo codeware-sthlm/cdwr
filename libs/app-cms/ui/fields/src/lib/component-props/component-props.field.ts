@@ -16,11 +16,11 @@ import {
 export const componentPropsField: JSONField = {
   name: 'props',
   type: 'json',
-  label: { en: 'Inputs', sv: 'Inputs' },
+  label: { en: 'Inputs', sv: 'Indata' },
   admin: {
     description: {
       en: 'The values for the inputs the component declares.',
-      sv: 'Värdena för de inputs komponenten deklarerar.'
+      sv: 'Värdena för komponentens indata.'
     },
     components: {
       Field: '@codeware/app-cms/ui/fields/component-props/ComponentProps.client'
