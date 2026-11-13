@@ -674,6 +674,28 @@ while true; do beat "$1" "$2"; sleep 1; done`
       expect(result.stdout).toMatch(/limit 0\/2/);
     });
 
+    it('--runnable prints the launch keys an implementing run may take', () => {
+      const answered = {
+        ...ticket('COD-702', 'started'),
+        labels: { nodes: [{ name: 'agent:needs-input' }] },
+        comments: {
+          nodes: [{ body: 'go ahead', createdAt: '2026-10-02T00:00:00Z' }]
+        }
+      };
+      const result = run(
+        [response(ticket('COD-1', 'backlog'), answered)],
+        ['--runnable']
+      );
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe('COD-702 answered\n');
+    });
+
+    it('--runnable fails when Linear did not answer', () => {
+      const result = run(['not json'], ['--runnable']);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toBe('wait: Linear did not answer\n');
+    });
+
     it('says when Linear did not answer', () => {
       const result = run(['not json'], ['--now']);
       expect(result.status).toBe(0);

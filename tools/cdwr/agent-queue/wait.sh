@@ -12,6 +12,7 @@
 # Runs from the repo, not installed. While it runs, <id>.watcher holds its pid and the hook reports `polling` on Stop.
 #   wait.sh [--interval 60] [--fallback 600] [--max 6600]
 #   wait.sh --now        print the current pick once and exit, with no listener
+#   wait.sh --runnable   print what an implementing session may take, one launch key per line
 # Where the scheduler runs elsewhere (a Mac without the launchd job), the watch state comes from
 # the NUC's queue_state row (`remote_watch`, one Supabase GET per pick) instead of the local
 # watch.json nothing refreshes; unreadable, the local file as before.
@@ -23,13 +24,15 @@ INTERVAL=60
 FALLBACK=600
 MAX=6600
 NOW=false
+RUNNABLE=false
 while (( $# )); do
   case "$1" in
     --interval) INTERVAL="${2:?--interval needs seconds}"; shift 2 ;;
     --fallback) FALLBACK="${2:?--fallback needs seconds}"; shift 2 ;;
     --max) MAX="${2:?--max needs seconds}"; shift 2 ;;
     --now) NOW=true; shift ;;
-    *) print -ru2 -- "usage: wait.sh [--interval <s>] [--fallback <s>] [--max <s>] [--now]"; exit 2 ;;
+    --runnable) RUNNABLE=true; shift ;;
+    *) print -ru2 -- "usage: wait.sh [--interval <s>] [--fallback <s>] [--max <s>] [--now | --runnable]"; exit 2 ;;
   esac
 done
 [[ "$INTERVAL" == <-> && "$FALLBACK" == <-> && "$MAX" == <-> ]] || { print -ru2 -- "wait.sh: seconds must be whole numbers"; exit 2; }
@@ -124,9 +127,12 @@ session_json=null
 [[ -n "$file" ]] && session_json="$(jq -nc --arg id "$sid" --arg t "$ticket" \
   '{state: "alive", detail: "polling", id: $id, ticket: (if $t == "" then null else $t end)}')"
 
-if $NOW; then
-  now="$(pick)" || { offline && print -r -- "wait: offline" || print -r -- "wait: Linear did not answer"; exit 0; }
-  if own "$now"; then jq -r --arg t "$ticket" -L "$HERE" 'include "watch"; resume_line($t)' <<<"$now"; else line_of "$now"; fi
+if $NOW || $RUNNABLE; then
+  # --runnable fails on no answer, so a session can't read an outage as its key gone
+  now="$(pick)" || { offline && print -r -- "wait: offline" || print -r -- "wait: Linear did not answer"; $RUNNABLE && exit 1; exit 0; }
+  # The same key launch() gives implement.sh: `<ticket> <reason>`, a PR's space as a dash
+  if $RUNNABLE; then jq -r '.runnable[] | "\(.ticket | gsub(" "; "-")) \(.reason)"' <<<"$now"
+  elif own "$now"; then jq -r --arg t "$ticket" -L "$HERE" 'include "watch"; resume_line($t)' <<<"$now"; else line_of "$now"; fi
   exit 0
 fi
 

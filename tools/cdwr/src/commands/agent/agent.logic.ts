@@ -763,6 +763,7 @@ export const spendForDay = (
 export const IMPLEMENT_OUTCOMES = [
   'launched',
   'implemented',
+  'untried',
   'cap',
   'failed'
 ] as const;
@@ -941,6 +942,7 @@ const SCHEDULER_TICKET = /\bCOD-\d+\b/;
 const IMPLEMENT_VERDICTS = [
   'fail',
   'done',
+  'untried',
   'busy',
   'launch',
   'cap',

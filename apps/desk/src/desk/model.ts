@@ -414,7 +414,7 @@ export const activityMissing = (activity: ActivityPayload): boolean =>
   'missing' in activity && Boolean(activity.missing);
 
 export const isProblem = (outcome: string): boolean =>
-  !/^(idle|paused|planned( [A-Z]+-\d+)?|launched|implemented|suggested( [A-Z]+-\d+)?|drafted( \S+)?|nothing|skip)$/.test(
+  !/^(idle|paused|planned( [A-Z]+-\d+)?|launched|implemented|untried|suggested( [A-Z]+-\d+)?|drafted( \S+)?|nothing|skip)$/.test(
     outcome
   );
 

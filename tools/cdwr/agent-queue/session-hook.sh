@@ -140,7 +140,7 @@ patch() {
 }
 
 main() {
-  local payload id event tool cmd out line ticket kind reason file wp state
+  local payload id event tool cmd out line ticket kind reason file wp state held
   payload="$(cat)" || return 0
   # One jq for the scalars: this runs after every tool call in every session
   # Unit separator, not tab: IFS whitespace would collapse an empty field
@@ -161,9 +161,12 @@ main() {
       mkdir -p "$DIR" || return 0
       # A session resumed after it ended beats at once
       state="$(jq -r '.state // empty' "$file" 2>/dev/null)"
+      # A live session registering again keeps its ticket; one resumed after it ended starts clean
+      held=
+      [[ "$state" != ended ]] && held="$(jq -r '.ticket // empty' "$file" 2>/dev/null)"
       jq -n --arg id "$id" --argjson pid "$(claude_pid)" --arg now "$(now)" \
-        --arg cwd "$(jq -r '.cwd // empty' <<<"$payload")" --arg host "$(host_id)" \
-        '{id: $id, pid: $pid, startedAt: $now, lastSeen: $now, state: "working", ticket: null,
+        --arg cwd "$(jq -r '.cwd // empty' <<<"$payload")" --arg host "$(host_id)" --arg held "$held" \
+        '{id: $id, pid: $pid, startedAt: $now, lastSeen: $now, state: "working", ticket: ($held | if . == "" then null else . end),
           detail: null, cwd: $cwd, host: $host}' > "$file.tmp.$$" &&
         mv "$file.tmp.$$" "$file" || rm -f "$file.tmp.$$"
       mirror force
