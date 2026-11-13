@@ -52,6 +52,7 @@ describe('the cdwr.io definition', () => {
       'studio',
       'components',
       'architecture',
+      'devlog',
       'start',
       'privacy'
     ]);
@@ -172,6 +173,9 @@ describe('the cdwr.io definition', () => {
         )
       },
       expect.objectContaining({
+        reference: { relationTo: 'pages', lookupSlug: 'devlog' }
+      }),
+      expect.objectContaining({
         reference: { relationTo: 'pages', lookupSlug: 'start' },
         appearance: 'button'
       })
@@ -195,8 +199,8 @@ describe('the cdwr.io devlog switch', () => {
       .flatMap((item) => ('children' in item ? item.children : [item]))
       .map(({ reference }) => reference.lookupSlug);
 
-  it('is off for the definition that is applied', () => {
-    expect(cdwrIo).toEqual(defineCdwrIo({ devlog: false }));
+  it('is on for the definition that is applied', () => {
+    expect(cdwrIo).toEqual(defineCdwrIo({ devlog: true }));
   });
 
   it.each([false, true])(
