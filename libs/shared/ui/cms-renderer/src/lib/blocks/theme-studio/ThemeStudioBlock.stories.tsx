@@ -38,3 +38,9 @@ export const Bare: Story = {
     note: ''
   }
 };
+
+/** Below `lg` the studio is not loaded; the block says what it needs. */
+export const Phone: Story = {
+  args,
+  globals: { viewport: { value: 'mobile1', isRotated: false } }
+};

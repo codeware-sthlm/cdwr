@@ -1,6 +1,7 @@
 'use client';
 
 import { CopyButton } from '@codeware/shared/ui/copy-button';
+import { Badge } from '@codeware/shared/ui/shadcn/components/badge';
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { Input } from '@codeware/shared/ui/shadcn/components/input';
 import { Label } from '@codeware/shared/ui/shadcn/components/label';
@@ -57,6 +58,15 @@ import {
 import { createContext, useContext, useId, useMemo, useState } from 'react';
 
 import { ContrastReport } from './ContrastReport';
+import {
+  type DroppedOverrides,
+  countOverrides,
+  describeRecipeChange,
+  dropDerivedOverrides,
+  droppedNames,
+  mergeDropped,
+  restoreDropped
+} from './derived-overrides';
 import { OverridePanel, type ThemeOverrides } from './OverridePanel';
 import { previewCss, previewScope } from './preview-css';
 import { ThemePreview } from './ThemePreview';
@@ -342,6 +352,8 @@ type ThemeStudioProps = {
   recipe?: ThemeRecipe;
   /** Hand-edited tokens to restore alongside the recipe */
   overrides?: ThemeOverrides;
+  /** Which scheme the preview opens on; the admin shows both */
+  initialScheme?: 'light' | 'dark' | 'both';
   onSelect?: (result: ThemeStudioResult) => void;
   onClose?: () => void;
 };
@@ -494,6 +506,7 @@ export function ThemeStudio({
   selectLabel = 'Use this theme',
   recipe: initialRecipe,
   overrides: initialOverrides,
+  initialScheme = 'both',
   onSelect,
   onClose
 }: ThemeStudioProps = {}) {
@@ -518,7 +531,12 @@ export function ThemeStudio({
   const [overrides, setOverrides] = useState<ThemeOverrides>(
     initialOverrides ?? NO_OVERRIDES
   );
-  const [scheme, setScheme] = useState<'light' | 'dark' | 'both'>('both');
+  // What the last recipe change took from the overrides, until restored or
+  // dismissed
+  const [dropped, setDropped] = useState<DroppedOverrides | null>(null);
+  const [scheme, setScheme] = useState<'light' | 'dark' | 'both'>(
+    initialScheme
+  );
   const [optionsOpen, setOptionsOpen] = useState(true);
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   // Seeded from the open theme, not left at a placeholder. The name is not
@@ -580,8 +598,7 @@ export function ThemeStudio({
     contrast.dark.filter(({ passes }) => !passes).length +
     broken.length;
 
-  const overrideCount =
-    Object.keys(overrides.light).length + Object.keys(overrides.dark).length;
+  const overrideCount = countOverrides(overrides);
 
   const files = useMemo(
     () => themeFiles(exportName, recipe, overrides),
@@ -677,8 +694,30 @@ export function ThemeStudio({
     );
 
   const ids = previewScope(scope);
+
+  // The one way the recipe changes: an override whose token the new recipe
+  // derives differently would otherwise keep pinning it, and the change would
+  // not show
+  const changeRecipe = (next: ThemeRecipe, cause?: string) => {
+    const { kept, dropped: taken } = dropDerivedOverrides(
+      overrides,
+      generated,
+      buildThemeTokens(next)
+    );
+
+    if (countOverrides(taken) > 0) {
+      setOverrides(kept);
+      setDropped((earlier) =>
+        mergeDropped(earlier, {
+          cause: cause ?? describeRecipeChange(recipe, next),
+          tokens: taken
+        })
+      );
+    }
+    setRecipe(next);
+  };
   const update = (patch: Partial<ThemeRecipe>) =>
-    setRecipe((current) => ({ ...current, ...patch }));
+    changeRecipe({ ...recipe, ...patch });
 
   return (
     <TooltipProvider>
@@ -921,6 +960,11 @@ export function ThemeStudio({
                         <Button variant="outline" size="sm" className="w-full">
                           Fine-tune tokens
                           {overrideCount > 0 && ` (${overrideCount})`}
+                          {dropped && (
+                            <Badge variant="warning">
+                              {droppedNames(dropped.tokens).length} dropped
+                            </Badge>
+                          )}
                         </Button>
                       </SheetTrigger>
                       <SheetContent
@@ -932,8 +976,9 @@ export function ThemeStudio({
                         <SheetHeader className="p-0">
                           <SheetTitle>Fine-tune tokens</SheetTitle>
                           <SheetDescription>
-                            An edited token stops following the recipe, so
-                            changing the brand or base later leaves it behind.
+                            An edited token stops following the recipe until a
+                            change to the recipe derives it again, which drops
+                            the edit. Restore brings it back.
                           </SheetDescription>
                         </SheetHeader>
                         <OverridePanel
@@ -941,6 +986,16 @@ export function ThemeStudio({
                           container={root}
                           overrides={overrides}
                           issues={issues}
+                          dropped={dropped}
+                          onRestore={() => {
+                            if (dropped) {
+                              setOverrides(
+                                restoreDropped(overrides, dropped.tokens)
+                              );
+                            }
+                            setDropped(null);
+                          }}
+                          onDismiss={() => setDropped(null)}
                           onChange={setOverrides}
                         />
                       </SheetContent>
@@ -1165,12 +1220,12 @@ export function ThemeStudio({
                 </Hint>
 
                 {/* Lives here rather than in the panel, so it survives collapsing */}
-                <Hint label="Feeling lucky — rolls a recipe that passes contrast. Any fine-tuned tokens are kept.">
+                <Hint label="Feeling lucky — rolls a recipe that passes contrast. Fine-tuned tokens the new recipe derives are dropped.">
                   <Button
                     size="icon"
                     variant="ghost"
                     className="size-8"
-                    onClick={() => setRecipe(randomRecipe())}
+                    onClick={() => changeRecipe(randomRecipe(), 'The shuffle')}
                     aria-label="Shuffle the theme"
                   >
                     <DicesIcon className="size-4" />
