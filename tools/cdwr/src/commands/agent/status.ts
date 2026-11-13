@@ -422,8 +422,10 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
           checked?.linear === undefined ? null : parseLinear(checked.linear),
         suggest:
           checked?.suggest === undefined ? null : parseSuggest(checked.suggest),
-        devlog:
-          checked?.devlog === undefined ? null : parseDevlog(checked.devlog),
+        // Absent, not null, when the script has no devlog line: an older image shows no row
+        ...(checked?.devlog === undefined
+          ? {}
+          : { devlog: parseDevlog(checked.devlog) }),
         queueView:
           checked?.queueView === undefined
             ? null

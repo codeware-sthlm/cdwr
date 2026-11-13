@@ -1301,10 +1301,8 @@ devlog_run() {
   ) > "$result" 2> "$log" || rc=$?
 
   run_outcome "a devlog run" devlog "$DEVLOG_BUDGET_USD" "$log" "$result" "$rc"
-  case "$outcome" in
-    cap) devlog_line "stopped at the budget"; return 0 ;;
-    failed) devlog_line "failed"; return 0 ;;
-  esac
+  # A cap leaves no result to read. A failed exit may still have drafted: its lines are read below
+  if [[ "$outcome" == cap ]]; then devlog_line "stopped at the budget"; return 0; fi
 
   # Only verdict lines count, so a code fence or blank lines around them do not matter. Every
   # draft is recorded before a trailing failure: the cms holds the post whether or not the
@@ -1322,7 +1320,9 @@ devlog_run() {
     (( ++count ))
   done <<<"$verdicts"
   line="$(print -r -- "$verdicts" | tail -n 1)"
-  if [[ "$line" == "failed: "* ]]; then
+  if [[ "$outcome" == failed ]]; then
+    if (( count > 0 )); then devlog_line "$count draft(s), then claude failed"; else devlog_line "failed"; fi
+  elif [[ "$line" == "failed: "* ]]; then
     note "fail: devlog: $line"
     record failed "" "devlog: ${line#failed: }$spent"
     notice action "Devlog: ${line#failed: }"

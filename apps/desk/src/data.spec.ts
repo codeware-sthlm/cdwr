@@ -39,6 +39,7 @@ const queueState: QueueStateRow = {
   last_run: '2026-10-28 09:50 · planned COD-1',
   attended: 'run now: COD-2 answered',
   suggested: '2026-10-28 · COD-7 Trim the cache',
+  devlog: null,
   job: 'Job: every 10 min · install current',
   view: {
     at: '2026-10-28T10:00:00.000Z',
