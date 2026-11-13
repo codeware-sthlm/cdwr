@@ -309,6 +309,7 @@ describe('toRuns', () => {
       parked: [],
       blocked: [],
       renovate: [],
+      audit: [],
       table: { before: [], label: [], after: [] }
     });
   });

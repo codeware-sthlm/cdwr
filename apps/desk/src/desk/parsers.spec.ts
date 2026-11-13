@@ -533,8 +533,25 @@ describe('validateQueueView', () => {
       parked: [],
       blocked: [],
       renovate: [],
+      audit: [],
       table: { before: [], label: [], after: [] }
     });
+  });
+
+  it('reads the audit and drops a malformed gap alone', () => {
+    const gap = {
+      id: 'COD-5:two-labels',
+      ticket: 'COD-5',
+      kind: 'two-labels',
+      what: 'COD-5 carries two labels',
+      fix: 'Keep one'
+    };
+    expect(
+      validateQueueView({ limit, table: {}, audit: [gap, { id: 1 }] })?.audit
+    ).toEqual([gap]);
+    expect(validateQueueView({ limit, table: {}, audit: null })?.audit).toEqual(
+      []
+    );
   });
 
   it('defaults null members the same way', () => {
@@ -565,6 +582,7 @@ describe('validateQueueView', () => {
       renovate: [
         { pr: 754, title: 'Update vite', state: 'failing', ticket: null }
       ],
+      audit: [],
       table: {
         before: [{ ticket: 'COD-5', kind: 'plan' }],
         label: [{ ticket: 'COD-7', parent: 'COD-1', blockers: [] }],

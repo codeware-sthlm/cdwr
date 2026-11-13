@@ -1107,6 +1107,42 @@ const labelEntrySchema = z.object({
   blockers: z.array(ticketSchema)
 });
 
+/** A gap the audit found: a ticket state only a person or a session can resolve */
+const gapSchema = z.object({
+  id: z.string(),
+  ticket: ticketSchema,
+  kind: z.string(),
+  what: z.string(),
+  fix: z.string()
+});
+
+const treeLeafSchema = z.object({
+  ticket: ticketSchema,
+  title: z.string().nullable(),
+  state: z.string().nullable(),
+  label: z.string().nullable(),
+  pr: prSchema,
+  blockers: z.array(ticketSchema),
+  gaps: z.array(z.string())
+});
+
+/** A parent or an agent ticket with its sub-issues */
+const treeRootSchema = treeLeafSchema.extend({
+  children: z.array(treeLeafSchema.extend({ children: z.array(z.unknown()) }))
+});
+
+/** The entries that parse; a malformed one drops alone */
+const tolerant = <T extends z.ZodType>(entry: T) =>
+  z
+    .array(z.unknown())
+    .default([])
+    .transform((entries) =>
+      entries.flatMap((e) => {
+        const result = entry.safeParse(e);
+        return result.success ? [result.data] : [];
+      })
+    );
+
 export const queueViewSchema = z.object({
   at: z.string(),
   limit: z.object({ used: z.number(), max: z.number() }),
@@ -1186,6 +1222,9 @@ export const queueViewSchema = z.object({
       })
     )
     .default([]),
+  // Older queue views have no audit or tree
+  audit: tolerant(gapSchema),
+  tree: tolerant(treeRootSchema),
   table: z.object({
     before: z.array(
       z.object({ ticket: ticketSchema, kind: z.enum(['plan', 'question']) })
@@ -1273,6 +1312,10 @@ export const formatRenovate = (view: QueueView): string =>
         `PR #${r.pr} ${r.state === 'tended' && r.ticket ? `tended by ${r.ticket}` : r.state} · ${r.title}`
     )
     .join('; ') || 'nothing';
+
+/** One line per gap of the audit, for the Gaps section of `status` */
+export const formatGaps = (view: QueueView): string[] =>
+  view.audit.map((g) => `${g.ticket} ${g.kind}: ${g.what}. ${g.fix}`);
 
 export const formatTable = (view: QueueView): string => {
   const { before, after, label } = view.table;

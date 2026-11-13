@@ -18,6 +18,7 @@ import {
   drift,
   filesDrift,
   formatBlocked,
+  formatGaps,
   formatHeld,
   formatImplement,
   formatNext,
@@ -945,6 +946,8 @@ const EMPTY_VIEW: QueueView = {
   refused: [],
   parked: [],
   renovate: [],
+  audit: [],
+  tree: [],
   table: { before: [], after: [], label: [] }
 };
 
@@ -1150,6 +1153,54 @@ describe('formatBlocked', () => {
 
   it('says nothing when empty', () => {
     expect(formatBlocked(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('audit and tree in the queue view', () => {
+  const gap = {
+    id: 'COD-5:label-on-closed',
+    ticket: 'COD-5',
+    kind: 'label-on-closed',
+    what: 'COD-5 is Done but still agent:ready',
+    fix: 'Remove the label'
+  };
+  const leaf = {
+    ticket: 'COD-5',
+    title: 'T',
+    state: 'completed',
+    label: 'agent:ready',
+    pr: null,
+    blockers: [],
+    gaps: ['label-on-closed']
+  };
+
+  it('reads a view without them as empty', () => {
+    const { audit: _a, tree: _t, ...old } = EMPTY_VIEW;
+    expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads the audit and the tree', () => {
+    const tree = [{ ...leaf, children: [{ ...leaf, children: [] }] }];
+    const view = parseQueueView(
+      JSON.stringify({ ...EMPTY_VIEW, audit: [gap], tree })
+    );
+    expect(view?.audit).toEqual([gap]);
+    expect(view?.tree).toEqual(tree);
+  });
+
+  it('drops a malformed entry alone', () => {
+    const view = parseQueueView(
+      JSON.stringify({ ...EMPTY_VIEW, audit: [gap, { id: 1 }], tree: ['x'] })
+    );
+    expect(view?.audit).toEqual([gap]);
+    expect(view?.tree).toEqual([]);
+  });
+
+  it('formats one line per gap, nothing when empty', () => {
+    expect(formatGaps({ ...EMPTY_VIEW, audit: [gap] })).toEqual([
+      'COD-5 label-on-closed: COD-5 is Done but still agent:ready. Remove the label'
+    ]);
+    expect(formatGaps(EMPTY_VIEW)).toEqual([]);
   });
 });
 

@@ -956,9 +956,40 @@ fi
 attended_line=""
 queue_view=""
 attended_watch=""
+# audit_notices <view>: one action notice per gap of the view's audit that has stood for 15 minutes
+# without being told, so a state that settles by itself (a merge before its label moves, a label
+# before its comment) stays quiet. audit-seen.json maps a gap id to { first, told }; an id that left
+# the audit leaves the file, so a gap that closes and returns starts over. Up to 3 due gaps get a
+# notice each, more get one summary. A view without an audit (the jq call failed) leaves the file alone.
+audit_notices() {
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/audit-seen.json" seen out n
+  jq -e '.audit | type == "array"' >/dev/null 2>&1 <<<"$1" || return 0
+  seen="$(jq -ce 'objects' "$file" 2>/dev/null || print '{}')"
+  [[ -n "$seen" ]] || seen='{}'
+  out="$(jq -c --argjson seen "$seen" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson at "$(date +%s)" '
+    def ts: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+    ([ .audit[] | .id as $i | ($seen[$i] // null) as $p
+       | { key: $i, value: (if $p == null then { first: $now, told: false }
+                            elif ($p | type) == "string" then { first: $p, told: true }
+                            else $p end) } ] | from_entries) as $st
+    | [ .audit[] | select($st[.id].told | not) | select(($st[.id].first | ts) <= $at - 900) ] as $due
+    | { state: ($st | with_entries(if (.key as $k | $due | any(.id == $k)) then .value.told = true else . end)),
+        due: $due }' <<<"$1")" || return 0
+  # Recorded before the notices go out, so a crash in between tells nobody twice
+  jq -c '.state' <<<"$out" > "$file.tmp" && mv "$file.tmp" "$file" || return 0
+  n="$(jq '.due | length' <<<"$out")"
+  if (( n > 3 )); then
+    notice action "Agent queue: $n new gaps, e.g. $(jq -r '.due[0].what' <<<"$out"). See cdwr agent status or the desk."
+  elif (( n > 0 )); then
+    local line
+    jq -r '.due[] | "Gap: \(.what). \(.fix)"' <<<"$out" | while IFS= read -r line; do notice action "$line"; done
+  fi
+}
+
 attended() {
   setopt local_options no_err_exit
-  local resp state verdict waits renovate
+  local resp state verdict waits renovate launch_state=null
   # Before the Linear read, so --check reports the source even when Linear fails
   watch_state "$HOME_DIR/watch.json"
   state="$WATCH_STATE"
@@ -1027,6 +1058,24 @@ attended() {
     --argjson renovate "$renovate" \
     'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits; $renovate)' <<<"$resp")" ||
     { note "warn: queue view: watch.jq failed$(watch_err)"; queue_view=""; }
+  # The audit and the tree join the view; a failure keeps the view as it was. The audit's launch
+  # guard reads launch.json before this run changes it. The output goes through files: it is too
+  # large for an argument.
+  [[ -f "$HOME_DIR/launch.json" ]] && launch_state="$(jq -ce 'objects' "$HOME_DIR/launch.json" 2>/dev/null || print null)"
+  if [[ -n "$queue_view" ]]; then
+    local ax="$HOME_DIR/audit-view.tmp.$$"
+    if watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson launch "$launch_state" \
+         --argjson runnable "$(jq -c '.runnable // []' <<<"$verdict")" \
+         'include "watch"; .data.issues.nodes | audit($now; $watch; $launch; $runnable)' <<<"$resp" > "$ax.audit" &&
+       watch -c --argjson now "$(date +%s)" --argjson watch "$state" --slurpfile gaps "$ax.audit" \
+         'include "watch"; .data.issues.nodes | tree($now; $watch; $gaps[0])' <<<"$resp" > "$ax.tree" &&
+       jq -c --slurpfile a "$ax.audit" --slurpfile t "$ax.tree" '. + { audit: $a[0], tree: $t[0] }' <<<"$queue_view" > "$ax.view"; then
+      queue_view="$(<"$ax.view")"
+    else
+      note "warn: audit: watch.jq failed$(watch_err)"
+    fi
+    rm -f "$ax.audit" "$ax.tree" "$ax.view"
+  fi
   # Should an implement-only session start? watch.jq `launch` decides from the pick and the
   # guards; implement.sh holds implement.lock while its session runs and writes the spend ledger.
   # The lock holds its owner's pid; it is cleared only when that process is gone (a kill skips the
@@ -1043,8 +1092,7 @@ attended() {
   spent="$(spent_today)"
   [[ "$spent" == null ]] && note "warn: implement-spend.jsonl unreadable; no launch today"
   cap="$(implement_cap)"
-  last=null
-  [[ -f "$HOME_DIR/launch.json" ]] && last="$(jq -ce 'objects' "$HOME_DIR/launch.json" 2>/dev/null || print null)"
+  last="$launch_state"
   local guards
   guards="$(jq -nc --argjson session "$session" --argjson locked "$locked" --argjson spent "$spent" \
     --argjson cap "$cap" --argjson last "$last" \
@@ -1058,6 +1106,7 @@ attended() {
     [[ -n "$queue_view" ]] && print -r -- "queue-view: $queue_view"
     return 0
   fi
+  [[ -n "$queue_view" ]] && audit_notices "$queue_view"
   local action; action="$(jq -r '.action' <<<"$decision")"
   # Misses count only while work waits: once the pick is idle, a later launch starts fresh. Not on
   # `running`: a launched session holds a fresh claim, and its death must still count as a miss.

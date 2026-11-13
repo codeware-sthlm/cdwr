@@ -95,6 +95,15 @@ export type QueueRenovate = {
   ticket: string | null;
 };
 
+/** A ticket state the queue cannot resolve by itself (watch.jq `audit`): what is wrong and the one action that fixes it */
+export type QueueGap = {
+  id: string;
+  ticket: string;
+  kind: string;
+  what: string;
+  fix: string;
+};
+
 export type QueueBefore = { ticket: string; kind?: string };
 
 /** An open sub-issue whose blockers are done, waiting for `agent:ready`; not held by the limit */
@@ -144,5 +153,7 @@ export type QueueView = {
   /** Answered plans held by open blockers; they are in neither `next` nor `table.before` */
   blocked: { ticket: string; blockers: string[] }[];
   renovate: QueueRenovate[];
+  /** Older views have none */
+  audit: QueueGap[];
   table: { before: QueueBefore[]; label: QueueLabel[]; after: QueueAfter[] };
 };

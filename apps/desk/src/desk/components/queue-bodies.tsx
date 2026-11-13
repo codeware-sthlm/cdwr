@@ -249,6 +249,23 @@ export const NextBody = ({ m, state }: BodyProps) => {
           </ul>
         </div>
       ) : null}
+      {m.gaps.length ? (
+        <div className={GROUP}>
+          <h3>{`Gaps · ${m.gaps.length}`}</h3>
+          <ul>
+            {m.gaps.map((g) => (
+              <Item
+                key={g.id}
+                details={details}
+                i={m.get(g.ticket)}
+                state="plain"
+                side={<Chip kind="conflict">{g.kind}</Chip>}
+                note={`${g.what}. ${g.fix}.`}
+              />
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {m.held.tickets.length ? (
         <div className={GROUP}>
           <h3>{`Held by the limit · ${m.held.tickets.length}`}</h3>

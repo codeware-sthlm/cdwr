@@ -289,9 +289,9 @@ fragment queued on IssueConnection {
     identifier title priority createdAt completedAt updatedAt description
     parent {
       identifier title state { type }
-      children(first: 25) { nodes { identifier title state { type } labels(first: 20) { nodes { name } } } }
+      children(first: 25) { nodes { identifier title state { type } labels(first: 5) { nodes { name } } } }
     }
-    children(first: 25) { nodes { identifier title state { type } labels(first: 20) { nodes { name } } } }
+    children(first: 25) { nodes { identifier title state { type } labels(first: 5) { nodes { name } } } }
     state { type }
     labels { nodes { name } }
     # The author tells the agent's comments from Håkan's (watch.jq `is_agent`)

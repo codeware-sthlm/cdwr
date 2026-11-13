@@ -22,19 +22,26 @@
 #                                                            then this host's rows older than 7 days are deleted; roots
 #                                                            overridable with HOST_METRICS_OS, _PROC, _SYS and _DISK
 # Needs AGENT_SUPABASE_URL and AGENT_SUPABASE_SERVICE_KEY; without both it does nothing.
-# The key travels on curl's stdin, never in its arguments, and is never printed.
+# The key travels on curl's stdin, never in its arguments, and is never printed. A body and the
+# queue view go through a file or a pipe, never one argument, so a large view can't reach the limit.
 
 _supabase_post() {
-  local url=$1 prefer=$2 body=$3 msg
+  local url=$1 prefer=$2 body=$3 msg tmp=""
+  local -a data=(-d "$body")
+  # One argument holds at most 128 KB: a large body (the queue view) goes through a file
+  if (( ${#body} > 65536 )); then
+    tmp="$(mktemp)" && print -rn -- "$body" > "$tmp" && data=(--data-binary "@$tmp")
+  fi
   if ! msg="$(printf 'header = "apikey: %s"\nheader = "Authorization: Bearer %s"\n' \
       "$AGENT_SUPABASE_SERVICE_KEY" "$AGENT_SUPABASE_SERVICE_KEY" |
     curl --max-time 10 -sS -f -K - -X POST \
       -H 'Content-Type: application/json' -H "Prefer: $prefer" \
-      -d "$body" "$url" 2>&1 >/dev/null)"; then
+      "${data[@]}" "$url" 2>&1 >/dev/null)"; then
     msg="warn: supabase ${url##*/rest/v1/} failed: ${msg//$'\n'/ }"
     msg="${msg//$AGENT_SUPABASE_SERVICE_KEY/***}"
     if (( $+functions[note] )); then note "$msg"; else print -ru2 -- "$msg"; fi
   fi
+  [[ -z "$tmp" ]] || rm -f "$tmp"
   return 0
 }
 
@@ -151,7 +158,7 @@ telemetry_run() {
 telemetry_queue_state() {
   telemetry_on || return 0
   local body
-  body="$(jq -nc --arg last_run "$1" --arg attended "$2" --arg suggested "$3" --arg job "$4" --arg view "$5" \
+  body="$(jq -nc --arg last_run "$1" --arg attended "$2" --arg suggested "$3" --arg job "$4" --rawfile view <(print -rn -- "$5") \
     --arg host "$(telemetry_host)" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
     def orNull: if . == "" then null else . end;
     {host: $host, at: $now, last_run: ($last_run | orNull), attended: ($attended | orNull),
@@ -162,11 +169,11 @@ telemetry_queue_state() {
   # fails (a warn) and the row itself still lands. An empty or invalid watch clears the column,
   # so a host whose watch.json is gone never serves a stale one
   supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
-    "$(jq -nc --arg w "$6" '{watch: ($w | try fromjson catch null)}')" >/dev/null || return 0
+    "$(jq -nc --rawfile w <(print -rn -- "$6") '{watch: ($w | try fromjson catch null)}')" >/dev/null || return 0
   # The Renovate state the same way, in a patch of its own for its own migration
   (( $# >= 7 )) || return 0
   supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
-    "$(jq -nc --arg r "$7" '{renovate: ($r | try fromjson catch null)}')" >/dev/null || return 0
+    "$(jq -nc --rawfile r <(print -rn -- "$7") '{renovate: ($r | try fromjson catch null)}')" >/dev/null || return 0
   # The devlog line too, in a patch of its own for its own migration
   (( $# >= 8 )) || return 0
   supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \

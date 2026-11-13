@@ -76,6 +76,7 @@ import type {
   QueueAfter,
   QueueBefore,
   QueueFree,
+  QueueGap,
   QueueLabel,
   QueueNext,
   QueueParked,
@@ -222,6 +223,8 @@ export type Model = {
   parked: QueueParked[];
   /** Renovate PRs that fail, conflict with main or are tended by a ticket, sorted by PR */
   renovate: QueueRenovate[];
+  /** The audit's gaps: tickets stuck in a state only a person or a session can resolve */
+  gaps: QueueGap[];
   held: { tickets: string[]; free: QueueFree[] };
   limit: { used: number; max: number };
   limits: Limits;
@@ -1248,6 +1251,7 @@ export const model = (
     next,
     parked,
     renovate: v ? v.renovate : [],
+    gaps: v ? v.audit : [],
     held: v ? v.held : { tickets: [], free: [] },
     limit,
     limits: {

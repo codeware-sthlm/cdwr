@@ -1886,6 +1886,148 @@ describe('run.sh watch.jq errors', () => {
   );
 });
 
+describe('run.sh audit', () => {
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+
+  it('adds the audit and the tree to the view, and keeps the view when they fail', () => {
+    expect(SCRIPT).toContain('audit($now; $watch; $launch; $runnable)');
+    expect(SCRIPT).toContain('tree($now; $watch; $gaps[0])');
+    expect(SCRIPT).toContain('warn: audit: watch.jq failed$(watch_err)');
+    expect(SCRIPT).toContain('audit_notices "$queue_view"');
+  });
+
+  it('notifies after the --check path returns', () => {
+    const check = SCRIPT.indexOf('print -r -- "queue-view: $queue_view"');
+    expect(SCRIPT.indexOf('audit_notices "$queue_view"')).toBeGreaterThan(
+      check
+    );
+  });
+
+  describe.skipIf(!hasZsh)('audit_notices', () => {
+    let home: string;
+    beforeEach(() => {
+      home = mkdtempSync(join(tmpdir(), 'audit-notices-'));
+    });
+    afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+    const gap = (n: number) => ({
+      id: `COD-${n}:label-on-closed`,
+      ticket: `COD-${n}`,
+      kind: 'label-on-closed',
+      what: `COD-${n} is Done but still agent:ready`,
+      fix: 'Remove the label'
+    });
+
+    // Runs the function with a notice that records its arguments; returns them and the seen file
+    const run = (audit: unknown, seen?: Record<string, unknown>) => {
+      if (seen)
+        writeFileSync(join(home, 'audit-seen.json'), JSON.stringify(seen));
+      const script = [
+        'set -uo pipefail',
+        `HOME_DIR="${home}"`,
+        `notice() { print -r -- "$1|$2" >> "${home}/notices"; }`,
+        fn('audit_notices'),
+        `audit_notices '${JSON.stringify(audit === undefined ? {} : { audit })}'`
+      ].join('\n');
+      const res = spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+      expect(res.status).toBe(0);
+      const read = (f: string) => {
+        try {
+          return readFileSync(join(home, f), 'utf8');
+        } catch {
+          return null;
+        }
+      };
+      return {
+        notices: (read('notices') ?? '').split('\n').filter(Boolean),
+        seen: JSON.parse(read('audit-seen.json') ?? 'null') as Record<
+          string,
+          { first: string; told: boolean }
+        > | null
+      };
+    };
+
+    const ago = (seconds: number) =>
+      new Date(Date.now() - seconds * 1000)
+        .toISOString()
+        .replace(/\.\d+Z$/, 'Z');
+    const stood = (seconds: number, told = false) => ({
+      first: ago(seconds),
+      told
+    });
+    const A = 'COD-1:label-on-closed';
+    const B = 'COD-2:label-on-closed';
+
+    it('records a new gap without a notice', () => {
+      const r = run([gap(1), gap(2)]);
+      expect(r.notices).toEqual([]);
+      expect(r.seen).toMatchObject({
+        [A]: { told: false },
+        [B]: { told: false }
+      });
+    });
+
+    it('notifies a gap that has stood for 15 minutes, once', () => {
+      const first = run([gap(1), gap(2)], { [A]: stood(901), [B]: stood(300) });
+      expect(first.notices).toEqual([
+        'action|Gap: COD-1 is Done but still agent:ready. Remove the label'
+      ]);
+      expect(first.seen?.[A]?.told).toBe(true);
+      expect(first.seen?.[B]?.told).toBe(false);
+      const again = run([gap(1), gap(2)]);
+      // The notices file accumulates: still the one from the first run
+      expect(again.notices).toEqual(first.notices);
+    });
+
+    it('reads an old string value as told, keeping its first time', () => {
+      const first = '2026-11-01T00:00:00Z';
+      const r = run([gap(1)], { [A]: first });
+      expect(r.notices).toEqual([]);
+      expect(r.seen?.[A]).toEqual({ first, told: true });
+    });
+
+    it('forgets a gap that closed, so its return starts over', () => {
+      const gone = run([gap(2)], {
+        [A]: stood(3600, true),
+        [B]: stood(3600, true)
+      });
+      expect(Object.keys(gone.seen ?? {})).toEqual([B]);
+      const back = run([gap(1), gap(2)]);
+      expect(back.notices).toEqual([]);
+      expect(back.seen?.[A]?.told).toBe(false);
+    });
+
+    it('sends one summary for more than 3 due gaps and marks them all told', () => {
+      const seen = Object.fromEntries(
+        [1, 2, 3, 4, 5].map((n) => [`COD-${n}:label-on-closed`, stood(3600)])
+      );
+      const r = run([1, 2, 3, 4, 5].map(gap), seen);
+      expect(r.notices).toEqual([
+        'action|Agent queue: 5 new gaps, e.g. COD-1 is Done but still agent:ready. See cdwr agent status or the desk.'
+      ]);
+      expect(Object.values(r.seen ?? {}).every((v) => v.told)).toBe(true);
+    });
+
+    it('sends each of up to 3 due gaps on its own', () => {
+      const seen = Object.fromEntries(
+        [1, 2, 3].map((n) => [`COD-${n}:label-on-closed`, stood(3600)])
+      );
+      expect(run([1, 2, 3].map(gap), seen).notices).toHaveLength(3);
+    });
+
+    it('leaves the seen file alone for a view without an audit', () => {
+      const seen = { [A]: stood(3600) };
+      const r = run(undefined, seen);
+      expect(r.notices).toEqual([]);
+      expect(r.seen).toEqual(seen);
+    });
+  });
+});
+
 // Desk commands are read and applied before the pause is, so a resume lifts it in the same tick
 describe('run.sh apply_commands', () => {
   const fn = (name: string) =>
