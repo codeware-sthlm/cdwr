@@ -121,6 +121,7 @@ const goodView = (
   parked: [],
   blocked: [],
   renovate: [],
+  audit: [],
   table: { before: [], label: [], after: [] }
 });
 

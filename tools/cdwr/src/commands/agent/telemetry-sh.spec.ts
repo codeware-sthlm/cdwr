@@ -372,6 +372,22 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
       expect(body['at']).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
     });
 
+    // A single argument holds at most 128 KB; the view is bigger than that on a busy queue
+    it('posts a view of 300 KB intact', async () => {
+      const view = JSON.stringify({ pad: 'x'.repeat(300_000) });
+      writeFileSync(join(tmpdir(), 'big-view.json'), view);
+      const out = await zsh(
+        configured(),
+        `telemetry_queue_state 'x' '' '' '' "$(cat '${join(tmpdir(), 'big-view.json')}')"`
+      );
+      expect(out.stdout).toBe('rc=0');
+      expect(hits).toHaveLength(1);
+      const body = JSON.parse(hits[0]?.body ?? '') as {
+        view: { pad: string };
+      };
+      expect(body.view.pad).toHaveLength(300_000);
+    });
+
     it('turns empty fields and an invalid view into null', async () => {
       await zsh(configured(), `telemetry_queue_state 'x' '' '' '' ''`);
       await zsh(

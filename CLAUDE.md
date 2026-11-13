@@ -45,7 +45,7 @@
 
 ## Agent queue
 
-Tickets with a Linear `agent:*` label are worked by `/work-queue` (`.claude/skills/work-queue`), which plans into the ticket and hands planned steps to the `implementer` subagent (Sonnet) in a worktree per ticket. Only Håkan sets `agent:ready`. Start an attended session with `cdwr agent attend [COD-n]`. How the scheduler, launches, telemetry, the desk and the GitHub and Linear apps work: [tools/cdwr/agent-queue/README.md](tools/cdwr/agent-queue/README.md). Read it before changing anything under `tools/cdwr/agent-queue`.
+Tickets with a Linear `agent:*` label are worked by `/work-queue` (`.claude/skills/work-queue`), which plans into the ticket and hands planned steps to the `implementer` subagent (Sonnet) in a worktree per ticket. Only Håkan sets `agent:ready`. Start an attended session with `cdwr agent attend [COD-n]`. How the scheduler, launches, telemetry, the desk and the GitHub and Linear apps work: [tools/cdwr/agent-queue/README.md](tools/cdwr/agent-queue/README.md). Read it before changing anything under `tools/cdwr/agent-queue`. Each run also audits tickets for states it cannot resolve itself (report-only gaps in `cdwr agent status` and the desk).
 
 ## Nx-generated projects cleanup
 

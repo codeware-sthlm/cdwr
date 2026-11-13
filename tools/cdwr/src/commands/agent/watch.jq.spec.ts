@@ -4931,11 +4931,11 @@ describe('audit and tree', () => {
   const audit = (
     issues: Node[],
     watch: Record<string, unknown> = {},
-    session: unknown = null,
-    launch: unknown = null
+    launch: unknown = null,
+    runnable: unknown[] = []
   ) =>
     run(
-      `audit(${NOW}; ${JSON.stringify(watch)}; ${JSON.stringify(session)}; ${JSON.stringify(launch)})`,
+      `audit(${NOW}; ${JSON.stringify(watch)}; ${JSON.stringify(launch)}; ${JSON.stringify(runnable)})`,
       issues
     ) as Array<{
       id: string;
@@ -4973,63 +4973,6 @@ describe('audit and tree', () => {
             }
           })
         ])
-      ).toEqual([]);
-    });
-  });
-
-  describe('dead-claim', () => {
-    const working = (ago: number, id = 'sess-1') =>
-      node('COD-1', 'agent:working', { description: claimLine(ago, id) });
-
-    it('flags a claim over 2 h old with no session', () => {
-      const [g] = audit([working(3 * HOUR)]);
-      expect(g).toMatchObject({ kind: 'dead-claim' });
-      expect(g?.fix).toBe('Run /work-queue COD-1 to take it over');
-    });
-
-    it.each([
-      ['a fresh claim', working(HOUR), null],
-      [
-        'a live session that owns the claim id',
-        working(3 * HOUR, 'sess-1'),
-        { state: 'alive', id: 'sess-1-abc', ticket: null, tickets: [] }
-      ],
-      [
-        'a live session holding the ticket',
-        working(3 * HOUR),
-        { state: 'alive', id: 'other', ticket: 'COD-1', tickets: ['COD-1'] }
-      ]
-    ])('is no gap for %s', (_name, issue, session) => {
-      expect(kinds([issue], {}, session)).toEqual([]);
-    });
-  });
-
-  describe('working-no-claim', () => {
-    it('flags an unclaimed ticket untouched for 30 minutes', () => {
-      expect(
-        kinds([node('COD-1', 'agent:working', { updatedAt: iso(31 * MIN) })])
-      ).toEqual(['COD-1:working-no-claim']);
-    });
-
-    it.each([
-      ['touched recently', { updatedAt: iso(10 * MIN) }, null],
-      [
-        'held by the live session',
-        { updatedAt: iso(HOUR) },
-        { state: 'alive', id: 's', ticket: 'COD-1', tickets: ['COD-1'] }
-      ],
-      [
-        'parked',
-        {
-          updatedAt: iso(HOUR),
-          description:
-            '**Next:** `Waiting: CI · PR #5 · since 2026-10-11T11:00Z`'
-        },
-        null
-      ]
-    ])('is no gap when %s', (_name, over, session) => {
-      expect(
-        kinds([node('COD-1', 'agent:working', over)], {}, session)
       ).toEqual([]);
     });
   });
@@ -5198,6 +5141,29 @@ describe('audit and tree', () => {
       expect(kinds([waiting([agentComment(body)])])).toEqual([]);
     });
 
+    it('is no gap when an agent note follows the question', () => {
+      expect(
+        kinds([
+          waiting([
+            agentComment('**Agent needs input** q', '2026-10-01T00:00:00Z'),
+            agentComment('**Agent:** rebased', '2026-10-03T00:00:00Z')
+          ])
+        ])
+      ).toEqual([]);
+    });
+
+    it('is a gap when only a note follows the last human comment', () => {
+      expect(
+        kinds([
+          waiting([
+            agentComment('**Agent needs input** q', '2026-10-01T00:00:00Z'),
+            personComment('hm', '2026-10-02T00:00:00Z'),
+            agentComment('**Agent:** took over', '2026-10-03T00:00:00Z')
+          ])
+        ])
+      ).toEqual(['COD-1:needs-input-no-question']);
+    });
+
     it('is no gap once answered', () => {
       expect(
         kinds([waiting([agentComment('**Agent: note**'), personComment('ok')])])
@@ -5226,15 +5192,14 @@ describe('audit and tree', () => {
   });
 
   describe('launch-guard', () => {
-    const answered = node('COD-1', 'agent:needs-input', {
-      comments: {
-        nodes: [agentComment('**Agent needs input** q'), personComment('a')]
-      }
-    });
+    const runnable = [
+      { ticket: 'COD-1', reason: 'answered', detail: null },
+      { ticket: 'PR 754', reason: 'renovate', detail: 'failing' }
+    ];
 
-    it('flags a ticket still runnable after two launches', () => {
+    it('flags a launch key still runnable after two launches', () => {
       expect(
-        kinds([answered], {}, null, { key: 'COD-1 answered', launches: 2 })
+        kinds([], {}, { key: 'COD-1 answered', launches: 2 }, runnable)
       ).toEqual(['COD-1:launch-guard']);
     });
 
@@ -5242,9 +5207,13 @@ describe('audit and tree', () => {
       ['one launch', { key: 'COD-1 answered', launches: 1 }],
       ['a Renovate key', { key: 'PR-754 renovate', launches: 2 }],
       ['a ticket no longer runnable', { key: 'COD-9 answered', launches: 2 }],
+      [
+        'another reason on the ticket',
+        { key: 'COD-1 merged comment', launches: 2 }
+      ],
       ['no launch file', null]
     ])('is no gap for %s', (_name, launch) => {
-      expect(kinds([answered], {}, null, launch)).toEqual([]);
+      expect(kinds([], {}, launch, runnable)).toEqual([]);
     });
   });
 
@@ -5261,7 +5230,7 @@ describe('audit and tree', () => {
   describe('tree', () => {
     const tree = (issues: Node[], watch: Record<string, unknown> = {}) =>
       run(
-        `tree(${NOW}; ${JSON.stringify(watch)}; null; null)`,
+        `. as $i | audit(${NOW}; ${JSON.stringify(watch)}; null; []) as $g | tree(${NOW}; ${JSON.stringify(watch)}; $g)`,
         issues
       ) as Array<{
         ticket: string;
@@ -5301,7 +5270,7 @@ describe('audit and tree', () => {
           ]
         }
       };
-      const gapped = node('COD-3', 'agent:working', {
+      const gapped = node('COD-3', ['agent:working', 'agent:ready'], {
         parent,
         updatedAt: iso(HOUR),
         inverseRelations: { nodes: [blocker('COD-8', 'started', null)] }
@@ -5337,7 +5306,7 @@ describe('audit and tree', () => {
         state: 'started',
         label: 'agent:working',
         blockers: ['COD-8'],
-        gaps: ['working-no-claim']
+        gaps: ['two-labels']
       });
       expect(r[0]?.children[2]).toMatchObject({
         title: 'Title COD-4',

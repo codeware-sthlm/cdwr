@@ -269,6 +269,14 @@ const labelEntry = z.object({
   blockers: list(z.string())
 });
 
+const gapEntry = z.object({
+  id: z.string(),
+  ticket: z.string(),
+  kind: z.string(),
+  what: z.string(),
+  fix: z.string()
+});
+
 const renovateEntry = z.object({
   pr: z.union([z.number(), z.string()]),
   title: z
@@ -339,6 +347,16 @@ const queueViewSchema = z
           return p.success ? [p.data] : [];
         })
       ),
+    // Older views have no audit; a malformed entry is dropped alone
+    audit: z
+      .array(z.unknown())
+      .nullish()
+      .transform((v) =>
+        (v ?? []).flatMap((x) => {
+          const p = gapEntry.safeParse(x);
+          return p.success ? [p.data] : [];
+        })
+      ),
     table: z.object({
       before: list(z.object({ ticket: z.string(), kind: opt(z.string()) })),
       label: z
@@ -365,9 +383,30 @@ const queueViewSchema = z
 export const validateQueueView = (v: unknown): QueueView | null => {
   const parsed = queueViewSchema.safeParse(v);
   if (!parsed.success) return null;
-  const { at, limit, session, next, held, parked, blocked, renovate, table } =
-    parsed.data;
-  return { at, limit, session, next, held, parked, blocked, renovate, table };
+  const {
+    at,
+    limit,
+    session,
+    next,
+    held,
+    parked,
+    blocked,
+    renovate,
+    audit,
+    table
+  } = parsed.data;
+  return {
+    at,
+    limit,
+    session,
+    next,
+    held,
+    parked,
+    blocked,
+    renovate,
+    audit,
+    table
+  };
 };
 
 const WATCH_STATES: readonly WatchEntry['state'][] = [

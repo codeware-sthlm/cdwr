@@ -33,6 +33,7 @@ import {
   byFile,
   filesDrift,
   formatBlocked,
+  formatGaps,
   formatHeld,
   formatImplement,
   formatNext,
@@ -319,6 +320,10 @@ export default defineCommand({
       showsRow(report.scheduler, r[1] ?? '', report.installedAny)
     );
     ctx.ui.table(['', 'check', 'detail'], shown);
+    if (typeof report.queueView === 'object' && report.queueView !== null) {
+      const gaps = formatGaps(report.queueView);
+      if (gaps.length > 0) ctx.ui.note(gaps, `Gaps (${gaps.length})`);
+    }
 
     const problems = shown.filter((r) => r[0] === symbols.fail).length;
     const warnings = shown.filter((r) => r[0] === symbols.warn).length;

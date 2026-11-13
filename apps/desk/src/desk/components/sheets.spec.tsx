@@ -172,6 +172,30 @@ describe('queue sheets', () => {
     expect(c.innerHTML).not.toContain('/issue/PR 754');
   });
 
+  it('list the audit gaps on the next sheet, and nothing without any', () => {
+    const state = filled();
+    expect(text(body('next', state))).not.toContain('Gaps');
+    state.data.runs = runs(
+      view({
+        audit: [
+          {
+            id: 'COD-5:label-on-closed',
+            ticket: 'COD-5',
+            kind: 'label-on-closed',
+            what: 'COD-5 is Done but still agent:ready',
+            fix: 'Remove the label'
+          }
+        ]
+      })
+    );
+    const t = text(body('next', state));
+    expect(t).toContain('Gaps · 1');
+    expect(t).toContain('label-on-closed');
+    expect(t).toContain(
+      'COD-5 is Done but still agent:ready. Remove the label.'
+    );
+  });
+
   it('tell a conflicting Renovate PR waits for an attended session', () => {
     const state = filled();
     state.data.runs = runs(
