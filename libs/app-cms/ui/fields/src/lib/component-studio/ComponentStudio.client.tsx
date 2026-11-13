@@ -1,5 +1,9 @@
 'use client';
 
+import type {
+  TranslationsKeys,
+  TranslationsObject
+} from '@codeware/app-cms/util/i18n';
 import { ComponentStudio } from '@codeware/shared/ui/component-studio';
 import {
   FieldError,
@@ -8,7 +12,8 @@ import {
   useDocumentInfo,
   useField,
   useForm,
-  useTheme
+  useTheme,
+  useTranslation
 } from '@payloadcms/ui';
 import type { RowFieldClientComponent } from 'payload';
 import { useCallback } from 'react';
@@ -43,6 +48,7 @@ const ComponentStudioField: RowFieldClientComponent = ({
   readOnly
 }) => {
   const { theme } = useTheme();
+  const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const { config } = useConfig();
   const { getDataByPath } = useForm();
   const { build, refresh } = useStoredBuild();
@@ -108,6 +114,7 @@ const ComponentStudioField: RowFieldClientComponent = ({
         onRebuild={id && !readOnly ? onRebuild : undefined}
         portalClassName="codeware-admin"
         panelClassName="@2xl:w-88"
+        sidePanelTitle={t('customComponents:inputs')}
         sidePanel={
           // Payload's own styles, not the studio's reset
           <div className="no-twp">
