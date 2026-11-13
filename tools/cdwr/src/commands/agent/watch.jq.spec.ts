@@ -4865,6 +4865,539 @@ describe('parents to close', () => {
   });
 });
 
+describe('audit and tree', () => {
+  const NOW = Date.parse('2026-10-11T12:00:00Z') / 1000;
+  const iso = (secondsAgo: number) =>
+    new Date((NOW - secondsAgo) * 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+  const MIN = 60;
+  const HOUR = 3600;
+  const DAY = 86400;
+
+  const node = (
+    id: string,
+    label: string | string[] | null,
+    over: Record<string, unknown> = {}
+  ) => ({
+    identifier: id,
+    title: `Title ${id}`,
+    priority: 3,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: iso(DAY),
+    completedAt: null as string | null,
+    state: { type: 'started' },
+    labels: {
+      nodes: (label === null ? [] : Array.isArray(label) ? label : [label]).map(
+        (name) => ({ name })
+      )
+    },
+    description: null as string | null,
+    comments: { nodes: [] as Comment[] },
+    inverseRelations: { nodes: [] as unknown[] },
+    parent: null as unknown,
+    ...over
+  });
+  type Node = ReturnType<typeof node>;
+  const claimLine = (ago: number, id = 'sess-1') =>
+    `**Claim:** ${id} · \`/w\` · ${iso(ago).slice(0, 16)}Z\n**Next:** go\n`;
+  const agentComment = (body: string, createdAt = '2026-10-01T00:00:00Z') => ({
+    body,
+    createdAt,
+    user: { id: APP_ID, app: true }
+  });
+  const personComment = (body: string, createdAt = '2026-10-02T00:00:00Z') => ({
+    body,
+    createdAt,
+    user: { id: PERSON_ID, app: false }
+  });
+  const prReady = (checklist: boolean) =>
+    agentComment(
+      `**Agent: PR ready**: ${PR}/1\n\n${checklist ? 'Hand-off checklist:\n- [ ] check' : 'Done'}`
+    );
+  const blocker = (
+    id: string,
+    type: string,
+    completedAt: string | null,
+    label: string | null = 'agent:ready'
+  ) => ({
+    type: 'blocks',
+    issue: {
+      identifier: id,
+      completedAt,
+      state: { type },
+      labels: { nodes: label ? [{ name: label }] : [] }
+    }
+  });
+
+  const audit = (
+    issues: Node[],
+    watch: Record<string, unknown> = {},
+    session: unknown = null,
+    launch: unknown = null
+  ) =>
+    run(
+      `audit(${NOW}; ${JSON.stringify(watch)}; ${JSON.stringify(session)}; ${JSON.stringify(launch)})`,
+      issues
+    ) as Array<{
+      id: string;
+      ticket: string;
+      kind: string;
+      what: string;
+      fix: string;
+    }>;
+  const kinds = (...args: Parameters<typeof audit>) =>
+    audit(...args).map((g) => `${g.ticket}:${g.kind}`);
+
+  describe('held', () => {
+    const planned =
+      '| Step | What | Status |\n| -- | -- | -- |\n| 1 | x | Planned |\n';
+    const held = (over: Record<string, unknown> = {}) =>
+      node('COD-1', 'agent:needs-input', {
+        description: planned,
+        comments: { nodes: [personComment('go')] },
+        inverseRelations: { nodes: [blocker('COD-9', 'started', null)] },
+        ...over
+      });
+
+    it('names the open blocker', () => {
+      const [g] = audit([held()]);
+      expect(g).toMatchObject({ id: 'COD-1:held', kind: 'held' });
+      expect(g?.fix).toContain('COD-9');
+    });
+
+    it('is no gap once the blocker is done', () => {
+      expect(
+        kinds([
+          held({
+            inverseRelations: {
+              nodes: [blocker('COD-9', 'completed', iso(HOUR))]
+            }
+          })
+        ])
+      ).toEqual([]);
+    });
+  });
+
+  describe('dead-claim', () => {
+    const working = (ago: number, id = 'sess-1') =>
+      node('COD-1', 'agent:working', { description: claimLine(ago, id) });
+
+    it('flags a claim over 2 h old with no session', () => {
+      const [g] = audit([working(3 * HOUR)]);
+      expect(g).toMatchObject({ kind: 'dead-claim' });
+      expect(g?.fix).toBe('Run /work-queue COD-1 to take it over');
+    });
+
+    it.each([
+      ['a fresh claim', working(HOUR), null],
+      [
+        'a live session that owns the claim id',
+        working(3 * HOUR, 'sess-1'),
+        { state: 'alive', id: 'sess-1-abc', ticket: null, tickets: [] }
+      ],
+      [
+        'a live session holding the ticket',
+        working(3 * HOUR),
+        { state: 'alive', id: 'other', ticket: 'COD-1', tickets: ['COD-1'] }
+      ]
+    ])('is no gap for %s', (_name, issue, session) => {
+      expect(kinds([issue], {}, session)).toEqual([]);
+    });
+  });
+
+  describe('working-no-claim', () => {
+    it('flags an unclaimed ticket untouched for 30 minutes', () => {
+      expect(
+        kinds([node('COD-1', 'agent:working', { updatedAt: iso(31 * MIN) })])
+      ).toEqual(['COD-1:working-no-claim']);
+    });
+
+    it.each([
+      ['touched recently', { updatedAt: iso(10 * MIN) }, null],
+      [
+        'held by the live session',
+        { updatedAt: iso(HOUR) },
+        { state: 'alive', id: 's', ticket: 'COD-1', tickets: ['COD-1'] }
+      ],
+      [
+        'parked',
+        {
+          updatedAt: iso(HOUR),
+          description:
+            '**Next:** `Waiting: CI · PR #5 · since 2026-10-11T11:00Z`'
+        },
+        null
+      ]
+    ])('is no gap when %s', (_name, over, session) => {
+      expect(
+        kinds([node('COD-1', 'agent:working', over)], {}, session)
+      ).toEqual([]);
+    });
+  });
+
+  describe('review-no-pr', () => {
+    const review = node('COD-1', 'agent:review');
+
+    it('flags a review with no PR when the watch has entries', () => {
+      expect(kinds([review], { 'COD-2': { pr: 2, state: 'open' } })).toEqual([
+        'COD-1:review-no-pr'
+      ]);
+      expect(
+        kinds([review], { 'COD-1': { state: 'open' }, 'COD-2': { pr: 2 } })
+      ).toEqual(['COD-1:review-no-pr']);
+    });
+
+    it('is no gap with a PR, or when the watch is empty', () => {
+      expect(kinds([review], { 'COD-1': { pr: 1, state: 'open' } })).toEqual(
+        []
+      );
+      expect(kinds([review], {})).toEqual([]);
+    });
+  });
+
+  describe('merged-not-done', () => {
+    const watch = { 'COD-1': { pr: 1, state: 'merged' } };
+
+    it('flags an open ticket whose PR merged over an hour ago', () => {
+      expect(
+        kinds(
+          [node('COD-1', 'agent:review', { updatedAt: iso(2 * HOUR) })],
+          watch
+        )
+      ).toEqual(['COD-1:merged-not-done']);
+    });
+
+    it.each([
+      [
+        'merged just now',
+        node('COD-1', 'agent:review', { updatedAt: iso(10 * MIN) })
+      ],
+      [
+        'Done',
+        node('COD-1', null, {
+          state: { type: 'completed' },
+          updatedAt: iso(2 * HOUR)
+        })
+      ]
+    ])('is no gap when %s', (_name, issue) => {
+      expect(kinds([issue], watch)).toEqual([]);
+    });
+  });
+
+  describe('closed-pr', () => {
+    const watch = { 'COD-1': { pr: 1, state: 'closed' } };
+
+    it('flags a review whose PR closed', () => {
+      expect(kinds([node('COD-1', 'agent:review')], watch)).toEqual([
+        'COD-1:closed-pr'
+      ]);
+    });
+
+    it('is no gap outside review', () => {
+      expect(
+        kinds(
+          [node('COD-1', 'agent:working', { description: claimLine(60) })],
+          watch
+        )
+      ).toEqual([]);
+    });
+  });
+
+  describe('label-on-closed', () => {
+    const done = { state: { type: 'completed' }, completedAt: iso(DAY) };
+
+    it.each([
+      ['Done with agent:ready', node('COD-1', 'agent:ready', done)],
+      ['Done with agent:working', node('COD-1', 'agent:working', done)],
+      ['Done with agent:needs-input', node('COD-1', 'agent:needs-input', done)],
+      [
+        'Canceled with agent:review',
+        node('COD-1', 'agent:review', { state: { type: 'canceled' } })
+      ],
+      [
+        'Done review with its only hand-off struck',
+        node('COD-1', 'agent:review', {
+          ...done,
+          comments: {
+            nodes: [
+              agentComment(
+                `**Agent: PR ready**: ${PR}/1\n\nHand-off checklist:\n- [ ] ~~check~~ not needed`
+              )
+            ]
+          }
+        })
+      ],
+      [
+        'Done review, PR ready, no hand-offs',
+        node('COD-1', 'agent:review', {
+          ...done,
+          comments: { nodes: [prReady(false)] }
+        })
+      ]
+    ])('flags %s', (_name, issue) => {
+      expect(kinds([issue])).toEqual(['COD-1:label-on-closed']);
+    });
+
+    it.each([
+      [
+        'Done review with an open hand-off',
+        node('COD-1', 'agent:review', {
+          ...done,
+          comments: { nodes: [prReady(true)] }
+        })
+      ],
+      [
+        'Done review with no PR-ready comment',
+        node('COD-1', 'agent:review', done)
+      ],
+      ['Done with no label', node('COD-1', null, done)]
+    ])('is no gap for %s', (_name, issue) => {
+      expect(kinds([issue])).toEqual([]);
+    });
+  });
+
+  describe('two-labels', () => {
+    it('names both labels', () => {
+      const [g] = audit([node('COD-1', ['agent:ready', 'agent:review'])]);
+      expect(g).toMatchObject({ kind: 'two-labels' });
+      expect(g?.fix).toContain('agent:ready, agent:review');
+    });
+
+    it('is no gap with one label', () => {
+      expect(kinds([node('COD-1', ['agent:review', 'bug'])])).toEqual([]);
+    });
+  });
+
+  describe('needs-input-no-question', () => {
+    const waiting = (comments: unknown[]) =>
+      node('COD-1', 'agent:needs-input', { comments: { nodes: comments } });
+
+    it.each([
+      ['no comment at all', []],
+      [
+        'an agent comment that asks nothing',
+        [agentComment('**Agent: note** fyi')]
+      ],
+      [
+        'a person comment older than an agent note',
+        [
+          personComment('hi', '2026-09-01T00:00:00Z'),
+          agentComment('**Agent: done** x')
+        ]
+      ]
+    ])('flags %s', (_name, comments) => {
+      expect(kinds([waiting(comments)])).toEqual([
+        'COD-1:needs-input-no-question'
+      ]);
+    });
+
+    it.each([
+      ['**Agent needs input** which?'],
+      ['**Agent: needs input** which?'],
+      ['  **Agent: plan ready** read it']
+    ])('is no gap for %j', (body) => {
+      expect(kinds([waiting([agentComment(body)])])).toEqual([]);
+    });
+
+    it('is no gap once answered', () => {
+      expect(
+        kinds([waiting([agentComment('**Agent: note**'), personComment('ok')])])
+      ).toEqual([]);
+    });
+  });
+
+  describe('unlabelled', () => {
+    const sub = (completedAt: string | null) =>
+      node('COD-2', null, {
+        state: { type: 'unstarted' },
+        parent: { identifier: 'COD-1', title: 'P', state: { type: 'started' } },
+        inverseRelations: {
+          nodes: [blocker('COD-3', 'completed', completedAt)]
+        }
+      });
+
+    it('flags a sub-issue ready to label for over a day', () => {
+      expect(kinds([sub(iso(2 * DAY))])).toEqual(['COD-2:unlabelled']);
+    });
+
+    it('is no gap for a recent or undated blocker', () => {
+      expect(kinds([sub(iso(HOUR))])).toEqual([]);
+      expect(kinds([sub(null)])).toEqual([]);
+    });
+  });
+
+  describe('launch-guard', () => {
+    const answered = node('COD-1', 'agent:needs-input', {
+      comments: {
+        nodes: [agentComment('**Agent needs input** q'), personComment('a')]
+      }
+    });
+
+    it('flags a ticket still runnable after two launches', () => {
+      expect(
+        kinds([answered], {}, null, { key: 'COD-1 answered', launches: 2 })
+      ).toEqual(['COD-1:launch-guard']);
+    });
+
+    it.each([
+      ['one launch', { key: 'COD-1 answered', launches: 1 }],
+      ['a Renovate key', { key: 'PR-754 renovate', launches: 2 }],
+      ['a ticket no longer runnable', { key: 'COD-9 answered', launches: 2 }],
+      ['no launch file', null]
+    ])('is no gap for %s', (_name, launch) => {
+      expect(kinds([answered], {}, null, launch)).toEqual([]);
+    });
+  });
+
+  it('skips tickets of another repo and sorts by number', () => {
+    expect(
+      kinds([
+        node('COD-12', ['agent:ready', 'agent:review']),
+        node('COD-5', ['agent:ready', 'agent:review']),
+        node('COD-7', ['agent:ready', 'agent:review', 'nx-plugins'])
+      ])
+    ).toEqual(['COD-5:two-labels', 'COD-12:two-labels']);
+  });
+
+  describe('tree', () => {
+    const tree = (issues: Node[], watch: Record<string, unknown> = {}) =>
+      run(
+        `tree(${NOW}; ${JSON.stringify(watch)}; null; null)`,
+        issues
+      ) as Array<{
+        ticket: string;
+        title: string;
+        state: string;
+        label: string | null;
+        pr: number | null;
+        blockers: string[];
+        gaps: string[];
+        children: Array<{
+          ticket: string;
+          state: string;
+          label: string | null;
+          pr: number | null;
+          blockers: string[];
+          gaps: string[];
+          children: unknown[];
+        }>;
+      }>;
+    const child = (id: string, type: string, label?: string) => ({
+      identifier: id,
+      title: `Title ${id}`,
+      state: { type },
+      labels: { nodes: label ? [{ name: label }] : [] }
+    });
+
+    it('lists a parent with its Done, unlabelled and gapped sub-issues', () => {
+      const parent = {
+        identifier: 'COD-1',
+        title: 'The parent',
+        state: { type: 'started' },
+        children: {
+          nodes: [
+            child('COD-4', 'unstarted'),
+            child('COD-2', 'completed', 'agent:review'),
+            child('COD-3', 'started', 'agent:working')
+          ]
+        }
+      };
+      const gapped = node('COD-3', 'agent:working', {
+        parent,
+        updatedAt: iso(HOUR),
+        inverseRelations: { nodes: [blocker('COD-8', 'started', null)] }
+      });
+      const done = node('COD-2', 'agent:review', {
+        parent,
+        state: { type: 'completed' },
+        completedAt: iso(DAY),
+        comments: { nodes: [prReady(true)] }
+      });
+      const r = tree([gapped, done], { 'COD-2': { pr: 42, state: 'merged' } });
+      expect(r).toHaveLength(1);
+      expect(r[0]).toMatchObject({
+        ticket: 'COD-1',
+        title: 'The parent',
+        state: 'started',
+        label: null,
+        pr: null,
+        gaps: []
+      });
+      expect(r[0]?.children.map((c) => c.ticket)).toEqual([
+        'COD-2',
+        'COD-3',
+        'COD-4'
+      ]);
+      expect(r[0]?.children[0]).toMatchObject({
+        state: 'completed',
+        label: 'agent:review',
+        pr: 42,
+        gaps: []
+      });
+      expect(r[0]?.children[1]).toMatchObject({
+        state: 'started',
+        label: 'agent:working',
+        blockers: ['COD-8'],
+        gaps: ['working-no-claim']
+      });
+      expect(r[0]?.children[2]).toMatchObject({
+        title: 'Title COD-4',
+        state: 'unstarted',
+        label: null,
+        gaps: []
+      });
+    });
+
+    it('roots a parentless agent ticket and sorts roots by number', () => {
+      const r = tree([
+        node('COD-20', 'agent:ready', { state: { type: 'unstarted' } }),
+        node('COD-5', 'agent:review'),
+        node('COD-6', null),
+        node('COD-7', 'agent:review', {
+          state: { type: 'completed' },
+          completedAt: iso(20 * DAY)
+        }),
+        node('COD-8', 'agent:review', {
+          state: { type: 'completed' },
+          completedAt: iso(DAY)
+        }),
+        node('COD-9', 'agent:ready', { state: { type: 'canceled' } })
+      ]);
+      expect(r.map((x) => x.ticket)).toEqual(['COD-5', 'COD-8', 'COD-20']);
+      expect(r[0]?.children).toEqual([]);
+    });
+  });
+
+  describe('canceled nodes leave the pick unchanged', () => {
+    const canceled = [
+      node('COD-90', 'agent:ready', { state: { type: 'canceled' } }),
+      node('COD-91', 'agent:working', {
+        state: { type: 'canceled' },
+        description: claimLine(5 * HOUR)
+      }),
+      node('COD-92', 'agent:review', { state: { type: 'canceled' } }),
+      node('COD-93', 'agent:needs-input', {
+        state: { type: 'canceled' },
+        comments: { nodes: [personComment('go')] }
+      })
+    ];
+    const live = [
+      node('COD-1', 'agent:ready', { state: { type: 'unstarted' } }),
+      node('COD-2', 'agent:review'),
+      node('COD-3', 'agent:needs-input', {
+        comments: {
+          nodes: [agentComment('**Agent needs input** q'), personComment('a')]
+        }
+      })
+    ];
+    const pick = (issues: Node[]) =>
+      run(`queue_view(${NOW}; 2; {}; null; {})`, issues);
+
+    it('gives the same queue view with or without them', () => {
+      expect(pick([...live, ...canceled])).toEqual(pick(live));
+    });
+  });
+});
+
 // The container's jq is 1.6, which refuses a keyword as a .field or a $variable; CI's jq does not
 describe('watch.jq on jq 1.6', () => {
   const KEYWORDS =

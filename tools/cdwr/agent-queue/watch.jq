@@ -526,7 +526,8 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
      + ($unc | map(select(.idle != null and .idle >= 1800)
                    | { ticket: .identifier, reason: "take over",
                        detail: "no claim line, \((.idle / 60 | floor)) min" }))) as $stale
-  | ([ $allC[] | select(.claim != null) | { key: .identifier, value: .claim.id } ]
+  # A canceled ticket is read for the audit only: it holds nothing
+  | ([ $allC[] | select(.claim != null and .state.type != "canceled") | { key: .identifier, value: .claim.id } ]
      | from_entries) as $holders
   # A stale parked ticket is taken over, not listed twice
   | ($stale | map(.ticket)) as $staleIds
@@ -739,3 +740,130 @@ def launch($guards):
              last: ({ key: $key, launches: ($done + 1) }
                     + (if $prev.key == $key and $prev.refunded then { refunded: true } else {} end)) }
       end;
+
+# --- Audit: states the queue cannot resolve by itself, so a person or a session has to ---
+# Input is the issue nodes, as for queue_view. A gap is { id, ticket, kind, what, fix }; the id is
+# stable per ticket and kind. It reads the pick's own helpers, so the audit never disagrees with
+# what a session would take.
+def gap($t; $kind; $what; $fix): { id: "\($t):\($kind)", ticket: $t, kind: $kind, what: $what, fix: $fix };
+
+# The number at the end of an identifier, for sorting
+def id_num: ((capture("(?<n>[0-9]+)$").n | tonumber) // 0);
+
+# The gaps of one ticket. $sessionTickets and $sid come from the live session.
+def ticket_gaps($now; $watch; $sessionTickets; $sid):
+  .identifier as $t
+  | agent_label as $lab
+  | [ (.labels.nodes // [])[].name | select(startswith("agent:")) ] as $labels
+  | is_open as $open
+  | ((($watch // {})[$t]) // {}) as $w
+  | claim as $c
+  | (.state.type // "") as $type
+  | ([ open_blockers[] | .identifier // "unknown" ] | join(", ")) as $open_names
+  | (if $type == "completed" then
+       (if ($labels | any(.[]; IN("agent:ready", "agent:working", "agent:needs-input")))
+        then "is Done but still \($lab)"
+        elif $lab == "agent:review" and any((.comments.nodes // [])[]; agent_kind("**Agent: PR ready**"))
+             and (handoffs | length) == 0
+        then "is Done with agent:review and no hand-offs left"
+        else null end)
+     elif $type == "canceled" and ($labels | length) > 0 then "is Canceled but still \($labels | join(", "))"
+     else null end) as $closed
+  | [ if $lab == "agent:needs-input" and $open and answered and blocked and plan_unstarted
+      then gap($t; "held"; "\($t) is answered but its plan waits on \($open_names)";
+               "Close or unlink \($open_names)") else empty end,
+      # The pick holds a claim under 2 h or one the live session owns; the rest is taken over
+      if $lab == "agent:working" and $open and $c != null and ($now - $c.at) >= 7200
+         and (($sid | startswith($c.id)) | not) and ($t | IN($sessionTickets[]) | not)
+      then gap($t; "dead-claim"; "\($t) is agent:working with a claim \((($now - $c.at) / 3600 | floor)) h old and no live session";
+               "Run /work-queue \($t) to take it over") else empty end,
+      if $lab == "agent:working" and $open and $c == null and parked == null
+         and .updatedAt != null and ($now - (.updatedAt | epoch)) >= 1800 and ($t | IN($sessionTickets[]) | not)
+      then gap($t; "working-no-claim"; "\($t) is agent:working with no claim line and untouched for \((($now - (.updatedAt | epoch)) / 60 | floor)) min";
+               "Run /work-queue \($t) to take it over") else empty end,
+      if $lab == "agent:review" and $open and (($watch // {}) | length) > 0 and ($w.pr // null) == null
+      then gap($t; "review-no-pr"; "\($t) is agent:review but no PR is attached";
+               "Attach the PR to \($t), or set the label back") else empty end,
+      # The watch entry has no merge time, so the ticket's last update stands in for it
+      if $w.state == "merged" and $open and .updatedAt != null and ($now - (.updatedAt | epoch)) > 3600
+      then gap($t; "merged-not-done"; "\($t) is still open though its PR merged";
+               "Set \($t) Done (the PR body lacked Closes)") else empty end,
+      if $w.state == "closed" and $lab == "agent:review" and $open
+      then gap($t; "closed-pr"; "\($t) is agent:review but its PR was closed without merging";
+               "Reopen the PR, or relabel \($t)") else empty end,
+      if $closed != null
+      then gap($t; "label-on-closed"; "\($t) \($closed)";
+               "An attended session cleans it up, or remove the label") else empty end,
+      if ($labels | length) > 1
+      then gap($t; "two-labels"; "\($t) carries \($labels | join(", "))";
+               "Keep one of \($labels | join(", "))") else empty end,
+      if $lab == "agent:needs-input" and $open and (answered | not)
+         and (([ (.comments.nodes // [])[] | select(is_agent) ] | sort_by(.createdAt) | last) as $a
+              | $a == null
+                or ((($a.body // "") | trim) as $b
+                    | [ "**Agent needs input**", "**Agent: needs input**", "**Agent: plan ready**" ]
+                    | map(. as $m | $b | startswith($m)) | any | not))
+      then gap($t; "needs-input-no-question"; "\($t) is agent:needs-input but the agent asked nothing";
+               "Answer anyway, or relabel \($t)") else empty end,
+      # A blocker without a completedAt doesn't age the ticket
+      if to_label
+         and (([ blockers[] | .completedAt | select(. != null) | epoch ] | max) as $m
+              | $m != null and ($now - $m) > 86400)
+      then gap($t; "unlabelled"; "\($t) has been ready to label for over a day";
+               "Label \($t) agent:ready") else empty end ];
+
+def audit($now; $watch; $session; $launch):
+  . as $issues
+  | (($session.tickets // [ $session.ticket ]) | map(select(. != null))) as $sessionTickets
+  | ($session.id // "") as $sid
+  # runnable is the same whatever the limit: only ready tickets and Renovate PRs depend on it, and
+  # runnable leaves both out
+  | ($issues | attended($now; 1000000; $watch; {}; {}; $session)) as $att
+  | ([ $issues[] | select(other_repo | not) | ticket_gaps($now; $watch; $sessionTickets; $sid)[] ]) as $gaps
+  | (if $launch == null or ($launch.launches // 0) < 2 then []
+     else (($launch.key // "") | split(" ")[0]) as $kt
+       | if $kt == null or $kt == "" or ($kt | startswith("PR-")) then []
+         elif any($att.runnable[]; .ticket == $kt)
+         then [ gap($kt; "launch-guard"; "\($launch.launches) launches of \($launch.key) changed nothing";
+                    "Start /work-queue on the Mac") ]
+         else [] end
+     end) as $guard
+  | ($gaps + $guard) | sort_by(.ticket | id_num);
+
+# --- Tree: parents with agent sub-issues, and agent tickets without a parent ---
+# Input is the issue nodes. A root is a parent with an agent-labelled sub-issue, or an agent ticket
+# with no parent that is open or Done within 14 days. Children come from the parent's own list of
+# sub-issues, so Done and unlabelled siblings show; one that is also in the nodes takes its richer data.
+def tree($now; $watch; $session; $launch):
+  . as $issues
+  | ($issues | audit($now; $watch; $session; $launch)) as $gaps
+  | ($issues | map({ key: .identifier, value: . }) | from_entries) as $by
+  | ($issues | map(select(other_repo | not))) as $all
+  | ([ $all[] | select(.parent != null and agent_label != null) ]
+     | group_by(.parent.identifier)
+     | map({ key: .[0].parent.identifier, value: { parent: .[0].parent, members: . } })
+     | from_entries) as $groups
+  | def leaf($c):
+      ($by[$c.identifier] // $c) as $r
+      | { ticket: $c.identifier, title: ($r.title // $c.title // null),
+          state: ($r.state.type // $c.state.type // null),
+          label: ($r | agent_label),
+          pr: (($watch // {})[$c.identifier].pr // null),
+          blockers: ($r | [ open_blockers[] | .identifier // "unknown" ]),
+          gaps: [ $gaps[] | select(.ticket == $c.identifier) | .kind ] };
+    ([ $all[] | select(agent_label != null and .parent == null
+                       and (is_open
+                            or (.state.type == "completed" and .completedAt != null
+                                and ($now - (.completedAt | epoch)) <= 14 * 86400)))
+       | .identifier ]
+     + ($groups | keys)
+     | unique) as $roots
+  | [ $roots[]
+      | . as $id
+      | ($by[$id] // $groups[$id].parent) as $r
+      | leaf($r)
+        + { children: ([ (($by[$id].children.nodes // []) + ($groups[$id].parent.children.nodes // [])
+                          + ($groups[$id].members // []))[] ]
+                       | unique_by(.identifier) | sort_by(.identifier | id_num)
+                       | map(leaf(.) + { children: [] })) } ]
+  | sort_by(.ticket | id_num);
