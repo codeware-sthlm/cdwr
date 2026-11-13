@@ -700,17 +700,19 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 richText: {
                   markdown:
                     '## Or build your own\n\nThe plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace with Payload, Postgres and the deployment wiring already connected.'
-                }
+                },
+                blocks: [
+                  {
+                    blockType: 'code',
+                    language: 'shell',
+                    code: [
+                      'npx create-nx-payload@latest my-platform',
+                      'cd my-platform && nx dev cms'
+                    ].join('\n')
+                  }
+                ]
               }
             ]
-          },
-          {
-            blockType: 'code',
-            language: 'plaintext',
-            code: [
-              'npx create-nx-payload@latest my-platform',
-              'cd my-platform && nx dev cms'
-            ].join('\n')
           },
           {
             blockType: 'feature-cards',

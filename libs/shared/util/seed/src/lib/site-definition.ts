@@ -1,6 +1,7 @@
 import type { ThemeRecipe, ThemeTokens } from '@codeware/shared/util/color';
 import type {
   CalloutBlock,
+  CodeBlock,
   ContentBlock,
   CustomComponent,
   CustomComponentBlock,
@@ -195,15 +196,17 @@ export type ReusableContentBlockDefinition = WithRef<
 /**
  * Columns of body text.
  *
- * `blocks` is deliberately left out: a column can nest a form, an image or
- * reusable content, and each of those needs its own reference treatment before
- * a definition could state one. Omitting it makes the attempt a type error
- * rather than a database id smuggled into a nested block.
+ * `blocks` takes only blocks without a document reference, for now code. A
+ * column can also nest a form, an image or reusable content, and each of those
+ * needs its own reference treatment before a definition could state one.
+ * Leaving them out makes the attempt a type error rather than a database id
+ * smuggled into a nested block.
  */
 export type ContentBlockDefinition = Omit<Authored<ContentBlock>, 'columns'> & {
   columns?: Array<{
     size?: NonNullable<ContentBlock['columns']>[number]['size'];
     richText?: RichTextRef | null;
+    blocks?: Array<Authored<CodeBlock>> | null;
   }> | null;
 };
 
