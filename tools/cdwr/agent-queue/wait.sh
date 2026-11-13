@@ -46,7 +46,7 @@ note() { return 0; }
 if [[ -n "${AGENT_QUEUE_LINEAR_CMD:-}" ]]; then
   linear() { eval "$AGENT_QUEUE_LINEAR_CMD"; }
 elif ! linear_auth; then
-  print -r -- "wait: no Linear credentials"; exit 0
+  print -r -- "wait: no Linear credentials"; $RUNNABLE && exit 1; exit 0
 fi
 # The Supabase env for the remote watch, found as the status line finds it
 [[ -n "${AGENT_QUEUE_WATCH_CMD:-}" ]] || telemetry_env_search "${HERE:h:h:h}"

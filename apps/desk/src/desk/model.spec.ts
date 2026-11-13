@@ -229,6 +229,7 @@ describe('isProblem', () => {
     ['planned COD-12', false],
     ['launched', false],
     ['implemented', false],
+    ['untried', false],
     ['suggested COD-3', false],
     ['nothing', false],
     ['skip', false],
