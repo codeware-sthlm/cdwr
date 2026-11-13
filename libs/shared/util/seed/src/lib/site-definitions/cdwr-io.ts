@@ -868,8 +868,8 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
   };
 }
 
-/** Off until the agent drafts entries worth publishing (COD-776) */
-const devlog = false;
+/** On: the agent drafts the entries and Håkan publishes them one by one */
+const devlog = true;
 
 export const cdwrIo = defineCdwrIo({ devlog });
 
