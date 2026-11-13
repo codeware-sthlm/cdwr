@@ -259,6 +259,13 @@ query {
     completedAt: { gt: "-P14D" }
     comments: { some: { body: { startsWith: "**Agent: PR ready**" } } }
   }) { ...queued }
+  # Canceled tickets still carrying an agent label, for the audit (watch.jq `audit`)
+  canceled: issues(first: 100, filter: {
+    team: { key: { eq: "COD" } }
+    labels: { some: { name: { startsWith: "agent:" } } }
+    state: { type: { eq: "canceled" } }
+    updatedAt: { gt: "-P14D" }
+  }) { ...queued }
   # Only what watch.jq `to_label` reads: no description or comments for issues it merely checks
   subissues: issues(first: 100, filter: {
     team: { key: { eq: "COD" } }
@@ -266,12 +273,12 @@ query {
     state: { type: { nin: ["completed", "canceled"] } }
   }) {
     nodes {
-      identifier priority createdAt
-      parent { identifier state { type } }
+      identifier title priority createdAt
+      parent { identifier title state { type } }
       state { type }
       labels(first: 20) { nodes { name } }
       inverseRelations(first: 20) {
-        nodes { type issue { identifier state { type } labels(first: 20) { nodes { name } } } }
+        nodes { type issue { identifier completedAt state { type } labels(first: 20) { nodes { name } } } }
         pageInfo { hasNextPage }
       }
     }
@@ -279,28 +286,32 @@ query {
 }
 fragment queued on IssueConnection {
   nodes {
-    identifier priority createdAt completedAt updatedAt description
-    parent { identifier state { type } }
+    identifier title priority createdAt completedAt updatedAt description
+    parent {
+      identifier title state { type }
+      children(first: 25) { nodes { identifier title state { type } labels(first: 20) { nodes { name } } } }
+    }
+    children(first: 25) { nodes { identifier title state { type } labels(first: 20) { nodes { name } } } }
     state { type }
     labels { nodes { name } }
     # The author tells the agent's comments from Håkan's (watch.jq `is_agent`)
     comments(first: 50, orderBy: createdAt) { nodes { body createdAt user { id app } } }
     # Who added agent:ready (watch.jq `ready_by_app`)
     history(first: 50) { nodes { createdAt actor { id app } addedLabels { name } } }
-    inverseRelations { nodes { type issue { identifier state { type } labels(first: 20) { nodes { name } } } } }
+    inverseRelations { nodes { type issue { identifier completedAt state { type } labels(first: 20) { nodes { name } } } } }
   }
 }
 GQL
 
-# attended_nodes: appends the merged tickets and the open sub-issues not already there to
+# attended_nodes: appends the merged and canceled tickets and the open sub-issues not already there to
 # .data.issues.nodes, keeping Linear's order, so every reader of the attended response sees one list. A filter-level `or` would be one field, but Linear widens a
 # nested `or` to the whole team.
 attended_nodes() {
   # An error answer stays as it came, so it still reads as one
   jq -c 'if (.data.issues.nodes | type) == "array" then
-      reduce ((.data.merged.nodes // [])[], (.data.subissues.nodes // [])[]) as $n (.;
+      reduce ((.data.merged.nodes // [])[], (.data.canceled.nodes // [])[], (.data.subissues.nodes // [])[]) as $n (.;
         if any(.data.issues.nodes[]; .identifier == $n.identifier) then . else .data.issues.nodes += [$n] end)
-      | del(.data.merged, .data.subissues)
+      | del(.data.merged, .data.canceled, .data.subissues)
     else . end' 2>/dev/null
 }
 
