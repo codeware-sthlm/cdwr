@@ -1,16 +1,19 @@
-import { type SupportedLocale, t } from '@codeware/shared/util/i18n';
+import { t } from '@codeware/shared/util/i18n';
 import { resolveReturnPath } from '@codeware/shared/util/site-gate';
 import { Lock, Unlock } from 'lucide-react';
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import Image from 'next/image';
 
+import { getAcceptedLocale } from '../../../utils/request-locale';
 import { SITE_GATE_SUBMIT_PATH } from '../../../utils/site-gate';
 
-/** Belt and braces beside the proxy's own header and the robots file */
-export const metadata: Metadata = {
-  robots: { index: false, follow: false }
-};
+/** The localized heading as the title; robots stays belt and braces beside the proxy's header and the robots file */
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: t(await getAcceptedLocale(), 'siteGate.heading'),
+    robots: { index: false, follow: false }
+  };
+}
 
 type Props = {
   // A repeated query key arrives as an array, which `resolveReturnPath` takes
@@ -23,7 +26,8 @@ type Props = {
 /**
  * Asks for the password that opens a site which is not public yet.
  *
- * Lives beside the maintenance page rather than in `(site)`: a gated site
+ * Has a root layout of its own beside the maintenance page's, so
+ * `<html lang>` follows the visitor. It is not in `(site)`: a gated site
  * should not have to reach its database to say it is closed, and the answer
  * is the platform's, not the tenant's.
  *
@@ -32,10 +36,7 @@ type Props = {
  */
 export default async function SiteGatePage({ searchParams }: Props) {
   const { error, from } = await searchParams;
-  const accepted = (await headers()).get('accept-language') ?? '';
-  const locale: SupportedLocale = accepted.toLowerCase().startsWith('sv')
-    ? 'sv'
-    : 'en';
+  const locale = await getAcceptedLocale();
 
   const reason = Array.isArray(error) ? error[0] : error;
   const message =

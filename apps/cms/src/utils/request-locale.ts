@@ -29,3 +29,11 @@ export const getRequestLocale = async (): Promise<SupportedLocale> =>
     (await cookies()).get(LANGUAGE_COOKIE)?.value,
     (await headers()).get('accept-language') ?? ''
   );
+
+/**
+ * The visitor's locale from `accept-language` alone, for the gate page and its
+ * layout. Not `getRequestLocale`: the `payload-lng` cookie is the admin's
+ * choice, and the gate is a site page.
+ */
+export const getAcceptedLocale = async (): Promise<SupportedLocale> =>
+  localeFromAcceptLanguage((await headers()).get('accept-language') ?? '');
