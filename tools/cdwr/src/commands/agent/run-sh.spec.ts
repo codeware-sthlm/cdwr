@@ -350,10 +350,10 @@ describe('run.sh Linear tools', () => {
     .filter((line) => !line.trim().startsWith('#'))
     .join('\n');
 
-  it('gives the plan and suggest claude runs the Linear MCP flags', () => {
+  it('gives the plan, suggest and devlog claude runs the Linear MCP flags', () => {
     expect(
       code.match(/--model opus "\$\{LINEAR_MCP_ARGS\[@\]\}"/g)
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   it('takes the tool prefix from lib.sh, never hardcoded', () => {
@@ -432,7 +432,7 @@ describe('run.sh telemetry', () => {
     );
     expect(SCRIPT).toMatch(/\( telemetry_queue_state "\$last" [^)]*\) &!/s);
     expect(SCRIPT).toMatch(
-      /telemetry_queue_state [^)]*"\$watch" "\$renovate" \) &!/s
+      /telemetry_queue_state [^)]*"\$watch" "\$renovate" "\$devlog" \) &!/s
     );
     expect(SCRIPT).toContain(
       'watch="$(cat "$HOME_DIR/watch.json" 2>/dev/null)"'
@@ -2383,4 +2383,105 @@ describe('watch.jq desk_verdict', () => {
       ).toBe('Copilot has reviewed it');
     }
   );
+});
+
+describe('run.sh devlog session', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  let home: string;
+
+  const day = (daysAgo: number) => {
+    const d = new Date(Date.now() - daysAgo * 86_400_000);
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, '0'),
+      String(d.getDate()).padStart(2, '0')
+    ].join('-');
+  };
+
+  const gate = (env: { days?: string; hour: string }, stamp?: string) => {
+    if (stamp) writeFileSync(join(home, 'devlog-ran-on'), `${stamp}\n`);
+    return spawnSync(
+      'zsh',
+      [
+        '-c',
+        [
+          `HOME_DIR="${home}"`,
+          `DEVLOG_DAYS="${env.days ?? '7'}"`,
+          `SUGGEST_HOUR="${env.hour}"`,
+          fn('stamp_age'),
+          fn('devlog_gate'),
+          'devlog_gate'
+        ].join('\n')
+      ],
+      { encoding: 'utf8' }
+    ).stdout.trim();
+  };
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'devlog-'));
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  it.skipIf(!hasZsh)('is off when the interval is 0 or not a number', () => {
+    expect(gate({ days: '0', hour: '0' })).toBe('off');
+    expect(gate({ days: 'weekly', hour: '0' })).toBe('off');
+  });
+
+  it.skipIf(!hasZsh)('is done for the week after a run', () => {
+    expect(gate({ hour: '0' }, day(0))).toBe('done, next in 7 day(s)');
+  });
+
+  it.skipIf(!hasZsh)('is due a week later, once past the hour', () => {
+    expect(gate({ hour: '0' }, day(8))).toBe('due');
+  });
+
+  it.skipIf(!hasZsh)('waits for the hour', () => {
+    expect(gate({ hour: '23' })).toMatch(/^(not before 23:00|due)$/);
+  });
+
+  describe('the claude call', () => {
+    const run = fn('devlog_run');
+    const allowed = run.slice(
+      run.indexOf('--allowedTools'),
+      run.indexOf(') > "$result"')
+    );
+
+    it('is read-only on Linear and Sentry, with no raw gh api', () => {
+      expect(run).not.toBe('');
+      expect(allowed).toContain('"$L"__get_issue');
+      expect(allowed).not.toContain('save_');
+      expect(allowed).not.toMatch(/Sentry/i);
+      expect(allowed).not.toContain('gh api');
+      expect(allowed).not.toContain('mcp__claude_ai_Claude_Docs');
+    });
+
+    it('writes only under devlog-drafts', () => {
+      const writes = allowed.match(/"(?:Write|Edit)\([^"]*\)"/g) ?? [];
+      expect(writes).toEqual([
+        '"Write(/$HOME_DIR/devlog-drafts/**)"',
+        '"Edit(/$HOME_DIR/devlog-drafts/**)"'
+      ]);
+    });
+  });
+
+  it('runs only from the idle block, after the suggest gate', () => {
+    expect(SCRIPT.match(/\bdevlog_run\b/g)).toHaveLength(2);
+    const idle = SCRIPT.slice(SCRIPT.indexOf('if [[ -z "$ready" ]]; then'));
+    expect(idle).toContain(
+      '*) if [[ "$(devlog_gate)" == due ]]; then devlog_run; fi ;;'
+    );
+    expect(idle.indexOf('suggest_gate')).toBeLessThan(
+      idle.indexOf('devlog_gate')
+    );
+  });
+
+  it('reports the gate on --check, idle or not', () => {
+    expect(
+      SCRIPT.match(/print -r -- "devlog: \$\(devlog_gate\)"/g)
+    ).toHaveLength(2);
+  });
 });
