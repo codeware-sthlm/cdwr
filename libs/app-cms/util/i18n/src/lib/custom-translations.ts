@@ -27,7 +27,6 @@ const customTranslationsSchema = z.object({
   }),
   customComponents: z.object({
     inputRequired: z.string(),
-    inputs: z.string(),
     newInput: z.string(),
     propRequired: z.string(),
     propsLoadFailed: z.string(),
@@ -585,7 +584,6 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
     },
     customComponents: {
       inputRequired: 'required',
-      inputs: 'Inputs',
       newInput: 'New input',
       propRequired: 'Required',
       propsLoadFailed:
@@ -1245,7 +1243,6 @@ Supported locales: {{locales}}`,
     },
     customComponents: {
       inputRequired: 'obligatorisk',
-      inputs: 'Indata',
       newInput: 'Ny indata',
       propRequired: 'Obligatorisk',
       propsLoadFailed:
