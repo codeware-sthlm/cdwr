@@ -1,0 +1,48 @@
+# Agent queue
+
+How the agent queue schedules, launches and reports on Linear tickets, and what it writes where.
+
+Tickets carrying a Linear `agent:*` label (Agent group, Codeware team) are worked by the
+`/work-queue` skill (`.claude/skills/work-queue`). It plans into the ticket, hands planned
+steps to the `implementer` subagent (`.claude/agents/implementer.md`, Sonnet) in a worktree
+per ticket, asks in Linear instead of waiting in the terminal, and keeps going until a limit
+of what waits on Håkan. The skill holds the queue order, the labels and how a gate asks.
+When a split's sub-issue has all its blockers done, the queue lists it as ready to label
+(`COD-n label`) among what waits on Håkan; only he sets `agent:ready`.
+
+To start an attended session, run `cdwr agent attend [COD-n]` from anywhere: it moves `codeware-queue` to `origin/main` (installing when the lockfile changed) and starts `/work-queue` there in the same terminal (`--no-start` prints the line instead). A session started on a detached checkout that is behind main warns at start and names that one command (the SessionStart hook, `tools/cdwr/agent-queue/session-start.sh`).
+
+The scheduler runs in the NUC's agent container, plan-only every 10 minutes; `cdwr agent status --host <host>` says what it would take next. The Mac is attended-only: `cdwr agent install` there sets up the attended side (the script copies, the Linear app's Keychain items, `agent_linear`), `--scheduler` adds a launchd job (a plain `install` keeps an existing one current), and `cdwr agent uninstall` removes it (`--worktree-remove` takes the planner checkout too) and keeps the session side. Without the job, bare `status` shows the attended rows and `pause`, `resume` and `run` name the host that has the scheduler; `status`, `notify`, `pause`, `resume` and `run` take `--host <host>` to act on the container's queue over ssh (`run` there wakes its loop). Any other `cdwr` command in the container, such as a hand-off, is `cdwr agent exec --host <host> -- <args>`, which runs it through `secrets.sh` with the vault's keys; a plain `docker exec` has none. Launchd runs an installed copy of
+`tools/cdwr/agent-queue/run.sh` (and its `watch.jq`, `waits.sh`, `implement.sh` and `github-app.sh`), so a merged change to its guardrails
+waits for the next `install`. Before planning, the same job watches the PRs of `agent:working`,
+`agent:needs-input` and `agent:review` tickets and sends a notice when a review PR leaves the merge
+queue, fails or conflicts with main, or any of them merges with hand-offs left. A ticket merged outside review is
+relabelled `agent:review` with a **Next:** line naming its hand-offs. After the watch, a parent whose
+agent split finished (every sub-issue Done or Canceled, at least one Done and one agent work) is set
+Done with an `**Agent: closed**` comment. Those are the job's two Linear writes. Then it reads
+Renovate's open PRs into `renovate.json`: an untended one whose checks fail, or that conflicts with
+main on a branch carrying a commit not by Renovate, is queue work (`PR 754`, held by the limit), until
+a `renovate` ticket carries it as an attachment. A session files that ticket; a mechanical fix goes on
+the agent's own branch, never Renovate's, which automerges an edited non-major PR once green.
+In the NUC's container the loop wakes on Linear and GitHub events and new desk commands (`cdwr agent listen` on Supabase Realtime, publishable key `AGENT_SUPABASE_ANON_KEY`), with a run every hour as the fallback; without the listener it polls every 10 minutes. An attended session's `wait.sh` starts the same listener from its checkout, with a state file of its own, and re-picks every 10 minutes as its fallback, or every minute without the listener (no `AGENT_SUPABASE_URL` and `AGENT_SUPABASE_ANON_KEY` in `tools/cdwr/.env`).
+Each run also sends its telemetry to the `agent-queue` Supabase project, which the Agent Desk reads: tables `runs`, `usage` (`cdwr agent usage`), `usage_hours` (the same spend per whole UTC hour over every Claude project on the host, sent every run and kept 14 days), `activity` (`cdwr agent activity`, from Linear's issue history), `sessions` (each session's heartbeat with its state and detail; an `ended` one leaves the desk at once), `queue_state`, `host_metrics` (the container's load, memory and disk, kept 7 days; the desk's NUC tile), `plan_usage` (the plan's 5-hour and weekly usage from the Mac's status line, `cdwr agent statusline install`; the desk's Plan usage tile, with `usage_hours` as its hourly breakdown), and `issue_events` written by the `linear-webhook` Edge Function, `github_events` and `builds` by `github-webhook` (env `AGENT_SUPABASE_URL` and `AGENT_SUPABASE_SERVICE_KEY`). It writes no Linear document. The desk writes only through the `desk-command` Edge Function, which checks a per-device token against `DESK_CONTROL_TOKENS` and stores each action in `desk_commands`. The same desk runs on the phone as a web app the NUC serves to the tailnet (`apps/desk/Dockerfile`, the `desk` service in `apps/agent-host/compose.yaml`, `tailscale serve`; the runbook is in `tools/cdwr/README.md`, "The desk on the phone"). The scheduler applies a host's pending ones at the start of each tick, before its pause check; `limit` and `cap` land in the queue home's `limit` and `implement-cap` files, which override the PR limit of 5 and `AGENT_QUEUE_IMPLEMENT_CAP_USD`. A review row's **Copilot review** and **Merge** buttons send `copilot` and `merge`, the scheduler's only GitHub writes: as the `codeware-agent` app, on a PR its watch holds for that ticket, after reading it again (`desk_verdict` in `watch.jq`). A merge joins main's merge queue and ends like one on GitHub; a Copilot request the app can't make falls back on `AGENT_COPILOT_TOKEN` (`tools/cdwr/README.md`).
+The `queue_state` row carries an `Attended:` line saying whether an attended `/work-queue` has something to do, and `cdwr agent status` shows it too. It also carries `watch`, the host's watch.json (the PRs of agent-labelled tickets with their state, checks, Copilot review and unresolved threads), and `renovate`, its renovate.json; a Mac without the scheduler reads both for its attended rows and its wait.
+Once a day, in the first idle run after 06:00, the job runs `/suggest-improvement`, which proposes one evidence-led improvement as a `Source: agent-idea` ticket or records "nothing today"; the `queue_state` row's `Suggested:` line and `cdwr agent status` show it. Accept it with `agent:ready`, discard it by cancelling with one word in a comment.
+Once a week, on an idle run the suggestion leaves, it runs `/devlog-draft`, which drafts at most two devlog posts in the cms from the pull requests merged since the last one, or records "nothing this week"; each draft sends an `action` notice to publish or delete it in the admin; the `queue_state` row's `devlog` column holds the last outcome, `cdwr agent status` shows the gate (due, done, not before, off), and `AGENT_QUEUE_DEVLOG_DAYS=0` turns it off.
+
+When that work waits and no session is alive, the job starts one itself: `implement.sh` runs
+`claude -p "/work-queue implement-only once"` detached, with deny-by-default permissions, a
+per-run budget (`AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, $15) and a daily cap
+(`AGENT_QUEUE_IMPLEMENT_CAP_USD`, $40) kept in `implement-spend.jsonl`. It resumes approved,
+answered or reviewed work only, and never starts a new ticket. It reaches Linear on both hosts
+through Linear's own MCP server, signed with a token of the queue's own Linear app, so its writes
+are the app user's and not Håkan's (`AGENT_QUEUE_LINEAR_MCP`, the credentials and the token cache
+are in `tools/cdwr/README.md`); a run without Linear tools doesn't start. The queue tells its own
+comments from Håkan's by that author (`is_agent` in `watch.jq`), and never starts a ticket whose
+`agent:ready` the app added (`refused` in the queue view). On GitHub it acts as the
+`codeware-agent` app (`github-app.sh`, credentials in `tools/cdwr/.env`), never as Håkan, so
+main's rulesets apply to it; without the app it does not start. After two launches that change
+nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
+launching too.
+
+An attended Mac session stays visible to the NUC because its session hook copies each session file into the NUC's container (`cdwr agent mirror set --host agent-host`, once). So the NUC launches nothing a live Mac session holds: while that session is polling, any other ticket may launch there; while it is working, only a comment on a merged ticket does. The claim line decides who has a ticket, and a session that loses the race leaves it alone. The hook runs from the checkout the session started in, which must be on a main that includes the mirror support: `cdwr agent attend` does that.
