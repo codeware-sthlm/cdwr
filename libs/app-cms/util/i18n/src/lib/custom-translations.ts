@@ -26,6 +26,9 @@ const customTranslationsSchema = z.object({
     socialMediaWithSuffix: z.string()
   }),
   customComponents: z.object({
+    inputRequired: z.string(),
+    inputs: z.string(),
+    newInput: z.string(),
     propRequired: z.string(),
     propsLoadFailed: z.string(),
     propsLoading: z.string(),
@@ -581,6 +584,9 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       socialMediaWithSuffix: 'Social Media {{suffix}}'
     },
     customComponents: {
+      inputRequired: 'required',
+      inputs: 'Inputs',
+      newInput: 'New input',
       propRequired: 'Required',
       propsLoadFailed:
         'The inputs could not be loaded. Edit the values as JSON instead.',
@@ -1238,12 +1244,15 @@ Supported locales: {{locales}}`,
       socialMediaWithSuffix: 'Sociala Medier {{suffix}}'
     },
     customComponents: {
-      propRequired: 'Required',
+      inputRequired: 'obligatorisk',
+      inputs: 'Indata',
+      newInput: 'Ny indata',
+      propRequired: 'Obligatorisk',
       propsLoadFailed:
-        'Inputs kunde inte läsas in. Redigera värdena som JSON i stället.',
-      propsLoading: 'Läser in inputs…',
-      propsNone: 'Den här komponenten har inga inputs.',
-      propsPickComponent: 'Välj en komponent för att fylla i dess inputs.',
+        'Indata kunde inte läsas in. Redigera värdena som JSON i stället.',
+      propsLoading: 'Läser in indata…',
+      propsNone: 'Den här komponenten har ingen indata.',
+      propsPickComponent: 'Välj en komponent för att fylla i dess indata.',
       propsUndeclared:
         'Sparade men visas inte, eftersom komponenten inte längre deklarerar dem: {{names}}'
     },
