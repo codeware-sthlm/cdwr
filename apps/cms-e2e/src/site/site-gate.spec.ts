@@ -29,17 +29,22 @@ test.describe('site gate', () => {
     await expect(page.getByText('Look at the silver moon.')).toHaveCount(0);
   });
 
-  // The rendered document, not the markup: Next streams dynamic metadata after the shell
-  for (const [accepted, lang, heading] of [
-    ['sv-SE,sv;q=0.9', 'sv', 'Webbplatsen är inte öppen'],
-    ['en-US,en;q=0.9', 'en', 'This site is not open']
+  // The rendered document, not the markup: Next streams dynamic metadata after
+  // the shell. The language comes from `locale`, not an extra header: Chromium
+  // keeps its own Accept-Language on a navigation
+  for (const [locale, lang, heading] of [
+    ['sv-SE', 'sv', 'Webbplatsen är inte öppen'],
+    ['en-US', 'en', 'This site is not open']
   ] as const) {
-    test(`answers in ${lang} with a title and lang`, async ({ page }) => {
-      await page.setExtraHTTPHeaders({ 'accept-language': accepted });
-      await page.goto('/');
+    test.describe(`in ${lang}`, () => {
+      test.use({ locale });
 
-      await expect(page).toHaveTitle(heading);
-      await expect(page.locator('html')).toHaveAttribute('lang', lang);
+      test('answers with a localized title and lang', async ({ page }) => {
+        await page.goto('/');
+
+        await expect(page).toHaveTitle(heading);
+        await expect(page.locator('html')).toHaveAttribute('lang', lang);
+      });
     });
   }
 
