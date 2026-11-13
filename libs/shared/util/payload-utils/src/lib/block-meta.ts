@@ -671,11 +671,11 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         type: 'json',
         label: {
           en: 'Inputs',
-          sv: 'Inputs'
+          sv: 'Indata'
         },
         description: {
           en: 'The values for the inputs the component declares.',
-          sv: 'Värdena för de inputs komponenten deklarerar.'
+          sv: 'Värdena för komponentens indata.'
         }
       },
       {
