@@ -2,6 +2,8 @@ import { CopyButton } from '@codeware/shared/ui/copy-button';
 import { Highlight, themes } from 'prism-react-renderer';
 import React from 'react';
 
+import './shell-grammar';
+
 export type Props = {
   code: string;
   language?: string;
