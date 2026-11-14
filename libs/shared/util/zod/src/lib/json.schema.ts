@@ -18,5 +18,9 @@ type Json = Literal | { [key: string]: Json } | Json[];
  * ```
  */
 export const JsonSchema: z.ZodType<Json> = z.lazy(() =>
-  z.union([LiteralSchema, z.array(JsonSchema), z.record(JsonSchema)])
+  z.union([
+    LiteralSchema,
+    z.array(JsonSchema),
+    z.record(z.string(), JsonSchema)
+  ])
 );
