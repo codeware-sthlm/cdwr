@@ -1,12 +1,11 @@
 import { z } from 'zod';
 
 const ProjectSchema = z.object({
-  INFISICAL_PROJECT_ID: z
-    .string({ description: 'Infisical Project ID' })
-    .min(1),
+  INFISICAL_PROJECT_ID: z.string().min(1).describe('Infisical Project ID'),
   INFISICAL_SITE: z
-    .enum(['eu', 'us'], { description: "Infisical Site defaults to 'us'" })
+    .enum(['eu', 'us'])
     .optional()
+    .describe("Infisical Site defaults to 'us'")
 });
 
 /**
@@ -15,18 +14,21 @@ const ProjectSchema = z.object({
 export const ClientSchema = z
   .object({
     INFISICAL_CLIENT_ID: z
-      .string({ description: 'Infisical Machine Client ID' })
-      .min(1),
+      .string()
+      .min(1)
+      .describe('Infisical Machine Client ID'),
     INFISICAL_CLIENT_SECRET: z
-      .string({ description: 'Infisical Machine Client Secret' })
-      .min(1),
+      .string()
+      .min(1)
+      .describe('Infisical Machine Client Secret'),
     ...ProjectSchema.shape
   })
   .or(
     z.object({
       INFISICAL_SERVICE_TOKEN: z
-        .string({ description: 'Infisical Service Token' })
-        .min(1),
+        .string()
+        .min(1)
+        .describe('Infisical Service Token'),
       ...ProjectSchema.shape
     })
   );
@@ -34,29 +36,24 @@ export const ClientSchema = z
 /**
  * Infisical project environment values
  */
-export const EnvironmentSchema = z.enum(
-  ['development', 'preview', 'production'],
-  {
-    description: 'The environment to get the secrets from'
-  }
-);
+export const EnvironmentSchema = z
+  .enum(['development', 'preview', 'production'])
+  .describe('The environment to get the secrets from');
 
 /**
  * Infisical configuration from `.infisical.json`
  */
 export const ConfigSchema = z.object({
   workspaceId: z
-    .string({
-      description: 'The ID of the project to connect to'
-    })
+    .string()
     .min(1, {
       message: 'Workspace ID is required'
-    }),
+    })
+    .describe('The ID of the project to connect to'),
   defaultEnvironment: EnvironmentSchema.optional(),
   gitBranchToEnvironmentMapping: z
-    .record(z.string(), z.string(), {
-      description: 'The mapping of git branches to environments'
-    })
+    .record(z.string(), z.string())
+    .describe('The mapping of git branches to environments')
     .nullable()
     .optional()
 });
@@ -82,8 +79,8 @@ export const SecretMetadataSchema = z.preprocess(
   },
   z.array(
     z.object({
-      key: z.string({ description: 'The key of the secret metadata' }),
-      value: z.string({ description: 'The value of the secret metadata' })
+      key: z.string().describe('The key of the secret metadata'),
+      value: z.string().describe('The value of the secret metadata')
     })
   )
 );
