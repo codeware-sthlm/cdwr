@@ -309,6 +309,7 @@ export const App = () => {
                   can={state.controls.target !== null}
                   busy={state.controls.reviewing}
                   note={state.controls.reviewNote}
+                  request={m.reviewRequest}
                   onReview={reviewNow}
                   onTicket={(id) => openTicket(id)}
                 />

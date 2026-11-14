@@ -17,9 +17,11 @@ import {
   type PlatformCommandState,
   type PrCommandState,
   type Reported,
+  type ReviewRequestState,
   controlStates,
   platformCommandStates,
-  prCommandStates
+  prCommandStates,
+  reviewRequestState
 } from './commands';
 import {
   AGENT,
@@ -299,6 +301,8 @@ export type Model = {
   prCommands: Map<string, PrCommandState>;
   /** `platformCommandKey` -> where an app's restart or a tenant's gate command stands */
   platformCommands: Map<string, PlatformCommandState>;
+  /** Where the newest Review now stands on the host the desk reads */
+  reviewRequest: ReviewRequestState;
   /** The agent's PRs as GitHub last told, newest first */
   agentPrs: AgentPr[];
   /** Live sessions per host, newest first */
@@ -1356,6 +1360,15 @@ export const model = (
     watch: watchByTicket(runs?.watches ?? []),
     prCommands: prCommandStates(data.deskCommands ?? [], nowMs),
     platformCommands: platformCommandStates(data.deskCommands ?? [], nowMs),
+    reviewRequest: runs
+      ? reviewRequestState(
+          data.deskCommands ?? [],
+          runs.host,
+          runs.review,
+          data.reviews?.at ?? null,
+          nowMs
+        )
+      : { state: 'idle' },
     agentPrs: agentPrs(data.githubEvents, prTickets, (id) => get(id).title),
     hostSessions: sessions,
     handBack: hand,
