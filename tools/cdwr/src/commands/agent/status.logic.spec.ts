@@ -39,6 +39,7 @@ const report = {
   attended: null,
   suggest: null,
   devlog: null,
+  review: null,
   queueView: null
 };
 const envelope = JSON.stringify({

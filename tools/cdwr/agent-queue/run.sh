@@ -28,6 +28,11 @@ SUGGEST_DAYS="${AGENT_QUEUE_SUGGEST_DAYS:-1}"
 DEVLOG_BUDGET_USD="${AGENT_QUEUE_DEVLOG_BUDGET_USD:-5}"
 # Days between devlog sessions; 0 switches the feature off. It starts after SUGGEST_HOUR too.
 DEVLOG_DAYS="${AGENT_QUEUE_DEVLOG_DAYS:-7}"
+# Budget for the daily review session, same reading as above.
+REVIEW_BUDGET_USD="${AGENT_QUEUE_REVIEW_BUDGET_USD:-5}"
+# Days between review sessions; 0 switches the schedule off (a desk request still runs one). It
+# starts after SUGGEST_HOUR too.
+REVIEW_DAYS="${AGENT_QUEUE_REVIEW_DAYS:-1}"
 # The dev checkout's Claude memory directory; empty means no memory file is writable.
 MEMORY_DIR="${AGENT_QUEUE_MEMORY_DIR:-}"
 OTHER_REPOS='["nx-plugins","enjinex"]'
@@ -38,6 +43,8 @@ mkdir -p "$LOGS"
 suggested_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/suggested-line"; }
 # The Devlog line of queue_state: the date and what happened
 devlog_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/devlog-line"; }
+# The review line of queue_state: the date and what happened
+review_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/review-line"; }
 note() { print -r -- "$(date '+%F %T') $*" >> "$LOGS/scheduler.log"; }
 say() { note "$*"; $check && print -r -- "$*"; return 0; }
 # Always action-level: a run that planned something or went wrong needs Håkan. No webhook, no-op.
@@ -275,7 +282,7 @@ DESK_STALE_SECS=7200
 apply_commands() {
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local host rows line id kind actor at ticket pr value verdict why change effect body acked stamp now target
+  local host rows line id kind actor at ticket pr value verdict why change effect body acked stamp now target ranat
   host="$(telemetry_host)"
   rows="$(supabase_select desk_commands "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor")"
   if $check; then say "commands: $(jq 'length' <<<"$rows" 2>/dev/null || print 0) pending"; return 0; fi
@@ -306,6 +313,14 @@ apply_commands() {
           if [[ -e "$HOME_DIR/paused" ]]; then verdict=refused why=paused
           elif [[ -d "$HOME_DIR/lock" ]]; then verdict=refused why="a run is in progress"
           else why="this run" change="run requested from the desk ($actor)"; fi ;;
+        review)
+          # One review an hour, whatever asked; the request is read by the next idle tick
+          ranat="$(cat "$HOME_DIR/review-ran-at" 2>/dev/null)"
+          if [[ "$ranat" == <-> ]] && (( now - ranat < 3600 )); then
+            zmodload zsh/datetime
+            verdict=refused why="a review ran at $(strftime %H:%M "$ranat")"
+          elif [[ -e "$HOME_DIR/review-requested" ]]; then why="already requested"
+          else effect=review change="review requested from the desk ($actor)"; fi ;;
         limit)
           if [[ "$value" == <-> ]] && (( value >= 1 && value <= 20 )); then
             effect=limit change="PR limit set to $value from the desk ($actor)"
@@ -337,6 +352,7 @@ apply_commands() {
     case "$effect" in
       pause) : > "$HOME_DIR/paused" ;;
       resume) rm -f "$HOME_DIR/paused" ;;
+      review) : > "$HOME_DIR/review-requested" ;;
       limit|implement-cap)
         print -r -- "$value" > "$HOME_DIR/$effect.tmp" && mv "$HOME_DIR/$effect.tmp" "$HOME_DIR/$effect" ;;
     esac || { note "warn: desk command $id ($kind): acked, but $effect could not be written"; record warn "" "desk command $id: $effect not written"; }
@@ -486,7 +502,7 @@ record_queue_state() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local last attended suggested jl view watch renovate devlog
+  local last attended suggested jl view watch renovate devlog review
   last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
   # attended-published is the cache before attended-line, until a verdict replaces it
   attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
@@ -496,7 +512,8 @@ record_queue_state() {
   watch="$(cat "$HOME_DIR/watch.json" 2>/dev/null)"
   renovate="$(cat "$HOME_DIR/renovate.json" 2>/dev/null)"
   devlog="$(cat "$HOME_DIR/devlog-line" 2>/dev/null)"
-  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" "$devlog" ) &!
+  review="$(cat "$HOME_DIR/review-line" 2>/dev/null)"
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" "$devlog" "$review" ) &!
 }
 
 # A paused tick publishes the last run's Attended line and queue view with a paused job line, so
@@ -1312,6 +1329,24 @@ devlog_gate() {
   print due
 }
 
+# review_gate: prints requested (a desk click, which beats the schedule and the hour), due, ran today,
+# done (next in N day(s)), not before HH:00, or off. It starts after SUGGEST_HOUR like the suggestion,
+# on an idle tick the suggestion leaves.
+review_gate() {
+  setopt local_options no_err_exit
+  local age hour
+  if [[ -e "$HOME_DIR/review-requested" ]]; then print requested; return 0; fi
+  if [[ "$REVIEW_DAYS" != <-> || "$REVIEW_DAYS" == 0 ]]; then print off; return 0; fi
+  age="$(stamp_age "$HOME_DIR/review-ran-on")"
+  if [[ -n "$age" ]] && (( age < REVIEW_DAYS )); then
+    if (( age == 0 )); then print "ran today"; else print "done, next in $(( REVIEW_DAYS - age )) day(s)"; fi
+    return 0
+  fi
+  hour=$(( 10#$(date +%H) ))
+  if (( hour < SUGGEST_HOUR )); then printf 'not before %02d:00\n' "$SUGGEST_HOUR"; return 0; fi
+  print due
+}
+
 # The result handling both claude runs share: appends the readable result to the log, sets
 # `spent`, and on a nonzero exit notes, notifies and records a cap or a failure, setting `outcome`.
 #   run_outcome <a planning run|a suggest run> <log prefix> <budget> <log> <result> <rc>
@@ -1465,10 +1500,117 @@ devlog_run() {
   fi
 }
 
+# The daily backlog review: reads the queue view the run just wrote (tree and audit candidates) and
+# the last 90 days of dismissals, each with the finding it names, and writes its brief, actions and
+# findings to review-out.json.
+# It ends with `REVIEWED <n> actions` or `failed: <line>`. `cdwr agent review-check` validates the
+# file and prints the reviews row; nothing is stored for a file it refuses.
+review_run() {
+  local log result rc=0 spent="" outcome line cost row out_json issue n since
+  local out="$HOME_DIR/review-out.json" model=opus
+  run_kind=review
+  linear_ok || { review_line "no Linear tools"; return 0; }
+  cd "$REPO"
+  to_main reviewing
+  log="$LOGS/$(date +%F_%H%M)-review.log"
+  result="${log%.log}.json"
+  note "review: → $log"
+  # Stamped as soon as it starts, so a crash can't run it twice in a day. review-ran-at is the
+  # desk command's one-hour limit. The request is consumed here, a stale result removed.
+  date +%F > "$HOME_DIR/review-ran-on"
+  date +%s > "$HOME_DIR/review-ran-at"
+  rm -f "$HOME_DIR/review-requested" "$out"
+
+  if [[ -n "$queue_view" ]]; then print -r -- "$queue_view" > "$HOME_DIR/review-view.json"
+  elif [[ -s "$HOME_DIR/queue-view.json" ]]; then cp "$HOME_DIR/queue-view.json" "$HOME_DIR/review-view.json"
+  else
+    note "warn: review: no queue view"; record warn "" "review: no queue view"
+    review_line "failed: no queue view"; return 0
+  fi
+  # Dismissals hold for 90 days, as the desk reads them. Each goes to the session with the stored
+  # finding it names (ticket, kind, key, fix), found in the reviews of the same window; the rows go
+  # through files, never arguments.
+  since="$(date -v-90d +%F 2>/dev/null || date -d '90 days ago' +%F 2>/dev/null)"
+  supabase_select review_dismissals "at=gte.$since&order=at.desc" > "$HOME_DIR/review-dismissals.tmp" ||
+    print -r -- '[]' > "$HOME_DIR/review-dismissals.tmp"
+  supabase_select reviews "at=gte.$since&select=findings" > "$HOME_DIR/review-findings.tmp" ||
+    print -r -- '[]' > "$HOME_DIR/review-findings.tmp"
+  jq --slurpfile reviews "$HOME_DIR/review-findings.tmp" '
+      ([$reviews[0][]? | .findings[]? | objects] | INDEX(.id)) as $found
+      | [.[] | . as $d | ($found[$d.finding_id] // {}) as $f
+        | {finding_id: $d.finding_id, at: $d.at, note: $d.note}
+          + ($f | {ticket, kind, key, fix} | with_entries(select(.value != null)))]' \
+    "$HOME_DIR/review-dismissals.tmp" > "$HOME_DIR/review-dismissed.json" 2>/dev/null ||
+    print -r -- '[]' > "$HOME_DIR/review-dismissed.json"
+  rm -f "$HOME_DIR/review-dismissals.tmp" "$HOME_DIR/review-findings.tmp"
+
+  # Same shape as the suggest call; it writes only the out file and its taste file in memory.
+  ( gh_identity_or_note
+  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/review-backlog memory=${MEMORY_DIR:-none} view=$HOME_DIR/review-view.json dismissed=$HOME_DIR/review-dismissed.json out=$out" \
+    --model "$model" "${LINEAR_MCP_ARGS[@]}" \
+    --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
+    --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
+      "Read(**/.env*)" "Read(//**/.claude.json)" "Read(//**/.cdwr/*)" "Read(//run/agent/**)" \
+      "Read(/$HOME_DIR/linear.token*)" "Read(/$HOME_DIR/linear-app.env*)" \
+      "Bash(*/run/agent/*)" "Bash(*linear.token*)" "Bash(*linear-app.env*)" "Bash(*security find-generic-password*)" "Bash(*AGENT_QUEUE_LINEAR*)" \
+    --tools "Read,Grep,Glob,Skill,Bash,Write,Edit" \
+    --permission-mode dontAsk --permission-prompts none \
+    --max-budget-usd "$REVIEW_BUDGET_USD" --output-format json \
+    --allowedTools Skill Read Grep Glob \
+      "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels \
+      "Bash(git log --since=60.days --oneline)" "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(tools/cdwr/agent-queue/gh-review.sh threads *)" \
+      "Write(/$out)" "Edit(/$out)" \
+      ${MEMORY_DIR:+"Write(/$MEMORY_DIR/feedback_review_taste.md)" "Edit(/$MEMORY_DIR/feedback_review_taste.md)"}
+  ) > "$result" 2> "$log" || rc=$?
+
+  run_outcome "a review run" review "$REVIEW_BUDGET_USD" "$log" "$result" "$rc"
+  case "$outcome" in
+    cap) review_line "stopped at the budget"; return 0 ;;
+    failed) review_line "failed"; return 0 ;;
+  esac
+
+  line="$(jq -r '.result // empty' "$result" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
+    grep -E '^(REVIEWED [0-9]+ actions?|failed: .+)$' | tail -n 1 || true)"
+  if [[ "$line" == "REVIEWED "* ]]; then
+    n="${${line#REVIEWED }%% *}"
+    cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
+    [[ "$cost" == <->(|.<->) ]] || cost=0
+    # With --json the check prints {"ok":true,"result":<row>}, or {"ok":false,"error":{"message":"failed: …"}}
+    out_json="$(node "$REPO/tools/cdwr/bin/cdwr.mjs" agent review-check "$out" --host "$(telemetry_host)" --cost "$cost" --model "$model" --json 2>> "$log" </dev/null || true)"
+    if row="$(jq -ce 'select(.ok == true) | .result | objects' <<<"$out_json" 2>/dev/null)"; then
+      if ! supabase_insert_checked reviews "$row"; then
+        note "warn: review: not stored (see $log)"
+        record warn "" "review: not stored"
+        review_line "failed: not stored"
+        return 0
+      fi
+      note "review: $n action(s)"
+      record nothing "" "review: $n action(s)$spent"
+      review_line "ran $(date +%H:%M), $n actions, \$$(printf '%.2f' "$cost")"
+      return 0
+    fi
+    issue="$(jq -r '.error.message // empty' <<<"$out_json" 2>/dev/null || true)"
+    issue="${${issue#failed: }:-review-check printed no row}"
+    note "warn: review: $issue (see $log)"
+    record warn "" "review: $issue"
+    review_line "failed: $issue"
+  elif [[ "$line" == "failed: "* ]]; then
+    note "fail: review: $line"
+    record warn "" "review: ${line#failed: }$spent"
+    review_line "failed: ${line#failed: }"
+  else
+    note "warn: review: no verdict (see $log)"
+    record warn "" "review: no verdict, see $log"
+    review_line "no verdict"
+  fi
+}
+
 if [[ -z "$ready" ]]; then
   gate="$(suggest_gate)"
   # The decision stays the last line: status reads it from there
-  if $check; then print -r -- "suggest: $gate"; print -r -- "devlog: $(devlog_gate)"; echo "idle: nothing to plan"; exit 0; fi
+  if $check; then print -r -- "suggest: $gate"; print -r -- "review: $(review_gate)"; print -r -- "devlog: $(devlog_gate)"; echo "idle: nothing to plan"; exit 0; fi
+  # A desk click beats the suggestion as well as the schedule
+  if [[ -e "$HOME_DIR/review-requested" ]]; then review_run; exit 0; fi
   case "$gate" in
     due*) suggest_run "${${gate#*focus }%)}" ;;
     skipped*)
@@ -1476,13 +1618,17 @@ if [[ -z "$ready" ]]; then
       record skip "" "suggest: ${${gate#skipped, }%% *} still open"
       suggested_line "${gate#skipped, }" ;;
     unavailable*) note "suggest: $gate" ;;
-    # The weekly devlog takes an idle tick the suggestion leaves: one claude session per run
-    *) if [[ "$(devlog_gate)" == due ]]; then devlog_run; fi ;;
+    # The review takes an idle tick the suggestion leaves, the weekly devlog one the review leaves:
+    # one claude session per run
+    *) review_state="$(review_gate)"
+       if [[ "$review_state" == due ]]; then review_run
+       elif [[ "$(devlog_gate)" == due ]]; then devlog_run; fi ;;
   esac
   exit 0
 fi
 if $check; then
   print -r -- "suggest: $(suggest_gate)"
+  print -r -- "review: $(review_gate)"
   print -r -- "devlog: $(devlog_gate)"
   echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')"; exit 0
 fi

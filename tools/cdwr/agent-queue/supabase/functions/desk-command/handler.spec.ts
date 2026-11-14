@@ -22,6 +22,8 @@ type Options = {
   serviceKey?: string | undefined;
   /** queue_state rows, or a status to fail the read with */
   queue?: unknown[] | number;
+  /** reviews rows, newest first; none by default */
+  reviews?: unknown[];
   insert?: number;
   /** desk_abandon, desk_snooze or desk_wake result rows, a status to fail with, or a throw */
   rpc?: unknown[] | number | 'throw';
@@ -46,6 +48,8 @@ const setup = async (options: Options = {}) => {
         const queue = options.queue ?? [{ at: AT, view: {} }];
         return typeof queue === 'number' ? json([], queue) : json(queue);
       }
+      if (path.startsWith('reviews?') && method === 'GET')
+        return json(options.reviews ?? []);
       if (path.startsWith('rpc/desk_') && method === 'POST') {
         if (options.rpc === 'throw') throw new Error('offline');
         const rpc = options.rpc ?? [{ id: 7, status: 'applied', note: null }];
@@ -112,6 +116,7 @@ const bodyOf = (call: [string, RequestInit]) =>
   JSON.parse(call[1].body as string) as Record<string, unknown>;
 
 const HEX = 'a'.repeat(64);
+const FINDING = 'stale:COD-9:0a1b2c3d';
 
 describe('sha256', () => {
   it('matches the known vector', async () => {
@@ -169,13 +174,16 @@ describe('deviceFor', () => {
 });
 
 describe('parseCommand', () => {
-  it.each(['pause', 'resume', 'run', 'abandon'])('accepts %s', (kind) => {
-    expect(parseCommand({ host: 'nuc', kind })).toEqual({
-      host: 'nuc',
-      kind,
-      args: {}
-    });
-  });
+  it.each(['pause', 'resume', 'run', 'abandon', 'review'])(
+    'accepts %s',
+    (kind) => {
+      expect(parseCommand({ host: 'nuc', kind })).toEqual({
+        host: 'nuc',
+        kind,
+        args: {}
+      });
+    }
+  );
 
   it('accepts empty args on a kind that takes none', () => {
     expect(parseCommand({ host: 'nuc', kind: 'pause', args: {} })).toEqual({
@@ -292,6 +300,59 @@ describe('parseCommand', () => {
   ])('refuses snooze with %s', (_name, args) => {
     expect(parseCommand({ host: 'nuc', kind: 'snooze', args })).toBe(
       'snooze takes a ticket, a row kind and a gate time or null'
+    );
+  });
+
+  it('accepts dismiss with a finding and trims the note', () => {
+    expect(
+      parseCommand({
+        host: 'nuc',
+        kind: 'dismiss',
+        args: { finding: FINDING, note: '  not a problem  ' }
+      })
+    ).toEqual({
+      host: 'nuc',
+      kind: 'dismiss',
+      args: { finding: FINDING, note: 'not a problem' }
+    });
+  });
+
+  it.each([
+    ['no note', { finding: FINDING }],
+    ['a null note', { finding: FINDING, note: null }],
+    ['a blank note', { finding: FINDING, note: '   ' }]
+  ])('accepts dismiss with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'dismiss', args })).toEqual({
+      host: 'nuc',
+      kind: 'dismiss',
+      args: { finding: FINDING, note: null }
+    });
+  });
+
+  it('accepts a note of 200 characters', () => {
+    const note = 'a'.repeat(200);
+    expect(
+      parseCommand({
+        host: 'nuc',
+        kind: 'dismiss',
+        args: { finding: FINDING, note }
+      })
+    ).toMatchObject({ args: { note } });
+  });
+
+  it.each([
+    ['no args', undefined],
+    ['no finding', {}],
+    ['an uppercase finding', { finding: 'Stale:COD-1:0a1b2c3d' }],
+    ['a short hash', { finding: 'stale:COD-1:0a1b2c' }],
+    ['a non-hex hash', { finding: 'stale:COD-1:0a1b2c3g' }],
+    ['no ticket', { finding: 'stale:0a1b2c3d' }],
+    ['a note too long', { finding: FINDING, note: 'a'.repeat(201) }],
+    ['a note that is not text', { finding: FINDING, note: 5 }],
+    ['another key', { finding: FINDING, ticket: 'COD-1' }]
+  ])('refuses dismiss with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'dismiss', args })).toBe(
+      'dismiss takes a finding id and a note of at most 200 characters'
     );
   });
 
@@ -776,6 +837,104 @@ describe('createHandler', () => {
     expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
       ticket: 'COD-9',
       change: 'merge refused from the desk (mac): no scheduler reports from nuc'
+    });
+  });
+
+  it('stores a review pending for a known host, with no RPC and no activity', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(post({ host: 'nuc', kind: 'review' }));
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ id: 7, status: 'pending', note: null });
+    expect(callsTo(fetch, 'rpc/')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
+      host: 'nuc',
+      kind: 'review',
+      args: {},
+      status: 'pending'
+    });
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
+  });
+
+  it('refuses a review when one ran less than an hour ago', async () => {
+    const { handle, fetch } = await setup({
+      reviews: [{ at: '2026-11-02T09:30:00Z' }]
+    });
+    const res = await handle(post({ host: 'nuc', kind: 'review' }));
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'a review ran at 09:30 UTC'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      change: 'review refused from the desk (mac): a review ran at 09:30 UTC'
+    });
+  });
+
+  it('stores a review when the newest one is over an hour old', async () => {
+    const { handle } = await setup({
+      reviews: [{ at: '2026-11-02T08:59:00Z' }]
+    });
+    const res = await handle(post({ host: 'nuc', kind: 'review' }));
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ id: 7, status: 'pending', note: null });
+  });
+
+  it('refuses a review for a host nothing reports from', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(post({ host: 'ghost', kind: 'review' }));
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'no scheduler reports from ghost'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      change:
+        'review refused from the desk (mac): no scheduler reports from ghost'
+    });
+  });
+
+  it('dismisses through desk_dismiss without reading the host, and logs activity', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(
+      post({
+        host: 'nuc',
+        kind: 'dismiss',
+        args: { finding: FINDING, note: ' fine ' }
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+
+    expect(
+      fetch.mock.calls.map(
+        ([url, init]) =>
+          `${init.method} ${url.slice(BASE.length + 1).split('?')[0]}`
+      )
+    ).toEqual(['POST rpc/desk_dismiss', 'POST activity']);
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_dismiss')[0])).toEqual({
+      p_host: 'nuc',
+      p_actor: 'mac',
+      p_at: AT,
+      p_finding: FINDING,
+      p_note: 'fine'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toEqual({
+      event_id: 'desk:7',
+      at: AT,
+      ticket: 'COD-9',
+      actor: 'human',
+      change: `dismissed ${FINDING} from the desk (mac)`,
+      host: 'nuc'
+    });
+  });
+
+  it('passes a null note to desk_dismiss when there is none', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    await handle(
+      post({ host: 'nuc', kind: 'dismiss', args: { finding: FINDING } })
+    );
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_dismiss')[0])).toMatchObject({
+      p_note: null
     });
   });
 

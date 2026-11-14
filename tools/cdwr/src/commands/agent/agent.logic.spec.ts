@@ -52,6 +52,7 @@ import {
   parseLoopPid,
   parseNotifyLevel,
   parseQueueView,
+  parseReview,
   parseSuggest,
   parseWatchSource,
   parseWatchState,
@@ -63,6 +64,7 @@ import {
   remoteLogFile,
   remoteReadLog,
   renderPlist,
+  reviewSettings,
   schedulerHere,
   serviceTarget,
   spendForDay,
@@ -391,7 +393,8 @@ describe('renderPlist', () => {
     path: '/opt/homebrew/bin:/usr/bin',
     memoryDir: '/h/.claude/projects/-w-dev/memory',
     suggest: { budgetUsd: 5, hour: 6, days: 1 },
-    devlog: { budgetUsd: 5, days: 7 }
+    devlog: { budgetUsd: 5, days: 7 },
+    review: { budgetUsd: 5, days: 1 }
   };
 
   it('describes the job', () => {
@@ -419,6 +422,12 @@ describe('renderPlist', () => {
     );
     expect(plist).toContain(
       '<key>AGENT_QUEUE_DEVLOG_DAYS</key>\n    <string>7</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_REVIEW_BUDGET_USD</key>\n    <string>5</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_REVIEW_DAYS</key>\n    <string>1</string>'
     );
     expect(plist).toContain(
       '<key>AGENT_QUEUE_MEMORY_DIR</key>\n    <string>/h/.claude/projects/-w-dev/memory</string>'
@@ -452,7 +461,8 @@ describe('renderPlist', () => {
       path: "/it's",
       memoryDir: '/m',
       suggest: { budgetUsd: 5, hour: 6, days: 1 },
-      devlog: { budgetUsd: 5, days: 7 }
+      devlog: { budgetUsd: 5, days: 7 },
+      review: { budgetUsd: 5, days: 1 }
     });
     expect(plist).toContain('/a&amp;b/run.sh');
     expect(plist).toContain('/&lt;h&gt;');
@@ -828,6 +838,21 @@ describe('parseSuggest', () => {
   });
 });
 
+describe('parseReview', () => {
+  it.each([
+    ['due', 'due'],
+    ['requested', 'requested'],
+    ['ran today', 'done'],
+    ['done, next in 1 day(s)', 'done'],
+    ['not before 06:00', 'early'],
+    ['off', 'off'],
+    ['garbage', 'unknown'],
+    ['', 'unknown']
+  ])('%j -> %s', (line, kind) => {
+    expect(parseReview(line)).toEqual({ kind, text: line.trim() });
+  });
+});
+
 describe('parseDevlog', () => {
   it.each([
     ['due', 'due'],
@@ -838,6 +863,27 @@ describe('parseDevlog', () => {
     ['', 'unknown']
   ])('%j -> %s', (line, kind) => {
     expect(parseDevlog(line)).toEqual({ kind, text: line.trim() });
+  });
+});
+
+describe('reviewSettings', () => {
+  it('defaults to $5 a day', () => {
+    expect(reviewSettings({})).toEqual({ budgetUsd: 5, days: 1 });
+  });
+
+  it('reads the environment, 0 days switching it off', () => {
+    expect(
+      reviewSettings({
+        AGENT_QUEUE_REVIEW_BUDGET_USD: '3',
+        AGENT_QUEUE_REVIEW_DAYS: '0'
+      })
+    ).toEqual({ budgetUsd: 3, days: 0 });
+  });
+
+  it('rejects a bad value', () => {
+    expect(() => reviewSettings({ AGENT_QUEUE_REVIEW_DAYS: 'daily' })).toThrow(
+      'AGENT_QUEUE_REVIEW_DAYS'
+    );
   });
 });
 
@@ -906,7 +952,8 @@ describe('installedEnv', () => {
       path: '/opt/homebrew/bin:/usr/bin',
       memoryDir: '/h/.claude/projects/-w-dev/memory',
       suggest: { budgetUsd: 3, hour: 7, days: 0 },
-      devlog: { budgetUsd: 5, days: 7 }
+      devlog: { budgetUsd: 5, days: 7 },
+      review: { budgetUsd: 5, days: 1 }
     });
     expect(installedEnv(plist)).toMatchObject({
       AGENT_QUEUE_SUGGEST_BUDGET_USD: '3',
@@ -1456,7 +1503,8 @@ describe('implement spend', () => {
       path: '/a&b/bin:/usr/bin',
       memoryDir: '/m',
       suggest: { budgetUsd: 5, hour: 6, days: 1 },
-      devlog: { budgetUsd: 5, days: 7 }
+      devlog: { budgetUsd: 5, days: 7 },
+      review: { budgetUsd: 5, days: 1 }
     });
     expect(plistPath(plist)).toBe('/a&b/bin:/usr/bin');
   });
