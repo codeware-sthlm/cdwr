@@ -300,6 +300,10 @@ describe('toRuns', () => {
       kind: 'nothing',
       text: 'nothing today'
     });
+    expect(
+      toRuns([state({ review: '2026-10-28T09:55Z · failed: no verdict' })], [])
+        ?.review
+    ).toEqual({ at: '2026-10-28T09:55Z', text: 'failed: no verdict' });
     expect(result?.qv).toEqual({
       at: '2026-10-28T10:00:00.000Z',
       limit: { used: 1, max: 3 },

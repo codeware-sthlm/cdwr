@@ -5,6 +5,7 @@ import { DAY_MS } from './desk/format';
 import {
   parseAttended,
   parseJob,
+  parseReviewLine,
   parseReviewRow,
   parseSuggested,
   queueViewIssues,
@@ -14,6 +15,7 @@ import type {
   Attended,
   Job,
   QueueView,
+  ReviewLine,
   ReviewRecord,
   Suggested,
   ViewIssue
@@ -75,6 +77,7 @@ export type RunsPayload = {
   last: { when: string; outcome: string } | null;
   attended: Attended | null;
   suggested: Suggested | null;
+  review: ReviewLine | null;
   job: Job | null;
   qv: QueueView | null;
   /** The row carries a view that does not parse; `qv` is then null, or the last good one the page kept */
@@ -232,6 +235,7 @@ export const toRuns = (
     suggested: state.suggested
       ? parseSuggested(`Suggested: ${state.suggested}`)
       : null,
+    review: parseReviewLine(state.review),
     // run.sh's job_line already starts with `Job: `; the other two lines are stored bare
     job: state.job ? parseJob(state.job) : null,
     qv,

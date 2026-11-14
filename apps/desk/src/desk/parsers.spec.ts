@@ -7,6 +7,7 @@ import {
   parseIdea,
   parseJob,
   parsePlan,
+  parseReviewLine,
   parseReviewRow,
   parseSuggested,
   parseWatch,
@@ -56,6 +57,22 @@ describe('parsePlan', () => {
   ])('%s', (_name, desc, expected) => {
     expect(parsePlan(desc)).toEqual(expected);
   });
+});
+
+describe('parseReviewLine', () => {
+  it('reads the UTC minute and the outcome', () => {
+    expect(parseReviewLine('2026-11-14T20:13Z · failed: denied')).toEqual({
+      at: '2026-11-14T20:13Z',
+      text: 'failed: denied'
+    });
+  });
+
+  it.each([null, '', '2026-11-14 · failed: denied'])(
+    'is null for %j, a line without the time',
+    (line) => {
+      expect(parseReviewLine(line)).toBeNull();
+    }
+  );
 });
 
 describe('parseSuggested', () => {

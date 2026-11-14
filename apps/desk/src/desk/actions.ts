@@ -637,7 +637,7 @@ function sendPr(
     });
 }
 
-/** Asks the host's scheduler for a review run; its answer, a note if it refused, then shows beside the button */
+/** Asks the host's scheduler for a review run; the command row then says where it stands (`reviewRequestState`), the note only why it was not sent */
 export function reviewNow(): void {
   const c = state.controls;
   const host = modelAt(new Date()).controls?.host;
@@ -647,7 +647,26 @@ export function reviewNow(): void {
   render();
   sendCommand(c.target, host, 'review')
     .then((reply) => {
-      if (reply.status === 'refused') c.reviewNote = reply.note ?? 'refused';
+      // The reply stands in for its row until Realtime delivers it, so the panel answers at once
+      const stored = state.data.deskCommands;
+      if (stored && !stored.some((row) => row.id === reply.id)) {
+        const at = new Date().toISOString();
+        state.data.deskCommands = [
+          ...stored,
+          {
+            id: reply.id,
+            at,
+            host,
+            kind: 'review',
+            args: {},
+            actor: 'desk',
+            status: reply.status,
+            applied_at: reply.status === 'pending' ? null : at,
+            note: reply.note
+          }
+        ];
+      } else if (!stored && reply.status === 'refused')
+        c.reviewNote = reply.note ?? 'refused';
     })
     .catch((error: unknown) => {
       c.reviewNote =

@@ -1,6 +1,7 @@
 import type { ReviewFinding } from '@codeware/shared/util/agent-review';
 import { type ReactNode, useState } from 'react';
 
+import type { ReviewRequestState } from '../commands';
 import { seenAgo, usd } from '../format';
 import type { ReviewRecord } from '../types';
 import { NOTE_MAX, findingChip } from '../view/review';
@@ -17,27 +18,61 @@ const PANEL =
 const ROW =
   'flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-[0.88rem]';
 
-/** The Review now button and the note a refusal left; nothing without a control token */
+/** What the panel says about the newest Review now, by where it stands */
+const REQUEST_TEXT = {
+  pending: () => 'Requested, waiting for the host.',
+  queued: () => 'Accepted. The review shows here when it is done.',
+  refused: (note: string) => `Refused: ${note}.`,
+  failed: (note: string) =>
+    `The review failed: ${note.replace(/^failed: /, '')}.`
+} as const satisfies Record<
+  Exclude<ReviewRequestState['state'], 'idle'>,
+  (note: string) => string
+>;
+
+const requestText = (request: ReviewRequestState): string | null => {
+  switch (request.state) {
+    case 'idle':
+      return null;
+    case 'pending':
+    case 'queued':
+      return REQUEST_TEXT[request.state]();
+    case 'refused':
+    case 'failed':
+      return REQUEST_TEXT[request.state](request.note);
+  }
+};
+
+/** The Review now button and what became of the last press; nothing without a control token */
 const ReviewNow = ({
   can,
   busy,
   note,
+  request,
   onReview
-}: Pick<PanelProps, 'can' | 'busy' | 'note' | 'onReview'>) =>
-  can ? (
+}: Pick<PanelProps, 'can' | 'busy' | 'note' | 'request' | 'onReview'>) => {
+  if (!can) return null;
+  const waiting = request.state === 'pending' || request.state === 'queued';
+  const said = note ?? requestText(request);
+  return (
     <span className="flex flex-wrap items-center gap-2">
       <button
         type="button"
         className={WSNOOZE_CARD}
         data-review-now
-        disabled={busy}
+        disabled={busy || waiting}
         onClick={onReview}
       >
-        {busy ? 'Reviewing…' : 'Review now'}
+        {busy ? 'Sending…' : waiting ? 'Reviewing…' : 'Review now'}
       </button>
-      {note ? <span className={WNOTE}>{note}</span> : null}
+      {said ? (
+        <span className={WNOTE} data-review-request={request.state}>
+          {said}
+        </span>
+      ) : null}
     </span>
-  ) : null;
+  );
+};
 
 const Section = ({
   title,
@@ -59,8 +94,10 @@ type PanelProps = {
   can: boolean;
   /** The review request is in flight */
   busy: boolean;
-  /** Why the last request did not go through */
+  /** Why the last request could not be sent */
   note: string | null;
+  /** Where the newest Review now stands */
+  request: ReviewRequestState;
   onReview: () => void;
   onTicket: (id: string) => void;
 };
@@ -72,6 +109,7 @@ export const ReviewPanel = ({
   can,
   busy,
   note,
+  request,
   onReview,
   onTicket
 }: PanelProps) => {
@@ -81,7 +119,13 @@ export const ReviewPanel = ({
         <Empty>
           <span className="flex flex-wrap items-center gap-3">
             <span>No review yet.</span>
-            <ReviewNow can={can} busy={busy} note={note} onReview={onReview} />
+            <ReviewNow
+              can={can}
+              busy={busy}
+              note={note}
+              request={request}
+              onReview={onReview}
+            />
           </span>
         </Empty>
       </section>
@@ -143,7 +187,13 @@ export const ReviewPanel = ({
             .filter(Boolean)
             .join(' · ')}
         </span>
-        <ReviewNow can={can} busy={busy} note={note} onReview={onReview} />
+        <ReviewNow
+          can={can}
+          busy={busy}
+          note={note}
+          request={request}
+          onReview={onReview}
+        />
       </div>
     </section>
   );

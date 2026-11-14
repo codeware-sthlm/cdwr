@@ -8,6 +8,7 @@ import {
   checkToken,
   controlStates,
   prCommandStates,
+  reviewRequestState,
   sendCommand
 } from './commands';
 
@@ -384,5 +385,103 @@ describe('prCommandStates', () => {
       NOW
     );
     expect(states.size).toBe(0);
+  });
+});
+
+describe('reviewRequestState', () => {
+  const AT = '2026-11-14T20:41:18Z';
+  const APPLIED = '2026-11-14T20:41:41Z';
+  const NOW = Date.parse('2026-11-14T20:50:00Z');
+  const row = (
+    id: number,
+    status: string,
+    extra: Partial<{
+      applied_at: string | null;
+      note: string;
+      host: string;
+    }> = {}
+  ) => ({
+    id,
+    at: AT,
+    args: {},
+    host: extra.host ?? 'nuc',
+    kind: 'review',
+    status,
+    applied_at: extra.applied_at ?? null,
+    note: extra.note ?? null
+  });
+  const state = (
+    rows: ReturnType<typeof row>[],
+    line: { at: string; text: string } | null = null,
+    reviewedAt: string | null = null,
+    now = NOW
+  ) => reviewRequestState(rows, 'nuc', line, reviewedAt, now);
+
+  it('is idle without a review command for the host', () => {
+    expect(state([])).toEqual({ state: 'idle' });
+    expect(state([row(1, 'pending', { host: 'mac' })])).toEqual({
+      state: 'idle'
+    });
+  });
+
+  it('waits for the host while pending', () => {
+    expect(state([row(1, 'pending')])).toEqual({ state: 'pending' });
+  });
+
+  it('shows the newest refusal, the host one included', () => {
+    const rows = [
+      row(1, 'applied', { applied_at: APPLIED }),
+      row(2, 'refused', {
+        applied_at: APPLIED,
+        note: 'a review ran at 20:12 UTC'
+      })
+    ];
+    expect(state(rows)).toEqual({
+      state: 'refused',
+      note: 'a review ran at 20:12 UTC'
+    });
+    expect(
+      state(rows, null, null, Date.parse(APPLIED) + REFUSED_SHOW_MS + 1)
+    ).toEqual({ state: 'idle' });
+  });
+
+  it('is queued once applied, until the run says something', () => {
+    const rows = [row(1, 'applied', { applied_at: APPLIED })];
+    expect(state(rows)).toEqual({ state: 'queued' });
+    // An older failure is not this request's answer
+    expect(
+      state(rows, { at: '2026-11-14T20:13Z', text: 'failed: denied' })
+    ).toEqual({ state: 'queued' });
+  });
+
+  it('shows a failed run from after the request', () => {
+    const rows = [row(1, 'applied', { applied_at: APPLIED })];
+    expect(
+      state(rows, { at: '2026-11-14T20:44Z', text: 'failed: denied' })
+    ).toEqual({ state: 'failed', note: 'failed: denied' });
+  });
+
+  it('counts a line from the minute it was applied', () => {
+    const rows = [row(1, 'applied', { applied_at: APPLIED })];
+    expect(
+      state(rows, { at: '2026-11-14T20:41Z', text: 'no verdict' })
+    ).toEqual({ state: 'failed', note: 'no verdict' });
+  });
+
+  it('is done once a review is stored after the request', () => {
+    const rows = [row(1, 'applied', { applied_at: APPLIED })];
+    expect(state(rows, null, '2026-11-14T20:48:00Z')).toEqual({
+      state: 'idle'
+    });
+    expect(
+      state(rows, { at: '2026-11-14T20:48Z', text: 'ran, 4 actions, $1.20' })
+    ).toEqual({ state: 'idle' });
+  });
+
+  it('stops waiting after the pending window', () => {
+    const rows = [row(1, 'applied', { applied_at: APPLIED })];
+    expect(
+      state(rows, null, null, Date.parse(APPLIED) + PENDING_MAX_MS + 1)
+    ).toEqual({ state: 'idle' });
   });
 });

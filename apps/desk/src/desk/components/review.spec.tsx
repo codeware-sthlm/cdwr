@@ -22,6 +22,7 @@ const panel = (over: Partial<Parameters<typeof ReviewPanel>[0]> = {}) => {
       can
       busy={false}
       note={null}
+      request={{ state: 'idle' }}
       onReview={onReview}
       onTicket={vi.fn()}
       {...over}
@@ -71,6 +72,35 @@ describe('ReviewPanel', () => {
       c.querySelector<HTMLButtonElement>('[data-review-now]')?.disabled
     ).toBe(true);
     expect(text(c)).toContain('no scheduler reports from nuc');
+  });
+
+  it.each([
+    [{ state: 'pending' } as const, 'Requested, waiting for the host.', true],
+    [
+      { state: 'queued' } as const,
+      'Accepted. The review shows here when it is done.',
+      true
+    ],
+    [
+      { state: 'refused', note: 'a review ran at 20:12 UTC' } as const,
+      'Refused: a review ran at 20:12 UTC.',
+      false
+    ],
+    [
+      { state: 'failed', note: 'failed: not stored' } as const,
+      'The review failed: not stored.',
+      false
+    ]
+  ])('answers a press that is %j', (request, said, disabled) => {
+    const { c } = panel({ request });
+    expect(text(c.querySelector('[data-review-request]'))).toBe(said);
+    expect(
+      c.querySelector<HTMLButtonElement>('[data-review-now]')?.disabled
+    ).toBe(disabled);
+  });
+
+  it('says nothing about an idle request', () => {
+    expect(panel().c.querySelector('[data-review-request]')).toBeNull();
   });
 
   it('reads one line and the button when there is no review yet', () => {
