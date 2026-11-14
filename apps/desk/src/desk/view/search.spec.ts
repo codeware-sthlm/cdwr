@@ -41,6 +41,8 @@ const desk = (): DeskState => {
           state: 'started',
           label: null,
           pr: null,
+          position: null,
+          waiting: false,
           blockers: [],
           gaps: [],
           children: [
@@ -50,6 +52,8 @@ const desk = (): DeskState => {
               state: 'unstarted',
               label: null,
               pr: null,
+              position: 1,
+              waiting: false,
               blockers: [],
               gaps: [],
               children: []
