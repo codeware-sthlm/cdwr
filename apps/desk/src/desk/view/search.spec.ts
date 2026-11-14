@@ -127,12 +127,30 @@ describe('searchTickets', () => {
     ['800', ['gap']],
     ['2', ['open', 'parked']],
     ['3', ['open', 'review']],
+    ['4', ['open', 'plan']],
+    ['5', ['hand-offs']],
     ['6', ['label']]
   ])('names where COD-%s shows up', (n, where) => {
     expect(searched(desk(), n)[0]).toMatchObject({
       ticket: `COD-${n}`,
       where
     });
+  });
+
+  it('finds a question and an approved plan held by an open blocker', () => {
+    const s = desk();
+    s.data.runs = runs(
+      view({
+        table: {
+          before: [{ ticket: 'COD-700', kind: 'question' }],
+          label: [],
+          after: []
+        },
+        blocked: [{ ticket: 'COD-701', blockers: ['COD-702'] }]
+      })
+    );
+    expect(searched(s, '700')[0]).toMatchObject({ where: ['question'] });
+    expect(searched(s, '701')[0]).toMatchObject({ where: ['held'] });
   });
 
   it('takes the title from the Linear issue, else the tree, else the gap', () => {

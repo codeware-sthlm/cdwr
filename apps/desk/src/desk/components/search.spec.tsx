@@ -68,10 +68,13 @@ describe('Search', () => {
     ]);
   });
 
-  it('lists the ids with a prefix, the higher number first', () => {
+  it('lists the ids with a prefix after the exact id, the higher number first', () => {
     const { field } = mount();
     type(field, 'cod-5');
-    expect(options().map((o) => o.slice(0, 6))).toEqual(['COD-51', 'COD-50']);
+    const [exact, ...prefixed] = options();
+    // COD-5 shows up only among the hand-offs, so it has no title
+    expect(exact).toBe('COD-5hand-offs');
+    expect(prefixed.map((o) => o.slice(0, 6))).toEqual(['COD-51', 'COD-50']);
   });
 
   it('lists the titles that hold every word of the query', () => {

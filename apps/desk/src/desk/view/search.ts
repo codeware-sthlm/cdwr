@@ -14,8 +14,12 @@ export const SEARCH_PLACES = [
   'tree',
   'gap',
   'next',
+  'plan',
+  'question',
+  'held',
   'parked',
   'review',
+  'hand-offs',
   'label',
   'session'
 ] as const;
@@ -57,8 +61,12 @@ const collect = (
   for (const n of treeNodes(m.tree)) add(n.ticket, 'tree', n.title ?? '');
   for (const g of m.gaps) add(g.ticket, 'gap', g.title);
   for (const x of m.next) add(x.ticket, 'next');
+  for (const x of m.plans) add(x.ticket, 'plan');
+  for (const x of m.questions) add(x.ticket, 'question');
+  for (const x of m.heldApprovals) add(x.ticket, 'held');
   for (const x of m.parked) add(x.ticket, 'parked');
   for (const x of m.prs) add(x.ticket, 'review');
+  for (const x of m.handoffs) add(x.ticket, 'hand-offs');
   for (const x of m.toLabel) add(x.ticket, 'label');
   const s = m.session;
   if (s?.ticket && s.state !== 'ended') add(s.ticket, 'session');
