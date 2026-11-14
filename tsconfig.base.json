@@ -170,6 +170,9 @@
       "@codeware/shared/ui/theme-studio": [
         "./libs/shared/ui/theme-studio/src/index.ts"
       ],
+      "@codeware/shared/util/agent-review": [
+        "./libs/shared/util/agent-review/src/index.ts"
+      ],
       "@codeware/shared/util/github": [
         "./libs/shared/util/github/src/index.ts"
       ],
