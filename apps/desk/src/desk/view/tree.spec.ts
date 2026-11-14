@@ -81,6 +81,14 @@ describe('filterTree', () => {
       )
     ).toHaveLength(1);
   });
+
+  it('counts a finished root whose children were cut short as open', () => {
+    const cut = node('H', 'completed', {
+      truncated: true,
+      children: [node('H1', 'completed')]
+    });
+    expect(filterTree([cut], NO_TREE_FILTER)).toHaveLength(1);
+  });
 });
 
 describe('hasGap and hasPosition', () => {
