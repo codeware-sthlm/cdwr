@@ -4940,6 +4940,7 @@ describe('audit and tree', () => {
     ) as Array<{
       id: string;
       ticket: string;
+      title: string | null;
       kind: string;
       what: string;
       fix: string;
@@ -4960,7 +4961,11 @@ describe('audit and tree', () => {
 
     it('names the open blocker', () => {
       const [g] = audit([held()]);
-      expect(g).toMatchObject({ id: 'COD-1:held', kind: 'held' });
+      expect(g).toMatchObject({
+        id: 'COD-1:held',
+        kind: 'held',
+        title: 'Title COD-1'
+      });
       expect(g?.fix).toContain('COD-9');
     });
 
@@ -5314,6 +5319,22 @@ describe('audit and tree', () => {
         label: null,
         gaps: []
       });
+    });
+
+    it('marks a root whose sub-issue list was cut at the page', () => {
+      const parent = (hasNextPage: boolean) => ({
+        identifier: 'COD-1',
+        title: 'The parent',
+        state: { type: 'started' },
+        children: {
+          pageInfo: { hasNextPage },
+          nodes: [child('COD-2', 'started', 'agent:working')]
+        }
+      });
+      const member = (hasNextPage: boolean) =>
+        node('COD-2', 'agent:working', { parent: parent(hasNextPage) });
+      expect(tree([member(true)])[0]).toMatchObject({ truncated: true });
+      expect(tree([member(false)])[0]).not.toHaveProperty('truncated');
     });
 
     it('roots a parentless agent ticket and sorts roots by number', () => {

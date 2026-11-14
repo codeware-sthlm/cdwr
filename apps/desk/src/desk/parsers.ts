@@ -272,6 +272,7 @@ const labelEntry = z.object({
 const gapEntry = z.object({
   id: z.string(),
   ticket: z.string(),
+  title: opt(z.string()),
   kind: z.string(),
   what: z.string(),
   fix: z.string()
