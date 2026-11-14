@@ -54,6 +54,7 @@ const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
   url: `https://linear.app/codeware/issue/${id}`,
   completedAt: null,
   canceledAt: null,
+  prReady: false,
   ...over
 });
 
@@ -1387,6 +1388,22 @@ describe('shipped', () => {
     );
     expect(s.week).toBe(2);
     expect(s.total).toBe(3);
+  });
+
+  it('counts a ticket whose agent label is gone but carries the PR-ready comment', () => {
+    const s = shipped(
+      [
+        issue('COD-1', {
+          statusType: 'completed',
+          completedAt: '2026-10-28T09:00:00',
+          labels: [],
+          prReady: true
+        }),
+        closedOn('COD-2', '2026-10-28T09:00:00', [])
+      ],
+      NOW
+    );
+    expect(s.days[28].items.map((i) => i.id)).toEqual(['COD-1']);
   });
 
   it('leaves out tickets without an agent label, of other repos, without a close time or outside the window', () => {

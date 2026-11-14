@@ -63,7 +63,8 @@ const issue = (id: string): Issue => ({
   updatedAt: '2026-10-01T08:00:00',
   url: `https://linear.app/codeware/issue/${id}`,
   completedAt: '2026-10-20T08:00:00',
-  canceledAt: null
+  canceledAt: null,
+  prReady: false
 });
 
 const keys = (n: number) =>

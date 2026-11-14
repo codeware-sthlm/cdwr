@@ -25,6 +25,7 @@ export const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
   url: `https://linear.app/codeware/issue/${id}`,
   completedAt: null,
   canceledAt: null,
+  prReady: false,
   ...over
 });
 

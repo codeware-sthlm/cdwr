@@ -839,7 +839,7 @@ export type ShippedDay = { key: string; items: Issue[] };
 
 export type Shipped = { days: ShippedDay[]; total: number; week: number };
 
-/** Agent tickets closed per day over the last SHIP_DAYS days, the one trend on the page */
+/** Agent tickets closed per day over the last SHIP_DAYS days, the one trend on the page; an agent ticket carries an `agent:` label or, once the queue removes it, the PR-ready comment */
 export const shipped = (
   closed: readonly Issue[] | null,
   now: Date
@@ -851,7 +851,10 @@ export const shipped = (
     days.push({ key: dayKey(today.getTime() - k * 864e5), items: [] });
   const byKey = new Map(days.map((d) => [d.key, d]));
   for (const i of closed ?? []) {
-    if (!i.completedAt || !i.labels.some((l) => l.startsWith('agent:')))
+    if (
+      !i.completedAt ||
+      !(i.prReady || i.labels.some((l) => l.startsWith('agent:')))
+    )
       continue;
     if (isOtherRepo(i)) continue;
     byKey.get(dayKey(i.completedAt))?.items.push(i);
