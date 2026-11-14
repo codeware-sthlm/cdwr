@@ -91,6 +91,16 @@ describe('ticketState', () => {
     expect(stateOf(s, 'COD-4').queue?.waiting).toBe('question');
   });
 
+  it("leaves out a watch entry of the ticket's older PR", () => {
+    const s = desk();
+    const entry = s.data.runs?.watches[0]?.watch['COD-3'];
+    if (entry) entry.pr = 6;
+    const t = stateOf(s, 'COD-3');
+    expect(t.pr).toBeNull();
+    // The events still follow the current PR 7
+    expect(t.activity?.some((e) => e.text.startsWith('PR 7 '))).toBe(true);
+  });
+
   it('builds the URL and knows nothing for an unknown id', () => {
     expect(stateOf(desk(), 'COD-999')).toEqual({
       id: 'COD-999',
