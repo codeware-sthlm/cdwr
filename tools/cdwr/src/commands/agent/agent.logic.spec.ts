@@ -1202,6 +1202,15 @@ describe('audit and tree in the queue view', () => {
     ]);
     expect(formatGaps(EMPTY_VIEW)).toEqual([]);
   });
+
+  it('leaves candidate gaps out of the Gaps lines', () => {
+    expect(
+      formatGaps({
+        ...EMPTY_VIEW,
+        audit: [{ ...gap, id: 'COD-6:untouched', candidate: true }, gap]
+      })
+    ).toHaveLength(1);
+  });
 });
 
 describe('formatRefused', () => {
