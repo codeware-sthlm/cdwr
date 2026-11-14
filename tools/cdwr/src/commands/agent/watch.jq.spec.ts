@@ -3229,7 +3229,7 @@ describe('attended picks', () => {
             since: '2026-10-11T11:55:00Z',
             resolved: true,
             outcome: 'reviewed',
-            copilot: null,
+            copilot: 'none',
             copilotAsked: null
           }
         ]);
@@ -3278,9 +3278,8 @@ describe('attended picks', () => {
         });
       });
 
-      it('leaves copilot and the request null for another PR or no entry', () => {
+      it('leaves copilot and the request null for another PR', () => {
         const issues = [parkedNode('COD-1', 'agent:review', 'copilot', 60)];
-        const nulls = { copilot: null, copilotAsked: null };
         expect(
           view(issues, {}, 5, {
             'COD-1': {
@@ -3289,8 +3288,16 @@ describe('attended picks', () => {
               copilotAsked: { at: iso(30), ok: true, why: null }
             }
           }).parked[0]
-        ).toMatchObject(nulls);
-        expect(view(issues).parked[0]).toMatchObject(nulls);
+        ).toMatchObject({ copilot: null, copilotAsked: null });
+      });
+
+      it('reads a PR the watch has not read yet as no Copilot', () => {
+        const issues = [parkedNode('COD-1', 'agent:review', 'copilot', 60)];
+        const none = { copilot: 'none', copilotAsked: null };
+        expect(view(issues).parked[0]).toMatchObject(none);
+        expect(
+          view(issues, {}, 5, { 'COD-1': { state: 'open' } }).parked[0]
+        ).toMatchObject(none);
       });
 
       it('keeps a ci entry free of the copilot fields', () => {

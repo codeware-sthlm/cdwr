@@ -614,10 +614,13 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
       parked: ($park | map({ ticket: .identifier, wait: .park.wait, pr: .park.pr,
                              since: (.park.since | todateiso8601),
                              resolved: .ws.resolved, outcome: .ws.outcome }
-                           # The desk reads a Copilot wait nobody asked for, or whose request failed, as stalled
+                           # The desk reads a Copilot wait nobody asked for, or whose request failed, as stalled.
+                           # A PR the watch has not read yet reads as none, so a wait the scheduler never
+                           # reached stalls too; an entry for another PR says nothing about this one.
                            + (if .park.wait == "copilot"
                               then .park.pr as $pr
-                                   | { copilot: (($watch // {})[.identifier] // {} | if .pr == $pr then .copilot // null else null end),
+                                   | { copilot: (($watch // {})[.identifier] // {}
+                                                 | if .pr == null then "none" elif .pr == $pr then .copilot // null else null end),
                                        copilotAsked: .asked }
                               else {} end))),
       renovate: ($ren | map({ pr, title, state, ticket })),
