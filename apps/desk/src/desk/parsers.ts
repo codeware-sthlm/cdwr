@@ -325,7 +325,7 @@ const gapEntry = z.object({
 });
 
 // A node's children are parsed one by one too: a malformed child is dropped without its parent
-const treeNode: z.ZodType<QueueTreeNode, z.ZodTypeDef, unknown> = z.lazy(() =>
+const treeNode: z.ZodType<QueueTreeNode, unknown> = z.lazy(() =>
   z.object({
     ticket: z.string(),
     title: z
@@ -599,12 +599,22 @@ export const parseWatch = (json: unknown): Map<string, WatchEntry> => {
   return entries;
 };
 
+/** The value at an issue's path; zod 4 issues no longer carry what was received */
+const valueAt = (root: unknown, path: PropertyKey[]): unknown =>
+  path.reduce<unknown>(
+    (value, key) =>
+      typeof value === 'object' && value !== null
+        ? (value as Record<PropertyKey, unknown>)[key]
+        : undefined,
+    root
+  );
+
 /** The paths a view fails to parse at; `missing` when the field is absent rather than mistyped */
 export const queueViewIssues = (v: unknown): ViewIssue[] => {
   const parsed = queueViewSchema.safeParse(v);
   if (parsed.success) return [];
   return parsed.error.issues.map((i) => ({
     path: i.path.join('.'),
-    missing: i.code === 'invalid_type' && i.received === 'undefined'
+    missing: i.code === 'invalid_type' && valueAt(v, i.path) === undefined
   }));
 };

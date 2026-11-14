@@ -143,7 +143,7 @@ const artifactsSchema = z.object({
 
 /** Whether the run still holds the desk artifact, from `gh api …/actions/runs/<id>/artifacts` */
 export const artifactVerdict = (text: string): ArtifactVerdict => {
-  let parsed: z.SafeParseReturnType<unknown, z.infer<typeof artifactsSchema>>;
+  let parsed: z.ZodSafeParseResult<z.infer<typeof artifactsSchema>>;
   try {
     parsed = artifactsSchema.safeParse(JSON.parse(text));
   } catch {
