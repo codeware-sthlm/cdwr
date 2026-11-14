@@ -48,6 +48,12 @@ describe('reviewSchema', () => {
     expect(reviewSchema.safeParse(review).success).toBe(false);
   });
 
+  it('fails with more than seven actions', () => {
+    const review = valid();
+    review.actions = Array.from({ length: 8 }, () => review.actions[0]!);
+    expect(reviewSchema.safeParse(review).success).toBe(false);
+  });
+
   it('fails an id of the wrong format', () => {
     const review = valid();
     review.findings[0]!.id = 'missing-plan:COD-2:xyz';
