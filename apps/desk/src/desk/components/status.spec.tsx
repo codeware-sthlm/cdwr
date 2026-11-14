@@ -18,7 +18,77 @@ import {
   view
 } from '../view/fixtures';
 
-import { Status } from './status';
+import { Status, TreePill } from './status';
+
+const node = (ticket: string, gaps: string[] = []) => ({
+  ticket,
+  title: null,
+  state: 'started',
+  label: null,
+  pr: null,
+  blockers: [],
+  gaps,
+  children: []
+});
+
+describe('TreePill', () => {
+  const pill = (tree: ReturnType<typeof node>[] | null, current = 'desk') => {
+    const state = filled();
+    state.data.runs = tree ? runs(view({ tree })) : null;
+    const onView = vi.fn();
+    const { container } = render(
+      <TreePill
+        m={model(state, NOW)}
+        view={current as 'desk'}
+        onView={onView}
+      />
+    );
+    return {
+      onView,
+      button: container.querySelector('button[data-view="tree"]') as HTMLElement
+    };
+  };
+
+  it('counts the roots and the gaps in the wait tone', () => {
+    const { button } = pill([
+      node('COD-1'),
+      node('COD-2', ['label-on-closed'])
+    ]);
+    expect(button.textContent).toContain('Tree');
+    expect(button.querySelector('.roots')?.textContent).toBe('2');
+    const gaps = button.querySelector('.gaps');
+    expect(gaps?.textContent).toBe('· 1 gap');
+    expect(gaps?.className).toContain('text-[color:var(--wait)]');
+    expect(button.querySelector('.flag.wait')).not.toBeNull();
+    expect(button.getAttribute('aria-label')).toBe(
+      'Ticket tree: 2 roots, 1 gap'
+    );
+  });
+
+  it('shows no gaps text or flag when there are none', () => {
+    const { button } = pill([node('COD-1')]);
+    expect(button.querySelector('.gaps')).toBeNull();
+    expect(button.querySelector('.flag')).toBeNull();
+    expect(button.getAttribute('aria-label')).toBe('Ticket tree: 1 root');
+  });
+
+  it('shows a dash for the count before the runs arrive', () => {
+    const { button } = pill(null);
+    expect(button.querySelector('.roots')?.textContent).toBe('–');
+    expect(button.getAttribute('aria-label')).toBe('Ticket tree: loading');
+  });
+
+  it('is the current page on the tree view only', () => {
+    expect(pill([], 'tree').button.getAttribute('aria-current')).toBe('page');
+    expect(pill([], 'desk').button.hasAttribute('aria-current')).toBe(false);
+  });
+
+  it('opens the tree view on click', () => {
+    const { button, onView } = pill([]);
+    fireEvent.click(button);
+    expect(onView).toHaveBeenCalledWith('tree');
+  });
+});
 
 describe('Status', () => {
   it('opens the Platform view from the Platform pill', () => {
@@ -34,6 +104,20 @@ describe('Status', () => {
     expect(onView).toHaveBeenCalledWith('platform');
     expect(container.textContent).toContain('LIVE');
     expect(container.textContent).toContain('realtime ·');
+  });
+
+  it('marks the Platform pill as the current page on the Platform view', () => {
+    const { container } = render(
+      <Status
+        m={model(filled(), NOW)}
+        connection={connection(true)}
+        view="platform"
+        onView={vi.fn()}
+      />
+    );
+    expect(
+      container.querySelector('.platform')?.getAttribute('aria-current')
+    ).toBe('page');
   });
 
   it('shows the unknown state while polling', () => {

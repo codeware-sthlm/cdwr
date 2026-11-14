@@ -30,7 +30,6 @@ describe('Tiles', () => {
     );
     expect(ids).toEqual([
       'next',
-      'tree',
       'review',
       'handoffs',
       'session',
@@ -75,7 +74,6 @@ describe('Tiles', () => {
       expect(t.tile(id)?.querySelector('span.s')?.textContent).toBe(sub);
     };
     tile('next', '1', 'COD-1 · ready');
-    tile('tree', '0', 'no gaps');
     tile('review', '1', '0 await you · live');
     tile('handoffs', '1', 'merged, steps remain');
     tile('session', '2', 'mac attended · nuc implement');
@@ -124,32 +122,6 @@ describe('Tiles', () => {
     expect(ok.tile('review')?.textContent).toContain('1 await you · live');
     expect(ok.tile('runs')?.classList.contains('bad')).toBe(false);
     expect(ok.tile('runs')?.textContent).toContain('median – · 0 failed');
-  });
-
-  it('counts the tree roots, and marks the tree tile bad when a ticket has a gap', () => {
-    const node = (ticket: string, gaps: string[] = []) => ({
-      ticket,
-      title: null,
-      state: 'started',
-      label: null,
-      pr: null,
-      blockers: [],
-      gaps,
-      children: []
-    });
-    const state = filled();
-    state.data.runs = runs(
-      view({ tree: [node('COD-1'), node('COD-2', ['label-on-closed'])] })
-    );
-    const gapped = mount(state);
-    expect(gapped.value('tree')).toBe('2');
-    expect(gapped.tile('tree')?.querySelector('span.s')?.textContent).toBe(
-      '1 gap'
-    );
-    expect(gapped.tile('tree')?.classList.contains('bad')).toBe(true);
-    state.data.runs = runs(view({ tree: [node('COD-1')] }));
-    const clean = mount(state);
-    expect(clean.tile('tree')?.classList.contains('bad')).toBe(false);
   });
 
   it('shows the plan tile as both used shares', () => {

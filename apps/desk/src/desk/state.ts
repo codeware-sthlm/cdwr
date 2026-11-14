@@ -43,7 +43,6 @@ export const isFilter = (value: unknown): value is Filter =>
 export const SHEET_IDS = [
   'before',
   'next',
-  'tree',
   'review',
   'handoffs',
   'session',
@@ -72,11 +71,15 @@ export const OLD_SHEET_IDS: ReadonlyMap<string, SheetId> = new Map([
 ]);
 
 /** The full-page views; the desk is the default and has no hash */
-export type View = 'desk' | 'platform';
+export type View = 'desk' | 'platform' | 'tree';
 
-/** The view a URL hash names: `platform`, or `nuc` from older links; null for anything else */
-export const viewOf = (value: unknown): 'platform' | null =>
-  value === 'platform' || value === 'nuc' ? 'platform' : null;
+/** The view a URL hash names: `platform` (or `nuc` from older links) or `tree`; null for anything else */
+export const viewOf = (value: unknown): 'platform' | 'tree' | null =>
+  value === 'platform' || value === 'nuc'
+    ? 'platform'
+    : value === 'tree'
+      ? 'tree'
+      : null;
 
 /** A current sheet id, or the sheet an old id moved to; null for anything else */
 export const sheetIdOf = (value: unknown): SheetId | null =>

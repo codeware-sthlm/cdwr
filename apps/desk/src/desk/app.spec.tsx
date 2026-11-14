@@ -53,6 +53,47 @@ describe('App', () => {
     expect(container.querySelector('#cards')).toBeNull();
   });
 
+  it('opens the tree view named by the start hash, also from an old sheet link', () => {
+    window.history.replaceState(null, '', '/#tree');
+    const { container } = render(<App />);
+    act(() => openStartHash());
+    expect(container.querySelector('main#tree')).not.toBeNull();
+    expect(container.querySelector('#cards')).toBeNull();
+    expect(store.state.ui.openSheet).toBeNull();
+  });
+
+  it('returns to the desk on Escape from the tree view', () => {
+    const { container } = render(<App />);
+    act(() => showView('tree', false));
+    expect(container.querySelector('main#tree')).not.toBeNull();
+    act(() => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+    expect(container.querySelector('#cards')).not.toBeNull();
+    expect(container.querySelector('main#tree')).toBeNull();
+  });
+
+  it('focuses the tree title when the view opens, and the Tree button when it closes', () => {
+    const { container } = render(<App />);
+    act(() => showView('tree'));
+    expect(document.activeElement?.id).toBe('tree-title');
+    act(() => showView('desk'));
+    expect(document.activeElement).toBe(
+      container.querySelector('button.tree-pill')
+    );
+  });
+
+  it('opens the tree view from the header Tree button', () => {
+    const { container } = render(<App />);
+    act(() => {
+      fireEvent.click(
+        container.querySelector('button.tree-pill') as HTMLElement
+      );
+    });
+    expect(store.state.ui.view).toBe('tree');
+    expect(window.location.hash).toBe('#tree');
+  });
+
   it('opens the sheet named by the start hash', () => {
     window.history.replaceState(null, '', '/#before');
     render(<App />);
@@ -80,6 +121,15 @@ describe('App', () => {
     render(<App />);
     act(() => showView('platform'));
     expect(document.activeElement?.id).toBe('platform-title');
+  });
+
+  it('focuses the header Platform button when the Platform view closes', () => {
+    const { container } = render(<App />);
+    act(() => showView('platform'));
+    act(() => showView('desk'));
+    expect(document.activeElement).toBe(
+      container.querySelector('button.platform')
+    );
   });
 
   it('opens the Waiting on you sheet from a click on its card', () => {

@@ -1,10 +1,12 @@
 import { hhmm, hhmmss, plural } from '../format';
 import { ofKind } from '../live';
-import type { Model } from '../model';
-import type { Connection } from '../state';
+import { type Model, treeGapped, treeRoots } from '../model';
+import type { Connection, View } from '../state';
 import { platform } from '../view/header';
 
-// The header's live part: the Platform pill and the LIVE dot. The title, bot line, Refresh and Settings are drawn by App.
+import { Icon } from './icon';
+
+// The header's live part: the Platform and Tree pills and the LIVE dot. The title, bot line, Refresh and Settings are drawn by App.
 
 const Sliders = () => (
   <svg
@@ -34,13 +36,61 @@ const B = 'font-normal tracking-[0.1em]';
 const LONG = 'long max-[600px]:hidden';
 const SHORT = 'short hidden max-[600px]:inline';
 
+const PILL =
+  'relative inline-flex min-h-[var(--tap)] items-center gap-2 rounded-[var(--r-pill)] bg-[color:var(--surface)] px-4 py-0 font-[family-name:var(--font-ui)] text-[12px] leading-[normal] font-normal max-[600px]:w-[var(--tap)] max-[600px]:justify-center max-[600px]:border-0 max-[600px]:bg-transparent max-[600px]:p-0';
+
+type TreePillProps = {
+  m: Model;
+  /** The view on show, for `aria-current` */
+  view: View;
+  onView: (view: 'tree') => void;
+};
+
+/** The header's Tree button: the root count, and the gaps in the wait tone */
+export const TreePill = ({ m, view, onView }: TreePillProps) => {
+  const loading = !m.runs;
+  const roots = treeRoots(m.tree);
+  const gaps = treeGapped(m.tree);
+  const label = `Ticket tree: ${loading ? 'loading' : plural(roots, 'root', 'roots') + (gaps ? ', ' + plural(gaps, 'gap', 'gaps') : '')}`;
+  return (
+    <button
+      type="button"
+      className={`tree-pill ${PILL}`}
+      data-view="tree"
+      onClick={() => onView('tree')}
+      aria-label={label}
+      aria-current={view === 'tree' ? 'page' : undefined}
+    >
+      <Icon
+        name="ticket"
+        className="size-4 flex-none stroke-[color:var(--muted)]"
+      />
+      <span className="name max-[600px]:hidden">Tree</span>
+      <span className="roots max-[600px]:hidden">{loading ? '–' : roots}</span>
+      {!loading && gaps ? (
+        <span className="gaps text-[color:var(--wait)] max-[600px]:hidden">
+          · {plural(gaps, 'gap', 'gaps')}
+        </span>
+      ) : null}
+      {!loading && gaps ? (
+        <i
+          className="flag wait absolute top-[9px] right-[9px] hidden size-[7px] rounded-[var(--r-pill)] bg-[color:var(--wait)] max-[600px]:block"
+          aria-hidden="true"
+        ></i>
+      ) : null}
+    </button>
+  );
+};
+
 type Props = {
   m: Model;
   connection: Connection;
+  /** The view on show, for the Platform pill's `aria-current` */
+  view?: View;
   onView: (view: 'platform') => void;
 };
 
-export const Status = ({ m, connection, onView }: Props) => {
+export const Status = ({ m, connection, view = 'desk', onView }: Props) => {
   const p = platform(m);
   const loading = !m.runs;
   const flag = p.failing.length ? 'bad' : p.updates ? 'wait' : '';
@@ -54,10 +104,12 @@ export const Status = ({ m, connection, onView }: Props) => {
   const pill = (
     <button
       type="button"
-      className="platform relative inline-flex min-h-[var(--tap)] items-center gap-2 rounded-[var(--r-pill)] bg-[color:var(--surface)] px-4 py-0 font-[family-name:var(--font-ui)] text-[12px] leading-[normal] font-normal max-[600px]:w-[var(--tap)] max-[600px]:justify-center max-[600px]:border-0 max-[600px]:bg-transparent max-[600px]:p-0"
+      className={`platform ${PILL}`}
+      data-view="platform"
       onClick={() => onView('platform')}
       title={title || undefined}
       aria-label={label}
+      aria-current={view === 'platform' ? 'page' : undefined}
     >
       <Sliders />
       <span className="name max-[600px]:hidden">Platform</span>
