@@ -58,7 +58,12 @@ describe('checkReview', () => {
     ['an sk_ key', 'uses sk_live_abcdef1234'],
     ['a private key', '-----BEGIN PRIVATE KEY-----'],
     ['a long hex run', `commit ${'a1b2c3d4e5'.repeat(4)}`],
-    ['a long base64 run', `key ${'Ab1+/Cd2'.repeat(6)}`]
+    ['a long base64 run', `key ${'Ab1+/Cd2'.repeat(6)}`],
+    ['a GitHub classic token', `token ghp_${'aB3d'.repeat(9)}`],
+    ['a GitHub fine-grained token', `github_pat_${'11ABCDEFG0'.repeat(3)}`],
+    ['a Slack token', 'xoxb-1234567890-abcdefghij'],
+    ['an AWS key id', 'AKIAABCDEFGHIJKLMNOP'],
+    ['a Supabase token', `sbp_${'a1'.repeat(15)}`]
   ])('refuses %s in a field, naming its path', (_name, text) => {
     expect(
       checkReview(

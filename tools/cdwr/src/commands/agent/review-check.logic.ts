@@ -19,6 +19,11 @@ const SECRET_PATTERNS = [
   /eyJ[\w-]*\.[\w-]+\.[\w-]+/,
   // An sk-/sk_ key
   /\bsk[-_][\w-]{8,}/,
+  // GitHub, Slack, AWS and Supabase tokens by their prefixes
+  /\b(gh[pousr]_|github_pat_)\w{20,}/,
+  /\bxox[abprs]-[\w-]{10,}/,
+  /\bAKIA[0-9A-Z]{16}\b/,
+  /\b(sbp_|sb_secret_)\w{20,}/,
   /-----BEGIN/
 ];
 
