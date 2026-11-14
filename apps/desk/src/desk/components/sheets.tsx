@@ -28,6 +28,8 @@ export type SheetActions = {
   wait: WaitActions;
   /** Opens the Ticket sheet on a ticket, also from inside it */
   onTicket: (id: string) => void;
+  /** Dismisses a finding of the review, with a note that may be empty */
+  onDismiss: (finding: string, note: string) => void;
   /** The Waiting on you sheet's snoozed fold */
   onSnoozedOpen: (open: boolean) => void;
   /** The Activity sheet's ticket filter */

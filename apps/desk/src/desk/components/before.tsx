@@ -61,7 +61,7 @@ const WC_PR =
 // A small note in the panel's mono: a card's own, and the one a button leaves
 const WC_NOTE =
   'wc-note font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-normal text-[color:var(--muted)]';
-const WNOTE =
+export const WNOTE =
   'wnote font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-normal text-[color:var(--muted)]';
 // The buttons share one compact row, and wrap only when it is too narrow
 const WC_ACTIONS = 'wc-actions flex flex-wrap items-center gap-2';
@@ -73,7 +73,7 @@ const ACT_SECONDARY = `${ACT} secondary border border-[color:var(--wait-line)] b
 const WSNOOZE_TONE =
   'wsnooze border border-[color:var(--line)] bg-transparent text-[color:var(--muted)] hover:enabled:border-[color:var(--wait-dash)] hover:enabled:text-[color:var(--fg)] disabled:opacity-50';
 const WSNOOZE = `${WSNOOZE_TONE} flex-none rounded-[var(--r-row)] px-2 py-0.5 text-[11px]`;
-const WSNOOZE_CARD = `${WSNOOZE_TONE} inline-flex min-h-8 flex-none items-center self-auto rounded-[10px] px-3 py-0 text-[12px] max-[600px]:min-h-[var(--tap)]`;
+export const WSNOOZE_CARD = `${WSNOOZE_TONE} inline-flex min-h-8 flex-none items-center self-auto rounded-[10px] px-3 py-0 text-[12px] max-[600px]:min-h-[var(--tap)]`;
 
 /** What the sheet's buttons do; the page sends the commands and renders again */
 export type WaitActions = {

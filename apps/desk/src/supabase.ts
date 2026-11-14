@@ -5,6 +5,7 @@ import { DAY_MS } from './desk/format';
 import {
   parseAttended,
   parseJob,
+  parseReviewRow,
   parseSuggested,
   queueViewIssues,
   validateQueueView
@@ -13,6 +14,7 @@ import type {
   Attended,
   Job,
   QueueView,
+  ReviewRecord,
   Suggested,
   ViewIssue
 } from './desk/types';
@@ -32,6 +34,7 @@ export type GithubEventRow = Tables['github_events']['Row'];
 export type SessionRow = Tables['sessions']['Row'];
 export type DeskCommandRow = Tables['desk_commands']['Row'];
 export type SnoozeRow = Tables['snoozes']['Row'];
+export type DismissalRow = Tables['review_dismissals']['Row'];
 
 /** Full commits of main's newest successful builds; null when none is recorded */
 /** Main's newest build of the NUC image, the Mac desk (desk.yml) and the web desk (desk-image.yml) */
@@ -152,6 +155,10 @@ export type Payloads = QueuePayloads & {
   deskCommands: DeskCommandRow[];
   /** Every snoozed ticket, by ticket */
   snoozes: SnoozeRow[];
+  /** The newest review; null when there is none or its row does not parse */
+  reviews: ReviewRecord | null;
+  /** Every dismissed finding, by finding id */
+  dismissals: DismissalRow[];
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -678,6 +685,35 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         : settle(result);
     });
 
+  // The tables are applied by hand after merge, so a missing one reads as no review; a row that does not parse reads as none too
+  const readReviews = (): Promise<ReviewRecord | null> =>
+    attempt(async () => {
+      const result = await client
+        .from('reviews')
+        .select('*')
+        .order('at', { ascending: false })
+        .limit(1);
+      if (result.error && MISSING_TABLE.includes(result.error.code ?? ''))
+        return null;
+      const row = settle(result)[0];
+      return row ? parseReviewRow(row) : null;
+    });
+
+  // A dismissal holds for 90 days, as the review run reads them; newest first
+  const readDismissals = (): Promise<DismissalRow[]> =>
+    attempt(async () => {
+      const since = new Date(Date.now() - 90 * 86_400_000).toISOString();
+      const result = await client
+        .from('review_dismissals')
+        .select('*')
+        .gte('at', since)
+        .order('at', { ascending: false })
+        .limit(1000);
+      return result.error && MISSING_TABLE.includes(result.error.code ?? '')
+        ? []
+        : settle(result);
+    });
+
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
    * catch up on what was missed. `onStatus` gets false on a channel error, a
@@ -689,7 +725,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
    * row as it arrives, without debounce; `onSessions` fires (debounced) on a
    * new or updated `sessions` row, which `onChange` hears too; `onDeskCommands`
    * fires (debounced) on a new or updated `desk_commands` row, and on each (re)join;
-   * `onSnoozes` likewise on a new, updated or deleted `snoozes` row.
+   * `onSnoozes` likewise on a new, updated or deleted `snoozes` row; `onReviews` on a new
+   * `reviews` row and `onDismissals` on a new, updated or deleted `review_dismissals` row.
    */
   const subscribe = (
     onChange: () => void,
@@ -701,7 +738,9 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     onGithub?: (row: GithubEventRow) => void,
     onSessions?: () => void,
     onDeskCommands?: () => void,
-    onSnoozes?: () => void
+    onSnoozes?: () => void,
+    onReviews?: () => void,
+    onDismissals?: () => void
   ): (() => Promise<void>) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hostTimer: ReturnType<typeof setTimeout> | undefined;
@@ -710,6 +749,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     let sessionsTimer: ReturnType<typeof setTimeout> | undefined;
     let commandsTimer: ReturnType<typeof setTimeout> | undefined;
     let snoozesTimer: ReturnType<typeof setTimeout> | undefined;
+    let reviewsTimer: ReturnType<typeof setTimeout> | undefined;
+    let dismissalsTimer: ReturnType<typeof setTimeout> | undefined;
     const changed = (): void => {
       clearTimeout(timer);
       timer = setTimeout(onChange, DEBOUNCE_MS);
@@ -737,6 +778,14 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     const snoozesChanged = (): void => {
       clearTimeout(snoozesTimer);
       snoozesTimer = setTimeout(() => onSnoozes?.(), DEBOUNCE_MS);
+    };
+    const reviewsChanged = (): void => {
+      clearTimeout(reviewsTimer);
+      reviewsTimer = setTimeout(() => onReviews?.(), DEBOUNCE_MS);
+    };
+    const dismissalsChanged = (): void => {
+      clearTimeout(dismissalsTimer);
+      dismissalsTimer = setTimeout(() => onDismissals?.(), DEBOUNCE_MS);
     };
     let channel = client.channel('desk');
     for (const table of [
@@ -843,6 +892,30 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     snoozes.subscribe((status) => {
       if (status === 'SUBSCRIBED') snoozesChanged();
     });
+    // Their own channels too, so before the reviews migration is applied a refused subscription costs the review only
+    let reviews = client.channel('desk-reviews');
+    for (const event of ['INSERT', 'UPDATE'] as const) {
+      reviews = reviews.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'reviews' },
+        reviewsChanged
+      );
+    }
+    // A (re)join catches up on a review that landed while it was away
+    reviews.subscribe((status) => {
+      if (status === 'SUBSCRIBED') reviewsChanged();
+    });
+    let dismissals = client.channel('desk-dismissals');
+    for (const event of ['INSERT', 'UPDATE', 'DELETE'] as const) {
+      dismissals = dismissals.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'review_dismissals' },
+        dismissalsChanged
+      );
+    }
+    dismissals.subscribe((status) => {
+      if (status === 'SUBSCRIBED') dismissalsChanged();
+    });
     // One channel per plan usage table too, so a missing one fails only its own data
     const planChannel = client
       .channel('desk-plan')
@@ -878,6 +951,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       clearTimeout(sessionsTimer);
       clearTimeout(commandsTimer);
       clearTimeout(snoozesTimer);
+      clearTimeout(reviewsTimer);
+      clearTimeout(dismissalsTimer);
       // Resolves once every channel is gone; a resubscribe before that gets the old one back
       return Promise.allSettled(
         [
@@ -887,6 +962,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
           builds,
           commands,
           snoozes,
+          reviews,
+          dismissals,
           planChannel,
           hoursChannel
         ].map((c) => client.removeChannel(c))
@@ -908,6 +985,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     readSessions,
     readDeskCommands,
     readSnoozes,
+    readReviews,
+    readDismissals,
     subscribe,
     check
   };

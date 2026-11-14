@@ -1,3 +1,15 @@
+import type { Review } from '@codeware/shared/util/agent-review';
+
+/** The newest `reviews` row: what the review run handed the desk, and when, where and at what cost */
+export type ReviewRecord = Review & {
+  id: number;
+  host: string;
+  /** ISO */
+  at: string;
+  cost: number | null;
+  model: string | null;
+};
+
 /** A path a queue_state view fails to parse at; `missing` when the field is absent rather than mistyped */
 export type ViewIssue = { path: string; missing: boolean };
 

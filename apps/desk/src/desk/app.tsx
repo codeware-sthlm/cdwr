@@ -13,6 +13,7 @@ import {
   platformActions,
   problemActions,
   refresh,
+  reviewNow,
   runNow,
   setSnoozedOpen,
   setTreeFilter,
@@ -33,6 +34,7 @@ import {
   Problems,
   frozenLabel
 } from './components/problems';
+import { ReviewPanel } from './components/review';
 import { Search } from './components/search';
 import {
   SETTINGS_SUB,
@@ -49,6 +51,7 @@ import type { Model } from './model';
 import { notice } from './notice';
 import { type DeskState, bucketsLoaded } from './state';
 import { useStore } from './store';
+import { findingsByTicket } from './view/review';
 import { forgetLabelled } from './view/waiting';
 
 // The timers and the connection's grace move without an event. A healthy page checks every 15th tick: a host can go silent without one.
@@ -263,6 +266,21 @@ export const App = () => {
               onOpen={setTreeOpen}
               onDesk={() => showView('desk')}
               onTicket={(id) => openTicket(id)}
+              findings={findingsByTicket(
+                state.data.reviews,
+                state.data.dismissals
+              )}
+              review={
+                <ReviewPanel
+                  review={state.data.reviews}
+                  now={now}
+                  can={state.controls.target !== null}
+                  busy={state.controls.reviewing}
+                  note={state.controls.reviewNote}
+                  onReview={reviewNow}
+                  onTicket={(id) => openTicket(id)}
+                />
+              }
             />
           </main>
         ) : (

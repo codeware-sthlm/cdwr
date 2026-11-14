@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { waitName } from '../constants';
 import { dayTime, seenAgo, tidy, usd } from '../format';
+import { findingsByTicket } from '../view/review';
 import {
   type TicketQueue,
   type TicketRelative,
@@ -14,6 +15,7 @@ import { mergeBlocker } from '../view/waiting';
 import { Chip, Empty, PRIO } from './items';
 import { BAR, GROUP, META, RULE } from './items-ui';
 import { IdLink, Inline, LinkIds, Prn, TicketButton } from './links';
+import { FindingsPart } from './review';
 import type { SheetProps } from './sheets';
 
 // The Ticket sheet: everything the desk holds for one ticket, a section per source
@@ -229,6 +231,16 @@ export const TicketBody = ({ m, state, now, actions }: SheetProps) => {
           <Row label="Updated">{seenAgo(linear.updatedAt, now)}</Row>
         </Part>
       ) : null}
+      <FindingsPart
+        findings={
+          findingsByTicket(state.data.reviews, state.data.dismissals).get(id) ??
+          []
+        }
+        can={state.controls.target !== null}
+        dismissing={state.controls.dismissing}
+        notes={state.controls.dismissNotes}
+        onDismiss={actions.onDismiss}
+      />
       {queue ? <QueuePart queue={queue} now={now} /> : null}
       {tree ? <TreePart tree={tree} onTicket={actions.onTicket} /> : null}
       {pr ? <PrPart pr={pr} /> : null}

@@ -438,6 +438,7 @@ export function setSnoozedOpen(open: boolean): void {
 export const sheetActions: SheetActions = {
   wait: waitActions,
   onTicket: (id) => openTicket(id),
+  onDismiss: dismissFinding,
   onSnoozedOpen: setSnoozedOpen,
   onActFilter: (ticket) => {
     state.ui.actFilter = ticket;
@@ -632,6 +633,71 @@ function sendPr(
     })
     .finally(() => {
       c.prSending.delete(key);
+      render();
+    });
+}
+
+/** Asks the host's scheduler for a review run; its answer, a note if it refused, then shows beside the button */
+export function reviewNow(): void {
+  const c = state.controls;
+  const host = modelAt(new Date()).controls?.host;
+  if (!c.target || !host || c.reviewing) return;
+  c.reviewing = true;
+  c.reviewNote = null;
+  render();
+  sendCommand(c.target, host, 'review')
+    .then((reply) => {
+      if (reply.status === 'refused') c.reviewNote = reply.note ?? 'refused';
+    })
+    .catch((error: unknown) => {
+      c.reviewNote =
+        error instanceof CommandError ? error.message : 'The command failed.';
+    })
+    .finally(() => {
+      c.reviewing = false;
+      render();
+    });
+}
+
+/** Dismisses a finding for good; it leaves the tree and the sheet at once, Realtime then confirms */
+export function dismissFinding(finding: string, note: string): void {
+  const c = state.controls;
+  const host = modelAt(new Date()).controls?.host;
+  if (!c.target || !host || c.dismissing.has(finding)) return;
+  const trimmed = note.trim();
+  c.dismissing.add(finding);
+  c.dismissNotes.delete(finding);
+  render();
+  sendCommand(c.target, host, 'dismiss', {
+    finding,
+    ...(trimmed ? { note: trimmed } : {})
+  })
+    .then((reply) => {
+      if (reply.status === 'refused') {
+        c.dismissNotes.set(finding, reply.note ?? 'refused');
+        return;
+      }
+      const rest = (state.data.dismissals ?? []).filter(
+        (d) => d.finding_id !== finding
+      );
+      state.data.dismissals = [
+        ...rest,
+        {
+          finding_id: finding,
+          at: new Date().toISOString(),
+          actor: 'desk',
+          note: trimmed || null
+        }
+      ];
+    })
+    .catch((error: unknown) => {
+      c.dismissNotes.set(
+        finding,
+        error instanceof CommandError ? error.message : 'The command failed.'
+      );
+    })
+    .finally(() => {
+      c.dismissing.delete(finding);
       render();
     });
 }

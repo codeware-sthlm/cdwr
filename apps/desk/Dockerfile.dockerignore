@@ -10,5 +10,6 @@
 # The shared components the desk renders with, and what they import
 !/libs/shared/ui/shadcn/src
 !/libs/shared/util/ui/src
+!/libs/shared/util/agent-review/src
 /apps/desk/src-tauri/target
 /apps/desk/node_modules

@@ -68,6 +68,8 @@ const setup = (getIssue: (id: string) => Promise<IssueDetail>) => {
     readSessions: vi.fn(() => Promise.resolve([])),
     readDeskCommands: vi.fn(() => Promise.resolve([])),
     readSnoozes: vi.fn(() => Promise.resolve([])),
+    readReviews: vi.fn(() => Promise.resolve(null)),
+    readDismissals: vi.fn(() => Promise.resolve([])),
     subscribe: vi.fn(() => () => Promise.resolve())
   };
   const adapter = createAdapter({
