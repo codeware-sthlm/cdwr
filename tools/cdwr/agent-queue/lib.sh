@@ -315,6 +315,52 @@ attended_nodes() {
     else . end' 2>/dev/null
 }
 
+# Every open COD ticket and the ones Done within 14 days, for the tree and the audit's candidate
+# rules (watch.jq `tree`, `candidate_gaps`). Only the run reads it; the pick never does.
+read -r -d '' TREE_QUERY <<'GQL' || true
+query($after: String) {
+  issues(first: 50, after: $after, filter: {
+    team: { key: { eq: "COD" } }
+    state: { type: { neq: "canceled" } }
+    or: [{ completedAt: { null: true } }, { completedAt: { gt: "-P14D" } }]
+  }) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      identifier title priority createdAt completedAt updatedAt description
+      parent {
+        identifier title updatedAt state { type }
+        children(first: 25) { pageInfo { hasNextPage } nodes { identifier title state { type } labels(first: 5) { nodes { name } } } }
+      }
+      children(first: 25) { pageInfo { hasNextPage } nodes { identifier title state { type } labels(first: 5) { nodes { name } } } }
+      state { type }
+      labels(first: 20) { nodes { name } }
+      comments(first: 25, orderBy: createdAt) { nodes { body createdAt user { id app } } }
+      inverseRelations(first: 20) {
+        nodes { type issue { identifier completedAt state { type } labels(first: 20) { nodes { name } } } }
+        pageInfo { hasNextPage }
+      }
+    }
+  }
+}
+GQL
+
+# tree_nodes: reads the TREE_QUERY pages (up to 4 of 50) and prints { nodes, truncated }, truncated
+# when tickets are left past the last page. Fails when Linear answers an error.
+tree_nodes() {
+  local resp after=null page pages="${TMPDIR:-/tmp}/tree-pages.$$" truncated=false
+  : > "$pages"
+  for page in {1..4}; do
+    resp="$(linear "$TREE_QUERY" "$(jq -nc --argjson a "$after" '{after: $a}')")" || { rm -f "$pages"; return 1; }
+    jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null || { rm -f "$pages"; return 1; }
+    jq -c '.data.issues.nodes' <<<"$resp" >> "$pages"
+    [[ "$(jq -r '.data.issues.pageInfo.hasNextPage' <<<"$resp")" == true ]] || break
+    after="$(jq -c '.data.issues.pageInfo.endCursor' <<<"$resp")"
+    (( page == 4 )) && truncated=true
+  done
+  jq -cs --argjson t "$truncated" '{ nodes: add, truncated: $t }' "$pages"
+  rm -f "$pages"
+}
+
 # queue_limit <dir>: the limit the desk sets in <dir>/limit, a whole number 1-20; 5 otherwise
 queue_limit() {
   local v

@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs';
 import { type Server, createServer } from 'node:http';
@@ -2041,13 +2042,98 @@ describe('run.sh audit', () => {
     )?.[0] ?? '';
 
   it('adds the audit and the tree to the view, and keeps the view when they fail', () => {
-    expect(SCRIPT).toContain('audit($now; $watch; $launch; $runnable)');
-    expect(SCRIPT).toContain('tree($now; $watch; $gaps[0])');
+    expect(SCRIPT).toContain(
+      'audit($now; $watch; $launch; $runnable; $wide[0])'
+    );
+    expect(SCRIPT).toContain('tree($now; $watch; $gaps[0]; $order; $wide[0])');
     expect(SCRIPT).toContain(
       'warn: audit: watch.jq failed$carried$(watch_err)'
     );
     expect(SCRIPT).toContain('kept the previous audit and tree');
     expect(SCRIPT).toContain('audit_notices "$queue_view"');
+  });
+
+  describe.skipIf(!hasZsh)('tree_wide', () => {
+    let home: string;
+    beforeEach(() => {
+      home = mkdtempSync(join(tmpdir(), 'tree-wide-'));
+    });
+    afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+    const cached = JSON.stringify({
+      nodes: [{ identifier: 'COD-1' }],
+      truncated: false
+    });
+    const fresh = JSON.stringify({
+      nodes: [{ identifier: 'COD-2' }],
+      truncated: false
+    });
+    // tree_nodes records each call; `ttl` is AGENT_QUEUE_TREE_TTL_MIN
+    const run = (opts: {
+      file?: string;
+      ageMin?: number;
+      read: 'ok' | 'fail';
+      ttl?: string;
+    }) => {
+      const f = join(home, 'tree-nodes.json');
+      if (opts.file) {
+        writeFileSync(f, opts.file);
+        const t = new Date(Date.now() - (opts.ageMin ?? 0) * 60000);
+        utimesSync(f, t, t);
+      }
+      const script = [
+        'set -uo pipefail',
+        `HOME_DIR="${home}"`,
+        ...(opts.ttl ? [`AGENT_QUEUE_TREE_TTL_MIN=${opts.ttl}`] : []),
+        `tree_nodes() { print x >> "${home}/calls"; ${opts.read === 'ok' ? `print -r -- '${fresh}'` : 'return 1'}; }`,
+        fn('tree_wide'),
+        'tree_wide'
+      ].join('\n');
+      const res = spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+      let calls = 0;
+      try {
+        calls = readFileSync(join(home, 'calls'), 'utf8')
+          .split('\n')
+          .filter(Boolean).length;
+      } catch {
+        /* no read */
+      }
+      return { status: res.status, out: res.stdout.trim(), calls };
+    };
+
+    it('reuses a file younger than the TTL without reading Linear', () => {
+      expect(run({ file: cached, ageMin: 5, read: 'ok' })).toEqual({
+        status: 0,
+        out: cached,
+        calls: 0
+      });
+    });
+
+    it('reads again past the TTL, and stores the answer', () => {
+      const r = run({ file: cached, ageMin: 30, read: 'ok' });
+      expect(r).toEqual({ status: 0, out: fresh, calls: 1 });
+      expect(readFileSync(join(home, 'tree-nodes.json'), 'utf8').trim()).toBe(
+        fresh
+      );
+    });
+
+    it('reads every time with a TTL of 0', () => {
+      expect(run({ file: cached, ageMin: 0, read: 'ok', ttl: '0' }).calls).toBe(
+        1
+      );
+    });
+
+    it('falls back on an old file when the read fails, and fails without one', () => {
+      expect(run({ file: cached, ageMin: 600, read: 'fail' })).toEqual({
+        status: 0,
+        out: cached,
+        calls: 1
+      });
+    });
+
+    it('fails when the read fails and there is no file', () => {
+      expect(run({ read: 'fail' }).status).toBe(1);
+    });
   });
 
   it('notifies after the --check path returns', () => {
@@ -2131,6 +2217,18 @@ describe('run.sh audit', () => {
       const again = run([gap(1), gap(2)]);
       // The notices file accumulates: still the one from the first run
       expect(again.notices).toEqual(first.notices);
+    });
+
+    it('records and tells nothing for a candidate gap', () => {
+      const cand = { ...gap(3), id: 'COD-3:untouched', candidate: true };
+      const r = run([cand, gap(1)], {
+        'COD-3:untouched': stood(3600),
+        [A]: stood(901)
+      });
+      expect(r.notices).toEqual([
+        'action|Gap: COD-1 is Done but still agent:ready. Remove the label'
+      ]);
+      expect(Object.keys(r.seen ?? {})).toEqual([A]);
     });
 
     it('reads an old string value as told, keeping its first time', () => {

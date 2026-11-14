@@ -1114,7 +1114,10 @@ const gapSchema = z.object({
   title: z.string().nullish(),
   kind: z.string(),
   what: z.string(),
-  fix: z.string()
+  fix: z.string(),
+  /** A candidate rule's gap: input for the review, no notice, not counted */
+  candidate: z.boolean().optional(),
+  rows: z.array(z.string()).optional()
 });
 
 const treeLeafSchema = z.object({
@@ -1325,9 +1328,11 @@ export const formatRenovate = (view: QueueView): string =>
     )
     .join('; ') || 'nothing';
 
-/** One line per gap of the audit, for the Gaps section of `status` */
+/** One line per gap of the audit, for the Gaps section of `status`; candidates are left out */
 export const formatGaps = (view: QueueView): string[] =>
-  view.audit.map((g) => `${g.ticket} ${g.kind}: ${g.what}. ${g.fix}`);
+  view.audit
+    .filter((g) => g.candidate !== true)
+    .map((g) => `${g.ticket} ${g.kind}: ${g.what}. ${g.fix}`);
 
 export const formatTable = (view: QueueView): string => {
   const { before, after, label } = view.table;

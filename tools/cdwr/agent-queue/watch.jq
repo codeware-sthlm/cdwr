@@ -832,10 +832,112 @@ def ticket_gaps($now; $watch):
       then gap($t; "unlabelled"; "\($t) has been ready to label for over a day";
                "Label \($t) agent:ready") else empty end ];
 
+# --- Candidate rules: report-only gaps a later AI review judges; the wording says "check" ---
+
+# The rows of the description's table under a Status heading (`## Status`, `**Status**`, `Status:`):
+# { what, lead, status, text }: the what is the column headed What, else the first cell that is not
+# a number (a step), else the first cell; lead is the first cell; the status is from the column headed
+# State or Status, else the last cell. A table needs its header and separator lines to count; without a
+# heading, the Step/What/Status table stands in.
+def status_table_rows:
+  ([ foreach ((.description // "") | split("\n")[]) as $l
+       ({ st: "none", row: null, col: -1, wcol: -1 };
+        ($l | trim) as $t
+        | ($t | [ sub("^\\|"; "") | sub("\\|$"; "") | split("|")[] | trim ]) as $c
+        | .row = null
+        | if ($t | test("^(#+\\s*)?(\\*\\*)?status:?(\\*\\*)?:?$"; "i")) then .st = "head"
+          elif ($t | startswith("|")) then
+            if .st == "head"
+              then .st = "hdr"
+                   | .col = ([ range(0; $c | length) | select($c[.] | gsub("[*_`~]"; "") | trim | ascii_downcase | IN("state", "status")) ] | first // -1)
+                   | .wcol = ([ range(0; $c | length) | select($c[.] | gsub("[*_`~]"; "") | trim | ascii_downcase == "what") ] | first // -1)
+            elif .st == "hdr" then .st = "tab"
+            elif .st == "tab" and ($c | length) >= 2
+              then .row = { what: (if .wcol >= 0 and .wcol < ($c | length) then $c[.wcol]
+                                   else ([ $c[] | select(test("^[0-9.#]*$") | not) ] | first // $c[0]) end),
+                            lead: $c[0], status: (if .col >= 0 and .col < ($c | length) then $c[.col] else $c[-1] end), text: $t }
+            else . end
+          elif $t == "" and .st == "head" then .
+          else .st = "none" end;
+        .row // empty) ]) as $h
+  | if ($h | length) > 0 then $h else [ status_rows[] | . + { lead: .what, text: "\(.what) | \(.status)" } ] end;
+
+# A status cell without markdown emphasis, lower case
+def cell_norm: gsub("[*_`~]"; "") | trim | ascii_downcase;
+# ... and without leading emoji or symbols, so "✅ Done" reads as done; a dash alone is kept
+def cell_word: cell_norm | sub("^[^\\p{L}\\p{N}—–]+"; "");
+def cell_finished:
+  cell_word | test("^(done|dropped|skipped|merged|n/a|not needed|won['’]t)\\b") or test("^[—–]$");
+def cell_done: cell_word | test("^(done|merged)\\b");
+def cell_open: cell_word | test("^(planned|open|blocked|todo|backlog|in progress|started|working|waiting|pending)\\b");
+def clip($n): if length > $n then .[0:$n] + "…" else . end;
+
+# The ticket a status row is about: the first COD-n of its first cell, else the one COD-n of the row
+# when it names exactly one, else null
+def row_ticket:
+  ([ .what | scan("COD-[0-9]+") ] | first)
+  // ([ .lead | scan("COD-[0-9]+") ] | first)
+  // ([ .text | scan("COD-[0-9]+") ] | unique | if length == 1 then .[0] else null end);
+
+# The candidate gaps of one ticket. $by maps identifier to node, for its parent and sub-issues.
+def candidate_gaps($now; $by; $tables):
+  .identifier as $t
+  | ($tables[.identifier] // []) as $rows
+  | (.state.type // "") as $type
+  | (.children.nodes // []) as $kids
+  | (if .parent == null then null else ($by[.parent.identifier] // .parent) end) as $p
+  | [ if $type == "completed" and .completedAt != null and ($now - (.completedAt | epoch)) <= 14 * 86400
+         and ([ $rows[] | select((.status | cell_word) != "" and (.status | cell_finished | not)) ] | length) > 0
+      then ([ $rows[] | select((.status | cell_word) != "" and (.status | cell_finished | not)) ]) as $o
+           | gap($t; "done-with-open-rows";
+                 "\($t) is Done with \($o | length) open Status row\(if ($o | length) == 1 then "" else "s" end) (\($o | map(.what | clip(40)) | join(", "))): check whether any blocks";
+                 "Update the rows, or reopen \($t) if one blocks")
+             + { rows: ($o | map(.text)) }
+      else empty end,
+      # A row naming exactly one of this ticket's sub-issues that says the opposite of that sub-issue
+      ([ $rows[]
+         | . as $r
+         | ($r | row_ticket) as $c
+         | select($c != null and $c != $t)
+         | select(any($kids[]; .identifier == $c))
+         | ((($by[$c] // ($kids[] | select(.identifier == $c))).state.type) // "") as $ct
+         | select(($ct == "completed" and ($r.status | cell_open)) or (($ct | IN("completed", "canceled") | not) and $ct != "" and ($r.status | cell_done)))
+         | { id: $c, text: $r.text } ]) as $stale
+      | if ($stale | length) > 0
+        then gap($t; "parent-status-stale";
+                 "\($t)'s Status table disagrees with \($stale | length) sub-issue\(if ($stale | length) == 1 then "" else "s" end) (\($stale | map(.id) | join(", ")))";
+                 "Check the rows against the sub-issues and update them")
+             + { rows: ($stale | map(.text)) }
+        else empty end,
+      if is_open and agent_label == null and .updatedAt != null and ($now - (.updatedAt | epoch)) > 10 * 86400
+         and $p != null and $p.updatedAt != null and ($p.updatedAt | epoch) > (.updatedAt | epoch)
+      then gap($t; "untouched";
+               "\($t) has not moved for \(($now - (.updatedAt | epoch)) / 86400 | floor) days while its parent \(.parent.identifier) has";
+               "Check whether \($t) is still wanted: label it, update it or cancel it")
+      else empty end,
+      # Own rows, or the parent's row naming this ticket, that wait for a decision nobody asked for
+      if is_open
+         and ((.labels.nodes // []) | map(.name) | index("agent:needs-input") | not)
+         and (any((.comments.nodes // [])[]; agent_kind("**Agent needs input**") or agent_kind("**Agent: needs input**")) | not)
+         and (([ $rows[] | select((row_ticket == null) or row_ticket == $t) ]
+               + (if $p == null then [] else [ ($tables[$p.identifier] // [])[] | select(row_ticket == $t) ] end))
+              | any(.[]; (.status | cell_done | not) and (.text | test("decision|h[åa]kan picks"; "i"))))
+      then gap($t; "decision-unasked";
+               "\($t) waits for a decision but nobody asked";
+               "Check the decision and ask it: label \($t) agent:needs-input, or answer in the ticket")
+      else empty end ];
+
 # $runnable is the pick's `runnable` list, so the launch guard reads what a launch would take.
-def audit($now; $watch; $launch; $runnable):
+# $wide is the wider set of open tickets the candidate rules read besides the agent ones.
+def audit($now; $watch; $launch; $runnable; $wide):
   . as $issues
+  | ($issues + (($wide // []) | map(select(.identifier as $i | any($issues[]; .identifier == $i) | not)))) as $u
+  | ($u | map({ key: .identifier, value: . }) | from_entries) as $by
   | [ .[] | select(other_repo | not) | (.title // null) as $title | ticket_gaps($now; $watch)[] | .title = $title ] as $gaps
+  # Candidates are input for the review: they show on the tree and in the view, and send no notice
+  # Each ticket's Status table is parsed once, for its own rules and its children's
+  | ($u | map({ key: .identifier, value: status_table_rows }) | from_entries) as $tables
+  | [ $u[] | select(other_repo | not) | (.title // null) as $title | candidate_gaps($now; $by; $tables)[] | .title = $title | .candidate = true ] as $cand
   # The key is the launch's own: ticket (a Renovate `PR 754` as `PR-754`) and reason
   | (if $launch == null or ($launch.launches // 0) < 2 then []
      else (($launch.key // "") | split(" ")[0]) as $kt
@@ -846,46 +948,71 @@ def audit($now; $watch; $launch; $runnable):
                 | .title = ([ $issues[] | select(.identifier == $kt) | .title ][0] // null) ]
          else [] end
      end) as $guard
-  | ($gaps + $guard) | sort_by(.ticket | id_num);
+  | ($gaps + $guard + $cand) | sort_by(.ticket | id_num);
+def audit($now; $watch; $launch; $runnable): audit($now; $watch; $launch; $runnable; []);
 
-# --- Tree: parents with agent sub-issues, and agent tickets without a parent ---
-# Input is the issue nodes. A root is a parent with an agent-labelled sub-issue, or an agent ticket
-# with no parent that is open or Done within 14 days. Children come from the parent's own list of
-# sub-issues, so Done and unlabelled siblings show; one that is also in the nodes takes its richer data.
+# --- Tree: every open COD ticket, with parents and sub-issues ---
+# Input is the issue nodes; $wide adds the open (and recently Done) tickets the tree query read
+# beyond the agent ones, and a node in both takes the richer one from the input. A root is a ticket
+# with no parent that is open or Done within 14 days, or the parent of a read ticket. Children come
+# from the parent's own list of sub-issues, so Done and unlabelled siblings show; one that is also
+# read takes its richer data.
 # A root whose sub-issue list was cut at the query's page gets `truncated: true`.
-# $gaps is the audit's output.
-def tree($now; $watch; $gaps):
-  . as $issues
+# $gaps is the audit's output. $order is the identifiers in the order the queue picks from (the
+# view's `next`, then what the limit holds): every node gets `position`, its 1-based index there, or
+# null when the queue never picks it. Roots and children sort by the lowest position in the subtree,
+# then by queue_order.
+def tree($now; $watch; $gaps; $order; $wide):
+  . as $input
+  | ($input + (($wide // []) | map(select(.identifier as $i | any($input[]; .identifier == $i) | not)))) as $issues
   | ($issues | map({ key: .identifier, value: . }) | from_entries) as $by
   | ($issues | map(select(other_repo | not))) as $all
-  | ([ $all[] | select(.parent != null and agent_label != null) ]
+  | ([ $all[] | select(.parent != null) ]
      | group_by(.parent.identifier)
      | map({ key: .[0].parent.identifier, value: { parent: .[0].parent, members: . } })
      | from_entries) as $groups
-  | def leaf($c):
+  | def pos($id): ($order | index([$id])) as $i | if $i == null then null else $i + 1 end;
+    def leaf($c):
       ($by[$c.identifier] // $c) as $r
+      | pos($c.identifier) as $p
       | { ticket: $c.identifier, title: ($r.title // $c.title // null),
           state: ($r.state.type // $c.state.type // null),
           label: ($r | agent_label),
+          position: $p,
+          # An agent ticket the queue waits on (a review, an answer, a blocker) has no place in the pick
+          waiting: ($p == null and ($r | is_open and agent_label != null)),
           pr: (($watch // {})[$c.identifier].pr // null),
           blockers: ($r | [ open_blockers[] | .identifier // "unknown" ]),
-          gaps: [ $gaps[] | select(.ticket == $c.identifier) | .kind ] };
-    ([ $all[] | select(agent_label != null and .parent == null
+          gaps: [ $gaps[] | select(.ticket == $c.identifier) | { kind, candidate: (.candidate // false) } ] };
+    # The lowest of a list of positions, else a number past every real one
+    def low: [ .[] | select(. != null) ] | (min // 1000000);
+    # queue_order, a node read in part (a parent's stub) counting as no priority and the newest
+    def order_key: (.priority = (.priority // 0)) | (.createdAt = (.createdAt // "9")) | queue_order;
+    # A node with its sub-issues nested, to five levels; `low` is the lowest position of the subtree
+    def build($c; $d):
+      $c.identifier as $id
+      | (if $d >= 5 then []
+         else ([ (($by[$id].children.nodes // []) + ($groups[$id].parent.children.nodes // [])
+                  + ($groups[$id].members // []))[] ] | unique_by(.identifier)) end) as $k0
+      | ($k0 | map(build(.; $d + 1))
+         | sort_by([ .low, .key, (.ticket | id_num) ])) as $kids
+      | ($by[$id] // $groups[$id].parent // $c) as $r
+      | leaf($c)
+        + (if (($by[$id].children.pageInfo.hasNextPage // false)
+               or ($groups[$id].parent.children.pageInfo.hasNextPage // false))
+           then { truncated: true } else {} end)
+        + { children: ($kids | map(del(.key, .low))),
+            key: ($r | order_key),
+            low: (([ pos($id) ] + ($kids | map(.low))) | low) };
+    # Roots: parentless open or recently Done tickets, and parents nobody reads a parent of
+    ([ $all[] | select(.parent == null
                        and (is_open
                             or (.state.type == "completed" and .completedAt != null
                                 and ($now - (.completedAt | epoch)) <= 14 * 86400)))
        | .identifier ]
-     + ($groups | keys)
+     + [ $groups | keys[] | select($by[.] == null or $by[.].parent == null) ]
      | unique) as $roots
-  | [ $roots[]
-      | . as $id
-      | ($by[$id] // $groups[$id].parent) as $r
-      | leaf($r)
-        + (if (($by[$id].children.pageInfo.hasNextPage // false)
-               or ($groups[$id].parent.children.pageInfo.hasNextPage // false))
-           then { truncated: true } else {} end)
-        + { children: ([ (($by[$id].children.nodes // []) + ($groups[$id].parent.children.nodes // [])
-                          + ($groups[$id].members // []))[] ]
-                       | unique_by(.identifier) | sort_by(.identifier | id_num)
-                       | map(leaf(.) + { children: [] })) } ]
-  | sort_by(.ticket | id_num);
+  | [ $roots[] | . as $id | build(($by[$id] // $groups[$id].parent); 0) ]
+  | sort_by([ .low, .key, (.ticket | id_num) ])
+  | map(del(.key, .low));
+def tree($now; $watch; $gaps): tree($now; $watch; $gaps; []; []);

@@ -1007,11 +1007,11 @@ audit_notices() {
   [[ -n "$seen" ]] || seen='{}'
   out="$(jq -c --argjson seen "$seen" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson at "$(date +%s)" '
     def ts: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
-    ([ .audit[] | .id as $i | ($seen[$i] // null) as $p
+    ([ .audit[] | select(.candidate != true) | .id as $i | ($seen[$i] // null) as $p
        | { key: $i, value: (if $p == null then { first: $now, told: false }
                             elif ($p | type) == "string" then { first: $p, told: true }
                             else $p end) } ] | from_entries) as $st
-    | [ .audit[] | select($st[.id].told | not) | select(($st[.id].first | ts) <= $at - 900) ] as $due
+    | [ .audit[] | select(.candidate != true) | select($st[.id].told | not) | select(($st[.id].first | ts) <= $at - 900) ] as $due
     | { state: ($st | with_entries(if (.key as $k | $due | any(.id == $k)) then .value.told = true else . end)),
         due: $due }' <<<"$1")" || return 0
   # Recorded before the notices go out, so a crash in between tells nobody twice
@@ -1023,6 +1023,25 @@ audit_notices() {
     local line
     jq -r '.due[] | "Gap: \(.what). \(.fix)"' <<<"$out" | while IFS= read -r line; do notice action "$line"; done
   fi
+}
+
+# tree_wide: the TREE_QUERY result as { nodes, truncated }, read again only when tree-nodes.json is
+# older than AGENT_QUEUE_TREE_TTL_MIN minutes (15; 0 reads every run). A failed read falls back on
+# the file however old it is; no file either fails.
+tree_wide() {
+  setopt local_options no_err_exit
+  local f="$HOME_DIR/tree-nodes.json" ttl="${AGENT_QUEUE_TREE_TTL_MIN:-15}" out
+  [[ "$ttl" == <-> ]] || ttl=15
+  if (( ttl > 0 )) && [[ -s "$f" && -n "$(find "$f" -mmin "-$ttl" 2>/dev/null)" ]] &&
+     jq -e '.nodes | type == "array"' "$f" >/dev/null 2>&1; then
+    cat "$f"; return 0
+  fi
+  if out="$(tree_nodes)" && jq -e '.nodes | type == "array"' >/dev/null 2>&1 <<<"$out"; then
+    print -r -- "$out" > "$f.tmp" && mv "$f.tmp" "$f"
+    print -r -- "$out"; return 0
+  fi
+  if [[ -s "$f" ]] && jq -e '.nodes | type == "array"' "$f" >/dev/null 2>&1; then cat "$f"; return 0; fi
+  return 1
 }
 
 attended() {
@@ -1101,12 +1120,23 @@ attended() {
   # large for an argument.
   [[ -f "$HOME_DIR/launch.json" ]] && launch_state="$(jq -ce 'objects' "$HOME_DIR/launch.json" 2>/dev/null || print null)"
   if [[ -n "$queue_view" ]]; then
-    local ax="$HOME_DIR/audit-view.tmp.$$"
+    local ax="$HOME_DIR/audit-view.tmp.$$" wide order
+    # The wider ticket read, kept for a while; without it the audit and the tree keep to the agent
+    # tickets. The nodes go through a file: they outgrow an argument.
+    echo '[]' > "$ax.wide"
+    if wide="$(tree_wide)"; then
+      jq -c '.nodes' <<<"$wide" > "$ax.wide"
+      [[ "$(jq -r '.truncated' <<<"$wide")" == true ]] && note "warn: tree: more than 200 open tickets, the rest left out"
+    else
+      note "warn: tree: Linear read failed, the tree keeps to the agent tickets"
+    fi
+    order="$(jq -c '[ (.next[].ticket), (.held.tickets[]) ] | reduce .[] as $t ([]; if index([$t]) then . else . + [$t] end)' <<<"$queue_view")"
     if watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson launch "$launch_state" \
-         --argjson runnable "$(jq -c '.runnable // []' <<<"$verdict")" \
-         'include "watch"; .data.issues.nodes | audit($now; $watch; $launch; $runnable)' <<<"$resp" > "$ax.audit" &&
+         --argjson runnable "$(jq -c '.runnable // []' <<<"$verdict")" --slurpfile wide "$ax.wide" \
+         'include "watch"; .data.issues.nodes | audit($now; $watch; $launch; $runnable; $wide[0])' <<<"$resp" > "$ax.audit" &&
        watch -c --argjson now "$(date +%s)" --argjson watch "$state" --slurpfile gaps "$ax.audit" \
-         'include "watch"; .data.issues.nodes | tree($now; $watch; $gaps[0])' <<<"$resp" > "$ax.tree" &&
+         --argjson order "$order" --slurpfile wide "$ax.wide" \
+         'include "watch"; .data.issues.nodes | tree($now; $watch; $gaps[0]; $order; $wide[0])' <<<"$resp" > "$ax.tree" &&
        jq -c --slurpfile a "$ax.audit" --slurpfile t "$ax.tree" '. + { audit: $a[0], tree: $t[0] }' <<<"$queue_view" > "$ax.view"; then
       queue_view="$(<"$ax.view")"
     else
@@ -1120,7 +1150,7 @@ attended() {
       fi
       note "warn: audit: watch.jq failed$carried$(watch_err)"
     fi
-    rm -f "$ax.audit" "$ax.tree" "$ax.view"
+    rm -f "$ax.audit" "$ax.tree" "$ax.view" "$ax.wide"
   fi
   # Should an implement-only session start? watch.jq `launch` decides from the pick and the
   # guards; implement.sh holds implement.lock while its session runs and writes the spend ledger.

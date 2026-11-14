@@ -5483,26 +5483,502 @@ describe('audit and tree', () => {
     ).toEqual(['COD-5:two-labels', 'COD-12:two-labels']);
   });
 
+  describe('candidate rules', () => {
+    const table = (rows: Array<[string, string]>, heading = '## Status') =>
+      `Intro\n\n${heading}\n\n| Step | What | Status |\n| -- | -- | -- |\n${rows
+        .map(([w, st], i) => `| ${i + 1} | ${w} | ${st} |`)
+        .join('\n')}\n\nAfter\n`;
+    const done = (over: Record<string, unknown> = {}) =>
+      node('COD-1', null, {
+        state: { type: 'completed' },
+        completedAt: iso(2 * DAY),
+        ...over
+      });
+    const wideKinds = (issues: Node[], wide: Node[] = []) =>
+      (
+        run(
+          `audit(${NOW}; {}; null; []; ${JSON.stringify(wide)})`,
+          issues
+        ) as Array<{ ticket: string; kind: string; what: string }>
+      ).map((g) => `${g.ticket}:${g.kind}`);
+
+    describe('State column and short wording', () => {
+      const kid = (id: string, type: string) => ({
+        identifier: id,
+        title: id,
+        state: { type },
+        labels: { nodes: [] }
+      });
+      const description = [
+        '## Status',
+        '',
+        '| # | State | Note |',
+        '| -- | -- | -- |',
+        '| COD-714 | open | |',
+        '| COD-715 | blocked | after COD-714 |',
+        '| COD-712 | open | decision gate: Håkan picks the option |',
+        ''
+      ].join('\n');
+      const parent = () =>
+        node('COD-711', null, {
+          description,
+          children: {
+            nodes: [
+              kid('COD-714', 'completed'),
+              kid('COD-715', 'completed'),
+              kid('COD-712', 'unstarted')
+            ]
+          }
+        });
+      const gaps = (issues: Node[]) =>
+        run(`audit(${NOW}; {}; null; []; [])`, issues) as Array<{
+          ticket: string;
+          kind: string;
+          what: string;
+          rows?: string[];
+          candidate?: boolean;
+        }>;
+
+      it('reads the column headed State, and keeps what short', () => {
+        const g = gaps([parent()]).find(
+          (x) => x.kind === 'parent-status-stale'
+        );
+        expect(g).toMatchObject({
+          ticket: 'COD-711',
+          candidate: true,
+          what: "COD-711's Status table disagrees with 2 sub-issues (COD-714, COD-715)"
+        });
+        expect(g?.rows).toHaveLength(2);
+      });
+
+      it('says sub-issue in the singular for one', () => {
+        const one = parent();
+        one.description = (one.description ?? '').replace(
+          '| COD-715 | blocked | after COD-714 |',
+          '| COD-715 | Done | |'
+        );
+        const g = gaps([one]).find((x) => x.kind === 'parent-status-stale');
+        expect(g?.what).toBe(
+          "COD-711's Status table disagrees with 1 sub-issue (COD-714)"
+        );
+      });
+
+      it('finds the decision in the Note of a row whose State is open', () => {
+        const child = node('COD-712', null, {
+          state: { type: 'unstarted' },
+          parent: {
+            identifier: 'COD-711',
+            title: 'P',
+            state: { type: 'started' }
+          }
+        });
+        expect(
+          gaps([parent(), child]).filter((x) => x.kind === 'decision-unasked')
+        ).toHaveLength(1);
+      });
+
+      it('says how many rows are open with their first cells', () => {
+        const g = gaps([
+          node('COD-621', null, {
+            state: { type: 'completed' },
+            completedAt: iso(DAY),
+            description: table([
+              ['content apply', 'Planned'],
+              ['cutover', 'Planned'],
+              ['x', 'Done']
+            ])
+          })
+        ])[0];
+        expect(g?.what).toBe(
+          'COD-621 is Done with 2 open Status rows (content apply, cutover): check whether any blocks'
+        );
+        expect(g?.rows).toHaveLength(2);
+        expect(g?.candidate).toBe(true);
+      });
+
+      it.each([
+        ['an emoji before Done', '✅ Done'],
+        ['a bold Done with a note', '**Done** (PR 5)'],
+        ['an em dash alone', '—'],
+        ['an en dash alone', '–'],
+        ['merged', 'Merged'],
+        ['n/a', 'n/a'],
+        ['not needed', 'Not needed'],
+        ["won't", "Won't do"]
+      ])('counts %s as finished', (_name, cell) => {
+        expect(
+          gaps([
+            node('COD-1', null, {
+              state: { type: 'completed' },
+              completedAt: iso(DAY),
+              description: table([['a', cell]])
+            })
+          ])
+        ).toEqual([]);
+      });
+
+      it('reads a Status heading with the colon inside the bold', () => {
+        const d = table([['a', 'Planned']], '**Status:**');
+        expect(
+          gaps([
+            node('COD-1', null, {
+              state: { type: 'completed' },
+              completedAt: iso(DAY),
+              description: d
+            })
+          ]).map((x) => x.kind)
+        ).toEqual(['done-with-open-rows']);
+      });
+
+      it('names a row by its What column, or the first cell that is not a number, and clips it', () => {
+        const long = 'x'.repeat(60);
+        const done = (description: string) =>
+          gaps([
+            node('COD-1', null, {
+              state: { type: 'completed' },
+              completedAt: iso(DAY),
+              description
+            })
+          ])[0]?.what;
+        expect(done(table([[long, 'Planned']]))).toBe(
+          `COD-1 is Done with 1 open Status row (${'x'.repeat(40)}…): check whether any blocks`
+        );
+        expect(
+          done(
+            '## Status\n\n| # | Item | State |\n| -- | -- | -- |\n| 3 | wire it | open |\n'
+          )
+        ).toContain('(wire it)');
+      });
+
+      it('falls back to the last cell without a State or Status header', () => {
+        const d =
+          '## Status\n\n| Step | What | Result |\n| -- | -- | -- |\n| 1 | a | Planned |\n';
+        expect(
+          gaps([
+            node('COD-1', null, {
+              state: { type: 'completed' },
+              completedAt: iso(DAY),
+              description: d
+            })
+          ]).map((x) => x.kind)
+        ).toEqual(['done-with-open-rows']);
+      });
+    });
+
+    describe('done-with-open-rows', () => {
+      it.each([
+        { name: 'Planned', rows: [['a', 'Planned']], gap: true },
+        {
+          name: 'open and blocked',
+          rows: [
+            ['a', 'Done'],
+            ['b', 'blocked']
+          ],
+          gap: true
+        },
+        { name: 'emphasis on Done', rows: [['a', '**Done**']], gap: false },
+        {
+          name: 'Done, Dropped, Skipped',
+          rows: [
+            ['a', 'Done'],
+            ['b', 'Dropped (n/a)'],
+            ['c', 'skipped']
+          ],
+          gap: false
+        },
+        { name: 'an empty status cell', rows: [['a', '']], gap: false }
+      ])('$name', ({ rows, gap }) => {
+        const r = wideKinds([
+          done({ description: table(rows as Array<[string, string]>) })
+        ]);
+        expect(r).toEqual(gap ? ['COD-1:done-with-open-rows'] : []);
+      });
+
+      it('reads a bold Status heading and the wide set', () => {
+        expect(
+          wideKinds(
+            [],
+            [done({ description: table([['a', 'Planned']], '**Status**') })]
+          )
+        ).toEqual(['COD-1:done-with-open-rows']);
+      });
+
+      it('leaves an open ticket, an old Done and a missing table alone', () => {
+        const d = table([['a', 'Planned']]);
+        expect(
+          wideKinds([
+            node('COD-1', null, { description: d }),
+            done({
+              identifier: 'COD-2',
+              description: d,
+              completedAt: iso(20 * DAY)
+            }),
+            done({ identifier: 'COD-3', description: 'no table | Planned' })
+          ])
+        ).toEqual([]);
+      });
+    });
+
+    describe('parent-status-stale', () => {
+      const kid = (id: string, type: string) => ({
+        identifier: id,
+        title: id,
+        state: { type },
+        labels: { nodes: [] }
+      });
+      const parent = (rows: Array<[string, string]>, kids: unknown[]) =>
+        node('COD-10', null, {
+          description: table(rows),
+          children: { nodes: kids }
+        });
+
+      it.each([
+        {
+          name: 'open row, sub-issue Done',
+          row: 'Open',
+          type: 'completed',
+          gap: true
+        },
+        {
+          name: 'Done row, sub-issue open',
+          row: 'Done',
+          type: 'started',
+          gap: true
+        },
+        { name: 'agreeing Done', row: 'Done', type: 'completed', gap: false },
+        {
+          name: 'agreeing open',
+          row: 'Planned',
+          type: 'unstarted',
+          gap: false
+        },
+        {
+          name: 'canceled sub-issue',
+          row: 'Planned',
+          type: 'canceled',
+          gap: false
+        },
+        {
+          name: 'unknown row status',
+          row: 'tbd',
+          type: 'completed',
+          gap: false
+        }
+      ])('$name', ({ row, type, gap }) => {
+        const r = wideKinds([
+          parent([['COD-11 the work', row]], [kid('COD-11', type)])
+        ]);
+        expect(r).toEqual(gap ? ['COD-10:parent-status-stale'] : []);
+      });
+
+      it('reads an issue tag and takes the sub-issue from the read set first', () => {
+        const tag =
+          '<issue id="x" label="COD-11" href="https://linear.app/x/COD-11/y" />';
+        const r = wideKinds(
+          [parent([[tag, 'Planned']], [kid('COD-11', 'started')])],
+          [
+            node('COD-11', null, {
+              state: { type: 'completed' },
+              completedAt: iso(DAY)
+            })
+          ]
+        );
+        expect(r).toEqual(['COD-10:parent-status-stale']);
+      });
+
+      it('skips a row naming a ticket that is no sub-issue', () => {
+        expect(
+          wideKinds([
+            parent(
+              [['COD-99 elsewhere', 'Open']],
+              [kid('COD-11', 'completed'), kid('COD-12', 'completed')]
+            )
+          ])
+        ).toEqual([]);
+      });
+    });
+
+    describe('untouched', () => {
+      const pair = (child: Record<string, unknown>, parentAgo: number) => [
+        node('COD-10', null, { updatedAt: iso(parentAgo) }),
+        node('COD-11', null, {
+          parent: {
+            identifier: 'COD-10',
+            title: 'P',
+            state: { type: 'started' }
+          },
+          state: { type: 'backlog' },
+          updatedAt: iso(12 * DAY),
+          ...child
+        })
+      ];
+      it.each([
+        {
+          name: 'stale child, parent moved since',
+          child: {},
+          parentAgo: 2 * DAY,
+          gap: true
+        },
+        {
+          name: 'parent older than the child',
+          child: {},
+          parentAgo: 15 * DAY,
+          gap: false
+        },
+        {
+          name: 'child updated 9 days ago',
+          child: { updatedAt: iso(9 * DAY) },
+          parentAgo: 2 * DAY,
+          gap: false
+        },
+        {
+          name: 'agent label',
+          child: { labels: { nodes: [{ name: 'agent:ready' }] } },
+          parentAgo: 2 * DAY,
+          gap: false
+        },
+        {
+          name: 'Done child',
+          child: { state: { type: 'completed' }, completedAt: iso(3 * DAY) },
+          parentAgo: 2 * DAY,
+          gap: false
+        }
+      ])('$name', ({ child, parentAgo, gap }) => {
+        const r = wideKinds(pair(child, parentAgo)).filter((k) =>
+          k.endsWith('untouched')
+        );
+        expect(r).toEqual(gap ? ['COD-11:untouched'] : []);
+      });
+
+      it('reads the parent from the wide set and its stub update time', () => {
+        const stub = node('COD-11', null, {
+          parent: {
+            identifier: 'COD-10',
+            title: 'P',
+            updatedAt: iso(DAY),
+            state: { type: 'started' }
+          },
+          updatedAt: iso(12 * DAY)
+        });
+        expect(wideKinds([], [stub])).toEqual(['COD-11:untouched']);
+      });
+    });
+
+    describe('decision-unasked', () => {
+      const own = (
+        rows: Array<[string, string]>,
+        over: Record<string, unknown> = {}
+      ) => node('COD-1', 'agent:ready', { description: table(rows), ...over });
+
+      it.each([
+        {
+          name: 'decision gate row',
+          rows: [['decision gate: pick', 'Planned']],
+          gap: true
+        },
+        {
+          name: 'Håkan picks',
+          rows: [['Håkan picks the option', 'open']],
+          gap: true
+        },
+        { name: 'Hakan picks', rows: [['hakan picks', 'open']], gap: true },
+        { name: 'decided row', rows: [['decision gate', 'Done']], gap: false },
+        { name: 'no decision words', rows: [['build', 'Planned']], gap: false }
+      ])('own row: $name', ({ rows, gap }) => {
+        expect(wideKinds([own(rows as Array<[string, string]>)])).toEqual(
+          gap ? ['COD-1:decision-unasked'] : []
+        );
+      });
+
+      it('reads the parent row that names the ticket', () => {
+        const p = node('COD-9', null, {
+          description: table([
+            ['COD-1 decision gate', 'Planned'],
+            ['COD-2 build', 'Planned']
+          ])
+        });
+        const child = (id: string) =>
+          node(id, null, {
+            parent: {
+              identifier: 'COD-9',
+              title: 'P',
+              state: { type: 'started' }
+            }
+          });
+        expect(wideKinds([p, child('COD-1'), child('COD-2')])).toEqual([
+          'COD-1:decision-unasked'
+        ]);
+      });
+
+      it('is quiet once the question is asked', () => {
+        const rows: Array<[string, string]> = [['decision gate', 'Planned']];
+        expect(
+          wideKinds([
+            own(rows, { labels: { nodes: [{ name: 'agent:needs-input' }] } })
+          ])
+        ).not.toContain('COD-1:decision-unasked');
+        expect(
+          wideKinds([
+            own(rows, {
+              comments: {
+                nodes: [agentComment('**Agent needs input** which?')]
+              }
+            })
+          ])
+        ).toEqual([]);
+        // A person's comment is no agent question
+        expect(
+          wideKinds([
+            own(rows, {
+              comments: { nodes: [personComment('what should it be?')] }
+            })
+          ])
+        ).toEqual(['COD-1:decision-unasked']);
+      });
+
+      it('skips a closed ticket', () => {
+        expect(
+          wideKinds([
+            own([['decision', 'Planned']], {
+              labels: { nodes: [] },
+              state: { type: 'completed' },
+              completedAt: iso(3 * DAY)
+            })
+          ])
+        ).toEqual(['COD-1:done-with-open-rows']);
+      });
+    });
+  });
+
   describe('tree', () => {
-    const tree = (issues: Node[], watch: Record<string, unknown> = {}) =>
+    const tree = (
+      issues: Node[],
+      watch: Record<string, unknown> = {},
+      order: string[] = [],
+      wide: Node[] = []
+    ) =>
       run(
-        `. as $i | audit(${NOW}; ${JSON.stringify(watch)}; null; []) as $g | tree(${NOW}; ${JSON.stringify(watch)}; $g)`,
+        `. as $i | audit(${NOW}; ${JSON.stringify(watch)}; null; []; ${JSON.stringify(wide)}) as $g | tree(${NOW}; ${JSON.stringify(watch)}; $g; ${JSON.stringify(order)}; ${JSON.stringify(wide)})`,
         issues
       ) as Array<{
         ticket: string;
         title: string;
         state: string;
         label: string | null;
+        position: number | null;
+        waiting: boolean;
         pr: number | null;
         blockers: string[];
-        gaps: string[];
+        gaps: Array<{ kind: string; candidate: boolean }>;
         children: Array<{
           ticket: string;
           state: string;
           label: string | null;
+          position: number | null;
           pr: number | null;
           blockers: string[];
-          gaps: string[];
+          gaps: Array<{ kind: string; candidate: boolean }>;
+          waiting?: boolean;
           children: unknown[];
         }>;
       }>;
@@ -5547,24 +6023,25 @@ describe('audit and tree', () => {
         pr: null,
         gaps: []
       });
+      // Not queued, so by status: started, unstarted, then Done
       expect(r[0]?.children.map((c) => c.ticket)).toEqual([
-        'COD-2',
         'COD-3',
-        'COD-4'
+        'COD-4',
+        'COD-2'
       ]);
-      expect(r[0]?.children[0]).toMatchObject({
+      expect(r[0]?.children[2]).toMatchObject({
         state: 'completed',
         label: 'agent:review',
         pr: 42,
         gaps: []
       });
-      expect(r[0]?.children[1]).toMatchObject({
+      expect(r[0]?.children[0]).toMatchObject({
         state: 'started',
         label: 'agent:working',
         blockers: ['COD-8'],
-        gaps: ['two-labels']
+        gaps: [{ kind: 'two-labels', candidate: false }]
       });
-      expect(r[0]?.children[2]).toMatchObject({
+      expect(r[0]?.children[1]).toMatchObject({
         title: 'Title COD-4',
         state: 'unstarted',
         label: null,
@@ -5588,7 +6065,7 @@ describe('audit and tree', () => {
       expect(tree([member(false)])[0]).not.toHaveProperty('truncated');
     });
 
-    it('roots a parentless agent ticket and sorts roots by number', () => {
+    it('roots every parentless open ticket, and Done ones from the last 14 days', () => {
       const r = tree([
         node('COD-20', 'agent:ready', { state: { type: 'unstarted' } }),
         node('COD-5', 'agent:review'),
@@ -5603,8 +6080,174 @@ describe('audit and tree', () => {
         }),
         node('COD-9', 'agent:ready', { state: { type: 'canceled' } })
       ]);
-      expect(r.map((x) => x.ticket)).toEqual(['COD-5', 'COD-8', 'COD-20']);
+      // Unqueued roots sort by status, then priority and age
+      expect(r.map((x) => x.ticket)).toEqual([
+        'COD-5',
+        'COD-6',
+        'COD-20',
+        'COD-8'
+      ]);
       expect(r[0]?.children).toEqual([]);
+    });
+
+    it('adds the wide tickets, and prefers the richer node of both', () => {
+      const parent = {
+        identifier: 'COD-30',
+        title: 'Wide parent',
+        state: { type: 'started' }
+      };
+      const wide = [
+        node('COD-31', null, { parent, state: { type: 'unstarted' } }),
+        node('COD-5', null, { title: 'Wide copy' })
+      ];
+      const r = tree([node('COD-5', 'agent:ready')], {}, [], wide);
+      expect(r.map((x) => x.ticket)).toEqual(['COD-5', 'COD-30']);
+      expect(r[0]).toMatchObject({
+        title: 'Title COD-5',
+        label: 'agent:ready'
+      });
+      expect(r[1]?.children.map((c) => c.ticket)).toEqual(['COD-31']);
+    });
+
+    it('nests a three-level chain once, and counts every descendant in the root position', () => {
+      const stub = (id: string, type = 'started') => ({
+        identifier: id,
+        title: id,
+        state: { type }
+      });
+      const r = tree(
+        [
+          node('COD-1', null),
+          node('COD-2', null, { parent: stub('COD-1') }),
+          node('COD-3', 'agent:ready', { parent: stub('COD-2') }),
+          node('COD-5', 'agent:ready')
+        ],
+        {},
+        ['COD-3', 'COD-5']
+      );
+      expect(r.map((x) => x.ticket)).toEqual(['COD-1', 'COD-5']);
+      const mid = r[0]?.children[0] as unknown as {
+        ticket: string;
+        children: Array<{ ticket: string; position: number | null }>;
+      };
+      expect(mid.ticket).toBe('COD-2');
+      expect(mid.children.map((c) => [c.ticket, c.position])).toEqual([
+        ['COD-3', 1]
+      ]);
+    });
+
+    it('marks an open agent ticket without a position as waiting', () => {
+      const r = tree(
+        [
+          node('COD-1', 'agent:review'),
+          node('COD-2', null),
+          node('COD-3', 'agent:ready'),
+          node('COD-4', 'agent:review', {
+            state: { type: 'completed' },
+            completedAt: iso(DAY)
+          })
+        ],
+        {},
+        ['COD-3']
+      );
+      expect(Object.fromEntries(r.map((x) => [x.ticket, x.waiting]))).toEqual({
+        'COD-1': true,
+        'COD-2': false,
+        'COD-3': false,
+        'COD-4': false
+      });
+    });
+
+    it('carries the candidate flag on each gap', () => {
+      const r = tree([
+        node('COD-1', ['agent:ready', 'agent:review']),
+        node('COD-2', null, {
+          state: { type: 'completed' },
+          completedAt: iso(DAY),
+          description:
+            '## Status\n\n| Step | What | Status |\n| -- | -- | -- |\n| 1 | a | Planned |\n'
+        })
+      ]);
+      expect(r.find((x) => x.ticket === 'COD-1')?.gaps).toEqual([
+        { kind: 'two-labels', candidate: false }
+      ]);
+      expect(r.find((x) => x.ticket === 'COD-2')?.gaps).toEqual([
+        { kind: 'done-with-open-rows', candidate: true }
+      ]);
+    });
+
+    describe('position', () => {
+      const flat = (ids: string[], order: string[]) =>
+        tree(
+          ids.map((id) => node(id, 'agent:ready')),
+          {},
+          order
+        );
+
+      it.each([
+        { order: ['COD-2', 'COD-1'], expected: { 'COD-2': 1, 'COD-1': 2 } },
+        { order: ['COD-1'], expected: { 'COD-1': 1, 'COD-2': null } },
+        { order: [], expected: { 'COD-1': null, 'COD-2': null } }
+      ])('is the index in the pick order $order', ({ order, expected }) => {
+        const r = flat(['COD-1', 'COD-2'], order);
+        expect(
+          Object.fromEntries(r.map((x) => [x.ticket, x.position]))
+        ).toEqual(expected);
+      });
+
+      it('sorts queued roots by position, then the rest by queue order', () => {
+        const r = tree(
+          [
+            node('COD-1', null, { priority: 1 }),
+            node('COD-2', 'agent:ready'),
+            node('COD-3', 'agent:ready'),
+            node('COD-4', null, { state: { type: 'unstarted' } })
+          ],
+          {},
+          ['COD-3', 'COD-2']
+        );
+        // COD-1 started and urgent, COD-4 unstarted: both unqueued, after the queued pair
+        expect(r.map((x) => x.ticket)).toEqual([
+          'COD-3',
+          'COD-2',
+          'COD-1',
+          'COD-4'
+        ]);
+      });
+
+      it('sorts a root by the lowest position in its subtree, and the children likewise', () => {
+        const parent = (id: string) => ({
+          identifier: id,
+          title: id,
+          state: { type: 'started' },
+          children: {
+            nodes: [
+              child('COD-12', 'unstarted'),
+              child('COD-11', 'unstarted', 'agent:ready'),
+              child('COD-13', 'unstarted', 'agent:ready')
+            ]
+          }
+        });
+        const r = tree(
+          [
+            node('COD-10', 'agent:ready'),
+            node('COD-11', 'agent:ready', { parent: parent('COD-9') }),
+            node('COD-13', 'agent:ready', { parent: parent('COD-9') })
+          ],
+          {},
+          ['COD-10', 'COD-13', 'COD-11']
+        );
+        // The parent COD-9 is not queued itself, but COD-13 under it is position 2
+        expect(r.map((x) => [x.ticket, x.position])).toEqual([
+          ['COD-10', 1],
+          ['COD-9', null]
+        ]);
+        expect(r[1]?.children.map((c) => [c.ticket, c.position])).toEqual([
+          ['COD-13', 2],
+          ['COD-11', 3],
+          ['COD-12', null]
+        ]);
+      });
     });
   });
 
