@@ -137,7 +137,7 @@ const transformKeys = (options: {
  *   machines: z.array(
  *     z.object({
  *       config: z.object({
- *         env: z.record(z.string()),
+ *         env: z.record(z.string(), z.string()),
  *       })
  *     })
  *   ),
