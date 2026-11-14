@@ -53,6 +53,23 @@ describe('App', () => {
     expect(container.querySelector('#settings')).not.toBeNull();
   });
 
+  it('draws the header in two rows: status above, brand and tools below', () => {
+    const { container } = render(<App />);
+    const rows = container.querySelectorAll('header.top > div');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.querySelector('#status')).not.toBeNull();
+    expect(rows[0]?.querySelector('#fresh')).not.toBeNull();
+    expect(rows[0]?.querySelector('a.who')).not.toBeNull();
+    expect(rows[1]?.querySelector('h1')?.textContent).toBe('Agent Desk');
+    expect(rows[1]?.querySelector('button.tree-pill')).not.toBeNull();
+    for (const id of ['refresh', 'settings']) {
+      const b = rows[1]?.querySelector(`#${id}`);
+      expect(b?.getAttribute('aria-label')).not.toBeNull();
+      expect(b?.getAttribute('title')).toBe(b?.getAttribute('aria-label'));
+      expect(b?.textContent).toBe('');
+    }
+  });
+
   it('calls the settings opener from the Settings button', () => {
     const opener = vi.fn();
     setSettingsOpener(opener);

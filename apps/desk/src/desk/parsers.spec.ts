@@ -546,8 +546,10 @@ describe('validateQueueView', () => {
       state: 'started',
       label: 'agent:working',
       pr: 12,
+      position: 2,
+      waiting: false,
       blockers: ['COD-9'],
-      gaps: ['two-labels'],
+      gaps: [{ kind: 'two-labels', candidate: false }],
       children: []
     };
     const root = {
@@ -556,6 +558,8 @@ describe('validateQueueView', () => {
       state: 'started',
       label: null,
       pr: null,
+      position: null,
+      waiting: false,
       blockers: [],
       gaps: [],
       truncated: true,
@@ -584,6 +588,8 @@ describe('validateQueueView', () => {
         state: null,
         label: null,
         pr: null,
+        position: null,
+        waiting: false,
         blockers: [],
         gaps: [],
         children: []
@@ -591,11 +597,66 @@ describe('validateQueueView', () => {
     ]);
   });
 
+  it('reads a gap as an object, or as a bare kind from an older scheduler', () => {
+    const gaps = (value: unknown) =>
+      validateQueueView({
+        limit,
+        table: {},
+        tree: [{ ticket: 'COD-1', gaps: value }]
+      })?.tree[0]?.gaps;
+    expect(
+      gaps([
+        'two-labels',
+        { kind: 'untouched', candidate: true },
+        { kind: 'held' }
+      ])
+    ).toEqual([
+      { kind: 'two-labels', candidate: false },
+      { kind: 'untouched', candidate: true },
+      { kind: 'held', candidate: false }
+    ]);
+  });
+
+  it('reads a tree node position, null when missing or not a number', () => {
+    const positions = (position: unknown) =>
+      validateQueueView({
+        limit,
+        table: {},
+        tree: [{ ticket: 'COD-1', position }]
+      })?.tree.map((n) => n.position);
+    expect(positions(3)).toEqual([3]);
+    expect(positions(null)).toEqual([null]);
+    expect(positions(undefined)).toEqual([null]);
+  });
+
   it('reads a view without a tree as empty', () => {
     expect(validateQueueView({ limit, table: {} })?.tree).toEqual([]);
     expect(validateQueueView({ limit, table: {}, tree: null })?.tree).toEqual(
       []
     );
+  });
+
+  it('reads a candidate gap with its rows, and an older gap without', () => {
+    const gap = {
+      id: 'COD-5:untouched',
+      ticket: 'COD-5',
+      kind: 'untouched',
+      what: 'Check COD-5',
+      fix: 'Look'
+    };
+    expect(
+      validateQueueView({
+        limit,
+        table: {},
+        audit: [
+          { ...gap, candidate: true, rows: ['4 | Cutover | Planned'] },
+          gap
+        ]
+      })?.audit
+    ).toEqual([
+      { ...gap, candidate: true, rows: ['4 | Cutover | Planned'] },
+      gap
+    ]);
   });
 
   it('reads the audit and drops a malformed gap alone', () => {

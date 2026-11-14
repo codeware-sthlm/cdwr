@@ -58,7 +58,13 @@ export const CHIP_KIND: Record<string, string> = {
   renovate: CHIP_REVIEW,
   feedback: CHIP_REVIEW,
   blocked: CHIP_BLOCK,
-  held: 'bg-[color:var(--sunk)] text-[color:var(--muted)]'
+  held: 'bg-[color:var(--sunk)] text-[color:var(--muted)]',
+  // The Linear state types of a tree row
+  backlog: 'bg-[color:var(--sunk)] text-[color:var(--muted)]',
+  todo: 'bg-[color:var(--control)] text-[color:var(--fg)]',
+  'in-progress': CHIP_WORK,
+  done: CHIP_OK,
+  canceled: 'bg-[color:var(--sunk)] text-[color:var(--faint)]'
 };
 
 /** A ticket row: a grid of rank, text and side with a coloured left edge by Agent state; `plain` has none */

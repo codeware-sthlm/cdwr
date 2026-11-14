@@ -44,6 +44,11 @@ const options = (): string[] =>
   screen.queryAllByRole('option').map((o) => o.textContent ?? '');
 
 describe('Search', () => {
+  it('sets a 16px font at touch widths so iOS does not zoom', () => {
+    const { field } = mount();
+    expect(field.className).toContain('max-[600px]:text-[16px]');
+  });
+
   it('is a labelled combobox that controls a listbox', () => {
     const { field } = mount();
     expect(field.type).toBe('search');

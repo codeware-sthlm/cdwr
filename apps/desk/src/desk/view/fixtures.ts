@@ -268,6 +268,8 @@ export const ticketDesk = (): DeskState => {
             state: 'started',
             label: null,
             pr: null,
+            position: 1,
+            waiting: false,
             blockers: [],
             gaps: [],
             children: [
@@ -277,8 +279,10 @@ export const ticketDesk = (): DeskState => {
                 state: 'started',
                 label: 'agent:review',
                 pr: 7,
+                position: 1,
+                waiting: false,
                 blockers: [],
-                gaps: ['stale'],
+                gaps: [{ kind: 'stale', candidate: false }],
                 children: []
               },
               {
@@ -287,6 +291,8 @@ export const ticketDesk = (): DeskState => {
                 state: 'unstarted',
                 label: null,
                 pr: null,
+                position: null,
+                waiting: false,
                 blockers: [],
                 gaps: [],
                 children: []

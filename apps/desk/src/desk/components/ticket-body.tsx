@@ -193,7 +193,18 @@ export const TicketBody = ({ m, state, now, actions }: SheetProps) => {
         <Empty>The desk holds nothing more for this ticket.</Empty>
       </>
     );
-  const { linear, queue, tree, pr, gaps, session, plan, snooze, spend } = t;
+  const {
+    linear,
+    queue,
+    tree,
+    pr,
+    gaps,
+    candidates,
+    session,
+    plan,
+    snooze,
+    spend
+  } = t;
   return (
     <>
       {linear ? (
@@ -224,6 +235,15 @@ export const TicketBody = ({ m, state, now, actions }: SheetProps) => {
       {gaps ? (
         <Part title="Gaps">
           {gaps.map((g) => (
+            <Row key={g.id} label={g.kind}>
+              <span>{`${g.what}. ${g.fix}.`}</span>
+            </Row>
+          ))}
+        </Part>
+      ) : null}
+      {candidates ? (
+        <Part title="Candidates to check">
+          {candidates.map((g) => (
             <Row key={g.id} label={g.kind}>
               <span>{`${g.what}. ${g.fix}.`}</span>
             </Row>

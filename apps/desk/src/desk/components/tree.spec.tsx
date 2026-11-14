@@ -3,7 +3,12 @@ import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
-import { type DeskState, type TreeFilter, createState } from '../state';
+import {
+  type DeskState,
+  NO_TREE_FILTER,
+  type TreeFilter,
+  createState
+} from '../state';
 import type { QueueTreeNode, SessionState } from '../types';
 import { NOW, filled, runs, view } from '../view/fixtures';
 
@@ -18,13 +23,15 @@ const node = (
   state: 'started',
   label: null,
   pr: null,
+  position: null,
+  waiting: false,
   blockers: [],
   gaps: [],
   children: [],
   ...over
 });
 
-const ALL: TreeFilter = { scope: 'all', gaps: false };
+const ALL: TreeFilter = { ...NO_TREE_FILTER, closed: true };
 
 /** The page over `tree`; `prepare` adjusts the state (details, session, watches) first */
 const mountWith = (
@@ -34,6 +41,8 @@ const mountWith = (
     onFilter = vi.fn(),
     onTicket = vi.fn(),
     filter = ALL,
+    open = {},
+    onOpen = vi.fn(),
     session = { state: 'none' },
     prepare = () => undefined
   }: {
@@ -41,6 +50,8 @@ const mountWith = (
     onFilter?: (filter: TreeFilter) => void;
     onTicket?: (id: string) => void;
     filter?: TreeFilter;
+    open?: Record<string, boolean>;
+    onOpen?: (ticket: string, open: boolean) => void;
     session?: SessionState;
     prepare?: (state: DeskState) => void;
   } = {}
@@ -55,6 +66,8 @@ const mountWith = (
       now={NOW}
       filter={filter}
       onFilter={onFilter}
+      open={open}
+      onOpen={onOpen}
       onDesk={onDesk}
       onTicket={onTicket}
     />
@@ -102,7 +115,7 @@ describe('TreePage', () => {
     const h1 = c.querySelector('h1#tree-title') as HTMLElement;
     expect(text(h1)).toBe('Ticket tree');
     expect(h1.tabIndex).toBe(-1);
-    expect(text(c)).toContain('every agent ticket where it sits in its split');
+    expect(text(c)).toContain('the whole backlog in the queue');
   });
 
   it('goes back to the desk from the back button', () => {
@@ -142,16 +155,50 @@ describe('TreePage', () => {
     expect(text(root)).toContain('Tree COD-11');
   });
 
-  it('names the state, and shows an unknown one raw', () => {
+  it('shows the state as a chip coloured by its type, and an unknown one raw', () => {
     const c = mount([
       node('COD-10', { state: 'unstarted' }),
       node('COD-20', { state: 'started' }),
-      node('COD-30', { state: 'weird' })
+      node('COD-30', { state: 'weird' }),
+      node('COD-40', { state: 'completed' }),
+      node('COD-50', { state: 'canceled' }),
+      node('COD-60', { state: 'backlog' }),
+      node('COD-70', { state: 'triage' })
     ]);
-    const t = text(c);
-    expect(t).toContain('todo');
-    expect(t).toContain('in progress');
-    expect(t).toContain('weird');
+    const chip = (kind: string) =>
+      [...c.querySelectorAll(`.chip.${kind}`)].map(text);
+    expect(chip('todo')).toEqual(['todo']);
+    expect(chip('in-progress')).toEqual(['in progress']);
+    expect(chip('done')).toEqual(['done']);
+    expect(chip('canceled')).toEqual(['canceled']);
+    expect(chip('backlog').filter((t) => t !== 'not queued')).toEqual([
+      'backlog',
+      'triage'
+    ]);
+    expect(text(c)).toContain('weird');
+  });
+
+  it('shows the pick position, or not queued for an open ticket without one', () => {
+    const c = mount([
+      node('COD-10', { position: 1 }),
+      node('COD-20'),
+      node('COD-30', { state: 'completed' })
+    ]);
+    expect([...c.querySelectorAll('.pos')].map(text)).toEqual(['#1']);
+    expect([...c.querySelectorAll('.chip.backlog')].map(text)).toEqual([
+      'not queued'
+    ]);
+  });
+
+  it('shows a waiting chip for an open agent ticket the queue waits on', () => {
+    const c = mount([
+      node('COD-10', { label: 'agent:review', waiting: true }),
+      node('COD-20')
+    ]);
+    expect([...c.querySelectorAll('.chip.backlog')].map(text)).toEqual([
+      'waiting',
+      'not queued'
+    ]);
   });
 
   it('shows the agent label as a chip without its prefix', () => {
@@ -166,7 +213,7 @@ describe('TreePage', () => {
       node('COD-10', {
         pr: 42,
         blockers: ['COD-9'],
-        gaps: ['label-on-closed']
+        gaps: [{ kind: 'label-on-closed', candidate: false }]
       })
     ]);
     expect(c.querySelector('a.prn[href$="/pull/42"]')?.textContent).toBe('#42');
@@ -222,11 +269,13 @@ describe('TreePage', () => {
         now={NOW}
         filter={ALL}
         onFilter={vi.fn()}
+        open={{}}
+        onOpen={vi.fn()}
         onDesk={vi.fn()}
         onTicket={vi.fn()}
       />
     ).container;
-    expect(text(c)).toContain('No agent ticket in flight.');
+    expect(text(c)).toContain('No open ticket.');
     expect(text(c)).toContain('Done ones for 14 days');
     expect(text(mount([node('COD-10')]))).toContain('Done ones for 14 days');
   });
@@ -313,27 +362,118 @@ describe('TreePage', () => {
     expect(c.textContent?.match(/updated /g)).toHaveLength(1);
   });
 
-  it('lists the filters with the current ones pressed, and calls back on a press', () => {
+  it('lists the three toggles as one group, and calls back on a press', () => {
     const onFilter = vi.fn();
     const c = mountWith([node('COD-10')], {
       onFilter,
-      filter: { scope: 'open', gaps: false }
+      filter: { closed: false, gaps: true, unqueued: false }
     });
-    const pressed = (sel: string) =>
-      c.querySelector(sel)?.getAttribute('aria-pressed');
-    expect(pressed('[data-scope="open"]')).toBe('true');
-    expect(pressed('[data-scope="all"]')).toBe('false');
-    expect(pressed('[data-gaps]')).toBe('false');
-    fireEvent.click(c.querySelector('[data-scope="all"]') as HTMLElement);
-    expect(onFilter).toHaveBeenLastCalledWith({ scope: 'all', gaps: false });
-    fireEvent.click(c.querySelector('[data-gaps]') as HTMLElement);
-    expect(onFilter).toHaveBeenLastCalledWith({ scope: 'open', gaps: true });
+    const buttons = [...c.querySelectorAll('.filters button')];
+    expect(buttons.map(text)).toEqual(['Closed', 'Gaps', 'Not queued']);
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual([
+      'false',
+      'true',
+      'false'
+    ]);
+    fireEvent.click(buttons[0] as HTMLElement);
+    expect(onFilter).toHaveBeenLastCalledWith({
+      closed: true,
+      gaps: true,
+      unqueued: false
+    });
+    fireEvent.click(buttons[1] as HTMLElement);
+    expect(onFilter).toHaveBeenLastCalledWith({
+      closed: false,
+      gaps: false,
+      unqueued: false
+    });
+    fireEvent.click(buttons[2] as HTMLElement);
+    expect(onFilter).toHaveBeenLastCalledWith({
+      closed: false,
+      gaps: true,
+      unqueued: true
+    });
+  });
+
+  it('collapses a finished root by default and expands an open one', () => {
+    const kids = [node('COD-11', { state: 'completed' })];
+    const c = mount([
+      node('COD-10', { state: 'completed', children: kids }),
+      node('COD-20', { children: [node('COD-21')] })
+    ]);
+    const toggle = (id: string) =>
+      c.querySelector(`button[aria-controls="tree-${id}"]`) as HTMLElement;
+    expect(toggle('COD-10').getAttribute('aria-expanded')).toBe('false');
+    expect(toggle('COD-20').getAttribute('aria-expanded')).toBe('true');
+    expect(c.querySelector('#tree-COD-10')?.hasAttribute('hidden')).toBe(true);
+    expect(c.querySelector('#tree-COD-20')?.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('takes the viewer’s choice over the default, and reports a toggle', () => {
+    const onOpen = vi.fn();
+    const c = mountWith(
+      [
+        node('COD-10', {
+          state: 'completed',
+          children: [node('COD-11', { state: 'completed' })]
+        }),
+        node('COD-20', { children: [node('COD-21')] })
+      ],
+      { open: { 'COD-10': true, 'COD-20': false }, onOpen }
+    );
+    const toggle = (id: string) =>
+      c.querySelector(`button[aria-controls="tree-${id}"]`) as HTMLElement;
+    expect(toggle('COD-10').getAttribute('aria-expanded')).toBe('true');
+    expect(toggle('COD-20').getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle('COD-20'));
+    expect(onOpen).toHaveBeenLastCalledWith('COD-20', true);
+    fireEvent.click(toggle('COD-10'));
+    expect(onOpen).toHaveBeenLastCalledWith('COD-10', false);
+  });
+
+  it('has no toggle on a root without children', () => {
+    expect(
+      mount([node('COD-10')]).querySelector('button[aria-expanded]')
+    ).toBeNull();
+  });
+
+  it('summarises a collapsed root: the child count and its worst chip', () => {
+    const c = mountWith(
+      [
+        node('COD-10', {
+          children: [
+            node('COD-11', {
+              gaps: [{ kind: 'untouched', candidate: true }]
+            }),
+            node('COD-12', { gaps: [{ kind: 'stale', candidate: false }] })
+          ]
+        })
+      ],
+      { open: { 'COD-10': false } }
+    );
+    const row = c.querySelector('li > div') as HTMLElement;
+    expect(text(row)).toContain('2');
+    expect(text(row.querySelector('.chip.conflict'))).toBe('stale');
+    expect(row.querySelector('.chip.held')).toBeNull();
+  });
+
+  it('shows a candidate gap as a soft chip', () => {
+    const c = mount([
+      node('COD-10', {
+        gaps: [
+          { kind: 'untouched', candidate: true },
+          { kind: 'stale', candidate: false }
+        ]
+      })
+    ]);
+    expect(text(c.querySelector('.chip.held'))).toBe('untouched');
+    expect(text(c.querySelector('.chip.conflict'))).toBe('stale');
   });
 
   it('lists the roots the filter keeps and says so when it keeps none', () => {
     const done = node('COD-10', { state: 'completed' });
     const c = mountWith([done], {
-      filter: { scope: 'open', gaps: false }
+      filter: NO_TREE_FILTER
     });
     expect(ids(c)).toEqual([]);
     expect(text(c)).toContain('No ticket matches the filter.');

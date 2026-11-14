@@ -32,8 +32,8 @@ import {
   createState,
   emptyControls,
   isFilter,
-  isTreeFilter,
   sheetIdOf,
+  treeFilterOf,
   viewOf
 } from './state';
 import { createStore } from './store';
@@ -454,6 +454,8 @@ export const sheetActions: SheetActions = {
   }
 };
 
+const TREE_OPEN_KEY = 'aq-tree-open';
+
 /** Sets the Ticket tree's filters, kept for the next visit */
 export function setTreeFilter(tree: TreeFilter): void {
   state.ui.tree = tree;
@@ -461,6 +463,17 @@ export function setTreeFilter(tree: TreeFilter): void {
     localStorage.setItem('aq-tree', JSON.stringify(tree));
   } catch {
     // Storage is unavailable: the filters last until the page closes
+  }
+  render();
+}
+
+/** Opens or closes a root's sub-issues by hand, kept for the next visit */
+export function setTreeOpen(ticket: string, open: boolean): void {
+  state.ui.treeOpen = { ...state.ui.treeOpen, [ticket]: open };
+  try {
+    localStorage.setItem(TREE_OPEN_KEY, JSON.stringify(state.ui.treeOpen));
+  } catch {
+    // Storage is unavailable: the choice lasts until the page closes
   }
   render();
 }
@@ -478,7 +491,14 @@ try {
   const f = localStorage.getItem('aq-filter');
   if (isFilter(f)) state.ui.filter = f;
   const t: unknown = JSON.parse(localStorage.getItem('aq-tree') ?? 'null');
-  if (isTreeFilter(t)) state.ui.tree = t;
+  state.ui.tree = treeFilterOf(t) ?? state.ui.tree;
+  const o: unknown = JSON.parse(localStorage.getItem(TREE_OPEN_KEY) ?? 'null');
+  if (typeof o === 'object' && o !== null)
+    state.ui.treeOpen = Object.fromEntries(
+      Object.entries(o).filter(
+        (e): e is [string, boolean] => typeof e[1] === 'boolean'
+      )
+    );
 } catch {
   // Storage is unavailable or holds junk: the filters start at their default
 }

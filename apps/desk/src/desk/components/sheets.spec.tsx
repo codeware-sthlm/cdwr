@@ -197,6 +197,40 @@ describe('queue sheets', () => {
     );
   });
 
+  it('lists a candidate apart from the gaps, in its own group', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        audit: [
+          {
+            id: 'COD-5:label-on-closed',
+            ticket: 'COD-5',
+            kind: 'label-on-closed',
+            what: 'COD-5 is Done but still agent:ready',
+            fix: 'Remove the label'
+          },
+          {
+            id: 'COD-6:untouched',
+            ticket: 'COD-6',
+            kind: 'untouched',
+            what: 'COD-6 has not moved',
+            fix: 'Check whether it is still wanted',
+            candidate: true
+          }
+        ]
+      })
+    );
+    const c = body('next', state);
+    const t = text(c);
+    expect(t).toContain('Gaps · 1');
+    expect(t).toContain('Candidates to check · 1');
+    expect(text(c.querySelector('.chip.held'))).toBe('untouched');
+    expect(text(c.querySelector('.chip.conflict'))).toBe('label-on-closed');
+    expect(t).toContain(
+      'COD-6 has not moved. Check whether it is still wanted.'
+    );
+  });
+
   it('titles a gap by its own title when the index lacks the ticket', () => {
     const state = filled();
     state.data.runs = runs(

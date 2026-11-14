@@ -3,35 +3,59 @@ import { type Model, prOf } from '../model';
 import type { DeskState, TreeFilter } from '../state';
 import type { QueueTreeNode } from '../types';
 import { whereText } from '../view/session';
-import { filterTree, finished } from '../view/tree';
+import { filterTree, finished, finishedInFull, worstChild } from '../view/tree';
 import { mergeBlocker } from '../view/waiting';
 
 import { CAP_SUB } from './capacity';
+import { Icon } from './icon';
 import { Chip, Empty } from './items';
 import { META, RULE } from './items-ui';
 import { IdLink, Prn, TicketButton } from './links';
 
 // The ticket tree view: each root with the sub-issues the scheduler's queue view carries
 
-const STATE_NAME: ReadonlyMap<string, string> = new Map([
-  ['triage', 'triage'],
-  ['backlog', 'backlog'],
-  ['unstarted', 'todo'],
-  ['started', 'in progress'],
-  ['completed', 'done'],
-  ['canceled', 'canceled']
+/** A Linear state type: its name and the chip kind that colours it */
+const STATE: ReadonlyMap<string, readonly [string, string]> = new Map([
+  ['triage', ['triage', 'backlog']],
+  ['backlog', ['backlog', 'backlog']],
+  ['unstarted', ['todo', 'todo']],
+  ['started', ['in progress', 'in-progress']],
+  ['completed', ['done', 'done']],
+  ['canceled', ['canceled', 'canceled']]
 ]);
 
 const ROW = 'flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 py-1';
 // A child's list hangs off its root with a left rule
-const NEST = 'ml-1.5 grid gap-0.5 border-l border-[color:var(--line)] pl-3.5';
+const NEST =
+  'ml-1.5 grid gap-0.5 border-l border-[color:var(--line)] pl-3.5 [&[hidden]]:hidden';
 const DIM = 'opacity-60';
-const SCOPES: readonly (readonly [TreeFilter['scope'], string])[] = [
-  ['open', 'Open'],
-  ['all', 'All']
+const TOGGLES: readonly (readonly [keyof TreeFilter, string])[] = [
+  ['closed', 'Closed'],
+  ['gaps', 'Gaps'],
+  ['unqueued', 'Not queued']
 ];
 const UNPRESSED =
   'aria-[pressed=false]:border-[color:var(--line)] aria-[pressed=false]:bg-transparent aria-[pressed=false]:text-[color:var(--muted)]';
+// One group: the buttons share their borders and only the ends are rounded
+const JOINED =
+  'rounded-none first:rounded-l-[var(--r-row)] last:rounded-r-[var(--r-row)] [&:not(:first-child)]:-ml-px focus-visible:relative aria-pressed:relative';
+
+/** A root's sub-issues are open unless the viewer chose otherwise; a finished root starts closed */
+const expanded = (
+  root: QueueTreeNode,
+  open: Readonly<Record<string, boolean>>
+): boolean => open[root.ticket] ?? !finishedInFull(root);
+
+/** The collapsed root's summary: how many children, and the worst thing on them */
+const Summary = ({ node }: { node: QueueTreeNode }) => {
+  const worst = worstChild(node);
+  return (
+    <>
+      <span className={META}>{node.children.length}</span>
+      {worst ? <Chip kind={worst.kind}>{worst.text}</Chip> : null}
+    </>
+  );
+};
 
 /** One ticket's row and, under a root, its children */
 const Node = ({
@@ -39,12 +63,16 @@ const Node = ({
   m,
   details,
   now,
+  open,
+  onOpen,
   onTicket
 }: {
   node: QueueTreeNode;
   m: Model;
   details: DeskState['details'];
   now: Date;
+  open: Readonly<Record<string, boolean>>;
+  onOpen: (ticket: string, open: boolean) => void;
   onTicket: (id: string) => void;
 }) => {
   const i = m.get(node.ticket);
@@ -63,19 +91,45 @@ const Node = ({
   const watched =
     entry && (pr === null || String(entry.pr) === String(pr)) ? entry : null;
   const blocker = watched ? mergeBlocker(watched) : null;
+  const state = node.state ? STATE.get(node.state) : undefined;
+  const isOpen = expanded(node, open);
+  const listId = `tree-${node.ticket}`;
   return (
     <li>
       <div className={done ? `${ROW} ${DIM}` : ROW}>
+        {node.children.length ? (
+          <button
+            type="button"
+            className="flex min-h-8 min-w-8 flex-none items-center justify-center self-center p-0"
+            aria-expanded={isOpen}
+            aria-controls={listId}
+            aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.ticket} sub-issues`}
+            onClick={() => onOpen(node.ticket, !isOpen)}
+          >
+            <Icon
+              name="next"
+              className={`size-3.5 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+            />
+          </button>
+        ) : null}
         <IdLink id={node.ticket} />
+        {node.children.length && !isOpen ? <Summary node={node} /> : null}
         {title ? (
           <TicketButton id={node.ticket} onOpen={onTicket}>
             {title}
           </TicketButton>
         ) : null}
-        {node.state ? (
-          <span className={META}>
-            {STATE_NAME.get(node.state) ?? node.state}
-          </span>
+        {node.position !== null ? (
+          <span className={`pos ${META}`}>{`#${node.position}`}</span>
+        ) : done ? null : node.waiting ? (
+          <Chip kind="backlog">waiting</Chip>
+        ) : (
+          <Chip kind="backlog">not queued</Chip>
+        )}
+        {state ? (
+          <Chip kind={state[1]}>{state[0]}</Chip>
+        ) : node.state ? (
+          <span className={META}>{node.state}</span>
         ) : null}
         {label ? <Chip kind={label}>{label}</Chip> : null}
         <Prn n={pr} />
@@ -85,8 +139,8 @@ const Node = ({
           </Chip>
         ))}
         {node.gaps.map((g) => (
-          <Chip key={g} kind="conflict">
-            {g}
+          <Chip key={g.kind} kind={g.candidate ? 'held' : 'conflict'}>
+            {g.kind}
           </Chip>
         ))}
         {plan ? (
@@ -114,7 +168,7 @@ const Node = ({
         <p className={`${META} pl-3.5`}>more sub-issues than the query reads</p>
       ) : null}
       {node.children.length ? (
-        <ul className={NEST}>
+        <ul id={listId} className={NEST} hidden={!isOpen}>
           {node.children.map((c) => (
             <Node
               key={c.ticket}
@@ -122,6 +176,8 @@ const Node = ({
               m={m}
               details={details}
               now={now}
+              open={open}
+              onOpen={onOpen}
               onTicket={onTicket}
             />
           ))}
@@ -137,39 +193,29 @@ type Props = {
   now: Date;
   filter: TreeFilter;
   onFilter: (filter: TreeFilter) => void;
+  /** The roots the viewer opened or closed by hand */
+  open: Readonly<Record<string, boolean>>;
+  onOpen: (ticket: string, open: boolean) => void;
   onDesk: () => void;
   /** A row's title opens the Ticket sheet */
   onTicket: (id: string) => void;
 };
 
-/** The filters' buttons: a segmented choice, or a toggle for `gaps` */
+/** The filters' buttons: independent toggles drawn as one group */
 const Filters = ({ filter, onFilter }: Pick<Props, 'filter' | 'onFilter'>) => (
-  <div
-    className="filters flex flex-wrap gap-1.5"
-    role="group"
-    aria-label="Filter"
-  >
-    {SCOPES.map(([scope, text]) => (
+  <div className="filters flex flex-wrap" role="group" aria-label="Filter">
+    {TOGGLES.map(([key, text]) => (
       <button
-        key={scope}
+        key={key}
         type="button"
-        className={UNPRESSED}
-        data-scope={scope}
-        aria-pressed={filter.scope === scope}
-        onClick={() => onFilter({ ...filter, scope })}
+        className={`${UNPRESSED} ${JOINED}`}
+        data-filter={key}
+        aria-pressed={filter[key]}
+        onClick={() => onFilter({ ...filter, [key]: !filter[key] })}
       >
         {text}
       </button>
     ))}
-    <button
-      type="button"
-      className={UNPRESSED}
-      data-gaps=""
-      aria-pressed={filter.gaps}
-      onClick={() => onFilter({ ...filter, gaps: !filter.gaps })}
-    >
-      Gaps only
-    </button>
   </div>
 );
 
@@ -179,6 +225,8 @@ export const TreePage = ({
   now,
   filter,
   onFilter,
+  open,
+  onOpen,
   onDesk,
   onTicket
 }: Props) => {
@@ -203,8 +251,8 @@ export const TreePage = ({
             Ticket tree
           </h1>
           <span className={`cap-sub ${CAP_SUB}`}>
-            every agent ticket where it sits in its split: state, agent label,
-            PR, blockers and gaps
+            the whole backlog in the queue's pick order: state, agent label, PR,
+            blockers and gaps
           </span>
         </div>
       </div>
@@ -218,6 +266,8 @@ export const TreePage = ({
               m={m}
               details={details}
               now={now}
+              open={open}
+              onOpen={onOpen}
               onTicket={onTicket}
             />
           ))}
@@ -225,13 +275,16 @@ export const TreePage = ({
       ) : m.tree.length ? (
         <Empty>No ticket matches the filter.</Empty>
       ) : (
-        <Empty>No agent ticket in flight.</Empty>
+        <Empty>No open ticket.</Empty>
       )}
       <p className={RULE}>
-        Agent tickets with their parents and sub-issues, Done ones for 14 days,
-        from the scheduler&apos;s queue view. An open blocker shows as a
-        &quot;blocked by&quot; chip, a gap from the audit as a chip of its kind,
-        as in the Next sheet&apos;s Gaps.
+        Open tickets with their sub-issues, Done ones for 14 days, in the order
+        the queue picks them: #n is the place, &quot;waiting&quot; an agent
+        ticket the queue waits on, &quot;not queued&quot; one it would never
+        pick. An open blocker shows as a &quot;blocked by&quot; chip, a gap from
+        the audit as a chip of its kind, and a grey one is a candidate to check.
+        Closed adds the finished roots with no gap, Gaps keeps the roots with a
+        gap, Not queued those the queue would never pick.
       </p>
     </>
   );

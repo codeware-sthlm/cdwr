@@ -22,7 +22,7 @@ type Option = {
 };
 
 const FIELD =
-  'min-h-[var(--tap)] w-[220px] rounded-[var(--r-row)] border border-[color:var(--line-strong)] bg-[color:var(--control)] px-3 text-[12px] text-[color:var(--fg)] placeholder:text-[color:var(--muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)] max-[600px]:w-full';
+  'min-h-[var(--tap)] w-[220px] rounded-[var(--r-row)] border border-[color:var(--line-strong)] bg-[color:var(--control)] px-3 text-[12px] text-[color:var(--fg)] max-[600px]:text-[16px] pointer-coarse:text-[16px] placeholder:text-[color:var(--muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)] max-[600px]:w-full';
 const LIST =
   'absolute top-full right-0 z-40 mt-1 grid max-h-[60vh] w-[min(440px,90vw)] gap-0.5 overflow-y-auto rounded-[var(--r-tile)] border border-[color:var(--line-strong)] bg-[color:var(--surface)] p-1.5 text-[0.85rem] text-[color:var(--fg)] shadow-lg';
 const OPTION =
@@ -119,7 +119,7 @@ export const Search = ({
   };
 
   return (
-    <div className="relative flex items-center">
+    <div className="relative flex min-w-0 items-center max-[600px]:flex-1 max-[600px]:justify-end">
       {wide ? null : (
         <button
           type="button"

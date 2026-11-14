@@ -108,9 +108,16 @@ export type QueueGap = {
   kind: string;
   what: string;
   fix: string;
+  /** A hint to check, not a finding: it does not count as a gap */
+  candidate?: boolean;
+  /** The rows of the ticket's Status table the rule read, for a candidate */
+  rows?: string[];
 };
 
-/** One ticket of the queue's tree (watch.jq `tree`): roots carry their children, children carry none */
+/** A gap on a tree node: its audit kind, and whether it is a candidate to check rather than a finding */
+export type QueueTreeGap = { kind: string; candidate: boolean };
+
+/** One ticket of the queue's tree (watch.jq `tree`): a node carries its sub-issues, nested */
 export type QueueTreeNode = {
   ticket: string;
   title: string | null;
@@ -119,10 +126,14 @@ export type QueueTreeNode = {
   /** The ticket's `agent:*` label, e.g. `agent:working` */
   label: string | null;
   pr: number | null;
+  /** The 1-based place in the queue's pick order; null when the queue would never pick it */
+  position: number | null;
+  /** An open agent ticket without a position: the queue waits on something (a review, an answer, a blocker) */
+  waiting: boolean;
   /** Open blockers */
   blockers: string[];
-  /** The kinds of the audit's gaps on the ticket */
-  gaps: string[];
+  /** The audit's gaps on the ticket */
+  gaps: QueueTreeGap[];
   /** Set on a root whose children the scheduler cut short */
   truncated?: boolean;
   children: QueueTreeNode[];
