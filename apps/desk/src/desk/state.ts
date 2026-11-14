@@ -43,6 +43,7 @@ export const isFilter = (value: unknown): value is Filter =>
 export const SHEET_IDS = [
   'before',
   'next',
+  'tree',
   'review',
   'handoffs',
   'session',

@@ -8,7 +8,14 @@ import {
   shortAge,
   usd
 } from '../format';
-import { type Model, activityMissing, ideaVerdict, shipped } from '../model';
+import {
+  type Model,
+  activityMissing,
+  ideaVerdict,
+  shipped,
+  treeGapped,
+  treeRoots
+} from '../model';
 import { perTicketAverage, spendStats, ticketCosts } from '../spend';
 import { type DeskState, type SheetId, bucketsLoaded } from '../state';
 import { livePr, prTone } from '../view/pr';
@@ -110,6 +117,7 @@ export const Tiles = ({ m, state, now, onSheet }: Props) => {
   const activityIn = activity ? !activityMissing(activity) : false;
   const first = m.next[0];
   const prs = prCounts(m, state);
+  const gapped = treeGapped(m.tree);
   const idea = ideaTile(m, state, now);
   const today = m.runsToday;
   const sessions = m.hostSessions.reduce((n, h) => n + h.sessions.length, 0);
@@ -120,6 +128,14 @@ export const Tiles = ({ m, state, now, onSheet }: Props) => {
       label: 'up next',
       value: runsIn ? String(m.next.length) : '–',
       sub: first ? [first.ticket, first.reason].filter(Boolean).join(' · ') : ''
+    },
+    {
+      sheet: 'tree',
+      icon: 'ticket',
+      label: 'ticket tree',
+      value: runsIn ? String(treeRoots(m.tree)) : '–',
+      sub: runsIn ? (gapped ? plural(gapped, 'gap', 'gaps') : 'no gaps') : '',
+      bad: gapped > 0
     },
     {
       sheet: 'review',
