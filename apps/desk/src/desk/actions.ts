@@ -27,10 +27,12 @@ import { type ControlsModel, type Model, model } from './model';
 import {
   type Connection,
   type SheetId,
+  type TreeFilter,
   type View,
   createState,
   emptyControls,
   isFilter,
+  isTreeFilter,
   sheetIdOf,
   viewOf
 } from './state';
@@ -418,6 +420,17 @@ export const sheetActions: SheetActions = {
   }
 };
 
+/** Sets the Ticket tree's filters, kept for the next visit */
+export function setTreeFilter(tree: TreeFilter): void {
+  state.ui.tree = tree;
+  try {
+    localStorage.setItem('aq-tree', JSON.stringify(tree));
+  } catch {
+    // Storage is unavailable: the filters last until the page closes
+  }
+  render();
+}
+
 // ---------- Load ----------
 
 export function refresh(): void {
@@ -430,8 +443,10 @@ export function refresh(): void {
 try {
   const f = localStorage.getItem('aq-filter');
   if (isFilter(f)) state.ui.filter = f;
+  const t: unknown = JSON.parse(localStorage.getItem('aq-tree') ?? 'null');
+  if (isTreeFilter(t)) state.ui.tree = t;
 } catch {
-  // Storage is unavailable: the filter starts at its default
+  // Storage is unavailable or holds junk: the filters start at their default
 }
 
 /** Records the Realtime channel's health for the model's problems and health checks */

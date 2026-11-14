@@ -96,7 +96,10 @@ export type Run = RunsPayload['rows'][number];
 export type TicketRef = Pick<
   Issue,
   'id' | 'title' | 'url' | 'status' | 'completedAt'
-> & { priority: Issue['priority'] | null };
+> & {
+  priority: Issue['priority'] | null;
+  updatedAt: Issue['updatedAt'] | null;
+};
 
 export type Blocker = { ticket: string; pr: PrRef | null };
 
@@ -382,7 +385,8 @@ const stub = (id: string): TicketRef => ({
   url: LINEAR_ISSUE + id,
   status: '',
   completedAt: null,
-  priority: null
+  priority: null,
+  updatedAt: null
 });
 
 /** Blockers before the PRs they block, otherwise the queue view's order; a cycle is cut where it closes */

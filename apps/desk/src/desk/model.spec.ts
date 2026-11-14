@@ -315,7 +315,8 @@ describe('model', () => {
       url: 'https://linear.app/codeware/issue/COD-77',
       status: '',
       completedAt: null,
-      priority: null
+      priority: null,
+      updatedAt: null
     });
   });
 

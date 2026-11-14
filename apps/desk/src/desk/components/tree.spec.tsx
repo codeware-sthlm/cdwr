@@ -3,8 +3,8 @@ import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
-import { createState } from '../state';
-import type { QueueTreeNode } from '../types';
+import { type DeskState, type TreeFilter, createState } from '../state';
+import type { QueueTreeNode, SessionState } from '../types';
 import { NOW, filled, runs, view } from '../view/fixtures';
 
 import { TreePage } from './tree';
@@ -24,13 +24,72 @@ const node = (
   ...over
 });
 
-const mount = (tree: QueueTreeNode[], onDesk = vi.fn()): HTMLElement => {
+const ALL: TreeFilter = { scope: 'all', gaps: false };
+
+/** The page over `tree`; `prepare` adjusts the state (details, session, watches) first */
+const mountWith = (
+  tree: QueueTreeNode[],
+  {
+    onDesk = vi.fn(),
+    onFilter = vi.fn(),
+    filter = ALL,
+    session = { state: 'none' },
+    prepare = () => undefined
+  }: {
+    onDesk?: () => void;
+    onFilter?: (filter: TreeFilter) => void;
+    filter?: TreeFilter;
+    session?: SessionState;
+    prepare?: (state: DeskState) => void;
+  } = {}
+): HTMLElement => {
   const state = filled();
-  state.data.runs = runs(view({ tree }));
+  state.data.runs = runs(view({ tree, session }));
+  prepare(state);
   return render(
-    <TreePage m={model(state, NOW)} details={state.details} onDesk={onDesk} />
+    <TreePage
+      m={model(state, NOW)}
+      details={state.details}
+      now={NOW}
+      filter={filter}
+      onFilter={onFilter}
+      onDesk={onDesk}
+    />
   ).container;
 };
+
+const mount = (tree: QueueTreeNode[], onDesk = vi.fn()): HTMLElement =>
+  mountWith(tree, { onDesk });
+
+const watching = (state: DeskState, over: Record<string, unknown> = {}) => {
+  const base = state.data.runs;
+  if (!base) return;
+  state.data.runs = {
+    ...base,
+    watches: [
+      {
+        host: 'nuc',
+        at: NOW.toISOString(),
+        watch: {
+          'COD-10': {
+            pr: 42,
+            state: 'open',
+            unresolved: 0,
+            threads: 0,
+            conflicting: false,
+            ci: 'SUCCESS',
+            copilot: 'none',
+            at: NOW.toISOString(),
+            ...over
+          }
+        }
+      }
+    ]
+  };
+};
+
+const ids = (c: HTMLElement): string[] =>
+  [...c.querySelectorAll('a.id')].map((a) => text(a));
 
 const text = (el: Element | null): string => el?.textContent ?? '';
 
@@ -143,11 +202,124 @@ describe('TreePage', () => {
       <TreePage
         m={model(state, NOW)}
         details={state.details}
+        now={NOW}
+        filter={ALL}
+        onFilter={vi.fn()}
         onDesk={vi.fn()}
       />
     ).container;
     expect(text(c)).toContain('No agent ticket in flight.');
     expect(text(c)).toContain('Done ones for 14 days');
     expect(text(mount([node('COD-10')]))).toContain('Done ones for 14 days');
+  });
+
+  it('shows the plan progress only for a ticket with a plan', () => {
+    const c = mountWith([node('COD-10'), node('COD-20')], {
+      prepare: (s) =>
+        s.details.set('COD-10', {
+          steps: 7,
+          done: 3,
+          next: null,
+          idea: null,
+          blockedBy: [],
+          pr: null,
+          prAt: null
+        })
+    });
+    expect(text(c)).toContain('plan 3/7');
+    expect(c.textContent?.match(/plan \d/g)).toHaveLength(1);
+  });
+
+  it('shows a live session on the ticket it holds, with its host', () => {
+    const session = { state: 'alive', ticket: 'COD-10', id: 's1' };
+    const c = mountWith([node('COD-10'), node('COD-20')], {
+      session,
+      prepare: (s) => {
+        s.data.sessions = [
+          {
+            id: 's1',
+            host: 'mac',
+            kind: 'attended',
+            state: 'alive',
+            detail: null,
+            last_seen: NOW.toISOString()
+          }
+        ];
+      }
+    });
+    const chips = [...c.querySelectorAll('.chip.working')];
+    expect(chips.map(text)).toEqual(['session · mac']);
+  });
+
+  it('shows a session that waits, and none for another ticket or an ended one', () => {
+    const waits = mountWith([node('COD-10')], {
+      session: { state: 'waiting', ticket: 'COD-10' }
+    });
+    expect(text(waits.querySelector('.chip.needs-input'))).toBe('session');
+    const other = mountWith([node('COD-10')], {
+      session: { state: 'alive', ticket: 'COD-99' }
+    });
+    expect(other.querySelector('.chip.working')).toBeNull();
+    const ended = mountWith([node('COD-10')], {
+      session: { state: 'ended', ticket: 'COD-10' }
+    });
+    expect(text(ended)).not.toContain('session');
+  });
+
+  it.each([
+    ['conflicts', { conflicting: true }, 'conflicts with main', 'review'],
+    ['failing checks', { ci: 'FAILURE' }, 'checks failure', 'review'],
+    ['open threads', { threads: 2 }, '2 unresolved threads', 'review'],
+    ['all clear', {}, 'mergeable', 'ready']
+  ])('shows the PR watch: %s', (_name, over, words, kind) => {
+    const c = mountWith([node('COD-10', { pr: 42 })], {
+      prepare: (s) => watching(s, over)
+    });
+    expect(text(c.querySelector(`.chip.${kind}`))).toBe(words);
+  });
+
+  it('shows no watch for a ticket without one, or for another PR', () => {
+    const none = mountWith([node('COD-20', { pr: 42 })], {
+      prepare: (s) => watching(s)
+    });
+    expect(none.querySelector('.chip.ready, .chip.review')).toBeNull();
+    const other = mountWith([node('COD-10', { pr: 43 })], {
+      prepare: (s) => watching(s)
+    });
+    expect(other.querySelector('.chip.ready, .chip.review')).toBeNull();
+  });
+
+  it('shows when the ticket was last updated, and nothing for one the desk lacks', () => {
+    const c = mount([node('COD-1'), node('COD-404')]);
+    expect(text(c)).toContain('updated 28 days ago');
+    expect(c.textContent?.match(/updated /g)).toHaveLength(1);
+  });
+
+  it('lists the filters with the current ones pressed, and calls back on a press', () => {
+    const onFilter = vi.fn();
+    const c = mountWith([node('COD-10')], {
+      onFilter,
+      filter: { scope: 'open', gaps: false }
+    });
+    const pressed = (sel: string) =>
+      c.querySelector(sel)?.getAttribute('aria-pressed');
+    expect(pressed('[data-scope="open"]')).toBe('true');
+    expect(pressed('[data-scope="all"]')).toBe('false');
+    expect(pressed('[data-gaps]')).toBe('false');
+    fireEvent.click(c.querySelector('[data-scope="all"]') as HTMLElement);
+    expect(onFilter).toHaveBeenLastCalledWith({ scope: 'all', gaps: false });
+    fireEvent.click(c.querySelector('[data-gaps]') as HTMLElement);
+    expect(onFilter).toHaveBeenLastCalledWith({ scope: 'open', gaps: true });
+  });
+
+  it('lists the roots the filter keeps and says so when it keeps none', () => {
+    const done = node('COD-10', { state: 'completed' });
+    const c = mountWith([done], {
+      filter: { scope: 'open', gaps: false }
+    });
+    expect(ids(c)).toEqual([]);
+    expect(text(c)).toContain('No ticket matches the filter.');
+    expect(text(c)).toContain('Done ones for 14 days');
+    expect(ids(mountWith([done], { filter: ALL }))).toEqual(['COD-10']);
   });
 });

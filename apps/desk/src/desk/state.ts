@@ -39,6 +39,17 @@ export type Filter = 'all' | 'todo' | 'agent';
 export const isFilter = (value: unknown): value is Filter =>
   value === 'all' || value === 'todo' || value === 'agent';
 
+/** The Ticket tree's filters: Open hides finished roots, `gaps` keeps the roots with a gap */
+export type TreeFilter = { scope: 'open' | 'all'; gaps: boolean };
+
+export const isTreeFilter = (value: unknown): value is TreeFilter =>
+  typeof value === 'object' &&
+  value !== null &&
+  'scope' in value &&
+  (value.scope === 'open' || value.scope === 'all') &&
+  'gaps' in value &&
+  typeof value.gaps === 'boolean';
+
 /** The sheets, one per column, gauge and tile; also what `data-w` and the URL hash name */
 export const SHEET_IDS = [
   'before',
@@ -138,6 +149,8 @@ export type Connection = {
 export type DeskUi = {
   /** The Open tickets sheet's filter */
   filter: Filter;
+  /** The Ticket tree's filters */
+  tree: TreeFilter;
   /** The Activity sheet's ticket filter, `all` or a ticket id */
   actFilter: string;
   openSheet: SheetId | null;
@@ -239,6 +252,7 @@ export const createState = (): DeskState => ({
   errors: new Map(),
   ui: {
     filter: 'all',
+    tree: { scope: 'open', gaps: false },
     actFilter: 'all',
     openSheet: null,
     view: 'desk',
