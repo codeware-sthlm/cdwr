@@ -148,6 +148,9 @@ def pr_state:
 # the relabel to agent:review until run.sh has stored `relabelled` for that PR.
 # A conflict that reads UNKNOWN keeps the previous value, so the state stays conflicting and
 # nothing is sent; a merged or closed PR conflicts with nothing.
+# $in.parked is the ticket's parked wait (parked, or null). askCopilot asks run.sh to request
+# Copilot; run.sh stores the outcome as the entry's copilotAsked { at, ok, why }, which is kept
+# while the PR stays the same, so the request is made once per PR.
 def step:
   . as $in
   | $in.id as $id | $in.pr as $pr
@@ -192,8 +195,14 @@ def step:
                 draft: ($now.draft // false), mergeable: ($now.mergeable // null),
                 ci: ($now.ci // null), copilot: ($now.copilot // "none"), threads: ($now.threads // 0),
                 mergeStateStatus: ($now.mergeStateStatus // null), at: $in.at }
-              + (if $prev.relabelled == true then { relabelled: true } else {} end))
-    };
+              + (if $prev.relabelled == true then { relabelled: true } else {} end)
+              + (if $prev.copilotAsked != null then { copilotAsked: $prev.copilotAsked } else {} end))
+    }
+  # The scheduler asks Copilot once per PR, while the ticket is parked on Copilot for this open PR
+  # and nobody has asked yet: GitHub's automatic review skips a PR the app opened
+  | .askCopilot = ($in.parked.wait == "copilot" and $in.parked.pr == $pr
+                   and ($in.now.state | IN("merged", "closed") | not)
+                   and ($in.now.copilot // "none") == "none" and .entry.copilotAsked == null);
 
 # The scheduler's verdict on a desk copilot or merge command, from the pullRequest node it just read
 # (run.sh desk_pr_check): `ok <node id> <head oid>`, else why not. The desk's buttons use the same
@@ -313,18 +322,27 @@ def parked:
 
 # { resolved, outcome } for a parked issue. $waits maps identifier to { state, reviewed, rollup, oid };
 # a missing entry is pending. A PR that merged or closed ends the wait whatever it waited for.
-# Copilot answers within 20 minutes or not at all; CI checks that haven't finished on the named
-# commit within an hour resolve as a timeout, so no ticket stays parked for good.
-def wait_state($now; $waits):
+# Copilot answers within 20 minutes or not at all, counted from the scheduler's request when the
+# watch entry ($watch) holds one that GitHub took for this PR, else from `since`; CI checks that
+# haven't finished on the named commit within an hour resolve as a timeout, so no ticket stays
+# parked for good.
+def copilot_asked($watch):
+  parked as $p
+  | ($watch[.identifier] // {}) as $e
+  | if $p != null and $e.pr == $p.pr then $e.copilotAsked // null else null end;
+
+def wait_state($now; $waits; $watch):
   parked as $p
   | ($waits[.identifier] // {}) as $w
+  | copilot_asked($watch) as $asked
   | if $w.state == "MERGED" then { resolved: true, outcome: "merged" }
     elif $w.state == "CLOSED" then { resolved: true, outcome: "closed" }
     elif $p.wait == "copilot" then
-      if $w.reviewed == true then { resolved: true, outcome: "reviewed" }
-      elif ($now - $p.since) >= 1200 then { resolved: true, outcome: "no review" }
-      else { resolved: false, outcome: null }
-      end
+      (if $asked.ok == true then ($asked.at | epoch) else $p.since end) as $from
+      | if $w.reviewed == true then { resolved: true, outcome: "reviewed" }
+        elif ($now - $from) >= 1200 then { resolved: true, outcome: "no review" }
+        else { resolved: false, outcome: null }
+        end
     else
       ($p.sha != null and (($w.oid // "") | startswith($p.sha))) as $head
       | if $head and $w.rollup == "SUCCESS" then { resolved: true, outcome: "success" }
@@ -333,6 +351,7 @@ def wait_state($now; $waits):
         else { resolved: false, outcome: null }
         end
     end;
+def wait_state($now; $waits): wait_state($now; $waits; {});
 
 # The issue's agent:* label name, else null
 def agent_label:
@@ -501,7 +520,8 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
   | ($all | limit_used($now; $limit)) as $lu0
   | ([ $all[] | select((agent_label == "agent:working" or agent_label == "agent:review")
                        and is_open and parked != null)
-       | . + { park: parked, ws: wait_state($now; $waits) } ] | sort_by(.park.since)) as $park
+       | . + { park: parked, ws: wait_state($now; $waits; $watch), asked: copilot_asked($watch) } ]
+     | sort_by(.park.since)) as $park
   | ($park | map(.identifier)) as $parkIds
   | (($session.tickets // [ $session.ticket ]) | map(select(. != null))) as $sessionTickets
   | ([ $park[] | select(agent_label == "agent:working") ]) as $parkWorking
@@ -593,7 +613,13 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
       refused: $refused,
       parked: ($park | map({ ticket: .identifier, wait: .park.wait, pr: .park.pr,
                              since: (.park.since | todateiso8601),
-                             resolved: .ws.resolved, outcome: .ws.outcome })),
+                             resolved: .ws.resolved, outcome: .ws.outcome }
+                           # The desk reads a Copilot wait nobody asked for, or whose request failed, as stalled
+                           + (if .park.wait == "copilot"
+                              then .park.pr as $pr
+                                   | { copilot: (($watch // {})[.identifier] // {} | if .pr == $pr then .copilot // null else null end),
+                                       copilotAsked: .asked }
+                              else {} end))),
       renovate: ($ren | map({ pr, title, state, ticket })),
       table: {
         before: $before,
