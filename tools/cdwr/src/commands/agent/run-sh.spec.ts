@@ -3045,7 +3045,7 @@ describe('run.sh review session', () => {
       );
       for (const rule of [
         '"Read(**/.env*)"',
-        '"Read(//**/.cdwr/*)"',
+        '"Read(//**/.cdwr/*.*)"',
         '"Read(//**/.claude.json)"',
         '"Read(//run/agent/**)"',
         '"Read(/$HOME_DIR/linear.token*)"'

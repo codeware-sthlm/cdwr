@@ -1550,7 +1550,7 @@ review_run() {
     --model "$model" "${LINEAR_MCP_ARGS[@]}" \
     --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
     --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
-      "Read(**/.env*)" "Read(//**/.claude.json)" "Read(//**/.cdwr/*)" "Read(//run/agent/**)" \
+      "Read(**/.env*)" "Read(//**/.claude.json)" "Read(//**/.cdwr/*.*)" "Read(//run/agent/**)" \
       "Read(/$HOME_DIR/linear.token*)" "Read(/$HOME_DIR/linear-app.env*)" \
       "Bash(*/run/agent/*)" "Bash(*linear.token*)" "Bash(*linear-app.env*)" "Bash(*security find-generic-password*)" "Bash(*AGENT_QUEUE_LINEAR*)" \
     --tools "Read,Grep,Glob,Skill,Bash,Write,Edit" \
