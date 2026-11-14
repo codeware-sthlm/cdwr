@@ -98,6 +98,7 @@ export const runs = (qv: QueueView | null): RunsPayload => ({
   last: { when: '2026-10-29 11:50', outcome: 'planned COD-1' },
   attended: null,
   suggested: { date: '2026-10-29', kind: 'nothing', text: 'nothing today' },
+  review: null,
   job: {
     line: 'every 10 min',
     minutes: 10,

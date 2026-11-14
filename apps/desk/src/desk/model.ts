@@ -16,8 +16,10 @@ import {
   type ControlState,
   type PrCommandState,
   type Reported,
+  type ReviewRequestState,
   controlStates,
-  prCommandStates
+  prCommandStates,
+  reviewRequestState
 } from './commands';
 import {
   AGENT,
@@ -293,6 +295,8 @@ export type Model = {
   watch: Map<string, WatchRef>;
   /** `prCommandKey` -> where a ticket's Copilot or Merge command stands */
   prCommands: Map<string, PrCommandState>;
+  /** Where the newest Review now stands on the host the desk reads */
+  reviewRequest: ReviewRequestState;
   /** The agent's PRs as GitHub last told, newest first */
   agentPrs: AgentPr[];
   /** Live sessions per host, newest first */
@@ -1339,6 +1343,15 @@ export const model = (
     snoozes: data.snoozes ?? [],
     watch: watchByTicket(runs?.watches ?? []),
     prCommands: prCommandStates(data.deskCommands ?? [], nowMs),
+    reviewRequest: runs
+      ? reviewRequestState(
+          data.deskCommands ?? [],
+          runs.host,
+          runs.review,
+          data.reviews?.at ?? null,
+          nowMs
+        )
+      : { state: 'idle' },
     agentPrs: agentPrs(data.githubEvents, prTickets, (id) => get(id).title),
     hostSessions: sessions,
     handBack: hand,

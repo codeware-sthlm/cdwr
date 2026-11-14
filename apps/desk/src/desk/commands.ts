@@ -1,5 +1,7 @@
 // Sends desk commands to the desk-command Edge Function with the device token as the bearer
 
+import type { ReviewLine } from './types';
+
 export type CommandKind =
   | 'pause'
   | 'resume'
@@ -346,4 +348,51 @@ export const prCommandStates = (
       states.set(key, { state: 'applied', at: row.applied_at });
   }
   return states;
+};
+
+/** Where the newest Review now stands; `failed` holds the run's own outcome */
+export type ReviewRequestState =
+  | { state: 'idle' }
+  | { state: 'pending' }
+  | { state: 'queued' }
+  | { state: 'refused'; note: string }
+  | { state: 'failed'; note: string };
+
+/**
+ * The newest Review now for the host. A pending row waits for the scheduler; an applied one is
+ * queued until a stored review or the run's line is newer than it. Refusals and failures show for
+ * REFUSED_SHOW_MS, the waiting states for PENDING_MAX_MS.
+ */
+export const reviewRequestState = (
+  rows: readonly CommandRowLike[],
+  host: string,
+  line: ReviewLine | null,
+  reviewedAt: string | null,
+  now: number
+): ReviewRequestState => {
+  let row: CommandRowLike | null = null;
+  for (const r of rows)
+    if (r.host === host && r.kind === 'review' && (!row || r.id > row.id))
+      row = r;
+  if (!row) return { state: 'idle' };
+  const since = Date.parse(row.applied_at ?? row.at);
+  const age = now - since;
+  if (row.status === 'pending')
+    return age <= PENDING_MAX_MS ? { state: 'pending' } : { state: 'idle' };
+  if (row.status === 'refused')
+    return age <= REFUSED_SHOW_MS
+      ? { state: 'refused', note: row.note ?? 'refused' }
+      : { state: 'idle' };
+  if (row.status !== 'applied') return { state: 'idle' };
+  // The line's minute can't be later than its run, so one from the minute it was applied counts
+  const after = (at: string | null) =>
+    at !== null && Date.parse(at) >= since - (since % 60_000);
+  if (after(reviewedAt)) return { state: 'idle' };
+  if (line && after(line.at)) {
+    if (line.text.startsWith('ran, ')) return { state: 'idle' };
+    return now - Date.parse(line.at) <= REFUSED_SHOW_MS
+      ? { state: 'failed', note: line.text }
+      : { state: 'idle' };
+  }
+  return age <= PENDING_MAX_MS ? { state: 'queued' } : { state: 'idle' };
 };
