@@ -23,13 +23,13 @@ export const statusFlyResponseSchema = z.object({
         repository: z.string(),
         tag: z.string(),
         digest: z.string(),
-        labels: z.record(z.string()).optional()
+        labels: z.record(z.string(), z.string()).optional()
       }),
       createdAt: z.string().datetime(),
       updatedAt: z.string().datetime(),
       config: z.object({
-        env: z.record(z.string()),
-        metadata: z.record(z.string()),
+        env: z.record(z.string(), z.string()),
+        metadata: z.record(z.string(), z.string()),
         guest: z
           .object({
             cpu_kind: z.string().optional(),
