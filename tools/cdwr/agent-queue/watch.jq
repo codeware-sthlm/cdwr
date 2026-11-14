@@ -748,7 +748,8 @@ def launch($guards):
 # Input is the issue nodes, as for queue_view. A gap is { id, ticket, kind, what, fix }; the id is
 # stable per ticket and kind. It reads the pick's own helpers, so the audit never disagrees with
 # what a session would take.
-def gap($t; $kind; $what; $fix): { id: "\($t):\($kind)", ticket: $t, kind: $kind, what: $what, fix: $fix };
+# The title rides along because the desk's index holds no canceled ticket; `audit` fills it in
+def gap($t; $kind; $what; $fix): { id: "\($t):\($kind)", ticket: $t, title: null, kind: $kind, what: $what, fix: $fix };
 
 # The gaps of one ticket
 def ticket_gaps($now; $watch):
@@ -804,14 +805,16 @@ def ticket_gaps($now; $watch):
 
 # $runnable is the pick's `runnable` list, so the launch guard reads what a launch would take.
 def audit($now; $watch; $launch; $runnable):
-  [ .[] | select(other_repo | not) | ticket_gaps($now; $watch)[] ] as $gaps
+  . as $issues
+  | [ .[] | select(other_repo | not) | (.title // null) as $title | ticket_gaps($now; $watch)[] | .title = $title ] as $gaps
   # The key is the launch's own: ticket (a Renovate `PR 754` as `PR-754`) and reason
   | (if $launch == null or ($launch.launches // 0) < 2 then []
      else (($launch.key // "") | split(" ")[0]) as $kt
        | if $kt == null or $kt == "" or ($kt | startswith("PR-")) then []
          elif any($runnable[]; "\(.ticket | gsub(" "; "-")) \(.reason)" == $launch.key)
          then [ gap($kt; "launch-guard"; "\($launch.launches) launches of \($launch.key) changed nothing";
-                    "Start /work-queue on the Mac") ]
+                    "Start /work-queue on the Mac")
+                | .title = ([ $issues[] | select(.identifier == $kt) | .title ][0] // null) ]
          else [] end
      end) as $guard
   | ($gaps + $guard) | sort_by(.ticket | id_num);
@@ -820,6 +823,7 @@ def audit($now; $watch; $launch; $runnable):
 # Input is the issue nodes. A root is a parent with an agent-labelled sub-issue, or an agent ticket
 # with no parent that is open or Done within 14 days. Children come from the parent's own list of
 # sub-issues, so Done and unlabelled siblings show; one that is also in the nodes takes its richer data.
+# A root whose sub-issue list was cut at the query's page gets `truncated: true`.
 # $gaps is the audit's output.
 def tree($now; $watch; $gaps):
   . as $issues
@@ -848,6 +852,9 @@ def tree($now; $watch; $gaps):
       | . as $id
       | ($by[$id] // $groups[$id].parent) as $r
       | leaf($r)
+        + (if (($by[$id].children.pageInfo.hasNextPage // false)
+               or ($groups[$id].parent.children.pageInfo.hasNextPage // false))
+           then { truncated: true } else {} end)
         + { children: ([ (($by[$id].children.nodes // []) + ($groups[$id].parent.children.nodes // [])
                           + ($groups[$id].members // []))[] ]
                        | unique_by(.identifier) | sort_by(.identifier | id_num)

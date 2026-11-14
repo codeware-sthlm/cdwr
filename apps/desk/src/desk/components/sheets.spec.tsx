@@ -196,6 +196,25 @@ describe('queue sheets', () => {
     );
   });
 
+  it('titles a gap by its own title when the index lacks the ticket', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        audit: [
+          {
+            id: 'COD-999:label-on-closed',
+            ticket: 'COD-999',
+            title: 'A canceled ticket',
+            kind: 'label-on-closed',
+            what: 'COD-999 is Canceled but still agent:ready',
+            fix: 'Remove the label'
+          }
+        ]
+      })
+    );
+    expect(text(body('next', state))).toContain('A canceled ticket');
+  });
+
   it('tell a conflicting Renovate PR waits for an attended session', () => {
     const state = filled();
     state.data.runs = runs(

@@ -253,16 +253,20 @@ export const NextBody = ({ m, state }: BodyProps) => {
         <div className={GROUP}>
           <h3>{`Gaps · ${m.gaps.length}`}</h3>
           <ul>
-            {m.gaps.map((g) => (
-              <Item
-                key={g.id}
-                details={details}
-                i={m.get(g.ticket)}
-                state="plain"
-                side={<Chip kind="conflict">{g.kind}</Chip>}
-                note={`${g.what}. ${g.fix}.`}
-              />
-            ))}
+            {m.gaps.map((g) => {
+              const i = m.get(g.ticket);
+              // A ticket outside the desk's index is a stub without a title
+              return (
+                <Item
+                  key={g.id}
+                  details={details}
+                  i={i.title || !g.title ? i : { ...i, title: g.title }}
+                  state="plain"
+                  side={<Chip kind="conflict">{g.kind}</Chip>}
+                  note={`${g.what}. ${g.fix}.`}
+                />
+              );
+            })}
           </ul>
         </div>
       ) : null}

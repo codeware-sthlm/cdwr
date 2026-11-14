@@ -1111,6 +1111,7 @@ const labelEntrySchema = z.object({
 const gapSchema = z.object({
   id: z.string(),
   ticket: ticketSchema,
+  title: z.string().nullish(),
   kind: z.string(),
   what: z.string(),
   fix: z.string()
@@ -1128,6 +1129,8 @@ const treeLeafSchema = z.object({
 
 /** A parent or an agent ticket with its sub-issues */
 const treeRootSchema = treeLeafSchema.extend({
+  /** The sub-issue list was cut at the query's page */
+  truncated: z.boolean().optional(),
   children: z.array(treeLeafSchema.extend({ children: z.array(z.unknown()) }))
 });
 

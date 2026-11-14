@@ -1896,7 +1896,10 @@ describe('run.sh audit', () => {
   it('adds the audit and the tree to the view, and keeps the view when they fail', () => {
     expect(SCRIPT).toContain('audit($now; $watch; $launch; $runnable)');
     expect(SCRIPT).toContain('tree($now; $watch; $gaps[0])');
-    expect(SCRIPT).toContain('warn: audit: watch.jq failed$(watch_err)');
+    expect(SCRIPT).toContain(
+      'warn: audit: watch.jq failed$carried$(watch_err)'
+    );
+    expect(SCRIPT).toContain('kept the previous audit and tree');
     expect(SCRIPT).toContain('audit_notices "$queue_view"');
   });
 

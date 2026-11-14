@@ -1072,7 +1072,15 @@ attended() {
        jq -c --slurpfile a "$ax.audit" --slurpfile t "$ax.tree" '. + { audit: $a[0], tree: $t[0] }' <<<"$queue_view" > "$ax.view"; then
       queue_view="$(<"$ax.view")"
     else
-      note "warn: audit: watch.jq failed$(watch_err)"
+      # Keep the last good gaps and tree rather than persist a view without them
+      local carried=""
+      if [[ -f "$HOME_DIR/queue-view.json" ]] &&
+         jq -ce --slurpfile p "$HOME_DIR/queue-view.json" \
+           '. + ($p[0] | { audit, tree } | with_entries(select(.value != null)))' <<<"$queue_view" > "$ax.view" 2>/dev/null; then
+        queue_view="$(<"$ax.view")"
+        carried=" (kept the previous audit and tree)"
+      fi
+      note "warn: audit: watch.jq failed$carried$(watch_err)"
     fi
     rm -f "$ax.audit" "$ax.tree" "$ax.view"
   fi

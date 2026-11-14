@@ -99,6 +99,8 @@ export type QueueRenovate = {
 export type QueueGap = {
   id: string;
   ticket: string;
+  /** The ticket's own title, for one the desk's index does not hold (a canceled one) */
+  title?: string;
   kind: string;
   what: string;
   fix: string;
