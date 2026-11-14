@@ -23,7 +23,7 @@ const runSchema = z.object({
   outcome: z.string().catch(''),
   ticket: z.string().catch(''),
   detail: z.string().catch('')
-}) satisfies z.ZodType<RunRow, z.ZodTypeDef, unknown>;
+}) satisfies z.ZodType<RunRow, unknown>;
 
 /** A runs.jsonl row, or undefined for a line that is not one */
 const parseRun = (line: string): RunRow | undefined => {

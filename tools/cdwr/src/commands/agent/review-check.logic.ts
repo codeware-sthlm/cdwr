@@ -66,9 +66,19 @@ export const checkReview = (
   const parsed = reviewFileSchema.safeParse(json);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
+    // zod 4 words a missing field as a type mismatch; the line keeps saying "Required"
+    const absent =
+      issue?.code === 'invalid_type' &&
+      issue.path.reduce<unknown>(
+        (value, key) =>
+          typeof value === 'object' && value !== null
+            ? (value as Record<PropertyKey, unknown>)[key]
+            : undefined,
+        json
+      ) === undefined;
     return {
       ok: false,
-      message: `failed: ${issue?.path.join('.') || '(root)'}: ${issue?.message ?? 'invalid'}`
+      message: `failed: ${issue?.path.join('.') || '(root)'}: ${absent ? 'Required' : (issue?.message ?? 'invalid')}`
     };
   }
   // The reviews table is readable with the desk's public key, so nothing secret may reach it

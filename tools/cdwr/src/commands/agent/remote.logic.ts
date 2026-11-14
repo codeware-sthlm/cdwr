@@ -69,7 +69,7 @@ export const parseRemoteAnswer = <S extends z.ZodTypeAny>(
       return {
         kind: 'result',
         ok: parsed.data.ok ?? true,
-        result: parsed.data.result as z.output<S>
+        result: (parsed.data as { result: z.output<S> }).result
       };
     return {
       kind: 'skew',
