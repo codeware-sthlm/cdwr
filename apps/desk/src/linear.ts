@@ -61,7 +61,8 @@ const issueNodeSchema = z.object({
   completedAt: z.string().nullish(),
   canceledAt: z.string().nullish(),
   state: z.object({ name: z.string(), type: statusTypeSchema }),
-  labels: z.object({ nodes: z.array(z.object({ name: z.string() })) })
+  labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
+  prReady: z.object({ nodes: z.array(z.object({ id: z.string() })) }).nullish()
 });
 
 const issuePageSchema = z.object({
@@ -160,6 +161,8 @@ export type Issue = {
   url: string;
   completedAt: string | null;
   canceledAt: string | null;
+  /** The agent has commented `**Agent: PR ready**`: a merged agent ticket, even once its `agent:*` label is gone */
+  prReady: boolean;
 };
 
 export type IssueDetail = {
@@ -194,6 +197,7 @@ const ISSUE_FIELDS = `
   canceledAt
   state { name type }
   labels(first: 20) { nodes { name } }
+  prReady: comments(first: 1, filter: { body: { startsWith: "**Agent: PR ready**" } }) { nodes { id } }
 `;
 
 // Linear prices a query by its connections and assumes 50 nodes for any without
@@ -261,7 +265,8 @@ const toIssue = (node: z.infer<typeof issueNodeSchema>): Issue => ({
   updatedAt: node.updatedAt,
   url: node.url,
   completedAt: node.completedAt ?? null,
-  canceledAt: node.canceledAt ?? null
+  canceledAt: node.canceledAt ?? null,
+  prReady: (node.prReady?.nodes.length ?? 0) > 0
 });
 
 const byCreatedAt = (a: Comment, b: Comment) =>

@@ -166,9 +166,20 @@ describe('issue mapping', () => {
         updatedAt: '2026-10-01T00:00:00.000Z',
         url: 'https://linear.app/codeware/issue/COD-1',
         completedAt: '2026-10-02T00:00:00.000Z',
-        canceledAt: null
+        canceledAt: null,
+        prReady: false
       }
     ]);
+  });
+
+  it.each([
+    ['a PR-ready comment', { prReady: { nodes: [{ id: 'c1' }] } }, true],
+    ['no PR-ready comment', { prReady: { nodes: [] } }, false],
+    ['an absent alias', {}, false]
+  ])('maps %s to prReady', async (_, over, expected) => {
+    const { linear } = setup(json(page([node(over)])));
+    const [issue] = await linear.listClosed();
+    expect(issue.prReady).toBe(expected);
   });
 
   it.each([

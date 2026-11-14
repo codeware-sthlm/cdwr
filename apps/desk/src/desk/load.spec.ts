@@ -18,7 +18,8 @@ const issue = (id: string, labels: string[] = []): Issue => ({
   updatedAt: '2026-10-01T00:00:00.000Z',
   url: `https://linear.app/${id}`,
   completedAt: null,
-  canceledAt: null
+  canceledAt: null,
+  prReady: false
 });
 
 const detail: IssueDetail = {
