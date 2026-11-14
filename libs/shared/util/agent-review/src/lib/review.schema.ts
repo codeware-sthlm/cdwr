@@ -51,10 +51,13 @@ const staleSchema = z.object({ ticket, why: text, evidence });
 
 const suggestionSchema = z.object({ ticket, why: text });
 
+// The skill lists at most 7 actions
+const actionsSchema = z.array(actionSchema).max(7);
+
 /** What a review run hands the desk: a brief and what needs attention */
 export const reviewSchema = z.object({
   brief: text,
-  actions: z.array(actionSchema),
+  actions: actionsSchema,
   findings: z.array(findingSchema),
   stale: z.array(staleSchema),
   suggestions: z.array(suggestionSchema).max(3)
@@ -63,7 +66,7 @@ export const reviewSchema = z.object({
 /** What the review run writes to its file: findings carry no id */
 export const reviewFileSchema = z.object({
   brief: text,
-  actions: z.array(actionSchema),
+  actions: actionsSchema,
   findings: z.array(fileFindingSchema),
   stale: z.array(staleSchema),
   suggestions: z.array(suggestionSchema).max(3)
