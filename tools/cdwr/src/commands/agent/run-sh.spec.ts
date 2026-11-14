@@ -60,10 +60,17 @@ describe('run.sh', () => {
     expect(ghCalls(DESK_PR_ACT).filter(notRead)).toEqual([
       'gh api graphql -f query="$ENQUEUE" -f id="$id" -f oid="$oid" 2>&1)" && return 0 ;;'
     ]);
-    // The app's token first, with no fallback to the signed-in user
-    expect(COPILOT_REQUEST.indexOf('gh_identity ||')).toBeLessThan(
+    // The app's token first, then Håkan's token, with no fallback to the signed-in user
+    expect(COPILOT_REQUEST.indexOf('if gh_identity; then')).toBeLessThan(
       COPILOT_REQUEST.indexOf('"${request[@]}"')
     );
+    expect(
+      COPILOT_REQUEST.split('\n').filter(
+        (line) =>
+          line.includes('"${request[@]}"') &&
+          !line.includes('GH_TOKEN="$token"')
+      )
+    ).toHaveLength(1);
     expect(DESK_PR_ACT.indexOf('gh_identity ||')).toBeLessThan(
       DESK_PR_ACT.indexOf('case "$kind"')
     );
@@ -1206,6 +1213,71 @@ describe('run.sh watch_prs', () => {
       expect(read('watch.json')).toBe(before);
     }
   );
+});
+
+describe('run.sh copilot_request', () => {
+  const source = SCRIPT.slice(
+    SCRIPT.indexOf('copilot_request() {'),
+    SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('copilot_request() {')) + 3
+  );
+  const canRun = spawnSync('zsh', ['-c', 'true']).status === 0;
+
+  // app: whether the app's token is there; token: Håkan's token, or none; added: the identity
+  // whose request GitHub turns into a Copilot request
+  // The calls go to a log, since copilot_request keeps the request's output as its reason
+  const request = (app: boolean, token: string, added: string) => {
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-request-'));
+    const log = join(dir, 'log');
+    const script = [
+      `gh_identity() { ${app ? 'export GH_TOKEN=app; return 0' : 'return 1'}; }`,
+      `copilot_token() { print -r -- "${token}"; }`,
+      `gh() { print -r -- "gh \${GH_TOKEN:-login}" >> "${log}"; }`,
+      `copilot_asked() { print -r -- "asked \${GH_TOKEN:-login}" >> "${log}"; [[ "\${GH_TOKEN:-}" == "${added}" ]]; }`,
+      source,
+      'out="$(copilot_request 42)"; print -r -- "rc=$? out=$out"'
+    ].join('\n');
+    const r = spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+    const calls = existsSync(log) ? readFileSync(log, 'utf8') : '';
+    rmSync(dir, { recursive: true, force: true });
+    return { stdout: r.stdout, calls };
+  };
+
+  it.skipIf(!canRun)('asks as the app and stops there when it worked', () => {
+    const r = request(true, 'tok', 'app');
+    expect(r.stdout).toBe('rc=0 out=\n');
+    expect(r.calls).toBe('gh app\nasked app\n');
+  });
+
+  it.skipIf(!canRun)(
+    'falls back on the token when the app adds no Copilot',
+    () => {
+      const r = request(true, 'tok', 'tok');
+      expect(r.stdout).toBe('rc=0 out=\n');
+      expect(r.calls).toBe('gh app\nasked app\ngh tok\nasked tok\n');
+    }
+  );
+
+  it.skipIf(!canRun)('falls back on the token when there is no app', () => {
+    const r = request(false, 'tok', 'tok');
+    expect(r.stdout).toBe('rc=0 out=\n');
+    expect(r.calls).toBe('gh tok\nasked tok\n');
+  });
+
+  it.skipIf(!canRun)(
+    'gives a one-line reason whole, not its first letter',
+    () => {
+      const r = request(true, '', 'tok');
+      expect(r.stdout).toBe(
+        'rc=1 out=GitHub did not add Copilot as a reviewer\n'
+      );
+    }
+  );
+
+  it.skipIf(!canRun)('never asks as the signed-in user', () => {
+    const r = request(false, '', 'login');
+    expect(r.stdout).toBe('rc=1 out=no GitHub app\n');
+    expect(r.calls).toBe('');
+  });
 });
 
 describe('run.sh watch_renovate', () => {
