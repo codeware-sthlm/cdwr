@@ -20,6 +20,7 @@ import {
   SessionBody,
   TimersBody
 } from './scheduler-bodies';
+import { TreeBody } from './tree-body';
 
 /** What a sheet's controls do; the state they change stays with the page */
 export type SheetActions = {
@@ -65,6 +66,11 @@ export const SHEETS: Record<SheetId, SheetDef> = {
     title: 'What the agent takes next',
     sub: "In the order a session takes them, from the scheduler's queue view",
     Body: NextBody
+  },
+  tree: {
+    title: 'Ticket tree',
+    sub: 'Every agent ticket where it sits in its split: state, agent label, PR, blockers and gaps',
+    Body: TreeBody
   },
   review: {
     title: 'Review & check',
