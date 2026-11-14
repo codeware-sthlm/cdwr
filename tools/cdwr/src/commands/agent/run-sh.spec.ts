@@ -2504,10 +2504,10 @@ describe('run.sh apply_commands', () => {
       files: { 'review-ran-at': `${ranAt}\n` }
     });
     expect(statuses(r)).toEqual([
-      ['refused', expect.stringMatching(/^a review ran at \d\d:\d\d$/)]
+      ['refused', expect.stringMatching(/^a review ran at \d\d:\d\d UTC$/)]
     ]);
     expect(changes(r)[0]).toMatch(
-      /^review refused from the desk \(mac\): a review ran at \d\d:\d\d$/
+      /^review refused from the desk \(mac\): a review ran at \d\d:\d\d UTC$/
     );
     expect(file('review-requested')).toBeNull();
   });
@@ -3127,8 +3127,7 @@ describe('run.sh review session', () => {
             ? 'print -r -- \'{"ok":false,"error":{"message":"failed: action 2 has no ticket"}}\'; return 1'
             : 'print -r -- \'{"ok":true,"result":{"host":"nuc","brief":"b"}}\''
         }; }`,
-        // A one-liner in run.sh, so fn() can't cut it out
-        'review_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/review-line"; }',
+        fn('review_line'),
         fn('run_outcome'),
         fn('review_run'),
         'review_run'
@@ -3168,7 +3167,7 @@ describe('run.sh review session', () => {
         expect(file('review-ran-on')).toBe(day(0));
         expect(file('review-ran-at')).toMatch(/^\d+$/);
         expect(file('review-line')).toMatch(
-          / · ran \d\d:\d\d, 4 actions, \$1\.20$/
+          /^\d{4}-\d\d-\d\dT\d\d:\d\dZ · ran, 4 actions, \$1\.20$/
         );
         expect(file('review-view.json')).toBe('{"tree":[]}');
         expect(r.selects[0]).toMatch(
@@ -3217,6 +3216,7 @@ describe('run.sh review session', () => {
         expect(r.records).toEqual(['warn  review: not stored']);
         expect(file('review-line')).toMatch(/ · failed: not stored$/);
         expect(file('review-line')).not.toContain('actions');
+        expect(file('review-ran-at')).toBeNull();
       }
     );
 
@@ -3225,6 +3225,7 @@ describe('run.sh review session', () => {
       expect(r.inserts).toEqual([]);
       expect(r.records).toEqual(['warn  review: action 2 has no ticket']);
       expect(file('review-line')).toMatch(/ · failed: action 2 has no ticket$/);
+      expect(file('review-ran-at')).toBeNull();
     });
 
     it.skipIf(!canRun)('stores nothing and warns on a failed: verdict', () => {
@@ -3241,6 +3242,7 @@ describe('run.sh review session', () => {
         expect.stringMatching(/^warn {2}review: no verdict/)
       ]);
       expect(file('review-line')).toMatch(/ · no verdict$/);
+      expect(file('review-ran-at')).toBeNull();
     });
   });
 });
