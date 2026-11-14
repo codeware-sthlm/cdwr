@@ -21,7 +21,7 @@ import type { PlatformActions } from './components/platform';
 import type { ProblemActions } from './components/problems';
 import type { SettingsOptions } from './components/settings';
 import type { SheetActions } from './components/sheets';
-import { CONFIRM_MS } from './constants';
+import { CONFIRM_MS, SEARCH_ID } from './constants';
 import { type Loader, createLoader } from './load';
 import { type ControlsModel, type Model, model } from './model';
 import {
@@ -38,6 +38,7 @@ import {
 } from './state';
 import { createStore } from './store';
 import { CAP_RANGE, LIMIT_RANGE } from './view/controls';
+import { canonicalId, isTicketId } from './view/ids';
 
 // This build, and whether it is the web desk the NUC serves rather than the Mac app: that
 // decides which workflow's build main is compared with
@@ -75,6 +76,8 @@ export const frame = {
 };
 // The sheet that just closed, whose tile or card takes focus back
 let closedSheet: SheetId | null = null;
+// What had focus when the Ticket sheet opened, which takes it back
+let ticketOpener: HTMLElement | null = null;
 
 /** Redraws the page after a change to the state */
 function render(): void {
@@ -86,8 +89,11 @@ function render(): void {
 
 /** The URL hash that names what is open: a sheet, else the view, else nothing */
 function setHash(): void {
+  const { openSheet, ticket } = state.ui;
   const hash =
-    state.ui.openSheet ?? (state.ui.view === 'desk' ? '' : state.ui.view);
+    openSheet === 'ticket' && ticket
+      ? `ticket/${ticket}`
+      : (openSheet ?? (state.ui.view === 'desk' ? '' : state.ui.view));
   try {
     window.history.replaceState(
       null,
@@ -151,6 +157,8 @@ export function showSheet(value: string, focus = true): void {
   const id = sheetIdOf(value);
   if (!id) return;
   if (frame.settings) return;
+  // The Ticket sheet has nothing to show until a ticket is chosen
+  if (id === 'ticket' && !state.ui.ticket) return;
   frame.settingsShown = false;
   state.ui.openSheet = id;
   frame.shownSheet = id;
@@ -166,10 +174,32 @@ export function hideSheet(): void {
   setHash();
 }
 
+/** Opens the Ticket sheet on a ticket; from inside the sheet it switches ticket and keeps the first opener */
+export function openTicket(id: string, focus = true): void {
+  if (frame.settings) return;
+  const active = document.activeElement;
+  if (state.ui.openSheet !== 'ticket')
+    ticketOpener = focus && active instanceof HTMLElement ? active : null;
+  state.ui.ticket = id;
+  showSheet('ticket', focus);
+}
+
 /** Puts focus back on the tile or card that opened the sheet */
 export function focusOpener(): void {
-  const el = document.querySelector<HTMLElement>(`[data-w="${closedSheet}"]`);
+  const sheet = closedSheet;
   closedSheet = null;
+  // Radix can report the close twice; the second has nothing left to focus
+  if (sheet === null) return;
+  if (sheet === 'ticket') {
+    // The element that opened the ticket (a search result, a tree row), else the search field
+    const opener = ticketOpener?.isConnected
+      ? ticketOpener
+      : document.getElementById(SEARCH_ID);
+    ticketOpener = null;
+    opener?.focus();
+    return;
+  }
+  const el = document.querySelector<HTMLElement>(`[data-w="${sheet}"]`);
   (el?.matches('button')
     ? el
     : el?.querySelector<HTMLElement>('.open')
@@ -182,8 +212,11 @@ export function openStartHash(): void {
   const view = viewOf(startHash);
   if (view) showView(view, false);
   else {
-    const startSheet = sheetIdOf(startHash);
-    if (startSheet) showSheet(startSheet, false);
+    const raw = startHash.startsWith('ticket/') ? startHash.slice(7) : '';
+    const ticket = isTicketId(raw) ? raw : canonicalId(raw);
+    if (ticket) openTicket(ticket, false);
+    // A bare `#ticket` names no ticket and opens nothing: showSheet refuses it
+    else showSheet(startHash, false);
   }
 }
 
@@ -404,6 +437,7 @@ export function setSnoozedOpen(open: boolean): void {
 /** What the sheets' controls do */
 export const sheetActions: SheetActions = {
   wait: waitActions,
+  onTicket: (id) => openTicket(id),
   onSnoozedOpen: setSnoozedOpen,
   onActFilter: (ticket) => {
     state.ui.actFilter = ticket;

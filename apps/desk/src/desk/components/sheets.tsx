@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { SHIP_DAYS } from '../constants';
 import type { Model } from '../model';
 import type { DeskState, Filter, SheetId } from '../state';
+import { ticketState } from '../view/ticket';
 
 import { BeforeSheet, type WaitActions } from './before';
 import {
@@ -20,10 +21,13 @@ import {
   SessionBody,
   TimersBody
 } from './scheduler-bodies';
+import { TicketBody } from './ticket-body';
 
 /** What a sheet's controls do; the state they change stays with the page */
 export type SheetActions = {
   wait: WaitActions;
+  /** Opens the Ticket sheet on a ticket, also from inside it */
+  onTicket: (id: string) => void;
   /** The Waiting on you sheet's snoozed fold */
   onSnoozedOpen: (open: boolean) => void;
   /** The Activity sheet's ticket filter */
@@ -40,7 +44,8 @@ export type SheetProps = {
 };
 
 export type SheetDef = {
-  title: string;
+  /** A function for a title that follows the state, as the Ticket sheet's does */
+  title: string | ((m: Model, state: DeskState) => string);
   sub: string;
   Body: (p: SheetProps) => ReactElement;
 };
@@ -134,5 +139,23 @@ export const SHEETS: Record<SheetId, SheetDef> = {
     title: 'Agent suggestions',
     sub: 'One evidence-led idea a day, from the first idle run after 06:00. Accept it with agent:ready; discard it by cancelling with one word in a comment.',
     Body: IdeasBody
+  },
+  ticket: {
+    title: (m, state) => {
+      const id = state.ui.ticket;
+      if (id === null) return 'Ticket';
+      const title = ticketState(m, state, id).linear?.title;
+      return title ? `${id} · ${title}` : id;
+    },
+    sub: 'Everything the desk holds for this ticket',
+    Body: TicketBody
   }
 };
+
+/** The title a sheet shows now */
+export const sheetTitle = (
+  def: SheetDef,
+  m: Model,
+  state: DeskState
+): string =>
+  typeof def.title === 'function' ? def.title(m, state) : def.title;

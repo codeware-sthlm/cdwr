@@ -10,6 +10,8 @@ import type {
 import { type DeskState, createState } from '../state';
 import type { QueueView, SessionState } from '../types';
 
+import { ACTIVITY_MAX } from './ticket';
+
 // Local-time dates, so the specs read the same in every time zone
 export const NOW = new Date('2026-10-29T12:00:00');
 
@@ -231,6 +233,158 @@ export const filled = (
   ];
   s.data.usageHours = [hourRow(0, 1.5), hourRow(2, 3, { role: 'other' })];
   s.ideaReasons.set('COD-51', 'not worth it');
+  return s;
+};
+
+const minute = (i: number): string =>
+  `2026-10-29 10:${String(i).padStart(2, '0')}`;
+
+/** The filled desk with COD-3 held by every part: review, tree, PR, gap, session, plan, snooze, spend and history */
+export const ticketDesk = (): DeskState => {
+  const s = filled();
+  s.data.runs = {
+    ...runs(
+      view({
+        session: {
+          state: 'alive',
+          ticket: 'COD-3',
+          id: 's1',
+          detail: 'working'
+        },
+        held: { tickets: ['COD-3'], free: [] },
+        audit: [
+          {
+            id: 'g1',
+            ticket: 'COD-3',
+            kind: 'stale',
+            what: 'PR is stale',
+            fix: 'rebase it'
+          }
+        ],
+        tree: [
+          {
+            ticket: 'COD-10',
+            title: 'The root',
+            state: 'started',
+            label: null,
+            pr: null,
+            blockers: [],
+            gaps: [],
+            children: [
+              {
+                ticket: 'COD-3',
+                title: 'Title of COD-3',
+                state: 'started',
+                label: 'agent:review',
+                pr: 7,
+                blockers: [],
+                gaps: ['stale'],
+                children: []
+              },
+              {
+                ticket: 'COD-11',
+                title: 'The sibling',
+                state: 'unstarted',
+                label: null,
+                pr: null,
+                blockers: [],
+                gaps: [],
+                children: []
+              }
+            ]
+          }
+        ]
+      })
+    ),
+    watches: [
+      {
+        host: 'nuc',
+        at: '2026-10-29T11:55:00Z',
+        watch: {
+          'COD-3': {
+            pr: 7,
+            state: 'open',
+            unresolved: 1,
+            threads: 1,
+            conflicting: false,
+            mergeable: 'MERGEABLE',
+            ci: 'SUCCESS',
+            copilot: 'reviewed'
+          }
+        }
+      }
+    ]
+  };
+  s.data.sessions = [
+    {
+      id: 's1',
+      host: 'nuc',
+      kind: 'implement',
+      last_seen: '2026-10-29T11:58:00Z',
+      state: 'alive',
+      detail: null
+    }
+  ];
+  s.details.set('COD-3', {
+    steps: 4,
+    done: 2,
+    next: 'Step 3',
+    idea: null,
+    blockedBy: [],
+    pr: 7,
+    prAt: null
+  });
+  s.data.snoozes = [
+    {
+      ticket: 'COD-3',
+      kind: 'review',
+      event_at: null,
+      at: '2026-10-29T11:00:00Z',
+      actor: 'desk'
+    }
+  ];
+  s.data.usage = {
+    ...usage,
+    tickets: [
+      {
+        ticket: 'COD-3',
+        planning: 1,
+        orchestrating: 2,
+        implementing: 3,
+        total: 6,
+        output: 1,
+        cacheRead: 1
+      }
+    ]
+  };
+  s.data.activity = {
+    updated: '2026-10-29 11:50',
+    header: '',
+    dropped: '',
+    rows: [
+      ...Array.from({ length: ACTIVITY_MAX + 2 }, (_, i) => ({
+        when: minute(i),
+        ticket: 'COD-3',
+        actor: 'agent',
+        change: `change ${i}`
+      })).reverse(),
+      { when: minute(30), ticket: 'COD-4', actor: 'agent', change: 'other' }
+    ]
+  };
+  s.data.githubEvents = [
+    {
+      subject: 'pr-7',
+      pr: 7,
+      action: 'check_suite:completed:success',
+      updated_at: '2026-10-29T10:05:00'
+    },
+    {
+      subject: 'pr-8',
+      pr: 8,
+      action: 'pull_request:opened',
+      updated_at: '2026-10-29T10:50:00'
+    }
+  ];
   return s;
 };
 

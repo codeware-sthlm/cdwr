@@ -3,163 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { model } from '../model';
 import type { DeskState } from '../state';
 
-import { NOW, filled, runs, usage, view } from './fixtures';
+import { NOW, ticketDesk as desk, runs, view } from './fixtures';
 import { ACTIVITY_MAX, ticketState } from './ticket';
 
 const stateOf = (s: DeskState, id: string) =>
   ticketState(model(s, NOW, null), s, id);
-
-const minute = (i: number): string =>
-  `2026-10-29 10:${String(i).padStart(2, '0')}`;
-
-/** The filled desk with COD-3 held by every part: review, tree, PR, gap, session, plan, snooze, spend and history */
-const desk = (): DeskState => {
-  const s = filled();
-  s.data.runs = {
-    ...runs(
-      view({
-        session: {
-          state: 'alive',
-          ticket: 'COD-3',
-          id: 's1',
-          detail: 'working'
-        },
-        held: { tickets: ['COD-3'], free: [] },
-        audit: [
-          {
-            id: 'g1',
-            ticket: 'COD-3',
-            kind: 'stale',
-            what: 'PR is stale',
-            fix: 'rebase it'
-          }
-        ],
-        tree: [
-          {
-            ticket: 'COD-10',
-            title: 'The root',
-            state: 'started',
-            label: null,
-            pr: null,
-            blockers: [],
-            gaps: [],
-            children: [
-              {
-                ticket: 'COD-3',
-                title: 'Title of COD-3',
-                state: 'started',
-                label: 'agent:review',
-                pr: 7,
-                blockers: [],
-                gaps: ['stale'],
-                children: []
-              },
-              {
-                ticket: 'COD-11',
-                title: 'The sibling',
-                state: 'unstarted',
-                label: null,
-                pr: null,
-                blockers: [],
-                gaps: [],
-                children: []
-              }
-            ]
-          }
-        ]
-      })
-    ),
-    watches: [
-      {
-        host: 'nuc',
-        at: '2026-10-29T11:55:00Z',
-        watch: {
-          'COD-3': {
-            pr: 7,
-            state: 'open',
-            unresolved: 1,
-            threads: 1,
-            conflicting: false,
-            mergeable: 'MERGEABLE',
-            ci: 'SUCCESS',
-            copilot: 'reviewed'
-          }
-        }
-      }
-    ]
-  };
-  s.data.sessions = [
-    {
-      id: 's1',
-      host: 'nuc',
-      kind: 'implement',
-      last_seen: '2026-10-29T11:58:00Z',
-      state: 'alive',
-      detail: null
-    }
-  ];
-  s.details.set('COD-3', {
-    steps: 4,
-    done: 2,
-    next: 'Step 3',
-    idea: null,
-    blockedBy: [],
-    pr: 7,
-    prAt: null
-  });
-  s.data.snoozes = [
-    {
-      ticket: 'COD-3',
-      kind: 'review',
-      event_at: null,
-      at: '2026-10-29T11:00:00Z',
-      actor: 'desk'
-    }
-  ];
-  s.data.usage = {
-    ...usage,
-    tickets: [
-      {
-        ticket: 'COD-3',
-        planning: 1,
-        orchestrating: 2,
-        implementing: 3,
-        total: 6,
-        output: 1,
-        cacheRead: 1
-      }
-    ]
-  };
-  s.data.activity = {
-    updated: '2026-10-29 11:50',
-    header: '',
-    dropped: '',
-    rows: [
-      ...Array.from({ length: ACTIVITY_MAX + 2 }, (_, i) => ({
-        when: minute(i),
-        ticket: 'COD-3',
-        actor: 'agent',
-        change: `change ${i}`
-      })).reverse(),
-      { when: minute(30), ticket: 'COD-4', actor: 'agent', change: 'other' }
-    ]
-  };
-  s.data.githubEvents = [
-    {
-      subject: 'pr-7',
-      pr: 7,
-      action: 'check_suite:completed:success',
-      updated_at: '2026-10-29T10:05:00'
-    },
-    {
-      subject: 'pr-8',
-      pr: 8,
-      action: 'pull_request:opened',
-      updated_at: '2026-10-29T10:50:00'
-    }
-  ];
-  return s;
-};
 
 describe('ticketState', () => {
   it('carries every part for a ticket the desk holds fully', () => {
@@ -218,6 +66,29 @@ describe('ticketState', () => {
     const q = stateOf(desk(), id).queue;
     expect(q).not.toBeNull();
     expect(q?.[part]).toBeTruthy();
+  });
+
+  it.each([
+    ['COD-3', 'review'],
+    ['COD-4', 'plan'],
+    ['COD-5', 'hand-offs'],
+    ['COD-1', null]
+  ] as const)('says what %s waits on Håkan for: %s', (id, waiting) => {
+    expect(stateOf(desk(), id).queue?.waiting ?? null).toBe(waiting);
+  });
+
+  it('reads a before row that is no plan as a question', () => {
+    const s = desk();
+    s.data.runs = runs(
+      view({
+        table: {
+          before: [{ ticket: 'COD-4', kind: 'question' }],
+          label: [],
+          after: []
+        }
+      })
+    );
+    expect(stateOf(s, 'COD-4').queue?.waiting).toBe('question');
   });
 
   it('builds the URL and knows nothing for an unknown id', () => {

@@ -8,7 +8,15 @@ import type { PrRef } from '../types';
 import { isTicketId } from '../view/ids';
 import { type PrTone, prPillData } from '../view/pr';
 
-import { ID, ID_LINK, PILL, PILL_TONE, PRN, PRN_TONE } from './items-ui';
+import {
+  ID,
+  ID_LINK,
+  PILL,
+  PILL_TONE,
+  PRN,
+  PRN_TONE,
+  TITLE_BUTTON
+} from './items-ui';
 
 // The desk's links, pills and chips: ticket ids, pull requests and Linear text
 
@@ -26,6 +34,21 @@ export const IdLink = ({ id = '' }: { id?: string }) =>
   ) : (
     <span className={ID}>{id || '—'}</span>
   );
+
+/** A ticket's title as a button that opens the Ticket sheet for `id` */
+export const TicketButton = ({
+  id,
+  children,
+  onOpen
+}: {
+  id: string;
+  children: ReactNode;
+  onOpen: (id: string) => void;
+}) => (
+  <button type="button" className={TITLE_BUTTON} onClick={() => onOpen(id)}>
+    {children}
+  </button>
+);
 
 /** The pull request's number as a link, tinted by its live tone; nothing without one */
 export const Prn = ({

@@ -8,6 +8,7 @@ import {
   hasAdapter,
   hideSheet,
   modelAt,
+  openTicket,
   pauseQueue,
   platformActions,
   problemActions,
@@ -30,13 +31,14 @@ import {
   Problems,
   frozenLabel
 } from './components/problems';
+import { Search } from './components/search';
 import {
   SETTINGS_SUB,
   SETTINGS_TITLE,
   SettingsForm
 } from './components/settings';
 import { Sheet } from './components/sheet';
-import { SHEETS } from './components/sheets';
+import { SHEETS, sheetTitle } from './components/sheets';
 import { Status, TreePill } from './components/status';
 import { Tiles } from './components/tiles';
 import { TreePage } from './components/tree';
@@ -104,7 +106,7 @@ const SheetFrame = ({ m, state, now }: Props) => {
   return (
     <Sheet
       open={state.ui.openSheet !== null}
-      title={def.title}
+      title={sheetTitle(def, m, state)}
       sub={def.sub}
       focus={frame.sheetFocus}
       onClose={hideSheet}
@@ -194,6 +196,7 @@ export const App = () => {
             <span id="fresh" className="max-[600px]:hidden">
               {fresh(state)}
             </span>
+            <Search m={m} state={state} onOpen={(id) => openTicket(id)} />
             <button
               id="refresh"
               type="button"
@@ -248,6 +251,7 @@ export const App = () => {
               filter={state.ui.tree}
               onFilter={setTreeFilter}
               onDesk={() => showView('desk')}
+              onTicket={(id) => openTicket(id)}
             />
           </main>
         ) : (
