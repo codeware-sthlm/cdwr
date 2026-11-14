@@ -18,12 +18,12 @@ import { z } from 'zod';
  * Keys are read at boot only, so a new pair needs a restart.
  */
 export const TurnstileSchema = z.object({
-  TURNSTILE_SITE_KEY: z.string({
-    description: 'Public key the widget is rendered with'
-  }),
-  TURNSTILE_SECRET_KEY: z.string({
-    description: 'Secret the submitted token is verified against'
-  })
+  TURNSTILE_SITE_KEY: z
+    .string()
+    .describe('Public key the widget is rendered with'),
+  TURNSTILE_SECRET_KEY: z
+    .string()
+    .describe('Secret the submitted token is verified against')
 });
 
 export type Turnstile = z.infer<typeof TurnstileSchema>;

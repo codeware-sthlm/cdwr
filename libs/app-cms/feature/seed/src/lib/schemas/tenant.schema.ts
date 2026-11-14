@@ -11,26 +11,33 @@ import { z } from 'zod';
 export const TenantEnvSchema = withEnvVars(
   z.object({
     PAYLOAD_ADMIN_EMAIL: z
-      .string({ description: 'Email of a tenant admin user' })
-      .email({ message: 'PAYLOAD_ADMIN_EMAIL must be a valid email address' }),
+      .string()
+      .email({ message: 'PAYLOAD_ADMIN_EMAIL must be a valid email address' })
+      .describe('Email of a tenant admin user'),
     PAYLOAD_ADMIN_NAME: z
-      .string({ description: 'Name of a tenant admin user' })
-      .min(1, { message: 'PAYLOAD_ADMIN_NAME is required' }),
+      .string()
+      .min(1, { message: 'PAYLOAD_ADMIN_NAME is required' })
+      .describe('Name of a tenant admin user'),
     PAYLOAD_ADMIN_PASSWORD: z
-      .string({ description: 'Password of a tenant admin user' })
-      .min(1, { message: 'PAYLOAD_ADMIN_PASSWORD is required' }),
+      .string()
+      .min(1, { message: 'PAYLOAD_ADMIN_PASSWORD is required' })
+      .describe('Password of a tenant admin user'),
     PAYLOAD_API_DESCRIPTION: z
-      .string({ description: 'Description of the tenant' })
-      .optional(),
+      .string()
+      .optional()
+      .describe('Description of the tenant'),
     PAYLOAD_API_HOST: z
-      .string({ description: 'Client host for the tenant' })
-      .min(1, { message: 'PAYLOAD_API_HOST is required' }),
+      .string()
+      .min(1, { message: 'PAYLOAD_API_HOST is required' })
+      .describe('Client host for the tenant'),
     PAYLOAD_API_KEY: z
-      .string({ description: 'API key for tenant' })
-      .min(1, { message: 'PAYLOAD_API_KEY is required' }),
+      .string()
+      .min(1, { message: 'PAYLOAD_API_KEY is required' })
+      .describe('API key for tenant'),
     PAYLOAD_API_NAME: z
-      .string({ description: 'Name of the tenant' })
+      .string()
       .min(1, { message: 'PAYLOAD_API_NAME is required' })
+      .describe('Name of the tenant')
   })
 );
 

@@ -297,7 +297,7 @@ export const SiteDefinitionSchema = z
         ])
       )
       .optional(),
-    siteSettings: z.record(z.unknown()).optional()
+    siteSettings: z.record(z.string(), z.unknown()).optional()
   })
   // Unknown keys are kept rather than stripped, so the identity guard below can
   // see them. Stripping first would let a top-level `apiKey` pass by vanishing
