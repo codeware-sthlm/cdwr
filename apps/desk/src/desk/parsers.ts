@@ -7,6 +7,7 @@ import type {
   Job,
   JobHost,
   PlanProgress,
+  QueueTreeNode,
   QueueView,
   Suggested,
   ViewIssue,
@@ -278,6 +279,44 @@ const gapEntry = z.object({
   fix: z.string()
 });
 
+// A node's children are parsed one by one too: a malformed child is dropped without its parent
+const treeNode: z.ZodType<QueueTreeNode, z.ZodTypeDef, unknown> = z.lazy(() =>
+  z.object({
+    ticket: z.string(),
+    title: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? null),
+    state: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? null),
+    label: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? null),
+    pr: z
+      .number()
+      .nullish()
+      .transform((v) => v ?? null),
+    blockers: list(z.string()),
+    gaps: list(z.string()),
+    truncated: z
+      .boolean()
+      .nullish()
+      .transform((v) => (v ? true : undefined)),
+    children: z
+      .array(z.unknown())
+      .nullish()
+      .transform((v) =>
+        (v ?? []).flatMap((x) => {
+          const p = treeNode.safeParse(x);
+          return p.success ? [p.data] : [];
+        })
+      )
+  })
+);
+
 const renovateEntry = z.object({
   pr: z.union([z.number(), z.string()]),
   title: z
@@ -358,6 +397,16 @@ const queueViewSchema = z
           return p.success ? [p.data] : [];
         })
       ),
+    // Older views have no tree; a malformed node is dropped alone
+    tree: z
+      .array(z.unknown())
+      .nullish()
+      .transform((v) =>
+        (v ?? []).flatMap((x) => {
+          const p = treeNode.safeParse(x);
+          return p.success ? [p.data] : [];
+        })
+      ),
     table: z.object({
       before: list(z.object({ ticket: z.string(), kind: opt(z.string()) })),
       label: z
@@ -394,6 +443,7 @@ export const validateQueueView = (v: unknown): QueueView | null => {
     blocked,
     renovate,
     audit,
+    tree,
     table
   } = parsed.data;
   return {
@@ -406,6 +456,7 @@ export const validateQueueView = (v: unknown): QueueView | null => {
     blocked,
     renovate,
     audit,
+    tree,
     table
   };
 };

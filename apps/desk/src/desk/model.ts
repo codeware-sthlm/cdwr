@@ -81,6 +81,7 @@ import type {
   QueueNext,
   QueueParked,
   QueueRenovate,
+  QueueTreeNode,
   QueueView,
   SessionState,
   Suggested,
@@ -225,6 +226,8 @@ export type Model = {
   renovate: QueueRenovate[];
   /** The audit's gaps: tickets stuck in a state only a person or a session can resolve */
   gaps: QueueGap[];
+  /** The queue's tree of root tickets and their children, as the scheduler builds it */
+  tree: QueueTreeNode[];
   held: { tickets: string[]; free: QueueFree[] };
   limit: { used: number; max: number };
   limits: Limits;
@@ -946,6 +949,20 @@ export const gateTimes = (
   return out;
 };
 
+/** How many trees the queue holds: the root tickets */
+export const treeRoots = (tree: readonly QueueTreeNode[]): number =>
+  tree.length;
+
+/** How many tickets of the tree, roots and children, carry at least one gap */
+export const treeGapped = (tree: readonly QueueTreeNode[]): number =>
+  tree.reduce(
+    (n, root) =>
+      n +
+      (root.gaps.length > 0 ? 1 : 0) +
+      root.children.filter((c) => c.gaps.length > 0).length,
+    0
+  );
+
 /** PR number -> ticket, for every ticket the queue view names with a PR, as `prOf` resolves it */
 export const ticketsByPr = (
   details: ReadonlyMap<string, Detail>,
@@ -1255,6 +1272,7 @@ export const model = (
     parked,
     renovate: v ? v.renovate : [],
     gaps: v ? v.audit : [],
+    tree: v ? v.tree : [],
     held: v ? v.held : { tickets: [], free: [] },
     limit,
     limits: {
