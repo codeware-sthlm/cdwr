@@ -36,8 +36,9 @@ import {
 } from './components/settings';
 import { Sheet } from './components/sheet';
 import { SHEETS } from './components/sheets';
-import { Status } from './components/status';
+import { Status, TreePill } from './components/status';
 import { Tiles } from './components/tiles';
+import { TreePage } from './components/tree';
 import { AGENT_AVATAR } from './constants';
 import type { Model } from './model';
 import { notice } from './notice';
@@ -115,7 +116,7 @@ const SheetFrame = ({ m, state, now }: Props) => {
 
 type Props = { m: Model; state: DeskState; now: Date };
 
-/** The page: the header, the desk or the Platform view, and the sheet frame */
+/** The page: the header, the desk or a full-page view, and the sheet frame */
 export const App = () => {
   const state = useStore(store);
   const now = new Date();
@@ -128,13 +129,13 @@ export const App = () => {
     const onKey = (e: KeyboardEvent) => {
       // An open sheet closes on its own Escape, which marks the event handled
       if (e.key !== 'Escape' || e.defaultPrevented) return;
-      if (store.state.ui.view === 'platform') showView('desk');
+      if (store.state.ui.view !== 'desk') showView('desk');
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const platform = state.ui.view === 'platform';
+  const view = state.ui.view;
   const label = frozenLabel(m);
   const note = notice(state.errors, hasAdapter());
   return (
@@ -180,9 +181,15 @@ export const App = () => {
               <Status
                 m={m}
                 connection={state.data.connection}
+                view={state.ui.view}
                 onView={(view) => showView(view)}
               />
             </span>
+            <TreePill
+              m={m}
+              view={state.ui.view}
+              onView={(view) => showView(view)}
+            />
             <span id="fresh" className="max-[600px]:hidden">
               {fresh(state)}
             </span>
@@ -219,13 +226,25 @@ export const App = () => {
           </div>
         )}
 
-        {platform ? (
+        {view === 'platform' ? (
           <main
             id="platform"
             className="platform-view flex flex-col gap-[var(--gap-card)]"
             aria-labelledby="platform-title"
           >
             <Platform m={m} now={now} actions={platformActions} />
+          </main>
+        ) : view === 'tree' ? (
+          <main
+            id="tree"
+            className="tree-view flex flex-col gap-[var(--gap-card)]"
+            aria-labelledby="tree-title"
+          >
+            <TreePage
+              m={m}
+              details={state.details}
+              onDesk={() => showView('desk')}
+            />
           </main>
         ) : (
           <>

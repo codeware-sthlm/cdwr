@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
@@ -7,14 +7,7 @@ import { createState } from '../state';
 import type { QueueTreeNode } from '../types';
 import { NOW, filled, runs, view } from '../view/fixtures';
 
-import { SHEETS, type SheetActions } from './sheets';
-
-const actions = {
-  wait: { snooze: vi.fn(), wake: vi.fn(), label: vi.fn(), pr: vi.fn() },
-  onSnoozedOpen: vi.fn(),
-  onActFilter: vi.fn(),
-  onFilter: vi.fn()
-} as SheetActions;
+import { TreePage } from './tree';
 
 const node = (
   ticket: string,
@@ -31,18 +24,32 @@ const node = (
   ...over
 });
 
-const mount = (tree: QueueTreeNode[]): HTMLElement => {
+const mount = (tree: QueueTreeNode[], onDesk = vi.fn()): HTMLElement => {
   const state = filled();
   state.data.runs = runs(view({ tree }));
-  const { Body } = SHEETS.tree;
   return render(
-    <Body m={model(state, NOW)} state={state} now={NOW} actions={actions} />
+    <TreePage m={model(state, NOW)} details={state.details} onDesk={onDesk} />
   ).container;
 };
 
 const text = (el: Element | null): string => el?.textContent ?? '';
 
-describe('TreeBody', () => {
+describe('TreePage', () => {
+  it('titles the view and takes focus-by-script on the title', () => {
+    const c = mount([node('COD-10')]);
+    const h1 = c.querySelector('h1#tree-title') as HTMLElement;
+    expect(text(h1)).toBe('Ticket tree');
+    expect(h1.tabIndex).toBe(-1);
+    expect(text(c)).toContain('every agent ticket where it sits in its split');
+  });
+
+  it('goes back to the desk from the back button', () => {
+    const onDesk = vi.fn();
+    const c = mount([node('COD-10')], onDesk);
+    fireEvent.click(c.querySelector('button[data-view="desk"]') as HTMLElement);
+    expect(onDesk).toHaveBeenCalledOnce();
+  });
+
   it('nests the children of a root under it', () => {
     const c = mount([
       node('COD-10', {
@@ -132,9 +139,12 @@ describe('TreeBody', () => {
 
   it('says so with no tree, and always ends on the rule', () => {
     const state = createState();
-    const { Body } = SHEETS.tree;
     const c = render(
-      <Body m={model(state, NOW)} state={state} now={NOW} actions={actions} />
+      <TreePage
+        m={model(state, NOW)}
+        details={state.details}
+        onDesk={vi.fn()}
+      />
     ).container;
     expect(text(c)).toContain('No agent ticket in flight.');
     expect(text(c)).toContain('Done ones for 14 days');

@@ -1,12 +1,13 @@
-import { prOf } from '../model';
+import { type Model, prOf } from '../model';
+import type { DeskState } from '../state';
 import type { QueueTreeNode } from '../types';
 
+import { CAP_SUB } from './capacity';
 import { Chip, Empty } from './items';
 import { META, RULE, TITLE } from './items-ui';
 import { IdLink, Prn } from './links';
-import type { SheetProps } from './sheets';
 
-// The ticket tree sheet: each root with the sub-issues the scheduler's queue view carries
+// The ticket tree view: each root with the sub-issues the scheduler's queue view carries
 
 const STATE_NAME: ReadonlyMap<string, string> = new Map([
   ['triage', 'triage'],
@@ -29,8 +30,8 @@ const Node = ({
   details
 }: {
   node: QueueTreeNode;
-  m: SheetProps['m'];
-  details: SheetProps['state']['details'];
+  m: Model;
+  details: DeskState['details'];
 }) => {
   const i = m.get(node.ticket);
   const title = node.title || i.title;
@@ -82,12 +83,41 @@ const Node = ({
   );
 };
 
-export const TreeBody = ({ m, state }: SheetProps) => (
+type Props = {
+  m: Model;
+  details: DeskState['details'];
+  onDesk: () => void;
+};
+
+export const TreePage = ({ m, details, onDesk }: Props) => (
   <>
+    <div className="pf-head flex flex-wrap items-center gap-x-4 gap-y-2">
+      <button
+        type="button"
+        className="pf-back min-h-[var(--tap)] px-3.5"
+        data-view="desk"
+        onClick={onDesk}
+      >
+        ‹ Desk
+      </button>
+      <div className="pf-title mr-auto flex min-w-0 flex-col gap-0.5">
+        <h1
+          id="tree-title"
+          tabIndex={-1}
+          className="font-[family-name:var(--font-ui)] text-[22px] leading-[1.2] font-semibold tracking-[0.18em] uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--accent)]"
+        >
+          Ticket tree
+        </h1>
+        <span className={`cap-sub ${CAP_SUB}`}>
+          every agent ticket where it sits in its split: state, agent label, PR,
+          blockers and gaps
+        </span>
+      </div>
+    </div>
     {m.tree.length ? (
       <ul className="grid gap-2">
         {m.tree.map((root) => (
-          <Node key={root.ticket} node={root} m={m} details={state.details} />
+          <Node key={root.ticket} node={root} m={m} details={details} />
         ))}
       </ul>
     ) : (

@@ -99,13 +99,16 @@ function setHash(): void {
 
 /** Shows the desk or a full-page view in its place */
 export function showView(view: View, focus = true): void {
+  const left = state.ui.view;
   state.ui.view = view;
   // A render is asynchronous: flushed here, the view's title exists before it takes focus
   flushSync(render);
   setHash();
   if (!focus) return;
-  if (view === 'platform') document.getElementById('platform-title')?.focus();
-  else document.querySelector<HTMLElement>('.platform')?.focus();
+  // Back on the desk, focus goes to the header button of the view just left
+  if (view === 'desk')
+    document.querySelector<HTMLElement>(`[data-view="${left}"]`)?.focus();
+  else document.getElementById(`${view}-title`)?.focus();
 }
 
 // ---------- Sheet ----------
@@ -171,10 +174,11 @@ export function focusOpener(): void {
   )?.focus();
 }
 
-/** Opens what the URL hash names at start: the Platform view or a sheet, without taking focus */
+/** Opens what the URL hash names at start: a full-page view or a sheet, without taking focus */
 export function openStartHash(): void {
   const startHash = (window.location.hash || '').slice(1);
-  if (viewOf(startHash)) showView('platform', false);
+  const view = viewOf(startHash);
+  if (view) showView(view, false);
   else {
     const startSheet = sheetIdOf(startHash);
     if (startSheet) showSheet(startSheet, false);
