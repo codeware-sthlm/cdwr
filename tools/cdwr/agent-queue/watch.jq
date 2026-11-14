@@ -872,11 +872,11 @@ def cell_done: cell_word | test("^(done|merged)\\b");
 def cell_open: cell_word | test("^(planned|open|blocked|todo|backlog|in progress|started|working|waiting|pending)\\b");
 def clip($n): if length > $n then .[0:$n] + "…" else . end;
 
-# The ticket a status row is about: the first COD-n of its first cell, else the one COD-n of the row
-# when it names exactly one, else null
+# The ticket a status row is about: the first COD-n of its first cell, else of its What cell, else the
+# one COD-n of the row when it names exactly one, else null
 def row_ticket:
-  ([ .what | scan("COD-[0-9]+") ] | first)
-  // ([ .lead | scan("COD-[0-9]+") ] | first)
+  ([ .lead | scan("COD-[0-9]+") ] | first)
+  // ([ .what | scan("COD-[0-9]+") ] | first)
   // ([ .text | scan("COD-[0-9]+") ] | unique | if length == 1 then .[0] else null end);
 
 # The candidate gaps of one ticket. $by maps identifier to node, for its parent and sub-issues.
@@ -899,7 +899,8 @@ def candidate_gaps($now; $by; $tables):
          | . as $r
          | ($r | row_ticket) as $c
          | select($c != null and $c != $t)
-         | select(any($kids[]; .identifier == $c))
+         # The parent's own read holds only its first 25 children; the wide read holds them all
+         | select(any($kids[]; .identifier == $c) or $by[$c].parent.identifier == $t)
          | ((($by[$c] // ($kids[] | select(.identifier == $c))).state.type) // "") as $ct
          | select(($ct == "completed" and ($r.status | cell_open)) or (($ct | IN("completed", "canceled") | not) and $ct != "" and ($r.status | cell_done)))
          | { id: $c, text: $r.text } ]) as $stale
