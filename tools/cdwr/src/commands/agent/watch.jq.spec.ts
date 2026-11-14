@@ -5796,6 +5796,37 @@ describe('audit and tree', () => {
           ])
         ).toEqual([]);
       });
+
+      it('gives a row to the ticket in its first cell, not one its What names', () => {
+        const r = wideKinds([
+          node('COD-10', null, {
+            description:
+              '## Status\n\n| Ticket | What | Status |\n| -- | -- | -- |\n| COD-11 | after COD-12 | Done |\n',
+            children: {
+              nodes: [kid('COD-11', 'started'), kid('COD-12', 'completed')]
+            }
+          })
+        ]);
+        expect(r).toEqual(['COD-10:parent-status-stale']);
+      });
+
+      it('finds a sub-issue past the 25 children through the wide read', () => {
+        const r = wideKinds(
+          [parent([['COD-11 the work', 'Open']], [])],
+          [
+            node('COD-11', null, {
+              state: { type: 'completed' },
+              completedAt: iso(DAY),
+              parent: {
+                identifier: 'COD-10',
+                title: 'P',
+                state: { type: 'started' }
+              }
+            })
+          ]
+        );
+        expect(r).toEqual(['COD-10:parent-status-stale']);
+      });
     });
 
     describe('untouched', () => {
