@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SnoozeRow } from '../../supabase';
 import { model } from '../model';
 import type { DeskState } from '../state';
-import type { WatchEntry } from '../types';
+import type { QueueParked, WatchEntry } from '../types';
 
 import { NOW, activity, filled, runs, view } from './fixtures';
 import { headline } from './session';
@@ -39,6 +39,80 @@ describe('waiting card and queue sheets', () => {
       ['COD-6', 'ready to label'],
       ['COD-50', 'idea']
     ]);
+  });
+});
+
+describe('a stalled wait on Copilot', () => {
+  // NOW is 12:00
+  const parked = (over: Partial<QueueParked>): QueueParked => ({
+    ticket: 'COD-2',
+    wait: 'copilot',
+    pr: 5,
+    since: '2026-10-29T11:50:00',
+    resolved: false,
+    copilot: 'none',
+    copilotAsked: null,
+    ...over
+  });
+  const rows = (p: QueueParked) => {
+    const state = filled();
+    state.data.runs = runs(view({ parked: [p] }));
+    const m = model(state, NOW);
+    return waitRows(m, state.details, NOW).filter((r) => r.id === p.ticket);
+  };
+
+  it('waits on you with why, when the request failed', () => {
+    const asked = { at: '2026-10-29T11:51:00', ok: false, why: 'no seat' };
+    expect(
+      rows(parked({ copilotAsked: asked, since: '2026-10-29T11:59:00' }))
+    ).toMatchObject([
+      {
+        kind: 'review',
+        pr: 5,
+        wait: 'Copilot request failed: no seat'
+      }
+    ]);
+  });
+
+  it('waits on you when none was made within five minutes', () => {
+    expect(rows(parked({}))).toMatchObject([
+      { kind: 'review', wait: 'no Copilot request was made' }
+    ]);
+  });
+
+  it('does not before five minutes have passed', () => {
+    expect(rows(parked({ since: '2026-10-29T11:56:00' }))).toEqual([]);
+  });
+
+  it('does not once Copilot was asked, reviewed or the wait resolved', () => {
+    const ok = { at: '2026-10-29T11:51:00', ok: true, why: null };
+    expect(rows(parked({ copilotAsked: ok }))).toEqual([]);
+    expect(rows(parked({ copilot: 'requested' }))).toEqual([]);
+    expect(rows(parked({ copilot: 'reviewed' }))).toEqual([]);
+    expect(rows(parked({ copilot: null }))).toEqual([]);
+    expect(rows(parked({ resolved: true }))).toEqual([]);
+  });
+
+  it('does not for a wait on CI', () => {
+    expect(rows(parked({ wait: 'ci' }))).toEqual([]);
+  });
+
+  it('gives the reason to the review row of an open PR parked on Copilot', () => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        parked: [parked({ ticket: 'COD-3' })],
+        table: {
+          before: [],
+          label: [],
+          after: [{ ticket: 'COD-3', kind: 'pr', pr: 7 }]
+        }
+      })
+    );
+    const m = model(state, NOW);
+    const r = waitRows(m, state.details, NOW).filter((x) => x.id === 'COD-3');
+    expect(r).toHaveLength(1);
+    expect(r[0].wait).toContain('no Copilot request was made');
   });
 });
 

@@ -3,9 +3,9 @@ import { PENDING_MAX_MS, type PrCommandState } from '../commands';
 import { CONFIRM_MS } from '../constants';
 import { type Blocker, type Model, type WatchRef, prOf } from '../model';
 import type { ControlsUi, Detail } from '../state';
-import type { PrRef, WatchEntry } from '../types';
+import type { PrRef, QueueParked, WatchEntry } from '../types';
 
-import { prWaitPlain } from './parked';
+import { copilotStall, prWaitPlain } from './parked';
 import { queuePr } from './pr';
 
 // The Waiting on you card: everything that waits on you, furthest along first, each with how long it has waited
@@ -204,7 +204,11 @@ export const waitRows = (
   const row = (
     id: string,
     kind: WaitRow['kind'],
-    opts: { blockers?: readonly Blocker[]; count?: number } = {}
+    opts: {
+      blockers?: readonly Blocker[];
+      count?: number;
+      stall?: string | null;
+    } = {}
   ): WaitRow => {
     const { title, url } = m.get(id);
     const gateAt = m.gateAt.get(id) ?? null;
@@ -217,7 +221,7 @@ export const waitRows = (
       age: m.waitAge.get(id) ?? null,
       count: opts.count ?? null,
       blockers: blockerText(opts.blockers ?? []),
-      wait: prWaitPlain(m, id),
+      wait: [prWaitPlain(m, id), opts.stall].filter(Boolean).join('. '),
       gateAt,
       snoozed: isSnoozed({ id, kind }, gateAt, m.snoozes)
     };
@@ -227,8 +231,20 @@ export const waitRows = (
     m.before
       .filter((x) => (x.kind === 'plan' ? 'plan' : 'question') === kind)
       .map((x) => row(x.ticket, kind, { blockers: open(x.ticket) }));
+  const stall = (p: QueueParked | undefined) =>
+    p ? copilotStall(p, now) : null;
   return [
-    ...m.prs.map((x) => row(x.ticket, 'review', { blockers: open(x.ticket) })),
+    ...m.prs.map((x) =>
+      row(x.ticket, 'review', {
+        blockers: open(x.ticket),
+        stall: stall(m.prWaits.get(x.ticket))
+      })
+    ),
+    // A stalled wait on Copilot whose PR is not among the open ones still wants the Copilot button
+    ...m.parked.flatMap((p) => {
+      const why = stall(p);
+      return why === null ? [] : [row(p.ticket, 'review', { stall: why })];
+    }),
     ...m.handoffs.map((x) =>
       row(x.ticket, 'hand-offs', { count: x.items?.length ?? 0 })
     ),

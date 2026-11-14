@@ -1210,7 +1210,16 @@ export const queueViewSchema = z.object({
         pr: z.number(),
         since: z.string(),
         resolved: z.boolean(),
-        outcome: z.string().nullable()
+        outcome: z.string().nullable(),
+        // Only a wait on Copilot has these, and older views have neither
+        copilot: z.enum(['none', 'requested', 'reviewed']).nullish(),
+        copilotAsked: z
+          .object({
+            at: z.string(),
+            ok: z.boolean(),
+            why: z.string().nullable()
+          })
+          .nullish()
       })
     )
     .default([]),

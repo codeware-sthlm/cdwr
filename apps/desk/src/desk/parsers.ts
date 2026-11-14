@@ -373,7 +373,25 @@ const queueViewSchema = z
         pr,
         since: opt(z.string()),
         resolved: z.boolean().nullish(),
-        outcome: z.string().nullish()
+        outcome: z.string().nullish(),
+        // Only a wait on Copilot has these, and older views have neither; a mistyped one reads as missing
+        copilot: z
+          .enum(['none', 'requested', 'reviewed'])
+          .nullish()
+          .catch(null)
+          .transform((v) => v ?? null),
+        copilotAsked: z
+          .object({
+            at: z.string(),
+            ok: z.boolean(),
+            why: z
+              .string()
+              .nullish()
+              .transform((v) => v ?? null)
+          })
+          .nullish()
+          .catch(null)
+          .transform((v) => v ?? null)
       })
     ),
     blocked: list(z.object({ ticket: z.string(), blockers: list(z.string()) })),

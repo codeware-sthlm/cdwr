@@ -85,6 +85,10 @@ export type QueueParked = {
   since?: string;
   resolved?: boolean | null;
   outcome?: string | null;
+  /** Of a wait on Copilot: the PR's copilot state in the watch; null without a watch entry, and absent on older views */
+  copilot?: 'none' | 'requested' | 'reviewed' | null;
+  /** Of a wait on Copilot: the scheduler's one automatic request for the PR; null when it made none, absent on older views */
+  copilotAsked?: { at: string; ok: boolean; why: string | null } | null;
 };
 
 /** A Renovate PR the queue tends or that needs a hand: failing checks, a conflict, or a ticket tending it */
