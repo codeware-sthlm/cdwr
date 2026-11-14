@@ -44,6 +44,7 @@ import {
   linearServerState,
   memoryDir,
   renderPlist,
+  reviewSettings,
   schedulerHere,
   serviceTarget,
   suggestSettings
@@ -127,7 +128,8 @@ export default defineCommand({
         memoryDir:
           ctx.env['AGENT_QUEUE_MEMORY_DIR'] || memoryDir(homedir(), ctx.root),
         suggest: suggestSettings(ctx.env),
-        devlog: devlogSettings(ctx.env)
+        devlog: devlogSettings(ctx.env),
+        review: reviewSettings(ctx.env)
       });
       worktreeExists = existsSync(worktree);
       if (worktreeExists && !existsSync(join(worktree, '.git'))) {

@@ -11,7 +11,9 @@ export const KINDS = [
   'snooze',
   'wake',
   'copilot',
-  'merge'
+  'merge',
+  'review',
+  'dismiss'
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -28,6 +30,9 @@ export const ROW_KINDS = [
 export type RowKind = (typeof ROW_KINDS)[number];
 
 const TICKET = /^COD-[0-9]{1,9}$/;
+/** A review finding's id, `<kind>:<ticket>:<8 hex>`; the lib's own check is not importable in Deno */
+const FINDING = /^[a-z0-9-]+:COD-\d+:[0-9a-f]{8}$/;
+const NOTE_MAX = 200;
 const ISO_TIME =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/;
 
@@ -43,6 +48,9 @@ export const RANGES = {
 /** A queue_state row older than this means no scheduler applies commands there any more */
 export const STALE_MS = 2 * 60 * 60 * 1000;
 
+/** A review is refused when the newest one is younger than this; the scheduler checks the same hour */
+export const REVIEW_GAP_MS = 60 * 60 * 1000;
+
 /** The session states the launch guard treats as holding the queue */
 const OPEN_STATES = ['alive', 'waiting'];
 
@@ -52,9 +60,11 @@ export type Command = {
   /**
    * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
    * snooze and wake, with the row's `kind` and newest gate event `eventAt` for snooze; `ticket`
-   * and `pr` for copilot and merge
+   * and `pr` for copilot and merge; `finding` and an optional `note` for dismiss
    */
   args: {
+    finding?: string;
+    note?: string | null;
     value?: number;
     session?: string;
     ticket?: string;
@@ -185,6 +195,25 @@ export const parseCommand = (payload: unknown): Command | string => {
       return `${kind} takes a ticket and a PR number`;
     return { host, kind, args: { ticket, pr } };
   }
+  if (kind === 'dismiss') {
+    const message = `dismiss takes a finding id and a note of at most ${NOTE_MAX} characters`;
+    if (!isRecord(args)) return message;
+    const { finding, note } = args;
+    if (
+      Object.keys(args).some((k) => !['finding', 'note'].includes(k)) ||
+      typeof finding !== 'string' ||
+      !FINDING.test(finding) ||
+      (note !== undefined && note !== null && typeof note !== 'string')
+    )
+      return message;
+    const text = typeof note === 'string' ? note.trim() : '';
+    if (text.length > NOTE_MAX) return message;
+    return {
+      host,
+      kind,
+      args: { finding, note: text === '' ? null : text }
+    };
+  }
   if (kind === 'snooze') {
     const message = 'snooze takes a ticket, a row kind and a gate time or null';
     if (!isRecord(args)) return message;
@@ -250,7 +279,11 @@ export const changeText = (
         ? `woke ${ticket} from the desk (${device})`
         : command.kind === 'copilot' || command.kind === 'merge'
           ? `${command.kind} for ${ticket} asked from the desk (${device})`
-          : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
+          : command.kind === 'review'
+            ? `review asked on ${command.host} from the desk (${device})`
+            : command.kind === 'dismiss'
+              ? `dismissed ${command.args.finding} from the desk (${device})`
+              : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -325,10 +358,11 @@ export const createHandler = ({
 
   /**
    * Applies a command and stores its row in one transaction: `desk_abandon` ends the session,
-   * `desk_snooze` and `desk_wake` set and remove the ticket's snooze
+   * `desk_snooze` and `desk_wake` set and remove the ticket's snooze, `desk_dismiss` records a
+   * dismissed finding
    */
   const rpc = async (
-    name: 'desk_abandon' | 'desk_snooze' | 'desk_wake',
+    name: 'desk_abandon' | 'desk_snooze' | 'desk_wake' | 'desk_dismiss',
     body: Record<string, unknown>
   ): Promise<{ id: number; status: Status; note: string | null }> => {
     const res = await rest(`rpc/${name}`, { method: 'POST', body });
@@ -391,7 +425,18 @@ export const createHandler = ({
     let ticket: string | null = null;
     try {
       let id: number;
-      if (command.kind === 'snooze' || command.kind === 'wake') {
+      if (command.kind === 'dismiss') {
+        // A dismissal belongs to a finding, not a host, so a silent host doesn't refuse it
+        const finding = command.args.finding ?? '';
+        ticket = /:(COD-\d+):/.exec(finding)?.[1] ?? null;
+        ({ id, status, note } = await rpc('desk_dismiss', {
+          p_host: command.host,
+          p_actor: device,
+          p_at: at,
+          p_finding: finding,
+          p_note: command.args.note ?? null
+        }));
+      } else if (command.kind === 'snooze' || command.kind === 'wake') {
         // A snooze belongs to a ticket, not a host: no scheduler applies it, so a silent host
         // doesn't refuse it
         ticket = command.args.ticket ?? null;
@@ -419,6 +464,19 @@ export const createHandler = ({
         if (!known) {
           status = 'refused';
           note = `no scheduler reports from ${command.host}`;
+        }
+
+        // One review an hour: the newest stored one decides, the scheduler checks its own stamp too
+        if (known && command.kind === 'review') {
+          const [latest] = await read<{ at: unknown }>(
+            'reviews?select=at&order=at.desc&limit=1'
+          );
+          const ranAt =
+            typeof latest?.at === 'string' ? Date.parse(latest.at) : NaN;
+          if (now() - ranAt < REVIEW_GAP_MS) {
+            status = 'refused';
+            note = `a review ran at ${new Date(ranAt).toISOString().slice(11, 16)} UTC`;
+          }
         }
 
         // The desk names the session it showed; one the host has since replaced is not abandoned

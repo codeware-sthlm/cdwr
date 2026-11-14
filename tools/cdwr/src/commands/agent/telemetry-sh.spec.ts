@@ -146,6 +146,24 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
     expect(out.stdout).not.toContain(KEY);
   });
 
+  it('supabase_insert_checked fails on a failed call and succeeds on a good one', async () => {
+    status = 500;
+    const bad = await zsh(configured(), `supabase_insert_checked runs '{}'`);
+    expect(bad.stdout).toBe('rc=1');
+    expect(bad.stderr).toContain('warn: supabase runs failed');
+    expect(bad.stderr).not.toContain(KEY);
+    status = 201;
+    const good = await zsh(configured(), `supabase_insert_checked runs '{}'`);
+    expect(good.stdout).toBe('rc=0');
+    expect(hits.at(-1)?.body).toBe('{}');
+  });
+
+  it('supabase_insert_checked succeeds when unconfigured', async () => {
+    const out = await zsh({}, `supabase_insert_checked runs '{}'`);
+    expect(out.stdout).toBe('rc=0');
+    expect(hits).toEqual([]);
+  });
+
   it('warns through note when the caller defines it', async () => {
     status = 500;
     const out = await zsh(
@@ -520,6 +538,42 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
         );
         expect(hits).toHaveLength(3);
         expect(hits.every((h) => !h.body.includes('devlog'))).toBe(true);
+      });
+    });
+
+    describe('the review line', () => {
+      const review = '2026-11-14 · nothing to review';
+
+      it('patches it in a patch of its own, after the devlog line', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '${review}'`
+        );
+        expect(hits).toHaveLength(5);
+        const host = (JSON.parse(hits[0]?.body ?? '') as { host: string }).host;
+        expect(hits[4]?.method).toBe('PATCH');
+        expect(hits[4]?.url).toBe(
+          `/rest/v1/queue_state?host=eq.${encodeURIComponent(host)}`
+        );
+        expect(JSON.parse(hits[4]?.body ?? '')).toEqual({ review });
+      });
+
+      it('patches null when it is empty', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' ''`
+        );
+        expect(hits).toHaveLength(5);
+        expect(JSON.parse(hits[4]?.body ?? '')).toEqual({ review: null });
+      });
+
+      it('sends no patch for it when absent', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' ''`
+        );
+        expect(hits).toHaveLength(4);
+        expect(hits.every((h) => !h.body.includes('review'))).toBe(true);
       });
     });
 

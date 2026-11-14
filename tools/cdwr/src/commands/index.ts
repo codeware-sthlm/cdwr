@@ -274,6 +274,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/activity').then((m) => m.default)
   },
   {
+    path: ['agent', 'review-check'],
+    summary: 'Check a review file and print the reviews row for it',
+    danger: 'read',
+    load: () => import('./agent/review-check').then((m) => m.default)
+  },
+  {
     path: ['agent', 'run'],
     summary: 'Start a planning run now',
     danger: 'mutate',

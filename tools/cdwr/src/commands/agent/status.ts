@@ -50,6 +50,7 @@ import {
   parseLinear,
   parseNotifyLevel,
   parseQueueView,
+  parseReview,
   parseSuggest,
   parseWatchSource,
   parseWatchState,
@@ -278,6 +279,17 @@ export default defineCommand({
                 )
               : row('warn', 'devlog', 'unknown; no verdict from the script')
           ]),
+      ...(report.review === undefined
+        ? []
+        : [
+            report.review
+              ? row(
+                  report.review.kind === 'unknown' ? 'warn' : true,
+                  'review',
+                  report.review.text
+                )
+              : row('warn', 'review', 'unknown; no verdict from the script')
+          ]),
       report.attended
         ? row(
             report.attended.kind === 'run' || report.attended.kind === 'unknown'
@@ -431,6 +443,9 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         ...(checked?.devlog === undefined
           ? {}
           : { devlog: parseDevlog(checked.devlog) }),
+        ...(checked?.review === undefined
+          ? {}
+          : { review: parseReview(checked.review) }),
         queueView:
           checked?.queueView === undefined
             ? null

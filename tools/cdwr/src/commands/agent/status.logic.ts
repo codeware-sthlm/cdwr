@@ -115,6 +115,14 @@ const reportShape = z.object({
     })
     .nullable()
     .optional(),
+  // Absent from a container on an older image
+  review: z
+    .object({
+      kind: z.enum(['requested', 'due', 'done', 'early', 'off', 'unknown']),
+      text: z.string()
+    })
+    .nullable()
+    .optional(),
   queueView: queueViewSchema.or(z.literal('malformed')).nullable(),
   // Absent from a container on an older image, and null without a listener file
   listener: listenerStateShape.nullable().optional(),

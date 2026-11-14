@@ -1,16 +1,17 @@
 #!/bin/zsh
 # Telemetry rows for the agent queue's Supabase project. Sourced; unconfigured or failing, it never fails the caller.
 #   supabase_insert <table> <json>                           POST a row, or an array of rows
+#   supabase_insert_checked <table> <json>                   same, but fails (non-zero) when the call did; succeeds when unconfigured
 #   supabase_upsert <table> <on_conflict> <json> [merge|ignore]   same, resolving duplicates on the given columns (default merge)
 #   telemetry_env <env file>                                 fills in the two variables from a plain KEY=VALUE file when unset
 #   telemetry_on                                             succeeds when both are set
 #   telemetry_run <started_at> <outcome> <ticket> <detail> <attended> <kind> <interval> <limit> <version>
 #                                                            one row in `runs`; empty fields become null
-#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json] [devlog]
+#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json] [devlog] [review]
 #                                                            upserts this host's row in `queue_state`; empty fields become null,
 #                                                            a view that isn't JSON too; a watch and a renovate state, when
 #                                                            given, are each patched on after (empty or invalid: null), then
-#                                                            a devlog line (empty: null)
+#                                                            a devlog line (empty: null), then a review line (same)
 #   telemetry_session <id> <kind> [state] [detail]           upserts the session's heartbeat in `sessions`;
 #                                                            empty fields become null
 #   supabase_delete <table> <query>                          DELETE the rows a PostgREST filter matches
@@ -26,7 +27,7 @@
 # queue view go through a file or a pipe, never one argument, so a large view can't reach the limit.
 
 _supabase_post() {
-  local url=$1 prefer=$2 body=$3 msg tmp=""
+  local url=$1 prefer=$2 body=$3 strict=${4:-} msg tmp="" rc=0
   local -a data=(-d "$body")
   # One argument holds at most 128 KB: a large body (the queue view) goes through a file
   if (( ${#body} > 65536 )); then
@@ -37,11 +38,14 @@ _supabase_post() {
     curl --max-time 10 -sS -f -K - -X POST \
       -H 'Content-Type: application/json' -H "Prefer: $prefer" \
       "${data[@]}" "$url" 2>&1 >/dev/null)"; then
+    rc=1
     msg="warn: supabase ${url##*/rest/v1/} failed: ${msg//$'\n'/ }"
     msg="${msg//$AGENT_SUPABASE_SERVICE_KEY/***}"
     if (( $+functions[note] )); then note "$msg"; else print -ru2 -- "$msg"; fi
   fi
   [[ -z "$tmp" ]] || rm -f "$tmp"
+  # Only a caller that asks (strict) learns of a failure; the rest keep going
+  [[ -n "$strict" ]] && return $rc
   return 0
 }
 
@@ -89,6 +93,11 @@ supabase_patch() {
 supabase_insert() {
   [[ -n "${AGENT_SUPABASE_URL:-}" && -n "${AGENT_SUPABASE_SERVICE_KEY:-}" ]] || return 0
   _supabase_post "${AGENT_SUPABASE_URL%/}/rest/v1/$1" 'return=minimal' "$2"
+}
+
+supabase_insert_checked() {
+  [[ -n "${AGENT_SUPABASE_URL:-}" && -n "${AGENT_SUPABASE_SERVICE_KEY:-}" ]] || return 0
+  _supabase_post "${AGENT_SUPABASE_URL%/}/rest/v1/$1" 'return=minimal' "$2" strict
 }
 
 supabase_upsert() {
@@ -178,6 +187,10 @@ telemetry_queue_state() {
   (( $# >= 8 )) || return 0
   supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
     "$(jq -nc --arg d "$8" 'def orNull: if . == "" then null else . end; {devlog: ($d | orNull)}')" >/dev/null || return 0
+  # And the review line, in a patch of its own for its own migration
+  (( $# >= 9 )) || return 0
+  supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
+    "$(jq -nc --arg r "$9" 'def orNull: if . == "" then null else . end; {review: ($r | orNull)}')" >/dev/null || return 0
 }
 
 # telemetry_session <id> <kind> [state] [detail]: an empty or missing state or detail is null

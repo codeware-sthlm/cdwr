@@ -134,7 +134,7 @@ export async function linearAuth(
 
 /**
  * What the installed script would do now: its decision (the last line) and the
- * `attended:` verdict, `linear:` line, `queue-view:`, `suggest:`, `devlog:`, `watch-source:` and `watch-state:` lines when it printed them. Undefined when it is not installed
+ * `attended:` verdict, `linear:` line, `queue-view:`, `suggest:`, `devlog:`, `review:`, `watch-source:` and `watch-state:` lines when it printed them. Undefined when it is not installed
  */
 export async function checkRun(
   queue: QueuePaths,
@@ -148,6 +148,7 @@ export async function checkRun(
       queueView?: string;
       suggest?: string;
       devlog?: string;
+      review?: string;
       watchSource?: string;
       watchState?: string;
     }
@@ -173,6 +174,7 @@ export async function checkRun(
     .at(-1);
   const suggest = lines.filter((line) => line.startsWith('suggest: ')).at(-1);
   const devlog = lines.filter((line) => line.startsWith('devlog: ')).at(-1);
+  const review = lines.filter((line) => line.startsWith('review: ')).at(-1);
   const watchSource = lines
     .filter((line) => line.startsWith('watch-source: '))
     .at(-1);
@@ -187,6 +189,9 @@ export async function checkRun(
     ...(devlog === undefined
       ? {}
       : { devlog: devlog.slice('devlog: '.length) }),
+    ...(review === undefined
+      ? {}
+      : { review: review.slice('review: '.length) }),
     ...(attended === undefined
       ? {}
       : { attended: attended.slice('attended: '.length) }),

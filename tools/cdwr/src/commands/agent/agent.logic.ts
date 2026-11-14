@@ -231,6 +231,25 @@ export const devlogSettings = (env: NodeJS.ProcessEnv): DevlogSettings => ({
   days: readNonNegativeInt(env, 'AGENT_QUEUE_DEVLOG_DAYS', DEVLOG_DAYS)
 });
 
+/** Daily backlog review session: budget in USD, days between runs (0 switches the schedule off) */
+export const REVIEW_BUDGET_USD = 5;
+export const REVIEW_DAYS = 1;
+
+export interface ReviewSettings {
+  budgetUsd: number;
+  days: number;
+}
+
+/** The review session's settings: the environment when set, the defaults otherwise */
+export const reviewSettings = (env: NodeJS.ProcessEnv): ReviewSettings => ({
+  budgetUsd: readNonNegativeInt(
+    env,
+    'AGENT_QUEUE_REVIEW_BUDGET_USD',
+    REVIEW_BUDGET_USD
+  ),
+  days: readNonNegativeInt(env, 'AGENT_QUEUE_REVIEW_DAYS', REVIEW_DAYS)
+});
+
 /** Claude Code names a project's directory after its path, every character but letters and digits becoming `-` */
 export const memoryDir = (userHome: string, repoRoot: string): string =>
   join(
@@ -466,6 +485,7 @@ export interface PlistInput {
   memoryDir: string;
   suggest: SuggestSettings;
   devlog: DevlogSettings;
+  review: ReviewSettings;
 }
 
 export const renderPlist = ({
@@ -475,7 +495,8 @@ export const renderPlist = ({
   path,
   memoryDir,
   suggest,
-  devlog
+  devlog,
+  review
 }: PlistInput): string => {
   const e = escapeXml;
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -509,6 +530,10 @@ export const renderPlist = ({
     <string>${devlog.budgetUsd}</string>
     <key>AGENT_QUEUE_DEVLOG_DAYS</key>
     <string>${devlog.days}</string>
+    <key>AGENT_QUEUE_REVIEW_BUDGET_USD</key>
+    <string>${review.budgetUsd}</string>
+    <key>AGENT_QUEUE_REVIEW_DAYS</key>
+    <string>${review.days}</string>
     <key>AGENT_QUEUE_MEMORY_DIR</key>
     <string>${e(memoryDir)}</string>
   </dict>
@@ -1092,6 +1117,24 @@ export const parseDevlog = (line: string): DevlogCheck => {
   const text = line.trim();
   if (text === 'off') return { kind: 'off', text };
   if (text.startsWith('done')) return { kind: 'done', text };
+  if (text.startsWith('not before ')) return { kind: 'early', text };
+  if (text === 'due') return { kind: 'due', text };
+  return { kind: 'unknown', text };
+};
+
+export interface ReviewCheck {
+  kind: 'requested' | 'due' | 'done' | 'early' | 'off' | 'unknown';
+  text: string;
+}
+
+/** Reads the text after `review: ` in the `run.sh --check` output */
+export const parseReview = (line: string): ReviewCheck => {
+  const text = line.trim();
+  if (text === 'off') return { kind: 'off', text };
+  if (text === 'requested') return { kind: 'requested', text };
+  if (text === 'ran today' || text.startsWith('done')) {
+    return { kind: 'done', text };
+  }
   if (text.startsWith('not before ')) return { kind: 'early', text };
   if (text === 'due') return { kind: 'due', text };
   return { kind: 'unknown', text };

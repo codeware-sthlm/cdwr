@@ -452,7 +452,7 @@ describe('run.sh telemetry', () => {
     );
     expect(SCRIPT).toMatch(/\( telemetry_queue_state "\$last" [^)]*\) &!/s);
     expect(SCRIPT).toMatch(
-      /telemetry_queue_state [^)]*"\$watch" "\$renovate" "\$devlog" \) &!/s
+      /telemetry_queue_state [^)]*"\$watch" "\$renovate" "\$devlog" "\$review" \) &!/s
     );
     expect(SCRIPT).toContain(
       'watch="$(cat "$HOME_DIR/watch.json" 2>/dev/null)"'
@@ -2476,6 +2476,49 @@ describe('run.sh apply_commands', () => {
     expect(changes(r)).toEqual(['run requested from the desk (mac)']);
   });
 
+  it.skipIf(!canRun)(
+    'requests a review with a file for the next idle tick',
+    () => {
+      const r = apply([{ id: 1, kind: 'review' }]);
+      expect(statuses(r)).toEqual([['applied', null]]);
+      expect(changes(r)).toEqual(['review requested from the desk (mac)']);
+      expect(file('review-requested')).toBe('');
+    }
+  );
+
+  it.skipIf(!canRun)(
+    'accepts a review when the last one ran over an hour ago',
+    () => {
+      const ranAt = String(Math.floor(Date.now() / 1000) - 2 * 3600);
+      const r = apply([{ id: 1, kind: 'review' }], {
+        files: { 'review-ran-at': `${ranAt}\n` }
+      });
+      expect(statuses(r)).toEqual([['applied', null]]);
+      expect(file('review-requested')).toBe('');
+    }
+  );
+
+  it.skipIf(!canRun)('refuses a review within an hour of the last', () => {
+    const ranAt = Math.floor(Date.now() / 1000) - 1800;
+    const r = apply([{ id: 1, kind: 'review' }], {
+      files: { 'review-ran-at': `${ranAt}\n` }
+    });
+    expect(statuses(r)).toEqual([
+      ['refused', expect.stringMatching(/^a review ran at \d\d:\d\d$/)]
+    ]);
+    expect(changes(r)[0]).toMatch(
+      /^review refused from the desk \(mac\): a review ran at \d\d:\d\d$/
+    );
+    expect(file('review-requested')).toBeNull();
+  });
+
+  it.skipIf(!canRun)('notes a review that is already requested', () => {
+    const r = apply([{ id: 1, kind: 'review' }], {
+      files: { 'review-requested': '' }
+    });
+    expect(statuses(r)).toEqual([['applied', 'already requested']]);
+  });
+
   it.skipIf(!canRun)('sets the limit from 1 to 20 and refuses the rest', () => {
     const ok = apply([{ id: 1, kind: 'limit', value: 3 }]);
     expect(file('limit')).toBe('3');
@@ -2861,17 +2904,343 @@ describe('run.sh devlog session', () => {
   it('runs only from the idle block, after the suggest gate', () => {
     expect(SCRIPT.match(/\bdevlog_run\b/g)).toHaveLength(2);
     const idle = SCRIPT.slice(SCRIPT.indexOf('if [[ -z "$ready" ]]; then'));
+    // Only when the review leaves the tick
     expect(idle).toContain(
-      '*) if [[ "$(devlog_gate)" == due ]]; then devlog_run; fi ;;'
+      'elif [[ "$(devlog_gate)" == due ]]; then devlog_run; fi ;;'
     );
     expect(idle.indexOf('suggest_gate')).toBeLessThan(
       idle.indexOf('devlog_gate')
     );
   });
 
+  it('runs a requested review before the suggestion gate is read', () => {
+    const idle = SCRIPT.slice(SCRIPT.indexOf('if [[ -z "$ready" ]]; then'));
+    const requested = idle.indexOf(
+      'if [[ -e "$HOME_DIR/review-requested" ]]; then review_run; exit 0; fi'
+    );
+    expect(requested).toBeGreaterThan(-1);
+    expect(requested).toBeLessThan(idle.indexOf('case "$gate" in'));
+    // After --check, which only reports
+    expect(requested).toBeGreaterThan(idle.indexOf('if $check;'));
+  });
+
   it('reports the gate on --check, idle or not', () => {
     expect(
       SCRIPT.match(/print -r -- "devlog: \$\(devlog_gate\)"/g)
     ).toHaveLength(2);
+  });
+});
+
+describe('run.sh review session', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  let home: string;
+
+  const day = (daysAgo: number) => {
+    const d = new Date(Date.now() - daysAgo * 86_400_000);
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, '0'),
+      String(d.getDate()).padStart(2, '0')
+    ].join('-');
+  };
+
+  const gate = (
+    env: { days?: string; hour: string },
+    files: Record<string, string> = {}
+  ) => {
+    for (const [name, content] of Object.entries(files)) {
+      writeFileSync(join(home, name), content);
+    }
+    return spawnSync(
+      'zsh',
+      [
+        '-c',
+        [
+          `HOME_DIR="${home}"`,
+          `REVIEW_DAYS="${env.days ?? '1'}"`,
+          `SUGGEST_HOUR="${env.hour}"`,
+          fn('stamp_age'),
+          fn('review_gate'),
+          'review_gate'
+        ].join('\n')
+      ],
+      { encoding: 'utf8' }
+    ).stdout.trim();
+  };
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'review-'));
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  describe('the gate', () => {
+    it.skipIf(!canRun)('is off when the interval is 0 or not a number', () => {
+      expect(gate({ days: '0', hour: '0' })).toBe('off');
+      expect(gate({ days: 'daily', hour: '0' })).toBe('off');
+    });
+
+    it.skipIf(!canRun)('has run today after a run', () => {
+      expect(gate({ hour: '0' }, { 'review-ran-on': `${day(0)}\n` })).toBe(
+        'ran today'
+      );
+    });
+
+    it.skipIf(!canRun)('waits out a longer interval', () => {
+      expect(
+        gate({ days: '3', hour: '0' }, { 'review-ran-on': `${day(1)}\n` })
+      ).toBe('done, next in 2 day(s)');
+    });
+
+    it.skipIf(!canRun)('waits for the hour', () => {
+      expect(gate({ hour: '24' })).toBe('not before 24:00');
+    });
+
+    it.skipIf(!canRun)(
+      'is due past the hour, with no stamp or an old one',
+      () => {
+        expect(gate({ hour: '0' })).toBe('due');
+        expect(gate({ hour: '0' }, { 'review-ran-on': `${day(2)}\n` })).toBe(
+          'due'
+        );
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'is requested by a file, whatever the hour, the days or a run today',
+      () => {
+        const files = {
+          'review-requested': '',
+          'review-ran-on': `${day(0)}\n`
+        };
+        expect(gate({ hour: '24' }, files)).toBe('requested');
+        expect(gate({ days: '0', hour: '24' }, files)).toBe('requested');
+      }
+    );
+  });
+
+  describe('the claude call', () => {
+    const run = fn('review_run');
+    const allowed = run.slice(
+      run.indexOf('--allowedTools'),
+      run.indexOf(') > "$result"')
+    );
+
+    it('is read-only on Linear, with no raw gh api', () => {
+      expect(run).not.toBe('');
+      expect(allowed).toContain('"$L"__get_issue');
+      expect(allowed).not.toContain('save_');
+      expect(allowed).not.toContain('gh api');
+    });
+
+    it('denies the secret paths', () => {
+      const denied = run.slice(
+        run.indexOf('--disallowedTools'),
+        run.indexOf('--tools')
+      );
+      for (const rule of [
+        '"Read(**/.env*)"',
+        '"Read(//**/.cdwr/*)"',
+        '"Read(//**/.claude.json)"',
+        '"Read(//run/agent/**)"',
+        '"Read(/$HOME_DIR/linear.token*)"'
+      ]) {
+        expect(denied).toContain(rule);
+      }
+    });
+
+    it('writes only the out file and its taste file', () => {
+      const writes = allowed.match(/"(?:Write|Edit)\([^"]*\)"/g) ?? [];
+      expect(writes).toEqual([
+        '"Write(/$out)"',
+        '"Edit(/$out)"',
+        '"Write(/$MEMORY_DIR/feedback_review_taste.md)"',
+        '"Edit(/$MEMORY_DIR/feedback_review_taste.md)"'
+      ]);
+    });
+  });
+
+  it('takes the idle tick after the suggestion and before the devlog', () => {
+    expect(SCRIPT.match(/\breview_run\b/g)).toHaveLength(3);
+    const idle = SCRIPT.slice(SCRIPT.indexOf('if [[ -z "$ready" ]]; then'));
+    expect(idle).toContain('if [[ "$review_state" == due ]]');
+    expect(idle.indexOf('suggest_gate')).toBeLessThan(
+      idle.indexOf('review_gate')
+    );
+    expect(idle.indexOf('review_gate')).toBeLessThan(
+      idle.indexOf('devlog_gate')
+    );
+  });
+
+  it('reports the gate on --check, idle or not', () => {
+    expect(
+      SCRIPT.match(/print -r -- "review: \$\(review_gate\)"/g)
+    ).toHaveLength(2);
+  });
+
+  describe('a run', () => {
+    // review_run over stubs: claude prints the given result, node stands in for review-check
+    const review = (opts: {
+      result?: string;
+      check?: 'pass' | 'fail';
+      store?: 'pass' | 'fail';
+      files?: Record<string, string>;
+    }) => {
+      const t = (name: string) => join(home, `t-${name}`);
+      for (const [name, content] of Object.entries(opts.files ?? {})) {
+        writeFileSync(join(home, name), content);
+      }
+      mkdirSync(join(home, 'logs'), { recursive: true });
+      const result = JSON.stringify({
+        result: opts.result ?? 'Done.\nREVIEWED 4 actions',
+        total_cost_usd: 1.2,
+        num_turns: 7
+      });
+      const script = [
+        `HOME_DIR="${home}"; REPO="${home}"; LOGS="${home}/logs"; MEMORY_DIR=""`,
+        'REVIEW_BUDGET_USD=5; L=linear; claude_env=(runenv); LINEAR_MCP_ARGS=()',
+        // Stands in for env: drops the NAME=value word and calls the claude stub
+        'runenv() { shift; "$@"; }',
+        `queue_view='{"tree":[]}'`,
+        'linear_ok() { return 0; }',
+        'to_main() { :; }',
+        'gh_identity_or_note() { :; }',
+        'notify() { :; }',
+        'telemetry_host() { print nuc; }',
+        `note() { print -r -- "$*" >> "${t('note')}"; }`,
+        `record() { print -r -- "$*" >> "${t('record')}"; }`,
+        `claude() { print -r -- '${result}'; }`,
+        `supabase_select() { print -r -- "$*" >> "${t('select')}"; case "$1" in
+          review_dismissals) print -r -- '[{"finding_id":"a:COD-1:0123abcd","at":"2026-11-01T08:00:00Z","note":"fine"},{"finding_id":"b:COD-2:0123abcd","at":"2026-11-02T08:00:00Z","note":null}]' ;;
+          *) print -r -- '[{"findings":[{"id":"a:COD-1:0123abcd","ticket":"COD-1","kind":"a","key":"k","severity":"note","evidence":[],"fix":"do it"}]}]' ;;
+        esac; }`,
+        `supabase_insert_checked() { print -r -- "$1|$2" >> "${t('insert')}"; ${
+          opts.store === 'fail' ? 'return 1' : 'return 0'
+        }; }`,
+        `node() { print -r -- "$*" >> "${t('node')}"; ${
+          opts.check === 'fail'
+            ? 'print -r -- \'{"ok":false,"error":{"message":"failed: action 2 has no ticket"}}\'; return 1'
+            : 'print -r -- \'{"ok":true,"result":{"host":"nuc","brief":"b"}}\''
+        }; }`,
+        // A one-liner in run.sh, so fn() can't cut it out
+        'review_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/review-line"; }',
+        fn('run_outcome'),
+        fn('review_run'),
+        'review_run'
+      ].join('\n');
+      const r = spawnSync('zsh', ['-c', script], {
+        encoding: 'utf8',
+        env: { PATH: process.env['PATH'] ?? '', HOME: home }
+      });
+      const lines = (name: string) =>
+        existsSync(t(name))
+          ? readFileSync(t(name), 'utf8').trim().split('\n')
+          : [];
+      return {
+        stderr: r.stderr,
+        inserts: lines('insert'),
+        records: lines('record'),
+        nodes: lines('node'),
+        selects: lines('select')
+      };
+    };
+    const file = (name: string) =>
+      existsSync(join(home, name))
+        ? readFileSync(join(home, name), 'utf8').trim()
+        : null;
+
+    it.skipIf(!canRun)(
+      'stores the row when the check passes, and stamps the run',
+      () => {
+        const r = review({ files: { 'review-requested': '' } });
+        expect(r.inserts).toEqual(['reviews|{"host":"nuc","brief":"b"}']);
+        expect(r.nodes).toHaveLength(1);
+        expect(r.nodes[0]).toMatch(
+          /review-check .*review-out\.json --host nuc --cost 1\.2 --model opus --json$/
+        );
+        expect(r.records.join('\n')).not.toContain('warn');
+        expect(file('review-requested')).toBeNull();
+        expect(file('review-ran-on')).toBe(day(0));
+        expect(file('review-ran-at')).toMatch(/^\d+$/);
+        expect(file('review-line')).toMatch(
+          / · ran \d\d:\d\d, 4 actions, \$1\.20$/
+        );
+        expect(file('review-view.json')).toBe('{"tree":[]}');
+        expect(r.selects[0]).toMatch(
+          /^review_dismissals at=gte\.\d{4}-\d\d-\d\d/
+        );
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'hands over 90 days of dismissals, each with the finding it names',
+      () => {
+        const r = review({});
+        const since = new Date(Date.now() - 90 * 86_400_000)
+          .toISOString()
+          .slice(0, 10);
+        expect(r.selects[0]).toContain(`at=gte.${since}`);
+        expect(r.selects[1]).toMatch(
+          /^reviews at=gte\.[\d-]+&select=findings$/
+        );
+        expect(r.selects[1]).toContain(`at=gte.${since}`);
+        expect(JSON.parse(file('review-dismissed.json') ?? '')).toEqual([
+          {
+            finding_id: 'a:COD-1:0123abcd',
+            at: '2026-11-01T08:00:00Z',
+            note: 'fine',
+            ticket: 'COD-1',
+            kind: 'a',
+            key: 'k',
+            fix: 'do it'
+          },
+          {
+            finding_id: 'b:COD-2:0123abcd',
+            at: '2026-11-02T08:00:00Z',
+            note: null
+          }
+        ]);
+        expect(file('review-dismissals.tmp')).toBeNull();
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'warns and does not report success when the store fails',
+      () => {
+        const r = review({ store: 'fail' });
+        expect(r.inserts).toHaveLength(1);
+        expect(r.records).toEqual(['warn  review: not stored']);
+        expect(file('review-line')).toMatch(/ · failed: not stored$/);
+        expect(file('review-line')).not.toContain('actions');
+      }
+    );
+
+    it.skipIf(!canRun)('stores nothing and warns when the check fails', () => {
+      const r = review({ check: 'fail' });
+      expect(r.inserts).toEqual([]);
+      expect(r.records).toEqual(['warn  review: action 2 has no ticket']);
+      expect(file('review-line')).toMatch(/ · failed: action 2 has no ticket$/);
+    });
+
+    it.skipIf(!canRun)('stores nothing and warns on a failed: verdict', () => {
+      const r = review({ result: 'failed: no queue to read' });
+      expect(r.inserts).toEqual([]);
+      expect(r.nodes).toEqual([]);
+      expect(r.records[0]).toMatch(/^warn {2}review: no queue to read/);
+    });
+
+    it.skipIf(!canRun)('stores nothing and warns without a verdict', () => {
+      const r = review({ result: 'all done' });
+      expect(r.inserts).toEqual([]);
+      expect(r.records).toEqual([
+        expect.stringMatching(/^warn {2}review: no verdict/)
+      ]);
+      expect(file('review-line')).toMatch(/ · no verdict$/);
+    });
   });
 });
