@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export type ValidationError = {
-  path: (string | number)[];
+  path: PropertyKey[];
   code: string;
   message: string;
 };
@@ -41,7 +41,7 @@ export function validateSchema<T extends z.ZodTypeAny>(
       return {
         success: false,
         details: `${schemaName} validation failed`,
-        errors: error.errors.map((err) => ({
+        errors: error.issues.map((err) => ({
           path: err.path,
           code: err.code,
           message: err.message
