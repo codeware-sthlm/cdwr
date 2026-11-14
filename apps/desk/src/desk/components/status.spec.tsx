@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
 import { createState } from '../state';
+import type { QueueTreeNode } from '../types';
 import {
   NEW,
   NOW,
@@ -20,19 +21,21 @@ import {
 
 import { Status, TreePill } from './status';
 
-const node = (ticket: string, gaps: string[] = []) => ({
+const node = (ticket: string, gaps: string[] = []): QueueTreeNode => ({
   ticket,
   title: null,
   state: 'started',
   label: null,
   pr: null,
+  position: null,
+  waiting: false,
   blockers: [],
-  gaps,
+  gaps: gaps.map((kind) => ({ kind, candidate: false })),
   children: []
 });
 
 describe('TreePill', () => {
-  const pill = (tree: ReturnType<typeof node>[] | null, current = 'desk') => {
+  const pill = (tree: QueueTreeNode[] | null, current = 'desk') => {
     const state = filled();
     state.data.runs = tree ? runs(view({ tree })) : null;
     const onView = vi.fn();
