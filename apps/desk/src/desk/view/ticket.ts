@@ -269,7 +269,13 @@ export const ticketState = (
   const linear = linearOf(issueOf(m, state, id));
   const queue = queueOf(m, id);
   const tree = treeOf(m, id);
-  const pr = m.watch.get(id) ?? null;
+  // The watch is keyed by ticket and can still hold an older PR's entry
+  const known = prOf(state.details, id, queuePr(m, id));
+  const watched = m.watch.get(id) ?? null;
+  const pr =
+    watched && (known === null || String(watched.entry.pr) === String(known))
+      ? watched
+      : null;
   const gaps = m.gaps.filter((g) => g.ticket === id);
   const session = sessionOf(m, state, id);
   const plan = planOf(state.details.get(id));
