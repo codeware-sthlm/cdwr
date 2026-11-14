@@ -32,12 +32,14 @@ const mountWith = (
   {
     onDesk = vi.fn(),
     onFilter = vi.fn(),
+    onTicket = vi.fn(),
     filter = ALL,
     session = { state: 'none' },
     prepare = () => undefined
   }: {
     onDesk?: () => void;
     onFilter?: (filter: TreeFilter) => void;
+    onTicket?: (id: string) => void;
     filter?: TreeFilter;
     session?: SessionState;
     prepare?: (state: DeskState) => void;
@@ -54,6 +56,7 @@ const mountWith = (
       filter={filter}
       onFilter={onFilter}
       onDesk={onDesk}
+      onTicket={onTicket}
     />
   ).container;
 };
@@ -107,6 +110,20 @@ describe('TreePage', () => {
     const c = mount([node('COD-10')], onDesk);
     fireEvent.click(c.querySelector('button[data-view="desk"]') as HTMLElement);
     expect(onDesk).toHaveBeenCalledOnce();
+  });
+
+  it('opens the Ticket sheet from a row title, and keeps the id a link to Linear', () => {
+    const onTicket = vi.fn();
+    const c = mountWith([node('COD-10', { children: [node('COD-11')] })], {
+      onTicket
+    });
+    const titles = [...c.querySelectorAll('button.title')];
+    expect(titles.map(text)).toEqual(['Tree COD-10', 'Tree COD-11']);
+    fireEvent.click(titles[1]);
+    expect(onTicket).toHaveBeenCalledWith('COD-11');
+    expect(c.querySelector('a.id[href$="/issue/COD-11"]')?.textContent).toBe(
+      'COD-11'
+    );
   });
 
   it('nests the children of a root under it', () => {
@@ -206,6 +223,7 @@ describe('TreePage', () => {
         filter={ALL}
         onFilter={vi.fn()}
         onDesk={vi.fn()}
+        onTicket={vi.fn()}
       />
     ).container;
     expect(text(c)).toContain('No agent ticket in flight.');

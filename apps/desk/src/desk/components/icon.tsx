@@ -137,6 +137,12 @@ const ICON = {
       <path d="M12 13v8" />
     </>
   ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="M21 21l-4.3-4.3" />
+    </>
+  ),
   all: (
     <>
       <path d="M8 6h13" />

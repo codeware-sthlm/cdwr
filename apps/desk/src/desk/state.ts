@@ -66,7 +66,8 @@ export const SHEET_IDS = [
   'shipped',
   'effort',
   'all',
-  'ideas'
+  'ideas',
+  'ticket'
 ] as const;
 
 export type SheetId = (typeof SHEET_IDS)[number];
@@ -154,6 +155,8 @@ export type DeskUi = {
   /** The Activity sheet's ticket filter, `all` or a ticket id */
   actFilter: string;
   openSheet: SheetId | null;
+  /** The ticket the Ticket sheet shows; kept while the sheet animates out */
+  ticket: string | null;
   /** The full-page view shown in place of the desk */
   view: View;
   /** The Snoozed fold is open, kept so a render doesn't close it */
@@ -255,6 +258,7 @@ export const createState = (): DeskState => ({
     tree: { scope: 'open', gaps: false },
     actFilter: 'all',
     openSheet: null,
+    ticket: null,
     view: 'desk',
     snoozedOpen: false
   },

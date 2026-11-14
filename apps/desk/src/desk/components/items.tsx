@@ -26,7 +26,8 @@ import { PV_MORE, TBL, TBL_CELL, TBL_HEAD } from './sheet-ui';
 
 // The row helpers of the sheets; their utilities are in items-ui.ts
 
-const PRIO: ReadonlyMap<number, string> = new Map([
+/** Linear's priority values by name */
+export const PRIO: ReadonlyMap<number, string> = new Map([
   [1, 'Urgent'],
   [2, 'High'],
   [3, 'Medium'],

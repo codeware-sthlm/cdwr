@@ -43,6 +43,8 @@ export type TicketQueue = {
   review: { pr: PrRef | null } | null;
   /** The hand-off items still unticked */
   handoffs: string[];
+  /** What waits on Håkan, the kind of its Waiting on you row; the furthest along when several */
+  waiting: 'review' | 'hand-offs' | 'question' | 'plan' | null;
 };
 
 export type TicketRelative = {
@@ -131,6 +133,8 @@ const queueOf = (m: Model, id: string): TicketQueue | null => {
   ].map((b) => b.ticket);
   const label = m.toLabel.find((x) => x.ticket === id);
   const review = m.prs.find((x) => x.ticket === id);
+  const handoffs = m.handoffs.find((x) => x.ticket === id);
+  const before = m.before.find((x) => x.ticket === id);
   const queue: TicketQueue = {
     next: next ? { reason: next.reason, detail: next.detail } : null,
     parked: parked
@@ -145,7 +149,16 @@ const queueOf = (m: Model, id: string): TicketQueue | null => {
     blockedBy: [...new Set(blocking)],
     toLabel: label ? { parent: label.parent } : null,
     review: review ? { pr: review.pr ?? null } : null,
-    handoffs: m.handoffs.find((x) => x.ticket === id)?.items ?? []
+    handoffs: handoffs?.items ?? [],
+    waiting: review
+      ? 'review'
+      : handoffs
+        ? 'hand-offs'
+        : before
+          ? before.kind === 'plan'
+            ? 'plan'
+            : 'question'
+          : null
   };
   const applies =
     queue.next !== null ||
@@ -154,7 +167,8 @@ const queueOf = (m: Model, id: string): TicketQueue | null => {
     queue.blockedBy.length > 0 ||
     queue.toLabel !== null ||
     queue.review !== null ||
-    queue.handoffs.length > 0;
+    queue.handoffs.length > 0 ||
+    queue.waiting !== null;
   return applies ? queue : null;
 };
 

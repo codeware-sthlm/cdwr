@@ -48,6 +48,9 @@ export const WEBHOOK_GRACE_MIN = 15; // a PR change Linear synced this long afte
 export const WEBHOOK_QUIET_HOURS = 24; // with no github_events row this recent the webhook check reads quiet
 
 export const CONFIRM_MS = 4000; // a confirmation button waits this long for its second click
+
+/** The header search field's id, which the Ticket sheet's focus falls back to */
+export const SEARCH_ID = 'search';
 export const PLAN_STALE_MIN = 60; // a plan sample older than this is shown with its age (it ages while no interactive session runs)
 export const PLAN_WARN_PCT = 100; // a window projected to reach this share by its reset is a warning
 export const PLAN_PROJECT_AFTER = 0.1; // the share of a window that must have passed at the sample before a projection counts

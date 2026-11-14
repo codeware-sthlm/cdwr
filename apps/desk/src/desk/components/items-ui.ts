@@ -87,6 +87,8 @@ export const RANK =
 export const MAIN = 'main grid min-w-0 gap-1';
 export const TITLE =
   'title font-medium text-[color:var(--fg)] [overflow-wrap:anywhere] hover:underline';
+/** A title that is a button, not a link: the title's look without the button's frame */
+export const TITLE_BUTTON = `${TITLE} cursor-pointer rounded-none border-0 bg-transparent p-0 text-left text-[length:inherit]`;
 export const META =
   'meta flex flex-wrap items-center gap-1.5 text-[0.78rem] text-[color:var(--muted)]';
 export const SIDE =

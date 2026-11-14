@@ -1,8 +1,22 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { openStartHash, setSettingsOpener, showView, store } from './actions';
+import {
+  hideSheet,
+  openStartHash,
+  openTicket,
+  setSettingsOpener,
+  showView,
+  store
+} from './actions';
 import { App } from './app';
 
 beforeEach(() => {
@@ -19,10 +33,13 @@ beforeEach(() => {
   );
   store.state.ui.view = 'desk';
   store.state.ui.openSheet = null;
+  store.state.ui.ticket = null;
   window.history.replaceState(null, '', '/');
 });
 
 afterEach(() => {
+  // Each test starts from one page: a mounted App keeps listening to the store
+  cleanup();
   vi.unstubAllGlobals();
 });
 
@@ -104,6 +121,61 @@ describe('App', () => {
         name: 'Waiting on you, furthest along first'
       })
     ).not.toBeNull();
+  });
+
+  it('opens the Ticket sheet named by a #ticket/ start hash, titled with the id', () => {
+    window.history.replaceState(null, '', '/#ticket/COD-1');
+    render(<App />);
+    act(() => openStartHash());
+    expect(store.state.ui.openSheet).toBe('ticket');
+    expect(store.state.ui.ticket).toBe('COD-1');
+    expect(screen.getByRole('dialog', { name: 'COD-1' })).not.toBeNull();
+    expect(window.location.hash).toBe('#ticket/COD-1');
+  });
+
+  it('takes a lower-case or bare number in a #ticket/ hash, and opens nothing for a bare #ticket', () => {
+    window.history.replaceState(null, '', '/#ticket/cod-12');
+    render(<App />);
+    act(() => openStartHash());
+    expect(store.state.ui.ticket).toBe('COD-12');
+    act(() => hideSheet());
+    store.state.ui.ticket = null;
+    window.history.replaceState(null, '', '/#ticket');
+    act(() => openStartHash());
+    expect(store.state.ui.openSheet).toBeNull();
+  });
+
+  it('writes #ticket/COD-n when a ticket is opened', () => {
+    render(<App />);
+    act(() => openTicket('COD-5'));
+    expect(window.location.hash).toBe('#ticket/COD-5');
+    act(() => hideSheet());
+    expect(window.location.hash).toBe('');
+  });
+
+  it('gives focus back to what opened the Ticket sheet, else to the search field', async () => {
+    const { container } = render(<App />);
+    const refresh = container.querySelector('#refresh') as HTMLElement;
+    act(() => refresh.focus());
+    act(() => openTicket('COD-5'));
+    act(() => hideSheet());
+    await waitFor(() => expect(document.activeElement).toBe(refresh));
+    // One opened without focus, as a start hash does, has no opener
+    act(() => openTicket('COD-6', false));
+    act(() => hideSheet());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(container.querySelector('#search'))
+    );
+  });
+
+  it('keeps the tree view on Escape in the search field', () => {
+    const { container } = render(<App />);
+    act(() => showView('tree', false));
+    const field = screen.getByRole('combobox');
+    fireEvent.change(field, { target: { value: 'COD-1' } });
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(container.querySelector('main#tree')).not.toBeNull();
+    expect((field as HTMLInputElement).value).toBe('');
   });
 
   it('returns to the desk on Escape from the Platform view', () => {

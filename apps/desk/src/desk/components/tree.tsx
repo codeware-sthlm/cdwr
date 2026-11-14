@@ -8,8 +8,8 @@ import { mergeBlocker } from '../view/waiting';
 
 import { CAP_SUB } from './capacity';
 import { Chip, Empty } from './items';
-import { META, RULE, TITLE } from './items-ui';
-import { IdLink, Prn } from './links';
+import { META, RULE } from './items-ui';
+import { IdLink, Prn, TicketButton } from './links';
 
 // The ticket tree view: each root with the sub-issues the scheduler's queue view carries
 
@@ -38,12 +38,14 @@ const Node = ({
   node,
   m,
   details,
-  now
+  now,
+  onTicket
 }: {
   node: QueueTreeNode;
   m: Model;
   details: DeskState['details'];
   now: Date;
+  onTicket: (id: string) => void;
 }) => {
   const i = m.get(node.ticket);
   const title = node.title || i.title;
@@ -66,14 +68,9 @@ const Node = ({
       <div className={done ? `${ROW} ${DIM}` : ROW}>
         <IdLink id={node.ticket} />
         {title ? (
-          <a
-            className={TITLE}
-            href={i.url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <TicketButton id={node.ticket} onOpen={onTicket}>
             {title}
-          </a>
+          </TicketButton>
         ) : null}
         {node.state ? (
           <span className={META}>
@@ -119,7 +116,14 @@ const Node = ({
       {node.children.length ? (
         <ul className={NEST}>
           {node.children.map((c) => (
-            <Node key={c.ticket} node={c} m={m} details={details} now={now} />
+            <Node
+              key={c.ticket}
+              node={c}
+              m={m}
+              details={details}
+              now={now}
+              onTicket={onTicket}
+            />
           ))}
         </ul>
       ) : null}
@@ -134,6 +138,8 @@ type Props = {
   filter: TreeFilter;
   onFilter: (filter: TreeFilter) => void;
   onDesk: () => void;
+  /** A row's title opens the Ticket sheet */
+  onTicket: (id: string) => void;
 };
 
 /** The filters' buttons: a segmented choice, or a toggle for `gaps` */
@@ -173,7 +179,8 @@ export const TreePage = ({
   now,
   filter,
   onFilter,
-  onDesk
+  onDesk,
+  onTicket
 }: Props) => {
   const roots = filterTree(m.tree, filter);
   return (
@@ -211,6 +218,7 @@ export const TreePage = ({
               m={m}
               details={details}
               now={now}
+              onTicket={onTicket}
             />
           ))}
         </ul>
