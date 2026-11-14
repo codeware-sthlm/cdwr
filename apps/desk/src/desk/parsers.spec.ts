@@ -637,7 +637,16 @@ describe('validateQueueView', () => {
         tickets: ['COD-2'],
         free: [{ action: 'review', ticket: 'COD-3', pr: 12 }]
       },
-      parked: [{ ticket: 'COD-4', wait: 'checks', pr: 7, resolved: false }],
+      parked: [
+        {
+          ticket: 'COD-4',
+          wait: 'checks',
+          pr: 7,
+          resolved: false,
+          copilot: null,
+          copilotAsked: null
+        }
+      ],
       blocked: [{ ticket: 'COD-8', blockers: ['COD-3', 'COD-9'] }],
       renovate: [
         { pr: 754, title: 'Update vite', state: 'failing', ticket: null }
@@ -693,7 +702,7 @@ describe('validateQueueView', () => {
       { action: undefined, ticket: undefined, pr: null, value: undefined },
       { action: 'review', ticket: 'COD-4', value: 2 }
     ]);
-    expect(view?.parked).toEqual([
+    expect(view?.parked).toMatchObject([
       { ticket: 'COD-5', wait: undefined, since: undefined },
       { ticket: 'COD-6', wait: 'ci', since: '2026-10-28T10:00:00Z' }
     ]);
@@ -704,6 +713,35 @@ describe('validateQueueView', () => {
     expect(view?.table.after).toEqual([
       { ticket: 'COD-9', kind: undefined, items: undefined },
       { ticket: 'COD-10', kind: 'handoffs', items: ['a'] }
+    ]);
+  });
+
+  it('reads the Copilot state and request of a parked wait, null on an older view', () => {
+    const view = validateQueueView({
+      limit,
+      parked: [
+        {
+          ticket: 'COD-1',
+          wait: 'copilot',
+          copilot: 'none',
+          copilotAsked: { at: '2026-10-28T10:00:00Z', ok: false, why: 'denied' }
+        },
+        {
+          ticket: 'COD-2',
+          wait: 'copilot',
+          copilot: null,
+          copilotAsked: { at: '2026-10-28T10:00:00Z', ok: true }
+        },
+        { ticket: 'COD-3', wait: 'ci' },
+        { ticket: 'COD-4', wait: 'copilot', copilot: 'bogus', copilotAsked: 3 }
+      ],
+      table: {}
+    });
+    expect(view?.parked.map((p) => [p.copilot, p.copilotAsked])).toEqual([
+      ['none', { at: '2026-10-28T10:00:00Z', ok: false, why: 'denied' }],
+      [null, { at: '2026-10-28T10:00:00Z', ok: true, why: null }],
+      [null, null],
+      [null, null]
     ]);
   });
 
