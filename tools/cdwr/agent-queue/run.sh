@@ -219,26 +219,37 @@ copilot_asked() {
   [[ "$s" == requested || "$s" == reviewed ]]
 }
 
-# desk_pr_act <copilot|merge> <pr> <node id> <head oid>: the GitHub write, always as the app. The
-# Copilot request falls back on copilot_token when the app is refused, or when GitHub takes the call
-# without adding Copilot (an author with no Copilot seat). Prints the reason and returns 1 on
-# failure. Run it in a command substitution.
-desk_pr_act() {
+# copilot_request <pr>: asks Copilot to review the PR, as the app first. It falls back on
+# copilot_token when the app is refused, or when GitHub takes the call without adding Copilot (an
+# author with no Copilot seat). Shared by the desk's copilot command and the watch's own request.
+# Prints the reason and returns 1 on failure. Run it in a command substitution.
+copilot_request() {
   setopt local_options no_err_exit
-  local kind=$1 pr=$2 id=$3 oid=$4 out="" token
+  local pr=$1 out="" token
   local -a request=(gh api -X POST "repos/codeware-sthlm/cdwr/pulls/$pr/requested_reviewers"
     -f 'reviewers[]=copilot-pull-request-reviewer[bot]' --silent)
+  gh_identity || { print -r -- "no GitHub app"; return 1; }
+  out="$("${request[@]}" 2>&1)" && copilot_asked "$pr" && return 0
+  token="$(copilot_token)"
+  if [[ -n "$token" ]]; then
+    out="$(GH_TOKEN="$token" GITHUB_TOKEN="$token" "${request[@]}" 2>&1)" && copilot_asked "$pr" && return 0
+  fi
+  [[ -n "$out" ]] || out="GitHub did not add Copilot as a reviewer"
+  print -r -- "${${(f)out}[1][1,160]:-GitHub refused}"
+  return 1
+}
+
+# desk_pr_act <copilot|merge> <pr> <node id> <head oid>: the GitHub write, always as the app (the
+# Copilot request as copilot_request makes it). Prints the reason and returns 1 on failure. Run it
+# in a command substitution.
+desk_pr_act() {
+  setopt local_options no_err_exit
+  local kind=$1 pr=$2 id=$3 oid=$4 out=""
+  [[ "$kind" == copilot ]] && { copilot_request "$pr"; return; }
   gh_identity || { print -r -- "no GitHub app"; return 1; }
   case "$kind" in
     merge)
       out="$(gh api graphql -f query="$ENQUEUE" -f id="$id" -f oid="$oid" 2>&1)" && return 0 ;;
-    copilot)
-      out="$("${request[@]}" 2>&1)" && copilot_asked "$pr" && return 0
-      token="$(copilot_token)"
-      if [[ -n "$token" ]]; then
-        out="$(GH_TOKEN="$token" GITHUB_TOKEN="$token" "${request[@]}" 2>&1)" && copilot_asked "$pr" && return 0
-      fi
-      [[ -n "$out" ]] || out="GitHub did not add Copilot as a reviewer" ;;
     *) out="unknown kind" ;;
   esac
   print -r -- "${${(f)out}[1][1,160]:-GitHub refused}"
@@ -643,7 +654,9 @@ $check || CHECKIN_ID="$(checkin in_progress)"
 # The decisions live in watch.jq, installed next to this file. It watches every ticket an agent
 # label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write. The
 # scheduler's other write is the parent close after it (CLOSE_PARENT, CLOSE_COMMENT). Its only
-# GitHub writes are the desk's copilot and merge commands (desk_pr_act), always as the app.
+# GitHub writes are the desk's copilot and merge commands (desk_pr_act), and the watch's own Copilot
+# request for a ticket parked on Copilot (copilot_request), since the ruleset's automatic review
+# skips a PR the app opened. Both go as the app, the Copilot request then as AGENT_COPILOT_TOKEN.
 # Paged, since done tickets keep agent:review for 14 days and alone fill a page.
 read -r -d '' WATCHED <<'GQL' || true
 query($after: String) {
@@ -708,7 +721,7 @@ watch_prs() {
   # One PR failing to read skips that PR, not the rest.
   setopt local_options no_err_exit
   local file="$HOME_DIR/watch.json" pages="$HOME_DIR/watch-pages.jsonl" after=null page
-  local resp nodes state node id label pr now out level msg review why
+  local resp nodes state node id label pr now out level msg review why asked ok
   gh_identity_or_note
   # Every page up to 5, through a file as in record_activity; only tickets past the cap go unwatched
   : > "$pages"
@@ -763,13 +776,31 @@ watch_prs() {
     out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
       --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
-      {id: $id, agentLabel: $agentLabel, pr: $pr, now: ($now | pr_state), prev: $state[$id], handoffs: ($node | handoffs), at: $at} | step')" ||
+      {id: $id, agentLabel: $agentLabel, pr: $pr, now: ($now | pr_state), prev: $state[$id],
+       handoffs: ($node | handoffs), parked: ($node | parked), at: $at} | step')" ||
       { why="$(watch_err)"; note "warn: watch: watch.jq failed on $id$why"; record warn "$id" "watch: watch.jq failed$why"; continue; }
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue
       note "watch: $level $msg"
       notice "$level" "$msg"
     done <<<"$(jq -r '.notices[] | "\(.level)\t\(.message)"' <<<"$out")"
+    # GitHub's automatic review skips a PR the app opened, so a ticket parked on Copilot gets one
+    # request per PR from here (step's askCopilot). The outcome stays on the entry and a failed try
+    # is never repeated: Håkan has the desk's Copilot button for it.
+    if [[ "$(jq -r '.askCopilot' <<<"$out")" == true ]]; then
+      ok=true
+      why="$(copilot_request "$pr")" || ok=false
+      asked="$(jq -nc --arg at "$(date -u +%FT%TZ)" --argjson ok "$ok" --arg why "$why" \
+        '{at: $at, ok: $ok, why: (if $ok or $why == "" then null else $why end)}')"
+      out="$(jq -c --argjson a "$asked" '.entry.copilotAsked = $a | if $a.ok then .entry.copilot = "requested" else . end' <<<"$out")"
+      if $ok; then
+        note "watch: $id Copilot requested on PR #$pr"
+      else
+        msg="$id: could not request Copilot on PR $pr: ${why:-GitHub refused}"
+        note "watch: action $msg"
+        notice action "$msg"
+      fi
+    fi
     if [[ "$(jq -r '.relabel' <<<"$out")" == true ]]; then
       relabel_merged "$node" "$(jq -r '.mergedAt // empty' <<<"$now")" "$review" &&
         out="$(jq -c '.entry.relabelled = true' <<<"$out")"

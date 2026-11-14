@@ -759,6 +759,13 @@ describe('step', () => {
     removedAt: string | null;
     relabelled?: boolean;
     conflicting?: boolean;
+    copilotAsked?: { at: string; ok: boolean; why: string | null };
+  } | null;
+  type Parked = {
+    wait: string;
+    pr: number;
+    sha: string | null;
+    since: number;
   } | null;
 
   const now = (state: string, over: Partial<Now> = {}): Now => ({
@@ -776,7 +783,13 @@ describe('step', () => {
     state,
     removedAt
   });
-  const step = (n: Now, p: Prev, handoffs: string[] = [], label?: string) =>
+  const step = (
+    n: Now,
+    p: Prev,
+    handoffs: string[] = [],
+    label?: string,
+    parked?: Parked
+  ) =>
     run('step', {
       id: 'COD-9',
       pr: 5,
@@ -784,10 +797,12 @@ describe('step', () => {
       prev: p,
       handoffs,
       at: '2026-05-01T00:00:00Z',
-      ...(label === undefined ? {} : { agentLabel: label })
+      ...(label === undefined ? {} : { agentLabel: label }),
+      ...(parked === undefined ? {} : { parked })
     }) as {
       notices: Array<{ level: string; message: string }>;
       relabel: boolean;
+      askCopilot: boolean;
       entry: Record<string, unknown>;
     };
 
@@ -1037,6 +1052,101 @@ describe('step', () => {
         expect(
           step(now('open'), prev('open'), [], working).entry
         ).not.toHaveProperty('relabelled');
+      });
+    });
+
+    describe('askCopilot', () => {
+      const park = (over: Partial<NonNullable<Parked>> = {}): Parked => ({
+        wait: 'copilot',
+        pr: 5,
+        sha: null,
+        since: 1791735600,
+        ...over
+      });
+      const asked = {
+        at: '2026-05-01T00:00:00Z',
+        ok: true,
+        why: null
+      };
+      const ask = (n: Now, p: Prev = prev('open'), parked: Parked = park()) =>
+        step(n, p, [], undefined, parked);
+
+      it('asks when parked on Copilot for this PR and Copilot is none', () => {
+        expect(ask(now('open', { copilot: 'none' })).askCopilot).toBe(true);
+      });
+
+      it('asks when the PR reads no Copilot state at all', () => {
+        expect(ask(now('open')).askCopilot).toBe(true);
+      });
+
+      it.each(['requested', 'reviewed'])(
+        'not when Copilot is %s',
+        (copilot) => {
+          expect(ask(now('open', { copilot })).askCopilot).toBe(false);
+        }
+      );
+
+      it('not when parked on CI', () => {
+        expect(
+          ask(now('open'), prev('open'), park({ wait: 'ci' })).askCopilot
+        ).toBe(false);
+      });
+
+      it('not when parked on another PR', () => {
+        expect(ask(now('open'), prev('open'), park({ pr: 4 })).askCopilot).toBe(
+          false
+        );
+      });
+
+      it.each([
+        ['null', null],
+        ['missing', undefined]
+      ])('not when the park is %s', (_name, parked) => {
+        expect(
+          step(now('open'), prev('open'), [], undefined, parked).askCopilot
+        ).toBe(false);
+      });
+
+      it.each(['merged', 'closed'])('not when the PR is %s', (state) => {
+        expect(ask(now(state), prev('open')).askCopilot).toBe(false);
+      });
+
+      it('not when prev carries copilotAsked for the same PR, and the entry keeps it', () => {
+        const r = ask(now('open'), {
+          pr: 5,
+          state: 'open',
+          removedAt: null,
+          copilotAsked: asked
+        });
+        expect(r.askCopilot).toBe(false);
+        expect(r.entry['copilotAsked']).toEqual(asked);
+      });
+
+      it('keeps a failed request too, so it is not repeated', () => {
+        const failed = { at: asked.at, ok: false, why: 'no seat' };
+        const r = ask(now('open'), {
+          pr: 5,
+          state: 'open',
+          removedAt: null,
+          copilotAsked: failed
+        });
+        expect(r.askCopilot).toBe(false);
+        expect(r.entry['copilotAsked']).toEqual(failed);
+      });
+
+      it('asks again and drops it when prev is a different PR', () => {
+        const r = ask(now('open'), {
+          pr: 4,
+          state: 'open',
+          removedAt: null,
+          copilotAsked: asked
+        });
+        expect(r.askCopilot).toBe(true);
+        expect(r.entry['copilotAsked']).toBeUndefined();
+      });
+
+      it('is carried by the entry only when prev had it', () => {
+        expect(ask(now('open')).entry).not.toHaveProperty('copilotAsked');
       });
     });
   });
@@ -2668,8 +2778,28 @@ describe('attended picks', () => {
     const claimed = (wait: string, ago: number, claimAgo = 60) =>
       `${claimLine(claimAgo).replace(/\*\*Next:\*\*.*\n/, '')}${marker(wait, ago)}\n`;
     const parkedOf = (n: Node) => run('parked', n);
-    const state = (n: Node, waits: Record<string, unknown> = {}) =>
-      run(`wait_state(${NOW}; ${JSON.stringify(waits)})`, n);
+    const state = (
+      n: Node,
+      waits: Record<string, unknown> = {},
+      watch?: Record<string, unknown>
+    ) =>
+      run(
+        watch === undefined
+          ? `wait_state(${NOW}; ${JSON.stringify(waits)})`
+          : `wait_state(${NOW}; ${JSON.stringify(waits)}; ${JSON.stringify(watch)})`,
+        n
+      );
+    const askedAt = (
+      ago: number,
+      over: Record<string, unknown> = {}
+    ): Record<string, unknown> => ({
+      'COD-1': {
+        pr: 12,
+        copilot: 'requested',
+        copilotAsked: { at: iso(ago), ok: true, why: null },
+        ...over
+      }
+    });
     type Item = { ticket: string; reason: string; detail: string | null };
     type View = {
       limit: { used: number; max: number };
@@ -2807,6 +2937,49 @@ describe('attended picks', () => {
       ])('copilot: %s', (_name, ago, entry, resolved, outcome) => {
         const waits = entry ? { 'COD-1': entry } : {};
         expect(state(copilot(ago), waits)).toEqual({ resolved, outcome });
+      });
+
+      describe('copilot, counted from the scheduler request', () => {
+        const pending = { resolved: false, outcome: null };
+        const none = { resolved: true, outcome: 'no review' };
+
+        it('an accepted request 5 minutes ago keeps waiting past the old window', () => {
+          expect(state(copilot(1800), {}, askedAt(300))).toEqual(pending);
+        });
+
+        it('an accepted request 20 minutes ago is no review', () => {
+          expect(state(copilot(60), {}, askedAt(1200))).toEqual(none);
+        });
+
+        it('a review still wins over the request window', () => {
+          expect(
+            state(copilot(1800), { 'COD-1': { reviewed: true } }, askedAt(300))
+          ).toEqual({ resolved: true, outcome: 'reviewed' });
+        });
+
+        it('a failed request counts from since', () => {
+          const failed = askedAt(300, {
+            copilotAsked: { at: iso(300), ok: false, why: 'no seat' }
+          });
+          expect(state(copilot(1800), {}, failed)).toEqual(none);
+          expect(state(copilot(60), {}, failed)).toEqual(pending);
+        });
+
+        it('a request for another PR counts from since', () => {
+          expect(state(copilot(1800), {}, askedAt(300, { pr: 11 }))).toEqual(
+            none
+          );
+        });
+
+        it('an entry without a request counts from since', () => {
+          expect(state(copilot(1800), {}, { 'COD-1': { pr: 12 } })).toEqual(
+            none
+          );
+        });
+
+        it('the 2-arity form counts from since', () => {
+          expect(state(copilot(1800))).toEqual(none);
+        });
       });
 
       it.each([
@@ -3055,9 +3228,80 @@ describe('attended picks', () => {
             pr: 12,
             since: '2026-10-11T11:55:00Z',
             resolved: true,
-            outcome: 'reviewed'
+            outcome: 'reviewed',
+            copilot: null,
+            copilotAsked: null
           }
         ]);
+      });
+
+      it('shows a parked copilot entry the watch state and the request', () => {
+        const asked = { at: iso(300), ok: true, why: null };
+        const r = view(
+          [parkedNode('COD-1', 'agent:review', 'copilot', 1800)],
+          {},
+          5,
+          {
+            'COD-1': { pr: 12, copilot: 'requested', copilotAsked: asked }
+          }
+        );
+        expect(r.parked).toEqual([
+          {
+            ticket: 'COD-1',
+            wait: 'copilot',
+            pr: 12,
+            since: '2026-10-11T11:30:00Z',
+            resolved: false,
+            outcome: null,
+            copilot: 'requested',
+            copilotAsked: asked
+          }
+        ]);
+      });
+
+      it('counts the copilot timeout from the request', () => {
+        const issues = [parkedNode('COD-1', 'agent:review', 'copilot', 1800)];
+        const entry = (ago: number) => ({
+          'COD-1': {
+            pr: 12,
+            copilot: 'requested',
+            copilotAsked: { at: iso(ago), ok: true, why: null }
+          }
+        });
+        expect(view(issues, {}, 5, entry(300)).parked[0]).toMatchObject({
+          resolved: false,
+          outcome: null
+        });
+        expect(view(issues, {}, 5, entry(1200)).parked[0]).toMatchObject({
+          resolved: true,
+          outcome: 'no review'
+        });
+      });
+
+      it('leaves copilot and the request null for another PR or no entry', () => {
+        const issues = [parkedNode('COD-1', 'agent:review', 'copilot', 60)];
+        const nulls = { copilot: null, copilotAsked: null };
+        expect(
+          view(issues, {}, 5, {
+            'COD-1': {
+              pr: 11,
+              copilot: 'reviewed',
+              copilotAsked: { at: iso(30), ok: true, why: null }
+            }
+          }).parked[0]
+        ).toMatchObject(nulls);
+        expect(view(issues).parked[0]).toMatchObject(nulls);
+      });
+
+      it('keeps a ci entry free of the copilot fields', () => {
+        const r = view(
+          [parkedNode('COD-1', 'agent:working', 'ci', 60)],
+          {},
+          5,
+          { 'COD-1': { pr: 12, copilot: 'none' } }
+        );
+        expect(r.parked[0]).not.toHaveProperty('copilot');
+        expect(r.parked[0]).not.toHaveProperty('copilotAsked');
       });
 
       it('keeps the older arities working', () => {

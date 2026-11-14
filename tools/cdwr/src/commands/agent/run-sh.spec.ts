@@ -24,7 +24,10 @@ const SCRIPT = readFileSync(
 
 const READS = [/^gh pr list /, /^gh api graphql -f query="\$PR_QUERY" /];
 
-// The desk's copilot and merge commands are run.sh's only GitHub writes, all in desk_pr_act
+// The Copilot request and the desk's merge command are run.sh's only GitHub writes, in
+// copilot_request and desk_pr_act
+const COPILOT_REQUEST =
+  SCRIPT.match(/^copilot_request\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
 const DESK_PR_ACT =
   SCRIPT.match(/^desk_pr_act\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
 
@@ -35,7 +38,9 @@ const ghCalls = (text: string) =>
     .flatMap((line) => line.match(/\bgh\s.*/g) ?? []);
 
 describe('run.sh', () => {
-  const calls = ghCalls(SCRIPT.replace(DESK_PR_ACT, ''));
+  const calls = ghCalls(
+    SCRIPT.replace(DESK_PR_ACT, '').replace(COPILOT_REQUEST, '')
+  );
 
   it('calls gh', () => {
     expect(calls.length).toBeGreaterThan(0);
@@ -45,20 +50,27 @@ describe('run.sh', () => {
     expect(READS.some((read) => read.test(call))).toBe(true);
   });
 
-  it('writes to GitHub only in desk_pr_act, as the app', () => {
+  it('writes to GitHub only in copilot_request and desk_pr_act, as the app', () => {
+    expect(COPILOT_REQUEST).not.toBe('');
     expect(DESK_PR_ACT).not.toBe('');
-    const writes = ghCalls(DESK_PR_ACT).filter(
-      (call) => !READS.some((read) => read.test(call))
-    );
-    expect(writes).toEqual([
-      'gh api -X POST "repos/codeware-sthlm/cdwr/pulls/$pr/requested_reviewers"',
+    const notRead = (call: string) => !READS.some((read) => read.test(call));
+    expect(ghCalls(COPILOT_REQUEST).filter(notRead)).toEqual([
+      'gh api -X POST "repos/codeware-sthlm/cdwr/pulls/$pr/requested_reviewers"'
+    ]);
+    expect(ghCalls(DESK_PR_ACT).filter(notRead)).toEqual([
       'gh api graphql -f query="$ENQUEUE" -f id="$id" -f oid="$oid" 2>&1)" && return 0 ;;'
     ]);
     // The app's token first, with no fallback to the signed-in user
+    expect(COPILOT_REQUEST.indexOf('gh_identity ||')).toBeLessThan(
+      COPILOT_REQUEST.indexOf('"${request[@]}"')
+    );
     expect(DESK_PR_ACT.indexOf('gh_identity ||')).toBeLessThan(
       DESK_PR_ACT.indexOf('case "$kind"')
     );
+    expect(COPILOT_REQUEST).not.toContain('gh_read');
     expect(DESK_PR_ACT).not.toContain('gh_read');
+    // Copilot is requested only through copilot_request
+    expect(SCRIPT.match(/\brequested_reviewers\b/g)).toHaveLength(1);
     expect(SCRIPT.split('"$ENQUEUE"')).toHaveLength(2);
   });
 
@@ -384,7 +396,7 @@ describe('run.sh Linear tools', () => {
     // One form or the other: `${why:-…}` would repeat the reason after the missing form
     expect(code).toContain('print -r -- "linear: missing ($why)"');
     expect(code).toContain('print -r -- "linear: ok ($LINEAR_MCP)"');
-    expect(code).not.toContain('${why:-');
+    expect(code).not.toMatch(/linear: [^\n]*\$\{why:-/);
   });
 });
 
@@ -976,7 +988,7 @@ describe('run.sh watch_prs', () => {
   const ticket = {
     identifier: 'COD-5',
     labels: { nodes: [{ name: 'agent:working' }] },
-    description: null,
+    description: null as string | null,
     attachments: {
       nodes: [
         {
@@ -1036,6 +1048,8 @@ describe('run.sh watch_prs', () => {
       'gh_identity_or_note() { :; }',
       'gh_read() { cat "$ROOT/pr.json"; }',
       'relabel_merged() { print -r -- "$*" >> "$ROOT/relabels"; }',
+      // The request: one line per call; it fails with a reason while copilot-fail exists
+      'copilot_request() { print -r -- "$1" >> "$ROOT/copilot"; [[ -f "$ROOT/copilot-fail" ]] || return 0; print -r -- "no Copilot seat"; return 1; }',
       `linear() { [[ "$1" == l ]] && { print -r -- '{"data":{"issueLabels":{"nodes":[]}}}'; return 0; }; cat "$ROOT/page-$(jq -r '.after // "1"' <<<"$2").json"; }`,
       source,
       'watch_prs; print -r -- "rc=$?"'
@@ -1118,6 +1132,67 @@ describe('run.sh watch_prs', () => {
     expect(result.stdout).toContain('rc=0');
     expect(Object.keys(JSON.parse(read('watch.json')))).toHaveLength(5);
     expect(read('records')).toBe('warn  watch: page limit reached\n');
+  });
+
+  describe('Copilot request for a ticket parked on Copilot', () => {
+    const parkedTicket = (wait = 'copilot', pr = 754) => ({
+      ...ticket,
+      description: `Status\n\n**Next:** Waiting: ${wait} · PR #${pr} · since 2026-01-01T00:00Z\n`
+    });
+    const entry = () => JSON.parse(read('watch.json'))['COD-5'];
+
+    it.skipIf(!canRun)('asks once and stores the request', () => {
+      const result = run('feature/cod-5', [[parkedTicket()]]);
+      expect(result.stdout).toContain('rc=0');
+      expect(read('copilot')).toBe('754\n');
+      expect(entry().copilotAsked).toMatchObject({ ok: true, why: null });
+      expect(entry().copilotAsked.at).toMatch(/^\d{4}-\d\d-\d\dT/);
+      expect(entry().copilot).toBe('requested');
+      expect(read('notices')).toBe('');
+    });
+
+    it.skipIf(!canRun)('stores a failure and notices it once', () => {
+      writeFileSync(join(root, 'copilot-fail'), '');
+      const result = run('feature/cod-5', [[parkedTicket()]]);
+      expect(result.stdout).toContain('rc=0');
+      expect(read('copilot')).toBe('754\n');
+      expect(entry().copilotAsked).toMatchObject({
+        ok: false,
+        why: 'no Copilot seat'
+      });
+      expect(entry().copilot).toBe('none');
+      expect(read('notices')).toBe(
+        'action COD-5: could not request Copilot on PR 754: no Copilot seat\n'
+      );
+    });
+
+    it.skipIf(!canRun)('does not ask again on the next tick', () => {
+      run('feature/cod-5', [[parkedTicket()]]);
+      const first = entry().copilotAsked;
+      const result = run('feature/cod-5', [[parkedTicket()]]);
+      expect(result.stdout).toContain('rc=0');
+      expect(read('copilot')).toBe('754\n');
+      expect(entry().copilotAsked).toEqual(first);
+    });
+
+    it.skipIf(!canRun)('does not ask again after a failed try', () => {
+      writeFileSync(join(root, 'copilot-fail'), '');
+      run('feature/cod-5', [[parkedTicket()]]);
+      run('feature/cod-5', [[parkedTicket()]]);
+      expect(read('copilot')).toBe('754\n');
+      expect(read('notices').split('\n').filter(Boolean)).toHaveLength(1);
+    });
+
+    it.skipIf(!canRun)('does not ask for a ticket parked on CI', () => {
+      run('feature/cod-5', [[parkedTicket('CI')]]);
+      expect(read('copilot')).toBe('');
+      expect(entry()).not.toHaveProperty('copilotAsked');
+    });
+
+    it.skipIf(!canRun)('does not ask for a ticket that is not parked', () => {
+      run('feature/cod-5');
+      expect(read('copilot')).toBe('');
+    });
   });
 
   it.skipIf(!canRun)(
