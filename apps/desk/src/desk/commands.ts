@@ -10,15 +10,17 @@ export type CommandKind =
   | 'snooze'
   | 'wake'
   | 'copilot'
-  | 'merge';
+  | 'merge'
+  | 'review'
+  | 'dismiss';
 
 /** The kinds a PR's buttons send; they belong to a ticket's review row, like snooze and wake */
 export type PrCommandKind = 'copilot' | 'merge';
 
-/** The kinds behind a control; snooze, wake, copilot and merge belong to a ticket and stay in no control's state */
+/** The kinds behind a control; snooze, wake, copilot, merge and dismiss belong to a ticket or finding, and review to the Review panel, so they stay in no control's state */
 export type ControlKind = Exclude<
   CommandKind,
-  'snooze' | 'wake' | 'copilot' | 'merge'
+  'snooze' | 'wake' | 'copilot' | 'merge' | 'review' | 'dismiss'
 >;
 
 export type CommandStatus = 'pending' | 'applied' | 'refused';
@@ -26,9 +28,12 @@ export type CommandStatus = 'pending' | 'applied' | 'refused';
 /**
  * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
  * snooze, wake, copilot and merge, and `kind` (a waiting row's kind) with `eventAt` (ISO, or
- * null) for snooze; `pr` (the number) for copilot and merge
+ * null) for snooze; `pr` (the number) for copilot and merge; `finding` (its id) with an
+ * optional `note` for dismiss
  */
 export type CommandArgs = {
+  finding?: string;
+  note?: string;
   value?: number;
   session?: string;
   ticket?: string;

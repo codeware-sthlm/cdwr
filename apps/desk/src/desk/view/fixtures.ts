@@ -8,9 +8,50 @@ import type {
   UsagePayload
 } from '../../supabase';
 import { type DeskState, createState } from '../state';
-import type { QueueView, SessionState } from '../types';
+import type { QueueView, ReviewRecord, SessionState } from '../types';
 
 import { ACTIVITY_MAX } from './ticket';
+
+/** A review of two findings (COD-2 blocks, COD-3 is a note), an action, a stale ticket and a suggestion, run 30 minutes before NOW */
+export const reviewRecord = (
+  over: Partial<ReviewRecord> = {}
+): ReviewRecord => ({
+  id: 1,
+  host: 'nuc',
+  at: new Date(NOW.getTime() - 30 * 6e4).toISOString(),
+  brief: 'Two PRs wait on you',
+  actions: [
+    {
+      ticket: 'COD-1',
+      action: 'Merge the PR',
+      why: 'Checks passed',
+      evidence: []
+    }
+  ],
+  findings: [
+    {
+      id: 'stale-pr:COD-2:0a1b2c3d',
+      ticket: 'COD-2',
+      kind: 'stale PR',
+      severity: 'blocks',
+      evidence: ['no push in 9 days'],
+      fix: 'Rebase it'
+    },
+    {
+      id: 'thin-plan:COD-3:1b2c3d4e',
+      ticket: 'COD-3',
+      kind: 'thin plan',
+      severity: 'note',
+      evidence: [],
+      fix: 'Add steps'
+    }
+  ],
+  stale: [{ ticket: 'COD-4', why: 'Untouched for 30 days', evidence: [] }],
+  suggestions: [{ ticket: 'COD-5', why: 'A quick win' }],
+  cost: 0.42,
+  model: 'sonnet',
+  ...over
+});
 
 // Local-time dates, so the specs read the same in every time zone
 export const NOW = new Date('2026-10-29T12:00:00');

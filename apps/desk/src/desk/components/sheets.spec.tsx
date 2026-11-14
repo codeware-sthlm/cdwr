@@ -31,6 +31,7 @@ import { SHEETS, type SheetActions } from './sheets';
 const actions: SheetActions = {
   wait: { snooze: vi.fn(), wake: vi.fn(), label: vi.fn(), pr: vi.fn() },
   onTicket: vi.fn(),
+  onDismiss: vi.fn(),
   onSnoozedOpen: vi.fn(),
   onActFilter: vi.fn(),
   onFilter: vi.fn()

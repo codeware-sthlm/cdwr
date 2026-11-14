@@ -306,6 +306,28 @@ export const createLoader = ({
       }
       render();
     });
+    adapter.watchTool('Supabase', 'reviews', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.reviews = ev.result.payload;
+        state.errors.delete('reviews');
+      } else {
+        state.errors.set('reviews', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.reviews = null;
+      }
+      render();
+    });
+    adapter.watchTool('Supabase', 'dismissals', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.dismissals = ev.result.payload;
+        state.errors.delete('dismissals');
+      } else {
+        state.errors.set('dismissals', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.dismissals = null;
+      }
+      render();
+    });
     adapter.watchTool(SERVER, 'list_issues', { label: IDEA_LABEL }, (ev) => {
       if (stopped) return;
       if (ev.type === 'data') {

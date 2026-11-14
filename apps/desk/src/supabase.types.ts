@@ -172,6 +172,7 @@ export type Database = {
           job: string | null;
           view: Json | null;
           watch: Json | null;
+          review: string | null;
         };
         Insert: {
           host: string;
@@ -183,6 +184,7 @@ export type Database = {
           job?: string | null;
           view?: Json | null;
           watch?: Json | null;
+          review?: string | null;
         };
         Update: {
           host?: string;
@@ -194,6 +196,7 @@ export type Database = {
           job?: string | null;
           view?: Json | null;
           watch?: Json | null;
+          review?: string | null;
         };
         Relationships: [];
       };
@@ -425,6 +428,66 @@ export type Database = {
         };
         Relationships: [];
       };
+      reviews: {
+        Row: {
+          id: number;
+          host: string;
+          at: string;
+          brief: string;
+          actions: Json;
+          findings: Json;
+          stale: Json;
+          suggestions: Json;
+          cost: number | null;
+          model: string | null;
+        };
+        Insert: {
+          id?: never;
+          host: string;
+          at?: string;
+          brief: string;
+          actions?: Json;
+          findings?: Json;
+          stale?: Json;
+          suggestions?: Json;
+          cost?: number | null;
+          model?: string | null;
+        };
+        Update: {
+          id?: never;
+          host?: string;
+          at?: string;
+          brief?: string;
+          actions?: Json;
+          findings?: Json;
+          stale?: Json;
+          suggestions?: Json;
+          cost?: number | null;
+          model?: string | null;
+        };
+        Relationships: [];
+      };
+      review_dismissals: {
+        Row: {
+          finding_id: string;
+          at: string;
+          actor: string | null;
+          note: string | null;
+        };
+        Insert: {
+          finding_id: string;
+          at?: string;
+          actor?: string | null;
+          note?: string | null;
+        };
+        Update: {
+          finding_id?: string;
+          at?: string;
+          actor?: string | null;
+          note?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       status: {
@@ -462,6 +525,16 @@ export type Database = {
           p_actor: string;
           p_at: string;
           p_ticket: string;
+        };
+        Returns: { id: number; status: string; note: string | null }[];
+      };
+      desk_dismiss: {
+        Args: {
+          p_host: string;
+          p_actor: string;
+          p_at: string;
+          p_finding: string;
+          p_note: string | null;
         };
         Returns: { id: number; status: string; note: string | null }[];
       };

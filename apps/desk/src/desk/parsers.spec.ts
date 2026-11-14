@@ -7,6 +7,7 @@ import {
   parseIdea,
   parseJob,
   parsePlan,
+  parseReviewRow,
   parseSuggested,
   parseWatch,
   queueViewIssues,
@@ -884,6 +885,69 @@ describe('queueViewIssues', () => {
 
   it('names the view itself when it is not an object', () => {
     expect(queueViewIssues(null)).toEqual([{ path: '', missing: false }]);
+  });
+});
+
+describe('parseReviewRow', () => {
+  const row = {
+    id: 3,
+    host: 'nuc',
+    at: '2026-11-08T10:00:00Z',
+    brief: 'Two PRs wait on you',
+    actions: [
+      {
+        ticket: 'COD-1',
+        action: 'Merge it',
+        why: 'Checks passed',
+        evidence: []
+      }
+    ],
+    findings: [
+      {
+        id: 'stale-pr:COD-2:0a1b2c3d',
+        ticket: 'COD-2',
+        kind: 'stale PR',
+        severity: 'blocks',
+        evidence: ['no push in 9 days'],
+        fix: 'Rebase it'
+      }
+    ],
+    stale: [{ ticket: 'COD-4', why: 'Untouched for 30 days', evidence: [] }],
+    suggestions: [{ ticket: 'COD-5', why: 'Quick win' }],
+    cost: 0.42,
+    model: 'sonnet'
+  };
+
+  it('reads the jsonb through the review schema and keeps the row fields', () => {
+    expect(parseReviewRow(row)).toEqual({
+      brief: row.brief,
+      actions: row.actions,
+      findings: row.findings,
+      stale: row.stale,
+      suggestions: row.suggestions,
+      id: 3,
+      host: 'nuc',
+      at: '2026-11-08T10:00:00Z',
+      cost: 0.42,
+      model: 'sonnet'
+    });
+  });
+
+  it.each([
+    ['findings that are not a list', { findings: {} }],
+    [
+      'an action without a why',
+      { actions: [{ ticket: 'COD-1', action: 'x' }] }
+    ],
+    [
+      'a finding id of another ticket',
+      {
+        findings: [{ ...row.findings[0], ticket: 'COD-9' }]
+      }
+    ],
+    ['an empty brief', { brief: '' }]
+  ])('reads %s as none', (_name, over) => {
+    expect(parseReviewRow({ ...row, ...over })).toBeNull();
   });
 });
 

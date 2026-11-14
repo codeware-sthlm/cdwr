@@ -1,3 +1,6 @@
+import type { ReviewFinding } from '@codeware/shared/util/agent-review';
+import type { ReactNode } from 'react';
+
 import { ageText } from '../format';
 import { type Model, prOf } from '../model';
 import type { DeskState, TreeFilter } from '../state';
@@ -11,6 +14,7 @@ import { Icon } from './icon';
 import { Chip, Empty } from './items';
 import { META, RULE } from './items-ui';
 import { IdLink, Prn, TicketButton } from './links';
+import { FindingChip } from './review';
 
 // The ticket tree view: each root with the sub-issues the scheduler's queue view carries
 
@@ -65,7 +69,8 @@ const Node = ({
   now,
   open,
   onOpen,
-  onTicket
+  onTicket,
+  findings
 }: {
   node: QueueTreeNode;
   m: Model;
@@ -74,6 +79,7 @@ const Node = ({
   open: Readonly<Record<string, boolean>>;
   onOpen: (ticket: string, open: boolean) => void;
   onTicket: (id: string) => void;
+  findings: ReadonlyMap<string, readonly ReviewFinding[]>;
 }) => {
   const i = m.get(node.ticket);
   const title = node.title || i.title;
@@ -143,6 +149,9 @@ const Node = ({
             {g.kind}
           </Chip>
         ))}
+        {(findings.get(node.ticket) ?? []).map((f) => (
+          <FindingChip key={f.id} f={f} />
+        ))}
         {plan ? (
           <span className={META}>{`plan ${plan.done}/${plan.steps}`}</span>
         ) : null}
@@ -179,6 +188,7 @@ const Node = ({
               open={open}
               onOpen={onOpen}
               onTicket={onTicket}
+              findings={findings}
             />
           ))}
         </ul>
@@ -199,7 +209,13 @@ type Props = {
   onDesk: () => void;
   /** A row's title opens the Ticket sheet */
   onTicket: (id: string) => void;
+  /** The review's open findings by ticket, shown as AI chips on the rows */
+  findings?: ReadonlyMap<string, readonly ReviewFinding[]>;
+  /** The Review panel, between the header and the filters */
+  review?: ReactNode;
 };
+
+const NO_FINDINGS: ReadonlyMap<string, readonly ReviewFinding[]> = new Map();
 
 /** The filters' buttons: independent toggles drawn as one group */
 const Filters = ({ filter, onFilter }: Pick<Props, 'filter' | 'onFilter'>) => (
@@ -228,7 +244,9 @@ export const TreePage = ({
   open,
   onOpen,
   onDesk,
-  onTicket
+  onTicket,
+  findings = NO_FINDINGS,
+  review
 }: Props) => {
   const roots = filterTree(m.tree, filter);
   return (
@@ -256,6 +274,7 @@ export const TreePage = ({
           </span>
         </div>
       </div>
+      {review}
       <Filters filter={filter} onFilter={onFilter} />
       {roots.length ? (
         <ul className="grid gap-2">
@@ -269,6 +288,7 @@ export const TreePage = ({
               open={open}
               onOpen={onOpen}
               onTicket={onTicket}
+              findings={findings}
             />
           ))}
         </ul>

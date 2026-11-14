@@ -58,6 +58,9 @@ export const CHIP_KIND: Record<string, string> = {
   renovate: CHIP_REVIEW,
   feedback: CHIP_REVIEW,
   blocked: CHIP_BLOCK,
+  // An AI finding: a blocking one in the warn colours, a note muted
+  'ai-blocks': CHIP_WAIT,
+  'ai-note': 'bg-[color:var(--sunk)] text-[color:var(--muted)]',
   held: 'bg-[color:var(--sunk)] text-[color:var(--muted)]',
   // The Linear state types of a tree row
   backlog: 'bg-[color:var(--sunk)] text-[color:var(--muted)]',

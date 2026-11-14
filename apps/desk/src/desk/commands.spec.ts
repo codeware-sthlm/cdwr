@@ -97,6 +97,25 @@ describe('sendCommand', () => {
     expect(JSON.parse(String(fetch.mock.calls[0][1]?.body)).args).toEqual({});
   });
 
+  it('sends a review without args and a dismiss with its finding and note', async () => {
+    const fetch = answering(202, { id: 9, status: 'pending', note: null });
+    await sendCommand(target(fetch), 'nuc', 'review');
+    await sendCommand(target(fetch), 'nuc', 'dismiss', {
+      finding: 'stale:COD-1:0a1b2c3d',
+      note: 'not a problem'
+    });
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({
+      host: 'nuc',
+      kind: 'review',
+      args: {}
+    });
+    expect(JSON.parse(String(fetch.mock.calls[1][1]?.body))).toEqual({
+      host: 'nuc',
+      kind: 'dismiss',
+      args: { finding: 'stale:COD-1:0a1b2c3d', note: 'not a problem' }
+    });
+  });
+
   it.each([
     [401, { error: 'Bad token' }, 'unauthorized'],
     [400, { error: 'Bad host' }, 'bad_request'],

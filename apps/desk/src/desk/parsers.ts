@@ -1,3 +1,4 @@
+import { reviewSchema } from '@codeware/shared/util/agent-review';
 import { z } from 'zod';
 
 import type {
@@ -9,12 +10,48 @@ import type {
   PlanProgress,
   QueueTreeNode,
   QueueView,
+  ReviewRecord,
   Suggested,
   ViewIssue,
   WatchEntry
 } from './types';
 
 // Line and description parsers for the queue_state, runs and usage text. Nothing here touches the DOM.
+
+/** The fields of a `reviews` row the desk reads */
+type ReviewRowLike = {
+  id: number;
+  host: string;
+  at: string;
+  brief: string;
+  actions: unknown;
+  findings: unknown;
+  stale: unknown;
+  suggestions: unknown;
+  cost: number | null;
+  model: string | null;
+};
+
+/** A `reviews` row with its jsonb parsed by the review schema; null when it does not parse */
+export const parseReviewRow = (row: ReviewRowLike): ReviewRecord | null => {
+  const parsed = reviewSchema.safeParse({
+    brief: row.brief,
+    actions: row.actions,
+    findings: row.findings,
+    stale: row.stale,
+    suggestions: row.suggestions
+  });
+  return parsed.success
+    ? {
+        ...parsed.data,
+        id: row.id,
+        host: row.host,
+        at: row.at,
+        cost: row.cost,
+        model: row.model
+      }
+    : null;
+};
 
 type Dated = { createdAt?: string | null };
 

@@ -4,6 +4,7 @@ import type {
   ActivityPayload,
   ChannelStatus,
   DeskCommandRow,
+  DismissalRow,
   GithubEventRow,
   HostMetricRow,
   IssueEventRow,
@@ -23,7 +24,7 @@ import type {
   ControlKind
 } from './commands';
 import { STATES } from './constants';
-import type { Idea, PlanProgress } from './types';
+import type { Idea, PlanProgress, ReviewRecord } from './types';
 
 /** What the page keeps of a ticket's description and relations */
 export type Detail = PlanProgress & {
@@ -147,6 +148,10 @@ export type DeskData = {
   deskCommands: DeskCommandRow[] | null;
   /** Every snoozed ticket, by ticket */
   snoozes: SnoozeRow[] | null;
+  /** The newest review; null before it loads, or when there is none */
+  reviews: ReviewRecord | null;
+  /** Every dismissed finding; null before it loads */
+  dismissals: DismissalRow[] | null;
   /** The Realtime channel as the adapter reports it */
   connection: Connection;
   /** When the open tickets were last stored, in ms */
@@ -212,6 +217,14 @@ export type ControlsUi = {
   snoozing: Set<string>;
   /** Ticket -> why its last snooze or wake did not go through, shown until it is used again */
   snoozeNotes: Map<string, string>;
+  /** Finding ids whose dismiss request is in flight */
+  dismissing: Set<string>;
+  /** Finding id -> why its last dismiss did not go through, shown until it is used again */
+  dismissNotes: Map<string, string>;
+  /** The Review now request is in flight */
+  reviewing: boolean;
+  /** Why the last Review now did not go through, shown until it is used again */
+  reviewNote: string | null;
   /** Ticket -> when its Label button asked for confirmation, in ms */
   labelConfirm: Map<string, number>;
   /** Tickets whose label request is in flight */
@@ -261,6 +274,8 @@ export const createState = (): DeskState => ({
     sessions: null,
     deskCommands: null,
     snoozes: null,
+    reviews: null,
+    dismissals: null,
     connection: {
       live: false,
       retries: 0,
@@ -299,6 +314,10 @@ export const emptyControls = (target: ControlsUi['target']): ControlsUi => ({
   confirm: null,
   snoozing: new Set(),
   snoozeNotes: new Map(),
+  dismissing: new Set(),
+  dismissNotes: new Map(),
+  reviewing: false,
+  reviewNote: null,
   labelConfirm: new Map(),
   labelling: new Set(),
   labelled: new Map(),
