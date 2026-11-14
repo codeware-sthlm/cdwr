@@ -16,9 +16,9 @@ const nodes = (root: QueueTreeNode): QueueTreeNode[] => [
 /** The queue picks the ticket, or waits on something for it */
 const queued = (n: QueueTreeNode): boolean => n.position !== null || n.waiting;
 
-/** The root and all its children are done or canceled */
+/** The root and all its children are done or canceled; a node with children cut short never is */
 export const finishedInFull = (root: QueueTreeNode): boolean =>
-  nodes(root).every(finished);
+  nodes(root).every((n) => finished(n) && !n.truncated);
 
 /** A gap, real or candidate, on the root or a descendant */
 export const hasGap = (root: QueueTreeNode): boolean =>
