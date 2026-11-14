@@ -220,7 +220,7 @@ copilot_asked() {
 }
 
 # copilot_request <pr>: asks Copilot to review the PR, as the app first. It falls back on
-# copilot_token when the app is refused, or when GitHub takes the call without adding Copilot (an
+# copilot_token when the app is missing or refused, or when GitHub takes the call without adding Copilot (an
 # author with no Copilot seat). Shared by the desk's copilot command and the watch's own request.
 # Prints the reason and returns 1 on failure. Run it in a command substitution.
 copilot_request() {
@@ -228,14 +228,20 @@ copilot_request() {
   local pr=$1 out="" token
   local -a request=(gh api -X POST "repos/codeware-sthlm/cdwr/pulls/$pr/requested_reviewers"
     -f 'reviewers[]=copilot-pull-request-reviewer[bot]' --silent)
-  gh_identity || { print -r -- "no GitHub app"; return 1; }
-  out="$("${request[@]}" 2>&1)" && copilot_asked "$pr" && return 0
+  # Without the app the token is still tried, and the PR is read again as the token
+  if gh_identity; then
+    out="$("${request[@]}" 2>&1)" && copilot_asked "$pr" && return 0
+  else
+    out="no GitHub app"
+  fi
   token="$(copilot_token)"
   if [[ -n "$token" ]]; then
-    out="$(GH_TOKEN="$token" GITHUB_TOKEN="$token" "${request[@]}" 2>&1)" && copilot_asked "$pr" && return 0
+    out="$(GH_TOKEN="$token" GITHUB_TOKEN="$token" "${request[@]}" 2>&1)" &&
+      GH_TOKEN="$token" GITHUB_TOKEN="$token" copilot_asked "$pr" && return 0
   fi
   [[ -n "$out" ]] || out="GitHub did not add Copilot as a reviewer"
-  print -r -- "${${(f)out}[1][1,160]:-GitHub refused}"
+  out=${out%%$'\n'*}
+  print -r -- "${out[1,160]:-GitHub refused}"
   return 1
 }
 
@@ -252,7 +258,8 @@ desk_pr_act() {
       out="$(gh api graphql -f query="$ENQUEUE" -f id="$id" -f oid="$oid" 2>&1)" && return 0 ;;
     *) out="unknown kind" ;;
   esac
-  print -r -- "${${(f)out}[1][1,160]:-GitHub refused}"
+  out=${out%%$'\n'*}
+  print -r -- "${out[1,160]:-GitHub refused}"
   return 1
 }
 
