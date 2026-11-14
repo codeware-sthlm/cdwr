@@ -14,6 +14,7 @@ import {
   refresh,
   runNow,
   setSnoozedOpen,
+  setTreeFilter,
   settingsClosed,
   sheetActions,
   showSheet,
@@ -243,6 +244,9 @@ export const App = () => {
             <TreePage
               m={m}
               details={state.details}
+              now={now}
+              filter={state.ui.tree}
+              onFilter={setTreeFilter}
               onDesk={() => showView('desk')}
             />
           </main>
