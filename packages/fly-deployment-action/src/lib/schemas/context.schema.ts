@@ -11,10 +11,14 @@ type PrettyPartial<T> = {
 // 'preview' environment requires a pull request number
 const BasePreviewSchema = z.object({
   environment: z.literal(EnvironmentSchema.enum.preview),
-  pullRequest: z.number({
-    description: 'Pull request number',
-    required_error: 'A pull request number is required'
-  })
+  pullRequest: z
+    .number({
+      error: (issue) =>
+        issue.input === undefined
+          ? 'A pull request number is required'
+          : undefined
+    })
+    .describe('Pull request number')
 });
 
 // 'production' environment have no additional context

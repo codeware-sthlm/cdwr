@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const ActionSchema = z.enum(['deploy', 'destroy', 'failed']);
 
 const FlyAppNameSchema = z.object({
-  app: z.string({ description: 'App name' }).min(1, 'An app name is required')
+  app: z.string().min(1, 'An app name is required').describe('App name')
 });
 
 // 'deploy' action requires project name, deployed app and url
@@ -12,14 +12,17 @@ const ActionDeploySchema = FlyAppNameSchema.merge(
   z.object({
     action: z.literal(ActionSchema.enum.deploy),
     name: z
-      .string({ description: 'Display label, `project (tenant)` when scoped' })
-      .min(1, 'A name is required'),
+      .string()
+      .min(1, 'A name is required')
+      .describe('Display label, `project (tenant)` when scoped'),
     projectName: z
-      .string({ description: 'Nx project name, without any tenant suffix' })
-      .min(1, 'A project name is required'),
+      .string()
+      .min(1, 'A project name is required')
+      .describe('Nx project name, without any tenant suffix'),
     url: z
-      .string({ description: 'Deployment URL' })
+      .string()
       .min(1, 'A deployment URL is required')
+      .describe('Deployment URL')
   })
 );
 
@@ -34,11 +37,13 @@ const ActionDestroySchema = FlyAppNameSchema.merge(
 const ActionFailedSchema = z.object({
   action: z.literal(ActionSchema.enum.failed),
   appOrProject: z
-    .string({ description: 'App or project name' })
-    .min(1, 'An app or project name is required'),
+    .string()
+    .min(1, 'An app or project name is required')
+    .describe('App or project name'),
   error: z
-    .string({ description: 'Error message' })
+    .string()
     .min(1, 'An error message is required')
+    .describe('Error message')
 });
 
 // Combine the action schemas into a discriminated union
