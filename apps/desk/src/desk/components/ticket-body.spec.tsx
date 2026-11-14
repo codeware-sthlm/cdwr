@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
 import { type DeskState, createState } from '../state';
-import { NOW, ticketDesk } from '../view/fixtures';
+import { NOW, runs, ticketDesk, view } from '../view/fixtures';
 import { ACTIVITY_MAX } from '../view/ticket';
 
 import type { SheetActions } from './sheets';
@@ -50,6 +50,35 @@ describe('TicketBody', () => {
       'Spend',
       'Activity'
     ]);
+  });
+
+  it('lists the candidates to check after the gaps', () => {
+    const s = ticketDesk();
+    s.data.runs = runs(
+      view({
+        audit: [
+          {
+            id: 'g1',
+            ticket: 'COD-50',
+            kind: 'stale',
+            what: 'PR is stale',
+            fix: 'rebase it'
+          },
+          {
+            id: 'g2',
+            ticket: 'COD-50',
+            kind: 'untouched',
+            what: 'COD-50 has not moved',
+            fix: 'Check it',
+            candidate: true
+          }
+        ]
+      })
+    );
+    const c = body(s, 'COD-50');
+    expect(headings(c)).toContain('Gaps');
+    expect(headings(c)).toContain('Candidates to check');
+    expect(text(c)).toContain('COD-50 has not moved. Check it.');
   });
 
   it('fills the parts from what the desk holds', () => {

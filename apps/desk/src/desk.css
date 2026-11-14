@@ -124,6 +124,14 @@ code {
   padding: 1px 6px;
   border-radius: 4px;
 }
+/* iOS zooms the page when a field under 16px takes focus */
+@media (max-width: 600px), (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
 ol,
 ul {
   display: grid;

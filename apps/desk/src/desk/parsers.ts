@@ -276,7 +276,15 @@ const gapEntry = z.object({
   title: opt(z.string()),
   kind: z.string(),
   what: z.string(),
-  fix: z.string()
+  fix: z.string(),
+  candidate: z
+    .boolean()
+    .nullish()
+    .transform((v) => (v ? true : undefined)),
+  rows: z
+    .array(z.string())
+    .nullish()
+    .transform((v) => (v?.length ? v : undefined))
 });
 
 // A node's children are parsed one by one too: a malformed child is dropped without its parent
@@ -299,8 +307,30 @@ const treeNode: z.ZodType<QueueTreeNode, z.ZodTypeDef, unknown> = z.lazy(() =>
       .number()
       .nullish()
       .transform((v) => v ?? null),
+    // An older scheduler sends none
+    position: z
+      .number()
+      .nullish()
+      .transform((v) => v ?? null),
+    // An older scheduler sends none
+    waiting: z
+      .boolean()
+      .nullish()
+      .transform((v) => v === true),
     blockers: list(z.string()),
-    gaps: list(z.string()),
+    // An older scheduler sends the kind alone, always a real gap
+    gaps: list(
+      z.union([
+        z.string().transform((kind) => ({ kind, candidate: false })),
+        z.object({
+          kind: z.string(),
+          candidate: z
+            .boolean()
+            .nullish()
+            .transform((v) => v === true)
+        })
+      ])
+    ),
     truncated: z
       .boolean()
       .nullish()

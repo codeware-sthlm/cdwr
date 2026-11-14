@@ -39,16 +39,37 @@ export type Filter = 'all' | 'todo' | 'agent';
 export const isFilter = (value: unknown): value is Filter =>
   value === 'all' || value === 'todo' || value === 'agent';
 
-/** The Ticket tree's filters: Open hides finished roots, `gaps` keeps the roots with a gap */
-export type TreeFilter = { scope: 'open' | 'all'; gaps: boolean };
+/**
+ * The Ticket tree's filters, each a toggle over the open roots: `closed` adds the roots finished in
+ * full with no gap, `gaps` keeps the roots with a gap, `unqueued` those the queue would never pick
+ */
+export type TreeFilter = { closed: boolean; gaps: boolean; unqueued: boolean };
 
-export const isTreeFilter = (value: unknown): value is TreeFilter =>
-  typeof value === 'object' &&
-  value !== null &&
-  'scope' in value &&
-  (value.scope === 'open' || value.scope === 'all') &&
-  'gaps' in value &&
-  typeof value.gaps === 'boolean';
+export const NO_TREE_FILTER: TreeFilter = {
+  closed: false,
+  gaps: false,
+  unqueued: false
+};
+
+/** A stored filter in the current shape, or in the old `{ scope, gaps }` one; null for anything else */
+export const treeFilterOf = (value: unknown): TreeFilter | null => {
+  if (typeof value !== 'object' || value === null) return null;
+  if (!('gaps' in value) || typeof value.gaps !== 'boolean') return null;
+  if ('scope' in value && (value.scope === 'open' || value.scope === 'all'))
+    return {
+      ...NO_TREE_FILTER,
+      closed: value.scope === 'all',
+      gaps: value.gaps
+    };
+  if (
+    'closed' in value &&
+    typeof value.closed === 'boolean' &&
+    'unqueued' in value &&
+    typeof value.unqueued === 'boolean'
+  )
+    return { closed: value.closed, gaps: value.gaps, unqueued: value.unqueued };
+  return null;
+};
 
 /** The sheets, one per column, gauge and tile; also what `data-w` and the URL hash name */
 export const SHEET_IDS = [
@@ -152,6 +173,8 @@ export type DeskUi = {
   filter: Filter;
   /** The Ticket tree's filters */
   tree: TreeFilter;
+  /** The roots the viewer opened (true) or closed (false) by hand, over the default of their state */
+  treeOpen: Record<string, boolean>;
   /** The Activity sheet's ticket filter, `all` or a ticket id */
   actFilter: string;
   openSheet: SheetId | null;
@@ -255,7 +278,8 @@ export const createState = (): DeskState => ({
   errors: new Map(),
   ui: {
     filter: 'all',
-    tree: { scope: 'open', gaps: false },
+    tree: NO_TREE_FILTER,
+    treeOpen: {},
     actFilter: 'all',
     openSheet: null,
     ticket: null,

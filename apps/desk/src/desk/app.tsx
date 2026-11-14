@@ -16,6 +16,7 @@ import {
   runNow,
   setSnoozedOpen,
   setTreeFilter,
+  setTreeOpen,
   settingsClosed,
   sheetActions,
   showSheet,
@@ -24,6 +25,7 @@ import {
 } from './actions';
 import { Capacity } from './components/capacity';
 import { Cards } from './components/cards';
+import { Icon } from './components/icon';
 import { Platform } from './components/platform';
 import {
   Alert,
@@ -152,18 +154,25 @@ export const App = () => {
         </div>
       ) : null}
       <div className="wrap mx-auto flex max-w-[1360px] flex-col gap-[var(--gap)]">
-        <header className="top flex flex-wrap items-center justify-between gap-3">
-          <div className="brand flex flex-wrap items-baseline gap-[14px]">
-            <h1 className="font-[family-name:var(--font-mono)] text-[13px] leading-[normal] font-semibold tracking-[0.18em] uppercase">
-              Agent Desk
-            </h1>
-            <span className="sub text-[12px] text-[color:var(--muted)] max-[600px]:hidden">
-              cdwr · what the work queue does next, and what waits on you
+        <header className="top flex flex-col gap-2">
+          <div className="flex min-w-0 items-center gap-x-[14px] text-[12px] text-[color:var(--muted)] max-[600px]:gap-x-[8px] max-[600px]:text-[11px]">
+            <span
+              id="status"
+              className="status flex min-w-0 items-center gap-[14px] text-[12px] text-[color:var(--muted)] max-[600px]:gap-[6px]"
+              aria-live="polite"
+            >
+              <Status
+                m={m}
+                connection={state.data.connection}
+                view={state.ui.view}
+                onView={(view) => showView(view)}
+              />
             </span>
-          </div>
-          <div className="tools flex flex-wrap items-center gap-[14px] text-[12px] text-[color:var(--muted)] max-[600px]:gap-[6px]">
+            <span id="fresh" className="min-w-0 truncate">
+              {fresh(state)}
+            </span>
             <a
-              className="who inline-flex items-center gap-[6px] text-[12px] text-[color:var(--muted)] hover:text-[color:var(--fg)] max-[600px]:hidden"
+              className="who ml-auto inline-flex flex-none items-center gap-[6px] hover:text-[color:var(--fg)]"
               href="https://github.com/apps/codeware-agent"
               target="_blank"
               rel="noreferrer"
@@ -174,45 +183,45 @@ export const App = () => {
                 src={AGENT_AVATAR}
                 alt=""
               />
-              on GitHub as codeware-agent[bot]
+              <span className="max-[600px]:sr-only">
+                on GitHub as codeware-agent[bot]
+              </span>
             </a>
-            <span
-              id="status"
-              className="status flex flex-wrap items-center gap-[14px] text-[12px] text-[color:var(--muted)] max-[600px]:gap-[6px]"
-              aria-live="polite"
-            >
-              <Status
-                m={m}
-                connection={state.data.connection}
-                view={state.ui.view}
-                onView={(view) => showView(view)}
-              />
-            </span>
+          </div>
+          <div className="tools flex min-w-0 items-center gap-[10px] max-[600px]:gap-[6px]">
+            <div className="brand mr-auto flex min-w-0 items-baseline gap-[14px]">
+              <h1 className="truncate font-[family-name:var(--font-mono)] text-[13px] leading-[normal] font-semibold tracking-[0.18em] uppercase">
+                Agent Desk
+              </h1>
+              <span className="sub text-[12px] text-[color:var(--muted)] max-[900px]:hidden">
+                cdwr · what the work queue does next, and what waits on you
+              </span>
+            </div>
             <TreePill
               m={m}
               view={state.ui.view}
               onView={(view) => showView(view)}
             />
-            <span id="fresh" className="max-[600px]:hidden">
-              {fresh(state)}
-            </span>
             <Search m={m} state={state} onOpen={(id) => openTicket(id)} />
             <button
               id="refresh"
               type="button"
-              className="tool min-h-[var(--tap)] px-[14px] py-0"
+              className="tool inline-flex min-h-[var(--tap)] min-w-[var(--tap)] flex-none items-center justify-center p-0"
+              aria-label="Refresh"
+              title="Refresh"
               onClick={refresh}
             >
-              Refresh
+              <Icon name="refresh" className="size-4" />
             </button>
             <button
               id="settings"
               type="button"
-              className="tool min-h-[var(--tap)] px-[14px] py-0"
+              className="tool inline-flex min-h-[var(--tap)] min-w-[var(--tap)] flex-none items-center justify-center p-0"
               aria-label="Settings"
+              title="Settings"
               onClick={clickSettings}
             >
-              Settings
+              <Icon name="settings" className="size-4" />
             </button>
           </div>
         </header>
@@ -250,6 +259,8 @@ export const App = () => {
               now={now}
               filter={state.ui.tree}
               onFilter={setTreeFilter}
+              open={state.ui.treeOpen}
+              onOpen={setTreeOpen}
               onDesk={() => showView('desk')}
               onTicket={(id) => openTicket(id)}
             />

@@ -957,13 +957,16 @@ export const gateTimes = (
 export const treeRoots = (tree: readonly QueueTreeNode[]): number =>
   tree.length;
 
-/** How many tickets of the tree, roots and children, carry at least one gap */
+/** A real gap, not a candidate to check */
+export const isRealGap = (g: QueueGap): boolean => !g.candidate;
+
+/** How many tickets of the tree, at any depth, carry at least one real gap; candidates do not count */
 export const treeGapped = (tree: readonly QueueTreeNode[]): number =>
   tree.reduce(
-    (n, root) =>
+    (n, node) =>
       n +
-      (root.gaps.length > 0 ? 1 : 0) +
-      root.children.filter((c) => c.gaps.length > 0).length,
+      (node.gaps.some((g) => !g.candidate) ? 1 : 0) +
+      treeGapped(node.children),
     0
   );
 

@@ -31,12 +31,41 @@ describe('ticketState', () => {
       },
       pr: { host: 'nuc', entry: { pr: 7, ci: 'SUCCESS', unresolved: 1 } },
       gaps: [{ kind: 'stale', fix: 'rebase it' }],
+      candidates: null,
       session: { id: 's1', host: 'nuc', kind: 'implement', state: 'alive' },
       plan: { done: 2, steps: 4, next: 'Step 3' },
       snooze: { ticket: 'COD-3', kind: 'review' },
       spend: { planning: 1, orchestrating: 2, implementing: 3, total: 6 }
     });
     expect(t.activity).not.toBeNull();
+  });
+
+  it('keeps the candidates apart from the real gaps', () => {
+    const s = desk();
+    s.data.runs = runs(
+      view({
+        audit: [
+          {
+            id: 'g1',
+            ticket: 'COD-50',
+            kind: 'stale',
+            what: 'PR is stale',
+            fix: 'rebase it'
+          },
+          {
+            id: 'g2',
+            ticket: 'COD-50',
+            kind: 'untouched',
+            what: 'COD-50 has not moved',
+            fix: 'Check it',
+            candidate: true
+          }
+        ]
+      })
+    );
+    const t = stateOf(s, 'COD-50');
+    expect(t.gaps?.map((g) => g.id)).toEqual(['g1']);
+    expect(t.candidates?.map((g) => g.id)).toEqual(['g2']);
   });
 
   it('is null in each part the desk holds nothing for', () => {
@@ -49,6 +78,7 @@ describe('ticketState', () => {
       tree: null,
       pr: null,
       gaps: null,
+      candidates: null,
       session: null,
       plan: null,
       snooze: null,
@@ -111,6 +141,7 @@ describe('ticketState', () => {
       tree: null,
       pr: null,
       gaps: null,
+      candidates: null,
       session: null,
       plan: null,
       snooze: null,

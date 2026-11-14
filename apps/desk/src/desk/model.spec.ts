@@ -1320,16 +1320,22 @@ describe('prActivity', () => {
 describe('tree', () => {
   const node = (
     ticket: string,
-    gaps: string[] = [],
-    children: QueueTreeNode[] = []
+    kinds: string[] = [],
+    children: QueueTreeNode[] = [],
+    candidates: string[] = []
   ): QueueTreeNode => ({
     ticket,
     title: null,
     state: null,
     label: null,
     pr: null,
+    position: null,
+    waiting: false,
     blockers: [],
-    gaps,
+    gaps: [
+      ...kinds.map((kind) => ({ kind, candidate: false })),
+      ...candidates.map((kind) => ({ kind, candidate: true }))
+    ],
     children
   });
   const tree = [
@@ -1355,6 +1361,28 @@ describe('tree', () => {
     expect(treeGapped(tree)).toBe(2);
     expect(treeGapped([node('COD-7', ['a'], [node('COD-8', ['b'])])])).toBe(2);
     expect(treeGapped([])).toBe(0);
+  });
+
+  it('does not count a candidate as a gap', () => {
+    expect(
+      treeGapped([
+        node(
+          'COD-7',
+          [],
+          [node('COD-8', [], [], ['decision-unasked'])],
+          ['untouched']
+        ),
+        node('COD-9', ['stale'], [], ['untouched'])
+      ])
+    ).toBe(1);
+  });
+
+  it('counts a gap at any depth', () => {
+    expect(
+      treeGapped([
+        node('COD-1', [], [node('COD-2', [], [node('COD-3', ['x'])])])
+      ])
+    ).toBe(1);
   });
 });
 

@@ -2,7 +2,7 @@ import type { Issue, StatusType } from '../../linear';
 import type { SnoozeRow, UsagePayload } from '../../supabase';
 import { LINEAR_ISSUE } from '../constants';
 import { runTime } from '../format';
-import { type Model, type WatchRef, prOf } from '../model';
+import { type Model, type WatchRef, isRealGap, prOf } from '../model';
 import type { DeskState, Detail } from '../state';
 import type {
   PrRef,
@@ -98,7 +98,10 @@ export type TicketState = {
   queue: TicketQueue | null;
   tree: TicketTree | null;
   pr: WatchRef | null;
+  /** The audit's real gaps on the ticket */
   gaps: QueueGap[] | null;
+  /** The audit's candidates to check on the ticket */
+  candidates: QueueGap[] | null;
   session: TicketSession | null;
   plan: TicketPlan | null;
   snooze: SnoozeRow | null;
@@ -276,7 +279,9 @@ export const ticketState = (
     watched && (known === null || String(watched.entry.pr) === String(known))
       ? watched
       : null;
-  const gaps = m.gaps.filter((g) => g.ticket === id);
+  const own = m.gaps.filter((g) => g.ticket === id);
+  const gaps = own.filter(isRealGap);
+  const candidates = own.filter((g) => !isRealGap(g));
   const session = sessionOf(m, state, id);
   const plan = planOf(state.details.get(id));
   const snooze =
@@ -289,6 +294,7 @@ export const ticketState = (
     tree,
     pr,
     gaps.length ? gaps : null,
+    candidates.length ? candidates : null,
     session,
     plan,
     snooze,
@@ -304,6 +310,7 @@ export const ticketState = (
     tree,
     pr,
     gaps: gaps.length ? gaps : null,
+    candidates: candidates.length ? candidates : null,
     session,
     plan,
     snooze,

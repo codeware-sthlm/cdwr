@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from 'react';
 
 import { GH_PR, LIMIT, waitName } from '../constants';
 import { hhmm } from '../format';
-import { type Model, type TicketRef, prOf } from '../model';
+import { type Model, type TicketRef, isRealGap, prOf } from '../model';
 import type { DeskState, Detail } from '../state';
 import type { QueueNext, QueueRenovate, SessionState } from '../types';
 import { parkedPlain, prWaitPlain } from '../view/parked';
@@ -187,6 +187,8 @@ const RenovateItem = ({ r }: { r: QueueRenovate }) => (
 export const NextBody = ({ m, state }: BodyProps) => {
   if (!m.v) return <Empty>No queue view yet.</Empty>;
   const { details } = state;
+  const real = m.gaps.filter(isRealGap);
+  const candidates = m.gaps.filter((g) => !isRealGap(g));
   return (
     <>
       <div className={GROUP}>
@@ -249,11 +251,11 @@ export const NextBody = ({ m, state }: BodyProps) => {
           </ul>
         </div>
       ) : null}
-      {m.gaps.length ? (
+      {real.length ? (
         <div className={GROUP}>
-          <h3>{`Gaps · ${m.gaps.length}`}</h3>
+          <h3>{`Gaps · ${real.length}`}</h3>
           <ul>
-            {m.gaps.map((g) => {
+            {real.map((g) => {
               const i = m.get(g.ticket);
               // A ticket outside the desk's index is a stub without a title
               return (
@@ -263,6 +265,27 @@ export const NextBody = ({ m, state }: BodyProps) => {
                   i={i.title || !g.title ? i : { ...i, title: g.title }}
                   state="plain"
                   side={<Chip kind="conflict">{g.kind}</Chip>}
+                  note={`${g.what}. ${g.fix}.`}
+                />
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+      {candidates.length ? (
+        <div className={GROUP}>
+          <h3>{`Candidates to check · ${candidates.length}`}</h3>
+          <ul>
+            {candidates.map((g) => {
+              const i = m.get(g.ticket);
+              // A ticket outside the desk's index is a stub without a title
+              return (
+                <Item
+                  key={g.id}
+                  details={details}
+                  i={i.title || !g.title ? i : { ...i, title: g.title }}
+                  state="plain"
+                  side={<Chip kind="held">{g.kind}</Chip>}
                   note={`${g.what}. ${g.fix}.`}
                 />
               );
