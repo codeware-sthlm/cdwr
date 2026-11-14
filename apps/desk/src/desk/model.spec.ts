@@ -31,13 +31,15 @@ import {
   runsToday,
   shipped,
   ticketsByPr,
+  treeGapped,
+  treeRoots,
   usageBurn,
   versions,
   waitAges,
   watchByTicket
 } from './model';
 import { type DeskState, type Detail, createState } from './state';
-import type { QueueView } from './types';
+import type { QueueTreeNode, QueueView } from './types';
 
 // Local-time dates, so the specs read the same in every time zone
 const NOW = new Date('2026-10-29T12:00:00');
@@ -79,6 +81,7 @@ const view = (over: Partial<QueueView> = {}): QueueView => ({
   blocked: [],
   renovate: [],
   audit: [],
+  tree: [],
   table: { before: [], label: [], after: [] },
   ...over
 });
@@ -1310,6 +1313,47 @@ describe('prActivity', () => {
       ['COD-3', detail()]
     ]);
     expect(prActivity(details)).toEqual([{ pr: 10, ticket: 'COD-1', at: 500 }]);
+  });
+});
+
+describe('tree', () => {
+  const node = (
+    ticket: string,
+    gaps: string[] = [],
+    children: QueueTreeNode[] = []
+  ): QueueTreeNode => ({
+    ticket,
+    title: null,
+    state: null,
+    label: null,
+    pr: null,
+    blockers: [],
+    gaps,
+    children
+  });
+  const tree = [
+    node('COD-1', ['two-labels'], [node('COD-2'), node('COD-3', ['stale'])]),
+    node('COD-4', [], [node('COD-5')]),
+    node('COD-6')
+  ];
+
+  it('passes the view’s tree through, empty without a view', () => {
+    const state = withState((s) => {
+      s.data.runs = runsPayload({ qv: view({ tree }) });
+    });
+    expect(model(state, NOW).tree).toEqual(tree);
+    expect(model(createState(), NOW).tree).toEqual([]);
+  });
+
+  it('counts the roots', () => {
+    expect(treeRoots(tree)).toBe(3);
+    expect(treeRoots([])).toBe(0);
+  });
+
+  it('counts the roots and children that carry a gap', () => {
+    expect(treeGapped(tree)).toBe(2);
+    expect(treeGapped([node('COD-7', ['a'], [node('COD-8', ['b'])])])).toBe(2);
+    expect(treeGapped([])).toBe(0);
   });
 });
 

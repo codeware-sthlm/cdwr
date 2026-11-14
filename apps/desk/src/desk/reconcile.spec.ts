@@ -17,6 +17,7 @@ const view = (over: Partial<QueueView> = {}): QueueView => ({
   blocked: [],
   renovate: [],
   audit: [],
+  tree: [],
   table: { before: [], label: [], after: [] },
   ...over
 });

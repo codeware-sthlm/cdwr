@@ -106,6 +106,24 @@ export type QueueGap = {
   fix: string;
 };
 
+/** One ticket of the queue's tree (watch.jq `tree`): roots carry their children, children carry none */
+export type QueueTreeNode = {
+  ticket: string;
+  title: string | null;
+  /** The Linear state type: triage, backlog, unstarted, started, completed or canceled */
+  state: string | null;
+  /** The ticket's `agent:*` label, e.g. `agent:working` */
+  label: string | null;
+  pr: number | null;
+  /** Open blockers */
+  blockers: string[];
+  /** The kinds of the audit's gaps on the ticket */
+  gaps: string[];
+  /** Set on a root whose children the scheduler cut short */
+  truncated?: boolean;
+  children: QueueTreeNode[];
+};
+
 export type QueueBefore = { ticket: string; kind?: string };
 
 /** An open sub-issue whose blockers are done, waiting for `agent:ready`; not held by the limit */
@@ -157,5 +175,7 @@ export type QueueView = {
   renovate: QueueRenovate[];
   /** Older views have none */
   audit: QueueGap[];
+  /** Older views have none */
+  tree: QueueTreeNode[];
   table: { before: QueueBefore[]; label: QueueLabel[]; after: QueueAfter[] };
 };

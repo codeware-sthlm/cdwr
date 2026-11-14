@@ -39,6 +39,7 @@ export const view = (over: Partial<QueueView> = {}): QueueView => ({
   blocked: [],
   renovate: [],
   audit: [],
+  tree: [],
   table: {
     before: [{ ticket: 'COD-4', kind: 'plan' }],
     label: [{ ticket: 'COD-6', parent: 'COD-<1>', blockers: ['COD-2'] }],

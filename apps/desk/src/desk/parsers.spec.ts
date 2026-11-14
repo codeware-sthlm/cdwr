@@ -534,8 +534,68 @@ describe('validateQueueView', () => {
       blocked: [],
       renovate: [],
       audit: [],
+      tree: [],
       table: { before: [], label: [], after: [] }
     });
+  });
+
+  it('reads the tree and drops a malformed node alone', () => {
+    const child = {
+      ticket: 'COD-2',
+      title: 'Child',
+      state: 'started',
+      label: 'agent:working',
+      pr: 12,
+      blockers: ['COD-9'],
+      gaps: ['two-labels'],
+      children: []
+    };
+    const root = {
+      ticket: 'COD-1',
+      title: 'Root',
+      state: 'started',
+      label: null,
+      pr: null,
+      blockers: [],
+      gaps: [],
+      truncated: true,
+      children: [child]
+    };
+    expect(
+      validateQueueView({
+        limit,
+        table: {},
+        tree: [
+          root,
+          { ticket: 3 },
+          { ...root, ticket: 'COD-4', children: [child, { id: 1 }] }
+        ]
+      })?.tree
+    ).toEqual([root, { ...root, ticket: 'COD-4' }]);
+  });
+
+  it('defaults what a tree node leaves out', () => {
+    expect(
+      validateQueueView({ limit, table: {}, tree: [{ ticket: 'COD-1' }] })?.tree
+    ).toEqual([
+      {
+        ticket: 'COD-1',
+        title: null,
+        state: null,
+        label: null,
+        pr: null,
+        blockers: [],
+        gaps: [],
+        children: []
+      }
+    ]);
+  });
+
+  it('reads a view without a tree as empty', () => {
+    expect(validateQueueView({ limit, table: {} })?.tree).toEqual([]);
+    expect(validateQueueView({ limit, table: {}, tree: null })?.tree).toEqual(
+      []
+    );
   });
 
   it('reads the audit and drops a malformed gap alone', () => {
@@ -583,6 +643,7 @@ describe('validateQueueView', () => {
         { pr: 754, title: 'Update vite', state: 'failing', ticket: null }
       ],
       audit: [],
+      tree: [],
       table: {
         before: [{ ticket: 'COD-5', kind: 'plan' }],
         label: [{ ticket: 'COD-7', parent: 'COD-1', blockers: [] }],
