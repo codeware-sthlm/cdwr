@@ -116,25 +116,37 @@ source "${0:A:h}/github-app.sh"
 # them, claude sessions included: record_platform names them on its own command line. Only the
 # database and Fly ones turn the step on; the Infisical, Sentry and Umami ones are optional reads.
 PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID PLATFORM_SENTRY_AUTH_TOKEN PLATFORM_SENTRY_ORG PLATFORM_UMAMI_URL PLATFORM_UMAMI_API_KEY)
-platform_env() {
+# The write credentials of the desk's restart and gate commands, read the same way and kept apart
+# from the read-only ones above: only desk_cdwr names them, on the command line of the cdwr call
+# that applies a command, so the platform read never holds a credential that writes
+DESK_VARS=(DESK_FLY_TOKEN DESK_INFISICAL_CLIENT_ID DESK_INFISICAL_CLIENT_SECRET DESK_INFISICAL_PROJECT_ID)
+unexported_env() {
   local v file line key value common
-  for v in $PLATFORM_VARS; do
+  local -a names=("$@")
+  for v in $names; do
     [[ -z "${(P)v+x}" ]] || typeset -g +x "$v"
   done
   common="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || common=""
   for file in "${AGENT_QUEUE_ENV_FILE:-}" "$REPO/tools/cdwr/.env" "${common:+${common:h}/tools/cdwr/.env}"; do
     [[ -n "$file" && -r "$file" ]] || continue
     for line in "${(@f)$(<"$file")}"; do
-      [[ "$line" == (FLY_API_TOKEN|PLATFORM_DATABASE_URL|PLATFORM_INFISICAL_(CLIENT_ID|CLIENT_SECRET|PROJECT_ID)|PLATFORM_SENTRY_(AUTH_TOKEN|ORG)|PLATFORM_UMAMI_(URL|API_KEY))=* ]] || continue
-      key="${line%%=*}"; value="${line#*=}"
+      [[ "$line" == [A-Z_]*=* ]] || continue
+      key="${line%%=*}"
+      (( ${names[(Ie)$key]} )) || continue
+      value="${line#*=}"
       value="${${value#[\"\']}%[\"\']}"
       [[ -n "${(P)key:-}" ]] || { typeset -g "$key=$value"; typeset -g +x "$key"; }
     done
   done
   return 0
 }
+platform_env() { unexported_env $PLATFORM_VARS; }
 platform_env
+unexported_env $DESK_VARS
 platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }
+desk_platform_on() {
+  [[ -n "${DESK_FLY_TOKEN:-}" && -n "${DESK_INFISICAL_CLIENT_ID:-}" && -n "${DESK_INFISICAL_CLIENT_SECRET:-}" && -n "${DESK_INFISICAL_PROJECT_ID:-}" ]]
+}
 
 # One PR as the watch and the desk's copilot and merge commands read it
 read -r -d '' PR_QUERY <<'GQL' || true
@@ -296,6 +308,78 @@ desk_pr_act() {
   return 1
 }
 
+# desk_cdwr <cdwr args>...: one cdwr command from $REPO with --yes --json, the desk's write
+# credentials its only ones: the empty FLY_ACCESS_TOKEN and INFISICAL_SERVICE_TOKEN keep dotenv from
+# filling another credential in from tools/cdwr/.env. Prints its stdout; stderr is dropped.
+desk_cdwr() {
+  ( cd "$REPO" && FLY_API_TOKEN="$DESK_FLY_TOKEN" FLY_ACCESS_TOKEN="" \
+      INFISICAL_CLIENT_ID="$DESK_INFISICAL_CLIENT_ID" INFISICAL_CLIENT_SECRET="$DESK_INFISICAL_CLIENT_SECRET" \
+      INFISICAL_PROJECT_ID="$DESK_INFISICAL_PROJECT_ID" INFISICAL_SERVICE_TOKEN="" \
+      node tools/cdwr/bin/cdwr.mjs "$@" --yes --json 2>/dev/null </dev/null )
+}
+
+# desk_platform_argv <restart|gate> <args json>: the cdwr arguments, one per line, production only;
+# returns 1 when the args don't hold. desk-command checked them already; this keeps a bad row off a
+# command line. A close always generates the password.
+desk_platform_argv() {
+  setopt local_options no_err_exit extended_glob
+  local tenant app action
+  tenant="$(jq -r '.tenant // ""' <<<"$2" 2>/dev/null)"
+  [[ "$tenant" == [a-z0-9][a-z0-9-]# ]] || return 1
+  case "$1" in
+    restart)
+      app="$(jq -r '.app // ""' <<<"$2" 2>/dev/null)"
+      [[ "$app" == cdwr-cms-[a-z0-9][a-z0-9-]# ]] || return 1
+      print -rl -- fly restart "$app" ;;
+    gate)
+      action="$(jq -r '.action // ""' <<<"$2" 2>/dev/null)"
+      [[ "$action" == (open|close) ]] || return 1
+      print -rl -- tenant gate "$action" --env production --tenant "$tenant" ${${action:#open}:+--generate} ;;
+    *) return 1 ;;
+  esac
+}
+
+# desk_platform_check <restart|gate> <args json>: `ok` when the command may go ahead, else why not.
+# The command's own dry run reads the live state, and platform_verdict compares it with what the
+# desk sent. Run it in a command substitution.
+desk_platform_check() {
+  setopt local_options no_err_exit
+  local -a cmd
+  local out
+  desk_platform_on || { print -r -- "no write credentials on $(telemetry_host)"; return 0; }
+  cmd=("${(@f)$(desk_platform_argv "$1" "$2")}")
+  [[ -n "${cmd[1]}" ]] || { print -r -- "bad args"; return 0; }
+  out="$(desk_cdwr "${cmd[@]}" --dry-run)"
+  [[ -n "$out" ]] || { print -r -- "the dry run printed nothing"; return 0; }
+  watch -r --arg kind "$1" --argjson args "$2" 'include "watch"; platform_verdict($kind; $args)' <<<"$out" ||
+    print -r -- "watch.jq failed$(watch_err)"
+}
+
+# desk_platform_act <restart|gate> <args json>: the write. A close's stdout holds the password, so
+# only `.ok` and `.error.message` are read from it, and a gate's message is cut at the gate key and
+# stripped of anything shaped like a generated password before it can reach a row or the log.
+# Prints the reason and returns 1 on failure. Run it in a command substitution.
+desk_platform_act() {
+  setopt local_options no_err_exit extended_glob
+  local -a cmd
+  local out msg
+  desk_platform_on || { print -r -- "no write credentials on $(telemetry_host)"; return 1; }
+  cmd=("${(@f)$(desk_platform_argv "$1" "$2")}")
+  [[ -n "${cmd[1]}" ]] || { print -r -- "bad args"; return 1; }
+  out="$(desk_cdwr "${cmd[@]}")"
+  [[ "$(jq -r '.ok' <<<"$out" 2>/dev/null)" == true ]] && return 0
+  msg="$(jq -r 'if .error then (.error.message // "") elif .ok == false then "only partly applied, see cdwr history on the host" else "" end' <<<"$out" 2>/dev/null)"
+  out=""
+  msg=${msg%%$'\n'*}
+  if [[ "$1" == gate ]]; then
+    msg=${msg%%SITE_GATE_PASSWORD*}
+    msg=${msg//[A-Za-z0-9_-](#c20,)/…}
+    msg=${msg%%[[:space:]]#}
+  fi
+  print -r -- "${msg[1,160]:-cdwr failed}"
+  return 1
+}
+
 # A pending desk command older than this is refused as expired, never replayed: the desk-command
 # function's STALE_MS, so a host back from a long silence fires no old run, pause or cap
 DESK_STALE_SECS=7200
@@ -308,19 +392,20 @@ DESK_STALE_SECS=7200
 apply_commands() {
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local host rows line id kind actor at ticket pr value verdict why change effect body acked stamp now target ranat
+  local host rows line id kind actor at ticket pr args value verdict why change effect body acked stamp now target ranat
   host="$(telemetry_host)"
   rows="$(supabase_select desk_commands "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor")"
   if $check; then say "commands: $(jq 'length' <<<"$rows" 2>/dev/null || print 0) pending"; return 0; fi
   now="$(date +%s)"
   # One line per row: id, kind, actor, at in epoch seconds (0 when unreadable, so expired), ticket
-  # and pr (`-` when absent: a tab is whitespace to read, so an empty field would shift the rest), value
+  # and pr (`-` when absent: a tab is whitespace to read, so an empty field would shift the rest), the
+  # args as compact JSON (never empty), value
   for line in "${(@f)$(jq -r '.[] | [.id, .kind, (.actor // "unknown"),
       (.at | tostring | sub("\\.[0-9]+"; "") | sub("\\+00(:00)?$"; "Z") | fromdateiso8601? // 0),
-      (.args.ticket // "-" | tostring), (.args.pr // "-" | tostring),
+      (.args.ticket // "-" | tostring), (.args.pr // "-" | tostring), (.args // {} | tojson),
       (.args.value // "" | tostring)] | @tsv' <<<"$rows" 2>/dev/null)}"; do
     [[ -n "$line" ]] || continue
-    IFS=$'\t' read -r id kind actor at ticket pr value <<<"$line"
+    IFS=$'\t' read -r id kind actor at ticket pr args value <<<"$line"
     [[ "$id" == <-> ]] || continue
     verdict=applied why="" change="" effect="" target=""
     if [[ "$at" != <-> ]] || (( now - at > DESK_STALE_SECS )); then
@@ -363,6 +448,14 @@ apply_commands() {
             if [[ "$kind" == merge ]]; then change="PR $pr added to the merge queue from the desk ($actor)"
             else change="Copilot review requested on PR $pr from the desk ($actor)"; fi
           else verdict=refused; [[ -n "$why" ]] || why="no answer"; fi ;;
+        restart|gate)
+          # Checked by the command's own dry run before the ack, as the PR commands are by their read
+          why="$(desk_platform_check "$kind" "$args")"
+          if [[ "$why" == ok ]]; then
+            why="" effect="$kind"
+            if [[ "$kind" == restart ]]; then change="restarted $(jq -r '.app' <<<"$args") from the desk ($actor)"
+            else change="$(jq -r '"site \(if .action == "open" then "opened" else "closed" end) for \(.tenant)"' <<<"$args") from the desk ($actor)"; fi
+          else verdict=refused; [[ -n "$why" ]] || why="no answer"; fi ;;
         *) verdict=refused why="unknown kind" ;;
       esac
     fi
@@ -385,6 +478,12 @@ apply_commands() {
     # A GitHub write that fails after the ack turns the row refused, with GitHub's reason
     if [[ "$effect" == (copilot|merge) ]] && ! why="$(desk_pr_act "$kind" "$pr" ${=target})"; then
       [[ -n "$why" ]] || why="GitHub refused"
+      verdict=refused change="$kind refused from the desk ($actor): $why"
+      supabase_patch desk_commands "id=eq.$id" "$(jq -nc --arg n "$why" '{status: "refused", note: $n}')" >/dev/null
+    fi
+    # Same for a restart or gate whose cdwr command fails after the ack
+    if [[ "$effect" == (restart|gate) ]] && ! why="$(desk_platform_act "$kind" "$args")"; then
+      [[ -n "$why" ]] || why="cdwr failed"
       verdict=refused change="$kind refused from the desk ($actor): $why"
       supabase_patch desk_commands "id=eq.$id" "$(jq -nc --arg n "$why" '{status: "refused", note: $n}')" >/dev/null
     fi
