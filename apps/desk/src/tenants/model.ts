@@ -29,6 +29,8 @@ export type TenantApp = {
   machines: TenantMachine[] | null;
   certs: TenantCert[] | null;
   health: { ok: boolean; status: number | null; ms: number | null } | null;
+  /** Affected since its machines' commit and still on it; null when unknown */
+  behind: boolean | null;
 };
 
 export type TenantDomain = {
@@ -54,6 +56,30 @@ export type TenantDb = {
   byApplication: Record<string, number>;
 };
 
+/** A tenant's Sentry read: the issue counts of the last day and week, and the busiest issue */
+export type TenantSentry = {
+  org: string;
+  count24h: number;
+  count7d: number;
+  top: { shortId: string; level: string; count: number; title: string } | null;
+};
+
+/** A tenant's Umami read: visitors today and the seven days before, oldest first */
+export type TenantVisitors = {
+  today: number;
+  days: { date: string; visitors: number }[];
+};
+
+/** The newest deploy run of main, on the shared row */
+export type TenantDeploy = {
+  runId: number;
+  sha: string;
+  /** The deploy job's conclusion: success, failure, skipped, cancelled or none */
+  conclusion: string;
+  url: string;
+  at: string;
+};
+
 export type TenantRow = {
   /** The tenant's slug, or `_shared` */
   key: string;
@@ -66,6 +92,9 @@ export type TenantRow = {
   domains: TenantDomain[];
   switches: TenantSwitch[];
   db: TenantDb | null;
+  sentry: TenantSentry | null;
+  visitors: TenantVisitors | null;
+  deploy: TenantDeploy | null;
   /** Source -> the one line a failed read left */
   errors: Record<string, string>;
 };
@@ -118,7 +147,68 @@ const app = (r: Rec): TenantApp | null => {
             status: num(health['status']),
             ms: num(health['ms'])
           }
+        : null,
+    behind: typeof r['behind'] === 'boolean' ? r['behind'] : null
+  };
+};
+
+const sentry = (value: unknown): TenantSentry | null => {
+  if (!isRecord(value)) return null;
+  const org = str(value['org']);
+  const count24h = num(value['count24h']);
+  const count7d = num(value['count7d']);
+  // The org becomes a host name, so only a slug passes
+  if (
+    !org ||
+    !/^[a-z0-9][a-z0-9-]*$/i.test(org) ||
+    count24h === null ||
+    count7d === null
+  )
+    return null;
+  const top = value['top'];
+  const shortId = isRecord(top) ? str(top['shortId']) : null;
+  const count = isRecord(top) ? num(top['count']) : null;
+  return {
+    org,
+    count24h,
+    count7d,
+    top:
+      isRecord(top) && shortId && count !== null
+        ? {
+            shortId,
+            level: str(top['level']) ?? 'error',
+            count,
+            title: str(top['title']) ?? ''
+          }
         : null
+  };
+};
+
+const visitors = (value: unknown): TenantVisitors | null => {
+  if (!isRecord(value)) return null;
+  const today = num(value['today']);
+  if (today === null) return null;
+  return {
+    today,
+    days: records(value['days']).flatMap((d) => {
+      const date = str(d['date']);
+      const n = num(d['visitors']);
+      return date && n !== null ? [{ date, visitors: n }] : [];
+    })
+  };
+};
+
+const deployRun = (value: unknown): TenantDeploy | null => {
+  if (!isRecord(value)) return null;
+  const runId = num(value['runId']);
+  const conclusion = str(value['conclusion']);
+  if (runId === null || !conclusion) return null;
+  return {
+    runId,
+    sha: str(value['sha']) ?? '',
+    conclusion,
+    url: str(value['url']) ?? '',
+    at: str(value['at']) ?? ''
   };
 };
 
@@ -177,6 +267,9 @@ export const parseTenantRow = (row: TenantStateRow): TenantRow => ({
       : [];
   }),
   db: database(row.db),
+  sentry: sentry(row.sentry),
+  visitors: visitors(row.visitors),
+  deploy: deployRun(row.deploy),
   errors: isRecord(row.errors)
     ? Object.fromEntries(
         Object.entries(row.errors).flatMap(([k, v]) => {

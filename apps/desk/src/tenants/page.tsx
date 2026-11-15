@@ -18,6 +18,7 @@ import {
   versionCell
 } from './cells';
 import { SHARED_KEY, type TenantDb } from './model';
+import { NeedsYou, ProblemBody, ProblemSummary } from './problem-cards';
 import {
   TENANTS_STALE_MIN,
   type TenantEntry,
@@ -46,7 +47,7 @@ const COLUMNS = [
 const GRID =
   'grid grid-cols-[minmax(150px,1.6fr)_64px_repeat(7,minmax(76px,1fr))] items-center gap-x-3';
 const ROW_BOX =
-  'tn-row w-full min-h-[var(--tap)] cursor-pointer rounded-[var(--r-row)] border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2.5 text-left font-[family-name:var(--font-ui)] text-[13px] font-normal hover:border-[color:var(--line-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]';
+  'tn-row w-full min-h-[var(--tap)] cursor-pointer rounded-[var(--r-row)] border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2.5 text-left font-[family-name:var(--font-ui)] text-[13px] font-normal hover:border-[color:var(--line-strong)] data-[problem=true]:border-l-[3px] data-[problem=true]:border-l-[color:var(--block)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]';
 const MONO =
   'font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-normal';
 
@@ -67,12 +68,15 @@ const TenantLine = ({
   main,
   db,
   phone,
+  problem,
   onOpen
 }: {
   entry: TenantEntry;
   main: string | null;
   db: TenantDb | null;
   phone: boolean;
+  /** Whether the row has an open problem */
+  problem: boolean;
   onOpen: (key: string) => void;
 }) => {
   const { row, status } = entry;
@@ -86,6 +90,7 @@ const TenantLine = ({
         }
         data-tenant={row.key}
         data-status={status}
+        data-problem={problem}
         onClick={() => onOpen(row.key)}
       >
         {phone ? (
@@ -147,11 +152,30 @@ const Rows = ({
   const phone = useMedia(PHONE);
   // The sheet keeps its row while it animates out
   const [sel, setSel] = useState<{ key: string; open: boolean } | null>(null);
+  // Likewise the problem sheet, by the problem's key
+  const [probSel, setProbSel] = useState<{
+    key: string;
+    open: boolean;
+  } | null>(null);
   const all = view.shared ? [view.shared, ...view.tenants] : view.tenants;
   const picked = sel ? all.find((e) => e.row.key === sel.key) : undefined;
+  const pickedProblem = probSel
+    ? view.problems.find((p) => p.key === probSel.key)
+    : undefined;
+  const problemRows = new Set(view.problems.map((p) => p.row));
+  const nameFor = (key: string): string => {
+    const e = all.find((x) => x.row.key === key);
+    return e ? nameOf(e) : key;
+  };
   const db = view.shared?.row.db ?? null;
   return (
     <>
+      <ProblemSummary problems={view.problems} />
+      <NeedsYou
+        problems={view.problems}
+        nameOf={nameFor}
+        onOpen={(key) => setProbSel({ key, open: true })}
+      />
       {phone ? null : (
         <div
           className={`${GRID} tn-head px-4 text-[10px] font-medium tracking-[0.1em] text-[color:var(--muted)] uppercase`}
@@ -172,6 +196,7 @@ const Rows = ({
             main={view.main}
             db={db}
             phone={phone}
+            problem={problemRows.has(e.row.key)}
             onOpen={(key) => setSel({ key, open: true })}
           />
         ))}
@@ -199,6 +224,27 @@ const Rows = ({
           }
         >
           <TenantBody entry={picked} main={view.main} now={now} />
+        </Sheet>
+      ) : null}
+      {pickedProblem ? (
+        <Sheet
+          open={probSel?.open === true}
+          title={pickedProblem.title}
+          sub={`${nameFor(pickedProblem.row)} · ${pickedProblem.severity}`}
+          focus
+          onClose={() => setProbSel((s) => (s ? { ...s, open: false } : s))}
+          onClosed={() =>
+            Array.from(
+              document.querySelectorAll<HTMLElement>('[data-problem-key]')
+            )
+              .find((el) => el.dataset['problemKey'] === pickedProblem.key)
+              ?.focus()
+          }
+        >
+          <ProblemBody
+            problem={pickedProblem}
+            row={all.find((e) => e.row.key === pickedProblem.row)?.row}
+          />
         </Sheet>
       ) : null}
     </>

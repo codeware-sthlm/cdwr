@@ -26,16 +26,24 @@ export const appCell = (row: TenantRow, kind: 'cms' | 'headless'): Cell => {
   return { text: 'unknown', tone: 'muted' };
 };
 
-/** Whether the machines run main's commit; their commit, short, when main is not known */
+/**
+ * Whether the machines run what main deploys: `behind` only when the NUC found an app affected
+ * since its commit, `current` when it found none or the commit is main's; else their commit, short
+ */
 export const versionCell = (row: TenantRow, main: string | null): Cell => {
   const shas = row.apps.flatMap((a) =>
     (a.machines ?? []).flatMap((m) => (m.sha ? [m.sha] : []))
   );
   if (!shas.length) return NONE;
-  if (main === null) return { text: shas[0].slice(0, 7), tone: 'muted' };
-  return shas.some((s) => isBehind(s, main))
-    ? { text: 'behind', tone: 'wait' }
-    : { text: 'current', tone: 'ok' };
+  if (row.apps.some((a) => a.behind === true))
+    return { text: 'behind', tone: 'wait' };
+  const known = row.apps.filter((a) => a.machines?.some((m) => m.sha));
+  if (
+    known.every((a) => a.behind === false) ||
+    (main !== null && !shas.some((s) => isBehind(s, main)))
+  )
+    return { text: 'current', tone: 'ok' };
+  return { text: shas[0].slice(0, 7), tone: 'muted' };
 };
 
 /** Every health check of the tenant's apps */

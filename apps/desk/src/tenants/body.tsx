@@ -6,6 +6,8 @@ import { bytes, seenAgo } from '../desk/format';
 import { versionCell } from './cells';
 import type { TenantApp, TenantMachine } from './model';
 import { SHARED_KEY } from './model';
+import { sentryIssueUrl } from './problems';
+import { Sparkline } from './sparkline';
 import {
   DB_SESSIONS_MAX,
   type TenantEntry,
@@ -16,6 +18,8 @@ import {
 import { Chip, StatusChip } from './ui';
 
 // What the tenant sheet shows: everything the NUC recorded for one row
+
+const round1 = (n: number): number => Math.round(n * 10) / 10;
 
 const HEADING =
   'text-[0.72rem] font-semibold tracking-[0.08em] text-[color:var(--muted)] uppercase';
@@ -38,7 +42,29 @@ const Section = ({
   </section>
 );
 
-const Machine = ({ m, main }: { m: TenantMachine; main: string | null }) => (
+/** A machine on main's commit is current; on another, the NUC's `behind` flag says whether that matters */
+const versionNote = (
+  sha: string,
+  main: string | null,
+  behind: boolean | null
+): string =>
+  main !== null && !isBehind(sha, main)
+    ? ' (current)'
+    : behind === true
+      ? ' (behind)'
+      : behind === false
+        ? ' (current)'
+        : '';
+
+const Machine = ({
+  m,
+  main,
+  behind
+}: {
+  m: TenantMachine;
+  main: string | null;
+  behind: boolean | null;
+}) => (
   <li className={MONO_LINE}>
     {[
       m.id,
@@ -47,7 +73,7 @@ const Machine = ({ m, main }: { m: TenantMachine; main: string | null }) => (
       m.memoryMb === null ? null : `${m.memoryMb} MB`,
       m.sha === null
         ? 'no commit'
-        : `${m.sha.slice(0, 7)}${main === null ? '' : isBehind(m.sha, main) ? ' (behind)' : ' (current)'}`
+        : `${m.sha.slice(0, 7)}${versionNote(m.sha, main, behind)}`
     ]
       .filter((part) => part !== null && part !== '')
       .join(' · ')}
@@ -79,7 +105,7 @@ const App = ({ app, main }: { app: TenantApp; main: string | null }) => (
     ) : app.machines.length ? (
       <ul className="grid gap-1">
         {app.machines.map((m) => (
-          <Machine key={m.id} m={m} main={main} />
+          <Machine key={m.id} m={m} main={main} behind={app.behind} />
         ))}
       </ul>
     ) : (
@@ -214,6 +240,60 @@ export const TenantBody = ({
               </div>
             ))}
           </dl>
+        </Section>
+      ) : null}
+
+      {row.sentry ? (
+        <Section title="Sentry">
+          <dl className={KV}>
+            <dt>Last 24 hours</dt>
+            <dd>{row.sentry.count24h}</dd>
+            <dt>Daily average, 7 days</dt>
+            <dd>{round1(row.sentry.count7d / 7)}</dd>
+            {row.sentry.top ? (
+              <>
+                <dt>Top issue</dt>
+                <dd>
+                  <a
+                    className="tn-link underline"
+                    href={sentryIssueUrl(
+                      row.sentry.org,
+                      row.sentry.top.shortId
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {row.sentry.top.shortId}
+                  </a>{' '}
+                  <span className="[overflow-wrap:anywhere]">
+                    {`${row.sentry.top.level} · ${row.sentry.top.count}× · ${row.sentry.top.title}`}
+                  </span>
+                </dd>
+              </>
+            ) : null}
+          </dl>
+        </Section>
+      ) : null}
+
+      {row.visitors ? (
+        <Section title="Visitors">
+          <dl className={KV}>
+            <dt>Today</dt>
+            <dd>{row.visitors.today}</dd>
+            <dt>Daily average, 7 days</dt>
+            <dd>
+              {row.visitors.days.length
+                ? round1(
+                    row.visitors.days.reduce((s, d) => s + d.visitors, 0) /
+                      row.visitors.days.length
+                  )
+                : '–'}
+            </dd>
+          </dl>
+          <Sparkline
+            values={row.visitors.days.map((d) => d.visitors)}
+            label={`Visitors per day, the last ${row.visitors.days.length} days`}
+          />
         </Section>
       ) : null}
 

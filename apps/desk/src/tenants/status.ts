@@ -1,14 +1,17 @@
 import type { TenantsPayload } from '../supabase';
 
 import { SHARED_KEY, type TenantRow, parseTenantRow } from './model';
+import { type Problem, allProblems, problemsOf } from './problems';
+import {
+  DB_SESSIONS_MAX,
+  DB_SESSIONS_WARN,
+  certPending,
+  certReady
+} from './thresholds';
 
 // What a tenant's row says: its status, and the state of the view as a whole. Pure; the page draws it.
 
-/** The database's session limit; the NUC's platform step counts against it */
-export const DB_SESSIONS_MAX = 15;
-
-/** Sessions from which the shared row warns: three below the limit */
-export const DB_SESSIONS_WARN = 12;
+export { DB_SESSIONS_MAX, DB_SESSIONS_WARN, certPending, certReady };
 
 /** The rows are stale once the newest was written longer ago than this, in minutes; the NUC writes every 10 */
 export const TENANTS_STALE_MIN = 30;
@@ -29,22 +32,11 @@ export const isBehind = (sha: string | null, main: string | null): boolean =>
   !sha.startsWith(main) &&
   !main.startsWith(sha);
 
-/** Fly's own word for a certificate that serves */
-export const certReady = (state: string): boolean =>
-  state.toLowerCase() === 'ready';
-
-/** A certificate that is not ready; `unknown` (Fly was not read) is not one */
-export const certPending = (state: string): boolean =>
-  !certReady(state) && state !== 'unknown';
-
-export const statusOf = (row: TenantRow, main: string | null): TenantStatus => {
-  if (row.apps.some((a) => a.health?.ok === false)) return 'down';
-  if (
-    row.apps.some((a) => a.machines?.some((m) => isBehind(m.sha, main))) ||
-    row.domains.some((d) => certPending(d.certificate)) ||
-    (row.db !== null && row.db.sessions >= DB_SESSIONS_WARN)
-  )
-    return 'warn';
+/** `down` and `warn` come from the row's problems; `main` is no longer compared, the apps' `behind` says it */
+export const statusOf = (row: TenantRow): TenantStatus => {
+  const found = problemsOf(row);
+  if (found.some((p) => p.severity === 'down')) return 'down';
+  if (found.length) return 'warn';
   // A switch that was not read says nothing: the tenant is not off for it
   if (
     row.key !== SHARED_KEY &&
@@ -70,6 +62,8 @@ export type TenantsView =
       shared: TenantEntry | null;
       /** The worst status of all rows, `_shared` included */
       worst: TenantStatus;
+      /** Every open problem, worst first */
+      problems: Problem[];
       /** The commit main deploys, when it is known */
       main: string | null;
       /** Minutes since the newest row was written; null when no row's time parses */
@@ -85,7 +79,7 @@ export const tenantsView = (
   if (!payload.rows.length) return { kind: 'empty' };
   const entries = payload.rows.map((r) => {
     const row = parseTenantRow(r);
-    return { row, status: statusOf(row, payload.main) };
+    return { row, status: statusOf(row) };
   });
   const times = entries.map((e) => e.row.at).filter(Number.isFinite);
   const ageMin = times.length
@@ -98,6 +92,7 @@ export const tenantsView = (
       .sort((a, b) => a.row.key.localeCompare(b.row.key)),
     shared: entries.find((e) => e.row.key === SHARED_KEY) ?? null,
     worst: entries.map((e) => e.status).reduce(worse),
+    problems: allProblems(entries),
     main: payload.main,
     ageMin,
     stale: ageMin === null || ageMin > TENANTS_STALE_MIN
