@@ -9,9 +9,11 @@ import { definitionInput } from '../../services/site-definitions';
 
 import {
   type AuditReport,
+  type FailedRequest,
   type LinkResult,
   type NotFoundCheck,
   type PageAudit,
+  addFailedRequest,
   auditFindings,
   auditMarkdown,
   isBroken,
@@ -132,6 +134,17 @@ export default defineCommand<
         if (message.type() === 'error') errors.push(message.text());
       });
       page.on('pageerror', (error) => errors.push(error.message));
+      // Chrome's `Failed to load resource` text names no URL, so the page's
+      // own requests say which one was refused
+      let failed: Array<FailedRequest> = [];
+      page.on('response', (response) => {
+        addFailedRequest(failed, {
+          method: response.request().method(),
+          url: response.url(),
+          status: response.status(),
+          resourceType: response.request().resourceType()
+        });
+      });
 
       // A link is asked once however many pages carry it; the context's
       // request shares its cookies, so the gate cookie goes along
@@ -154,6 +167,7 @@ export default defineCommand<
           route,
           async () => {
             errors = [];
+            failed = [];
             const abs = new URL(route, url).href;
             const response = await visit(page, abs);
             if (!response) {
@@ -161,6 +175,7 @@ export default defineCommand<
                 route,
                 status: null,
                 consoleErrors: errors,
+                failedRequests: failed,
                 axe: [],
                 brokenLinks: []
               });
@@ -168,6 +183,7 @@ export default defineCommand<
             }
             const status = response.status();
             const consoleErrors = errors;
+            const failedRequests = failed;
 
             const { violations } = await new AxeBuilder({ page }).analyze();
 
@@ -190,6 +206,7 @@ export default defineCommand<
               route,
               status,
               consoleErrors,
+              failedRequests,
               axe: violations.map((violation) => ({
                 id: violation.id,
                 impact: violation.impact ?? null,
