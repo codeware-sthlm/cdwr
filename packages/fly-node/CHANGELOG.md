@@ -1,3 +1,14 @@
+## 0.3.5 (2026-11-15)
+
+### 🐞 Bug Fixes
+
+- **fly-node:** await parse so nullOnError catches schema errors ([23f2ffb3](https://github.com/codeware-sthlm/cdwr/commit/23f2ffb3))
+- **fly-node:** read certificate status from flyctl 0.5 certs list ([8ea5053f](https://github.com/codeware-sthlm/cdwr/commit/8ea5053f))
+
+### ✅ Tests
+
+- **fly-node:** list a real certificate in the cli integration test ([522353c6](https://github.com/codeware-sthlm/cdwr/commit/522353c6))
+
 ## 0.3.4 (2026-11-15)
 
 ### 🐞 Bug Fixes
