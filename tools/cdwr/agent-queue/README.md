@@ -43,6 +43,8 @@ The desk raises these problems from the rows:
 - error spike: 10 or more errors in 24 h and at least 3x the daily average of the 6 days before
 - deploy failed: the newest run's deploy job failed; clears when a newer run's deploy doesn't fail
 
+The desk's `restart` and `gate` commands use a separate, writing set in the same folder: `DESK_FLY_TOKEN` (an org deploy token, with an expiry) and `DESK_INFISICAL_CLIENT_ID`, `_CLIENT_SECRET` and `_PROJECT_ID` (production write on the project). They are unexported the same way and named only on the command line of the `cdwr` call that applies a command, never on the platform step's. The command is dry-run first, the verdict is checked, then the row is acked and the real command runs. A `close` always generates the site password, which stays in Infisical (`/tenants/<tenant>/apps/<app>`, `SITE_GATE_PASSWORD`) and never reaches a row, log or notice. Details are in `tools/cdwr/README.md`.
+
 When that work waits and no session is alive, the job starts one itself: `implement.sh` runs
 `claude -p "/work-queue implement-only once key=\"<key>\""` detached, with deny-by-default permissions, a
 per-run budget (`AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, $15) and a daily cap

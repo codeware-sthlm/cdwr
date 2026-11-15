@@ -224,6 +224,37 @@ def desk_verdict($kind):
     elif $s.threads > 0 then "\($s.threads) unresolved \(if $s.threads == 1 then "thread" else "threads" end)"
     else "ok \(.id) \(.headRefOid)" end;
 
+# The scheduler's verdict on a desk restart or gate command, from the `cdwr --dry-run --json`
+# envelope it just ran (run.sh desk_platform_check): `ok`, else why not. $args is the command's args
+# as the desk sent them: restart `{tenant, app, sha}` (sha null when the desk showed none), gate
+# `{tenant, action}`. The dry run reads the live state, so a refusal means it changed since.
+def platform_verdict($kind; $args):
+  (.plan.json // null) as $j
+  | if .ok != true then "the dry run failed: \((.error.message // "no reason") | tostring | .[0:120])"
+    elif $j == null then "the dry run carried no state"
+    elif $j.environment != "production" then "not a production target"
+    elif $kind == "restart" then
+      ($j.machines // []) as $m
+      | ([ $m[] | .sha | select(. != null) ] | unique) as $shas
+      | if $j.app != $args.app then "the dry run read \($j.app), not \($args.app)"
+        elif ($m | length) == 0 then "\($args.app) has no machines"
+        elif $args.sha == null then "ok"
+        elif any($shas[]; . as $s | $s | startswith($args.sha) or ($args.sha | startswith($s)) | not)
+          then "\($args.app) runs \($shas | map(.[0:7]) | join(", ")) now, not \($args.sha[0:7])"
+        else "ok" end
+    elif $kind == "gate" then
+      ($j.apps // []) as $a
+      | [ $a[] | select(.onFly != "unreachable") ] as $live
+      | if $j.tenant != $args.tenant then "the dry run read \($j.tenant), not \($args.tenant)"
+        elif ($live | length) == 0 then "\($args.tenant) has no deployed app"
+        elif $args.action == "close" and all($live[]; .onFly == "set") and all($a[]; .inInfisical)
+          then "already closed"
+        elif $args.action == "open" and all($live[]; .onFly != "set") and all($a[]; .inInfisical | not)
+          then "already open"
+        elif ($args.action | IN("open", "close") | not) then "unknown action"
+        else "ok" end
+    else "unknown kind" end;
+
 # The description with its first "**Next:** " line saying the PR merged at $when (ISO time) and
 # what is handed off; the line is appended when there is none
 def merged_next($when; $items):

@@ -2303,6 +2303,7 @@ describe('run.sh apply_commands', () => {
     files?: Record<string, string>;
     // Shell lines defining desk_pr_check and desk_pr_act, the GitHub side
     stubs?: string[];
+    env?: Record<string, string>;
   };
 
   // PostgREST form: 2026-11-02T10:59:03.621+00:00
@@ -2347,7 +2348,7 @@ describe('run.sh apply_commands', () => {
     ].join('\n');
     const result = spawnSync('zsh', ['-c', script], {
       encoding: 'utf8',
-      env: { PATH: process.env['PATH'] ?? '', HOME: home }
+      env: { PATH: process.env['PATH'] ?? '', HOME: home, ...opts.env }
     });
     const lines = (name: string) =>
       existsSync(t(name))
@@ -2708,6 +2709,258 @@ describe('run.sh apply_commands', () => {
       }
     );
   });
+
+  describe('restart and gate', () => {
+    const AQ = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+    const TOKEN = 'Zk3pQ9xLm2Vb7Nc4Rt8Wy6Hd';
+    const CALL = 'tools/cdwr/bin/cdwr.mjs';
+    const restart = { tenant: 'acme', app: 'cdwr-cms-acme', sha: 'abc1234' };
+    const close = { tenant: 'acme', action: 'close' };
+    const restartDry = {
+      ok: true,
+      command: 'fly restart',
+      dryRun: true,
+      plan: {
+        steps: [],
+        json: {
+          app: 'cdwr-cms-acme',
+          environment: 'production',
+          machines: [{ id: 'm1', state: 'started', sha: 'abc1234def5678' }]
+        }
+      }
+    };
+    const gateDry = (onFly: string, inInfisical: boolean) => ({
+      ok: true,
+      command: 'tenant gate',
+      dryRun: true,
+      plan: {
+        steps: [],
+        json: {
+          tenant: 'acme',
+          environment: 'production',
+          apps: [{ app: 'cms', flyApp: 'cdwr-cms-acme', inInfisical, onFly }]
+        }
+      }
+    });
+
+    // The real check, act and argv, with a stub node standing in for cdwr
+    const setup = (
+      dry: unknown,
+      real: unknown = { ok: true },
+      rc = 0,
+      creds = true
+    ) => {
+      const bin = join(home, 'bin');
+      mkdirSync(bin, { recursive: true });
+      writeFileSync(
+        join(bin, 'node'),
+        [
+          '#!/bin/sh',
+          `echo "$*" >> "${home}/node.calls"`,
+          'case "$*" in',
+          `  *--dry-run*) env > "${home}/node.dry.env"; cat "${home}/dry.json" ;;`,
+          '  *)',
+          `    if [ -f "${home}/t-patch" ]; then echo after-ack >> "${home}/node.order"; else echo before-ack >> "${home}/node.order"; fi`,
+          `    env > "${home}/node.env"; cat "${home}/real.json"; exit ${rc} ;;`,
+          'esac'
+        ].join('\n')
+      );
+      chmodSync(join(bin, 'node'), 0o755);
+      writeFileSync(join(home, 'dry.json'), JSON.stringify(dry));
+      writeFileSync(join(home, 'real.json'), JSON.stringify(real));
+      return {
+        env: { PATH: `${bin}:${process.env['PATH'] ?? ''}` },
+        stubs: [
+          `LOGS="${home}"; WATCH_DIR="${AQ}"; REPO="${home}"`,
+          ...(creds
+            ? [
+                // plain shell variables, as unexported_env leaves them
+                'typeset +x DESK_FLY_TOKEN=fly-desk DESK_INFISICAL_CLIENT_ID=inf-id DESK_INFISICAL_CLIENT_SECRET=inf-secret DESK_INFISICAL_PROJECT_ID=inf-proj'
+              ]
+            : []),
+          ...[
+            'desk_platform_on',
+            'desk_cdwr',
+            'desk_platform_argv',
+            'desk_platform_check',
+            'desk_platform_act',
+            'watch',
+            'watch_err'
+          ].map(fn)
+        ]
+      };
+    };
+    const calls = () => (file('node.calls') ?? '').split('\n').filter(Boolean);
+    const everything = (r: ReturnType<typeof apply>) =>
+      JSON.stringify([r.patches, r.upserts, r.notes, r.says, r.stderr]);
+
+    it.skipIf(!canRun)('refuses without the write credentials', () => {
+      const r = apply(
+        [{ id: 1, kind: 'restart', args: restart }],
+        setup(restartDry, undefined, 0, false)
+      );
+      expect(statuses(r)).toEqual([['refused', 'no write credentials on nuc']]);
+      expect(calls()).toEqual([]);
+    });
+
+    it.skipIf(!canRun)(
+      'dry runs, acks, then restarts with the desk credentials alone',
+      () => {
+        const r = apply(
+          [{ id: 1, kind: 'restart', args: restart }],
+          setup(restartDry)
+        );
+        expect(statuses(r)).toEqual([['applied', null]]);
+        expect(calls()).toEqual([
+          `${CALL} fly restart cdwr-cms-acme --dry-run --yes --json`,
+          `${CALL} fly restart cdwr-cms-acme --yes --json`
+        ]);
+        expect(file('node.order')).toBe('after-ack');
+        expect(changes(r)).toEqual([
+          'restarted cdwr-cms-acme from the desk (mac)'
+        ]);
+        for (const name of ['node.dry.env', 'node.env']) {
+          const env = file(name) ?? '';
+          expect(env).toMatch(/^FLY_API_TOKEN=fly-desk$/m);
+          expect(env).toMatch(/^FLY_ACCESS_TOKEN=$/m);
+          expect(env).toMatch(/^INFISICAL_CLIENT_ID=inf-id$/m);
+          expect(env).toMatch(/^INFISICAL_CLIENT_SECRET=inf-secret$/m);
+          expect(env).toMatch(/^INFISICAL_PROJECT_ID=inf-proj$/m);
+          expect(env).toMatch(/^INFISICAL_SERVICE_TOKEN=$/m);
+          expect(env).not.toContain('DESK_');
+        }
+      }
+    );
+
+    it.skipIf(!canRun)('closes a site with a generated password', () => {
+      const r = apply(
+        [{ id: 1, kind: 'gate', args: close }],
+        setup(gateDry('missing', false))
+      );
+      expect(statuses(r)).toEqual([['applied', null]]);
+      expect(calls()).toEqual([
+        `${CALL} tenant gate close --env production --tenant acme --generate --dry-run --yes --json`,
+        `${CALL} tenant gate close --env production --tenant acme --generate --yes --json`
+      ]);
+      expect(changes(r)).toEqual(['site closed for acme from the desk (mac)']);
+    });
+
+    it.skipIf(!canRun)('opens a site without generating anything', () => {
+      const r = apply(
+        [{ id: 1, kind: 'gate', args: { tenant: 'acme', action: 'open' } }],
+        setup(gateDry('set', true))
+      );
+      expect(statuses(r)).toEqual([['applied', null]]);
+      expect(calls()[1]).toBe(
+        `${CALL} tenant gate open --env production --tenant acme --yes --json`
+      );
+      expect(changes(r)).toEqual(['site opened for acme from the desk (mac)']);
+    });
+
+    it.skipIf(!canRun)(
+      'refuses on the verdict and never runs the real command',
+      () => {
+        const r = apply(
+          [{ id: 1, kind: 'gate', args: close }],
+          setup(gateDry('set', true))
+        );
+        expect(statuses(r)).toEqual([['refused', 'already closed']]);
+        expect(calls()).toHaveLength(1);
+        expect(calls()[0]).toContain('--dry-run');
+        expect(changes(r)).toEqual([
+          'gate refused from the desk (mac): already closed'
+        ]);
+      }
+    );
+
+    it.skipIf(!canRun)('refuses a restart whose sha has moved on', () => {
+      const r = apply(
+        [{ id: 1, kind: 'restart', args: { ...restart, sha: '1111111' } }],
+        setup(restartDry)
+      );
+      expect(statuses(r)).toEqual([
+        ['refused', 'cdwr-cms-acme runs abc1234 now, not 1111111']
+      ]);
+      expect(calls()).toHaveLength(1);
+    });
+
+    it.skipIf(!canRun)(
+      'refuses args that would not make a command line',
+      () => {
+        const r = apply(
+          [
+            {
+              id: 1,
+              kind: 'restart',
+              args: { ...restart, app: 'cdwr-cms-acme; rm -rf /' }
+            }
+          ],
+          setup(restartDry)
+        );
+        expect(statuses(r)).toEqual([['refused', 'bad args']]);
+        expect(calls()).toEqual([]);
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'turns an acked row refused when the command fails',
+      () => {
+        const r = apply(
+          [{ id: 1, kind: 'restart', args: restart }],
+          setup(restartDry, { ok: false, error: { message: 'fly is down' } }, 1)
+        );
+        expect(r.patches.map((p) => [p.query, p.body['status']])).toEqual([
+          ['id=eq.1&status=eq.pending', 'applied'],
+          ['id=eq.1', 'refused']
+        ]);
+        expect(r.patches[1]?.body['note']).toBe('fly is down');
+        expect(changes(r)).toEqual([
+          'restart refused from the desk (mac): fly is down'
+        ]);
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'keeps the generated password out of a failed close',
+      () => {
+        const r = apply(
+          [{ id: 1, kind: 'gate', args: close }],
+          setup(
+            gateDry('missing', false),
+            {
+              ok: false,
+              error: {
+                message: `could not set SITE_GATE_PASSWORD=Abc${TOKEN} on cdwr-cms-acme`
+              },
+              password: TOKEN
+            },
+            1
+          )
+        );
+        expect(r.patches[1]?.body['status']).toBe('refused');
+        expect(String(r.patches[1]?.body['note']).trim()).toBe('could not set');
+        const all = everything(r);
+        expect(all).not.toContain(TOKEN);
+        expect(all).not.toContain('SITE_GATE_PASSWORD=');
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'strips a bare token from a failed close message',
+      () => {
+        const r = apply(
+          [{ id: 1, kind: 'gate', args: close }],
+          setup(
+            gateDry('missing', false),
+            { ok: false, error: { message: `failed with ${TOKEN} given` } },
+            1
+          )
+        );
+        expect(r.patches[1]?.body['status']).toBe('refused');
+        expect(everything(r)).not.toContain(TOKEN);
+      }
+    );
+  });
 });
 
 // The scheduler's verdict on a desk command, from the PR it just read; desk_pr_check prints it
@@ -2816,6 +3069,205 @@ describe('watch.jq desk_verdict', () => {
       ).toBe('Copilot has reviewed it');
     }
   );
+});
+
+// The scheduler's verdict on a desk restart or gate command, from the dry run's envelope;
+// desk_platform_check prints it
+describe('watch.jq platform_verdict', () => {
+  const canRun = spawnSync('jq', ['--version']).status === 0;
+  const dir = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  const verdict = (
+    kind: string,
+    args: Record<string, unknown>,
+    envelope: Record<string, unknown>
+  ) =>
+    execFileSync(
+      'jq',
+      [
+        '-L',
+        dir,
+        '-r',
+        '--arg',
+        'kind',
+        kind,
+        '--argjson',
+        'args',
+        JSON.stringify(args),
+        'include "watch"; platform_verdict($kind; $args)'
+      ],
+      { input: JSON.stringify(envelope), encoding: 'utf8' }
+    ).trim();
+  const envelope = (json: unknown, over: Record<string, unknown> = {}) => ({
+    ok: true,
+    dryRun: true,
+    plan: { steps: [], json },
+    ...over
+  });
+  const SHA = 'abc1234def5678';
+  const machine = (sha: string | null = SHA) => ({
+    id: 'm1',
+    state: 'started',
+    sha
+  });
+  const restartState = (over: Record<string, unknown> = {}) => ({
+    app: 'cdwr-cms-acme',
+    environment: 'production',
+    machines: [machine()],
+    ...over
+  });
+  const restartArgs = (sha: string | null = 'abc1234') => ({
+    tenant: 'acme',
+    app: 'cdwr-cms-acme',
+    sha
+  });
+
+  describe('restart', () => {
+    it.skipIf(!canRun)('lets a restart through when the sha holds', () => {
+      expect(verdict('restart', restartArgs(), envelope(restartState()))).toBe(
+        'ok'
+      );
+    });
+
+    it.skipIf(!canRun)('refuses a sha that has moved on', () => {
+      expect(
+        verdict('restart', restartArgs('1111111'), envelope(restartState()))
+      ).toBe('cdwr-cms-acme runs abc1234 now, not 1111111');
+    });
+
+    it.skipIf(!canRun)(
+      'lets a restart through when the desk showed no sha',
+      () => {
+        expect(
+          verdict('restart', restartArgs(null), envelope(restartState()))
+        ).toBe('ok');
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'lets a restart through when a machine has no sha',
+      () => {
+        expect(
+          verdict(
+            'restart',
+            restartArgs(),
+            envelope(restartState({ machines: [machine(null)] }))
+          )
+        ).toBe('ok');
+      }
+    );
+
+    it.skipIf(!canRun)('refuses an app without machines', () => {
+      expect(
+        verdict(
+          'restart',
+          restartArgs(),
+          envelope(restartState({ machines: [] }))
+        )
+      ).toBe('cdwr-cms-acme has no machines');
+    });
+
+    it.skipIf(!canRun)('refuses a dry run that read another app', () => {
+      expect(
+        verdict(
+          'restart',
+          restartArgs(),
+          envelope(restartState({ app: 'cdwr-cms-other' }))
+        )
+      ).toBe('the dry run read cdwr-cms-other, not cdwr-cms-acme');
+    });
+
+    it.skipIf(!canRun)('refuses a target that is not production', () => {
+      expect(
+        verdict(
+          'restart',
+          restartArgs(),
+          envelope(restartState({ environment: 'preview' }))
+        )
+      ).toBe('not a production target');
+    });
+
+    it.skipIf(!canRun)(
+      'refuses a dry run that failed, with its message',
+      () => {
+        expect(
+          verdict('restart', restartArgs(), {
+            ok: false,
+            error: { message: 'Fly refused the token' }
+          })
+        ).toBe('the dry run failed: Fly refused the token');
+      }
+    );
+  });
+
+  describe('gate', () => {
+    const app = (
+      onFly: string,
+      inInfisical: boolean,
+      name = 'cms'
+    ): Record<string, unknown> => ({
+      app: name,
+      flyApp: `cdwr-${name}-acme`,
+      inInfisical,
+      onFly
+    });
+    const gateState = (
+      apps: Array<Record<string, unknown>>,
+      over: Record<string, unknown> = {}
+    ) => ({ tenant: 'acme', environment: 'production', apps, ...over });
+    const args = (action: string) => ({ tenant: 'acme', action });
+
+    it.skipIf(!canRun)('lets a close through on an open site', () => {
+      expect(
+        verdict(
+          'gate',
+          args('close'),
+          envelope(gateState([app('missing', false)]))
+        )
+      ).toBe('ok');
+    });
+
+    it.skipIf(!canRun)('refuses a close on a closed site', () => {
+      expect(
+        verdict('gate', args('close'), envelope(gateState([app('set', true)])))
+      ).toBe('already closed');
+    });
+
+    it.skipIf(!canRun)('lets an open through on a closed site', () => {
+      expect(
+        verdict('gate', args('open'), envelope(gateState([app('set', true)])))
+      ).toBe('ok');
+    });
+
+    it.skipIf(!canRun)('refuses an open on an open site', () => {
+      expect(
+        verdict(
+          'gate',
+          args('open'),
+          envelope(gateState([app('missing', false)]))
+        )
+      ).toBe('already open');
+    });
+
+    it.skipIf(!canRun)('refuses a tenant with no deployed app', () => {
+      expect(
+        verdict(
+          'gate',
+          args('close'),
+          envelope(gateState([app('unreachable', false)]))
+        )
+      ).toBe('acme has no deployed app');
+    });
+
+    it.skipIf(!canRun)('refuses a dry run that read another tenant', () => {
+      expect(
+        verdict(
+          'gate',
+          args('close'),
+          envelope(gateState([app('missing', false)], { tenant: 'other' }))
+        )
+      ).toBe('the dry run read other, not acme');
+    });
+  });
 });
 
 describe('run.sh devlog session', () => {
@@ -3414,11 +3866,14 @@ describe('run.sh platform step', () => {
       // plain shell variables, as telemetry_env leaves them after reading the .env file
       'typeset +x AGENT_SUPABASE_URL=https://supabase.test AGENT_SUPABASE_SERVICE_KEY=svc',
       'PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID PLATFORM_SENTRY_AUTH_TOKEN PLATFORM_SENTRY_ORG PLATFORM_UMAMI_URL PLATFORM_UMAMI_API_KEY)',
-      fn('platform_env'),
+      'DESK_VARS=(DESK_FLY_TOKEN DESK_INFISICAL_CLIENT_ID DESK_INFISICAL_CLIENT_SECRET DESK_INFISICAL_PROJECT_ID)',
+      fn('unexported_env'),
+      'platform_env() { unexported_env $PLATFORM_VARS; }',
       'platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }',
       fn('platform_warn'),
       fn('record_platform'),
       'platform_env',
+      'unexported_env $DESK_VARS',
       'record_platform',
       // a sibling child process after the step, as a claude launch would be
       `env > "${root}/sibling.env"`
@@ -3544,8 +3999,14 @@ describe('run.sh platform step', () => {
         'PLATFORM_INFISICAL_PROJECT_ID="from-file"\n'
       );
       const { PLATFORM_INFISICAL_PROJECT_ID: _p, ...exported } = CREDS;
-      await tick({ ...exported, AGENT_QUEUE_ENV_FILE: join(root, 'env-file') });
+      await tick({
+        ...exported,
+        DESK_FLY_TOKEN: 'desk-secret',
+        AGENT_QUEUE_ENV_FILE: join(root, 'env-file')
+      });
       const node = read('node.env');
+      // the desk's write credentials stay out of the platform read
+      expect(node).not.toMatch(/DESK_|desk-secret/);
       for (const [key, value] of Object.entries(exported))
         expect(node).toContain(`${key}=${value}`);
       expect(node).toContain('PLATFORM_INFISICAL_PROJECT_ID=from-file');
@@ -3554,7 +4015,45 @@ describe('run.sh platform step', () => {
       expect(node).toContain(`AGENT_QUEUE_HOME=${root}`);
       const sibling = read('sibling.env');
       expect(sibling).not.toMatch(
-        /FLY_API_TOKEN|PLATFORM_|fly-secret|db-secret|sentry-secret|umami-secret/
+        /FLY_API_TOKEN|PLATFORM_|DESK_|fly-secret|db-secret|sentry-secret|umami-secret|desk-secret/
+      );
+    }
+  );
+
+  it.skipIf(!hasZsh)(
+    'reads the desk write credentials from the env file and leaves them unexported',
+    () => {
+      writeFileSync(
+        join(root, 'env-file'),
+        [
+          'DESK_FLY_TOKEN="from-file"',
+          'DESK_INFISICAL_CLIENT_ID=file-id',
+          'DESK_INFISICAL_CLIENT_SECRET=file-secret',
+          'OTHER_VAR=ignored'
+        ].join('\n') + '\n'
+      );
+      const script = [
+        `REPO="${root}"`,
+        'DESK_VARS=(DESK_FLY_TOKEN DESK_INFISICAL_CLIENT_ID DESK_INFISICAL_CLIENT_SECRET DESK_INFISICAL_PROJECT_ID)',
+        fn('unexported_env'),
+        'unexported_env $DESK_VARS',
+        'print -r -- "$DESK_FLY_TOKEN|$DESK_INFISICAL_CLIENT_ID|$DESK_INFISICAL_CLIENT_SECRET|${OTHER_VAR:-unset}|${DESK_INFISICAL_PROJECT_ID:-unset}" > "$ROOT/vars"',
+        'env > "$ROOT/sibling.env"'
+      ].join('\n');
+      const res = spawnSync('zsh', ['-c', script], {
+        env: {
+          ...process.env,
+          ROOT: root,
+          AGENT_QUEUE_ENV_FILE: join(root, 'env-file'),
+          // already exported: it wins over the file, and is unexported
+          DESK_INFISICAL_CLIENT_ID: 'from-env'
+        },
+        stdio: 'ignore'
+      });
+      expect(res.status).toBe(0);
+      expect(read('vars')).toBe('from-file|from-env|file-secret|unset|unset\n');
+      expect(read('sibling.env')).not.toMatch(
+        /DESK_|from-file|from-env|file-secret/
       );
     }
   );

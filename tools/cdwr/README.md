@@ -364,7 +364,7 @@ The desk steers the queue through a third Edge Function, `desk-command`. Anon ma
 desk posts `{host, kind, args}` with a per-device bearer token, and the function checks the token's
 SHA-256 against `DESK_CONTROL_TOKENS`, a JSON object of `{device: hex sha256}`; the device name is
 the actor, so one device is revoked on its own. Kinds are `pause`, `resume`, `run`, `limit`
-(`{value}` 1–20), `cap` (`{value}` 0–500 dollars), `copilot` and `merge` (`{ticket, pr}`), which it stores `pending` in `desk_commands`
+(`{value}` 1–20), `cap` (`{value}` 0–500 dollars), `copilot` and `merge` (`{ticket, pr}`), `restart` (`{tenant, app, sha}`) and `gate` (`{tenant, action}`), which it stores `pending` in `desk_commands`
 for the scheduler on that host to apply, and `abandon`, which it applies itself through `desk_abandon`, a database function that ends the
 session row the host's last snapshot calls alive or waiting; that is the desk's record only, since the
 host reads its own session files. The function stores the command in the same transaction. A host whose `queue_state` row is missing or more than 2 hours old,
@@ -411,6 +411,29 @@ takes the request without adding Copilot (the app has no Copilot seat), it tries
 `AGENT_COPILOT_TOKEN`, a fine-grained token of yours on `cdwr` with pull requests read and write,
 from the environment or `tools/cdwr/.env`. A GitHub call that fails after the ack turns the row
 `refused` with GitHub's reason.
+
+`restart` (`{tenant, app, sha}`) and `gate` (`{tenant, action}`, `open` or `close`) are a tenant's
+buttons, and they change production. `restart` runs `cdwr fly restart <app>`; `gate` runs
+`cdwr tenant gate open|close --env production --tenant <tenant>`. The scheduler runs the same command
+first with `--dry-run --json` and checks the live state it prints with `platform_verdict` in
+`watch.jq`, before the ack: a restart needs the app to have machines and still run the commit the
+desk showed (`sha`, when the desk showed one), and a gate needs a deployed app that is not already
+closed or open. A command whose dry run fails, or whose answer doesn't match, is refused with that
+reason and never runs for real. Then the row is acked, then the real command runs, so a command
+that fails after the ack turns the row `refused` with the command's own message. Only the app name
+and tenant slug that pass a strict pattern reach the command line, and only production.
+
+A `close` always generates a new password. It is stored by the command in Infisical
+(`/tenants/<tenant>/apps/<app>`, `SITE_GATE_PASSWORD`) and goes no further: `run.sh` reads only the
+command's `ok` and error message, cuts a gate's message at the key and replaces anything shaped like a
+generated password, so it reaches no row, log or notice. Read it in Infisical when you need it. The
+write credentials are `DESK_FLY_TOKEN` (an org deploy token, with an expiry) and
+`DESK_INFISICAL_CLIENT_ID`, `_CLIENT_SECRET` and `_PROJECT_ID` (an identity with write on production
+secrets of the project), in the same places as the platform step's read-only ones, which they are kept
+apart from. `run.sh` unexports them too and names them only on the command line of the `cdwr` call
+that applies a command, as `FLY_API_TOKEN` and `INFISICAL_*`, with `FLY_ACCESS_TOKEN` and
+`INFISICAL_SERVICE_TOKEN` emptied so `tools/cdwr/.env` fills in no other credential. Without all four
+the command is refused (`no write credentials on <host>`).
 
 The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install --scheduler` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install --scheduler` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
 
