@@ -175,7 +175,7 @@ describe('AI chips on the tree', () => {
         onFilter={vi.fn()}
         open={{}}
         onOpen={vi.fn()}
-        onDesk={vi.fn()}
+        onAgent={vi.fn()}
         onTicket={vi.fn()}
         findings={findingsByTicket(
           reviewRecord(),
