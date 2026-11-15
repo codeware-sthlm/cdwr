@@ -15,6 +15,15 @@ describe('agent-host image', () => {
     expect(dockerfile).toContain(`tools/cdwr/agent-queue/${file}`);
     expect(ignore).toContain(`!/tools/cdwr/agent-queue/${file}`);
   });
+
+  // The platform step reads the cms database and Fly with them
+  it('installs psql and a pinned flyctl on the PATH as fly and flyctl', () => {
+    expect(dockerfile).toMatch(/^\s+postgresql-client \\$/m);
+    expect(dockerfile).toMatch(/^ARG FLYCTL_VERSION=\d+\.\d+\.\d+$/m);
+    expect(dockerfile).toContain('superfly/flyctl/releases/download/');
+    expect(dockerfile).toContain('/usr/local/bin flyctl');
+    expect(dockerfile).toContain('ln -s flyctl /usr/local/bin/fly');
+  });
 });
 
 describe('agent-host entrypoint', () => {

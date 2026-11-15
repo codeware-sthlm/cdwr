@@ -8,6 +8,7 @@ FROM node:22.23.4-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68ae
 ARG TARGETARCH
 ARG GH_VERSION=2.102.0
 ARG INFISICAL_VERSION=0.44.2
+ARG FLYCTL_VERSION=0.5.4
 
 # build-essential and python3 build node-pty when a ticket worktree installs
 RUN apt-get update -qq \
@@ -18,6 +19,7 @@ RUN apt-get update -qq \
     git \
     jq \
     openssl \
+    postgresql-client \
     procps \
     python3 \
     zsh \
@@ -33,6 +35,12 @@ RUN curl -fsSL -o /tmp/infisical.deb \
     "https://github.com/Infisical/cli/releases/download/v${INFISICAL_VERSION}/infisical_${INFISICAL_VERSION}_linux_${TARGETARCH}.deb" \
   && dpkg -i /tmp/infisical.deb \
   && rm /tmp/infisical.deb
+
+# flyctl releases name the arch x86_64 or arm64, not the deb arch
+RUN case "${TARGETARCH}" in amd64) fly_arch=x86_64 ;; *) fly_arch=arm64 ;; esac \
+  && curl -fsSL "https://github.com/superfly/flyctl/releases/download/v${FLYCTL_VERSION}/flyctl_${FLYCTL_VERSION}_Linux_${fly_arch}.tar.gz" \
+    | tar -xz -C /usr/local/bin flyctl \
+  && ln -s flyctl /usr/local/bin/fly
 
 RUN npm install -g pnpm@11.23.0 @anthropic-ai/claude-code@2.1.302
 
