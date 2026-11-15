@@ -25,6 +25,7 @@ import {
   implementCapSource,
   installedEnv,
   lastImplementRun,
+  limitedUntil,
   linearAuthSource,
   linearCredentialFiles,
   nodeMajor,
@@ -276,6 +277,7 @@ export function implementReport(
   capSource: CapSource;
   budget: number;
   last: ReturnType<typeof lastImplementRun>;
+  limitedUntil: number | undefined;
 } {
   // The day implement.sh stamps: local date
   const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -288,7 +290,11 @@ export function implementReport(
     cap,
     capSource: source,
     budget: implementBudget(env['AGENT_QUEUE_IMPLEMENT_BUDGET_USD']),
-    last: lastImplementRun(readText(queue.runs))
+    last: lastImplementRun(readText(queue.runs)),
+    limitedUntil: limitedUntil(
+      readText(queue.limitedUntil),
+      now.getTime() / 1000
+    )
   };
 }
 

@@ -70,6 +70,8 @@ const reportShape = z.object({
     capSource: z.enum(['file', 'env', 'default']).optional(),
     // Absent from a container on an older image
     budget: z.number().optional(),
+    // Epoch seconds while a session limit holds claude runs; absent from an older image
+    limitedUntil: z.number().optional(),
     last: z
       .object({
         when: z.string(),
