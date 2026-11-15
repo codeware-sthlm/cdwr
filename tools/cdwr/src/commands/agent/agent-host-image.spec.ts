@@ -18,7 +18,12 @@ describe('agent-host image', () => {
 
   // The platform step reads the cms database and Fly with them
   it('installs psql and a pinned flyctl on the PATH as fly and flyctl', () => {
-    expect(dockerfile).toMatch(/^\s+postgresql-client \\$/m);
+    expect(dockerfile).not.toMatch(/^\s+postgresql-client \\$/m);
+    expect(dockerfile).toMatch(/^ARG PG_CLIENT_MAJOR=1[7-9]$/m);
+    expect(dockerfile).toContain(
+      'apt.postgresql.org/pub/repos/apt bookworm-pgdg'
+    );
+    expect(dockerfile).toContain('"postgresql-client-${PG_CLIENT_MAJOR}"');
     expect(dockerfile).toMatch(/^ARG FLYCTL_VERSION=\d+\.\d+\.\d+$/m);
     expect(dockerfile).toContain('superfly/flyctl/releases/download/');
     expect(dockerfile).toContain('/usr/local/bin flyctl');

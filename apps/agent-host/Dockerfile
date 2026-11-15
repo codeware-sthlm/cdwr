@@ -9,6 +9,7 @@ ARG TARGETARCH
 ARG GH_VERSION=2.102.0
 ARG INFISICAL_VERSION=0.44.2
 ARG FLYCTL_VERSION=0.5.4
+ARG PG_CLIENT_MAJOR=17
 
 # build-essential and python3 build node-pty when a ticket worktree installs
 RUN apt-get update -qq \
@@ -19,10 +20,20 @@ RUN apt-get update -qq \
     git \
     jq \
     openssl \
-    postgresql-client \
     procps \
     python3 \
     zsh \
+  && rm -rf /var/lib/apt/lists/*
+
+# psql and pg_dump from PGDG, not bookworm's 15: pg_dump refuses a server of a newer major, and a
+# newer pg_dump dumps an older server. The major is pinned; PGDG keeps only the newest minor of it.
+RUN install -d /usr/share/postgresql-common/pgdg \
+  && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+  && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+    > /etc/apt/sources.list.d/pgdg.list \
+  && apt-get update -qq \
+  && apt-get install -y --no-install-recommends "postgresql-client-${PG_CLIENT_MAJOR}" \
   && rm -rf /var/lib/apt/lists/*
 
 # From the release, not GitHub's apt repo: that keeps only the latest gh, so a pin breaks on the next release
