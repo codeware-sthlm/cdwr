@@ -113,8 +113,9 @@ source "${0:A:h}/github-app.sh"
 # The platform step's credentials, read like the telemetry key: from the environment or the same
 # env files as plain KEY=VALUE text, never sourced; whatever is already set wins. They stay shell
 # variables and are never exported (an exported one is unexported here), so no child inherits
-# them, claude sessions included: record_platform names them on its own command line.
-PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID)
+# them, claude sessions included: record_platform names them on its own command line. Only the
+# database and Fly ones turn the step on; the Infisical, Sentry and Umami ones are optional reads.
+PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID PLATFORM_SENTRY_AUTH_TOKEN PLATFORM_SENTRY_ORG PLATFORM_UMAMI_URL PLATFORM_UMAMI_API_KEY)
 platform_env() {
   local v file line key value common
   for v in $PLATFORM_VARS; do
@@ -124,7 +125,7 @@ platform_env() {
   for file in "${AGENT_QUEUE_ENV_FILE:-}" "$REPO/tools/cdwr/.env" "${common:+${common:h}/tools/cdwr/.env}"; do
     [[ -n "$file" && -r "$file" ]] || continue
     for line in "${(@f)$(<"$file")}"; do
-      [[ "$line" == (FLY_API_TOKEN|PLATFORM_DATABASE_URL|PLATFORM_INFISICAL_(CLIENT_ID|CLIENT_SECRET|PROJECT_ID))=* ]] || continue
+      [[ "$line" == (FLY_API_TOKEN|PLATFORM_DATABASE_URL|PLATFORM_INFISICAL_(CLIENT_ID|CLIENT_SECRET|PROJECT_ID)|PLATFORM_SENTRY_(AUTH_TOKEN|ORG)|PLATFORM_UMAMI_(URL|API_KEY))=* ]] || continue
       key="${line%%=*}"; value="${line#*=}"
       value="${${value#[\"\']}%[\"\']}"
       [[ -n "${(P)key:-}" ]] || { typeset -g "$key=$value"; typeset -g +x "$key"; }
@@ -431,6 +432,11 @@ record_platform() {
       PLATFORM_INFISICAL_CLIENT_ID="${PLATFORM_INFISICAL_CLIENT_ID:-}" \
       PLATFORM_INFISICAL_CLIENT_SECRET="${PLATFORM_INFISICAL_CLIENT_SECRET:-}" \
       PLATFORM_INFISICAL_PROJECT_ID="${PLATFORM_INFISICAL_PROJECT_ID:-}" \
+      PLATFORM_SENTRY_AUTH_TOKEN="${PLATFORM_SENTRY_AUTH_TOKEN:-}" \
+      PLATFORM_SENTRY_ORG="${PLATFORM_SENTRY_ORG:-}" \
+      PLATFORM_UMAMI_URL="${PLATFORM_UMAMI_URL:-}" \
+      PLATFORM_UMAMI_API_KEY="${PLATFORM_UMAMI_API_KEY:-}" \
+      AGENT_QUEUE_HOME="$HOME_DIR" \
       AGENT_SUPABASE_URL="$AGENT_SUPABASE_URL" AGENT_SUPABASE_SERVICE_KEY="$AGENT_SUPABASE_SERVICE_KEY" \
       node tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json >/dev/null 2>&1 </dev/null &
     cpid=$!
