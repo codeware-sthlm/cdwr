@@ -3,6 +3,7 @@ import { defineCommand } from '../../cli/command';
 import {
   DATABASE_URL_ENV,
   readAffected,
+  readBackup,
   readDatabase,
   readDeploy,
   readFly,
@@ -35,7 +36,7 @@ const none = (): Data => ({ rows: [], prune: null, url: '', key: '' });
 
 export default defineCommand({
   summary: 'Send the platform state to the telemetry database',
-  description: `Reads the tenants and database figures (psql, read-only), the Fly apps with their machines, certificates and health, and the deploy switches (Infisical), and upserts one row per tenant plus a shared row into the tenant_state table of the agent-queue Supabase project, through PostgREST with the service key. A source that fails is named in that row's errors and never recorded as empty; rows of tenants that no longer exist are deleted only when the tenants were read. Needs ${URL_ENV}, ${KEY_ENV} and ${DATABASE_URL_ENV}; without them it does nothing. The Fly CLI reads FLY_API_TOKEN, the switches PLATFORM_INFISICAL_CLIENT_ID, PLATFORM_INFISICAL_CLIENT_SECRET and PLATFORM_INFISICAL_PROJECT_ID. It also reads the errors per tenant from Sentry (PLATFORM_SENTRY_AUTH_TOKEN, PLATFORM_SENTRY_ORG), the visitors per tenant from Umami (PLATFORM_UMAMI_URL, PLATFORM_UMAMI_API_KEY), the last deploy of main from GitHub (public, no token), and whether each app is behind that deploy, asking Nx in this checkout once per new pair of commits and remembering the answer under AGENT_QUEUE_HOME. Only states, names and counts leave the machine, never a secret value.`,
+  description: `Reads the tenants and database figures (psql, read-only), the Fly apps with their machines, certificates and health, and the deploy switches (Infisical), and upserts one row per tenant plus a shared row into the tenant_state table of the agent-queue Supabase project, through PostgREST with the service key. A source that fails is named in that row's errors and never recorded as empty; rows of tenants that no longer exist are deleted only when the tenants were read. Needs ${URL_ENV}, ${KEY_ENV} and ${DATABASE_URL_ENV}; without them it does nothing. The Fly CLI reads FLY_API_TOKEN, the switches PLATFORM_INFISICAL_CLIENT_ID, PLATFORM_INFISICAL_CLIENT_SECRET and PLATFORM_INFISICAL_PROJECT_ID. It also reads the errors per tenant from Sentry (PLATFORM_SENTRY_AUTH_TOKEN, PLATFORM_SENTRY_ORG), the visitors per tenant from Umami (PLATFORM_UMAMI_URL, PLATFORM_UMAMI_API_KEY), the last deploy of main from GitHub (public, no token), and whether each app is behind that deploy, asking Nx in this checkout once per new pair of commits and remembering the answer under AGENT_QUEUE_HOME. The backups \`cdwr agent backup\` left there (the newest, how many, its size and how the last run went) go on the shared row. Only states, names and counts leave the machine, never a secret value.`,
   danger: 'mutate',
   // The scheduler runs it every run
   history: false,
@@ -81,7 +82,8 @@ export default defineCommand({
       sentry,
       visitors,
       deploy,
-      affected
+      affected,
+      backup: readBackup(ctx.env)
     });
     clearTimeout(guard);
 

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   type AffectedCache,
+  type BackupRead,
   type FlyAppReading,
   type PlatformReadings,
   SHARED_KEY,
@@ -173,6 +174,7 @@ const readings = (over: Partial<PlatformReadings> = {}): PlatformReadings => ({
   },
   deploy: ok(deploy),
   affected: {},
+  backup: null,
   ...over
 });
 
@@ -852,6 +854,93 @@ describe('the deploy column', () => {
   });
 });
 
+describe('the backup column', () => {
+  const read: BackupRead = {
+    newest: {
+      name: 'cms-production-2026-11-15T03-00-00',
+      takenAt: '2026-11-15T03:00:00Z',
+      bytes: 1234
+    },
+    count: 7,
+    lastRun: ok({ at: '2026-11-15T03:00:09.000Z', ok: true, error: null })
+  };
+
+  it('goes to the shared row only, with exactly the contract fields', () => {
+    const { rows } = buildRows(readings({ backup: read }));
+    expect(row(rows, SHARED_KEY).backup).toEqual({
+      newest: 'cms-production-2026-11-15T03-00-00',
+      newestAt: '2026-11-15T03:00:00Z',
+      count: 7,
+      bytes: 1234,
+      lastRun: { at: '2026-11-15T03:00:09.000Z', ok: true, error: null }
+    });
+    expect(row(rows, 'acme').backup).toEqual({});
+    expect(row(rows, 'beta').backup).toEqual({});
+    expect(row(rows, SHARED_KEY).errors).toEqual({});
+  });
+
+  it('is empty when nothing was read, with no error', () => {
+    const { rows } = buildRows(readings({ backup: null }));
+    expect(row(rows, SHARED_KEY).backup).toEqual({});
+    expect(row(rows, SHARED_KEY).errors).toEqual({});
+  });
+
+  it('has no newest and no size when there is no dump, only a status', () => {
+    const { rows } = buildRows(
+      readings({
+        backup: {
+          newest: null,
+          count: 0,
+          lastRun: ok({ at: 'x', ok: false, error: 'pg_dump failed' })
+        }
+      })
+    );
+    expect(row(rows, SHARED_KEY).backup).toEqual({
+      newest: null,
+      newestAt: null,
+      count: 0,
+      bytes: null,
+      lastRun: { at: 'x', ok: false, error: 'pg_dump failed' }
+    });
+  });
+
+  it('cleans the error of the last run and cuts it to 200 characters', () => {
+    const { rows } = buildRows(
+      readings({
+        backup: {
+          ...read,
+          lastRun: ok({
+            at: 'x',
+            ok: false,
+            error: `connect postgres://u:pw@h/db ${'z'.repeat(300)}`
+          })
+        }
+      })
+    );
+    const { lastRun } = row(rows, SHARED_KEY).backup as {
+      lastRun: { error: string };
+    };
+    expect(lastRun.error).toHaveLength(200);
+    expect(lastRun.error.startsWith('connect [url] zzz')).toBe(true);
+  });
+
+  it('names an unreadable status file under backup and leaves lastRun null', () => {
+    const { rows } = buildRows(
+      readings({
+        backup: { ...read, lastRun: failed('backup-status.json is bad') }
+      })
+    );
+    expect(row(rows, SHARED_KEY).errors).toEqual({
+      backup: 'backup-status.json is bad'
+    });
+    expect(row(rows, SHARED_KEY).backup).toMatchObject({
+      count: 7,
+      lastRun: null
+    });
+    expect(row(rows, 'acme').errors).toEqual({});
+  });
+});
+
 describe('behind main', () => {
   const head = 'd'.repeat(40);
   const base = 'a'.repeat(40);
@@ -1247,7 +1336,22 @@ describe('what leaves the machine', () => {
         deploy: ok({
           ...deploy,
           secrets: { PAYLOAD_API_KEY: planted.values[1] }
-        } as never)
+        } as never),
+        backup: {
+          newest: {
+            name: 'cms-production-2026-11-15T03-00-00',
+            takenAt: '2026-11-15T03:00:00Z',
+            bytes: 10,
+            apiKey: planted.values[1]
+          },
+          count: 1,
+          lastRun: ok({
+            at: AT,
+            ok: false,
+            error: `dump of ${planted.values[0] as string} failed`,
+            token: planted.values[2]
+          })
+        } as never
       })
     );
     const text = JSON.stringify(rows);

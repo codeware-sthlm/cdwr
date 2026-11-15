@@ -14,7 +14,8 @@ const collect = vi.hoisted(() => ({
   readSentry: vi.fn(),
   readVisitors: vi.fn(),
   readDeploy: vi.fn(),
-  readAffected: vi.fn()
+  readAffected: vi.fn(),
+  readBackup: vi.fn()
 }));
 
 vi.mock('./platform.collect', () => ({
@@ -70,6 +71,7 @@ describe('agent platform-record', () => {
     collect.readVisitors.mockReset().mockResolvedValue({});
     collect.readDeploy.mockReset().mockResolvedValue(deployed);
     collect.readAffected.mockReset().mockResolvedValue({});
+    collect.readBackup.mockReset().mockReturnValue(null);
     ui = fakeUi([]);
   });
 

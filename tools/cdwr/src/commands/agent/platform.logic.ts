@@ -1,6 +1,7 @@
 import * as TOML from 'smol-toml';
 import { z } from 'zod';
 
+import { libpqEnv } from '../../services/libpq';
 import { APPS, summarize } from '../infisical/analysis.logic';
 import { GATE_KEY } from '../tenant/gate.logic';
 
@@ -40,33 +41,7 @@ export const failed = (error: unknown): Reading<never> => ({
 
 // --- the database read ---
 
-/**
- * A `postgres://` connection string as libpq's own environment variables, so
- * `psql` gets it without the url in its arguments. libpq never expands a url
- * in `PGDATABASE`, so the parts go one by one. Throws on anything else.
- */
-export const libpqEnv = (url: string): Record<string, string> => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error('the database url does not parse');
-  }
-  if (!/^postgres(ql)?:$/.test(parsed.protocol)) {
-    throw new Error('the database url is not a postgres:// url');
-  }
-  const env: Record<string, string> = {};
-  const set = (key: string, value: string | null) => {
-    if (value) env[key] = value;
-  };
-  set('PGHOST', parsed.hostname.replace(/^\[(.*)\]$/, '$1'));
-  set('PGPORT', parsed.port);
-  set('PGUSER', decodeURIComponent(parsed.username));
-  set('PGPASSWORD', decodeURIComponent(parsed.password));
-  set('PGDATABASE', decodeURIComponent(parsed.pathname.replace(/^\//, '')));
-  set('PGSSLMODE', parsed.searchParams.get('sslmode'));
-  return env;
-};
+export { libpqEnv };
 
 const SqlSchema = z.object({
   tenants: z.array(
@@ -547,6 +522,23 @@ export const uncachedPairs = (
   return pairs.filter((p) => !known.has(pairKey(p)));
 };
 
+// --- the backup read ---
+
+/** How the last `cdwr agent backup` run went, as it wrote it */
+export type BackupRun = { at: string; ok: boolean; error: string | null };
+
+/**
+ * What `cdwr agent backup` left under the queue's home: the newest dump (with
+ * the size of its two files, null when they can't be read), how many dumps
+ * there are, and the status file, which is a reading of its own so an
+ * unreadable one is named instead of passing for "never ran".
+ */
+export type BackupRead = {
+  newest: { name: string; takenAt: string; bytes: number | null } | null;
+  count: number;
+  lastRun: Reading<BackupRun | null>;
+};
+
 // --- the rows ---
 
 export interface PlatformReadings {
@@ -562,9 +554,29 @@ export interface PlatformReadings {
   deploy: Reading<DeployRead>;
   /** Project lists by `base..head`, for the pairs `behindPairs` named */
   affected: Record<string, Reading<string[]>>;
+  /** null: no backups folder and no status file, or no queue home */
+  backup: BackupRead | null;
 }
 
 type Errors = Record<string, string>;
+
+/** The `backup` column of the shared row; the desk parses exactly these fields */
+const backupSignal = (read: BackupRead) => {
+  const run = read.lastRun.ok ? read.lastRun.value : null;
+  return {
+    newest: read.newest ? plainText(read.newest.name, 80) : null,
+    newestAt: read.newest ? plainText(read.newest.takenAt, 40) : null,
+    count: read.count,
+    bytes: read.newest?.bytes ?? null,
+    lastRun: run
+      ? {
+          at: plainText(run.at, 40),
+          ok: run.ok,
+          error: run.error === null ? null : plainText(run.error, 200)
+        }
+      : null
+  };
+};
 
 const note = (errors: Errors, source: string, reason: string): void => {
   errors[source] = errors[source] ? `${errors[source]}; ${reason}` : reason;
@@ -642,8 +654,18 @@ const hostDomains = (apps: AppState[], claimed: ReadonlySet<string>) =>
 export const buildRows = (
   readings: PlatformReadings
 ): { rows: TenantStateRow[]; prune: string[] | null } => {
-  const { at, tenants, db, fly, switches, sentry, visitors, deploy, affected } =
-    readings;
+  const {
+    at,
+    tenants,
+    db,
+    fly,
+    switches,
+    sentry,
+    visitors,
+    deploy,
+    affected,
+    backup
+  } = readings;
   const known = tenants.ok ? tenants.value : null;
 
   const errors = new Map<string, Errors>();
@@ -679,6 +701,9 @@ export const buildRows = (
   }
   if (!deploy.ok) note(errorsOf(SHARED_KEY), 'github', deploy.reason);
   const deploySha = deploy.ok ? deploy.value.sha : null;
+  if (backup && !backup.lastRun.ok) {
+    note(errorsOf(SHARED_KEY), 'backup', backup.lastRun.reason);
+  }
 
   // Whether each tenant's app holds the gate password, by tenant slug and app kind
   const gated = new Map<string, boolean>();
@@ -793,6 +818,7 @@ export const buildRows = (
         sentry: sentry.ok ? sentrySignal(sentry.value, t.slug) : {},
         visitors: seen?.ok ? visitorsSignal(seen.value, visitorDays) : {},
         deploy: {},
+        backup: {},
         errors: errorsOf(t.slug)
       };
     });
@@ -829,6 +855,7 @@ export const buildRows = (
           at: deploy.value.at
         }
       : {},
+    backup: backup ? backupSignal(backup) : {},
     errors: errorsOf(SHARED_KEY)
   });
 
