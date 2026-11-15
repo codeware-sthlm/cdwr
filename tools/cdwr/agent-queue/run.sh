@@ -431,7 +431,7 @@ record_platform() {
       PLATFORM_INFISICAL_CLIENT_ID="${PLATFORM_INFISICAL_CLIENT_ID:-}" \
       PLATFORM_INFISICAL_CLIENT_SECRET="${PLATFORM_INFISICAL_CLIENT_SECRET:-}" \
       PLATFORM_INFISICAL_PROJECT_ID="${PLATFORM_INFISICAL_PROJECT_ID:-}" \
-      AGENT_SUPABASE_SERVICE_KEY="$AGENT_SUPABASE_SERVICE_KEY" \
+      AGENT_SUPABASE_URL="$AGENT_SUPABASE_URL" AGENT_SUPABASE_SERVICE_KEY="$AGENT_SUPABASE_SERVICE_KEY" \
       node tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json >/dev/null 2>&1 </dev/null &
     cpid=$!
     ( sleep "$deadline"; : > "$HOME_DIR/platform-timeout"; kill -TERM $cpid 2>/dev/null ) &

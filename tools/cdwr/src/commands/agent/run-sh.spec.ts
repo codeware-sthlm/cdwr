@@ -3407,7 +3407,8 @@ describe('run.sh platform step', () => {
       `note() { print -r -- "$*" >> "${root}/notes"; }`,
       `record() { print -r -- "$*" >> "${root}/records"; }`,
       'telemetry_on() { return 0; }',
-      'AGENT_SUPABASE_SERVICE_KEY=svc',
+      // plain shell variables, as telemetry_env leaves them after reading the .env file
+      'typeset +x AGENT_SUPABASE_URL=https://supabase.test AGENT_SUPABASE_SERVICE_KEY=svc',
       'PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID)',
       fn('platform_env'),
       'platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }',
@@ -3483,6 +3484,8 @@ describe('run.sh platform step', () => {
       for (const [key, value] of Object.entries(exported))
         expect(node).toContain(`${key}=${value}`);
       expect(node).toContain('PLATFORM_INFISICAL_PROJECT_ID=from-file');
+      expect(node).toContain('AGENT_SUPABASE_URL=https://supabase.test');
+      expect(node).toContain('AGENT_SUPABASE_SERVICE_KEY=svc');
       const sibling = read('sibling.env');
       expect(sibling).not.toMatch(
         /FLY_API_TOKEN|PLATFORM_|fly-secret|db-secret/
