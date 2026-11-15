@@ -82,6 +82,19 @@ export type TenantDeploy = {
   at: string;
 };
 
+/** The NUC's database backup, on the shared row; null when none is configured or none ran yet */
+export type TenantBackup = {
+  /** The newest dump's folder name */
+  newest: string | null;
+  /** When the newest dump was made, ISO */
+  newestAt: string | null;
+  /** Dumps kept on the NUC */
+  count: number;
+  /** The newest dump's size */
+  bytes: number | null;
+  lastRun: { at: string; ok: boolean; error: string | null } | null;
+};
+
 export type TenantRow = {
   /** The tenant's slug, or `_shared` */
   key: string;
@@ -97,6 +110,7 @@ export type TenantRow = {
   sentry: TenantSentry | null;
   visitors: TenantVisitors | null;
   deploy: TenantDeploy | null;
+  backup: TenantBackup | null;
   /** Source -> the one line a failed read left */
   errors: Record<string, string>;
 };
@@ -215,6 +229,24 @@ const deployRun = (value: unknown): TenantDeploy | null => {
   };
 };
 
+const backupOf = (value: unknown): TenantBackup | null => {
+  if (!isRecord(value)) return null;
+  const count = num(value['count']);
+  if (count === null) return null;
+  const run = value['lastRun'];
+  const at = isRecord(run) ? str(run['at']) : null;
+  return {
+    newest: str(value['newest']),
+    newestAt: str(value['newestAt']),
+    count,
+    bytes: num(value['bytes']),
+    lastRun:
+      isRecord(run) && at && typeof run['ok'] === 'boolean'
+        ? { at, ok: run['ok'], error: str(run['error']) }
+        : null
+  };
+};
+
 const database = (value: unknown): TenantDb | null => {
   if (!isRecord(value)) return null;
   const sessions = num(value['sessions']);
@@ -273,6 +305,7 @@ export const parseTenantRow = (row: TenantStateRow): TenantRow => ({
   sentry: sentry(row.sentry),
   visitors: visitors(row.visitors),
   deploy: deployRun(row.deploy),
+  backup: backupOf(row.backup),
   errors: isRecord(row.errors)
     ? Object.fromEntries(
         Object.entries(row.errors).flatMap(([k, v]) => {

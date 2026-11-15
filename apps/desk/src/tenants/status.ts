@@ -33,8 +33,11 @@ export const isBehind = (sha: string | null, main: string | null): boolean =>
   !main.startsWith(sha);
 
 /** `down` and `warn` come from the row's problems; `main` is no longer compared, the apps' `behind` says it */
-export const statusOf = (row: TenantRow): TenantStatus => {
-  const found = problemsOf(row);
+export const statusOf = (
+  row: TenantRow,
+  now: number = Date.now()
+): TenantStatus => {
+  const found = problemsOf(row, null, now);
   if (found.some((p) => p.severity === 'down')) return 'down';
   if (found.length) return 'warn';
   // A switch that was not read says nothing: the tenant is not off for it
@@ -79,7 +82,7 @@ export const tenantsView = (
   if (!payload.rows.length) return { kind: 'empty' };
   const entries = payload.rows.map((r) => {
     const row = parseTenantRow(r);
-    return { row, status: statusOf(row) };
+    return { row, status: statusOf(row, now.getTime()) };
   });
   const times = entries.map((e) => e.row.at).filter(Number.isFinite);
   const ageMin = times.length
@@ -92,7 +95,7 @@ export const tenantsView = (
       .sort((a, b) => a.row.key.localeCompare(b.row.key)),
     shared: entries.find((e) => e.row.key === SHARED_KEY) ?? null,
     worst: entries.map((e) => e.status).reduce(worse),
-    problems: allProblems(entries),
+    problems: allProblems(entries, now.getTime()),
     main: payload.main,
     ageMin,
     stale: ageMin === null || ageMin > TENANTS_STALE_MIN

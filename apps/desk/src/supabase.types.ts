@@ -310,6 +310,7 @@ export type Database = {
           sentry: Json;
           visitors: Json;
           deploy: Json;
+          backup: Json;
           errors: Json;
         };
         Insert: {
@@ -325,6 +326,7 @@ export type Database = {
           sentry?: Json;
           visitors?: Json;
           deploy?: Json;
+          backup?: Json;
           errors?: Json;
         };
         Update: {
@@ -340,6 +342,7 @@ export type Database = {
           sentry?: Json;
           visitors?: Json;
           deploy?: Json;
+          backup?: Json;
           errors?: Json;
         };
         Relationships: [];

@@ -6,6 +6,9 @@ export const DB_SESSIONS_MAX = 15;
 /** Sessions from which the shared row warns: three below the limit */
 export const DB_SESSIONS_WARN = 12;
 
+/** Hours after which the newest database backup is stale: the NUC dumps nightly after 02:00, plus slack */
+export const BACKUP_STALE_HOURS = 26;
+
 /** Fly's own word for a certificate that serves */
 export const certReady = (state: string): boolean =>
   state.toLowerCase() === 'ready';

@@ -1,12 +1,19 @@
+import { shortAge } from '../desk/format';
+
 import { SHARED_KEY, type TenantRow } from './model';
-import { DB_SESSIONS_MAX, DB_SESSIONS_WARN, certPending } from './thresholds';
+import {
+  BACKUP_STALE_HOURS,
+  DB_SESSIONS_MAX,
+  DB_SESSIONS_WARN,
+  certPending
+} from './thresholds';
 
 // What is wrong with a tenant row, as the problem cards of the tenants view say it. Pure:
 // each kind is one predicate with its threshold written in the problem, so the card can say
 // why it was raised. The row's status derives from the same predicates.
 
 export type ProblemKind =
-  'behind' | 'cert' | 'deploy' | 'down' | 'errors' | 'pooler';
+  'backup' | 'behind' | 'cert' | 'deploy' | 'down' | 'errors' | 'pooler';
 
 export type ProblemSeverity = 'down' | 'warn';
 
@@ -200,29 +207,76 @@ const deploy = (row: TenantRow): Problem[] =>
       ]
     : [];
 
-const KIND_ORDER = ['behind', 'cert', 'deploy', 'down', 'errors', 'pooler'];
+// A failed last run with a fresh newest dump is not a problem: the sheet shows it, nothing more
+const backup = (row: TenantRow, now: number): Problem[] => {
+  const b = row.backup;
+  if (row.key !== SHARED_KEY || b === null) return [];
+  const at = b.newestAt === null ? NaN : Date.parse(b.newestAt);
+  const ageH = (now - at) / 36e5;
+  // A time that does not parse counts as no dump
+  if (Number.isFinite(ageH) && ageH <= BACKUP_STALE_HOURS) return [];
+  return [
+    {
+      key: `${row.key}:backup`,
+      row: row.key,
+      kind: 'backup',
+      severity: 'warn',
+      title: Number.isFinite(ageH)
+        ? `The newest database backup is ${shortAge(ageH * 60)} old`
+        : 'No database backup on the NUC yet',
+      evidence: [
+        ...(b.newest
+          ? [`Newest dump ${b.newest}${b.newestAt ? `, ${b.newestAt}` : ''}`]
+          : []),
+        ...(b.lastRun && !b.lastRun.ok
+          ? [
+              `Last run ${b.lastRun.at} failed: ${b.lastRun.error ?? 'no error recorded'}`
+            ]
+          : [])
+      ],
+      threshold: `The newest dump is more than ${BACKUP_STALE_HOURS} hours old; the NUC dumps the cms database each night after 02:00. A backup that was never configured is not a problem.`,
+      actions: [
+        'Read the scheduler log on the NUC (backup-status.json in the queue home)',
+        'Run `cdwr agent backup` on the NUC by hand'
+      ]
+    }
+  ];
+};
 
-/** The problems of one row; `deploySha` is the commit the newest deploy run of main carries, for the behind evidence */
+const KIND_ORDER = [
+  'backup',
+  'behind',
+  'cert',
+  'deploy',
+  'down',
+  'errors',
+  'pooler'
+];
+
+/** The problems of one row; `deploySha` is the commit the newest deploy run of main carries, for the behind evidence; `now` is ms */
 export const problemsOf = (
   row: TenantRow,
-  deploySha: string | null = null
+  deploySha: string | null = null,
+  now: number = Date.now()
 ): Problem[] => [
   ...down(row),
   ...behind(row, deploySha),
   ...cert(row),
   ...pooler(row),
   ...errors(row),
-  ...deploy(row)
+  ...deploy(row),
+  ...backup(row, now)
 ];
 
 /** Worst first (down before warn), then by row with `_shared` first, then by kind and key */
 export const allProblems = (
-  entries: readonly { row: TenantRow }[]
+  entries: readonly { row: TenantRow }[],
+  now: number = Date.now()
 ): Problem[] => {
   const deploySha =
     entries.find((e) => e.row.key === SHARED_KEY)?.row.deploy?.sha ?? null;
   return entries
-    .flatMap((e) => problemsOf(e.row, deploySha))
+    .flatMap((e) => problemsOf(e.row, deploySha, now))
     .sort(
       (a, b) =>
         Number(b.severity === 'down') - Number(a.severity === 'down') ||

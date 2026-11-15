@@ -4,6 +4,7 @@ import type { Json } from '../supabase.types';
 
 import {
   MAIN,
+  backupState,
   deployRun,
   domain,
   flag,
@@ -209,6 +210,35 @@ describe('parseTenantRow', () => {
       null
     );
     expect(odd({ deploy: { runId: 1 } }).deploy).toBeNull();
+  });
+
+  it('parses the backup column; empty or malformed reads as absent', () => {
+    expect(parseTenantRow(tenant('acme')).backup).toBeNull();
+    expect(parseTenantRow(shared()).backup).toBeNull();
+    expect(parseTenantRow(shared({ backup: backupState(10) })).backup).toEqual({
+      newest: 'cms-production-2026-11-15T02-05-11',
+      newestAt: '2026-11-15T02:00:00.000Z',
+      count: 7,
+      bytes: 48 * 2 ** 20,
+      lastRun: { at: '2026-11-15T02:00:00.000Z', ok: true, error: null }
+    });
+    expect(
+      parseTenantRow(
+        shared({
+          backup: { count: 0, newest: null, newestAt: null, lastRun: { ok: 1 } }
+        })
+      ).backup
+    ).toEqual({
+      newest: null,
+      newestAt: null,
+      count: 0,
+      bytes: null,
+      lastRun: null
+    });
+    expect(
+      parseTenantRow(shared({ backup: { count: 'x' } })).backup
+    ).toBeNull();
+    expect(parseTenantRow(shared({ backup: [1] })).backup).toBeNull();
   });
 
   it('reads json that is not a list or a record as empty', () => {

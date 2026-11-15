@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Json } from '../supabase.types';
+
 import {
   BEHIND,
   MAIN,
+  NOW,
+  backupState,
   deployRun,
   domain,
   flyApp,
   machine,
+  minutesAgo,
   sentry,
   shared,
   tenant,
@@ -238,6 +243,69 @@ describe('deploy', () => {
   it('reads a malformed column as no deploy', () => {
     expect(sharedProblems({ deploy: { conclusion: 'failure' } })).toEqual([]);
     expect(sharedProblems({ deploy: 'failure' })).toEqual([]);
+  });
+});
+
+describe('backup', () => {
+  const at = (backup: Json) =>
+    problemsOf(parseTenantRow(shared({ backup })), null, NOW.getTime());
+
+  it('is not raised for no backup, a fresh one, or one at the limit', () => {
+    expect(at({})).toEqual([]);
+    expect(at(backupState(10))).toEqual([]);
+    expect(at(backupState(26))).toEqual([]);
+  });
+
+  it('warns on the shared row once the newest dump is over 26 hours old', () => {
+    const found = at(backupState(27));
+    expect(found.map((p) => [p.key, p.kind, p.severity])).toEqual([
+      ['_shared:backup', 'backup', 'warn']
+    ]);
+    expect(found[0].title).toBe('The newest database backup is 27 h old');
+    expect(found[0].evidence).toEqual([
+      'Newest dump cms-production-2026-11-15T02-05-11, 2026-11-14T09:00:00.000Z'
+    ]);
+    expect(found[0].threshold).toContain('26 hours');
+  });
+
+  it('warns when there is a backup state but no dump yet', () => {
+    const found = at({ newest: null, newestAt: null, count: 0, bytes: null });
+    expect(found[0].title).toBe('No database backup on the NUC yet');
+  });
+
+  it('does not count a failed last run while the newest dump is fresh', () => {
+    expect(
+      at(
+        backupState(10, {
+          lastRun: { at: minutesAgo(5), ok: false, error: 'pg_dump failed' }
+        })
+      )
+    ).toEqual([]);
+  });
+
+  it('names the failed last run in the evidence when stale', () => {
+    const [p] = at(
+      backupState(30, {
+        lastRun: {
+          at: '2026-11-15T02:00:00.000Z',
+          ok: false,
+          error: 'disk full'
+        }
+      })
+    );
+    expect(p.evidence).toContain(
+      'Last run 2026-11-15T02:00:00.000Z failed: disk full'
+    );
+  });
+
+  it('is never raised on a tenant row', () => {
+    expect(
+      problemsOf(
+        parseTenantRow(tenant('acme', { backup: backupState(40) })),
+        null,
+        NOW.getTime()
+      )
+    ).toEqual([]);
   });
 });
 

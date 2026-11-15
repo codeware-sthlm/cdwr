@@ -13,6 +13,7 @@ import {
   BEHIND,
   MAIN,
   NOW,
+  backupState,
   deployRun,
   domain,
   flag,
@@ -192,6 +193,16 @@ describe('statusOf', () => {
     expect(statusFor({ ...off, ...behind })).toBe('warn');
     expect(statusFor({ ...off, ...failing })).toBe('down');
     expect(statusFor({ ...behind, ...failing })).toBe('down');
+  });
+});
+
+describe('stale backup', () => {
+  it('makes the shared row warn, by the clock it is given', () => {
+    const row = parseTenantRow(shared({ backup: backupState(30) }));
+    expect(statusOf(row, NOW.getTime())).toBe('warn');
+    expect(statusOf(row, NOW.getTime() - 10 * 36e5)).toBe('ok');
+    const v = tenantsView(payload([shared({ backup: backupState(30) })]), NOW);
+    expect(v).toMatchObject({ kind: 'ready', worst: 'warn' });
   });
 });
 
