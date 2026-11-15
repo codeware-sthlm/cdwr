@@ -14,6 +14,7 @@ import {
   type SwitchRecord,
   type TenantRecord,
   failed,
+  libpqEnv,
   ok,
   oneLine,
   parseSql,
@@ -53,7 +54,7 @@ export async function readDatabase(
         SQL_FILE
       ],
       {
-        env: childEnv(env, { PGDATABASE: url, PGCONNECT_TIMEOUT: '10' }),
+        env: childEnv(env, { ...libpqEnv(url), PGCONNECT_TIMEOUT: '10' }),
         timeout: PSQL_TIMEOUT_MS
       }
     );
