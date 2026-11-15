@@ -128,6 +128,32 @@ describe('App', () => {
     expect(window.location.hash).toBe('#tree');
   });
 
+  it('opens the tenants view from the header Tenants button, and focuses its title', () => {
+    const { container } = render(<App />);
+    act(() => {
+      fireEvent.click(
+        container.querySelector('button.tenants-pill') as HTMLElement
+      );
+    });
+    expect(store.state.ui.view).toBe('tenants');
+    expect(window.location.hash).toBe('#tenants');
+    expect(container.querySelector('main#tenants')).not.toBeNull();
+    expect(container.querySelector('#cards')).toBeNull();
+    expect(document.activeElement?.id).toBe('tenants-title');
+    act(() => showView('desk'));
+    expect(document.activeElement).toBe(
+      container.querySelector('button.tenants-pill')
+    );
+  });
+
+  it('opens the tenants view named by the start hash', () => {
+    window.history.replaceState(null, '', '/#tenants');
+    const { container } = render(<App />);
+    act(() => openStartHash());
+    expect(container.querySelector('main#tenants')).not.toBeNull();
+    expect(store.state.ui.openSheet).toBeNull();
+  });
+
   it('opens the sheet named by the start hash', () => {
     window.history.replaceState(null, '', '/#before');
     render(<App />);

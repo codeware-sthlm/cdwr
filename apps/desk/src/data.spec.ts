@@ -121,6 +121,7 @@ const setup = () => {
     readSnoozes: supabaseReadSnoozes,
     readReviews: vi.fn(() => Promise.resolve(null)),
     readDismissals: vi.fn(() => Promise.resolve([])),
+    readTenants: vi.fn(() => Promise.resolve({ rows: [], main: null })),
     subscribe: vi.fn(
       (
         onChange: () => void,

@@ -1,0 +1,253 @@
+import { useState } from 'react';
+
+import { CAP_SUB } from '../desk/components/capacity';
+import { PANEL } from '../desk/components/card-ui';
+import { PHONE, Sheet, useMedia } from '../desk/components/sheet';
+import { ageText } from '../desk/format';
+import type { TenantsPayload } from '../supabase';
+
+import { TenantBody } from './body';
+import {
+  type Cell,
+  appCell,
+  certCell,
+  compactLine,
+  healthCell,
+  sessionsCell,
+  switchesCell,
+  versionCell
+} from './cells';
+import { SHARED_KEY, type TenantDb } from './model';
+import {
+  TENANTS_STALE_MIN,
+  type TenantEntry,
+  type TenantsView,
+  tenantsView
+} from './status';
+import { StatusChip, TEXT_TONE } from './ui';
+
+// The tenants view: one row per tenant and the shared one, the NUC's platform state at a glance.
+// Read-only. A row opens a sheet with everything for it; which one is open is this page's own state.
+
+const EMPTY_TEXT = 'No platform data yet — the NUC writes it every 10 minutes.';
+
+const COLUMNS = [
+  'Tenant',
+  'Status',
+  'cms',
+  'headless',
+  'Version',
+  'Health',
+  'Certificate',
+  'DB sessions',
+  'Switches'
+] as const;
+
+const GRID =
+  'grid grid-cols-[minmax(150px,1.6fr)_64px_repeat(7,minmax(76px,1fr))] items-center gap-x-3';
+const ROW_BOX =
+  'tn-row w-full min-h-[var(--tap)] cursor-pointer rounded-[var(--r-row)] border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2.5 text-left font-[family-name:var(--font-ui)] text-[13px] font-normal hover:border-[color:var(--line-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]';
+const MONO =
+  'font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-normal';
+
+const nameOf = (entry: TenantEntry): string =>
+  entry.row.key === SHARED_KEY ? 'Shared' : (entry.row.name ?? entry.row.key);
+
+const Value = ({ cell, col }: { cell: Cell; col: string }) => (
+  <span
+    className={`${MONO} ${TEXT_TONE[cell.tone]} min-w-0 truncate`}
+    data-col={col}
+  >
+    {cell.text}
+  </span>
+);
+
+const TenantLine = ({
+  entry,
+  main,
+  db,
+  phone,
+  onOpen
+}: {
+  entry: TenantEntry;
+  main: string | null;
+  db: TenantDb | null;
+  phone: boolean;
+  onOpen: (key: string) => void;
+}) => {
+  const { row, status } = entry;
+  const shared = row.key === SHARED_KEY;
+  return (
+    <li>
+      <button
+        type="button"
+        className={
+          phone ? `${ROW_BOX} flex flex-col gap-1.5` : `${ROW_BOX} ${GRID}`
+        }
+        data-tenant={row.key}
+        data-status={status}
+        onClick={() => onOpen(row.key)}
+      >
+        {phone ? (
+          <>
+            <span className="flex min-w-0 items-center justify-between gap-3">
+              <b className="min-w-0 truncate font-semibold">{nameOf(entry)}</b>
+              <StatusChip status={status} />
+            </span>
+            <span
+              className={`${MONO} min-w-0 truncate text-[color:var(--muted)]`}
+            >
+              {compactLine(row, main) ||
+                (shared ? 'host apps and database' : 'no app')}
+            </span>
+          </>
+        ) : (
+          <>
+            <b className="min-w-0 truncate font-semibold">{nameOf(entry)}</b>
+            <StatusChip status={status} />
+            <Value col="cms" cell={appCell(row, 'cms')} />
+            <Value col="headless" cell={appCell(row, 'headless')} />
+            <Value col="version" cell={versionCell(row, main)} />
+            <Value col="health" cell={healthCell(row)} />
+            <Value col="certificate" cell={certCell(row)} />
+            <Value col="sessions" cell={sessionsCell(row, db)} />
+            <Value col="switches" cell={switchesCell(row)} />
+          </>
+        )}
+      </button>
+    </li>
+  );
+};
+
+/** The alert band: the rows are older than the NUC's cadence allows */
+const StaleBand = ({ ageMin }: { ageMin: number | null }) => (
+  <div
+    role="alert"
+    className="tn-stale rounded-[10px] bg-[color:var(--wait-soft)] px-4 py-3 text-[0.9rem] text-[color:var(--wait)]"
+  >
+    {ageMin === null
+      ? 'The platform data carries no readable time, so it may be stale.'
+      : `The platform data was last written ${ageText(ageMin)}, more than ${TENANTS_STALE_MIN} min ago. The NUC writes it every 10 minutes, so it may be down.`}
+  </div>
+);
+
+type Props = {
+  data: TenantsPayload | null;
+  now: Date;
+  onDesk: () => void;
+};
+
+const Rows = ({
+  view,
+  now
+}: {
+  view: Extract<TenantsView, { kind: 'ready' }>;
+  now: Date;
+}) => {
+  const phone = useMedia(PHONE);
+  // The sheet keeps its row while it animates out
+  const [sel, setSel] = useState<{ key: string; open: boolean } | null>(null);
+  const all = view.shared ? [view.shared, ...view.tenants] : view.tenants;
+  const picked = sel ? all.find((e) => e.row.key === sel.key) : undefined;
+  const db = view.shared?.row.db ?? null;
+  return (
+    <>
+      {phone ? null : (
+        <div
+          className={`${GRID} tn-head px-4 text-[10px] font-medium tracking-[0.1em] text-[color:var(--muted)] uppercase`}
+          aria-hidden="true"
+        >
+          {COLUMNS.map((c) => (
+            <span key={c} className="truncate">
+              {c}
+            </span>
+          ))}
+        </div>
+      )}
+      <ul className="grid gap-2">
+        {all.map((e) => (
+          <TenantLine
+            key={e.row.key}
+            entry={e}
+            main={view.main}
+            db={db}
+            phone={phone}
+            onOpen={(key) => setSel({ key, open: true })}
+          />
+        ))}
+      </ul>
+      {view.tenants.length ? null : (
+        <p className="text-[0.9rem] text-[color:var(--muted)]">
+          No tenant is recorded yet.
+        </p>
+      )}
+      {picked ? (
+        <Sheet
+          open={sel?.open === true}
+          title={nameOf(picked)}
+          sub={
+            picked.row.key === SHARED_KEY
+              ? 'host apps and database'
+              : `${picked.row.key} · ${picked.row.deployment ?? 'no deployment'}`
+          }
+          focus
+          onClose={() => setSel((s) => (s ? { ...s, open: false } : s))}
+          onClosed={() =>
+            Array.from(document.querySelectorAll<HTMLElement>('[data-tenant]'))
+              .find((el) => el.dataset['tenant'] === picked.row.key)
+              ?.focus()
+          }
+        >
+          <TenantBody entry={picked} main={view.main} now={now} />
+        </Sheet>
+      ) : null}
+    </>
+  );
+};
+
+export const TenantsPage = ({ data, now, onDesk }: Props) => {
+  const view = tenantsView(data, now);
+  return (
+    <>
+      {view.kind === 'ready' && view.stale ? (
+        <StaleBand ageMin={view.ageMin} />
+      ) : null}
+      <div className="pf-head flex flex-wrap items-center gap-x-4 gap-y-2">
+        <button
+          type="button"
+          className="pf-back min-h-[var(--tap)] px-3.5"
+          data-view="desk"
+          onClick={onDesk}
+        >
+          ‹ Desk
+        </button>
+        <div className="pf-title mr-auto flex min-w-0 flex-col gap-0.5">
+          <h1
+            id="tenants-title"
+            tabIndex={-1}
+            className="font-[family-name:var(--font-ui)] text-[22px] leading-[1.2] font-semibold tracking-[0.18em] uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--accent)]"
+          >
+            Tenants
+          </h1>
+          <span className={`cap-sub ${CAP_SUB}`}>
+            each tenant&apos;s apps, version, certificates and deploy switches,
+            as the NUC last read them
+          </span>
+        </div>
+      </div>
+      {view.kind === 'loading' ? (
+        <div className={`${PANEL} text-[0.9rem] text-[color:var(--muted)]`}>
+          Loading…
+        </div>
+      ) : view.kind === 'empty' ? (
+        <div
+          className={`${PANEL} tn-empty text-[0.9rem] text-[color:var(--muted)]`}
+        >
+          {EMPTY_TEXT}
+        </div>
+      ) : (
+        <Rows view={view} now={now} />
+      )}
+    </>
+  );
+};
