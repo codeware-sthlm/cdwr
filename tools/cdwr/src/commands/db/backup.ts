@@ -1,11 +1,9 @@
-import { mkdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 import { defineCommand } from '../../cli/command';
-import { backupName, backupsRoot } from '../../services/backups';
+import { backupName, backupsRoot, dumpCms } from '../../services/backups';
 import { resolveDatabaseUrl } from '../../services/database';
 import { environmentInput, previewAppInput } from '../../services/environment';
-import { run } from '../../services/shell';
 
 /**
  * Template for a read-only command: one remembered input, a plan that only
@@ -40,19 +38,9 @@ export default defineCommand({
   },
 
   async apply(ctx, { databaseUrl, dir }) {
-    mkdirSync(dir, { recursive: true });
-    const dump = (part: 'schema' | 'data') =>
-      ctx.ui.task(`Dumping ${part}`, () =>
-        run('pg_dump', [
-          part === 'schema' ? '--schema-only' : '--data-only',
-          '--no-acl',
-          '--no-owner',
-          `--file=${join(dir, `${part}.sql`)}`,
-          databaseUrl
-        ])
-      );
-    await dump('schema');
-    await dump('data');
+    await ctx.ui.task('Dumping schema and data', () =>
+      dumpCms({ url: databaseUrl, dir })
+    );
     const where = relative(ctx.root, dir);
     return {
       summary: `Backup written to ${where}`,

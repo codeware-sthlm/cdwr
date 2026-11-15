@@ -267,6 +267,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/platform-record').then((m) => m.default)
   },
   {
+    path: ['agent', 'backup'],
+    summary: 'Dump the production CMS database into the agent-queue home',
+    danger: 'mutate',
+    load: () => import('./agent/backup').then((m) => m.default)
+  },
+  {
     path: ['agent', 'listen'],
     summary: 'Wake the scheduler when issue or GitHub events arrive',
     danger: 'read',
