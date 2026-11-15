@@ -4402,3 +4402,147 @@ describe('run.sh platform step', () => {
     }
   );
 });
+
+describe('run.sh backup step', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  const URL = 'postgres://backup-secret';
+  const today = () => new Date().toLocaleDateString('sv');
+  let root: string;
+  let bin: string;
+
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const calls = () => read('node.calls').split('\n').filter(Boolean).length;
+
+  // A stub node standing in for the cdwr command
+  const stubNode = (body: string) => {
+    writeFileSync(
+      join(bin, 'node'),
+      `#!/bin/sh\necho "$@" >> "${root}/node.calls"\nenv > "${root}/node.env"\n${body}\n`
+    );
+    chmodSync(join(bin, 'node'), 0o755);
+  };
+
+  // One tick's record_backup, run with the given environment; the detached part is waited for
+  const tick = async (env: Record<string, string>) => {
+    const script = [
+      `exec 2>>"${root}/err"`,
+      'set -euo pipefail',
+      `HOME_DIR="${root}"; REPO="${root}"; check=false`,
+      `note() { print -r -- "$*" >> "${root}/notes"; }`,
+      `record() { print -r -- "$*" >> "${root}/records"; }`,
+      'PLATFORM_VARS=(PLATFORM_BACKUP_DATABASE_URL)',
+      fn('unexported_env'),
+      'platform_env() { unexported_env $PLATFORM_VARS; }',
+      fn('backup_warn'),
+      fn('record_backup'),
+      'platform_env',
+      'record_backup',
+      `env > "${root}/sibling.env"`
+    ].join('\n');
+    const res = spawnSync('zsh', ['-c', script], {
+      env: { ...process.env, PATH: `${bin}:${process.env['PATH']}`, ...env },
+      stdio: 'ignore'
+    });
+    expect(res.status).toBe(0);
+    for (let i = 0; i < 100 && existsSync(join(root, 'backup.lock')); i++)
+      await sleep(50);
+    expect(read('err')).toBe('');
+  };
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'backup-'));
+    bin = join(root, 'bin');
+    mkdirSync(bin);
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('runs every tick, right after the platform step', () => {
+    const at = SCRIPT.indexOf('\nrecord_backup\n');
+    expect(at).toBeGreaterThan(SCRIPT.indexOf('\nrecord_platform\n'));
+    expect(at).toBeLessThan(SCRIPT.indexOf('\nCHECKIN_ID=""\n'));
+    expect(SCRIPT).toContain(
+      'PLATFORM_DATABASE_URL PLATFORM_BACKUP_DATABASE_URL'
+    );
+    expect(SCRIPT).not.toMatch(/export [^\n]*PLATFORM_BACKUP/);
+  });
+
+  it.skipIf(!hasZsh)('runs once a night, from 02:00', async () => {
+    stubNode('exit 0');
+    const env = { PLATFORM_BACKUP_DATABASE_URL: URL };
+    await tick({ ...env, AGENT_QUEUE_BACKUP_HOUR: '01' });
+    expect(calls()).toBe(0);
+    expect(read('backup-ran-on')).toBe('');
+    // a leading zero is not octal
+    await tick({ ...env, AGENT_QUEUE_BACKUP_HOUR: '08' });
+    expect(read('node.calls')).toBe(
+      'tools/cdwr/bin/cdwr.mjs agent backup --yes --json\n'
+    );
+    expect(read('backup-ran-on')).toBe(`${today()}\n`);
+    expect(read('notes')).toContain('backup: started');
+    await tick({ ...env, AGENT_QUEUE_BACKUP_HOUR: '09' });
+    expect(calls()).toBe(1);
+    // another day
+    writeFileSync(join(root, 'backup-ran-on'), '2000-01-01\n');
+    await tick({ ...env, AGENT_QUEUE_BACKUP_HOUR: '23' });
+    expect(calls()).toBe(2);
+  });
+
+  it.skipIf(!hasZsh)('does nothing without the url', async () => {
+    stubNode('exit 0');
+    await tick({ AGENT_QUEUE_BACKUP_HOUR: '05' });
+    await sleep(200);
+    expect(calls()).toBe(0);
+    expect(read('notes')).toBe('');
+    expect(read('backup-ran-on')).toBe('');
+  });
+
+  it.skipIf(!hasZsh)(
+    'passes the url to the command alone, never to other children',
+    async () => {
+      stubNode('exit 0');
+      writeFileSync(
+        join(root, 'env-file'),
+        `PLATFORM_BACKUP_DATABASE_URL="${URL}"\n`
+      );
+      await tick({
+        AGENT_QUEUE_ENV_FILE: join(root, 'env-file'),
+        AGENT_QUEUE_BACKUP_HOUR: '05'
+      });
+      expect(read('node.env')).toContain(`PLATFORM_BACKUP_DATABASE_URL=${URL}`);
+      expect(read('node.env')).toContain(`AGENT_QUEUE_HOME=${root}`);
+      expect(read('sibling.env')).not.toMatch(
+        /PLATFORM_BACKUP_DATABASE_URL|backup-secret/
+      );
+    }
+  );
+
+  it.skipIf(!hasZsh)(
+    'warns about a failed run once, and clears it',
+    async () => {
+      stubNode('exit 3');
+      const env = {
+        PLATFORM_BACKUP_DATABASE_URL: URL,
+        AGENT_QUEUE_BACKUP_HOUR: '05'
+      };
+      await tick(env);
+      expect(read('backup-failed')).toBe('cdwr agent backup failed (3)\n');
+      expect(read('records')).toBe('');
+      // the same day: no new run, the failure is warned and removed
+      await tick(env);
+      expect(read('records')).toBe(
+        'warn  backup: cdwr agent backup failed (3)\n'
+      );
+      expect(read('notes')).toContain(
+        'warn: backup: cdwr agent backup failed (3)'
+      );
+      expect(existsSync(join(root, 'backup-failed'))).toBe(false);
+      expect(calls()).toBe(1);
+    }
+  );
+});
