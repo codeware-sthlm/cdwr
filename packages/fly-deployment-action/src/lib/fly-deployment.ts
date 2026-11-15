@@ -121,6 +121,7 @@ export async function flyDeployment(
       config,
       environment: context.environment,
       fly,
+      gitSha: github.context.sha || undefined,
       imageMap: inputs.images,
       pullRequest: context.pullRequest
     });

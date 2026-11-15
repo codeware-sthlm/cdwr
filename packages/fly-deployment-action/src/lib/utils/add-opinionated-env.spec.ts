@@ -18,6 +18,32 @@ describe('addOpinionatedEnv', () => {
     expect(result).not.toHaveProperty('TENANT_ID');
   });
 
+  it('should add GIT_SHA only when a sha is given', () => {
+    const sha = 'e3b25eff0123456789abcdef0123456789abcdef';
+
+    expect(
+      addOpinionatedEnv({
+        appName: 'my-app',
+        gitSha: sha,
+        prNumber: undefined,
+        tenantId: undefined
+      })
+    ).toEqual({
+      APP_NAME: 'my-app',
+      FLY_URL: 'https://my-app.fly.dev',
+      GIT_SHA: sha,
+      PR_NUMBER: ''
+    });
+    expect(
+      addOpinionatedEnv({
+        appName: 'my-app',
+        gitSha: '',
+        prNumber: undefined,
+        tenantId: undefined
+      })
+    ).not.toHaveProperty('GIT_SHA');
+  });
+
   it('should add APP_NAME, FLY_URL, PR_NUMBER and TENANT_ID with tenant', () => {
     const result = addOpinionatedEnv({
       appName: 'my-app',
