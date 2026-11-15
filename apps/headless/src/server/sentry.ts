@@ -1,12 +1,13 @@
 import { EnvSchema } from '@codeware/app-headless/util/env-schema';
 import * as Sentry from '@sentry/tanstackstart-react';
 
-import { sentryOptions } from '../sentry';
+import { sentryOptions, tenantScope } from '../sentry';
 
 const SentryEnv = EnvSchema.pick({
   DEPLOY_ENV: true,
   SENTRY_DSN: true,
-  SENTRY_RELEASE: true
+  SENTRY_RELEASE: true,
+  TENANT_ID: true
 });
 
 /**
@@ -34,11 +35,12 @@ export function initSentryServer(env: NodeJS.ProcessEnv = process.env) {
     return;
   }
 
-  Sentry.init(
-    sentryOptions({
+  Sentry.init({
+    ...sentryOptions({
       dsn: result.data.SENTRY_DSN,
       environment: result.data.DEPLOY_ENV,
       release: result.data.SENTRY_RELEASE
-    })
-  );
+    }),
+    initialScope: tenantScope(result.data.TENANT_ID)
+  });
 }
