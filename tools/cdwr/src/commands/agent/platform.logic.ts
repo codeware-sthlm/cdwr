@@ -19,16 +19,17 @@ export const ok = <T>(value: T): Reading<T> => ({ ok: true, value });
  * One line, short, with anything shaped like a url (a connection string with a
  * password) removed: an error message ends up in a table the desk shows.
  */
-export const oneLine = (error: unknown): string => {
-  const text = error instanceof Error ? error.message : String(error);
-  return (
-    text
-      .replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[url]')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 200) || 'unknown error'
-  );
-};
+export const oneLine = (error: unknown): string =>
+  plainText(error instanceof Error ? error.message : String(error), 200) ||
+  'unknown error';
+
+/** `text` on one line, urls removed, cut to `max` characters; for text from a third party */
+export const plainText = (text: string, max: number): string =>
+  text
+    .replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[url]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
 
 export const failed = (error: unknown): Reading<never> => ({
   ok: false,
@@ -72,6 +73,7 @@ const SqlSchema = z.object({
       name: z.string().nullable(),
       deployment: z.string().nullable(),
       status: z.string().nullable(),
+      statsWebsiteId: z.string().nullable(),
       domains: z.array(
         z.object({
           hostname: z.string(),
@@ -158,12 +160,17 @@ const machineState = (m: MachineInput) => ({
     : null
 });
 
-const appState = (reading: FlyAppReading, kind: string) => ({
+const appState = (
+  reading: FlyAppReading,
+  kind: string,
+  behind: boolean | null
+) => ({
   app: reading.name,
   kind,
   machines: reading.machines.ok
     ? reading.machines.value.map(machineState)
     : null,
+  behind,
   certs: reading.certs.ok
     ? reading.certs.value.map((c) => ({
         hostname: c.hostname,
@@ -233,6 +240,244 @@ export const switchRecords = (
   return records;
 };
 
+// --- the sentry read ---
+
+export type SentryTop = {
+  shortId: string;
+  level: string;
+  count: number;
+  title: string;
+};
+
+/** Errors per tenant slug over 24 hours and 7 days, and the top unresolved issue of each tenant with errors today */
+export type SentryRead = {
+  org: string;
+  day: Record<string, number>;
+  week: Record<string, number>;
+  tops: Record<string, Reading<SentryTop | null>>;
+};
+
+const TITLE_MAX = 120;
+
+/** The top issue as a row field: strings from Sentry are one line, urlless and short */
+export const sentryTop = (top: SentryTop): SentryTop => ({
+  shortId: plainText(top.shortId, 40),
+  level: plainText(top.level, 20),
+  count: top.count,
+  title: plainText(top.title, TITLE_MAX)
+});
+
+/** The `sentry` column of a tenant; a tenant absent from the grouped result has none */
+export const sentrySignal = (read: SentryRead, slug: string) => {
+  const top = read.tops[slug];
+  return {
+    org: plainText(read.org, 80),
+    count24h: read.day[slug] ?? 0,
+    count7d: read.week[slug] ?? 0,
+    top: top?.ok && top.value ? sentryTop(top.value) : null
+  };
+};
+
+// --- the umami read ---
+
+export const STATS_TIMEZONE = 'Europe/Stockholm';
+export const VISITOR_DAYS = 7;
+
+/** The visitors of today so far and the per-day series as Umami answered it */
+export type VisitorsRead = {
+  today: number;
+  days: Array<{ date: string; visitors: number }>;
+};
+
+/** Milliseconds the timezone is ahead of UTC at this instant */
+const offsetAt = (ms: number): number => {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: STATS_TIMEZONE,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric'
+    })
+      .formatToParts(new Date(ms))
+      .map((p) => [p.type, Number(p.value)])
+  ) as Record<string, number>;
+  const wall = Date.UTC(
+    parts['year'] ?? 0,
+    (parts['month'] ?? 1) - 1,
+    parts['day'] ?? 1,
+    parts['hour'] ?? 0,
+    parts['minute'] ?? 0,
+    parts['second'] ?? 0
+  );
+  return wall - Math.floor(ms / 1000) * 1000;
+};
+
+/** The calendar day (`YYYY-MM-DD`) in Stockholm at this instant */
+export const stockholmDay = (ms: number): string =>
+  new Date(ms + offsetAt(ms)).toISOString().slice(0, 10);
+
+/** The instant Stockholm's `day` (`YYYY-MM-DD`) starts, in epoch milliseconds */
+export const dayStart = (day: string): number => {
+  const utc = Date.parse(`${day}T00:00:00Z`);
+  // Midnight comes before a switch of summer time, so the second step settles the day of the switch
+  const first = utc - offsetAt(utc);
+  return utc - offsetAt(first);
+};
+
+/** The `count` days before `today`, oldest first */
+export const daysBefore = (today: string, count: number): string[] => {
+  const start = Date.parse(`${today}T00:00:00Z`);
+  return Array.from({ length: count }, (_, i) =>
+    new Date(start - (count - i) * 86_400_000).toISOString().slice(0, 10)
+  );
+};
+
+/** The `visitors` column: today and each of `days`, a day Umami didn't list counting 0 */
+export const visitorsSignal = (read: VisitorsRead, days: string[]) => {
+  const per = new Map(read.days.map((d) => [d.date, d.visitors]));
+  return {
+    today: read.today,
+    days: days.map((date) => ({ date, visitors: per.get(date) ?? 0 }))
+  };
+};
+
+// --- the deploy read and behind main ---
+
+/** The last completed deploy of main */
+export type DeployRead = {
+  runId: number;
+  sha: string;
+  conclusion: string;
+  url: string;
+  at: string;
+};
+
+/**
+ * What the deploy job of a run concluded; a matrix names its jobs `deploy (x)`
+ * and one failure fails them all. `none` when the run has no deploy job.
+ */
+export const deployConclusion = (
+  jobs: Array<{ name: string; conclusion: string | null }>
+): string => {
+  const own = jobs.filter(
+    (j) => j.name === 'deploy' || j.name.startsWith('deploy (')
+  );
+  if (own.length === 0) return 'none';
+  const seen = own.map((j) => j.conclusion ?? 'unknown');
+  if (seen.some((c) => c === 'failure' || c === 'timed_out')) return 'failure';
+  for (const c of ['cancelled', 'success', 'skipped']) {
+    if (seen.includes(c)) return c;
+  }
+  return seen[0] ?? 'none';
+};
+
+/** The Nx project an app kind is deployed from; the apps share their names with their projects */
+export const projectOf = (kind: string): string | null =>
+  (APPS as readonly string[]).includes(kind) ? kind : null;
+
+export type AffectedPair = { base: string; head: string };
+
+export const pairKey = ({ base, head }: AffectedPair): string =>
+  `${base}..${head}`;
+
+/** Two shas of one commit, whichever length each was written in */
+const sameSha = (a: string, b: string): boolean =>
+  a.startsWith(b) || b.startsWith(a);
+
+/** The commits a machine runs that the deploy isn't at, as `machine..deploy` pairs, each once */
+export const behindPairs = (
+  apps: FlyAppReading[],
+  deploySha: string
+): AffectedPair[] => {
+  const seen = new Map<string, AffectedPair>();
+  for (const app of apps) {
+    if (!app.machines.ok) continue;
+    for (const m of app.machines.value) {
+      const sha = machineState(m).sha;
+      if (sha && !sameSha(sha, deploySha)) {
+        const pair = { base: sha, head: deploySha };
+        seen.set(pairKey(pair), pair);
+      }
+    }
+  }
+  return [...seen.values()];
+};
+
+/**
+ * Whether an app is behind main, by the deploy's own rule: some machine runs
+ * another commit than the last deploy and the app's project is affected between
+ * the two. `behind` is null when that can't be told; `error` says why when a
+ * read failed rather than there being nothing to compare.
+ */
+export const behindFlag = (
+  kind: string,
+  machines: Array<{ sha: string | null }> | null,
+  deploySha: string | null,
+  affected: Record<string, Reading<string[]>>
+): { behind: boolean | null; error?: string } => {
+  const project = projectOf(kind);
+  if (!project || !deploySha || !machines) return { behind: null };
+  const shas = machines.flatMap((m) => (m.sha ? [m.sha] : []));
+  if (shas.length === 0) return { behind: null };
+  const apart = shas.filter((sha) => !sameSha(sha, deploySha));
+  let error: string | undefined;
+  for (const sha of apart) {
+    const reading = affected[pairKey({ base: sha, head: deploySha })];
+    if (!reading) {
+      error ??= 'not read';
+    } else if (!reading.ok) {
+      error ??= reading.reason;
+    } else if (reading.value.includes(project)) {
+      return { behind: true };
+    }
+  }
+  return error === undefined ? { behind: false } : { behind: null, error };
+};
+
+/** The project lists remembered per `base..head`, oldest first */
+export type AffectedCache = Array<{ key: string; projects: string[] }>;
+
+export const CACHE_PAIRS = 50;
+
+const CacheSchema = z.array(
+  z.object({ key: z.string(), projects: z.array(z.string()) })
+);
+
+/** The cache file's content; anything unreadable is an empty cache */
+export const parseAffectedCache = (text: string): AffectedCache => {
+  try {
+    return CacheSchema.parse(JSON.parse(text));
+  } catch {
+    return [];
+  }
+};
+
+/** The newest `keep` entries, each key once with its latest value */
+export const pruneAffected = (
+  cache: AffectedCache,
+  keep = CACHE_PAIRS
+): AffectedCache => {
+  const latest = new Map<string, AffectedCache[number]>();
+  for (const entry of cache) {
+    latest.delete(entry.key);
+    latest.set(entry.key, entry);
+  }
+  return [...latest.values()].slice(-keep);
+};
+
+/** The pairs the cache can't answer, so Nx runs only for a new pair of shas */
+export const uncachedPairs = (
+  pairs: AffectedPair[],
+  cache: AffectedCache
+): AffectedPair[] => {
+  const known = new Set(cache.map((e) => e.key));
+  return pairs.filter((p) => !known.has(pairKey(p)));
+};
+
 // --- the rows ---
 
 export interface PlatformReadings {
@@ -242,6 +487,12 @@ export interface PlatformReadings {
   db: Reading<DbRecord>;
   fly: Reading<FlyAppReading[]>;
   switches: Reading<SwitchRecord[]>;
+  sentry: Reading<SentryRead>;
+  /** By tenant slug, for the tenants that have a statistics website */
+  visitors: Record<string, Reading<VisitorsRead>>;
+  deploy: Reading<DeployRead>;
+  /** Project lists by `base..head`, for the pairs `behindPairs` named */
+  affected: Record<string, Reading<string[]>>;
 }
 
 type Errors = Record<string, string>;
@@ -272,7 +523,8 @@ const certificateOf = (
 export const buildRows = (
   readings: PlatformReadings
 ): { rows: TenantStateRow[]; prune: string[] | null } => {
-  const { at, tenants, db, fly, switches } = readings;
+  const { at, tenants, db, fly, switches, sentry, visitors, deploy, affected } =
+    readings;
   const known = tenants.ok ? tenants.value : null;
 
   const errors = new Map<string, Errors>();
@@ -283,6 +535,7 @@ export const buildRows = (
   };
   const apps = new Map<string, AppState[]>();
   const switchList = new Map<string, SwitchRecord[]>();
+  const visitorDays = daysBefore(stockholmDay(Date.parse(at)), VISITOR_DAYS);
 
   // Failures of a whole source show on every row it feeds
   const keys = [...(known?.map((t) => t.slug) ?? []), SHARED_KEY];
@@ -293,12 +546,30 @@ export const buildRows = (
   if (!switches.ok) {
     for (const key of keys) note(errorsOf(key), 'switches', switches.reason);
   }
+  if (!sentry.ok) {
+    for (const key of keys) note(errorsOf(key), 'sentry', sentry.reason);
+  } else {
+    for (const [slug, top] of Object.entries(sentry.value.tops)) {
+      if (!top.ok && known?.some((t) => t.slug === slug)) {
+        note(errorsOf(slug), 'sentry', `top issue: ${top.reason}`);
+      }
+    }
+  }
+  if (!deploy.ok) note(errorsOf(SHARED_KEY), 'github', deploy.reason);
+  const deploySha = deploy.ok ? deploy.value.sha : null;
 
   if (fly.ok) {
     for (const reading of fly.value) {
       const owner = appOwner(reading.name, known);
       if (!owner) continue;
       const own = errorsOf(owner.key);
+      const { behind, error } = behindFlag(
+        owner.kind,
+        reading.machines.ok ? reading.machines.value.map(machineState) : null,
+        deploySha,
+        affected
+      );
+      if (error !== undefined) note(own, 'behind', `${reading.name}: ${error}`);
       if (!reading.machines.ok) {
         note(own, 'fly', `${reading.name}: ${reading.machines.reason}`);
       }
@@ -307,7 +578,7 @@ export const buildRows = (
       }
       apps.set(owner.key, [
         ...(apps.get(owner.key) ?? []),
-        appState(reading, owner.kind)
+        appState(reading, owner.kind, behind)
       ]);
     }
   }
@@ -338,6 +609,11 @@ export const buildRows = (
     .sort((a, b) => a.slug.localeCompare(b.slug))
     .map((t) => {
       const own = apps.get(t.slug) ?? [];
+      const seen = t.statsWebsiteId ? visitors[t.slug] : undefined;
+      if (t.statsWebsiteId) {
+        if (!seen) note(errorsOf(t.slug), 'umami', 'not read');
+        else if (!seen.ok) note(errorsOf(t.slug), 'umami', seen.reason);
+      }
       return {
         key: t.slug,
         at,
@@ -354,6 +630,9 @@ export const buildRows = (
         })),
         switches: switchState(t.slug),
         db: {},
+        sentry: sentry.ok ? sentrySignal(sentry.value, t.slug) : {},
+        visitors: seen?.ok ? visitorsSignal(seen.value, visitorDays) : {},
+        deploy: {},
         errors: errorsOf(t.slug)
       };
     });
@@ -374,6 +653,17 @@ export const buildRows = (
           byApplication: Object.fromEntries(
             Object.entries(db.value.byApplication)
           )
+        }
+      : {},
+    sentry: {},
+    visitors: {},
+    deploy: deploy.ok
+      ? {
+          runId: deploy.value.runId,
+          sha: deploy.value.sha,
+          conclusion: deploy.value.conclusion,
+          url: deploy.value.url,
+          at: deploy.value.at
         }
       : {},
     errors: errorsOf(SHARED_KEY)

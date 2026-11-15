@@ -307,6 +307,9 @@ export type Database = {
           switches: Json;
           db: Json;
           errors: Json;
+          sentry: Json;
+          visitors: Json;
+          deploy: Json;
         };
         Insert: {
           key: string;
@@ -319,6 +322,9 @@ export type Database = {
           switches?: Json;
           db?: Json;
           errors?: Json;
+          sentry?: Json;
+          visitors?: Json;
+          deploy?: Json;
         };
         Update: {
           key?: string;
@@ -331,6 +337,9 @@ export type Database = {
           switches?: Json;
           db?: Json;
           errors?: Json;
+          sentry?: Json;
+          visitors?: Json;
+          deploy?: Json;
         };
         Relationships: [];
       };

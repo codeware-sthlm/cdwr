@@ -3,20 +3,35 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  type AffectedCache,
   type FlyAppReading,
   type PlatformReadings,
   SHARED_KEY,
   type TenantRecord,
   appOwner,
+  behindFlag,
+  behindPairs,
   buildRows,
+  dayStart,
+  daysBefore,
+  deployConclusion,
   failed,
   libpqEnv,
   ok,
   oneLine,
+  pairKey,
+  parseAffectedCache,
   parseSql,
+  plainText,
+  projectOf,
+  pruneAffected,
+  sentrySignal,
   splitDatabase,
+  stockholmDay,
   switchRecords,
-  vanishedFilter
+  uncachedPairs,
+  vanishedFilter,
+  visitorsSignal
 } from './platform.logic';
 
 const AT = '2026-11-15T10:00:00.000Z';
@@ -60,6 +75,7 @@ const acme: TenantRecord = {
   name: 'Acme',
   deployment: 'acme-dep',
   status: 'active',
+  statsWebsiteId: 'site-acme',
   domains: [
     {
       hostname: 'acme.example',
@@ -80,6 +96,7 @@ const beta: TenantRecord = {
   name: 'Beta',
   deployment: null,
   status: null,
+  statsWebsiteId: null,
   domains: []
 };
 
@@ -111,6 +128,14 @@ const db = {
   byApplication: { cms: 2, '(none)': 1 }
 };
 
+const deploy = {
+  runId: 42,
+  sha: 'abc1234def',
+  conclusion: 'success',
+  url: 'https://github.com/codeware-sthlm/cdwr/actions/runs/42',
+  at: '2026-11-15T09:00:00Z'
+};
+
 const readings = (over: Partial<PlatformReadings> = {}): PlatformReadings => ({
   at: AT,
   tenants: ok([beta, acme]),
@@ -128,6 +153,24 @@ const readings = (over: Partial<PlatformReadings> = {}): PlatformReadings => ({
     { app: 'cms', environment: 'production', tenant: 'acme-dep', flag: 'on' },
     { app: 'headless', environment: 'production', tenant: 'beta', flag: 'off' }
   ]),
+  sentry: ok({
+    org: 'cdwr',
+    day: { acme: 3 },
+    week: { acme: 10, beta: 1 },
+    tops: {
+      acme: ok({
+        shortId: 'CDWR-1',
+        level: 'error',
+        count: 3,
+        title: 'Boom'
+      })
+    }
+  }),
+  visitors: {
+    acme: ok({ today: 5, days: [{ date: '2026-11-14', visitors: 9 }] })
+  },
+  deploy: ok(deploy),
+  affected: {},
   ...over
 });
 
@@ -369,6 +412,344 @@ describe('buildRows', () => {
   });
 });
 
+describe('the sentry column', () => {
+  it('counts the tenant, with its top issue; a tenant absent from the result has 0 and 0', () => {
+    const { rows } = buildRows(readings());
+    expect(row(rows, 'acme').sentry).toEqual({
+      org: 'cdwr',
+      count24h: 3,
+      count7d: 10,
+      top: { shortId: 'CDWR-1', level: 'error', count: 3, title: 'Boom' }
+    });
+    expect(row(rows, 'beta').sentry).toEqual({
+      org: 'cdwr',
+      count24h: 0,
+      count7d: 1,
+      top: null
+    });
+    expect(row(rows, SHARED_KEY).sentry).toEqual({});
+  });
+
+  it('cleans the title of urls and cuts it to 120 characters', () => {
+    const read = {
+      org: 'cdwr',
+      day: { acme: 1 },
+      week: { acme: 1 },
+      tops: {
+        acme: ok({
+          shortId: 'CDWR-2',
+          level: 'error',
+          count: 1,
+          title: `fetch https://x.io/a?b=1   failed\n${'y'.repeat(300)}`
+        })
+      }
+    };
+    const { top } = sentrySignal(read, 'acme');
+    expect(top?.title).toHaveLength(120);
+    expect(top?.title.startsWith('fetch [url] failed yyy')).toBe(true);
+    expect(plainText('a\n b', 10)).toBe('a b');
+  });
+
+  it('names a failed read on every row and never records zero errors', () => {
+    const { rows } = buildRows(readings({ sentry: failed('not configured') }));
+    for (const r of rows) {
+      expect(r.errors).toEqual({ sentry: 'not configured' });
+      expect(r.sentry).toEqual({});
+    }
+  });
+
+  it('names a failed top issue read on its tenant, leaving the counts', () => {
+    const { rows } = buildRows(
+      readings({
+        sentry: ok({
+          org: 'cdwr',
+          day: { acme: 3 },
+          week: { acme: 3 },
+          tops: { acme: failed('Sentry answered 500') }
+        })
+      })
+    );
+    expect(row(rows, 'acme').errors).toEqual({
+      sentry: 'top issue: Sentry answered 500'
+    });
+    expect(row(rows, 'acme').sentry).toMatchObject({ count24h: 3, top: null });
+  });
+});
+
+describe('the visitors column', () => {
+  it('lists the seven days before today, oldest first, a missing day as 0', () => {
+    const { rows } = buildRows(readings());
+    expect(row(rows, 'acme').visitors).toEqual({
+      today: 5,
+      days: [
+        { date: '2026-11-08', visitors: 0 },
+        { date: '2026-11-09', visitors: 0 },
+        { date: '2026-11-10', visitors: 0 },
+        { date: '2026-11-11', visitors: 0 },
+        { date: '2026-11-12', visitors: 0 },
+        { date: '2026-11-13', visitors: 0 },
+        { date: '2026-11-14', visitors: 9 }
+      ]
+    });
+  });
+
+  it('leaves a tenant without a statistics website empty, with no error', () => {
+    const { rows } = buildRows(readings());
+    expect(row(rows, 'beta').visitors).toEqual({});
+    expect(row(rows, 'beta').errors).toEqual({});
+    expect(row(rows, SHARED_KEY).visitors).toEqual({});
+  });
+
+  it('names a failed read on the tenant, not as zero visitors', () => {
+    const { rows } = buildRows(
+      readings({ visitors: { acme: failed('not configured') } })
+    );
+    expect(row(rows, 'acme').errors).toEqual({ umami: 'not configured' });
+    expect(row(rows, 'acme').visitors).toEqual({});
+  });
+
+  it('names a tenant with a website that was not read', () => {
+    const { rows } = buildRows(readings({ visitors: {} }));
+    expect(row(rows, 'acme').errors).toEqual({ umami: 'not read' });
+  });
+
+  it('keeps a day that really had 0 visitors apart from a failure', () => {
+    expect(visitorsSignal({ today: 0, days: [] }, ['2026-11-14'])).toEqual({
+      today: 0,
+      days: [{ date: '2026-11-14', visitors: 0 }]
+    });
+  });
+});
+
+describe('Stockholm days', () => {
+  it('names the day by the clock in Stockholm', () => {
+    expect(stockholmDay(Date.parse('2026-11-14T23:30:00Z'))).toBe('2026-11-15');
+    expect(stockholmDay(Date.parse('2026-06-30T21:59:00Z'))).toBe('2026-06-30');
+    expect(stockholmDay(Date.parse('2026-06-30T22:00:00Z'))).toBe('2026-07-01');
+  });
+
+  it('starts the day at local midnight, through the switches of summer time', () => {
+    expect(dayStart('2026-11-15')).toBe(Date.parse('2026-11-14T23:00:00Z'));
+    expect(dayStart('2026-07-01')).toBe(Date.parse('2026-06-30T22:00:00Z'));
+    expect(dayStart('2026-03-29')).toBe(Date.parse('2026-03-28T23:00:00Z'));
+    expect(dayStart('2026-10-25')).toBe(Date.parse('2026-10-24T22:00:00Z'));
+  });
+
+  it('lists the days before a day, oldest first', () => {
+    expect(daysBefore('2026-03-01', 3)).toEqual([
+      '2026-02-26',
+      '2026-02-27',
+      '2026-02-28'
+    ]);
+  });
+});
+
+describe('the deploy column', () => {
+  it('goes to the shared row only', () => {
+    const { rows } = buildRows(readings());
+    expect(row(rows, SHARED_KEY).deploy).toEqual(deploy);
+    expect(row(rows, 'acme').deploy).toEqual({});
+  });
+
+  it('names a failed read on the shared row, leaving the column empty', () => {
+    const { rows } = buildRows(
+      readings({ deploy: failed('GitHub answered 403') })
+    );
+    expect(row(rows, SHARED_KEY).errors).toEqual({
+      github: 'GitHub answered 403'
+    });
+    expect(row(rows, SHARED_KEY).deploy).toEqual({});
+    expect(row(rows, 'acme').errors).toEqual({});
+  });
+
+  it('takes the conclusion of the deploy job', () => {
+    const job = (name: string, conclusion: string | null) => ({
+      name,
+      conclusion
+    });
+    expect(
+      deployConclusion([job('build', 'success'), job('deploy', 'success')])
+    ).toBe('success');
+    expect(deployConclusion([job('deploy', 'failure')])).toBe('failure');
+    expect(deployConclusion([job('deploy', 'skipped')])).toBe('skipped');
+    expect(deployConclusion([job('deploy', 'cancelled')])).toBe('cancelled');
+    expect(deployConclusion([job('build', 'failure')])).toBe('none');
+    expect(deployConclusion([])).toBe('none');
+    expect(
+      deployConclusion([
+        job('deploy (a)', 'success'),
+        job('deploy (b)', 'failure')
+      ])
+    ).toBe('failure');
+    expect(
+      deployConclusion([
+        job('deploy (a)', 'success'),
+        job('deploy (b)', 'skipped')
+      ])
+    ).toBe('success');
+    expect(deployConclusion([job('deployment', 'failure')])).toBe('none');
+  });
+});
+
+describe('behind main', () => {
+  const head = 'd'.repeat(40);
+  const base = 'a'.repeat(40);
+  const key = pairKey({ base, head });
+
+  it('maps an app kind to its Nx project', () => {
+    expect(projectOf('cms')).toBe('cms');
+    expect(projectOf('umami')).toBe('umami');
+    expect(projectOf('other')).toBeNull();
+  });
+
+  it('is true when the project is affected between the machine and the deploy', () => {
+    expect(
+      behindFlag('cms', [{ sha: base }], head, { [key]: ok(['cms', 'ui']) })
+    ).toEqual({ behind: true });
+  });
+
+  it('is false when the project is not affected, or every machine is at the deploy', () => {
+    expect(
+      behindFlag('cms', [{ sha: base }], head, { [key]: ok(['headless']) })
+    ).toEqual({ behind: false });
+    expect(behindFlag('cms', [{ sha: head }], head, {})).toEqual({
+      behind: false
+    });
+    // A short sha of the same commit is the same commit
+    expect(behindFlag('cms', [{ sha: 'dddddddd' }], head, {})).toEqual({
+      behind: false
+    });
+  });
+
+  it('is true when any machine is behind', () => {
+    expect(
+      behindFlag('cms', [{ sha: head }, { sha: base }], head, {
+        [key]: ok(['cms'])
+      })
+    ).toEqual({ behind: true });
+  });
+
+  it('is null when it cannot be told', () => {
+    expect(behindFlag('cms', [{ sha: base }], null, {})).toEqual({
+      behind: null
+    });
+    expect(behindFlag('cms', null, head, {})).toEqual({ behind: null });
+    expect(behindFlag('cms', [{ sha: null }], head, {})).toEqual({
+      behind: null
+    });
+    expect(
+      behindFlag('other', [{ sha: base }], head, { [key]: ok(['cms']) })
+    ).toEqual({ behind: null });
+  });
+
+  it('is null with the reason when the projects could not be read', () => {
+    expect(
+      behindFlag('cms', [{ sha: base }], head, {
+        [key]: failed('the commit is not in the local git')
+      })
+    ).toEqual({ behind: null, error: 'the commit is not in the local git' });
+    expect(behindFlag('cms', [{ sha: base }], head, {})).toEqual({
+      behind: null,
+      error: 'not read'
+    });
+  });
+
+  it('asks once for each commit pair a machine is apart from the deploy', () => {
+    const second = { ...machine, id: 'm2' };
+    const pairs = behindPairs(
+      [
+        flyApp('cdwr-cms', {
+          machines: ok([
+            { ...machine, config: { env: { GIT_SHA: base } } },
+            { ...second, config: { env: { GIT_SHA: base } } },
+            { ...second, id: 'm3', config: { env: { GIT_SHA: head } } },
+            { id: 'm4', state: 'stopped', region: 'arn' }
+          ])
+        }),
+        flyApp('cdwr-cms-x', { machines: failed('down') })
+      ],
+      head
+    );
+    expect(pairs).toEqual([{ base, head }]);
+  });
+
+  it('puts the flag on the app and the reason in errors of its row', () => {
+    const stale = {
+      ...machine,
+      config: { env: { GIT_SHA: base } }
+    };
+    const { rows } = buildRows(
+      readings({
+        deploy: ok({ ...deploy, sha: head }),
+        fly: ok([
+          flyApp('cdwr-cms', { machines: ok([stale]) }),
+          flyApp('cdwr-cms-acme-dep', { machines: ok([stale]) })
+        ]),
+        affected: { [key]: failed('nx failed (1)') }
+      })
+    );
+    expect(row(rows, SHARED_KEY).apps).toMatchObject([{ behind: null }]);
+    expect(row(rows, SHARED_KEY).errors).toEqual({
+      behind: 'cdwr-cms: nx failed (1)'
+    });
+    const ok2 = buildRows(
+      readings({
+        deploy: ok({ ...deploy, sha: head }),
+        fly: ok([flyApp('cdwr-cms', { machines: ok([stale]) })]),
+        affected: { [key]: ok(['cms']) }
+      })
+    );
+    expect(row(ok2.rows, SHARED_KEY).apps).toMatchObject([{ behind: true }]);
+    expect(row(ok2.rows, SHARED_KEY).errors).toEqual({});
+  });
+
+  it('is null on every app, with no behind error, when the deploy was not read', () => {
+    const { rows } = buildRows(readings({ deploy: failed('x') }));
+    expect(row(rows, SHARED_KEY).apps).toMatchObject([{ behind: null }]);
+    expect(row(rows, SHARED_KEY).errors).toEqual({ github: 'x' });
+  });
+});
+
+describe('the affected cache', () => {
+  const entry = (n: number) => ({ key: `a${n}..b${n}`, projects: [`p${n}`] });
+
+  it('asks only for pairs it has not seen', () => {
+    const cache: AffectedCache = [entry(1)];
+    expect(
+      uncachedPairs(
+        [
+          { base: 'a1', head: 'b1' },
+          { base: 'a2', head: 'b2' }
+        ],
+        cache
+      )
+    ).toEqual([{ base: 'a2', head: 'b2' }]);
+  });
+
+  it('keeps the newest 50 pairs', () => {
+    const cache = Array.from({ length: 60 }, (_, i) => entry(i));
+    const kept = pruneAffected(cache);
+    expect(kept).toHaveLength(50);
+    expect(kept[0]).toEqual(entry(10));
+    expect(kept.at(-1)).toEqual(entry(59));
+  });
+
+  it('keeps a pair once, as the newest', () => {
+    const kept = pruneAffected([
+      entry(1),
+      entry(2),
+      { ...entry(1), projects: ['new'] }
+    ]);
+    expect(kept).toEqual([entry(2), { ...entry(1), projects: ['new'] }]);
+  });
+
+  it('reads a file back, and an unreadable one as empty', () => {
+    expect(parseAffectedCache(JSON.stringify([entry(1)]))).toEqual([entry(1)]);
+    expect(parseAffectedCache('not json')).toEqual([]);
+    expect(parseAffectedCache('{"key":1}')).toEqual([]);
+  });
+});
+
 describe('the vanished-tenant delete rule', () => {
   it('keeps exactly the current tenants and the shared row', () => {
     const { prune } = buildRows(readings());
@@ -554,7 +935,33 @@ describe('what leaves the machine', () => {
             value: planted.values[3],
             secrets: { PAYLOAD_API_KEY: planted.values[1] }
           } as never
-        ])
+        ]),
+        sentry: ok({
+          org: 'cdwr',
+          day: { acme: 1 },
+          week: { acme: 1 },
+          tops: {
+            acme: ok({
+              shortId: 'CDWR-1',
+              level: 'error',
+              count: 1,
+              title: `connect ${planted.values[0] as string} failed`,
+              apiKey: planted.values[1],
+              token: planted.values[2]
+            } as never)
+          }
+        }),
+        visitors: {
+          acme: ok({
+            today: 1,
+            days: [],
+            apiKey: planted.values[1]
+          } as never)
+        },
+        deploy: ok({
+          ...deploy,
+          secrets: { PAYLOAD_API_KEY: planted.values[1] }
+        } as never)
       })
     );
     const text = JSON.stringify(rows);
