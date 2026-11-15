@@ -9,7 +9,7 @@
     "tslib": "^2.3.0",
     "@nx/devkit": "23.3.0",
     "nx": "23.3.0",
-    "prettier": "~3.9.0"
+    "prettier": "~3.10.0"
   },
   "devDependencies": {
     "vitest": "4.1.11",
