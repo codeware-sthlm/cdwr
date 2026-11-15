@@ -3380,7 +3380,11 @@ describe('run.sh platform step', () => {
     PLATFORM_DATABASE_URL: 'postgres://db-secret',
     PLATFORM_INFISICAL_CLIENT_ID: 'inf-id',
     PLATFORM_INFISICAL_CLIENT_SECRET: 'inf-secret',
-    PLATFORM_INFISICAL_PROJECT_ID: 'inf-project'
+    PLATFORM_INFISICAL_PROJECT_ID: 'inf-project',
+    PLATFORM_SENTRY_AUTH_TOKEN: 'sentry-secret',
+    PLATFORM_SENTRY_ORG: 'sentry-org',
+    PLATFORM_UMAMI_URL: 'https://umami.test',
+    PLATFORM_UMAMI_API_KEY: 'umami-secret'
   };
   let root: string;
   let bin: string;
@@ -3409,7 +3413,7 @@ describe('run.sh platform step', () => {
       'telemetry_on() { return 0; }',
       // plain shell variables, as telemetry_env leaves them after reading the .env file
       'typeset +x AGENT_SUPABASE_URL=https://supabase.test AGENT_SUPABASE_SERVICE_KEY=svc',
-      'PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID)',
+      'PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID PLATFORM_SENTRY_AUTH_TOKEN PLATFORM_SENTRY_ORG PLATFORM_UMAMI_URL PLATFORM_UMAMI_API_KEY)',
       fn('platform_env'),
       'platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }',
       fn('platform_warn'),
@@ -3486,12 +3490,19 @@ describe('run.sh platform step', () => {
       expect(node).toContain('PLATFORM_INFISICAL_PROJECT_ID=from-file');
       expect(node).toContain('AGENT_SUPABASE_URL=https://supabase.test');
       expect(node).toContain('AGENT_SUPABASE_SERVICE_KEY=svc');
+      expect(node).toContain(`AGENT_QUEUE_HOME=${root}`);
       const sibling = read('sibling.env');
       expect(sibling).not.toMatch(
-        /FLY_API_TOKEN|PLATFORM_|fly-secret|db-secret/
+        /FLY_API_TOKEN|PLATFORM_|fly-secret|db-secret|sentry-secret|umami-secret/
       );
     }
   );
+
+  it('keeps the Sentry and Umami reads optional', () => {
+    expect(SCRIPT).toContain(
+      'platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }'
+    );
+  });
 
   it('never exports them in the script', () => {
     expect(SCRIPT).not.toMatch(/export [^\n]*(FLY_API_TOKEN|PLATFORM_)/);
