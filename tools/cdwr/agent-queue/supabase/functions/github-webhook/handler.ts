@@ -47,7 +47,8 @@ export const STORED: Record<string, readonly string[]> = {
 export const BUILT = [
   'agent-host-image.yml',
   'desk.yml',
-  'desk-image.yml'
+  'desk-image.yml',
+  'fly-deployment.yml'
 ] as const;
 
 /** GitHub sends `sha256=<hex HMAC-SHA256 of the raw body>` in `X-Hub-Signature-256` */

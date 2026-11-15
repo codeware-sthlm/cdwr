@@ -296,7 +296,12 @@ describe('toRow', () => {
 });
 
 describe('toBuild', () => {
-  it.each(['agent-host-image.yml', 'desk.yml', 'desk-image.yml'])(
+  it.each([
+    'agent-host-image.yml',
+    'desk.yml',
+    'desk-image.yml',
+    'fly-deployment.yml'
+  ])(
     'maps a successful push run of %s on main to its workflow and commit',
     (workflow) => {
       expect(
