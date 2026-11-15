@@ -3089,6 +3089,7 @@ describe('run.sh review session', () => {
       result?: string;
       check?: 'pass' | 'fail';
       store?: 'pass' | 'fail';
+      limited?: boolean;
       files?: Record<string, string>;
     }) => {
       const t = (name: string) => join(home, `t-${name}`);
@@ -3096,12 +3097,24 @@ describe('run.sh review session', () => {
         writeFileSync(join(home, name), content);
       }
       mkdirSync(join(home, 'logs'), { recursive: true });
-      const result = JSON.stringify({
-        result: opts.result ?? 'Done.\nREVIEWED 4 actions',
-        total_cost_usd: 1.2,
-        num_turns: 7
-      });
+      // The plan's session limit: an error result and exit 1, with no apostrophe for the quoting
+      const result = JSON.stringify(
+        opts.limited
+          ? {
+              is_error: true,
+              api_error: 'usage_limit_reached',
+              result: 'Session limit reached · resets 7:10am (UTC)',
+              total_cost_usd: 0,
+              num_turns: 1
+            }
+          : {
+              result: opts.result ?? 'Done.\nREVIEWED 4 actions',
+              total_cost_usd: 1.2,
+              num_turns: 7
+            }
+      );
       const script = [
+        `source "${fileURLToPath(new URL('../../../agent-queue/lib.sh', import.meta.url))}"`,
         `HOME_DIR="${home}"; REPO="${home}"; LOGS="${home}/logs"; MEMORY_DIR=""`,
         'REVIEW_BUDGET_USD=5; L=linear; claude_env=(runenv); LINEAR_MCP_ARGS=()',
         // Stands in for env: drops the NAME=value word and calls the claude stub
@@ -3114,7 +3127,8 @@ describe('run.sh review session', () => {
         'telemetry_host() { print nuc; }',
         `note() { print -r -- "$*" >> "${t('note')}"; }`,
         `record() { print -r -- "$*" >> "${t('record')}"; }`,
-        `claude() { print -r -- '${result}'; }`,
+        `notice() { print -r -- "$1|$2" >> "${t('notice')}"; }`,
+        `claude() { print -r -- '${result}'; ${opts.limited ? 'return 1' : 'return 0'}; }`,
         `supabase_select() { print -r -- "$*" >> "${t('select')}"; case "$1" in
           review_dismissals) print -r -- '[{"finding_id":"a:COD-1:0123abcd","at":"2026-11-01T08:00:00Z","note":"fine"},{"finding_id":"b:COD-2:0123abcd","at":"2026-11-02T08:00:00Z","note":null}]' ;;
           *) print -r -- '[{"findings":[{"id":"a:COD-1:0123abcd","ticket":"COD-1","kind":"a","key":"k","severity":"note","evidence":[],"fix":"do it"}]}]' ;;
@@ -3146,7 +3160,8 @@ describe('run.sh review session', () => {
         inserts: lines('insert'),
         records: lines('record'),
         nodes: lines('node'),
-        selects: lines('select')
+        selects: lines('select'),
+        notices: lines('notice')
       };
     };
     const file = (name: string) =>
@@ -3242,5 +3257,114 @@ describe('run.sh review session', () => {
       ]);
       expect(file('review-line')).toMatch(/ · no verdict$/);
     });
+
+    it.skipIf(!canRun)(
+      'records limited, not a failure, and holds the claude runs',
+      () => {
+        const r = review({ limited: true });
+        expect(r.records).toHaveLength(1);
+        expect(r.records[0]).toMatch(
+          /^limited {2}review: Session limit reached · resets 7:10am \(UTC\), log /
+        );
+        expect(r.records.join('\n')).not.toContain('failed');
+        expect(r.notices).toEqual([
+          expect.stringMatching(
+            /^info\|Agent queue: session limit reached, launches held until \d\d:\d\d UTC$/
+          )
+        ]);
+        expect(r.inserts).toEqual([]);
+        expect(r.nodes).toEqual([]);
+        const hold = JSON.parse(file('limited-until.json') ?? '') as {
+          until: number;
+        };
+        expect(hold.until).toBeGreaterThan(Date.now() / 1000);
+        expect(file('review-line')).toMatch(
+          / · session limit, runs after the reset$/
+        );
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'puts the stamps back after a limit, and a desk request with them',
+      () => {
+        const asked = review({
+          limited: true,
+          files: { 'review-requested': '' }
+        });
+        expect(asked.stderr).toBe('');
+        expect(file('review-ran-on')).toBeNull();
+        expect(file('review-ran-at')).toBeNull();
+        expect(file('review-requested')).toBe('');
+      }
+    );
+
+    it.skipIf(!canRun)('leaves no request behind when none was made', () => {
+      review({ limited: true });
+      expect(file('review-ran-on')).toBeNull();
+      expect(file('review-requested')).toBeNull();
+    });
+
+    it.skipIf(!canRun)('tells of a hold once', () => {
+      review({ limited: true });
+      const again = review({ limited: true });
+      // The notices file accumulates: the second run adds none
+      expect(again.notices).toHaveLength(1);
+    });
+  });
+});
+
+// A limit never ran the session, so the claude runs give their stamps back and the idle tick waits
+describe('run.sh session limit', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+
+  it('removes the suggest and devlog stamp of a limited run', () => {
+    expect(fn('suggest_run')).toContain(
+      'limited) rm -f "$HOME_DIR/suggest-ran-on"'
+    );
+    expect(fn('devlog_run')).toContain(
+      'rm -f "$HOME_DIR/devlog-ran-on"; devlog_line'
+    );
+    expect(fn('devlog_run')).toContain('if [[ "$outcome" == limited ]]');
+  });
+
+  it('sets the outcome in run_outcome before the cap and failure branches', () => {
+    const run = fn('run_outcome');
+    expect(run).toContain('outcome=limited');
+    expect(run.indexOf('limit_hold "$result"')).toBeLessThan(
+      run.indexOf('error_max_budget_usd')
+    );
+    expect(run.indexOf('outcome=limited')).toBeLessThan(
+      run.indexOf('outcome=failed')
+    );
+  });
+
+  it('starts no claude run on an idle tick while the limit holds', () => {
+    const idle = SCRIPT.slice(SCRIPT.indexOf('if [[ -z "$ready" ]]; then'));
+    const held = idle.indexOf('if limit_at="$(limit_held)"; then note');
+    expect(held).toBeGreaterThan(idle.indexOf('if $check;'));
+    expect(held).toBeLessThan(idle.indexOf('review-requested'));
+    expect(held).toBeLessThan(idle.indexOf('case "$gate" in'));
+  });
+
+  it('holds planning too, after the --check report', () => {
+    const at = SCRIPT.indexOf('skip: session limit, planning held until');
+    expect(at).toBeGreaterThan(SCRIPT.lastIndexOf('would plan one of'));
+    expect(at).toBeLessThan(SCRIPT.indexOf('to_main planning'));
+  });
+
+  it('reports the hold on --check, idle or not', () => {
+    expect(
+      SCRIPT.match(/print -r -- "limit: claude runs held until \$limit_at"/g)
+    ).toHaveLength(2);
+  });
+
+  it('hands the launch guard the lift time', () => {
+    expect(SCRIPT).toContain('limited_until="$(limit_held || true)"');
+    expect(SCRIPT).toContain(
+      'limitedUntil: (if $limited == "" then null else $limited end)'
+    );
   });
 });

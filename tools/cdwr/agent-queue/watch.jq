@@ -729,7 +729,8 @@ def session_prefix:
 # Input: the attended pick. $guards: { session (session_state), locked (implement.lock held),
 # spent and cap (today's implement spend and the daily cap, USD; spent is null when the ledger
 # is unreadable), last ({ key, launches } of the
-# previous launch, or null) }. Output: { action: launch|notify|skip, reason, key }, plus `last`,
+# previous launch, or null), limitedUntil (when the plan's session limit lifts, `07:10 UTC`, or
+# null) }. Output: { action: launch|notify|skip, reason, key }, plus `last`,
 # the state to store, only when the action is launch.
 def launch($guards):
   # Old callers pass a bare pick: a `run` verdict is the one runnable item
@@ -759,6 +760,9 @@ def launch($guards):
       # branch is attended work
       elif $item.reason == "renovate" and $item.detail != "failing" then { action: "skip", reason: "a Renovate conflict waits for an attended session" }
       elif $guards.locked then { action: "skip", reason: "a launched session is still running" }
+      # The plan's session limit: nothing starts before the reset (lib.sh limit_held)
+      elif ($guards.limitedUntil | type) == "string"
+        then { action: "notify", reason: "session limit, resets \($guards.limitedUntil)" }
       # No cap is no licence to spend: fail safe
       elif ($guards.cap | type) != "number" then { action: "notify", reason: "no daily implement cap set" }
       # run.sh passes null for a ledger it couldn't sum: fail closed, and say so

@@ -700,6 +700,119 @@ describe('implement.sh', () => {
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
     });
 
+    describe('a session that ends on the plan session limit', () => {
+      const limitText = "You've hit your session limit · resets 7:10am (UTC)";
+      const launchFile = (): string => join(queueHome, 'launch.json');
+      const seed = (launches: number): void => {
+        mkdirSync(queueHome, { recursive: true });
+        writeFileSync(
+          launchFile(),
+          JSON.stringify({ key: 'COD-1 answered', launches })
+        );
+      };
+      const launches = (): unknown =>
+        (JSON.parse(readFileSync(launchFile(), 'utf8')) as { launches: number })
+          .launches;
+      let sent: string;
+
+      // The result goes through a file: the text has an apostrophe
+      const fakeLimited = (): void => {
+        const result = join(dir, 'limit-result.json');
+        writeFileSync(
+          result,
+          JSON.stringify({
+            type: 'result',
+            subtype: 'success',
+            is_error: true,
+            api_error: 'usage_limit_reached',
+            result: limitText,
+            total_cost_usd: 0,
+            num_turns: 1
+          })
+        );
+        writeFileSync(
+          join(bin, 'claude'),
+          `#!/bin/sh\ncat "${result}"\nexit 1\n`
+        );
+        chmodSync(join(bin, 'claude'), 0o755);
+      };
+
+      beforeEach(() => {
+        sent = join(dir, 'notices');
+        mkdirSync(queueHome, { recursive: true });
+        writeFileSync(
+          join(queueHome, 'notify.sh'),
+          `#!/bin/sh\ncat >> "${sent}"\necho >> "${sent}"\n`
+        );
+        chmodSync(join(queueHome, 'notify.sh'), 0o755);
+        fakeLimited();
+      });
+
+      it('records limited with the text, gives the launch back and holds the claude runs', () => {
+        seed(1);
+        expect(start().status).toBe(0);
+        const last = rows('runs.jsonl').at(-1);
+        expect(last).toMatchObject({ outcome: 'limited', ticket: 'COD-1' });
+        expect(last?.['detail']).toContain(limitText);
+        expect(rows('runs.jsonl').map((r) => r['outcome'])).not.toContain(
+          'failed'
+        );
+        expect(launches()).toBe(0);
+        const hold = JSON.parse(
+          readFileSync(join(queueHome, 'limited-until.json'), 'utf8')
+        ) as { until: number; text: string };
+        expect(hold.text).toBe(limitText);
+        expect(hold.until).toBeGreaterThan(Date.now() / 1000);
+        expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+      });
+
+      it('gives the launch back every time, not once per key', () => {
+        seed(2);
+        start();
+        expect(launches()).toBe(1);
+        start();
+        expect(launches()).toBe(0);
+        start();
+        expect(launches()).toBe(0);
+        expect(rows('runs.jsonl').map((r) => r['outcome'])).toEqual([
+          'launched',
+          'limited',
+          'launched',
+          'limited',
+          'launched',
+          'limited'
+        ]);
+      });
+
+      it('notifies once per hold, and never as a failure', () => {
+        seed(2);
+        start();
+        start();
+        const text = readFileSync(sent, 'utf8');
+        expect(text.match(/session limit reached/g)).toHaveLength(1);
+        expect(text).toContain('launches held until');
+        expect(text).not.toContain('failed');
+      });
+
+      it('sends no notice when notify-level is action', () => {
+        seed(1);
+        writeFileSync(join(queueHome, 'notify-level'), 'action\n');
+        start();
+        expect(existsSync(sent)).toBe(false);
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('limited');
+      });
+
+      it('leaves the launch of another key alone', () => {
+        mkdirSync(queueHome, { recursive: true });
+        writeFileSync(
+          launchFile(),
+          JSON.stringify({ key: 'COD-9 answered', launches: 2 })
+        );
+        start();
+        expect(launches()).toBe(2);
+      });
+    });
+
     it('records a failure on any other exit', () => {
       fakeClaude(2, '{"subtype":"error_during_execution"}');
       start();

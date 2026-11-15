@@ -735,5 +735,168 @@ describe('lib.sh', () => {
         ]);
       });
     });
+
+    // The plan's session limit: when it lifts, whether a hold is in force, and writing one
+    describe('the session limit', () => {
+      const env = (): Record<string, string> => ({ AGENT_QUEUE_HOME: dir });
+      const at = (iso: string): number => Date.parse(iso) / 1000;
+      const until = (text: string, now: number, extra = {}): number =>
+        Number(
+          run(`limit_until '${text}' ${now}`, {
+            ...env(),
+            ...extra
+          }).stdout.trim()
+        );
+      const hasZone = existsSync('/usr/share/zoneinfo/Europe/Stockholm');
+
+      describe('limit_until', () => {
+        const morning = at('2026-11-15T06:00:00Z');
+        const evening = at('2026-11-15T08:00:00Z');
+
+        it('is the clock time today while it is still ahead', () => {
+          expect(until('resets 7:10am (UTC)', morning)).toBe(
+            at('2026-11-15T07:10:00Z')
+          );
+        });
+
+        it('is the clock time tomorrow once it has passed', () => {
+          expect(until('resets 7:10am (UTC)', evening)).toBe(
+            at('2026-11-16T07:10:00Z')
+          );
+        });
+
+        it('reads 12am as midnight and 12pm as noon', () => {
+          expect(until('resets 12am (UTC)', morning)).toBe(
+            at('2026-11-16T00:00:00Z')
+          );
+          expect(until('resets 12pm (UTC)', morning)).toBe(
+            at('2026-11-15T12:00:00Z')
+          );
+        });
+
+        it('reads the text inside a longer message', () => {
+          expect(
+            until(
+              'Session limit hit · resets 7:10am (UTC) · try later',
+              morning
+            )
+          ).toBe(at('2026-11-15T07:10:00Z'));
+        });
+
+        it.skipIf(!hasZone)('follows the zone, winter and summer time', () => {
+          // CET is UTC+1: 1pm is 12:00 UTC
+          expect(until('resets 1pm (Europe/Stockholm)', morning)).toBe(
+            at('2026-11-15T12:00:00Z')
+          );
+          // CEST is UTC+2: 1pm is 11:00 UTC
+          expect(
+            until('resets 1pm (Europe/Stockholm)', at('2026-07-15T06:00:00Z'))
+          ).toBe(at('2026-07-15T11:00:00Z'));
+        });
+
+        it.each([
+          ['a weekday', 'resets Mon 9am'],
+          ['no time at all', 'something went wrong'],
+          ['an unknown zone', 'resets 9am (Mars/Base)'],
+          ['an hour out of range', 'resets 13pm (UTC)']
+        ])('holds an hour for %s', (_name, text) => {
+          expect(until(text, morning)).toBe(morning + 3600);
+        });
+      });
+
+      describe('limit_held', () => {
+        const stamp = (secs: number): void =>
+          writeFileSync(
+            join(dir, 'limited-until.json'),
+            JSON.stringify({ until: secs, text: 'x', at: 'y' })
+          );
+        const now = (): number => Math.floor(Date.now() / 1000);
+
+        it('prints when a future hold lifts', () => {
+          const lifts = now() + 7200;
+          stamp(lifts);
+          const result = run('limit_held; print -r -- "rc=$?"', env());
+          expect(result.stdout.trim().split('\n')).toEqual([
+            `${new Date(lifts * 1000).toISOString().slice(11, 16)} UTC`,
+            'rc=0'
+          ]);
+        });
+
+        it('fails for an expired hold', () => {
+          stamp(now() - 60);
+          const result = run('limit_held; print -r -- "rc=$?"', env());
+          expect(result.stdout.trim()).toBe('rc=1');
+        });
+
+        it('fails without a file', () => {
+          const result = run('limit_held; print -r -- "rc=$?"', env());
+          expect(result.stdout.trim()).toBe('rc=1');
+        });
+      });
+
+      describe('limit_hold', () => {
+        let n = 0;
+        const result = (json: string): string => {
+          const file = join(dir, `result-${n++}.json`);
+          writeFileSync(file, json);
+          return file;
+        };
+        const limited = JSON.stringify({
+          is_error: true,
+          api_error: 'usage_limit_reached',
+          result: "You've hit your session limit · resets 7:10am (UTC)"
+        });
+        const held = (): { until: number; text: string; at: string } =>
+          JSON.parse(readFileSync(join(dir, 'limited-until.json'), 'utf8'));
+
+        it('fails on a result that is no limit, and writes nothing', () => {
+          const out = run(
+            `limit_hold '${result('{"is_error":true,"result":"boom"}')}'; print -r -- "rc=$?"`,
+            env()
+          );
+          expect(out.stdout.trim()).toBe('rc=1');
+          expect(existsSync(join(dir, 'limited-until.json'))).toBe(false);
+        });
+
+        it('fails on a result that is not JSON', () => {
+          const out = run(
+            `limit_hold '${result('plain text')}'; print -r -- "rc=$?"`,
+            env()
+          );
+          expect(out.stdout.trim()).toBe('rc=1');
+          expect(existsSync(join(dir, 'limited-until.json'))).toBe(false);
+        });
+
+        it('writes the hold, and is new only the first time', () => {
+          const file = result(limited);
+          const out = run(
+            `limit_hold '${file}'; print -r -- "rc=$? $LIMIT_NEW"; limit_hold '${file}'; print -r -- "rc=$? $LIMIT_NEW"`,
+            env()
+          );
+          expect(out.stdout.trim().split('\n')).toEqual([
+            'rc=0 true',
+            'rc=0 false'
+          ]);
+          const written = held();
+          expect(written.text).toBe(
+            "You've hit your session limit · resets 7:10am (UTC)"
+          );
+          expect(written.until).toBeGreaterThan(Date.now() / 1000);
+          expect(written.until).toBeLessThanOrEqual(Date.now() / 1000 + 86400);
+          expect(written.at).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+        });
+
+        it('sets LIMIT_TEXT, and a default when the result has no text', () => {
+          const out = run(
+            `limit_hold '${result(limited)}'; print -r -- "$LIMIT_TEXT"; rm -f '${join(dir, 'limited-until.json')}'; limit_hold '${result('{"api_error":"usage_limit_reached"}')}'; print -r -- "$LIMIT_TEXT"`,
+            env()
+          );
+          expect(out.stdout.trim().split('\n')).toEqual([
+            "You've hit your session limit · resets 7:10am (UTC)",
+            'session limit reached'
+          ]);
+        });
+      });
+    });
   });
 });
