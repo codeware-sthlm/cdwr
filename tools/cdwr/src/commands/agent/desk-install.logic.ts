@@ -1,12 +1,16 @@
 import { z } from 'zod';
 
 export const WORKFLOW = 'desk.yml';
-export const ARTIFACT = 'agent-desk-macos-arm64';
+export const ARTIFACT = 'cdwr-desk-macos-arm64';
 export const APP_DIR = '/Applications';
-export const APP_NAME = 'Agent Desk';
+export const APP_NAME = 'CDWR Desk';
 /** The running process: the Cargo binary, not the bundle's display name */
-export const APP_PROCESS = 'agent-desk';
+export const APP_PROCESS = 'cdwr-desk';
 export const APP_PATH = `${APP_DIR}/${APP_NAME}.app`;
+/** What the desk was called before it was renamed; removed after an install */
+export const LEGACY_APP_NAME = 'Agent Desk';
+export const LEGACY_APP_PROCESS = 'agent-desk';
+export const LEGACY_APP_PATH = `${APP_DIR}/${LEGACY_APP_NAME}.app`;
 /** The zipped bundle inside the artifact */
 export const APP_ZIP = `${APP_NAME}.app.zip`;
 
@@ -17,7 +21,7 @@ export const platformProblem = (
 ): string | undefined =>
   platform === 'darwin' && arch === 'arm64'
     ? undefined
-    : `The Agent Desk is built for macOS arm64 only, this is ${platform} ${arch}`;
+    : `The CDWR Desk is built for macOS arm64 only, this is ${platform} ${arch}`;
 
 const runsSchema = z.array(
   z.object({
@@ -117,8 +121,10 @@ export const QUIT_POLL_MS = 500;
 export const quitGaveUp = (elapsedMs: number): boolean =>
   elapsedMs >= QUIT_WAIT_MS;
 
-export const quitProblem = `${APP_NAME} did not quit`;
-export const quitFix = `Quit ${APP_NAME} and run the command again`;
+export const quitProblem = (name: string = APP_NAME): string =>
+  `${name} did not quit`;
+export const quitFix = (name: string = APP_NAME): string =>
+  `Quit ${name} and run the command again`;
 
 /** The aside copy of the installed app while it is being replaced */
 export const PREVIOUS_PATH = `${APP_PATH}.previous`;
@@ -173,7 +179,8 @@ export const artifactProblem = (verdict: 'expired' | 'missing'): string =>
 /** The steps the plan prints */
 export const installSteps = (
   run: DeskRun,
-  replacing: boolean
+  replacing: boolean,
+  legacyInstalled = false
 ): Array<{ label: string; detail?: string }> => [
   {
     label: `Download the build of ${short(run.headSha)}`,
@@ -185,7 +192,15 @@ export const installSteps = (
     label: replacing ? `Replace ${APP_PATH}` : `Install ${APP_PATH}`,
     detail: replacing ? 'settings live outside the app and are kept' : undefined
   },
-  { label: 'Clear the quarantine flag' }
+  { label: 'Clear the quarantine flag' },
+  ...(legacyInstalled
+    ? [
+        {
+          label: `Remove ${LEGACY_APP_PATH}`,
+          detail: `the old name, ${LEGACY_APP_NAME} is quit first if it is running`
+        }
+      ]
+    : [])
 ];
 
 /** Says where the app went and how to open it */

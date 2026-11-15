@@ -14,6 +14,9 @@ import {
   APP_PROCESS,
   APP_ZIP,
   ARTIFACT,
+  LEGACY_APP_NAME,
+  LEGACY_APP_PATH,
+  LEGACY_APP_PROCESS,
   PREVIOUS_PATH,
   QUIT_POLL_MS,
   WORKFLOW,
@@ -39,9 +42,9 @@ const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Whether the app has a process; pgrep exits 1 when none matches */
-const isRunning = async (): Promise<boolean> => {
+const isRunning = async (process: string): Promise<boolean> => {
   try {
-    await run('pgrep', ['-x', APP_PROCESS]);
+    await run('pgrep', ['-x', process]);
     return true;
   } catch (error) {
     if (error instanceof CommandError && error.code === 1) return false;
@@ -50,14 +53,17 @@ const isRunning = async (): Promise<boolean> => {
 };
 
 /** Asks a running app to quit and waits for it; fails when it stays up */
-const quitApp = async (): Promise<void> => {
-  if (!(await isRunning())) return;
-  await run('osascript', ['-e', `quit app "${APP_NAME}"`]);
+const quitApp = async (
+  name = APP_NAME,
+  process = APP_PROCESS
+): Promise<void> => {
+  if (!(await isRunning(process))) return;
+  await run('osascript', ['-e', `quit app "${name}"`]);
   for (let waited = 0; !quitGaveUp(waited); waited += QUIT_POLL_MS) {
     await sleep(QUIT_POLL_MS);
-    if (!(await isRunning())) return;
+    if (!(await isRunning(process))) return;
   }
-  throw new CliError(quitProblem, undefined, quitFix);
+  throw new CliError(quitProblem(name), undefined, quitFix(name));
 };
 
 /** Clears the flag Gatekeeper checks; an app without it is already fine */
@@ -77,8 +83,8 @@ const clearQuarantine = async (): Promise<void> => {
 };
 
 export default defineCommand({
-  summary: 'Install the Agent Desk from a CI build',
-  description: `Installs ${APP_NAME} into ${APP_DIR} from the artifact the desk workflow built: the newest successful push to main, or with --pr the newest successful build of that pull request's branch. Replaces an installed copy, quits it first and clears the quarantine flag; its settings live outside the app and are kept. Does not open the app. macOS arm64 only.`,
+  summary: 'Install the CDWR Desk from a CI build',
+  description: `Installs ${APP_NAME} into ${APP_DIR} from the artifact the desk workflow built: the newest successful push to main, or with --pr the newest successful build of that pull request's branch. Replaces an installed copy, quits it first and clears the quarantine flag; its settings live outside the app and are kept. Afterwards quits and removes the old ${LEGACY_APP_NAME}.app if it is installed. Does not open the app. macOS arm64 only.`,
   danger: 'mutate',
   needs: ['gh'],
   inputs: {
@@ -148,14 +154,14 @@ export default defineCommand({
     const replacing = existsSync(APP_PATH);
     const note = staleNote(chosen, head);
     return {
-      steps: installSteps(chosen, replacing),
+      steps: installSteps(chosen, replacing, existsSync(LEGACY_APP_PATH)),
       notes: note ? [note] : undefined,
       data: { runId: chosen.databaseId, sha: chosen.headSha, replacing }
     };
   },
 
   async apply(ctx, { runId, sha, replacing }) {
-    const tmp = mkdtempSync(join(tmpdir(), 'agent-desk-'));
+    const tmp = mkdtempSync(join(tmpdir(), 'cdwr-desk-'));
     try {
       await ctx.ui.task('Downloading the build', () =>
         run('gh', [
@@ -202,6 +208,12 @@ export default defineCommand({
         }
         rmSync(PREVIOUS_PATH, { recursive: true, force: true });
       });
+      if (existsSync(LEGACY_APP_PATH)) {
+        await ctx.ui.task(`Removing ${LEGACY_APP_PATH}`, async () => {
+          await quitApp(LEGACY_APP_NAME, LEGACY_APP_PROCESS);
+          rmSync(LEGACY_APP_PATH, { recursive: true, force: true });
+        });
+      }
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

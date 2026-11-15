@@ -204,8 +204,9 @@ describe('artifactVerdict', () => {
     JSON.stringify({ total_count: artifacts.length, artifacts });
 
   it.each([
-    [list([{ name: 'agent-desk-macos-arm64', expired: false }]), 'present'],
-    [list([{ name: 'agent-desk-macos-arm64', expired: true }]), 'expired'],
+    [list([{ name: 'cdwr-desk-macos-arm64', expired: false }]), 'present'],
+    [list([{ name: 'cdwr-desk-macos-arm64', expired: true }]), 'expired'],
+    [list([{ name: 'agent-desk-macos-arm64', expired: false }]), 'missing'],
     [list([{ name: 'other', expired: false }]), 'missing'],
     [list([]), 'missing'],
     ['{}', 'missing'],
@@ -236,18 +237,28 @@ describe('installSteps', () => {
     );
     expect(labels).toEqual([
       'Download the build of aaaaaaa',
-      'Unpack Agent Desk.app.zip',
-      'Quit Agent Desk if it is running',
+      'Unpack CDWR Desk.app.zip',
+      'Quit CDWR Desk if it is running',
       expected,
       'Clear the quarantine flag'
     ]);
+  });
+
+  it.each([
+    [true, ['Remove /Applications/Agent Desk.app']],
+    [false, []]
+  ])('legacy app installed %s', (legacy, expected) => {
+    const labels = installSteps(run({}), false, legacy)
+      .map((step) => step.label)
+      .slice(5);
+    expect(labels).toEqual(expected);
   });
 });
 
 describe('installedSummary', () => {
   it('says where and how to open it', () => {
     expect(installedSummary()).toBe(
-      'Installed /Applications/Agent Desk.app. Open it with: open "/Applications/Agent Desk.app"'
+      'Installed /Applications/CDWR Desk.app. Open it with: open "/Applications/CDWR Desk.app"'
     );
   });
 });

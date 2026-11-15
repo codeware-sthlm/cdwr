@@ -353,7 +353,7 @@ export const ENTRIES: Entry[] = [
   },
   {
     path: ['agent', 'desk', 'install'],
-    summary: 'Install the Agent Desk from a CI build',
+    summary: 'Install the CDWR Desk from a CI build',
     danger: 'mutate',
     load: () => import('./agent/desk-install').then((m) => m.default)
   },
