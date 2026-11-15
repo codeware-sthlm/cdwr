@@ -4436,7 +4436,8 @@ describe('run.sh backup step', () => {
       `HOME_DIR="${root}"; REPO="${root}"; check=false`,
       `note() { print -r -- "$*" >> "${root}/notes"; }`,
       `record() { print -r -- "$*" >> "${root}/records"; }`,
-      'PLATFORM_VARS=(PLATFORM_BACKUP_DATABASE_URL)',
+      // The script's own list, so a name missing from it shows here
+      SCRIPT.match(/^PLATFORM_VARS=\(.*\)$/m)?.[0] ?? '',
       fn('unexported_env'),
       'platform_env() { unexported_env $PLATFORM_VARS; }',
       fn('backup_warn'),
@@ -4467,7 +4468,7 @@ describe('run.sh backup step', () => {
     expect(at).toBeGreaterThan(SCRIPT.indexOf('\nrecord_platform\n'));
     expect(at).toBeLessThan(SCRIPT.indexOf('\nCHECKIN_ID=""\n'));
     expect(SCRIPT).toContain(
-      'PLATFORM_DATABASE_URL PLATFORM_BACKUP_DATABASE_URL'
+      'PLATFORM_DATABASE_URL PLATFORM_BACKUP_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID'
     );
     expect(SCRIPT).not.toMatch(/export [^\n]*PLATFORM_BACKUP/);
   });
@@ -4516,6 +4517,21 @@ describe('run.sh backup step', () => {
       });
       expect(read('node.env')).toContain(`PLATFORM_BACKUP_DATABASE_URL=${URL}`);
       expect(read('node.env')).toContain(`AGENT_QUEUE_HOME=${root}`);
+      expect(read('sibling.env')).not.toMatch(
+        /PLATFORM_BACKUP_DATABASE_URL|backup-secret/
+      );
+    }
+  );
+
+  it.skipIf(!hasZsh)(
+    'unexports an inherited url, so only the command gets it',
+    async () => {
+      stubNode('exit 0');
+      await tick({
+        PLATFORM_BACKUP_DATABASE_URL: URL,
+        AGENT_QUEUE_BACKUP_HOUR: '05'
+      });
+      expect(read('node.env')).toContain(`PLATFORM_BACKUP_DATABASE_URL=${URL}`);
       expect(read('sibling.env')).not.toMatch(
         /PLATFORM_BACKUP_DATABASE_URL|backup-secret/
       );
