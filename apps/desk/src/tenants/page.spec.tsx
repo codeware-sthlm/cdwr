@@ -23,7 +23,6 @@ import {
   visitors
 } from './fixtures';
 import { TenantsPage } from './page';
-import { TenantsPill } from './pill';
 
 /** jsdom has no matchMedia: report the phone width or not */
 const media = (phone: boolean) =>
@@ -43,13 +42,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const mount = (data: TenantsPayload | null, onDesk = vi.fn()) => {
-  const { container } = render(
-    <TenantsPage data={data} now={NOW} onDesk={onDesk} />
-  );
+const mount = (data: TenantsPayload | null) => {
+  const { container } = render(<TenantsPage data={data} now={NOW} />);
   const all = (sel: string) =>
     Array.from(container.querySelectorAll<HTMLElement>(sel));
-  return { container, all, text: container.textContent ?? '', onDesk };
+  return { container, all, text: container.textContent ?? '' };
 };
 
 const rows = () =>
@@ -86,11 +83,16 @@ describe('TenantsPage', () => {
     expect(empty.all('[role="alert"]')).toHaveLength(0);
   });
 
-  it('goes back to the desk', () => {
+  it('is the Platform page, titled for production and with no back button', () => {
     media(false);
-    const { all, onDesk } = mount(payload([]));
-    fireEvent.click(all('button.pf-back')[0]);
-    expect(onDesk).toHaveBeenCalledTimes(1);
+    const { container, all } = mount(payload([]));
+    expect(container.querySelector('h1#platform-title')?.textContent).toBe(
+      'Platform'
+    );
+    expect(container.querySelector('.cap-sub')?.textContent).toContain(
+      'production'
+    );
+    expect(all('button.pf-back')).toHaveLength(0);
   });
 
   it('lists the shared row and the tenants with the seven fields on a desktop', () => {
@@ -252,14 +254,7 @@ describe('TenantsPage', () => {
       send: vi.fn()
     };
     const open = (key: string, withPlatform: typeof platform | undefined) => {
-      render(
-        <TenantsPage
-          data={rows()}
-          now={NOW}
-          onDesk={vi.fn()}
-          platform={withPlatform}
-        />
-      );
+      render(<TenantsPage data={rows()} now={NOW} platform={withPlatform} />);
       fireEvent.click(
         document.querySelector(`[data-tenant="${key}"]`) as Element
       );
@@ -467,43 +462,5 @@ describe('problems', () => {
     expect(
       screen.getByRole('dialog', { name: 'cdwr-headless-zed is down' })
     ).toBeTruthy();
-  });
-});
-
-describe('TenantsPill', () => {
-  const pill = (data: TenantsPayload | null, onView = vi.fn()) => {
-    const { container } = render(
-      <TenantsPill data={data} now={NOW} view="desk" onView={onView} />
-    );
-    return { button: container.querySelector('button') as HTMLElement, onView };
-  };
-
-  it('shows the count of tenants and the worst status', () => {
-    const { button } = pill(rows());
-    expect(button.querySelector('.count')?.textContent).toBe('2');
-    expect(button.dataset['worst']).toBe('down');
-    expect(button.getAttribute('aria-label')).toBe('Tenants: 2, down');
-    expect(button.querySelector('.dot')?.className).toContain('--block');
-  });
-
-  it('is green when every tenant is fine, and says when the data is stale', () => {
-    const { button } = pill(payload([tenant('acme', { at: minutesAgo(40) })]));
-    expect(button.dataset['worst']).toBe('ok');
-    expect(button.querySelector('.dot')?.className).toContain('--live');
-    expect(button.getAttribute('aria-label')).toContain('data is stale');
-  });
-
-  it('has no count or dot without data', () => {
-    expect(pill(null).button.querySelector('.count')?.textContent).toBe('–');
-    cleanup();
-    const { button } = pill(payload([]));
-    expect(button.querySelector('.dot')).toBeNull();
-    expect(button.getAttribute('aria-label')).toBe('Tenants: no data yet');
-  });
-
-  it('opens the view', () => {
-    const { button, onView } = pill(rows());
-    fireEvent.click(button);
-    expect(onView).toHaveBeenCalledWith('tenants');
   });
 });

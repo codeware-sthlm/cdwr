@@ -21,19 +21,19 @@ import {
 } from '../view/fixtures';
 
 import { HEAD, PANEL } from './card-ui';
-import { Platform, type PlatformActions } from './platform';
+import { AgentHealth, type HealthActions } from './health';
 import { Problems } from './problems';
 
 const actions = () =>
   ({
-    desk: vi.fn(),
+    agent: vi.fn(),
     problem: vi.fn(),
     sheet: vi.fn(),
     pause: vi.fn(),
     run: vi.fn(),
     step: vi.fn(),
     apply: vi.fn()
-  }) satisfies PlatformActions;
+  }) satisfies HealthActions;
 
 const jobWith = (
   over: Partial<NonNullable<RunsPayload['job']>>,
@@ -107,7 +107,7 @@ const mount = (
   a: ReturnType<typeof actions> = actions()
 ) => {
   const m = model(s, NOW, desk);
-  const { container } = render(<Platform m={m} now={NOW} actions={a} />);
+  const { container } = render(<AgentHealth m={m} now={NOW} actions={a} />);
   const all = (sel: string) =>
     Array.from(container.querySelectorAll<HTMLElement>(sel));
   const text = container.textContent ?? '';
@@ -122,7 +122,7 @@ const mount = (
   return { container, a, text, all, withText, check, q };
 };
 
-describe('Platform', () => {
+describe('AgentHealth', () => {
   it('frames each section as a card', () => {
     const c = mount(base());
     const sections = c.all('section.pf-card');
@@ -141,8 +141,8 @@ describe('Platform', () => {
       'VERSIONS & UPDATES',
       'HEALTH CHECKS'
     ]);
-    expect(p.q('[data-view="desk"]')).not.toBeNull();
-    expect(p.q('h1#platform-title')).not.toBeNull();
+    expect(p.q('[data-view="agent"]')?.textContent).toBe('‹ Agent');
+    expect(p.q('h1#health-title')?.textContent).toBe('Agent health');
     expect(p.text).toContain('controls need a control token in Settings');
     expect(p.text).toContain('Read-only here: add a control token');
     expect(p.q('[data-cmd]')).toBeNull();
@@ -269,7 +269,7 @@ describe('Platform', () => {
           reconnect: vi.fn(),
           reload: vi.fn(),
           copyRow: vi.fn(),
-          platform: vi.fn(),
+          health: vi.fn(),
           abandon: vi.fn()
         }}
       />
@@ -422,10 +422,10 @@ describe('Platform', () => {
   });
 
   describe('buttons', () => {
-    it('goes back to the desk', () => {
+    it('goes back to Agent', () => {
       const p = mount(filled());
       fireEvent.click(p.q('.pf-back') as HTMLElement);
-      expect(p.a.desk).toHaveBeenCalledTimes(1);
+      expect(p.a.agent).toHaveBeenCalledTimes(1);
     });
 
     it("opens the scheduler row's sheets", () => {
@@ -445,7 +445,7 @@ describe('Platform', () => {
   });
 });
 
-describe('Platform with controls', () => {
+describe('AgentHealth with controls', () => {
   const target = { supabaseUrl: 'https://x.supabase.co', controlToken: 't' };
   const row = (
     id: number,

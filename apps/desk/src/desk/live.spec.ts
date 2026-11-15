@@ -959,7 +959,7 @@ describe('health', () => {
     ageMin
   });
 
-  it('lists the checks in the order the Platform view shows them', () => {
+  it('lists the checks in the order the Agent health view shows them', () => {
     const checks = health({ ...fresh(), heartbeats: [mac(2)] });
     expect(checks.map((c) => c.name)).toEqual([
       'Realtime',

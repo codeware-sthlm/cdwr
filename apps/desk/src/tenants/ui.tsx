@@ -1,7 +1,7 @@
 import type { Tone } from './cells';
 import type { TenantStatus } from './status';
 
-// The tone classes the tenant view shares: the chip, the text and the dot, in the colours the Platform view uses
+// The tone classes the tenant view shares: the chip, the text and the dot, in the colours the Agent health view uses
 
 const MONO = 'font-[family-name:var(--font-mono)] leading-[normal]';
 

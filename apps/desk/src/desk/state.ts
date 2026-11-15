@@ -105,19 +105,19 @@ export const OLD_SHEET_IDS: ReadonlyMap<string, SheetId> = new Map([
   ['ticketcost', 'effort']
 ]);
 
-/** The full-page views; the desk is the default and has no hash */
-export type View = 'desk' | 'platform' | 'tree' | 'tenants';
+/** The views: Agent (the desk, the default, with no hash) and Platform (production) at the top, Agent health and the Ticket tree as pages of Agent */
+export type View = 'agent' | 'platform' | 'health' | 'tree';
 
-/** The view a URL hash names: `platform` (or `nuc` from older links), `tree` or `tenants`; null for anything else */
+/** The view a URL hash names: `platform` (or `tenants` from older links), `health` (or `nuc`), `tree`; null for anything else, which opens Agent */
 export const viewOf = (
   value: unknown
-): 'platform' | 'tree' | 'tenants' | null =>
-  value === 'platform' || value === 'nuc'
+): 'platform' | 'health' | 'tree' | null =>
+  value === 'platform' || value === 'tenants'
     ? 'platform'
-    : value === 'tree'
-      ? 'tree'
-      : value === 'tenants'
-        ? 'tenants'
+    : value === 'health' || value === 'nuc'
+      ? 'health'
+      : value === 'tree'
+        ? 'tree'
         : null;
 
 /** A current sheet id, or the sheet an old id moved to; null for anything else */
@@ -192,7 +192,7 @@ export type DeskUi = {
   openSheet: SheetId | null;
   /** The ticket the Ticket sheet shows; kept while the sheet animates out */
   ticket: string | null;
-  /** The full-page view shown in place of the desk */
+  /** The view on show */
   view: View;
   /** The Snoozed fold is open, kept so a render doesn't close it */
   snoozedOpen: boolean;
@@ -306,7 +306,7 @@ export const createState = (): DeskState => ({
     actFilter: 'all',
     openSheet: null,
     ticket: null,
-    view: 'desk',
+    view: 'agent',
     snoozedOpen: false
   },
   controls: emptyControls(null)

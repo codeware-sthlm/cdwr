@@ -29,7 +29,7 @@ const actions = (): ProblemActions => ({
   reconnect: vi.fn(),
   reload: vi.fn(),
   copyRow: vi.fn(),
-  platform: vi.fn(),
+  health: vi.fn(),
   abandon: vi.fn()
 });
 
@@ -127,13 +127,13 @@ describe('Problems', () => {
     expect(card?.getAttribute('data-kind')).toBe('check');
     expect(p.text).toContain('mac heartbeat');
     expect(p.text).toContain('no heartbeat for 42 m while a turn was running');
-    const platform = p.button('Platform ›');
-    if (!platform) throw new Error('no Platform button');
-    fireEvent.click(platform);
-    expect(p.actions.platform).toHaveBeenCalledOnce();
+    const health = p.button('Agent health ›');
+    if (!health) throw new Error('no Agent health button');
+    fireEvent.click(health);
+    expect(p.actions.health).toHaveBeenCalledOnce();
     const a = alertOf(m);
     expect(a.text).toContain('a health check is failing');
-    expect(a.text).toContain('1 check failing · see Platform');
+    expect(a.text).toContain('1 check failing · see Agent health');
     expect(frozenLabel(m)).toBe('');
   });
 

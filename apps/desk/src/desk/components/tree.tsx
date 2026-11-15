@@ -206,7 +206,7 @@ type Props = {
   /** The roots the viewer opened or closed by hand */
   open: Readonly<Record<string, boolean>>;
   onOpen: (ticket: string, open: boolean) => void;
-  onDesk: () => void;
+  onAgent: () => void;
   /** A row's title opens the Ticket sheet */
   onTicket: (id: string) => void;
   /** The review's open findings by ticket, shown as AI chips on the rows */
@@ -243,7 +243,7 @@ export const TreePage = ({
   onFilter,
   open,
   onOpen,
-  onDesk,
+  onAgent,
   onTicket,
   findings = NO_FINDINGS,
   review
@@ -255,10 +255,10 @@ export const TreePage = ({
         <button
           type="button"
           className="pf-back min-h-[var(--tap)] px-3.5"
-          data-view="desk"
-          onClick={onDesk}
+          data-view="agent"
+          onClick={onAgent}
         >
-          ‹ Desk
+          ‹ Agent
         </button>
         <div className="pf-title mr-auto flex min-w-0 flex-col gap-0.5">
           <h1

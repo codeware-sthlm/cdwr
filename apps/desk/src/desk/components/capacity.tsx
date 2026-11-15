@@ -39,7 +39,7 @@ export const STEPS: readonly HandBackState[] = [
 type Props = {
   m: Model;
   onSheet: (id: string) => void;
-  onView: (view: 'platform') => void;
+  onView: (view: 'health') => void;
   pause: (kind: 'pause' | 'resume') => void;
   run: () => void;
 };
@@ -47,7 +47,7 @@ type Props = {
 const MUTED = 'text-[color:var(--muted)]';
 const MONO = 'font-[family-name:var(--font-mono)] leading-[normal]';
 
-// Shared with the Platform view, which draws the same host heads
+// Shared with the Agent health view, which draws the same host heads
 export const CAP_LABEL = `${MONO} text-[11px] font-medium tracking-[0.12em] uppercase ${MUTED}`;
 export const CAP_HH = 'flex min-w-0 items-center gap-2';
 export const CAP_NAME = `${MONO} text-[13px] font-semibold`;
@@ -387,10 +387,10 @@ const Hosts = ({ m, onView, run }: Pick<Props, 'm' | 'onView' | 'run'>) => (
         <button
           type="button"
           className="cap-link -my-3 min-h-[var(--tap)] border-0 bg-transparent px-1 py-0 font-[family-name:var(--font-ui)] text-[12px] leading-[normal] font-medium text-[color:var(--accent)]"
-          data-view="platform"
-          onClick={() => onView('platform')}
+          data-view="health"
+          onClick={() => onView('health')}
         >
-          Platform ›
+          Agent health ›
         </button>
       </span>
     </div>
@@ -443,7 +443,7 @@ const Phone = ({
   onView
 }: {
   m: Model;
-  onView: (view: 'platform') => void;
+  onView: (view: 'health') => void;
 }) => {
   const loaded = m.runs !== null;
   const { used } = m.limits.prs;
@@ -454,9 +454,9 @@ const Phone = ({
     <button
       type="button"
       className={`${FRAME} cap-phone hidden w-full cursor-pointer gap-2 border-[color:var(--line)] bg-[color:var(--surface)] text-left [font:inherit] hover:border-[color:var(--line-strong)] max-[600px]:flex`}
-      data-view="platform"
+      data-view="health"
       aria-label="Capacity: tap for hosts"
-      onClick={() => onView('platform')}
+      onClick={() => onView('health')}
     >
       <span className="cap-minis grid grid-cols-[repeat(2,minmax(0,1fr))] gap-x-4 gap-y-3">
         <Mini
