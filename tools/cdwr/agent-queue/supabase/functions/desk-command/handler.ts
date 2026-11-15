@@ -13,7 +13,9 @@ export const KINDS = [
   'copilot',
   'merge',
   'review',
-  'dismiss'
+  'dismiss',
+  'restart',
+  'gate'
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -32,6 +34,9 @@ export type RowKind = (typeof ROW_KINDS)[number];
 const TICKET = /^COD-[0-9]{1,9}$/;
 /** A review finding's id, `<kind>:<ticket>:<8 hex>`; the lib's own check is not importable in Deno */
 const FINDING = /^[a-z0-9-]+:COD-\d+:[0-9a-f]{8}$/;
+const TENANT = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const CMS_APP = /^cdwr-cms-[a-z0-9][a-z0-9-]{0,59}$/;
+const SHA = /^[0-9a-f]{7,40}$/;
 const NOTE_MAX = 200;
 const ISO_TIME =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/;
@@ -60,9 +65,14 @@ export type Command = {
   /**
    * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
    * snooze and wake, with the row's `kind` and newest gate event `eventAt` for snooze; `ticket`
-   * and `pr` for copilot and merge; `finding` and an optional `note` for dismiss
+   * and `pr` for copilot and merge; `finding` and an optional `note` for dismiss; `tenant`, `app`
+   * and a `sha` or null for restart; `tenant` and `action` for gate
    */
   args: {
+    tenant?: string;
+    app?: string;
+    sha?: string | null;
+    action?: 'open' | 'close';
     finding?: string;
     note?: string | null;
     value?: number;
@@ -195,6 +205,34 @@ export const parseCommand = (payload: unknown): Command | string => {
       return `${kind} takes a ticket and a PR number`;
     return { host, kind, args: { ticket, pr } };
   }
+  if (kind === 'restart') {
+    const message = 'restart takes a tenant, a cms app and a sha or null';
+    if (!isRecord(args)) return message;
+    const { tenant, app, sha = null } = args;
+    if (
+      Object.keys(args).some((k) => !['tenant', 'app', 'sha'].includes(k)) ||
+      typeof tenant !== 'string' ||
+      !TENANT.test(tenant) ||
+      typeof app !== 'string' ||
+      !CMS_APP.test(app) ||
+      (sha !== null && (typeof sha !== 'string' || !SHA.test(sha)))
+    )
+      return message;
+    return { host, kind, args: { tenant, app, sha } };
+  }
+  if (kind === 'gate') {
+    const message = 'gate takes a tenant and open or close';
+    if (!isRecord(args)) return message;
+    const { tenant, action } = args;
+    if (
+      Object.keys(args).length !== 2 ||
+      typeof tenant !== 'string' ||
+      !TENANT.test(tenant) ||
+      (action !== 'open' && action !== 'close')
+    )
+      return message;
+    return { host, kind, args: { tenant, action } };
+  }
   if (kind === 'dismiss') {
     const message = `dismiss takes a finding id and a note of at most ${NOTE_MAX} characters`;
     if (!isRecord(args)) return message;
@@ -279,11 +317,15 @@ export const changeText = (
         ? `woke ${ticket} from the desk (${device})`
         : command.kind === 'copilot' || command.kind === 'merge'
           ? `${command.kind} for ${ticket} asked from the desk (${device})`
-          : command.kind === 'review'
-            ? `review asked on ${command.host} from the desk (${device})`
-            : command.kind === 'dismiss'
-              ? `dismissed ${command.args.finding} from the desk (${device})`
-              : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
+          : command.kind === 'restart'
+            ? `restart of ${command.args.app} asked from the desk (${device})`
+            : command.kind === 'gate'
+              ? `gate ${command.args.action} for ${command.args.tenant} asked from the desk (${device})`
+              : command.kind === 'review'
+                ? `review asked on ${command.host} from the desk (${device})`
+                : command.kind === 'dismiss'
+                  ? `dismissed ${command.args.finding} from the desk (${device})`
+                  : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

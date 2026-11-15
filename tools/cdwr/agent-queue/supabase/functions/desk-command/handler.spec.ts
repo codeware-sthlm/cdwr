@@ -251,6 +251,66 @@ describe('parseCommand', () => {
       expect(parseCommand({ host: 'nuc', kind, args })).toBe(message);
   });
 
+  it('accepts restart with a sha, a null sha or no sha key', () => {
+    const base = { tenant: 'acme', app: 'cdwr-cms-acme' };
+    for (const [args, sha] of [
+      [{ ...base, sha: 'abc1234' }, 'abc1234'],
+      [{ ...base, sha: null }, null],
+      [base, null]
+    ] as const)
+      expect(parseCommand({ host: 'nuc', kind: 'restart', args })).toEqual({
+        host: 'nuc',
+        kind: 'restart',
+        args: { ...base, sha }
+      });
+  });
+
+  it('refuses restart with a bad payload', () => {
+    const message = 'restart takes a tenant, a cms app and a sha or null';
+    const ok = { tenant: 'acme', app: 'cdwr-cms-acme', sha: null };
+    for (const args of [
+      undefined,
+      { ...ok, app: 'cdwr-web-x' },
+      { ...ok, app: 'cdwr-cms-' },
+      { ...ok, tenant: 'Acme' },
+      { ...ok, sha: 'abc12' },
+      { ...ok, sha: 'ABC1234' },
+      { ...ok, sha: 'a'.repeat(41) },
+      { ...ok, sha: 5 },
+      { ...ok, extra: 1 }
+    ])
+      expect(parseCommand({ host: 'nuc', kind: 'restart', args })).toBe(
+        message
+      );
+  });
+
+  it('accepts gate open and close', () => {
+    for (const action of ['open', 'close'])
+      expect(
+        parseCommand({
+          host: 'nuc',
+          kind: 'gate',
+          args: { tenant: 'acme', action }
+        })
+      ).toEqual({
+        host: 'nuc',
+        kind: 'gate',
+        args: { tenant: 'acme', action }
+      });
+  });
+
+  it('refuses gate with a bad payload, a password included', () => {
+    const message = 'gate takes a tenant and open or close';
+    for (const args of [
+      undefined,
+      { tenant: 'acme' },
+      { tenant: 'acme', action: 'toggle' },
+      { tenant: 'Acme', action: 'open' },
+      { tenant: 'acme', action: 'open', password: 'secret' }
+    ])
+      expect(parseCommand({ host: 'nuc', kind: 'gate', args })).toBe(message);
+  });
+
   it('accepts snooze and normalises the gate time', () => {
     expect(
       parseCommand({
@@ -839,6 +899,68 @@ describe('createHandler', () => {
       change: 'merge refused from the desk (mac): no scheduler reports from nuc'
     });
   });
+
+  it.each([
+    [
+      'restart',
+      { tenant: 'acme', app: 'cdwr-cms-acme', sha: null },
+      'restart of cdwr-cms-acme asked from the desk (mac)'
+    ],
+    [
+      'gate',
+      { tenant: 'acme', action: 'open' },
+      'gate open for acme asked from the desk (mac)'
+    ]
+  ] as [string, Record<string, unknown>, string][])(
+    'stores %s pending for a known host',
+    async (kind, args) => {
+      const { handle, fetch } = await setup();
+      const res = await handle(post({ host: 'nuc', kind, args }));
+      expect(res.status).toBe(202);
+      expect(await res.json()).toEqual({
+        id: 7,
+        status: 'pending',
+        note: null
+      });
+      expect(callsTo(fetch, 'rpc/')).toHaveLength(0);
+      expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
+        host: 'nuc',
+        kind,
+        args,
+        status: 'pending'
+      });
+      expect(callsTo(fetch, 'activity')).toHaveLength(0);
+    }
+  );
+
+  it.each([
+    [
+      'restart',
+      { tenant: 'acme', app: 'cdwr-cms-acme', sha: 'abc1234' },
+      'restart refused from the desk (mac): no scheduler reports from nuc'
+    ],
+    [
+      'gate',
+      { tenant: 'acme', action: 'close' },
+      'gate refused from the desk (mac): no scheduler reports from nuc'
+    ]
+  ] as [string, Record<string, unknown>, string][])(
+    'refuses %s for a host nothing reports from',
+    async (kind, args, change) => {
+      const { handle, fetch } = await setup({ queue: [] });
+      const res = await handle(post({ host: 'nuc', kind, args }));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        id: 7,
+        status: 'refused',
+        note: 'no scheduler reports from nuc'
+      });
+      expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+        ticket: null,
+        change
+      });
+    }
+  );
 
   it('stores a review pending for a known host, with no RPC and no activity', async () => {
     const { handle, fetch } = await setup();
