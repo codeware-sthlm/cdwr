@@ -1,3 +1,14 @@
+## 0.3.4 (2026-11-15)
+
+### 🐞 Bug Fixes
+
+- **fly-node:** give the status schema records a key schema for zod 4 ([6cbff255](https://github.com/codeware-sthlm/cdwr/commit/6cbff255))
+- **deps:** require zod 4.6.7 or later for the array length advisory ([f5d15049](https://github.com/codeware-sthlm/cdwr/commit/f5d15049))
+
+### ⚙️ Miscellaneous Chores
+
+- **deps:** update dependency zod to v4 [security] ([1d5324c4](https://github.com/codeware-sthlm/cdwr/commit/1d5324c4))
+
 ## 0.3.3 (2026-11-04)
 
 ### ✨ Features
