@@ -51,6 +51,18 @@ describe('down', () => {
     expect(found[0].threshold).toContain('10 s');
   });
 
+  it('is raised for a 2xx answer that is not 200', () => {
+    const found = tenantProblems({
+      apps: [
+        flyApp('cdwr-cms-acme', 'cms', {
+          health: { ok: true, status: 204, ms: 80 }
+        })
+      ]
+    });
+    expect(found.map((p) => p.key)).toEqual(['acme:down:cdwr-cms-acme']);
+    expect(found[0].evidence).toEqual(['Health check answered 204']);
+  });
+
   it('is raised for an app with no machine at all', () => {
     const found = tenantProblems({
       apps: [flyApp('cdwr-cms-acme', 'cms', { machines: [] })]
