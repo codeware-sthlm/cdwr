@@ -12,6 +12,7 @@ import {
   localStamp,
   pickQueueState,
   readAllPages,
+  silentHosts,
   toActivity,
   toGithubEvent,
   toIssueEvent,
@@ -171,36 +172,135 @@ describe('isPausedRow', () => {
 describe('pickQueueState', () => {
   const now = new Date('2026-10-28T10:00:00.000Z');
   const at = (min: number) => new Date(now.getTime() - min * 6e4).toISOString();
-  const paused = { last_run: '2026-10-28 09:50 · paused' };
+  const nuc = (min: number, over: Partial<QueueStateRow> = {}) =>
+    state({
+      host: 'nuc',
+      at: at(min),
+      job: 'Job: live · fallback 60 min · image sha-9c7a20d',
+      ...over
+    });
+  const mac = (min: number, over: Partial<QueueStateRow> = {}) =>
+    state({ host: 'mbp', at: at(min), ...over });
+  const paused = { job: 'Job: live · fallback 60 min · image · paused' };
 
-  it('prefers an older live row to a newer paused one', () => {
-    const live = state({ host: 'nuc', at: at(40) });
-    expect(
-      pickQueueState([state({ host: 'mbp', at: at(10), ...paused }), live], now)
-    ).toBe(live);
+  it('takes the container row over a newer launchd row, both unpaused', () => {
+    const row = nuc(40);
+    expect(pickQueueState([mac(10), row], now)).toBe(row);
   });
-  it('takes the newest of several live rows', () => {
-    const newer = state({ host: 'b', at: at(10) });
-    expect(pickQueueState([state({ host: 'a', at: at(40) }), newer], now)).toBe(
-      newer
-    );
+  it('takes a paused container row over a newer unpaused launchd row', () => {
+    const row = nuc(40, paused);
+    expect(pickQueueState([mac(10), row], now)).toBe(row);
   });
-  it('takes the newest of all when every row is paused', () => {
-    const newer = state({ host: 'b', at: at(10), ...paused });
-    expect(
-      pickQueueState([state({ host: 'a', at: at(40), ...paused }), newer], now)
-    ).toBe(newer);
+  it('takes the newest of several container rows', () => {
+    const newer = nuc(10, { host: 'nuc2' });
+    expect(pickQueueState([nuc(40), newer, mac(5)], now)).toBe(newer);
   });
-  it('does not let an old live row beat a fresh paused one', () => {
-    const fresh = state({ host: 'nuc', at: at(10), ...paused });
-    expect(
-      pickQueueState([state({ host: 'dead', at: at(300) }), fresh], now)
-    ).toBe(fresh);
+  it('lets a fresh launchd row beat a container row older than the window', () => {
+    const fresh = mac(10);
+    expect(pickQueueState([nuc(300), fresh], now)).toBe(fresh);
   });
-  it('takes a single row, paused or not, and none from none', () => {
-    const only = state({ ...paused });
+  it('lets a launchd row beat a container row whose host went silent', () => {
+    const fresh = mac(10);
+    const silent = (host: string) => host === 'nuc';
+    expect(pickQueueState([nuc(5), fresh], now, silent)).toBe(fresh);
+    expect(pickQueueState([nuc(5), fresh], now, () => false)).not.toBe(fresh);
+  });
+  it('takes the newest fresh row without a container host, kind unknown included', () => {
+    const newer = mac(10, { host: 'old', job: null });
+    expect(pickQueueState([mac(40), newer], now)).toBe(newer);
+  });
+  it('takes the newest of all when every row is stale', () => {
+    const newer = mac(200);
+    expect(pickQueueState([nuc(300), newer], now)).toBe(newer);
+  });
+  it('takes a single row and none from none', () => {
+    const only = nuc(300, paused);
     expect(pickQueueState([only], now)).toBe(only);
     expect(pickQueueState([], now)).toBeUndefined();
+  });
+});
+
+describe('silentHosts', () => {
+  const now = new Date('2026-10-28T10:00:00.000Z');
+  const sample = (host: string, min: number) => ({
+    host,
+    at: new Date(now.getTime() - min * 6e4).toISOString()
+  });
+
+  it('is silent past three of its observed intervals', () => {
+    // Samples a minute apart: silent after 3 minutes
+    const fast = [sample('nuc', 4), sample('nuc', 5), sample('nuc', 6)];
+    expect(silentHosts(fast, now)('nuc')).toBe(true);
+    const ok = [sample('nuc', 2), sample('nuc', 3), sample('nuc', 4)];
+    expect(silentHosts(ok, now)('nuc')).toBe(false);
+  });
+  it('reads only the named host, and none without samples', () => {
+    const rows = [sample('nuc', 1), sample('nuc', 2), sample('other', 60)];
+    expect(silentHosts(rows, now)('nuc')).toBe(false);
+    expect(silentHosts(rows, now)('mbp')).toBe(false);
+    expect(silentHosts([], now)('nuc')).toBe(false);
+  });
+});
+
+describe('createSupabase read of the scheduler host', () => {
+  const reply = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' }
+    });
+  const now = Date.parse('2026-10-28T10:00:00.000Z');
+  const at = (min: number) => new Date(now - min * 6e4).toISOString();
+  const rows = [
+    state({ host: 'nuc', at: at(5), job: 'Job: every 10 min · image' }),
+    state({ host: 'mbp', at: at(1) })
+  ];
+
+  const readWith = (metrics: () => Response) => {
+    vi.useFakeTimers({ now, toFake: ['Date'] });
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/rest/v1/host_metrics')) return metrics();
+      if (url.includes('/rest/v1/queue_state')) return reply(rows);
+      return reply([]);
+    });
+    vi.stubGlobal('fetch', fetch);
+    return createSupabase({ url: 'https://x.supabase.co', anonKey: 'anon' })
+      .read()
+      .then((p) => ({ host: p.runs?.host, fetch }))
+      .finally(() => {
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+      });
+  };
+
+  it('keeps the NUC while it samples, asking for its samples only', async () => {
+    const { host, fetch } = await readWith(() =>
+      reply([
+        { host: 'nuc', at: at(1) },
+        { host: 'nuc', at: at(2) }
+      ])
+    );
+    expect(host).toBe('nuc');
+    const asked = fetch.mock.calls
+      .map(([u]) => String(u))
+      .filter((u) => u.includes('host_metrics'));
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain('host=eq.nuc');
+  });
+  it('hands the view on once the NUC goes silent', async () => {
+    const { host } = await readWith(() =>
+      reply([
+        { host: 'nuc', at: at(30) },
+        { host: 'nuc', at: at(31) }
+      ])
+    );
+    expect(host).toBe('mbp');
+  });
+  it('keeps the NUC when host_metrics fails', async () => {
+    const { host } = await readWith(() =>
+      reply({ code: 'PGRST205', message: 'Could not find the table' }, 404)
+    );
+    expect(host).toBe('nuc');
   });
 });
 
@@ -378,9 +478,13 @@ describe('toRuns', () => {
     });
   });
 
-  it('picks the live host over a newer paused one, and reports the others', () => {
+  it('picks the container host over a newer launchd one, and reports the others', () => {
     const now = new Date('2026-10-28T10:30:00.000Z');
-    const live = state({ host: 'nuc', at: '2026-10-28T10:00:00.000Z' });
+    const live = state({
+      host: 'nuc',
+      at: '2026-10-28T10:00:00.000Z',
+      job: 'Job: every 10 min · image'
+    });
     const paused = state({
       host: 'mbp',
       at: '2026-10-28T10:20:00.000Z',
