@@ -357,11 +357,14 @@ async function githubGet<T>(path: string, schema: z.ZodType<T>): Promise<T> {
   return parsed.data;
 }
 
-/** The last completed deploy run of main (public repository, no token) and what its deploy job concluded */
+/**
+ * The last completed deploy run of main (public repository, no token) and what its deploy job
+ * concluded. A manual run on main counts as well as a push: it is how a production redeploy starts.
+ */
 export async function readDeploy(): Promise<Reading<DeployRead>> {
   try {
     const { workflow_runs } = await githubGet(
-      '/actions/workflows/fly-deployment.yml/runs?branch=main&event=push&status=completed&per_page=1',
+      '/actions/workflows/fly-deployment.yml/runs?branch=main&status=completed&per_page=1',
       RunsSchema
     );
     const latest = workflow_runs[0];
