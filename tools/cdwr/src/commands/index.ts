@@ -261,6 +261,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/usage-record').then((m) => m.default)
   },
   {
+    path: ['agent', 'platform-record'],
+    summary: 'Send the platform state to the telemetry database',
+    danger: 'mutate',
+    load: () => import('./agent/platform-record').then((m) => m.default)
+  },
+  {
     path: ['agent', 'listen'],
     summary: 'Wake the scheduler when issue or GitHub events arrive',
     danger: 'read',
