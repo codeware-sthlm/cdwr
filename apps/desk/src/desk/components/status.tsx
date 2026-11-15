@@ -36,7 +36,7 @@ const B = 'font-normal tracking-[0.1em]';
 const LONG = 'long max-[600px]:hidden';
 const SHORT = 'short hidden max-[600px]:inline';
 
-const PILL =
+export const PILL =
   'relative inline-flex min-h-[var(--tap)] items-center gap-2 rounded-[var(--r-pill)] bg-[color:var(--surface)] px-4 py-0 font-[family-name:var(--font-ui)] text-[12px] leading-[normal] font-normal max-[600px]:w-[var(--tap)] max-[600px]:justify-center max-[600px]:border-0 max-[600px]:bg-transparent max-[600px]:p-0';
 
 type TreePillProps = {

@@ -35,6 +35,13 @@ export type SessionRow = Tables['sessions']['Row'];
 export type DeskCommandRow = Tables['desk_commands']['Row'];
 export type SnoozeRow = Tables['snoozes']['Row'];
 export type DismissalRow = Tables['review_dismissals']['Row'];
+export type TenantStateRow = Tables['tenant_state']['Row'];
+
+/** The NUC's platform rows, one per tenant plus `_shared`, and the commit of main's newest fly-deployment.yml build; null when none is recorded */
+export type TenantsPayload = {
+  rows: TenantStateRow[];
+  main: string | null;
+};
 
 /** Full commits of main's newest successful builds; null when none is recorded */
 /** Main's newest build of the NUC image, the Mac desk (desk.yml) and the web desk (desk-image.yml) */
@@ -159,6 +166,8 @@ export type Payloads = QueuePayloads & {
   reviews: ReviewRecord | null;
   /** Every dismissed finding, by finding id */
   dismissals: DismissalRow[];
+  /** The platform state per tenant; empty before the NUC's first write */
+  tenants: TenantsPayload;
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -714,6 +723,32 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         : settle(result);
     });
 
+  // The tenant_state table is applied by hand after merge, so a missing one reads as no rows; the newest fly-deployment build is the commit a tenant's machines should run
+  const readTenants = (): Promise<TenantsPayload> =>
+    attempt(async () => {
+      const orEmpty = <T>(result: {
+        data: T[] | null;
+        error: { message: string; code?: string } | null;
+        status: number;
+      }): T[] =>
+        result.error && MISSING_TABLE.includes(result.error.code ?? '')
+          ? []
+          : settle(result);
+      const [rows, builds] = await Promise.all([
+        client
+          .from('tenant_state')
+          .select('*')
+          .order('key', { ascending: true }),
+        client
+          .from('builds')
+          .select('*')
+          .eq('workflow', 'fly-deployment.yml')
+          .order('run_created_at', { ascending: false })
+          .limit(1)
+      ]);
+      return { rows: orEmpty(rows), main: orEmpty(builds)[0]?.sha ?? null };
+    });
+
   /**
    * `onChange` fires on a change and again each time the channel (re)joins, to
    * catch up on what was missed. `onStatus` gets false on a channel error, a
@@ -726,7 +761,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
    * new or updated `sessions` row, which `onChange` hears too; `onDeskCommands`
    * fires (debounced) on a new or updated `desk_commands` row, and on each (re)join;
    * `onSnoozes` likewise on a new, updated or deleted `snoozes` row; `onReviews` on a new
-   * `reviews` row and `onDismissals` on a new, updated or deleted `review_dismissals` row.
+   * `reviews` row and `onDismissals` on a new, updated or deleted `review_dismissals` row;
+   * `onTenants` likewise on a new, updated or deleted `tenant_state` row.
    */
   const subscribe = (
     onChange: () => void,
@@ -740,7 +776,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     onDeskCommands?: () => void,
     onSnoozes?: () => void,
     onReviews?: () => void,
-    onDismissals?: () => void
+    onDismissals?: () => void,
+    onTenants?: () => void
   ): (() => Promise<void>) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hostTimer: ReturnType<typeof setTimeout> | undefined;
@@ -751,6 +788,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     let snoozesTimer: ReturnType<typeof setTimeout> | undefined;
     let reviewsTimer: ReturnType<typeof setTimeout> | undefined;
     let dismissalsTimer: ReturnType<typeof setTimeout> | undefined;
+    let tenantsTimer: ReturnType<typeof setTimeout> | undefined;
     const changed = (): void => {
       clearTimeout(timer);
       timer = setTimeout(onChange, DEBOUNCE_MS);
@@ -786,6 +824,10 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     const dismissalsChanged = (): void => {
       clearTimeout(dismissalsTimer);
       dismissalsTimer = setTimeout(() => onDismissals?.(), DEBOUNCE_MS);
+    };
+    const tenantsChanged = (): void => {
+      clearTimeout(tenantsTimer);
+      tenantsTimer = setTimeout(() => onTenants?.(), DEBOUNCE_MS);
     };
     let channel = client.channel('desk');
     for (const table of [
@@ -916,6 +958,19 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     dismissals.subscribe((status) => {
       if (status === 'SUBSCRIBED') dismissalsChanged();
     });
+    // Its own channel too, so before the tenant_state migration is applied a refused subscription costs the tenant view only
+    let tenants = client.channel('desk-tenants');
+    for (const event of ['INSERT', 'UPDATE', 'DELETE'] as const) {
+      tenants = tenants.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'tenant_state' },
+        tenantsChanged
+      );
+    }
+    // A (re)join catches up on a row that changed while it was away
+    tenants.subscribe((status) => {
+      if (status === 'SUBSCRIBED') tenantsChanged();
+    });
     // One channel per plan usage table too, so a missing one fails only its own data
     const planChannel = client
       .channel('desk-plan')
@@ -953,6 +1008,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       clearTimeout(snoozesTimer);
       clearTimeout(reviewsTimer);
       clearTimeout(dismissalsTimer);
+      clearTimeout(tenantsTimer);
       // Resolves once every channel is gone; a resubscribe before that gets the old one back
       return Promise.allSettled(
         [
@@ -964,6 +1020,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
           snoozes,
           reviews,
           dismissals,
+          tenants,
           planChannel,
           hoursChannel
         ].map((c) => client.removeChannel(c))
@@ -987,6 +1044,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     readSnoozes,
     readReviews,
     readDismissals,
+    readTenants,
     subscribe,
     check
   };

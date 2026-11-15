@@ -12,6 +12,7 @@ import type {
   RunsPayload,
   SessionRow,
   SnoozeRow,
+  TenantsPayload,
   UsageHourRow,
   UsagePayload
 } from '../supabase';
@@ -105,15 +106,19 @@ export const OLD_SHEET_IDS: ReadonlyMap<string, SheetId> = new Map([
 ]);
 
 /** The full-page views; the desk is the default and has no hash */
-export type View = 'desk' | 'platform' | 'tree';
+export type View = 'desk' | 'platform' | 'tree' | 'tenants';
 
-/** The view a URL hash names: `platform` (or `nuc` from older links) or `tree`; null for anything else */
-export const viewOf = (value: unknown): 'platform' | 'tree' | null =>
+/** The view a URL hash names: `platform` (or `nuc` from older links), `tree` or `tenants`; null for anything else */
+export const viewOf = (
+  value: unknown
+): 'platform' | 'tree' | 'tenants' | null =>
   value === 'platform' || value === 'nuc'
     ? 'platform'
     : value === 'tree'
       ? 'tree'
-      : null;
+      : value === 'tenants'
+        ? 'tenants'
+        : null;
 
 /** A current sheet id, or the sheet an old id moved to; null for anything else */
 export const sheetIdOf = (value: unknown): SheetId | null =>
@@ -152,6 +157,8 @@ export type DeskData = {
   reviews: ReviewRecord | null;
   /** Every dismissed finding; null before it loads */
   dismissals: DismissalRow[] | null;
+  /** The platform state of every tenant and the commit main deploys; null before it loads */
+  tenants: TenantsPayload | null;
   /** The Realtime channel as the adapter reports it */
   connection: Connection;
   /** When the open tickets were last stored, in ms */
@@ -276,6 +283,7 @@ export const createState = (): DeskState => ({
     snoozes: null,
     reviews: null,
     dismissals: null,
+    tenants: null,
     connection: {
       live: false,
       retries: 0,

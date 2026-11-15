@@ -6,6 +6,7 @@ describe('viewOf', () => {
   it('names the Platform view from its hash, and from the old nuc link', () => {
     expect(viewOf('platform')).toBe('platform');
     expect(viewOf('nuc')).toBe('platform');
+    expect(viewOf('tenants')).toBe('tenants');
     expect(viewOf('scheduler')).toBeNull();
     expect(viewOf('')).toBeNull();
     expect(viewOf(null)).toBeNull();

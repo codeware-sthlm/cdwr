@@ -328,6 +328,17 @@ export const createLoader = ({
       }
       render();
     });
+    adapter.watchTool('Supabase', 'tenants', {}, (ev) => {
+      if (stopped) return;
+      if (ev.type === 'data') {
+        state.data.tenants = ev.result.payload;
+        state.errors.delete('tenants');
+      } else {
+        state.errors.set('tenants', ev.error);
+        if (RETRACT.includes(ev.error.code)) state.data.tenants = null;
+      }
+      render();
+    });
     adapter.watchTool(SERVER, 'list_issues', { label: IDEA_LABEL }, (ev) => {
       if (stopped) return;
       if (ev.type === 'data') {

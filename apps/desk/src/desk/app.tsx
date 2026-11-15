@@ -1,5 +1,8 @@
 import { useEffect, useReducer } from 'react';
 
+import { TenantsPage } from '../tenants/page';
+import { TenantsPill } from '../tenants/pill';
+
 import {
   clickSettings,
   closeSettings,
@@ -205,6 +208,12 @@ export const App = () => {
               view={state.ui.view}
               onView={(view) => showView(view)}
             />
+            <TenantsPill
+              data={state.data.tenants}
+              now={now}
+              view={state.ui.view}
+              onView={(view) => showView(view)}
+            />
             <Search m={m} state={state} onOpen={(id) => openTicket(id)} />
             <button
               id="refresh"
@@ -249,6 +258,18 @@ export const App = () => {
             aria-labelledby="platform-title"
           >
             <Platform m={m} now={now} actions={platformActions} />
+          </main>
+        ) : view === 'tenants' ? (
+          <main
+            id="tenants"
+            className="tenants-view flex flex-col gap-[var(--gap-card)]"
+            aria-labelledby="tenants-title"
+          >
+            <TenantsPage
+              data={state.data.tenants}
+              now={now}
+              onDesk={() => showView('desk')}
+            />
           </main>
         ) : view === 'tree' ? (
           <main
