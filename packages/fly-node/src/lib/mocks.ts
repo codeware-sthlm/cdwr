@@ -98,7 +98,7 @@ export const mockListCertForAppResponse: ListCertForAppResponse = [
     hostname: `${mockDefs.testApp}.fly.dev`
   },
   {
-    clientStatus: 'Pending', // TODO: Check if this is correct
+    clientStatus: 'Awaiting configuration',
     createdAt: '2024-02-01T00:00:00Z',
     hostname: '*.custom.io'
   }
