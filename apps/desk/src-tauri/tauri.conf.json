@@ -1,6 +1,6 @@
 {
   "$schema": "../../../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Agent Desk",
+  "productName": "CDWR Desk",
   "version": "0.1.0",
   "identifier": "se.codeware.agent-desk",
   "build": {
@@ -10,7 +10,7 @@
   "app": {
     "windows": [
       {
-        "title": "Agent Desk",
+        "title": "CDWR Desk",
         "width": 1280,
         "height": 860,
         "resizable": true,

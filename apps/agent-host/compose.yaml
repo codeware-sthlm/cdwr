@@ -23,7 +23,7 @@ services:
         max-size: 10m
         max-file: "5"
 
-  # The Agent Desk as a static site, for the phone: bound to the host's loopback only, and
+  # The CDWR Desk as a static site, for the phone: bound to the host's loopback only, and
   # published to the tailnet with `tailscale serve` (tools/cdwr/README.md, the NUC section)
   desk:
     image: ghcr.io/codeware-sthlm/cdwr-desk:${DESK_IMAGE_TAG:-main}
