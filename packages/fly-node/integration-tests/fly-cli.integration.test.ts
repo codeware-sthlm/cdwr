@@ -140,28 +140,67 @@ describe('Fly CLI Compatibility & Schema Validation', () => {
       });
     });
 
-    // Currently not valueable since no certs are created during tests
     describe('Certificates Commands', () => {
-      // Does Let's Encrypt provide test certs?
-      it.todo('certs.add executes without errors and adds the certificate');
-      it.todo(
-        'certs.remove executes without errors and removes the certificate'
-      );
+      // `example.com` is reserved (RFC 2606), so the certificate is listed
+      // but never issued, and no Let's Encrypt challenge can fail on it
+      let certHostname: string;
+
+      beforeAll(() => {
+        certHostname = `${testAppName}.example.com`;
+      });
+
+      afterAll(async () => {
+        // The test app is destroyed later anyway, so a failure here is harmless
+        await fly.certs
+          .remove(certHostname, { app: testAppName })
+          .catch(() => undefined);
+      });
+
+      it('certs.add executes without errors', async () => {
+        await expect(
+          fly.certs.add(certHostname, { app: testAppName })
+        ).resolves.not.toThrow();
+      });
 
       it('certs.list for app returns valid response', async () => {
         const response = await fly.certs.list({
           app: testAppName
         });
 
-        expect(response).toBeDefined();
+        expect(response.length).toBeGreaterThan(0);
+        expect(response.map(({ hostname }) => hostname)).toContain(
+          certHostname
+        );
         CertsListTransformedResponseSchema.parse(response);
       });
 
       it('certs.list all returns valid response', async () => {
         const response = await fly.certs.list('all');
 
-        expect(response).toBeDefined();
+        expect(
+          response.find(
+            ({ app, hostname }) =>
+              app === testAppName && hostname === certHostname
+          )
+        ).toBeDefined();
         CertsListWithAppTransformedResponseSchema.parse(response);
+      });
+
+      it('statusExtended lists the certificate as a domain', async () => {
+        const response = await fly.statusExtended({ app: testAppName });
+
+        expect(response?.domains).toContainEqual({ hostname: certHostname });
+      });
+
+      it('certs.remove executes without errors and removes the certificate', async () => {
+        await expect(
+          fly.certs.remove(certHostname, { app: testAppName })
+        ).resolves.not.toThrow();
+
+        const response = await fly.certs.list({ app: testAppName });
+        expect(response.map(({ hostname }) => hostname)).not.toContain(
+          certHostname
+        );
       });
     });
 
