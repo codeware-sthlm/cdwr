@@ -235,6 +235,7 @@ describe('isProblem', () => {
     ['launched', false],
     ['implemented', false],
     ['untried', false],
+    ['limited', false],
     ['suggested COD-3', false],
     ['nothing', false],
     ['skip', false],
@@ -887,6 +888,28 @@ describe('model', () => {
         ]
       });
       expect(m.runProblems).toEqual([]);
+    });
+
+    it('shows a limited newest run as amber, not as a problem', () => {
+      const m = at({
+        last: { when: '2026-10-29 11:50', outcome: 'limited' },
+        rows: [
+          row('2026-10-29 11:50', 'limited'),
+          row('2026-10-29 09:00', 'implemented')
+        ]
+      });
+      expect(m.runProblems).toEqual([]);
+      expect(m.runLimited?.when).toBe('2026-10-29 11:50');
+    });
+
+    it('is no longer limited once a later run did something else', () => {
+      const m = at({
+        rows: [
+          row('2026-10-29 11:00', 'implemented'),
+          row('2026-10-29 09:00', 'limited')
+        ]
+      });
+      expect(m.runLimited).toBeNull();
     });
   });
 
