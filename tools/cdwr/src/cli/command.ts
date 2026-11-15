@@ -35,6 +35,8 @@ export interface Plan<D = unknown> {
   nothing?: string;
   /** Raises the command's danger for this plan, e.g. a fresh apply outside development; never lowers it */
   danger?: Danger;
+  /** Machine-readable plan for `--dry-run --json`; public data only, never a secret */
+  json?: unknown;
   data: D;
 }
 

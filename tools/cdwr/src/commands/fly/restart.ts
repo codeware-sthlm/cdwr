@@ -7,6 +7,9 @@ import {
   restartMachines
 } from '../../services/fly';
 
+/** A deployed commit; anything else in `GIT_SHA` is not taken */
+const SHA = /^[0-9a-f]{7,40}$/;
+
 /**
  * Template for a mutating command: a select input loaded from Fly, a plan
  * that names the target so production gets a confirmation, an apply that
@@ -43,14 +46,20 @@ export default defineCommand({
       () => machinesOf(app),
       (list) => `${list.length} machine(s) in ${app}`
     );
+    const environment = pullRequestOf(app) ? 'preview' : 'production';
     return {
       steps: machines.map((m) => ({
         label: `Restart ${m.id}`,
         detail: `${m.name}, ${m.state}`
       })),
-      target: {
-        environment: pullRequestOf(app) ? 'preview' : 'production',
-        name: app
+      target: { environment, name: app },
+      json: {
+        app,
+        environment,
+        machines: machines.map((m) => {
+          const sha = m.config?.env?.['GIT_SHA'] ?? '';
+          return { id: m.id, state: m.state, sha: SHA.test(sha) ? sha : null };
+        })
       },
       data: { app }
     };

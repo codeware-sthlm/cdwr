@@ -367,6 +367,68 @@ describe('buildRows', () => {
     ]);
   });
 
+  it('marks a tenant app gated by tenant and kind, and leaves unknown out', () => {
+    const { rows } = buildRows(
+      readings({
+        switches: ok([
+          {
+            app: 'cms',
+            environment: 'production',
+            tenant: 'acme-dep',
+            flag: 'on',
+            gated: true
+          },
+          {
+            app: 'headless',
+            environment: 'production',
+            tenant: 'acme-dep',
+            flag: 'on',
+            gated: false
+          },
+          // Host switch: the shared cms stays unmarked
+          {
+            app: 'cms',
+            environment: 'production',
+            tenant: null,
+            flag: 'on',
+            gated: true
+          }
+        ])
+      })
+    );
+    const acmeApps = row(rows, 'acme').apps as {
+      kind: string;
+      gated?: boolean;
+    }[];
+    expect(acmeApps.map((a) => [a.kind, a.gated])).toEqual([
+      ['cms', true],
+      ['headless', false]
+    ]);
+    // No Infisical entry for beta's app, and no gate on the shared row
+    for (const key of ['beta', SHARED_KEY]) {
+      for (const app of row(rows, key).apps as object[]) {
+        expect(app).not.toHaveProperty('gated');
+      }
+    }
+    // The switches column keeps its named fields
+    expect(row(rows, 'acme').switches).toEqual([
+      { app: 'cms', environment: 'production', tenant: 'acme-dep', flag: 'on' },
+      {
+        app: 'headless',
+        environment: 'production',
+        tenant: 'acme-dep',
+        flag: 'on'
+      }
+    ]);
+  });
+
+  it('leaves gated out when Infisical was not read', () => {
+    const { rows } = buildRows(readings({ switches: failed('no infisical') }));
+    for (const app of row(rows, 'acme').apps as object[]) {
+      expect(app).not.toHaveProperty('gated');
+    }
+  });
+
   it('puts the database figures in the shared row only', () => {
     const { rows } = buildRows(readings());
     expect(row(rows, SHARED_KEY).db).toEqual({
@@ -793,7 +855,8 @@ describe('switchRecords', () => {
       app: 'headless',
       environment: 'production',
       tenant: 'acme-dep',
-      flag: 'on'
+      flag: 'on',
+      gated: false
     });
     expect(records).toContainEqual({
       app: 'headless',
@@ -802,6 +865,30 @@ describe('switchRecords', () => {
       flag: 'off'
     });
     expect(JSON.stringify(records)).not.toContain('shh');
+  });
+
+  it('records whether a tenant app holds the gate, never its value', () => {
+    const records = switchRecords(
+      'production',
+      {
+        cms: [
+          { secrets: { SITE_GATE_PASSWORD: 'hunter2' } },
+          { tenant: 'acme-dep', secrets: { SITE_GATE_PASSWORD: 'hunter2' } },
+          { tenant: 'beta', secrets: { TOKEN: 'shh' } }
+        ],
+        headless: [{ tenant: 'acme-dep' }]
+      },
+      [{ app: 'headless', tenant: 'beta', reason: 'flag-off' }]
+    );
+    const gated = (app: string, tenant: string | null) =>
+      records.find((r) => r.app === app && r.tenant === tenant)?.gated;
+    expect(gated('cms', 'acme-dep')).toBe(true);
+    expect(gated('cms', 'beta')).toBe(false);
+    expect(gated('headless', 'acme-dep')).toBe(false);
+    // A host app and a skipped deployment were not read
+    expect(gated('cms', null)).toBeUndefined();
+    expect(gated('headless', 'beta')).toBeUndefined();
+    expect(JSON.stringify(records)).not.toContain('hunter2');
   });
 });
 
