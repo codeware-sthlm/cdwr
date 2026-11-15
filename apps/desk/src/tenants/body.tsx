@@ -252,6 +252,41 @@ export const TenantBody = ({
         </Section>
       ) : null}
 
+      {shared ? (
+        <Section title="Database backup">
+          {row.backup ? (
+            <dl className={KV}>
+              <dt>Newest</dt>
+              <dd>
+                {row.backup.newestAt
+                  ? `${seenAgo(row.backup.newestAt, now)}${row.backup.newest ? ` · ${row.backup.newest}` : ''}`
+                  : '—'}
+              </dd>
+              {row.backup.bytes === null ? null : (
+                <>
+                  <dt>Size</dt>
+                  <dd>{bytes(row.backup.bytes)}</dd>
+                </>
+              )}
+              <dt>Kept</dt>
+              <dd>{row.backup.count}</dd>
+              {row.backup.lastRun ? (
+                <>
+                  <dt>Last run</dt>
+                  <dd className="[overflow-wrap:anywhere]">
+                    {row.backup.lastRun.ok
+                      ? `${seenAgo(row.backup.lastRun.at, now)} · ok`
+                      : `${seenAgo(row.backup.lastRun.at, now)} · failed: ${row.backup.lastRun.error ?? 'no error recorded'}`}
+                  </dd>
+                </>
+              ) : null}
+            </dl>
+          ) : (
+            <p className={NOTE}>—</p>
+          )}
+        </Section>
+      ) : null}
+
       {row.sentry ? (
         <Section title="Sentry">
           <dl className={KV}>

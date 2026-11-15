@@ -73,6 +73,7 @@ export const tenant = (
   sentry: {},
   visitors: {},
   deploy: {},
+  backup: {},
   errors: {},
   ...over
 });
@@ -113,6 +114,19 @@ export const deployRun = (over: Record<string, Json> = {}): Json => ({
   ...over
 });
 
+/** The shared row's `backup` column: a dump made `ageH` hours before NOW */
+export const backupState = (
+  ageH = 10,
+  over: Record<string, Json> = {}
+): Json => ({
+  newest: 'cms-production-2026-11-15T02-05-11',
+  newestAt: new Date(NOW.getTime() - ageH * 36e5).toISOString(),
+  count: 7,
+  bytes: 48 * 2 ** 20,
+  lastRun: { at: minutesAgo(ageH * 60), ok: true, error: null },
+  ...over
+});
+
 /** The shared row: the host apps and the database */
 export const shared = (over: Partial<TenantStateRow> = {}): TenantStateRow => ({
   key: SHARED_KEY,
@@ -131,6 +145,7 @@ export const shared = (over: Partial<TenantStateRow> = {}): TenantStateRow => ({
   sentry: {},
   visitors: {},
   deploy: {},
+  backup: {},
   errors: {},
   ...over
 });
