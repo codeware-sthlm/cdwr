@@ -10,12 +10,27 @@ export type AxeFinding = {
 /** A link and what it answered; null when it never answered */
 export type LinkResult = { href: string; status: number | null };
 
+/** A request the page made that answered 400 or worse */
+export type FailedRequest = {
+  method: string;
+  url: string;
+  status: number;
+  /** What the browser asked for: document, script, fetch, image… */
+  resourceType: string;
+};
+
 export type PageAudit = {
   route: string;
   /** The page's HTTP status; null when it never answered */
   status: number | null;
   /** What the browser console reported as an error while the page loaded */
   consoleErrors: Array<string>;
+  /**
+   * The page's requests that answered 400 or worse, each once. Chrome's
+   * console text names no URL, so this list is what says which request a
+   * `Failed to load resource` error was about.
+   */
+  failedRequests: Array<FailedRequest>;
   axe: Array<AxeFinding>;
   /** Only the links that did not answer well */
   brokenLinks: Array<LinkResult>;
@@ -88,6 +103,31 @@ export const isBroken = (status: number | null): boolean =>
   status === null || status >= 400;
 
 /**
+ * Adds a request that answered 400 or worse to a page's list, unless the same
+ * method, URL and status is already there
+ *
+ * @returns Whether it was added
+ */
+export function addFailedRequest(
+  failed: Array<FailedRequest>,
+  request: FailedRequest
+): boolean {
+  if (
+    request.status < 400 ||
+    failed.some(
+      ({ method, url, status }) =>
+        method === request.method &&
+        url === request.url &&
+        status === request.status
+    )
+  ) {
+    return false;
+  }
+  failed.push(request);
+  return true;
+}
+
+/**
  * The share-card check: which of title, description and image are missing, and
  * whether the image answers.
  *
@@ -134,6 +174,13 @@ export function auditFindings(report: AuditReport): Array<string> {
         `${page.route}: ${page.consoleErrors.length} console error(s)`
       );
     }
+    if (page.failedRequests.length) {
+      findings.push(
+        `${page.route}: ${page.failedRequests.length} failed request(s) (${page.failedRequests
+          .map(({ method, url, status }) => `${status} ${method} ${url}`)
+          .join(', ')})`
+      );
+    }
     if (page.axe.length) {
       findings.push(
         `${page.route}: ${page.axe.length} axe violation(s) (${page.axe
@@ -174,11 +221,11 @@ export function auditMarkdown(report: AuditReport): string {
     '',
     `Gate cookie: ${report.gateCookie ? 'sent' : 'not sent'}`,
     '',
-    '| Route | Status | Console errors | Axe | Broken links |',
-    '| --- | --- | --- | --- | --- |',
+    '| Route | Status | Console errors | Failed requests | Axe | Broken links |',
+    '| --- | --- | --- | --- | --- | --- |',
     ...report.pages.map(
       (page) =>
-        `| ${page.route} | ${page.status ?? '-'} | ${page.consoleErrors.length} | ${page.axe.length} | ${page.brokenLinks.length} |`
+        `| ${page.route} | ${page.status ?? '-'} | ${page.consoleErrors.length} | ${page.failedRequests.length} | ${page.axe.length} | ${page.brokenLinks.length} |`
     ),
     '',
     `OG: ${
