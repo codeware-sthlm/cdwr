@@ -1,6 +1,6 @@
 import type { ErrorEvent } from '@sentry/tanstackstart-react';
 
-import { dropBotEvent, sentryOptions } from './sentry';
+import { dropBotEvent, sentryOptions, tenantScope } from './sentry';
 
 const withUserAgent = (header: string, userAgent: string) =>
   ({
@@ -26,6 +26,14 @@ describe('dropBotEvent', () => {
   it('keeps an event without a user agent', () => {
     const event = { type: undefined } as ErrorEvent;
     expect(dropBotEvent(event)).toBe(event);
+  });
+});
+
+describe('tenantScope', () => {
+  it('tags the tenant and the tenant mode', () => {
+    expect(tenantScope('moon')).toEqual({
+      tags: { mode: 'tenant', tenant: 'moon' }
+    });
   });
 });
 

@@ -24,6 +24,15 @@ export function dropBotEvent(event: ErrorEvent): ErrorEvent | null {
 }
 
 /**
+ * The tags that tell a tenant's errors apart as the cms does: tenants share one
+ * Sentry project and release. Headless is only deployed as a tenant app, so the
+ * mode is always `tenant`. Server only: the browser build has no tenant id.
+ */
+export const tenantScope = (tenant: string) => ({
+  tags: { mode: 'tenant', tenant }
+});
+
+/**
  * The options client and server share, as the cms sets them. Off without a DSN.
  * No Session Replay: it records the screen and keeps state in the visitor's
  * browser, which would need consent on every public site.
