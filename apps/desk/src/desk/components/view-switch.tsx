@@ -32,8 +32,10 @@ export const ViewSwitch = ({
   onView
 }: Props) => {
   const agent = agentCount(m, details, now);
+  // The queue's snapshot is as old as the scheduler's last run
+  const agentStale = agent !== null && m.schedulerStale;
   const platform = platformCount(tenants, now);
-  const agentLabel = `Agent: ${agent === null ? 'loading' : agent ? `${agent} waiting on you` : 'nothing waiting on you'}`;
+  const agentLabel = `Agent: ${agent === null ? 'loading' : agent ? `${agent} waiting on you` : 'nothing waiting on you'}${agentStale ? ', data is stale' : ''}`;
   const platformLabel = `Platform: ${
     platform.count === null
       ? platform.empty
@@ -54,7 +56,10 @@ export const ViewSwitch = ({
         aria-current={view !== 'platform' ? 'page' : undefined}
       >
         <span className="name">Agent</span>
-        <span className={`${COUNT} ${agent ? 'text-[color:var(--wait)]' : ''}`}>
+        <span
+          className={`${COUNT} ${agent && !agentStale ? 'text-[color:var(--wait)]' : ''}`}
+          data-stale={agentStale}
+        >
           {agent ?? '–'}
         </span>
       </button>
@@ -68,7 +73,7 @@ export const ViewSwitch = ({
       >
         <span className="name">Platform</span>
         <span
-          className={`${COUNT} ${platform.count ? 'text-[color:var(--block)]' : ''}`}
+          className={`${COUNT} ${platform.count && !platform.stale ? 'text-[color:var(--block)]' : ''}`}
           data-stale={platform.stale}
         >
           {platform.count ?? '–'}
