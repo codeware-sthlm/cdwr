@@ -298,11 +298,12 @@ export const SchedulerBody = ({ m }: Pick<BodyProps, 'm'>) => {
         <code>untried</code>, <code>limited</code>, <code>cap</code> or{' '}
         <code>failed</code>). A problem is any outcome other than planned, idle,
         launched, implemented, untried, limited, suggested, nothing or skip, for
-        example a failed run or one that planned nothing. It turns the Platform
-        pill red until a later run goes well. <code>limited</code> is a run that
-        hit the plan&apos;s session limit: no claude run starts until it resets,
-        and the pill and the run row turn amber meanwhile. The runs themselves
-        are on the Runs today sheet. Full logs: <code>cdwr agent logs</code>.
+        example a failed run or one that planned nothing. It turns the Agent
+        health pill red until a later run goes well. <code>limited</code> is a
+        run that hit the plan&apos;s session limit: no claude run starts until
+        it resets, and the pill and the run row turn amber meanwhile. The runs
+        themselves are on the Runs today sheet. Full logs:{' '}
+        <code>cdwr agent logs</code>.
       </p>
     </>
   );

@@ -2,11 +2,11 @@ import { hhmm, hhmmss, plural } from '../format';
 import { ofKind } from '../live';
 import { type Model, treeGapped, treeRoots } from '../model';
 import type { Connection, View } from '../state';
-import { platform } from '../view/header';
+import { health } from '../view/header';
 
 import { Icon } from './icon';
 
-// The header's live part: the Platform and Tree pills and the LIVE dot. The title, bot line, Refresh and Settings are drawn by App.
+// The header's live part: the Agent health and Tree pills and the LIVE dot. The title, view switch, bot line, Refresh and Settings are drawn by App.
 
 const Sliders = () => (
   <svg
@@ -85,13 +85,21 @@ export const TreePill = ({ m, view, onView }: TreePillProps) => {
 type Props = {
   m: Model;
   connection: Connection;
-  /** The view on show, for the Platform pill's `aria-current` */
+  /** The view on show, for the Agent health pill's `aria-current` */
   view?: View;
-  onView: (view: 'platform') => void;
+  onView: (view: 'health') => void;
+  /** Whether the Agent health pill shows; the connection indicator always does */
+  pill?: boolean;
 };
 
-export const Status = ({ m, connection, view = 'desk', onView }: Props) => {
-  const p = platform(m);
+export const Status = ({
+  m,
+  connection,
+  view = 'agent',
+  onView,
+  pill: showPill = true
+}: Props) => {
+  const p = health(m);
   const loading = !m.runs;
   const flag = p.failing.length ? 'bad' : p.updates || p.limited ? 'wait' : '';
   const title = [
@@ -101,19 +109,19 @@ export const Status = ({ m, connection, view = 'desk', onView }: Props) => {
   ]
     .filter(Boolean)
     .join('. ');
-  const label = `Platform: ${loading ? 'loading' : p.failing.length ? p.failing.length + ' failing' : 'checks ok'}${p.limited ? ', held by the session limit' : ''}${p.updates ? ', ' + plural(p.updates, 'update', 'updates') : ''}`;
-  const pill = (
+  const label = `Agent health: ${loading ? 'loading' : p.failing.length ? p.failing.length + ' failing' : 'checks ok'}${p.limited ? ', held by the session limit' : ''}${p.updates ? ', ' + plural(p.updates, 'update', 'updates') : ''}`;
+  const pill = showPill ? (
     <button
       type="button"
-      className={`platform ${PILL}`}
-      data-view="platform"
-      onClick={() => onView('platform')}
+      className={`health ${PILL}`}
+      data-view="health"
+      onClick={() => onView('health')}
       title={title || undefined}
       aria-label={label}
-      aria-current={view === 'platform' ? 'page' : undefined}
+      aria-current={view === 'health' ? 'page' : undefined}
     >
       <Sliders />
-      <span className="name max-[600px]:hidden">Platform</span>
+      <span className="name max-[600px]:hidden">Agent health</span>
       {loading ? (
         <span className="checks max-[600px]:hidden">checks –</span>
       ) : p.failing.length ? (
@@ -142,7 +150,7 @@ export const Status = ({ m, connection, view = 'desk', onView }: Props) => {
         ></i>
       ) : null}
     </button>
-  );
+  ) : null;
   const at = m.pulse?.at ?? connection.upSince;
   const down = ofKind(m.problems, 'connection')[0];
   if (down) {

@@ -1,4 +1,4 @@
-// The utilities the desk's cards share: the session and Waiting on you cards, and the capacity and Platform cards built on the frame
+// The utilities the desk's cards share: the session and Waiting on you cards, and the capacity and Agent health cards built on the frame
 
 /** The card frame: padding, radius and border, a column; the callers add the display, the cursor, the gap, the flex basis and the tone */
 export const FRAME =
@@ -7,7 +7,7 @@ export const FRAME =
 /** A clickable card on the frame: shown, with the pointer and the card gap */
 export const CARD = `${FRAME} flex cursor-pointer gap-3 max-[600px]:gap-2`;
 
-/** A card that is not a control, the capacity and Platform cards: shown, the default cursor, the wider gap and the plain tone */
+/** A card that is not a control, the capacity and Agent health cards: shown, the default cursor, the wider gap and the plain tone */
 export const PANEL = `${FRAME} flex cursor-default gap-[14px] border-[color:var(--line)] bg-[color:var(--surface)]`;
 
 /** The card's head: the pill on the left, the count or where it runs on the right */

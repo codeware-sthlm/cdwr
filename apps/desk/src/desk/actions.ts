@@ -19,7 +19,7 @@ import {
   sendCommand
 } from './commands';
 import type { WaitActions } from './components/before';
-import type { PlatformActions } from './components/platform';
+import type { HealthActions } from './components/health';
 import type { ProblemActions } from './components/problems';
 import type { SettingsOptions } from './components/settings';
 import type { SheetActions } from './components/sheets';
@@ -95,7 +95,7 @@ function setHash(): void {
   const hash =
     openSheet === 'ticket' && ticket
       ? `ticket/${ticket}`
-      : (openSheet ?? (state.ui.view === 'desk' ? '' : state.ui.view));
+      : (openSheet ?? (state.ui.view === 'agent' ? '' : state.ui.view));
   try {
     window.history.replaceState(
       null,
@@ -107,16 +107,24 @@ function setHash(): void {
   }
 }
 
-/** Shows the desk or a full-page view in its place */
+const VIEW_KEY = 'aq-view';
+
+/** Shows a view; Agent and Platform are kept for the next visit */
 export function showView(view: View, focus = true): void {
   const left = state.ui.view;
   state.ui.view = view;
+  if (view === 'agent' || view === 'platform')
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      // Storage is unavailable: the view lasts until the page closes
+    }
   // A render is asynchronous: flushed here, the view's title exists before it takes focus
   flushSync(render);
   setHash();
   if (!focus) return;
-  // Back on the desk, focus goes to the header button of the view just left
-  if (view === 'desk')
+  // Back on Agent, focus goes to the header button of the view just left
+  if (view === 'agent')
     document.querySelector<HTMLElement>(`[data-view="${left}"]`)?.focus();
   else document.getElementById(`${view}-title`)?.focus();
 }
@@ -208,7 +216,16 @@ export function focusOpener(): void {
   )?.focus();
 }
 
-/** Opens what the URL hash names at start: a full-page view or a sheet, without taking focus */
+/** The view kept for this device, when it is Platform; Agent is the default anyway */
+function rememberedView(): 'platform' | null {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'platform' ? 'platform' : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Opens what the URL hash names at start: a view or a sheet, without taking focus; with none, the view kept last */
 export function openStartHash(): void {
   const startHash = (window.location.hash || '').slice(1);
   const view = viewOf(startHash);
@@ -217,8 +234,8 @@ export function openStartHash(): void {
     const raw = startHash.startsWith('ticket/') ? startHash.slice(7) : '';
     const ticket = isTicketId(raw) ? raw : canonicalId(raw);
     if (ticket) openTicket(ticket, false);
-    // A bare `#ticket` names no ticket and opens nothing: showSheet refuses it
-    else showSheet(startHash, false);
+    else if (sheetIdOf(startHash)) showSheet(startHash, false);
+    else if (rememberedView()) showView('platform', false);
   }
 }
 
@@ -248,7 +265,7 @@ function controlsNow(): ControlsModel | null {
   return state.controls.target ? modelAt(new Date()).controls : null;
 }
 
-// The controls' actions, shared by the capacity row and the Platform view
+// The controls' actions, shared by the capacity row and the Agent health view
 
 export function pauseQueue(kind: 'pause' | 'resume'): void {
   const m = controlsNow();
@@ -280,17 +297,17 @@ function applyDraft(control: 'limit' | 'cap'): void {
     sendControl(control, m.host, control, { value: draft });
 }
 
-/** Scrolls to a problem's card on the desk */
+/** Scrolls to a problem's card on Agent */
 function showProblem(id: string): void {
-  showView('desk', false);
+  showView('agent', false);
   const card = document.getElementById(id);
   card?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth' });
   card?.focus({ preventScroll: true });
 }
 
-/** What the Platform view's buttons do */
-export const platformActions: PlatformActions = {
-  desk: () => showView('desk'),
+/** What the Agent health view's buttons do */
+export const healthActions: HealthActions = {
+  agent: () => showView('agent'),
   problem: showProblem,
   sheet: (id) => showSheet(id),
   pause: pauseQueue,
@@ -321,8 +338,8 @@ function abandonRun(): void {
 /** What the alert's link and the problem cards' buttons do */
 export const problemActions: ProblemActions = {
   seeProblems: () => {
-    // The alert shows on the Platform view too, where the problems are hidden
-    if (state.ui.view !== 'desk') showView('desk', false);
+    // The alert shows on the other views too, where the problems are hidden
+    if (state.ui.view !== 'agent') showView('agent', false);
     document.getElementById('problems')?.scrollIntoView({
       behavior: reducedMotion() ? 'auto' : 'smooth'
     });
@@ -330,7 +347,7 @@ export const problemActions: ProblemActions = {
   reconnect: () => void adapter?.reconnect(),
   reload: () => window.location.reload(),
   copyRow,
-  platform: () => showView('platform'),
+  health: () => showView('health'),
   abandon: abandonRun
 };
 

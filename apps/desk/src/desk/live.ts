@@ -404,7 +404,7 @@ export const ofKind = <K extends ProblemKind>(
 ): Extract<Problem, { kind: K }>[] =>
   list.filter((p): p is Extract<Problem, { kind: K }> => p.kind === kind);
 
-/** The id a Platform row links to: one card per check, the first card of any other key */
+/** The id an Agent health row links to: one card per check, the first card of any other key */
 export const problemId = (p: Problem): string =>
   p.kind === 'check'
     ? `problem-check-${p.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
@@ -622,7 +622,7 @@ export const missedEvent = (
   };
 };
 
-/** The Platform view's checks, in the order it lists them */
+/** The Agent health view's checks, in the order it lists them */
 export const health = ({
   connection,
   runs,

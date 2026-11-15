@@ -28,7 +28,7 @@ import {
 } from './status';
 import { StatusChip, TEXT_TONE } from './ui';
 
-// The tenants view: one row per tenant and the shared one, the NUC's platform state at a glance.
+// The Platform view: one row per tenant and the shared one, production's state as the NUC reads it.
 // Read-only apart from the sheet's restart and gate actions. A row opens a sheet with everything for it; which one is open is this page's own state.
 
 const EMPTY_TEXT = 'No platform data yet — the NUC writes it every 10 minutes.';
@@ -140,7 +140,6 @@ const StaleBand = ({ ageMin }: { ageMin: number | null }) => (
 type Props = {
   data: TenantsPayload | null;
   now: Date;
-  onDesk: () => void;
   /** The sheet's restart and gate actions; none without it */
   platform?: PlatformApi;
 };
@@ -261,7 +260,7 @@ const Rows = ({
   );
 };
 
-export const TenantsPage = ({ data, now, onDesk, platform }: Props) => {
+export const TenantsPage = ({ data, now, platform }: Props) => {
   const view = tenantsView(data, now);
   return (
     <>
@@ -269,25 +268,17 @@ export const TenantsPage = ({ data, now, onDesk, platform }: Props) => {
         <StaleBand ageMin={view.ageMin} />
       ) : null}
       <div className="pf-head flex flex-wrap items-center gap-x-4 gap-y-2">
-        <button
-          type="button"
-          className="pf-back min-h-[var(--tap)] px-3.5"
-          data-view="desk"
-          onClick={onDesk}
-        >
-          ‹ Desk
-        </button>
         <div className="pf-title mr-auto flex min-w-0 flex-col gap-0.5">
           <h1
-            id="tenants-title"
+            id="platform-title"
             tabIndex={-1}
             className="font-[family-name:var(--font-ui)] text-[22px] leading-[1.2] font-semibold tracking-[0.18em] uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--accent)]"
           >
-            Tenants
+            Platform
           </h1>
           <span className={`cap-sub ${CAP_SUB}`}>
-            each tenant&apos;s apps, version, certificates and deploy switches,
-            as the NUC last read them
+            production: the tenants and the shared host, their health and
+            problems, as the NUC last read them
           </span>
         </div>
       </div>

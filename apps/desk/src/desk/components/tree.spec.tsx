@@ -37,7 +37,7 @@ const ALL: TreeFilter = { ...NO_TREE_FILTER, closed: true };
 const mountWith = (
   tree: QueueTreeNode[],
   {
-    onDesk = vi.fn(),
+    onAgent = vi.fn(),
     onFilter = vi.fn(),
     onTicket = vi.fn(),
     filter = ALL,
@@ -46,7 +46,7 @@ const mountWith = (
     session = { state: 'none' },
     prepare = () => undefined
   }: {
-    onDesk?: () => void;
+    onAgent?: () => void;
     onFilter?: (filter: TreeFilter) => void;
     onTicket?: (id: string) => void;
     filter?: TreeFilter;
@@ -68,14 +68,14 @@ const mountWith = (
       onFilter={onFilter}
       open={open}
       onOpen={onOpen}
-      onDesk={onDesk}
+      onAgent={onAgent}
       onTicket={onTicket}
     />
   ).container;
 };
 
-const mount = (tree: QueueTreeNode[], onDesk = vi.fn()): HTMLElement =>
-  mountWith(tree, { onDesk });
+const mount = (tree: QueueTreeNode[], onAgent = vi.fn()): HTMLElement =>
+  mountWith(tree, { onAgent });
 
 const watching = (state: DeskState, over: Record<string, unknown> = {}) => {
   const base = state.data.runs;
@@ -118,11 +118,13 @@ describe('TreePage', () => {
     expect(text(c)).toContain('the whole backlog in the queue');
   });
 
-  it('goes back to the desk from the back button', () => {
-    const onDesk = vi.fn();
-    const c = mount([node('COD-10')], onDesk);
-    fireEvent.click(c.querySelector('button[data-view="desk"]') as HTMLElement);
-    expect(onDesk).toHaveBeenCalledOnce();
+  it('goes back to Agent from the back button', () => {
+    const onAgent = vi.fn();
+    const c = mount([node('COD-10')], onAgent);
+    const back = c.querySelector('button[data-view="agent"]') as HTMLElement;
+    expect(text(back)).toBe('‹ Agent');
+    fireEvent.click(back);
+    expect(onAgent).toHaveBeenCalledOnce();
   });
 
   it('opens the Ticket sheet from a row title, and keeps the id a link to Linear', () => {
@@ -271,7 +273,7 @@ describe('TreePage', () => {
         onFilter={vi.fn()}
         open={{}}
         onOpen={vi.fn()}
-        onDesk={vi.fn()}
+        onAgent={vi.fn()}
         onTicket={vi.fn()}
       />
     ).container;

@@ -2,7 +2,6 @@ import { useEffect, useReducer } from 'react';
 
 import { platformHost } from '../tenants/host';
 import { TenantsPage } from '../tenants/page';
-import { TenantsPill } from '../tenants/pill';
 
 import {
   clickSettings,
@@ -10,11 +9,11 @@ import {
   focusOpener,
   frame,
   hasAdapter,
+  healthActions,
   hideSheet,
   modelAt,
   openTicket,
   pauseQueue,
-  platformActions,
   problemActions,
   refresh,
   reviewNow,
@@ -31,8 +30,8 @@ import {
 } from './actions';
 import { Capacity } from './components/capacity';
 import { Cards } from './components/cards';
+import { AgentHealth } from './components/health';
 import { Icon } from './components/icon';
-import { Platform } from './components/platform';
 import {
   Alert,
   FrozenLabel,
@@ -51,6 +50,7 @@ import { SHEETS, sheetTitle } from './components/sheets';
 import { Status, TreePill } from './components/status';
 import { Tiles } from './components/tiles';
 import { TreePage } from './components/tree';
+import { ViewSwitch } from './components/view-switch';
 import { AGENT_AVATAR } from './constants';
 import type { Model } from './model';
 import { notice } from './notice';
@@ -142,13 +142,16 @@ export const App = () => {
     const onKey = (e: KeyboardEvent) => {
       // An open sheet closes on its own Escape, which marks the event handled
       if (e.key !== 'Escape' || e.defaultPrevented) return;
-      if (store.state.ui.view !== 'desk') showView('desk');
+      // Agent health and the tree are pages of Agent; Platform and Agent have nowhere to go back to
+      const view = store.state.ui.view;
+      if (view === 'health' || view === 'tree') showView('agent');
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
   const view = state.ui.view;
+  const onAgent = view !== 'platform';
   const label = frozenLabel(m);
   const note = notice(state.errors, hasAdapter());
   return (
@@ -174,6 +177,7 @@ export const App = () => {
                 connection={state.data.connection}
                 view={state.ui.view}
                 onView={(view) => showView(view)}
+                pill={onAgent}
               />
             </span>
             <span id="fresh" className="min-w-0 truncate">
@@ -199,24 +203,32 @@ export const App = () => {
           <div className="tools flex min-w-0 items-center gap-[10px] max-[600px]:gap-[6px]">
             <div className="brand mr-auto flex min-w-0 items-baseline gap-[14px]">
               <h1 className="truncate font-[family-name:var(--font-mono)] text-[13px] leading-[normal] font-semibold tracking-[0.18em] uppercase">
-                Agent Desk
+                CDWR Desk
               </h1>
               <span className="sub text-[12px] text-[color:var(--muted)] max-[900px]:hidden">
-                cdwr · what the work queue does next, and what waits on you
+                {onAgent
+                  ? 'cdwr · what the work queue does next, and what waits on you'
+                  : 'cdwr · production: tenants, health and problems'}
               </span>
             </div>
-            <TreePill
+            <ViewSwitch
               m={m}
-              view={state.ui.view}
-              onView={(view) => showView(view)}
-            />
-            <TenantsPill
-              data={state.data.tenants}
+              details={state.details}
+              tenants={state.data.tenants}
               now={now}
-              view={state.ui.view}
-              onView={(view) => showView(view)}
+              view={view}
+              onView={(next) => showView(next)}
             />
-            <Search m={m} state={state} onOpen={(id) => openTicket(id)} />
+            {onAgent ? (
+              <>
+                <TreePill
+                  m={m}
+                  view={state.ui.view}
+                  onView={(view) => showView(view)}
+                />
+                <Search m={m} state={state} onOpen={(id) => openTicket(id)} />
+              </>
+            ) : null}
             <button
               id="refresh"
               type="button"
@@ -253,24 +265,23 @@ export const App = () => {
           </div>
         )}
 
-        {view === 'platform' ? (
+        {view === 'health' ? (
+          <main
+            id="health"
+            className="health-view flex flex-col gap-[var(--gap-card)]"
+            aria-labelledby="health-title"
+          >
+            <AgentHealth m={m} now={now} actions={healthActions} />
+          </main>
+        ) : view === 'platform' ? (
           <main
             id="platform"
             className="platform-view flex flex-col gap-[var(--gap-card)]"
             aria-labelledby="platform-title"
           >
-            <Platform m={m} now={now} actions={platformActions} />
-          </main>
-        ) : view === 'tenants' ? (
-          <main
-            id="tenants"
-            className="tenants-view flex flex-col gap-[var(--gap-card)]"
-            aria-labelledby="tenants-title"
-          >
             <TenantsPage
               data={state.data.tenants}
               now={now}
-              onDesk={() => showView('desk')}
               platform={{
                 can: state.controls.target !== null,
                 host: platformHost(
@@ -296,7 +307,7 @@ export const App = () => {
               onFilter={setTreeFilter}
               open={state.ui.treeOpen}
               onOpen={setTreeOpen}
-              onDesk={() => showView('desk')}
+              onAgent={() => showView('agent')}
               onTicket={(id) => openTicket(id)}
               findings={findingsByTicket(
                 state.data.reviews,

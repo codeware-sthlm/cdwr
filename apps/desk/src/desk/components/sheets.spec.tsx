@@ -22,7 +22,7 @@ import {
   runs,
   view
 } from '../view/fixtures';
-import { platform } from '../view/header';
+import { health } from '../view/header';
 import { headline } from '../view/session';
 
 import { whyLine } from './queue-bodies';
@@ -93,7 +93,7 @@ describe('scheduler sheet', () => {
   it('says when the image is behind main', () => {
     const state = behind({ image: NEW, desk: null, deskWeb: null }, true);
     const m = model(state, NOW, null);
-    expect(platform(m).updates).toBe(1);
+    expect(health(m).updates).toBe(1);
     const html = text(body('scheduler', state, m));
     expect(html).toContain('cdwr agent deploy --host agent-host');
     expect(html).toContain('sha-def5678');
@@ -104,8 +104,8 @@ describe('scheduler sheet', () => {
     const state = behind({ image: null, desk: NEW, deskWeb: null }, false);
     const m = model(state, NOW, OLD);
     // An update, but no failing check
-    expect(platform(m).updates).toBe(1);
-    expect(platform(m).failing).not.toContain('desk');
+    expect(health(m).updates).toBe(1);
+    expect(health(m).failing).not.toContain('desk');
     expect(text(body('scheduler', state, m))).toContain(
       'cdwr agent desk install'
     );
@@ -114,7 +114,7 @@ describe('scheduler sheet', () => {
   it('shows neither when both are current', () => {
     const state = behind({ image: OLD, desk: OLD, deskWeb: null }, true);
     const m = model(state, NOW, OLD);
-    expect(platform(m).updates).toBe(0);
+    expect(health(m).updates).toBe(0);
     const html = text(body('scheduler', state, m));
     expect(html).not.toContain('cdwr agent desk install');
     expect(html).not.toContain('docker compose pull');

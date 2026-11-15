@@ -10,7 +10,7 @@ import {
 } from '../live';
 import type { Model, VersionState } from '../model';
 import { CAP_RANGE, LIMIT_RANGE } from '../view/controls';
-import { platform } from '../view/header';
+import { health } from '../view/header';
 
 import {
   CAP_HH,
@@ -25,13 +25,13 @@ import {
 import { HEAD, PANEL } from './card-ui';
 import { CmdButton, ControlStatus, MINI, Stepper } from './controls';
 
-// The Platform view: hosts, versions and health, with the queue's controls when the desk has a
-// control token. It fills `#platform` in place of the desk's cards, and handles its own clicks.
+// The Agent health view: hosts, versions and health, with the queue's controls when the desk has a
+// control token. It fills `#health` in place of the Agent cards, and handles its own clicks.
 
 /** What the view's buttons do */
-export type PlatformActions = {
-  /** Back to the desk */
-  desk: () => void;
+export type HealthActions = {
+  /** Back to Agent */
+  agent: () => void;
   /** A failing check's link to the problem card that explains it */
   problem: (id: string) => void;
   /** The scheduler row's sheets */
@@ -131,7 +131,7 @@ const SCHEDULER_SHEETS = [
   ['runs', 'runs']
 ] as const;
 
-const SchedulerRow = ({ m, a }: { m: Model; a: PlatformActions }) => {
+const SchedulerRow = ({ m, a }: { m: Model; a: HealthActions }) => {
   const last = m.runs?.last
     ? `last run ${hhmm(runTime(m.runs.last.when))}`
     : 'no run yet';
@@ -171,7 +171,7 @@ const SchedulerRow = ({ m, a }: { m: Model; a: PlatformActions }) => {
   );
 };
 
-const Controls = ({ m, a }: { m: Model; a: PlatformActions }) => {
+const Controls = ({ m, a }: { m: Model; a: HealthActions }) => {
   const loaded = m.runs !== null;
   const { used, max } = m.limits.prs;
   const e = m.limits.effort;
@@ -560,10 +560,10 @@ const HealthChecks = ({
 
 // ---------- The view ----------
 
-type Props = { m: Model; now: Date; actions: PlatformActions };
+type Props = { m: Model; now: Date; actions: HealthActions };
 
-export const Platform = ({ m, now, actions }: Props) => {
-  const p = platform(m);
+export const AgentHealth = ({ m, now, actions }: Props) => {
+  const p = health(m);
   const ok = m.health.filter((c) => c.ok).length;
   return (
     <>
@@ -571,21 +571,21 @@ export const Platform = ({ m, now, actions }: Props) => {
         <button
           type="button"
           className="pf-back min-h-[var(--tap)] px-3.5"
-          data-view="desk"
-          onClick={actions.desk}
+          data-view="agent"
+          onClick={actions.agent}
         >
-          ‹ Desk
+          ‹ Agent
         </button>
         <div className="pf-title mr-auto flex min-w-0 flex-col gap-0.5">
           <h1
-            id="platform-title"
+            id="health-title"
             tabIndex={-1}
             className="font-[family-name:var(--font-ui)] text-[22px] leading-[1.2] font-semibold tracking-[0.18em] uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--accent)]"
           >
-            Platform
+            Agent health
           </h1>
           <span className={`cap-sub ${CAP_SUB}`}>
-            hosts, versions and health
+            the agent&apos;s hosts, versions and health checks
             {m.controls
               ? ''
               : ' — read-only; controls need a control token in Settings'}

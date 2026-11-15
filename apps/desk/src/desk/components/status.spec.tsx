@@ -35,14 +35,14 @@ const node = (ticket: string, gaps: string[] = []): QueueTreeNode => ({
 });
 
 describe('TreePill', () => {
-  const pill = (tree: QueueTreeNode[] | null, current = 'desk') => {
+  const pill = (tree: QueueTreeNode[] | null, current = 'agent') => {
     const state = filled();
     state.data.runs = tree ? runs(view({ tree })) : null;
     const onView = vi.fn();
     const { container } = render(
       <TreePill
         m={model(state, NOW)}
-        view={current as 'desk'}
+        view={current as 'agent'}
         onView={onView}
       />
     );
@@ -83,7 +83,7 @@ describe('TreePill', () => {
 
   it('is the current page on the tree view only', () => {
     expect(pill([], 'tree').button.getAttribute('aria-current')).toBe('page');
-    expect(pill([], 'desk').button.hasAttribute('aria-current')).toBe(false);
+    expect(pill([], 'agent').button.hasAttribute('aria-current')).toBe(false);
   });
 
   it('opens the tree view on click', () => {
@@ -94,7 +94,7 @@ describe('TreePill', () => {
 });
 
 describe('Status', () => {
-  it('opens the Platform view from the Platform pill', () => {
+  it('opens the Agent health view from the Agent health pill', () => {
     const onView = vi.fn();
     const { container } = render(
       <Status
@@ -103,24 +103,39 @@ describe('Status', () => {
         onView={onView}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /Platform/ }));
-    expect(onView).toHaveBeenCalledWith('platform');
+    const button = screen.getByRole('button', { name: /Agent health/ });
+    expect(button.textContent).toContain('Agent health');
+    fireEvent.click(button);
+    expect(onView).toHaveBeenCalledWith('health');
     expect(container.textContent).toContain('LIVE');
     expect(container.textContent).toContain('realtime ·');
   });
 
-  it('marks the Platform pill as the current page on the Platform view', () => {
+  it('marks the Agent health pill as the current page on the Agent health view', () => {
     const { container } = render(
       <Status
         m={model(filled(), NOW)}
         connection={connection(true)}
-        view="platform"
+        view="health"
         onView={vi.fn()}
       />
     );
     expect(
-      container.querySelector('.platform')?.getAttribute('aria-current')
+      container.querySelector('.health')?.getAttribute('aria-current')
     ).toBe('page');
+  });
+
+  it('leaves out the pill but keeps the connection indicator without it', () => {
+    const { container } = render(
+      <Status
+        m={model(filled(), NOW)}
+        connection={connection(true)}
+        pill={false}
+        onView={vi.fn()}
+      />
+    );
+    expect(container.querySelector('button')).toBeNull();
+    expect(container.textContent).toContain('LIVE');
   });
 
   it('shows the unknown state while polling', () => {

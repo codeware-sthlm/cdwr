@@ -45,7 +45,9 @@ describe('Tiles', () => {
     // The limit and the NUC moved to the Capacity row
     expect(t.tile('limit')).toBeNull();
     expect(t.tile('nuc')).toBeNull();
-    expect(t.container.textContent).not.toContain('Until the Platform view');
+    expect(t.container.textContent).not.toContain(
+      'Until the Agent health view'
+    );
     expect(t.container.querySelector('.tiles.small')).toBeNull();
     for (const b of t.container.querySelectorAll('button[data-w]'))
       expect(b.getAttribute('aria-haspopup')).toBe('dialog');

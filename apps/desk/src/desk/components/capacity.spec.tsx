@@ -149,7 +149,7 @@ describe('Capacity', () => {
         ?.querySelector('.cap-pct')?.textContent;
     expect(c.text).toContain('HOSTS');
     expect(c.text).toContain('host_metrics · live');
-    expect(c.q('.cap-link[data-view="platform"]')).not.toBeNull();
+    expect(c.q('.cap-link[data-view="health"]')).not.toBeNull();
     expect(c.text).toContain('busy · heartbeat 0 s ago');
     expect(pct('CPU')).toBe('25%');
     expect(pct('Memory')).toBe('25%');
@@ -265,7 +265,7 @@ describe('Capacity', () => {
     ];
     const c = mount(s);
     const phone = c.q('button.cap-phone');
-    expect(phone?.getAttribute('data-view')).toBe('platform');
+    expect(phone?.getAttribute('data-view')).toBe('health');
     expect(phone?.getAttribute('aria-label')).toBe('Capacity: tap for hosts');
     expect(c.all('.cap-mini')).toHaveLength(4);
     const mini = (label: string) =>
@@ -330,12 +330,12 @@ describe('Capacity', () => {
       expect(c.a.onSheet).toHaveBeenCalledWith('limit');
     });
 
-    it('opens the Platform view from the link and the phone card', () => {
+    it('opens the Agent health view from the link and the phone card', () => {
       const c = mount(filled());
       fireEvent.click(c.q('.cap-link') as HTMLElement);
-      expect(c.a.onView).toHaveBeenLastCalledWith('platform');
+      expect(c.a.onView).toHaveBeenLastCalledWith('health');
       fireEvent.click(c.q('.cap-phone') as HTMLElement);
-      expect(c.a.onView).toHaveBeenLastCalledWith('platform');
+      expect(c.a.onView).toHaveBeenLastCalledWith('health');
       expect(c.a.onView).toHaveBeenCalledTimes(2);
     });
   });

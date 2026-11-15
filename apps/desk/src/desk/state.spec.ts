@@ -3,10 +3,19 @@ import { describe, expect, it } from 'vitest';
 import { NO_TREE_FILTER, treeFilterOf, viewOf } from './state';
 
 describe('viewOf', () => {
-  it('names the Platform view from its hash, and from the old nuc link', () => {
+  it('names Platform from its hash, and from the old tenants link', () => {
     expect(viewOf('platform')).toBe('platform');
-    expect(viewOf('nuc')).toBe('platform');
-    expect(viewOf('tenants')).toBe('tenants');
+    expect(viewOf('tenants')).toBe('platform');
+  });
+
+  it('names Agent health from its hash, and from the old nuc link', () => {
+    expect(viewOf('health')).toBe('health');
+    expect(viewOf('nuc')).toBe('health');
+  });
+
+  it('names the tree, and nothing for anything else, which opens Agent', () => {
+    expect(viewOf('tree')).toBe('tree');
+    expect(viewOf('agent')).toBeNull();
     expect(viewOf('scheduler')).toBeNull();
     expect(viewOf('')).toBeNull();
     expect(viewOf(null)).toBeNull();

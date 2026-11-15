@@ -27,7 +27,7 @@ export type ProblemActions = {
   reload: () => void;
   /** Copies the raw row's text, or selects it when the clipboard is blocked */
   copyRow: (raw: HTMLElement) => void;
-  platform: () => void;
+  health: () => void;
   /** Asks to confirm, then marks the open run abandoned */
   abandon: () => void;
 };
@@ -161,7 +161,7 @@ export const Alert = ({
       `the desk reads ${writers[0].used}`
     ) : (
       <Both
-        long={`${checks} failing · see Platform`}
+        long={`${checks} failing · see Agent health`}
         short={`${checks} failing.`}
       />
     );
@@ -431,8 +431,8 @@ const checkCard = (
   body: `${p.text}. A failing check says nothing about the queue, so its numbers stand.`,
   short: p.text,
   actions: (
-    <button type="button" className={BTN_PLAIN} onClick={actions.platform}>
-      Platform ›
+    <button type="button" className={BTN_PLAIN} onClick={actions.health}>
+      Agent health ›
     </button>
   )
 });
@@ -507,7 +507,7 @@ const ProblemCard = ({
   );
 };
 
-/** One card per problem; the first of each key carries the id a Platform row links to */
+/** One card per problem; the first of each key carries the id an Agent health row links to */
 export const Problems = ({
   m,
   now,
