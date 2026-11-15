@@ -12,7 +12,9 @@ import {
   loginToken,
   newShareSlug,
   readUmamiProvisioning,
-  setShare
+  setShare,
+  websiteDays,
+  websiteStats
 } from './umami';
 
 vi.mock('./shell', () => ({ sleep: () => Promise.resolve() }));
@@ -177,6 +179,60 @@ describe('Umami client', () => {
     expect(slugs).toHaveLength(101);
     expect(fetchMock.mock.calls[1][0]).toContain('page=2');
     expect(pickShare(slugs, 'recorded')).toBe('recorded');
+  });
+
+  it.each([
+    ['v2', { visitors: { value: 12, prev: 9 }, pageviews: { value: 40 } }],
+    ['v3', { visitors: 12, pageviews: 40 }]
+  ])('reads the visitors of a website from a %s answer', async (_v, body) => {
+    fetchMock.mockResolvedValue(reply(body));
+    expect(
+      await websiteStats(conn, 'w1', { startAt: 1000, endAt: 2000 })
+    ).toEqual({ visitors: 12 });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://umami.test/api/websites/w1/stats?startAt=1000&endAt=2000'
+    );
+  });
+
+  it('reads the visitors per day from the sessions series', async () => {
+    fetchMock.mockResolvedValue(
+      reply({
+        pageviews: [{ x: '2026-11-14 00:00:00', y: 99 }],
+        sessions: [
+          { x: '2026-11-14 00:00:00', y: 4 },
+          { x: '2026-11-15T00:00:00Z', y: 0 }
+        ]
+      })
+    );
+    expect(
+      await websiteDays(conn, 'w1', {
+        startAt: 1,
+        endAt: 2,
+        timezone: 'Europe/Stockholm'
+      })
+    ).toEqual([
+      { date: '2026-11-14', visitors: 4 },
+      { date: '2026-11-15', visitors: 0 }
+    ]);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://umami.test/api/websites/w1/pageviews?startAt=1&endAt=2&unit=day&timezone=Europe%2FStockholm'
+    );
+  });
+
+  it('reports a refused statistics read by its status only', async () => {
+    fetchMock.mockResolvedValue(reply({ error: 'secret detail' }, 500));
+    const error = await websiteStats(conn, 'w1', {
+      startAt: 1,
+      endAt: 2
+    }).catch((e: Error) => e);
+    expect((error as Error).message).toBe('Umami answered 500');
+  });
+
+  it('rejects an answer of an unexpected shape', async () => {
+    fetchMock.mockResolvedValue(reply({ visitors: 'many' }));
+    await expect(
+      websiteStats(conn, 'w1', { startAt: 1, endAt: 2 })
+    ).rejects.toThrow();
   });
 
   it('refuses a failed share list', async () => {

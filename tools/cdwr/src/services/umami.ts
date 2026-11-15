@@ -285,6 +285,58 @@ export async function setShare(
   return shareId;
 }
 
+/** Umami v2 answers a figure as `{ value, prev }`, v3 as the number */
+const figureSchema = z.union([
+  z.number(),
+  z.object({ value: z.number() }).transform(({ value }) => value)
+]);
+
+const statsSchema = z.object({ visitors: figureSchema });
+
+const seriesSchema = z.object({
+  sessions: z.array(z.object({ x: z.string(), y: z.number() }))
+});
+
+/** The window of a statistics read, in epoch milliseconds */
+export interface UmamiWindow {
+  startAt: number;
+  endAt: number;
+}
+
+/** Unique visitors of a website in the window */
+export async function websiteStats(
+  conn: UmamiConnection,
+  websiteId: string,
+  { startAt, endAt }: UmamiWindow
+): Promise<{ visitors: number }> {
+  const response = await request(
+    conn,
+    `/websites/${encodeURIComponent(websiteId)}/stats?startAt=${startAt}&endAt=${endAt}`
+  );
+  if (!response.ok) throw new Error(`Umami answered ${response.status}`);
+  const { visitors } = statsSchema.parse(
+    parseUmamiJson('stats', response.text)
+  );
+  return { visitors };
+}
+
+/** Unique visitors per day in the window; `date` is the day in `timezone` */
+export async function websiteDays(
+  conn: UmamiConnection,
+  websiteId: string,
+  { startAt, endAt, timezone }: UmamiWindow & { timezone: string }
+): Promise<Array<{ date: string; visitors: number }>> {
+  const response = await request(
+    conn,
+    `/websites/${encodeURIComponent(websiteId)}/pageviews?startAt=${startAt}&endAt=${endAt}&unit=day&timezone=${encodeURIComponent(timezone)}`
+  );
+  if (!response.ok) throw new Error(`Umami answered ${response.status}`);
+  const { sessions } = seriesSchema.parse(
+    parseUmamiJson('pageviews', response.text)
+  );
+  return sessions.map(({ x, y }) => ({ date: x.slice(0, 10), visitors: y }));
+}
+
 const SLUG_ALPHABET =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 

@@ -8,6 +8,7 @@ SELECT json_build_object(
       'name', t.name,
       'deployment', t.deployment,
       'status', t.status,
+      'statsWebsiteId', t.stats_website_id,
       'domains', coalesce((
         SELECT json_agg(json_build_object(
           'hostname', d.hostname,

@@ -10,7 +10,11 @@ vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 const collect = vi.hoisted(() => ({
   readDatabase: vi.fn(),
   readFly: vi.fn(),
-  readSwitches: vi.fn()
+  readSwitches: vi.fn(),
+  readSentry: vi.fn(),
+  readVisitors: vi.fn(),
+  readDeploy: vi.fn(),
+  readAffected: vi.fn()
 }));
 
 vi.mock('./platform.collect', () => ({
@@ -34,10 +38,19 @@ const database = ok({
       name: 'Acme',
       deployment: 'acme',
       status: 'active',
+      statsWebsiteId: null,
       domains: []
     }
   ],
   db: { sizeBytes: 1, sessions: 1, byApplication: { cms: 1 } }
+});
+
+const deployed = ok({
+  runId: 7,
+  sha: 'd'.repeat(40),
+  conclusion: 'success',
+  url: 'https://github.com/codeware-sthlm/cdwr/actions/runs/7',
+  at: '2026-11-15T09:00:00Z'
 });
 
 describe('agent platform-record', () => {
@@ -51,6 +64,12 @@ describe('agent platform-record', () => {
     collect.readDatabase.mockReset().mockResolvedValue(database);
     collect.readFly.mockReset().mockResolvedValue(ok([]));
     collect.readSwitches.mockReset().mockResolvedValue(ok([]));
+    collect.readSentry
+      .mockReset()
+      .mockResolvedValue(ok({ org: 'cdwr', day: {}, week: {}, tops: {} }));
+    collect.readVisitors.mockReset().mockResolvedValue({});
+    collect.readDeploy.mockReset().mockResolvedValue(deployed);
+    collect.readAffected.mockReset().mockResolvedValue({});
     ui = fakeUi([]);
   });
 
@@ -137,6 +156,55 @@ describe('agent platform-record', () => {
       key: '_shared',
       errors: { tenants: 'psql failed', db: 'psql failed' }
     });
+  });
+
+  it('asks for the affected projects of the machines that are not at the deploy, and records the signals', async () => {
+    const stale = 'a'.repeat(40);
+    collect.readFly.mockResolvedValue(
+      ok([
+        {
+          name: 'cdwr-cms',
+          machines: ok([
+            {
+              id: 'm',
+              state: 'started',
+              region: 'arn',
+              config: { env: { GIT_SHA: stale } }
+            }
+          ]),
+          certs: ok([]),
+          health: { ok: true, status: 200, ms: 1 }
+        }
+      ])
+    );
+    collect.readAffected.mockResolvedValue({
+      [`${stale}..${'d'.repeat(40)}`]: ok(['cms'])
+    });
+    collect.readSentry.mockResolvedValue(failed('not configured'));
+    const { exit } = await record(['--yes', '--json'], env);
+    expect(exit).toBe(EXIT.ok);
+    expect(collect.readAffected).toHaveBeenCalledWith(
+      [{ base: stale, head: 'd'.repeat(40) }],
+      expect.anything()
+    );
+    const rows = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      key: string;
+      apps: { behind: boolean | null }[];
+      deploy: { sha?: string };
+      errors: Record<string, string>;
+    }[];
+    const shared = rows.find((r) => r.key === '_shared');
+    expect(shared?.apps[0]?.behind).toBe(true);
+    expect(shared?.deploy.sha).toBe('d'.repeat(40));
+    expect(rows.every((r) => r.errors['sentry'] === 'not configured')).toBe(
+      true
+    );
+  });
+
+  it('asks for nothing when the deploy was not read', async () => {
+    collect.readDeploy.mockResolvedValue(failed('GitHub answered 403'));
+    await record(['--yes', '--json'], env);
+    expect(collect.readAffected).toHaveBeenCalledWith([], expect.anything());
   });
 
   it('fails, without printing the key, when Supabase refuses', async () => {
