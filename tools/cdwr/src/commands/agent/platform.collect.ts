@@ -1,10 +1,18 @@
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
 import { cdwrHome } from '../../cli/prefs';
+import { backupsRoot, listBackups } from '../../services/backups';
 import { belongsTo, fly, listAppNames } from '../../services/fly';
 import { CommandError, childEnv, run } from '../../services/shell';
 import { deployments, tenancyConfig } from '../../services/tenancy';
@@ -14,6 +22,7 @@ import { APPS } from '../infisical/analysis.logic';
 import {
   type AffectedCache,
   type AffectedPair,
+  type BackupRead,
   type DbRecord,
   type DeployRead,
   type FlyAppReading,
@@ -532,6 +541,61 @@ export async function readAffected(
     }
   }
   return result;
+}
+
+// --- backup ---
+
+const BackupStatusSchema = z.object({
+  at: z.string(),
+  ok: z.boolean(),
+  error: z.string().nullable()
+});
+
+/**
+ * What `cdwr agent backup` left under AGENT_QUEUE_HOME: the dumps, the size of
+ * the newest, and its status file. Null when the home is unset or holds
+ * neither; an unreadable status file is a failed reading of its own.
+ */
+export function readBackup(env: NodeJS.ProcessEnv): BackupRead | null {
+  const home = env['AGENT_QUEUE_HOME'];
+  if (!home) return null;
+  const dumps = listBackups(home);
+  const statusFile = join(home, 'backup-status.json');
+
+  let lastRun: BackupRead['lastRun'] = ok(null);
+  if (existsSync(statusFile)) {
+    try {
+      const parsed = BackupStatusSchema.safeParse(
+        JSON.parse(readFileSync(statusFile, 'utf8'))
+      );
+      lastRun = parsed.success
+        ? ok(parsed.data)
+        : failed('backup-status.json has an unexpected shape');
+    } catch {
+      // The parse error would quote the file
+      lastRun = failed('backup-status.json could not be read');
+    }
+  } else if (dumps.length === 0) {
+    return null;
+  }
+
+  const [first] = dumps;
+  let bytes: number | null = null;
+  if (first) {
+    try {
+      const dir = join(backupsRoot(home), first.name);
+      bytes =
+        statSync(join(dir, 'schema.sql')).size +
+        statSync(join(dir, 'data.sql')).size;
+    } catch {
+      bytes = null;
+    }
+  }
+  return {
+    newest: first ? { name: first.name, takenAt: first.takenAt, bytes } : null,
+    count: dumps.length,
+    lastRun
+  };
 }
 
 /** The deploy switches of production, through the Infisical tenancy lib; never a secret value */
