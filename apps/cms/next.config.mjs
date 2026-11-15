@@ -166,6 +166,7 @@ const sentryConfig = {
 
   // Route Sentry requests through your server (avoids ad-blockers),
   // This increases server load. Consider the trade-off for the application.
+  // Must match `SENTRY_TUNNEL_ROUTE` in src/utils/sentry-tunnel.ts
   tunnelRoute: '/monitoring',
 
   // Do not upload source maps for node_modules to reduce build size

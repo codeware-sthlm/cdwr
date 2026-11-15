@@ -1,8 +1,7 @@
 import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-// Must match `tunnelRoute` in next.config.mjs.
-const TUNNEL_ROUTE = '/monitoring';
+import { SENTRY_TUNNEL_ROUTE } from './utils/sentry-tunnel';
 
 // Next 16.3 adds ten `close` listeners to a response it proxies to an external
 // rewrite such as the Sentry tunnel, and Sentry adds two more, so every envelope
@@ -18,7 +17,7 @@ type RequestStart = { request: IncomingMessage; response: ServerResponse };
 const onRequestStart = (message: unknown) => {
   const { request, response } = message as RequestStart;
   const path = request.url?.split('?')[0].replace(/\/$/, '');
-  if (path === TUNNEL_ROUTE) {
+  if (path === SENTRY_TUNNEL_ROUTE) {
     response.setMaxListeners(TUNNEL_MAX_LISTENERS);
   }
 };
