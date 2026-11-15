@@ -911,6 +911,32 @@ describe('Fly', () => {
       ]);
       expect(response).toEqual(mockListCertForAllResponse);
     });
+
+    it('should read the certificate state from flyctl 0.5 output', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /certs list --app test-app/,
+          resolveOrReject: 'resolve',
+          output: JSON.stringify([
+            {
+              hostname: 'test.io',
+              status: 'Ready',
+              created_at: '2026-10-08T21:49:45.152Z',
+              configured: true
+            }
+          ])
+        }
+      ]);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+
+      expect(await fly.certs.list()).toEqual([
+        {
+          hostname: 'test.io',
+          clientStatus: 'Ready',
+          createdAt: '2026-10-08T21:49:45.152Z'
+        }
+      ]);
+    });
   });
 
   describe('ips', () => {
@@ -2386,6 +2412,24 @@ describe('Fly', () => {
       const status = await fly.statusExtended();
 
       expect(status).toBeNull();
+    });
+
+    it('should return status with no domains when certs list does not parse', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /certs list --app test-app/,
+          resolveOrReject: 'resolve',
+          output: JSON.stringify([{ hostname: 'test.io' }])
+        }
+      ]);
+      const fly = new Fly({ ...mockFlyConfig, app: mockDefs.testApp });
+      const status = await fly.statusExtended();
+
+      expect(status).toEqual({
+        ...mockStatusResponse(mockDefs.testApp),
+        domains: [],
+        secrets: expect.any(Array)
+      });
     });
   });
 });

@@ -858,7 +858,7 @@ export class Fly {
     args.push('--org', options?.org || this._config.org || 'personal');
     args.push('--json');
 
-    return AppsCreateTransformedResponseSchema.parseAsync(
+    return await AppsCreateTransformedResponseSchema.parseAsync(
       await this.execFly(args)
     );
   }
@@ -1441,7 +1441,7 @@ export class Fly {
     const args = ['apps', 'list', '--json'];
 
     try {
-      return AppsListTransformedResponseSchema.parseAsync(
+      return await AppsListTransformedResponseSchema.parseAsync(
         await this.execFly(args)
       );
     } catch (error) {
@@ -1665,7 +1665,7 @@ ${JSON.stringify(response, null, 2)}`);
     args.push('--json');
 
     try {
-      return CertsListTransformedResponseSchema.parseAsync(
+      return await CertsListTransformedResponseSchema.parseAsync(
         await this.execFly(args)
       );
     } catch (error) {
@@ -1699,7 +1699,7 @@ ${JSON.stringify(response, null, 2)}`);
     args.push('--json');
 
     try {
-      return SecretsListTransformedResponseSchema.parseAsync(
+      return await SecretsListTransformedResponseSchema.parseAsync(
         await this.execFly(args)
       );
     } catch (error) {
