@@ -44,7 +44,11 @@ const down = (row: TenantRow): Problem[] =>
   row.apps.flatMap((a): Problem[] => {
     const base = { row: row.key, kind: 'down', severity: 'down' } as const;
     const key = `${row.key}:down:${a.app}`;
-    if (a.health?.ok === false)
+    // `ok` is any 2xx, so the status itself decides
+    if (
+      a.health &&
+      (!a.health.ok || (a.health.status !== null && a.health.status !== 200))
+    )
       return [
         {
           ...base,
