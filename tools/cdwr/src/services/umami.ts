@@ -285,17 +285,35 @@ export async function setShare(
   return shareId;
 }
 
+/** Umami may answer a count as a numeric string, as the cms's site-stats client allows too */
+const count = z.coerce.number();
+
 /** Umami v2 answers a figure as `{ value, prev }`, v3 as the number */
 const figureSchema = z.union([
-  z.number(),
-  z.object({ value: z.number() }).transform(({ value }) => value)
+  z.object({ value: count }).transform(({ value }) => value),
+  count
 ]);
 
 const statsSchema = z.object({ visitors: figureSchema });
 
 const seriesSchema = z.object({
-  sessions: z.array(z.object({ x: z.string(), y: z.number() }))
+  sessions: z.array(z.object({ x: z.string(), y: count }))
 });
+
+/**
+ * The day a bucket of Umami's series belongs to, in the time zone. A bucket
+ * with an offset is an instant; one without is already a local time. The same
+ * rule as the cms's site-stats `bucketDay`.
+ */
+const bucketDay = (x: string, timezone: string): string =>
+  /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(x)
+    ? new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(Date.parse(x))
+    : x.slice(0, 10);
 
 /** The window of a statistics read, in epoch milliseconds */
 export interface UmamiWindow {
@@ -334,7 +352,10 @@ export async function websiteDays(
   const { sessions } = seriesSchema.parse(
     parseUmamiJson('pageviews', response.text)
   );
-  return sessions.map(({ x, y }) => ({ date: x.slice(0, 10), visitors: y }));
+  return sessions.map(({ x, y }) => ({
+    date: bucketDay(x, timezone),
+    visitors: y
+  }));
 }
 
 const SLUG_ALPHABET =
