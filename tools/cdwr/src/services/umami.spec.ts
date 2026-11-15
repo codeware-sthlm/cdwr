@@ -183,7 +183,9 @@ describe('Umami client', () => {
 
   it.each([
     ['v2', { visitors: { value: 12, prev: 9 }, pageviews: { value: 40 } }],
-    ['v3', { visitors: 12, pageviews: 40 }]
+    ['v3', { visitors: 12, pageviews: 40 }],
+    ['v2 string', { visitors: { value: '12', prev: '9' } }],
+    ['v3 string', { visitors: '12' }]
   ])('reads the visitors of a website from a %s answer', async (_v, body) => {
     fetchMock.mockResolvedValue(reply(body));
     expect(
@@ -194,13 +196,14 @@ describe('Umami client', () => {
     );
   });
 
-  it('reads the visitors per day from the sessions series', async () => {
+  it('reads the visitors per day from the sessions series, an instant in the time zone', async () => {
     fetchMock.mockResolvedValue(
       reply({
         pageviews: [{ x: '2026-11-14 00:00:00', y: 99 }],
         sessions: [
-          { x: '2026-11-14 00:00:00', y: 4 },
-          { x: '2026-11-15T00:00:00Z', y: 0 }
+          { x: '2026-11-14 00:00:00', y: '4' },
+          // Midnight in Stockholm, as an instant: the 15th there
+          { x: '2026-11-14T23:00:00Z', y: 0 }
         ]
       })
     );
