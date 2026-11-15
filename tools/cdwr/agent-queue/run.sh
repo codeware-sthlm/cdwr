@@ -110,6 +110,31 @@ telemetry_env_search "$REPO"
 
 source "${0:A:h}/github-app.sh"
 
+# The platform step's credentials, read like the telemetry key: from the environment or the same
+# env files as plain KEY=VALUE text, never sourced; whatever is already set wins. They stay shell
+# variables and are never exported (an exported one is unexported here), so no child inherits
+# them, claude sessions included: record_platform names them on its own command line.
+PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID)
+platform_env() {
+  local v file line key value common
+  for v in $PLATFORM_VARS; do
+    [[ -z "${(P)v+x}" ]] || typeset -g +x "$v"
+  done
+  common="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || common=""
+  for file in "${AGENT_QUEUE_ENV_FILE:-}" "$REPO/tools/cdwr/.env" "${common:+${common:h}/tools/cdwr/.env}"; do
+    [[ -n "$file" && -r "$file" ]] || continue
+    for line in "${(@f)$(<"$file")}"; do
+      [[ "$line" == (FLY_API_TOKEN|PLATFORM_DATABASE_URL|PLATFORM_INFISICAL_(CLIENT_ID|CLIENT_SECRET|PROJECT_ID))=* ]] || continue
+      key="${line%%=*}"; value="${line#*=}"
+      value="${${value#[\"\']}%[\"\']}"
+      [[ -n "${(P)key:-}" ]] || { typeset -g "$key=$value"; typeset -g +x "$key"; }
+    done
+  done
+  return 0
+}
+platform_env
+platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }
+
 # One PR as the watch and the desk's copilot and merge commands read it
 read -r -d '' PR_QUERY <<'GQL' || true
 query($n: Int!) {
@@ -371,6 +396,59 @@ apply_commands() {
   return 0
 }
 apply_commands
+
+# The platform state (Fly, Infisical, the tenants' databases) as tenant_state rows, made by
+# `cdwr agent platform-record`. It runs every tick, a paused one too. Detached, so it can't hold up
+# the tick, with a 4 minute deadline of its own (AGENT_QUEUE_PLATFORM_DEADLINE, in seconds). A
+# platform.lock directory keeps two ticks from collecting at once; one older than 5 minutes lost
+# its owner and is taken over. The detached wrapper writes a failure to platform-status, and the
+# next tick warns about it, at most once an hour. Without the credentials it does nothing.
+platform_warn() {
+  local stamp="$HOME_DIR/platform-warned-at" last
+  note "warn: platform rows: $1"
+  last="$(cat "$stamp" 2>/dev/null)"
+  [[ "$last" == <-> ]] || last=0
+  (( $(date +%s) - last > 3600 )) || return 0
+  date +%s > "$stamp"
+  record warn "" "platform: $1"
+}
+record_platform() {
+  $check && return 0
+  setopt local_options no_err_exit
+  platform_on && telemetry_on || return 0
+  local lockdir="$HOME_DIR/platform.lock" failed="$HOME_DIR/platform-status" deadline="${AGENT_QUEUE_PLATFORM_DEADLINE:-240}"
+  if [[ -r "$failed" ]]; then
+    platform_warn "$(cat "$failed")"
+    rm -f "$failed"
+  fi
+  if [[ -d "$lockdir" && -n "$(find "$lockdir" -maxdepth 0 -mmin +5 2>/dev/null)" ]]; then
+    rm -rf "$lockdir" && note "warn: cleared platform.lock; its run is gone"
+  fi
+  mkdir "$lockdir" 2>/dev/null || return 0
+  rm -f "$HOME_DIR/platform-timeout"
+  ( cd "$REPO" || { rmdir "$lockdir"; exit 0; }
+    FLY_API_TOKEN="$FLY_API_TOKEN" PLATFORM_DATABASE_URL="$PLATFORM_DATABASE_URL" \
+      PLATFORM_INFISICAL_CLIENT_ID="${PLATFORM_INFISICAL_CLIENT_ID:-}" \
+      PLATFORM_INFISICAL_CLIENT_SECRET="${PLATFORM_INFISICAL_CLIENT_SECRET:-}" \
+      PLATFORM_INFISICAL_PROJECT_ID="${PLATFORM_INFISICAL_PROJECT_ID:-}" \
+      AGENT_SUPABASE_SERVICE_KEY="$AGENT_SUPABASE_SERVICE_KEY" \
+      node tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json >/dev/null 2>&1 </dev/null &
+    cpid=$!
+    ( sleep "$deadline"; : > "$HOME_DIR/platform-timeout"; kill -TERM $cpid 2>/dev/null ) &
+    watchdog=$!
+    wait $cpid
+    rc=$?
+    kill $watchdog 2>/dev/null
+    if [[ -e "$HOME_DIR/platform-timeout" ]]; then
+      rm -f "$HOME_DIR/platform-timeout"
+      print -r -- "cdwr agent platform-record timed out after ${deadline}s" > "$failed"
+    elif (( rc != 0 )); then
+      print -r -- "cdwr agent platform-record failed ($rc)" > "$failed"
+    fi
+    rmdir "$lockdir" 2>/dev/null ) &!
+  return 0
+}
+record_platform
 
 # A pause is deliberate: the tick takes no lock and still checks in ok, so the monitor does not
 # alert. It publishes its queue state below, once that can be written.

@@ -3368,3 +3368,178 @@ describe('run.sh session limit', () => {
     );
   });
 });
+
+describe('run.sh platform step', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  const CREDS = {
+    FLY_API_TOKEN: 'fly-secret',
+    PLATFORM_DATABASE_URL: 'postgres://db-secret',
+    PLATFORM_INFISICAL_CLIENT_ID: 'inf-id',
+    PLATFORM_INFISICAL_CLIENT_SECRET: 'inf-secret',
+    PLATFORM_INFISICAL_PROJECT_ID: 'inf-project'
+  };
+  let root: string;
+  let bin: string;
+
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  // A stub node standing in for the cdwr command: it logs its arguments and its environment
+  const stubNode = (body: string) => {
+    writeFileSync(
+      join(bin, 'node'),
+      `#!/bin/sh\necho "$@" >> "${root}/node.calls"\nenv > "${root}/node.env"\n${body}\n`
+    );
+    chmodSync(join(bin, 'node'), 0o755);
+  };
+
+  // One tick's record_platform, run with the given environment; the detached part is waited for
+  const tick = async (env: Record<string, string>, wait = true) => {
+    const script = [
+      `exec 2>>"${root}/err"`,
+      'set -euo pipefail',
+      `HOME_DIR="${root}"; REPO="${root}"; check=false`,
+      `note() { print -r -- "$*" >> "${root}/notes"; }`,
+      `record() { print -r -- "$*" >> "${root}/records"; }`,
+      'telemetry_on() { return 0; }',
+      'AGENT_SUPABASE_SERVICE_KEY=svc',
+      'PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID)',
+      fn('platform_env'),
+      'platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }',
+      fn('platform_warn'),
+      fn('record_platform'),
+      'platform_env',
+      'record_platform',
+      // a sibling child process after the step, as a claude launch would be
+      `env > "${root}/sibling.env"`
+    ].join('\n');
+    const res = spawnSync('zsh', ['-c', script], {
+      env: { ...process.env, PATH: `${bin}:${process.env['PATH']}`, ...env },
+      stdio: 'ignore'
+    });
+    expect(res.status).toBe(0);
+    for (
+      let i = 0;
+      wait && i < 100 && existsSync(join(root, 'platform.lock'));
+      i++
+    )
+      await sleep(50);
+    expect(read('err')).toBe('');
+  };
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'platform-'));
+    bin = join(root, 'bin');
+    mkdirSync(bin);
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('runs every tick, after the desk commands and before the pause check', () => {
+    expect(fn('record_platform')).toContain('record_platform()');
+    const at = SCRIPT.indexOf('\nrecord_platform\n');
+    expect(at).toBeGreaterThan(SCRIPT.indexOf('\napply_commands\n'));
+    expect(at).toBeLessThan(SCRIPT.indexOf('\npaused=false\n'));
+  });
+
+  it.skipIf(!hasZsh)('runs the command while the queue is paused', async () => {
+    stubNode('exit 0');
+    writeFileSync(join(root, 'paused'), '');
+    await tick(CREDS);
+    expect(read('node.calls')).toBe(
+      'tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json\n'
+    );
+    expect(read('records')).toBe('');
+  });
+
+  it.skipIf(!hasZsh)('skips silently without the credentials', async () => {
+    stubNode('exit 0');
+    const { FLY_API_TOKEN: _fly, ...noFly } = CREDS;
+    const { PLATFORM_DATABASE_URL: _db, ...noDb } = CREDS;
+    await tick(noFly);
+    await tick(noDb);
+    await tick({});
+    await sleep(200);
+    expect(read('node.calls')).toBe('');
+    expect(read('notes')).toBe('');
+    expect(existsSync(join(root, 'platform.lock'))).toBe(false);
+  });
+
+  it.skipIf(!hasZsh)(
+    'passes the credentials to the command alone, never to other children',
+    async () => {
+      stubNode('exit 0');
+      writeFileSync(
+        join(root, 'env-file'),
+        'PLATFORM_INFISICAL_PROJECT_ID="from-file"\n'
+      );
+      const { PLATFORM_INFISICAL_PROJECT_ID: _p, ...exported } = CREDS;
+      await tick({ ...exported, AGENT_QUEUE_ENV_FILE: join(root, 'env-file') });
+      const node = read('node.env');
+      for (const [key, value] of Object.entries(exported))
+        expect(node).toContain(`${key}=${value}`);
+      expect(node).toContain('PLATFORM_INFISICAL_PROJECT_ID=from-file');
+      const sibling = read('sibling.env');
+      expect(sibling).not.toMatch(
+        /FLY_API_TOKEN|PLATFORM_|fly-secret|db-secret/
+      );
+    }
+  );
+
+  it('never exports them in the script', () => {
+    expect(SCRIPT).not.toMatch(/export [^\n]*(FLY_API_TOKEN|PLATFORM_)/);
+    expect(SCRIPT).toContain('typeset -g +x "$v"');
+  });
+
+  it.skipIf(!hasZsh)(
+    'warns about a failed run on the next tick, once an hour',
+    async () => {
+      stubNode('exit 3');
+      await tick(CREDS);
+      // The failure is only known to the next tick
+      expect(read('records')).toBe('');
+      await tick(CREDS);
+      expect(read('records')).toBe(
+        'warn  platform: cdwr agent platform-record failed (3)\n'
+      );
+      await tick(CREDS);
+      await tick(CREDS);
+      // Noted each time, a row for the first only
+      expect(read('notes').match(/warn: platform rows:/g)).toHaveLength(3);
+      expect(read('records').match(/platform:/g)).toHaveLength(1);
+      // The queue is never stopped: the stub ran every tick
+      expect(read('node.calls').split('\n').filter(Boolean)).toHaveLength(4);
+    }
+  );
+
+  it.skipIf(!hasZsh)('stops a run at its deadline and warns', async () => {
+    stubNode('exec sleep 30');
+    await tick({ ...CREDS, AGENT_QUEUE_PLATFORM_DEADLINE: '1' });
+    expect(read('platform-status')).toBe(
+      'cdwr agent platform-record timed out after 1s\n'
+    );
+    await tick({ ...CREDS, AGENT_QUEUE_PLATFORM_DEADLINE: '1' });
+    expect(read('records')).toContain(
+      'platform: cdwr agent platform-record timed out'
+    );
+  });
+
+  it.skipIf(!hasZsh)(
+    'lets only one collect at a time, and clears a stale lock',
+    async () => {
+      stubNode('exit 0');
+      mkdirSync(join(root, 'platform.lock'));
+      await tick(CREDS, false);
+      await sleep(200);
+      expect(read('node.calls')).toBe('');
+      const old = new Date(Date.now() - 10 * 60 * 1000);
+      utimesSync(join(root, 'platform.lock'), old, old);
+      await tick(CREDS);
+      expect(read('node.calls')).not.toBe('');
+    }
+  );
+});
