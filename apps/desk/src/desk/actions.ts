@@ -9,9 +9,11 @@ import type { IssueEventRow } from '../supabase';
 import {
   type CommandArgs,
   CommandError,
+  type CommandReply,
   type CommandTarget,
   type Control,
   type ControlKind,
+  type PlatformCommandKind,
   type PrCommandKind,
   prCommandKey,
   sendCommand
@@ -635,6 +637,40 @@ function sendPr(
       c.prSending.delete(key);
       render();
     });
+}
+
+/**
+ * Sends a tenant's restart or gate command to `host`. The reply stands in for its row until
+ * Realtime delivers it, so the sheet shows it at once; a failure that stored no row throws.
+ */
+export async function sendPlatform(
+  host: string,
+  kind: PlatformCommandKind,
+  args: CommandArgs
+): Promise<CommandReply> {
+  const target = state.controls.target;
+  if (!target) throw new CommandError('unauthorized', 'No control token.');
+  const reply = await sendCommand(target, host, kind, args);
+  const stored = state.data.deskCommands;
+  if (stored && !stored.some((row) => row.id === reply.id)) {
+    const at = new Date().toISOString();
+    state.data.deskCommands = [
+      ...stored,
+      {
+        id: reply.id,
+        at,
+        host,
+        kind,
+        args,
+        actor: 'desk',
+        status: reply.status,
+        applied_at: reply.status === 'pending' ? null : at,
+        note: reply.note
+      }
+    ];
+  }
+  render();
+  return reply;
 }
 
 /** Asks the host's scheduler for a review run; its answer, a note if it refused, then shows beside the button */

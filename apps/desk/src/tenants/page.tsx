@@ -6,6 +6,7 @@ import { PHONE, Sheet, useMedia } from '../desk/components/sheet';
 import { ageText } from '../desk/format';
 import type { TenantsPayload } from '../supabase';
 
+import type { PlatformApi } from './actions';
 import { TenantBody } from './body';
 import {
   type Cell,
@@ -28,7 +29,7 @@ import {
 import { StatusChip, TEXT_TONE } from './ui';
 
 // The tenants view: one row per tenant and the shared one, the NUC's platform state at a glance.
-// Read-only. A row opens a sheet with everything for it; which one is open is this page's own state.
+// Read-only apart from the sheet's restart and gate actions. A row opens a sheet with everything for it; which one is open is this page's own state.
 
 const EMPTY_TEXT = 'No platform data yet — the NUC writes it every 10 minutes.';
 
@@ -140,14 +141,18 @@ type Props = {
   data: TenantsPayload | null;
   now: Date;
   onDesk: () => void;
+  /** The sheet's restart and gate actions; none without it */
+  platform?: PlatformApi;
 };
 
 const Rows = ({
   view,
-  now
+  now,
+  platform
 }: {
   view: Extract<TenantsView, { kind: 'ready' }>;
   now: Date;
+  platform?: PlatformApi;
 }) => {
   const phone = useMedia(PHONE);
   // The sheet keeps its row while it animates out
@@ -223,7 +228,12 @@ const Rows = ({
               ?.focus()
           }
         >
-          <TenantBody entry={picked} main={view.main} now={now} />
+          <TenantBody
+            entry={picked}
+            main={view.main}
+            now={now}
+            platform={platform}
+          />
         </Sheet>
       ) : null}
       {pickedProblem ? (
@@ -251,7 +261,7 @@ const Rows = ({
   );
 };
 
-export const TenantsPage = ({ data, now, onDesk }: Props) => {
+export const TenantsPage = ({ data, now, onDesk, platform }: Props) => {
   const view = tenantsView(data, now);
   return (
     <>
@@ -292,7 +302,7 @@ export const TenantsPage = ({ data, now, onDesk }: Props) => {
           {EMPTY_TEXT}
         </div>
       ) : (
-        <Rows view={view} now={now} />
+        <Rows view={view} now={now} platform={platform} />
       )}
     </>
   );

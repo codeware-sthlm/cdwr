@@ -12,15 +12,27 @@ export type CommandKind =
   | 'copilot'
   | 'merge'
   | 'review'
-  | 'dismiss';
+  | 'dismiss'
+  | 'restart'
+  | 'gate';
 
 /** The kinds a PR's buttons send; they belong to a ticket's review row, like snooze and wake */
 export type PrCommandKind = 'copilot' | 'merge';
 
-/** The kinds behind a control; snooze, wake, copilot, merge and dismiss belong to a ticket or finding, and review to the Review panel, so they stay in no control's state */
+/** The kinds a tenant's sheet sends; they belong to a tenant's app or site */
+export type PlatformCommandKind = 'restart' | 'gate';
+
+/** The kinds behind a control; snooze, wake, copilot, merge and dismiss belong to a ticket or finding, review to the Review panel, and restart and gate to a tenant, so they stay in no control's state */
 export type ControlKind = Exclude<
   CommandKind,
-  'snooze' | 'wake' | 'copilot' | 'merge' | 'review' | 'dismiss'
+  | 'snooze'
+  | 'wake'
+  | 'copilot'
+  | 'merge'
+  | 'review'
+  | 'dismiss'
+  | 'restart'
+  | 'gate'
 >;
 
 export type CommandStatus = 'pending' | 'applied' | 'refused';
@@ -29,7 +41,8 @@ export type CommandStatus = 'pending' | 'applied' | 'refused';
  * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
  * snooze, wake, copilot and merge, and `kind` (a waiting row's kind) with `eventAt` (ISO, or
  * null) for snooze; `pr` (the number) for copilot and merge; `finding` (its id) with an
- * optional `note` for dismiss
+ * optional `note` for dismiss; `tenant` (its slug) for restart and gate, with `app` (the Fly
+ * app) and `sha` (the commit its machines run, or null) for restart and `action` for gate
  */
 export type CommandArgs = {
   finding?: string;
@@ -40,6 +53,10 @@ export type CommandArgs = {
   kind?: string;
   eventAt?: string | null;
   pr?: number;
+  tenant?: string;
+  app?: string;
+  sha?: string | null;
+  action?: 'open' | 'close';
 };
 
 /** The function's answer to a stored command */
@@ -344,6 +361,73 @@ export const prCommandStates = (
         states.set(key, { state: 'refused', note: row.note ?? 'refused' });
     } else if (row.status === 'applied' && age <= REFUSED_SHOW_MS)
       states.set(key, { state: 'applied', at: row.applied_at });
+  }
+  return states;
+};
+
+/** Where a tenant's restart or gate command stands; a gate carries the `action` of its newest row */
+export type PlatformCommandState = PrCommandState & {
+  action?: 'open' | 'close';
+};
+
+const isPlatformKind = (value: string): value is PlatformCommandKind =>
+  value === 'restart' || value === 'gate';
+
+const stringArg = (args: unknown, name: string): string | null => {
+  if (typeof args !== 'object' || args === null || !(name in args)) return null;
+  const value = (args as Record<string, unknown>)[name];
+  return typeof value === 'string' && value !== '' ? value : null;
+};
+
+/** The key a tenant's command is kept under in `platformCommandStates`: `restart <app>`, `gate <tenant>` */
+export const platformCommandKey = (
+  kind: PlatformCommandKind,
+  target: string
+): string => `${kind} ${target}`;
+
+/**
+ * Each app's restart and each tenant's gate command from its newest row, keyed by
+ * `platformCommandKey`; the windows are `prCommandStates`'s. A gate state carries the `action` of
+ * its row.
+ */
+export const platformCommandStates = (
+  rows: readonly CommandRowLike[],
+  now: number
+): Map<string, PlatformCommandState> => {
+  const newest = new Map<string, CommandRowLike>();
+  for (const row of rows) {
+    if (!isPlatformKind(row.kind)) continue;
+    const target = stringArg(
+      row.args,
+      row.kind === 'restart' ? 'app' : 'tenant'
+    );
+    if (target === null) continue;
+    const key = platformCommandKey(row.kind, target);
+    const seen = newest.get(key);
+    if (!seen || row.id > seen.id) newest.set(key, row);
+  }
+  const states = new Map<string, PlatformCommandState>();
+  for (const [key, row] of newest) {
+    const age = now - Date.parse(row.applied_at ?? row.at);
+    const action = stringArg(row.args, 'action');
+    const extra: { action?: 'open' | 'close' } =
+      row.kind === 'gate' && action === 'open'
+        ? { action: 'open' }
+        : row.kind === 'gate' && action === 'close'
+          ? { action: 'close' }
+          : {};
+    if (row.status === 'pending') {
+      if (age <= PENDING_MAX_MS)
+        states.set(key, { state: 'pending', ...extra });
+    } else if (row.status === 'refused') {
+      if (age <= REFUSED_SHOW_MS)
+        states.set(key, {
+          state: 'refused',
+          note: row.note ?? 'refused',
+          ...extra
+        });
+    } else if (row.status === 'applied' && age <= REFUSED_SHOW_MS)
+      states.set(key, { state: 'applied', at: row.applied_at, ...extra });
   }
   return states;
 };

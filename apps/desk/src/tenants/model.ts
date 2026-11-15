@@ -31,6 +31,8 @@ export type TenantApp = {
   health: { ok: boolean; status: number | null; ms: number | null } | null;
   /** Affected since its machines' commit and still on it; null when unknown */
   behind: boolean | null;
+  /** Whether the site gate is closed; null when the NUC did not read it */
+  gated: boolean | null;
 };
 
 export type TenantDomain = {
@@ -148,7 +150,8 @@ const app = (r: Rec): TenantApp | null => {
             ms: num(health['ms'])
           }
         : null,
-    behind: typeof r['behind'] === 'boolean' ? r['behind'] : null
+    behind: typeof r['behind'] === 'boolean' ? r['behind'] : null,
+    gated: typeof r['gated'] === 'boolean' ? r['gated'] : null
   };
 };
 

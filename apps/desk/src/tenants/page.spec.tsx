@@ -206,6 +206,39 @@ describe('TenantsPage', () => {
     expect(dialog.textContent).not.toContain('Domains');
   });
 
+  it('shows the actions on a tenant sheet only with controls, never on the shared one', () => {
+    media(false);
+    const platform = {
+      can: true,
+      host: 'nuc',
+      commands: new Map(),
+      send: vi.fn()
+    };
+    const open = (key: string, withPlatform: typeof platform | undefined) => {
+      render(
+        <TenantsPage
+          data={rows()}
+          now={NOW}
+          onDesk={vi.fn()}
+          platform={withPlatform}
+        />
+      );
+      fireEvent.click(
+        document.querySelector(`[data-tenant="${key}"]`) as Element
+      );
+      return screen.getByRole('dialog').textContent ?? '';
+    };
+    expect(open('acme', platform)).toContain('Close site');
+    cleanup();
+    expect(open('_shared', platform)).not.toContain('Close site');
+    cleanup();
+    expect(open('acme', { ...platform, can: false })).not.toContain(
+      'Close site'
+    );
+    cleanup();
+    expect(open('acme', undefined)).not.toContain('Close site');
+  });
+
   it('names a read that failed instead of an empty list', () => {
     media(false);
     const { all } = mount(

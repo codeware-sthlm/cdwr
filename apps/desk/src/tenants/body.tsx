@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { KV } from '../desk/components/sheet-ui';
 import { bytes, seenAgo } from '../desk/format';
 
+import { type PlatformApi, TenantActions } from './actions';
 import { versionCell } from './cells';
 import type { TenantApp, TenantMachine } from './model';
 import { SHARED_KEY } from './model';
@@ -117,11 +118,13 @@ const App = ({ app, main }: { app: TenantApp; main: string | null }) => (
 export const TenantBody = ({
   entry,
   main,
-  now
+  now,
+  platform
 }: {
   entry: TenantEntry;
   main: string | null;
   now: Date;
+  platform?: PlatformApi;
 }) => {
   const { row, status } = entry;
   const shared = row.key === SHARED_KEY;
@@ -160,6 +163,12 @@ export const TenantBody = ({
           </dd>
         </dl>
       </Section>
+
+      {platform?.can && !shared ? (
+        <Section title="Actions">
+          <TenantActions key={row.key} row={row} api={platform} />
+        </Section>
+      ) : null}
 
       <Section title="Apps">
         {row.apps.length ? (
