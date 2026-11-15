@@ -1,0 +1,16 @@
+[
+  {
+    "hostname": "test-org.se",
+    "status": "Ready",
+    "created_at": "2026-10-08T21:49:45.152Z",
+    "configured": true,
+    "has_fly_certificate": true
+  },
+  {
+    "hostname": "www.test-org.se",
+    "status": "Awaiting configuration",
+    "created_at": "2026-10-09T07:12:03.481Z",
+    "configured": false,
+    "has_fly_certificate": false
+  }
+]

@@ -149,6 +149,21 @@ exports[`fly-node schema validation > validates all schemas against fixtures > C
 ]
 `;
 
+exports[`fly-node schema validation > validates all schemas against fixtures > CertsListTransformedResponseSchema (flyctl 0.5) transformed shape 1`] = `
+[
+  {
+    "clientStatus": "Ready",
+    "createdAt": "2026-10-08T21:49:45.152Z",
+    "hostname": "test-org.se",
+  },
+  {
+    "clientStatus": "Awaiting configuration",
+    "createdAt": "2026-10-09T07:12:03.481Z",
+    "hostname": "www.test-org.se",
+  },
+]
+`;
+
 exports[`fly-node schema validation > validates all schemas against fixtures > CertsListTransformedResponseSchema transformed shape 1`] = `
 [
   {
