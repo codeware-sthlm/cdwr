@@ -229,7 +229,8 @@ export default defineCommand({
         : []),
       row(
         report.implement.spent === undefined ||
-          report.implement.spent >= report.implement.cap
+          report.implement.spent >= report.implement.cap ||
+          report.implement.limitedUntil !== undefined
           ? 'warn'
           : true,
         'implement',
@@ -238,7 +239,8 @@ export default defineCommand({
           report.implement.cap,
           report.implement.last,
           report.implement.budget ?? IMPLEMENT_BUDGET_USD,
-          report.implement.capSource
+          report.implement.capSource,
+          report.implement.limitedUntil
         )
       ),
       row(

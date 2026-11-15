@@ -38,6 +38,7 @@ import {
   lastSchedulerLine,
   latestRunLog,
   launchPath,
+  limitedUntil,
   linearAuthSource,
   linearCredentialFiles,
   linearServerState,
@@ -344,6 +345,7 @@ describe('queuePaths', () => {
       implementSpend: '/h/.cdwr/agent-queue/implement-spend.jsonl',
       limit: '/h/.cdwr/agent-queue/limit',
       implementCap: '/h/.cdwr/agent-queue/implement-cap',
+      limitedUntil: '/h/.cdwr/agent-queue/limited-until.json',
       loopPid: '/h/.cdwr/agent-queue/loop.pid',
       runs: '/h/.cdwr/agent-queue/runs.jsonl',
       logs: '/h/.cdwr/agent-queue/logs',
@@ -1487,6 +1489,26 @@ describe('implement spend', () => {
     expect(formatImplement(spent, 40, undefined, 15)).toBe(
       `implement spend today $${spent.toFixed(2)} of $40${over}, no implementing session yet`
     );
+  });
+
+  it('counts limited as an implementing outcome and shows the hold', () => {
+    const until = Date.UTC(2026, 10, 15, 7, 10) / 1000;
+    expect(
+      lastImplementRun('{"when":"a","outcome":"limited","ticket":"COD-9"}')
+    ).toEqual({ when: 'a', outcome: 'limited', ticket: 'COD-9' });
+    expect(formatImplement(0, 40, undefined, 15, 'default', until)).toBe(
+      'held by the session limit until 07:10 UTC, implement spend today $0.00 of $40, no implementing session yet'
+    );
+  });
+
+  it.each([
+    ['{"until":2000,"text":"x","at":"y"}', 1000, 2000],
+    ['{"until":2000}', 2000, undefined],
+    ['{"until":"2000"}', 1000, undefined],
+    ['not json', 1000, undefined],
+    [undefined, 1000, undefined]
+  ])('limited-until %j at %i is %j', (text, now, expected) => {
+    expect(limitedUntil(text, now)).toBe(expected);
   });
 
   it('warns when the ledger is unreadable', () => {

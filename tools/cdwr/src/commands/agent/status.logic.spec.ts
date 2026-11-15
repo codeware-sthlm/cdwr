@@ -103,6 +103,19 @@ describe('parseRemoteStatus', () => {
     expect(parseRemoteStatus(old)).toMatchObject({ kind: 'report' });
   });
 
+  it('reads a limited outcome and the hold, which an older image omits', () => {
+    const implement = {
+      cap: 40,
+      limitedUntil: 1_800_000_000,
+      last: { when: 'a', outcome: 'limited', ticket: 'COD-9' }
+    };
+    expect(
+      parseRemoteStatus(
+        JSON.stringify({ ok: true, result: { ...report, implement } })
+      )
+    ).toMatchObject({ kind: 'report', report: { implement } });
+  });
+
   it('reads the limit and the cap source, which an older image omits', () => {
     const answer = JSON.stringify({
       ok: true,

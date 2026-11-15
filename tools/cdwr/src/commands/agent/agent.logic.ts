@@ -280,6 +280,8 @@ export interface QueuePaths {
   limit: string;
   /** The daily implementing cap in dollars the desk sets; absent means the env or default */
   implementCap: string;
+  /** Written by a run that hit the plan's session limit: no claude run starts before its `until` */
+  limitedUntil: string;
   /** The container loop's pid, which a SIGUSR1 wakes; written by the image's entrypoint */
   loopPid: string;
   runs: string;
@@ -308,6 +310,7 @@ export const queuePaths = (
     implementSpend: join(home, 'implement-spend.jsonl'),
     limit: join(home, 'limit'),
     implementCap: join(home, 'implement-cap'),
+    limitedUntil: join(home, 'limited-until.json'),
     loopPid: join(home, 'loop.pid'),
     runs: join(home, 'runs.jsonl'),
     logs,
@@ -789,9 +792,34 @@ export const IMPLEMENT_OUTCOMES = [
   'launched',
   'implemented',
   'untried',
+  'limited',
   'cap',
   'failed'
 ] as const;
+
+/** The epoch seconds in limited-until.json while they are still ahead of now; otherwise undefined */
+export const limitedUntil = (
+  text: string | undefined,
+  nowSeconds: number
+): number | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text ?? '');
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined;
+  const until = (parsed as Record<string, unknown>)['until'];
+  return typeof until === 'number' &&
+    Number.isFinite(until) &&
+    until > nowSeconds
+    ? until
+    : undefined;
+};
+
+/** `07:10 UTC` for an epoch in seconds */
+export const formatUtcClock = (epochSeconds: number): string =>
+  `${new Date(epochSeconds * 1000).toISOString().slice(11, 16)} UTC`;
 
 export interface ImplementRun {
   when: string;
@@ -825,11 +853,15 @@ export const formatImplement = (
   cap: number,
   last: ImplementRun | undefined,
   budget = IMPLEMENT_BUDGET_USD,
-  capSource: CapSource = 'default'
+  capSource: CapSource = 'default',
+  heldUntil?: number
 ): string =>
   spent === undefined
     ? 'implement spend unreadable: implement-spend.jsonl has a bad line; no launch until it is fixed'
     : [
+        ...(heldUntil === undefined
+          ? []
+          : [`held by the session limit until ${formatUtcClock(heldUntil)}`]),
         `implement spend today $${spent.toFixed(2)} of $${cap}${capSource === 'file' ? ' (desk)' : capSource === 'env' ? ' (env)' : ''}${spent >= cap ? ` (over; a run may overshoot by its $${budget} budget)` : ''}`,
         last
           ? `last ${last.outcome}${last.ticket ? ` ${last.ticket}` : ''}${last.when ? ` (${last.when})` : ''}`
@@ -968,6 +1000,7 @@ const IMPLEMENT_VERDICTS = [
   'fail',
   'done',
   'untried',
+  'limited',
   'busy',
   'launch',
   'cap',
