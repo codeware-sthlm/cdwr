@@ -222,6 +222,7 @@ cdwr agent logs --host <name> [--run]   # the same, from the agent container ove
 cdwr agent exec --host <name> -- <cdwr args>   # any cdwr command in the agent container, with its vault secrets
 cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ticket, from local transcripts
 cdwr agent usage-record [--days 3] [--kind both] [--hours 6]   # upsert that spend into the telemetry database: day rows (this repo) and hour rows (every Claude project); --dry-run prints the rows
+cdwr agent platform-record [--dry-run]   # upsert tenant and platform state (db, Fly, health, Infisical flags) into tenant_state; the scheduler runs it each tick
 … | cdwr agent activity [--runs <file>]   # activity rows and a table from a Linear history response on stdin
 cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
 cdwr agent attend [COD-n] [--path <dir>] [--no-start]   # refresh codeware-queue to origin/main, then start /work-queue there
@@ -303,7 +304,7 @@ checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/n
 run) always go out.
 
 The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
-`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events`, `builds`, `desk_commands` and `snoozes`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events`, `builds`, `tenant_state` (one row per tenant plus `_shared`, from `cdwr agent platform-record`), `desk_commands` and `snoozes`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
