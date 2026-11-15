@@ -379,23 +379,36 @@ limit_file() { print -r -- "${HOME_DIR:-${AGENT_QUEUE_HOME:-$HOME/.cdwr/agent-qu
 # in that zone (at most a day away). Text it can't read (a weekday, an unknown zone) holds an hour.
 limit_until() {
   setopt local_options no_bash_rematch
-  local text="$1" now="${2:-$(date +%s)}" h m pm=0 zone hms target sod delta
+  local text="$1" now="${2:-$(date +%s)}" h m pm=0 zone target sod until diff
   if [[ "$text" =~ 'resets ([0-9]{1,2})(:([0-9]{2}))?(am|pm) \(([A-Za-z_+/-]+)\)' ]]; then
     h=$(( 10#$match[1] )) m=$(( 10#${match[3]:-0} )) zone="$match[5]"
     [[ "$match[4]" == pm ]] && pm=12
     if (( h >= 1 && h <= 12 && m < 60 )) && [[ "$zone" != *..* ]] &&
-       [[ "$zone" == UTC || -r "/usr/share/zoneinfo/$zone" ]] &&
-       hms="$(TZ="$zone" date -d "@$now" '+%H %M %S' 2>/dev/null || TZ="$zone" date -r "$now" '+%H %M %S' 2>/dev/null)" &&
-       [[ "$hms" == <->' '<->' '<-> ]]; then
+       [[ "$zone" == UTC || -r "/usr/share/zoneinfo/$zone" ]] && sod="$(zone_sod "$zone" "$now")"; then
       target=$(( (h % 12 + pm) * 3600 + m * 60 ))
-      sod=$(( 10#${hms[1,2]} * 3600 + 10#${hms[4,5]} * 60 + 10#${hms[7,8]} ))
-      delta=$(( target - sod ))
-      (( delta > 0 )) || (( delta += 86400 ))
-      print -r -- $(( now + delta ))
+      until=$(( now + target - sod ))
+      (( until > now )) || (( until += 86400 ))
+      # A DST change between now and the reset shifts the wall clock by its offset: correct for it,
+      # across midnight too (12am)
+      if sod="$(zone_sod "$zone" "$until")"; then
+        diff=$(( target - sod ))
+        (( diff > 43200 )) && (( diff -= 86400 ))
+        (( diff < -43200 )) && (( diff += 86400 ))
+        (( diff != 0 && diff <= 7200 && diff >= -7200 )) && (( until += diff ))
+      fi
+      print -r -- $until
       return 0
     fi
   fi
   print -r -- $(( now + 3600 ))
+}
+
+# zone_sod <zone> <epoch>: the seconds since local midnight in that zone
+zone_sod() {
+  local hms
+  hms="$(TZ="$1" date -d "@$2" '+%H %M %S' 2>/dev/null || TZ="$1" date -r "$2" '+%H %M %S' 2>/dev/null)" &&
+    [[ "$hms" == <->' '<->' '<-> ]] || return 1
+  print -r -- $(( 10#${hms[1,2]} * 3600 + 10#${hms[4,5]} * 60 + 10#${hms[7,8]} ))
 }
 
 # limit_held: succeeds while a hold is in force, printing when it lifts (`07:10 UTC`)
@@ -408,7 +421,8 @@ limit_held() {
 
 # limit_hold <result json>: succeeds when the run ended on the session limit, and writes the hold.
 # LIMIT_TEXT is the limit's own text; LIMIT_NEW is true when no hold was in force before, so the
-# caller sends one notice per hold.
+# caller sends one notice per hold. A hold it can't write fails, so the run counts as failed: a
+# limited launch is given back every time, and without a hold it would relaunch every tick.
 LIMIT_TEXT="" LIMIT_NEW=false
 limit_hold() {
   local file
@@ -418,9 +432,10 @@ limit_hold() {
   [[ -n "$LIMIT_TEXT" ]] || LIMIT_TEXT="session limit reached"
   if limit_held >/dev/null; then LIMIT_NEW=false; else LIMIT_NEW=true; fi
   jq -nc --argjson u "$(limit_until "$LIMIT_TEXT")" --arg t "$LIMIT_TEXT" --arg a "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{until: $u, text: $t, at: $a}' > "$file.tmp.$$" 2>/dev/null && mv "$file.tmp.$$" "$file" 2>/dev/null ||
-    rm -f "$file.tmp.$$" 2>/dev/null
-  return 0
+    '{until: $u, text: $t, at: $a}' > "$file.tmp.$$" 2>/dev/null && mv "$file.tmp.$$" "$file" 2>/dev/null &&
+    return 0
+  rm -f "$file.tmp.$$" 2>/dev/null
+  return 1
 }
 
 # host_id: the machine's stable name (a Mac's hostname follows the network); session-hook.sh has the twin
