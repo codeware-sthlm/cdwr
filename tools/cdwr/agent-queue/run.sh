@@ -138,7 +138,8 @@ source "${0:A:h}/github-app.sh"
 # variables and are never exported (an exported one is unexported here), so no child inherits
 # them, claude sessions included: record_platform names them on its own command line. Only the
 # database and Fly ones turn the step on; the Infisical, Sentry and Umami ones are optional reads.
-PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID PLATFORM_SENTRY_AUTH_TOKEN PLATFORM_SENTRY_ORG PLATFORM_UMAMI_URL PLATFORM_UMAMI_API_KEY)
+# The backup url turns on only the backup step (record_backup).
+PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_BACKUP_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID PLATFORM_SENTRY_AUTH_TOKEN PLATFORM_SENTRY_ORG PLATFORM_UMAMI_URL PLATFORM_UMAMI_API_KEY)
 # The write credentials of the desk's restart and gate commands, read the same way and kept apart
 # from the read-only ones above: only desk_cdwr names them, on the command line of the cdwr call
 # that applies a command, so the platform read never holds a credential that writes
@@ -628,6 +629,64 @@ if $platform; then
   exit 0
 fi
 
+# A nightly dump of the cms database into $HOME_DIR/backups, made by `cdwr agent backup`. It runs
+# every tick, a paused one too, but starts only once a day: from 02:00 local time, when
+# backup-ran-on does not already name today (written at the start, so a failing night is not retried
+# every tick; the desk's stale-backup problem covers it). AGENT_QUEUE_BACKUP_HOUR stands in for the
+# local hour in tests. Detached with a deadline of its own (AGENT_QUEUE_BACKUP_DEADLINE, in
+# seconds, default 15 minutes); a backup.lock directory keeps two runs apart and one older than 20
+# minutes is taken over. The detached wrapper writes a failure to backup-failed, and the next tick
+# warns about it, at most once an hour. It writes no telemetry, so it needs no Supabase key.
+# Without PLATFORM_BACKUP_DATABASE_URL it does nothing.
+backup_warn() {
+  local stamp="$HOME_DIR/backup-warned-at" last
+  note "warn: backup: $1"
+  last="$(cat "$stamp" 2>/dev/null)"
+  [[ "$last" == <-> ]] || last=0
+  (( $(date +%s) - last > 3600 )) || return 0
+  date +%s > "$stamp"
+  record warn "" "backup: $1"
+}
+record_backup() {
+  $check && return 0
+  setopt local_options no_err_exit
+  [[ -n "${PLATFORM_BACKUP_DATABASE_URL:-}" ]] || return 0
+  local lockdir="$HOME_DIR/backup.lock" failed="$HOME_DIR/backup-failed" deadline="${AGENT_QUEUE_BACKUP_DEADLINE:-900}" hour today
+  if [[ -r "$failed" ]]; then
+    backup_warn "$(cat "$failed")"
+    rm -f "$failed"
+  fi
+  hour="${AGENT_QUEUE_BACKUP_HOUR:-$(date +%H)}"
+  [[ "$hour" == <-> ]] || return 0
+  (( 10#$hour >= 2 )) || return 0
+  today="$(date +%F)"
+  [[ "$(cat "$HOME_DIR/backup-ran-on" 2>/dev/null)" == "$today" ]] && return 0
+  if [[ -d "$lockdir" && -n "$(find "$lockdir" -maxdepth 0 -mmin +20 2>/dev/null)" ]]; then
+    rm -rf "$lockdir" && note "warn: cleared backup.lock; its run is gone"
+  fi
+  mkdir "$lockdir" 2>/dev/null || return 0
+  print -r -- "$today" > "$HOME_DIR/backup-ran-on"
+  rm -f "$HOME_DIR/backup-timeout"
+  note "backup: started"
+  ( cd "$REPO" || { rmdir "$lockdir"; exit 0; }
+    PLATFORM_BACKUP_DATABASE_URL="$PLATFORM_BACKUP_DATABASE_URL" AGENT_QUEUE_HOME="$HOME_DIR" \
+      node tools/cdwr/bin/cdwr.mjs agent backup --yes --json >/dev/null 2>&1 </dev/null &
+    cpid=$!
+    ( sleep "$deadline"; : > "$HOME_DIR/backup-timeout"; kill -TERM $cpid 2>/dev/null ) &
+    watchdog=$!
+    wait $cpid
+    rc=$?
+    kill $watchdog 2>/dev/null
+    if [[ -e "$HOME_DIR/backup-timeout" ]]; then
+      rm -f "$HOME_DIR/backup-timeout"
+      print -r -- "cdwr agent backup timed out after ${deadline}s" > "$failed"
+    elif (( rc != 0 )); then
+      print -r -- "cdwr agent backup failed ($rc)" > "$failed"
+    fi
+    rmdir "$lockdir" 2>/dev/null ) &!
+  return 0
+}
+
 # A pause is deliberate: the tick takes no lock and still checks in ok, so the monitor does not
 # alert. It publishes its queue state below, once that can be written.
 paused=false
@@ -649,6 +708,7 @@ if ! $paused; then
   fi
 fi
 record_platform
+record_backup
 CHECKIN_ID=""
 
 source "${0:A:h}/lib.sh"
