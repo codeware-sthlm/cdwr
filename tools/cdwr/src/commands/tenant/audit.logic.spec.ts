@@ -1,5 +1,7 @@
 import {
   type AuditReport,
+  type FailedRequest,
+  addFailedRequest,
   auditFindings,
   auditMarkdown,
   isBroken,
@@ -13,7 +15,14 @@ const okReport = (): AuditReport => ({
   at: '2026-11-12T10:00:00.000Z',
   gateCookie: true,
   pages: [
-    { route: '/', status: 200, consoleErrors: [], axe: [], brokenLinks: [] }
+    {
+      route: '/',
+      status: 200,
+      consoleErrors: [],
+      failedRequests: [],
+      axe: [],
+      brokenLinks: []
+    }
   ],
   og: {
     title: 'Home',
@@ -63,6 +72,54 @@ describe('isBroken', () => {
     [200, false]
   ])('reads %s as %s', (status, expected) => {
     expect(isBroken(status)).toBe(expected);
+  });
+});
+
+describe('addFailedRequest', () => {
+  const unauthorized: FailedRequest = {
+    method: 'GET',
+    url: 'https://cdwr.io/_next/image?url=%2Fa.png&w=640&q=75',
+    status: 401,
+    resourceType: 'image'
+  };
+
+  it('adds a request that answers 400 or worse, query string kept', () => {
+    const failed: Array<FailedRequest> = [];
+
+    expect(addFailedRequest(failed, unauthorized)).toBe(true);
+    expect(failed).toEqual([unauthorized]);
+  });
+
+  it.each([[200], [304], [399]])(
+    'leaves out a request answering %s',
+    (status) => {
+      const failed: Array<FailedRequest> = [];
+
+      expect(addFailedRequest(failed, { ...unauthorized, status })).toBe(false);
+      expect(failed).toEqual([]);
+    }
+  );
+
+  it('adds the same method, URL and status once', () => {
+    const failed: Array<FailedRequest> = [];
+    addFailedRequest(failed, unauthorized);
+
+    expect(
+      addFailedRequest(failed, { ...unauthorized, resourceType: 'fetch' })
+    ).toBe(false);
+    expect(failed).toEqual([unauthorized]);
+  });
+
+  it.each([
+    ['method', { method: 'POST' }],
+    ['URL', { url: 'https://cdwr.io/api/a' }],
+    ['status', { status: 403 }]
+  ])('adds a request with another %s', (_, change) => {
+    const failed: Array<FailedRequest> = [];
+    addFailedRequest(failed, unauthorized);
+
+    expect(addFailedRequest(failed, { ...unauthorized, ...change })).toBe(true);
+    expect(failed).toHaveLength(2);
   });
 });
 
@@ -116,13 +173,34 @@ describe('auditFindings', () => {
         route: '/a',
         status: 500,
         consoleErrors: ['x', 'y'],
+        failedRequests: [
+          {
+            method: 'GET',
+            url: 'https://cdwr.io/api/a',
+            status: 401,
+            resourceType: 'fetch'
+          },
+          {
+            method: 'POST',
+            url: 'https://cdwr.io/api/b',
+            status: 403,
+            resourceType: 'xhr'
+          }
+        ],
         axe: [
           { id: 'color-contrast', impact: 'serious', help: '', nodes: 3 },
           { id: 'label', impact: null, help: '', nodes: 1 }
         ],
         brokenLinks: [{ href: 'https://cdwr.io/gone', status: 404 }]
       },
-      { route: '/b', status: null, consoleErrors: [], axe: [], brokenLinks: [] }
+      {
+        route: '/b',
+        status: null,
+        consoleErrors: [],
+        failedRequests: [],
+        axe: [],
+        brokenLinks: []
+      }
     ];
     report.og.missing = ['og:image'];
     report.notFound = [{ locale: 'en', path: '/m', status: 200, lang: 'en' }];
@@ -130,6 +208,7 @@ describe('auditFindings', () => {
     expect(auditFindings(report)).toEqual([
       '/a: answers 500',
       '/a: 2 console error(s)',
+      '/a: 2 failed request(s) (401 GET https://cdwr.io/api/a, 403 POST https://cdwr.io/api/b)',
       '/a: 2 axe violation(s) (color-contrast, label)',
       '/a: 1 broken link(s) (https://cdwr.io/gone)',
       '/b: answers nothing',
@@ -147,9 +226,9 @@ describe('auditMarkdown', () => {
       '### Audit of https://cdwr.io at 2026-11-12T10:00:00.000Z'
     );
     expect(markdown).toContain(
-      '| Route | Status | Console errors | Axe | Broken links |'
+      '| Route | Status | Console errors | Failed requests | Axe | Broken links |'
     );
-    expect(markdown).toContain('| / | 200 | 0 | 0 | 0 |');
+    expect(markdown).toContain('| / | 200 | 0 | 0 | 0 | 0 |');
     expect(markdown).toContain('OG: title, description and image (200)');
     expect(markdown).toContain('404 in sv: 404, lang sv');
     expect(markdown).toContain('Gate cookie: sent');
@@ -161,6 +240,25 @@ describe('auditMarkdown', () => {
     report.gateCookie = false;
 
     expect(auditMarkdown(report)).toContain('Gate cookie: not sent');
+  });
+
+  it('counts failed requests in the table and lists them as a finding', () => {
+    const report = okReport();
+    report.pages[0].failedRequests = [
+      {
+        method: 'GET',
+        url: 'https://cdwr.io/api/a',
+        status: 401,
+        resourceType: 'fetch'
+      }
+    ];
+
+    const markdown = auditMarkdown(report);
+
+    expect(markdown).toContain('| / | 200 | 0 | 1 | 0 | 0 |');
+    expect(markdown).toContain(
+      '- /: 1 failed request(s) (401 GET https://cdwr.io/api/a)'
+    );
   });
 
   it('lists the findings when there are some', () => {
