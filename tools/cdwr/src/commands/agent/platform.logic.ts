@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { APPS, summarize } from '../infisical/analysis.logic';
+import { GATE_KEY } from '../tenant/gate.logic';
 
 import type { Database } from './supabase.types';
 
@@ -140,6 +141,8 @@ export type SwitchRecord = {
   environment: string;
   tenant: string | null;
   flag: string;
+  /** Whether the tenant app's secrets name the site gate password; absent when the app was not read */
+  gated?: boolean;
 };
 
 /** A deployed commit; anything else in `GIT_SHA` is not taken */
@@ -163,10 +166,12 @@ const machineState = (m: MachineInput) => ({
 const appState = (
   reading: FlyAppReading,
   kind: string,
-  behind: boolean | null
+  behind: boolean | null,
+  gated?: boolean
 ) => ({
   app: reading.name,
   kind,
+  ...(gated === undefined ? {} : { gated }),
   machines: reading.machines.ok
     ? reading.machines.value.map(machineState)
     : null,
@@ -236,6 +241,13 @@ export const switchRecords = (
     for (const { tenant, flag } of tenants) {
       records.push({ app, environment, tenant, flag });
     }
+  }
+  // Only the secret names are looked at, and only for whether the gate is among them
+  for (const record of records) {
+    const shipped = record.tenant
+      ? deployments[record.app]?.find(({ tenant }) => tenant === record.tenant)
+      : undefined;
+    if (shipped) record.gated = GATE_KEY in (shipped.secrets ?? {});
   }
   return records;
 };
@@ -558,6 +570,16 @@ export const buildRows = (
   if (!deploy.ok) note(errorsOf(SHARED_KEY), 'github', deploy.reason);
   const deploySha = deploy.ok ? deploy.value.sha : null;
 
+  // Whether each tenant's app holds the gate password, by tenant slug and app kind
+  const gated = new Map<string, boolean>();
+  if (switches.ok && known) {
+    for (const record of switches.value) {
+      if (record.tenant === null || record.gated === undefined) continue;
+      const tenant = tenantOf(record.tenant, known);
+      if (tenant) gated.set(`${tenant.slug}\u0000${record.app}`, record.gated);
+    }
+  }
+
   if (fly.ok) {
     for (const reading of fly.value) {
       const owner = appOwner(reading.name, known);
@@ -578,7 +600,14 @@ export const buildRows = (
       }
       apps.set(owner.key, [
         ...(apps.get(owner.key) ?? []),
-        appState(reading, owner.kind, behind)
+        appState(
+          reading,
+          owner.kind,
+          behind,
+          owner.key === SHARED_KEY
+            ? undefined
+            : gated.get(`${owner.key}\u0000${owner.kind}`)
+        )
       ]);
     }
   }

@@ -157,6 +157,17 @@ export default defineCommand({
           : 'Infisical is cleared first, then the running apps, for the same reason.'
       ],
       target: { environment, name: tenant },
+      // Never the password: a dry run's JSON is read by scripts and the desk
+      json: {
+        tenant,
+        environment,
+        apps: states.map(({ app, flyApp, inInfisical, onFly }) => ({
+          app,
+          flyApp,
+          inInfisical,
+          onFly
+        }))
+      },
       data: { action, environment, tenant, states, value }
     };
   },

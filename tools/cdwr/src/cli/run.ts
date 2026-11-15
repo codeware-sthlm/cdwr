@@ -228,7 +228,8 @@ export async function runCommand(options: RunOptions): Promise<number> {
 const planJson = (plan: Plan) => ({
   steps: plan.steps.map((s) => (typeof s === 'string' ? { label: s } : s)),
   notes: plan.notes,
-  target: plan.target
+  target: plan.target,
+  ...(plan.json === undefined ? {} : { json: plan.json })
 });
 
 /** Print an error the way the mode wants and return its exit code */

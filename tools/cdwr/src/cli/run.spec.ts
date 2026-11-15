@@ -266,6 +266,44 @@ describe('runCommand', () => {
     });
   });
 
+  it('puts the plan json in a --dry-run --json document, and omits the key without one', async () => {
+    const dry = async (json?: unknown) => {
+      const stdout: string[] = [];
+      const exit = await runCommand({
+        name: 'test dry',
+        command: defineCommand({
+          summary: 'Dry',
+          description: 'Dry',
+          danger: 'mutate',
+          inputs: {},
+          plan: async () => ({ steps: ['x'], json, data: {} }),
+          apply: async () => ({ summary: 'done' })
+        }),
+        argv: ['--dry-run', '--json'],
+        root: '/repo',
+        env: {},
+        prefs: memoryPrefs(),
+        interactive: false,
+        ui: fakeUi([], false),
+        history: () => undefined,
+        stdout: (text) => stdout.push(text)
+      });
+      expect(exit).toBe(EXIT.ok);
+      return JSON.parse(stdout[0] ?? '');
+    };
+
+    expect((await dry({ machines: [{ id: 'm1' }] })).plan).toEqual({
+      steps: [{ label: 'x' }],
+      json: { machines: [{ id: 'm1' }] }
+    });
+    expect(await dry()).toEqual({
+      ok: true,
+      command: 'test dry',
+      dryRun: true,
+      plan: { steps: [{ label: 'x' }] }
+    });
+  });
+
   it('reports a usage error as JSON too', async () => {
     const r = run('read', ['--json'], [], false);
     expect(await r.exit).toBe(EXIT.usage);

@@ -67,4 +67,48 @@ describe('tenant gate', () => {
     expect(ui.printed.note.some((n) => n.startsWith('Share this'))).toBe(true);
     expect(ui.printed.outro[0]).toContain('acme is closed in production');
   });
+
+  it('describes a dry run as JSON without the password', async () => {
+    const command = (await import('./gate')).default;
+
+    const stdout: string[] = [];
+    const exit = await runCommand({
+      name: 'tenant gate',
+      command,
+      argv: [
+        'close',
+        '--env',
+        'production',
+        '--tenant',
+        'acme',
+        '--password',
+        'hunter2-hunter2',
+        '--dry-run',
+        '--json'
+      ],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([], false),
+      history: () => undefined,
+      stdout: (t) => stdout.push(t)
+    });
+
+    expect(exit).toBe(EXIT.ok);
+    const out = JSON.parse(stdout[0] ?? '');
+    expect(out.plan.json).toEqual({
+      tenant: 'acme',
+      environment: 'production',
+      apps: [
+        {
+          app: 'cms',
+          flyApp: 'cdwr-cms-acme',
+          inInfisical: false,
+          onFly: 'missing'
+        }
+      ]
+    });
+    expect(stdout.join('')).not.toContain('hunter2');
+  });
 });
