@@ -231,7 +231,7 @@ cdwr agent notify [all|action]   # which notices are sent; no argument shows the
 cdwr agent attend [COD-n] [--path <dir>] [--no-start]   # refresh codeware-queue to origin/main, then start /work-queue there
 cdwr agent worktree add COD-529 --branch <name>   # codeware-cod-529 beside this checkout
 cdwr agent worktree prune          # remove ticket worktrees whose PR is merged or closed
-cdwr agent desk install [--pr <n>] # install the Agent Desk from the newest CI build of main, or of a PR (the phone gets it from the NUC, see The desk on the phone)
+cdwr agent desk install [--pr <n>] # install the CDWR Desk from the newest CI build of main, or of a PR (the phone gets it from the NUC, see The desk on the phone)
 ```
 
 `worktree add` gives each ticket its own checkout, so starting the next never disturbs an earlier
@@ -241,9 +241,10 @@ removes the `codeware-cod-<n>` checkouts whose pull request is merged or closed,
 branch too when merged. One with no pull request, an open one or uncommitted changes is kept, as
 are the agent worktree and the one you run it from. Shell completion stops at `worktree`.
 
-`desk install` downloads the `agent-desk-macos-arm64` artifact of the newest successful `desk.yml`
-run (a push to main, or with `--pr` that PR's branch) and replaces `/Applications/Agent Desk.app`,
-quitting a running copy first and clearing the quarantine flag the unsigned build needs. It does not
+`desk install` downloads the `cdwr-desk-macos-arm64` artifact of the newest successful `desk.yml`
+run (a push to main, or with `--pr` that PR's branch) and replaces `/Applications/CDWR Desk.app`,
+quitting a running copy first and clearing the quarantine flag the unsigned build needs. It then
+quits and removes the old `/Applications/Agent Desk.app` if it is there. It does not
 open the app; the settings live outside it and survive. An expired or missing artifact fails in the
 plan with the fix: `gh workflow run desk.yml` (`--ref <branch>` for a PR) or `nx tauri-build desk`.
 macOS arm64 only.
@@ -311,7 +312,7 @@ The queue also writes telemetry to its own Supabase project, `agent-queue` (tabl
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
-queue writes no Linear document; the Agent Desk reads these tables. The `queue_state` row also
+queue writes no Linear document; the CDWR Desk reads these tables. The `queue_state` row also
 carries `watch`, the host's `watch.json` (the PRs of agent-labelled tickets with their state and
 the unresolved review threads a person or Copilot spoke last in, Copilot's share as
 `copilotThreads`; a review ticket with only Copilot threads open reads `review feedback (Copilot
@@ -658,7 +659,7 @@ the plan with the resolved tag. When the queue stays busy it resumes and changes
 
 ### The desk on the phone
 
-The same desk runs as a web app, served by the NUC to the tailnet only. `.github/workflows/desk-image.yml`
+The same CDWR Desk, with both views (Agent and Platform), runs as a web app, served by the NUC to the tailnet only. `.github/workflows/desk-image.yml`
 builds `ghcr.io/codeware-sthlm/cdwr-desk` on main whenever `apps/desk` changes (`apps/desk/Dockerfile`:
 the Vite build behind nginx, with the Tauri window's CSP plus Linear's API as a header), and the
 `desk` service in `apps/agent-host/compose.yaml` runs it on the host's loopback, `127.0.0.1:8787`,
