@@ -120,6 +120,27 @@ describe('ViewSwitch', () => {
     expect(count?.className).toContain('outline-dashed');
   });
 
+  it('marks a stale agent count while the scheduler is silent, and says so', () => {
+    const state = waiting(2);
+    const { container } = render(
+      <ViewSwitch
+        m={{ ...model(state, NOW), schedulerStale: true }}
+        details={state.details}
+        tenants={null}
+        now={TENANTS_NOW}
+        view="agent"
+        onView={vi.fn()}
+      />
+    );
+    const agent = container.querySelector('[data-view="agent"]');
+    expect(agent?.getAttribute('aria-label')).toBe(
+      'Agent: 2 waiting on you, data is stale'
+    );
+    expect(agent?.querySelector('.count')?.getAttribute('data-stale')).toBe(
+      'true'
+    );
+  });
+
   it('marks Agent current, also on its pages, and Platform on Platform', () => {
     for (const page of ['agent', 'health', 'tree'] as const) {
       const { agent, platform } = mount(waiting(1), down(), page);
