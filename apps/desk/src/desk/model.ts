@@ -14,9 +14,11 @@ import {
   type CommandRowLike,
   type Control,
   type ControlState,
+  type PlatformCommandState,
   type PrCommandState,
   type Reported,
   controlStates,
+  platformCommandStates,
   prCommandStates
 } from './commands';
 import {
@@ -295,6 +297,8 @@ export type Model = {
   watch: Map<string, WatchRef>;
   /** `prCommandKey` -> where a ticket's Copilot or Merge command stands */
   prCommands: Map<string, PrCommandState>;
+  /** `platformCommandKey` -> where an app's restart or a tenant's gate command stands */
+  platformCommands: Map<string, PlatformCommandState>;
   /** The agent's PRs as GitHub last told, newest first */
   agentPrs: AgentPr[];
   /** Live sessions per host, newest first */
@@ -1351,6 +1355,7 @@ export const model = (
     snoozes: data.snoozes ?? [],
     watch: watchByTicket(runs?.watches ?? []),
     prCommands: prCommandStates(data.deskCommands ?? [], nowMs),
+    platformCommands: platformCommandStates(data.deskCommands ?? [], nowMs),
     agentPrs: agentPrs(data.githubEvents, prTickets, (id) => get(id).title),
     hostSessions: sessions,
     handBack: hand,

@@ -1,5 +1,6 @@
 import { useEffect, useReducer } from 'react';
 
+import { platformHost } from '../tenants/host';
 import { TenantsPage } from '../tenants/page';
 import { TenantsPill } from '../tenants/pill';
 
@@ -18,6 +19,7 @@ import {
   refresh,
   reviewNow,
   runNow,
+  sendPlatform,
   setSnoozedOpen,
   setTreeFilter,
   setTreeOpen,
@@ -269,6 +271,15 @@ export const App = () => {
               data={state.data.tenants}
               now={now}
               onDesk={() => showView('desk')}
+              platform={{
+                can: state.controls.target !== null,
+                host: platformHost(
+                  m.runs?.host ?? null,
+                  m.runs?.job?.host ?? null
+                ),
+                commands: m.platformCommands,
+                send: sendPlatform
+              }}
             />
           </main>
         ) : view === 'tree' ? (

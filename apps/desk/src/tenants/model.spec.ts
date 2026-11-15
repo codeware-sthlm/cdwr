@@ -49,6 +49,20 @@ describe('parseTenantRow', () => {
     expect(row.db).toBeNull();
   });
 
+  it('reads gated as a boolean, else as unknown', () => {
+    const row = parseTenantRow(
+      tenant('acme', {
+        apps: [
+          flyApp('cdwr-cms-acme', 'cms', { gated: true }),
+          flyApp('cdwr-headless-acme', 'headless', { gated: false }),
+          flyApp('cdwr-builder', 'builder', { gated: 'yes' }),
+          flyApp('cdwr-umami', 'umami')
+        ]
+      })
+    );
+    expect(row.apps.map((a) => a.gated)).toEqual([true, false, null, null]);
+  });
+
   it('parses the database of the shared row', () => {
     const row = parseTenantRow(shared());
     expect(row.key).toBe(SHARED_KEY);

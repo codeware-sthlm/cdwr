@@ -7,6 +7,8 @@ import {
   type Reported,
   checkToken,
   controlStates,
+  platformCommandKey,
+  platformCommandStates,
   prCommandStates,
   sendCommand
 } from './commands';
@@ -380,6 +382,111 @@ describe('prCommandStates', () => {
         row(3, 'merge', 'pending', { args: {} }),
         row(4, 'merge', 'pending', { args: null }),
         row(5, 'merge', 'pending', { args: { ticket: 'COD-1' } })
+      ],
+      NOW
+    );
+    expect(states.size).toBe(0);
+  });
+});
+
+describe('platformCommandStates', () => {
+  const AT = '2026-11-02T20:00:00Z';
+  const NOW = Date.parse('2026-11-02T20:05:00Z');
+  const row = (
+    id: number,
+    kind: string,
+    status: string,
+    args: unknown,
+    extra: Partial<{ applied_at: string | null; note: string }> = {}
+  ) => ({
+    id,
+    at: AT,
+    args,
+    host: 'nuc',
+    kind,
+    status,
+    applied_at: extra.applied_at ?? null,
+    note: extra.note ?? null
+  });
+  const restart = { tenant: 'acme', app: 'cdwr-cms-acme', sha: null };
+  const gate = (action: 'open' | 'close') => ({ tenant: 'acme', action });
+
+  it('names a restart by its app and a gate by its tenant', () => {
+    expect(platformCommandKey('restart', 'cdwr-cms-acme')).toBe(
+      'restart cdwr-cms-acme'
+    );
+    expect(platformCommandKey('gate', 'acme')).toBe('gate acme');
+  });
+
+  it('is empty without rows', () => {
+    expect(platformCommandStates([], NOW).size).toBe(0);
+  });
+
+  it('keeps a pending row for the scheduler expiry', () => {
+    const rows = [row(1, 'restart', 'pending', restart)];
+    expect(
+      platformCommandStates(rows, NOW).get('restart cdwr-cms-acme')
+    ).toEqual({ state: 'pending' });
+    expect(platformCommandStates(rows, NOW + PENDING_MAX_MS + 1000).size).toBe(
+      0
+    );
+  });
+
+  it('shows a refusal with its note, or an applied row, for a while', () => {
+    const refused = [
+      row(1, 'restart', 'refused', restart, {
+        applied_at: AT,
+        note: 'sha moved'
+      })
+    ];
+    expect(
+      platformCommandStates(refused, NOW).get('restart cdwr-cms-acme')
+    ).toEqual({ state: 'refused', note: 'sha moved' });
+    const applied = [row(1, 'restart', 'applied', restart, { applied_at: AT })];
+    expect(
+      platformCommandStates(applied, NOW).get('restart cdwr-cms-acme')
+    ).toEqual({ state: 'applied', at: AT });
+    const later = Date.parse(AT) + REFUSED_SHOW_MS + 1000;
+    expect(platformCommandStates(refused, later).size).toBe(0);
+    expect(platformCommandStates(applied, later).size).toBe(0);
+  });
+
+  it('keeps the action of the newest gate row', () => {
+    const states = platformCommandStates(
+      [
+        row(1, 'gate', 'applied', gate('close'), { applied_at: AT }),
+        row(2, 'gate', 'applied', gate('open'), { applied_at: AT })
+      ],
+      NOW
+    );
+    expect(states.get('gate acme')).toEqual({
+      state: 'applied',
+      at: AT,
+      action: 'open'
+    });
+    expect(states.size).toBe(1);
+  });
+
+  it('reads the newest row per app and keeps apps apart', () => {
+    const states = platformCommandStates(
+      [
+        row(2, 'restart', 'pending', restart),
+        row(1, 'restart', 'refused', restart, { applied_at: AT }),
+        row(3, 'restart', 'pending', { ...restart, app: 'cdwr-cms-zed' })
+      ],
+      NOW
+    );
+    expect(states.get('restart cdwr-cms-acme')).toEqual({ state: 'pending' });
+    expect(states.get('restart cdwr-cms-zed')).toEqual({ state: 'pending' });
+  });
+
+  it('ignores other kinds and rows without an app or tenant', () => {
+    const states = platformCommandStates(
+      [
+        row(1, 'merge', 'pending', { ticket: 'COD-1', pr: 7 }),
+        row(2, 'restart', 'pending', { tenant: 'acme' }),
+        row(3, 'gate', 'pending', null),
+        row(4, 'gate', 'pending', { action: 'close' })
       ],
       NOW
     );
