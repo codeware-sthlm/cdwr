@@ -1186,10 +1186,13 @@ attended() {
   [[ "$spent" == null ]] && note "warn: implement-spend.jsonl unreadable; no launch today"
   cap="$(implement_cap)"
   last="$launch_state"
-  local guards
+  local guards limited_until
+  # When the plan's session limit lifts (`07:10 UTC`), or empty with no hold in force
+  limited_until="$(limit_held || true)"
   guards="$(jq -nc --argjson session "$session" --argjson locked "$locked" --argjson spent "$spent" \
-    --argjson cap "$cap" --argjson last "$last" \
-    '{session: $session, locked: $locked, spent: $spent, cap: $cap, last: $last}')"
+    --argjson cap "$cap" --argjson last "$last" --arg limited "$limited_until" \
+    '{session: $session, locked: $locked, spent: $spent, cap: $cap, last: $last,
+      limitedUntil: (if $limited == "" then null else $limited end)}')"
   decision="$(watch -c --argjson g "$guards" 'include "watch"; launch($g)' <<<"$verdict" 2>/dev/null)" ||
     { local why="watch.jq failed$(watch_err)"; note "warn: launch: $why"
       decision="$(jq -c --arg r "$why" '{action: "skip", reason: $r, key: null, pick: (if .verdict == "run" and .reason != "ready" then {ticket, reason, detail} else null end)}' <<<"$verdict")"; }
@@ -1357,7 +1360,13 @@ run_outcome() {
   cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
   spent=""; [[ "$cost" == <->(|.<->) ]] && spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result") turns"
   (( rc != 0 )) || return 0
-  if [[ "$(jq -r '.subtype // empty' "$result" 2>/dev/null)" == error_max_budget_usd ]]; then
+  # The plan's session limit holds every claude run until the reset (lib.sh); nothing failed here
+  if limit_hold "$result"; then
+    outcome=limited
+    note "limited: ${tag:+$tag }$LIMIT_TEXT (see $log)"
+    $LIMIT_NEW && notice info "Agent queue: session limit reached, launches held until $(limit_held || print 'the reset')"
+    record limited "" "${tag:+$tag: }$LIMIT_TEXT, log $log$spent"
+  elif [[ "$(jq -r '.subtype // empty' "$result" 2>/dev/null)" == error_max_budget_usd ]]; then
     outcome=cap
     note "cap: ${tag:+$tag }stopped at the \$$budget budget (see $log)"
     notify "Agent queue: $label hit the \$$budget cap and stopped. Log: $log"
@@ -1405,6 +1414,8 @@ suggest_run() {
 
   run_outcome "a suggest run" suggest "$SUGGEST_BUDGET_USD" "$log" "$result" "$rc"
   case "$outcome" in
+    # Never ran: the day's stamp goes back, so it runs after the reset
+    limited) rm -f "$HOME_DIR/suggest-ran-on"; suggested_line "session limit, runs after the reset"; return 0 ;;
     cap) suggested_line "stopped at the budget"; return 0 ;;
     failed) suggested_line "failed"; return 0 ;;
   esac
@@ -1461,7 +1472,9 @@ devlog_run() {
   ) > "$result" 2> "$log" || rc=$?
 
   run_outcome "a devlog run" devlog "$DEVLOG_BUDGET_USD" "$log" "$result" "$rc"
-  # A cap leaves no result to read. A failed exit may still have drafted: its lines are read below
+  # A cap leaves no result to read. A failed exit may still have drafted: its lines are read below.
+  # A limited run never ran: the week's stamp goes back, so it runs after the reset
+  if [[ "$outcome" == limited ]]; then rm -f "$HOME_DIR/devlog-ran-on"; devlog_line "session limit, runs after the reset"; return 0; fi
   if [[ "$outcome" == cap ]]; then devlog_line "stopped at the budget"; return 0; fi
 
   # Only verdict lines count, so a code fence or blank lines around them do not matter. Every
@@ -1507,8 +1520,9 @@ devlog_run() {
 # file and prints the reviews row; nothing is stored for a file it refuses.
 review_run() {
   local log result rc=0 spent="" outcome line cost row out_json issue n since
-  local out="$HOME_DIR/review-out.json" model=opus
+  local out="$HOME_DIR/review-out.json" model=opus requested=false
   run_kind=review
+  [[ -e "$HOME_DIR/review-requested" ]] && requested=true
   linear_ok || { review_line "no Linear tools"; return 0; }
   cd "$REPO"
   to_main reviewing
@@ -1565,6 +1579,11 @@ review_run() {
 
   run_outcome "a review run" review "$REVIEW_BUDGET_USD" "$log" "$result" "$rc"
   case "$outcome" in
+    # Never ran: the stamps and a desk request go back, so it runs after the reset
+    limited)
+      rm -f "$HOME_DIR/review-ran-on" "$HOME_DIR/review-ran-at"
+      $requested && : > "$HOME_DIR/review-requested"
+      review_line "session limit, runs after the reset"; return 0 ;;
     cap) review_line "stopped at the budget"; return 0 ;;
     failed) review_line "failed"; return 0 ;;
   esac
@@ -1608,7 +1627,12 @@ review_run() {
 if [[ -z "$ready" ]]; then
   gate="$(suggest_gate)"
   # The decision stays the last line: status reads it from there
-  if $check; then print -r -- "suggest: $gate"; print -r -- "review: $(review_gate)"; print -r -- "devlog: $(devlog_gate)"; echo "idle: nothing to plan"; exit 0; fi
+  if $check; then
+    limit_at="$(limit_held)" && print -r -- "limit: claude runs held until $limit_at"
+    print -r -- "suggest: $gate"; print -r -- "review: $(review_gate)"; print -r -- "devlog: $(devlog_gate)"; echo "idle: nothing to plan"; exit 0
+  fi
+  # The plan's session limit holds every claude run until the reset; a note, not a row, each tick
+  if limit_at="$(limit_held)"; then note "skip: session limit, claude runs held until $limit_at"; exit 0; fi
   # A desk click beats the suggestion as well as the schedule
   if [[ -e "$HOME_DIR/review-requested" ]]; then review_run; exit 0; fi
   case "$gate" in
@@ -1630,9 +1654,11 @@ if $check; then
   print -r -- "suggest: $(suggest_gate)"
   print -r -- "review: $(review_gate)"
   print -r -- "devlog: $(devlog_gate)"
+  limit_at="$(limit_held)" && print -r -- "limit: claude runs held until $limit_at"
   echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')"; exit 0
 fi
 
+if limit_at="$(limit_held)"; then note "skip: session limit, planning held until $limit_at"; exit 0; fi
 linear_ok || exit 0
 cd "$REPO"
 to_main planning

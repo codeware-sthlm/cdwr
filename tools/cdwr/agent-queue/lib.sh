@@ -368,6 +368,61 @@ queue_limit() {
   if [[ "$v" == <-> ]] && (( 10#$v >= 1 && 10#$v <= 20 )); then print -r -- "$(( 10#$v ))"; else print -r -- 5; fi
 }
 
+# --- The plan's session limit (COD-801) ---
+# A claude run that ends with `"api_error": "usage_limit_reached"` never worked. run.sh and
+# implement.sh record it as `limited` and write limited-until.json in the queue home; until that
+# time no claude run starts. One file, so the two scripts can't disagree.
+limit_file() { print -r -- "${HOME_DIR:-${AGENT_QUEUE_HOME:-$HOME/.cdwr/agent-queue}}/limited-until.json"; }
+
+# limit_until <text> [now]: the epoch the limit lifts, from `resets 7:10am (UTC)` or
+# `resets 1pm (Europe/Stockholm)` in the result text, as the next time that clock time comes round
+# in that zone (at most a day away). Text it can't read (a weekday, an unknown zone) holds an hour.
+limit_until() {
+  setopt local_options no_bash_rematch
+  local text="$1" now="${2:-$(date +%s)}" h m pm=0 zone hms target sod delta
+  if [[ "$text" =~ 'resets ([0-9]{1,2})(:([0-9]{2}))?(am|pm) \(([A-Za-z_+/-]+)\)' ]]; then
+    h=$(( 10#$match[1] )) m=$(( 10#${match[3]:-0} )) zone="$match[5]"
+    [[ "$match[4]" == pm ]] && pm=12
+    if (( h >= 1 && h <= 12 && m < 60 )) && [[ "$zone" != *..* ]] &&
+       [[ "$zone" == UTC || -r "/usr/share/zoneinfo/$zone" ]] &&
+       hms="$(TZ="$zone" date -d "@$now" '+%H %M %S' 2>/dev/null || TZ="$zone" date -r "$now" '+%H %M %S' 2>/dev/null)" &&
+       [[ "$hms" == <->' '<->' '<-> ]]; then
+      target=$(( (h % 12 + pm) * 3600 + m * 60 ))
+      sod=$(( 10#${hms[1,2]} * 3600 + 10#${hms[4,5]} * 60 + 10#${hms[7,8]} ))
+      delta=$(( target - sod ))
+      (( delta > 0 )) || (( delta += 86400 ))
+      print -r -- $(( now + delta ))
+      return 0
+    fi
+  fi
+  print -r -- $(( now + 3600 ))
+}
+
+# limit_held: succeeds while a hold is in force, printing when it lifts (`07:10 UTC`)
+limit_held() {
+  local until
+  until="$(jq -r '.until // empty' "$(limit_file)" 2>/dev/null)"
+  [[ "$until" == <-> ]] && (( until > $(date +%s) )) || return 1
+  print -r -- "$(TZ=UTC date -d "@$until" +%H:%M 2>/dev/null || TZ=UTC date -r "$until" +%H:%M) UTC"
+}
+
+# limit_hold <result json>: succeeds when the run ended on the session limit, and writes the hold.
+# LIMIT_TEXT is the limit's own text; LIMIT_NEW is true when no hold was in force before, so the
+# caller sends one notice per hold.
+LIMIT_TEXT="" LIMIT_NEW=false
+limit_hold() {
+  local file
+  [[ "$(jq -r '.api_error // empty' "$1" 2>/dev/null)" == usage_limit_reached ]] || return 1
+  file="$(limit_file)"
+  LIMIT_TEXT="$(jq -r '.result // empty' "$1" 2>/dev/null)"
+  [[ -n "$LIMIT_TEXT" ]] || LIMIT_TEXT="session limit reached"
+  if limit_held >/dev/null; then LIMIT_NEW=false; else LIMIT_NEW=true; fi
+  jq -nc --argjson u "$(limit_until "$LIMIT_TEXT")" --arg t "$LIMIT_TEXT" --arg a "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{until: $u, text: $t, at: $a}' > "$file.tmp.$$" 2>/dev/null && mv "$file.tmp.$$" "$file" 2>/dev/null ||
+    rm -f "$file.tmp.$$" 2>/dev/null
+  return 0
+}
+
 # host_id: the machine's stable name (a Mac's hostname follows the network); session-hook.sh has the twin
 host_id() { [[ "$(uname)" == Darwin ]] && scutil --get LocalHostName 2>/dev/null || hostname -s; }
 

@@ -4322,6 +4322,40 @@ describe('launch', () => {
     expect(res.reason).toBe('a launched session is still running');
   });
 
+  describe('the plan session limit', () => {
+    it('notifies, without launching, until the reset', () => {
+      const res = launch(pick(), guards({ limitedUntil: '07:10 UTC' }));
+      expect(res).toMatchObject({
+        action: 'notify',
+        reason: 'session limit, resets 07:10 UTC',
+        key: 'COD-1 answered'
+      });
+      expect(res.last).toBeUndefined();
+    });
+
+    it.each([
+      ['null', { limitedUntil: null }],
+      ['absent', {}]
+    ])('launches as before when the limit is %s', (_name, over) => {
+      const res = launch(pick(), guards(over));
+      expect(res.action).toBe('launch');
+      expect(res.last).toEqual({ key: 'COD-1 answered', launches: 1 });
+    });
+
+    it('comes after a running session and before the cap checks', () => {
+      expect(
+        launch(pick(), guards({ limitedUntil: '07:10 UTC', locked: true }))
+          .reason
+      ).toBe('a launched session is still running');
+      expect(
+        launch(pick(), guards({ limitedUntil: '07:10 UTC', spent: 52 })).reason
+      ).toBe('session limit, resets 07:10 UTC');
+      expect(
+        launch(pick(), guards({ limitedUntil: '07:10 UTC', cap: null })).reason
+      ).toBe('session limit, resets 07:10 UTC');
+    });
+  });
+
   it.each([
     ['equal to the cap', 40],
     ['above the cap', 52]

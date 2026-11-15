@@ -205,6 +205,21 @@ if [[ -n "$KEY" && "$last" == "not tried: $KEY"( · *|) ]]; then
   note "untried: $KEY · $reason"
   record untried "$KEY · $reason$spent · log $log"
   telemetry untried "$KEY · $reason$spent · log $log"
+elif (( rc != 0 )) && limit_hold "$result"; then
+  # The plan's session limit: the session never worked and nothing failed on our side. The launch
+  # is given back every time, so a limit never counts toward the two-miss stop; run.sh holds every
+  # launch until the reset. One info notice per hold, no failure notice.
+  if [[ "$(jq -r '.key // empty' "$HOME_DIR/launch.json" 2>/dev/null)" == "$KEY" ]]; then
+    jq -c '.launches = ([(.launches // 0) - 1, 0] | max)' \
+      "$HOME_DIR/launch.json" > "$HOME_DIR/launch.json.tmp.$$" 2>/dev/null &&
+      mv "$HOME_DIR/launch.json.tmp.$$" "$HOME_DIR/launch.json" 2>/dev/null || rm -f "$HOME_DIR/launch.json.tmp.$$" 2>/dev/null || true
+  fi
+  note "limited: $KEY · $LIMIT_TEXT"
+  if $LIMIT_NEW && [[ "$(tr -d '[:space:]' 2>/dev/null < "$HOME_DIR/notify-level" || true)" != action ]]; then
+    notify "Agent queue: session limit reached, launches held until $(limit_held || print 'the reset')"
+  fi
+  record limited "$KEY · $LIMIT_TEXT$spent · log $log"
+  telemetry limited "$KEY · $LIMIT_TEXT$spent · log $log"
 elif (( rc == 0 )); then
   note "done: $KEY$spent"
   record implemented "$KEY$spent · log $log"
