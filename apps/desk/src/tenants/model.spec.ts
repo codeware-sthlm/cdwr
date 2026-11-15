@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAIN, domain, flag, flyApp, shared, tenant } from './fixtures';
+import type { Json } from '../supabase.types';
+
+import {
+  MAIN,
+  deployRun,
+  domain,
+  flag,
+  flyApp,
+  sentry,
+  shared,
+  tenant,
+  topIssue,
+  visitors
+} from './fixtures';
 import { SHARED_KEY, parseTenantRow } from './model';
 
 describe('parseTenantRow', () => {
@@ -114,6 +127,74 @@ describe('parseTenantRow', () => {
     expect(row.switches).toHaveLength(1);
     expect(row.db).toBeNull();
     expect(row.errors).toEqual({ fly: 'down' });
+  });
+
+  it('parses the sentry, visitors and deploy columns and the apps behind flag', () => {
+    const row = parseTenantRow(
+      tenant('acme', {
+        apps: [
+          flyApp('a', 'cms', { behind: true }),
+          flyApp('b', 'headless', { behind: null }),
+          flyApp('c', 'cms', { behind: 'yes' })
+        ],
+        sentry: sentry({ top: topIssue() }),
+        visitors: visitors()
+      })
+    );
+    expect(row.apps.map((a) => a.behind)).toEqual([true, null, null]);
+    expect(row.sentry).toEqual({
+      org: 'cdwr',
+      count24h: 2,
+      count7d: 14,
+      top: {
+        shortId: 'CMS-4F',
+        level: 'error',
+        count: 31,
+        title: 'TypeError: x is undefined'
+      }
+    });
+    expect(row.visitors?.today).toBe(12);
+    expect(row.visitors?.days).toHaveLength(7);
+    expect(row.visitors?.days[0]).toEqual({ date: '2026-11-08', visitors: 8 });
+    expect(row.deploy).toBeNull();
+    expect(
+      parseTenantRow(shared({ deploy: deployRun() })).deploy
+    ).toMatchObject({ runId: 4242, conclusion: 'success' });
+  });
+
+  it('reads the empty column of a row without such data as absent', () => {
+    const row = parseTenantRow(tenant('acme'));
+    expect(row.sentry).toBeNull();
+    expect(row.visitors).toBeNull();
+    expect(row.deploy).toBeNull();
+  });
+
+  it('reads malformed sentry, visitors and deploy columns as absent', () => {
+    const odd = (over: Record<string, Json>) =>
+      parseTenantRow(tenant('acme', over));
+    expect(odd({ sentry: [1], visitors: 'x', deploy: 4 })).toMatchObject({
+      sentry: null,
+      visitors: null,
+      deploy: null
+    });
+    expect(odd({ sentry: sentry({ count24h: 'many' }) }).sentry).toBeNull();
+    expect(odd({ sentry: sentry({ org: 'a.b/c' }) }).sentry).toBeNull();
+    expect(odd({ sentry: sentry({ top: { shortId: 3 } }) }).sentry?.top).toBe(
+      null
+    );
+    expect(odd({ visitors: { today: 'x' } }).visitors).toBeNull();
+    expect(
+      odd({
+        visitors: {
+          today: 3,
+          days: [{ date: 1, visitors: 2 }, { date: 'd', visitors: 'x' }, 'z']
+        }
+      }).visitors
+    ).toEqual({ today: 3, days: [] });
+    expect(odd({ deploy: { runId: 'x', conclusion: 'failure' } }).deploy).toBe(
+      null
+    );
+    expect(odd({ deploy: { runId: 1 } }).deploy).toBeNull();
   });
 
   it('reads json that is not a list or a record as empty', () => {

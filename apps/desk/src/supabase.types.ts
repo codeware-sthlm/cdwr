@@ -307,6 +307,9 @@ export type Database = {
           domains: Json;
           switches: Json;
           db: Json;
+          sentry: Json;
+          visitors: Json;
+          deploy: Json;
           errors: Json;
         };
         Insert: {
@@ -319,6 +322,9 @@ export type Database = {
           domains?: Json;
           switches?: Json;
           db?: Json;
+          sentry?: Json;
+          visitors?: Json;
+          deploy?: Json;
           errors?: Json;
         };
         Update: {
@@ -331,6 +337,9 @@ export type Database = {
           domains?: Json;
           switches?: Json;
           db?: Json;
+          sentry?: Json;
+          visitors?: Json;
+          deploy?: Json;
           errors?: Json;
         };
         Relationships: [];

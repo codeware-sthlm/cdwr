@@ -13,12 +13,14 @@ import {
   BEHIND,
   MAIN,
   NOW,
+  deployRun,
   domain,
   flag,
   flyApp,
   machine,
   minutesAgo,
   payload,
+  sentry,
   shared,
   tenant
 } from './fixtures';
@@ -32,10 +34,8 @@ import {
   tenantsView
 } from './status';
 
-const statusFor = (
-  over: Parameters<typeof tenant>[1],
-  main: string | null = MAIN
-) => statusOf(parseTenantRow(tenant('acme', over)), main);
+const statusFor = (over: Parameters<typeof tenant>[1]) =>
+  statusOf(parseTenantRow(tenant('acme', over)));
 
 describe('thresholds', () => {
   it('names the limits', () => {
@@ -80,34 +80,32 @@ describe('statusOf', () => {
     ).toBe('down');
   });
 
-  it('is warn when a machine is behind main', () => {
+  it('is warn when an app is behind, by its flag and not by the commits', () => {
+    const app = (behind: boolean | null) => ({
+      apps: [
+        flyApp('cdwr-cms-acme', 'cms', {
+          machines: [machine({ sha: BEHIND })],
+          behind
+        })
+      ]
+    });
+    expect(statusFor(app(true))).toBe('warn');
+    expect(statusFor(app(false))).toBe('ok');
+    expect(statusFor(app(null))).toBe('ok');
+  });
+
+  it('is down when an app has no machine, not when its machines are suspended', () => {
+    expect(
+      statusFor({ apps: [flyApp('cdwr-cms-acme', 'cms', { machines: [] })] })
+    ).toBe('down');
     expect(
       statusFor({
         apps: [
           flyApp('cdwr-cms-acme', 'cms', {
-            machines: [machine({ sha: BEHIND })]
+            machines: [machine({ state: 'suspended' })]
           })
         ]
       })
-    ).toBe('warn');
-  });
-
-  it('is not warn for a machine with no known commit, or without main', () => {
-    const apps = [
-      flyApp('cdwr-cms-acme', 'cms', { machines: [machine({ sha: null })] })
-    ];
-    expect(statusFor({ apps })).toBe('ok');
-    expect(
-      statusFor(
-        {
-          apps: [
-            flyApp('cdwr-cms-acme', 'cms', {
-              machines: [machine({ sha: BEHIND })]
-            })
-          ]
-        },
-        null
-      )
     ).toBe('ok');
   });
 
@@ -141,8 +139,7 @@ describe('statusOf', () => {
       statusOf(
         parseTenantRow(
           shared({ db: { sizeBytes: null, sessions, byApplication: {} } })
-        ),
-        MAIN
+        )
       );
     expect(at(DB_SESSIONS_WARN - 1)).toBe('ok');
     expect(at(DB_SESSIONS_WARN)).toBe('warn');
@@ -166,15 +163,24 @@ describe('statusOf', () => {
   });
 
   it('never calls the shared row off', () => {
-    expect(statusOf(parseTenantRow(shared({ switches: [] })), MAIN)).toBe('ok');
+    expect(statusOf(parseTenantRow(shared({ switches: [] })))).toBe('ok');
+  });
+
+  it('warns the shared row on a failed deploy and a tenant on an error spike', () => {
+    expect(
+      statusOf(
+        parseTenantRow(shared({ deploy: deployRun({ conclusion: 'failure' }) }))
+      )
+    ).toBe('warn');
+    expect(statusFor({ sentry: sentry({ count24h: 30, count7d: 30 }) })).toBe(
+      'warn'
+    );
   });
 
   it('ranks down over warn over off', () => {
     const off = { switches: [flag('acme', 'off')] };
     const behind = {
-      apps: [
-        flyApp('cdwr-cms-acme', 'cms', { machines: [machine({ sha: BEHIND })] })
-      ]
+      apps: [flyApp('cdwr-cms-acme', 'cms', { behind: true })]
     };
     const failing = {
       apps: [
@@ -215,6 +221,27 @@ describe('tenantsView', () => {
       NOW
     );
     expect(v).toMatchObject({ kind: 'ready', worst: 'warn' });
+  });
+
+  it('lists the problems of every row, worst first', () => {
+    const v = tenantsView(
+      payload([
+        tenant('acme', {
+          apps: [flyApp('cdwr-cms-acme', 'cms', { behind: true })]
+        }),
+        shared({ db: { sizeBytes: null, sessions: 13, byApplication: {} } }),
+        tenant('zed', {
+          apps: [flyApp('cdwr-cms-zed', 'cms', { machines: [] })]
+        })
+      ]),
+      NOW
+    );
+    if (v.kind !== 'ready') throw new Error('not ready');
+    expect(v.problems.map((p) => p.key)).toEqual([
+      'zed:down:cdwr-cms-zed',
+      '_shared:pooler',
+      'acme:behind:cdwr-cms-acme'
+    ]);
   });
 
   it('does not let an off tenant colour the rest', () => {
@@ -285,13 +312,42 @@ describe('cells', () => {
         row({
           apps: [
             flyApp('cdwr-cms-acme', 'cms', {
-              machines: [machine({ sha: BEHIND })]
+              machines: [machine({ sha: BEHIND })],
+              behind: true
             })
           ]
         }),
         MAIN
       )
     ).toEqual({ text: 'behind', tone: 'wait' });
+    // Another commit than main's is current when no change since it affects the app
+    expect(
+      versionCell(
+        row({
+          apps: [
+            flyApp('cdwr-cms-acme', 'cms', {
+              machines: [machine({ sha: BEHIND })],
+              behind: false
+            })
+          ]
+        }),
+        MAIN
+      )
+    ).toEqual({ text: 'current', tone: 'ok' });
+    // Unknown: the commit, short
+    expect(
+      versionCell(
+        row({
+          apps: [
+            flyApp('cdwr-cms-acme', 'cms', {
+              machines: [machine({ sha: BEHIND })],
+              behind: null
+            })
+          ]
+        }),
+        MAIN
+      )
+    ).toEqual({ text: 'bbbbbbb', tone: 'muted' });
     expect(versionCell(row(), null)).toEqual({
       text: 'aaaaaaa',
       tone: 'muted'

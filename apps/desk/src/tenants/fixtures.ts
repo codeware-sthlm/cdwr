@@ -70,7 +70,46 @@ export const tenant = (
   domains: [domain(`${key}.example.com`)],
   switches: [flag(key, 'on')],
   db: {},
+  sentry: {},
+  visitors: {},
+  deploy: {},
   errors: {},
+  ...over
+});
+
+/** A tenant's `sentry` column; a quiet week unless told otherwise */
+export const sentry = (over: Record<string, Json> = {}): Json => ({
+  org: 'cdwr',
+  count24h: 2,
+  count7d: 14,
+  top: null,
+  ...over
+});
+
+export const topIssue = (over: Record<string, Json> = {}): Json => ({
+  shortId: 'CMS-4F',
+  level: 'error',
+  count: 31,
+  title: 'TypeError: x is undefined',
+  ...over
+});
+
+/** A tenant's `visitors` column: today, and seven days before it, oldest first */
+export const visitors = (
+  today = 12,
+  days: number[] = [8, 9, 11, 10, 14, 9, 12]
+): Json => ({
+  today,
+  days: days.map((n, i) => ({ date: `2026-11-0${i + 8}`, visitors: n }))
+});
+
+/** The shared row's `deploy` column */
+export const deployRun = (over: Record<string, Json> = {}): Json => ({
+  runId: 4242,
+  sha: MAIN,
+  conclusion: 'success',
+  url: 'https://github.com/codeware/cdwr/actions/runs/4242',
+  at: '2026-11-15T11:30:00.000Z',
   ...over
 });
 
@@ -89,6 +128,9 @@ export const shared = (over: Partial<TenantStateRow> = {}): TenantStateRow => ({
     sessions: 5,
     byApplication: { 'cdwr-cms': 3 }
   },
+  sentry: {},
+  visitors: {},
+  deploy: {},
   errors: {},
   ...over
 });
