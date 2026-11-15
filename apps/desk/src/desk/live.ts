@@ -114,7 +114,9 @@ const median = (xs: readonly number[]): number | null => {
 };
 
 /** Minutes between the host's samples, the median of its newest spacings; HOST_METRICS_MINUTES without two samples */
-export const sampleMinutes = (series: readonly HostMetricRow[]): number => {
+export const sampleMinutes = (
+  series: readonly Pick<HostMetricRow, 'at'>[]
+): number => {
   const times = series
     .map((r) => Date.parse(r.at))
     .sort((a, b) => a - b)

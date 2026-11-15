@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { QUEUE_WRITER_MIN } from './desk/constants';
+import { HOST_SPACING_SAMPLES, QUEUE_WRITER_MIN } from './desk/constants';
 import { DAY_MS } from './desk/format';
+import { sampleMinutes, silentAfter } from './desk/live';
 import {
   parseAttended,
   parseJob,
@@ -203,13 +204,38 @@ export const isPausedRow = (
 const publishing = (row: QueueStateRow, now: Date): boolean =>
   now.getTime() - Date.parse(row.at) <= QUEUE_WRITER_MIN * 6e4;
 
-/** The newest unpaused row written within QUEUE_WRITER_MIN, so neither a paused host nor a dead one hides the live host; else the newest of all */
+/** Whether a host's host_metrics samples went silent; a host without samples is not known to be */
+export type SilentHost = (host: string) => boolean;
+
+/**
+ * The scheduler's row. Of the rows written within QUEUE_WRITER_MIN by a host not silent: the newest
+ * container row, paused or not; else the newest of any kind (a launchd-only setup). Else the newest of all
+ */
 export const pickQueueState = (
   rows: QueueStateRow[],
-  now: Date
-): QueueStateRow | undefined =>
-  newest(rows.filter((r) => !isPausedRow(r) && publishing(r, now))) ??
-  newest(rows);
+  now: Date,
+  silent: SilentHost = () => false
+): QueueStateRow | undefined => {
+  const fresh = rows.filter((r) => publishing(r, now) && !silent(r.host));
+  return (
+    newest(fresh.filter((r) => parseJob(r.job)?.host === 'container')) ??
+    newest(fresh) ??
+    newest(rows)
+  );
+};
+
+/** Silent past HOST_STALE_SAMPLES of its observed interval, as the NUC tile reads it */
+export const silentHosts =
+  (
+    samples: readonly Pick<HostMetricRow, 'host' | 'at'>[],
+    now: Date
+  ): SilentHost =>
+  (host) => {
+    const own = samples.filter((s) => s.host === host);
+    if (!own.length) return false;
+    const last = Math.max(...own.map((s) => Date.parse(s.at)));
+    return (now.getTime() - last) / 6e4 > silentAfter(sampleMinutes(own));
+  };
 
 // The text's clock time is the scheduler host's local time; the row's `at` carries the zone
 const LAST_RUN = /^\d{4}-\d\d-\d\d \d\d:\d\d\s*·\s*(.+)$/;
@@ -224,9 +250,10 @@ export const toRuns = (
   queueStates: QueueStateRow[],
   runRows: RunRow[],
   buildRows: BuildRow[] = [],
-  now: Date = new Date()
+  now: Date = new Date(),
+  silent?: SilentHost
 ): RunsPayload | null => {
-  const state = pickQueueState(queueStates, now);
+  const state = pickQueueState(queueStates, now, silent);
   if (!state) return null;
   const lastMatch = state.last_run?.match(LAST_RUN);
   const qv = validateQueueView(state.view);
@@ -493,6 +520,35 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       ? []
       : settle(result);
 
+  // The newest samples of each container host still publishing, so a NUC gone silent hands the queue view on.
+  // Any failure reads as no samples: the host is then not known to be silent, and its row keeps its QUEUE_WRITER_MIN.
+  const schedulerSamples = async (
+    rows: QueueStateRow[],
+    now: Date
+  ): Promise<Pick<HostMetricRow, 'host' | 'at'>[]> => {
+    const hosts = rows
+      .filter(
+        (r) => publishing(r, now) && parseJob(r.job)?.host === 'container'
+      )
+      .map((r) => r.host);
+    const each = await Promise.all(
+      hosts.map(async (host) => {
+        try {
+          const { data, error } = await client
+            .from('host_metrics')
+            .select('host, at')
+            .eq('host', host)
+            .order('at', { ascending: false })
+            .limit(HOST_SPACING_SAMPLES + 1);
+          return error ? [] : (data ?? []);
+        } catch {
+          return [];
+        }
+      })
+    );
+    return each.flat();
+  };
+
   const read = (): Promise<QueuePayloads> =>
     attempt(async () => {
       const now = new Date();
@@ -528,7 +584,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         queueStates,
         settle(runs),
         buildRows(builds),
-        now
+        now,
+        silentHosts(await schedulerSamples(queueStates, now), now)
       );
       return {
         runs: runsPayload,
