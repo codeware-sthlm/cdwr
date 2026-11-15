@@ -1404,6 +1404,31 @@ describe('flyDeployment', () => {
       );
     });
 
+    it('should set GIT_SHA from the workflow commit', async () => {
+      setContext('push-main-branch', {
+        eventName: 'workflow_dispatch',
+        payload: { ref: 'refs/heads/main' }
+      });
+      const sha = 'e3b25eff0123456789abcdef0123456789abcdef';
+      mockGithubContext.sha = sha;
+      setupMocks();
+      const config = setupTest(
+        { environment: 'preview', prNumber: 42 },
+        'preview'
+      );
+      try {
+        await flyDeployment(config, true);
+      } finally {
+        mockGithubContext.sha = '';
+      }
+
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          env: expect.objectContaining({ GIT_SHA: sha })
+        })
+      );
+    });
+
     it('should fail preview deployment when no pull request can be resolved', async () => {
       setContext('push-main-branch', {
         eventName: 'workflow_dispatch',

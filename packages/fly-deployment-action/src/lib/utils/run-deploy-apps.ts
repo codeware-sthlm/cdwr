@@ -25,13 +25,22 @@ export const runDeployApps = async (options: {
   config: DeploymentConfig;
   environment: Environment;
   fly: Fly;
+  /** The full commit sha being deployed, set as `GIT_SHA` on each app */
+  gitSha?: string | undefined;
   pullRequest: number | undefined;
   imageMap?: Record<string, string>;
 }): Promise<ActionOutputs['projects']> => {
   const projects: ActionOutputs['projects'] = [];
 
-  const { appDetails, config, environment, fly, imageMap, pullRequest } =
-    options;
+  const {
+    appDetails,
+    config,
+    environment,
+    fly,
+    gitSha,
+    imageMap,
+    pullRequest
+  } = options;
 
   // Track apps whose host deployment failed so tenant deployments can be skipped.
   // Deploying tenants against an incompatible schema would cause runtime failures.
@@ -158,7 +167,7 @@ export const runDeployApps = async (options: {
 
       // Add opinionated environment variables
       const envVars = addOpinionatedEnv(
-        { appName, prNumber: pullRequest, tenantId },
+        { appName, gitSha, prNumber: pullRequest, tenantId },
         mergedEnv
       );
 
