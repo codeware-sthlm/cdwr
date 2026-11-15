@@ -794,6 +794,16 @@ describe('lib.sh', () => {
           ).toBe(at('2026-07-15T11:00:00Z'));
         });
 
+        it.skipIf(!hasZone)(
+          'corrects for a DST change before the reset',
+          () => {
+            // 02:30 CEST on the night summer time ends; 3am comes after the fallback, in CET
+            expect(
+              until('resets 3am (Europe/Stockholm)', at('2026-10-25T00:30:00Z'))
+            ).toBe(at('2026-10-25T02:00:00Z'));
+          }
+        );
+
         it.each([
           ['a weekday', 'resets Mon 9am'],
           ['no time at all', 'something went wrong'],
@@ -884,6 +894,14 @@ describe('lib.sh', () => {
           expect(written.until).toBeGreaterThan(Date.now() / 1000);
           expect(written.until).toBeLessThanOrEqual(Date.now() / 1000 + 86400);
           expect(written.at).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+        });
+
+        it('fails when it cannot write the hold', () => {
+          const out = run(
+            `limit_hold '${result(limited)}'; print -r -- "rc=$?"`,
+            { AGENT_QUEUE_HOME: join(dir, 'missing') }
+          );
+          expect(out.stdout.trim()).toBe('rc=1');
         });
 
         it('sets LIMIT_TEXT, and a default when the result has no text', () => {
