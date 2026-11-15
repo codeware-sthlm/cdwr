@@ -10,8 +10,71 @@
  */
 
 import { expect, test } from '../fixtures';
+import { SITE_GATE_COOKIE, siteGateCookie } from '../helpers/site-gate';
 
 const password = process.env['SITE_GATE_PASSWORD'] ?? '';
+
+/**
+ * Whether a script's own POST from a page through the gate carries the cookie
+ * — COD-813.
+ *
+ * `cdwr tenant audit` sends the cookie as here, HttpOnly and Lax, and every
+ * page got through, yet the browser's Sentry envelopes to `/monitoring` got the
+ * gate's 401. Sentry posts with `keepalive`, and through a `fetch` taken from a
+ * sandbox iframe it removes again whenever `window.fetch` is wrapped, which its
+ * own instrumentation does. Both are asked here, on a path that is still gated.
+ */
+test.describe('site gate cookie on a script request', () => {
+  test('rides along on a keepalive POST and on a sandboxed fetch', async ({
+    baseURL,
+    browser
+  }) => {
+    const cookie = siteGateCookie();
+    expect(cookie, 'the suite runs gated').toBeTruthy();
+
+    const context = await browser.newContext({ baseURL });
+    await context.addCookies([
+      {
+        name: SITE_GATE_COOKIE,
+        value: cookie ?? '',
+        url: new URL('/', baseURL ?? 'http://localhost:3000').href,
+        httpOnly: true,
+        sameSite: 'Lax'
+      }
+    ]);
+    const page = await context.newPage();
+    await page.goto('/');
+
+    const statuses = await page.evaluate(async () => {
+      const post = (fetcher: typeof fetch) =>
+        fetcher('/lunar-maria', {
+          method: 'POST',
+          body: '{}',
+          keepalive: true,
+          referrerPolicy: 'strict-origin'
+        }).then((response) => response.status);
+
+      // What Sentry's `getNativeImplementation('fetch')` does
+      const sandbox = document.createElement('iframe');
+      sandbox.hidden = true;
+      document.head.appendChild(sandbox);
+      const sandboxed = (sandbox.contentWindow as Window).fetch.bind(window);
+      document.head.removeChild(sandbox);
+
+      return {
+        window: await post(window.fetch.bind(window)),
+        sandboxed: await post(sandboxed).catch((error: Error) => error.message)
+      };
+    });
+    await context.close();
+
+    // A status other than the gate's 401 is the site's own answer
+    const summary = JSON.stringify(statuses);
+    expect(typeof statuses.sandboxed, summary).toBe('number');
+    expect(statuses.window, summary).not.toBe(401);
+    expect(statuses.sandboxed, summary).not.toBe(401);
+  });
+});
 
 test.describe('site gate', () => {
   // Neither a session nor the gate cookie: the visitor the gate exists for
