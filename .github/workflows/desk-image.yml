@@ -1,6 +1,6 @@
 name: Desk image
 
-# The Agent Desk as a static site, served on the tailnet by the NUC (apps/agent-host/compose.yaml,
+# The CDWR Desk as a static site, served on the tailnet by the NUC (apps/agent-host/compose.yaml,
 # the `desk` service). Built on main whenever the desk changes; `cdwr agent deploy` pulls it.
 
 on:

@@ -1,6 +1,6 @@
 # syntax = docker/dockerfile:1
 
-# The Agent Desk as a static site, for the NUC to serve on the tailnet (apps/agent-host/compose.yaml,
+# The CDWR Desk as a static site, for the NUC to serve on the tailnet (apps/agent-host/compose.yaml,
 # the `desk` service); .github/workflows/desk-image.yml builds it on main. Build from the
 # repository root:
 #   docker build -f apps/desk/Dockerfile --build-arg VITE_DESK_SHA=$(git rev-parse HEAD) .
