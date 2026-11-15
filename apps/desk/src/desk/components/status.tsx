@@ -93,14 +93,15 @@ type Props = {
 export const Status = ({ m, connection, view = 'desk', onView }: Props) => {
   const p = platform(m);
   const loading = !m.runs;
-  const flag = p.failing.length ? 'bad' : p.updates ? 'wait' : '';
+  const flag = p.failing.length ? 'bad' : p.updates || p.limited ? 'wait' : '';
   const title = [
     p.failing.length ? 'Failing: ' + p.failing.join(', ') : '',
+    p.limited ? 'Held by the session limit' : '',
     p.updates ? plural(p.updates, 'update', 'updates') + ' behind main' : ''
   ]
     .filter(Boolean)
     .join('. ');
-  const label = `Platform: ${loading ? 'loading' : p.failing.length ? p.failing.length + ' failing' : 'checks ok'}${p.updates ? ', ' + plural(p.updates, 'update', 'updates') : ''}`;
+  const label = `Platform: ${loading ? 'loading' : p.failing.length ? p.failing.length + ' failing' : 'checks ok'}${p.limited ? ', held by the session limit' : ''}${p.updates ? ', ' + plural(p.updates, 'update', 'updates') : ''}`;
   const pill = (
     <button
       type="button"
@@ -124,6 +125,11 @@ export const Status = ({ m, connection, view = 'desk', onView }: Props) => {
           checks ok
         </span>
       )}
+      {p.limited ? (
+        <span className="limited text-[color:var(--wait)] max-[600px]:hidden">
+          · session limit
+        </span>
+      ) : null}
       {p.updates ? (
         <span className="updates text-[color:var(--wait)] max-[600px]:hidden">
           · {plural(p.updates, 'update', 'updates')}

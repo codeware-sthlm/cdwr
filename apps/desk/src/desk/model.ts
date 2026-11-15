@@ -240,6 +240,8 @@ export type Model = {
   /** Minutes a session has polled while the queue had work for it, once that passes STUCK_MIN */
   stuck: number | null;
   runProblems: Run[];
+  /** The newest run of the last 24 hours when it ended on the session limit; the queue is held until it resets */
+  runLimited: Run | null;
   /** Hours since the last run; null without one */
   lastRunAge: number | null;
   staleHours: number;
@@ -423,8 +425,11 @@ export const prOf = (
 export const activityMissing = (activity: ActivityPayload): boolean =>
   'missing' in activity && Boolean(activity.missing);
 
+/** A run that ended on the plan's session limit: not a problem, but the queue is held, so amber */
+export const isLimited = (outcome: string): boolean => outcome === 'limited';
+
 export const isProblem = (outcome: string): boolean =>
-  !/^(idle|paused|planned( [A-Z]+-\d+)?|launched|implemented|untried|suggested( [A-Z]+-\d+)?|drafted( \S+)?|nothing|skip)$/.test(
+  !/^(idle|paused|planned( [A-Z]+-\d+)?|launched|implemented|untried|limited|suggested( [A-Z]+-\d+)?|drafted( \S+)?|nothing|skip)$/.test(
     outcome
   );
 
@@ -1182,6 +1187,12 @@ export const model = (
     (r) =>
       isProblem(r.outcome) && runTime(r.when) >= day && runTime(r.when) > lastOk
   );
+  // Rows are newest first
+  const newest = rows[0];
+  const runLimited =
+    newest && isLimited(newest.outcome) && runTime(newest.when) >= day
+      ? newest
+      : null;
   const lastRunAge = runs?.last
     ? (nowMs - runTime(runs.last.when)) / 36e5
     : null;
@@ -1299,6 +1310,7 @@ export const model = (
     session,
     stuck,
     runProblems,
+    runLimited,
     lastRunAge,
     staleHours,
     schedulerStale: lastRunAge === null || lastRunAge > staleHours,

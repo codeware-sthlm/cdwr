@@ -8,6 +8,8 @@ export type Platform = {
   failing: string[];
   /** What runs behind main: the image, the desk, the install */
   updates: number;
+  /** The queue is held by the plan's session limit: amber, not a failure */
+  limited: boolean;
 };
 
 /** What the Platform pill counts, from the health checks and what is behind main */
@@ -24,5 +26,6 @@ export const platform = (m: Model): Platform => ({
   updates:
     Number(m.imageBehind !== null) +
     Number(m.deskBehind !== null) +
-    Number(m.installStale)
+    Number(m.installStale),
+  limited: m.runLimited !== null
 });

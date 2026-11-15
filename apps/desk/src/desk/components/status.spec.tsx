@@ -165,6 +165,40 @@ describe('Status', () => {
     );
   });
 
+  it('shows a run held by the session limit in the wait tone, not as failing', () => {
+    const state = filled();
+    const when = new Date(NOW.getTime() - 6e4);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    state.data.runs = {
+      ...runs(view()),
+      last: {
+        when: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())} ${pad(when.getHours())}:${pad(when.getMinutes())}`,
+        outcome: 'limited'
+      },
+      rows: [
+        {
+          when: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())} ${pad(when.getHours())}:${pad(when.getMinutes())}`,
+          outcome: 'limited',
+          ticket: 'COD-1',
+          detail: '',
+          started: when.toISOString(),
+          finished: null
+        }
+      ]
+    };
+    const m = model(state, NOW);
+    const { container } = render(
+      <Status m={m} connection={connection(true)} onView={vi.fn()} />
+    );
+    expect(m.runProblems).toEqual([]);
+    expect(container.querySelector('.limited')?.className).toContain(
+      'text-[color:var(--wait)]'
+    );
+    expect(container.querySelector('.limited')?.textContent).toContain(
+      'session limit'
+    );
+  });
+
   it('says when the image is behind main, and not when both are current', () => {
     const stale = behind({ image: NEW, desk: null, deskWeb: null }, true);
     const first = render(
