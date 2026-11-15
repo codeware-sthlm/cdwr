@@ -223,6 +223,11 @@ export default defineCommand<
         );
       }
 
+      // The reports hold the last route's lists, so the home visit below
+      // must not add to them
+      errors = [];
+      failed = [];
+
       await ctx.ui.task('OG tags', async () => {
         // The home page, which the routes may not include or end on
         const home = new URL('/', url).href;
