@@ -295,6 +295,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      tenant_state: {
+        Row: {
+          key: string;
+          at: string;
+          name: string | null;
+          deployment: string | null;
+          status: string | null;
+          apps: Json;
+          domains: Json;
+          switches: Json;
+          db: Json;
+          errors: Json;
+        };
+        Insert: {
+          key: string;
+          at: string;
+          name?: string | null;
+          deployment?: string | null;
+          status?: string | null;
+          apps?: Json;
+          domains?: Json;
+          switches?: Json;
+          db?: Json;
+          errors?: Json;
+        };
+        Update: {
+          key?: string;
+          at?: string;
+          name?: string | null;
+          deployment?: string | null;
+          status?: string | null;
+          apps?: Json;
+          domains?: Json;
+          switches?: Json;
+          db?: Json;
+          errors?: Json;
+        };
+        Relationships: [];
+      };
       builds: {
         Row: {
           workflow: string;
