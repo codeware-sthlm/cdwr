@@ -10,6 +10,7 @@ import {
   appOwner,
   buildRows,
   failed,
+  libpqEnv,
   ok,
   oneLine,
   parseSql,
@@ -19,6 +20,40 @@ import {
 } from './platform.logic';
 
 const AT = '2026-11-15T10:00:00.000Z';
+
+describe('libpqEnv', () => {
+  it('splits a connection url into the libpq variables', () => {
+    expect(
+      libpqEnv(
+        'postgres://platform_reader:p%40ss@db.internal:5433/cms?sslmode=require'
+      )
+    ).toEqual({
+      PGHOST: 'db.internal',
+      PGPORT: '5433',
+      PGUSER: 'platform_reader',
+      PGPASSWORD: 'p@ss',
+      PGDATABASE: 'cms',
+      PGSSLMODE: 'require'
+    });
+  });
+
+  it('leaves out what the url does not name, and unwraps an IPv6 host', () => {
+    expect(libpqEnv('postgresql://reader@[fdaa::3]/cms')).toEqual({
+      PGHOST: 'fdaa::3',
+      PGUSER: 'reader',
+      PGDATABASE: 'cms'
+    });
+  });
+
+  it('throws on anything else, without quoting it', () => {
+    expect(() => libpqEnv('not a url secret')).toThrow(
+      'the database url does not parse'
+    );
+    expect(() => libpqEnv('mysql://u:secret@h/db')).toThrow(
+      /^the database url is not a postgres:\/\/ url$/
+    );
+  });
+});
 
 const acme: TenantRecord = {
   slug: 'acme',
