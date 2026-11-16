@@ -44,13 +44,19 @@ export async function previewDatabaseUrl(app: string): Promise<string> {
 }
 
 /** Production from Infisical, preview from the named cms app */
-export const resolveDatabaseUrl = (
+export const resolveDatabaseUrl = async (
   environment: Environment,
   previewApp?: string
-): Promise<string> =>
-  environment === 'preview' && previewApp
-    ? previewDatabaseUrl(previewApp)
-    : cmsDatabaseUrl(environment);
+): Promise<string> => {
+  if (environment !== 'preview') return cmsDatabaseUrl(environment);
+  // Each pull request has its own preview database, so Infisical holds none
+  if (!previewApp) {
+    throw new Error(
+      'Preview has no shared database: pass --preview-app (-p), such as cdwr-cms-pr-123'
+    );
+  }
+  return previewDatabaseUrl(previewApp);
+};
 
 const PROXY_PORT = 15432;
 const TUNNEL_ATTEMPTS = 5;
