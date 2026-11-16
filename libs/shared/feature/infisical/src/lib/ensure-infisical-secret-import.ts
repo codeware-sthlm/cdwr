@@ -47,8 +47,7 @@ export const ensureInfisicalSecretImport = async <TEnv = Environment>({
   });
   if (
     imports.some(
-      (existing) =>
-        existing.path === importPath && existing.environment === env
+      (existing) => existing.path === importPath && existing.environment === env
     )
   ) {
     return false;
