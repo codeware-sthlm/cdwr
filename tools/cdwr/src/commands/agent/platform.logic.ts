@@ -614,18 +614,23 @@ const certificateOf = (
   };
 };
 
-/** The certificates of the host apps (`cdwr-<app>`), as Fly reports them; there is no recorded domain to match */
-const hostDomains = (apps: AppState[]) =>
+/**
+ * The certificates of the host apps (`cdwr-<app>`), as Fly reports them; there is no recorded domain
+ * to match. A hostname a tenant claims stays on that tenant's row only.
+ */
+const hostDomains = (apps: AppState[], claimed: ReadonlySet<string>) =>
   apps
     .filter((app) => app.app === `cdwr-${app.kind}`)
     .flatMap((app) =>
-      (app.certs ?? []).map((c) => ({
-        hostname: c.hostname,
-        app: app.kind,
-        primary: false,
-        certificate: c.state,
-        recordedCertificate: null
-      }))
+      (app.certs ?? [])
+        .filter((c) => !claimed.has(c.hostname))
+        .map((c) => ({
+          hostname: c.hostname,
+          app: app.kind,
+          primary: false,
+          certificate: c.state,
+          recordedCertificate: null
+        }))
     );
 
 /**
@@ -799,7 +804,10 @@ export const buildRows = (
     deployment: null,
     status: null,
     apps: apps.get(SHARED_KEY) ?? [],
-    domains: hostDomains(apps.get(SHARED_KEY) ?? []),
+    domains: hostDomains(
+      apps.get(SHARED_KEY) ?? [],
+      new Set((known ?? []).flatMap((t) => t.domains.map((d) => d.hostname)))
+    ),
     switches: switchState(SHARED_KEY),
     db: db.ok
       ? {
