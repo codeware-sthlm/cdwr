@@ -185,6 +185,35 @@ export const flagActionOf = (stored: string | undefined): FlagAction =>
       ? 'enabled'
       : 'paused';
 
+/** Shared values and the signature arrive by reference, so rotation stays in one place */
+export const HEADLESS_IMPORTS = [
+  '/apps/headless',
+  '/apps/cms/signature'
+] as const;
+
+export interface ImportPlan {
+  app: AppKind;
+  importPath: string;
+  action: 'create' | 'present';
+}
+
+/**
+ * The imports a tenant folder needs, given what the headless folder already
+ * imports. Only the headless app has any; the cms gets none.
+ */
+export function planImports(
+  apps: ReadonlyArray<AppKind>,
+  imported: ReadonlyArray<string>
+): ImportPlan[] {
+  return apps.includes('headless')
+    ? HEADLESS_IMPORTS.map((importPath) => ({
+        app: 'headless',
+        importPath,
+        action: imported.includes(importPath) ? 'present' : 'create'
+      }))
+    : [];
+}
+
 /** A domain as Umami and the workspace's domains list it: lowercase, no scheme, path or trailing dot */
 export const normalizeDomain = (value: string): string =>
   value
@@ -279,7 +308,8 @@ export function provisionSteps(
   flags: ReadonlyArray<FlagPlan> = [],
   stats?: StatsPlan,
   flip = false,
-  team: ReadonlyArray<TeamStep> = []
+  team: ReadonlyArray<TeamStep> = [],
+  imports: ReadonlyArray<ImportPlan> = []
 ): string[] {
   return [
     ...folders.map((folder) => `Create folder ${folderPath(folder)}`),
@@ -295,6 +325,12 @@ export function provisionSteps(
       return action === 'enabled'
         ? `Keep ${DEPLOY_ENABLED_KEY} in ${path} (already true)`
         : `Keep ${DEPLOY_ENABLED_KEY}=${value} in ${path} (paused)`;
+    }),
+    ...imports.map(({ app, importPath, action }) => {
+      const path = `/tenants/${deployment}/apps/${app}`;
+      return action === 'create'
+        ? `Import ${importPath} into ${path}`
+        : `Keep import of ${importPath} in ${path} (already there)`;
     }),
     ...team.map((step) => `Statistics: ${TEAM_STEP_TEXT[step]}`),
     ...(stats ? [statsStep(stats)] : []),

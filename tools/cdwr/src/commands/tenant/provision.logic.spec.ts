@@ -13,6 +13,7 @@ import {
   pickShare,
   planFlyAppsToDeploy,
   planFolders,
+  planImports,
   provisionSteps,
   reasonSkipped,
   statsDomain,
@@ -155,6 +156,46 @@ describe('provisionSteps flags', () => {
     expect(
       provisionSteps('demo', [], [], [{ app: 'cms', action: 'enabled' }])
     ).toEqual(['Keep DEPLOY_ENABLED in /tenants/demo/apps/cms (already true)']);
+  });
+});
+
+describe('planImports', () => {
+  it('plans both imports for headless when none exist', () => {
+    expect(planImports(['cms', 'headless'], [])).toEqual([
+      { app: 'headless', importPath: '/apps/headless', action: 'create' },
+      { app: 'headless', importPath: '/apps/cms/signature', action: 'create' }
+    ]);
+  });
+
+  it('keeps the imports already there', () => {
+    expect(planImports(['headless'], ['/apps/headless'])).toEqual([
+      { app: 'headless', importPath: '/apps/headless', action: 'present' },
+      { app: 'headless', importPath: '/apps/cms/signature', action: 'create' }
+    ]);
+  });
+
+  it('plans nothing for the cms', () => {
+    expect(planImports(['cms'], [])).toEqual([]);
+  });
+});
+
+describe('provisionSteps imports', () => {
+  it('shows the import and the kept import', () => {
+    expect(
+      provisionSteps(
+        'demo',
+        [],
+        [],
+        [],
+        undefined,
+        false,
+        [],
+        planImports(['headless'], ['/apps/headless'])
+      )
+    ).toEqual([
+      'Keep import of /apps/headless in /tenants/demo/apps/headless (already there)',
+      'Import /apps/cms/signature into /tenants/demo/apps/headless'
+    ]);
   });
 });
 
