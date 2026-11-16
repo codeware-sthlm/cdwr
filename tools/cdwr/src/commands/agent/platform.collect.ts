@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,6 +30,8 @@ import {
   daysBefore,
   deployConclusion,
   failed,
+  healthChecksOf,
+  healthPath,
   libpqEnv,
   ok,
   oneLine,
@@ -91,11 +93,36 @@ export async function readDatabase(
   }
 }
 
-/** `GET /api/health` of an app: down is a result, not a failed read */
-export async function readHealth(app: string): Promise<HealthInput> {
+/** The fly.toml of each app folder as raw text; an unreadable one is left out */
+function readTomls(root: string): Record<string, string> {
+  const tomls: Record<string, string> = {};
+  let folders: string[] = [];
+  try {
+    folders = readdirSync(join(root, 'apps'));
+  } catch {
+    return tomls;
+  }
+  for (const folder of folders) {
+    try {
+      tomls[folder] = readFileSync(
+        join(root, 'apps', folder, 'fly.toml'),
+        'utf8'
+      );
+    } catch {
+      continue;
+    }
+  }
+  return tomls;
+}
+
+/** `GET` of an app's health check path (its `fly.toml`'s): down is a result, not a failed read */
+export async function readHealth(
+  app: string,
+  path: string
+): Promise<HealthInput> {
   const started = Date.now();
   try {
-    const response = await fetch(`https://${app}.fly.dev/api/health`, {
+    const response = await fetch(`https://${app}.fly.dev${path}`, {
       signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS)
     });
     await response.body?.cancel();
@@ -115,7 +142,7 @@ export async function readHealth(app: string): Promise<HealthInput> {
 }
 
 /** Machines, certificates and health of every production `cdwr-*` app */
-export async function readFly(): Promise<Reading<FlyAppReading[]>> {
+export async function readFly(root: string): Promise<Reading<FlyAppReading[]>> {
   let names: string[];
   try {
     names = (await listAppNames()).filter(
@@ -124,6 +151,7 @@ export async function readFly(): Promise<Reading<FlyAppReading[]>> {
   } catch (error) {
     return failed(error);
   }
+  const checks = healthChecksOf(readTomls(root));
   const apps: FlyAppReading[] = [];
   for (const name of names) {
     const [machines, certs, health] = await Promise.all([
@@ -144,7 +172,7 @@ export async function readFly(): Promise<Reading<FlyAppReading[]>> {
           )
         )
         .catch(failed),
-      readHealth(name)
+      readHealth(name, healthPath(name, checks))
     ]);
     apps.push({ name, machines, certs, health });
   }

@@ -1,3 +1,4 @@
+import * as TOML from 'smol-toml';
 import { z } from 'zod';
 
 import { APPS, summarize } from '../infisical/analysis.logic';
@@ -107,6 +108,62 @@ export const parseSql = (
 };
 
 // --- the fly and health reads ---
+
+const DEFAULT_HEALTH_PATH = '/api/health';
+
+const FlyTomlSchema = z.object({
+  app: z.string(),
+  http_service: z.object({
+    checks: z.array(
+      z.object({ method: z.string().optional(), path: z.string().optional() })
+    )
+  })
+});
+
+/**
+ * The GET health check path of each app, by the base app name in its fly.toml
+ * (raw text, keyed by anything). A file that does not parse or names no app or
+ * GET check is skipped.
+ */
+export const healthChecksOf = (
+  tomls: Record<string, string>
+): Map<string, string> => {
+  const checks = new Map<string, string>();
+  for (const text of Object.values(tomls)) {
+    let parsed: unknown;
+    try {
+      parsed = TOML.parse(text);
+    } catch {
+      continue;
+    }
+    const config = FlyTomlSchema.safeParse(parsed);
+    if (!config.success) continue;
+    const path = config.data.http_service.checks.find(
+      (c) => (c.method ?? 'GET').toUpperCase() === 'GET' && c.path
+    )?.path;
+    if (path) checks.set(config.data.app, path);
+  }
+  return checks;
+};
+
+/** The health path of a Fly app: that of the longest base name it is or extends with `-` */
+export const healthPath = (
+  app: string,
+  checks: Map<string, string>
+): string => {
+  let best: string | undefined;
+  for (const base of checks.keys()) {
+    if (
+      (app === base || app.startsWith(`${base}-`)) &&
+      (best === undefined || base.length > best.length)
+    ) {
+      best = base;
+    }
+  }
+  return (
+    (best !== undefined ? checks.get(best) : undefined) ?? DEFAULT_HEALTH_PATH
+  );
+};
 
 /** The part of a Fly machine that is read; the rest of it is never looked at */
 export type MachineInput = {
@@ -557,6 +614,20 @@ const certificateOf = (
   };
 };
 
+/** The certificates of the host apps (`cdwr-<app>`), as Fly reports them; there is no recorded domain to match */
+const hostDomains = (apps: AppState[]) =>
+  apps
+    .filter((app) => app.app === `cdwr-${app.kind}`)
+    .flatMap((app) =>
+      (app.certs ?? []).map((c) => ({
+        hostname: c.hostname,
+        app: app.kind,
+        primary: false,
+        certificate: c.state,
+        recordedCertificate: null
+      }))
+    );
+
 /**
  * One row per tenant plus the shared row, from what was read. A failed read
  * leaves an entry under its source name in `errors` of every row it would have
@@ -728,7 +799,7 @@ export const buildRows = (
     deployment: null,
     status: null,
     apps: apps.get(SHARED_KEY) ?? [],
-    domains: [],
+    domains: hostDomains(apps.get(SHARED_KEY) ?? []),
     switches: switchState(SHARED_KEY),
     db: db.ok
       ? {

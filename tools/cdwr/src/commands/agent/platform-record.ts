@@ -62,7 +62,7 @@ export default defineCommand({
     const now = new Date();
     const split = splitDatabase(database);
     const [fly, switches, sentry, visitors, deploy] = await Promise.all([
-      readFly(),
+      readFly(ctx.root),
       readSwitches(ctx.env),
       readSentry(ctx.env),
       readVisitors(ctx.env, split.tenants.ok ? split.tenants.value : null, now),
