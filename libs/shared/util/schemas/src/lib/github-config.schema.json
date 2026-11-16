@@ -38,6 +38,13 @@
       "description": "Whether the deploy passes the workflow's shared secrets (Infisical credentials, Sentry token) to this app. Set false for an app that runs third-party code and must not hold them.",
       "type": "boolean",
       "default": true
+    },
+    "previewWith": {
+      "description": "Nx projects whose host app deploys beside this app in preview, at their last released version when nothing bumped them.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": [],
+      "examples": [["cms"]]
     }
   },
   "required": []
