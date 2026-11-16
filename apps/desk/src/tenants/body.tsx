@@ -178,36 +178,36 @@ export const TenantBody = ({
         )}
       </Section>
 
-      {shared ? null : (
-        <Section title="Domains">
-          {row.domains.length ? (
-            <ul className="grid gap-1.5">
-              {row.domains.map((d) => (
-                <li
-                  key={d.hostname}
-                  className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.88rem]"
-                >
-                  <span className="[overflow-wrap:anywhere]">{d.hostname}</span>
-                  {d.primary ? <Chip text="primary" tone="muted" /> : null}
-                  <Chip
-                    text={`certificate ${d.certificate}`}
-                    tone={
-                      certReady(d.certificate)
-                        ? 'ok'
-                        : certPending(d.certificate)
-                          ? 'wait'
-                          : 'muted'
-                    }
-                  />
-                  {d.app ? <span className={NOTE}>{d.app}</span> : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className={NOTE}>No domain.</p>
-          )}
-        </Section>
-      )}
+      <Section title="Domains">
+        {row.domains.length ? (
+          <ul className="grid gap-1.5">
+            {row.domains.map((d) => (
+              <li
+                key={`${d.app ?? ''}\u0000${d.hostname}`}
+                className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.88rem]"
+              >
+                <span className="[overflow-wrap:anywhere]">{d.hostname}</span>
+                {d.primary ? <Chip text="primary" tone="muted" /> : null}
+                <Chip
+                  text={`certificate ${d.certificate}`}
+                  tone={
+                    certReady(d.certificate)
+                      ? 'ok'
+                      : certPending(d.certificate)
+                        ? 'wait'
+                        : 'muted'
+                  }
+                />
+                {d.app ? <span className={NOTE}>{d.app}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={NOTE}>
+            {shared ? 'No host certificate was read.' : 'No domain.'}
+          </p>
+        )}
+      </Section>
 
       <Section title="Deploy switches">
         {row.switches.length ? (
