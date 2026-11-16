@@ -66,6 +66,14 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     } satisfies ActionInputs);
 
+    // GitHub drops a job output that holds a masked value, so the build's
+    // `apps` can vanish while its images arrive; deploying nothing is no success
+    if (inputs.apps.length === 0 && Object.keys(images ?? {}).length > 0) {
+      throw new Error(
+        `The build produced images for ${Object.keys(images ?? {}).join(', ')} but no apps arrived; check the build job for "Skip output 'apps' since it may contain secret"`
+      );
+    }
+
     maskSecretsIn(inputs);
     core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 

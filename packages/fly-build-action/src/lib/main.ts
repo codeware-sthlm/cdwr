@@ -9,6 +9,7 @@ import {
   type ActionInputs,
   ActionInputsSchema
 } from './schemas/action-inputs.schema';
+import { withoutTenantEnv } from './utils/without-tenant-env';
 
 /** Treat anything that isn't a positive integer as absent */
 const parsePrNumber = (value: string): number | undefined => {
@@ -40,9 +41,13 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     } satisfies ActionInputs);
 
-    // Not the apps: their Sentry DSNs travel on in this job's `apps` output,
-    // which GitHub drops when it holds a masked value
-    maskSecretsIn({ ...inputs, apps: [] });
+    // Not the apps or the tenant env: Sentry DSNs travel on in this job's
+    // `apps` output, which GitHub drops when it holds a masked value
+    maskSecretsIn({
+      ...inputs,
+      apps: [],
+      appDetails: withoutTenantEnv(inputs.appDetails ?? {})
+    });
     core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     const { environment, images } = await flyBuild(inputs);

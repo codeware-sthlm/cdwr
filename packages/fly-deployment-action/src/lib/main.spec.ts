@@ -142,6 +142,26 @@ describe('main', () => {
     expect(runMock).toHaveReturned();
   });
 
+  it('fails when images arrive without apps', async () => {
+    getInputMock.mockImplementation((name: string) => {
+      if (name === 'apps') return '[]';
+      if (name === 'app-details') return '{}';
+      if (name === 'environment') return 'preview';
+      if (name === 'images')
+        return '{"cdwr-headless-pr-1-moon":"registry.fly.io/x:1"}';
+      if (name === 'images-path') return '';
+      if (name === 'infisical-site') return 'eu';
+      return name;
+    });
+
+    await main.run();
+
+    expect(flyDeploymentMock).not.toHaveBeenCalled();
+    expect(setFailedMock).toHaveBeenCalledWith(
+      expect.stringContaining('no apps arrived')
+    );
+  });
+
   it('should have invalid inputs with missing required inputs', async () => {
     getInputMock.mockReturnValue('');
     await main.run();
