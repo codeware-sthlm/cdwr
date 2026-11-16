@@ -680,7 +680,9 @@ push, and it shouldn't try.
 
 1. Take the first `agent:ready` ticket by the queue rule. Skip resuming: `agent:working`,
    answered `agent:needs-input`, review feedback and merged-ticket comments wait for an attended
-   session, and the limit doesn't apply.
+   session, and the limit doesn't apply. Skip a ready ticket whose description already has a Status
+   table: it has its plan, and the audit reports it as `ready-planned`. The scheduler only
+   launches a plan-only run when a ready ticket without one exists.
 2. Investigate with Read, Grep and Glob against the checked-out `origin/main`. There is no
    shell, so no git history; note in the plan where history would have helped. A plan that
    needs a new implement permission reads the installed `implement.sh` and `job.json` in the
