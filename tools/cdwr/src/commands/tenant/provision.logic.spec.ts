@@ -160,17 +160,15 @@ describe('provisionSteps flags', () => {
 });
 
 describe('planImports', () => {
-  it('plans both imports for headless when none exist', () => {
+  it('plans the shared import for headless when none exist', () => {
     expect(planImports(['cms', 'headless'], [])).toEqual([
-      { app: 'headless', importPath: '/apps/headless', action: 'create' },
-      { app: 'headless', importPath: '/apps/cms/signature', action: 'create' }
+      { app: 'headless', importPath: '/apps/headless', action: 'create' }
     ]);
   });
 
-  it('keeps the imports already there', () => {
+  it('keeps the import already there', () => {
     expect(planImports(['headless'], ['/apps/headless'])).toEqual([
-      { app: 'headless', importPath: '/apps/headless', action: 'present' },
-      { app: 'headless', importPath: '/apps/cms/signature', action: 'create' }
+      { app: 'headless', importPath: '/apps/headless', action: 'present' }
     ]);
   });
 
@@ -193,8 +191,7 @@ describe('provisionSteps imports', () => {
         planImports(['headless'], ['/apps/headless'])
       )
     ).toEqual([
-      'Keep import of /apps/headless in /tenants/demo/apps/headless (already there)',
-      'Import /apps/cms/signature into /tenants/demo/apps/headless'
+      'Keep import of /apps/headless in /tenants/demo/apps/headless (already there)'
     ]);
   });
 
@@ -212,7 +209,6 @@ describe('provisionSteps imports', () => {
       )
     ).toEqual([
       'Import /apps/headless into /tenants/demo/apps/headless',
-      'Import /apps/cms/signature into /tenants/demo/apps/headless',
       'Set DEPLOY_ENABLED=true in /tenants/demo/apps/headless'
     ]);
   });

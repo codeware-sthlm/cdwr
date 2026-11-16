@@ -124,15 +124,19 @@ The API token the cms uses lives in Infisical `/integrations/umami`.
 A headless app never reads Infisical: the deploy pushes `/tenants/<tenant>/apps/headless` to it, with
 that folder's imports resolved, and the app exits at boot when a required variable is missing.
 
-| Where                             | What                                                                          |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `/tenants/<tenant>/apps/headless` | `PAYLOAD_API_KEY`, `DEPLOY_ENABLED`, `RESTRICTED_FONTS`, `SITE_GATE_PASSWORD` |
-| `/apps/headless`, imported        | `PAYLOAD_URL`, `UMAMI_URL`, `FONT_ASSETS_BASE_URL`, `CSP_ENFORCE`, tagged env |
-| `/apps/cms/signature`, imported   | `SIGNATURE_SECRET`                                                            |
-| the deploy                        | `TENANT_ID`, `DEPLOY_ENV`, Sentry, `PR_NUMBER`                                |
+| Where                                               | What                                                                                   |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `/tenants/<tenant>/apps/headless`                   | `PAYLOAD_API_KEY`, `DEPLOY_ENABLED`, `RESTRICTED_FONTS`, `SITE_GATE_PASSWORD`          |
+| `/apps/headless`, imported                          | `PAYLOAD_URL`, `UMAMI_URL`, `FONT_ASSETS_BASE_URL`, `CSP_ENFORCE`, metadata `env=true` |
+| `/apps/cms/signature`, imported by `/apps/headless` | `SIGNATURE_SECRET`                                                                     |
+| the deploy                                          | `TENANT_ID`, `DEPLOY_ENV`, Sentry, `PR_NUMBER`                                         |
 
-The imports are references, so a shared value or the signature changes in one place.
-`cdwr tenant provision` creates them, and `cdwr infisical analysis` names what a tenant still lacks.
+The imports are references, so a shared value or the signature changes in one place. A tenant
+folder imports only `/apps/headless`, which imports `/apps/cms/signature` once per environment;
+Infisical resolves the chain. `cdwr tenant provision` creates the tenant's import, and
+`cdwr infisical analysis` names what a tenant still lacks. Sentry's `SENTRY_PROJECT` and `SENTRY_DSN`
+also live in `/apps/headless`, where the deploy reads them for every tenant app; give them metadata
+`env=true` too, or the import pushes them a second time as Fly secrets.
 `PAYLOAD_URL` is the host cms; in preview `https://cdwr-cms-pr-{PR_NUMBER}.fly.dev`, with braces and
 no `$`, since Infisical expands `${…}` itself. A headless preview deploys the cms preview beside it
 (`previewWith` in `apps/headless/github.json`).
