@@ -4,7 +4,8 @@
 --   psql "<owner url>" -v role=<platform role> -v grant=1 -f tools/cdwr/agent-queue/platform-role.sql
 -- Column grants on exactly what `platform.sql` reads, so the role never sees api keys or hashes.
 -- They survive added and altered columns; rerun after a granted column or table is dropped and
--- recreated, or when `platform.sql` reads a new column (add it here first). Rerunning is harmless.
+-- recreated, or when `platform.sql` reads a new column (add it to both lists here first).
+-- Rerunning is harmless. Grant mode fails when the role can still read more than the list.
 
 \set ON_ERROR_STOP on
 
@@ -16,7 +17,12 @@
 
 \if :{?grant}
   \if :grant
--- A table-wide SELECT would expose every column; revoking it also clears the column grants
+-- A role that inherits pg_read_all_data reads every column whatever is granted here
+SELECT pg_has_role(:'role', 'pg_read_all_data', 'USAGE') AS read_all \gset
+    \if :read_all
+DO $$ BEGIN RAISE EXCEPTION 'the role inherits pg_read_all_data; revoke that membership first'; END $$;
+    \endif
+-- Revoking the table-wide SELECT also revokes every column grant, so only the list below stays
 REVOKE SELECT ON payload.tenants, payload.tenants_domains FROM :"role";
 GRANT USAGE ON SCHEMA payload TO :"role";
 GRANT SELECT (id, slug, name, deployment, status, stats_website_id)
@@ -50,10 +56,25 @@ FROM (VALUES
   ('payload.tenants_domains', 'certificate_status')
 ) AS needed (tbl, col);
 
--- Everything the role holds on these tables today, so a grant that was never made shows as absent
-SELECT table_name, column_name, privilege_type
-FROM information_schema.column_privileges
-WHERE grantee = :'role'
-  AND table_schema = 'payload'
-  AND table_name IN ('tenants', 'tenants_domains')
-ORDER BY table_name, column_name;
+-- Wanted: nothing printed. Any column the role reads beyond the list, by any route: a grant, PUBLIC or a role it inherits
+SELECT string_agg(format('%s.%s', c.table_name, c.column_name), ', '
+                  ORDER BY c.table_name, c.column_name) AS extra
+FROM information_schema.columns c
+WHERE c.table_schema = 'payload'
+  AND c.table_name IN ('tenants', 'tenants_domains')
+  AND has_column_privilege(:'role', format('payload.%I', c.table_name), c.column_name, 'SELECT')
+  AND (c.table_name, c.column_name) NOT IN (VALUES
+    ('tenants', 'id'), ('tenants', 'slug'), ('tenants', 'name'), ('tenants', 'deployment'),
+    ('tenants', 'status'), ('tenants', 'stats_website_id'),
+    ('tenants_domains', '_parent_id'), ('tenants_domains', '_order'),
+    ('tenants_domains', 'hostname'), ('tenants_domains', 'app'),
+    ('tenants_domains', 'is_primary'), ('tenants_domains', 'certificate_status')) \gset
+-- A NULL aggregate leaves `extra` unset
+\if :{?extra}
+  \echo 'Beyond the list the role can read:' :extra
+  \if :{?grant}
+    \if :grant
+DO $$ BEGIN RAISE EXCEPTION 'the role still reads columns beyond the list; see above'; END $$;
+    \endif
+  \endif
+\endif
