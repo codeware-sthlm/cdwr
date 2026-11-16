@@ -42,8 +42,8 @@ executor, which reads the app's Infisical folder with your CLI session. Preceden
 purpose (target env, `.env.local`, the shell). `OFFLINE=1` uses `apps/<app>/.env.offline`
 instead, refreshed with `nx dx:secrets <app>`; `CI` skips the vault. `cdwr infisical resolve`
 shows where each key comes from, `cdwr infisical session` whether you are logged in.
-headless's `dev` reads only the cms's `/apps/cms/signature`, so it signs as the cms verifies; its
-offline copy is still its own `apps/headless/.env.offline` (`--app=headless`).
+headless's `dev` reads tenant moon's `/tenants/moon/apps/headless`, imports included, as a deploy
+does (see [Headless config](#headless-config)); its offline copy is `apps/headless/.env.offline`.
 
 ### Custom component builds
 
@@ -118,6 +118,24 @@ docker run --rm -p 3000:3000 -e DATABASE_URL=… -e DIRECT_DATABASE_URL=… -e A
 ```
 
 The API token the cms uses lives in Infisical `/integrations/umami`.
+
+### Headless config
+
+A headless app never reads Infisical: the deploy pushes `/tenants/<tenant>/apps/headless` to it, with
+that folder's imports resolved, and the app exits at boot when a required variable is missing.
+
+| Where                             | What                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `/tenants/<tenant>/apps/headless` | `PAYLOAD_API_KEY`, `DEPLOY_ENABLED`, `RESTRICTED_FONTS`, `SITE_GATE_PASSWORD` |
+| `/apps/headless`, imported        | `PAYLOAD_URL`, `UMAMI_URL`, `FONT_ASSETS_BASE_URL`, `CSP_ENFORCE`, tagged env |
+| `/apps/cms/signature`, imported   | `SIGNATURE_SECRET`                                                            |
+| the deploy                        | `TENANT_ID`, `DEPLOY_ENV`, Sentry, `PR_NUMBER`                                |
+
+The imports are references, so a shared value or the signature changes in one place.
+`cdwr tenant provision` creates them, and `cdwr infisical analysis` names what a tenant still lacks.
+`PAYLOAD_URL` is the host cms; in preview `https://cdwr-cms-pr-{PR_NUMBER}.fly.dev`, with braces and
+no `$`, since Infisical expands `${…}` itself. A headless preview deploys the cms preview beside it
+(`previewWith` in `apps/headless/github.json`).
 
 ### CMS admin components + import map
 
