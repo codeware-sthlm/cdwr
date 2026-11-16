@@ -779,15 +779,15 @@ describe('run.sh to_main', () => {
     chmodSync(join(bin, 'pnpm'), 0o755);
   };
 
-  const run = () => {
+  const run = (args = 'planning', cwd = `${root}/work`) => {
     const script = [
       'set -euo pipefail',
-      `LOGS="${root}"`,
+      `LOGS="${root}"; REPO="${root}/work"`,
       `note() { print -r -- "$*" >> "$LOGS/notes"; }`,
       `record() { print -r -- "$*" >> "$LOGS/records"; }`,
       fn,
-      `cd "${root}/work"`,
-      'to_main planning',
+      `cd "${cwd}"`,
+      `to_main ${args}`,
       'print done >> "$LOGS/notes"'
     ].join('\n');
     return spawnSync('zsh', ['-c', script], {
@@ -826,7 +826,9 @@ describe('run.sh to_main', () => {
     installedFrom('a\n');
     stub(0);
     expect(run().status).toBe(0);
-    expect(read('pnpm.calls')).toBe('install --frozen-lockfile\n');
+    expect(read('pnpm.calls')).toBe(
+      `-C ${root}/work install --frozen-lockfile\n`
+    );
     expect(read('records')).toBe('');
     expect(marker()).toBe(lockHash());
   });
@@ -843,7 +845,9 @@ describe('run.sh to_main', () => {
     setup(false);
     stub(0);
     expect(run().status).toBe(0);
-    expect(read('pnpm.calls')).toBe('install --frozen-lockfile\n');
+    expect(read('pnpm.calls')).toBe(
+      `-C ${root}/work install --frozen-lockfile\n`
+    );
   });
 
   it.skipIf(!hasZsh)('warns, carries on, and retries on the next run', () => {
@@ -854,10 +858,97 @@ describe('run.sh to_main', () => {
     expect(read('records')).toContain('install failed after a lockfile change');
     expect(read('notes')).toContain('done');
     expect(run().status).toBe(0);
-    expect(read('pnpm.calls')).toBe(
-      'install --frozen-lockfile\ninstall --frozen-lockfile\n'
-    );
+    const call = `-C ${root}/work install --frozen-lockfile\n`;
+    expect(read('pnpm.calls')).toBe(call + call);
   });
+
+  it.skipIf(!hasZsh)('with quiet, a failed install is only noted', () => {
+    setup(true);
+    installedFrom('a\n');
+    stub(1);
+    expect(run('platform quiet').status).toBe(0);
+    expect(read('notes')).toContain('install failed after a lockfile change');
+    expect(read('records')).toBe('');
+  });
+
+  it.skipIf(!hasZsh)('with quiet, a dirty worktree is only noted', () => {
+    setup(true);
+    stub(0);
+    // origin/main changed the lockfile, so a local edit of it blocks the switch
+    writeFileSync(join(root, 'work', 'pnpm-lock.yaml'), 'dirty\n');
+    expect(run('platform quiet').status).toBe(0);
+    expect(read('notes')).toContain('worktree not clean');
+    expect(read('records')).toBe('');
+    expect(read('pnpm.calls')).toBe('');
+  });
+
+  it.skipIf(!hasZsh)('moves the checkout from another cwd', () => {
+    setup(true);
+    installedFrom('a\n');
+    stub(0);
+    expect(run('planning', '/').status).toBe(0);
+    expect(git(join(root, 'work'), 'rev-parse', 'HEAD')).toBe(
+      git(join(root, 'origin'), 'rev-parse', 'HEAD')
+    );
+    expect(read('pnpm.calls')).toBe(
+      `-C ${root}/work install --frozen-lockfile\n`
+    );
+    expect(marker()).toBe(lockHash());
+  });
+});
+
+describe('run.sh implement_live', () => {
+  const fn = SCRIPT.match(/^implement_live\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  let root: string;
+
+  const live = () =>
+    spawnSync('zsh', ['-c', `HOME_DIR="${root}"\n${fn}\nimplement_live`], {
+      encoding: 'utf8'
+    }).status === 0;
+  const lock = (pid?: string) => {
+    mkdirSync(join(root, 'implement.lock'));
+    if (pid !== undefined)
+      writeFileSync(join(root, 'implement.lock', 'pid'), `${pid}\n`);
+  };
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'impl-live-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    expect(fn).toContain('implement_live()');
+  });
+
+  it.skipIf(!hasZsh)('is false without a lock', () => {
+    expect(live()).toBe(false);
+  });
+
+  it.skipIf(!hasZsh)('is true while the pid in the lock answers', () => {
+    lock(String(process.pid));
+    expect(live()).toBe(true);
+  });
+
+  it.skipIf(!hasZsh)('is false when the pid in the lock is gone', () => {
+    lock(String(spawnSync('true').pid));
+    expect(live()).toBe(false);
+  });
+
+  it.skipIf(!hasZsh)('is true for a fresh lock without a pid', () => {
+    lock();
+    expect(live()).toBe(true);
+  });
+
+  it.skipIf(!hasZsh)(
+    'is false for a lock without a pid over a minute old',
+    () => {
+      lock();
+      const old = new Date(Date.now() - 2 * 60 * 1000);
+      utimesSync(join(root, 'implement.lock'), old, old);
+      expect(live()).toBe(false);
+    }
+  );
 });
 
 describe('run.sh close_parents', () => {
@@ -3862,11 +3953,15 @@ describe('run.sh platform step', () => {
   };
 
   // One tick's record_platform, run with the given environment; the detached part is waited for
-  const tick = async (env: Record<string, string>, wait = true) => {
+  const tick = async (
+    env: Record<string, string>,
+    wait = true,
+    move = false
+  ) => {
     const script = [
       `exec 2>>"${root}/err"`,
       'set -euo pipefail',
-      `HOME_DIR="${root}"; REPO="${root}"; check=false`,
+      `HOME_DIR="${root}"; LOGS="${root}"; REPO="${move ? `${root}/work` : root}"; check=false`,
       `note() { print -r -- "$*" >> "${root}/notes"; }`,
       `record() { print -r -- "$*" >> "${root}/records"; }`,
       'telemetry_on() { return 0; }',
@@ -3878,10 +3973,13 @@ describe('run.sh platform step', () => {
       'platform_env() { unexported_env $PLATFORM_VARS; }',
       'platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }',
       fn('platform_warn'),
+      fn('implement_live'),
+      fn('to_main'),
+      fn('platform_move'),
       fn('record_platform'),
       'platform_env',
       'unexported_env $DESK_VARS',
-      'record_platform',
+      move ? 'record_platform move' : 'record_platform',
       // a sibling child process after the step, as a claude launch would be
       `env > "${root}/sibling.env"`
     ].join('\n');
@@ -3906,13 +4004,30 @@ describe('run.sh platform step', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('runs every tick, after the desk commands and before the pause check', () => {
+  it('runs every tick, after the move to main and before the check-in', () => {
     expect(fn('record_platform')).toContain('record_platform()');
     const at = SCRIPT.indexOf('\nrecord_platform\n');
-    expect(at).toBeGreaterThan(
-      SCRIPT.indexOf('\n$platform || apply_commands\n')
+    const lock = SCRIPT.indexOf(
+      'mkdir "$HOME_DIR/lock"',
+      SCRIPT.indexOf('\npaused=false\n')
     );
-    expect(at).toBeLessThan(SCRIPT.indexOf('\npaused=false\n'));
+    const toMain = SCRIPT.indexOf('to_main platform\n', lock);
+    expect(lock).toBeGreaterThan(-1);
+    expect(at).toBeGreaterThan(SCRIPT.indexOf('\npaused=false\n'));
+    expect(at).toBeGreaterThan(lock);
+    expect(at).toBeGreaterThan(toMain);
+    expect(at).toBeLessThan(SCRIPT.indexOf('\nCHECKIN_ID=""'));
+    // inside the unpaused block: the implementing session is checked and origin fetched first
+    const live = SCRIPT.indexOf('implement_live', lock);
+    const fetch = SCRIPT.indexOf('fetch -q origin', lock);
+    expect(live).toBeGreaterThan(lock);
+    expect(fetch).toBeGreaterThan(live);
+    expect(toMain).toBeGreaterThan(fetch);
+    // and the platform step moves too, in its own block
+    const step = SCRIPT.indexOf('if $platform; then\n');
+    expect(SCRIPT.slice(step, SCRIPT.indexOf('\nfi\n', step))).toContain(
+      'record_platform move'
+    );
   });
 
   it('runs alone with --platform: no desk commands, pause or queue lock', () => {
@@ -3921,11 +4036,17 @@ describe('run.sh platform step', () => {
     );
     expect(SCRIPT).toContain('\n$platform || apply_commands\n');
     const block =
-      'if $platform; then\n  platform_due && record_platform\n  exit 0\nfi\n';
+      'if $platform; then\n  platform_due && record_platform move\n  exit 0\nfi\n';
     const at = SCRIPT.indexOf(block);
     expect(at).toBeGreaterThan(SCRIPT.indexOf('\nrecord_platform() {\n'));
     expect(at).toBeLessThan(SCRIPT.indexOf('\npaused=false\n'));
-    expect(at).toBeLessThan(SCRIPT.indexOf('mkdir "$HOME_DIR/lock"'));
+    // platform_move's own mkdir sits above; the tick's queue lock comes after the block
+    expect(at).toBeLessThan(
+      SCRIPT.indexOf(
+        'mkdir "$HOME_DIR/lock"',
+        SCRIPT.indexOf('\npaused=false\n')
+      )
+    );
     expect(at).toBeLessThan(SCRIPT.indexOf("trap 'st=$?; on_exit"));
   });
 
@@ -3982,6 +4103,119 @@ describe('run.sh platform step', () => {
       'tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json\n'
     );
     expect(read('records')).toBe('');
+  });
+
+  describe('with the move to main', () => {
+    const git = (cwd: string, ...args: string[]) =>
+      execFileSync(
+        'git',
+        ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+        { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+      ).trim();
+    const work = () => join(root, 'work');
+    const originHead = () => git(join(root, 'origin'), 'rev-parse', 'HEAD');
+
+    // A checkout one commit behind origin/main, fetched; node records what it sees when it runs
+    const setup = (lockChanged = false) => {
+      const origin = join(root, 'origin');
+      mkdirSync(origin);
+      git(origin, 'init', '-q', '-b', 'main');
+      writeFileSync(join(origin, 'pnpm-lock.yaml'), 'a\n');
+      git(origin, 'add', 'pnpm-lock.yaml');
+      git(origin, 'commit', '-q', '-m', 'one');
+      git(root, 'clone', '-q', origin, work());
+      if (lockChanged) writeFileSync(join(origin, 'pnpm-lock.yaml'), 'b\n');
+      git(origin, 'commit', '-q', '--allow-empty', '-am', 'two');
+      // where to_main writes its marker
+      mkdirSync(join(work(), 'node_modules'));
+      writeFileSync(join(bin, 'pnpm'), '#!/bin/sh\nexit 0\n');
+      chmodSync(join(bin, 'pnpm'), 0o755);
+      stubNode(
+        `git -C "${work()}" rev-parse HEAD > "${root}/node.head"\n` +
+          `if [ -d "${root}/lock" ]; then echo held; else echo free; fi > "${root}/node.lock"`
+      );
+    };
+    const collected = () => read('node.calls') !== '';
+
+    it.skipIf(!hasZsh)(
+      'moves the checkout before the command, without the queue lock held then or after',
+      async () => {
+        setup();
+        const before = git(work(), 'rev-parse', 'HEAD');
+        expect(before).not.toBe(originHead());
+        await tick(CREDS, true, true);
+        expect(read('node.head').trim()).toBe(originHead());
+        expect(read('node.lock').trim()).toBe('free');
+        expect(existsSync(join(root, 'lock'))).toBe(false);
+        expect(read('node.calls')).toBe(
+          'tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json\n'
+        );
+      }
+    );
+
+    it.skipIf(!hasZsh)('leaves the checkout alone without move', async () => {
+      setup();
+      const before = git(work(), 'rev-parse', 'HEAD');
+      await tick(CREDS);
+      expect(collected()).toBe(true);
+      expect(git(work(), 'rev-parse', 'HEAD')).toBe(before);
+    });
+
+    it.skipIf(!hasZsh)(
+      'skips the move while a run holds the queue lock, and leaves the lock',
+      async () => {
+        setup();
+        const before = git(work(), 'rev-parse', 'HEAD');
+        mkdirSync(join(root, 'lock'));
+        await tick(CREDS, true, true);
+        expect(collected()).toBe(true);
+        expect(read('node.head').trim()).toBe(before);
+        expect(read('notes')).toContain('a run holds the lock');
+        expect(existsSync(join(root, 'lock'))).toBe(true);
+      }
+    );
+
+    it.skipIf(!hasZsh)(
+      'skips the move while an implementing session runs',
+      async () => {
+        setup();
+        const before = git(work(), 'rev-parse', 'HEAD');
+        mkdirSync(join(root, 'implement.lock'));
+        writeFileSync(join(root, 'implement.lock', 'pid'), `${process.pid}\n`);
+        await tick(CREDS, true, true);
+        expect(collected()).toBe(true);
+        expect(read('node.head').trim()).toBe(before);
+        expect(read('notes')).toContain('an implementing session runs');
+        expect(existsSync(join(root, 'lock'))).toBe(false);
+      }
+    );
+
+    it.skipIf(!hasZsh)(
+      'notes a dirty worktree, records nothing and still collects',
+      async () => {
+        setup(true);
+        const before = git(work(), 'rev-parse', 'HEAD');
+        writeFileSync(join(work(), 'pnpm-lock.yaml'), 'dirty\n');
+        await tick(CREDS, true, true);
+        expect(collected()).toBe(true);
+        expect(read('node.head').trim()).toBe(before);
+        expect(read('notes')).toContain('worktree not clean');
+        expect(read('records')).toBe('');
+        expect(existsSync(join(root, 'lock'))).toBe(false);
+      }
+    );
+
+    it.skipIf(!hasZsh)('notes a failed fetch and still collects', async () => {
+      setup();
+      const before = git(work(), 'rev-parse', 'HEAD');
+      git(work(), 'remote', 'set-url', 'origin', join(root, 'missing'));
+      await tick(CREDS, true, true);
+      expect(collected()).toBe(true);
+      expect(read('node.head').trim()).toBe(before);
+      expect(read('notes')).toContain('warn: fetch failed');
+      expect(read('records')).toBe('');
+      expect(existsSync(join(root, 'lock'))).toBe(false);
+    });
   });
 
   it.skipIf(!hasZsh)('skips silently without the credentials', async () => {

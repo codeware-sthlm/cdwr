@@ -88,21 +88,36 @@ record() {
   return 0
 }
 
-# to_main <what>: moves the checkout to origin/main and installs when its lockfile is not the one
-# node_modules was last installed from, so the next run retries a failed install.
-# A failed install is a warn; the run goes on.
+# to_main <what> [quiet]: moves the checkout to origin/main and installs when its lockfile is not
+# the one node_modules was last installed from, so the next run retries a failed install.
+# A failed install is a warn; the run goes on. With quiet (the detached platform move) a warn is
+# only noted: a record from there would race the tick's runs.jsonl writes.
 to_main() {
-  local lock marker=node_modules/.cdwr-lockfile
-  git switch -q --detach origin/main 2>/dev/null ||
-    { note "warn: worktree not clean, $1 against its current state"; record warn "" "worktree not clean"; return 0; }
-  lock="$(git hash-object pnpm-lock.yaml 2>/dev/null)" || return 0
+  local lock marker="$REPO/node_modules/.cdwr-lockfile"
+  git -C "$REPO" switch -q --detach origin/main 2>/dev/null ||
+    { note "warn: worktree not clean, $1 against its current state"; [[ -n "${2:-}" ]] || record warn "" "worktree not clean"; return 0; }
+  lock="$(git -C "$REPO" hash-object pnpm-lock.yaml 2>/dev/null)" || return 0
   [[ -r "$marker" && "$(<"$marker")" == "$lock" ]] && return 0
-  if pnpm install --frozen-lockfile >> "$LOGS/scheduler.log" 2>&1; then
+  if pnpm -C "$REPO" install --frozen-lockfile >> "$LOGS/scheduler.log" 2>&1; then
     print -r -- "$lock" > "$marker" 2>/dev/null || true
   else
-    note "warn: install failed after a lockfile change"; record warn "" "install failed after a lockfile change"
+    note "warn: install failed after a lockfile change"; [[ -n "${2:-}" ]] || record warn "" "install failed after a lockfile change"
   fi
   return 0
+}
+
+# True while implement.sh holds implement.lock: its pid answers, or it has no pid yet and is under
+# a minute old (lost between mkdir and the write otherwise). Its session runs in $REPO outside the
+# queue lock, so the checkout must not move under it.
+implement_live() {
+  local lockdir="$HOME_DIR/implement.lock" owner
+  [[ -d "$lockdir" ]] || return 1
+  owner="$(cat "$lockdir/pid" 2>/dev/null)"
+  if [[ "$owner" == <-> ]]; then
+    kill -0 "$owner" 2>/dev/null
+  else
+    [[ -z "$(find "$lockdir" -maxdepth 0 -mmin +1 2>/dev/null)" ]]
+  fi
 }
 
 source "${0:A:h}/checkin.sh"
@@ -510,6 +525,10 @@ $platform || apply_commands
 # platform.lock directory keeps two ticks from collecting at once; one older than 5 minutes lost
 # its owner and is taken over. The detached wrapper writes a failure to platform-status, and the
 # next tick warns about it, at most once an hour. Without the credentials it does nothing.
+# It runs the code on origin/main: an unpaused tick moves the checkout under its own queue lock
+# before it collects, and the --platform step moves it inside its detached part (platform_move).
+# A paused tick collects with the code it has. The move is skipped while an implementing session
+# runs in the checkout.
 platform_warn() {
   local stamp="$HOME_DIR/platform-warned-at" last
   note "warn: platform rows: $1"
@@ -527,11 +546,26 @@ platform_due() {
   [[ "$last" == <-> ]] || return 0
   (( $(date +%s) - last >= 300 ))
 }
+# The --platform step's move to origin/main, from its detached part: under the queue lock, taken
+# without waiting and dropped before the collection starts. A run holding the lock, or a live
+# implement.lock, skips the move; a warn is only noted (to_main quiet). A signal while the lock is
+# held drops it, so a killed move never stops the queue.
+platform_move() {
+  setopt local_options local_traps
+  if implement_live; then note "platform: an implementing session runs, collecting without the move to main"; return 0; fi
+  mkdir "$HOME_DIR/lock" 2>/dev/null ||
+    { note "platform: a run holds the lock, collecting without the move to main"; return 0; }
+  trap 'rmdir "$HOME_DIR/lock" 2>/dev/null; exit 1' INT TERM HUP
+  if git -C "$REPO" fetch -q origin 2>/dev/null; then to_main platform quiet; else note "warn: fetch failed"; fi
+  rmdir "$HOME_DIR/lock" 2>/dev/null
+  return 0
+}
+# record_platform [move]: move is the --platform step's, which runs platform_move first
 record_platform() {
   $check && return 0
   setopt local_options no_err_exit
   platform_on && telemetry_on || return 0
-  local lockdir="$HOME_DIR/platform.lock" failed="$HOME_DIR/platform-status" deadline="${AGENT_QUEUE_PLATFORM_DEADLINE:-240}"
+  local lockdir="$HOME_DIR/platform.lock" failed="$HOME_DIR/platform-status" deadline="${AGENT_QUEUE_PLATFORM_DEADLINE:-240}" move="${1:-}"
   if [[ -r "$failed" ]]; then
     platform_warn "$(cat "$failed")"
     rm -f "$failed"
@@ -543,6 +577,8 @@ record_platform() {
   date +%s > "$HOME_DIR/platform-ran-at"
   rm -f "$HOME_DIR/platform-timeout"
   ( cd "$REPO" || { rmdir "$lockdir"; exit 0; }
+    # The move can take an install; the 5-minute takeover of platform.lock counts from here
+    [[ "$move" == move ]] && { platform_move; touch "$lockdir"; }
     FLY_API_TOKEN="$FLY_API_TOKEN" PLATFORM_DATABASE_URL="$PLATFORM_DATABASE_URL" \
       PLATFORM_INFISICAL_CLIENT_ID="${PLATFORM_INFISICAL_CLIENT_ID:-}" \
       PLATFORM_INFISICAL_CLIENT_SECRET="${PLATFORM_INFISICAL_CLIENT_SECRET:-}" \
@@ -571,19 +607,31 @@ record_platform() {
 }
 # Between runs: no desk commands, no pause, no queue lock
 if $platform; then
-  platform_due && record_platform
+  platform_due && record_platform move
   exit 0
 fi
-record_platform
 
 # A pause is deliberate: the tick takes no lock and still checks in ok, so the monitor does not
 # alert. It publishes its queue state below, once that can be written.
 paused=false
 if [[ -e "$HOME_DIR/paused" ]] && ! $check; then paused=true; fi
+fetched=false
 if ! $paused; then
   if ! mkdir "$HOME_DIR/lock" 2>/dev/null; then say "busy: a run is in progress"; exit 0; fi
   trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
+  # Under the lock, so no claude run is mid-flight on the checkout: the collection runs main's code
+  if ! $check && platform_on && telemetry_on; then
+    if implement_live; then
+      note "platform: an implementing session runs, collecting without the move to main"
+    elif git -C "$REPO" fetch -q origin 2>/dev/null; then
+      fetched=true
+      to_main platform
+    else
+      note "warn: fetch failed"
+    fi
+  fi
 fi
+record_platform
 CHECKIN_ID=""
 
 source "${0:A:h}/lib.sh"
@@ -1195,7 +1243,8 @@ watch_renovate() {
 }
 
 # One fetch per run: the job line and planning both read origin/main. A failure never stops the run.
-if ! $check; then
+# The platform move may have fetched already.
+if ! $check && ! $fetched; then
   git -C "$REPO" fetch -q origin 2>/dev/null || note "warn: fetch failed"
 fi
 
@@ -1378,12 +1427,9 @@ attended() {
   # The lock holds its owner's pid; it is cleared only when that process is gone (a kill skips the
   # EXIT trap). A lock without a pid older than a minute lost its owner between mkdir and write.
   local lockdir="$HOME_DIR/implement.lock" locked=false spent cap last decision owner
-  if [[ -d "$lockdir" ]]; then
+  if [[ -d "$lockdir" ]] && ! implement_live; then
     owner="$(cat "$lockdir/pid" 2>/dev/null)"
-    if [[ "$owner" == <-> ]] && ! kill -0 "$owner" 2>/dev/null ||
-       [[ "$owner" != <-> && -n "$(find "$lockdir" -maxdepth 0 -mmin +1 2>/dev/null)" ]]; then
-      rm -rf "$lockdir" && note "warn: cleared implement.lock; its session ${owner:-?} is gone"
-    fi
+    rm -rf "$lockdir" && note "warn: cleared implement.lock; its session ${owner:-?} is gone"
   fi
   [[ -d "$lockdir" ]] && locked=true
   spent="$(spent_today)"
