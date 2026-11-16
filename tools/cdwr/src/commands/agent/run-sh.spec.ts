@@ -104,6 +104,13 @@ describe('run.sh', () => {
     expect(offline).toBeLessThan(SCRIPT.search(/\$\(linear "/));
   });
 
+  it('leaves planned tickets out of the plan-only selection', () => {
+    expect(SCRIPT).toContain('select(ready_planned | not)');
+    expect(SCRIPT).toMatch(
+      /identifier\n\s+description\n\s+state \{ type \}\n\s+labels \{ nodes \{ name \} \}\n\s+inverseRelations/
+    );
+  });
+
   it('fails a clean run that planned nothing', () => {
     expect(SCRIPT).toMatch(/note "fail: planned nothing/);
   });

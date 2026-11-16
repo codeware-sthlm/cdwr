@@ -424,6 +424,12 @@ def plan_unstarted:
   status_rows as $r
   | ($r | length) > 0 and all($r[]; .status | test("^planned\\b"; "i"));
 
+def is_open: .state.type != "completed" and .state.type != "canceled";
+
+# True for an open agent:ready ticket that already has a written plan: a planning run has nothing to add
+def ready_planned:
+  any((.labels.nodes // [])[].name; . == "agent:ready") and is_open and (status_rows | length) > 0;
+
 # True when the newest comment is not the agent's
 def answered:
   ((.comments.nodes // []) | sort_by(.createdAt) | last) as $c
@@ -467,8 +473,6 @@ def queue_order:
   [ ({ started: 0, unstarted: 1, backlog: 2, triage: 3 }[.state.type] // 4),
     (if .priority == 0 then 5 else .priority end),
     .createdAt ];
-
-def is_open: .state.type != "completed" and .state.type != "canceled";
 
 # True when an app added the ticket's agent:ready: the newest history entry adding it has an app
 # user as its actor, the queue's own or any other integration. Only Håkan makes a ticket ready. No such entry in the page read counts as his:
@@ -836,6 +840,9 @@ def ticket_gaps($now; $watch):
   | [ if $lab == "agent:needs-input" and $open and answered and blocked and plan_unstarted
       then gap($t; "held"; "\($t) is answered but its plan waits on \($open_names)";
                "Close or unlink \($open_names)") else empty end,
+      if ready_planned and (blocked | not)
+      then gap($t; "ready-planned"; "\($t) has a written plan but is agent:ready, so only an attended session takes it";
+               "Start `cdwr agent attend \($t)`, or set it to agent:needs-input and answer its plan so the scheduler launches it") else empty end,
       if $lab == "agent:review" and $open and (($watch // {}) | length) > 0 and ($w.pr // null) == null
       then gap($t; "review-no-pr"; "\($t) is agent:review but no PR is attached";
                "Attach the PR to \($t), or set the label back") else empty end,

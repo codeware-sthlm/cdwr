@@ -5287,6 +5287,63 @@ describe('audit and tree', () => {
     });
   });
 
+  describe('ready-planned', () => {
+    const plan = (status: string) =>
+      `| Step | What | Status |\n| -- | -- | -- |\n| 1 | x | ${status} |\n`;
+
+    it('flags agent:ready with a Status table, all Planned or with a Done row', () => {
+      expect(
+        kinds([node('COD-1', 'agent:ready', { description: plan('Planned') })])
+      ).toEqual(['COD-1:ready-planned']);
+      expect(
+        kinds([node('COD-1', 'agent:ready', { description: plan('Done') })])
+      ).toEqual(['COD-1:ready-planned']);
+    });
+
+    it('is no gap without a table, for another label, or on a closed ticket', () => {
+      expect(
+        kinds([node('COD-1', 'agent:ready', { description: 'no table' })])
+      ).toEqual([]);
+      expect(
+        kinds([
+          node('COD-1', 'agent:needs-input', { description: plan('Planned') })
+        ])
+      ).not.toContain('COD-1:ready-planned');
+      expect(
+        kinds([
+          node('COD-1', 'agent:ready', {
+            description: plan('Planned'),
+            state: { type: 'completed' }
+          })
+        ])
+      ).not.toContain('COD-1:ready-planned');
+    });
+
+    it('is no gap while an open issue blocks it', () => {
+      expect(
+        kinds([
+          node('COD-1', 'agent:ready', {
+            description: plan('Planned'),
+            inverseRelations: { nodes: [blocker('COD-9', 'started', null)] }
+          })
+        ])
+      ).toEqual([]);
+    });
+
+    it('reads agent:ready beside another agent label', () => {
+      expect(
+        kinds([
+          node('COD-1', 'agent:needs-input', {
+            description: plan('Planned'),
+            labels: {
+              nodes: [{ name: 'agent:needs-input' }, { name: 'agent:ready' }]
+            }
+          })
+        ])
+      ).toContain('COD-1:ready-planned');
+    });
+  });
+
   describe('merged-not-done', () => {
     const watch = { 'COD-1': { pr: 1, state: 'merged' } };
 
@@ -5934,6 +5991,9 @@ describe('audit and tree', () => {
         rows: Array<[string, string]>,
         over: Record<string, unknown> = {}
       ) => node('COD-1', 'agent:ready', { description: table(rows), ...over });
+      // A ready ticket with a table is also ready-planned; only this gap is under test here
+      const decisionKinds = (nodes: Parameters<typeof wideKinds>[0]) =>
+        wideKinds(nodes).filter((k) => !k.endsWith(':ready-planned'));
 
       it.each([
         {
@@ -5950,7 +6010,7 @@ describe('audit and tree', () => {
         { name: 'decided row', rows: [['decision gate', 'Done']], gap: false },
         { name: 'no decision words', rows: [['build', 'Planned']], gap: false }
       ])('own row: $name', ({ rows, gap }) => {
-        expect(wideKinds([own(rows as Array<[string, string]>)])).toEqual(
+        expect(decisionKinds([own(rows as Array<[string, string]>)])).toEqual(
           gap ? ['COD-1:decision-unasked'] : []
         );
       });
@@ -5970,7 +6030,7 @@ describe('audit and tree', () => {
               state: { type: 'started' }
             }
           });
-        expect(wideKinds([p, child('COD-1'), child('COD-2')])).toEqual([
+        expect(decisionKinds([p, child('COD-1'), child('COD-2')])).toEqual([
           'COD-1:decision-unasked'
         ]);
       });
@@ -5978,12 +6038,12 @@ describe('audit and tree', () => {
       it('is quiet once the question is asked', () => {
         const rows: Array<[string, string]> = [['decision gate', 'Planned']];
         expect(
-          wideKinds([
+          decisionKinds([
             own(rows, { labels: { nodes: [{ name: 'agent:needs-input' }] } })
           ])
         ).not.toContain('COD-1:decision-unasked');
         expect(
-          wideKinds([
+          decisionKinds([
             own(rows, {
               comments: {
                 nodes: [agentComment('**Agent needs input** which?')]
@@ -5993,7 +6053,7 @@ describe('audit and tree', () => {
         ).toEqual([]);
         // A person's comment is no agent question
         expect(
-          wideKinds([
+          decisionKinds([
             own(rows, {
               comments: { nodes: [personComment('what should it be?')] }
             })
@@ -6003,7 +6063,7 @@ describe('audit and tree', () => {
 
       it('skips a closed ticket', () => {
         expect(
-          wideKinds([
+          decisionKinds([
             own([['decision', 'Planned']], {
               labels: { nodes: [] },
               state: { type: 'completed' },

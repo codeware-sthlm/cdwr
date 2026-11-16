@@ -1459,6 +1459,8 @@ query {
   }) {
     nodes {
       identifier
+      description
+      state { type }
       labels { nodes { name } }
       inverseRelations { nodes { type issue { state { type } } } }
     }
@@ -1473,12 +1475,14 @@ if jq -e '.errors' >/dev/null <<<"$resp"; then
   record skip "" "Linear error $(jq -c '.errors[0].message' <<<"$resp")"; exit 0
 fi
 
-# Plan-only: an agent:ready ticket for this repo, not blocked by an open ticket.
-ready="$(jq -r --argjson other "$OTHER_REPOS" '
+# Plan-only: an agent:ready ticket for this repo, not blocked by an open ticket, with no plan yet.
+ready="$(watch -r --argjson other "$OTHER_REPOS" 'include "watch";
   .data.issues.nodes[]
+  | select(ready_planned | not)
   | select((.labels.nodes | map(.name | IN($other[])) | any) | not)
   | select([.inverseRelations.nodes[] | select(.type == "blocks" and (.issue.state.type | IN("completed","canceled") | not))] | length == 0)
-  | .identifier' <<<"$resp")"
+  | .identifier' <<<"$resp")" ||
+  { why="$(watch_err)"; note "warn: watch: watch.jq failed on the ready selection$why"; record warn "" "watch: watch.jq failed on the ready selection$why"; exit 0; }
 
 # The daily suggestion: team COD tickets labelled agent-idea still open, minus those the queue
 # has already taken up (any Agent-group label); one left means no new suggestion.
@@ -1911,6 +1915,7 @@ if after="$(linear "$PLANNED")" && ! jq -e '.errors' >/dev/null <<<"$after"; the
     (( ++planned ))
   done
   # A clean exit that planned nothing is a failure all the same, e.g. no Linear tools.
+  # Planned tickets are left out of `ready`, so this fires only for a ticket that really needed a plan.
   if (( rc == 0 && planned == 0 )); then
     note "fail: planned nothing (see $log)"
     notify "Agent queue: a planning run exited cleanly but planned nothing. Log: $log"
