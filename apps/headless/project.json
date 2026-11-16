@@ -21,23 +21,23 @@
     },
     "dev": {
       "metadata": {
-        "description": "Starts the Vite dev server, signing with the cms dev vault signature secret"
+        "description": "Starts the Vite dev server with tenant moon's dev vault folder, as a deploy resolves it"
       },
       "executor": "dev-plugin:infisical-run",
       "continuous": true,
       "options": {
-        "path": "/apps/cms/signature",
+        "path": "/tenants/moon/apps/headless",
         "cwd": "apps/headless",
         "commands": ["vite"]
       }
     },
     "dx:secrets": {
       "metadata": {
-        "description": "Refresh the offline copy of the signature secret, for working without a session."
+        "description": "Refresh the offline copy of tenant moon's dev vault folder, for working without a session."
       },
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm cdwr infisical cache --path=/apps/cms/signature --app=headless --yes"
+        "command": "pnpm cdwr infisical cache --path=/tenants/moon/apps/headless --app=headless --yes"
       }
     },
     "start": {
