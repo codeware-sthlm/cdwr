@@ -356,9 +356,10 @@ desk_platform_check() {
 }
 
 # desk_platform_act <restart|gate> <args json>: the write. A close's stdout holds the password, so
-# only `.ok` and `.error.message` are read from it, and a gate's message is cut at the gate key and
-# stripped of anything shaped like a generated password before it can reach a row or the log.
-# Prints the reason and returns 1 on failure. Run it in a command substitution.
+# it never reaches a variable: jq in the pipe keeps `.ok` and the error message alone, and a gate's
+# message is cut at the gate key and stripped of anything shaped like a generated password before
+# it can reach a row or the log. Prints the reason and returns 1 on failure. Run it in a command
+# substitution.
 desk_platform_act() {
   setopt local_options no_err_exit extended_glob
   local -a cmd
@@ -366,9 +367,10 @@ desk_platform_act() {
   desk_platform_on || { print -r -- "no write credentials on $(telemetry_host)"; return 1; }
   cmd=("${(@f)$(desk_platform_argv "$1" "$2")}")
   [[ -n "${cmd[1]}" ]] || { print -r -- "bad args"; return 1; }
-  out="$(desk_cdwr "${cmd[@]}")"
-  [[ "$(jq -r '.ok' <<<"$out" 2>/dev/null)" == true ]] && return 0
-  msg="$(jq -r 'if .error then (.error.message // "") elif .ok == false then "only partly applied, see cdwr history on the host" else "" end' <<<"$out" 2>/dev/null)"
+  # Two lines: .ok, then the reason on failure
+  out="$(desk_cdwr "${cmd[@]}" | jq -r '(.ok | tostring), (if .ok == true then "" elif .error then (.error.message // "") elif .ok == false then "only partly applied, see cdwr history on the host" else "" end)' 2>/dev/null)"
+  [[ "${out%%$'\n'*}" == true ]] && return 0
+  [[ "$out" == *$'\n'* ]] && msg=${out#*$'\n'}
   out=""
   msg=${msg%%$'\n'*}
   if [[ "$1" == gate ]]; then
