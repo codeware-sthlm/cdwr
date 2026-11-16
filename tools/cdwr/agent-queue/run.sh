@@ -558,9 +558,14 @@ platform_due() {
 # so a killed move never stops the queue.
 platform_move() {
   setopt local_options local_traps
+  local beat i
   mkdir "$HOME_DIR/lock" 2>/dev/null ||
     { note "platform: a run holds the lock, collecting without the move to main"; return 0; }
-  trap 'rmdir "$HOME_DIR/lock" 2>/dev/null; exit 1' INT TERM HUP
+  # A slow install must not read as a lost collection: platform.lock stays fresh while the move
+  # runs, for at most 30 minutes should this shell die without its trap
+  ( for i in {1..30}; do sleep 60; touch "$HOME_DIR/platform.lock" 2>/dev/null; done ) &
+  beat=$!
+  trap 'kill $beat 2>/dev/null; rmdir "$HOME_DIR/lock" 2>/dev/null; exit 1' INT TERM HUP
   if implement_near; then
     note "platform: an implementing session runs, collecting without the move to main"
   elif git -C "$REPO" fetch -q origin 2>/dev/null; then
@@ -568,6 +573,7 @@ platform_move() {
   else
     note "warn: fetch failed"
   fi
+  kill $beat 2>/dev/null
   rmdir "$HOME_DIR/lock" 2>/dev/null
   return 0
 }
@@ -588,7 +594,7 @@ record_platform() {
   date +%s > "$HOME_DIR/platform-ran-at"
   rm -f "$HOME_DIR/platform-timeout"
   ( cd "$REPO" || { rmdir "$lockdir"; exit 0; }
-    # The move can take an install; the 5-minute takeover of platform.lock counts from here
+    # The deadline and the 5-minute takeover of platform.lock count from the end of the move
     [[ "$move" == move ]] && { platform_move; touch "$lockdir"; }
     FLY_API_TOKEN="$FLY_API_TOKEN" PLATFORM_DATABASE_URL="$PLATFORM_DATABASE_URL" \
       PLATFORM_INFISICAL_CLIENT_ID="${PLATFORM_INFISICAL_CLIENT_ID:-}" \
