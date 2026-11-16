@@ -4213,6 +4213,20 @@ describe('run.sh platform step', () => {
       expect(read('node.head').trim()).toBe(originHead());
     });
 
+    it('keeps platform.lock fresh while it moves, and stops after', () => {
+      const move = fn('platform_move');
+      const beat = move.indexOf('touch "$HOME_DIR/platform.lock"');
+      expect(beat).toBeGreaterThan(move.indexOf('mkdir "$HOME_DIR/lock"'));
+      expect(move.indexOf('for i in {1..30}; do sleep 60;')).toBeGreaterThan(
+        -1
+      );
+      // the trap stops it on a signal, and the move stops it before the lock goes
+      expect(move).toContain("trap 'kill $beat 2>/dev/null; rmdir");
+      const stop = move.lastIndexOf('kill $beat 2>/dev/null\n');
+      expect(stop).toBeGreaterThan(move.indexOf('to_main platform quiet'));
+      expect(stop).toBeLessThan(move.lastIndexOf('rmdir "$HOME_DIR/lock"'));
+    });
+
     it('checks for an implementing session under the queue lock', () => {
       const move = fn('platform_move');
       expect(move.indexOf('implement_near')).toBeGreaterThan(
