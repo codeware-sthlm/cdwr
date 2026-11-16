@@ -318,6 +318,13 @@ export function provisionSteps(
         ? `Set PAYLOAD_API_KEY in /tenants/${deployment}/apps/${app}`
         : `Keep PAYLOAD_API_KEY in /tenants/${deployment}/apps/${app} (already matches)`
     ),
+    // In write order: a tenant is enabled only once its imports exist
+    ...imports.map(({ app, importPath, action }) => {
+      const path = `/tenants/${deployment}/apps/${app}`;
+      return action === 'create'
+        ? `Import ${importPath} into ${path}`
+        : `Keep import of ${importPath} in ${path} (already there)`;
+    }),
     ...flags.map(({ app, action, value }) => {
       const path = `/tenants/${deployment}/apps/${app}`;
       if (action === 'create')
@@ -325,12 +332,6 @@ export function provisionSteps(
       return action === 'enabled'
         ? `Keep ${DEPLOY_ENABLED_KEY} in ${path} (already true)`
         : `Keep ${DEPLOY_ENABLED_KEY}=${value} in ${path} (paused)`;
-    }),
-    ...imports.map(({ app, importPath, action }) => {
-      const path = `/tenants/${deployment}/apps/${app}`;
-      return action === 'create'
-        ? `Import ${importPath} into ${path}`
-        : `Keep import of ${importPath} in ${path} (already there)`;
     }),
     ...team.map((step) => `Statistics: ${TEAM_STEP_TEXT[step]}`),
     ...(stats ? [statsStep(stats)] : []),
