@@ -185,11 +185,8 @@ export const flagActionOf = (stored: string | undefined): FlagAction =>
       ? 'enabled'
       : 'paused';
 
-/** Shared values and the signature arrive by reference, so rotation stays in one place */
-export const HEADLESS_IMPORTS = [
-  '/apps/headless',
-  '/apps/cms/signature'
-] as const;
+/** Shared values arrive by reference, the signature through `/apps/headless`'s own import */
+export const HEADLESS_IMPORTS = ['/apps/headless'] as const;
 
 export interface ImportPlan {
   app: AppKind;

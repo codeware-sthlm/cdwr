@@ -59,7 +59,7 @@ async function fetchAffectedApps(
  * catching up. cms (and the retired web) read the secret from Infisical at
  * boot, so a restart is all they need. headless never reads Infisical: the new
  * secret is set on each of its apps as a Fly secret, which restarts it, and the
- * tenant folders' import of the secret keeps later deploys right.
+ * import of the secret, through `/apps/headless`, keeps later deploys right.
  */
 export default defineCommand({
   summary: 'Roll over the request signature secret, step by step',

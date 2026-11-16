@@ -284,7 +284,7 @@ describe('tenant provision', () => {
       );
     };
 
-    it('imports the shared folders and the signature', async () => {
+    it('imports the shared folder', async () => {
       const { ensureInfisicalSecretImport } =
         await import('../../services/infisical');
       await headlessFolder();
@@ -292,42 +292,45 @@ describe('tenant provision', () => {
       const { exit, out } = await run(['--json'], 'production', 'headless');
 
       expect(exit).toBe(EXIT.ok);
-      expect(ensureInfisicalSecretImport).toHaveBeenCalledTimes(2);
+      expect(ensureInfisicalSecretImport).toHaveBeenCalledTimes(1);
       expect(ensureInfisicalSecretImport).toHaveBeenCalledWith({
         environment: 'production',
         path: '/tenants/acme/apps/headless',
         importPath: '/apps/headless'
       });
-      expect(ensureInfisicalSecretImport).toHaveBeenCalledWith({
-        environment: 'production',
-        path: '/tenants/acme/apps/headless',
-        importPath: '/apps/cms/signature'
-      });
       expect(out).toContain('importsWritten');
     });
 
-    it('keeps an import that is already there and writes the other', async () => {
+    it('keeps an import that is already there', async () => {
       const { ensureInfisicalSecretImport, listInfisicalSecretImports } =
         await import('../../services/infisical');
       await headlessFolder();
       vi.mocked(listInfisicalSecretImports).mockResolvedValue([
-        { path: '/apps/headless', environment: 'production' },
-        { path: '/apps/cms/signature', environment: 'preview' }
+        { path: '/apps/headless', environment: 'production' }
       ]);
 
       const { ui } = await run([], 'production', 'headless');
 
-      const planned = ui.printed.note.join('\n');
-      expect(planned).toContain(
+      expect(ui.printed.note.join('\n')).toContain(
         'Keep import of /apps/headless in /tenants/acme/apps/headless (already there)'
       );
-      expect(planned).toContain(
-        'Import /apps/cms/signature into /tenants/acme/apps/headless'
+      expect(ensureInfisicalSecretImport).not.toHaveBeenCalled();
+    });
+
+    it('writes an import that exists only from another environment', async () => {
+      const { ensureInfisicalSecretImport, listInfisicalSecretImports } =
+        await import('../../services/infisical');
+      await headlessFolder();
+      vi.mocked(listInfisicalSecretImports).mockResolvedValue([
+        { path: '/apps/headless', environment: 'preview' }
+      ]);
+
+      const { ui } = await run([], 'production', 'headless');
+
+      expect(ui.printed.note.join('\n')).toContain(
+        'Import /apps/headless into /tenants/acme/apps/headless'
       );
       expect(ensureInfisicalSecretImport).toHaveBeenCalledTimes(1);
-      expect(ensureInfisicalSecretImport).toHaveBeenCalledWith(
-        expect.objectContaining({ importPath: '/apps/cms/signature' })
-      );
     });
 
     it('writes the imports before the deploy flag', async () => {
