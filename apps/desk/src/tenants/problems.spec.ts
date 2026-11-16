@@ -149,6 +149,13 @@ describe('cert', () => {
     ]);
     expect(found[0].severity).toBe('warn');
   });
+
+  it('covers a host certificate on the shared row', () => {
+    const found = sharedProblems({
+      domains: [domain('cms.example.com', { certificate: 'Pending' })]
+    });
+    expect(found.map((p) => p.key)).toEqual(['_shared:cert:cms.example.com']);
+  });
 });
 
 describe('pooler', () => {

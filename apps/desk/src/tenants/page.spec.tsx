@@ -203,7 +203,7 @@ describe('TenantsPage', () => {
     expect(dialog.textContent).toContain('5 of 15');
     expect(dialog.textContent).toContain('120 MiB');
     expect(dialog.textContent).toContain('host');
-    expect(dialog.textContent).not.toContain('Domains');
+    expect(dialog.textContent).toContain('No host certificate was read.');
   });
 
   it('shows the actions on a tenant sheet only with controls, never on the shared one', () => {
