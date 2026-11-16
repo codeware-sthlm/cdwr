@@ -46,7 +46,8 @@ export default defineConfig(({ mode }) => {
       tsconfigPaths({ projects: ['../../tsconfig.base.json'] }),
       tailwindcss(),
       tanstackStart(),
-      nitro(),
+      // Exits at boot on an invalid environment, before any request
+      nitro({ plugins: [`${import.meta.dirname}/src/server/env-check.ts`] }),
       // React's plugin after Start's, as its docs say
       react(),
       ...(sentryUpload
