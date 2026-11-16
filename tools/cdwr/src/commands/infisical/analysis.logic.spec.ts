@@ -1,4 +1,9 @@
-import { APPS, flagStateOf, summarize } from './analysis.logic';
+import {
+  APPS,
+  flagStateOf,
+  missingHeadlessKeys,
+  summarize
+} from './analysis.logic';
 
 describe('flagStateOf', () => {
   it('is on only for true', () => {
@@ -67,6 +72,64 @@ describe('summarize', () => {
       { app: 'headless', host: null, tenants: [], secrets: {} },
       { app: 'builder', host: 'off', tenants: [], secrets: {} },
       { app: 'umami', host: 'no flag', tenants: [], secrets: {} }
+    ]);
+  });
+});
+
+describe('missingHeadlessKeys', () => {
+  const all = {
+    PAYLOAD_URL: 'https://cms.example.com',
+    PAYLOAD_API_KEY: 'k',
+    SIGNATURE_SECRET: 's'
+  };
+
+  it('is empty when every required key is delivered', () => {
+    expect(missingHeadlessKeys({ env: all })).toEqual([]);
+  });
+
+  it('names what is missing, sorted', () => {
+    expect(missingHeadlessKeys({ secrets: { PAYLOAD_API_KEY: 'k' } })).toEqual([
+      'PAYLOAD_URL',
+      'SIGNATURE_SECRET'
+    ]);
+  });
+
+  it('counts a key from env or secrets as present', () => {
+    expect(
+      missingHeadlessKeys({
+        env: { PAYLOAD_URL: 'https://x' },
+        secrets: { PAYLOAD_API_KEY: 'k', SIGNATURE_SECRET: 's' }
+      })
+    ).toEqual([]);
+  });
+
+  it('never reports a key the deploy sets itself', () => {
+    expect(missingHeadlessKeys({})).not.toContain('TENANT_ID');
+  });
+});
+
+describe('summarize headless', () => {
+  it('checks enabled headless tenants only', () => {
+    const result = summarize(
+      'preview',
+      {
+        headless: [{ tenant: 'moon', secrets: { PAYLOAD_API_KEY: 'k' } }],
+        cms: [{ tenant: 'moon' }]
+      },
+      [{ app: 'headless', tenant: 'sun', reason: 'flag-off' }],
+      {}
+    );
+    const headless = result.apps.find(({ app }) => app === 'headless');
+    expect(headless?.tenants).toEqual([
+      {
+        tenant: 'moon',
+        flag: 'on',
+        missing: ['PAYLOAD_URL', 'SIGNATURE_SECRET']
+      },
+      { tenant: 'sun', flag: 'off' }
+    ]);
+    expect(result.apps.find(({ app }) => app === 'cms')?.tenants).toEqual([
+      { tenant: 'moon', flag: 'on' }
     ]);
   });
 });
