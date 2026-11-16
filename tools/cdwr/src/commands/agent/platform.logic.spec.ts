@@ -16,6 +16,8 @@ import {
   daysBefore,
   deployConclusion,
   failed,
+  healthChecksOf,
+  healthPath,
   libpqEnv,
   ok,
   oneLine,
@@ -214,6 +216,49 @@ describe('appOwner', () => {
 
   it('leaves a tenant app out when the tenants were not read', () => {
     expect(appOwner('cdwr-cms-acme-dep', null)).toBeNull();
+  });
+});
+
+describe('health check paths', () => {
+  const toml = (app: string, check: string) =>
+    `app = '${app}'\n[http_service]\n  internal_port = 3000\n${check}`;
+  const get = (path: string) =>
+    `[[http_service.checks]]\n  method = 'GET'\n  path = '${path}'\n`;
+  const checks = healthChecksOf({
+    umami: toml('cdwr-umami', get('/api/heartbeat')),
+    cms: toml('cdwr-cms', get('/api/health')),
+    nocheck: toml('cdwr-builder', ''),
+    broken: 'app = [',
+    post: toml(
+      'cdwr-post',
+      "[[http_service.checks]]\n  method = 'POST'\n  path = '/x'\n"
+    ),
+    nomethod: toml('cdwr-open', "[[http_service.checks]]\n  path = '/open'\n")
+  });
+
+  it('reads the GET path by base app name, skipping a file with none or a broken one', () => {
+    expect([...checks.keys()].sort()).toEqual([
+      'cdwr-cms',
+      'cdwr-open',
+      'cdwr-umami'
+    ]);
+    expect(checks.get('cdwr-open')).toBe('/open');
+  });
+
+  it('gives an app the path of its base name, defaulting to /api/health', () => {
+    expect(healthPath('cdwr-umami', checks)).toBe('/api/heartbeat');
+    expect(healthPath('cdwr-cms-moon', checks)).toBe('/api/health');
+    expect(healthPath('cdwr-unknown', checks)).toBe('/api/health');
+    expect(healthPath('cdwr-umamix', checks)).toBe('/api/health');
+  });
+
+  it('prefers the longest base name', () => {
+    const nested = new Map([
+      ['cdwr-c', '/short'],
+      ['cdwr-cms', '/long']
+    ]);
+    expect(healthPath('cdwr-cms-moon', nested)).toBe('/long');
+    expect(healthPath('cdwr-cms', nested)).toBe('/long');
   });
 });
 
@@ -427,6 +472,32 @@ describe('buildRows', () => {
     expect(row(rows, SHARED_KEY).errors).toEqual({
       certs: 'cdwr-cms: fly timed out'
     });
+  });
+
+  it('lists the certificates of the host apps on the shared row', () => {
+    const { rows } = buildRows(
+      readings({
+        fly: ok([
+          flyApp('cdwr-cms', {
+            certs: ok([{ hostname: 'cms.example', clientStatus: 'Ready' }])
+          }),
+          flyApp('cdwr-umami', { certs: failed('nope') }),
+          // An app of no known tenant also sits on the shared row, but is no host
+          flyApp('cdwr-cms-gone', {
+            certs: ok([{ hostname: 'gone.example', clientStatus: 'Pending' }])
+          })
+        ])
+      })
+    );
+    expect(row(rows, SHARED_KEY).domains).toEqual([
+      {
+        hostname: 'cms.example',
+        app: 'cms',
+        primary: false,
+        certificate: 'Ready',
+        recordedCertificate: null
+      }
+    ]);
   });
 
   it('records a failed certificate read as unknown with the reason in errors', () => {
