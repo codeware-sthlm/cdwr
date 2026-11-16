@@ -1,6 +1,7 @@
 -- Read by `cdwr agent platform-record`: one JSON document, tenants and database figures.
 -- A single SELECT, so the connection stays read-only in effect. Never select the
--- tenants' api key, or any hash, salt or token column.
+-- tenants' api key, or any hash, salt or token column. The role may only read the columns
+-- granted in `tools/cdwr/agent-queue/platform-role.sql`: a new column goes there too.
 SELECT json_build_object(
   'tenants', coalesce((
     SELECT json_agg(json_build_object(
