@@ -2398,7 +2398,7 @@ describe('run.sh apply_commands', () => {
 
   it('applies the commands before the pause is read', () => {
     const env = SCRIPT.indexOf('telemetry_env_search "$REPO"');
-    const call = SCRIPT.indexOf('\napply_commands\n');
+    const call = SCRIPT.indexOf('\n$platform || apply_commands\n');
     expect(env).toBeGreaterThan(0);
     expect(env).toBeLessThan(call);
     expect(call).toBeLessThan(SCRIPT.indexOf('paused=false'));
@@ -3447,9 +3447,70 @@ describe('run.sh platform step', () => {
   it('runs every tick, after the desk commands and before the pause check', () => {
     expect(fn('record_platform')).toContain('record_platform()');
     const at = SCRIPT.indexOf('\nrecord_platform\n');
-    expect(at).toBeGreaterThan(SCRIPT.indexOf('\napply_commands\n'));
+    expect(at).toBeGreaterThan(
+      SCRIPT.indexOf('\n$platform || apply_commands\n')
+    );
     expect(at).toBeLessThan(SCRIPT.indexOf('\npaused=false\n'));
   });
+
+  it('runs alone with --platform: no desk commands, pause or queue lock', () => {
+    expect(SCRIPT).toContain(
+      'platform=false; [[ "${1:-}" == "--platform" ]] && platform=true'
+    );
+    expect(SCRIPT).toContain('\n$platform || apply_commands\n');
+    const block =
+      'if $platform; then\n  platform_due && record_platform\n  exit 0\nfi\n';
+    const at = SCRIPT.indexOf(block);
+    expect(at).toBeGreaterThan(SCRIPT.indexOf('\nrecord_platform() {\n'));
+    expect(at).toBeLessThan(SCRIPT.indexOf('\npaused=false\n'));
+    expect(at).toBeLessThan(SCRIPT.indexOf('mkdir "$HOME_DIR/lock"'));
+    expect(at).toBeLessThan(SCRIPT.indexOf("trap 'st=$?; on_exit"));
+  });
+
+  it.skipIf(!hasZsh)(
+    'is due unless a collection started under 5 minutes ago',
+    () => {
+      const due = (stamp?: string) => {
+        if (stamp !== undefined)
+          writeFileSync(join(root, 'platform-ran-at'), stamp);
+        return spawnSync(
+          'zsh',
+          [
+            '-c',
+            [`HOME_DIR="${root}"`, fn('platform_due'), 'platform_due'].join(
+              '\n'
+            )
+          ],
+          { encoding: 'utf8' }
+        ).status;
+      };
+      const ago = (s: number) => `${Math.floor(Date.now() / 1000) - s}\n`;
+      expect(due()).toBe(0);
+      expect(due(ago(60))).not.toBe(0);
+      expect(due(ago(299))).not.toBe(0);
+      expect(due(ago(400))).toBe(0);
+      expect(due('garbage\n')).toBe(0);
+    }
+  );
+
+  it.skipIf(!hasZsh)('stamps the start of each collection', async () => {
+    stubNode('exit 0');
+    const before = Math.floor(Date.now() / 1000);
+    await tick(CREDS);
+    const stamp = Number(read('platform-ran-at'));
+    expect(stamp).toBeGreaterThanOrEqual(before);
+    expect(stamp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
+  });
+
+  it.skipIf(!hasZsh)(
+    'leaves the stamp alone when another collection holds the lock',
+    async () => {
+      stubNode('exit 0');
+      mkdirSync(join(root, 'platform.lock'));
+      await tick(CREDS, false);
+      expect(read('platform-ran-at')).toBe('');
+    }
+  );
 
   it.skipIf(!hasZsh)('runs the command while the queue is paused', async () => {
     stubNode('exit 0');

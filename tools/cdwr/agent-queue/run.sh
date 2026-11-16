@@ -7,6 +7,7 @@
 # connectors to --disallowedTools when they appear.
 #   run.sh          normal run (launchd)
 #   run.sh --check  print the decision, start nothing
+#   run.sh --platform  the platform step alone, when due (the container loop between runs)
 # `cdwr agent install` copies this file out of the repo and sets PATH, AGENT_QUEUE_HOME and
 # AGENT_QUEUE_REPO in the launchd job; a merge changes nothing until the next install.
 set -euo pipefail
@@ -63,6 +64,8 @@ notice() {
 check=false; [[ "${1:-}" == "--check" ]] && check=true
 # Set by the container loop when the listener woke this run
 wake=false; [[ "${1:-}" == "--wake" ]] && wake=true
+# Set by the container loop between runs: record_platform and nothing else
+platform=false; [[ "${1:-}" == "--platform" ]] && platform=true
 
 # Run history, newest last, kept to its last 20 rows; the suggest run and `cdwr agent activity`
 # read it. Idle adds no row.
@@ -396,10 +399,12 @@ apply_commands() {
   done
   return 0
 }
-apply_commands
+$platform || apply_commands
 
 # The platform state (Fly, Infisical, the tenants' databases) as tenant_state rows, made by
-# `cdwr agent platform-record`. It runs every tick, a paused one too. Detached, so it can't hold up
+# `cdwr agent platform-record`. It runs every tick, a paused one too, and in the container also
+# between runs: the loop calls `run.sh --platform` every 10 minutes, which collects only when
+# platform_due (no collection started in the last 5 minutes). Detached, so it can't hold up
 # the tick, with a 4 minute deadline of its own (AGENT_QUEUE_PLATFORM_DEADLINE, in seconds). A
 # platform.lock directory keeps two ticks from collecting at once; one older than 5 minutes lost
 # its owner and is taken over. The detached wrapper writes a failure to platform-status, and the
@@ -412,6 +417,14 @@ platform_warn() {
   (( $(date +%s) - last > 3600 )) || return 0
   date +%s > "$stamp"
   record warn "" "platform: $1"
+}
+# True unless a collection started under 5 minutes ago (platform-ran-at, epoch seconds), so a loop
+# step right after a queue run doesn't read the platform twice
+platform_due() {
+  local last
+  last="$(cat "$HOME_DIR/platform-ran-at" 2>/dev/null)"
+  [[ "$last" == <-> ]] || return 0
+  (( $(date +%s) - last >= 300 ))
 }
 record_platform() {
   $check && return 0
@@ -426,6 +439,7 @@ record_platform() {
     rm -rf "$lockdir" && note "warn: cleared platform.lock; its run is gone"
   fi
   mkdir "$lockdir" 2>/dev/null || return 0
+  date +%s > "$HOME_DIR/platform-ran-at"
   rm -f "$HOME_DIR/platform-timeout"
   ( cd "$REPO" || { rmdir "$lockdir"; exit 0; }
     FLY_API_TOKEN="$FLY_API_TOKEN" PLATFORM_DATABASE_URL="$PLATFORM_DATABASE_URL" \
@@ -454,6 +468,11 @@ record_platform() {
     rmdir "$lockdir" 2>/dev/null ) &!
   return 0
 }
+# Between runs: no desk commands, no pause, no queue lock
+if $platform; then
+  platform_due && record_platform
+  exit 0
+fi
 record_platform
 
 # A pause is deliberate: the tick takes no lock and still checks in ok, so the monitor does not
