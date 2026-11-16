@@ -36,7 +36,14 @@ describe('agent-host entrypoint', () => {
     );
     expect(entrypoint).toContain('slept >= ${RUN_FALLBACK_SECONDS:-3600} ))');
     // The monitor's 10-minute schedule holds while the loop sleeps the hour
-    expect(entrypoint).toMatch(/break\n {4}fi\n {4}checkin ok\n {2}done/);
+    expect(entrypoint).toMatch(/break\n {4}fi\n {4}checkin ok\n/);
+  });
+
+  it('runs the platform step on every sleep step, never ending the loop', () => {
+    // tenant_state stays fresh while the loop sleeps the hour
+    expect(entrypoint).toMatch(
+      /checkin ok\n(?: {4}#.*\n)* {4}"\$AGENT_QUEUE_HOME\/run\.sh" --platform \|\| true\n {2}done/
+    );
   });
 
   it('samples the host from one disowned sampler, with telemetry_env inside it', () => {

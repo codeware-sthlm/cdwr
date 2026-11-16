@@ -197,6 +197,9 @@ while (( ! stop )); do
       break
     fi
     checkin ok
+    # The platform step between runs, so tenant_state stays about 10 minutes fresh in a quiet
+    # spell. It detaches the collection and returns in a second; a failure never ends the loop.
+    "$AGENT_QUEUE_HOME/run.sh" --platform || true
   done
   woken=$pending
 done
