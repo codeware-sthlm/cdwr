@@ -119,6 +119,11 @@ implement_live() {
     [[ -z "$(find "$lockdir" -maxdepth 0 -mmin +1 2>/dev/null)" ]]
   fi
 }
+# implement_live, or a launch under a minute ago (launch.json is written then): implement.sh starts
+# detached and takes implement.lock only after the launching tick may have dropped the queue lock
+implement_near() {
+  implement_live || [[ -n "$(find "$HOME_DIR/launch.json" -mmin -1 2>/dev/null)" ]]
+}
 
 source "${0:A:h}/checkin.sh"
 source "${0:A:h}/telemetry.sh"
@@ -547,16 +552,22 @@ platform_due() {
   (( $(date +%s) - last >= 300 ))
 }
 # The --platform step's move to origin/main, from its detached part: under the queue lock, taken
-# without waiting and dropped before the collection starts. A run holding the lock, or a live
-# implement.lock, skips the move; a warn is only noted (to_main quiet). A signal while the lock is
-# held drops it, so a killed move never stops the queue.
+# without waiting and dropped before the collection starts. A run holding the lock, or an
+# implementing session (implement_near, checked under the lock, since a tick launches it there),
+# skips the move; a warn is only noted (to_main quiet). A signal while the lock is held drops it,
+# so a killed move never stops the queue.
 platform_move() {
   setopt local_options local_traps
-  if implement_live; then note "platform: an implementing session runs, collecting without the move to main"; return 0; fi
   mkdir "$HOME_DIR/lock" 2>/dev/null ||
     { note "platform: a run holds the lock, collecting without the move to main"; return 0; }
   trap 'rmdir "$HOME_DIR/lock" 2>/dev/null; exit 1' INT TERM HUP
-  if git -C "$REPO" fetch -q origin 2>/dev/null; then to_main platform quiet; else note "warn: fetch failed"; fi
+  if implement_near; then
+    note "platform: an implementing session runs, collecting without the move to main"
+  elif git -C "$REPO" fetch -q origin 2>/dev/null; then
+    to_main platform quiet
+  else
+    note "warn: fetch failed"
+  fi
   rmdir "$HOME_DIR/lock" 2>/dev/null
   return 0
 }
@@ -621,7 +632,7 @@ if ! $paused; then
   trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
   # Under the lock, so no claude run is mid-flight on the checkout: the collection runs main's code
   if ! $check && platform_on && telemetry_on; then
-    if implement_live; then
+    if implement_near; then
       note "platform: an implementing session runs, collecting without the move to main"
     elif git -C "$REPO" fetch -q origin 2>/dev/null; then
       fetched=true

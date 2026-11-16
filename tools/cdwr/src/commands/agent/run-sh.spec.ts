@@ -3974,6 +3974,7 @@ describe('run.sh platform step', () => {
       'platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }',
       fn('platform_warn'),
       fn('implement_live'),
+      fn('implement_near'),
       fn('to_main'),
       fn('platform_move'),
       fn('record_platform'),
@@ -4018,7 +4019,7 @@ describe('run.sh platform step', () => {
     expect(at).toBeGreaterThan(toMain);
     expect(at).toBeLessThan(SCRIPT.indexOf('\nCHECKIN_ID=""'));
     // inside the unpaused block: the implementing session is checked and origin fetched first
-    const live = SCRIPT.indexOf('implement_live', lock);
+    const live = SCRIPT.indexOf('implement_near', lock);
     const fetch = SCRIPT.indexOf('fetch -q origin', lock);
     expect(live).toBeGreaterThan(lock);
     expect(fetch).toBeGreaterThan(live);
@@ -4189,6 +4190,35 @@ describe('run.sh platform step', () => {
         expect(existsSync(join(root, 'lock'))).toBe(false);
       }
     );
+
+    it.skipIf(!hasZsh)(
+      'skips the move after a launch that holds no implement.lock yet',
+      async () => {
+        setup();
+        const before = git(work(), 'rev-parse', 'HEAD');
+        writeFileSync(join(root, 'launch.json'), '{}\n');
+        await tick(CREDS, true, true);
+        expect(collected()).toBe(true);
+        expect(read('node.head').trim()).toBe(before);
+        expect(read('notes')).toContain('an implementing session runs');
+      }
+    );
+
+    it.skipIf(!hasZsh)('moves once a launch is a minute old', async () => {
+      setup();
+      writeFileSync(join(root, 'launch.json'), '{}\n');
+      const old = new Date(Date.now() - 2 * 60 * 1000);
+      utimesSync(join(root, 'launch.json'), old, old);
+      await tick(CREDS, true, true);
+      expect(read('node.head').trim()).toBe(originHead());
+    });
+
+    it('checks for an implementing session under the queue lock', () => {
+      const move = fn('platform_move');
+      expect(move.indexOf('implement_near')).toBeGreaterThan(
+        move.indexOf('mkdir "$HOME_DIR/lock"')
+      );
+    });
 
     it.skipIf(!hasZsh)(
       'notes a dirty worktree, records nothing and still collects',
