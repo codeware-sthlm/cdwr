@@ -1,4 +1,9 @@
-import { SilentNoOpError, isGuardedNoOp, retryGuardedNoOp } from './database';
+import {
+  SilentNoOpError,
+  isGuardedNoOp,
+  resolveDatabaseUrl,
+  retryGuardedNoOp
+} from './database';
 import { CommandError } from './shell';
 
 const guarded = () =>
@@ -69,5 +74,13 @@ describe('retryGuardedNoOp', () => {
       'did nothing 3 times in a row'
     );
     expect(work).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('resolveDatabaseUrl', () => {
+  it('asks for the preview app in preview', async () => {
+    await expect(resolveDatabaseUrl('preview')).rejects.toThrow(
+      'pass --preview-app (-p)'
+    );
   });
 });
