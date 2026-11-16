@@ -18,9 +18,9 @@ const SentryEnv = EnvSchema.pick({
  * copied next to it. Errors are captured either way; what the preload would add
  * is automatic tracing of Node's own modules, such as outgoing `fetch`.
  *
- * Reads only its own variables, so a broken environment still fails per
- * request, with its message, rather than at boot; Sentry then stays off and
- * says so.
+ * Reads only its own variables; when they are invalid, Sentry stays off and
+ * says so. The rest of the environment is checked at boot, by the Nitro
+ * plugin in `env-check.ts`.
  */
 export function initSentryServer(env: NodeJS.ProcessEnv = process.env) {
   const result = SentryEnv.safeParse(env);
