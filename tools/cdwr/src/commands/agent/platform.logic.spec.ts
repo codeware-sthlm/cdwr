@@ -79,13 +79,13 @@ const acme: TenantRecord = {
   domains: [
     {
       hostname: 'acme.example',
-      app: 'cms',
+      app: 'cdwr-cms-acme-dep',
       primary: true,
       certificateStatus: 'ready'
     },
     {
       hostname: 'www.acme.example',
-      app: 'headless',
+      app: 'cdwr-headless-acme-dep',
       primary: false,
       certificateStatus: null
     }
@@ -279,14 +279,14 @@ describe('buildRows', () => {
     expect(row(rows, 'acme').domains).toEqual([
       {
         hostname: 'acme.example',
-        app: 'cms',
+        app: 'cdwr-cms-acme-dep',
         primary: true,
         certificate: 'Ready',
         recordedCertificate: 'ready'
       },
       {
         hostname: 'www.acme.example',
-        app: 'headless',
+        app: 'cdwr-headless-acme-dep',
         primary: false,
         certificate: 'Pending',
         recordedCertificate: null
@@ -294,13 +294,139 @@ describe('buildRows', () => {
     ]);
 
     const missing = buildRows(
-      readings({ fly: ok([flyApp('cdwr-cms-acme-dep', { certs: ok([]) })]) })
+      readings({
+        fly: ok([
+          flyApp('cdwr-cms-acme-dep', { certs: ok([]) }),
+          flyApp('cdwr-headless-acme-dep', { certs: ok([]) })
+        ])
+      })
     );
+    const missingRow = row(missing.rows, 'acme');
     expect(
-      (row(missing.rows, 'acme').domains as { certificate: string }[]).map(
+      (missingRow.domains as { certificate: string }[]).map(
         (d) => d.certificate
       )
     ).toEqual(['missing', 'missing']);
+    expect(missingRow.errors).toEqual({});
+  });
+
+  it('looks a domain up on the app it names, the host app included', () => {
+    const onHost: TenantRecord = {
+      ...acme,
+      domains: [
+        {
+          hostname: 'host.acme.example',
+          app: 'cdwr-cms',
+          primary: true,
+          certificateStatus: null
+        }
+      ]
+    };
+    const { rows } = buildRows(
+      readings({
+        tenants: ok([onHost, beta]),
+        fly: ok([
+          flyApp('cdwr-cms', {
+            certs: ok([
+              { hostname: 'host.acme.example', clientStatus: 'Ready' }
+            ])
+          }),
+          flyApp('cdwr-cms-acme-dep', { certs: ok([]) })
+        ])
+      })
+    );
+    const acmeRow = row(rows, 'acme');
+    expect(acmeRow.domains).toMatchObject([
+      { hostname: 'host.acme.example', app: 'cdwr-cms', certificate: 'Ready' }
+    ]);
+    expect(acmeRow.errors).toEqual({});
+    expect(row(rows, SHARED_KEY).domains).toEqual([]);
+  });
+
+  it('reads a domain on its named app as missing when that app lacks it, without falling back', () => {
+    const { rows } = buildRows(
+      readings({
+        fly: ok([
+          flyApp('cdwr-cms-acme-dep', {
+            certs: ok([
+              { hostname: 'acme.example', clientStatus: 'Ready' },
+              { hostname: 'www.acme.example', clientStatus: 'Ready' }
+            ])
+          }),
+          flyApp('cdwr-headless-acme-dep', { certs: ok([]) })
+        ])
+      })
+    );
+    expect(
+      (row(rows, 'acme').domains as { certificate: string }[]).map(
+        (d) => d.certificate
+      )
+    ).toEqual(['Ready', 'missing']);
+  });
+
+  it('falls back to the own apps when the named app was not read, and notes it when they lack it too', () => {
+    const kindOnly: TenantRecord = {
+      ...acme,
+      domains: [
+        {
+          hostname: 'acme.example',
+          app: 'cms',
+          primary: true,
+          certificateStatus: 'ready'
+        },
+        {
+          hostname: 'www.acme.example',
+          app: 'cdwr-headless-gone',
+          primary: false,
+          certificateStatus: null
+        },
+        {
+          hostname: 'none.acme.example',
+          app: null,
+          primary: false,
+          certificateStatus: null
+        }
+      ]
+    };
+    const { rows } = buildRows(
+      readings({
+        tenants: ok([kindOnly, beta]),
+        fly: ok([flyApp('cdwr-cms-acme-dep')])
+      })
+    );
+    const acmeRow = row(rows, 'acme');
+    expect(
+      (acmeRow.domains as { certificate: string }[]).map((d) => d.certificate)
+    ).toEqual(['Ready', 'unknown', 'missing']);
+    expect(acmeRow.errors).toEqual({
+      certs: 'www.acme.example: cdwr-headless-gone was not read'
+    });
+  });
+
+  it('notes a failed certificate read of a named app on another row, once', () => {
+    const onHost: TenantRecord = {
+      ...acme,
+      domains: ['a.acme.example', 'b.acme.example'].map((hostname) => ({
+        hostname,
+        app: 'cdwr-cms',
+        primary: false,
+        certificateStatus: null
+      }))
+    };
+    const { rows } = buildRows(
+      readings({
+        tenants: ok([onHost, beta]),
+        fly: ok([flyApp('cdwr-cms', { certs: failed('fly timed out') })])
+      })
+    );
+    const acmeRow = row(rows, 'acme');
+    expect(
+      (acmeRow.domains as { certificate: string }[]).map((d) => d.certificate)
+    ).toEqual(['unknown', 'unknown']);
+    expect(acmeRow.errors).toEqual({ certs: 'cdwr-cms: fly timed out' });
+    expect(row(rows, SHARED_KEY).errors).toEqual({
+      certs: 'cdwr-cms: fly timed out'
+    });
   });
 
   it('records a failed certificate read as unknown with the reason in errors', () => {
@@ -309,13 +435,15 @@ describe('buildRows', () => {
         fly: ok([
           flyApp('cdwr-cms-acme-dep', {
             certs: failed(new Error('flyctl exploded\nsecond line'))
-          })
+          }),
+          flyApp('cdwr-headless-acme-dep', { certs: failed('timed out') })
         ])
       })
     );
     const acmeRow = row(rows, 'acme');
     expect(acmeRow.errors).toEqual({
-      certs: 'cdwr-cms-acme-dep: flyctl exploded second line'
+      certs:
+        'cdwr-cms-acme-dep: flyctl exploded second line; cdwr-headless-acme-dep: timed out'
     });
     expect(
       (acmeRow.domains as { certificate: string }[]).map((d) => d.certificate)
