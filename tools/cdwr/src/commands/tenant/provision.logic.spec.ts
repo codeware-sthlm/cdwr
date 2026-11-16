@@ -197,6 +197,25 @@ describe('provisionSteps imports', () => {
       'Import /apps/cms/signature into /tenants/demo/apps/headless'
     ]);
   });
+
+  it('lists the imports before the flag, in write order', () => {
+    expect(
+      provisionSteps(
+        'demo',
+        [],
+        [],
+        [{ app: 'headless', action: 'create' }],
+        undefined,
+        false,
+        [],
+        planImports(['headless'], [])
+      )
+    ).toEqual([
+      'Import /apps/headless into /tenants/demo/apps/headless',
+      'Import /apps/cms/signature into /tenants/demo/apps/headless',
+      'Set DEPLOY_ENABLED=true in /tenants/demo/apps/headless'
+    ]);
+  });
 });
 
 describe('pausedMessage', () => {
