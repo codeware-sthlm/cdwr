@@ -71,6 +71,10 @@ vi.mock('../../services/github', () => ({
 vi.mock('../../services/infisical', () => ({
   readSecrets: vi.fn(async () => ({})),
   readDeployFlag: vi.fn(async (): Promise<string | undefined> => undefined),
+  ensureInfisicalSecretImport: vi.fn(async (): Promise<boolean> => true),
+  listInfisicalSecretImports: vi.fn(
+    async (): Promise<Array<{ path: string; environment: string }>> => []
+  ),
   setInfisicalSecret: vi.fn().mockResolvedValue({
     action: 'created',
     key: 'PAYLOAD_API_KEY',
@@ -163,11 +167,12 @@ const existingFolder = async (flag?: string) => {
 describe('tenant provision', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const { readSecrets, readDeployFlag } =
+    const { readSecrets, readDeployFlag, listInfisicalSecretImports } =
       await import('../../services/infisical');
     vi.mocked(readSecrets).mockResolvedValue({});
     vi.mocked(readDeployFlag).mockResolvedValue(undefined);
     listFolders.mockImplementation(async () => []);
+    vi.mocked(listInfisicalSecretImports).mockResolvedValue([]);
   });
 
   it('creates the folders, key and flag, then triggers the deployment', async () => {
@@ -265,6 +270,115 @@ describe('tenant provision', () => {
     expect(ui.printed.note.join('\n')).toContain(
       'Set DEPLOY_ENABLED=true in /tenants/acme/apps/cms'
     );
+  });
+
+  describe('headless imports', () => {
+    const HEADLESS_FOLDERS: Record<string, Array<{ name: string }>> = {
+      ...EXISTING_FOLDERS,
+      '/tenants/acme/apps': [{ name: 'cms' }, { name: 'headless' }]
+    };
+    const headlessFolder = async () => {
+      await existingFolder('true');
+      listFolders.mockImplementation(
+        async ({ path }: { path: string }) => HEADLESS_FOLDERS[path] ?? []
+      );
+    };
+
+    it('imports the shared folders and the signature', async () => {
+      const { ensureInfisicalSecretImport } =
+        await import('../../services/infisical');
+      await headlessFolder();
+
+      const { exit, out } = await run(['--json'], 'production', 'headless');
+
+      expect(exit).toBe(EXIT.ok);
+      expect(ensureInfisicalSecretImport).toHaveBeenCalledTimes(2);
+      expect(ensureInfisicalSecretImport).toHaveBeenCalledWith({
+        environment: 'production',
+        path: '/tenants/acme/apps/headless',
+        importPath: '/apps/headless'
+      });
+      expect(ensureInfisicalSecretImport).toHaveBeenCalledWith({
+        environment: 'production',
+        path: '/tenants/acme/apps/headless',
+        importPath: '/apps/cms/signature'
+      });
+      expect(out).toContain('importsWritten');
+    });
+
+    it('keeps an import that is already there and writes the other', async () => {
+      const { ensureInfisicalSecretImport, listInfisicalSecretImports } =
+        await import('../../services/infisical');
+      await headlessFolder();
+      vi.mocked(listInfisicalSecretImports).mockResolvedValue([
+        { path: '/apps/headless', environment: 'production' },
+        { path: '/apps/cms/signature', environment: 'preview' }
+      ]);
+
+      const { ui } = await run([], 'production', 'headless');
+
+      const planned = ui.printed.note.join('\n');
+      expect(planned).toContain(
+        'Keep import of /apps/headless in /tenants/acme/apps/headless (already there)'
+      );
+      expect(planned).toContain(
+        'Import /apps/cms/signature into /tenants/acme/apps/headless'
+      );
+      expect(ensureInfisicalSecretImport).toHaveBeenCalledTimes(1);
+      expect(ensureInfisicalSecretImport).toHaveBeenCalledWith(
+        expect.objectContaining({ importPath: '/apps/cms/signature' })
+      );
+    });
+
+    it('writes the imports before the deploy flag', async () => {
+      const { ensureInfisicalSecretImport, setInfisicalSecret } =
+        await import('../../services/infisical');
+      listFolders.mockImplementation(
+        async ({ path }: { path: string }) => HEADLESS_FOLDERS[path] ?? []
+      );
+
+      const { exit } = await run([], 'production', 'headless');
+
+      expect(exit).toBe(EXIT.ok);
+      const flagCall = vi
+        .mocked(setInfisicalSecret)
+        .mock.calls.findIndex(([arg]) => arg.key === 'DEPLOY_ENABLED');
+      expect(flagCall).toBeGreaterThanOrEqual(0);
+      const flagOrder =
+        vi.mocked(setInfisicalSecret).mock.invocationCallOrder[flagCall];
+      const importOrders = vi.mocked(ensureInfisicalSecretImport).mock
+        .invocationCallOrder;
+      expect(importOrders.length).toBeGreaterThan(0);
+      for (const order of importOrders) {
+        expect(order).toBeLessThan(flagOrder);
+      }
+    });
+
+    it('plans no import for the cms', async () => {
+      const { ensureInfisicalSecretImport, listInfisicalSecretImports } =
+        await import('../../services/infisical');
+      await existingFolder('true');
+
+      const { ui } = await run();
+
+      expect(ui.printed.note.join('\n')).not.toContain('Import ');
+      expect(ensureInfisicalSecretImport).not.toHaveBeenCalled();
+      expect(listInfisicalSecretImports).not.toHaveBeenCalled();
+    });
+
+    it('shows the imports and writes none on a dry run', async () => {
+      const { ensureInfisicalSecretImport } =
+        await import('../../services/infisical');
+      await headlessFolder();
+
+      const { exit, ui } = await run(['--dry-run'], 'production', 'headless');
+
+      expect(exit).toBe(EXIT.ok);
+      expect(ensureInfisicalSecretImport).not.toHaveBeenCalled();
+      expect(ui.printed.note.join('\n')).toContain(
+        'Import /apps/headless into /tenants/acme/apps/headless'
+      );
+    });
   });
 
   describe('statistics website', () => {

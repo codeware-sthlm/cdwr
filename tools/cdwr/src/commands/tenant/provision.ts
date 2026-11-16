@@ -26,6 +26,8 @@ import {
 } from '../../services/github';
 import {
   type Environment,
+  ensureInfisicalSecretImport,
+  listInfisicalSecretImports,
   readDeployFlag,
   readSecrets,
   setInfisicalSecret
@@ -61,6 +63,7 @@ import {
   type FlagPlan,
   type FlipOutcome,
   type Folder,
+  type ImportPlan,
   type KeyPlan,
   type StatsPlan,
   TENANT_APPS,
@@ -76,6 +79,7 @@ import {
   pickShare,
   planFlyAppsToDeploy,
   planFolders,
+  planImports,
   provisionSteps,
   reasonSkipped,
   statsDomain,
@@ -268,6 +272,7 @@ interface PlanData {
   folders: Folder[];
   keysToWrite: AppKind[];
   flags: FlagPlan[];
+  imports: ImportPlan[];
   databaseUrl: string;
   tenantId: number;
   stats: StatsPlan;
@@ -601,7 +606,7 @@ export default defineCommand({
 
     const connection = await createClient({});
 
-    const { folders, keys, flags } = await ctx.ui.task(
+    const { folders, keys, flags, imports } = await ctx.ui.task(
       'Reading what Infisical already holds',
       async () => {
         const folders = await planFolders(
@@ -637,10 +642,23 @@ export default defineCommand({
             return { key, plan };
           })
         );
+        const headlessPath = `/tenants/${deployment}/apps/headless`;
+        const imported =
+          apps.includes('headless') && !missing.has(headlessPath)
+            ? (
+                await listInfisicalSecretImports({
+                  environment,
+                  path: headlessPath
+                })
+              )
+                .filter((found) => found.environment === environment)
+                .map((found) => found.path)
+            : [];
         return {
           folders,
           keys: rows.map(({ key }) => key),
-          flags: rows.map(({ plan }) => plan)
+          flags: rows.map(({ plan }) => plan),
+          imports: planImports(apps, imported)
         };
       },
       () => 'Plan ready'
@@ -706,7 +724,8 @@ export default defineCommand({
         flags,
         stats,
         flip,
-        statsTeam?.plan.steps
+        statsTeam?.plan.steps,
+        imports
       ),
       notes,
       target: { environment, name: deployment },
@@ -720,6 +739,7 @@ export default defineCommand({
         folders,
         keysToWrite,
         flags,
+        imports,
         databaseUrl,
         tenantId: tenant.id,
         stats,
@@ -733,6 +753,7 @@ export default defineCommand({
           folders.length +
           keysToWrite.length +
           flags.filter(({ action }) => action === 'create').length +
+          imports.filter(({ action }) => action === 'create').length +
           statsWrites(stats, tenant.statsShareId) +
           (statsTeam?.plan.steps.length ?? 0)
       } satisfies PlanData
@@ -750,6 +771,7 @@ export default defineCommand({
       folders,
       keysToWrite,
       flags,
+      imports,
       databaseUrl,
       tenantId,
       stats,
@@ -809,6 +831,33 @@ export default defineCommand({
             : `${secretPath} created`
       );
       if (status === 'created') written.push(app);
+    }
+
+    // Checked again by the lib right before writing: an import that appeared after the plan is kept
+    const importsWritten: string[] = [];
+    for (const { app, importPath } of imports.filter(
+      ({ action }) => action === 'create'
+    )) {
+      const secretPath = `/tenants/${deployment}/apps/${app}`;
+      const created = await ctx.ui.task(
+        `Importing ${importPath} into ${secretPath}`,
+        async () => {
+          try {
+            return await ensureInfisicalSecretImport({
+              environment,
+              path: secretPath,
+              importPath
+            });
+          } catch (error) {
+            throw new CliError(messageOf(error), EXIT.failed, RETRY_HINT);
+          }
+        },
+        (result) =>
+          result
+            ? `${secretPath} imports ${importPath}`
+            : `${secretPath} already imports ${importPath}`
+      );
+      if (created) importsWritten.push(`${secretPath} <- ${importPath}`);
     }
 
     // Created like the key: a flag that appeared after the plan is never overwritten
@@ -1070,6 +1119,7 @@ export default defineCommand({
         flagsWritten: flags
           .filter(({ action }) => action === 'create')
           .map(({ app }) => app),
+        importsWritten,
         paused: paused.map(({ app }) => app),
         statistics: {
           action: statistics.action,
