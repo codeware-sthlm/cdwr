@@ -513,17 +513,48 @@ const note = (errors: Errors, source: string, reason: string): void => {
   errors[source] = errors[source] ? `${errors[source]}; ${reason}` : reason;
 };
 
-const certificateOf = (
+const certificateIn = (
   hostname: string,
-  apps: AppState[],
-  flyRead: boolean
-): string => {
-  if (!flyRead) return 'unknown';
+  apps: AppState[]
+): string | undefined => {
   for (const app of apps) {
     const found = app.certs?.find((c) => c.hostname === hostname);
     if (found) return found.state;
   }
-  return apps.some((app) => app.certs === null) ? 'unknown' : 'missing';
+  return undefined;
+};
+
+/**
+ * A domain's certificate, looked up on the app the domain names (any app read,
+ * the host app included). When the domain names no app, or one that wasn't
+ * read, the tenant's own apps are searched instead. Returns a `certs` reason
+ * for the row when the lookup could not be made.
+ */
+const certificateOf = (
+  domain: { hostname: string; app: string | null },
+  own: AppState[],
+  byName: Map<string, AppState>,
+  flyRead: boolean
+): { state: string; error?: string } => {
+  if (!flyRead) return { state: 'unknown' };
+  const named = domain.app ? byName.get(domain.app) : undefined;
+  if (named) {
+    if (named.certs === null) return { state: 'unknown' };
+    return {
+      state: certificateIn(domain.hostname, [named]) ?? 'missing'
+    };
+  }
+  const found = certificateIn(domain.hostname, own);
+  if (found) return { state: found };
+  if (domain.app) {
+    return {
+      state: 'unknown',
+      error: `${domain.hostname}: ${domain.app} was not read`
+    };
+  }
+  return {
+    state: own.some((app) => app.certs === null) ? 'unknown' : 'missing'
+  };
 };
 
 /**
@@ -546,6 +577,9 @@ export const buildRows = (
     return own;
   };
   const apps = new Map<string, AppState[]>();
+  // Every app read, by name, with its owner and why its certificates weren't read
+  const byName = new Map<string, AppState>();
+  const appInfo = new Map<string, { key: string; certsReason?: string }>();
   const switchList = new Map<string, SwitchRecord[]>();
   const visitorDays = daysBefore(stockholmDay(Date.parse(at)), VISITOR_DAYS);
 
@@ -598,17 +632,20 @@ export const buildRows = (
       if (!reading.certs.ok) {
         note(own, 'certs', `${reading.name}: ${reading.certs.reason}`);
       }
-      apps.set(owner.key, [
-        ...(apps.get(owner.key) ?? []),
-        appState(
-          reading,
-          owner.kind,
-          behind,
-          owner.key === SHARED_KEY
-            ? undefined
-            : gated.get(`${owner.key}\u0000${owner.kind}`)
-        )
-      ]);
+      const state = appState(
+        reading,
+        owner.kind,
+        behind,
+        owner.key === SHARED_KEY
+          ? undefined
+          : gated.get(`${owner.key}\u0000${owner.kind}`)
+      );
+      apps.set(owner.key, [...(apps.get(owner.key) ?? []), state]);
+      byName.set(reading.name, state);
+      appInfo.set(reading.name, {
+        key: owner.key,
+        ...(reading.certs.ok ? {} : { certsReason: reading.certs.reason })
+      });
     }
   }
 
@@ -643,6 +680,30 @@ export const buildRows = (
         if (!seen) note(errorsOf(t.slug), 'umami', 'not read');
         else if (!seen.ok) note(errorsOf(t.slug), 'umami', seen.reason);
       }
+      // A named app on another row whose certificates weren't read: its
+      // reason shows here too, once per app
+      const noted = new Set<string>();
+      const domains = t.domains.map((d) => {
+        const { state, error } = certificateOf(d, own, byName, fly.ok);
+        if (error !== undefined) note(errorsOf(t.slug), 'certs', error);
+        const info = d.app ? appInfo.get(d.app) : undefined;
+        if (
+          d.app &&
+          info?.certsReason !== undefined &&
+          info.key !== t.slug &&
+          !noted.has(d.app)
+        ) {
+          noted.add(d.app);
+          note(errorsOf(t.slug), 'certs', `${d.app}: ${info.certsReason}`);
+        }
+        return {
+          hostname: d.hostname,
+          app: d.app,
+          primary: d.primary,
+          certificate: state,
+          recordedCertificate: d.certificateStatus
+        };
+      });
       return {
         key: t.slug,
         at,
@@ -650,13 +711,7 @@ export const buildRows = (
         deployment: t.deployment,
         status: t.status,
         apps: own,
-        domains: t.domains.map((d) => ({
-          hostname: d.hostname,
-          app: d.app,
-          primary: d.primary,
-          certificate: certificateOf(d.hostname, own, fly.ok),
-          recordedCertificate: d.certificateStatus
-        })),
+        domains,
         switches: switchState(t.slug),
         db: {},
         sentry: sentry.ok ? sentrySignal(sentry.value, t.slug) : {},
