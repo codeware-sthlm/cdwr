@@ -66,18 +66,22 @@ export const certCell = (row: TenantRow): Cell => {
     : { text: 'unknown', tone: 'muted' };
 };
 
-/** The database's sessions: the total of the shared row against the limit, a tenant's own by its apps' names where the database tells them apart */
+/** The database's sessions: the shared row's pooler sessions against the pool size (its total before they were read), a tenant's own by its apps' names where the database tells them apart */
 export const sessionsCell = (row: TenantRow, db: TenantDb | null): Cell => {
-  if (row.db)
+  if (row.db) {
+    const pooler = row.db.pooler;
+    if (pooler === null)
+      return { text: String(row.db.sessions), tone: 'muted' };
     return {
-      text: `${row.db.sessions} of ${DB_SESSIONS_MAX}`,
+      text: `${pooler} of ${DB_SESSIONS_MAX}`,
       tone:
-        row.db.sessions >= DB_SESSIONS_MAX
+        pooler >= DB_SESSIONS_MAX
           ? 'bad'
-          : row.db.sessions >= DB_SESSIONS_WARN
+          : pooler >= DB_SESSIONS_WARN
             ? 'wait'
             : 'ok'
     };
+  }
   const own = row.apps.flatMap((a) =>
     db && a.app in db.byApplication ? [db.byApplication[a.app]] : []
   );

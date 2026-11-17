@@ -55,6 +55,8 @@ export type TenantSwitch = {
 export type TenantDb = {
   sizeBytes: number | null;
   sessions: number;
+  /** The sessions that take a slot in the pool (Supavisor's); null on a row written before it was read */
+  pooler: number | null;
   byApplication: Record<string, number>;
 };
 
@@ -223,6 +225,7 @@ const database = (value: unknown): TenantDb | null => {
   return {
     sizeBytes: num(value['sizeBytes']),
     sessions,
+    pooler: num(value['poolerSessions']),
     byApplication: isRecord(by)
       ? Object.fromEntries(
           Object.entries(by).flatMap(([k, v]) => {

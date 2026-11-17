@@ -39,7 +39,7 @@ The desk raises these problems from the rows:
 - app down: health not 200 or timed out (10 s), or the app has no machine at all (a suspended or stopped machine is not down)
 - behind main: the `behind` flag
 - certificate not ready: neither Ready nor unknown
-- pooler near its limit: 12 or more of 15 sessions
+- pooler near its limit: 12 or more of its 15 sessions, counting only `Supavisor` sessions (`poolerSessions`); Supabase's own sessions and Supavisor's `(auth_query)` take no slot, but the evidence still lists every application
 - error spike: 10 or more errors in 24 h and at least 3x the daily average of the 6 days before
 - deploy failed: the newest run's deploy job failed; clears when a newer run's deploy doesn't fail
 

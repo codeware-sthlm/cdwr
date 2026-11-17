@@ -139,12 +139,12 @@ describe('TenantsPage', () => {
     expect(all('.tn-head')).toHaveLength(1);
   });
 
-  it('shows the shared sessions against the limit', () => {
+  it('shows the shared pooler sessions against the pool size', () => {
     media(false);
     const { all } = mount(rows());
     expect(
       all('[data-tenant="_shared"] [data-col="sessions"]')[0].textContent
-    ).toBe('5 of 15');
+    ).toBe('3 of 15');
   });
 
   it('draws a name, a status chip and one line on the phone', () => {
@@ -200,7 +200,8 @@ describe('TenantsPage', () => {
     const { all } = mount(rows());
     fireEvent.click(all('[data-tenant="_shared"]')[0]);
     const dialog = screen.getByRole('dialog', { name: 'Shared' });
-    expect(dialog.textContent).toContain('5 of 15');
+    expect(dialog.textContent).toContain('Pooler sessions3 of 15');
+    expect(dialog.textContent).toContain('All sessions5');
     expect(dialog.textContent).toContain('120 MiB');
     expect(dialog.textContent).toContain('host');
     expect(dialog.textContent).toContain('No host certificate was read.');

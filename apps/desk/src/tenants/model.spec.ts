@@ -69,8 +69,16 @@ describe('parseTenantRow', () => {
     expect(row.db).toEqual({
       sizeBytes: 120 * 2 ** 20,
       sessions: 5,
+      pooler: 3,
       byApplication: { 'cdwr-cms': 3 }
     });
+  });
+
+  it('reads a database row written before the pooler count as no pooler figure', () => {
+    const row = parseTenantRow(
+      shared({ db: { sizeBytes: null, sessions: 14, byApplication: {} } })
+    );
+    expect(row.db).toMatchObject({ sessions: 14, pooler: null });
   });
 
   it('reads a read that failed as null, not as empty', () => {

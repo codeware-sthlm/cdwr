@@ -159,15 +159,54 @@ describe('cert', () => {
 });
 
 describe('pooler', () => {
-  it('is raised on the shared row from 12 sessions, not at 11', () => {
-    const at = (sessions: number) =>
-      sharedProblems({ db: { sizeBytes: null, sessions, byApplication: {} } });
+  it('is raised on the shared row from 12 pooler sessions, not at 11', () => {
+    const at = (poolerSessions: number) =>
+      sharedProblems({
+        db: {
+          sizeBytes: null,
+          sessions: 20,
+          poolerSessions,
+          byApplication: {}
+        }
+      });
     expect(at(11)).toEqual([]);
     const found = at(12);
     expect(found.map((p) => p.key)).toEqual(['_shared:pooler']);
-    expect(found[0].evidence).toEqual(['12 of 15 sessions in use']);
+    expect(found[0].evidence).toEqual(['12 of 15 pooler sessions in use']);
     expect(found[0].threshold).toContain('12');
+    expect(found[0].threshold).toContain('pooler');
     expect(at(15)).toHaveLength(1);
+  });
+
+  it('counts only the pooler, and still lists every application', () => {
+    const byApplication = {
+      '(none)': 2,
+      Supavisor: 6,
+      postgrest: 1,
+      'pg_net 0.20.0': 1,
+      'pg_cron scheduler': 1,
+      postgres_exporter: 1,
+      'Supavisor (auth_query)': 2
+    };
+    const quiet = sharedProblems({
+      db: { sizeBytes: null, sessions: 14, poolerSessions: 6, byApplication }
+    });
+    expect(quiet).toEqual([]);
+    const busy = sharedProblems({
+      db: { sizeBytes: null, sessions: 20, poolerSessions: 12, byApplication }
+    });
+    expect(busy[0].evidence).toEqual([
+      '12 of 15 pooler sessions in use',
+      ...Object.entries(byApplication).map(([name, n]) => `${name}: ${n}`)
+    ]);
+  });
+
+  it('is not raised on a row written before the pooler count', () => {
+    expect(
+      sharedProblems({
+        db: { sizeBytes: null, sessions: 14, byApplication: {} }
+      })
+    ).toEqual([]);
   });
 });
 
@@ -252,7 +291,12 @@ describe('allProblems', () => {
         apps: [flyApp('cdwr-cms-acme', 'cms', { machines: [] })]
       }),
       shared({
-        db: { sizeBytes: null, sessions: 13, byApplication: {} },
+        db: {
+          sizeBytes: null,
+          sessions: 16,
+          poolerSessions: 13,
+          byApplication: {}
+        },
         deploy: deployRun({ conclusion: 'failure' })
       }),
       tenant('mid', {
