@@ -1877,10 +1877,10 @@ review_run() {
     note "warn: review: no queue view"; record warn "" "review: no queue view"
     review_line "failed: no queue view"; return 0
   fi
-  # Dismissals hold for 90 days, as the desk reads them. Each goes to the session with the stored
+  # Dismissals hold for 90 days in UTC, as the desk reads them. Each goes to the session with the stored
   # finding it names (ticket, kind, key, fix), found in the reviews of the same window; the rows go
   # through files, never arguments.
-  since="$(date -v-90d +%F 2>/dev/null || date -d '90 days ago' +%F 2>/dev/null)"
+  since="$(date -u -v-90d +%F 2>/dev/null || date -u -d '90 days ago' +%F 2>/dev/null)"
   supabase_select review_dismissals "at=gte.$since&order=at.desc" > "$HOME_DIR/review-dismissals.tmp" ||
     print -r -- '[]' > "$HOME_DIR/review-dismissals.tmp"
   supabase_select reviews "at=gte.$since&select=findings" > "$HOME_DIR/review-findings.tmp" ||
