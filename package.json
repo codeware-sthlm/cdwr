@@ -65,7 +65,7 @@
     "@tailwindcss/node": "4.3.4",
     "@tailwindcss/oxide": "4.3.4",
     "@tanstack/react-router": "1.170.46",
-    "@tanstack/react-start": "1.169.4",
+    "@tanstack/react-start": "1.169.5",
     "@tauri-apps/api": "2.12.4",
     "@tauri-apps/plugin-http": "2.8.3",
     "@tauri-apps/plugin-opener": "2.7.2",
