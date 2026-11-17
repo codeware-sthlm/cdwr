@@ -28,6 +28,12 @@ SELECT json_build_object(
     'sessions', (
       SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()
     ),
+    -- Only these take a slot in the session pool; Supabase's own sessions and
+    -- Supavisor's `(auth_query)` lookup do not
+    'poolerSessions', (
+      SELECT count(*) FROM pg_stat_activity
+      WHERE datname = current_database() AND application_name = 'Supavisor'
+    ),
     'byApplication', coalesce((
       SELECT json_object_agg(application, sessions)
       FROM (
