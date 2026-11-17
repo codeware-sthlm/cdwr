@@ -419,7 +419,8 @@ buttons, and they change production. `restart` runs `cdwr fly restart <app>`; `g
 first with `--dry-run --json` and checks the live state it prints with `platform_verdict` in
 `watch.jq`, before the ack: a restart needs the app to have machines and still run the commit the
 desk showed (`sha`, when the desk showed one), and a gate needs a deployed app that is not already
-closed or open. A command whose dry run fails, or whose answer doesn't match, is refused with that
+closed or open. A gate with no deployed app names the side that failed: Infisical listing no app
+for the tenant, or Fly refusing to read the app, with Fly's error. A command whose dry run fails, or whose answer doesn't match, is refused with that
 reason and never runs for real. Then the row is acked, then the real command runs, so a command
 that fails after the ack turns the row `refused` with the command's own message. Only the app name
 and tenant slug that pass a strict pattern reach the command line, and only production.

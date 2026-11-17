@@ -3356,6 +3356,80 @@ describe('watch.jq platform_verdict', () => {
       ).toBe('acme has no deployed app');
     });
 
+    it.skipIf(!canRun)('names Infisical when it lists no app', () => {
+      expect(verdict('gate', args('open'), envelope(gateState([])))).toBe(
+        'Infisical lists no app for acme'
+      );
+    });
+
+    it.skipIf(!canRun)('names Fly and its error when it refused', () => {
+      expect(
+        verdict(
+          'gate',
+          args('open'),
+          envelope(
+            gateState([
+              { ...app('unreachable', false), flyError: 'Error: unauthorized' }
+            ])
+          )
+        )
+      ).toBe('Fly refused cdwr-cms-acme: Error: unauthorized');
+    });
+
+    it.skipIf(!canRun)('counts the other apps Fly refused', () => {
+      expect(
+        verdict(
+          'gate',
+          args('open'),
+          envelope(
+            gateState([
+              { ...app('unreachable', false), flyError: 'Error: unauthorized' },
+              {
+                ...app('unreachable', false, 'headless'),
+                flyError: 'Error: unauthorized'
+              }
+            ])
+          )
+        )
+      ).toBe('Fly refused cdwr-cms-acme: Error: unauthorized (+1 more)');
+    });
+
+    it.skipIf(!canRun)('cuts a long Fly refusal to 160 characters', () => {
+      const out = verdict(
+        'gate',
+        args('open'),
+        envelope(
+          gateState([
+            { ...app('unreachable', false), flyError: 'x'.repeat(160) }
+          ])
+        )
+      );
+      expect(out.startsWith('Fly refused cdwr-cms-acme: xxx')).toBe(true);
+      expect(out).toHaveLength(160);
+      expect(out.endsWith('…')).toBe(true);
+    });
+
+    it.skipIf(!canRun)(
+      'lets a gate through when one app is live beside one Fly refused',
+      () => {
+        expect(
+          verdict(
+            'gate',
+            args('close'),
+            envelope(
+              gateState([
+                app('missing', false),
+                {
+                  ...app('unreachable', false, 'headless'),
+                  flyError: 'Error: unauthorized'
+                }
+              ])
+            )
+          )
+        ).toBe('ok');
+      }
+    );
+
     it.skipIf(!canRun)('refuses a dry run that read another tenant', () => {
       expect(
         verdict(
