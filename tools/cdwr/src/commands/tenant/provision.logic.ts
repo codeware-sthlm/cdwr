@@ -222,13 +222,14 @@ export const normalizeDomain = (value: string): string =>
 
 /**
  * The domain the workspace's statistics website is registered under: the
- * primary domain of its cms app, otherwise that app's Fly hostname.
+ * primary domain of the app it is named after (the cms, else headless),
+ * otherwise that app's Fly hostname.
  */
-export const statsDomain = (row: TenantRow, cmsFlyApp: string): string => {
+export const statsDomain = (row: TenantRow, flyApp: string): string => {
   const primary = row.domains.find(
-    ({ app, isPrimary }) => isPrimary && app === cmsFlyApp
+    ({ app, isPrimary }) => isPrimary && app === flyApp
   );
-  return normalizeDomain(primary?.hostname ?? `${cmsFlyApp}.fly.dev`);
+  return normalizeDomain(primary?.hostname ?? `${flyApp}.fly.dev`);
 };
 
 /**
@@ -242,8 +243,7 @@ export const pickShare = (
 ): string | null =>
   recorded ? (slugs.includes(recorded) ? recorded : null) : (slugs[0] ?? null);
 
-export type StatsSkipReason =
-  'preview' | 'unconfigured' | 'no-cms' | 'unreachable';
+export type StatsSkipReason = 'preview' | 'unconfigured' | 'unreachable';
 
 /** What to do about the workspace's Umami website */
 export type StatsPlan =
@@ -275,7 +275,6 @@ export const statsWrites = (
 const SKIP_TEXT: Record<StatsSkipReason, string> = {
   preview: 'preview',
   unconfigured: 'Umami not configured',
-  'no-cms': 'the cms is not among the apps',
   unreachable: 'Umami did not answer'
 };
 
