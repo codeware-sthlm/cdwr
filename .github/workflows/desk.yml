@@ -19,6 +19,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NX_NO_CLOUD: true
+
 concurrency:
   group: desk-${{ github.ref }}
   cancel-in-progress: true
