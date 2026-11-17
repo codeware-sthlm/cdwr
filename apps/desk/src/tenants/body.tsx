@@ -255,8 +255,14 @@ export const TenantBody = ({
       {row.db ? (
         <Section title="Database">
           <dl className={KV}>
-            <dt>Sessions</dt>
-            <dd>{`${row.db.sessions} of ${DB_SESSIONS_MAX}`}</dd>
+            {row.db.pooler === null ? null : (
+              <>
+                <dt>Pooler sessions</dt>
+                <dd>{`${row.db.pooler} of ${DB_SESSIONS_MAX}`}</dd>
+              </>
+            )}
+            <dt>All sessions</dt>
+            <dd>{row.db.sessions}</dd>
             {row.db.sizeBytes === null ? null : (
               <>
                 <dt>Size</dt>

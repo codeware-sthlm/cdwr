@@ -144,7 +144,8 @@ const cert = (row: TenantRow): Problem[] =>
 const pooler = (row: TenantRow): Problem[] =>
   row.key === SHARED_KEY &&
   row.db !== null &&
-  row.db.sessions >= DB_SESSIONS_WARN
+  row.db.pooler !== null &&
+  row.db.pooler >= DB_SESSIONS_WARN
     ? [
         {
           key: `${row.key}:pooler`,
@@ -153,12 +154,12 @@ const pooler = (row: TenantRow): Problem[] =>
           severity: 'warn',
           title: 'The database pooler is nearly full',
           evidence: [
-            `${row.db.sessions} of ${DB_SESSIONS_MAX} sessions in use`,
+            `${row.db.pooler} of ${DB_SESSIONS_MAX} pooler sessions in use`,
             ...Object.entries(row.db.byApplication).map(
               ([name, n]) => `${name}: ${n}`
             )
           ],
-          threshold: `${DB_SESSIONS_WARN} or more of the ${DB_SESSIONS_MAX} database sessions in use, three below the limit.`,
+          threshold: `${DB_SESSIONS_WARN} or more of the ${DB_SESSIONS_MAX} pooler (Supavisor) sessions in use, three below the pool size.`,
           actions: [
             'See which application holds the sessions',
             'Restart the app that leaks sessions (fly machine restart)'

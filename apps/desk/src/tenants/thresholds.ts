@@ -1,9 +1,9 @@
 // The limits and predicates both the status and the problems of a tenant row rest on
 
-/** The database's session limit; the NUC's platform step counts against it */
+/** The session pooler's size; the NUC's platform step counts Supavisor's sessions against it */
 export const DB_SESSIONS_MAX = 15;
 
-/** Sessions from which the shared row warns: three below the limit */
+/** Pooler sessions from which the shared row warns: three below the pool size */
 export const DB_SESSIONS_WARN = 12;
 
 /** Hours after which the newest database backup is stale: the NUC dumps nightly after 02:00, plus slack */

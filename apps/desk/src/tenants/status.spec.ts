@@ -135,11 +135,18 @@ describe('statusOf', () => {
     ).toBe('ok');
   });
 
-  it('warns the shared row from 12 database sessions', () => {
-    const at = (sessions: number) =>
+  it('warns the shared row from 12 pooler sessions', () => {
+    const at = (poolerSessions: number) =>
       statusOf(
         parseTenantRow(
-          shared({ db: { sizeBytes: null, sessions, byApplication: {} } })
+          shared({
+            db: {
+              sizeBytes: null,
+              sessions: 20,
+              poolerSessions,
+              byApplication: {}
+            }
+          })
         )
       );
     expect(at(DB_SESSIONS_WARN - 1)).toBe('ok');
@@ -227,7 +234,14 @@ describe('tenantsView', () => {
     const v = tenantsView(
       payload([
         tenant('acme'),
-        shared({ db: { sizeBytes: null, sessions: 13, byApplication: {} } })
+        shared({
+          db: {
+            sizeBytes: null,
+            sessions: 16,
+            poolerSessions: 13,
+            byApplication: {}
+          }
+        })
       ]),
       NOW
     );
@@ -240,7 +254,14 @@ describe('tenantsView', () => {
         tenant('acme', {
           apps: [flyApp('cdwr-cms-acme', 'cms', { behind: true })]
         }),
-        shared({ db: { sizeBytes: null, sessions: 13, byApplication: {} } }),
+        shared({
+          db: {
+            sizeBytes: null,
+            sessions: 16,
+            poolerSessions: 13,
+            byApplication: {}
+          }
+        }),
         tenant('zed', {
           apps: [flyApp('cdwr-cms-zed', 'cms', { machines: [] })]
         })
@@ -419,23 +440,35 @@ describe('cells', () => {
     });
   });
 
-  it('shows the shared sessions against the limit, a tenant its own by app name', () => {
+  it('shows the shared pooler sessions against the pool size, a tenant its own by app name', () => {
     const sharedRow = parseTenantRow(shared());
     expect(sessionsCell(sharedRow, sharedRow.db)).toEqual({
-      text: '5 of 15',
+      text: '3 of 15',
       tone: 'ok'
     });
-    const busy = parseTenantRow(
-      shared({ db: { sizeBytes: null, sessions: 12, byApplication: {} } })
-    );
+    const pooled = (sessions: number, poolerSessions: number) =>
+      parseTenantRow(
+        shared({
+          db: { sizeBytes: null, sessions, poolerSessions, byApplication: {} }
+        })
+      );
+    const busy = pooled(20, 12);
     expect(sessionsCell(busy, busy.db).tone).toBe('wait');
-    const full = parseTenantRow(
-      shared({ db: { sizeBytes: null, sessions: 15, byApplication: {} } })
-    );
+    const full = pooled(22, 15);
     expect(sessionsCell(full, full.db).tone).toBe('bad');
+    const quiet = pooled(14, 6);
+    expect(sessionsCell(quiet, quiet.db)).toEqual({
+      text: '6 of 15',
+      tone: 'ok'
+    });
+    const old = parseTenantRow(
+      shared({ db: { sizeBytes: null, sessions: 14, byApplication: {} } })
+    );
+    expect(sessionsCell(old, old.db)).toEqual({ text: '14', tone: 'muted' });
     const db = {
       sizeBytes: null,
       sessions: 5,
+      pooler: 3,
       byApplication: { 'cdwr-cms-acme': 2, 'cdwr-headless-acme': 1 }
     };
     expect(sessionsCell(row(), db)).toEqual({ text: '3', tone: 'muted' });
