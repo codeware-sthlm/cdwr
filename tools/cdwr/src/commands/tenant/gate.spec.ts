@@ -111,4 +111,52 @@ describe('tenant gate', () => {
     });
     expect(stdout.join('')).not.toContain('hunter2');
   });
+
+  it('keeps the Fly error of an app it could not read', async () => {
+    const { fly } = await import('../../services/fly');
+    vi.mocked(fly).mockReturnValueOnce({
+      secrets: {
+        list: vi
+          .fn()
+          .mockRejectedValue(
+            new Error('[list secrets] something broke\nError: unauthorized')
+          )
+      }
+    } as unknown as ReturnType<typeof fly>);
+    const command = (await import('./gate')).default;
+
+    const stdout: string[] = [];
+    const exit = await runCommand({
+      name: 'tenant gate',
+      command,
+      argv: [
+        'open',
+        '--env',
+        'production',
+        '--tenant',
+        'acme',
+        '--dry-run',
+        '--json'
+      ],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([], false),
+      history: () => undefined,
+      stdout: (t) => stdout.push(t)
+    });
+
+    expect(exit).toBe(EXIT.ok);
+    const out = JSON.parse(stdout[0] ?? '');
+    expect(out.plan.json.apps).toEqual([
+      {
+        app: 'cms',
+        flyApp: 'cdwr-cms-acme',
+        inInfisical: false,
+        onFly: 'unreachable',
+        flyError: 'Error: unauthorized'
+      }
+    ]);
+  });
 });

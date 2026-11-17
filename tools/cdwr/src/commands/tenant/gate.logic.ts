@@ -19,6 +19,30 @@ export interface AppState {
   flyApp: string;
   /** Whether the running app carries it, which is what closes the site */
   onFly: OnFly;
+  /** Why Fly could not be read, so a refusal can say which side failed */
+  flyError?: string;
+}
+
+/** How long a Fly error may be once it reaches a desk row */
+export const FLY_ERROR_MAX = 160;
+
+/** Anything shaped like a Fly token: a macaroon (`FlyV1 …`) or `fm1_`/`fm2_` */
+const FLY_TOKEN = /FlyV1\s+\S+|fm[12]_[\w-]+/g;
+
+/**
+ * The last line of a Fly error, where the CLI prints its own `Error: …`,
+ * with any token-shaped text replaced and cut to fit a desk row.
+ */
+export function flyErrorOf(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error);
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const last = (lines.at(-1) ?? '').replace(FLY_TOKEN, '…');
+  return last.length > FLY_ERROR_MAX
+    ? `${last.slice(0, FLY_ERROR_MAX - 1)}…`
+    : last;
 }
 
 /** A password nobody has to invent, in the alphabet a url can carry */
