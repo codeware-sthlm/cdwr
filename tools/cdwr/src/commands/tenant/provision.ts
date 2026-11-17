@@ -174,9 +174,8 @@ interface TeamWork {
  */
 async function planStats(
   environment: Environment,
-  apps: ReadonlyArray<AppKind>,
   tenant: TenantRow,
-  cmsFlyApp: string,
+  statsFlyApp: string,
   onWaking: () => void
 ): Promise<{
   plan: StatsPlan;
@@ -186,8 +185,6 @@ async function planStats(
 }> {
   if (environment !== 'production')
     return { plan: { action: 'skip', reason: 'preview' } };
-  if (!apps.includes('cms'))
-    return { plan: { action: 'skip', reason: 'no-cms' } };
 
   try {
     const provisioning = await readUmamiProvisioning(environment);
@@ -231,7 +228,7 @@ async function planStats(
 
     const input = await gatherTenantTeam(connection, readerConnection, tenant);
     const team = { input, plan: planTenantTeam(input) };
-    const domain = statsDomain(tenant, cmsFlyApp);
+    const domain = statsDomain(tenant, statsFlyApp);
     // Only the tenant's own team is searched; without one the website is new
     const match =
       input.statsTeamId && !team.plan.problem
@@ -687,9 +684,14 @@ export default defineCommand({
       () =>
         planStats(
           environment,
-          apps,
           tenant,
-          flyAppName(ctx.root, 'cms', deployment, pullRequest),
+          // The website is named after the cms, or headless when it runs alone
+          flyAppName(
+            ctx.root,
+            apps.includes('cms') ? 'cms' : 'headless',
+            deployment,
+            pullRequest
+          ),
           () => {
             woke = true;
           }

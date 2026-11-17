@@ -374,6 +374,31 @@ describe('statsDomain', () => {
   it('falls back to the Fly hostname', () => {
     expect(statsDomain(row, 'cdwr-cms-acme')).toBe('cdwr-cms-acme.fly.dev');
   });
+
+  it('takes the primary domain of a headless app', () => {
+    expect(
+      statsDomain(
+        {
+          ...row,
+          domains: [
+            { hostname: 'acme.se', app: 'cdwr-cms-acme', isPrimary: true },
+            {
+              hostname: 'Moon.Acme.SE',
+              app: 'cdwr-headless-acme',
+              isPrimary: true
+            }
+          ]
+        },
+        'cdwr-headless-acme'
+      )
+    ).toBe('moon.acme.se');
+  });
+
+  it('falls back to the Fly hostname of a headless app', () => {
+    expect(statsDomain(row, 'cdwr-headless-acme')).toBe(
+      'cdwr-headless-acme.fly.dev'
+    );
+  });
 });
 
 describe('statsStep', () => {

@@ -49,7 +49,10 @@ vi.mock('../../services/database', () => ({
 }));
 
 vi.mock('../../services/fly', () => ({
-  flyAppName: vi.fn(() => 'cdwr-cms-acme'),
+  flyAppName: vi.fn(
+    (_root: string, app: string, deployment: string) =>
+      `cdwr-${app}-${deployment}`
+  ),
   listAppNames: vi.fn(async () => []),
   pullRequestOf: vi.fn(() => undefined),
   listPreviewCmsApps: vi.fn(async () => [])
@@ -524,6 +527,52 @@ describe('tenant provision', () => {
       expect(planned).toContain('Statistics: add reader');
       expect(planned).toContain(
         'Create statistics website cdwr-cms-acme.fly.dev in Umami with a share link'
+      );
+    });
+
+    it('names the website after headless when the cms is not among the apps', async () => {
+      const { createWebsite } = await umami();
+      await scripts({
+        domains: [
+          { hostname: 'moon.se', app: 'cdwr-headless-acme', isPrimary: true }
+        ]
+      });
+
+      const { exit, ui } = await run([], 'production', 'headless');
+
+      expect(exit).toBe(EXIT.ok);
+      expect(createWebsite).toHaveBeenCalledWith(expect.anything(), {
+        name: 'Acme',
+        domain: 'moon.se',
+        teamId: 'team-new'
+      });
+      expect((await writes()).at(-1)?.[3]).toMatchObject({
+        STATS_WEBSITE_ID: 'new-id',
+        STATS_SHARE_ID: 'newslug'
+      });
+      expect(ui.printed.note.join('\n')).toContain(
+        'Create statistics website moon.se in Umami with a share link'
+      );
+    });
+
+    it('keeps the cms domain when both apps are provisioned', async () => {
+      await umami();
+      await scripts({
+        domains: [
+          { hostname: 'acme.se', app: 'cdwr-cms-acme', isPrimary: true },
+          { hostname: 'moon.se', app: 'cdwr-headless-acme', isPrimary: true }
+        ]
+      });
+
+      const { exit, ui } = await run(
+        ['--dry-run'],
+        'production',
+        'cms,headless'
+      );
+
+      expect(exit).toBe(EXIT.ok);
+      expect(ui.printed.note.join('\n')).toContain(
+        'Create statistics website acme.se in Umami with a share link'
       );
     });
 
