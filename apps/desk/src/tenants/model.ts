@@ -17,6 +17,8 @@ export type TenantMachine = {
   image: string | null;
   /** The commit the machine was deployed from; null when it carries none */
   sha: string | null;
+  /** The newest release tag the machine's commit holds, e.g. `cms-1.65.3`; null when unknown */
+  version: string | null;
 };
 
 export type TenantCert = { hostname: string; state: string };
@@ -29,7 +31,9 @@ export type TenantApp = {
   machines: TenantMachine[] | null;
   certs: TenantCert[] | null;
   health: { ok: boolean; status: number | null; ms: number | null } | null;
-  /** Affected since its machines' commit and still on it; null when unknown */
+  /** The project's newest production release tag on main, e.g. `cms-1.65.4`; null when unknown */
+  latest: string | null;
+  /** Some machine's commit does not hold the `latest` tag; null when unknown */
   behind: boolean | null;
   /** Whether the site gate is closed; null when the NUC did not read it */
   gated: boolean | null;
@@ -129,13 +133,20 @@ const str = (value: unknown): string | null =>
 const num = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
+/** A release tag such as `cms-1.65.4`; anything else reads as absent */
+const releaseTag = (value: unknown): string | null =>
+  typeof value === 'string' && /^[a-z][a-z0-9-]*-\d+\.\d+\.\d+$/.test(value)
+    ? value
+    : null;
+
 const machine = (r: Rec): TenantMachine => ({
   id: str(r['id']) ?? '',
   state: str(r['state']) ?? 'unknown',
   region: str(r['region']) ?? '',
   memoryMb: num(r['memoryMb']),
   image: str(r['image']),
-  sha: str(r['sha'])
+  sha: str(r['sha']),
+  version: releaseTag(r['version'])
 });
 
 const app = (r: Rec): TenantApp | null => {
@@ -164,6 +175,7 @@ const app = (r: Rec): TenantApp | null => {
             ms: num(health['ms'])
           }
         : null,
+    latest: releaseTag(r['latest']),
     behind: typeof r['behind'] === 'boolean' ? r['behind'] : null,
     gated: typeof r['gated'] === 'boolean' ? r['gated'] : null
   };

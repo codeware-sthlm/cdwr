@@ -27,8 +27,9 @@ export const appCell = (row: TenantRow, kind: 'cms' | 'headless'): Cell => {
 };
 
 /**
- * Whether the machines run what main deploys: `behind` only when the NUC found an app affected
- * since its commit, `current` when it found none or the commit is main's; else their commit, short
+ * Whether the machines run the newest release: `behind` when the NUC found an app with a machine
+ * whose commit does not hold the newest release tag, `current` when it found none or the commit is
+ * main's; else their commit, short
  */
 export const versionCell = (row: TenantRow, main: string | null): Cell => {
   const shas = row.apps.flatMap((a) =>

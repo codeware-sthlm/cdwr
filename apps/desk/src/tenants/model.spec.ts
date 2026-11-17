@@ -3,12 +3,15 @@ import { describe, expect, it } from 'vitest';
 import type { Json } from '../supabase.types';
 
 import {
+  LATEST,
   MAIN,
+  OLDER,
   backupState,
   deployRun,
   domain,
   flag,
   flyApp,
+  machine,
   sentry,
   shared,
   tenant,
@@ -33,7 +36,8 @@ describe('parseTenantRow', () => {
       region: 'arn',
       memoryMb: 512,
       image: 'registry.fly.io/cdwr:deployment-1',
-      sha: MAIN
+      sha: MAIN,
+      version: null
     });
     expect(row.apps[0].health).toEqual({ ok: true, status: 200, ms: 120 });
     expect(row.domains).toEqual([
@@ -127,7 +131,8 @@ describe('parseTenantRow', () => {
         region: '',
         memoryMb: null,
         image: null,
-        sha: null
+        sha: null,
+        version: null
       }
     ]);
     expect(row.apps[1].health).toEqual({ ok: false, status: null, ms: null });
@@ -175,6 +180,50 @@ describe('parseTenantRow', () => {
     expect(
       parseTenantRow(shared({ deploy: deployRun() })).deploy
     ).toMatchObject({ runId: 4242, conclusion: 'success' });
+  });
+
+  it('parses the latest release of an app and the version of its machines', () => {
+    const row = parseTenantRow(
+      tenant('acme', {
+        apps: [
+          flyApp('a', 'cms', {
+            latest: LATEST,
+            machines: [machine({ version: OLDER })]
+          })
+        ]
+      })
+    );
+    expect(row.apps[0].latest).toBe(LATEST);
+    expect(row.apps[0].machines?.[0].version).toBe(OLDER);
+  });
+
+  it('reads a row without the release fields as null', () => {
+    const row = parseTenantRow(tenant('acme'));
+    expect(row.apps.map((a) => a.latest)).toEqual([null, null]);
+    expect(row.apps[0].machines?.[0].version).toBeNull();
+  });
+
+  it('reads a release tag of another shape as null', () => {
+    const row = parseTenantRow(
+      tenant('acme', {
+        apps: [
+          flyApp('a', 'cms', {
+            latest: 'v1.65.4',
+            machines: [
+              machine({ version: '1.65.4' }),
+              machine({ id: 'm2', version: 'cms-1.65' }),
+              machine({ id: 'm3', version: 7 })
+            ]
+          })
+        ]
+      })
+    );
+    expect(row.apps[0].latest).toBeNull();
+    expect(row.apps[0].machines?.map((m) => m.version)).toEqual([
+      null,
+      null,
+      null
+    ]);
   });
 
   it('reads the empty column of a row without such data as absent', () => {

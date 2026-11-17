@@ -6,7 +6,9 @@ import type { TenantsPayload } from '../supabase';
 
 import {
   BEHIND,
+  LATEST,
   NOW,
+  OLDER,
   deployRun,
   domain,
   flag,
@@ -193,6 +195,41 @@ describe('TenantsPage', () => {
     expect(text).toContain('certs');
     expect(text).toContain('cdwr-cms-zed: timeout');
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  });
+
+  it('shows the release a machine runs next to its commit', () => {
+    media(false);
+    const sheetText = (apps: ReturnType<typeof flyApp>[]) => {
+      const { all } = mount(payload([tenant('zed', { apps })]));
+      fireEvent.click(all('[data-tenant="zed"]')[0]);
+      const text =
+        screen.getByRole('dialog', { name: 'ZED' }).textContent ?? '';
+      cleanup();
+      return text;
+    };
+    expect(
+      sheetText([
+        flyApp('cdwr-cms-zed', 'cms', {
+          latest: LATEST,
+          behind: false,
+          machines: [machine({ version: LATEST })]
+        })
+      ])
+    ).toContain(`${LATEST} · aaaaaaa`);
+    expect(
+      sheetText([
+        flyApp('cdwr-cms-zed', 'cms', {
+          latest: LATEST,
+          behind: true,
+          machines: [machine({ sha: BEHIND, version: OLDER })]
+        })
+      ])
+    ).toContain(`${OLDER} → ${LATEST} · bbbbbbb`);
+    const plain = sheetText([
+      flyApp('cdwr-cms-zed', 'cms', { machines: [machine()] })
+    ]);
+    expect(plain).toContain('aaaaaaa (current)');
+    expect(plain).not.toContain('cms-1');
   });
 
   it('shows the database on the shared sheet', () => {

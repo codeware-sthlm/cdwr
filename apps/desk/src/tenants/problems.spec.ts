@@ -4,8 +4,10 @@ import type { Json } from '../supabase.types';
 
 import {
   BEHIND,
+  LATEST,
   MAIN,
   NOW,
+  OLDER,
   backupState,
   deployRun,
   domain,
@@ -134,7 +136,28 @@ describe('behind', () => {
       severity: 'warn',
       evidence: ['Machines on bbbbbbb, the newest deploy of main is aaaaaaa']
     });
-    expect(found[0].threshold).toContain('newest deploy run of main');
+    expect(found[0].threshold).toContain('newest release tag');
+  });
+
+  it('names the versions the machines run and the newest release', () => {
+    const row = parseTenantRow(
+      tenant('acme', {
+        apps: [
+          flyApp('a', 'cms', {
+            behind: true,
+            latest: LATEST,
+            machines: [
+              machine({ sha: BEHIND, version: OLDER }),
+              machine({ id: 'm2', sha: BEHIND, version: OLDER }),
+              machine({ id: 'm3', sha: MAIN, version: LATEST })
+            ]
+          })
+        ]
+      })
+    );
+    expect(problemsOf(row, MAIN)[0].evidence).toEqual([
+      `Machines run ${OLDER}, ${LATEST}, the newest release is ${LATEST}`
+    ]);
   });
 });
 
