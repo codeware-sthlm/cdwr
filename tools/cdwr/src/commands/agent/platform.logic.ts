@@ -195,19 +195,28 @@ const machineState = (m: MachineInput) => ({
     : null
 });
 
+/** A machine's state with the release its commit holds; null when that wasn't read */
+const machineWithVersion = (m: MachineInput, release: ReleaseRead | null) => {
+  const state = machineState(m);
+  const read = state.sha ? release?.machines[state.sha] : undefined;
+  return { ...state, version: read?.ok ? read.value.version : null };
+};
+
 const appState = (
   reading: FlyAppReading,
   kind: string,
   behind: boolean | null,
+  release: ReleaseRead | null,
   gated?: boolean
 ) => ({
   app: reading.name,
   kind,
   ...(gated === undefined ? {} : { gated }),
   machines: reading.machines.ok
-    ? reading.machines.value.map(machineState)
+    ? reading.machines.value.map((m) => machineWithVersion(m, release))
     : null,
   behind,
+  latest: release?.latest ?? null,
   certs: reading.certs.ok
     ? reading.certs.value.map((c) => ({
         hostname: c.hostname,
@@ -423,103 +432,76 @@ export const deployConclusion = (
 export const projectOf = (kind: string): string | null =>
   (APPS as readonly string[]).includes(kind) ? kind : null;
 
-export type AffectedPair = { base: string; head: string };
+/** A production release tag of a project, `<project>-<x.y.z>`; previews and anything else are not taken */
+export const releaseTag = (project: string, tag: string): string | null =>
+  new RegExp(`^${project}-\\d+\\.\\d+\\.\\d+$`).test(tag) ? tag : null;
 
-export const pairKey = ({ base, head }: AffectedPair): string =>
-  `${base}..${head}`;
+/** What a machine's commit holds: the newest release tag it contains, and whether that is the latest */
+export type MachineRelease = { version: string | null; current: boolean };
 
-/** Two shas of one commit, whichever length each was written in */
-const sameSha = (a: string, b: string): boolean =>
-  a.startsWith(b) || b.startsWith(a);
+/** A project's newest release tag on main, and per machine commit what it runs */
+export type ReleaseRead = {
+  latest: string | null;
+  machines: Record<string, Reading<MachineRelease>>;
+};
 
-/** The commits a machine runs that the deploy isn't at, as `machine..deploy` pairs, each once */
-export const behindPairs = (
-  apps: FlyAppReading[],
-  deploySha: string
-): AffectedPair[] => {
-  const seen = new Map<string, AffectedPair>();
+export type ReleasesRead = {
+  /** Why fetching the tags failed; the local tags were used */
+  fetchError: string | null;
+  /** By project */
+  projects: Record<string, Reading<ReleaseRead>>;
+};
+
+/** The commits the machines of each project run, each once, for the release read */
+export const releaseShas = (
+  apps: FlyAppReading[]
+): Record<string, string[]> => {
+  const shas: Record<string, Set<string>> = {};
   for (const app of apps) {
-    if (!app.machines.ok) continue;
+    const project = projectOf(appOwner(app.name, [])?.kind ?? '');
+    if (!project || !app.machines.ok) continue;
     for (const m of app.machines.value) {
       const sha = machineState(m).sha;
-      if (sha && !sameSha(sha, deploySha)) {
-        const pair = { base: sha, head: deploySha };
-        seen.set(pairKey(pair), pair);
-      }
+      if (sha) (shas[project] ??= new Set()).add(sha);
     }
   }
-  return [...seen.values()];
+  return Object.fromEntries(
+    Object.entries(shas).map(([project, set]) => [project, [...set]])
+  );
 };
 
 /**
- * Whether an app is behind main, by the deploy's own rule: some machine runs
- * another commit than the last deploy and the app's project is affected between
- * the two. `behind` is null when that can't be told; `error` says why when a
- * read failed rather than there being nothing to compare.
+ * Whether an app is behind, by the rule that decides a deploy: some machine's
+ * commit doesn't contain the project's newest release tag. The tag is set on
+ * the deployed commit, so a machine on that commit or a newer one is current.
+ * `behind` is null when that can't be told (no project, no machines, no tag);
+ * `error` says why when a read failed rather than there being nothing to compare.
  */
 export const behindFlag = (
   kind: string,
   machines: Array<{ sha: string | null }> | null,
-  deploySha: string | null,
-  affected: Record<string, Reading<string[]>>
+  releases: Record<string, Reading<ReleaseRead>>
 ): { behind: boolean | null; error?: string } => {
   const project = projectOf(kind);
-  if (!project || !deploySha || !machines) return { behind: null };
+  if (!project || !machines) return { behind: null };
   const shas = machines.flatMap((m) => (m.sha ? [m.sha] : []));
   if (shas.length === 0) return { behind: null };
-  const apart = shas.filter((sha) => !sameSha(sha, deploySha));
+  const read = releases[project];
+  if (!read) return { behind: null, error: 'not read' };
+  if (!read.ok) return { behind: null, error: read.reason };
+  if (read.value.latest === null) return { behind: null };
   let error: string | undefined;
-  for (const sha of apart) {
-    const reading = affected[pairKey({ base: sha, head: deploySha })];
-    if (!reading) {
+  for (const sha of shas) {
+    const machine = read.value.machines[sha];
+    if (!machine) {
       error ??= 'not read';
-    } else if (!reading.ok) {
-      error ??= reading.reason;
-    } else if (reading.value.includes(project)) {
+    } else if (!machine.ok) {
+      error ??= machine.reason;
+    } else if (!machine.value.current) {
       return { behind: true };
     }
   }
   return error === undefined ? { behind: false } : { behind: null, error };
-};
-
-/** The project lists remembered per `base..head`, oldest first */
-export type AffectedCache = Array<{ key: string; projects: string[] }>;
-
-export const CACHE_PAIRS = 50;
-
-const CacheSchema = z.array(
-  z.object({ key: z.string(), projects: z.array(z.string()) })
-);
-
-/** The cache file's content; anything unreadable is an empty cache */
-export const parseAffectedCache = (text: string): AffectedCache => {
-  try {
-    return CacheSchema.parse(JSON.parse(text));
-  } catch {
-    return [];
-  }
-};
-
-/** The newest `keep` entries, each key once with its latest value */
-export const pruneAffected = (
-  cache: AffectedCache,
-  keep = CACHE_PAIRS
-): AffectedCache => {
-  const latest = new Map<string, AffectedCache[number]>();
-  for (const entry of cache) {
-    latest.delete(entry.key);
-    latest.set(entry.key, entry);
-  }
-  return [...latest.values()].slice(-keep);
-};
-
-/** The pairs the cache can't answer, so Nx runs only for a new pair of shas */
-export const uncachedPairs = (
-  pairs: AffectedPair[],
-  cache: AffectedCache
-): AffectedPair[] => {
-  const known = new Set(cache.map((e) => e.key));
-  return pairs.filter((p) => !known.has(pairKey(p)));
 };
 
 // --- the backup read ---
@@ -552,8 +534,8 @@ export interface PlatformReadings {
   /** By tenant slug, for the tenants that have a statistics website */
   visitors: Record<string, Reading<VisitorsRead>>;
   deploy: Reading<DeployRead>;
-  /** Project lists by `base..head`, for the pairs `behindPairs` named */
-  affected: Record<string, Reading<string[]>>;
+  /** Release tags by project, for the commits `releaseShas` named */
+  releases: ReleasesRead;
   /** null: no backups folder and no status file, or no queue home */
   backup: BackupRead | null;
 }
@@ -663,7 +645,7 @@ export const buildRows = (
     sentry,
     visitors,
     deploy,
-    affected,
+    releases,
     backup
   } = readings;
   const known = tenants.ok ? tenants.value : null;
@@ -700,7 +682,9 @@ export const buildRows = (
     }
   }
   if (!deploy.ok) note(errorsOf(SHARED_KEY), 'github', deploy.reason);
-  const deploySha = deploy.ok ? deploy.value.sha : null;
+  if (releases.fetchError !== null) {
+    note(errorsOf(SHARED_KEY), 'behind', releases.fetchError);
+  }
   if (backup && !backup.lastRun.ok) {
     note(errorsOf(SHARED_KEY), 'backup', backup.lastRun.reason);
   }
@@ -723,9 +707,10 @@ export const buildRows = (
       const { behind, error } = behindFlag(
         owner.kind,
         reading.machines.ok ? reading.machines.value.map(machineState) : null,
-        deploySha,
-        affected
+        releases.projects
       );
+      const project = projectOf(owner.kind);
+      const release = project ? releases.projects[project] : undefined;
       if (error !== undefined) note(own, 'behind', `${reading.name}: ${error}`);
       if (!reading.machines.ok) {
         note(own, 'fly', `${reading.name}: ${reading.machines.reason}`);
@@ -737,6 +722,7 @@ export const buildRows = (
         reading,
         owner.kind,
         behind,
+        release?.ok ? release.value : null,
         owner.key === SHARED_KEY
           ? undefined
           : gated.get(`${owner.key}\u0000${owner.kind}`)

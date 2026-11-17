@@ -3,15 +3,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  type AffectedCache,
   type BackupRead,
   type FlyAppReading,
+  type MachineInput,
   type PlatformReadings,
+  type ReleaseRead,
   SHARED_KEY,
   type TenantRecord,
   appOwner,
   behindFlag,
-  behindPairs,
   buildRows,
   dayStart,
   daysBefore,
@@ -22,17 +22,15 @@ import {
   libpqEnv,
   ok,
   oneLine,
-  pairKey,
-  parseAffectedCache,
   parseSql,
   plainText,
   projectOf,
-  pruneAffected,
+  releaseShas,
+  releaseTag,
   sentrySignal,
   splitDatabase,
   stockholmDay,
   switchRecords,
-  uncachedPairs,
   vanishedFilter,
   visitorsSignal
 } from './platform.logic';
@@ -173,7 +171,20 @@ const readings = (over: Partial<PlatformReadings> = {}): PlatformReadings => ({
     acme: ok({ today: 5, days: [{ date: '2026-11-14', visitors: 9 }] })
   },
   deploy: ok(deploy),
-  affected: {},
+  releases: {
+    fetchError: null,
+    projects: Object.fromEntries(
+      ['cms', 'headless'].map((project) => [
+        project,
+        ok({
+          latest: `${project}-1.1.0`,
+          machines: {
+            abc1234def: ok({ version: `${project}-1.1.0`, current: true })
+          }
+        })
+      ])
+    )
+  },
   backup: null,
   ...over
 });
@@ -942,9 +953,17 @@ describe('the backup column', () => {
 });
 
 describe('behind main', () => {
-  const head = 'd'.repeat(40);
-  const base = 'a'.repeat(40);
-  const key = pairKey({ base, head });
+  const old = 'a'.repeat(40);
+  const tagged = 'b'.repeat(40);
+  const newer = 'c'.repeat(40);
+
+  const release = (
+    machines: ReleaseRead['machines'],
+    latest: string | null = 'cms-1.1.0'
+  ) => ({ cms: ok<ReleaseRead>({ latest, machines }) });
+  const current = (version: string | null = 'cms-1.1.0') =>
+    ok({ version, current: true });
+  const stale = ok({ version: 'cms-1.0.0', current: false });
 
   it('maps an app kind to its Nx project', () => {
     expect(projectOf('cms')).toBe('cms');
@@ -952,151 +971,263 @@ describe('behind main', () => {
     expect(projectOf('other')).toBeNull();
   });
 
-  it('is true when the project is affected between the machine and the deploy', () => {
-    expect(
-      behindFlag('cms', [{ sha: base }], head, { [key]: ok(['cms', 'ui']) })
-    ).toEqual({ behind: true });
+  it.each([
+    ['cms-1.65.4', 'cms', 'cms-1.65.4'],
+    ['cms-1.65.4-preview.3', 'cms', null],
+    ['cmsx-1.0.0', 'cms', null],
+    ['builder-0.0.71', 'builder', 'builder-0.0.71'],
+    ['builder-0.0.71', 'cms', null],
+    ['cms-1.2', 'cms', null]
+  ])('takes the release tag %s of %s as %s', (tag, project, expected) => {
+    expect(releaseTag(project, tag)).toBe(expected);
   });
 
-  it('is false when the project is not affected, or every machine is at the deploy', () => {
-    expect(
-      behindFlag('cms', [{ sha: base }], head, { [key]: ok(['headless']) })
-    ).toEqual({ behind: false });
-    expect(behindFlag('cms', [{ sha: head }], head, {})).toEqual({
-      behind: false
+  describe.each([
+    {
+      name: 'a machine on the release commit is current',
+      kind: 'cms',
+      machines: [{ sha: tagged }],
+      releases: release({ [tagged]: current() }),
+      expected: { behind: false }
+    },
+    {
+      name: 'a machine on a newer untagged commit is current',
+      kind: 'cms',
+      machines: [{ sha: newer }],
+      releases: release({ [newer]: current('cms-1.0.0') }),
+      expected: { behind: false }
+    },
+    {
+      name: 'a machine whose commit lacks the newest tag is behind',
+      kind: 'cms',
+      machines: [{ sha: old }],
+      releases: release({ [old]: stale }),
+      expected: { behind: true }
+    },
+    {
+      name: 'any machine behind makes the app behind',
+      kind: 'cms',
+      machines: [{ sha: tagged }, { sha: old }],
+      releases: release({ [tagged]: current(), [old]: stale }),
+      expected: { behind: true }
+    },
+    {
+      name: 'a machine without a sha is not compared',
+      kind: 'cms',
+      machines: [{ sha: tagged }, { sha: null }],
+      releases: release({ [tagged]: current() }),
+      expected: { behind: false }
+    },
+    {
+      name: 'no release tag is null without an error',
+      kind: 'cms',
+      machines: [{ sha: old }],
+      releases: release({ [old]: ok({ version: null, current: false }) }, null),
+      expected: { behind: null }
+    },
+    {
+      name: 'an unknown commit is null with its reason',
+      kind: 'cms',
+      machines: [{ sha: old }],
+      releases: release({
+        [old]: failed('the commit is not in the local git')
+      }),
+      expected: { behind: null, error: 'the commit is not in the local git' }
+    },
+    {
+      name: 'a machine behind beats another machine unread',
+      kind: 'cms',
+      machines: [{ sha: old }, { sha: newer }],
+      releases: release({ [old]: stale, [newer]: failed('unknown commit') }),
+      expected: { behind: true }
+    },
+    {
+      name: 'a machine behind beats an unread machine listed first',
+      kind: 'cms',
+      machines: [{ sha: newer }, { sha: old }],
+      releases: release({ [newer]: failed('unknown commit'), [old]: stale }),
+      expected: { behind: true }
+    },
+    {
+      name: 'a machine missing from the read is null as not read',
+      kind: 'cms',
+      machines: [{ sha: old }],
+      releases: release({}),
+      expected: { behind: null, error: 'not read' }
+    },
+    {
+      name: 'a failed project read is null with its reason',
+      kind: 'cms',
+      machines: [{ sha: old }],
+      releases: { cms: failed('git tag failed (128)') },
+      expected: { behind: null, error: 'git tag failed (128)' }
+    },
+    {
+      name: 'an absent project is null as not read',
+      kind: 'cms',
+      machines: [{ sha: old }],
+      releases: {},
+      expected: { behind: null, error: 'not read' }
+    },
+    {
+      name: 'a kind with no project is null',
+      kind: 'other',
+      machines: [{ sha: old }],
+      releases: release({ [old]: stale }),
+      expected: { behind: null }
+    },
+    {
+      name: 'machines not read are null',
+      kind: 'cms',
+      machines: null,
+      releases: release({}),
+      expected: { behind: null }
+    },
+    {
+      name: 'no machines are null',
+      kind: 'cms',
+      machines: [],
+      releases: release({}),
+      expected: { behind: null }
+    },
+    {
+      name: 'machines with no sha are null',
+      kind: 'cms',
+      machines: [{ sha: null }],
+      releases: release({}),
+      expected: { behind: null }
+    }
+  ])('behindFlag', ({ name, kind, machines, releases, expected }) => {
+    it(name, () => {
+      expect(behindFlag(kind, machines, releases)).toEqual(expected);
     });
-    // A short sha of the same commit is the same commit
-    expect(behindFlag('cms', [{ sha: 'dddddddd' }], head, {})).toEqual({
-      behind: false
+  });
+
+  describe('releaseShas', () => {
+    const on = (sha: string | undefined, id = 'm1'): MachineInput => ({
+      id,
+      state: 'started',
+      region: 'arn',
+      config: { env: sha ? { GIT_SHA: sha } : {} }
+    });
+
+    it('lists the commits of a host app and of a tenant app by project', () => {
+      expect(
+        releaseShas([
+          flyApp('cdwr-cms', { machines: ok([on(old)]) }),
+          flyApp('cdwr-headless-acme-dep', { machines: ok([on(tagged)]) })
+        ])
+      ).toEqual({ cms: [old], headless: [tagged] });
+    });
+
+    it('lists a commit once across the apps of a project', () => {
+      expect(
+        releaseShas([
+          flyApp('cdwr-cms', { machines: ok([on(old), on(old, 'm2')]) }),
+          flyApp('cdwr-cms-acme-dep', {
+            machines: ok([on(old), on(newer, 'm3')])
+          })
+        ])
+      ).toEqual({ cms: [old, newer] });
+    });
+
+    it('skips failed machine reads, other kinds and machines without a sha', () => {
+      expect(
+        releaseShas([
+          flyApp('cdwr-cms', { machines: failed('down') }),
+          flyApp('cdwr-umami-x', { machines: ok([on(old)]) }),
+          flyApp('cdwr-thing', { machines: ok([on(old)]) }),
+          flyApp('cdwr-headless', {
+            machines: ok([
+              on(undefined),
+              on('not a sha!', 'm2'),
+              on(tagged, 'm3')
+            ])
+          })
+        ])
+      ).toEqual({ umami: [old], headless: [tagged] });
     });
   });
 
-  it('is true when any machine is behind', () => {
-    expect(
-      behindFlag('cms', [{ sha: head }, { sha: base }], head, {
-        [key]: ok(['cms'])
-      })
-    ).toEqual({ behind: true });
-  });
-
-  it('is null when it cannot be told', () => {
-    expect(behindFlag('cms', [{ sha: base }], null, {})).toEqual({
-      behind: null
-    });
-    expect(behindFlag('cms', null, head, {})).toEqual({ behind: null });
-    expect(behindFlag('cms', [{ sha: null }], head, {})).toEqual({
-      behind: null
-    });
-    expect(
-      behindFlag('other', [{ sha: base }], head, { [key]: ok(['cms']) })
-    ).toEqual({ behind: null });
-  });
-
-  it('is null with the reason when the projects could not be read', () => {
-    expect(
-      behindFlag('cms', [{ sha: base }], head, {
-        [key]: failed('the commit is not in the local git')
-      })
-    ).toEqual({ behind: null, error: 'the commit is not in the local git' });
-    expect(behindFlag('cms', [{ sha: base }], head, {})).toEqual({
-      behind: null,
-      error: 'not read'
-    });
-  });
-
-  it('asks once for each commit pair a machine is apart from the deploy', () => {
-    const second = { ...machine, id: 'm2' };
-    const pairs = behindPairs(
-      [
-        flyApp('cdwr-cms', {
-          machines: ok([
-            { ...machine, config: { env: { GIT_SHA: base } } },
-            { ...second, config: { env: { GIT_SHA: base } } },
-            { ...second, id: 'm3', config: { env: { GIT_SHA: head } } },
-            { id: 'm4', state: 'stopped', region: 'arn' }
-          ])
-        }),
-        flyApp('cdwr-cms-x', { machines: failed('down') })
-      ],
-      head
-    );
-    expect(pairs).toEqual([{ base, head }]);
-  });
-
-  it('puts the flag on the app and the reason in errors of its row', () => {
-    const stale = {
-      ...machine,
-      config: { env: { GIT_SHA: base } }
-    };
+  it('puts the flag, the latest tag and each machine version on the app', () => {
     const { rows } = buildRows(
       readings({
-        deploy: ok({ ...deploy, sha: head }),
         fly: ok([
-          flyApp('cdwr-cms', { machines: ok([stale]) }),
-          flyApp('cdwr-cms-acme-dep', { machines: ok([stale]) })
+          flyApp('cdwr-cms', {
+            machines: ok([
+              { ...machine, config: { env: { GIT_SHA: old } } },
+              { ...machine, id: 'm2', config: { env: { GIT_SHA: newer } } },
+              { ...machine, id: 'm3', config: { env: { GIT_SHA: tagged } } },
+              { id: 'm4', state: 'stopped', region: 'arn' }
+            ])
+          })
         ]),
-        affected: { [key]: failed('nx failed (1)') }
+        releases: {
+          fetchError: null,
+          projects: release({
+            [old]: stale,
+            [newer]: current('cms-1.1.0'),
+            [tagged]: failed('unknown commit')
+          })
+        }
       })
     );
-    expect(row(rows, SHARED_KEY).apps).toMatchObject([{ behind: null }]);
-    expect(row(rows, SHARED_KEY).errors).toEqual({
-      behind: 'cdwr-cms: nx failed (1)'
-    });
-    const ok2 = buildRows(
-      readings({
-        deploy: ok({ ...deploy, sha: head }),
-        fly: ok([flyApp('cdwr-cms', { machines: ok([stale]) })]),
-        affected: { [key]: ok(['cms']) }
-      })
-    );
-    expect(row(ok2.rows, SHARED_KEY).apps).toMatchObject([{ behind: true }]);
-    expect(row(ok2.rows, SHARED_KEY).errors).toEqual({});
-  });
-
-  it('is null on every app, with no behind error, when the deploy was not read', () => {
-    const { rows } = buildRows(readings({ deploy: failed('x') }));
-    expect(row(rows, SHARED_KEY).apps).toMatchObject([{ behind: null }]);
-    expect(row(rows, SHARED_KEY).errors).toEqual({ github: 'x' });
-  });
-});
-
-describe('the affected cache', () => {
-  const entry = (n: number) => ({ key: `a${n}..b${n}`, projects: [`p${n}`] });
-
-  it('asks only for pairs it has not seen', () => {
-    const cache: AffectedCache = [entry(1)];
-    expect(
-      uncachedPairs(
-        [
-          { base: 'a1', head: 'b1' },
-          { base: 'a2', head: 'b2' }
-        ],
-        cache
-      )
-    ).toEqual([{ base: 'a2', head: 'b2' }]);
-  });
-
-  it('keeps the newest 50 pairs', () => {
-    const cache = Array.from({ length: 60 }, (_, i) => entry(i));
-    const kept = pruneAffected(cache);
-    expect(kept).toHaveLength(50);
-    expect(kept[0]).toEqual(entry(10));
-    expect(kept.at(-1)).toEqual(entry(59));
-  });
-
-  it('keeps a pair once, as the newest', () => {
-    const kept = pruneAffected([
-      entry(1),
-      entry(2),
-      { ...entry(1), projects: ['new'] }
+    expect(row(rows, SHARED_KEY).apps).toMatchObject([
+      {
+        behind: true,
+        latest: 'cms-1.1.0',
+        machines: [
+          { version: 'cms-1.0.0' },
+          { version: 'cms-1.1.0' },
+          { version: null },
+          { version: null }
+        ]
+      }
     ]);
-    expect(kept).toEqual([entry(2), { ...entry(1), projects: ['new'] }]);
+    expect(row(rows, SHARED_KEY).errors).toEqual({});
   });
 
-  it('reads a file back, and an unreadable one as empty', () => {
-    expect(parseAffectedCache(JSON.stringify([entry(1)]))).toEqual([entry(1)]);
-    expect(parseAffectedCache('not json')).toEqual([]);
-    expect(parseAffectedCache('{"key":1}')).toEqual([]);
+  it('leaves latest and versions null when nothing was read, noting an unread project', () => {
+    const { rows } = buildRows(
+      readings({ releases: { fetchError: null, projects: {} } })
+    );
+    expect(row(rows, SHARED_KEY).apps).toMatchObject([
+      { behind: null, latest: null, machines: [{ version: null }] }
+    ]);
+    expect(row(rows, SHARED_KEY).errors).toEqual({
+      behind: 'cdwr-cms: not read'
+    });
+  });
+
+  it('names the reason in errors of the app row when the project read failed', () => {
+    const { rows } = buildRows(
+      readings({
+        releases: {
+          fetchError: null,
+          projects: { cms: failed('git tag failed (128)') }
+        }
+      })
+    );
+    expect(row(rows, SHARED_KEY).apps).toMatchObject([
+      { behind: null, latest: null }
+    ]);
+    expect(row(rows, 'acme').errors).toMatchObject({
+      behind: expect.stringContaining('cdwr-cms-acme-dep: git tag failed (128)')
+    });
+  });
+
+  it('notes a failed fetch of the tags on the shared row', () => {
+    const { rows } = buildRows(
+      readings({
+        releases: {
+          ...readings().releases,
+          fetchError: 'git fetch failed (128), local tags used'
+        }
+      })
+    );
+    expect(row(rows, SHARED_KEY).errors).toEqual({
+      behind: 'git fetch failed (128), local tags used'
+    });
   });
 });
 

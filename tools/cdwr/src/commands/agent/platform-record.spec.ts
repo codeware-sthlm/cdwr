@@ -14,7 +14,7 @@ const collect = vi.hoisted(() => ({
   readSentry: vi.fn(),
   readVisitors: vi.fn(),
   readDeploy: vi.fn(),
-  readAffected: vi.fn(),
+  readReleases: vi.fn(),
   readBackup: vi.fn()
 }));
 
@@ -70,7 +70,9 @@ describe('agent platform-record', () => {
       .mockResolvedValue(ok({ org: 'cdwr', day: {}, week: {}, tops: {} }));
     collect.readVisitors.mockReset().mockResolvedValue({});
     collect.readDeploy.mockReset().mockResolvedValue(deployed);
-    collect.readAffected.mockReset().mockResolvedValue({});
+    collect.readReleases
+      .mockReset()
+      .mockResolvedValue({ fetchError: null, projects: {} });
     collect.readBackup.mockReset().mockReturnValue(null);
     ui = fakeUi([]);
   });
@@ -160,7 +162,7 @@ describe('agent platform-record', () => {
     });
   });
 
-  it('asks for the affected projects of the machines that are not at the deploy, and records the signals', async () => {
+  it('asks for the releases of the commits the machines run, and records the signals', async () => {
     const stale = 'a'.repeat(40);
     collect.readFly.mockResolvedValue(
       ok([
@@ -179,16 +181,21 @@ describe('agent platform-record', () => {
         }
       ])
     );
-    collect.readAffected.mockResolvedValue({
-      [`${stale}..${'d'.repeat(40)}`]: ok(['cms'])
+    collect.readReleases.mockResolvedValue({
+      fetchError: null,
+      projects: {
+        cms: ok({
+          latest: 'cms-1.1.0',
+          machines: { [stale]: ok({ version: 'cms-1.0.0', current: false }) }
+        })
+      }
     });
     collect.readSentry.mockResolvedValue(failed('not configured'));
     const { exit } = await record(['--yes', '--json'], env);
     expect(exit).toBe(EXIT.ok);
-    expect(collect.readAffected).toHaveBeenCalledWith(
-      [{ base: stale, head: 'd'.repeat(40) }],
-      expect.anything()
-    );
+    expect(collect.readReleases).toHaveBeenCalledWith('/ws/codeware', {
+      cms: [stale]
+    });
     const rows = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
       key: string;
       apps: { behind: boolean | null }[];
@@ -203,10 +210,10 @@ describe('agent platform-record', () => {
     );
   });
 
-  it('asks for nothing when the deploy was not read', async () => {
-    collect.readDeploy.mockResolvedValue(failed('GitHub answered 403'));
+  it('asks for no commits when fly was not read', async () => {
+    collect.readFly.mockResolvedValue(failed('fly down'));
     await record(['--yes', '--json'], env);
-    expect(collect.readAffected).toHaveBeenCalledWith([], expect.anything());
+    expect(collect.readReleases).toHaveBeenCalledWith('/ws/codeware', {});
   });
 
   it('fails, without printing the key, when Supabase refuses', async () => {

@@ -1,17 +1,9 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  writeFileSync
-} from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
-import { cdwrHome } from '../../cli/prefs';
 import { backupsRoot, listBackups } from '../../services/backups';
 import { belongsTo, fly, listAppNames } from '../../services/fly';
 import { CommandError, childEnv, run } from '../../services/shell';
@@ -20,14 +12,15 @@ import { websiteDays, websiteStats } from '../../services/umami';
 import { APPS } from '../infisical/analysis.logic';
 
 import {
-  type AffectedCache,
-  type AffectedPair,
   type BackupRead,
   type DbRecord,
   type DeployRead,
   type FlyAppReading,
   type HealthInput,
+  type MachineRelease,
   type Reading,
+  type ReleaseRead,
+  type ReleasesRead,
   STATS_TIMEZONE,
   type SentryRead,
   type SentryTop,
@@ -44,13 +37,10 @@ import {
   libpqEnv,
   ok,
   oneLine,
-  pairKey,
-  parseAffectedCache,
   parseSql,
-  pruneAffected,
+  releaseTag,
   stockholmDay,
-  switchRecords,
-  uncachedPairs
+  switchRecords
 } from './platform.logic';
 
 export const DATABASE_URL_ENV = 'PLATFORM_DATABASE_URL';
@@ -422,125 +412,118 @@ export async function readDeploy(): Promise<Reading<DeployRead>> {
   }
 }
 
-// --- behind main ---
+// --- behind the release ---
 
-const NX_TIMEOUT_MS = 120_000;
-/** No new Nx run starts after this, so the command's deadline holds; the pair is asked again next run */
-const NX_BUDGET_MS = 100_000;
+const FETCH_TIMEOUT_MS = 30_000;
+const GIT_TIMEOUT_MS = 10_000;
 
-const queueHome = (env: NodeJS.ProcessEnv): string =>
-  env['AGENT_QUEUE_HOME'] ?? join(cdwrHome(env), 'agent-queue');
+/** A git read in the checkout; the command line and stderr are not for the table */
+const git = (root: string, args: string[]) =>
+  run('git', ['-C', root, ...args], { timeout: GIT_TIMEOUT_MS });
 
-const readCache = (file: string): AffectedCache => {
-  try {
-    return parseAffectedCache(readFileSync(file, 'utf8'));
-  } catch {
-    return [];
-  }
-};
+const codeOf = (error: unknown) =>
+  error instanceof CommandError ? error.code : 'unknown';
 
-/** The projects Nx finds affected between two commits of the local checkout */
-async function affectedBetween(
+/** The newest production release tag of a project on main */
+async function latestTag(
   root: string,
-  pair: AffectedPair,
-  env: NodeJS.ProcessEnv
-): Promise<Reading<string[]>> {
+  project: string
+): Promise<string | null> {
+  const { stdout } = await git(root, [
+    'tag',
+    '--list',
+    `${project}-*`,
+    '--merged',
+    'origin/main',
+    '--sort=-v:refname'
+  ]).catch((error: unknown) => {
+    throw new Error(`git tag failed (${codeOf(error)})`);
+  });
+  for (const line of stdout.split('\n')) {
+    const tag = releaseTag(project, line.trim());
+    if (tag) return tag;
+  }
+  return null;
+}
+
+/** What a machine's commit holds of a project's releases, against the latest tag */
+async function machineRelease(
+  root: string,
+  project: string,
+  sha: string,
+  latest: string | null
+): Promise<Reading<MachineRelease>> {
   try {
-    for (const sha of [pair.base, pair.head]) {
-      await run('git', ['-C', root, 'cat-file', '-e', `${sha}^{commit}`]).catch(
-        () => {
-          throw new Error('the commit is not in the local git');
-        }
-      );
-    }
-    const { stdout } = await run(
-      'pnpm',
-      [
-        'exec',
-        'nx',
-        'show',
-        'projects',
-        '--affected',
-        `--base=${pair.base}`,
-        `--head=${pair.head}`,
-        '--json'
-      ],
-      {
-        cwd: root,
-        env: childEnv(env, { NX_DAEMON: 'false', NX_NO_CLOUD: 'true' }),
-        timeout: NX_TIMEOUT_MS
-      }
-    ).catch((error: unknown) => {
-      // The command line and stderr are not for the table
-      throw new Error(
-        `nx failed (${error instanceof CommandError ? error.code : 'unknown'})`
-      );
+    await git(root, ['cat-file', '-e', `${sha}^{commit}`]).catch(() => {
+      throw new Error('the commit is not in the local git');
     });
-    const line = stdout
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith('['))
-      .pop();
-    const parsed = z.array(z.string()).safeParse(JSON.parse(line ?? 'null'));
-    if (!parsed.success) throw new Error('nx printed no project list');
-    return ok(parsed.data);
+    // No production tag in its history is a version of null, not a failure
+    const version = await git(root, [
+      'describe',
+      '--tags',
+      '--abbrev=0',
+      '--match',
+      `${project}-*`,
+      '--exclude',
+      '*-preview.*',
+      sha
+    ]).then(
+      ({ stdout }) => releaseTag(project, stdout.trim()),
+      () => null
+    );
+    if (latest === null) return ok({ version, current: true });
+    // Exit 1 is "not an ancestor"; anything else is a failed read
+    const current = await git(root, [
+      'merge-base',
+      '--is-ancestor',
+      `refs/tags/${latest}`,
+      sha
+    ]).then(
+      () => true,
+      (error: unknown) => {
+        if (codeOf(error) === 1) return false;
+        throw new Error(`git merge-base failed (${codeOf(error)})`);
+      }
+    );
+    return ok({ version, current });
   } catch (error) {
     return failed(error);
   }
 }
 
 /**
- * The affected projects of each pair. A pair seen before comes from the cache
- * beside the queue's state, so Nx only runs when a new pair of shas appears.
+ * Per project, its newest production release tag on main, and for each commit
+ * its machines run the newest tag that commit holds and whether it holds the
+ * latest. Tags are fetched first, since a paused tick skips the checkout's own
+ * fetch; when that fails the local tags are used and the reason is returned.
  */
-export async function readAffected(
-  pairs: AffectedPair[],
-  env: NodeJS.ProcessEnv
-): Promise<Record<string, Reading<string[]>>> {
-  const result: Record<string, Reading<string[]>> = {};
-  if (pairs.length === 0) return result;
-  const file = join(queueHome(env), 'platform-affected.json');
-  let cache = readCache(file);
-  for (const entry of cache) result[entry.key] = ok(entry.projects);
-
-  const todo = uncachedPairs(pairs, cache);
-  if (todo.length === 0) return result;
-
-  let root: string;
-  try {
-    root = (await run('git', ['rev-parse', '--show-toplevel'])).stdout.trim();
-  } catch {
-    for (const pair of todo) {
-      result[pairKey(pair)] = failed(
-        'the working directory is not a git checkout'
-      );
-    }
-    return result;
-  }
-  const started = Date.now();
-  let changed = false;
-  for (const pair of todo) {
-    const key = pairKey(pair);
-    if (Date.now() - started > NX_BUDGET_MS) {
-      result[key] = failed('out of time, asked again next run');
-      continue;
-    }
-    const reading = await affectedBetween(root, pair, env);
-    result[key] = reading;
-    if (reading.ok) {
-      cache = [...cache, { key, projects: reading.value }];
-      changed = true;
-    }
-  }
-  if (changed) {
+export async function readReleases(
+  root: string,
+  shas: Record<string, string[]>
+): Promise<ReleasesRead> {
+  const projects: ReleasesRead['projects'] = {};
+  if (Object.keys(shas).length === 0) return { fetchError: null, projects };
+  const fetchError = await run(
+    'git',
+    ['-C', root, 'fetch', '--tags', '-q', 'origin'],
+    { timeout: FETCH_TIMEOUT_MS }
+  ).then(
+    () => null,
+    (error: unknown) => `git fetch failed (${codeOf(error)}), local tags used`
+  );
+  for (const [project, list] of Object.entries(shas)) {
     try {
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, JSON.stringify(pruneAffected(cache)));
-    } catch {
-      // The cache only saves work; the readings stand
+      const latest = await latestTag(root, project);
+      const machines: ReleaseRead['machines'] = {};
+      for (const sha of list) {
+        machines[sha] = await machineRelease(root, project, sha, latest);
+      }
+      projects[project] = ok({ latest, machines });
+    } catch (error) {
+      projects[project] = failed(error);
     }
   }
-  return result;
+  return { fetchError, projects };
 }
 
 // --- backup ---
