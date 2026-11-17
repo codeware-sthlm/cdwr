@@ -26,6 +26,7 @@ import {
   MIN_PASSWORD_LENGTH,
   type OnFly,
   describeOnFly,
+  flyErrorOf,
   generatePassword,
   prChoices,
   pullRequestChoices,
@@ -34,12 +35,16 @@ import {
 } from './gate.logic';
 
 /** Whether the deployed app carries the gate password; unreachable is reported rather than assumed open */
-async function readFlyState(flyApp: string): Promise<OnFly> {
+async function readFlyState(
+  flyApp: string
+): Promise<{ onFly: OnFly; flyError?: string }> {
   try {
     const secrets = await fly().secrets.list({ app: flyApp });
-    return secrets.some(({ name }) => name === GATE_KEY) ? 'set' : 'missing';
-  } catch {
-    return 'unreachable';
+    return {
+      onFly: secrets.some(({ name }) => name === GATE_KEY) ? 'set' : 'missing'
+    };
+  } catch (error) {
+    return { onFly: 'unreachable', flyError: flyErrorOf(error) };
   }
 }
 
@@ -136,7 +141,9 @@ export default defineCommand({
               secretPath: `/tenants/${tenant}/apps/${app}`,
               inInfisical: GATE_KEY in secrets,
               flyApp,
-              onFly: flyApp ? await readFlyState(flyApp) : 'unreachable'
+              ...(flyApp
+                ? await readFlyState(flyApp)
+                : { onFly: 'unreachable' as const })
             };
           })
         ),
@@ -161,11 +168,12 @@ export default defineCommand({
       json: {
         tenant,
         environment,
-        apps: states.map(({ app, flyApp, inInfisical, onFly }) => ({
+        apps: states.map(({ app, flyApp, inInfisical, onFly, flyError }) => ({
           app,
           flyApp,
           inInfisical,
-          onFly
+          onFly,
+          ...(flyError ? { flyError } : {})
         }))
       },
       data: { action, environment, tenant, states, value }

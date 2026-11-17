@@ -2,17 +2,46 @@ import type { TenantApp } from '../../services/infisical';
 
 import {
   type AppState,
+  FLY_ERROR_MAX,
   GATE_KEY,
   MIN_PASSWORD_LENGTH,
   anyClosed,
   anyStored,
   describeOnFly,
+  flyErrorOf,
   generatePassword,
   prChoices,
   pullRequestChoices,
   targetFlyApp,
   tenantHint
 } from './gate.logic';
+
+describe('flyErrorOf', () => {
+  it("keeps the CLI's own last line", () => {
+    const error = new Error(
+      '[list secrets] something broke\nCommand failed with exit code 1: fly secrets list\n\nError: unauthorized\n'
+    );
+    expect(flyErrorOf(error)).toBe('Error: unauthorized');
+  });
+
+  it('reads a non-Error value', () => {
+    expect(flyErrorOf('timed out')).toBe('timed out');
+  });
+
+  it('cuts a long line to fit a desk row', () => {
+    const out = flyErrorOf(new Error('x'.repeat(400)));
+    expect(out).toHaveLength(FLY_ERROR_MAX);
+    expect(out.endsWith('…')).toBe(true);
+  });
+
+  it('replaces anything shaped like a Fly token', () => {
+    const out = flyErrorOf(
+      new Error('Error: bad token FlyV1 fm2_abc123,fm2_def456 and fm1_xyz-9')
+    );
+    expect(out).toBe('Error: bad token … and …');
+    expect(out).not.toMatch(/fm[12]_|FlyV1/);
+  });
+});
 
 describe('generatePassword', () => {
   it('is long enough and url-safe', () => {
