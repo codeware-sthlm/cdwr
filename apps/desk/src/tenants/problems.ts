@@ -98,6 +98,11 @@ const behind = (row: TenantRow, deploySha: string | null): Problem[] =>
       const shas = [
         ...new Set((a.machines ?? []).flatMap((m) => (m.sha ? [m.sha] : [])))
       ].map(short);
+      const versions = [
+        ...new Set(
+          (a.machines ?? []).flatMap((m) => (m.version ? [m.version] : []))
+        )
+      ];
       return {
         key: `${row.key}:behind:${a.app}`,
         row: row.key,
@@ -105,10 +110,12 @@ const behind = (row: TenantRow, deploySha: string | null): Problem[] =>
         severity: 'warn',
         title: `${a.app} is behind`,
         evidence: [
-          `Machines on ${shas.length ? shas.join(', ') : 'no known commit'}${deploySha ? `, the newest deploy of main is ${short(deploySha)}` : ''}`
+          versions.length && a.latest
+            ? `Machines run ${versions.join(', ')}, the newest release is ${a.latest}`
+            : `Machines on ${shas.length ? shas.join(', ') : 'no known commit'}${deploySha ? `, the newest deploy of main is ${short(deploySha)}` : ''}`
         ],
         threshold:
-          "The app is affected by a change between its machines' commit and the newest deploy run of main, and its machines still run the old commit.",
+          "A machine's commit does not hold the newest release tag of the app's project on main.",
         actions: [
           'Wait for the next deploy run',
           'Open the deploy run and check its job for this app'

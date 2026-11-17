@@ -43,7 +43,7 @@ const Section = ({
   </section>
 );
 
-/** A machine on main's commit is current; on another, the NUC's `behind` flag says whether that matters */
+/** Without a release tag: a machine on main's commit is current; on another, the NUC's `behind` flag (a machine's commit lacks the newest release tag) says whether that matters */
 const versionNote = (
   sha: string,
   main: string | null,
@@ -57,13 +57,25 @@ const versionNote = (
         ? ' (current)'
         : '';
 
+/** The release the machine runs; `old → newest` when the app is behind and the machine is not on the newest. A machine without a known release shows nothing */
+const releaseLabel = (
+  version: string | null,
+  latest: string | null,
+  behind: boolean | null
+): string | null =>
+  version !== null && behind === true && latest !== null && version !== latest
+    ? `${version} → ${latest}`
+    : version;
+
 const Machine = ({
   m,
   main,
+  latest,
   behind
 }: {
   m: TenantMachine;
   main: string | null;
+  latest: string | null;
   behind: boolean | null;
 }) => (
   <li className={MONO_LINE}>
@@ -72,9 +84,12 @@ const Machine = ({
       m.state,
       m.region,
       m.memoryMb === null ? null : `${m.memoryMb} MB`,
+      releaseLabel(m.version, latest, behind),
       m.sha === null
         ? 'no commit'
-        : `${m.sha.slice(0, 7)}${versionNote(m.sha, main, behind)}`
+        : m.version === null
+          ? `${m.sha.slice(0, 7)}${versionNote(m.sha, main, behind)}`
+          : m.sha.slice(0, 7)
     ]
       .filter((part) => part !== null && part !== '')
       .join(' · ')}
@@ -106,7 +121,13 @@ const App = ({ app, main }: { app: TenantApp; main: string | null }) => (
     ) : app.machines.length ? (
       <ul className="grid gap-1">
         {app.machines.map((m) => (
-          <Machine key={m.id} m={m} main={main} behind={app.behind} />
+          <Machine
+            key={m.id}
+            m={m}
+            main={main}
+            latest={app.latest}
+            behind={app.behind}
+          />
         ))}
       </ul>
     ) : (

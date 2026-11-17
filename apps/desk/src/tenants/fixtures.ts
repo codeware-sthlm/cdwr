@@ -8,6 +8,9 @@ import { SHARED_KEY } from './model';
 export const NOW = new Date('2026-11-15T12:00:00.000Z');
 export const MAIN = 'a'.repeat(40);
 export const BEHIND = 'b'.repeat(40);
+/** The newest cms release, and the one before it that a machine behind still runs */
+export const LATEST = 'cms-1.65.4';
+export const OLDER = 'cms-1.65.3';
 
 export const minutesAgo = (min: number): string =>
   new Date(NOW.getTime() - min * 6e4).toISOString();
