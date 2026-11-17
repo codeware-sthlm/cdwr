@@ -245,7 +245,14 @@ def platform_verdict($kind; $args):
     elif $kind == "gate" then
       ($j.apps // []) as $a
       | [ $a[] | select(.onFly != "unreachable") ] as $live
+      | [ $a[] | select((.flyError // "") != "") ] as $failed
       | if $j.tenant != $args.tenant then "the dry run read \($j.tenant), not \($args.tenant)"
+        elif ($a | length) == 0 then "Infisical lists no app for \($args.tenant)"
+        # Which side failed: Infisical listed apps, but Fly refused to read them
+        elif ($live | length) == 0 and ($failed | length) > 0 then
+          "Fly refused \($failed[0].flyApp): \($failed[0].flyError)"
+          + (if ($failed | length) > 1 then " (+\(($failed | length) - 1) more)" else "" end)
+          | if length > 160 then .[0:159] + "…" else . end
         elif ($live | length) == 0 then "\($args.tenant) has no deployed app"
         elif $args.action == "close" and all($live[]; .onFly == "set") and all($a[]; .inInfisical)
           then "already closed"
