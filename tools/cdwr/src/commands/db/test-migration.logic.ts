@@ -33,6 +33,9 @@ export const isPayloadObject = (object: DumpObject): boolean =>
 
 const SAFE_PREAMBLE = /^(--|SET |SELECT pg_catalog\.set_config)/;
 
+/** pg_dump 17.6+ wraps a dump in `\restrict <key>` … `\unrestrict <key>`; psql needs both or neither */
+const RESTRICT = /^\\(un)?restrict /;
+
 /**
  * Keep only the `payload` schema from a Supabase pg_dump file. Supabase
  * dumps carry objects — pgsodium, pg_graphql, supabase_vault — that crash a
@@ -51,7 +54,7 @@ export function extractPayloadSchema(sql: string): string {
       inPayload = isPayloadObject(header);
     }
 
-    if (inPayload) {
+    if (inPayload || RESTRICT.test(line)) {
       kept.push(line);
     } else if (
       !seenFirstHeader &&

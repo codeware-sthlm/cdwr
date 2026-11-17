@@ -106,6 +106,22 @@ describe('extractPayloadSchema', () => {
     expect(filtered).not.toContain('pgsodium.key');
     expect(filtered).toContain('SET statement_timeout = 0;');
   });
+
+  it('keeps the restrict pair wherever the sections around it fall', () => {
+    const lines = fixture.split('\n');
+    const restricted = [
+      ...lines.slice(0, 2),
+      '\\restrict abc',
+      ...lines.slice(2),
+      '-- Name: vault; Type: SCHEMA; Schema: -; Owner: -',
+      '\\unrestrict abc'
+    ].join('\n');
+
+    const filtered = extractPayloadSchema(restricted).split('\n');
+
+    expect(filtered).toContain('\\restrict abc');
+    expect(filtered).toContain('\\unrestrict abc');
+  });
 });
 
 describe('appliedMigrations', () => {
