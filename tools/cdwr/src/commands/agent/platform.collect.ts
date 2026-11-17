@@ -416,6 +416,9 @@ export async function readDeploy(): Promise<Reading<DeployRead>> {
 
 const FETCH_TIMEOUT_MS = 30_000;
 const GIT_TIMEOUT_MS = 10_000;
+/** After the fetch; a read started just before it can add three git timeouts */
+const RELEASES_BUDGET_MS = 60_000;
+const OUT_OF_TIME = 'out of time, read again next run';
 
 /** A git read in the checkout; the command line and stderr are not for the table */
 const git = (root: string, args: string[]) =>
@@ -496,10 +499,13 @@ async function machineRelease(
  * its machines run the newest tag that commit holds and whether it holds the
  * latest. Tags are fetched first, since a paused tick skips the checkout's own
  * fetch; when that fails the local tags are used and the reason is returned.
+ * No new read starts after `budgetMs`, so the command's deadline holds; what
+ * is left is a failed read, asked again next run.
  */
 export async function readReleases(
   root: string,
-  shas: Record<string, string[]>
+  shas: Record<string, string[]>,
+  budgetMs = RELEASES_BUDGET_MS
 ): Promise<ReleasesRead> {
   const projects: ReleasesRead['projects'] = {};
   if (Object.keys(shas).length === 0) return { fetchError: null, projects };
@@ -511,12 +517,20 @@ export async function readReleases(
     () => null,
     (error: unknown) => `git fetch failed (${codeOf(error)}), local tags used`
   );
+  const started = Date.now();
+  const late = () => Date.now() - started > budgetMs;
   for (const [project, list] of Object.entries(shas)) {
+    if (late()) {
+      projects[project] = failed(OUT_OF_TIME);
+      continue;
+    }
     try {
       const latest = await latestTag(root, project);
       const machines: ReleaseRead['machines'] = {};
       for (const sha of list) {
-        machines[sha] = await machineRelease(root, project, sha, latest);
+        machines[sha] = late()
+          ? failed(OUT_OF_TIME)
+          : await machineRelease(root, project, sha, latest);
       }
       projects[project] = ok({ latest, machines });
     } catch (error) {
