@@ -95,8 +95,6 @@ out
 # Generated offline copy of the vault (nx dx:secrets cms)
 *.env.offline
 
-.nx/self-healing
-
 .nx/migrate-runs
 
 # Generated showcase imagery, reviewed by hand before upload
