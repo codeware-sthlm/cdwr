@@ -64,6 +64,7 @@ const SqlSchema = z.object({
   db: z.object({
     sizeBytes: z.number().nullable(),
     sessions: z.number(),
+    poolerSessions: z.number(),
     byApplication: z.record(z.string(), z.number())
   })
 });
@@ -825,6 +826,7 @@ export const buildRows = (
       ? {
           sizeBytes: db.value.sizeBytes,
           sessions: db.value.sessions,
+          poolerSessions: db.value.poolerSessions,
           byApplication: Object.fromEntries(
             Object.entries(db.value.byApplication)
           )

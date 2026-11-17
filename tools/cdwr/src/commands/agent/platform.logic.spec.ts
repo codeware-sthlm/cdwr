@@ -126,7 +126,8 @@ const flyApp = (
 const db = {
   sizeBytes: 1000,
   sessions: 3,
-  byApplication: { cms: 2, '(none)': 1 }
+  poolerSessions: 2,
+  byApplication: { Supavisor: 2, '(none)': 1 }
 };
 
 const deploy = {
@@ -646,7 +647,8 @@ describe('buildRows', () => {
     expect(row(rows, SHARED_KEY).db).toEqual({
       sizeBytes: 1000,
       sessions: 3,
-      byApplication: { cms: 2, '(none)': 1 }
+      poolerSessions: 2,
+      byApplication: { Supavisor: 2, '(none)': 1 }
     });
     expect(row(rows, 'acme').db).toEqual({});
   });
@@ -1316,6 +1318,7 @@ describe('parseSql', () => {
     const parsed = parseSql(JSON.stringify({ tenants: [acme], db }) + '\n');
     expect(parsed.tenants[0]?.slug).toBe('acme');
     expect(parsed.db.sessions).toBe(3);
+    expect(parsed.db.poolerSessions).toBe(2);
   });
 
   it('drops fields it does not name', () => {

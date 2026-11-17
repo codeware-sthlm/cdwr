@@ -43,7 +43,12 @@ const database = ok({
       domains: []
     }
   ],
-  db: { sizeBytes: 1, sessions: 1, byApplication: { cms: 1 } }
+  db: {
+    sizeBytes: 1,
+    sessions: 1,
+    poolerSessions: 1,
+    byApplication: { Supavisor: 1 }
+  }
 });
 
 const deployed = ok({
