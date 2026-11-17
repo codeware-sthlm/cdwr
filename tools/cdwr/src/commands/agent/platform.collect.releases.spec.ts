@@ -160,6 +160,18 @@ describe('readReleases', () => {
     });
   });
 
+  it('starts no read past its budget', async () => {
+    const { projects } = await readReleases(
+      work,
+      { cms: [sha['newer'] ?? ''], builder: [sha['second'] ?? ''] },
+      -1
+    );
+    expect(projects).toEqual({
+      cms: { ok: false, reason: 'out of time, read again next run' },
+      builder: { ok: false, reason: 'out of time, read again next run' }
+    });
+  });
+
   it('names a failed fetch and still uses the local tags', async () => {
     git(work, 'remote', 'set-url', 'origin', join(dir, 'missing.git'));
     const { fetchError, projects } = await readReleases(work, {
