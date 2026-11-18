@@ -157,7 +157,7 @@ const tourSignups: CollectionConfig<'tour-signups'> = {
         {
           name: 'queuePosition',
           type: 'number',
-          label: { en: 'Queue position', sv: 'Köplats' },
+          label: { en: 'Queue position', sv: 'Plats på väntelistan' },
           index: true,
           admin: {
             width: '50%',
