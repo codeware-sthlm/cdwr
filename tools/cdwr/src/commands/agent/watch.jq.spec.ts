@@ -4,12 +4,24 @@ import { fileURLToPath } from 'node:url';
 
 const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
 
+// No skip when jq is missing: this spec covers the scheduler's queue logic
+const JQ_MISSING = 'jq not found: install jq to run this spec';
+
+const spawnError = (error: Error & { code?: string }) =>
+  error.code === 'ENOENT' ? new Error(JQ_MISSING) : error;
+
+beforeAll(() => {
+  const res = spawnSync('jq', ['--version'], { encoding: 'utf8' });
+  if (res.error) throw spawnError(res.error);
+});
+
 // Runs `expr` against `input` through the real jq with the watch module included
 const run = (expr: string, input: unknown = null): unknown => {
   const res = spawnSync('jq', ['-c', '-L', DIR, `include "watch"; ${expr}`], {
     input: JSON.stringify(input),
     encoding: 'utf8'
   });
+  if (res.error) throw spawnError(res.error);
   if (res.status !== 0) throw new Error(res.stderr);
   return JSON.parse(res.stdout);
 };
