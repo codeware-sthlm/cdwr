@@ -16,6 +16,7 @@ import {
   addFailedRequest,
   auditFindings,
   auditMarkdown,
+  axeTargets,
   isBroken,
   notFoundPath,
   ogCheck,
@@ -211,7 +212,8 @@ export default defineCommand<
                 id: violation.id,
                 impact: violation.impact ?? null,
                 help: violation.help,
-                nodes: violation.nodes.length
+                nodes: violation.nodes.length,
+                targets: axeTargets(violation.nodes)
               })),
               brokenLinks
             });

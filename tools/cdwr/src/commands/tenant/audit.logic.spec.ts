@@ -4,6 +4,7 @@ import {
   addFailedRequest,
   auditFindings,
   auditMarkdown,
+  axeTargets,
   isBroken,
   notFoundPath,
   ogCheck,
@@ -161,6 +162,25 @@ describe('notFoundPath', () => {
   });
 });
 
+describe('axeTargets', () => {
+  it('keeps the first five selectors', () => {
+    const nodes = ['.a', '.b', '.c', '.d', '.e', '.f'].map((selector) => ({
+      target: [selector]
+    }));
+
+    expect(axeTargets(nodes)).toEqual(['.a', '.b', '.c', '.d', '.e']);
+  });
+
+  it('joins a path through a frame or a shadow root', () => {
+    expect(
+      axeTargets([
+        { target: ['iframe', '#inner'] },
+        { target: [['my-el', 'button']] }
+      ])
+    ).toEqual(['iframe >>> #inner', 'my-el >>> button']);
+  });
+});
+
 describe('auditFindings', () => {
   it('is empty when all is well', () => {
     expect(auditFindings(okReport())).toEqual([]);
@@ -188,8 +208,14 @@ describe('auditFindings', () => {
           }
         ],
         axe: [
-          { id: 'color-contrast', impact: 'serious', help: '', nodes: 3 },
-          { id: 'label', impact: null, help: '', nodes: 1 }
+          {
+            id: 'color-contrast',
+            impact: 'serious',
+            help: '',
+            nodes: 3,
+            targets: ['.a', '.b', '.c']
+          },
+          { id: 'label', impact: null, help: '', nodes: 1, targets: ['#x'] }
         ],
         brokenLinks: [{ href: 'https://cdwr.io/gone', status: 404 }]
       },
@@ -259,6 +285,30 @@ describe('auditMarkdown', () => {
     expect(markdown).toContain(
       '- /: 1 failed request(s) (401 GET https://cdwr.io/api/a)'
     );
+  });
+
+  it('lists the elements of each axe violation', () => {
+    const report = okReport();
+    report.pages[0].axe = [
+      {
+        id: 'color-contrast',
+        impact: 'serious',
+        help: '',
+        nodes: 7,
+        targets: ['.caption', 'pre > span:nth-child(2)']
+      },
+      { id: 'region', impact: 'moderate', help: '', nodes: 1, targets: [] }
+    ];
+
+    const markdown = auditMarkdown(report);
+
+    expect(markdown).toContain(
+      '#### Axe elements\n\n- / color-contrast (7): `.caption`, `pre > span:nth-child(2)`\n- / region (1): no selector'
+    );
+  });
+
+  it('has no axe elements section without violations', () => {
+    expect(auditMarkdown(okReport())).not.toContain('Axe elements');
   });
 
   it('lists the findings when there are some', () => {

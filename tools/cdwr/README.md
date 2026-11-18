@@ -117,7 +117,8 @@ valid for an hour, so the password itself is never sent.
 
 `cdwr tenant audit` looks at the same pages before a site opens. Per page: the HTTP status, console
 errors, every request the page made that answered 400 or worse (method, URL and status, since
-Chrome's `Failed to load resource` text names no URL), axe violations and every same-site link that
+Chrome's `Failed to load resource` text names no URL), axe violations with the selectors of up to 5
+failing elements each, and every same-site link that
 answers 400 or worse. Once per site: the home
 page's `og:title`, `og:description` and `og:image` (and that the image answers), and a path no site
 has answering 404 in each of `--locales` (`sv,en` by default). It takes `--gate-password` too, and
