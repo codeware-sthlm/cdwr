@@ -92,6 +92,13 @@ if ! linear_gate "$HOME_DIR"; then
   telemetry failed "$KEY · no Linear tools ($linear_why)"
   exit 1
 fi
+# The Linear tools the session may call: linear-tools.txt, the list the container's proxy allows
+if ! linear_allow=("${(@f)$(linear_allowed)}"); then
+  note "fail: no Linear tool list (linear-tools.txt); not starting"
+  record failed "$KEY · no Linear tool list"
+  telemetry failed "$KEY · no Linear tool list"
+  exit 1
+fi
 
 # Reserve the whole budget before the session starts, so a machine that dies mid-session still
 # counts it against the daily cap; the actual cost settles it afterwards. No reservation, no start.
@@ -186,8 +193,7 @@ prompt="/work-queue implement-only once"
     "Bash(tools/cdwr/agent-queue/session.sh register)" "Bash(tools/cdwr/agent-queue/session.sh ticket *)" "Bash(tools/cdwr/agent-queue/session.sh id)" \
     "Bash(tools/cdwr/agent-queue/wait.sh*)" \
     "Bash(tools/cdwr/agent-queue/notify.sh *)" "Bash(~/.claude/hooks/notify-slack.sh)" "Bash($HOME/.claude/hooks/notify-slack.sh)" \
-    "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels "$L"__get_attachment \
-    "$L"__save_issue "$L"__save_comment "$L"__prepare_attachment_upload "$L"__create_attachment_from_upload \
+    "${linear_allow[@]/#/${L}__}" \
   > "$result" 2> "$log" &
 claude_pid=$!
 wait $claude_pid || rc=$?

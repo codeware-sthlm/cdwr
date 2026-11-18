@@ -358,6 +358,12 @@ describe('implement.sh', () => {
         ),
         join(scripts, 'telemetry.sh')
       );
+      copyFileSync(
+        fileURLToPath(
+          new URL('../../../agent-queue/linear-tools.txt', import.meta.url)
+        ),
+        join(scripts, 'linear-tools.txt')
+      );
       fakeApp();
     });
 
@@ -444,6 +450,8 @@ describe('implement.sh', () => {
         {
           env: {
             AGENT_QUEUE_LINEAR_TOOLS_CMD: 'true',
+            // Implement runs only in the container
+            AGENT_QUEUE_HOST: 'container',
             PATH: `${bin}:${process.env['PATH'] ?? ''}`,
             HOME: join(dir, 'home'),
             AGENT_QUEUE_HOME: queueHome,
@@ -769,6 +777,62 @@ describe('implement.sh', () => {
         const argv = readFileSync(argvFile(), 'utf8');
         expect(argv).toContain('mcp__claude_ai_Linear__get_issue');
         expect(argv).not.toContain('--mcp-config');
+      });
+
+      it('allows exactly the Linear tools in linear-tools.txt', () => {
+        fakeArgvClaude();
+        expect(start({ AGENT_QUEUE_LINEAR_MCP: 'connector' }).status).toBe(0);
+        const names = readFileSync(join(scripts, 'linear-tools.txt'), 'utf8')
+          .split('\n')
+          .filter((line) => line.trim() && !line.startsWith('#'));
+        expect(names.length).toBeGreaterThan(0);
+        const linear = readFileSync(argvFile(), 'utf8')
+          .split('\n')
+          .filter((arg) => arg.startsWith('mcp__claude_ai_Linear__'));
+        expect(linear).toEqual(
+          names.map((name) => `mcp__claude_ai_Linear__${name}`)
+        );
+      });
+
+      it('allows exactly those tools on the key server too', () => {
+        fakeArgvClaude();
+        const keyFile = join(dir, 'linear.key');
+        writeFileSync(keyFile, 'sekret\n');
+        expect(
+          start({
+            AGENT_QUEUE_LINEAR_MCP: 'key',
+            AGENT_QUEUE_LINEAR_KEY: 'sekret',
+            AGENT_QUEUE_LINEAR_KEY_FILE: keyFile
+          }).status
+        ).toBe(0);
+        const names = readFileSync(join(scripts, 'linear-tools.txt'), 'utf8')
+          .split('\n')
+          .filter((line) => line.trim() && !line.startsWith('#'));
+        const linear = readFileSync(argvFile(), 'utf8')
+          .split('\n')
+          .filter((arg) => arg.startsWith('mcp__agent_linear__'));
+        expect(linear).toEqual(
+          names.map((name) => `mcp__agent_linear__${name}`)
+        );
+      });
+
+      it('does not start without a Linear tool list, and reserves nothing', () => {
+        fakeClaude(0, '{}');
+        rmSync(join(scripts, 'linear-tools.txt'));
+        const result = start();
+        expect(result.status).toBe(1);
+        expect(existsSync(calls)).toBe(false);
+        expect(existsSync(join(queueHome, 'implement-spend.jsonl'))).toBe(
+          false
+        );
+        expect(rows('runs.jsonl')).toEqual([
+          expect.objectContaining({
+            outcome: 'failed',
+            ticket: 'COD-1',
+            detail: expect.stringContaining('no Linear tool list') as string
+          })
+        ]);
+        expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
       });
 
       it('signs its own server with the key, which stays out of argv and the config', () => {

@@ -790,7 +790,7 @@ job_line() {
   elif [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
   if [[ -z "$want" ]]; then print -r -- "$out · $kind unknown"; return 0; fi
-  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh checkin.sh telemetry.sh; do
+  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh checkin.sh telemetry.sh linear-tools.txt; do
     theirs="$(git -C "$REPO" show "origin/main:$dir/$f" 2>/dev/null)" ||
       { print -r -- "$out · $kind unknown"; return 0; }
     [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")
@@ -1618,7 +1618,9 @@ attended() {
 # status reads this line: whether a claude run here would have Linear tools
 if $check; then
   why="$(linear_tools)"
-  if [[ -n "$why" ]]; then print -r -- "linear: missing ($why)"; else print -r -- "linear: ok ($LINEAR_MCP)"; fi
+  via=
+  [[ "$LINEAR_MCP" == key && -n "$LINEAR_PROXY_URL" ]] && via=" via proxy"
+  if [[ -n "$why" ]]; then print -r -- "linear: missing ($why)"; else print -r -- "linear: ok ($LINEAR_MCP$via)"; fi
 fi
 attended
 
