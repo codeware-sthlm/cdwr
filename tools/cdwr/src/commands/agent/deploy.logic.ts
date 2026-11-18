@@ -8,7 +8,7 @@ export const CONTAINER = 'cdwr-agent';
 /** The queue state inside the container */
 export const QUEUE_DIR = '/home/agent/.cdwr/agent-queue';
 export const PAUSED = `${QUEUE_DIR}/paused`;
-/** Held by a run; the entrypoint clears it at start */
+/** Held by a run, which writes its pid inside; the entrypoint clears it at start */
 export const RUN_LOCK = `${QUEUE_DIR}/lock`;
 /** Held by an implementing session, which writes its pid inside */
 export const IMPLEMENT_LOCK = `${QUEUE_DIR}/implement.lock`;
@@ -98,9 +98,53 @@ export const unpause = (host: string): Remote =>
 export const pathExists = (host: string, path: string): Remote =>
   ssh(host, 'docker', 'exec', CONTAINER, 'test', '-e', path);
 
-/** Prints the pid the implementing session wrote into its lock directory; exits 1 without one */
+/** Prints a file inside a lock directory (`pid`, `key`, `waiting`); exits 1 when it is absent */
+export const lockFile = (host: string, lock: string, name: string): Remote =>
+  ssh(host, 'docker', 'exec', CONTAINER, 'cat', `${lock}/${name}`);
+
+/** Prints the pid the lock's owner wrote into its lock directory; exits 1 without one */
 export const lockPid = (host: string, lock: string): Remote =>
-  ssh(host, 'docker', 'exec', CONTAINER, 'cat', `${lock}/pid`);
+  lockFile(host, lock, 'pid');
+
+/**
+ * Exits 0 when the process's command line names wait.sh, 1 when it does not,
+ * 2 when the process is gone; the pid must be digits
+ */
+export const pidIsWait = (host: string, pid: string): Remote => {
+  if (!isPid(pid)) throw new CliError(`Not a pid: ${pid}`);
+  return ssh(
+    host,
+    'docker',
+    'exec',
+    CONTAINER,
+    'grep',
+    '-qa',
+    'wait.sh',
+    `/proc/${pid}/cmdline`
+  );
+};
+
+/** The ticket a launch key starts with, such as `COD-752` out of `COD-752 answered` */
+export const ticketOfKey = (key: string): string | undefined => {
+  const first = key.trim().split(/\s+/)[0] ?? '';
+  return /^COD-[0-9]+$/.test(first) ? first : undefined;
+};
+
+/**
+ * What an implementing session is doing: nothing, polling in wait.sh (safe to
+ * interrupt, the next tick resumes it) or working
+ */
+export type SessionState = 'none' | 'waiting' | 'working';
+
+export const sessionState = (s: {
+  locked: boolean;
+  alive: boolean;
+  waitingAlive: boolean;
+  waitingIsWait: boolean;
+}): SessionState => {
+  if (!s.locked || !s.alive) return 'none';
+  return s.waitingAlive && s.waitingIsWait ? 'waiting' : 'working';
+};
 
 /** Exits 0 when the process runs in the container, 1 when it is gone; the pid must be digits */
 export const pidAlive = (host: string, pid: string): Remote => {

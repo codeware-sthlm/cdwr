@@ -8,6 +8,7 @@ import {
   headShaOf,
   isPid,
   isRunning,
+  lockFile,
   lockOld,
   lockPid,
   parseReport,
@@ -15,9 +16,12 @@ import {
   pathExists,
   pause,
   pidAlive,
+  pidIsWait,
   pull,
   report,
+  sessionState,
   tagFromSha,
+  ticketOfKey,
   unpause,
   up,
   uploadCompose,
@@ -159,7 +163,9 @@ describe('remote commands', () => {
       unpause('nuc'),
       pathExists('nuc', RUN_LOCK),
       lockPid('nuc', IMPLEMENT_LOCK),
+      lockFile('nuc', IMPLEMENT_LOCK, 'key'),
       pidAlive('nuc', '4242'),
+      pidIsWait('nuc', '4242'),
       lockOld('nuc', IMPLEMENT_LOCK),
       pull('nuc'),
       up('nuc'),
@@ -177,6 +183,64 @@ describe('pids', () => {
     expect(isPid('')).toBe(false);
     expect(isPid('1; rm')).toBe(false);
     expect(() => pidAlive('nuc', '1 2')).toThrow();
+    expect(() => pidIsWait('nuc', '1 2')).toThrow('Not a pid');
+  });
+
+  it('reads files in a lock directory', () => {
+    const base = ['docker', 'exec', CONTAINER, 'cat'];
+    expect(lockFile('nuc', IMPLEMENT_LOCK, 'key').args.slice(3)).toEqual([
+      ...base,
+      `${IMPLEMENT_LOCK}/key`
+    ]);
+    expect(lockPid('nuc', RUN_LOCK).args.slice(3)).toEqual([
+      ...base,
+      `${RUN_LOCK}/pid`
+    ]);
+  });
+
+  it('asks whether a process is a wait.sh', () => {
+    expect(pidIsWait('nuc', '4242').args.slice(3)).toEqual([
+      'docker',
+      'exec',
+      CONTAINER,
+      'grep',
+      '-qa',
+      'wait.sh',
+      '/proc/4242/cmdline'
+    ]);
+  });
+});
+
+describe('ticketOfKey', () => {
+  it('takes the ticket a launch key starts with', () => {
+    expect(ticketOfKey('COD-752 answered')).toBe('COD-752');
+    expect(ticketOfKey('COD-9')).toBe('COD-9');
+  });
+
+  it('gives nothing for another key', () => {
+    expect(ticketOfKey('')).toBeUndefined();
+    expect(ticketOfKey('review-backlog')).toBeUndefined();
+    expect(ticketOfKey('COD-x answered')).toBeUndefined();
+  });
+});
+
+describe('sessionState', () => {
+  const base = {
+    locked: true,
+    alive: true,
+    waitingAlive: true,
+    waitingIsWait: true
+  };
+
+  it('is waiting only while a live wait.sh is polled', () => {
+    expect(sessionState(base)).toBe('waiting');
+    expect(sessionState({ ...base, waitingAlive: false })).toBe('working');
+    expect(sessionState({ ...base, waitingIsWait: false })).toBe('working');
+  });
+
+  it('is none without a live lock', () => {
+    expect(sessionState({ ...base, locked: false })).toBe('none');
+    expect(sessionState({ ...base, alive: false })).toBe('none');
   });
 });
 

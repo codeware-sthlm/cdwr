@@ -280,6 +280,125 @@ describe('agent deploy', () => {
     expect(calls().some((s) => s.includes('image.env'))).toBe(false);
   });
 
+  const QUEUE = '/home/agent/.cdwr/agent-queue';
+
+  /**
+   * An implementing session polling in a wait.sh (pid 5151); `isWait` is asked
+   * once per check, so a script can send it back to work between checks
+   */
+  const session = (opts: {
+    isWait: () => boolean;
+    runLockPid?: string;
+    implementing?: boolean;
+  }) => {
+    const { implementing = true } = opts;
+    run.mockImplementation(async (_bin, a) => {
+      const cmd = a.slice(3).join(' ');
+      if (cmd.includes('State.Running')) return ok('true\n');
+      if (cmd.endsWith(`test -e ${QUEUE}/paused`)) throw fail(1);
+      if (cmd.endsWith(`test -e ${QUEUE}/lock`)) {
+        if (opts.runLockPid) return ok();
+        throw fail(1);
+      }
+      if (cmd.endsWith(`cat ${QUEUE}/lock/pid`)) {
+        return ok(`${opts.runLockPid}\n`);
+      }
+      if (cmd.includes('/proc/9999')) throw fail(1);
+      if (cmd.endsWith(`test -e ${QUEUE}/implement.lock`)) {
+        if (implementing) return ok();
+        throw fail(1);
+      }
+      if (cmd.endsWith('implement.lock/pid')) return ok('4242\n');
+      if (cmd.endsWith('implement.lock/key')) return ok('COD-752 answered\n');
+      if (cmd.endsWith('implement.lock/waiting')) return ok('5151\n');
+      if (cmd.includes('grep -qa wait.sh')) {
+        if (opts.isWait()) return ok();
+        throw fail(1);
+      }
+      if (cmd.includes('State.Status')) return ok('sha256:abc=running\n');
+      return ok();
+    });
+  };
+
+  const greps = () => calls().filter((s) => s.includes('grep -qa'));
+
+  it('does not wait for a session that only waits in wait.sh, and names it', async () => {
+    session({ isWait: () => true });
+    const exit = await deploy(args);
+    expect(exit).toBe(EXIT.ok);
+    // One look before the pull, one before the restart
+    expect(greps()).toHaveLength(2);
+    expect(calls().some((s) => s.includes('up -d'))).toBe(true);
+    expect(JSON.stringify(ui.printed)).toContain(
+      'Interrupted COD-752 (COD-752 answered), which was waiting in wait.sh; the next tick resumes it'
+    );
+  });
+
+  it('waits as before while the session works', async () => {
+    let n = 0;
+    session({ isWait: () => ++n > 2 });
+    const exit = await deploy(args);
+    expect(exit).toBe(EXIT.ok);
+    expect(greps().length).toBeGreaterThan(2);
+    expect(calls().some((s) => s.includes('up -d'))).toBe(true);
+  });
+
+  it('waits again when the session is working after the pull, then restarts', async () => {
+    const script = [true, false, true];
+    session({ isWait: () => script.shift() ?? true });
+    const exit = await deploy(args);
+    expect(exit).toBe(EXIT.ok);
+    expect(greps()).toHaveLength(3);
+    const steps = calls();
+    expect(steps.findIndex((s) => s.includes('up -d'))).toBeGreaterThan(
+      steps.findIndex((s) => s.includes('pull'))
+    );
+  });
+
+  it('stops before the restart when the session stays busy after the pull', async () => {
+    const script = [true];
+    session({ isWait: () => script.shift() ?? false });
+    const exit = await deploy([...args.slice(0, -1), '--wait', '0', '--yes']);
+    expect(exit).toBe(EXIT.failed);
+    const steps = calls();
+    expect(steps.some((s) => s.includes('pull'))).toBe(true);
+    expect(steps.some((s) => s.includes('up -d'))).toBe(false);
+    expect(steps.at(-1)).toContain('rm -f');
+    const printed = JSON.stringify(ui.printed);
+    expect(printed).toContain('the container was not restarted');
+    expect(printed).toContain('Run the same deploy again');
+  });
+
+  it('with --force skips both checks and says what it cut', async () => {
+    session({ isWait: () => false });
+    const exit = await deploy([...args, '--force']);
+    expect(exit).toBe(EXIT.ok);
+    // Only one look, to report; nothing is waited for
+    expect(greps()).toHaveLength(1);
+    expect(calls().some((s) => s.includes('up -d'))).toBe(true);
+    expect(JSON.stringify(ui.printed)).toContain(
+      'Cut COD-752 (COD-752 answered) while it was working'
+    );
+  });
+
+  it('raises the plan to destructive with --force only', async () => {
+    const { plan } = (await import('./deploy')).default;
+    const ctx = { root } as never;
+    const base = { host: 'nuc', tag: 'main', wait: 30 };
+    expect((await plan(ctx, { ...base, force: true })).danger).toBe(
+      'destructive'
+    );
+    expect((await plan(ctx, { ...base, force: false })).danger).toBeUndefined();
+  });
+
+  it('treats a run lock with a dead pid as not busy', async () => {
+    session({ isWait: () => true, runLockPid: '9999', implementing: false });
+    const exit = await deploy(args);
+    expect(exit).toBe(EXIT.ok);
+    expect(calls().some((s) => s.includes('up -d'))).toBe(true);
+    expect(greps()).toHaveLength(0);
+  });
+
   it('uploads the compose file only after the wait', async () => {
     run.mockImplementation(async (_bin, a) => {
       const cmd = a.slice(3).join(' ');
