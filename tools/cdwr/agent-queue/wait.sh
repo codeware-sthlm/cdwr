@@ -10,6 +10,8 @@
 # Supabase env in tools/cdwr/.env, a listener that exited) every --interval, as before. A listener
 # that dies mid-wait is not restarted; the next wait.sh starts a fresh one.
 # Runs from the repo, not installed. While it runs, <id>.watcher holds its pid and the hook reports `polling` on Stop.
+# In an implement session (AGENT_QUEUE_SESSION_KIND=implement) it also writes its pid to implement.lock/waiting
+# while it waits, which `cdwr agent deploy` reads as "only polling, safe to restart".
 #   wait.sh [--interval 60] [--fallback 600] [--max 6600]
 #   wait.sh --now        print the current pick once and exit, with no listener
 #   wait.sh --runnable   print what an implementing session may take, one launch key per line
@@ -211,7 +213,22 @@ nap() {
 }
 
 write_watcher
-trap 'stop_listener; remove_watcher' EXIT
+# The implementing session is only polling: the marker tells `cdwr agent deploy` a restart costs
+# nothing. A marker left by a killed wait.sh names a dead pid and reads as working.
+waiting_marker=""
+write_waiting() {
+  local lock="${AGENT_QUEUE_HOME:-$BASE}/implement.lock"
+  [[ "${AGENT_QUEUE_SESSION_KIND:-}" == implement && -d "$lock" ]] || return 0
+  waiting_marker="$lock/waiting"
+  print -r -- "$$" > "$waiting_marker.tmp.$$" && mv "$waiting_marker.tmp.$$" "$waiting_marker" || { rm -f "$waiting_marker.tmp.$$"; waiting_marker=""; }
+  return 0
+}
+remove_waiting() {
+  [[ -n "$waiting_marker" && "$(cat "$waiting_marker" 2>/dev/null)" == "$$" ]] && rm -f "$waiting_marker"
+  return 0
+}
+write_waiting
+trap 'stop_listener; remove_watcher; remove_waiting' EXIT
 trap 'exit 0' INT TERM HUP
 # Before the listener starts: SIGUSR1's default action would end the wait
 trap 'woken=1; [[ -n "$sleeper" ]] && kill "$sleeper" 2>/dev/null; true' USR1

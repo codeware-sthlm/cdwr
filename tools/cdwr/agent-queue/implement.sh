@@ -50,6 +50,8 @@ telemetry() {
 LOCK="$HOME_DIR/implement.lock"
 if ! mkdir "$LOCK" 2>/dev/null; then note "busy: a session is running"; exit 0; fi
 print -r -- "$$" > "$LOCK/pid"
+# The launch key beside the pid, for a deploy that names what it would interrupt
+[[ -n "$KEY" ]] && print -r -- "$KEY" > "$LOCK/key"
 trap '[[ "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]] && rm -rf "$LOCK"' EXIT
 
 # The app identity, read from the agent checkout's tools/cdwr/.env (install refreshes that
@@ -141,8 +143,10 @@ DENY=(
 WT="/${REPO:h}/codeware-cod-*/**"
 rc=0
 claude_pid=
-# A stop (the container shutting down) reaches claude; the ledger and the lock are settled below
-trap '[[ -n "$claude_pid" ]] && kill -TERM $claude_pid 2>/dev/null' TERM INT
+interrupted=false
+# A stop (the container shutting down) reaches claude; the ledger and the lock are settled below.
+# The flag tells the outcome below that the session was cut short, not that it failed.
+trap 'interrupted=true; [[ -n "$claude_pid" ]] && kill -TERM $claude_pid 2>/dev/null' TERM INT
 # The session hook tells the sessions table what kind this is
 export AGENT_QUEUE_SESSION_KIND=implement
 prompt="/work-queue implement-only once"
@@ -192,7 +196,18 @@ spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result" 2
 last=
 (( rc == 0 )) && last="$({ jq -r '.result // empty' "$result" 2>/dev/null || true; } | awk 'NF {l = $0} END {print l}')"
 
-if [[ -n "$KEY" && "$last" == "not tried: $KEY"( · *|) ]]; then
+if $interrupted; then
+  # A deploy or container stop is not a failure, so it never counts toward the two-miss stop:
+  # the launch is given back once per key, as for `not tried`, and nobody is notified
+  if [[ "$(jq -r '.key // empty' "$HOME_DIR/launch.json" 2>/dev/null)" == "$KEY" ]]; then
+    jq -c 'if .refunded then . else .launches = ([(.launches // 0) - 1, 0] | max) | .refunded = true end' \
+      "$HOME_DIR/launch.json" > "$HOME_DIR/launch.json.tmp.$$" 2>/dev/null &&
+      mv "$HOME_DIR/launch.json.tmp.$$" "$HOME_DIR/launch.json" 2>/dev/null || rm -f "$HOME_DIR/launch.json.tmp.$$" 2>/dev/null || true
+  fi
+  note "interrupted: $KEY$spent"
+  record interrupted "$KEY · stopped by a container stop or deploy$spent · log $log"
+  telemetry interrupted "$KEY · stopped by a container stop or deploy$spent · log $log"
+elif [[ -n "$KEY" && "$last" == "not tried: $KEY"( · *|) ]]; then
   # The launch changed nothing by design: give it back once per key, so the next pick may launch
   # it again, and a session that keeps declining still meets the two-miss stop
   if [[ "$(jq -r '.key // empty' "$HOME_DIR/launch.json" 2>/dev/null)" == "$KEY" ]]; then

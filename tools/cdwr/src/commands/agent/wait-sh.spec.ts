@@ -741,6 +741,87 @@ while true; do beat "$1" "$2"; sleep 1; done`
       expect(existsSync(watcher)).toBe(false);
     });
   });
+
+  // The marker `cdwr agent deploy` reads: the implementing session is only polling
+  describe('waiting marker', { timeout: 20_000 }, () => {
+    const lock = () => join(dir, 'queue', 'implement.lock');
+    const marker = () => join(lock(), 'waiting');
+    const linear = (body = '') => {
+      const cmd = join(dir, 'linear.sh');
+      writeFileSync(
+        cmd,
+        `#!/bin/sh\n${body}\ncat <<'EOF'\n${response(ticket('COD-1', 'backlog'))}\nEOF\n`
+      );
+      chmodSync(cmd, 0o755);
+      return cmd;
+    };
+    // The exit promise is made at spawn, so a child that is already gone still resolves it
+    const start = (
+      args: string[],
+      env: Record<string, string> = {},
+      cmd = linear()
+    ) => {
+      const child = spawn('zsh', [SCRIPT, ...args], {
+        env: {
+          ...process.env,
+          HOME: dir,
+          AGENT_QUEUE_SESSIONS: join(dir, 'sessions'),
+          AGENT_QUEUE_HOME: join(dir, 'queue'),
+          AGENT_QUEUE_LINEAR_CMD: cmd,
+          AGENT_QUEUE_LISTEN_CMD: stub('no-listener', 'exit 0'),
+          ...env
+        },
+        stdio: 'ignore'
+      });
+      const done = new Promise<void>((r) => child.once('close', () => r()));
+      return { child, done };
+    };
+    const longWait = ['--interval', '1', '--max', '3'];
+    const implement = { AGENT_QUEUE_SESSION_KIND: 'implement' };
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    beforeEach(() => {
+      mkdirSync(join(dir, 'queue'));
+    });
+
+    it('is written during a long wait of an implement session and removed on exit', async () => {
+      mkdirSync(lock());
+      const { child, done } = start(longWait, implement);
+      for (let i = 0; i < 40 && !existsSync(marker()); i++) await sleep(100);
+      expect(readFileSync(marker(), 'utf8').trim()).toBe(String(child.pid));
+      await done;
+      expect(existsSync(marker())).toBe(false);
+      expect(existsSync(lock())).toBe(true);
+    });
+
+    it('is not written without the implement session kind', async () => {
+      mkdirSync(lock());
+      const { done } = start(longWait);
+      await sleep(1500);
+      expect(existsSync(marker())).toBe(false);
+      await done;
+    });
+
+    it('is not written without the lock dir', async () => {
+      const { done } = start(longWait, implement);
+      await sleep(1500);
+      expect(existsSync(lock())).toBe(false);
+      await done;
+    });
+
+    it.each(['--now', '--runnable'])('is not written for %s', async (flag) => {
+      mkdirSync(lock());
+      await start([flag], implement).done;
+      expect(existsSync(marker())).toBe(false);
+    });
+
+    it('is left alone when it holds another pid', async () => {
+      mkdirSync(lock());
+      await start(longWait, implement, linear(`echo 99999 > "${marker()}"`))
+        .done;
+      expect(readFileSync(marker(), 'utf8').trim()).toBe('99999');
+    });
+  });
 });
 
 describe.skipIf(!hasZsh)('parked_waits', () => {

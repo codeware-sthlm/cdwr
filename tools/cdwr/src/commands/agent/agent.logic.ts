@@ -792,6 +792,7 @@ export const IMPLEMENT_OUTCOMES = [
   'launched',
   'implemented',
   'untried',
+  'interrupted',
   'limited',
   'cap',
   'failed'
@@ -1000,6 +1001,7 @@ const IMPLEMENT_VERDICTS = [
   'fail',
   'done',
   'untried',
+  'interrupted',
   'limited',
   'busy',
   'launch',
