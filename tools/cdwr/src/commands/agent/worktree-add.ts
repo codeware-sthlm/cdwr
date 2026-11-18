@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { defineCommand } from '../../cli/command';
@@ -7,7 +7,7 @@ import { input } from '../../cli/inputs';
 import { readText, worktreeOf } from '../../services/agent-queue';
 import { CommandError, childEnv, run } from '../../services/shell';
 
-import { envCopiesFor } from './agent.logic';
+import { envCopiesFor, envWithheldFor } from './agent.logic';
 import { isTicket, worktreePath } from './worktree.logic';
 
 /** Where the branch comes from when the checkout is created */
@@ -125,6 +125,10 @@ export default defineCommand({
       const ours = readText(join(envSource, file));
       return ours !== undefined && ours !== readText(join(path, file));
     });
+    // A worktree an attended session set up may hold a copy this session must not have
+    const envRemovals = envWithheldFor(ctx.env).filter((file) =>
+      existsSync(join(path, file))
+    );
     const deps = !existsSync(join(path, 'node_modules'));
 
     const labels: Record<Source, string> = {
@@ -138,6 +142,10 @@ export default defineCommand({
         label: `Copy ${file}`,
         detail: `from ${envSource}`
       })),
+      ...envRemovals.map((file) => ({
+        label: `Remove ${file}`,
+        detail: 'an implement session gets no copy'
+      })),
       deps && { label: 'Install dependencies', detail: 'pnpm install' }
     ].filter((step) => step !== false);
 
@@ -149,6 +157,7 @@ export default defineCommand({
       source,
       exists,
       envCopies,
+      envRemovals,
       deps
     };
     if (steps.length === 0) {
@@ -190,6 +199,10 @@ export default defineCommand({
       copyFileSync(join(data.envSource, file), join(path, file));
       ctx.ui.info(`Copied ${file}`);
     }
+    for (const file of data.envRemovals) {
+      rmSync(join(path, file), { force: true });
+      ctx.ui.info(`Removed ${file}`);
+    }
     if (data.deps) {
       await ctx.ui.task('Installing dependencies in the worktree', () =>
         run('pnpm', ['install', '--frozen-lockfile'], {
@@ -207,6 +220,7 @@ export default defineCommand({
         created: !data.exists,
         source: data.source,
         envCopies: data.envCopies,
+        envRemovals: data.envRemovals,
         deps: data.deps
       }
     };

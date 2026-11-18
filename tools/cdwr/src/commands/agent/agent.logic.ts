@@ -275,6 +275,10 @@ export const envCopiesFor = (env: NodeJS.ProcessEnv): string[] =>
   env[SESSION_KIND_ENV] === 'implement'
     ? ENV_COPIES.filter((file) => file !== 'tools/cdwr/.env')
     : ENV_COPIES;
+
+/** The env copies a ticket worktree must not hold: removed when an earlier attended run left them */
+export const envWithheldFor = (env: NodeJS.ProcessEnv): string[] =>
+  ENV_COPIES.filter((file) => !envCopiesFor(env).includes(file));
 /** Pref holding the worktree the queue plans in */
 export const WORKTREE_PREF = 'agentWorktree';
 
