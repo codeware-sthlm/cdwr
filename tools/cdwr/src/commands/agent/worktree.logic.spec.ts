@@ -2,6 +2,7 @@ import {
   type Candidate,
   isTicket,
   isTicketWorktree,
+  orphanDaemons,
   parsePrHead,
   parsePrState,
   parseWorktreeList,
@@ -66,6 +67,42 @@ branch refs/heads/cod-529-keep-going/x
 
   it('is empty for empty output', () => {
     expect(parseWorktreeList('')).toEqual([]);
+  });
+});
+
+describe('orphanDaemons', () => {
+  const nx = (dir: string) =>
+    `/usr/bin/node ${dir}/node_modules/.pnpm/nx@22.0.0/node_modules/nx/src/daemon/server/start.js`;
+  const existing = ['/w/codeware', '/w/codeware-cod-2'];
+
+  it('finds the daemon of a worktree that is gone, with leading spaces', () => {
+    const ps = `  101 ${nx('/w/codeware-cod-1')}\n12345 ${nx('/w/codeware-cod-1')}\n`;
+    expect(orphanDaemons(ps, existing, '/w')).toEqual([
+      { pid: 101, path: '/w/codeware-cod-1' },
+      { pid: 12345, path: '/w/codeware-cod-1' }
+    ]);
+  });
+
+  it('finds the plugin worker of a gone worktree', () => {
+    const ps = ` 7 node /w/codeware-cod-1/node_modules/nx/src/project-graph/plugins/isolation/plugin-worker.js`;
+    expect(orphanDaemons(ps, existing, '/w')).toEqual([
+      { pid: 7, path: '/w/codeware-cod-1' }
+    ]);
+  });
+
+  it('ignores the daemon of an existing worktree and of the main checkout', () => {
+    const ps = ` 1 ${nx('/w/codeware-cod-2')}\n 2 ${nx('/w/codeware')}\n`;
+    expect(orphanDaemons(ps, existing, '/w')).toEqual([]);
+  });
+
+  it('ignores a checkout that is not a ticket one or lies elsewhere', () => {
+    const ps = ` 1 ${nx('/w/codeware-agent')}\n 2 ${nx('/other/codeware-cod-9')}\n`;
+    expect(orphanDaemons(ps, existing, '/w')).toEqual([]);
+  });
+
+  it('ignores other node processes', () => {
+    const ps = ` 1 node /w/codeware-cod-1/node_modules/.bin/vite\n 2 -zsh\n\n`;
+    expect(orphanDaemons(ps, existing, '/w')).toEqual([]);
   });
 });
 
