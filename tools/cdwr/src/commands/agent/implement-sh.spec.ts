@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   copyFileSync,
@@ -363,6 +363,73 @@ describe('implement.sh', () => {
       ]);
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
     });
+
+    it('writes the launch key beside the pid while the session runs', () => {
+      const seen = join(dir, 'seen');
+      writeFileSync(
+        join(bin, 'claude'),
+        `#!/bin/sh\ncat "${queueHome}/implement.lock/key" > "${seen}"\nprintf '%s' '{"result":"ok"}'\n`
+      );
+      chmodSync(join(bin, 'claude'), 0o755);
+      expect(start().status).toBe(0);
+      expect(readFileSync(seen, 'utf8').trim()).toBe('COD-1 answered');
+      expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+    });
+
+    it('records interrupted, refunds once and stays quiet on a TERM', async () => {
+      mkdirSync(queueHome, { recursive: true });
+      writeFileSync(
+        join(queueHome, 'launch.json'),
+        JSON.stringify({ key: 'COD-1 answered', launches: 1 })
+      );
+      const ready = join(dir, 'ready');
+      const notified = join(dir, 'notified');
+      writeFileSync(
+        join(queueHome, 'notify.sh'),
+        `#!/bin/sh\ntouch "${notified}"\n`
+      );
+      chmodSync(join(queueHome, 'notify.sh'), 0o755);
+      writeFileSync(
+        join(bin, 'claude'),
+        `#!/bin/sh\ntouch "${ready}"\nexec sleep 30\n`
+      );
+      chmodSync(join(bin, 'claude'), 0o755);
+      const child = spawn(
+        'zsh',
+        [join(scripts, 'implement.sh'), 'COD-1 answered'],
+        {
+          env: {
+            AGENT_QUEUE_LINEAR_TOOLS_CMD: 'true',
+            PATH: `${bin}:${process.env['PATH'] ?? ''}`,
+            HOME: join(dir, 'home'),
+            AGENT_QUEUE_HOME: queueHome,
+            AGENT_QUEUE_REPO: join(dir, 'ws', 'codeware-agent')
+          },
+          stdio: 'ignore'
+        }
+      );
+      const exited = new Promise<number | null>((resolve) =>
+        child.on('close', (status) => resolve(status))
+      );
+      for (let i = 0; i < 100 && !existsSync(ready); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(existsSync(ready)).toBe(true);
+      child.kill('SIGTERM');
+      expect(await exited).toBe(0);
+      expect(rows('runs.jsonl').map((r) => r['outcome'])).toEqual([
+        'launched',
+        'interrupted'
+      ]);
+      expect(rows('runs.jsonl').at(-1)?.['detail']).toContain(
+        'stopped by a container stop or deploy'
+      );
+      expect(
+        JSON.parse(readFileSync(join(queueHome, 'launch.json'), 'utf8'))
+      ).toEqual({ key: 'COD-1 answered', launches: 0, refunded: true });
+      expect(existsSync(notified)).toBe(false);
+      expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+    }, 20000);
 
     describe('a session that could not take its key', () => {
       const launchFile = (): string => join(queueHome, 'launch.json');
