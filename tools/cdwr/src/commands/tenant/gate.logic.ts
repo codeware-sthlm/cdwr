@@ -31,7 +31,8 @@ const FLY_TOKEN = /FlyV1\s+\S+|fm[12]_[\w-]+/g;
 
 /**
  * The last line of a Fly error, where the CLI prints its own `Error: …`,
- * with any token-shaped text replaced and cut to fit a desk row.
+ * with a repeated `Error: ` prefix read once, any token-shaped text replaced
+ * and cut to fit a desk row.
  */
 export function flyErrorOf(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
@@ -39,7 +40,9 @@ export function flyErrorOf(error: unknown): string {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-  const last = (lines.at(-1) ?? '').replace(FLY_TOKEN, '…');
+  const last = (lines.at(-1) ?? '')
+    .replace(/^(?:Error:\s*){2,}/, 'Error: ')
+    .replace(FLY_TOKEN, '…');
   return last.length > FLY_ERROR_MAX
     ? `${last.slice(0, FLY_ERROR_MAX - 1)}…`
     : last;

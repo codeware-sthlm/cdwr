@@ -24,6 +24,15 @@ describe('flyErrorOf', () => {
     expect(flyErrorOf(error)).toBe('Error: unauthorized');
   });
 
+  it('reads a repeated Error prefix once', () => {
+    const error = new Error(
+      "Error: Error: no access token available. Please login with 'flyctl auth login'"
+    );
+    expect(flyErrorOf(error)).toBe(
+      "Error: no access token available. Please login with 'flyctl auth login'"
+    );
+  });
+
   it('reads a non-Error value', () => {
     expect(flyErrorOf('timed out')).toBe('timed out');
   });
