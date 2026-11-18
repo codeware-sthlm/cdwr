@@ -261,6 +261,24 @@ describe('implement.sh', () => {
     }
   );
 
+  it.each([
+    'Read(//proc/**)',
+    'Bash(*/proc/*)',
+    'Read(//**/tools/cdwr/.env)',
+    'Bash(*tools/cdwr/.env*)'
+  ])('denies the environs and the cdwr env with %s', (rule) => {
+    expect(code).toContain(`"${rule}"`);
+  });
+
+  it.each([
+    'cat /proc/1/environ',
+    'tr "\\0" "\\n" < /proc/self/environ',
+    `git -C ${wt} show HEAD:tools/cdwr/.env`,
+    'cat /work/codeware-agent/tools/cdwr/.env'
+  ])('denies %s', (command) => {
+    expect(isDenied(command)).toBe(true);
+  });
+
   describe.skipIf(!hasZsh)('run', () => {
     let dir: string;
     let bin: string;
@@ -293,6 +311,8 @@ describe('implement.sh', () => {
         env: {
           // Prints nothing: Linear tools are there
           AGENT_QUEUE_LINEAR_TOOLS_CMD: 'true',
+          // Implement runs only in the container
+          AGENT_QUEUE_HOST: 'container',
           ...extraEnv,
           PATH: `${bin}:${process.env['PATH'] ?? ''}`,
           // No Slack hook under this home
@@ -344,6 +364,30 @@ describe('implement.sh', () => {
     afterEach(() => {
       rmSync(dir, { recursive: true, force: true });
     });
+
+    it.each(['', 'launchd'])(
+      'refuses to start outside the container (host %j)',
+      (host) => {
+        fakeClaude(0, '{"total_cost_usd":1.5,"num_turns":3,"result":"ok"}');
+        const result = start({ AGENT_QUEUE_HOST: host });
+        expect(result.status).toBe(1);
+        expect(existsSync(calls)).toBe(false);
+        // Before the lock and the reservation
+        expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+        expect(existsSync(join(queueHome, 'implement-spend.jsonl'))).toBe(
+          false
+        );
+        expect(rows('runs.jsonl')).toEqual([
+          expect.objectContaining({
+            outcome: 'failed',
+            detail: 'COD-1 answered · implement runs only in the container'
+          })
+        ]);
+        expect(
+          readFileSync(join(queueHome, 'logs', 'scheduler.log'), 'utf8')
+        ).toContain('implement runs only in the container');
+      }
+    );
 
     it('records the spend and an implemented row, then frees the lock', () => {
       fakeClaude(0, '{"total_cost_usd":1.5,"num_turns":3,"result":"ok"}');

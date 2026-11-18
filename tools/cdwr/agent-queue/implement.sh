@@ -38,6 +38,14 @@ record() {
     '{when: $w, outcome: $o, ticket: $t, detail: $d}' >> "$HOME_DIR/runs.jsonl" 2>/dev/null || true
 }
 
+# The container only (COD-657): its tmpfs keys and deny rules are what this session's permissions
+# assume. run.sh launches nothing elsewhere; this is the backstop, before the lock and with no notice.
+if [[ "${AGENT_QUEUE_HOST:-}" != container ]]; then
+  note "fail: implement runs only in the container; not starting"
+  record failed "$KEY · implement runs only in the container"
+  exit 1
+fi
+
 STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # One row for the launch in the telemetry database; a no-op without the env vars. attended is false:
 # nobody sits at this session. It runs detached from the scheduler, so waiting on the call is fine.
@@ -136,6 +144,11 @@ DENY=(
   "Bash(gh api * --input*)" "Bash(gh api *@*)"
   # The container's keys live on its tmpfs; the Linear key reaches only the MCP's header helper
   "Read(//run/agent/**)" "Bash(*/run/agent/*)" "Bash(*lib.sh*)"
+  # Every process's environ and memory, the entrypoint's and tini's included (COD-657). Read rules
+  # cover Grep and Glob too
+  "Read(//proc/**)" "Bash(*/proc/*)"
+  # The checkouts' cdwr env, which holds the Supabase service key; worktrees get no copy here
+  "Read(//**/tools/cdwr/.env)" "Bash(*tools/cdwr/.env*)"
   # The Mac's token cache and the app's credentials files stay out of the session too
   "Read(/$HOME_DIR/linear.token*)" "Bash(*linear.token*)" "Bash(*linear-app.env*)" "Bash(*security find-generic-password*)" "Bash(*AGENT_QUEUE_LINEAR*)"
 )
