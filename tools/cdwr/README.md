@@ -295,12 +295,21 @@ whose `headersHelper` runs `zsh ~/.cdwr/agent-queue/lib.sh header`. That returns
 buys one from the credentials in `AGENT_QUEUE_LINEAR_APP_FILE` (the container's `/run/agent/linear-app.env`,
 tmpfs, mode 600) or the Keychain, or falls back to the key in `AGENT_QUEUE_LINEAR_KEY_FILE` or the
 Keychain, so no credential is ever in the config or on a command line. Claude itself runs without
-them in its environment, and implement-only runs deny reading `/run/agent` and the token cache. Its
+them in its environment, and implement-only runs deny reading `/run/agent` and the token cache. In the
+container `linear-mcp.json` has no `headersHelper`: its url is a local proxy, `apps/agent-host/linear-mcp-proxy.mjs`
+on `127.0.0.1:8790` (`AGENT_QUEUE_LINEAR_PROXY_PORT`, set in the Dockerfile), which the entrypoint
+starts and restarts. The proxy signs each request with what `lib.sh header` prints, buys a new token
+with `lib.sh header force` on a 401 and retries once, so claude never runs the helper and the session
+never gets the token through it. It answers a `tools/call` for any tool not in
+`agent-queue/linear-tools.txt` with a JSON-RPC error, so Linear never sees it (`tools/list` is not
+filtered), and refuses batches, bodies that are not JSON or over 1 MB, a foreign `Host` header and
+other paths. `linear-tools.txt` is the one tool list: `implement.sh` allows exactly it, and the other
+runs in `run.sh` a subset of it (a spec checks). Its
 tools are `mcp__agent_linear__*`; the allowlists take the prefix from the same place. `install` adds
 the same server as `agent_linear` to the Mac's user Claude config, so an attended session can use
 the app too. `connector`, an explicit opt-out, is the claude.ai connector of the interactive login,
 which writes as its owner. Before each claude run the scripts check that the server answers (an MCP
-`initialize` for `key`, `claude mcp list` for the connector); without it nothing starts, the run is recorded as `no Linear tools`, one notice
+`initialize` for `key`, sent unsigned to the proxy in the container, where a miss reads `the Linear proxy on 127.0.0.1:8790 answered nothing` or `answered <code>`, and `status` shows `linear: ok (key via proxy)`; `claude mcp list` for the connector); without it nothing starts, the run is recorded as `no Linear tools`, one notice
 goes out, and `status` shows a `linear tools` warning. Notices go
 through `agent-queue/notify.sh "<message>"`, which posts to the webhook in `SLACK_WEBHOOK_URL` (or
 `CLAUDE_SLACK_WEBHOOK`, or `~/.claude/slack-webhook`) and does nothing without one. It also reads
@@ -476,6 +485,10 @@ sessions; that is why it must stay a Viewer of that one project. Without the ide
 uses its environment as given. Secrets are read once per start, so a rotated one takes a
 `docker compose restart`. Claude runs on `CLAUDE_CODE_OAUTH_TOKEN`, a long-lived token from
 `claude setup-token` on the Mac, which keeps billing on the subscription.
+
+The entrypoint also supervises the Linear proxy (`supervise_proxy`, restarted like the listener), so
+the claude runs reach Linear without holding the token. On a Mac nothing changes: the
+`headersHelper` stays.
 
 In the container the loop wakes on events rather than on the clock. `cdwr agent listen`, started and
 restarted by the entrypoint (back-off from 5 s to 5 min), subscribes to `issue_events` and
