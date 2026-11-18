@@ -35,6 +35,26 @@ describe('agent-host entrypoint', () => {
   const dockerfile = read('../../../../../apps/agent-host/Dockerfile');
   const entrypoint = read('../../../../../apps/agent-host/entrypoint.sh');
 
+  // secrets.sh writes the key secrets to the tmpfs; the entrypoint only checks the files
+  it('never reads or writes the key secrets themselves', () => {
+    for (const name of [
+      '$AGENT_GITHUB_APP_KEY',
+      '${AGENT_GITHUB_APP_KEY',
+      '$AGENT_QUEUE_LINEAR_KEY"',
+      '${AGENT_QUEUE_LINEAR_KEY:',
+      '$AGENT_QUEUE_LINEAR_CLIENT_ID',
+      '${AGENT_QUEUE_LINEAR_CLIENT_ID',
+      '$AGENT_QUEUE_LINEAR_CLIENT_SECRET',
+      '${AGENT_QUEUE_LINEAR_CLIENT_SECRET'
+    ]) {
+      expect(entrypoint).not.toContain(name);
+    }
+    expect(entrypoint).toContain('[[ -s "$KEY_PATH" ]]');
+    expect(entrypoint).toContain(
+      '[[ ! -s "$AGENT_QUEUE_LINEAR_APP_FILE" && ! -s "$AGENT_QUEUE_LINEAR_KEY_FILE" ]]'
+    );
+  });
+
   it('falls back to an hourly run while the listener is live', () => {
     expect(dockerfile).toContain(
       `RUN_FALLBACK_SECONDS=${RUN_FALLBACK_SECONDS}`
