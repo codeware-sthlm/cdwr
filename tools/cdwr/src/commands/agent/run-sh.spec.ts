@@ -2920,7 +2920,7 @@ describe('run.sh apply_commands', () => {
         for (const name of ['node.dry.env', 'node.env']) {
           const env = file(name) ?? '';
           expect(env).toMatch(/^FLY_API_TOKEN=fly-desk$/m);
-          expect(env).toMatch(/^FLY_ACCESS_TOKEN=$/m);
+          expect(env).toMatch(/^FLY_ACCESS_TOKEN=fly-desk$/m);
           expect(env).toMatch(/^INFISICAL_CLIENT_ID=inf-id$/m);
           expect(env).toMatch(/^INFISICAL_CLIENT_SECRET=inf-secret$/m);
           expect(env).toMatch(/^INFISICAL_PROJECT_ID=inf-proj$/m);

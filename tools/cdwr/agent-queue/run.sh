@@ -333,10 +333,12 @@ desk_pr_act() {
 }
 
 # desk_cdwr <cdwr args>...: one cdwr command from $REPO with --yes --json, the desk's write
-# credentials its only ones: the empty FLY_ACCESS_TOKEN and INFISICAL_SERVICE_TOKEN keep dotenv from
-# filling another credential in from tools/cdwr/.env. Prints its stdout; stderr is dropped.
+# credentials its only ones: naming FLY_ACCESS_TOKEN and INFISICAL_SERVICE_TOKEN keeps dotenv from
+# filling another credential in from tools/cdwr/.env. The desk token goes in FLY_ACCESS_TOKEN too:
+# flyctl reads it before FLY_API_TOKEN and takes an empty one as set, so it would find no token.
+# Prints its stdout; stderr is dropped.
 desk_cdwr() {
-  ( cd "$REPO" && FLY_API_TOKEN="$DESK_FLY_TOKEN" FLY_ACCESS_TOKEN="" \
+  ( cd "$REPO" && FLY_API_TOKEN="$DESK_FLY_TOKEN" FLY_ACCESS_TOKEN="$DESK_FLY_TOKEN" \
       INFISICAL_CLIENT_ID="$DESK_INFISICAL_CLIENT_ID" INFISICAL_CLIENT_SECRET="$DESK_INFISICAL_CLIENT_SECRET" \
       INFISICAL_PROJECT_ID="$DESK_INFISICAL_PROJECT_ID" INFISICAL_SERVICE_TOKEN="" \
       node tools/cdwr/bin/cdwr.mjs "$@" --yes --json 2>/dev/null </dev/null )
