@@ -529,11 +529,9 @@ describe('run.sh Sentry check-ins', () => {
     expect(SCRIPT).toContain(
       'if [[ -e "$HOME_DIR/paused" ]] && ! $check; then paused=true; fi'
     );
-    expect(SCRIPT).toContain(
-      'if ! $paused; then\n  if ! mkdir "$HOME_DIR/lock"'
-    );
+    expect(SCRIPT).toContain('if ! $paused; then\n  if ! take_run_lock $$');
     const at = SCRIPT.indexOf('if $paused; then\n  last_outcome=paused');
-    expect(at).toBeGreaterThan(SCRIPT.indexOf('mkdir "$HOME_DIR/lock"'));
+    expect(at).toBeGreaterThan(SCRIPT.indexOf('take_run_lock $$'));
     expect(at).toBeLessThan(SCRIPT.indexOf('linear_auth || {'));
     expect(at).toBeLessThan(SCRIPT.indexOf('if offline; then'));
     expect(SCRIPT).toContain('$check || CHECKIN_ID="$(checkin in_progress)"');
@@ -541,7 +539,7 @@ describe('run.sh Sentry check-ins', () => {
   });
 
   it('opens after the lock and closes by exit status in on_exit', () => {
-    const lock = SCRIPT.indexOf('mkdir "$HOME_DIR/lock"');
+    const lock = SCRIPT.indexOf('take_run_lock $$');
     expect(SCRIPT.indexOf('checkin in_progress')).toBeGreaterThan(lock);
     const exit = SCRIPT.slice(SCRIPT.indexOf('on_exit() {'));
     expect(exit).toContain('checkin ok "$CHECKIN_ID"');
@@ -949,6 +947,141 @@ describe('run.sh implement_live', () => {
       expect(live()).toBe(false);
     }
   );
+});
+
+describe('run.sh queue lock', () => {
+  const cut = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const fns = ['run_lock_live', 'take_run_lock', 'drop_run_lock'].map(cut);
+  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  let root: string;
+
+  const lockDir = () => join(root, 'lock');
+  const lock = (pid?: string) => {
+    mkdirSync(lockDir());
+    if (pid !== undefined) writeFileSync(join(lockDir(), 'pid'), `${pid}\n`);
+  };
+  const age = () => {
+    const old = new Date(Date.now() - 2 * 60 * 1000);
+    utimesSync(lockDir(), old, old);
+  };
+  const dead = () => String(spawnSync('true').pid);
+  // runs the helpers with note writing to $HOME_DIR/notes
+  const sh = (call: string) =>
+    spawnSync(
+      'zsh',
+      [
+        '-c',
+        [
+          `HOME_DIR="${root}"`,
+          'note() { print -r -- "$*" >> "$HOME_DIR/notes"; }',
+          ...fns,
+          call
+        ].join('\n')
+      ],
+      { encoding: 'utf8' }
+    ).status;
+  const pidFile = () => readFileSync(join(lockDir(), 'pid'), 'utf8').trim();
+  const notes = () =>
+    existsSync(join(root, 'notes'))
+      ? readFileSync(join(root, 'notes'), 'utf8')
+      : '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'run-lock-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    for (const f of fns) expect(f).not.toBe('');
+  });
+
+  it.skipIf(!hasZsh)('takes a free lock and writes the owner pid', () => {
+    expect(sh('take_run_lock 4242')).toBe(0);
+    expect(pidFile()).toBe('4242');
+    expect(notes()).toBe('');
+  });
+
+  it.skipIf(!hasZsh)('clears a lock whose pid is gone and takes it', () => {
+    const gone = dead();
+    lock(gone);
+    expect(sh('take_run_lock 4242')).toBe(0);
+    expect(pidFile()).toBe('4242');
+    expect(notes()).toContain(`warn: cleared lock; its run ${gone} is gone`);
+  });
+
+  it.skipIf(!hasZsh)('keeps a lock whose pid answers', () => {
+    lock(String(process.pid));
+    expect(sh('take_run_lock 4242')).not.toBe(0);
+    expect(pidFile()).toBe(String(process.pid));
+    expect(notes()).toBe('');
+    expect(sh('run_lock_live')).toBe(0);
+  });
+
+  it.skipIf(!hasZsh)('keeps a fresh lock without a pid', () => {
+    lock();
+    expect(sh('take_run_lock 4242')).not.toBe(0);
+    expect(existsSync(join(lockDir(), 'pid'))).toBe(false);
+  });
+
+  it.skipIf(!hasZsh)('clears a lock without a pid over a minute old', () => {
+    lock();
+    age();
+    expect(sh('take_run_lock 4242')).toBe(0);
+    expect(pidFile()).toBe('4242');
+    expect(notes()).toContain('warn: cleared lock; its run ? is gone');
+  });
+
+  it.skipIf(!hasZsh)('is not live without a lock', () => {
+    expect(sh('run_lock_live')).not.toBe(0);
+  });
+
+  it.skipIf(!hasZsh)('drops only its own lock', () => {
+    lock('4242');
+    expect(sh('drop_run_lock 1111')).toBe(0);
+    expect(existsSync(lockDir())).toBe(true);
+    expect(sh('drop_run_lock 4242')).toBe(0);
+    expect(existsSync(lockDir())).toBe(false);
+  });
+
+  it.skipIf(!hasZsh)('leaves a lock without a pid when dropping', () => {
+    lock();
+    expect(sh('drop_run_lock 4242')).toBe(0);
+    expect(existsSync(lockDir())).toBe(true);
+  });
+
+  it.skipIf(!hasZsh)('platform_move writes its own pid, not the parent', () => {
+    const move = cut('platform_move');
+    const r = spawnSync(
+      'zsh',
+      [
+        '-c',
+        [
+          `HOME_DIR="${root}"`,
+          'exec >/dev/null 2>&1',
+          'zmodload zsh/system',
+          'note() { :; }',
+          'implement_near() {',
+          '  cat "$HOME_DIR/lock/pid" > "$HOME_DIR/seen"',
+          '  print -r -- "$sysparams[pid]" > "$HOME_DIR/own"',
+          '  return 0',
+          '}',
+          ...fns,
+          move,
+          '( platform_move )',
+          'print -r -- "$$" > "$HOME_DIR/parent"'
+        ].join('\n')
+      ],
+      { encoding: 'utf8' }
+    );
+    expect(r.status).toBe(0);
+    const seen = readFileSync(join(root, 'seen'), 'utf8').trim();
+    expect(seen).toBe(readFileSync(join(root, 'own'), 'utf8').trim());
+    expect(seen).not.toBe(readFileSync(join(root, 'parent'), 'utf8').trim());
+    expect(existsSync(lockDir())).toBe(false);
+  });
 });
 
 describe('run.sh close_parents', () => {
@@ -2441,6 +2574,7 @@ describe('run.sh apply_commands', () => {
       `note() { print -r -- "$*" >> "${t('note')}"; }`,
       `say() { print -r -- "$*" >> "${t('say')}"; }`,
       ...(opts.stubs ?? []),
+      fn('run_lock_live'),
       fn('apply_commands'),
       'apply_commands'
     ].join('\n');
@@ -4049,6 +4183,9 @@ describe('run.sh platform step', () => {
       fn('platform_warn'),
       fn('implement_live'),
       fn('implement_near'),
+      fn('run_lock_live'),
+      fn('take_run_lock'),
+      fn('drop_run_lock'),
       fn('to_main'),
       fn('platform_move'),
       fn('record_platform'),
@@ -4083,7 +4220,7 @@ describe('run.sh platform step', () => {
     expect(fn('record_platform')).toContain('record_platform()');
     const at = SCRIPT.indexOf('\nrecord_platform\n');
     const lock = SCRIPT.indexOf(
-      'mkdir "$HOME_DIR/lock"',
+      'take_run_lock $$',
       SCRIPT.indexOf('\npaused=false\n')
     );
     const toMain = SCRIPT.indexOf('to_main platform\n', lock);
@@ -4117,10 +4254,7 @@ describe('run.sh platform step', () => {
     expect(at).toBeLessThan(SCRIPT.indexOf('\npaused=false\n'));
     // platform_move's own mkdir sits above; the tick's queue lock comes after the block
     expect(at).toBeLessThan(
-      SCRIPT.indexOf(
-        'mkdir "$HOME_DIR/lock"',
-        SCRIPT.indexOf('\npaused=false\n')
-      )
+      SCRIPT.indexOf('take_run_lock $$', SCRIPT.indexOf('\npaused=false\n'))
     );
     expect(at).toBeLessThan(SCRIPT.indexOf("trap 'st=$?; on_exit"));
   });
@@ -4290,21 +4424,21 @@ describe('run.sh platform step', () => {
     it('keeps platform.lock fresh while it moves, and stops after', () => {
       const move = fn('platform_move');
       const beat = move.indexOf('touch "$HOME_DIR/platform.lock"');
-      expect(beat).toBeGreaterThan(move.indexOf('mkdir "$HOME_DIR/lock"'));
+      expect(beat).toBeGreaterThan(move.indexOf('take_run_lock'));
       expect(move.indexOf('for i in {1..30}; do sleep 60;')).toBeGreaterThan(
         -1
       );
       // the trap stops it on a signal, and the move stops it before the lock goes
-      expect(move).toContain("trap 'kill $beat 2>/dev/null; rmdir");
+      expect(move).toContain("trap 'kill $beat 2>/dev/null; drop_run_lock");
       const stop = move.lastIndexOf('kill $beat 2>/dev/null\n');
       expect(stop).toBeGreaterThan(move.indexOf('to_main platform quiet'));
-      expect(stop).toBeLessThan(move.lastIndexOf('rmdir "$HOME_DIR/lock"'));
+      expect(stop).toBeLessThan(move.lastIndexOf('drop_run_lock'));
     });
 
     it('checks for an implementing session under the queue lock', () => {
       const move = fn('platform_move');
       expect(move.indexOf('implement_near')).toBeGreaterThan(
-        move.indexOf('mkdir "$HOME_DIR/lock"')
+        move.indexOf('take_run_lock')
       );
     });
 

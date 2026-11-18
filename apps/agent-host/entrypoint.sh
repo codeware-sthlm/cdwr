@@ -103,7 +103,7 @@ write_env
 ) || print -r -- "agent-host: could not bring the checkout to origin/main"
 
 # One runner per container: a lock left by a killed run is stale
-rmdir "$AGENT_QUEUE_HOME/lock" 2>/dev/null || true
+rm -rf "$AGENT_QUEUE_HOME/lock"
 
 stop=0
 pending=0

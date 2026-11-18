@@ -119,6 +119,37 @@ implement_live() {
     [[ -z "$(find "$lockdir" -maxdepth 0 -mmin +1 2>/dev/null)" ]]
   fi
 }
+# True while a run holds the queue lock, by the same rule as implement_live: a kill skips the EXIT
+# trap, so a lock whose owner is gone must not block every later run until the container restarts.
+run_lock_live() {
+  local lockdir="$HOME_DIR/lock" owner
+  [[ -d "$lockdir" ]] || return 1
+  owner="$(cat "$lockdir/pid" 2>/dev/null)"
+  if [[ "$owner" == <-> ]]; then
+    kill -0 "$owner" 2>/dev/null
+  else
+    [[ -z "$(find "$lockdir" -maxdepth 0 -mmin +1 2>/dev/null)" ]]
+  fi
+}
+# take_run_lock <pid>: takes the queue lock for pid, clearing one whose owner is gone first.
+# Non-zero when another run still holds it.
+take_run_lock() {
+  local lockdir="$HOME_DIR/lock" owner
+  if ! mkdir "$lockdir" 2>/dev/null; then
+    run_lock_live && return 1
+    owner="$(cat "$lockdir/pid" 2>/dev/null)"
+    rm -rf "$lockdir"
+    note "warn: cleared lock; its run ${owner:-?} is gone"
+    mkdir "$lockdir" 2>/dev/null || return 1
+  fi
+  print -r -- "$1" > "$lockdir/pid" 2>/dev/null
+  return 0
+}
+# drop_run_lock <pid>: removes the queue lock only when pid owns it
+drop_run_lock() {
+  [[ -r "$HOME_DIR/lock/pid" && "$(cat "$HOME_DIR/lock/pid" 2>/dev/null)" == "$1" ]] || return 0
+  rm -rf "$HOME_DIR/lock"
+}
 # implement_live, or a launch under a minute ago (launch.json is written then): implement.sh starts
 # detached and takes implement.lock only after the launching tick may have dropped the queue lock
 implement_near() {
@@ -450,7 +481,7 @@ apply_commands() {
           # In the container the listener woke this run; on the Mac the tick is the run. A run
           # holding the lock would make this one exit busy, so the request is refused, not lost.
           if [[ -e "$HOME_DIR/paused" ]]; then verdict=refused why=paused
-          elif [[ -d "$HOME_DIR/lock" ]]; then verdict=refused why="a run is in progress"
+          elif run_lock_live; then verdict=refused why="a run is in progress"
           else why="this run" change="run requested from the desk ($actor)"; fi ;;
         review)
           # One review an hour, whatever asked; the request is read by the next idle tick
@@ -561,14 +592,17 @@ platform_due() {
 # so a killed move never stops the queue.
 platform_move() {
   setopt local_options local_traps
-  local beat i
-  mkdir "$HOME_DIR/lock" 2>/dev/null ||
+  local beat i me
+  # In this detached subshell $$ is the parent's pid; the lock's owner is this process
+  zmodload zsh/system
+  me=$sysparams[pid]
+  take_run_lock "$me" ||
     { note "platform: a run holds the lock, collecting without the move to main"; return 0; }
   # A slow install must not read as a lost collection: platform.lock stays fresh while the move
   # runs, for at most 30 minutes should this shell die without its trap
   ( for i in {1..30}; do sleep 60; touch "$HOME_DIR/platform.lock" 2>/dev/null; done ) &
   beat=$!
-  trap 'kill $beat 2>/dev/null; rmdir "$HOME_DIR/lock" 2>/dev/null; exit 1' INT TERM HUP
+  trap 'kill $beat 2>/dev/null; drop_run_lock "$me"; exit 1' INT TERM HUP
   if implement_near; then
     note "platform: an implementing session runs, collecting without the move to main"
   elif git -C "$REPO" fetch -q origin 2>/dev/null; then
@@ -577,7 +611,7 @@ platform_move() {
     note "warn: fetch failed"
   fi
   kill $beat 2>/dev/null
-  rmdir "$HOME_DIR/lock" 2>/dev/null
+  drop_run_lock "$me"
   return 0
 }
 # record_platform [move]: move is the --platform step's, which runs platform_move first
@@ -695,8 +729,8 @@ paused=false
 if [[ -e "$HOME_DIR/paused" ]] && ! $check; then paused=true; fi
 fetched=false
 if ! $paused; then
-  if ! mkdir "$HOME_DIR/lock" 2>/dev/null; then say "busy: a run is in progress"; exit 0; fi
-  trap 'rmdir "$HOME_DIR/lock" 2>/dev/null' EXIT
+  if ! take_run_lock $$; then say "busy: a run is in progress"; exit 0; fi
+  trap 'drop_run_lock $$' EXIT
   # Under the lock, so no claude run is mid-flight on the checkout: the collection runs main's code
   if ! $check && platform_on && telemetry_on; then
     if implement_near; then
@@ -995,7 +1029,7 @@ on_exit() {
   job_state
   record_queue_state
   record_run "$st"
-  rmdir "$HOME_DIR/lock" 2>/dev/null
+  drop_run_lock $$
   if ! $check; then
     if (( st == 0 )); then checkin ok "$CHECKIN_ID"; else checkin error "$CHECKIN_ID"; fi
   fi
