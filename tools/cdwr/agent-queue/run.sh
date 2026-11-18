@@ -132,15 +132,23 @@ run_lock_live() {
   fi
 }
 # take_run_lock <pid>: takes the queue lock for pid, clearing one whose owner is gone first.
-# Non-zero when another run still holds it.
+# Non-zero when another run still holds it. Two runs may both find the owner gone, so the clearing
+# goes under lock.takeover and the owner is checked again there: without it one run could remove
+# the lock the other had just taken. A takeover left by a killed run is cleared after a minute.
 take_run_lock() {
-  local lockdir="$HOME_DIR/lock" owner
+  local lockdir="$HOME_DIR/lock" takeover="$HOME_DIR/lock.takeover" owner
   if ! mkdir "$lockdir" 2>/dev/null; then
     run_lock_live && return 1
+    [[ -n "$(find "$takeover" -maxdepth 0 -mmin +1 2>/dev/null)" ]] && rmdir "$takeover" 2>/dev/null
+    mkdir "$takeover" 2>/dev/null || return 1
+    if run_lock_live; then rmdir "$takeover" 2>/dev/null; return 1; fi
     owner="$(cat "$lockdir/pid" 2>/dev/null)"
     rm -rf "$lockdir"
     note "warn: cleared lock; its run ${owner:-?} is gone"
-    mkdir "$lockdir" 2>/dev/null || return 1
+    mkdir "$lockdir" 2>/dev/null || { rmdir "$takeover" 2>/dev/null; return 1; }
+    print -r -- "$1" > "$lockdir/pid" 2>/dev/null
+    rmdir "$takeover" 2>/dev/null
+    return 0
   fi
   print -r -- "$1" > "$lockdir/pid" 2>/dev/null
   return 0
