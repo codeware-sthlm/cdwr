@@ -2,14 +2,57 @@
 # The container's entrypoint: fills the environment from Infisical /agent-queue, then execs the run
 # loop (or the command given), so the loop stays tini's direct child and receives SIGTERM itself.
 # Without INFISICAL_CLIENT_ID the environment is used as given (plain .env mode).
+#
+# The key secrets never reach the exec'd command's environment, so /proc/<pid>/environ of the loop
+# and everything it starts holds none of them: they go to files on the tmpfs, mode 600, where
+# lib.sh and the credential helper read them. In plain .env mode Docker still puts them in
+# /proc/1/environ (tini), the weaker mode; the vault keeps them out of it.
 setopt err_exit pipe_fail no_unset
 
 typeset -a run
 run=("$@")
 (( ${#run} )) || run=(/opt/agent-host/entrypoint.sh)
 
+run_dir="${AGENT_HOST_RUN_DIR:-/run/agent}"
+typeset -a key_names
+key_names=(AGENT_GITHUB_APP_KEY AGENT_QUEUE_LINEAR_KEY AGENT_QUEUE_LINEAR_CLIENT_ID AGENT_QUEUE_LINEAR_CLIENT_SECRET)
+# The vault's key secrets, held here and never exported
+typeset -A keys
+
+# Writes through a temp file and a rename, so a reader never sees a half-written key
+write_secret() {
+  local file="$1"
+  shift
+  (umask 077; print -rl -- "$@" > "$file.tmp")
+  chmod 600 "$file.tmp"
+  mv -f "$file.tmp" "$file"
+}
+
+# Each key from the vault, or from the environment where it was set (that wins), goes to its file
+# and out of the environment. The file names are the ones lib.sh and entrypoint.sh read.
+write_keys() {
+  local name
+  for name in "${key_names[@]}"; do
+    [[ -n "${(P)name:-}" ]] && keys[$name]="${(P)name}"
+    unset "$name"
+  done
+  (( ${#keys} )) || return 0
+  mkdir -p "$run_dir"
+  [[ -n "${keys[AGENT_GITHUB_APP_KEY]:-}" ]] && write_secret "$run_dir/app.pem" "${keys[AGENT_GITHUB_APP_KEY]}"
+  [[ -n "${keys[AGENT_QUEUE_LINEAR_KEY]:-}" ]] &&
+    write_secret "${AGENT_QUEUE_LINEAR_KEY_FILE:-$run_dir/linear.key}" "${keys[AGENT_QUEUE_LINEAR_KEY]}"
+  if [[ -n "${keys[AGENT_QUEUE_LINEAR_CLIENT_ID]:-}" && -n "${keys[AGENT_QUEUE_LINEAR_CLIENT_SECRET]:-}" ]]; then
+    write_secret "${AGENT_QUEUE_LINEAR_APP_FILE:-$run_dir/linear-app.env}" \
+      "AGENT_QUEUE_LINEAR_CLIENT_ID=${keys[AGENT_QUEUE_LINEAR_CLIENT_ID]}" \
+      "AGENT_QUEUE_LINEAR_CLIENT_SECRET=${keys[AGENT_QUEUE_LINEAR_CLIENT_SECRET]}"
+  fi
+  keys=()
+  return 0
+}
+
 if [[ -z "${INFISICAL_CLIENT_ID:-}" ]]; then
   print -r -- "secrets: no INFISICAL_CLIENT_ID, using the environment as given"
+  write_keys
   exec "${run[@]}"
 fi
 
@@ -61,7 +104,11 @@ while IFS= read -r pair; do
     kept+=("$key")
     continue
   fi
-  export "$key=$(jq -r .value <<<"$pair")"
+  if (( ${key_names[(Ie)$key]} )); then
+    keys[$key]="$(jq -r .value <<<"$pair")"
+  else
+    export "$key=$(jq -r .value <<<"$pair")"
+  fi
   from_vault+=("$key")
 done <<<"$pairs"
 
@@ -71,4 +118,5 @@ print -r -- "secrets: $environment $folder: ${#from_vault} from the vault${from_
 # Out of the loop's own environment. PID 1 (tini) still holds it in /proc/1/environ, readable by
 # the same uid; accepted because the identity is a Viewer of a project that holds only this folder.
 unset token vault pairs pair INFISICAL_CLIENT_SECRET INFISICAL_CLIENT_ID INFISICAL_TOKEN
+write_keys
 exec "${run[@]}"

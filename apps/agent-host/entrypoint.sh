@@ -2,12 +2,23 @@
 # Starts the agent queue in a container: App identity, first-time checkout, then the run loop.
 setopt err_exit pipe_fail no_unset
 
+RUN_DIR="${AGENT_HOST_RUN_DIR:-/run/agent}"
+KEY_PATH="$RUN_DIR/app.pem"
+ENV_FILE="$AGENT_QUEUE_REPO/tools/cdwr/.env"
+# secrets.sh wrote the key secrets here (mode 600, the App key as github-app.sh requires) and kept
+# them out of this script's environment, so no process inherits them. lib.sh reads the Linear
+# files where these point, buys its token from the app file and keeps it on the same tmpfs
+: "${AGENT_QUEUE_LINEAR_KEY_FILE:=$RUN_DIR/linear.key}"
+: "${AGENT_QUEUE_LINEAR_APP_FILE:=$RUN_DIR/linear-app.env}"
+export AGENT_QUEUE_LINEAR_KEY_FILE AGENT_QUEUE_LINEAR_APP_FILE
+
 typeset -a missing
-for v in AGENT_GITHUB_APP_ID AGENT_GITHUB_APP_INSTALLATION_ID AGENT_GITHUB_APP_KEY CLAUDE_CODE_OAUTH_TOKEN; do
+for v in AGENT_GITHUB_APP_ID AGENT_GITHUB_APP_INSTALLATION_ID CLAUDE_CODE_OAUTH_TOKEN; do
   [[ -n "${(P)v:-}" ]] || missing+=("$v")
 done
+[[ -s "$KEY_PATH" ]] || missing+=("AGENT_GITHUB_APP_KEY (no $KEY_PATH)")
 # Linear: the app's client id and secret, or the key they replace until it is revoked
-if [[ -z "${AGENT_QUEUE_LINEAR_CLIENT_ID:-}" || -z "${AGENT_QUEUE_LINEAR_CLIENT_SECRET:-}" ]] && [[ -z "${AGENT_QUEUE_LINEAR_KEY:-}" ]]; then
+if [[ ! -s "$AGENT_QUEUE_LINEAR_APP_FILE" && ! -s "$AGENT_QUEUE_LINEAR_KEY_FILE" ]]; then
   missing+=("AGENT_QUEUE_LINEAR_CLIENT_ID and AGENT_QUEUE_LINEAR_CLIENT_SECRET (or AGENT_QUEUE_LINEAR_KEY)")
 fi
 if (( ${#missing} )); then
@@ -15,44 +26,13 @@ if (( ${#missing} )); then
   exit 1
 fi
 
-KEY_PATH=/run/agent/app.pem
-ENV_FILE="$AGENT_QUEUE_REPO/tools/cdwr/.env"
-
 # The queue files the image carries, where run.sh compares them with origin/main
 cp /opt/agent-queue/* "$AGENT_QUEUE_HOME/"
-
-# The key stays out of git config and logs: a tmpfs file, mode 600 as github-app.sh requires
-mkdir -p /run/agent
-(umask 077; print -r -- "$AGENT_GITHUB_APP_KEY" > "$KEY_PATH")
-chmod 600 "$KEY_PATH"
-unset AGENT_GITHUB_APP_KEY
-
-# The Linear key the same way, where the image's AGENT_QUEUE_LINEAR_KEY_FILE points: lib.sh reads
-# the file, and no process inherits the key itself. The key is the fallback until it is revoked
-: "${AGENT_QUEUE_LINEAR_KEY_FILE:=/run/agent/linear.key}"
-export AGENT_QUEUE_LINEAR_KEY_FILE
-mkdir -p "${AGENT_QUEUE_LINEAR_KEY_FILE:h}"
-if [[ -n "${AGENT_QUEUE_LINEAR_KEY:-}" ]]; then
-  (umask 077; print -r -- "$AGENT_QUEUE_LINEAR_KEY" > "$AGENT_QUEUE_LINEAR_KEY_FILE")
-  chmod 600 "$AGENT_QUEUE_LINEAR_KEY_FILE"
-fi
-unset AGENT_QUEUE_LINEAR_KEY
-
-# The app's client id and secret the same way, where AGENT_QUEUE_LINEAR_APP_FILE points: lib.sh buys
-# its token from that file and keeps the token in AGENT_QUEUE_LINEAR_TOKEN_FILE on the same tmpfs
-: "${AGENT_QUEUE_LINEAR_APP_FILE:=/run/agent/linear-app.env}"
-export AGENT_QUEUE_LINEAR_APP_FILE
-if [[ -n "${AGENT_QUEUE_LINEAR_CLIENT_ID:-}" && -n "${AGENT_QUEUE_LINEAR_CLIENT_SECRET:-}" ]]; then
-  (umask 077; print -rl -- "AGENT_QUEUE_LINEAR_CLIENT_ID=$AGENT_QUEUE_LINEAR_CLIENT_ID" \
-    "AGENT_QUEUE_LINEAR_CLIENT_SECRET=$AGENT_QUEUE_LINEAR_CLIENT_SECRET" > "$AGENT_QUEUE_LINEAR_APP_FILE")
-  chmod 600 "$AGENT_QUEUE_LINEAR_APP_FILE"
-fi
-unset AGENT_QUEUE_LINEAR_CLIENT_ID AGENT_QUEUE_LINEAR_CLIENT_SECRET
 
 # The identity on the tmpfs too: the credential helper reads it, and it exists before the first clone
 (umask 077; print -rl -- "AGENT_GITHUB_APP_ID=$AGENT_GITHUB_APP_ID" \
   "AGENT_GITHUB_APP_INSTALLATION_ID=$AGENT_GITHUB_APP_INSTALLATION_ID" \
-  "AGENT_GITHUB_APP_KEY_PATH=$KEY_PATH" > /run/agent/app.env)
+  "AGENT_GITHUB_APP_KEY_PATH=$KEY_PATH" > "$RUN_DIR/app.env")
 
 git config --global --unset-all credential.https://github.com.helper 2>/dev/null || true
 git config --global credential.https://github.com.helper ''
