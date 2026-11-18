@@ -162,7 +162,8 @@ describe('constants', () => {
       'waits.sh',
       'watch.jq',
       'notify.sh',
-      'telemetry.sh'
+      'telemetry.sh',
+      'linear-tools.txt'
     ]);
   });
 });
@@ -361,7 +362,8 @@ describe('queuePaths', () => {
         'waits.sh': '/h/.cdwr/agent-queue/waits.sh',
         'watch.jq': '/h/.cdwr/agent-queue/watch.jq',
         'notify.sh': '/h/.cdwr/agent-queue/notify.sh',
-        'telemetry.sh': '/h/.cdwr/agent-queue/telemetry.sh'
+        'telemetry.sh': '/h/.cdwr/agent-queue/telemetry.sh',
+        'linear-tools.txt': '/h/.cdwr/agent-queue/linear-tools.txt'
       },
       watchState: '/h/.cdwr/agent-queue/watch.json',
       paused: '/h/.cdwr/agent-queue/paused',
@@ -606,7 +608,8 @@ describe('filesDrift', () => {
     'waits.sh': 'd',
     'watch.jq': 'b',
     'notify.sh': 'n',
-    'telemetry.sh': 't'
+    'telemetry.sh': 't',
+    'linear-tools.txt': 'l'
   };
 
   const all = {
@@ -618,11 +621,14 @@ describe('filesDrift', () => {
     'waits.sh': 'd',
     'watch.jq': 'b',
     'notify.sh': 'n',
-    'telemetry.sh': 't'
+    'telemetry.sh': 't',
+    'linear-tools.txt': 'l'
   };
 
   it.each([
     [all, 'current'],
+    [{ ...all, 'linear-tools.txt': undefined }, 'missing'],
+    [{ ...all, 'linear-tools.txt': 'x' }, 'stale'],
     [{ ...all, 'watch.jq': undefined }, 'missing'],
     [{ ...all, 'lib.sh': undefined }, 'missing'],
     [{ ...all, 'implement.sh': undefined }, 'missing'],

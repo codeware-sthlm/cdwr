@@ -168,15 +168,19 @@ LINEAR_MCP_URL=https://mcp.linear.app/mcp
 claude_env=(env -u AGENT_QUEUE_LINEAR_KEY -u AGENT_QUEUE_LINEAR_CLIENT_ID -u AGENT_QUEUE_LINEAR_CLIENT_SECRET
   -u AGENT_QUEUE_LINEAR_KEY_FILE -u AGENT_QUEUE_LINEAR_APP_FILE -u AGENT_QUEUE_LINEAR_TOKEN_FILE)
 
-# linear_header: the MCP header as JSON, for the headersHelper; nothing without a token
+# linear_header [force]: the MCP header as JSON, for the headersHelper and the container's proxy;
+# nothing without a token. force buys a new token, after Linear refused the cached one.
 linear_header() {
   local t
-  t="$(linear_token)" || return 1
+  t="$(linear_token "${1:-}")" || return 1
   jq -nc --arg k "Bearer $t" '{Authorization: $k}'
 }
 
 # The helper command, as claude's shell runs it: this file, run rather than sourced
 LINEAR_HEADERS_HELPER="zsh ${(q)LIB_SH} header"
+# The container's Linear proxy (apps/agent-host/linear-mcp-proxy.mjs), which the entrypoint starts
+# on this port; elsewhere there is none and claude signs through the helper
+LINEAR_PROXY_URL="${AGENT_QUEUE_LINEAR_PROXY_PORT:+http://127.0.0.1:$AGENT_QUEUE_LINEAR_PROXY_PORT/mcp}"
 
 # linear_mcp <dir>: sets L, the tool prefix the allowlists use, and LINEAR_MCP_ARGS, the claude
 # flags that load the server; key mode writes its config into <dir>.
@@ -184,14 +188,33 @@ linear_mcp() {
   LINEAR_MCP_ARGS=()
   if [[ "$LINEAR_MCP" == key ]]; then
     L=mcp__agent_linear
-    # Renamed into place: the scheduler and a launched session may write it at once
-    jq -n --arg url "$LINEAR_MCP_URL" --arg helper "$LINEAR_HEADERS_HELPER" \
-      '{mcpServers: {agent_linear: {type: "http", url: $url, headersHelper: $helper}}}' > "$1/linear-mcp.json.$$"
+    # Renamed into place: the scheduler and a launched session may write it at once. In the
+    # container the proxy signs, so claude gets no helper and the session no way to the token.
+    if [[ -n "$LINEAR_PROXY_URL" ]]; then
+      jq -n --arg url "$LINEAR_PROXY_URL" \
+        '{mcpServers: {agent_linear: {type: "http", url: $url}}}' > "$1/linear-mcp.json.$$"
+    else
+      jq -n --arg url "$LINEAR_MCP_URL" --arg helper "$LINEAR_HEADERS_HELPER" \
+        '{mcpServers: {agent_linear: {type: "http", url: $url, headersHelper: $helper}}}' > "$1/linear-mcp.json.$$"
+    fi
     mv -f "$1/linear-mcp.json.$$" "$1/linear-mcp.json"
     LINEAR_MCP_ARGS=(--strict-mcp-config --mcp-config "$1/linear-mcp.json")
   else
     L=mcp__claude_ai_Linear
   fi
+}
+
+# linear_allowed: the Linear tools a claude run may call (linear-tools.txt beside this file), one
+# per line without the prefix; fails when the list is missing or empty
+linear_allowed() {
+  local line out=()
+  [[ -r "${LIB_SH:h}/linear-tools.txt" ]] || return 1
+  for line in "${(@f)$(<"${LIB_SH:h}/linear-tools.txt")}"; do
+    line="${${line%%\#*}//[[:space:]]/}"
+    [[ -n "$line" ]] && out+=("$line")
+  done
+  (( ${#out} )) || return 1
+  print -rl -- "${out[@]}"
 }
 
 # linear_tools: prints why a claude run would have no Linear tools, nothing when it has them.
@@ -201,6 +224,21 @@ linear_tools() {
   local answer code header attempt
   case "$LINEAR_MCP" in
     key)
+      # Through the proxy, unsigned: it signs and forwards, and buys a new token on a 401 itself,
+      # so a pass means it is up and Linear takes its token
+      if [[ -n "$LINEAR_PROXY_URL" ]]; then
+        answer="$(curl -sS -m 30 -w '\n%{http_code}' "$LINEAR_PROXY_URL" \
+          -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+          --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agent-queue","version":"1"}}}' \
+          2>/dev/null)" || true
+        code="${answer##*$'\n'}"
+        [[ "$code" == <100-599> ]] || code=
+        if [[ -z "$code" ]]; then print -r -- "key: the Linear proxy on 127.0.0.1:$AGENT_QUEUE_LINEAR_PROXY_PORT answered nothing"
+        elif [[ "$code" != 200 ]]; then print -r -- "key: the Linear proxy on 127.0.0.1:$AGENT_QUEUE_LINEAR_PROXY_PORT answered $code"
+        elif [[ "$answer" != *'"result"'*'"protocolVersion"'* ]]; then print -r -- "key: Linear's MCP refused initialize"
+        fi
+        return 0
+      fi
       # Twice at most: a 401 buys a new token first, so a revoked one never blocks a launch
       for attempt in 1 2; do
         # The header claude will get: the helper run as claude runs it, without credentials in its env
@@ -504,8 +542,9 @@ watch_state() {
   return 0
 }
 
-# Run as `zsh lib.sh header`, it is the MCP config's headersHelper
+# Run as `zsh lib.sh header`, it is the MCP config's headersHelper; the container's proxy runs it
+# too, and with `force` after a 401
 if [[ "$ZSH_EVAL_CONTEXT" == toplevel && "${1:-}" == header ]]; then
-  linear_header
+  linear_header "${2:-}"
   exit
 fi

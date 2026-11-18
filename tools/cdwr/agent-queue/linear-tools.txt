@@ -1,0 +1,12 @@
+# The Linear MCP tools a claude run may call, one server-side name per line. implement.sh allows
+# exactly these, every other run in run.sh a subset of them, and the container's Linear proxy
+# (apps/agent-host/linear-mcp-proxy.mjs) refuses any other tools/call.
+list_issues
+get_issue
+list_comments
+list_issue_labels
+get_attachment
+save_issue
+save_comment
+prepare_attachment_upload
+create_attachment_from_upload

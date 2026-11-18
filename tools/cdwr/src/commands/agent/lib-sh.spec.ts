@@ -116,6 +116,138 @@ describe('lib.sh', () => {
       expect(raw).not.toContain('sekret');
     });
 
+    // The container's proxy signs for claude: no helper in the config, the proxy's url instead
+    it('key with the proxy port: writes the proxy url and no headersHelper', () => {
+      run(`linear_mcp "${dir}"`, {
+        AGENT_QUEUE_LINEAR_MCP: 'key',
+        AGENT_QUEUE_LINEAR_PROXY_PORT: '8790'
+      });
+      const raw = readFileSync(join(dir, 'linear-mcp.json'), 'utf8');
+      expect(JSON.parse(raw)).toEqual({
+        mcpServers: {
+          agent_linear: { type: 'http', url: 'http://127.0.0.1:8790/mcp' }
+        }
+      });
+      expect(raw).not.toContain('headersHelper');
+    });
+
+    it('key without the proxy port: keeps the helper and the Linear url', () => {
+      run(`linear_mcp "${dir}"`, { AGENT_QUEUE_LINEAR_MCP: 'key' });
+      const server = (
+        JSON.parse(readFileSync(join(dir, 'linear-mcp.json'), 'utf8')) as {
+          mcpServers: { agent_linear: Record<string, string> };
+        }
+      ).mcpServers.agent_linear;
+      expect(server['url']).toBe('https://mcp.linear.app/mcp');
+      expect(server['headersHelper']).toBe(`zsh ${REAL_LIB} header`);
+    });
+
+    describe('linear_allowed', () => {
+      it('prints the tools of linear-tools.txt without comments and blank lines', () => {
+        const lib = join(dir, 'lib.sh');
+        writeFileSync(lib, readFileSync(LIB, 'utf8'));
+        writeFileSync(
+          join(dir, 'linear-tools.txt'),
+          '# a comment\n\nget_issue\n  list_issues  # trailing\n\n   \nsave_comment\n'
+        );
+        const result = spawnSync(
+          'zsh',
+          ['-c', `source "${lib}"\nlinear_allowed`],
+          {
+            encoding: 'utf8',
+            env: { PATH: process.env['PATH'] ?? '', HOME: dir }
+          }
+        );
+        expect(result.status).toBe(0);
+        expect(result.stdout).toBe('get_issue\nlist_issues\nsave_comment\n');
+      });
+
+      it('lists the shipped file', () => {
+        const result = run('linear_allowed');
+        expect(result.status).toBe(0);
+        const names = result.stdout.trim().split('\n');
+        expect(names).toContain('get_issue');
+        expect(names.every((name) => /^[a-z_]+$/.test(name))).toBe(true);
+      });
+
+      it.each([
+        ['missing', undefined],
+        ['empty', '# only a comment\n\n']
+      ])('fails when the list is %s', (_name, content) => {
+        const lib = join(dir, 'lib.sh');
+        writeFileSync(lib, readFileSync(LIB, 'utf8'));
+        if (content !== undefined) {
+          writeFileSync(join(dir, 'linear-tools.txt'), content);
+        }
+        const result = spawnSync(
+          'zsh',
+          ['-c', `source "${lib}"\nlinear_allowed`],
+          {
+            encoding: 'utf8',
+            env: { PATH: process.env['PATH'] ?? '', HOME: dir }
+          }
+        );
+        expect(result.status).not.toBe(0);
+        expect(result.stdout).toBe('');
+      });
+    });
+
+    describe('linear_tools through the proxy', () => {
+      const proxyEnv = {
+        AGENT_QUEUE_LINEAR_MCP: 'key',
+        AGENT_QUEUE_LINEAR_PROXY_PORT: '8790'
+      };
+      const fakeCurl = (body: string): void => {
+        writeFileSync(join(bin(), 'curl'), `#!/bin/sh\n${body}\n`);
+        chmodSync(join(bin(), 'curl'), 0o755);
+      };
+
+      it('passes on an initialize result, unsigned, to the proxy url', () => {
+        const seen = join(dir, 'seen-args');
+        fakeCurl(
+          `printf '%s\\n' "$@" > "${seen}"\nprintf '%s\\n200' 'data: {"result":{"protocolVersion":"x"}}'`
+        );
+        const result = run('linear_tools', proxyEnv);
+        expect(result.stdout).toBe('');
+        const args = readFileSync(seen, 'utf8');
+        expect(args).toContain('http://127.0.0.1:8790/mcp\n');
+        expect(args).not.toContain('Authorization');
+      });
+
+      it('passes without any credentials of its own', () => {
+        fakeCurl(
+          `printf '%s\\n200' 'data: {"result":{"protocolVersion":"x"}}'`
+        );
+        expect(
+          run('linear_tools', { ...proxyEnv, AGENT_QUEUE_LINEAR_KEY: '' })
+            .stdout
+        ).toBe('');
+      });
+
+      it('names a proxy that is not listening', () => {
+        fakeCurl('exit 7');
+        expect(run('linear_tools', proxyEnv).stdout.trim()).toBe(
+          'key: the Linear proxy on 127.0.0.1:8790 answered nothing'
+        );
+      });
+
+      it('names a proxy that answers with a code', () => {
+        fakeCurl(`printf '%s\\n502' 'bad gateway'`);
+        expect(run('linear_tools', proxyEnv).stdout.trim()).toBe(
+          'key: the Linear proxy on 127.0.0.1:8790 answered 502'
+        );
+      });
+
+      it('names a 200 without an initialize result', () => {
+        fakeCurl(
+          `printf '%s\\n200' 'data: {"jsonrpc":"2.0","id":1,"error":{"code":-32000}}'`
+        );
+        expect(run('linear_tools', proxyEnv).stdout.trim()).toBe(
+          "key: Linear's MCP refused initialize"
+        );
+      });
+    });
+
     describe('key sources', () => {
       const keyFile = (value: string): string => {
         const file = join(dir, 'linear.key');
@@ -466,6 +598,28 @@ describe('lib.sh', () => {
         expect(stripped.stdout.trim()).toBe(
           '{"Authorization":"Bearer cached"}'
         );
+      });
+
+      it('header force: buys a new token over a fresh cache', () => {
+        cache('cached', now() + 2000000);
+        const header = (args: string[]) =>
+          spawnSync('zsh', [LIB, 'header', ...args], {
+            encoding: 'utf8',
+            env: {
+              PATH: `${bin()}:${process.env['PATH'] ?? ''}`,
+              HOME: dir,
+              AGENT_QUEUE_LINEAR_TOKEN_FILE: tokenFile(),
+              AGENT_QUEUE_HOME: dir,
+              ...creds
+            }
+          });
+        expect(header([]).stdout.trim()).toBe(
+          '{"Authorization":"Bearer cached"}'
+        );
+        expect(header(['force']).stdout.trim()).toBe(
+          '{"Authorization":"Bearer tok1"}'
+        );
+        expect(readCache().token).toBe('tok1');
       });
 
       it('claude_env strips the key and the client credentials', () => {

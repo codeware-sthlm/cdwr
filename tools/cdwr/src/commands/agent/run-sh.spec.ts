@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { RUN_INTERVAL_SECONDS } from './agent.logic';
+import { QUEUE_FILES, RUN_INTERVAL_SECONDS } from './agent.logic';
 
 // run.sh runs gh unattended as Håkan, so every gh call must be a read
 const SCRIPT = readFileSync(
@@ -427,8 +427,28 @@ describe('run.sh Linear tools', () => {
   it('reports the state on --check', () => {
     // One form or the other: `${why:-…}` would repeat the reason after the missing form
     expect(code).toContain('print -r -- "linear: missing ($why)"');
-    expect(code).toContain('print -r -- "linear: ok ($LINEAR_MCP)"');
+    expect(code).toContain('print -r -- "linear: ok ($LINEAR_MCP$via)"');
+    // `via` names the proxy only in key mode with the proxy set
+    expect(code).toContain(
+      '[[ "$LINEAR_MCP" == key && -n "$LINEAR_PROXY_URL" ]] && via=" via proxy"'
+    );
     expect(code).not.toMatch(/linear: [^\n]*\$\{why:-/);
+  });
+
+  // Every Linear tool a run.sh launch allows is on the list the container's proxy lets through
+  it('allows only Linear tools that linear-tools.txt lists', () => {
+    const listed = readFileSync(
+      fileURLToPath(
+        new URL('../../../agent-queue/linear-tools.txt', import.meta.url)
+      ),
+      'utf8'
+    )
+      .split('\n')
+      .map((line) => line.replace(/#.*/, '').trim())
+      .filter(Boolean);
+    const used = [...code.matchAll(/"\$L"__(\w+)/g)].map((m) => m[1]);
+    expect(used.length).toBeGreaterThan(0);
+    expect(used.filter((name) => !listed.includes(name ?? ''))).toEqual([]);
   });
 });
 
@@ -1963,6 +1983,11 @@ describe('run.sh woken by the listener', () => {
     }
   );
 
+  it('compares every queue file against main in the job line', () => {
+    const loop = /for f in ([^;\n]+); do\n\s+theirs=/.exec(fn('job_line'))?.[1];
+    expect(loop?.split(' ').sort()).toEqual([...QUEUE_FILES].sort());
+  });
+
   it('records the interval and the version from either job line', () => {
     const run = fn('record_run');
     expect(run).toContain(`'(every|fallback) ([0-9]+) min'`);
@@ -2000,7 +2025,8 @@ describe('run.sh job.json', () => {
     'github-app.sh',
     'notify.sh',
     'checkin.sh',
-    'telemetry.sh'
+    'telemetry.sh',
+    'linear-tools.txt'
   ];
   let root: string;
   let repo: string;
