@@ -15,10 +15,9 @@ import {
   SheetTrigger
 } from '@codeware/shared/ui/shadcn/components/sheet';
 import {
-  Tabs,
-  TabsList,
-  TabsTrigger
-} from '@codeware/shared/ui/shadcn/components/tabs';
+  ToggleGroup,
+  ToggleGroupItem
+} from '@codeware/shared/ui/shadcn/components/toggle-group';
 import {
   Tooltip,
   TooltipContent,
@@ -383,7 +382,7 @@ function SwatchGroups({
     <div className="space-y-2">
       {groups.map(({ label, families }) => (
         <div key={label} className="space-y-1">
-          <p className="text-muted-foreground/70 text-[10px] tracking-wide uppercase">
+          <p className="text-muted-foreground text-[10px] tracking-wide uppercase">
             {label}
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -511,6 +510,10 @@ export function ThemeStudio({
   onClose
 }: ThemeStudioProps = {}) {
   const scope = useId().replace(/:/g, '');
+  // On a page the studio is not the view: the page owns the one `main` and
+  // the `complementary` landmark, so the studio's panes are plain containers
+  const Main = fit === 'content' ? 'div' : 'main';
+  const Aside = fit === 'content' ? 'div' : 'aside';
   // Who may choose a licensed face, narrowed to what this deployment may show
   const offeredFonts = useMemo(
     () => ({
@@ -734,7 +737,7 @@ export function ThemeStudio({
           </style>
 
           {optionsOpen && (
-            <aside className="border-border bg-muted/30 flex min-h-0 w-72 shrink-0 flex-col border-r">
+            <Aside className="border-border bg-muted/30 flex min-h-0 w-72 shrink-0 flex-col border-r">
               <div className="flex h-12 shrink-0 flex-col justify-center border-b px-4">
                 <h2 className="text-sm font-semibold">
                   {themeName ?? 'Theme studio'}
@@ -747,7 +750,16 @@ export function ThemeStudio({
               </div>
 
               <div className={optionsPane({ fit })}>
-                <div className={optionsBody({ fit })}>
+                <div
+                  className={optionsBody({ fit })}
+                  // Taken out of the flow on a page, so it scrolls on its own
+                  // and a keyboard needs to reach it to scroll it
+                  {...(fit === 'content' && {
+                    tabIndex: 0,
+                    role: 'group',
+                    'aria-label': 'Theme options'
+                  })}
+                >
                   <div className="space-y-2">
                     <Label className="text-xs">Base colour</Label>
                     <p className="text-muted-foreground text-[11px]">
@@ -1198,10 +1210,10 @@ export function ThemeStudio({
                   </div>
                 </div>
               </div>
-            </aside>
+            </Aside>
           )}
 
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <Main className="flex min-h-0 min-w-0 flex-1 flex-col">
             <header className="border-border flex h-12 shrink-0 items-center justify-between gap-3 border-b px-5">
               <div className="flex items-center gap-3">
                 <Hint label={optionsOpen ? 'Hide options' : 'Show options'}>
@@ -1232,18 +1244,23 @@ export function ThemeStudio({
                   </Button>
                 </Hint>
 
-                <Tabs
+                <ToggleGroup
+                  type="single"
                   value={scheme}
+                  // Radix clears the value when the active item is pressed
+                  // again, and there is no "no scheme" to fall back to
                   onValueChange={(value) =>
-                    setScheme(value as 'light' | 'dark' | 'both')
+                    value && setScheme(value as 'light' | 'dark' | 'both')
                   }
+                  variant="outline"
+                  size="sm"
+                  spacing={0}
+                  aria-label="Preview scheme"
                 >
-                  <TabsList>
-                    <TabsTrigger value="light">Light</TabsTrigger>
-                    <TabsTrigger value="dark">Dark</TabsTrigger>
-                    <TabsTrigger value="both">Both</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                  <ToggleGroupItem value="light">Light</ToggleGroupItem>
+                  <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
+                  <ToggleGroupItem value="both">Both</ToggleGroupItem>
+                </ToggleGroup>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1297,7 +1314,7 @@ export function ThemeStudio({
                 {scheme !== 'light' && <ThemePreview id={ids.dark} dark />}
               </div>
             </div>
-          </main>
+          </Main>
         </div>
       </PortalContainer.Provider>
     </TooltipProvider>

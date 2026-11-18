@@ -51,4 +51,21 @@ describe('ThemeStudioBlock', () => {
     expect(await screen.findByText('The studio')).toBeTruthy();
     expect(screen.queryByText(/built for a desktop screen/)).toBeNull();
   });
+
+  it('adds no main or complementary landmark to the page it sits in', async () => {
+    const { ThemeStudio } = await vi.importActual<
+      typeof import('@codeware/shared/ui/theme-studio')
+    >('@codeware/shared/ui/theme-studio');
+    viewport(true);
+    // The page already has its own `main`; the block must not add a second
+    const { container } = render(
+      <main>
+        <ThemeStudio fit="content" />
+      </main>
+    );
+
+    expect(await screen.findByText('Theme studio')).toBeTruthy();
+    expect(container.querySelectorAll('main, [role="main"]')).toHaveLength(1);
+    expect(container.querySelector('aside, [role="complementary"]')).toBeNull();
+  });
 });
