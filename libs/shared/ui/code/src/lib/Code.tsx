@@ -2,6 +2,7 @@ import { CopyButton } from '@codeware/shared/ui/copy-button';
 import { Highlight, themes } from 'prism-react-renderer';
 import React from 'react';
 
+import { vsDarkAA, vsLightAA } from './accessible-themes';
 import './shell-grammar';
 
 export type Props = {
@@ -11,10 +12,18 @@ export type Props = {
   theme?: keyof typeof themes;
 };
 
+const resolveTheme = (theme: keyof typeof themes) => {
+  if (theme === 'vsLight') return vsLightAA;
+  if (theme === 'vsDark') return vsDarkAA;
+  return themes[theme];
+};
+
 /**
  * React code component for highlighting code blocks.
  *
- * Theme defaults to `vsLight`.
+ * Theme defaults to `vsLight`. `vsLight` and `vsDark` use contrast-safe copies
+ * (see `accessible-themes`) so every token reaches WCAG AA; other themes are
+ * used as shipped.
  *
  * @param props - The component props.
  * @returns A React component that renders a code block with syntax highlighting.
@@ -29,7 +38,7 @@ export const Code: React.FC<Props> = ({
 
   return (
     <div className={`relative ${className}`}>
-      <Highlight code={code} language={language} theme={themes[theme]}>
+      <Highlight code={code} language={language} theme={resolveTheme(theme)}>
         {({ className, getLineProps, getTokenProps, style, tokens }) => (
           // The code scrolls inside the gutter kept for the copy button, so a
           // long line never runs underneath it
