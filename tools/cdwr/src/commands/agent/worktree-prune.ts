@@ -15,13 +15,38 @@ import {
   pruneVerdict
 } from './worktree.logic';
 
-/** Nx processes of ticket checkouts that no longer exist; none when `ps` fails */
-async function findOrphans(root: string, existing: string[]) {
+/**
+ * Nx processes of ticket checkouts that no longer exist; none when `ps` fails.
+ * git keeps a worktree whose directory is gone in its list, so only paths on disk count as existing.
+ */
+async function findOrphans(root: string, listed: string[]) {
   try {
     const { stdout } = await run('ps', ['-eo', 'pid=,args=']);
-    return orphanDaemons(stdout, existing, dirname(root));
+    return orphanDaemons(stdout, listed.filter(existsSync), dirname(root));
   } catch {
     return [];
+  }
+}
+
+/** The pid still runs the same orphan: it may have exited and been reused since the `ps` above */
+async function stillOrphan(
+  root: string,
+  orphan: { pid: number; path: string }
+): Promise<boolean> {
+  try {
+    const { stdout } = await run('ps', [
+      '-o',
+      'args=',
+      '-p',
+      String(orphan.pid)
+    ]);
+    return orphanDaemons(
+      `${orphan.pid} ${stdout.trim()}`,
+      [],
+      dirname(root)
+    ).some(({ path }) => path === orphan.path);
+  } catch {
+    return false;
   }
 }
 
@@ -166,6 +191,7 @@ export default defineCommand({
     );
     const stopped: typeof orphans = [];
     for (const orphan of orphans) {
+      if (!(await stillOrphan(root, orphan))) continue;
       try {
         process.kill(orphan.pid, 'SIGTERM');
         stopped.push(orphan);

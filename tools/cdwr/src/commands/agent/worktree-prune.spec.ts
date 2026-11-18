@@ -41,6 +41,17 @@ describe('agent worktree prune', () => {
     run.mockReset();
     run.mockImplementation(async (bin, args) => {
       calls.push(`${bin} ${args.join(' ')}`);
+      if (bin === 'ps' && args[0] === '-o') {
+        // One pid's args, as `ps -o args= -p <pid>` prints them; exit 1 when it is gone
+        const line = ps
+          .split('\n')
+          .find((l) => l.trim().split(/\s+/)[0] === args[3]);
+        if (!line) throw new Error('ps: no such process');
+        return {
+          stdout: `${line.trim().replace(/^\d+\s+/, '')}\n`,
+          stderr: ''
+        };
+      }
       if (bin === 'ps') return { stdout: ps, stderr: '' };
       if (bin === 'git' && args[0] === 'worktree' && args[1] === 'list') {
         return { stdout: listing, stderr: '' };
@@ -126,6 +137,27 @@ describe('agent worktree prune', () => {
     ps = daemon(done);
     await prune(['--yes']);
     expect(kill).toHaveBeenCalledWith(4242, 'SIGTERM');
+  });
+
+  it('stops the daemon of a listed worktree whose directory is gone', async () => {
+    const gone = join(dir, 'codeware-cod-7');
+    listing += `\nworktree ${gone}\nHEAD c\nbranch refs/heads/cod-7\n`;
+    ps = daemon(gone);
+    await prune(['--yes']);
+    expect(kill).toHaveBeenCalledWith(4242, 'SIGTERM');
+  });
+
+  it('leaves a pid alone that no longer runs the orphan', async () => {
+    ps = daemon(join(dir, 'codeware-cod-9'));
+    const base = run.getMockImplementation();
+    run.mockImplementation(async (bin, args) => {
+      if (bin === 'ps' && args[0] === '-o') {
+        return { stdout: 'vim notes.txt\n', stderr: '' };
+      }
+      return base!(bin, args);
+    });
+    await prune(['--yes']);
+    expect(kill).not.toHaveBeenCalled();
   });
 
   it('stops nothing on a dry run', async () => {
