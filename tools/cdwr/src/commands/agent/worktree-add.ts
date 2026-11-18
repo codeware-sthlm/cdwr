@@ -7,7 +7,7 @@ import { input } from '../../cli/inputs';
 import { readText, worktreeOf } from '../../services/agent-queue';
 import { CommandError, childEnv, run } from '../../services/shell';
 
-import { ENV_COPIES } from './agent.logic';
+import { envCopiesFor } from './agent.logic';
 import { isTicket, worktreePath } from './worktree.logic';
 
 /** Where the branch comes from when the checkout is created */
@@ -121,7 +121,7 @@ export default defineCommand({
         source = 'local';
       }
     }
-    const envCopies = ENV_COPIES.filter((file) => {
+    const envCopies = envCopiesFor(ctx.env).filter((file) => {
       const ours = readText(join(envSource, file));
       return ours !== undefined && ours !== readText(join(path, file));
     });

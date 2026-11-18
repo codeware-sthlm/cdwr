@@ -262,6 +262,19 @@ export const memoryDir = (userHome: string, repoRoot: string): string =>
 
 /** Files a worktree needs but git does not carry, relative to the workspace root */
 export const ENV_COPIES = ['apps/cms/.env.local', 'tools/cdwr/.env'];
+/** Set by implement.sh for its session, read by the session hook and `worktree add` */
+export const SESSION_KIND_ENV = 'AGENT_QUEUE_SESSION_KIND';
+
+/**
+ * The env copies a ticket worktree gets. An implement session's worktree gets no `tools/cdwr/.env`,
+ * which holds the Supabase service key in the container: the session runs no `cdwr` command that
+ * needs it, and its deny rules keep it from the agent checkout's copy (COD-657). An attended one
+ * keeps it to check its hand-offs.
+ */
+export const envCopiesFor = (env: NodeJS.ProcessEnv): string[] =>
+  env[SESSION_KIND_ENV] === 'implement'
+    ? ENV_COPIES.filter((file) => file !== 'tools/cdwr/.env')
+    : ENV_COPIES;
 /** Pref holding the worktree the queue plans in */
 export const WORKTREE_PREF = 'agentWorktree';
 
