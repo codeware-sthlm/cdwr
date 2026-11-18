@@ -62,7 +62,8 @@ comments from Håkan's by that author (`is_agent` in `watch.jq`), and never star
 `codeware-agent` app (`github-app.sh`, credentials in `tools/cdwr/.env`), never as Håkan, so
 main's rulesets apply to it; without the app it does not start. The session takes the key's work
 first (`wait.sh --runnable` lists what it may take); when it can't, it ends with
-`not tried: <key> · <reason>` and the launch is recorded `untried` and not counted. After two
+`not tried: <key> · <reason>` and the launch is recorded `untried` and not counted. A session a
+deploy or container stop cuts is recorded `interrupted` and not counted either. After two
 launches that change nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
 launching too.
 

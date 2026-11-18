@@ -240,7 +240,9 @@ branch: the pushed branch when origin has it, else the local one, else a new one
 It copies the env files and installs dependencies, and does only what differs. `worktree prune`
 removes the `codeware-cod-<n>` checkouts whose pull request is merged or closed, deleting the
 branch too when merged. One with no pull request, an open one or uncommitted changes is kept, as
-are the agent worktree and the one you run it from. Shell completion stops at `worktree`.
+are the agent worktree and the one you run it from. It stops a worktree's Nx daemon before
+removing it, and afterwards stops any Nx daemon or plugin worker still running for a
+`codeware-cod-<n>` worktree that is gone. Shell completion stops at `worktree`.
 
 `desk install` downloads the `cdwr-desk-macos-arm64` artifact of the newest successful `desk.yml`
 run (a push to main, or with `--pr` that PR's branch) and replaces `/Applications/CDWR Desk.app`,
@@ -658,6 +660,18 @@ is named after its role, `agent-host`, so moving to another box changes only the
 minutes (default 30) for the running job to finish, writes the tag to `image.env`, pulls,
 restarts and resumes. Without `--tag` it takes the latest image built on main; `--dry-run` prints
 the plan with the resolved tag. When the queue stays busy it resumes and changes nothing.
+
+An implementing session that only waits in `wait.sh` does not hold a deploy up: while it waits,
+`wait.sh` writes its pid to `implement.lock/waiting`, and the deploy reads the session as idle when
+that pid is alive and is a `wait.sh`. It restarts at once and names the ticket it interrupted, from
+`implement.lock/key`. It checks once more right before the restart, since the pull can take
+minutes: a session that went back to work is waited for with what is left of `--wait`, and if that
+runs out the image is pulled but the container is not restarted, so the same deploy finishes the
+job. `implement.sh` records a session cut by a deploy or a container stop as `interrupted`, sends no
+failure notice and gives the launch back once per key. `--force` skips both checks and cuts a
+working session too; it is prompted as destructive. Both queue locks hold their owner's pid, so a
+lock whose run was killed is cleared by the next run (`warn: cleared lock; its run <pid> is gone`)
+instead of blocking every run and deploy until the container restarts.
 
 ### The desk on the phone
 
