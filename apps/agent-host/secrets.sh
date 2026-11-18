@@ -23,28 +23,40 @@ typeset -A keys
 write_secret() {
   local file="$1"
   shift
+  mkdir -p "${file:h}"
   (umask 077; print -rl -- "$@" > "$file.tmp")
   chmod 600 "$file.tmp"
   mv -f "$file.tmp" "$file"
 }
 
 # Each key from the vault, or from the environment where it was set (that wins), goes to its file
-# and out of the environment. The file names are the ones lib.sh and entrypoint.sh read.
+# and out of the environment. The file names are the ones lib.sh and entrypoint.sh read. A file
+# whose secret is gone is removed, so a second run (`cdwr agent exec`) leaves no revoked key behind.
 write_keys() {
   local name
   for name in "${key_names[@]}"; do
     [[ -n "${(P)name:-}" ]] && keys[$name]="${(P)name}"
     unset "$name"
   done
-  (( ${#keys} )) || return 0
-  mkdir -p "$run_dir"
-  [[ -n "${keys[AGENT_GITHUB_APP_KEY]:-}" ]] && write_secret "$run_dir/app.pem" "${keys[AGENT_GITHUB_APP_KEY]}"
-  [[ -n "${keys[AGENT_QUEUE_LINEAR_KEY]:-}" ]] &&
-    write_secret "${AGENT_QUEUE_LINEAR_KEY_FILE:-$run_dir/linear.key}" "${keys[AGENT_QUEUE_LINEAR_KEY]}"
+  local pem="$run_dir/app.pem"
+  local key_file="${AGENT_QUEUE_LINEAR_KEY_FILE:-$run_dir/linear.key}"
+  local app_file="${AGENT_QUEUE_LINEAR_APP_FILE:-$run_dir/linear-app.env}"
+  if [[ -n "${keys[AGENT_GITHUB_APP_KEY]:-}" ]]; then
+    write_secret "$pem" "${keys[AGENT_GITHUB_APP_KEY]}"
+  else
+    rm -f "$pem"
+  fi
+  if [[ -n "${keys[AGENT_QUEUE_LINEAR_KEY]:-}" ]]; then
+    write_secret "$key_file" "${keys[AGENT_QUEUE_LINEAR_KEY]}"
+  else
+    rm -f "$key_file"
+  fi
   if [[ -n "${keys[AGENT_QUEUE_LINEAR_CLIENT_ID]:-}" && -n "${keys[AGENT_QUEUE_LINEAR_CLIENT_SECRET]:-}" ]]; then
-    write_secret "${AGENT_QUEUE_LINEAR_APP_FILE:-$run_dir/linear-app.env}" \
+    write_secret "$app_file" \
       "AGENT_QUEUE_LINEAR_CLIENT_ID=${keys[AGENT_QUEUE_LINEAR_CLIENT_ID]}" \
       "AGENT_QUEUE_LINEAR_CLIENT_SECRET=${keys[AGENT_QUEUE_LINEAR_CLIENT_SECRET]}"
+  else
+    rm -f "$app_file"
   fi
   keys=()
   return 0
