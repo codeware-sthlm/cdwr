@@ -66,6 +66,20 @@ first (`wait.sh --runnable` lists what it may take); when it can't, it ends with
 launches that change nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
 launching too.
 
+Implement sessions start in the container only. Elsewhere (a Mac with the launchd job) `run.sh`
+turns a launch into a notice with the reason `implement runs only in the container`, so the Mac
+plans and notifies and never counts a miss; `implement.sh` refuses to start outside the
+container as a backstop, before its lock, with a `failed` row and no notice. In the container,
+`secrets.sh` writes the key secrets (`AGENT_GITHUB_APP_KEY` to `app.pem`, `AGENT_QUEUE_LINEAR_KEY`
+to `linear.key`, the Linear app's client id and secret to `linear-app.env`) to the `/run/agent`
+tmpfs, mode 600, and never exports them, so no process's `/proc/<pid>/environ` holds them; in
+plain `.env` mode Docker still puts them in tini's `/proc/1/environ`. The session's deny rules
+cover `/run/agent`, `/proc` (Read, which Grep and Glob follow, and any Bash command naming it) and
+every `tools/cdwr/.env` (it holds the Supabase service key), and an implement session's ticket
+worktrees get no copy of that file (`envCopiesFor` in `agent.logic.ts`). `CLAUDE_CODE_OAUTH_TOKEN`
+and `AGENT_SUPABASE_SERVICE_KEY` stay in the loop's environment, and tini's environ keeps the
+Infisical identity, until the session runs as a uid of its own (COD-653).
+
 A claude run that ends on the plan's session limit (`You've hit your session limit · resets 7:10am (UTC)`) is recorded `limited`, with the limit text in its detail. It is not a failure. The run writes `limited-until.json` in the queue home, `{"until": <epoch seconds>, "text": "<limit text>", "at": "<ISO>"}`, and while `until` is in the future no claude run starts: planning, implementing, suggest, review and devlog all wait. The reset is the next occurrence of `resets H[:MM]am|pm (<zone>)` in the text; a text without a parseable reset holds for 60 minutes, and no hold lasts longer than a day. Suggest, review and devlog give their day stamp back when they end limited, so they run again after the reset. A limited implement launch is given back every time, so it never counts toward the two-launch stop above. The implement launch decision reads `notify` with the reason `session limit, resets 07:10 UTC`, `--check` prints `limit: claude runs held until 07:10 UTC` before its other lines, and `cdwr agent status` shows `held by the session limit until 07:10 UTC` on its implement line while the file is in force. The desk shows it amber, a third state between ok and problem: the Agent health page reads `session limit` and the run row takes the warning style, until a later run goes well.
 
 An attended Mac session stays visible to the NUC because its session hook copies each session file into the NUC's container (`cdwr agent mirror set --host agent-host`, once). So the NUC launches nothing a live Mac session holds: while that session is polling, any other ticket may launch there; while it is working, only a comment on a merged ticket does. The claim line decides who has a ticket, and a session that loses the race leaves it alone. The hook runs from the checkout the session started in, which must be on a main that includes the mirror support: `cdwr agent attend` does that.
