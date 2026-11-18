@@ -70,8 +70,10 @@ COPY --chmod=755 tools/cdwr/agent-queue/run.sh \
   tools/cdwr/agent-queue/checkin.sh \
   tools/cdwr/agent-queue/telemetry.sh \
   tools/cdwr/agent-queue/watch.jq \
+  tools/cdwr/agent-queue/linear-tools.txt \
   /opt/agent-queue/
-COPY --chmod=755 apps/agent-host/secrets.sh apps/agent-host/entrypoint.sh apps/agent-host/git-credential-app.sh /opt/agent-host/
+COPY --chmod=755 apps/agent-host/secrets.sh apps/agent-host/entrypoint.sh apps/agent-host/git-credential-app.sh \
+  apps/agent-host/linear-mcp-proxy.mjs /opt/agent-host/
 
 ENV AGENT_QUEUE_HOST=container \
     AGENT_QUEUE_HOME=/home/agent/.cdwr/agent-queue \
@@ -79,6 +81,7 @@ ENV AGENT_QUEUE_HOST=container \
     AGENT_QUEUE_LINEAR_KEY_FILE=/run/agent/linear.key \
     AGENT_QUEUE_LINEAR_APP_FILE=/run/agent/linear-app.env \
     AGENT_QUEUE_LINEAR_TOKEN_FILE=/run/agent/linear.token \
+    AGENT_QUEUE_LINEAR_PROXY_PORT=8790 \
     RUN_INTERVAL_SECONDS=600 \
     RUN_FALLBACK_SECONDS=3600 \
     HOST_METRICS_INTERVAL_SECONDS=60 \

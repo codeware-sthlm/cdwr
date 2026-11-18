@@ -16,6 +16,15 @@ describe('agent-host image', () => {
     expect(ignore).toContain(`!/tools/cdwr/agent-queue/${file}`);
   });
 
+  it('ships the Linear proxy and tells the queue scripts its port', () => {
+    expect(dockerfile).toContain('apps/agent-host/linear-mcp-proxy.mjs');
+    expect(dockerfile).toMatch(
+      /apps\/agent-host\/linear-mcp-proxy\.mjs\s+\/opt\/agent-host\//
+    );
+    expect(ignore).toContain('!/apps/agent-host/linear-mcp-proxy.mjs');
+    expect(dockerfile).toContain('AGENT_QUEUE_LINEAR_PROXY_PORT=8790');
+  });
+
   // The platform step reads the cms database and Fly with them
   it('installs psql and a pinned flyctl on the PATH as fly and flyctl', () => {
     expect(dockerfile).not.toMatch(/^\s+postgresql-client \\$/m);
@@ -115,6 +124,23 @@ describe('agent-host entrypoint', () => {
     expect(
       entrypoint.indexOf('git switch -q --detach origin/main')
     ).toBeLessThan(entrypoint.indexOf('supervise_listener &'));
+  });
+
+  it('starts the Linear proxy after the queue copy, before the listener and the run loop', () => {
+    const copy = entrypoint.indexOf('cp /opt/agent-queue/*');
+    const proxy = entrypoint.indexOf('supervise_proxy &');
+    expect(copy).toBeGreaterThan(-1);
+    expect(proxy).toBeGreaterThan(copy);
+    expect(proxy).toBeLessThan(entrypoint.indexOf('supervise_listener &'));
+    expect(proxy).toBeLessThan(entrypoint.indexOf('while (( ! stop ))'));
+    expect(entrypoint).toContain('proxy_supervisor=$!');
+    expect(entrypoint).toContain('node /opt/agent-host/linear-mcp-proxy.mjs');
+  });
+
+  it('stops the proxy supervisor on TERM', () => {
+    expect(entrypoint).toMatch(
+      /trap '[^']*kill -TERM \$proxy_supervisor[^']*' TERM INT/
+    );
   });
 
   it('sends no heartbeat after a failed run', () => {

@@ -91,10 +91,38 @@ woken=0
 runner=
 sleeper=
 supervisor=
+proxy_supervisor=
 # Before the listener starts: SIGUSR1's default action would end the loop
-trap 'stop=1; [[ -n "$runner" ]] && kill -TERM $runner 2>/dev/null; [[ -n "$sleeper" ]] && kill $sleeper 2>/dev/null; [[ -n "$supervisor" ]] && kill -TERM $supervisor 2>/dev/null; true' TERM INT
+trap 'stop=1; [[ -n "$runner" ]] && kill -TERM $runner 2>/dev/null; [[ -n "$sleeper" ]] && kill $sleeper 2>/dev/null; [[ -n "$supervisor" ]] && kill -TERM $supervisor 2>/dev/null; [[ -n "$proxy_supervisor" ]] && kill -TERM $proxy_supervisor 2>/dev/null; true' TERM INT
 # A wake only cuts the sleep short; during a run it is kept for right after
 trap 'pending=1; [[ -n "$sleeper" ]] && kill $sleeper 2>/dev/null; true' USR1
+
+# The claude runs' Linear MCP (COD-658): the proxy on 127.0.0.1:AGENT_QUEUE_LINEAR_PROXY_PORT signs
+# their calls and refuses tools outside linear-tools.txt, which the cp above put in the queue home.
+# Restarted with the listener's back-off; it runs before the first run.sh, whose gate asks it.
+supervise_proxy() {
+  local backoff=5 started proxy=
+  trap '[[ -n "$proxy" ]] && kill -TERM $proxy 2>/dev/null; exit 0' TERM
+  while true; do
+    started=$SECONDS
+    node /opt/agent-host/linear-mcp-proxy.mjs &
+    proxy=$!
+    wait $proxy || true
+    proxy=
+    if (( SECONDS - started >= 600 )); then backoff=5; fi
+    print -r -- "agent-host: the Linear proxy exited, restarting in ${backoff}s"
+    sleep $backoff &
+    wait $! || true
+    (( backoff = backoff * 2 > 300 ? 300 : backoff * 2 ))
+  done
+}
+supervise_proxy &
+proxy_supervisor=$!
+# The first run's gate asks the proxy, so it gets up to 10 s to listen (any answer will do)
+for (( i = 0; i < 20; i++ )); do
+  curl -s -m 1 -o /dev/null "http://127.0.0.1:${AGENT_QUEUE_LINEAR_PROXY_PORT:-8790}/" && break
+  sleep 0.5
+done
 
 # The listener (`cdwr agent listen`) wakes the loop on Supabase events and keeps listener.json
 # beating; without its env the loop polls every RUN_INTERVAL_SECONDS as before
