@@ -1,4 +1,5 @@
 import {
+  ENV_COPIES,
   KEYCHAIN_CLIENT_ID_SERVICE,
   KEYCHAIN_CLIENT_SECRET_SERVICE,
   KEYCHAIN_SERVICE,
@@ -16,6 +17,7 @@ import {
   devlogSettings,
   domainTarget,
   drift,
+  envCopiesFor,
   filesDrift,
   formatBlocked,
   formatGaps,
@@ -160,6 +162,22 @@ describe('constants', () => {
       'watch.jq',
       'notify.sh',
       'telemetry.sh'
+    ]);
+  });
+});
+
+describe('envCopiesFor', () => {
+  it('copies both env files to an attended worktree', () => {
+    expect(envCopiesFor({})).toEqual(ENV_COPIES);
+    expect(envCopiesFor({ AGENT_QUEUE_SESSION_KIND: 'attended' })).toEqual(
+      ENV_COPIES
+    );
+  });
+
+  // The cdwr env holds the Supabase service key in the container (COD-657)
+  it('leaves tools/cdwr/.env out of an implement session worktree', () => {
+    expect(envCopiesFor({ AGENT_QUEUE_SESSION_KIND: 'implement' })).toEqual([
+      'apps/cms/.env.local'
     ]);
   });
 });
