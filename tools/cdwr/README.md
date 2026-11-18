@@ -433,7 +433,8 @@ write credentials are `DESK_FLY_TOKEN` (an org deploy token, with an expiry) and
 `DESK_INFISICAL_CLIENT_ID`, `_CLIENT_SECRET` and `_PROJECT_ID` (an identity with write on production
 secrets of the project), in the same places as the platform step's read-only ones, which they are kept
 apart from. `run.sh` unexports them too and names them only on the command line of the `cdwr` call
-that applies a command, as `FLY_API_TOKEN` and `INFISICAL_*`, with `FLY_ACCESS_TOKEN` and
+that applies a command, the Fly token as both `FLY_API_TOKEN` and `FLY_ACCESS_TOKEN` (flyctl reads
+the second first and takes an empty one as set) and the identity as `INFISICAL_*`, with
 `INFISICAL_SERVICE_TOKEN` emptied so `tools/cdwr/.env` fills in no other credential. Without all four
 the command is refused (`no write credentials on <host>`).
 
