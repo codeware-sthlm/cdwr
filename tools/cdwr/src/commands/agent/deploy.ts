@@ -18,21 +18,25 @@ import {
   REMOTE_IMAGE_ENV,
   RUN_LOCK,
   type Remote,
+  type SessionState,
   assertHost,
   assertTag,
   headShaOf,
   isPid,
   isRunning,
+  lockFile,
   lockOld,
-  lockPid,
   parseReport,
   parseRunning,
   pathExists,
   pause,
   pidAlive,
+  pidIsWait,
   pull,
   report,
+  sessionState,
   tagFromSha,
+  ticketOfKey,
   unpause,
   up,
   uploadCompose,
@@ -66,24 +70,76 @@ async function running(host: string): Promise<boolean> {
   }
 }
 
-/** An implement.lock is busy while its session lives; mirrors how run.sh clears a stale one */
-async function implementing(host: string): Promise<boolean> {
-  if (!(await succeeds(pathExists(host, IMPLEMENT_LOCK)))) return false;
-  let owner = '';
+/** The text of a file in a lock directory; empty when it is absent */
+async function readLock(
+  host: string,
+  lock: string,
+  name: string
+): Promise<string> {
   try {
-    owner = (await ssh(lockPid(host, IMPLEMENT_LOCK))).stdout.trim();
+    return (await ssh(lockFile(host, lock, name))).stdout.trim();
   } catch (error) {
     if (!(error instanceof CommandError && error.code === 1)) throw error;
+    return '';
   }
+}
+
+/** A lock is busy while its owner lives; mirrors how run.sh clears a stale one */
+async function held(host: string, lock: string): Promise<boolean> {
+  if (!(await succeeds(pathExists(host, lock)))) return false;
+  const owner = await readLock(host, lock, 'pid');
   if (isPid(owner)) return succeeds(pidAlive(host, owner));
   // No pid yet: the owner may be between mkdir and write, so only an old lock is stale
-  const old = (await ssh(lockOld(host, IMPLEMENT_LOCK))).stdout.trim();
+  const old = (await ssh(lockOld(host, lock))).stdout.trim();
   return old === '';
 }
 
-async function busy(host: string): Promise<boolean> {
-  if (await succeeds(pathExists(host, RUN_LOCK))) return true;
-  return implementing(host);
+/** Whether the process is a wait.sh; grep exits 2 when the process is gone */
+async function isWait(host: string, pid: string): Promise<boolean> {
+  try {
+    await ssh(pidIsWait(host, pid));
+    return true;
+  } catch (error) {
+    const code = error instanceof CommandError ? error.code : undefined;
+    if (code === 1 || code === 2) return false;
+    throw error;
+  }
+}
+
+/** What the queue is doing; `key` is the launch key of a waiting or working implementing session */
+interface Queue {
+  state: SessionState;
+  key?: string;
+}
+
+async function queue(host: string): Promise<Queue> {
+  if (await held(host, RUN_LOCK)) return { state: 'working' };
+  const locked = await succeeds(pathExists(host, IMPLEMENT_LOCK));
+  const alive = locked && (await held(host, IMPLEMENT_LOCK));
+  if (!alive) return { state: 'none' };
+  const key = (await readLock(host, IMPLEMENT_LOCK, 'key')) || undefined;
+  const waiting = await readLock(host, IMPLEMENT_LOCK, 'waiting');
+  const waitingAlive =
+    isPid(waiting) && (await succeeds(pidAlive(host, waiting)));
+  const waitingIsWait = waitingAlive && (await isWait(host, waiting));
+  return {
+    state: sessionState({ locked, alive, waitingAlive, waitingIsWait }),
+    key
+  };
+}
+
+/** Polls until the queue is idle or its session only waits; undefined when the checks run out */
+async function awaitIdle(
+  host: string,
+  checks: number,
+  intervalMs: number
+): Promise<Queue | undefined> {
+  for (let i = 0; i < checks; i++) {
+    if (i > 0) await sleep(intervalMs);
+    const q = await queue(host);
+    if (q.state !== 'working') return q;
+  }
+  return undefined;
 }
 
 async function latestImageTag(): Promise<string> {
@@ -128,10 +184,17 @@ export default defineCommand({
       short: 'w',
       description: 'Minutes to wait for a running job before giving up',
       default: DEFAULT_WAIT_MINUTES
+    }),
+    force: input.boolean({
+      prompt: 'Restart without waiting for the queue to be idle?',
+      short: 'f',
+      description:
+        'Skip the idle wait and restart at once, cutting a session that is working',
+      default: false
     })
   },
 
-  async plan(ctx, { host, tag, wait }) {
+  async plan(ctx, { host, tag, wait, force }) {
     assertHost(host);
     const resolved = tag
       ? assertTag(tag)
@@ -144,8 +207,12 @@ export default defineCommand({
     return {
       steps: [
         {
-          label: 'Pause the queue and wait for it to be idle',
-          detail: `up to ${wait} minutes, only when the container runs`
+          label: force
+            ? 'Pause the queue, without waiting for it to be idle'
+            : 'Pause the queue and wait for it to be idle',
+          detail: force
+            ? 'the wait is skipped and a working session is cut; only when the container runs'
+            : `up to ${wait} minutes, or until the session only waits in wait.sh; only when the container runs`
         },
         {
           label: 'Upload the compose file',
@@ -160,11 +227,12 @@ export default defineCommand({
         { label: 'Resume the queue and report the image' }
       ],
       target: { name: host },
-      data: { host, tag: resolved, compose, wait }
+      ...(force ? { danger: 'destructive' as const } : {}),
+      data: { host, tag: resolved, compose, wait, force }
     };
   },
 
-  async apply(ctx: Context, { host, tag, compose, wait }) {
+  async apply(ctx: Context, { host, tag, compose, wait, force }) {
     const runs = await running(host);
     // A pause the user set stays; only one made here is lifted again
     const alreadyPaused = runs && (await succeeds(pathExists(host, PAUSED)));
@@ -188,24 +256,23 @@ export default defineCommand({
       );
     };
 
-    if (runs) {
-      const { intervalMs, checks } = waitPlan(wait);
-      let idle: boolean;
+    // What the deploy interrupts: a session waiting in wait.sh, or with --force one that was working
+    let seen: Queue = { state: 'none' };
+    const started = Date.now();
+    const { intervalMs, checks } = waitPlan(wait);
+
+    if (runs && !force) {
+      let idle: Queue | undefined;
       try {
         idle = await ctx.ui.task(
           'Waiting for the queue to be idle',
-          async () => {
-            for (let i = 0; i < checks; i++) {
-              if (i > 0) await sleep(intervalMs);
-              if (!(await busy(host))) return true;
-            }
-            return false;
-          },
-          (ok) => (ok ? 'The queue is idle' : 'The queue stayed busy')
+          () => awaitIdle(host, checks, intervalMs),
+          (q) => (q ? 'The queue is idle' : 'The queue stayed busy')
         );
       } catch (error) {
         throw failed(error, await lift());
       }
+      if (idle) seen = idle;
       if (!idle) {
         const resumed = await lift();
         throw new CliError(
@@ -230,6 +297,47 @@ export default defineCommand({
         () => ssh(pull(host)),
         () => `Pulled ${tag}`
       );
+    } catch (error) {
+      throw failed(error, await lift());
+    }
+
+    // The pull takes a while: the session may have gone back to work since the first check
+    if (runs) {
+      try {
+        if (force) {
+          // Only looked at, to say what was cut
+          seen = await queue(host).catch(() => seen);
+        } else {
+          const now = await queue(host);
+          if (now.state !== 'working') {
+            seen = now;
+          } else {
+            const left = await ctx.ui.task(
+              'The session is working again, waiting for it',
+              () => {
+                const left = wait - (Date.now() - started) / 60_000;
+                return awaitIdle(host, waitPlan(left).checks, intervalMs);
+              },
+              (q) => (q ? 'The queue is idle' : 'The queue stayed busy')
+            );
+            if (!left) {
+              const resumed = await lift();
+              throw new CliError(
+                `The queue was busy again after the pull and stayed busy for ${wait} minutes; the image is pulled and the tag written, but the container was not restarted`,
+                EXIT.failed,
+                `Run the same deploy again to finish it${resumed ? '' : `; ${stillPaused}`}`
+              );
+            }
+            seen = left;
+          }
+        }
+      } catch (error) {
+        if (error instanceof CliError) throw error;
+        throw failed(error, await lift());
+      }
+    }
+
+    try {
       await ctx.ui.task(
         'Restarting the container',
         () => ssh(up(host)),
@@ -249,11 +357,24 @@ export default defineCommand({
 
     const { image, state } = parseReport((await ssh(report(host))).stdout);
     const stuck = !resumed;
+    const cut = seen.state === 'waiting' || seen.state === 'working';
+    const ticket = seen.key ? ticketOfKey(seen.key) : undefined;
+    const who = seen.key
+      ? `${ticket ? `${ticket} ` : 'a session '}(${seen.key})`
+      : 'a session';
     return {
       summary: `Deployed ${tag} to ${host}`,
       details: [
         `Image ${image}`,
         `State ${state}`,
+        ...(seen.state === 'waiting'
+          ? [
+              `Interrupted ${who}, which was waiting in wait.sh; the next tick resumes it`
+            ]
+          : []),
+        ...(seen.state === 'working'
+          ? [`Cut ${who} while it was working (--force)`]
+          : []),
         ...(alreadyPaused
           ? ['The queue was already paused and stays paused']
           : [])
@@ -264,7 +385,14 @@ export default defineCommand({
           ]
         : undefined,
       partial: state !== 'running' || stuck,
-      json: { host, tag, image, state, resumed: created && resumed }
+      json: {
+        host,
+        tag,
+        image,
+        state,
+        resumed: created && resumed,
+        interrupted: cut ? (seen.key ?? 'unknown') : null
+      }
     };
   }
 });
