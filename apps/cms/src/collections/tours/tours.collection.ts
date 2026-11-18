@@ -476,7 +476,7 @@ const tours: CollectionConfig<'tours'> = {
           label: { en: 'Tour signups', sv: 'Anmälningar' },
           description: {
             en: 'Who has signed up, and who is waiting. The same signups are listed under Tour signups, where you can search across every tour.',
-            sv: 'Vilka som har anmält sig och vilka som står i kö. Samma anmälningar finns under Reseanmälningar, där du kan söka över alla resor.'
+            sv: 'Vilka som har anmält sig och vilka som står på väntelistan. Samma anmälningar finns under Reseanmälningar, där du kan söka över alla resor.'
           },
           fields: [
             {
