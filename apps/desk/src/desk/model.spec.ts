@@ -235,6 +235,7 @@ describe('isProblem', () => {
     ['launched', false],
     ['implemented', false],
     ['untried', false],
+    ['interrupted', false],
     ['limited', false],
     ['suggested COD-3', false],
     ['nothing', false],
