@@ -13,7 +13,7 @@ When a split's sub-issue has all its blockers done, the queue lists it as ready 
 To start an attended session, run `cdwr agent attend [COD-n]` from anywhere: it moves `codeware-queue` to `origin/main` (installing when the lockfile changed) and starts `/work-queue` there in the same terminal (`--no-start` prints the line instead). A session started on a detached checkout that is behind main warns at start and names that one command (the SessionStart hook, `tools/cdwr/agent-queue/session-start.sh`).
 
 The scheduler runs in the NUC's agent container, plan-only every 10 minutes; `cdwr agent status --host <host>` says what it would take next. The Mac is attended-only: `cdwr agent install` there sets up the attended side (the script copies, the Linear app's Keychain items, `agent_linear`), `--scheduler` adds a launchd job (a plain `install` keeps an existing one current), and `cdwr agent uninstall` removes it (`--worktree-remove` takes the planner checkout too) and keeps the session side. Without the job, bare `status` shows the attended rows and `pause`, `resume` and `run` name the host that has the scheduler; `status`, `notify`, `pause`, `resume` and `run` take `--host <host>` to act on the container's queue over ssh (`run` there wakes its loop). Any other `cdwr` command in the container, such as a hand-off, is `cdwr agent exec --host <host> -- <args>`, which runs it through `secrets.sh` with the vault's keys; a plain `docker exec` has none. Launchd runs an installed copy of
-`tools/cdwr/agent-queue/run.sh` (and its `watch.jq`, `waits.sh`, `implement.sh` and `github-app.sh`), so a merged change to its guardrails
+`tools/cdwr/agent-queue/run.sh` (and its `watch.jq`, `waits.sh`, `implement.sh`, `linear-tools.txt` and `github-app.sh`), so a merged change to its guardrails
 waits for the next `install`. Before planning, the same job watches the PRs of `agent:working`,
 `agent:needs-input` and `agent:review` tickets and sends a notice when a review PR leaves the merge
 queue, fails or conflicts with main, or any of them merges with hand-offs left. A ticket merged outside review is
@@ -56,7 +56,10 @@ per-run budget (`AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, $15) and a daily cap
 answered or reviewed work only, and never starts a new ticket. It reaches Linear on both hosts
 through Linear's own MCP server, signed with a token of the queue's own Linear app, so its writes
 are the app user's and not Håkan's (`AGENT_QUEUE_LINEAR_MCP`, the credentials and the token cache
-are in `tools/cdwr/README.md`); a run without Linear tools doesn't start. The queue tells its own
+are in `tools/cdwr/README.md`); a run without Linear tools doesn't start. In the container the
+runs reach it through a local proxy (`apps/agent-host/linear-mcp-proxy.mjs`) that signs the requests
+and answers a call to a tool outside `linear-tools.txt` itself, the one Linear tool list; the session
+gets no token. A queue file, `linear-tools.txt` is installed beside the scripts. The queue tells its own
 comments from Håkan's by that author (`is_agent` in `watch.jq`), and never starts a ticket whose
 `agent:ready` the app added (`refused` in the queue view). On GitHub it acts as the
 `codeware-agent` app (`github-app.sh`, credentials in `tools/cdwr/.env`), never as Håkan, so
