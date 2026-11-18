@@ -5,7 +5,30 @@ export type AxeFinding = {
   help: string;
   /** How many elements break the rule */
   nodes: number;
+  /** The CSS selectors of the first few elements that break it */
+  targets: Array<string>;
 };
+
+/** How many selectors a finding keeps */
+export const MAX_AXE_TARGETS = 5;
+
+/**
+ * The selectors of the first elements an axe rule found, as one string each.
+ *
+ * axe gives a path per element: one selector, or several when the element sits
+ * in a frame or a shadow root. Those are joined with ` >>> `.
+ *
+ * @param nodes - The rule's elements, as axe reports them
+ */
+export function axeTargets(
+  nodes: ReadonlyArray<{
+    target: ReadonlyArray<string | ReadonlyArray<string>>;
+  }>
+): Array<string> {
+  return nodes
+    .slice(0, MAX_AXE_TARGETS)
+    .map(({ target }) => target.flat().join(' >>> '));
+}
 
 /** A link and what it answered; null when it never answered */
 export type LinkResult = { href: string; status: number | null };
@@ -212,9 +235,27 @@ export function auditFindings(report: AuditReport): Array<string> {
   return findings;
 }
 
+/**
+ * Where each axe violation is: one line per rule and page, with the selectors
+ * of its first elements. Empty when axe found nothing.
+ */
+export function axeTargetLines(report: AuditReport): Array<string> {
+  return report.pages.flatMap((page) =>
+    page.axe.map(
+      ({ id, nodes, targets }) =>
+        `- ${page.route} ${id} (${nodes}): ${
+          targets.length
+            ? targets.map((target) => `\`${target}\``).join(', ')
+            : 'no selector'
+        }`
+    )
+  );
+}
+
 /** The report as a short markdown block to paste into a ticket */
 export function auditMarkdown(report: AuditReport): string {
   const findings = auditFindings(report);
+  const targets = axeTargetLines(report);
 
   return [
     `### Audit of ${report.url} at ${report.at}`,
@@ -241,6 +282,7 @@ export function auditMarkdown(report: AuditReport): string {
     '',
     ...(findings.length
       ? findings.map((finding) => `- ${finding}`)
-      : ['No findings'])
+      : ['No findings']),
+    ...(targets.length ? ['', '#### Axe elements', '', ...targets] : [])
   ].join('\n');
 }
