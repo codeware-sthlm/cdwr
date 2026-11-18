@@ -964,13 +964,13 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignupEmail.promotedBody':
       'En plats har blivit ledig på {{tour}} och den är din. Din anmälan är nu bekräftad.',
     'tourSignupEmail.questions': 'Svara på det här mejlet om något är oklart.',
-    'tourSignupEmail.firstInQueueLabel': 'Först i kön',
+    'tourSignupEmail.firstInQueueLabel': 'Först på väntelistan',
     'tourSignupEmail.openTour': 'Öppna resan',
     'tourSignupEmail.seatsFreeLabel': 'Lediga platser',
     'tourSignupEmail.seatsFreedAction':
-      'Nya anmälningar hamnar i kön istället för att ta platserna, så resan fylls igen först när du flyttar upp någon.',
+      'Nya anmälningar hamnar på väntelistan istället för att ta platserna, så resan fylls igen först när du flyttar upp någon.',
     'tourSignupEmail.seatsFreedBody':
-      '{{count}} platser är lediga på {{tour}}. {{name}} står först i kön, för {{people}} personer.',
+      '{{count}} platser är lediga på {{tour}}. {{name}} står först på väntelistan, för {{people}} personer.',
     'tourSignupEmail.subjectSeatsFreed': 'Lediga platser på {{tour}}',
     'tourSignupEmail.statusLabel': 'Status',
     'tourSignupEmail.statusBooked': 'Bekräftad',
@@ -978,11 +978,11 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignupEmail.subjectBooked': 'Din plats på {{tour}} är bekräftad',
     'tourSignupEmail.subjectNotification': 'Ny anmälan till {{tour}}',
     'tourSignupEmail.subjectPromoted': 'En plats har blivit ledig på {{tour}}',
-    'tourSignupEmail.subjectWaiting': 'Du står i kön till {{tour}}',
+    'tourSignupEmail.subjectWaiting': 'Du står på väntelistan till {{tour}}',
     'tourSignupEmail.termsLink': 'Villkor',
     'tourSignupEmail.tourLabel': 'Resa',
     'tourSignupEmail.waitingBody':
-      '{{tour}} är fullbokad, så du står i kön. Vi hör av oss så snart en plats blir ledig — inget debiteras och du kan ändra dig när du vill.',
+      '{{tour}} är fullbokad, så du står på väntelistan. Vi hör av oss så snart en plats blir ledig — inget debiteras och du kan ändra dig när du vill.',
     'forgotPasswordEmail.body':
       'Någon har bett om att återställa lösenordet för ditt konto hos {{brand}}.',
     'forgotPasswordEmail.button': 'Välj ett nytt lösenord',
@@ -1065,10 +1065,10 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignup.queueOnlyCountOne':
       '1 plats kvar — erbjuds först till väntelistan',
     'tourSignup.queueOnlyLede':
-      'Andra väntar redan på plats på den här resan, så anmälningar ställs i kön i tur och ordning. Vi hör av oss när det är din tur.',
+      'Andra väntar redan på plats på den här resan, så nya anmälningar hamnar på väntelistan i tur och ordning. Vi hör av oss när det är din tur.',
     'tourSignup.fullLede':
-      'Ställ dig i kön så hör vi av oss om en plats blir ledig.',
-    'tourSignup.joinWaitingList': 'Ställ mig i kön',
+      'Ställ dig på väntelistan så hör vi av oss om en plats blir ledig.',
+    'tourSignup.joinWaitingList': 'Ställ mig på väntelistan',
     'tourSignup.name': 'Namn',
     'tourSignup.people': 'Antal resenärer',
     'tourSignup.peopleHelp': 'Inklusive dig själv.',
@@ -1083,7 +1083,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignup.successBooked':
       'Tack! Din anmälan är registrerad och vi har skickat en bekräftelse.',
     'tourSignup.successWaiting':
-      'Tack! Du står i kön och vi hör av oss om en plats blir ledig.',
+      'Tack! Du står på väntelistan och vi hör av oss om en plats blir ledig.',
     'tourSignup.title': 'Anmäl dig',
     'tourSignup.tooManyPeople': 'Ange ett antal mellan 1 och {{max}}',
     'tours.registerInterest': 'Intresseanmälan',

@@ -40,6 +40,6 @@ describe('renderSeatsFreedMail', () => {
     const mail = renderSeatsFreedMail({ ...base, locale: 'sv' });
 
     expect(mail.subject).toContain('Lediga platser');
-    expect(mail.text).toContain('står först i kön');
+    expect(mail.text).toContain('står först på väntelistan');
   });
 });
