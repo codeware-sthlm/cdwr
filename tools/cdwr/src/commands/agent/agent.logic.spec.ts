@@ -18,6 +18,7 @@ import {
   domainTarget,
   drift,
   envCopiesFor,
+  envWithheldFor,
   filesDrift,
   formatBlocked,
   formatGaps,
@@ -179,6 +180,14 @@ describe('envCopiesFor', () => {
     expect(envCopiesFor({ AGENT_QUEUE_SESSION_KIND: 'implement' })).toEqual([
       'apps/cms/.env.local'
     ]);
+  });
+
+  // A worktree reused from an attended session loses its copy
+  it('withholds the cdwr env from an implement session only', () => {
+    expect(envWithheldFor({ AGENT_QUEUE_SESSION_KIND: 'implement' })).toEqual([
+      'tools/cdwr/.env'
+    ]);
+    expect(envWithheldFor({})).toEqual([]);
   });
 });
 
