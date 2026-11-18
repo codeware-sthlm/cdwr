@@ -301,14 +301,14 @@ export const skewedStatus = (
 ): string =>
   `The status report from ${host} differs from this cdwr's (${paths.slice(0, 3).join(', ')}${paths.length > 3 ? ', ...' : ''}); likely the Mac and the NUC run different versions, so \`cdwr agent attend\` and \`cdwr agent deploy --host ${host}\`. Answer starts: ${excerpt(line)}`;
 
-/** The command that clears a stale lock: plain locally, through ssh when the report came from `host` */
+/** The command that clears a stale lock, which holds its owner's pid: plain locally, through ssh when the report came from `host` */
 export const rmLockCommand = (
   lock: string,
   host: string | undefined
 ): string =>
   host
-    ? `ssh ${host} docker exec ${REMOTE_CONTAINER} rmdir ${lock}`
-    : `rmdir ${lock}`;
+    ? `ssh ${host} docker exec ${REMOTE_CONTAINER} rm -rf ${lock}`
+    : `rm -rf ${lock}`;
 
 /** What to do about scripts that differ from the repo's, per kind of host */
 export const staleScriptsHint = (host: 'launchd' | 'container'): string =>

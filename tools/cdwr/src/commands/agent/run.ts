@@ -82,7 +82,7 @@ export default defineCommand({
       case 'busy':
         return none(
           lockState(lockAge(queue.lock), job.running) === 'stale'
-            ? `A lock was left by a run that did not finish; \`rmdir ${queue.lock}\``
+            ? `A lock was left by a run that did not finish; \`rm -rf ${queue.lock}\``
             : 'A run or a check is in progress; try again shortly'
         );
       case 'skip':

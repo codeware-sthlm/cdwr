@@ -166,7 +166,7 @@ describe('agent uninstall', () => {
     const { exit, text } = await uninstall(['--yes']);
     expect(exit).toBe(EXIT.failed);
     expect(text).toContain('stale queue lock');
-    expect(text).toContain(`rmdir ${queue.lock}`);
+    expect(text).toContain(`rm -rf ${queue.lock}`);
     expect(run).not.toHaveBeenCalled();
   });
 

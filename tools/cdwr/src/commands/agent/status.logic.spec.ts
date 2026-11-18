@@ -184,8 +184,8 @@ describe('skewedStatus', () => {
 
 describe('rmLockCommand', () => {
   it.each([
-    [undefined, 'rmdir /l'],
-    ['nuc', 'ssh nuc docker exec cdwr-agent rmdir /l']
+    [undefined, 'rm -rf /l'],
+    ['nuc', 'ssh nuc docker exec cdwr-agent rm -rf /l']
   ])('with host %s', (host, text) => {
     expect(rmLockCommand('/l', host)).toBe(text);
   });
