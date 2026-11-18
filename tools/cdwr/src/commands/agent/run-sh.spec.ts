@@ -1012,6 +1012,31 @@ describe('run.sh queue lock', () => {
     expect(notes()).toContain(`warn: cleared lock; its run ${gone} is gone`);
   });
 
+  it.skipIf(!hasZsh)(
+    'leaves a stale lock alone while another run clears it',
+    () => {
+      lock(dead());
+      mkdirSync(join(root, 'lock.takeover'));
+      expect(sh('take_run_lock 4242')).not.toBe(0);
+      expect(pidFile()).not.toBe('4242');
+      expect(notes()).toBe('');
+    }
+  );
+
+  it.skipIf(!hasZsh)(
+    'clears a takeover left by a killed run after a minute',
+    () => {
+      lock(dead());
+      const takeover = join(root, 'lock.takeover');
+      mkdirSync(takeover);
+      const old = new Date(Date.now() - 2 * 60 * 1000);
+      utimesSync(takeover, old, old);
+      expect(sh('take_run_lock 4242')).toBe(0);
+      expect(pidFile()).toBe('4242');
+      expect(existsSync(takeover)).toBe(false);
+    }
+  );
+
   it.skipIf(!hasZsh)('keeps a lock whose pid answers', () => {
     lock(String(process.pid));
     expect(sh('take_run_lock 4242')).not.toBe(0);
