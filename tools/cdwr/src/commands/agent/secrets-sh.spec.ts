@@ -1,6 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -191,7 +193,37 @@ describe.skipIf(!hasTools)('secrets.sh', () => {
     const result = run({ AGENT_QUEUE_LINEAR_CLIENT_ID: 'cid' });
     expect(result.status).toBe(0);
     expect(seenBy(result.stdout).clientId).toBeNull();
-    expect(readdirSync(runDir())).toEqual([]);
+    expect(existsSync(join(runDir(), 'linear-app.env'))).toBe(false);
+  });
+
+  // A second run (cdwr agent exec) after a key left the vault
+  it('removes a file whose secret is gone, and an app file missing half', () => {
+    mkdirSync(runDir());
+    for (const name of ['app.pem', 'linear.key', 'linear-app.env']) {
+      writeFileSync(join(runDir(), name), 'old\n');
+    }
+    const result = run(
+      {
+        ...identity,
+        AGENT_QUEUE_LINEAR_CLIENT_ID: 'cid',
+        AGENT_QUEUE_LINEAR_CLIENT_SECRET: ''
+      },
+      JSON.stringify([{ key: 'AGENT_GITHUB_APP_KEY', value: PEM }])
+    );
+    expect(result.status).toBe(0);
+    expect(readdirSync(runDir())).toEqual(['app.pem']);
+    expect(secretFile('app.pem').text).toBe(`${PEM}\n`);
+  });
+
+  it('creates the parent of a Linear file the image points elsewhere', () => {
+    const result = run({
+      ...identity,
+      AGENT_QUEUE_LINEAR_KEY_FILE: join(dir, 'keys', 'linear.key')
+    });
+    expect(result.status).toBe(0);
+    expect(readFileSync(join(dir, 'keys', 'linear.key'), 'utf8')).toBe(
+      'vault-linear\n'
+    );
   });
 
   it('says so when the folder is empty', () => {
