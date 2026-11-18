@@ -146,6 +146,23 @@ describe('run.sh', () => {
     );
   });
 
+  // COD-657: the Mac plans and notifies; implement sessions start in the container only
+  it('turns a launch into a notice off the container, before anything acts on it', () => {
+    const guard =
+      'if [[ "${AGENT_QUEUE_HOST:-}" != container && "$(jq -r \'.action\' <<<"$decision")" == launch ]]; then\n' +
+      '    decision="$(jq -c \'.action = "notify" | .reason = "implement runs only in the container"\' <<<"$decision")"\n' +
+      '  fi\n';
+    expect(SCRIPT).toContain(guard);
+    const at = SCRIPT.indexOf(guard);
+    expect(SCRIPT.indexOf('\'include "watch"; launch($g)\'')).toBeLessThan(at);
+    expect(at).toBeLessThan(SCRIPT.indexOf('print -r -- "launch: '));
+    expect(at).toBeLessThan(
+      SCRIPT.indexOf(
+        'local action; action="$(jq -r \'.action\' <<<"$decision")"'
+      )
+    );
+  });
+
   it('keeps the start notice as the fallback when a guard refuses', () => {
     expect(SCRIPT).toContain('Not launched: ');
     expect(SCRIPT).toContain('Start /work-queue.');

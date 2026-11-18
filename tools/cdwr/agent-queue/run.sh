@@ -1525,6 +1525,11 @@ attended() {
   decision="$(watch -c --argjson g "$guards" 'include "watch"; launch($g)' <<<"$verdict" 2>/dev/null)" ||
     { local why="watch.jq failed$(watch_err)"; note "warn: launch: $why"
       decision="$(jq -c --arg r "$why" '{action: "skip", reason: $r, key: null, pick: (if .verdict == "run" and .reason != "ready" then {ticket, reason, detail} else null end)}' <<<"$verdict")"; }
+  # Implement sessions run in the container only (COD-657): elsewhere a launch is a notice, so the
+  # Mac sends it and never counts a miss for work it may not run
+  if [[ "${AGENT_QUEUE_HOST:-}" != container && "$(jq -r '.action' <<<"$decision")" == launch ]]; then
+    decision="$(jq -c '.action = "notify" | .reason = "implement runs only in the container"' <<<"$decision")"
+  fi
   if $check; then
     print -r -- "attended: $attended_line"
     print -r -- "launch: $(jq -r '.action + (if .reason then " (" + .reason + ")" else "" end)' <<<"$decision")"
