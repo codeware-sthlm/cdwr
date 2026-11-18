@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import { defineCommand } from '../../cli/command';
 import { worktreeOf } from '../../services/agent-queue';
@@ -8,11 +8,22 @@ import { run } from '../../services/shell';
 import {
   REPO,
   isTicketWorktree,
+  orphanDaemons,
   parsePrHead,
   parsePrState,
   parseWorktreeList,
   pruneVerdict
 } from './worktree.logic';
+
+/** Nx processes of ticket checkouts that no longer exist; none when `ps` fails */
+async function findOrphans(root: string, existing: string[]) {
+  try {
+    const { stdout } = await run('ps', ['-eo', 'pid=,args=']);
+    return orphanDaemons(stdout, existing, dirname(root));
+  } catch {
+    return [];
+  }
+}
 
 export default defineCommand({
   summary: 'Remove the checkouts of tickets whose pull request is done',
@@ -27,7 +38,8 @@ export default defineCommand({
       cwd: ctx.root
     });
     const skip = [resolve(ctx.root), resolve(worktreeOf(ctx))];
-    const found = parseWorktreeList(stdout).filter(
+    const entries = parseWorktreeList(stdout);
+    const found = entries.filter(
       (entry) =>
         isTicketWorktree(entry.path) && !skip.includes(resolve(entry.path))
     );
@@ -97,26 +109,45 @@ export default defineCommand({
     );
     const kept = verdicts.length - removals.length;
 
-    if (verdicts.length === 0) {
-      return {
-        steps,
-        nothing: 'No ticket worktrees to look at',
-        data: { root: ctx.root, removals, kept }
-      };
+    // Daemons whose worktree is gone, or goes with the removals below
+    const removed = removals.map(({ path }) => resolve(path));
+    const orphans = await findOrphans(
+      ctx.root,
+      entries
+        .map(({ path }) => path)
+        .filter((p) => !removed.includes(resolve(p)))
+    );
+    if (removals.length > 0 || orphans.length > 0) {
+      steps.push({
+        label:
+          'Stop the Nx daemon of each removed worktree, and orphan daemons whose worktree is gone',
+        detail:
+          orphans.length === 0
+            ? 'no orphan daemons found now'
+            : orphans.map(({ pid, path }) => `${pid} (${path})`).join(', ')
+      });
     }
-    if (removals.length === 0) {
-      return {
-        steps,
-        nothing: 'Nothing to remove',
-        data: { root: ctx.root, removals, kept }
-      };
+    const data = { root: ctx.root, removals, kept, orphans };
+
+    if (verdicts.length === 0 && orphans.length === 0) {
+      return { steps, nothing: 'No ticket worktrees to look at', data };
     }
-    return { steps, data: { root: ctx.root, removals, kept } };
+    if (removals.length === 0 && orphans.length === 0) {
+      return { steps, nothing: 'Nothing to remove', data };
+    }
+    return { steps, data };
   },
 
   async apply(ctx, { root, removals, kept }) {
     for (const { path, branch, deleteBranch } of removals) {
       await ctx.ui.task(`Removing ${path}`, async () => {
+        try {
+          await run('pnpm', ['-C', path, 'exec', 'nx', 'daemon', '--stop']);
+        } catch (error) {
+          ctx.ui.warn(
+            `Could not stop the Nx daemon in ${path}: ${error instanceof Error ? error.message.trim() : String(error)}`
+          );
+        }
         await run('git', ['worktree', 'remove', path], { cwd: root });
         if (deleteBranch && branch) {
           // The tip is the PR's head, which GitHub keeps, so -D loses nothing
@@ -124,9 +155,29 @@ export default defineCommand({
         }
       });
     }
+
+    // Looked up again: the removals above changed what exists
+    const { stdout } = await run('git', ['worktree', 'list', '--porcelain'], {
+      cwd: root
+    });
+    const orphans = await findOrphans(
+      root,
+      parseWorktreeList(stdout).map(({ path }) => path)
+    );
+    const stopped: typeof orphans = [];
+    for (const orphan of orphans) {
+      try {
+        process.kill(orphan.pid, 'SIGTERM');
+        stopped.push(orphan);
+      } catch (error) {
+        ctx.ui.warn(
+          `Could not stop process ${orphan.pid} of ${orphan.path}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
     return {
-      summary: `Removed ${removals.length} worktree${removals.length === 1 ? '' : 's'}, kept ${kept}`,
-      json: { removed: removals, kept }
+      summary: `Removed ${removals.length} worktree${removals.length === 1 ? '' : 's'}, kept ${kept}, stopped ${stopped.length} orphan Nx process${stopped.length === 1 ? '' : 'es'}`,
+      json: { removed: removals, kept, stopped }
     };
   }
 });
