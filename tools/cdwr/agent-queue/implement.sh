@@ -57,6 +57,8 @@ telemetry() {
 # run.sh clears it only when its owner is gone, and only the owner removes it.
 LOCK="$HOME_DIR/implement.lock"
 if ! mkdir "$LOCK" 2>/dev/null; then note "busy: a session is running"; exit 0; fi
+# The session's wait.sh writes its `waiting` marker here, under the other user
+chgrp queue "$LOCK" 2>/dev/null && chmod 2770 "$LOCK" || true
 print -r -- "$$" > "$LOCK/pid"
 # The launch key beside the pid, for a deploy that names what it would interrupt
 [[ -n "$KEY" ]] && print -r -- "$KEY" > "$LOCK/key"
@@ -69,8 +71,6 @@ source "${0:A:h}/github-app.sh"
 source "${0:A:h}/telemetry.sh"
 source "${0:A:h}/lib.sh"
 telemetry_env "$REPO/tools/cdwr/.env"
-# Where session-hook.sh finds the key: the path goes to the session, never the key
-[[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
 errf="$LOGS/github-app.err"
 if ! { app_env "$REPO/tools/cdwr/.env" && app_session; } 2> "$errf"; then
   reason="$(tr '\n' ' ' < "$errf" | sed 's/ *$//')"
@@ -170,12 +170,31 @@ claude_pid=
 interrupted=false
 # A stop (the container shutting down) reaches claude; the ledger and the lock are settled below.
 # The flag tells the outcome below that the session was cut short, not that it failed.
-trap 'interrupted=true; [[ -n "$claude_pid" ]] && kill -TERM $claude_pid 2>/dev/null' TERM INT
+# The session's claude is sudo's child under another user, which this user can't signal, and
+# sudo itself runs as root: the stop goes through its own crossing. Without a child (the specs
+# launch claude itself) the pid is claude's own.
+stop_session() {
+  local child
+  [[ -n "$claude_pid" ]] || return 0
+  child="$(pgrep -P "$claude_pid" 2>/dev/null | head -n 1)"
+  if [[ "$child" == <-> ]]; then
+    ${=AGENT_QUEUE_SESSION_STOP:-sudo -n -u session /opt/agent-host/session-stop.sh} "$child" 2>/dev/null || true
+  else
+    kill -TERM "$claude_pid" 2>/dev/null || true
+  fi
+}
+trap 'interrupted=true; stop_session' TERM INT
 # The session hook tells the sessions table what kind this is
 export AGENT_QUEUE_SESSION_KIND=implement
 prompt="/work-queue implement-only once"
 [[ -n "$KEY" ]] && prompt+=" key=\"$KEY\""
-"${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "$prompt" \
+# The session runs as its own user: sudo keeps only what the sudoers file lists, and the launcher
+# sets the rest (the session's home, the queue home it reads, its clone, its credential helper).
+# The container's tmpfs keys, this checkout's .env and the queue home's writes stay the queue
+# user's. AGENT_QUEUE_SESSION_LAUNCH replaces the launcher in the specs, which have no sudo.
+typeset -a launch
+launch=(${=AGENT_QUEUE_SESSION_LAUNCH:-sudo -n -u session /opt/agent-host/session-launch.sh})
+"${claude_env[@]}" ENABLE_TOOL_SEARCH=false "${launch[@]}" -p "$prompt" \
   --model opus "${LINEAR_MCP_ARGS[@]}" \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
   --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
@@ -204,7 +223,7 @@ prompt="/work-queue implement-only once"
 claude_pid=$!
 wait $claude_pid || rc=$?
 # wait returns early on a trapped signal; let claude finish
-kill -0 $claude_pid 2>/dev/null && { wait $claude_pid || rc=$?; }
+ps -p $claude_pid >/dev/null 2>&1 && { wait $claude_pid || rc=$?; }
 claude_pid=
 
 jq -r '.result // empty, (.errors // [])[]' "$result" >> "$log" 2>/dev/null || cat "$result" >> "$log"

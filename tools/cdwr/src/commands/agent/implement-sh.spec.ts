@@ -355,6 +355,8 @@ describe('implement.sh', () => {
           AGENT_QUEUE_LINEAR_TOOLS_CMD: 'true',
           // Implement runs only in the container
           AGENT_QUEUE_HOST: 'container',
+          // The session's launcher is sudo into the second user; the specs have neither
+          AGENT_QUEUE_SESSION_LAUNCH: 'claude',
           ...extraEnv,
           PATH: `${bin}:${process.env['PATH'] ?? ''}`,
           // No Slack hook under this home
@@ -494,6 +496,7 @@ describe('implement.sh', () => {
             AGENT_QUEUE_LINEAR_TOOLS_CMD: 'true',
             // Implement runs only in the container
             AGENT_QUEUE_HOST: 'container',
+            AGENT_QUEUE_SESSION_LAUNCH: 'claude',
             PATH: `${bin}:${process.env['PATH'] ?? ''}`,
             HOME: join(dir, 'home'),
             AGENT_QUEUE_HOME: queueHome,
@@ -779,7 +782,22 @@ describe('implement.sh', () => {
         expect(body['finished_at']).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
       });
 
-      it('keeps the key out of the session, handing it only the path of the env file', () => {
+      it('launches the session as the second user through the launcher, by default', () => {
+        expect(code).toContain(
+          'launch=(${=AGENT_QUEUE_SESSION_LAUNCH:-sudo -n -u session /opt/agent-host/session-launch.sh})'
+        );
+        expect(code).toContain('"${launch[@]}" -p "$prompt"');
+        // The stop crosses into the session user too, and liveness is read with ps
+        expect(code).toContain(
+          '${=AGENT_QUEUE_SESSION_STOP:-sudo -n -u session /opt/agent-host/session-stop.sh} "$child"'
+        );
+        expect(code).not.toMatch(/kill -0 \$claude_pid/);
+        expect(code).not.toMatch(
+          /^\s*"\$\{claude_env\[@\]\}"[^\n]* claude -p/m
+        );
+      });
+
+      it('keeps the key and the env file out of the session', () => {
         fakeCurl();
         const envLog = join(dir, 'claude-env');
         writeFileSync(
@@ -806,7 +824,8 @@ describe('implement.sh', () => {
         expect(seen).not.toContain('AGENT_SUPABASE_SERVICE_KEY');
         expect(seen).not.toContain('filekey');
         expect(seen).not.toContain('envkey');
-        expect(seen).toContain(`AGENT_QUEUE_ENV_FILE=${envFile}`);
+        // The session can't read that file as its own user, and the entrypoint relays its rows
+        expect(seen).not.toContain('AGENT_QUEUE_ENV_FILE');
       });
 
       it('sends nothing without the env vars', () => {
