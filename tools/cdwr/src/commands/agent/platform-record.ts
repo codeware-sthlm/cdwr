@@ -74,10 +74,14 @@ export default defineCommand({
     const database = await readDatabase(ctx.env);
     const now = new Date();
     const split = splitDatabase(database);
+    // A role that sees only its own sessions would record a peak of 1 for the
+    // day; the sessions opened are counted from pg_stat_database all the same
     const dbPeak = split.db.ok
       ? mergePeak(readDbPeak(ctx.env), {
           at: now.toISOString(),
-          connections: split.db.value.connections,
+          connections: split.db.value.seesAllSessions
+            ? split.db.value.connections
+            : null,
           sessionsOpened: split.db.value.sessionsOpened
         })
       : null;

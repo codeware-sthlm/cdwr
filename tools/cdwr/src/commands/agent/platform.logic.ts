@@ -65,6 +65,7 @@ const SqlSchema = z.object({
     sizeBytes: z.number().nullable(),
     sessions: z.number(),
     poolerSessions: z.number(),
+    seesAllSessions: z.boolean(),
     connections: z.number(),
     maxConnections: z.number(),
     reservedConnections: z.number(),
@@ -532,7 +533,8 @@ export type BackupRead = {
 export const DbPeakSchema = z.object({
   /** The UTC day the peak belongs to, `YYYY-MM-DD` */
   day: z.string(),
-  connections: z.number(),
+  /** Null while no tick of the day could count every session */
+  connections: z.number().nullable(),
   at: z.string(),
   /** `sessionsOpened` at the last tick, for the next tick's delta */
   sessionsOpened: z.number()
@@ -548,13 +550,15 @@ export type DbPeak = z.infer<typeof DbPeakSchema>;
  */
 export const mergePeak = (
   previous: DbPeak | null,
-  sample: { at: string; connections: number; sessionsOpened: number }
+  sample: { at: string; connections: number | null; sessionsOpened: number }
 ): { peak: DbPeak; opened: number | null } => {
   const day = sample.at.slice(0, 10);
+  // A sample that could not count every session never lowers or sets the peak
   const keep =
     previous !== null &&
     previous.day === day &&
-    previous.connections >= sample.connections;
+    previous.connections !== null &&
+    (sample.connections === null || previous.connections >= sample.connections);
   return {
     peak: {
       day,
@@ -719,6 +723,13 @@ export const buildRows = (
   for (const key of keys) errorsOf(key);
   if (!tenants.ok) note(errorsOf(SHARED_KEY), 'tenants', tenants.reason);
   if (!db.ok) note(errorsOf(SHARED_KEY), 'db', db.reason);
+  else if (!db.value.seesAllSessions) {
+    note(
+      errorsOf(SHARED_KEY),
+      'db',
+      'platform role lacks pg_read_all_stats: connections counts only its own sessions'
+    );
+  }
   if (!fly.ok) for (const key of keys) note(errorsOf(key), 'fly', fly.reason);
   if (!switches.ok) {
     for (const key of keys) note(errorsOf(key), 'switches', switches.reason);
@@ -880,19 +891,21 @@ export const buildRows = (
           sizeBytes: db.value.sizeBytes,
           sessions: db.value.sessions,
           poolerSessions: db.value.poolerSessions,
-          connections: db.value.connections,
+          // Unknown rather than the role's own session, which would read as fine
+          connections: db.value.seesAllSessions ? db.value.connections : null,
           // What a role without superuser can use
           limit: db.value.maxConnections - db.value.reservedConnections,
-          peak: dbPeak
-            ? {
-                connections: dbPeak.peak.connections,
-                at: plainText(dbPeak.peak.at, 40)
-              }
-            : null,
+          peak:
+            dbPeak && dbPeak.peak.connections !== null
+              ? {
+                  connections: dbPeak.peak.connections,
+                  at: plainText(dbPeak.peak.at, 40)
+                }
+              : null,
           opened: dbPeak?.opened ?? null,
-          byApplication: Object.fromEntries(
-            Object.entries(db.value.byApplication)
-          )
+          byApplication: db.value.seesAllSessions
+            ? Object.fromEntries(Object.entries(db.value.byApplication))
+            : {}
         }
       : {},
     sentry: sentry.ok ? sentrySignal(sentry.value, SHARED_KEY) : {},

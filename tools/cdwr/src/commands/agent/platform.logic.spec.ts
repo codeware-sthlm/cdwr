@@ -128,6 +128,7 @@ const db = {
   sizeBytes: 1000,
   sessions: 3,
   poolerSessions: 2,
+  seesAllSessions: true,
   connections: 12,
   maxConnections: 60,
   reservedConnections: 3,
@@ -713,6 +714,20 @@ describe('buildRows', () => {
     const { rows } = buildRows(readings({ db: failed('no stats') }));
     expect(row(rows, SHARED_KEY).errors).toEqual({ db: 'no stats' });
     expect(row(rows, SHARED_KEY).db).toEqual({});
+  });
+
+  it('says so when the role sees only its own sessions, and keeps the figures', () => {
+    const { rows } = buildRows(
+      readings({ db: ok({ ...db, seesAllSessions: false }) })
+    );
+    expect(row(rows, SHARED_KEY).errors).toEqual({
+      db: 'platform role lacks pg_read_all_stats: connections counts only its own sessions'
+    });
+    expect(row(rows, SHARED_KEY).db).toMatchObject({
+      sessions: 3,
+      connections: null,
+      byApplication: {}
+    });
   });
 });
 
@@ -1395,6 +1410,34 @@ describe('mergePeak', () => {
         sessionsOpened: 500
       },
       opened: null
+    });
+  });
+
+  it('keeps the peak of the day when the sample could not count, and still counts the sessions opened', () => {
+    expect(
+      mergePeak(previous, {
+        at: '2026-11-18T11:00:00.000Z',
+        connections: null,
+        sessionsOpened: 1040
+      })
+    ).toEqual({ peak: { ...previous, sessionsOpened: 1040 }, opened: 140 });
+  });
+
+  it('has no peak on a day whose ticks could not count', () => {
+    expect(
+      mergePeak(previous, {
+        at: '2026-11-19T00:10:00.000Z',
+        connections: null,
+        sessionsOpened: 1040
+      })
+    ).toEqual({
+      peak: {
+        day: '2026-11-19',
+        connections: null,
+        at: '2026-11-19T00:10:00.000Z',
+        sessionsOpened: 1040
+      },
+      opened: 140
     });
   });
 
