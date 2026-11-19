@@ -62,6 +62,7 @@ const lastPeak = {
   day: '2000-01-01',
   connections: 55,
   at: '2000-01-01T10:00:00.000Z',
+  counted: true,
   sessionsOpened: 900
 };
 

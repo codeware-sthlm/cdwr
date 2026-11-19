@@ -198,6 +198,7 @@ const readings = (over: Partial<PlatformReadings> = {}): PlatformReadings => ({
       day: '2026-11-18',
       connections: 41,
       at: '2026-11-18T10:50:00.000Z',
+      counted: true,
       sessionsOpened: 900
     },
     opened: 140
@@ -1391,6 +1392,7 @@ describe('mergePeak', () => {
   const previous = {
     day: '2026-11-18',
     connections: 41,
+    counted: true,
     at: '2026-11-18T10:50:00.000Z',
     sessionsOpened: 900
   };
@@ -1406,6 +1408,7 @@ describe('mergePeak', () => {
       peak: {
         day: '2026-11-18',
         connections: 12,
+        counted: true,
         at: '2026-11-18T09:00:00.000Z',
         sessionsOpened: 500
       },
@@ -1434,11 +1437,25 @@ describe('mergePeak', () => {
       peak: {
         day: '2026-11-19',
         connections: null,
+        counted: false,
         at: '2026-11-19T00:10:00.000Z',
         sessionsOpened: 1040
       },
       opened: 140
     });
+  });
+
+  it('drops a peak the old code wrote on the first sample that could not count', () => {
+    expect(
+      mergePeak(
+        { ...previous, connections: 1, counted: false },
+        {
+          at: '2026-11-18T11:00:00.000Z',
+          connections: null,
+          sessionsOpened: 1040
+        }
+      ).peak
+    ).toMatchObject({ connections: null, counted: false });
   });
 
   it('keeps a higher peak of the same day and counts the sessions opened', () => {
@@ -1464,6 +1481,7 @@ describe('mergePeak', () => {
     ).toEqual({
       day: '2026-11-18',
       connections: 50,
+      counted: true,
       at: '2026-11-18T11:00:00.000Z',
       sessionsOpened: 950
     });
@@ -1480,6 +1498,7 @@ describe('mergePeak', () => {
       peak: {
         day: '2026-11-19',
         connections: 8,
+        counted: true,
         at: '2026-11-19T00:05:00.000Z',
         sessionsOpened: 1000
       },

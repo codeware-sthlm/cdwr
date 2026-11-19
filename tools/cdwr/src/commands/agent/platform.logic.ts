@@ -536,6 +536,8 @@ export const DbPeakSchema = z.object({
   /** Null while no tick of the day could count every session */
   connections: z.number().nullable(),
   at: z.string(),
+  /** Set by a tick that counted every session; a file older than this flag reads as not */
+  counted: z.boolean().default(false),
   /** `sessionsOpened` at the last tick, for the next tick's delta */
   sessionsOpened: z.number()
 });
@@ -553,17 +555,21 @@ export const mergePeak = (
   sample: { at: string; connections: number | null; sessionsOpened: number }
 ): { peak: DbPeak; opened: number | null } => {
   const day = sample.at.slice(0, 10);
-  // A sample that could not count every session never lowers or sets the peak
+  // A sample that could not count every session never lowers or sets the
+  // peak, and keeps only a peak that was counted: one the old code wrote while
+  // the role saw its own session alone is dropped
   const keep =
     previous !== null &&
     previous.day === day &&
     previous.connections !== null &&
+    previous.counted &&
     (sample.connections === null || previous.connections >= sample.connections);
   return {
     peak: {
       day,
       connections: keep ? previous.connections : sample.connections,
       at: keep ? previous.at : sample.at,
+      counted: keep || sample.connections !== null,
       sessionsOpened: sample.sessionsOpened
     },
     opened:
