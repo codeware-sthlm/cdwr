@@ -18,18 +18,28 @@ try {
   // for a migration to run in, so DIRECT_DATABASE_URL wins when it exists.
   // Both are env-specific and loaded from Infisical at runtime by the app.
   // The release machine has the Infisical credentials as Fly secrets, so the
-  // vault is read unless the direct url is already a native Fly secret.
+  // vault is read unless the direct url is already a native Fly secret. A
+  // native DATABASE_URL never depends on the vault: when the read fails it
+  // is used as it is, with a warning
   let direct = process.env.DIRECT_DATABASE_URL;
   let url = process.env.DATABASE_URL;
   if (!direct && process.env.DEPLOY_ENV) {
-    const secrets = await withInfisical({
-      environment: process.env['DEPLOY_ENV'],
-      filter: { path: '/apps/cms', recurse: true }
-    });
-    const secret = (key: string) =>
-      secrets.find((s) => s.secretKey === key)?.secretValue;
-    direct = secret('DIRECT_DATABASE_URL');
-    url ||= secret('DATABASE_URL');
+    try {
+      const secrets = await withInfisical({
+        environment: process.env['DEPLOY_ENV'],
+        filter: { path: '/apps/cms', recurse: true }
+      });
+      const secret = (key: string) =>
+        secrets.find((s) => s.secretKey === key)?.secretValue;
+      direct = secret('DIRECT_DATABASE_URL');
+      url ||= secret('DATABASE_URL');
+    } catch (error) {
+      if (!url) throw error;
+      console.warn(
+        '[migrate] Infisical not read, using the native DATABASE_URL:',
+        error instanceof Error ? error.message : error
+      );
+    }
   }
   const databaseUrl = direct || url;
   if (!databaseUrl) {
