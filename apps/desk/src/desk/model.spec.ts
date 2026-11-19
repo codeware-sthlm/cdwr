@@ -90,6 +90,7 @@ const runsPayload = (over: Partial<RunsPayload> = {}): RunsPayload => ({
   last: { when: '2026-10-29 11:50', outcome: 'planned COD-1' },
   attended: null,
   suggested: null,
+  review: null,
   job: null,
   qv: view(),
   viewInvalid: false,

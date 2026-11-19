@@ -44,8 +44,12 @@ mkdir -p "$LOGS"
 suggested_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/suggested-line"; }
 # The Devlog line of queue_state: the date and what happened
 devlog_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/devlog-line"; }
-# The review line of queue_state: the date and what happened
-review_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/review-line"; }
+# The review line of queue_state: the UTC time and what happened, so the desk can tell it from an
+# older one. Every review ends here, and only a stored one ("ran, …") keeps the desk's hour.
+review_line() {
+  print -r -- "$(date -u +%FT%H:%MZ) · $*" > "$HOME_DIR/review-line"
+  [[ "$*" == "ran, "* ]] || rm -f "$HOME_DIR/review-ran-at"
+}
 note() { print -r -- "$(date '+%F %T') $*" >> "$LOGS/scheduler.log"; }
 say() { note "$*"; $check && print -r -- "$*"; return 0; }
 # Always action-level: a run that planned something or went wrong needs Håkan. No webhook, no-op.
@@ -496,7 +500,7 @@ apply_commands() {
           ranat="$(cat "$HOME_DIR/review-ran-at" 2>/dev/null)"
           if [[ "$ranat" == <-> ]] && (( now - ranat < 3600 )); then
             zmodload zsh/datetime
-            verdict=refused why="a review ran at $(strftime %H:%M "$ranat")"
+            verdict=refused why="a review ran at $(TZ=UTC strftime '%H:%M UTC' "$ranat")"
           elif [[ -e "$HOME_DIR/review-requested" ]]; then why="already requested"
           else effect=review change="review requested from the desk ($actor)"; fi ;;
         limit)
@@ -1910,7 +1914,8 @@ review_run() {
   result="${log%.log}.json"
   note "review: → $log"
   # Stamped as soon as it starts, so a crash can't run it twice in a day. review-ran-at is the
-  # desk command's one-hour limit. The request is consumed here, a stale result removed.
+  # desk command's one-hour limit, held while it runs; review_line frees it unless the review was
+  # stored. The request is consumed here, a stale result removed.
   date +%F > "$HOME_DIR/review-ran-on"
   date +%s > "$HOME_DIR/review-ran-at"
   rm -f "$HOME_DIR/review-requested" "$out"
@@ -1921,10 +1926,10 @@ review_run() {
     note "warn: review: no queue view"; record warn "" "review: no queue view"
     review_line "failed: no queue view"; return 0
   fi
-  # Dismissals hold for 90 days, as the desk reads them. Each goes to the session with the stored
+  # Dismissals hold for 90 days in UTC, as the desk reads them. Each goes to the session with the stored
   # finding it names (ticket, kind, key, fix), found in the reviews of the same window; the rows go
   # through files, never arguments.
-  since="$(date -v-90d +%F 2>/dev/null || date -d '90 days ago' +%F 2>/dev/null)"
+  since="$(date -u -v-90d +%F 2>/dev/null || date -u -d '90 days ago' +%F 2>/dev/null)"
   supabase_select review_dismissals "at=gte.$since&order=at.desc" > "$HOME_DIR/review-dismissals.tmp" ||
     print -r -- '[]' > "$HOME_DIR/review-dismissals.tmp"
   supabase_select reviews "at=gte.$since&select=findings" > "$HOME_DIR/review-findings.tmp" ||
@@ -1985,7 +1990,7 @@ review_run() {
       fi
       note "review: $n action(s)"
       record nothing "" "review: $n action(s)$spent"
-      review_line "ran $(date +%H:%M), $n actions, \$$(printf '%.2f' "$cost")"
+      review_line "ran, $n actions, \$$(printf '%.2f' "$cost")"
       return 0
     fi
     issue="$(jq -r '.error.message // empty' <<<"$out_json" 2>/dev/null || true)"

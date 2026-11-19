@@ -10,6 +10,7 @@ import type {
   PlanProgress,
   QueueTreeNode,
   QueueView,
+  ReviewLine,
   ReviewRecord,
   Suggested,
   ViewIssue,
@@ -130,6 +131,15 @@ const between = (line: string, open: string, close: string): string => {
   const end = line.indexOf(close, start + open.length);
   return end < 0 ? '' : line.slice(start + open.length, end);
 };
+
+// Review: run.sh `review_line`, "<YYYY-MM-DDTHH:MMZ> · <outcome>"; a line from before it carried the
+// time reads as null, since it can't be placed against a desk request
+export function parseReviewLine(
+  text: string | null | undefined
+): ReviewLine | null {
+  const m = /^(\d{4}-\d\d-\d\dT\d\d:\d\dZ) · (.+)$/.exec(text?.trim() ?? '');
+  return m ? { at: m[1], text: m[2] } : null;
+}
 
 // Suggested (COD-579): run.sh `suggested_line`, "YYYY-MM-DD · COD-123 <title>", "nothing today",
 // "COD-123 still open", "stopped at the budget", "failed" or "no verdict". Linear may wrap ids in mention tags.

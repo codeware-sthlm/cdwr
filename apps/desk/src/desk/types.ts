@@ -20,6 +20,9 @@ export type PlanProgress = {
   next: string | null;
 };
 
+/** run.sh's last review outcome, from queue_state's review line; `at` is the UTC minute, ISO */
+export type ReviewLine = { at: string; text: string };
+
 /** A line of the "Suggested:" value; `title` only when a ticket was suggested */
 export type Suggested =
   | { date: string; kind: 'open'; ticket: string; text: string }
