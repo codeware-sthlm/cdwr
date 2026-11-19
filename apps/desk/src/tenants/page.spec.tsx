@@ -143,12 +143,12 @@ describe('TenantsPage', () => {
     expect(all('.tn-head')).toHaveLength(1);
   });
 
-  it('shows the shared pooler sessions against the pool size', () => {
+  it('shows the shared connections against the limit', () => {
     media(false);
     const { all } = mount(rows());
     expect(
       all('[data-tenant="_shared"] [data-col="sessions"]')[0].textContent
-    ).toBe('3 of 15');
+    ).toBe('3 of 57');
   });
 
   it('draws a name, a status chip and one line on the phone', () => {
@@ -239,7 +239,10 @@ describe('TenantsPage', () => {
     const { all } = mount(rows());
     fireEvent.click(all('[data-tenant="_shared"]')[0]);
     const dialog = screen.getByRole('dialog', { name: 'Shared' });
-    expect(dialog.textContent).toContain('Pooler sessions3 of 15');
+    expect(dialog.textContent).toContain('Connections3 of 57');
+    expect(dialog.textContent).toContain('Peak today9 at 08:15 UTC');
+    expect(dialog.textContent).toContain('Opened since last read4');
+    expect(dialog.textContent).toContain('Pooler sessions3');
     expect(dialog.textContent).toContain('All sessions5');
     expect(dialog.textContent).toContain('120 MiB');
     expect(dialog.textContent).toContain('host');

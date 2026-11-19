@@ -144,7 +144,11 @@ export const shared = (over: Partial<TenantStateRow> = {}): TenantStateRow => ({
     sizeBytes: 120 * 2 ** 20,
     sessions: 5,
     poolerSessions: 3,
-    byApplication: { 'cdwr-cms': 3 }
+    byApplication: { 'cdwr-cms': 3 },
+    connections: 3,
+    limit: 57,
+    peak: { connections: 9, at: '2026-10-29T08:15:00.000Z' },
+    opened: 4
   },
   sentry: {},
   visitors: {},

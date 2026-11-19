@@ -27,8 +27,7 @@ import {
 } from './fixtures';
 import { parseTenantRow } from './model';
 import {
-  DB_SESSIONS_MAX,
-  DB_SESSIONS_WARN,
+  DB_CONNECTIONS_WARN_SHARE,
   TENANTS_STALE_MIN,
   isBehind,
   statusOf,
@@ -40,8 +39,7 @@ const statusFor = (over: Parameters<typeof tenant>[1]) =>
 
 describe('thresholds', () => {
   it('names the limits', () => {
-    expect(DB_SESSIONS_MAX).toBe(15);
-    expect(DB_SESSIONS_WARN).toBe(12);
+    expect(DB_CONNECTIONS_WARN_SHARE).toBe(0.8);
     expect(TENANTS_STALE_MIN).toBe(30);
   });
 });
@@ -135,23 +133,25 @@ describe('statusOf', () => {
     ).toBe('ok');
   });
 
-  it('warns the shared row from 12 pooler sessions', () => {
-    const at = (poolerSessions: number) =>
+  it('warns the shared row from 46 of 57 connections', () => {
+    const at = (connections: number) =>
       statusOf(
         parseTenantRow(
           shared({
             db: {
               sizeBytes: null,
               sessions: 20,
-              poolerSessions,
-              byApplication: {}
+              poolerSessions: 3,
+              byApplication: {},
+              connections,
+              limit: 57
             }
           })
         )
       );
-    expect(at(DB_SESSIONS_WARN - 1)).toBe('ok');
-    expect(at(DB_SESSIONS_WARN)).toBe('warn');
-    expect(at(DB_SESSIONS_MAX)).toBe('warn');
+    expect(at(45)).toBe('ok');
+    expect(at(46)).toBe('warn');
+    expect(at(57)).toBe('warn');
   });
 
   it('is off when no switch of the tenant is on', () => {
@@ -239,7 +239,9 @@ describe('tenantsView', () => {
             sizeBytes: null,
             sessions: 16,
             poolerSessions: 13,
-            byApplication: {}
+            byApplication: {},
+            connections: 50,
+            limit: 57
           }
         })
       ]),
@@ -259,7 +261,9 @@ describe('tenantsView', () => {
             sizeBytes: null,
             sessions: 16,
             poolerSessions: 13,
-            byApplication: {}
+            byApplication: {},
+            connections: 50,
+            limit: 57
           }
         }),
         tenant('zed', {
@@ -271,7 +275,7 @@ describe('tenantsView', () => {
     if (v.kind !== 'ready') throw new Error('not ready');
     expect(v.problems.map((p) => p.key)).toEqual([
       'zed:down:cdwr-cms-zed',
-      '_shared:pooler',
+      '_shared:connections',
       'acme:behind:cdwr-cms-acme'
     ]);
   });
@@ -440,25 +444,34 @@ describe('cells', () => {
     });
   });
 
-  it('shows the shared pooler sessions against the pool size, a tenant its own by app name', () => {
+  it('shows the shared connections against the limit, a tenant its own sessions by app name', () => {
     const sharedRow = parseTenantRow(shared());
     expect(sessionsCell(sharedRow, sharedRow.db)).toEqual({
-      text: '3 of 15',
+      text: '3 of 57',
       tone: 'ok'
     });
-    const pooled = (sessions: number, poolerSessions: number) =>
+    const connected = (connections: number) =>
       parseTenantRow(
         shared({
-          db: { sizeBytes: null, sessions, poolerSessions, byApplication: {} }
+          db: {
+            sizeBytes: null,
+            sessions: 20,
+            byApplication: {},
+            connections,
+            limit: 57
+          }
         })
       );
-    const busy = pooled(20, 12);
+    const busy = connected(46);
     expect(sessionsCell(busy, busy.db).tone).toBe('wait');
-    const full = pooled(22, 15);
-    expect(sessionsCell(full, full.db).tone).toBe('bad');
-    const quiet = pooled(14, 6);
+    const full = connected(57);
+    expect(sessionsCell(full, full.db)).toEqual({
+      text: '57 of 57',
+      tone: 'bad'
+    });
+    const quiet = connected(45);
     expect(sessionsCell(quiet, quiet.db)).toEqual({
-      text: '6 of 15',
+      text: '45 of 57',
       tone: 'ok'
     });
     const old = parseTenantRow(
@@ -469,7 +482,11 @@ describe('cells', () => {
       sizeBytes: null,
       sessions: 5,
       pooler: 3,
-      byApplication: { 'cdwr-cms-acme': 2, 'cdwr-headless-acme': 1 }
+      byApplication: { 'cdwr-cms-acme': 2, 'cdwr-headless-acme': 1 },
+      connections: 3,
+      limit: 57,
+      peak: null,
+      opened: null
     };
     expect(sessionsCell(row(), db)).toEqual({ text: '3', tone: 'muted' });
     expect(sessionsCell(row(), null)).toEqual({ text: '–', tone: 'muted' });

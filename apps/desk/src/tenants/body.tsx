@@ -6,16 +6,10 @@ import { bytes, seenAgo } from '../desk/format';
 import { type PlatformApi, TenantActions } from './actions';
 import { versionCell } from './cells';
 import type { TenantApp, TenantMachine } from './model';
-import { SHARED_KEY } from './model';
+import { SHARED_KEY, utcClock } from './model';
 import { sentryIssueUrl } from './problems';
 import { Sparkline } from './sparkline';
-import {
-  DB_SESSIONS_MAX,
-  type TenantEntry,
-  certPending,
-  certReady,
-  isBehind
-} from './status';
+import { type TenantEntry, certPending, certReady, isBehind } from './status';
 import { Chip, StatusChip } from './ui';
 
 // What the tenant sheet shows: everything the NUC recorded for one row
@@ -255,10 +249,28 @@ export const TenantBody = ({
       {row.db ? (
         <Section title="Database">
           <dl className={KV}>
+            {row.db.connections === null || row.db.limit === null ? null : (
+              <>
+                <dt>Connections</dt>
+                <dd>{`${row.db.connections} of ${row.db.limit}`}</dd>
+              </>
+            )}
+            {row.db.peak === null ? null : (
+              <>
+                <dt>Peak today</dt>
+                <dd>{`${row.db.peak.connections} at ${utcClock(row.db.peak.at)} UTC`}</dd>
+              </>
+            )}
+            {row.db.opened === null ? null : (
+              <>
+                <dt>Opened since last read</dt>
+                <dd>{row.db.opened}</dd>
+              </>
+            )}
             {row.db.pooler === null ? null : (
               <>
                 <dt>Pooler sessions</dt>
-                <dd>{`${row.db.pooler} of ${DB_SESSIONS_MAX}`}</dd>
+                <dd>{row.db.pooler}</dd>
               </>
             )}
             <dt>All sessions</dt>

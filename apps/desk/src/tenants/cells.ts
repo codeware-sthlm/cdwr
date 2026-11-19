@@ -1,11 +1,5 @@
 import type { TenantDb, TenantRow } from './model';
-import {
-  DB_SESSIONS_MAX,
-  DB_SESSIONS_WARN,
-  certPending,
-  certReady,
-  isBehind
-} from './status';
+import { certPending, certReady, connectionsWarnAt, isBehind } from './status';
 
 // The one-line summaries of a tenant row, as the page's columns and compact line show them
 
@@ -67,18 +61,18 @@ export const certCell = (row: TenantRow): Cell => {
     : { text: 'unknown', tone: 'muted' };
 };
 
-/** The database's sessions: the shared row's pooler sessions against the pool size (its total before they were read), a tenant's own by its apps' names where the database tells them apart */
+/** The database's connections: the shared row's client connections against the usable limit (its total sessions before they were read), a tenant's own by its apps' names where the database tells them apart */
 export const sessionsCell = (row: TenantRow, db: TenantDb | null): Cell => {
   if (row.db) {
-    const pooler = row.db.pooler;
-    if (pooler === null)
+    const { connections, limit } = row.db;
+    if (connections === null || limit === null || limit <= 0)
       return { text: String(row.db.sessions), tone: 'muted' };
     return {
-      text: `${pooler} of ${DB_SESSIONS_MAX}`,
+      text: `${connections} of ${limit}`,
       tone:
-        pooler >= DB_SESSIONS_MAX
+        connections >= limit
           ? 'bad'
-          : pooler >= DB_SESSIONS_WARN
+          : connections >= connectionsWarnAt(limit)
             ? 'wait'
             : 'ok'
     };
