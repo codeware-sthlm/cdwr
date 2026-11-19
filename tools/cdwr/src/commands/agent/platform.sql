@@ -35,7 +35,11 @@ SELECT json_build_object(
       WHERE datname = current_database() AND application_name = 'Supavisor'
     ),
     -- What runs out is max_connections, which is per server: every client backend
-    -- takes a slot, whichever database or role it uses
+    -- takes a slot, whichever database or role it uses. For a role outside
+    -- pg_read_all_stats Postgres nulls backend_type and most other columns of
+    -- other roles' rows, so the filter below drops them: the count is only
+    -- right when this is true
+    'seesAllSessions', pg_has_role(current_user, 'pg_read_all_stats', 'USAGE'),
     'connections', (
       SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'
     ),

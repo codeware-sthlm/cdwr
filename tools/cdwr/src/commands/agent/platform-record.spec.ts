@@ -49,6 +49,7 @@ const database = ok({
     sizeBytes: 1,
     sessions: 1,
     poolerSessions: 1,
+    seesAllSessions: true,
     connections: 30,
     maxConnections: 60,
     reservedConnections: 3,
@@ -170,6 +171,34 @@ describe('agent platform-record', () => {
     collect.readDatabase.mockResolvedValue(failed('psql failed'));
     await record(['--yes', '--json'], env);
     expect(collect.writeDbPeak).not.toHaveBeenCalled();
+  });
+
+  it('records no count or peak while the role sees only its own sessions, and says so', async () => {
+    const read = database.ok ? database.value : null;
+    if (!read) throw new Error('fixture');
+    collect.readDatabase.mockResolvedValue(
+      ok({ ...read, db: { ...read.db, seesAllSessions: false } })
+    );
+    await record(['--yes', '--json'], env);
+    // The sessions opened are still counted, the peak is not
+    expect(collect.writeDbPeak).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ connections: null, sessionsOpened: 1040 })
+    );
+    const rows = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      key: string;
+      db: Record<string, unknown>;
+      errors: Record<string, string>;
+    }[];
+    const shared = rows.find((r) => r.key === '_shared');
+    expect(shared?.db).toMatchObject({
+      sessions: 1,
+      connections: null,
+      peak: null,
+      opened: 140,
+      byApplication: {}
+    });
+    expect(shared?.errors['db']).toContain('pg_read_all_stats');
   });
 
   it('upserts the tenant rows and the shared row, then deletes the vanished', async () => {
