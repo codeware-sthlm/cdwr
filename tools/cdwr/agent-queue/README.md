@@ -78,8 +78,8 @@ session runs the code review over a diff file: `review-diff.sh <worktree>` write
 run may neither pipe git into a file nor diff against `origin/main` itself. A session whose review
 could not run at all ends with `review failed: <key> · <reason>` and opens no PR; the launch is
 recorded `failed` with that reason, one notice goes out, and the ticket keeps `agent:working` with its
-**Next:** line naming why, so the desk shows the gap. A session a
-deploy or container stop cuts is recorded `interrupted` and not counted either. After two
+**Next:** line naming why, so the desk shows the gap. A session cut short by a deploy or
+container stop is recorded `interrupted` and not counted either. After two
 launches that change nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
 launching too.
 
