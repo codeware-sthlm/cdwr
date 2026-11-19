@@ -727,7 +727,10 @@ export const buildRows = (
     for (const key of keys) note(errorsOf(key), 'sentry', sentry.reason);
   } else {
     for (const [slug, top] of Object.entries(sentry.value.tops)) {
-      if (!top.ok && known?.some((t) => t.slug === slug)) {
+      if (
+        !top.ok &&
+        (slug === SHARED_KEY || known?.some((t) => t.slug === slug))
+      ) {
         note(errorsOf(slug), 'sentry', `top issue: ${top.reason}`);
       }
     }
@@ -892,7 +895,7 @@ export const buildRows = (
           )
         }
       : {},
-    sentry: {},
+    sentry: sentry.ok ? sentrySignal(sentry.value, SHARED_KEY) : {},
     visitors: {},
     deploy: deploy.ok
       ? {
