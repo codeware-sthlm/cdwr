@@ -181,6 +181,9 @@ LINEAR_HEADERS_HELPER="zsh ${(q)LIB_SH} header"
 # The container's Linear proxy (apps/agent-host/linear-mcp-proxy.mjs), which the entrypoint starts
 # on this port; elsewhere there is none and claude signs through the helper
 LINEAR_PROXY_URL="${AGENT_QUEUE_LINEAR_PROXY_PORT:+http://127.0.0.1:$AGENT_QUEUE_LINEAR_PROXY_PORT/mcp}"
+# The proxy's second route: the attended query, run as the queue's own user, for a session
+# that holds no Linear credentials
+LINEAR_PROXY_ATTENDED="${AGENT_QUEUE_LINEAR_PROXY_PORT:+http://127.0.0.1:$AGENT_QUEUE_LINEAR_PROXY_PORT/attended}"
 
 # linear_mcp <dir>: sets L, the tool prefix the allowlists use, and LINEAR_MCP_ARGS, the claude
 # flags that load the server; key mode writes its config into <dir>.
@@ -340,6 +343,28 @@ fragment queued on IssueConnection {
   }
 }
 GQL
+
+# linear_via_proxy <query>: the attended query through the container's proxy, for a session
+# without credentials of its own. The route runs that one query and nothing else, so any other
+# query is refused here rather than answered wrongly. The answer comes as the GraphQL body.
+linear_via_proxy() {
+  local answer code body
+  if [[ "$1" != "$ATTENDED_QUERY" ]]; then
+    print -ru2 -- "linear: only the attended query goes through the proxy"; return 1
+  fi
+  if [[ -z "$LINEAR_PROXY_ATTENDED" ]]; then
+    print -ru2 -- "linear: no proxy port (AGENT_QUEUE_LINEAR_PROXY_PORT) to ask for the attended query"
+    return 1
+  fi
+  # Past the proxy's own deadline, so what arrives is its answer and never a client timeout
+  answer="$(curl -sS -m 150 -w $'\n%{http_code}' -X POST -H 'Content-Length: 0' "$LINEAR_PROXY_ATTENDED")" || return 1
+  code="${answer##*$'\n'}"
+  body="${answer%$'\n'*}"
+  if [[ "$code" != 200 ]]; then
+    print -ru2 -- "linear: the proxy answered $code for the attended query: ${body:0:200}"; return 1
+  fi
+  print -r -- "$body"
+}
 
 # attended_nodes: appends the merged and canceled tickets and the open sub-issues not already there to
 # .data.issues.nodes, keeping Linear's order, so every reader of the attended response sees one list. A filter-level `or` would be one field, but Linear widens a
@@ -544,7 +569,11 @@ watch_state() {
 
 # Run as `zsh lib.sh header`, it is the MCP config's headersHelper; the container's proxy runs it
 # too, and with `force` after a 401
-if [[ "$ZSH_EVAL_CONTEXT" == toplevel && "${1:-}" == header ]]; then
-  linear_header "${2:-}"
-  exit
+# Run rather than sourced: `header` prints the MCP header, `attended` answers the attended
+# query. The proxy runs both as the queue's own user, so a session never holds the token.
+if [[ "$ZSH_EVAL_CONTEXT" == toplevel ]]; then
+  case "${1:-}" in
+    header) linear_header "${2:-}"; exit ;;
+    attended) linear "$ATTENDED_QUERY"; exit ;;
+  esac
 fi

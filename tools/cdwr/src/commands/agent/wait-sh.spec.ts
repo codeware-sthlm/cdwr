@@ -701,6 +701,41 @@ while true; do beat "$1" "$2"; sleep 1; done`
       expect(result.status).toBe(0);
       expect(result.stdout).toBe('wait: Linear did not answer\n');
     });
+
+    it('asks the proxy for the attended query when it holds no credentials', () => {
+      // No key anywhere: not in the environment, the file, nor (as on Linux) the Keychain
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      writeFileSync(join(bin, 'uname'), '#!/bin/sh\necho Linux\n');
+      const args = join(dir, 'curl-args');
+      writeFileSync(
+        join(bin, 'curl'),
+        `#!/bin/sh\ncase "$*" in *attended*) ;; *) exit 7 ;; esac\nprintf '%s\\n' "$@" > "${args}"\nprintf '%s\\n200' '${response(ticket('COD-1', 'backlog'))}'\n`
+      );
+      chmodSync(join(bin, 'uname'), 0o755);
+      chmodSync(join(bin, 'curl'), 0o755);
+      const result = spawnSync('zsh', [SCRIPT, '--now'], {
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env['PATH'] ?? ''}`,
+          HOME: dir,
+          AGENT_QUEUE_SESSIONS: join(dir, 'sessions'),
+          AGENT_QUEUE_LINEAR_PROXY_PORT: '8790',
+          AGENT_QUEUE_LINEAR_KEY: '',
+          AGENT_QUEUE_LINEAR_KEY_FILE: '',
+          AGENT_QUEUE_LINEAR_CLIENT_ID: '',
+          AGENT_QUEUE_LINEAR_CLIENT_SECRET: '',
+          AGENT_QUEUE_LINEAR_APP_FILE: '',
+          AGENT_QUEUE_LISTEN_CMD: stub('no-listener', 'exit 0')
+        },
+        encoding: 'utf8',
+        timeout: 30_000
+      });
+      expect(result.stdout).toBe('run now: COD-1 ready\n');
+      expect(readFileSync(args, 'utf8')).toContain(
+        'http://127.0.0.1:8790/attended\n'
+      );
+    });
   });
 
   describe('watcher file', () => {
