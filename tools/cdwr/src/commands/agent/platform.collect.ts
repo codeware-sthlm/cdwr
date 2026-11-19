@@ -30,6 +30,7 @@ import {
   type Reading,
   type ReleaseRead,
   type ReleasesRead,
+  SHARED_KEY,
   STATS_TIMEZONE,
   type SentryRead,
   type SentryTop,
@@ -196,7 +197,9 @@ export const SENTRY_ENVS = [
 const SENTRY_BASE = 'https://sentry.io/api/0';
 
 const GroupedSchema = z.object({
-  data: z.array(z.object({ tenant: z.string(), 'count()': z.number() }))
+  data: z.array(
+    z.object({ tenant: z.string().nullish(), 'count()': z.number() })
+  )
 });
 
 const IssuesSchema = z.array(
@@ -229,7 +232,7 @@ async function sentryGet<T>(
   return parsed.data;
 }
 
-/** Errors per tenant tag over 24 hours and 7 days, and the top unresolved issue of every tenant with errors today */
+/** Errors per tenant tag (untagged events on the shared key) over 24 hours and 7 days, and the top unresolved issue of every tenant with errors today */
 export async function readSentry(
   env: NodeJS.ProcessEnv
 ): Promise<Reading<SentryRead>> {
@@ -244,7 +247,6 @@ export async function readSentry(
         [
           ['field', 'tenant'],
           ['field', 'count()'],
-          ['query', 'has:tenant'],
           ['dataset', 'errors'],
           ['statsPeriod', statsPeriod],
           ['per_page', '100']
@@ -252,8 +254,13 @@ export async function readSentry(
         GroupedSchema
       );
     const [day, week] = await Promise.all([grouped('24h'), grouped('7d')]);
+    // Untagged rows come as '' or null, and both fold onto the shared key
     const counts = (g: z.infer<typeof GroupedSchema>) =>
-      Object.fromEntries(g.data.map((r) => [r.tenant, r['count()']]));
+      g.data.reduce<Record<string, number>>((acc, r) => {
+        const key = r.tenant || SHARED_KEY;
+        acc[key] = (acc[key] ?? 0) + r['count()'];
+        return acc;
+      }, {});
     const dayCounts = counts(day);
 
     const tops: SentryRead['tops'] = Object.fromEntries(
@@ -266,7 +273,12 @@ export async function readSentry(
                 token,
                 `/organizations/${encodeURIComponent(org)}/issues/`,
                 [
-                  ['query', `is:unresolved tenant:${slug}`],
+                  [
+                    'query',
+                    slug === SHARED_KEY
+                      ? 'is:unresolved !has:tenant'
+                      : `is:unresolved tenant:${slug}`
+                  ],
                   ['statsPeriod', '24h'],
                   ['sort', 'freq'],
                   ['limit', '1']

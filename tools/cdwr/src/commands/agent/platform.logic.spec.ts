@@ -731,7 +731,38 @@ describe('the sentry column', () => {
       count7d: 1,
       top: null
     });
-    expect(row(rows, SHARED_KEY).sentry).toEqual({});
+    expect(row(rows, SHARED_KEY).sentry).toEqual({
+      org: 'cdwr',
+      count24h: 0,
+      count7d: 0,
+      top: null
+    });
+  });
+
+  it('carries the untagged counts and top issue on the shared row', () => {
+    const { rows } = buildRows(
+      readings({
+        sentry: ok({
+          org: 'cdwr',
+          day: { [SHARED_KEY]: 27 },
+          week: { [SHARED_KEY]: 40 },
+          tops: {
+            [SHARED_KEY]: ok({
+              shortId: 'CDWR-9',
+              level: 'error',
+              count: 20,
+              title: 'Host boom'
+            })
+          }
+        })
+      })
+    );
+    expect(row(rows, SHARED_KEY).sentry).toEqual({
+      org: 'cdwr',
+      count24h: 27,
+      count7d: 40,
+      top: { shortId: 'CDWR-9', level: 'error', count: 20, title: 'Host boom' }
+    });
   });
 
   it('cleans the title of urls and cuts it to 120 characters', () => {
