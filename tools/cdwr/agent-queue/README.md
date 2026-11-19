@@ -7,8 +7,17 @@ Tickets carrying a Linear `agent:*` label (Agent group, Codeware team) are worke
 steps to the `implementer` subagent (`.claude/agents/implementer.md`, Sonnet) in a worktree
 per ticket, asks in Linear instead of waiting in the terminal, and keeps going until a limit
 of what waits on Håkan. The skill holds the queue order, the labels and how a gate asks.
-When a split's sub-issue has all its blockers done, the queue lists it as ready to label
-(`COD-n label`) among what waits on Håkan; only he sets `agent:ready`.
+When a split's sub-issue has all its blockers Done or Canceled and its report asks nothing first,
+the scheduler labels it `agent:ready` itself (see below). One that asks first is listed as ready
+to label (`COD-n label`) among what waits on Håkan. Otherwise only he sets `agent:ready`.
+
+Plans approve themselves on every path. A session records its approval under Decisions and posts
+`**Agent: plan approved**` with the decisions worth checking; reply to stop it. A plan-only run
+keeps `agent:ready`: such a ticket is `plan_approved` in `watch.jq` and becomes a `plan approved`
+pick, held by the limit like a ready ticket, and the scheduler launches an implement-only run for it.
+A ticket whose report (the text before `## Plan`) holds `**Ask me before implementing**`, or a
+heading or bold line starting "Open question", keeps the old `**Agent: plan ready**` gate. A
+question only Håkan can answer stays a needs-input gate.
 
 To start an attended session, run `cdwr agent attend [COD-n]` from anywhere: it moves `codeware-queue` to `origin/main` (installing when the lockfile changed) and starts `/work-queue` there in the same terminal (`--no-start` prints the line instead). A session started on a detached checkout that is behind main warns at start and names that one command (the SessionStart hook, `tools/cdwr/agent-queue/session-start.sh`).
 
@@ -19,7 +28,13 @@ waits for the next `install`. Before planning, the same job watches the PRs of `
 queue, fails or conflicts with main, or any of them merges with hand-offs left. A ticket merged outside review is
 relabelled `agent:review` with a **Next:** line naming its hand-offs. After the watch, a parent whose
 agent split finished (every sub-issue Done or Canceled, at least one Done and one agent work) is set
-Done with an `**Agent: closed**` comment. Those are the job's two Linear writes. Then it reads
+Done with an `**Agent: closed**` comment. Right after, a split's next part (`label_parts` in
+`run.sh`) whose blockers are all Done or Canceled and whose report asks nothing first is labelled
+`agent:ready`, with an `**Agent: labelled ready** every blocker is closed: …` comment, a `labelled`
+record and an info notice. A part that already carries that comment, or is listed in
+`labelled-parts` in the queue home, is never labelled again, so a part Håkan unlabels stays
+unlabelled whichever host labelled it. `ready_by_app` lets the queue's own label through only on a
+sub-issue carrying that comment whose report asks nothing first. Those are the job's three Linear writes. Then it reads
 Renovate's open PRs into `renovate.json`: an untended one whose checks fail, or that conflicts with
 main on a branch carrying a commit not by Renovate, is queue work (`PR 754`, held by the limit), until
 a `renovate` ticket carries it as an attachment. A session files that ticket; a mechanical fix goes on
@@ -54,7 +69,8 @@ When that work waits and no session is alive, the job starts one itself: `implem
 `claude -p "/work-queue implement-only once key=\"<key>\""` detached, with deny-by-default permissions, a
 per-run budget (`AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, $15) and a daily cap
 (`AGENT_QUEUE_IMPLEMENT_CAP_USD`, $40) kept in `implement-spend.jsonl`. It resumes approved,
-answered or reviewed work only, and never starts a new ticket. It reaches Linear on both hosts
+answered or reviewed work only (a `plan approved` pick, an answered gate, a review, and `merge checks`
+below), and never starts a new ticket. It reaches Linear on both hosts
 through Linear's own MCP server, signed with a token of the queue's own Linear app, so its writes
 are the app user's and not Håkan's (`AGENT_QUEUE_LINEAR_MCP`, the credentials and the token cache
 are in `tools/cdwr/README.md`); a run without Linear tools doesn't start. In the container the
@@ -97,8 +113,20 @@ worktrees get no copy of that file (`envCopiesFor` in `agent.logic.ts`). `CLAUDE
 and `AGENT_SUPABASE_SERVICE_KEY` stay in the loop's environment, and tini's environ keeps the
 Infisical identity, until the session runs as a uid of its own (COD-653).
 
+Checks are never hand-offs. Before the merge, the session runs what it can on the preview and lists
+it in the PR-ready comment under `Checked on the preview:`. After the merge, checks go under
+`After the merge, the agent checks:` as `- [ ] <check>` items, apart from the hand-off checklist.
+Once the PR merged 15 or more minutes ago and every hand-off is ticked or dropped (a deploy comes
+first), `watch.jq` (`merge_checks`, `merge_checks_due`) makes a `merge checks` pick. An implement-only
+run takes it, ticks each passing check, strikes a failing one (`- [ ] ~~check~~ failed: <what>`) and
+posts `**Agent: checks**` with what it saw. A failure also gets an `**Agent: suggestion**` for a
+follow-up ticket. Only a check that needs Håkan's logged-in browser stays a hand-off, and says why.
+For these the session may run `pnpm cdwr agent status` and `logs` (not with `--host`) and fetch
+`cdwr.io`, `*.cdwr.io`, `codeware.se` and `*.codeware.se` only. `*.fly.dev` is not listed: a wildcard
+there would let a session send data to any Fly app.
+
 A claude run that ends on the plan's session limit (`You've hit your session limit · resets 7:10am (UTC)`) is recorded `limited`, with the limit text in its detail. It is not a failure. The run writes `limited-until.json` in the queue home, `{"until": <epoch seconds>, "text": "<limit text>", "at": "<ISO>"}`, and while `until` is in the future no claude run starts: planning, implementing, suggest, review and devlog all wait. The reset is the next occurrence of `resets H[:MM]am|pm (<zone>)` in the text; a text without a parseable reset holds for 60 minutes, and no hold lasts longer than a day. Suggest, review and devlog give their day stamp back when they end limited, so they run again after the reset. A limited implement launch is given back every time, so it never counts toward the two-launch stop above. The implement launch decision reads `notify` with the reason `session limit, resets 07:10 UTC`, `--check` prints `limit: claude runs held until 07:10 UTC` before its other lines, and `cdwr agent status` shows `held by the session limit until 07:10 UTC` on its implement line while the file is in force. The desk shows it amber, a third state between ok and problem: the Agent health page reads `session limit` and the run row takes the warning style, until a later run goes well.
 
 An attended Mac session stays visible to the NUC because its session hook copies each session file into the NUC's container (`cdwr agent mirror set --host agent-host`, once). So the NUC launches nothing a live Mac session holds: while that session is polling, any other ticket may launch there; while it is working, only a comment on a merged ticket does. The claim line decides who has a ticket, and a session that loses the race leaves it alone. The hook runs from the checkout the session started in, which must be on a main that includes the mirror support: `cdwr agent attend` does that.
 
-Every run also audits the tickets (`audit` in `watch.jq`), report-only: it changes nothing in Linear. A gap is a state the queue cannot resolve by itself, and each carries what is wrong and the one fix. The kinds are `held`, `ready-planned` (an `agent:ready` ticket that already has a Status table, which a plan-only run does not take), `review-no-pr`, `merged-not-done`, `closed-pr`, `label-on-closed`, `two-labels`, `needs-input-no-question`, `unlabelled` and `launch-guard`. Four more are candidates for a later AI review, worded "check" and marked `candidate: true`: they stay in the view's audit and the tree's `gaps`, but send no notice and are not in the `Gaps (n)` count: `done-with-open-rows` (a ticket Done within 14 days whose Status table still has rows other than Done, Dropped or Skipped), `parent-status-stale` (a Status row naming a sub-issue says the opposite of its state), `untouched` (open, no agent label, not updated for 10 days, its parent updated since) and `decision-unasked` (a Status row says decision or Håkan picks, with no `agent:needs-input` and no agent question). The Status column is the one headed State or Status, else the last. A gap's `what` stays short and its `rows` array carries the row texts. They read every open COD ticket plus those Done within 14 days (`TREE_QUERY` in `lib.sh`, read by the run only, 200 at most, kept in `tree-nodes.json` for `AGENT_QUEUE_TREE_TTL_MIN` minutes, 15 by default, and reused when a read fails), where the other kinds read the agent tickets. The audit and a `tree` of every open COD ticket, as roots with their sub-issues, are keys of the queue view, so `queue-view.json`, `queue_state.view`, `cdwr agent status` (a `Gaps (n)` note) and the desk (a Gaps group on the queue sheet, and the Ticket tree page, the Tree page of the Agent view, with each ticket's state, agent label, pick position (`position`: its 1-based place in the order `next` and the held tickets give, null when the queue never picks it; roots and children sort by the lowest position in their subtree, then by `queue_order`), PR, open blockers and gaps, its plan progress, live session, PR checks and age, and Open/All and Gaps-only filters) show them. The desk's header search finds a ticket by id or title among everything the desk has loaded, and opens a Ticket sheet (`#ticket/COD-n`) with all the desk holds for it. A stale claim or an unclaimed working ticket is no gap: the pick already takes it over. `audit-seen.json` maps each gap id to `{ first, told }`: a gap that has stood for 15 minutes and was not yet told sends one action notice, `Gap: <what>. <fix>`, so a state that settles by itself stays quiet; more than 3 due in a run send one summary instead; a gap that closes and returns starts over. `--check` sends nothing. The audit output goes through files, never arguments, since it outgrows the argument limit.
+Every run also audits the tickets (`audit` in `watch.jq`), report-only: it changes nothing in Linear. A gap is a state the queue cannot resolve by itself, and each carries what is wrong and the one fix. The kinds are `held`, `ready-planned` (a plan nothing will take: an `agent:ready` ticket with a Status table that is neither a `plan approved` pick nor waiting on a gate), `review-no-pr`, `merged-not-done`, `closed-pr`, `label-on-closed`, `two-labels`, `needs-input-no-question`, `unlabelled` and `launch-guard`. Four more are candidates for a later AI review, worded "check" and marked `candidate: true`: they stay in the view's audit and the tree's `gaps`, but send no notice and are not in the `Gaps (n)` count: `done-with-open-rows` (a ticket Done within 14 days whose Status table still has rows other than Done, Dropped or Skipped), `parent-status-stale` (a Status row naming a sub-issue says the opposite of its state), `untouched` (open, no agent label, not updated for 10 days, its parent updated since) and `decision-unasked` (a Status row says decision or Håkan picks, with no `agent:needs-input` and no agent question). The Status column is the one headed State or Status, else the last. A gap's `what` stays short and its `rows` array carries the row texts. They read every open COD ticket plus those Done within 14 days (`TREE_QUERY` in `lib.sh`, read by the run only, 200 at most, kept in `tree-nodes.json` for `AGENT_QUEUE_TREE_TTL_MIN` minutes, 15 by default, and reused when a read fails), where the other kinds read the agent tickets. The audit and a `tree` of every open COD ticket, as roots with their sub-issues, are keys of the queue view, so `queue-view.json`, `queue_state.view`, `cdwr agent status` (a `Gaps (n)` note) and the desk (a Gaps group on the queue sheet, and the Ticket tree page, the Tree page of the Agent view, with each ticket's state, agent label, pick position (`position`: its 1-based place in the order `next` and the held tickets give, null when the queue never picks it; roots and children sort by the lowest position in their subtree, then by `queue_order`), PR, open blockers and gaps, its plan progress, live session, PR checks and age, and Open/All and Gaps-only filters) show them. The desk's header search finds a ticket by id or title among everything the desk has loaded, and opens a Ticket sheet (`#ticket/COD-n`) with all the desk holds for it. A stale claim or an unclaimed working ticket is no gap: the pick already takes it over. `audit-seen.json` maps each gap id to `{ first, told }`: a gap that has stood for 15 minutes and was not yet told sends one action notice, `Gap: <what>. <fix>`, so a state that settles by itself stays quiet; more than 3 due in a run send one summary instead; a gap that closes and returns starts over. `--check` sends nothing. The audit output goes through files, never arguments, since it outgrows the argument limit.

@@ -105,10 +105,23 @@ describe('run.sh', () => {
   });
 
   it('leaves planned tickets out of the plan-only selection', () => {
-    expect(SCRIPT).toContain('select(ready_planned | not)');
+    expect(SCRIPT).toContain('select((status_rows | length) == 0)');
     expect(SCRIPT).toMatch(
       /identifier\n\s+description\n\s+state \{ type \}\n\s+labels \{ nodes \{ name \} \}\n\s+inverseRelations/
     );
+  });
+
+  it('counts an offered ticket still agent:ready with a plan as planned', () => {
+    const planned = SCRIPT.slice(SCRIPT.indexOf("read -r -d '' PLANNED"));
+    expect(planned).toContain(
+      'labels: { some: { name: { in: ["agent:needs-input", "agent:ready"] } } }'
+    );
+    expect(planned).toContain('(^|\\n)##\\\\s+plan\\\\s*(\\n|$)');
+    expect(planned).toContain('record planned "$id"');
+    expect(planned).toContain(
+      'notice info "$id: plan approved, an implementing run follows"'
+    );
+    expect(planned).toContain('notify "$id: plan ready, needs your approval"');
   });
 
   it('fails a clean run that planned nothing', () => {
@@ -272,10 +285,11 @@ describe('run.sh without Linear documents', () => {
     )?.[1];
 
   // The scheduler's Linear writes: the watch relabels a ticket whose PR merged outside review,
-  // and a parent whose agent split finished is closed with a comment. Nothing else. The fourth
-  // mutation is GitHub's, the desk's merge (ENQUEUE).
-  it('holds exactly three Linear mutations, each in its named query', () => {
-    expect(code.match(/mutation\b/gi)).toHaveLength(4);
+  // a parent whose agent split finished is closed with a comment, and a split's next part is
+  // labelled agent:ready with a comment. Nothing else. The last mutation is GitHub's, the desk's
+  // merge (ENQUEUE).
+  it('holds exactly four Linear mutations, each in its named query', () => {
+    expect(code.match(/mutation\b/gi)).toHaveLength(5);
     expect(gql('ENQUEUE')).toMatch(/^mutation\([\s\S]*enqueuePullRequest\(/);
     expect(code.match(/"\$ENQUEUE"/g)).toHaveLength(1);
     expect(gql('RELABEL')).toMatch(/^mutation\(/);
@@ -287,14 +301,16 @@ describe('run.sh without Linear documents', () => {
     expect(gql('CLOSE_COMMENT')).toMatch(/^mutation\(/);
     expect(gql('CLOSE_COMMENT')).toContain('commentCreate(');
     // Each in its mutation and in the check of its answer
-    expect(code.match(/issueUpdate\b/g)).toHaveLength(4);
-    expect(code.match(/commentCreate\b/g)).toHaveLength(2);
+    expect(gql('LABEL_PART')).toMatch(/^mutation\(/);
+    expect(gql('LABEL_PART')).toContain('addedLabelIds: [$label]');
+    expect(code.match(/issueUpdate\b/g)).toHaveLength(6);
+    expect(code.match(/commentCreate\b/g)).toHaveLength(3);
   });
 
   it.each([
     ['RELABEL', 'relabel_merged'],
     ['CLOSE_PARENT', 'close_parents'],
-    ['CLOSE_COMMENT', 'close_parents']
+    ['LABEL_PART', 'label_parts']
   ])('uses "$%s" only inside %s', (name, owner) => {
     const body = fn(owner);
     expect(body).toContain(`linear "$${name}" "$vars"`);
@@ -302,9 +318,19 @@ describe('run.sh without Linear documents', () => {
     expect(code.replace(body, '')).not.toContain(`$${name}`);
   });
 
-  it('closes parents after the watches, never on --check', () => {
+  it('uses "$CLOSE_COMMENT" only inside close_parents and label_parts', () => {
+    for (const owner of ['close_parents', 'label_parts']) {
+      expect(fn(owner)).toContain('linear "$CLOSE_COMMENT" "$vars"');
+    }
+    expect(code.split('"$CLOSE_COMMENT"')).toHaveLength(3);
+    expect(
+      code.replace(fn('close_parents'), '').replace(fn('label_parts'), '')
+    ).not.toContain('$CLOSE_COMMENT');
+  });
+
+  it('closes parents then labels parts after the watches, never on --check', () => {
     expect(code).toMatch(
-      /if ! \$check; then\n {2}err="\$\(watch_prs\)"[^\n]*\n {2}err="\$\(watch_renovate\)"[^\n]*\n {2}err="\$\(close_parents\)" \|\| \{/
+      /if ! \$check; then\n {2}err="\$\(watch_prs\)"[^\n]*\n {2}err="\$\(watch_renovate\)"[^\n]*\n {2}err="\$\(close_parents\)"[^\n]*\n {2}err="\$\(label_parts\)" \|\| \{/
     );
   });
 
@@ -1271,6 +1297,170 @@ describe('run.sh close_parents', () => {
       expect(read('notes')).toContain('warn: close: COD-100 failed ("nope")');
       expect(read('notices')).toBe('');
       expect(read('closed-parents')).toBe('');
+    }
+  );
+});
+
+describe('run.sh label_parts', () => {
+  const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  // The queries and the function as written in run.sh
+  const source = SCRIPT.slice(
+    SCRIPT.indexOf("read -r -d '' PARTS"),
+    SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('label_parts() {')) + 3
+  );
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  let root: string;
+
+  const part = (description: string, comments: unknown[] = []) => ({
+    data: {
+      issues: {
+        nodes: [
+          {
+            id: 'uuid-102',
+            identifier: 'COD-102',
+            description,
+            comments: { nodes: comments },
+            team: { key: 'COD' },
+            parent: { identifier: 'COD-100', state: { type: 'started' } },
+            state: { type: 'backlog' },
+            labels: { nodes: [] },
+            inverseRelations: {
+              nodes: [
+                {
+                  type: 'blocks',
+                  issue: {
+                    identifier: 'COD-101',
+                    completedAt: '2026-11-01T00:00:00Z',
+                    state: { type: 'completed' },
+                    labels: { nodes: [{ name: 'agent:review' }] }
+                  }
+                }
+              ],
+              pageInfo: { hasNextPage: false }
+            }
+          }
+        ]
+      },
+      issueLabels: { nodes: [{ id: 'lbl-ready', team: { key: 'COD' } }] }
+    }
+  });
+
+  // Runs label_parts with a fake Linear; `update` is what the label update answers
+  const run = (
+    update: unknown,
+    description = '## Report\n\nDone.',
+    comments: unknown[] = []
+  ) => {
+    writeFileSync(
+      join(root, 'parts.json'),
+      JSON.stringify(part(description, comments))
+    );
+    writeFileSync(join(root, 'update.json'), JSON.stringify(update));
+    const script = [
+      `ROOT="${root}"; HOME_DIR="${root}"`,
+      `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
+      `record() { print -r -- "$*" >> "$ROOT/records"; }`,
+      `notice() { print -r -- "$*" >> "$ROOT/notices"; }`,
+      `watch() { jq -L "${DIR}" "$@"; }`,
+      'watch_err() { :; }',
+      'linear() {',
+      '  case "$1" in',
+      '    *issueUpdate*) print -r -- "label $2" >> "$ROOT/calls"; cat "$ROOT/update.json" ;;',
+      '    *commentCreate*) print -r -- "comment $2" >> "$ROOT/calls"; print -r -- \'{"data":{"commentCreate":{"success":true}}}\' ;;',
+      '    *) cat "$ROOT/parts.json" ;;',
+      '  esac',
+      '}',
+      // The comment mutation is shared with close_parents
+      SCRIPT.slice(
+        SCRIPT.indexOf("read -r -d '' CLOSE_COMMENT"),
+        SCRIPT.indexOf(
+          'GQL\n',
+          SCRIPT.indexOf("read -r -d '' CLOSE_COMMENT") + 40
+        ) + 4
+      ),
+      source,
+      'label_parts; print -r -- "rc=$?"'
+    ].join('\n');
+    return spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+  };
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'label-parts-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    expect(source).toContain('label_parts() {');
+    expect(source).toContain("read -r -d '' LABEL_PART");
+    expect(source).toContain(
+      'comments(first: 50, orderBy: createdAt) { nodes { body createdAt user { id app } } }'
+    );
+  });
+
+  it.skipIf(!canRun)('labels a ready part once, then comments', () => {
+    const result = run({ data: { issueUpdate: { success: true } } });
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls').trim().split('\n')).toEqual([
+      'label {"id":"uuid-102","label":"lbl-ready"}',
+      `comment ${JSON.stringify({ id: 'uuid-102', body: '**Agent: labelled ready** every blocker is closed: COD-101 (Done).' })}`
+    ]);
+    expect(read('records')).toBe('labelled COD-102 every blocker is closed\n');
+    expect(read('notices')).toBe(
+      'info COD-102 labelled agent:ready: every blocker is closed\n'
+    );
+    expect(read('labelled-parts')).toBe('COD-102\n');
+  });
+
+  it.skipIf(!canRun)('leaves a part it labelled before alone', () => {
+    writeFileSync(join(root, 'labelled-parts'), 'COD-102\n');
+    const result = run({ data: { issueUpdate: { success: true } } });
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls')).toBe('');
+    expect(read('records')).toBe('');
+  });
+
+  it.skipIf(!canRun)('leaves a part the queue labelled on another host', () => {
+    const result = run(
+      { data: { issueUpdate: { success: true } } },
+      undefined,
+      [
+        {
+          body: '**Agent: labelled ready** every blocker is closed: COD-101 (Done).',
+          createdAt: '2026-11-02T00:00:00Z',
+          user: { id: 'bbbb4a33-e052-486e-8e0f-d3abb5c5c841', app: true }
+        }
+      ]
+    );
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls')).toBe('');
+    expect(read('records')).toBe('');
+  });
+
+  it.skipIf(!canRun)('leaves a part whose report asks Håkan first', () => {
+    const result = run(
+      { data: { issueUpdate: { success: true } } },
+      '## Report\n\n**Ask me before implementing**\n'
+    );
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls')).toBe('');
+    expect(read('records')).toBe('');
+    expect(read('labelled-parts')).toBe('');
+  });
+
+  it.skipIf(!canRun)(
+    'only warns when the label fails, and posts no comment',
+    () => {
+      const result = run({ errors: [{ message: 'nope' }] });
+      expect(result.stdout).toContain('rc=0');
+      expect(read('calls')).not.toContain('comment');
+      expect(read('records')).toBe('warn COD-102 label: part label failed\n');
+      expect(read('notes')).toContain('warn: label: COD-102 failed ("nope")');
+      expect(read('notices')).toBe('');
+      expect(read('labelled-parts')).toBe('');
     }
   );
 });

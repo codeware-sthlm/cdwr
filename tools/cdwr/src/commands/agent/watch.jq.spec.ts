@@ -2628,6 +2628,379 @@ describe('attended picks', () => {
       expect(attended([ready('COD-9')]).ticket).toBe('COD-9');
       expect(refused([ready('COD-9')])).toEqual([]);
     });
+
+    describe('a split part', () => {
+      const labelledComment = {
+        body: '**Agent: labelled ready** every blocker is closed: COD-1 (Done).',
+        createdAt: '2026-10-01T00:00:01Z',
+        user: app
+      };
+      const part = (
+        actor: unknown,
+        description: string | null = null,
+        comments: unknown[] = [labelledComment],
+        blockerLabels: Array<{ name: string }> = [{ name: 'agent:review' }]
+      ) =>
+        ready('COD-9', {
+          parent: { identifier: 'COD-100' },
+          description,
+          comments: { nodes: comments },
+          inverseRelations: {
+            nodes: [
+              {
+                type: 'blocks',
+                issue: {
+                  identifier: 'COD-1',
+                  state: { type: 'completed' },
+                  labels: { nodes: blockerLabels }
+                }
+              }
+            ]
+          },
+          history: { nodes: [entry('2026-10-01T00:00:00Z', actor)] }
+        });
+
+      it('takes the agent’s own label when the report asks nothing', () => {
+        const n = part(app, 'A plain report.');
+        expect(refused([n])).toEqual([]);
+        expect(attended([n])).toMatchObject({
+          verdict: 'run',
+          ticket: 'COD-9',
+          reason: 'ready'
+        });
+      });
+
+      it('takes the agent’s label once the blocker lost its agent label', () => {
+        const n = part(app, 'A plain report.', [labelledComment], []);
+        expect(refused([n])).toEqual([]);
+        expect(attended([n]).verdict).toBe('run');
+      });
+
+      it('refuses the agent’s label without its labelled-ready comment', () => {
+        const n = part(app, 'A plain report.', []);
+        expect(refused([n])).toHaveLength(1);
+        expect(attended([n]).verdict).toBe('idle');
+      });
+
+      it('does not count a labelled-ready comment a person wrote', () => {
+        const n = part(app, 'A plain report.', [
+          {
+            body: '**Agent: labelled ready** pasted',
+            createdAt: AFTER_CUTOVER,
+            user: person
+          }
+        ]);
+        expect(refused([n])).toHaveLength(1);
+        expect(attended([n]).verdict).toBe('idle');
+      });
+
+      it('refuses the agent’s label on a ticket that is no split part', () => {
+        const n = ready('COD-9', {
+          history: { nodes: [entry('2026-10-01T00:00:00Z', app)] }
+        });
+        expect(refused([n])).toHaveLength(1);
+        expect(attended([n]).verdict).toBe('idle');
+      });
+
+      it('refuses another app’s label on a split part', () => {
+        const other = { id: 'cccc0000-0000-4000-8000-000000000002', app: true };
+        const n = part(other, 'A plain report.');
+        expect(refused([n])).toHaveLength(1);
+        expect(attended([n]).verdict).toBe('idle');
+      });
+
+      it('refuses the agent’s label on a part whose report asks first', () => {
+        const n = part(app, '**Ask me before implementing**\n');
+        expect(refused([n])).toHaveLength(1);
+        expect(attended([n]).verdict).toBe('idle');
+      });
+    });
+  });
+
+  describe('plan approved', () => {
+    const PLANNED =
+      '| Step | What | Status |\n| -- | -- | -- |\n| 1 | a | Planned |\n| 2 | b | Planned |\n';
+    const approved = {
+      body: '**Agent: plan approved** go ahead',
+      createdAt: '2026-10-01T00:00:00Z'
+    };
+    const planReady = {
+      body: '**Agent: plan ready** please look',
+      createdAt: '2026-10-02T00:00:00Z'
+    };
+    const approvedTicket = (over: Record<string, unknown> = {}) =>
+      ready('COD-9', {
+        description: PLANNED,
+        comments: { nodes: [approved] },
+        ...over
+      });
+    const q = (issues: Node[], limit = 5) =>
+      run(`queue_view(${NOW}; ${limit}; {}; null; {})`, issues) as {
+        next: Array<{ ticket: string; reason: string; detail: string | null }>;
+        held: { tickets: string[] };
+      };
+    const reasons = (issues: Node[]) =>
+      q(issues).next.map((i) => `${i.ticket}:${i.reason}`);
+    const runnable = (issues: Node[]) =>
+      (
+        run(`attended(${NOW}; 5; {}) | .runnable`, issues) as Array<{
+          ticket: string;
+          reason: string;
+        }>
+      ).map((i) => `${i.ticket}:${i.reason}`);
+
+    it('is a plan approved item, not a ready one', () => {
+      const n = approvedTicket();
+      expect(run('plan_approved', n)).toBe(true);
+      expect(run('ready_planned', n)).toBe(false);
+      expect(q([n]).next).toEqual([
+        { ticket: 'COD-9', reason: 'plan approved', detail: null }
+      ]);
+      expect(attended([n])).toMatchObject({
+        verdict: 'run',
+        ticket: 'COD-9',
+        reason: 'plan approved'
+      });
+    });
+
+    it('is runnable for an implementing session', () => {
+      expect(runnable([approvedTicket()])).toEqual(['COD-9:plan approved']);
+      expect(runnable([ready('COD-8')])).toEqual([]);
+    });
+
+    it('comes before ready, after a merged comment', () => {
+      const merged = node('COD-5', 'agent:review', {
+        state: { type: 'completed' },
+        completedAt: '2026-09-01T12:00:00Z',
+        comments: {
+          nodes: [
+            prReady(false),
+            { body: 'hi', createdAt: '2026-09-02T00:00:00Z' }
+          ]
+        }
+      });
+      expect(reasons([ready('COD-8'), approvedTicket(), merged])).toEqual([
+        'COD-5:merged comment',
+        'COD-9:plan approved',
+        'COD-8:ready'
+      ]);
+    });
+
+    it('is held when the limit is full, like a ready ticket', () => {
+      const issues = [review('COD-1'), approvedTicket(), ready('COD-8')];
+      const v = q(issues, 1);
+      expect(v.next).toEqual([]);
+      expect(v.held.tickets).toEqual(['COD-9', 'COD-8']);
+    });
+
+    it('survives a human comment after the approval', () => {
+      const n = approvedTicket({
+        comments: {
+          nodes: [
+            approved,
+            { body: 'thanks', createdAt: '2026-10-03T00:00:00Z' }
+          ]
+        }
+      });
+      expect(reasons([n])).toEqual(['COD-9:plan approved']);
+    });
+
+    it.each([
+      [
+        'its report asks first',
+        {
+          description: `**Ask me before implementing**\n\n${PLANNED}`
+        }
+      ],
+      [
+        'the newest agent comment is plan ready',
+        { comments: { nodes: [approved, planReady] } }
+      ],
+      ['no agent comment approved it', { comments: { nodes: [] } }],
+      [
+        'a person pasted the marker',
+        {
+          comments: {
+            nodes: [
+              {
+                ...approved,
+                user: { id: PERSON_ID, app: false },
+                createdAt: '2026-11-11T00:00:00Z'
+              }
+            ]
+          }
+        }
+      ],
+      [
+        'a row is already started',
+        {
+          description:
+            '| Step | What | Status |\n| -- | -- | -- |\n| 1 | a | Done |\n| 2 | b | Planned |\n'
+        }
+      ]
+    ])('stays a plain ready pick when %s', (_name, over) => {
+      const n = approvedTicket(over);
+      expect(run('plan_approved', n)).toBe(false);
+      expect(reasons([n])).toEqual(['COD-9:ready']);
+    });
+
+    it('is no pick while an open blocker holds it', () => {
+      const n = approvedTicket({
+        inverseRelations: {
+          nodes: [{ type: 'blocks', issue: { state: { type: 'started' } } }]
+        }
+      });
+      expect(run('plan_approved', n)).toBe(false);
+      expect(reasons([n])).toEqual([]);
+    });
+  });
+
+  describe('merge checks', () => {
+    const body = (handoffs: string[], checks: string[]) =>
+      [
+        '**Agent: PR ready**: ' + PR + '/1',
+        '',
+        ...(handoffs.length ? ['Hand-off checklist:', ...handoffs, ''] : []),
+        ...(checks.length
+          ? ['After the merge, the agent checks:', ...checks]
+          : [])
+      ].join('\n');
+    const merged = (
+      text: string,
+      agoSeconds = 30 * 60,
+      over: Record<string, unknown> = {}
+    ) =>
+      node('COD-5', null, {
+        state: { type: 'completed' },
+        completedAt: iso(agoSeconds),
+        comments: {
+          nodes: [{ body: text, createdAt: '2026-10-01T00:00:00Z' }]
+        },
+        ...over
+      });
+    const next = (issues: Node[], limit = 5) =>
+      (
+        run(
+          `queue_view(${NOW}; ${limit}; {}; null; {}) | .next`,
+          issues
+        ) as Array<{
+          ticket: string;
+          reason: string;
+          detail: string | null;
+        }>
+      ).map((i) => `${i.ticket}:${i.reason}:${i.detail}`);
+    const due = (n: Node) => run(`merge_checks_due(${NOW})`, n);
+
+    it('is a pick 30 minutes after the merge, with the count left', () => {
+      expect(
+        next([merged(body(['- [x] deploy'], ['- [ ] x', '- [ ] y']))])
+      ).toEqual(['COD-5:merge checks:2 left']);
+    });
+
+    it('also reads a ticket whose hand-offs were never listed', () => {
+      expect(next([merged(body([], ['- [ ] x']))])).toEqual([
+        'COD-5:merge checks:1 left'
+      ]);
+    });
+
+    it('waits 15 minutes past the merge', () => {
+      const text = body([], ['- [ ] x']);
+      expect(due(merged(text, 14 * 60))).toBe(false);
+      expect(due(merged(text, 15 * 60))).toBe(true);
+    });
+
+    it('ends 14 days after the merge', () => {
+      const text = body([], ['- [ ] x']);
+      expect(due(merged(text, 14 * DAY))).toBe(true);
+      expect(due(merged(text, 15 * DAY))).toBe(false);
+    });
+
+    it('ends once an agent checks comment follows the merge', () => {
+      const text = body([], ['- [ ] x']);
+      const checks = (createdAt: string) => ({
+        body: '**Agent: checks** all fine',
+        createdAt,
+        user: { id: APP_ID, app: true }
+      });
+      const withChecks = (createdAt: string) =>
+        merged(text, 30 * 60, {
+          comments: {
+            nodes: [
+              { body: text, createdAt: '2026-10-01T00:00:00Z' },
+              checks(createdAt)
+            ]
+          }
+        });
+      expect(due(merged(text))).toBe(true);
+      expect(due(withChecks(iso(10 * 60)))).toBe(false);
+      expect(due(withChecks(iso(2 * HOUR)))).toBe(true);
+    });
+
+    it('waits while a hand-off is unticked', () => {
+      expect(due(merged(body(['- [x] a', '- [ ] b'], ['- [ ] x'])))).toBe(
+        false
+      );
+    });
+
+    it.each([
+      ['all ticked', ['- [x] x', '- [X] y']],
+      ['struck through', ['- [ ] ~~x~~ not needed']],
+      ['none listed', []]
+    ])('is no pick when the checks are %s', (_name, checks) => {
+      expect(next([merged(body(['- [x] a'], checks))])).toEqual([]);
+    });
+
+    it('is no pick while the ticket is open', () => {
+      expect(
+        due(
+          merged(body([], ['- [ ] x']), 30 * 60, { state: { type: 'started' } })
+        )
+      ).toBe(false);
+    });
+
+    it('is not held by the limit', () => {
+      const issues = [review('COD-1'), merged(body([], ['- [ ] x']))];
+      expect(next(issues, 1)).toEqual(['COD-5:merge checks:1 left']);
+    });
+
+    it('is skipped when the ticket is already a merged comment pick', () => {
+      const n = merged(body([], ['- [ ] x']), 30 * 60, {
+        comments: {
+          nodes: [
+            {
+              body: body([], ['- [ ] x']),
+              createdAt: iso(2 * HOUR)
+            },
+            { body: 'one more thing', createdAt: iso(20 * 60) }
+          ]
+        }
+      });
+      expect(next([n])).toEqual(['COD-5:merged comment:null']);
+    });
+
+    it('leaves the hand-off block parsing unchanged', () => {
+      const text = body(['- [x] a', '- [ ] b'], ['- [ ] x']);
+      expect(
+        run(
+          'handoffs',
+          node('COD-5', null, {
+            comments: {
+              nodes: [{ body: text, createdAt: '2026-10-01T00:00:00Z' }]
+            }
+          })
+        )
+      ).toEqual(['b']);
+      expect(
+        run(
+          'merge_checks',
+          node('COD-5', null, {
+            comments: {
+              nodes: [{ body: text, createdAt: '2026-10-01T00:00:00Z' }]
+            }
+          })
+        )
+      ).toEqual(['x']);
+    });
   });
 
   describe('queue_order', () => {
@@ -3682,14 +4055,89 @@ describe('attended picks', () => {
           labels: { nodes: labelName ? [{ name: labelName }] : [] }
         }
       });
+      // A part is listed for Håkan only when its report asks him first
+      const ASK = '**Ask me before implementing**\n';
       const sub = (id: string, relations: unknown[], over = {}) =>
         node(id, null, {
           parent: { identifier: 'COD-100' },
           inverseRelations: { nodes: relations },
+          description: ASK,
           ...over
         });
       const listed = (issues: Node[]) =>
         view(issues).table.label.map((l) => l.ticket);
+      const flags = (n: Node) => ({
+        to_label: run('to_label', n),
+        parts_to_label: run('parts_to_label', n)
+      });
+
+      describe('the report decides who labels', () => {
+        const rel = [blocker('COD-1', 'completed')];
+
+        it('a part with nothing open in its report is the scheduler’s to label', () => {
+          const n = sub('COD-5', rel, { description: 'A plain report.\n' });
+          expect(flags(n)).toEqual({ to_label: false, parts_to_label: true });
+          expect(listed([n])).toEqual([]);
+        });
+
+        it('a part without a description is the scheduler’s to label', () => {
+          const n = sub('COD-5', rel, { description: null });
+          expect(flags(n)).toEqual({ to_label: false, parts_to_label: true });
+          expect(listed([n])).toEqual([]);
+        });
+
+        it.each([
+          ['an ask line', 'Report.\n\n**Ask me before implementing**\n'],
+          ['an Open questions heading', 'Report.\n\n### Open questions\n- x\n'],
+          ['a bold Open question line', 'Report.\n\n**Open question** which?\n']
+        ])('a part with %s is listed for Håkan', (_name, description) => {
+          const n = sub('COD-5', rel, { description });
+          expect(flags(n)).toEqual({ to_label: true, parts_to_label: false });
+          expect(listed([n])).toEqual(['COD-5']);
+        });
+
+        it('an Open questions heading under the Plan does not count', () => {
+          const n = sub('COD-5', rel, {
+            description:
+              'Report.\n\n## Plan\n\n### Open questions\n- x\n\n**Ask me before implementing**\n'
+          });
+          expect(flags(n)).toEqual({ to_label: false, parts_to_label: true });
+          expect(listed([n])).toEqual([]);
+        });
+
+        it('a part the queue labelled before, since unlabelled, is nobody’s to label', () => {
+          const n = sub('COD-5', rel, {
+            description: 'A plain report.\n',
+            comments: {
+              nodes: [
+                {
+                  body: '**Agent: labelled ready** every blocker is closed',
+                  createdAt: '2026-10-01T00:00:00Z',
+                  user: { id: APP_ID, app: true }
+                }
+              ]
+            }
+          });
+          expect(flags(n)).toEqual({ to_label: false, parts_to_label: false });
+        });
+
+        it.each([
+          ['an ask line with a colon', '**Ask me before implementing:** x'],
+          ['an ask line with a full stop', '**Ask me before implementing.**'],
+          ['an ask line with more words', '**Ask me before implementing this**']
+        ])('%s counts as asking first', (_name, description) => {
+          const n = sub('COD-5', rel, { description });
+          expect(flags(n)).toEqual({ to_label: true, parts_to_label: false });
+        });
+
+        it('neither list holds a part that already carries an agent label', () => {
+          const n = sub('COD-5', rel, {
+            description: 'Report.\n',
+            labels: { nodes: [{ name: 'agent:ready' }] }
+          });
+          expect(flags(n)).toEqual({ to_label: false, parts_to_label: false });
+        });
+      });
 
       it('lists a sub-issue whose blockers are all done', () => {
         const r = view([
@@ -5154,6 +5602,70 @@ describe('parents to close', () => {
     ).toEqual([]);
   });
 
+  describe('parts_to_label_list', () => {
+    const blocker = (id: string, type: string) => ({
+      type: 'blocks',
+      issue: {
+        identifier: id,
+        state: { type },
+        labels: { nodes: [{ name: 'agent:review' }] }
+      }
+    });
+    const part = (id: string, over: Record<string, unknown> = {}) => ({
+      id: `uuid-${id}`,
+      identifier: id,
+      team: { key: 'COD' },
+      parent: { identifier: 'COD-100', state: { type: 'started' } },
+      state: { type: 'unstarted' },
+      labels: { nodes: [] },
+      description: 'A plain report.',
+      inverseRelations: {
+        nodes: [blocker('COD-2', 'canceled'), blocker('COD-1', 'completed')]
+      },
+      ...over
+    });
+    const list = (nodes: unknown[], labelled: string[] = []) =>
+      run(`parts_to_label_list(${JSON.stringify(labelled)})`, {
+        data: { issues: { nodes } }
+      });
+
+    it('labels the part, blockers in number order', () => {
+      expect(list([part('COD-5')])).toEqual([
+        {
+          id: 'uuid-COD-5',
+          identifier: 'COD-5',
+          comment:
+            '**Agent: labelled ready** every blocker is closed: COD-1 (Done), COD-2 (Canceled).'
+        }
+      ]);
+    });
+
+    it('skips a part it labelled before', () => {
+      expect(
+        (
+          list([part('COD-5'), part('COD-6')], ['COD-5']) as Array<{
+            identifier: string;
+          }>
+        ).map((p) => p.identifier)
+      ).toEqual(['COD-6']);
+    });
+
+    it.each([
+      ['another team', { team: { key: 'ENG' } }],
+      [
+        'a report that asks first',
+        { description: '**Ask me before implementing**' }
+      ],
+      ['an agent label', { labels: { nodes: [{ name: 'agent:ready' }] } }]
+    ])('skips a part with %s', (_name, over) => {
+      expect(list([part('COD-5', over)])).toEqual([]);
+    });
+
+    it('reads an empty response as nothing to label', () => {
+      expect(run('parts_to_label_list([])', { data: {} })).toEqual([]);
+    });
+  });
+
   it('reads an empty response as nothing to close', () => {
     expect(run('parents_to_close([])', { data: {} })).toEqual({
       state: null,
@@ -5340,6 +5852,54 @@ describe('audit and tree', () => {
           })
         ])
       ).toEqual([]);
+    });
+
+    describe('an approved plan', () => {
+      const approved = agentComment('**Agent: plan approved** go');
+      const approvedKinds = (over: Record<string, unknown> = {}) =>
+        kinds([
+          node('COD-1', 'agent:ready', {
+            description: plan('Planned'),
+            comments: { nodes: [approved] },
+            ...over
+          })
+        ]);
+
+      it('is no gap, nor a decision nobody asked', () => {
+        expect(approvedKinds()).toEqual([]);
+      });
+
+      it('is a gap again when the report asks first', () => {
+        expect(
+          approvedKinds({
+            description: `**Ask me before implementing**\n\n${plan('Planned')}`
+          })
+        ).toEqual(['COD-1:ready-planned']);
+      });
+
+      it('is a gap again when the newest agent comment is plan ready', () => {
+        expect(
+          approvedKinds({
+            comments: {
+              nodes: [
+                approved,
+                agentComment(
+                  '**Agent: plan ready** look',
+                  '2026-10-03T00:00:00Z'
+                )
+              ]
+            }
+          })
+        ).toEqual(['COD-1:ready-planned']);
+      });
+
+      it('survives a human comment after the approval', () => {
+        expect(
+          approvedKinds({
+            comments: { nodes: [approved, personComment('thanks')] }
+          })
+        ).toEqual([]);
+      });
     });
 
     it('reads agent:ready beside another agent label', () => {
@@ -5531,8 +6091,12 @@ describe('audit and tree', () => {
   });
 
   describe('unlabelled', () => {
-    const sub = (completedAt: string | null) =>
+    const sub = (
+      completedAt: string | null,
+      description: string | null = '**Ask me before implementing**'
+    ) =>
       node('COD-2', null, {
+        description,
         state: { type: 'unstarted' },
         parent: { identifier: 'COD-1', title: 'P', state: { type: 'started' } },
         inverseRelations: {
@@ -5547,6 +6111,10 @@ describe('audit and tree', () => {
     it('is no gap for a recent or undated blocker', () => {
       expect(kinds([sub(iso(HOUR))])).toEqual([]);
       expect(kinds([sub(null)])).toEqual([]);
+    });
+
+    it('is no gap for a part the scheduler labels itself', () => {
+      expect(kinds([sub(iso(2 * DAY), 'A plain report.')])).toEqual([]);
     });
   });
 

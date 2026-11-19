@@ -1268,6 +1268,8 @@ export const queueViewSchema = z.object({
         'review feedback',
         'conflicts with main',
         'merged comment',
+        'merge checks',
+        'plan approved',
         'parked wait resolved',
         'renovate',
         'ready'

@@ -158,6 +158,10 @@ DENY=(
   "Read(//**/tools/cdwr/.env)" "Bash(*tools/cdwr/.env*)"
   # The Mac's token cache and the app's credentials files stay out of the session too
   "Read(/$HOME_DIR/linear.token*)" "Bash(*linear.token*)" "Bash(*linear-app.env*)" "Bash(*security find-generic-password*)" "Bash(*AGENT_QUEUE_LINEAR*)"
+  # A merge check reads the queue on this host only: --host (-H, alone or in a cluster) reaches
+  # another one over ssh
+  "Bash(pnpm cdwr agent status *--host*)" "Bash(pnpm cdwr agent logs *--host*)"
+  "Bash(pnpm cdwr agent status *-*H*)" "Bash(pnpm cdwr agent logs *-*H*)"
 )
 # The ticket worktrees sit beside the agent worktree; `//` anchors the rule at the root
 WT="/${REPO:h}/codeware-cod-*/**"
@@ -189,6 +193,8 @@ prompt="/work-queue implement-only once"
     "Bash(pnpm nx *)" "Bash(pnpm -C * nx *)" "Bash(pnpm -C * vitest *)" "Bash(pnpm -C * install*)" \
     "Bash(pnpm -C * add *)" "Bash(pnpm -C * remove *)" \
     "Bash(pnpm cdwr agent worktree *)" \
+    "Bash(pnpm cdwr agent status)" "Bash(pnpm cdwr agent status *)" "Bash(pnpm cdwr agent logs)" "Bash(pnpm cdwr agent logs *)" \
+    "WebFetch(domain:cdwr.io)" "WebFetch(domain:*.cdwr.io)" "WebFetch(domain:codeware.se)" "WebFetch(domain:*.codeware.se)" \
     "Bash(jq *)" "Bash(uuidgen*)" "Bash(cut *)" "Bash(date *)" "Bash(wc -c *)" \
     "Bash(tools/cdwr/agent-queue/session.sh register)" "Bash(tools/cdwr/agent-queue/session.sh ticket *)" "Bash(tools/cdwr/agent-queue/session.sh id)" \
     "Bash(tools/cdwr/agent-queue/wait.sh*)" \

@@ -307,14 +307,14 @@ query {
     state: { type: { eq: "canceled" } }
     updatedAt: { gt: "-P14D" }
   }) { ...queued }
-  # Only what watch.jq `to_label` reads: no description or comments for issues it merely checks
+  # Only what watch.jq `to_label` and `asks_first` read: the description, but no comments
   subissues: issues(first: 100, filter: {
     team: { key: { eq: "COD" } }
     parent: { null: false }
     state: { type: { nin: ["completed", "canceled"] } }
   }) {
     nodes {
-      identifier title priority createdAt
+      identifier title priority createdAt description
       parent { identifier title state { type } }
       state { type }
       labels(first: 20) { nodes { name } }
