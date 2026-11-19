@@ -150,6 +150,10 @@ describe('implement.sh', () => {
     expect(code).not.toMatch(/"Bash\([^"]*--force-with-lease=/);
   });
 
+  it('writes the review diff only through review-diff.sh', () => {
+    expect(code).toContain('"Bash(tools/cdwr/agent-queue/review-diff.sh *)"');
+  });
+
   it('reads the deny rules', () => {
     expect(denied.length).toBeGreaterThan(20);
     expect(matches('git * push * main', 'git -C /w push origin main')).toBe(
@@ -586,6 +590,42 @@ describe('implement.sh', () => {
         start();
         expect(launches()).toEqual({ key: 'COD-9 answered', launches: 2 });
         expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('untried');
+      });
+
+      it('records a review that could not run as failed, keeps the launch and opens nothing', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(
+          0,
+          JSON.stringify({
+            total_cost_usd: 0.4,
+            num_turns: 9,
+            result:
+              'implemented the steps\n\nreview failed: COD-1 answered · dontAsk denied the diff read\n'
+          })
+        );
+        expect(start().status).toBe(0);
+        expect(launches()).toEqual({ key: 'COD-1 answered', launches: 1 });
+        const last = rows('runs.jsonl').at(-1);
+        expect(last).toMatchObject({ outcome: 'failed', ticket: 'COD-1' });
+        expect(last?.['detail']).toContain(
+          'COD-1 answered · review could not run: dontAsk denied the diff read'
+        );
+      });
+
+      it('records a review failure with no reason given', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(
+          0,
+          JSON.stringify({
+            result: 'review failed: COD-1 answered',
+            num_turns: 1
+          })
+        );
+        start();
+        expect(rows('runs.jsonl').at(-1)).toMatchObject({ outcome: 'failed' });
+        expect(rows('runs.jsonl').at(-1)?.['detail']).toContain(
+          'review could not run: no reason given'
+        );
       });
 
       it('counts a normal result as implemented and keeps the launches', () => {
