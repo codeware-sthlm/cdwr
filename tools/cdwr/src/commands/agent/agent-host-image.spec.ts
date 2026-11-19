@@ -37,6 +37,41 @@ describe('agent-host image', () => {
     expect(dockerfile).toContain('AGENT_QUEUE_LINEAR_PROXY_PORT=8790');
   });
 
+  it('runs implement sessions as a second user, with two sudo crossings and nothing else', () => {
+    expect(dockerfile).toMatch(/^\s+sudo \\$/m);
+    expect(dockerfile).toContain('groupadd --gid 1002 queue');
+    expect(dockerfile).toContain('useradd --uid 1001 --user-group');
+    expect(dockerfile).toContain('usermod -aG queue agent');
+    expect(dockerfile).toContain('usermod -aG queue session');
+    expect(dockerfile).toContain('chmod 2770 /home/session/.claude');
+    expect(dockerfile).toContain(
+      'apps/agent-host/session-launch.sh apps/agent-host/session-stop.sh apps/agent-host/linear-mcp-proxy.mjs /opt/agent-host/'
+    );
+    expect(dockerfile).toContain(
+      'COPY --chmod=440 apps/agent-host/sudoers /etc/sudoers.d/agent-host'
+    );
+    expect(dockerfile).toContain('visudo -cf /etc/sudoers.d/agent-host');
+    expect(ignore).toContain('!/apps/agent-host/session-launch.sh');
+    expect(ignore).toContain('!/apps/agent-host/sudoers');
+    const sudoers = read('../../../../../apps/agent-host/sudoers');
+    expect(sudoers.split('\n').filter((l) => l.includes('NOPASSWD'))).toEqual([
+      'agent ALL=(session) NOPASSWD: /opt/agent-host/session-launch.sh',
+      'agent ALL=(session) NOPASSWD: /opt/agent-host/session-stop.sh',
+      'session ALL=(agent) NOPASSWD: /opt/agent-host/git-credential-app.sh'
+    ]);
+    expect(ignore).toContain('!/apps/agent-host/session-stop.sh');
+    expect(dockerfile).toContain('apps/agent-host/session-stop.sh');
+    expect(sudoers).toContain('env_reset');
+    expect(sudoers).not.toMatch(
+      /LINEAR_KEY|LINEAR_CLIENT|INFISICAL|SERVICE_KEY|SLACK|APP_KEY/
+    );
+    expect(sudoers).toContain('AGENT_SUPABASE_URL AGENT_SUPABASE_ANON_KEY');
+    const compose = read('../../../../../apps/agent-host/compose.yaml');
+    expect(compose).toContain('session-claude-home:/home/session/.claude');
+    expect(compose).toContain('session-pnpm-store:/session-pnpm-store');
+    expect(compose).toContain('/run/agent:mode=0700,uid=1000,gid=1000');
+  });
+
   // The platform step reads the cms database and Fly with them
   it('installs psql and a pinned flyctl on the PATH as fly and flyctl', () => {
     expect(dockerfile).not.toMatch(/^\s+postgresql-client \\$/m);
@@ -49,6 +84,41 @@ describe('agent-host image', () => {
     expect(dockerfile).toContain('superfly/flyctl/releases/download/');
     expect(dockerfile).toContain('/usr/local/bin flyctl');
     expect(dockerfile).toContain('ln -s flyctl /usr/local/bin/fly');
+  });
+});
+
+describe('agent-host session launcher', () => {
+  const launcher = read('../../../../../apps/agent-host/session-launch.sh');
+  const helper = read('../../../../../apps/agent-host/git-credential-app.sh');
+
+  it('gives the session its own home and the queue home under the other user', () => {
+    expect(launcher).toContain('export HOME=/home/session');
+    expect(launcher).toContain('export CDWR_HOME=/home/agent/.cdwr');
+    expect(launcher).toContain(
+      'export pnpm_config_store_dir=/session-pnpm-store'
+    );
+    expect(launcher).toContain(
+      'export AGENT_QUEUE_WORKTREE_REPO=/work/codeware-session'
+    );
+    expect(launcher).toContain(
+      'export AGENT_QUEUE_NOTIFY_SPOOL="$CDWR_HOME/agent-queue/notify-spool"'
+    );
+    expect(launcher).toMatch(/exec claude "\$@"\s*$/);
+    expect(launcher).toContain(
+      'git config --global --add safe.directory "${AGENT_QUEUE_REPO:?}"'
+    );
+  });
+
+  it('gets its git tokens through the queue user, never the key', () => {
+    expect(launcher).toContain(
+      "'!sudo -n -u agent /opt/agent-host/git-credential-app.sh'"
+    );
+    expect(launcher).not.toMatch(/run\/agent|app\.pem|linear/);
+    // The helper's environment is reset by sudo, so its paths are the image's
+    expect(helper).toContain(
+      'source /home/agent/.cdwr/agent-queue/github-app.sh'
+    );
+    expect(helper).not.toContain('AGENT_QUEUE_HOME');
   });
 });
 

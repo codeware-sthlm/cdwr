@@ -1,0 +1,14 @@
+# The crossings between the queue's user and the implement sessions' user, and nothing else:
+# the launcher and the stop one way, the git credential helper the other. Checked with visudo
+# when the image builds. The launcher gets a reset environment plus what the session is meant to
+# have: the OAuth token, the GitHub token and identity, the queue's non-secret settings and the
+# listener's publishable Supabase keys. No Linear, Infisical, service or Slack secret crosses.
+Defaults!/opt/agent-host/session-launch.sh env_reset
+Defaults!/opt/agent-host/session-launch.sh env_keep += "CLAUDE_CODE_OAUTH_TOKEN GH_TOKEN GITHUB_TOKEN"
+Defaults!/opt/agent-host/session-launch.sh env_keep += "GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL"
+Defaults!/opt/agent-host/session-launch.sh env_keep += "AGENT_QUEUE_SESSION_KIND AGENT_QUEUE_HOST AGENT_QUEUE_HOME AGENT_QUEUE_REPO"
+Defaults!/opt/agent-host/session-launch.sh env_keep += "AGENT_QUEUE_LINEAR_PROXY_PORT AGENT_QUEUE_LINEAR_MCP ENABLE_TOOL_SEARCH"
+Defaults!/opt/agent-host/session-launch.sh env_keep += "AGENT_SUPABASE_URL AGENT_SUPABASE_ANON_KEY"
+agent ALL=(session) NOPASSWD: /opt/agent-host/session-launch.sh
+agent ALL=(session) NOPASSWD: /opt/agent-host/session-stop.sh
+session ALL=(agent) NOPASSWD: /opt/agent-host/git-credential-app.sh
