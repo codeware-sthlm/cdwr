@@ -536,17 +536,27 @@ jobs:
           retention-days: 1
           if-no-files-found: warn
 
+      # Only apps that reached Fly get a finalized release and a deploy record.
+      # An app the action skipped (an older commit than its newest release)
+      # never ran this build, so its release is deleted like a failed one.
       - name: Finalize Sentry releases
         if: steps.deployment.outcome == 'success'
         env:
           APPS: ${{ needs.build.outputs.apps }}
+          DEPLOYED: ${{ steps.deployment.outputs.deployed-projects }}
           ENVIRONMENT: ${{ needs.pre-deploy.outputs.environment }}
           SENTRY_AUTH_TOKEN: ${{ secrets.INF_SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.INF_SENTRY_ORG }}
         run: |
           set -euo pipefail
-          jq -r '.[] | select(.sentry.release) | "\(.sentry.project) \(.sentry.release)"' <<< "$APPS" |
-            while read -r project release; do
+          jq -r --argjson deployed "${DEPLOYED:-[]}" \
+            '.[] | select(.sentry.release) | "\(.name as $n | $deployed | index($n) != null) \(.sentry.project) \(.sentry.release)"' <<< "$APPS" |
+            while read -r deployed project release; do
+              if [ "$deployed" != "true" ]; then
+                echo "$release: not deployed, deleting it"
+                SENTRY_PROJECT="$project" pnpm sentry-cli releases delete "$release" || true
+                continue
+              fi
               SENTRY_PROJECT="$project" pnpm sentry-cli releases finalize "$release"
               # Record where it landed, now that the deployment has succeeded
               SENTRY_PROJECT="$project" pnpm sentry-cli deploys new \
@@ -696,6 +706,7 @@ jobs:
               .[] |
               if .action == "deploy" then "✅ *" + .name + "* — <" + .url + "|" + .url + ">"
               elif .action == "failed" then "❌ *" + .appOrProject + "* — " + .error
+              elif .action == "skipped" then "⏭️ *" + .appOrProject + "* — " + .reason
               else empty
               end
             ' "$PROJECTS_FILE")
