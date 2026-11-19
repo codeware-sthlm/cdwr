@@ -73,12 +73,33 @@ export const unreadApps = (states: AppState[]): AppState[] =>
       onFly === 'unreachable' && !!flyApp && !!flyError
   );
 
-/** One desk-row line naming the first unread app and Fly's error, with no password */
-export function partialReason(unread: AppState[]): string {
-  const [first] = unread;
+export interface FlyFailure {
+  flyApp: string;
+  flyError?: string;
+}
+
+/** The first app of a kind of failure and Fly's error, counting the rest */
+function describeFailures(failures: FlyFailure[], what: string): string {
+  const [first] = failures;
   if (!first) return '';
-  const more = unread.length > 1 ? ` (+${unread.length - 1} more)` : '';
-  const line = `${first.flyApp} not read on Fly: ${first.flyError}${more}`;
+  const more = failures.length > 1 ? ` (+${failures.length - 1} more)` : '';
+  return `${first.flyApp} ${what}: ${first.flyError}${more}`;
+}
+
+/**
+ * One desk-row line naming the first unread app and the first app Fly would
+ * not open, each with Fly's error, and no password
+ */
+export function partialReason(
+  unread: FlyFailure[],
+  stillClosed: FlyFailure[] = []
+): string {
+  const line = [
+    describeFailures(unread, 'not read on Fly'),
+    describeFailures(stillClosed, 'still closed on Fly')
+  ]
+    .filter(Boolean)
+    .join('; ');
   return line.length > FLY_ERROR_MAX
     ? `${line.slice(0, FLY_ERROR_MAX - 1)}…`
     : line;

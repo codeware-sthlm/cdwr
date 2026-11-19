@@ -234,6 +234,20 @@ describe('unreadApps / partialReason', () => {
     expect(out.endsWith('…')).toBe(true);
   });
 
+  it('names an app Fly would not open beside an unread one', () => {
+    expect(
+      partialReason(
+        [cms],
+        [{ flyApp: 'cdwr-headless-acme', flyError: 'Error: timeout' }]
+      )
+    ).toBe(
+      'cdwr-cms-acme not read on Fly: Error: unauthorized; cdwr-headless-acme still closed on Fly: Error: timeout'
+    );
+    expect(
+      partialReason([], [{ flyApp: 'cdwr-cms-acme', flyError: 'Error: x' }])
+    ).toBe('cdwr-cms-acme still closed on Fly: Error: x');
+  });
+
   it('is empty with nothing unread', () => {
     expect(partialReason([])).toBe('');
   });
