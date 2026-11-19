@@ -363,6 +363,47 @@ fi
     expect(rest).toContain('data: second');
   });
 
+  describe('the attended route', () => {
+    const attendedScript = (body: string): string => {
+      const script = join(dir, 'attended.sh');
+      writeFileSync(script, `#!/bin/sh\n${body}\n`);
+      chmodSync(script, 0o755);
+      return script;
+    };
+    const attended = (method = 'POST', body = '') =>
+      fetch(`http://127.0.0.1:${proxyPort}/attended`, {
+        method,
+        ...(method === 'POST' ? { body } : {})
+      });
+
+    it("answers the attended command's JSON, upstream untouched", async () => {
+      const script = attendedScript(
+        `printf '%s' '{"data":{"issues":{"nodes":[]}}}'`
+      );
+      await startProxy({ AGENT_QUEUE_LINEAR_ATTENDED: script });
+      const res = await attended('POST', 'ignored');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('application/json');
+      expect(await res.json()).toEqual({ data: { issues: { nodes: [] } } });
+      expect(received).toEqual([]);
+    });
+
+    it('answers 502 when the command fails or prints no JSON', async () => {
+      const script = attendedScript('exit 3');
+      await startProxy({ AGENT_QUEUE_LINEAR_ATTENDED: script });
+      expect((await attended()).status).toBe(502);
+      writeFileSync(script, "#!/bin/sh\nprintf 'not json'\n");
+      expect((await attended()).status).toBe(502);
+    });
+
+    it('answers 404 for GET /attended', async () => {
+      await startProxy({
+        AGENT_QUEUE_LINEAR_ATTENDED: attendedScript('exit 0')
+      });
+      expect((await attended('GET')).status).toBe(404);
+    });
+  });
+
   it('exits non-zero when the tools file is missing', async () => {
     await expect(
       startProxy({
