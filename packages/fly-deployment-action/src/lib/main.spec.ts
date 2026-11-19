@@ -209,6 +209,26 @@ describe('main', () => {
     );
   });
 
+  it('should list skipped projects in the summary without failing', async () => {
+    flyDeploymentMock.mockResolvedValue({
+      environment: 'production',
+      projects: [
+        {
+          action: 'skipped',
+          appOrProject: 'cms',
+          reason: 'abcdef1 is older than cms-1.2.3'
+        }
+      ]
+    } satisfies ActionOutputs);
+
+    await main.run();
+
+    expect(core.summary.addList).toHaveBeenCalledWith([
+      'cms: abcdef1 is older than cms-1.2.3'
+    ]);
+    expect(setFailedMock).not.toHaveBeenCalled();
+  });
+
   it('should handle errors', async () => {
     getInputMock.mockImplementation((name: string) => {
       if (name === 'apps') return '[]';

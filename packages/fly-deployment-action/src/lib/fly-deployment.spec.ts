@@ -10,6 +10,7 @@ import { vol } from 'memfs';
 import { flyDeployment } from './fly-deployment';
 import type { ActionInputs } from './schemas/action-inputs.schema';
 import { ActionOutputs } from './schemas/action-outputs.schema';
+import { checkReleaseOrder } from './utils/release-order';
 
 type WebhookPayload = (typeof context)['payload'];
 
@@ -41,6 +42,9 @@ vi.mock('@codeware/shared/util/github', async () => ({
   getRepositoryDefaultBranch: vi.fn()
 }));
 vi.mock('@cdwr/fly-node');
+vi.mock('./utils/release-order', () => ({
+  checkReleaseOrder: vi.fn()
+}));
 vi.mock('@codeware/shared/feature/tenancy', () => ({
   fetchDeployments: vi.fn()
 }));
@@ -62,6 +66,7 @@ describe('flyDeployment', () => {
   const mockCoreWarning = vi.mocked(core.warning);
   const mockGithubContext = vi.mocked(github.context);
   const mockFly = vi.mocked(Fly);
+  const mockCheckReleaseOrder = vi.mocked(checkReleaseOrder);
 
   /**
    * Helper to get the mocked Fly instance to interact and spy on methods
@@ -337,6 +342,9 @@ describe('flyDeployment', () => {
 
     setupMocks();
     setContext('push-main-branch');
+
+    // A commit that holds the newest release, unless a test says otherwise
+    mockCheckReleaseOrder.mockResolvedValue({ deploy: true });
   });
 
   describe('start up', () => {
@@ -1129,6 +1137,89 @@ describe('flyDeployment', () => {
         );
       }
     );
+  });
+
+  describe('release order', () => {
+    const sha = 'abcdef1234567890abcdef1234567890abcdef12';
+
+    beforeEach(() => {
+      mockGithubContext.sha = sha;
+    });
+
+    afterEach(() => {
+      mockGithubContext.sha = '';
+    });
+
+    it('should skip an app older than its newest release and deploy the others', async () => {
+      setupMocks();
+      mockCheckReleaseOrder.mockImplementation(async (project) =>
+        project === 'app-one'
+          ? { deploy: false, reason: 'abcdef1 is older than app-one-1.0.0' }
+          : { deploy: true }
+      );
+
+      const result = await flyDeployment(setupTest(), true);
+
+      expect(mockCheckReleaseOrder).toHaveBeenCalledWith('app-one', sha);
+      expect(mockCheckReleaseOrder).toHaveBeenCalledWith('app-two', sha);
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-two-config' })
+      );
+      expect(result.projects).toEqual([
+        {
+          action: 'skipped',
+          appOrProject: 'app-one',
+          reason: 'abcdef1 is older than app-one-1.0.0'
+        },
+        expect.objectContaining({ action: 'deploy', app: 'app-two-config' })
+      ]);
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        expect.stringContaining('Skipping app-one')
+      );
+    });
+
+    it('should report failed without deploying when the check throws', async () => {
+      setupMocks();
+      mockCheckReleaseOrder.mockImplementation(async (project) => {
+        if (project === 'app-one') throw new Error('git boom');
+        return { deploy: true };
+      });
+
+      const result = await flyDeployment(setupTest(), true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(getMockFly().deploy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-one-config' })
+      );
+      expect(result.projects[0]).toEqual({
+        action: 'failed',
+        appOrProject: 'app-one',
+        error: 'Release order check failed: git boom'
+      });
+    });
+
+    it('should deploy as before when the commit holds the newest release', async () => {
+      setupMocks();
+
+      const result = await flyDeployment(setupTest(), true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(2);
+      expect(result.projects.map((p) => p.action)).toEqual([
+        'deploy',
+        'deploy'
+      ]);
+    });
+
+    it('should not check the order of a preview deployment', async () => {
+      setContext('pr-opened');
+      setupMocks();
+
+      await flyDeployment(setupTest({}, 'preview'), true);
+
+      expect(mockCheckReleaseOrder).not.toHaveBeenCalled();
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('tenant secrets', () => {

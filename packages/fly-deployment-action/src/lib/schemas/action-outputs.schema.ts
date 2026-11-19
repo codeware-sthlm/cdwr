@@ -1,7 +1,7 @@
 import { EnvironmentSchema } from '@codeware/shared/util/nx-deploy';
 import { z } from 'zod';
 
-export const ActionSchema = z.enum(['deploy', 'destroy', 'failed']);
+export const ActionSchema = z.enum(['deploy', 'destroy', 'failed', 'skipped']);
 
 const FlyAppNameSchema = z.object({
   app: z.string().min(1, 'An app name is required').describe('App name')
@@ -46,11 +46,26 @@ const ActionFailedSchema = z.object({
     .describe('Error message')
 });
 
+// 'skipped' action requires an app or project name and the reason, e.g. an
+// older commit than the project's newest release
+const ActionSkippedSchema = z.object({
+  action: z.literal(ActionSchema.enum.skipped),
+  appOrProject: z
+    .string()
+    .min(1, 'An app or project name is required')
+    .describe('App or project name'),
+  reason: z
+    .string()
+    .min(1, 'A reason is required')
+    .describe('Why the project was not deployed')
+});
+
 // Combine the action schemas into a discriminated union
 const ProjectSchema = z.discriminatedUnion('action', [
   ActionDeploySchema,
   ActionDestroySchema,
-  ActionFailedSchema
+  ActionFailedSchema,
+  ActionSkippedSchema
 ]);
 
 // Final action outputs schema

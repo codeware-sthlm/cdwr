@@ -7,6 +7,7 @@ import type { DeploymentConfig } from '../schemas/deployment-config.schema';
 
 import { addOpinionatedEnv } from './add-opinionated-env';
 import { getHealthCheckPath, probeHealth } from './probe-health';
+import { checkReleaseOrder } from './release-order';
 import type { ResolvedAppDetails } from './resolve-tenant-secrets';
 
 /**
@@ -63,6 +64,34 @@ export const runDeployApps = async (options: {
       );
       core.endGroup();
       continue;
+    }
+
+    // A production deploy never moves an app back past its newest release:
+    // a re-run of an older deploy can start after a newer one released it
+    if (environment === 'production' && gitSha) {
+      try {
+        const order = await checkReleaseOrder(projectName, gitSha);
+        if (!order.deploy) {
+          core.warning(`Skipping ${projectName}: ${order.reason}`);
+          projects.push({
+            action: 'skipped',
+            appOrProject: projectName,
+            reason: order.reason
+          });
+          core.endGroup();
+          continue;
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        core.error(`❌ Could not check the release order: ${msg}`);
+        projects.push({
+          action: 'failed',
+          appOrProject: projectName,
+          error: `Release order check failed: ${msg}`
+        });
+        core.endGroup();
+        continue;
+      }
     }
 
     // Read the base app name and the health check path from local config

@@ -16,6 +16,11 @@
       "action": "failed",
       "appOrProject": "broken-project",
       "error": "No fly.toml file found"
+    },
+    {
+      "action": "skipped",
+      "appOrProject": "stale-project",
+      "reason": "641a9e3 is older than stale-project-1.2.3"
     }
   ]
 }

@@ -120,7 +120,7 @@ outputs:
   projects:
     description: >
       JSON array of all deployment results (deployed, failed, skipped).
-      Each item has an action field ('deploy', 'destroy', or 'failed') and relevant properties.
+      Each item has an action field ('deploy', 'destroy', 'failed' or 'skipped') and relevant properties.
   projects-path:
     description: >
       Path to a JSON file containing the projects array.

@@ -118,6 +118,16 @@ export async function run(): Promise<void> {
     writeFileSync(projectsPath, JSON.stringify(projects));
     core.setOutput('projects-path', projectsPath);
 
+    // A skip is no failure, but the run summary says what was left out and why
+    const skippedProjects = projects.filter((p) => p.action === 'skipped');
+    if (skippedProjects.length > 0) {
+      core.summary.addHeading('Skipped deployments', 3);
+      core.summary.addList(
+        skippedProjects.map((p) => `${p.appOrProject}: ${p.reason}`)
+      );
+      await core.summary.write();
+    }
+
     const failedProjects = projects.filter((p) => p.action === 'failed');
     if (failedProjects.length > 0) {
       const failedList = failedProjects
