@@ -12,7 +12,10 @@
     "nx@nx-claude-plugins": true
   },
   "permissions": {
-    "allow": ["Bash(tools/cdwr/agent-queue/force-push.sh *)"]
+    "allow": [
+      "Bash(tools/cdwr/agent-queue/force-push.sh *)",
+      "Bash(tools/cdwr/agent-queue/review-diff.sh *)"
+    ]
   },
   "sandbox": {
     "network": {
