@@ -1,8 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync
 } from 'node:fs';
@@ -83,9 +85,45 @@ describe.skipIf(!hasZsh)('notify.sh', () => {
     });
   });
 
-  it('does nothing without a webhook', () => {
+  it('does nothing without a webhook or a spool', () => {
     const result = run({}, { message: 'm' });
     expect(result.status).toBe(0);
     expect(existsSync(body)).toBe(false);
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it('spools the notice without a webhook', () => {
+    const spool = join(dir, 'spool');
+    const result = run(
+      { AGENT_QUEUE_NOTIFY_SPOOL: spool },
+      { message: 'COD-1: plan ready', cwd: '/work/cdwr' }
+    );
+    expect(result.status).toBe(0);
+    const files = readdirSync(spool);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(/^\d+-\d+\.json$/);
+    expect(
+      JSON.parse(readFileSync(join(spool, files[0] ?? ''), 'utf8'))
+    ).toEqual({
+      text: '*cdwr*: COD-1: plan ready',
+      at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
+    });
+    expect(files.some((f) => f.endsWith('.tmp'))).toBe(false);
+    expect(existsSync(body)).toBe(false);
+  });
+
+  it('posts and never spools with a webhook', () => {
+    const spool = join(dir, 'spool');
+    mkdirSync(spool);
+    const result = run(
+      {
+        SLACK_WEBHOOK_URL: 'https://hooks.example/x',
+        AGENT_QUEUE_NOTIFY_SPOOL: spool
+      },
+      { message: 'm' }
+    );
+    expect(result.status).toBe(0);
+    expect(existsSync(body)).toBe(true);
+    expect(readdirSync(spool)).toEqual([]);
   });
 });

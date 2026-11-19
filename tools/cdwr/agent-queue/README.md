@@ -60,7 +60,13 @@ are the app user's and not Håkan's (`AGENT_QUEUE_LINEAR_MCP`, the credentials a
 are in `tools/cdwr/README.md`); a run without Linear tools doesn't start. In the container the
 runs reach it through a local proxy (`apps/agent-host/linear-mcp-proxy.mjs`) that signs the requests
 and answers a call to a tool outside `linear-tools.txt` itself, the one Linear tool list; the session
-gets no token. A queue file, `linear-tools.txt` is installed beside the scripts. The queue tells its own
+gets no token. It also answers `POST /attended` with the attended query's JSON, run as `agent`
+through `lib.sh attended`, so a session without Linear credentials can still compute its pick:
+`wait.sh` falls back to that route when `linear_auth` fails and the proxy port is set, and only
+the attended query goes that way. In the same spirit `notify.sh` without a webhook spools each
+notice as a JSON file into `AGENT_QUEUE_NOTIFY_SPOOL` when that names a directory, for a relay to
+post; without the variable it stays a silent no-op. A queue file, `linear-tools.txt` is installed
+beside the scripts. The queue tells its own
 comments from Håkan's by that author (`is_agent` in `watch.jq`), and never starts a ticket whose
 `agent:ready` the app added (`refused` in the queue view). On GitHub it acts as the
 `codeware-agent` app (`github-app.sh`, credentials in `tools/cdwr/.env`), never as Håkan, so
