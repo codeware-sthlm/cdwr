@@ -51,17 +51,21 @@ export default defineConfig({
       gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 }
     },
     {
-      // The built server, as it runs in production. `start` builds first, and
-      // the built server reads no `.env`, so everything it needs is set here.
-      // The gate page answers without the cms.
+      // The built server, as it runs in production. The `e2e` target builds it
+      // first, and the built server reads no `.env`, so everything it needs is
+      // set here. The gate page answers without the cms.
+      // Started directly, not through pnpm and nx, so SIGTERM reaches it.
       // Never reused: the gate allows 10 wrong guesses per address per 10
       // minutes, and a reused server would carry them across reruns
-      command: 'pnpm exec nx run headless:start',
+      command: 'node .output/server/index.mjs',
       url: `http://localhost:${HEADLESS_PORT}/site-gate`,
       reuseExistingServer: false,
-      cwd: workspaceRoot,
+      cwd: resolve(workspaceRoot, 'apps/headless'),
       timeout: 300_000,
       env: {
+        // srvx skips its SIGTERM handler when `CI` is set, and the server
+        // then dies by the signal with a non-zero exit
+        CI: '',
         NODE_ENV: 'production',
         PORT: HEADLESS_PORT,
         PAYLOAD_URL: CMS_URL,
