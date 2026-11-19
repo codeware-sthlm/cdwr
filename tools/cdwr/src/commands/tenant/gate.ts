@@ -22,6 +22,7 @@ import {
 
 import {
   type AppState,
+  type FlyFailure,
   GATE_KEY,
   MIN_PASSWORD_LENGTH,
   type OnFly,
@@ -210,7 +211,7 @@ export default defineCommand({
         );
       }
 
-      const failed: string[] = [];
+      const stillClosed: FlyFailure[] = [];
       for (const { flyApp } of states.filter(({ onFly }) => onFly === 'set')) {
         try {
           await ctx.ui.task(`Opening ${flyApp}`, async () => {
@@ -219,9 +220,10 @@ export default defineCommand({
           });
         } catch (error) {
           ctx.ui.warn(`${flyApp} is still closed: ${messageOf(error)}`);
-          failed.push(flyApp);
+          stillClosed.push({ flyApp, flyError: flyErrorOf(error) });
         }
       }
+      const failed = stillClosed.map(({ flyApp }) => flyApp);
 
       if (failed.length || unread.length) {
         return {
@@ -234,9 +236,8 @@ export default defineCommand({
             tenant,
             environment,
             failed,
-            ...(unreadJson ?? {
-              reason: `${failed.join(', ')} still closed on Fly`
-            })
+            ...unreadJson,
+            reason: partialReason(unread, stillClosed)
           }
         };
       }
