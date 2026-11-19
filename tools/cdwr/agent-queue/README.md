@@ -72,7 +72,13 @@ comments from Håkan's by that author (`is_agent` in `watch.jq`), and never star
 `codeware-agent` app (`github-app.sh`, credentials in `tools/cdwr/.env`), never as Håkan, so
 main's rulesets apply to it; without the app it does not start. The session takes the key's work
 first (`wait.sh --runnable` lists what it may take); when it can't, it ends with
-`not tried: <key> · <reason>` and the launch is recorded `untried` and not counted. A session a
+`not tried: <key> · <reason>` and the launch is recorded `untried` and not counted. Before its PR the
+session runs the code review over a diff file: `review-diff.sh <worktree>` writes the branch against
+`origin/main` plus the uncommitted changes into the worktree's git dir and prints the path, since the
+run may neither pipe git into a file nor diff against `origin/main` itself. A session whose review
+could not run at all ends with `review failed: <key> · <reason>` and opens no PR; the launch is
+recorded `failed` with that reason, one notice goes out, and the ticket keeps `agent:working` with its
+**Next:** line naming why, so the desk shows the gap. A session a
 deploy or container stop cuts is recorded `interrupted` and not counted either. After two
 launches that change nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
 launching too.
