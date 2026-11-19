@@ -20,6 +20,7 @@ import {
   healthChecksOf,
   healthPath,
   libpqEnv,
+  mergePeak,
   ok,
   oneLine,
   parseSql,
@@ -127,6 +128,10 @@ const db = {
   sizeBytes: 1000,
   sessions: 3,
   poolerSessions: 2,
+  connections: 12,
+  maxConnections: 60,
+  reservedConnections: 3,
+  sessionsOpened: 900,
   byApplication: { Supavisor: 2, '(none)': 1 }
 };
 
@@ -187,6 +192,15 @@ const readings = (over: Partial<PlatformReadings> = {}): PlatformReadings => ({
     )
   },
   backup: null,
+  dbPeak: {
+    peak: {
+      day: '2026-11-18',
+      connections: 41,
+      at: '2026-11-18T10:50:00.000Z',
+      sessionsOpened: 900
+    },
+    opened: 140
+  },
   ...over
 });
 
@@ -648,9 +662,23 @@ describe('buildRows', () => {
       sizeBytes: 1000,
       sessions: 3,
       poolerSessions: 2,
+      connections: 12,
+      limit: 57,
+      peak: { connections: 41, at: '2026-11-18T10:50:00.000Z' },
+      opened: 140,
       byApplication: { Supavisor: 2, '(none)': 1 }
     });
     expect(row(rows, 'acme').db).toEqual({});
+  });
+
+  it('leaves the peak and sessions opened empty without a merged peak', () => {
+    const { rows } = buildRows(readings({ dbPeak: null }));
+    expect(row(rows, SHARED_KEY).db).toMatchObject({
+      connections: 12,
+      limit: 57,
+      peak: null,
+      opened: null
+    });
   });
 
   it('names a failed whole source in the errors of every row it feeds', () => {
@@ -1313,12 +1341,100 @@ describe('switchRecords', () => {
   });
 });
 
+describe('mergePeak', () => {
+  const previous = {
+    day: '2026-11-18',
+    connections: 41,
+    at: '2026-11-18T10:50:00.000Z',
+    sessionsOpened: 900
+  };
+
+  it('starts the peak on the first tick, with no sessions opened yet', () => {
+    expect(
+      mergePeak(null, {
+        at: '2026-11-18T09:00:00.000Z',
+        connections: 12,
+        sessionsOpened: 500
+      })
+    ).toEqual({
+      peak: {
+        day: '2026-11-18',
+        connections: 12,
+        at: '2026-11-18T09:00:00.000Z',
+        sessionsOpened: 500
+      },
+      opened: null
+    });
+  });
+
+  it('keeps a higher peak of the same day and counts the sessions opened', () => {
+    expect(
+      mergePeak(previous, {
+        at: '2026-11-18T11:00:00.000Z',
+        connections: 12,
+        sessionsOpened: 1040
+      })
+    ).toEqual({
+      peak: { ...previous, sessionsOpened: 1040 },
+      opened: 140
+    });
+  });
+
+  it('takes a new high of the same day', () => {
+    expect(
+      mergePeak(previous, {
+        at: '2026-11-18T11:00:00.000Z',
+        connections: 50,
+        sessionsOpened: 950
+      }).peak
+    ).toEqual({
+      day: '2026-11-18',
+      connections: 50,
+      at: '2026-11-18T11:00:00.000Z',
+      sessionsOpened: 950
+    });
+  });
+
+  it('starts over on a new UTC day', () => {
+    expect(
+      mergePeak(previous, {
+        at: '2026-11-19T00:05:00.000Z',
+        connections: 8,
+        sessionsOpened: 1000
+      })
+    ).toEqual({
+      peak: {
+        day: '2026-11-19',
+        connections: 8,
+        at: '2026-11-19T00:05:00.000Z',
+        sessionsOpened: 1000
+      },
+      opened: 100
+    });
+  });
+
+  it('counts no sessions opened when the counter went down (a restart)', () => {
+    const { peak, opened } = mergePeak(previous, {
+      at: '2026-11-18T11:00:00.000Z',
+      connections: 5,
+      sessionsOpened: 20
+    });
+    expect(opened).toBeNull();
+    expect(peak.sessionsOpened).toBe(20);
+    expect(peak.connections).toBe(41);
+  });
+});
+
 describe('parseSql', () => {
   it('reads the query output', () => {
     const parsed = parseSql(JSON.stringify({ tenants: [acme], db }) + '\n');
     expect(parsed.tenants[0]?.slug).toBe('acme');
     expect(parsed.db.sessions).toBe(3);
     expect(parsed.db.poolerSessions).toBe(2);
+    expect(parsed.db.connections).toBe(12);
+    expect(parsed.db.maxConnections).toBe(60);
+    expect(parsed.db.reservedConnections).toBe(3);
+    expect(parsed.db.sessionsOpened).toBe(900);
   });
 
   it('drops fields it does not name', () => {

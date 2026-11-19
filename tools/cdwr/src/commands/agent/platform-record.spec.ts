@@ -15,7 +15,9 @@ const collect = vi.hoisted(() => ({
   readVisitors: vi.fn(),
   readDeploy: vi.fn(),
   readReleases: vi.fn(),
-  readBackup: vi.fn()
+  readBackup: vi.fn(),
+  readDbPeak: vi.fn(),
+  writeDbPeak: vi.fn()
 }));
 
 vi.mock('./platform.collect', () => ({
@@ -47,9 +49,20 @@ const database = ok({
     sizeBytes: 1,
     sessions: 1,
     poolerSessions: 1,
-    byApplication: { Supavisor: 1 }
+    connections: 30,
+    maxConnections: 60,
+    reservedConnections: 3,
+    sessionsOpened: 1040,
+    byApplication: { Supavisor: 1, postgres: 29 }
   }
 });
+
+const lastPeak = {
+  day: '2000-01-01',
+  connections: 55,
+  at: '2000-01-01T10:00:00.000Z',
+  sessionsOpened: 900
+};
 
 const deployed = ok({
   runId: 7,
@@ -79,6 +92,8 @@ describe('agent platform-record', () => {
       .mockReset()
       .mockResolvedValue({ fetchError: null, projects: {} });
     collect.readBackup.mockReset().mockReturnValue(null);
+    collect.readDbPeak.mockReset().mockReturnValue(lastPeak);
+    collect.writeDbPeak.mockReset();
     ui = fakeUi([]);
   });
 
@@ -126,6 +141,35 @@ describe('agent platform-record', () => {
     expect(exit).toBe(EXIT.ok);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(JSON.stringify(ui.printed)).toContain('acme');
+    expect(collect.writeDbPeak).not.toHaveBeenCalled();
+  });
+
+  it('records the connections against the usable limit, and keeps the peak once sent', async () => {
+    const { exit } = await record(['--yes', '--json'], env);
+    expect(exit).toBe(EXIT.ok);
+    const rows = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      key: string;
+      db: Record<string, unknown>;
+    }[];
+    const shared = rows.find((r) => r.key === '_shared');
+    // The last peak is from another day, so this tick's sample starts the new one
+    expect(shared?.db).toMatchObject({
+      connections: 30,
+      limit: 57,
+      peak: { connections: 30 },
+      opened: 140,
+      byApplication: { Supavisor: 1, postgres: 29 }
+    });
+    expect(collect.writeDbPeak).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ connections: 30, sessionsOpened: 1040 })
+    );
+  });
+
+  it('keeps the last peak when the database was not read', async () => {
+    collect.readDatabase.mockResolvedValue(failed('psql failed'));
+    await record(['--yes', '--json'], env);
+    expect(collect.writeDbPeak).not.toHaveBeenCalled();
   });
 
   it('upserts the tenant rows and the shared row, then deletes the vanished', async () => {
@@ -227,5 +271,6 @@ describe('agent platform-record', () => {
     expect(exit).toBe(EXIT.failed);
     expect(JSON.stringify(ui.printed)).not.toContain(KEY);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(collect.writeDbPeak).not.toHaveBeenCalled();
   });
 });

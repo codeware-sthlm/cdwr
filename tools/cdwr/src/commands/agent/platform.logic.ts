@@ -65,6 +65,10 @@ const SqlSchema = z.object({
     sizeBytes: z.number().nullable(),
     sessions: z.number(),
     poolerSessions: z.number(),
+    connections: z.number(),
+    maxConnections: z.number(),
+    reservedConnections: z.number(),
+    sessionsOpened: z.number(),
     byApplication: z.record(z.string(), z.number())
   })
 });
@@ -522,6 +526,49 @@ export type BackupRead = {
   lastRun: Reading<BackupRun | null>;
 };
 
+// --- the day's connection peak ---
+
+/** `db-peak.json` in the queue home, as the last tick left it */
+export const DbPeakSchema = z.object({
+  /** The UTC day the peak belongs to, `YYYY-MM-DD` */
+  day: z.string(),
+  connections: z.number(),
+  at: z.string(),
+  /** `sessionsOpened` at the last tick, for the next tick's delta */
+  sessionsOpened: z.number()
+});
+
+export type DbPeak = z.infer<typeof DbPeakSchema>;
+
+/**
+ * The tick's sample merged into the day's peak. A tick samples once every 10
+ * minutes and misses a short burst, so `opened` (sessions opened since the last
+ * tick) shows one anyway. It is null on the first tick, and when the counter
+ * went down (a restart or a statistics reset).
+ */
+export const mergePeak = (
+  previous: DbPeak | null,
+  sample: { at: string; connections: number; sessionsOpened: number }
+): { peak: DbPeak; opened: number | null } => {
+  const day = sample.at.slice(0, 10);
+  const keep =
+    previous !== null &&
+    previous.day === day &&
+    previous.connections >= sample.connections;
+  return {
+    peak: {
+      day,
+      connections: keep ? previous.connections : sample.connections,
+      at: keep ? previous.at : sample.at,
+      sessionsOpened: sample.sessionsOpened
+    },
+    opened:
+      previous !== null && sample.sessionsOpened >= previous.sessionsOpened
+        ? sample.sessionsOpened - previous.sessionsOpened
+        : null
+  };
+};
+
 // --- the rows ---
 
 export interface PlatformReadings {
@@ -539,6 +586,8 @@ export interface PlatformReadings {
   releases: ReleasesRead;
   /** null: no backups folder and no status file, or no queue home */
   backup: BackupRead | null;
+  /** `mergePeak` of this tick; null when the database wasn't read */
+  dbPeak: { peak: DbPeak; opened: number | null } | null;
 }
 
 type Errors = Record<string, string>;
@@ -647,7 +696,8 @@ export const buildRows = (
     visitors,
     deploy,
     releases,
-    backup
+    backup,
+    dbPeak
   } = readings;
   const known = tenants.ok ? tenants.value : null;
 
@@ -827,6 +877,16 @@ export const buildRows = (
           sizeBytes: db.value.sizeBytes,
           sessions: db.value.sessions,
           poolerSessions: db.value.poolerSessions,
+          connections: db.value.connections,
+          // What a role without superuser can use
+          limit: db.value.maxConnections - db.value.reservedConnections,
+          peak: dbPeak
+            ? {
+                connections: dbPeak.peak.connections,
+                at: plainText(dbPeak.peak.at, 40)
+              }
+            : null,
+          opened: dbPeak?.opened ?? null,
           byApplication: Object.fromEntries(
             Object.entries(db.value.byApplication)
           )
