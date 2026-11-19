@@ -1,4 +1,5 @@
 import {
+  type PayloadRuntime,
   buildTenantConfig,
   getCustomThemes,
   getGeneralSiteSettings
@@ -57,9 +58,14 @@ export const tenantConfigEndpoint: Endpoint = {
       );
     }
 
-    const runtime = await payloadRuntime();
-    runtime.payload.authenticatedUser = req.user;
-    runtime.tenantConfig = null;
+    // A view of its own: the runtime is shared by every caller in the request
+    const shared = await payloadRuntime();
+    const runtime: PayloadRuntime = {
+      payload: Object.assign(Object.create(shared.payload), {
+        authenticatedUser: req.user
+      }),
+      tenantConfig: null
+    };
 
     // Fetch tenant config for the authenticated tenant user
     const settings = await getGeneralSiteSettings(runtime);
