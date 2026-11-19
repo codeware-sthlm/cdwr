@@ -102,6 +102,29 @@ describe('EnvSchema', () => {
     );
   });
 
+  describe('DATABASE_POOL_MAX', () => {
+    it('defaults to a small pool', () => {
+      const result = parse({});
+      expect(result.success && result.data.DATABASE_POOL_MAX).toBe(4);
+    });
+
+    it('reads a number from the string the environment holds', () => {
+      const result = parse({ DATABASE_POOL_MAX: '10' });
+      expect(result.success && result.data.DATABASE_POOL_MAX).toBe(10);
+    });
+
+    it('takes a blank value as the default', () => {
+      const result = parse({ DATABASE_POOL_MAX: '' });
+      expect(result.success && result.data.DATABASE_POOL_MAX).toBe(4);
+    });
+
+    it.each(['1', '0', '-1', '2.5', 'many'])('refuses %s', (value) => {
+      expect(issuePaths({ DATABASE_POOL_MAX: value })).toContain(
+        'DATABASE_POOL_MAX'
+      );
+    });
+  });
+
   describe('Turnstile', () => {
     it('keeps the source of a half pair for the boot warning', () => {
       const result = parse({

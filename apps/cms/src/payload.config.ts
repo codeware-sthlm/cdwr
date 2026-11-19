@@ -220,7 +220,12 @@ export default buildConfig({
   csrf: env.CSRF_URLS ? env.CSRF_URLS.split(',').filter(Boolean) : undefined,
   db: postgresAdapter({
     pool: {
-      connectionString: env.DATABASE_URL
+      connectionString: env.DATABASE_URL,
+      max: env.DATABASE_POOL_MAX,
+      // A small pool can starve: a write holds a client for its transaction
+      // while a hook's query waits for another. Waiting ends in an error,
+      // which rolls the write back, instead of a process that hangs for good
+      connectionTimeoutMillis: 10_000
     },
     schemaName: env.DATABASE_SCHEMA,
     migrationDir: path.resolve(dirname, 'migrations'),
