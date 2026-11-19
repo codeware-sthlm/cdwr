@@ -185,7 +185,7 @@ prompt="/work-queue implement-only once"
     "Edit($WT)" "Write($WT)" \
     "Bash(git *)" "Bash(gh pr *)" "Bash(gh run view *)" "Bash(gh api repos/codeware-sthlm/cdwr/*)" \
     "Bash(tools/cdwr/agent-queue/gh-review.sh *)" "Bash(tools/cdwr/agent-queue/linear-upload.sh *)" \
-    "Bash(tools/cdwr/agent-queue/force-push.sh *)" \
+    "Bash(tools/cdwr/agent-queue/force-push.sh *)" "Bash(tools/cdwr/agent-queue/review-diff.sh *)" \
     "Bash(pnpm nx *)" "Bash(pnpm -C * nx *)" "Bash(pnpm -C * vitest *)" "Bash(pnpm -C * install*)" \
     "Bash(pnpm -C * add *)" "Bash(pnpm -C * remove *)" \
     "Bash(pnpm cdwr agent worktree *)" \
@@ -211,7 +211,8 @@ settle="$(jq -n --argjson c "$cost" --argjson b "$BUDGET_USD" '$c - $b')"
 [[ "$settle" == 0 ]] || ledger "$settle" settle 2>/dev/null || note "warn: could not settle the spend ledger"
 spent=" · \$$(printf '%.2f' "$cost") in $(jq -r '.num_turns // "?"' "$result" 2>/dev/null || print '?') turns"
 
-# A session that could not take its key ends with `not tried: <key> · <reason>`
+# A session that could not take its key ends with `not tried: <key> · <reason>`; one whose code
+# review could not run ends with `review failed: <key> · <reason>` and opened no PR
 last=
 (( rc == 0 )) && last="$({ jq -r '.result // empty' "$result" 2>/dev/null || true; } | awk 'NF {l = $0} END {print l}')"
 
@@ -239,6 +240,15 @@ elif [[ -n "$KEY" && "$last" == "not tried: $KEY"( · *|) ]]; then
   note "untried: $KEY · $reason"
   record untried "$KEY · $reason$spent · log $log"
   telemetry untried "$KEY · $reason$spent · log $log"
+elif [[ -n "$KEY" && "$last" == "review failed: $KEY"( · *|) ]]; then
+  # The session stopped short of its PR because the review could not run. A failure, so the desk
+  # shows the gap and the two-miss stop holds a run that keeps failing; the launch is not given back
+  reason="${${last#review failed: $KEY}# · }"
+  [[ -n "$reason" ]] || reason="no reason given"
+  note "fail: review could not run on $KEY · $reason"
+  notify "Agent queue: the code review could not run on $TICKET ($reason), so no PR was opened. Log: $log"
+  record failed "$KEY · review could not run: $reason$spent · log $log"
+  telemetry failed "$KEY · review could not run: $reason$spent · log $log"
 elif (( rc != 0 )) && limit_hold "$result"; then
   # The plan's session limit: the session never worked and nothing failed on our side. The launch
   # is given back every time, so a limit never counts toward the two-miss stop; run.sh holds every
