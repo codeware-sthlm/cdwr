@@ -125,6 +125,18 @@ describe('EnvSchema', () => {
     });
   });
 
+  describe('DIRECT_DATABASE_URL', () => {
+    it('is optional', () => {
+      const result = parse({});
+      expect(result.success && result.data.DIRECT_DATABASE_URL).toBeUndefined();
+    });
+
+    it('takes a blank value as none', () => {
+      const result = parse({ DIRECT_DATABASE_URL: '' });
+      expect(result.success && result.data.DIRECT_DATABASE_URL).toBeUndefined();
+    });
+  });
+
   describe('Turnstile', () => {
     it('keeps the source of a half pair for the boot warning', () => {
       const result = parse({

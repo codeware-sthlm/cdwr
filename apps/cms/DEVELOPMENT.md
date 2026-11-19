@@ -90,6 +90,17 @@ without the file the editor is syntax-only and the build still decides.
 Rotating the token is `cdwr builder rotate-token`: the service accepts the previous token
 (`BUILDER_TOKEN_PREVIOUS`) while the cms switches over, so nothing is refused on the way.
 
+### Database connections
+
+Each cms process opens a pool of at most `DATABASE_POOL_MAX` connections (default 4). Keep it
+small: every machine of every cms app pools against the one Supabase database, and a scanner
+burst wakes them all at once. In production `DATABASE_URL` is Supabase's **transaction** pooler
+(port 6543), so Postgres sees Supavisor's pool size however many machines wake, and
+`DIRECT_DATABASE_URL` is the direct connection, which `migrate.mjs` takes at every release since a
+migration needs a session. Both live in Infisical under `/apps/cms`. Without `DIRECT_DATABASE_URL`
+the migrations use `DATABASE_URL`, which is what preview, e2e and local development do: their
+Postgres has no pooler.
+
 ### Site statistics (Umami)
 
 `apps/umami` wraps the upstream Umami image; bump the pinned tag in its Dockerfile, via PR, to upgrade.

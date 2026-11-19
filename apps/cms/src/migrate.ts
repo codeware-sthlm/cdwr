@@ -14,31 +14,32 @@ if (process.env.TENANT_ID) {
 console.log('[migrate] Running migrations for cms host...');
 
 try {
-  // DATABASE_URL is env-specific and loaded from Infisical at runtime by the app.
-  // The release machine has the Infisical credentials as Fly secrets, so load them
-  // here if DATABASE_URL isn't already set as a native Fly secret.
-  if (!process.env.DATABASE_URL) {
-    if (!process.env.DEPLOY_ENV) {
-      throw new Error(
-        'DEPLOY_ENV is not set — cannot load secrets from Infisical'
-      );
-    }
+  // The runtime may connect through a transaction pooler, which has no session
+  // for a migration to run in, so DIRECT_DATABASE_URL wins when it exists.
+  // Both are env-specific and loaded from Infisical at runtime by the app.
+  // The release machine has the Infisical credentials as Fly secrets, so the
+  // vault is read unless the direct url is already a native Fly secret.
+  let direct = process.env.DIRECT_DATABASE_URL;
+  let url = process.env.DATABASE_URL;
+  if (!direct && process.env.DEPLOY_ENV) {
     const secrets = await withInfisical({
       environment: process.env['DEPLOY_ENV'],
       filter: { path: '/apps/cms', recurse: true }
     });
-
-    // Only database url is needed
-    const databaseUrl = secrets.find(
-      (s) => s.secretKey === 'DATABASE_URL'
-    )?.secretValue;
-    if (!databaseUrl) {
-      throw new Error(
-        'DATABASE_URL not available after loading from Infisical'
-      );
-    }
-    process.env.DATABASE_URL = databaseUrl;
+    const secret = (key: string) =>
+      secrets.find((s) => s.secretKey === key)?.secretValue;
+    direct = secret('DIRECT_DATABASE_URL');
+    url ||= secret('DATABASE_URL');
   }
+  const databaseUrl = direct || url;
+  if (!databaseUrl) {
+    throw new Error(
+      process.env.DEPLOY_ENV
+        ? 'DATABASE_URL not available after loading from Infisical'
+        : 'DEPLOY_ENV is not set — cannot load secrets from Infisical'
+    );
+  }
+  process.env.DATABASE_URL = databaseUrl;
 
   // Build a minimal Payload instance with the same DB config as the main app,
   // and run the migrations directly against the database.

@@ -123,6 +123,17 @@ export const EnvSchema = withEnvVars(
           .default(4)
           .describe('Postgres connections per process')
       ),
+      // Migrations need a session, so they take this when the runtime
+      // connects through a transaction pooler. Blank or unset, they use
+      // DATABASE_URL
+      DIRECT_DATABASE_URL: z.preprocess(
+        (value) => (value === '' ? undefined : value),
+        z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Direct database connection string, for migrations')
+      ),
       LOG_LEVEL: z
         .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
         .default('info'),
