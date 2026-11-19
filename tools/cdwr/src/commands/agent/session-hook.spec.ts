@@ -728,6 +728,24 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
       expect(hits).toHaveLength(1);
     });
 
+    it('still records the session, and sends nothing, with no credentials anywhere', async () => {
+      const code = await hook(
+        REGISTER,
+        env({
+          CLAUDE_PROJECT_DIR: join(root, 'codeware-queue'),
+          AGENT_SUPABASE_URL: '',
+          AGENT_SUPABASE_SERVICE_KEY: ''
+        })
+      );
+      await settle();
+      expect(code).toBe(0);
+      expect(
+        JSON.parse(readFileSync(join(dir, 'abc.json'), 'utf8'))
+      ).toMatchObject({ id: 'abc', state: 'working' });
+      expect(existsSync(join(dir, 'abc.json.beat'))).toBe(false);
+      expect(hits).toEqual([]);
+    });
+
     it('sends nothing when none has the key', async () => {
       await hook(
         REGISTER,
