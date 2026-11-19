@@ -110,6 +110,19 @@ export const EnvSchema = withEnvVars(
         .string()
         .min(1)
         .describe('Database schema name for Payload tables'),
+      // Small on purpose: every machine has its own pool against one
+      // database, and a burst wakes every machine. The adapter keeps one
+      // client for its reconnect listener, so the rest serve queries and a
+      // pool of 1 would serve none. Blank means not set
+      DATABASE_POOL_MAX: z.preprocess(
+        (value) => (value === '' ? undefined : value),
+        z.coerce
+          .number()
+          .int()
+          .min(2)
+          .default(4)
+          .describe('Postgres connections per process')
+      ),
       LOG_LEVEL: z
         .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
         .default('info'),
