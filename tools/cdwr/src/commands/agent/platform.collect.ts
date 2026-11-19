@@ -1,4 +1,11 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  statSync,
+  writeFileSync
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +20,8 @@ import { APPS } from '../infisical/analysis.logic';
 
 import {
   type BackupRead,
+  type DbPeak,
+  DbPeakSchema,
   type DbRecord,
   type DeployRead,
   type FlyAppReading,
@@ -593,6 +602,37 @@ export function readBackup(env: NodeJS.ProcessEnv): BackupRead | null {
     count: dumps.length,
     lastRun
   };
+}
+
+// --- the day's connection peak ---
+
+const DB_PEAK_FILE = 'db-peak.json';
+
+/**
+ * The peak the last tick left under AGENT_QUEUE_HOME. Null when the home is
+ * unset, or the file is missing or unreadable: the tick then starts afresh.
+ */
+export function readDbPeak(env: NodeJS.ProcessEnv): DbPeak | null {
+  const home = env['AGENT_QUEUE_HOME'];
+  if (!home) return null;
+  try {
+    const parsed = DbPeakSchema.safeParse(
+      JSON.parse(readFileSync(join(home, DB_PEAK_FILE), 'utf8'))
+    );
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps this tick's peak for the next one; a no-op without a queue home */
+export function writeDbPeak(env: NodeJS.ProcessEnv, peak: DbPeak): void {
+  const home = env['AGENT_QUEUE_HOME'];
+  if (!home) return;
+  // A rename, so a tick killed mid-write leaves the old file whole
+  const file = join(home, DB_PEAK_FILE);
+  writeFileSync(`${file}.partial`, `${JSON.stringify(peak)}\n`);
+  renameSync(`${file}.partial`, file);
 }
 
 /** The deploy switches of production, through the Infisical tenancy lib; never a secret value */

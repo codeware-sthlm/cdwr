@@ -34,13 +34,27 @@ SELECT json_build_object(
       SELECT count(*) FROM pg_stat_activity
       WHERE datname = current_database() AND application_name = 'Supavisor'
     ),
+    -- What runs out is max_connections, which is per server: every client backend
+    -- takes a slot, whichever database or role it uses
+    'connections', (
+      SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'
+    ),
+    'maxConnections', current_setting('max_connections')::int,
+    -- reserved_connections exists from Postgres 16 on
+    'reservedConnections',
+      current_setting('superuser_reserved_connections')::int
+      + coalesce(nullif(current_setting('reserved_connections', true), '')::int, 0),
+    -- Cumulative since the statistics were reset; the delta between ticks shows a burst
+    'sessionsOpened', (
+      SELECT coalesce(sum(sessions), 0)::bigint FROM pg_stat_database
+    ),
     'byApplication', coalesce((
       SELECT json_object_agg(application, sessions)
       FROM (
         SELECT coalesce(nullif(application_name, ''), '(none)') AS application,
                count(*) AS sessions
         FROM pg_stat_activity
-        WHERE datname = current_database()
+        WHERE backend_type = 'client backend'
         GROUP BY 1
       ) per_application
     ), '{}'::json)
