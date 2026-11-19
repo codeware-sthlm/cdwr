@@ -248,6 +248,75 @@ describe('lib.sh', () => {
       });
     });
 
+    describe('the attended query through the proxy', () => {
+      const proxyEnv = { AGENT_QUEUE_LINEAR_PROXY_PORT: '8790' };
+      const fakeCurl = (body: string): void => {
+        writeFileSync(join(bin(), 'curl'), `#!/bin/sh\n${body}\n`);
+        chmodSync(join(bin(), 'curl'), 0o755);
+      };
+
+      it('linear_via_proxy posts the attended query to the attended route, unsigned', () => {
+        const seen = join(dir, 'seen-args');
+        fakeCurl(
+          `printf '%s\\n' "$@" > "${seen}"\nprintf '%s\\n200' '{"data":{"issues":{"nodes":[]}}}'`
+        );
+        const result = run('linear_via_proxy "$ATTENDED_QUERY"', proxyEnv);
+        expect(result.status).toBe(0);
+        expect(result.stdout.trim()).toBe('{"data":{"issues":{"nodes":[]}}}');
+        const args = readFileSync(seen, 'utf8');
+        expect(args).toContain('http://127.0.0.1:8790/attended\n');
+        expect(args).not.toContain('Authorization');
+      });
+
+      it('linear_via_proxy refuses any other query without a call', () => {
+        const seen = join(dir, 'seen-args');
+        fakeCurl(`printf '%s\\n' "$@" > "${seen}"`);
+        const result = run(
+          'linear_via_proxy "query { viewer { id } }"',
+          proxyEnv
+        );
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain('only the attended query');
+        expect(existsSync(seen)).toBe(false);
+      });
+
+      it('linear_via_proxy fails without a proxy port, and says so', () => {
+        const result = run('linear_via_proxy "$ATTENDED_QUERY"');
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain('no proxy port');
+      });
+
+      it("linear_via_proxy names the proxy's code and reason, and prints no body", () => {
+        fakeCurl(`printf '%s\\n502' 'the attended command failed'`);
+        const result = run('linear_via_proxy "$ATTENDED_QUERY"', proxyEnv);
+        expect(result.status).not.toBe(0);
+        expect(result.stdout).toBe('');
+        expect(result.stderr).toContain(
+          'answered 502 for the attended query: the attended command failed'
+        );
+      });
+
+      it('attended: runs the attended query with the key and prints the answer', () => {
+        const seen = join(dir, 'seen-args');
+        fakeCurl(
+          `printf '%s\\n' "$@" > "${seen}"\nprintf '%s\\n200' '{"data":{"issues":{"nodes":[]}}}'`
+        );
+        const result = spawnSync('zsh', [LIB, 'attended'], {
+          encoding: 'utf8',
+          env: {
+            PATH: `${bin()}:${process.env['PATH'] ?? ''}`,
+            HOME: dir,
+            AGENT_QUEUE_LINEAR_KEY_FILE: keyFile
+          }
+        });
+        expect(result.status).toBe(0);
+        expect(result.stdout.trim()).toBe('{"data":{"issues":{"nodes":[]}}}');
+        expect(readFileSync(seen, 'utf8')).toContain(
+          'https://api.linear.app/graphql\n'
+        );
+      });
+    });
+
     describe('key sources', () => {
       const keyFile = (value: string): string => {
         const file = join(dir, 'linear.key');

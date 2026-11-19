@@ -15,6 +15,8 @@
 #   wait.sh [--interval 60] [--fallback 600] [--max 6600]
 #   wait.sh --now        print the current pick once and exit, with no listener
 #   wait.sh --runnable   print what an implementing session may take, one launch key per line
+# With AGENT_QUEUE_LINEAR_PROXY_PORT set and no Linear credentials (a container session), the
+# attended query is asked of the proxy's /attended route; no other query is possible then.
 # Where the scheduler runs elsewhere (a Mac without the launchd job), the watch state comes from
 # the NUC's queue_state row (`remote_watch`, one Supabase GET per pick) instead of the local
 # watch.json nothing refreshes; unreadable, the local file as before.
@@ -47,7 +49,12 @@ source "$HERE/telemetry.sh"
 note() { return 0; }
 if [[ -n "${AGENT_QUEUE_LINEAR_CMD:-}" ]]; then
   linear() { eval "$AGENT_QUEUE_LINEAR_CMD"; }
-elif ! linear_auth; then
+elif linear_auth; then
+  :
+elif [[ -n "$LINEAR_PROXY_ATTENDED" ]]; then
+  # A session without credentials asks the container's proxy, which runs the one query it needs
+  linear() { linear_via_proxy "$@"; }
+else
   print -r -- "wait: no Linear credentials"; $RUNNABLE && exit 1; exit 0
 fi
 # The Supabase env for the remote watch, found as the status line finds it
