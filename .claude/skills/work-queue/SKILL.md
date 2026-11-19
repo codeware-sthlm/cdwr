@@ -264,7 +264,15 @@ to **What to take next**.
    **Next:** line. Batch two or three tiny steps into one implementer call. Do design,
    security, boot-path and published-API steps yourself, not through the implementer.
 5. **Finish.** Run `nx affected` lint, typecheck and test against main, then `/code-review`,
-   folding its fixes into the commits they correct. Push and open the PR (plan summary in the
+   folding its fixes into the commits they correct. In an implement-only run the review reads
+   a file, since dontAsk denies the diff commands the skill would build: run
+   `tools/cdwr/agent-queue/review-diff.sh <worktree>`, which writes the branch against
+   `origin/main` plus the uncommitted changes into the worktree's git dir and prints the path,
+   then `/code-review high <that path>` with the line "read the diff with Read and run no
+   Bash". If the forked skill still reaches for Bash and is denied, review through the `Agent`
+   tool instead: a `general-purpose` agent that reads the same file with Read and reports
+   findings in the skill's form. When neither could review, open no PR: see **Implement-only
+   runs**, step 10. Push and open the PR (plan summary in the
    body, ending with `Closes COD-123`). Never `Part of`, `Ref` or another contributing word:
    on merge Linear moves those tickets back to In Progress instead of Done. Notify `info`:
    PR opened. Then park on `copilot` (see **Parking**) and go to **What to take next**.
@@ -272,7 +280,9 @@ to **What to take next**.
    **Copilot review** below. Once CI is green after it, and `gh pr view <n> --json mergeable`
    doesn't read `CONFLICTING` (else rebase first, **A PR that conflicts with main**), set `agent:review` and status In
    Review, and add a comment
-   that starts with `**Agent: PR ready**`. It holds the PR link, what the Copilot round
+   that starts with `**Agent: PR ready**`. It holds the PR link, what the code review found
+   under a line `Code review:` (one finding per line, `fixed in <sha>` or `dismissed: <reason>`,
+   or `Code review: no findings` written out, so it never reads as skipped), what the Copilot round
    fixed and dismissed, what the Fly Deployment run did for the labelled PR (its jobs in
    `gh pr checks <n>`, where every deploy job skipped means no deployable app, and the
    preview urls from the workflow's PR comment in `gh pr view <n> --comments`), anything
@@ -643,6 +653,17 @@ listed.
    deploy, post it as a needs-input gate (see **How a gate asks**) and stop.
 9. With `once`, stop when the ticket reaches review or a gate. Don't go to **Nothing workable**,
    and don't start `wait.sh`.
+10. The review has to run before the PR. When neither `/code-review` over the diff file nor the
+    `Agent` fallback could review (**Per ticket** step 5), open no PR: set the ticket's
+    **Next:** line to `review could not run: <why>`, keep `agent:working`, and end the run with
+    this result line, last:
+
+    ```text
+    review failed: <key> · <why, one line>
+    ```
+
+    `implement.sh` records the run `failed` with that reason and sends one notice, so the gap
+    shows on the desk, and the two-miss stop keeps the scheduler from looping on it.
 
 ### A denied tool
 
