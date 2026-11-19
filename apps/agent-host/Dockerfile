@@ -22,6 +22,7 @@ RUN apt-get update -qq \
     openssl \
     procps \
     python3 \
+    sudo \
     zsh \
   && rm -rf /var/lib/apt/lists/*
 
@@ -55,11 +56,22 @@ RUN case "${TARGETARCH}" in amd64) fly_arch=x86_64 ;; *) fly_arch=arm64 ;; esac 
 
 RUN npm install -g pnpm@11.23.0 @anthropic-ai/claude-code@2.1.302
 
-# The base image's uid 1000 becomes the agent
+# The base image's uid 1000 becomes the agent, the queue's user. The implement sessions run as
+# session (uid 1001), and the queue group is what the two share: the sessions dir, the queue
+# home's reads and /work. The session's claude home is group-writable, so the entrypoint can seed
+# its memory. The two crossings between the users are the sudoers file below.
 RUN usermod -l agent -d /home/agent -m node \
   && groupmod -n agent node \
+  && groupadd --gid 1002 queue \
+  && useradd --uid 1001 --user-group --create-home --home-dir /home/session --shell /bin/zsh session \
+  && usermod -aG queue agent \
+  && usermod -aG queue session \
   && mkdir -p /work /pnpm-store /home/agent/.cdwr/agent-queue /home/agent/.claude \
-  && chown -R agent:agent /work /pnpm-store /home/agent
+    /home/session/.claude /session-pnpm-store \
+  && chown -R agent:agent /work /pnpm-store /home/agent \
+  && chown -R session:queue /home/session /session-pnpm-store \
+  && chmod 750 /home/session \
+  && chmod 2770 /home/session/.claude
 
 COPY --chmod=755 tools/cdwr/agent-queue/run.sh \
   tools/cdwr/agent-queue/lib.sh \
@@ -73,7 +85,9 @@ COPY --chmod=755 tools/cdwr/agent-queue/run.sh \
   tools/cdwr/agent-queue/linear-tools.txt \
   /opt/agent-queue/
 COPY --chmod=755 apps/agent-host/secrets.sh apps/agent-host/entrypoint.sh apps/agent-host/git-credential-app.sh \
-  apps/agent-host/linear-mcp-proxy.mjs /opt/agent-host/
+  apps/agent-host/session-launch.sh apps/agent-host/session-stop.sh apps/agent-host/linear-mcp-proxy.mjs /opt/agent-host/
+COPY --chmod=440 apps/agent-host/sudoers /etc/sudoers.d/agent-host
+RUN visudo -cf /etc/sudoers.d/agent-host
 
 ENV AGENT_QUEUE_HOST=container \
     AGENT_QUEUE_HOME=/home/agent/.cdwr/agent-queue \

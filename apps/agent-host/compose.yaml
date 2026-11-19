@@ -15,6 +15,9 @@ services:
       - worktrees:/work
       - pnpm-store:/pnpm-store
       - claude-home:/home/agent/.claude
+      # The implement sessions' own claude home and pnpm store (uid session), never shared
+      - session-claude-home:/home/session/.claude
+      - session-pnpm-store:/session-pnpm-store
     tmpfs:
       - /run/agent:mode=0700,uid=1000,gid=1000
     logging:
@@ -42,3 +45,5 @@ volumes:
   worktrees:
   pnpm-store:
   claude-home:
+  session-claude-home:
+  session-pnpm-store:
