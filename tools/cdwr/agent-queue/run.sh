@@ -421,10 +421,12 @@ desk_platform_check() {
 }
 
 # desk_platform_act <restart|gate> <args json>: the write. A close's stdout holds the password, so
-# it never reaches a variable: jq in the pipe keeps `.ok` and the error message alone, and a gate's
-# message is cut at the gate key and stripped of anything shaped like a generated password before
-# it can reach a row or the log. Prints the reason and returns 1 on failure. Run it in a command
-# substitution.
+# it never reaches a variable: jq in the pipe keeps `.ok` and the reason alone (the error message,
+# or the `reason` a partial gate names its unread app with), and a gate's reason is cut at the gate
+# key and stripped of anything shaped like a generated password before it can reach a row or the
+# log. A generated password is 24 base64url characters, so a run of 20 or more with an uppercase
+# letter, a digit or an underscore goes; a lowercase Fly app name such as cdwr-headless-codeware
+# stays. Prints the reason and returns 1 on failure. Run it in a command substitution.
 desk_platform_act() {
   setopt local_options no_err_exit extended_glob
   local -a cmd
@@ -433,14 +435,14 @@ desk_platform_act() {
   cmd=("${(@f)$(desk_platform_argv "$1" "$2")}")
   [[ -n "${cmd[1]}" ]] || { print -r -- "bad args"; return 1; }
   # Two lines: .ok, then the reason on failure
-  out="$(desk_cdwr "${cmd[@]}" | jq -r '(.ok | tostring), (if .ok == true then "" elif .error then (.error.message // "") elif .ok == false then "only partly applied, see cdwr history on the host" else "" end)' 2>/dev/null)"
+  out="$(desk_cdwr "${cmd[@]}" | jq -r '(.ok | tostring), (if .ok == true then "" elif .error then (.error.message // "") elif .ok == false then (.result.reason // "only partly applied, see cdwr history on the host") else "" end)' 2>/dev/null)"
   [[ "${out%%$'\n'*}" == true ]] && return 0
   [[ "$out" == *$'\n'* ]] && msg=${out#*$'\n'}
   out=""
   msg=${msg%%$'\n'*}
   if [[ "$1" == gate ]]; then
     msg=${msg%%SITE_GATE_PASSWORD*}
-    msg=${msg//[A-Za-z0-9_-](#c20,)/…}
+    msg=${msg//(#m)[A-Za-z0-9_-](#c20,)/${${MATCH:#*[A-Z0-9_]*}:-…}}
     msg=${msg%%[[:space:]]#}
   fi
   print -r -- "${msg[1,160]:-cdwr failed}"
