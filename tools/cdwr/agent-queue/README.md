@@ -60,7 +60,12 @@ are the app user's and not Håkan's (`AGENT_QUEUE_LINEAR_MCP`, the credentials a
 are in `tools/cdwr/README.md`); a run without Linear tools doesn't start. In the container the
 runs reach it through a local proxy (`apps/agent-host/linear-mcp-proxy.mjs`) that signs the requests
 and answers a call to a tool outside `linear-tools.txt` itself, the one Linear tool list; the session
-gets no token. It also answers `POST /attended` with the attended query's JSON, run as `agent`
+gets no token. The session runs as a second user there, `session`, launched through sudo by
+`implement.sh`: it reads the queue's checkout and the queue home and writes only the sessions dir
+and the notice spool, its ticket worktrees hang off a clone of its own (`/work/codeware-session`,
+`AGENT_QUEUE_WORKTREE_REPO`), and the tmpfs keys, the checkout's `.env` and `/proc` of the queue's
+processes are out of its reach; the two users and their two sudo crossings are described in
+`apps/agent-host/README.md`. It also answers `POST /attended` with the attended query's JSON, run as `agent`
 through `lib.sh attended`, so a session without Linear credentials can still compute its pick:
 `wait.sh` falls back to that route when `linear_auth` fails and the proxy port is set, and only
 the attended query goes that way. In the same spirit `notify.sh` without a webhook spools each

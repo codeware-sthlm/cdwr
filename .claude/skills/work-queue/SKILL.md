@@ -691,7 +691,8 @@ a while.
 
 What an earlier run hit is in the same directory: `logs/implement_<date>.log` (an implementing
 run's stderr and result), `logs/<date>.log` (a scheduler run) and `runs.jsonl` (the last 20
-outcomes). The transcripts, `~/.claude/projects/<project>/*.jsonl`, record every denied call with
+outcomes). The transcripts, `~/.claude/projects/<project>/*.jsonl` (in the container an
+implement session's are under `/home/session/.claude`, the session user's own home), record every denied call with
 its command.
 
 ## Plan-only runs
