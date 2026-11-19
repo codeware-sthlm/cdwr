@@ -49,6 +49,27 @@ export const runDeployApps = async (options: {
 
   core.info(`Found ${config.apps.length} apps to deploy`);
 
+  // A production deploy never moves an app back past its newest release:
+  // a re-run of an older deploy can start after a newer one released it.
+  // Every app is checked before any deploys, so a git error stops the run
+  // with nothing deployed rather than half of it.
+  const skipReasons = new Map<string, string>();
+  if (environment === 'production' && gitSha) {
+    for (const { name: projectName } of config.apps) {
+      try {
+        const order = await checkReleaseOrder(projectName, gitSha);
+        if (!order.deploy) {
+          skipReasons.set(projectName, order.reason);
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Release order check failed for ${projectName}, nothing deployed: ${msg}`
+        );
+      }
+    }
+  }
+
   for (const app of config.apps) {
     const { flyConfigFile, githubConfig, name: projectName, sentry } = app;
 
@@ -66,32 +87,16 @@ export const runDeployApps = async (options: {
       continue;
     }
 
-    // A production deploy never moves an app back past its newest release:
-    // a re-run of an older deploy can start after a newer one released it
-    if (environment === 'production' && gitSha) {
-      try {
-        const order = await checkReleaseOrder(projectName, gitSha);
-        if (!order.deploy) {
-          core.warning(`Skipping ${projectName}: ${order.reason}`);
-          projects.push({
-            action: 'skipped',
-            appOrProject: projectName,
-            reason: order.reason
-          });
-          core.endGroup();
-          continue;
-        }
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        core.error(`❌ Could not check the release order: ${msg}`);
-        projects.push({
-          action: 'failed',
-          appOrProject: projectName,
-          error: `Release order check failed: ${msg}`
-        });
-        core.endGroup();
-        continue;
-      }
+    const skipReason = skipReasons.get(projectName);
+    if (skipReason) {
+      core.warning(`Skipping ${projectName}: ${skipReason}`);
+      projects.push({
+        action: 'skipped',
+        appOrProject: projectName,
+        reason: skipReason
+      });
+      core.endGroup();
+      continue;
     }
 
     // Read the base app name and the health check path from local config

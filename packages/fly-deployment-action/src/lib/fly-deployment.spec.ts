@@ -1179,24 +1179,17 @@ describe('flyDeployment', () => {
       );
     });
 
-    it('should report failed without deploying when the check throws', async () => {
+    it('should deploy nothing when the check of a later app throws', async () => {
       setupMocks();
       mockCheckReleaseOrder.mockImplementation(async (project) => {
-        if (project === 'app-one') throw new Error('git boom');
+        if (project === 'app-two') throw new Error('git boom');
         return { deploy: true };
       });
 
-      const result = await flyDeployment(setupTest(), true);
-
-      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
-      expect(getMockFly().deploy).not.toHaveBeenCalledWith(
-        expect.objectContaining({ app: 'app-one-config' })
+      await expect(flyDeployment(setupTest(), true)).rejects.toThrow(
+        'Release order check failed for app-two, nothing deployed: git boom'
       );
-      expect(result.projects[0]).toEqual({
-        action: 'failed',
-        appOrProject: 'app-one',
-        error: 'Release order check failed: git boom'
-      });
+      expect(getMockFly().deploy).not.toHaveBeenCalled();
     });
 
     it('should deploy as before when the commit holds the newest release', async () => {
