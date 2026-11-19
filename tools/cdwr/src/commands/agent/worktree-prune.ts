@@ -12,7 +12,8 @@ import {
   parsePrHead,
   parsePrState,
   parseWorktreeList,
-  pruneVerdict
+  pruneVerdict,
+  worktreeRepo
 } from './worktree.logic';
 
 /**
@@ -59,10 +60,12 @@ export default defineCommand({
   inputs: {},
 
   async plan(ctx) {
+    // The checkout the ticket worktrees hang off, this one unless the environment names another
+    const repo = worktreeRepo(ctx.env, ctx.root);
     const { stdout } = await run('git', ['worktree', 'list', '--porcelain'], {
-      cwd: ctx.root
+      cwd: repo
     });
-    const skip = [resolve(ctx.root), resolve(worktreeOf(ctx))];
+    const skip = [resolve(ctx.root), resolve(repo), resolve(worktreeOf(ctx))];
     const entries = parseWorktreeList(stdout);
     const found = entries.filter(
       (entry) =>
@@ -89,7 +92,7 @@ export default defineCommand({
                   '--limit',
                   '1'
                 ],
-                { cwd: ctx.root }
+                { cwd: repo }
               )
             ).stdout
           : undefined;
@@ -98,7 +101,7 @@ export default defineCommand({
         const tip = branch
           ? (
               await run('git', ['rev-parse', `refs/heads/${branch}`], {
-                cwd: ctx.root
+                cwd: repo
               })
             ).stdout.trim()
           : undefined;
@@ -137,7 +140,7 @@ export default defineCommand({
     // Daemons whose worktree is gone, or goes with the removals below
     const removed = removals.map(({ path }) => resolve(path));
     const orphans = await findOrphans(
-      ctx.root,
+      repo,
       entries
         .map(({ path }) => path)
         .filter((p) => !removed.includes(resolve(p)))
@@ -152,7 +155,7 @@ export default defineCommand({
             : orphans.map(({ pid, path }) => `${pid} (${path})`).join(', ')
       });
     }
-    const data = { root: ctx.root, removals, kept, orphans };
+    const data = { root: repo, removals, kept, orphans };
 
     if (verdicts.length === 0 && orphans.length === 0) {
       return { steps, nothing: 'No ticket worktrees to look at', data };

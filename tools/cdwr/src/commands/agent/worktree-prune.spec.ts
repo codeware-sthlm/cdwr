@@ -11,12 +11,20 @@ vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
 const run =
   vi.fn<
-    (bin: string, args: string[]) => Promise<{ stdout: string; stderr: string }>
+    (
+      bin: string,
+      args: string[],
+      opts?: { cwd?: string }
+    ) => Promise<{ stdout: string; stderr: string }>
   >();
 
 vi.mock('../../services/shell', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/shell')>();
-  return { ...actual, run: (bin: string, args: string[]) => run(bin, args) };
+  return {
+    ...actual,
+    run: (bin: string, args: string[], opts?: { cwd?: string }) =>
+      run(bin, args, opts)
+  };
 });
 
 describe('agent worktree prune', () => {
@@ -27,6 +35,7 @@ describe('agent worktree prune', () => {
   let ps: string;
   let listing: string;
   let calls: string[];
+  let cwds: (string | undefined)[];
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'cdwr-prune-'));
@@ -35,12 +44,14 @@ describe('agent worktree prune', () => {
     mkdirSync(main);
     mkdirSync(done);
     calls = [];
+    cwds = [];
     listing = `worktree ${main}\nHEAD a\nbranch refs/heads/main\n\nworktree ${done}\nHEAD b\nbranch refs/heads/cod-1\n`;
     ps = '';
     kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
     run.mockReset();
-    run.mockImplementation(async (bin, args) => {
+    run.mockImplementation(async (bin, args, opts) => {
       calls.push(`${bin} ${args.join(' ')}`);
+      cwds.push(opts?.cwd);
       if (bin === 'ps' && args[0] === '-o') {
         // One pid's args, as `ps -o args= -p <pid>` prints them; exit 1 when it is gone
         const line = ps
@@ -77,7 +88,7 @@ describe('agent worktree prune', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  async function prune(argv: string[]) {
+  async function prune(argv: string[], env: Record<string, string> = {}) {
     const ui = fakeUi([]);
     const command = (await import('./worktree-prune')).default;
     const exit = await runCommand({
@@ -85,7 +96,7 @@ describe('agent worktree prune', () => {
       command,
       argv,
       root: main,
-      env: {},
+      env,
       prefs: memoryPrefs(),
       interactive: false,
       ui,
@@ -158,6 +169,15 @@ describe('agent worktree prune', () => {
     });
     await prune(['--yes']);
     expect(kill).not.toHaveBeenCalled();
+  });
+
+  it('lists and removes against the clone AGENT_QUEUE_WORKTREE_REPO names', async () => {
+    const session = join(dir, 'codeware-session');
+    mkdirSync(session);
+    await prune(['--yes'], { AGENT_QUEUE_WORKTREE_REPO: session });
+    expect(cwds[0]).toBe(session);
+    expect(calls.some((c) => c.startsWith('git worktree remove'))).toBe(true);
+    expect(cwds.filter((c) => c === main)).toEqual([]);
   });
 
   it('stops nothing on a dry run', async () => {

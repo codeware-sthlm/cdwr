@@ -7,7 +7,8 @@ import {
   parsePrState,
   parseWorktreeList,
   pruneVerdict,
-  worktreePath
+  worktreePath,
+  worktreeRepo
 } from './worktree.logic';
 
 describe('isTicket', () => {
@@ -20,6 +21,26 @@ describe('isTicket', () => {
     ['COD-12 ', false]
   ])('%s -> %s', (value, expected) => {
     expect(isTicket(value)).toBe(expected);
+  });
+});
+
+describe('worktreeRepo', () => {
+  it('is the checkout the command runs from', () => {
+    expect(worktreeRepo({}, '/work/codeware-agent')).toBe(
+      '/work/codeware-agent'
+    );
+    expect(worktreeRepo({ AGENT_QUEUE_WORKTREE_REPO: '' }, '/w/a')).toBe(
+      '/w/a'
+    );
+  });
+
+  it('is the clone the environment names, for a session that must not write the checkout', () => {
+    expect(
+      worktreeRepo(
+        { AGENT_QUEUE_WORKTREE_REPO: '/work/codeware-session' },
+        '/work/codeware-agent'
+      )
+    ).toBe('/work/codeware-session');
   });
 });
 
