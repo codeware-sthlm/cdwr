@@ -3279,21 +3279,23 @@ describe('run.sh apply_commands', () => {
           [{ id: 1, kind: 'gate', args: { tenant: 'acme', action: 'open' } }],
           setup(
             gateDry('set', true),
-            // 22 characters, past the password-shaped run length
+            // 23 characters with a digit, past the password-shaped run length
             partial(
-              'cdwr-headless-codeware not read on Fly: Error: unauthorized'
+              'cdwr-headless-codeware2 not read on Fly: Error: unauthorized'
             ),
             1
           )
         );
         expect(r.patches[1]?.body['status']).toBe('refused');
         expect(r.patches[1]?.body['note']).toBe(
-          'cdwr-headless-codeware not read on Fly: Error: unauthorized'
+          'cdwr-headless-codeware2 not read on Fly: Error: unauthorized'
         );
       }
     );
 
-    it.skipIf(!canRun)('strips a password-shaped run from the reason', () => {
+    it.skipIf(!canRun)('replaces the password itself in the reason', () => {
+      // A generated password can be all lowercase, so no shape gives it away
+      const lower = 'qwertyuiopasdfghjklzxcvb';
       const r = apply(
         [{ id: 1, kind: 'gate', args: close }],
         setup(
@@ -3301,8 +3303,8 @@ describe('run.sh apply_commands', () => {
           {
             ok: false,
             result: {
-              password: TOKEN,
-              reason: `cdwr-cms-acme not read on Fly: Error: ${TOKEN}`
+              password: lower,
+              reason: `cdwr-cms-acme not read on Fly: Error: ${lower}`
             }
           },
           1
@@ -3311,7 +3313,7 @@ describe('run.sh apply_commands', () => {
       expect(r.patches[1]?.body['note']).toBe(
         'cdwr-cms-acme not read on Fly: Error: …'
       );
-      expect(everything(r)).not.toContain(TOKEN);
+      expect(everything(r)).not.toContain(lower);
     });
 
     it.skipIf(!canRun)(

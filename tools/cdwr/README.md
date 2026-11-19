@@ -443,10 +443,9 @@ and tenant slug that pass a strict pattern reach the command line, and only prod
 
 A `close` always generates a new password. It is stored by the command in Infisical
 (`/tenants/<tenant>/apps/<app>`, `SITE_GATE_PASSWORD`) and goes no further: `run.sh` reads only the
-command's `ok` and error message (or a partial gate's `reason`), cuts a gate's message at the key and
-replaces anything shaped like a generated password (a run of 20 or more url-safe characters with an
-uppercase letter, a digit or an underscore; a lowercase app name stays), so it reaches no row, log or
-notice. Read it in Infisical when you need it. The
+command's `ok` and error message (or a partial gate's `reason`), replaces the password wherever the
+result carries it, cuts a gate's message at the key, and replaces anything shaped like a generated
+password in an error message, so it reaches no row, log or notice. Read it in Infisical when you need it. The
 write credentials are `DESK_FLY_TOKEN` (an org deploy token, with an expiry) and
 `DESK_INFISICAL_CLIENT_ID`, `_CLIENT_SECRET` and `_PROJECT_ID` (an identity with write on production
 secrets of the project), in the same places as the platform step's read-only ones, which they are kept
