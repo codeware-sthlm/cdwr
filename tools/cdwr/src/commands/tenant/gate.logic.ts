@@ -63,6 +63,28 @@ export const anyStored = (states: AppState[]): boolean =>
   states.some(({ inInfisical }) => inInfisical);
 
 /**
+ * Apps whose Fly read failed, so open or close could not act on them. A
+ * preview gate without a pull request names no app and has no error, and
+ * writing Infisical only is all it means to do.
+ */
+export const unreadApps = (states: AppState[]): AppState[] =>
+  states.filter(
+    ({ onFly, flyApp, flyError }) =>
+      onFly === 'unreachable' && !!flyApp && !!flyError
+  );
+
+/** One desk-row line naming the first unread app and Fly's error, with no password */
+export function partialReason(unread: AppState[]): string {
+  const [first] = unread;
+  if (!first) return '';
+  const more = unread.length > 1 ? ` (+${unread.length - 1} more)` : '';
+  const line = `${first.flyApp} not read on Fly: ${first.flyError}${more}`;
+  return line.length > FLY_ERROR_MAX
+    ? `${line.slice(0, FLY_ERROR_MAX - 1)}…`
+    : line;
+}
+
+/**
  * Pull request numbers carried by preview cms app names, deduplicated, with
  * the current branch's own pull request moved first when it is among them.
  */

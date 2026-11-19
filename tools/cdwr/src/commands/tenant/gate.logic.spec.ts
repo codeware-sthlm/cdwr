@@ -10,10 +10,12 @@ import {
   describeOnFly,
   flyErrorOf,
   generatePassword,
+  partialReason,
   prChoices,
   pullRequestChoices,
   targetFlyApp,
-  tenantHint
+  tenantHint,
+  unreadApps
 } from './gate.logic';
 
 describe('flyErrorOf', () => {
@@ -182,5 +184,57 @@ describe('anyClosed / anyStored', () => {
     expect(anyStored([{ ...states[0], inInfisical: false } as AppState])).toBe(
       false
     );
+  });
+});
+
+describe('unreadApps / partialReason', () => {
+  const app = (over: Partial<AppState>): AppState => ({
+    app: 'cms',
+    secretPath: '/x',
+    inInfisical: false,
+    flyApp: 'cdwr-cms-acme',
+    onFly: 'set',
+    ...over
+  });
+  const cms = app({ onFly: 'unreachable', flyError: 'Error: unauthorized' });
+  const web = app({
+    app: 'headless',
+    flyApp: 'cdwr-headless-acme',
+    onFly: 'unreachable',
+    flyError: 'Error: app not found'
+  });
+
+  it('keeps only apps whose Fly read failed', () => {
+    expect(unreadApps([app({}), cms, app({ onFly: 'missing' })])).toEqual([
+      cms
+    ]);
+  });
+
+  it('skips a preview gate that names no app', () => {
+    expect(unreadApps([app({ flyApp: '', onFly: 'unreachable' })])).toEqual([]);
+  });
+
+  it('names the first app and its error', () => {
+    expect(partialReason([cms])).toBe(
+      'cdwr-cms-acme not read on Fly: Error: unauthorized'
+    );
+  });
+
+  it('counts the rest', () => {
+    expect(partialReason([cms, web])).toBe(
+      'cdwr-cms-acme not read on Fly: Error: unauthorized (+1 more)'
+    );
+  });
+
+  it('cuts a long line to fit a desk row', () => {
+    const out = partialReason([
+      app({ onFly: 'unreachable', flyError: 'x'.repeat(FLY_ERROR_MAX) })
+    ]);
+    expect(out).toHaveLength(FLY_ERROR_MAX);
+    expect(out.endsWith('…')).toBe(true);
+  });
+
+  it('is empty with nothing unread', () => {
+    expect(partialReason([])).toBe('');
   });
 });

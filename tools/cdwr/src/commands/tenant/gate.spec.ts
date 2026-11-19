@@ -159,4 +159,120 @@ describe('tenant gate', () => {
       }
     ]);
   });
+
+  describe('with one app Fly could not read beside a live one', () => {
+    afterEach(async () => {
+      const { readTenantDeployments } =
+        await import('../../services/infisical');
+      vi.mocked(readTenantDeployments).mockResolvedValue(
+        new Map([['acme', [{ app: 'cms', secrets: {} }]]])
+      );
+    });
+
+    /** cms fails its Fly read; headless reads and carries the password */
+    async function arrange() {
+      const { readTenantDeployments } =
+        await import('../../services/infisical');
+      const { fly, flyAppName } = await import('../../services/fly');
+      // Read twice: once for the tenant choices, once by the plan
+      vi.mocked(readTenantDeployments).mockResolvedValue(
+        new Map([
+          [
+            'acme',
+            [
+              { app: 'cms', secrets: {} },
+              { app: 'headless', secrets: {} }
+            ]
+          ]
+        ]) as Awaited<ReturnType<typeof readTenantDeployments>>
+      );
+      vi.mocked(flyAppName)
+        .mockReturnValueOnce('cdwr-cms-acme')
+        .mockReturnValueOnce('cdwr-headless-acme');
+      const unset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(fly)
+        .mockReturnValueOnce({
+          secrets: {
+            list: vi.fn().mockRejectedValue(new Error('Error: unauthorized'))
+          }
+        } as unknown as ReturnType<typeof fly>)
+        .mockReturnValueOnce({
+          secrets: { list: vi.fn().mockResolvedValue([{ name: GATE_KEY }]) }
+        } as unknown as ReturnType<typeof fly>)
+        .mockReturnValueOnce({
+          secrets: { unset }
+        } as unknown as ReturnType<typeof fly>);
+      return { unset };
+    }
+
+    async function run(argv: string[]) {
+      const command = (await import('./gate')).default;
+      const stdout: string[] = [];
+      const exit = await runCommand({
+        name: 'tenant gate',
+        command,
+        argv: [
+          ...argv,
+          '--env',
+          'production',
+          '--tenant',
+          'acme',
+          '--yes',
+          '--json'
+        ],
+        root: '/repo',
+        env: {},
+        prefs: memoryPrefs(),
+        interactive: false,
+        ui: fakeUi([], false),
+        history: () => undefined,
+        stdout: (t) => stdout.push(t)
+      });
+      return { exit, out: JSON.parse(stdout[0] ?? '') };
+    }
+
+    it('opens the live app and reports the other as partial', async () => {
+      const { unset } = await arrange();
+      const { deleteInfisicalSecret } =
+        await import('../../services/infisical');
+      vi.mocked(deleteInfisicalSecret).mockClear();
+
+      const { exit, out } = await run(['open']);
+
+      expect(exit).toBe(EXIT.failed);
+      expect(deleteInfisicalSecret).toHaveBeenCalledTimes(2);
+      expect(unset).toHaveBeenCalledWith(GATE_KEY, {
+        app: 'cdwr-headless-acme'
+      });
+      expect(out.result.reason).toBe(
+        'cdwr-cms-acme not read on Fly: Error: unauthorized'
+      );
+      expect(out.result.unread).toEqual([
+        { flyApp: 'cdwr-cms-acme', flyError: 'Error: unauthorized' }
+      ]);
+    });
+
+    it('closes the live app and reports the other as partial', async () => {
+      await arrange();
+      const { setSecretsTogether } = await import('../../services/fly');
+      vi.mocked(setSecretsTogether).mockClear();
+
+      const { exit, out } = await run([
+        'close',
+        '--password',
+        'hunter2-hunter2'
+      ]);
+
+      expect(exit).toBe(EXIT.failed);
+      expect(setSecretsTogether).toHaveBeenCalledWith(
+        ['cdwr-headless-acme'],
+        { [GATE_KEY]: 'hunter2-hunter2' },
+        expect.any(Function)
+      );
+      expect(out.result.reason).toBe(
+        'cdwr-cms-acme not read on Fly: Error: unauthorized'
+      );
+      expect(out.result.reason).not.toContain('hunter2');
+    });
+  });
 });
