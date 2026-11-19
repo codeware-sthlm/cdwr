@@ -1,10 +1,22 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { QUEUE_FILES, RUN_FALLBACK_SECONDS } from './agent.logic';
 
 const read = (path: string) =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
+
+const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+const hasJq = spawnSync('jq', ['--version']).status === 0;
 
 // The image copies the queue files by name; a file install copies but the image lacks breaks the container
 describe('agent-host image', () => {
@@ -141,6 +153,84 @@ describe('agent-host entrypoint', () => {
     expect(entrypoint).toMatch(
       /trap '[^']*kill -TERM \$proxy_supervisor[^']*' TERM INT/
     );
+  });
+
+  // A redeploy starts ~/.claude.json empty, so every start trusts the checkout again (COD-798)
+  it('trusts the checkout in ~/.claude.json before the listener and the run loop', () => {
+    const trust = entrypoint.indexOf('(umask 077; trust_checkout)');
+    expect(trust).toBeGreaterThan(entrypoint.indexOf('write_env\n'));
+    expect(trust).toBeLessThan(entrypoint.indexOf('supervise_listener &'));
+    expect(trust).toBeLessThan(entrypoint.indexOf('while (( ! stop ))'));
+    expect(entrypoint).toContain(
+      `'.projects[$repo].hasTrustDialogAccepted = true'`
+    );
+  });
+
+  describe.skipIf(!hasZsh || !hasJq)('trust_checkout', () => {
+    const fn = entrypoint.match(/^trust_checkout\(\) \{\n[\s\S]*?\n\}\n/m)?.[0];
+    let home: string;
+
+    beforeEach(() => {
+      home = mkdtempSync(join(tmpdir(), 'trust-'));
+    });
+    afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+    const run = () =>
+      spawnSync(
+        'zsh',
+        [
+          '-c',
+          `setopt err_exit pipe_fail no_unset\n${fn}\n(umask 077; trust_checkout)`
+        ],
+        {
+          encoding: 'utf8',
+          env: {
+            PATH: process.env['PATH'],
+            HOME: home,
+            AGENT_QUEUE_REPO: '/work/repo'
+          }
+        }
+      );
+    const config = () =>
+      JSON.parse(readFileSync(join(home, '.claude.json'), 'utf8'));
+
+    it('creates the file when it is missing', () => {
+      expect(fn).toBeDefined();
+      expect(run().status).toBe(0);
+      expect(config()).toEqual({
+        projects: { '/work/repo': { hasTrustDialogAccepted: true } }
+      });
+      expect(statSync(join(home, '.claude.json')).mode & 0o777).toBe(0o600);
+    });
+
+    it('keeps every other key', () => {
+      writeFileSync(
+        join(home, '.claude.json'),
+        JSON.stringify({
+          userID: 'u',
+          projects: {
+            '/other': { hasTrustDialogAccepted: false },
+            '/work/repo': { allowedTools: [] }
+          }
+        })
+      );
+      expect(run().status).toBe(0);
+      expect(config()).toEqual({
+        userID: 'u',
+        projects: {
+          '/other': { hasTrustDialogAccepted: false },
+          '/work/repo': { allowedTools: [], hasTrustDialogAccepted: true }
+        }
+      });
+    });
+
+    it('fails without touching a broken file', () => {
+      writeFileSync(join(home, '.claude.json'), '{ not json');
+      expect(run().status).not.toBe(0);
+      expect(readFileSync(join(home, '.claude.json'), 'utf8')).toBe(
+        '{ not json'
+      );
+    });
   });
 
   it('sends no heartbeat after a failed run', () => {

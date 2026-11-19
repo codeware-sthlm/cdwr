@@ -67,6 +67,18 @@ if [[ ! -f "$INSTALLED" ]]; then
 fi
 write_env
 
+# Trust the checkout every scheduled claude runs from, so its .claude/settings.json allow rule
+# applies (COD-798). ~/.claude.json sits beside the claude-home volume, in the container's own
+# layer, so a redeploy starts it empty; the merge keeps every key Claude Code wrote since. A
+# broken file leaves the checkout untrusted rather than stopping the start
+trust_checkout() {
+  local cfg="$HOME/.claude.json"
+  { [[ -s "$cfg" ]] && cat "$cfg" || print -r -- '{}' } |
+    jq --arg repo "$AGENT_QUEUE_REPO" '.projects[$repo].hasTrustDialogAccepted = true' > "$cfg.tmp" &&
+    mv "$cfg.tmp" "$cfg"
+}
+(umask 077; trust_checkout) || print -r -- "agent-host: could not trust $AGENT_QUEUE_REPO in ~/.claude.json"
+
 # The listener runs from the checkout, so a start (a deploy) brings it to origin/main first, the way
 # run.sh's to_main does before it plans: same lockfile marker, and a dirty checkout stays as it is
 (
