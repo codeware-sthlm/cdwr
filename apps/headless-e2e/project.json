@@ -12,7 +12,7 @@
       "command": "(docker ps -q -f name=postgres-headless-e2e | grep -q . || docker run --name postgres-headless-e2e --rm -d --env-file apps/headless-e2e/.env.e2e -p 5434:5432 postgres) && until docker exec postgres-headless-e2e pg_isready -q; do sleep 1; done"
     },
     "e2e": {
-      "dependsOn": ["re-seed"]
+      "dependsOn": ["re-seed", { "projects": ["headless"], "target": "build" }]
     },
     "open-report": {
       "metadata": {
