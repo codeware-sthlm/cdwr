@@ -168,12 +168,69 @@ describe('agent-host entrypoint', () => {
     expect(entrypoint.match(/telemetry_host_metrics/g)).toHaveLength(1);
     expect(entrypoint.match(/telemetry_env/g)).toHaveLength(2); // comment + call
     expect(entrypoint).toMatch(
-      /\n\(\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}telemetry_host_metrics \|\| true\n {4}sleep "\$\{HOST_METRICS_INTERVAL_SECONDS:-\$RUN_INTERVAL_SECONDS\}"\n {2}done\n\) &!\n/
+      /\n\(\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}telemetry_host_metrics \|\| true\n {4}relay_sessions \|\| true\n {4}relay_notices \|\| true\n {4}sleep "\$\{HOST_METRICS_INTERVAL_SECONDS:-\$RUN_INTERVAL_SECONDS\}"\n {2}done\n\) &!\n/
     );
     // Never in the loop's own shell: it un-exports the key every run.sh needs
     expect(entrypoint).not.toMatch(/^telemetry_env/m);
     expect(entrypoint.indexOf('telemetry_host_metrics || true')).toBeLessThan(
       entrypoint.indexOf('while (( ! stop ))')
+    );
+  });
+
+  it('shares /work, the queue home and the sessions dir with the session user at every start', () => {
+    expect(entrypoint).toContain('chgrp queue /work && chmod 1775 /work');
+    expect(entrypoint).toContain(
+      'chgrp -R queue "$AGENT_QUEUE_HOME" && chmod 750 "$AGENT_QUEUE_HOME" && chmod -R g+rX "$AGENT_QUEUE_HOME"'
+    );
+    expect(entrypoint).toContain(
+      'install -d -m 2770 -g queue "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool"'
+    );
+    // Before the clone and the first run, right after the queue files are copied
+    expect(entrypoint.indexOf('chgrp queue /work')).toBeGreaterThan(
+      entrypoint.indexOf('cp /opt/agent-queue/*')
+    );
+    expect(entrypoint.indexOf('chgrp queue /work')).toBeLessThan(
+      entrypoint.indexOf('git clone')
+    );
+  });
+
+  it('removes the ticket worktrees linked to the checkout from before the session user, once', () => {
+    expect(entrypoint).toContain('for wt in /work/codeware-cod-*(N/); do');
+    expect(entrypoint).toContain('== "$AGENT_QUEUE_REPO/.git" ]]; then');
+    expect(entrypoint).toContain(
+      'git -C "$AGENT_QUEUE_REPO" worktree remove --force "$wt" || rm -rf "$wt"'
+    );
+  });
+
+  it('writes the checkout env file as mode 600 and seeds the session memory once', () => {
+    expect(entrypoint).toMatch(/umask 077\n\s+\{\n\s+\(\( \$\{#keep\} \)\)/);
+    expect(entrypoint).toContain('chmod 600 "$ENV_FILE.tmp"');
+    expect(entrypoint).toContain(
+      'dst="/home/session/.claude/projects/$slug/memory"'
+    );
+    expect(entrypoint).toContain('[[ -d "$src" && ! -d "$dst" ]] || return 0');
+    expect(entrypoint).toContain('cp -n "$src"/*.md "$dst"/');
+  });
+
+  it('relays the session rows and the spooled notices from the sampler, as the queue user', () => {
+    expect(entrypoint).toContain(
+      'telemetry_session "$id" implement "$state" "$detail" || true'
+    );
+    expect(entrypoint).toContain('stamp="$file.relayed"');
+    // Stamped before the read, so a change during the send is relayed next time; a mirrored
+    // file from another host is that host's to send
+    expect(entrypoint.indexOf('touch -r "$file" "$stamp"')).toBeLessThan(
+      entrypoint.indexOf('telemetry_session "$id" implement')
+    );
+    expect(entrypoint).toContain(
+      '[[ -z "$host" || "$host" == "$(hostname -s)" ]] || continue'
+    );
+    expect(entrypoint).toContain(
+      'for file in "$AGENT_QUEUE_HOME"/notify-spool/*.json(N); do'
+    );
+    // A notice is removed only once it posted, or when it is not a notice at all
+    expect(entrypoint).toMatch(
+      /--data @- "\$url" >\/dev\/null 2>&1; then\n\s+rm -f "\$file"/
     );
   });
 

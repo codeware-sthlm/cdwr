@@ -29,6 +29,27 @@ fi
 # The queue files the image carries, where run.sh compares them with origin/main
 cp /opt/agent-queue/* "$AGENT_QUEUE_HOME/"
 
+# The implement sessions run as another user, and the queue group is what the two share: /work
+# takes their clone and ticket worktrees beside this checkout, the queue home is theirs to read,
+# the sessions dir and the notice spool theirs to write. Docker applies the image's modes to a
+# new, empty volume only, so this runs at every start.
+chgrp queue /work && chmod 1775 /work
+chgrp -R queue "$AGENT_QUEUE_HOME" && chmod 750 "$AGENT_QUEUE_HOME" && chmod -R g+rX "$AGENT_QUEUE_HOME"
+install -d -m 2770 -g queue "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool"
+chmod -R g+rwX "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool"
+# Ticket worktrees from before the session user are linked to this checkout and are this user's:
+# a session can neither use nor remove them, so they go, once. A deploy waits for an idle queue,
+# so none holds work in flight, and every branch is on origin.
+if [[ -d "$AGENT_QUEUE_REPO/.git" ]]; then
+  for wt in /work/codeware-cod-*(N/); do
+    if [[ "$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" == "$AGENT_QUEUE_REPO/.git" ]]; then
+      print -r -- "agent-host: removing the ticket worktree $wt, which belongs to the queue's user"
+      git -C "$AGENT_QUEUE_REPO" worktree remove --force "$wt" || rm -rf "$wt"
+    fi
+  done
+  git -C "$AGENT_QUEUE_REPO" worktree prune || true
+fi
+
 # The identity on the tmpfs too: the credential helper reads it, and it exists before the first clone
 (umask 077; print -rl -- "AGENT_GITHUB_APP_ID=$AGENT_GITHUB_APP_ID" \
   "AGENT_GITHUB_APP_INSTALLATION_ID=$AGENT_GITHUB_APP_INSTALLATION_ID" \
@@ -44,12 +65,17 @@ write_env() {
   mkdir -p "${ENV_FILE:h}"
   local -a keep
   [[ -f "$ENV_FILE" ]] && keep=("${(@f)$(grep -v '^AGENT_GITHUB_APP_' "$ENV_FILE" || true)}")
-  {
-    (( ${#keep} )) && print -rl -- "${keep[@]}"
-    print -r -- "AGENT_GITHUB_APP_ID=$AGENT_GITHUB_APP_ID"
-    print -r -- "AGENT_GITHUB_APP_INSTALLATION_ID=$AGENT_GITHUB_APP_INSTALLATION_ID"
-    print -r -- "AGENT_GITHUB_APP_KEY_PATH=$KEY_PATH"
-  } > "$ENV_FILE.tmp"
+  # Mode 600: the file holds the Supabase service key, which a session must not read
+  (
+    umask 077
+    {
+      (( ${#keep} )) && print -rl -- "${keep[@]}"
+      print -r -- "AGENT_GITHUB_APP_ID=$AGENT_GITHUB_APP_ID"
+      print -r -- "AGENT_GITHUB_APP_INSTALLATION_ID=$AGENT_GITHUB_APP_INSTALLATION_ID"
+      print -r -- "AGENT_GITHUB_APP_KEY_PATH=$KEY_PATH"
+    } > "$ENV_FILE.tmp"
+  )
+  chmod 600 "$ENV_FILE.tmp"
   mv "$ENV_FILE.tmp" "$ENV_FILE"
 }
 
@@ -78,6 +104,16 @@ trust_checkout() {
     mv "$cfg.tmp" "$cfg"
 }
 (umask 077; trust_checkout) || print -r -- "agent-host: could not trust $AGENT_QUEUE_REPO in ~/.claude.json"
+
+# The implement sessions' project memory, seeded once from this user's into their claude home
+# (group-writable for this): what an implement run may and may not do lives there
+seed_session_memory() {
+  local slug="${AGENT_QUEUE_REPO//\//-}"
+  local src="$HOME/.claude/projects/$slug/memory" dst="/home/session/.claude/projects/$slug/memory"
+  [[ -d "$src" && ! -d "$dst" ]] || return 0
+  (umask 002; mkdir -p "$dst" && cp -n "$src"/*.md "$dst"/)
+}
+seed_session_memory || print -r -- "agent-host: could not seed the session memory"
 
 # The listener runs from the checkout, so a start (a deploy) brings it to origin/main first, the way
 # run.sh's to_main does before it plans: same lockfile marker, and a dirty checkout stays as it is
@@ -181,10 +217,42 @@ source "$AGENT_QUEUE_HOME/checkin.sh"
 # slow Supabase never holds it, and it never ends the loop. telemetry_env
 # runs inside it only, as it un-exports the key every run.sh the loop starts needs.
 source "$AGENT_QUEUE_HOME/telemetry.sh"
+# What the implement sessions can't send themselves, holding neither the key nor the webhook:
+# their session rows, from the files the hook writes, and the notices notify.sh spooled. Each
+# session file is sent when it changed since its stamp; a notice is removed once it is posted.
+relay_sessions() {
+  local file stamp id host state detail
+  for file in "$AGENT_QUEUE_HOME"/sessions/*.json(N); do
+    stamp="$file.relayed"
+    [[ -f "$stamp" && ! "$file" -nt "$stamp" ]] && continue
+    # The stamp takes the file's time before the read, so a change during the send is seen next
+    touch -r "$file" "$stamp"
+    IFS=$'\x1f' read -r id host state detail <<<"$(jq -r '[.id, .host, .state, .detail] | map(. // "") | join("\u001f")' "$file" 2>/dev/null)" || continue
+    [[ -n "$id" ]] || continue
+    # A file mirrored from another host is that host's session, which sends its own row
+    [[ -z "$host" || "$host" == "$(hostname -s)" ]] || continue
+    telemetry_session "$id" implement "$state" "$detail" || true
+  done
+}
+relay_notices() {
+  local file url text
+  url="${SLACK_WEBHOOK_URL:-${CLAUDE_SLACK_WEBHOOK:-}}"
+  [[ -z "$url" && -r "$HOME/.claude/slack-webhook" ]] && url="$(tr -d '[:space:]' < "$HOME/.claude/slack-webhook")"
+  [[ -n "$url" ]] || return 0
+  for file in "$AGENT_QUEUE_HOME"/notify-spool/*.json(N); do
+    text="$(jq -r '.text // empty' "$file" 2>/dev/null)" || { rm -f "$file"; continue; }
+    if [[ -z "$text" ]] || jq -nc --arg text "$text" '{text: $text}' |
+        curl -sS -m 5 -X POST -H 'Content-Type: application/json' --data @- "$url" >/dev/null 2>&1; then
+      rm -f "$file"
+    fi
+  done
+}
 (
   telemetry_env "$ENV_FILE"
   while true; do
     telemetry_host_metrics || true
+    relay_sessions || true
+    relay_notices || true
     sleep "${HOST_METRICS_INTERVAL_SECONDS:-$RUN_INTERVAL_SECONDS}"
   done
 ) &!
