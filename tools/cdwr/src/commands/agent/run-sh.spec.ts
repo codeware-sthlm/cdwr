@@ -3891,6 +3891,18 @@ describe('run.sh review session', () => {
     });
   });
 
+  // A trusted checkout (COD-798) brings the project's force-push.sh allow rule into every run;
+  // the runs that only read and suggest deny it, and a deny wins over an allow
+  it.each(['suggest_run', 'devlog_run', 'review_run'])(
+    '%s denies force-push.sh',
+    (name) => {
+      const run = fn(name);
+      const from = run.indexOf('--disallowedTools');
+      const denied = run.slice(from, run.indexOf('--tools "', from));
+      expect(denied).toContain('"Bash(*force-push.sh*)"');
+    }
+  );
+
   it('takes the idle tick after the suggestion and before the devlog', () => {
     expect(SCRIPT.match(/\breview_run\b/g)).toHaveLength(3);
     const idle = SCRIPT.slice(SCRIPT.indexOf('if [[ -z "$ready" ]]; then'));

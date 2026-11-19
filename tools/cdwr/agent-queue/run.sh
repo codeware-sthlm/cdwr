@@ -1783,7 +1783,7 @@ suggest_run() {
   "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none} runs=$RUNS" \
     --model opus "${LINEAR_MCP_ARGS[@]}" \
     --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
-    --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
+    --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs "Bash(*force-push.sh*)" \
     --tools "Read,Grep,Glob,Skill,Bash,Write,Edit" \
     --permission-mode dontAsk --permission-prompts none \
     --max-budget-usd "$SUGGEST_BUDGET_USD" --output-format json \
@@ -1844,7 +1844,7 @@ devlog_run() {
   "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/devlog-draft home=$HOME_DIR" \
     --model opus "${LINEAR_MCP_ARGS[@]}" \
     --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
-    --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
+    --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs "Bash(*force-push.sh*)" \
     --tools "Read,Grep,Glob,Skill,Bash,Write,Edit" \
     --permission-mode dontAsk --permission-prompts none \
     --max-budget-usd "$DEVLOG_BUDGET_USD" --output-format json \
@@ -1949,6 +1949,7 @@ review_run() {
       "Read(**/.env*)" "Read(//**/.claude.json)" "Read(//**/.cdwr/*.*)" "Read(//run/agent/**)" \
       "Read(/$HOME_DIR/linear.token*)" "Read(/$HOME_DIR/linear-app.env*)" \
       "Bash(*/run/agent/*)" "Bash(*linear.token*)" "Bash(*linear-app.env*)" "Bash(*security find-generic-password*)" "Bash(*AGENT_QUEUE_LINEAR*)" \
+      "Bash(*force-push.sh*)" \
     --tools "Read,Grep,Glob,Skill,Bash,Write,Edit" \
     --permission-mode dontAsk --permission-prompts none \
     --max-budget-usd "$REVIEW_BUDGET_USD" --output-format json \
