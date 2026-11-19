@@ -1,11 +1,11 @@
 import { shortAge } from '../desk/format';
 
-import { SHARED_KEY, type TenantRow } from './model';
+import { SHARED_KEY, type TenantRow, utcClock } from './model';
 import {
   BACKUP_STALE_HOURS,
-  DB_SESSIONS_MAX,
-  DB_SESSIONS_WARN,
-  certPending
+  DB_CONNECTIONS_WARN_SHARE,
+  certPending,
+  connectionsWarnAt
 } from './thresholds';
 
 // What is wrong with a tenant row, as the problem cards of the tenants view say it. Pure:
@@ -13,7 +13,7 @@ import {
 // why it was raised. The row's status derives from the same predicates.
 
 export type ProblemKind =
-  'backup' | 'behind' | 'cert' | 'deploy' | 'down' | 'errors' | 'pooler';
+  'backup' | 'behind' | 'cert' | 'connections' | 'deploy' | 'down' | 'errors';
 
 export type ProblemSeverity = 'down' | 'warn';
 
@@ -141,32 +141,43 @@ const cert = (row: TenantRow): Problem[] =>
       ]
     }));
 
-const pooler = (row: TenantRow): Problem[] =>
-  row.key === SHARED_KEY &&
-  row.db !== null &&
-  row.db.pooler !== null &&
-  row.db.pooler >= DB_SESSIONS_WARN
-    ? [
-        {
-          key: `${row.key}:pooler`,
-          row: row.key,
-          kind: 'pooler',
-          severity: 'warn',
-          title: 'The database pooler is nearly full',
-          evidence: [
-            `${row.db.pooler} of ${DB_SESSIONS_MAX} pooler sessions in use`,
-            ...Object.entries(row.db.byApplication).map(
-              ([name, n]) => `${name}: ${n}`
-            )
-          ],
-          threshold: `${DB_SESSIONS_WARN} or more of the ${DB_SESSIONS_MAX} pooler (Supavisor) sessions in use, three below the pool size.`,
-          actions: [
-            'See which application holds the sessions',
-            'Restart the app that leaks sessions (fly machine restart)'
-          ]
-        }
+const connections = (row: TenantRow): Problem[] => {
+  const db = row.db;
+  if (
+    row.key !== SHARED_KEY ||
+    db === null ||
+    db.connections === null ||
+    db.limit === null ||
+    db.limit <= 0 ||
+    db.connections < connectionsWarnAt(db.limit)
+  )
+    return [];
+  const top = Object.entries(db.byApplication)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 3)
+    .map(([name, n]) => `${name} ${n}`);
+  return [
+    {
+      key: `${row.key}:connections`,
+      row: row.key,
+      kind: 'connections',
+      severity: 'warn',
+      title: 'Postgres connections near the limit',
+      evidence: [
+        `${db.connections} of ${db.limit} connections in use`,
+        ...(top.length ? [top.join(', ')] : []),
+        ...(db.peak
+          ? [`peak today ${db.peak.connections} at ${utcClock(db.peak.at)} UTC`]
+          : [])
+      ],
+      threshold: `${connectionsWarnAt(db.limit)} or more of the ${db.limit} usable connections in use: ${DB_CONNECTIONS_WARN_SHARE * 100} percent of max_connections less the reserved slots, counted across the whole server.`,
+      actions: [
+        'See which application holds the connections',
+        'Restart the app that leaks connections (fly machine restart)'
       ]
-    : [];
+    }
+  ];
+};
 
 const errors = (row: TenantRow): Problem[] => {
   const s = row.sentry;
@@ -255,10 +266,10 @@ const KIND_ORDER = [
   'backup',
   'behind',
   'cert',
+  'connections',
   'deploy',
   'down',
-  'errors',
-  'pooler'
+  'errors'
 ];
 
 /** The problems of one row; `deploySha` is the commit the newest deploy run of main carries, for the behind evidence; `now` is ms */
@@ -270,7 +281,7 @@ export const problemsOf = (
   ...down(row),
   ...behind(row, deploySha),
   ...cert(row),
-  ...pooler(row),
+  ...connections(row),
   ...errors(row),
   ...deploy(row),
   ...backup(row, now)

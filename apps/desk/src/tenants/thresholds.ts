@@ -1,10 +1,11 @@
 // The limits and predicates both the status and the problems of a tenant row rest on
 
-/** The session pooler's size; the NUC's platform step counts Supavisor's sessions against it */
-export const DB_SESSIONS_MAX = 15;
+/** The share of the usable connection limit from which the shared row warns */
+export const DB_CONNECTIONS_WARN_SHARE = 0.8;
 
-/** Pooler sessions from which the shared row warns: three below the pool size */
-export const DB_SESSIONS_WARN = 12;
+/** The connections from which the shared row warns, for a usable limit */
+export const connectionsWarnAt = (limit: number): number =>
+  Math.ceil(limit * DB_CONNECTIONS_WARN_SHARE);
 
 /** Hours after which the newest database backup is stale: the NUC dumps nightly after 02:00, plus slack */
 export const BACKUP_STALE_HOURS = 26;

@@ -3,15 +3,15 @@ import type { TenantsPayload } from '../supabase';
 import { SHARED_KEY, type TenantRow, parseTenantRow } from './model';
 import { type Problem, allProblems, problemsOf } from './problems';
 import {
-  DB_SESSIONS_MAX,
-  DB_SESSIONS_WARN,
+  DB_CONNECTIONS_WARN_SHARE,
   certPending,
-  certReady
+  certReady,
+  connectionsWarnAt
 } from './thresholds';
 
 // What a tenant's row says: its status, and the state of the view as a whole. Pure; the page draws it.
 
-export { DB_SESSIONS_MAX, DB_SESSIONS_WARN, certPending, certReady };
+export { DB_CONNECTIONS_WARN_SHARE, certPending, certReady, connectionsWarnAt };
 
 /** The rows are stale once the newest was written longer ago than this, in minutes; the NUC writes every 10 */
 export const TENANTS_STALE_MIN = 30;

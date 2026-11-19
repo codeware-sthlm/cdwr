@@ -61,7 +61,22 @@ export type TenantDb = {
   sessions: number;
   /** The sessions that take a slot in the pool (Supavisor's); null on a row written before it was read */
   pooler: number | null;
+  /** Client backends across the whole server, by application name; on an old row, the cms database's only */
   byApplication: Record<string, number>;
+  /** Client backends across the server; null on a row written before it was read */
+  connections: number | null;
+  /** The usable connection limit: max_connections less the reserved slots; null on an old row */
+  limit: number | null;
+  /** The most connections seen at a tick this UTC day, and when (ISO time) */
+  peak: { connections: number; at: string } | null;
+  /** Sessions opened since the previous tick, all databases; null on the first tick or an old row */
+  opened: number | null;
+};
+
+/** The clock time of an ISO time in UTC, `HH:MM`; the input as it came when it does not parse */
+export const utcClock = (iso: string): string => {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? new Date(t).toISOString().slice(11, 16) : iso;
 };
 
 /** A tenant's Sentry read: the issue counts of the last day and week, and the busiest issue */
@@ -266,7 +281,17 @@ const database = (value: unknown): TenantDb | null => {
   const sessions = num(value['sessions']);
   if (sessions === null) return null;
   const by = value['byApplication'];
+  const peak = value['peak'];
+  const peakConnections = isRecord(peak) ? num(peak['connections']) : null;
+  const peakAt = isRecord(peak) ? str(peak['at']) : null;
   return {
+    connections: num(value['connections']),
+    limit: num(value['limit']),
+    peak:
+      peakConnections !== null && peakAt
+        ? { connections: peakConnections, at: peakAt }
+        : null,
+    opened: num(value['opened']),
     sizeBytes: num(value['sizeBytes']),
     sessions,
     pooler: num(value['poolerSessions']),

@@ -75,15 +75,26 @@ describe('parseTenantRow', () => {
       sizeBytes: 120 * 2 ** 20,
       sessions: 5,
       pooler: 3,
-      byApplication: { 'cdwr-cms': 3 }
+      byApplication: { 'cdwr-cms': 3 },
+      connections: 3,
+      limit: 57,
+      peak: { connections: 9, at: '2026-10-29T08:15:00.000Z' },
+      opened: 4
     });
   });
 
-  it('reads a database row written before the pooler count as no pooler figure', () => {
+  it('reads a database row written before the connection figures as null for each', () => {
     const row = parseTenantRow(
       shared({ db: { sizeBytes: null, sessions: 14, byApplication: {} } })
     );
-    expect(row.db).toMatchObject({ sessions: 14, pooler: null });
+    expect(row.db).toMatchObject({
+      sessions: 14,
+      pooler: null,
+      connections: null,
+      limit: null,
+      peak: null,
+      opened: null
+    });
   });
 
   it('reads a read that failed as null, not as empty', () => {
