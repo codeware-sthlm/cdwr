@@ -435,13 +435,18 @@ desk showed (`sha`, when the desk showed one), and a gate needs a deployed app t
 closed or open. A gate with no deployed app names the side that failed: Infisical listing no app
 for the tenant, or Fly refusing to read the app, with Fly's error. A command whose dry run fails, or whose answer doesn't match, is refused with that
 reason and never runs for real. Then the row is acked, then the real command runs, so a command
-that fails after the ack turns the row `refused` with the command's own message. Only the app name
+that fails after the ack turns the row `refused` with the command's own message. A gate goes ahead
+when one of the tenant's apps is live, and an app Fly could not read is then left as it was: the
+command ends `partial`, and the row is `refused` with its `reason`, which names that app and Fly's
+error (`cdwr-cms-codeware not read on Fly: Error: …`). The readable apps were opened or closed. Only the app name
 and tenant slug that pass a strict pattern reach the command line, and only production.
 
 A `close` always generates a new password. It is stored by the command in Infisical
 (`/tenants/<tenant>/apps/<app>`, `SITE_GATE_PASSWORD`) and goes no further: `run.sh` reads only the
-command's `ok` and error message, cuts a gate's message at the key and replaces anything shaped like a
-generated password, so it reaches no row, log or notice. Read it in Infisical when you need it. The
+command's `ok` and error message (or a partial gate's `reason`), cuts a gate's message at the key and
+replaces anything shaped like a generated password (a run of 20 or more url-safe characters with an
+uppercase letter, a digit or an underscore; a lowercase app name stays), so it reaches no row, log or
+notice. Read it in Infisical when you need it. The
 write credentials are `DESK_FLY_TOKEN` (an org deploy token, with an expiry) and
 `DESK_INFISICAL_CLIENT_ID`, `_CLIENT_SECRET` and `_PROJECT_ID` (an identity with write on production
 secrets of the project), in the same places as the platform step's read-only ones, which they are kept

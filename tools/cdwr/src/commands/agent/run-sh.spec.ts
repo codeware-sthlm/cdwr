@@ -3260,6 +3260,72 @@ describe('run.sh apply_commands', () => {
         expect(everything(r)).not.toContain(TOKEN);
       }
     );
+
+    const partial = (reason?: string) => ({
+      ok: false,
+      command: 'tenant gate',
+      result: {
+        summary: 'acme in production is only partly open',
+        tenant: 'acme',
+        failed: [],
+        ...(reason ? { reason } : {})
+      }
+    });
+
+    it.skipIf(!canRun)(
+      'refuses a partial gate with the app it could not read',
+      () => {
+        const r = apply(
+          [{ id: 1, kind: 'gate', args: { tenant: 'acme', action: 'open' } }],
+          setup(
+            gateDry('set', true),
+            // 22 characters, past the password-shaped run length
+            partial(
+              'cdwr-headless-codeware not read on Fly: Error: unauthorized'
+            ),
+            1
+          )
+        );
+        expect(r.patches[1]?.body['status']).toBe('refused');
+        expect(r.patches[1]?.body['note']).toBe(
+          'cdwr-headless-codeware not read on Fly: Error: unauthorized'
+        );
+      }
+    );
+
+    it.skipIf(!canRun)('strips a password-shaped run from the reason', () => {
+      const r = apply(
+        [{ id: 1, kind: 'gate', args: close }],
+        setup(
+          gateDry('missing', false),
+          {
+            ok: false,
+            result: {
+              password: TOKEN,
+              reason: `cdwr-cms-acme not read on Fly: Error: ${TOKEN}`
+            }
+          },
+          1
+        )
+      );
+      expect(r.patches[1]?.body['note']).toBe(
+        'cdwr-cms-acme not read on Fly: Error: …'
+      );
+      expect(everything(r)).not.toContain(TOKEN);
+    });
+
+    it.skipIf(!canRun)(
+      'falls back to the generic text without a reason',
+      () => {
+        const r = apply(
+          [{ id: 1, kind: 'gate', args: { tenant: 'acme', action: 'open' } }],
+          setup(gateDry('set', true), partial(), 1)
+        );
+        expect(r.patches[1]?.body['note']).toBe(
+          'only partly applied, see cdwr history on the host'
+        );
+      }
+    );
   });
 });
 
