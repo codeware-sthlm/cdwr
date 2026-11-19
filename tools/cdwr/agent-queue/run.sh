@@ -1567,14 +1567,16 @@ attended() {
       # A mirrored file from another host: its pids mean nothing here, so liveness is its age
       fhost="$(jq -r '.host // empty' "$f" 2>/dev/null)"
       [[ -n "$fhost" && "$fhost" != "$(host_id)" ]] && remote=true
+      # ps, not kill -0: a session runs as another user in the container, whose processes this
+      # one may see but not signal
       if ! $remote; then
-        [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && pa=true
-        [[ "$wpid" == <-> ]] && kill -0 "$wpid" 2>/dev/null && wa=true
+        [[ -n "$pid" ]] && ps -p "$pid" >/dev/null 2>&1 && pa=true
+        [[ "$wpid" == <-> ]] && ps -p "$wpid" >/dev/null 2>&1 && wa=true
       fi
       # Ended or dead for over 24 h: delete
       if [[ "$pa" == false || "$(jq -r '.state' "$f" 2>/dev/null)" == ended ]] &&
          (( $(date +%s) - $(jq -r '.lastSeen // empty | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' "$f" 2>/dev/null || echo 0) > 86400 )); then
-        rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen" "$f.mirrored" "$f.beat" "$f.beatpending"; continue
+        rm -f "$f" "${f%.json}.watcher" "${f%.json}.seen" "$f.mirrored" "$f.beat" "$f.beatpending" "$f.relayed"; continue
       fi
       if $remote; then
         items+=("$(jq -c '. + {pidAlive: null, watcherAlive: null}' "$f" 2>/dev/null)")
@@ -1585,7 +1587,7 @@ attended() {
     # A watcher file whose pid is dead, with or without a session file
     for w in "$SESSIONS"/*.watcher(N); do
       wpid="$(cat "$w" 2>/dev/null)"
-      [[ "$wpid" == <-> ]] && kill -0 "$wpid" 2>/dev/null || rm -f "$w"
+      [[ "$wpid" == <-> ]] && ps -p "$wpid" >/dev/null 2>&1 || rm -f "$w"
     done
     # What wait.sh last reported to a session that no longer exists
     for w in "$SESSIONS"/*.seen(N); do
