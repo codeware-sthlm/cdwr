@@ -2,7 +2,9 @@
 -- Run as the database owner. Without `grant=1` it only reports; with it, it grants and reports again:
 --   psql "<owner url>" -v role=<platform role> -f tools/cdwr/agent-queue/platform-role.sql
 --   psql "<owner url>" -v role=<platform role> -v grant=1 -f tools/cdwr/agent-queue/platform-role.sql
--- Column grants on exactly what `platform.sql` reads, so the role never sees api keys or hashes.
+-- Column grants on exactly what `platform.sql` reads, so the role never sees api keys or hashes
+-- in the tables, plus pg_read_all_stats, so it sees every session in pg_stat_activity and not
+-- only its own. That membership also shows other sessions' query text, as any statistics reader.
 -- They survive added and altered columns; rerun after a granted column or table is dropped and
 -- recreated, or when `platform.sql` reads a new column (add it to both lists here first).
 -- Rerunning is harmless. Grant mode fails when the role can still read more than the list.
@@ -29,14 +31,23 @@ GRANT SELECT (id, slug, name, deployment, status, stats_website_id)
   ON payload.tenants TO :"role";
 GRANT SELECT (_parent_id, _order, hostname, app, is_primary, certificate_status)
   ON payload.tenants_domains TO :"role";
+-- Statistics views only, no table data: the connection count is per server. Last, so a
+-- refused grant (it needs ADMIN OPTION on the role) leaves the column grants above in place
+GRANT pg_read_all_stats TO :"role";
   \endif
 \endif
 
--- Wanted: schema_usage t, both table_wide f, member_of_read_all f
+-- Wanted: schema_usage t, both table_wide f, member_of_read_all f, reads_all_stats t
 SELECT has_schema_privilege(:'role', 'payload', 'USAGE') AS schema_usage,
        has_table_privilege(:'role', 'payload.tenants', 'SELECT') AS tenants_table_wide,
        has_table_privilege(:'role', 'payload.tenants_domains', 'SELECT') AS domains_table_wide,
-       pg_has_role(:'role', 'pg_read_all_data', 'USAGE') AS member_of_read_all;
+       pg_has_role(:'role', 'pg_read_all_data', 'USAGE') AS member_of_read_all,
+       pg_has_role(:'role', 'pg_read_all_stats', 'USAGE') AS reads_all_stats;
+SELECT pg_has_role(:'role', 'pg_read_all_stats', 'USAGE') AS reads_all_stats \gset
+\if :reads_all_stats
+\else
+  \echo 'The role is outside pg_read_all_stats: the connection count sees only its own sessions. Rerun with -v grant=1'
+\endif
 
 -- Wanted: every can_select t
 SELECT needed.tbl AS "table", needed.col AS "column",
