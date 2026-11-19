@@ -252,6 +252,44 @@ describe('implement.sh', () => {
     ).toBe(true);
   });
 
+  // A merge check reads the queue on this host and the live site, nothing else
+  it.each([
+    'Bash(pnpm cdwr agent status)',
+    'Bash(pnpm cdwr agent status *)',
+    'Bash(pnpm cdwr agent logs)',
+    'Bash(pnpm cdwr agent logs *)'
+  ])('allows %s for a merge check', (rule) => {
+    expect(code).toContain(`"${rule}"`);
+    expect(allowed).toContain(rule.slice(5, -1));
+  });
+
+  it('denies --host on status and logs', () => {
+    expect(denied).toContain('pnpm cdwr agent status *--host*');
+    expect(denied).toContain('pnpm cdwr agent logs *--host*');
+    expect(isDenied('pnpm cdwr agent status --host agent-host')).toBe(true);
+    expect(isDenied('pnpm cdwr agent logs -n 5 --host agent-host')).toBe(true);
+    expect(denied).toContain('pnpm cdwr agent status *-*H*');
+    expect(denied).toContain('pnpm cdwr agent logs *-*H*');
+    expect(isDenied('pnpm cdwr agent status -H agent-host')).toBe(true);
+    expect(isDenied('pnpm cdwr agent logs -n 5 -H agent-host')).toBe(true);
+    expect(isDenied('pnpm cdwr agent status -jH agent-host')).toBe(true);
+    expect(isDenied('pnpm cdwr agent status')).toBe(false);
+  });
+
+  it('fetches only the platform domains', () => {
+    const fetches = [...code.matchAll(/"(WebFetch[^"]*)"/g)].map((m) => m[1]);
+    expect(fetches.sort()).toEqual([
+      'WebFetch(domain:*.cdwr.io)',
+      'WebFetch(domain:*.codeware.se)',
+      'WebFetch(domain:cdwr.io)',
+      'WebFetch(domain:codeware.se)'
+    ]);
+    expect(fetches.every((rule) => rule.startsWith('WebFetch(domain:'))).toBe(
+      true
+    );
+    expect(code).not.toContain('fly.dev');
+  });
+
   it('reads a failed job log but cannot rerun it', () => {
     expect(code).toContain('"Bash(gh run view *)"');
     expect(code).not.toContain('"Bash(gh run *)"');

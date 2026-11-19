@@ -28,6 +28,8 @@ const REASON: ReadonlyMap<string, readonly [string, string]> = new Map([
   ['review feedback', ['review feedback', 'feedback']],
   ['conflicts with main', ['conflicts with main', 'conflict']],
   ['merged comment', ['merged comment', 'comment']],
+  ['merge checks', ['merge checks', 'comment']],
+  ['plan approved', ['plan approved', 'ready']],
   ['renovate', ['renovate', 'renovate']],
   ['ready', ['ready', 'ready']]
 ]);

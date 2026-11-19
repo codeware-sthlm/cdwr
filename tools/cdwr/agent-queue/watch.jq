@@ -63,32 +63,43 @@ def status_handoffs:
     | (.what | sub("^hand-offs?:?\\s*"; ""; "i")) as $t
     | if $t == "" then .what else $t end ];
 
-# Unchecked items of the newest "PR ready" comment's "Hand-off checklist:" block. An unchecked item
-# struck through (`- [ ] ~~item~~`, a reason may follow) is dropped, not waiting. A ticket that
+# The newest "PR ready" comment the agent wrote, else null
+def pr_ready_comment:
+  [ (.comments.nodes // [])[] | select(agent_kind("**Agent: PR ready**")) ] | sort_by(.createdAt) | last;
+
+# Unchecked items of a comment body's checklist block: the line $heading (bold or not, any case),
+# then `- [ ] <item>` lines up to the first line that is not an item. An unchecked item struck
+# through (`- [ ] ~~item~~`, a reason may follow) is dropped, not waiting. No such block: [].
+def checklist($heading):
+  split("\n") as $lines
+  | ([ range(0; $lines | length)
+       | select($lines[.] | trim | gsub("^\\*\\*|\\*\\*$"; "") | ascii_downcase == $heading) ]
+     | first) as $i
+  | if $i == null then []
+    else
+      reduce $lines[$i + 1:][] as $l ({ items: [], stop: false };
+        if .stop then .
+        elif ($l | test("^\\s*$")) then .
+        elif ($l | test("^\\s*[-*] \\[ \\] ~~")) then .
+        elif ($l | test("^\\s*[-*] \\[ \\] ")) then
+          .items += [ $l | capture("^\\s*[-*] \\[ \\] (?<t>.*)$").t | trim ]
+        elif ($l | test("^\\s*[-*] \\[[xX]\\] ")) then .
+        else .stop = true
+        end)
+      | .items
+    end;
+
+# Unchecked items of the newest "PR ready" comment's "Hand-off checklist:" block. A ticket that
 # never got one (merged from a gate) falls back to the Status table's hand-off rows.
 def handoffs:
-  ([ (.comments.nodes // [])[] | select(agent_kind("**Agent: PR ready**")) ]
-    | sort_by(.createdAt) | last) as $c
-  | if $c == null then status_handoffs
-    else
-      ($c.body | split("\n")) as $lines
-      | ([ range(0; $lines | length)
-           | select($lines[.] | trim | gsub("^\\*\\*|\\*\\*$"; "") | ascii_downcase == "hand-off checklist:") ]
-         | first) as $i
-      | if $i == null then []
-        else
-          reduce $lines[$i + 1:][] as $l ({ items: [], stop: false };
-            if .stop then .
-            elif ($l | test("^\\s*$")) then .
-            elif ($l | test("^\\s*[-*] \\[ \\] ~~")) then .
-            elif ($l | test("^\\s*[-*] \\[ \\] ")) then
-              .items += [ $l | capture("^\\s*[-*] \\[ \\] (?<t>.*)$").t | trim ]
-            elif ($l | test("^\\s*[-*] \\[[xX]\\] ")) then .
-            else .stop = true
-            end)
-          | .items
-        end
-    end;
+  pr_ready_comment as $c
+  | if $c == null then status_handoffs else $c.body // "" | checklist("hand-off checklist:") end;
+
+# Unchecked items of the newest "PR ready" comment's "After the merge, the agent checks:" block:
+# checks an implementing run makes once the PR merged and the hand-offs are done
+def merge_checks:
+  pr_ready_comment as $c
+  | if $c == null then [] else $c.body // "" | checklist("after the merge, the agent checks:") end;
 
 # Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved,
 # copilotThreads, threads, threadsTruncated, conflicting, draft, mergeable, mergeStateStatus, ci, copilot }.
@@ -410,14 +421,27 @@ def open_blockers:
 # True when an open issue blocks this one
 def blocked: open_blockers | length > 0;
 
-# True for an open sub-issue that waits only on the label: no agent label of its own, not started,
-# this repo, every blocker done and at least one of them agent work. Surfaced for Håkan, never labelled.
-def to_label:
+# The report's lines: the description before its `## Plan` heading, so a plan's own "Open questions"
+# never count
+def report:
+  ((.description // "") | split("\n")) as $l
+  | ([ range(0; $l | length) | select($l[.] | test("^##\\s+plan\\s*$"; "i")) ] | first) as $i
+  | if $i == null then $l else $l[:$i] end;
+
+# True when the report asks Håkan first: a line `**Ask me before implementing**`, or a heading or
+# bold line starting "Open question". Such a ticket keeps the plan gate, and a split part is listed
+# for him to label rather than labelled.
+def asks_first:
+  any(report[]; trim | test("^\\*\\*ask me before implementing\\b"; "i")
+                       or test("^(#+\\s*|\\*\\*)open questions?\\b"; "i"));
+
+# True for an open sub-issue whose split is ready for it: not started, this repo, every blocker
+# done and at least one of them agent work. Whether it carries an agent label is left to the caller.
+def split_ready:
   blockers as $b
   | .parent != null
     # A closed parent is an abandoned split
     and (.parent.state.type // "" | IN("completed", "canceled") | not)
-    and agent_label == null
     and (.state.type | IN("backlog", "unstarted", "triage"))
     and (other_repo | not)
     and ($b | length) > 0
@@ -426,6 +450,17 @@ def to_label:
     and all($b[]; .state.type == "completed" or .state.type == "canceled")
     and any($b[]; agent_label != null);
 
+# True when the queue's own `**Agent: labelled ready**` comment is on the ticket: label_parts
+# labelled it once, whichever host did
+def labelled_by_queue: any((.comments.nodes // [])[]; agent_kind("**Agent: labelled ready**"));
+
+# A split part the scheduler labels agent:ready itself (run.sh `label_parts`): no agent label yet,
+# never labelled by the queue before, and nothing in its report asks Håkan first
+def parts_to_label: split_ready and agent_label == null and (labelled_by_queue | not) and (asks_first | not);
+
+# A split part listed for Håkan to label: no agent label, and its report asks him first
+def to_label: split_ready and agent_label == null and asks_first;
+
 # True for a written plan not yet started: a Status table whose rows are all Planned
 def plan_unstarted:
   status_rows as $r
@@ -433,9 +468,32 @@ def plan_unstarted:
 
 def is_open: .state.type != "completed" and .state.type != "canceled";
 
-# True for an open agent:ready ticket that already has a written plan: a planning run has nothing to add
+# True when an app added the ticket's agent:ready: the newest history entry adding it has an app
+# user as its actor, the queue's own or any other integration. Only Håkan makes a ticket ready, with
+# one exception: the queue's own label on a sub-issue that carries its `**Agent: labelled ready**`
+# comment and asks nothing first (run.sh `label_parts`). Not split_ready: a blocker's label cleared
+# after the part was labelled would refuse it. No such entry in the page read counts as his: a guard that hides real
+# work is worse than one that misses.
+def ready_by_app:
+  ([ (.history.nodes // [])[] | select(any((.addedLabels // [])[]; .name == "agent:ready")) ]
+   | sort_by(.createdAt) | last) as $h
+  | $h != null and ($h.actor.app == true or $h.actor.id == agent_user_id)
+    and (($h.actor.id == agent_user_id and .parent != null and labelled_by_queue and (asks_first | not)) | not);
+
+# True for a plan the agent approved itself that waits for an implementing run: an open, unblocked
+# agent:ready ticket whose Status rows are all Planned, whose newest agent comment is
+# `**Agent: plan approved**`, and whose report doesn't ask Håkan first
+def plan_approved:
+  any((.labels.nodes // [])[].name; . == "agent:ready") and is_open
+  and (blocked | not) and (ready_by_app | not) and plan_unstarted and (asks_first | not)
+  and ([ (.comments.nodes // [])[] | select(is_agent) ] | sort_by(.createdAt) | last
+       | . != null and agent_kind("**Agent: plan approved**"));
+
+# True for an open agent:ready ticket that already has a written plan nothing will take: a planning
+# run has nothing to add, and an approved plan is implement work
 def ready_planned:
-  any((.labels.nodes // [])[].name; . == "agent:ready") and is_open and (status_rows | length) > 0;
+  any((.labels.nodes // [])[].name; . == "agent:ready") and is_open and (status_rows | length) > 0
+  and (plan_approved | not);
 
 # True when the newest comment is not the agent's
 def answered:
@@ -475,19 +533,23 @@ def merged_comment:
   and answered
   and (((.comments.nodes // []) | sort_by(.createdAt) | last | .createdAt | epoch) > (.completedAt | epoch));
 
+# True for a merged ticket with checks left for the agent: Done within 14 days, unchecked items under
+# its PR-ready comment's "After the merge, the agent checks:", every hand-off ticked or dropped (a
+# deploy among them comes first), and 15 minutes past the merge, so the deploy it starts has landed.
+# An `**Agent: checks**` after the merge ends it, even when its checklist edit failed.
+def merge_checks_due($now):
+  .state.type == "completed" and .completedAt != null
+  and ($now - (.completedAt | epoch)) >= 900 and ($now - (.completedAt | epoch)) <= 14 * 86400
+  and (handoffs | length) == 0 and (merge_checks | length) > 0
+  and ((.completedAt | epoch) as $merged
+       | any((.comments.nodes // [])[]; agent_kind("**Agent: checks**") and (.createdAt | epoch) > $merged)
+       | not);
+
 # Sort key for ready tickets: status, then priority (none last), then oldest first
 def queue_order:
   [ ({ started: 0, unstarted: 1, backlog: 2, triage: 3 }[.state.type] // 4),
     (if .priority == 0 then 5 else .priority end),
     .createdAt ];
-
-# True when an app added the ticket's agent:ready: the newest history entry adding it has an app
-# user as its actor, the queue's own or any other integration. Only Håkan makes a ticket ready. No such entry in the page read counts as his:
-# a guard that hides real work is worse than one that misses.
-def ready_by_app:
-  ([ (.history.nodes // [])[] | select(any((.addedLabels // [])[]; .name == "agent:ready")) ]
-   | sort_by(.createdAt) | last) as $h
-  | $h != null and ($h.actor.app == true or $h.actor.id == agent_user_id);
 
 # --- Parent close: the scheduler's second Linear write (run.sh `close_parents`) ---
 
@@ -537,6 +599,25 @@ def parents_to_close($closed):
                     | select(parent_to_close)
                     | { id, identifier, comment: close_comment })) };
 
+# --- Part labels: the scheduler's third Linear write (run.sh `label_parts`) ---
+
+# The comment that goes with the label, blockers in number order
+def label_comment:
+  "**Agent: labelled ready** every blocker is closed: "
+  + ([ blockers | sort_by(.identifier | id_num)[]
+       | "\(.identifier) (\(if .state.type == "completed" then "Done" else "Canceled" end))" ]
+     | join(", "))
+  + ".";
+
+# From the PARTS response (open sub-issues with their reports and blockers): [{ id, identifier,
+# comment }] for each split part to label agent:ready. $labelled lists the parts the scheduler
+# labelled before: one unlabelled since is Håkan's, never labelled again.
+def parts_to_label_list($labelled):
+  [ (.data.issues.nodes // [])[]
+    | select(.identifier as $i | ($labelled | index($i)) == null)
+    | select(((.team.key // "COD") == "COD") and parts_to_label)
+    | { id, identifier, comment: label_comment } ];
+
 # What waits on Håkan after implementation: open reviews count toward the limit; hand-off
 # tickets completed within 14 days are listed but don't count
 def limit_used($now; $limit):
@@ -556,7 +637,10 @@ def limit_used($now; $limit):
 # broken or tended; `table` is what waits on Håkan: before and after implementation, and sub-issues
 # ready to label. $session comes from session_state, or null. $waits comes from waits.sh, keyed by
 # identifier. $renovate is renovate.json (renovate_step's state); an untended broken PR is a `next`
-# item `PR <n>` after merged comments, new work that the limit holds like a ready ticket.
+# item `PR <n>` after merged comments, new work that the limit holds like a ready ticket. A merged
+# ticket with checks left is a `merge checks` item after merged comments, which the limit never
+# holds; a plan the agent approved itself is a `plan approved` item before Renovate PRs, held like
+# a ready ticket. `table.label` lists only the split parts whose report asks Håkan first.
 def queue_view($now; $limit; $watch; $session; $waits; $renovate):
   map(select(other_repo | not)) as $all
   | ($all | limit_used($now; $limit)) as $lu0
@@ -621,7 +705,15 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
   | ([ $all[] | select(merged_comment and (.identifier | IN($parkIds[]) | not)) ]
      | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "merged comment", detail: null })) as $mc
-  | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not) and (ready_by_app | not)) ]
+  # A comment on the merged ticket is answered first
+  | ($mc | map(.ticket)) as $mcIds
+  | ([ $all[] | select(merge_checks_due($now) and (.identifier | IN($mcIds[]) | not)) ]
+     | sort_by(queue_order)
+     | map({ ticket: .identifier, reason: "merge checks", detail: "\(merge_checks | length) left" })) as $mck
+  # A plan the agent approved itself is implement work, held by the limit like a ready ticket
+  | ([ $all[] | select(plan_approved) ] | sort_by(queue_order) | map(.identifier)) as $pa
+  | ([ $all[] | select(agent_label == "agent:ready" and is_open and (blocked | not) and (ready_by_app | not)
+                       and (plan_approved | not)) ]
      | sort_by(queue_order) | map(.identifier)) as $rdy
   # Listed rather than dropped silently, so the desk and status show why it doesn't start
   | ([ $all[] | select(agent_label == "agent:ready" and is_open and ready_by_app) ] | sort_by(queue_order)
@@ -641,11 +733,13 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
       limit: { used: $lu.used, max: $limit },
       session: $session,
       holders: $holders,
-      next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb + $conf + $mc
-             + (if $full then [] else $renNext + ($rdy | map({ ticket: ., reason: "ready", detail: null })) end)),
+      next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb + $conf + $mc + $mck
+             + (if $full then []
+                else ($pa | map({ ticket: ., reason: "plan approved", detail: null })) + $renNext
+                     + ($rdy | map({ ticket: ., reason: "ready", detail: null })) end)),
       held: {
-        tickets: (if $full then ($renNext | map(.ticket)) + $rdy else [] end),
-        free: (if $full and (($rdy | length) + ($renNext | length)) > 0
+        tickets: (if $full then $pa + ($renNext | map(.ticket)) + $rdy else [] end),
+        free: (if $full and (($pa | length) + ($rdy | length) + ($renNext | length)) > 0
                then ($lu0.open | map({ action: "review", ticket: ., pr: ($watch[.].pr // null) }))
                     + ($parkWorking | map({ action: "wait", ticket: .identifier, pr: .park.pr }))
                     + [ { action: "limit", value: ($lu.used + 1) } ]
@@ -849,7 +943,7 @@ def ticket_gaps($now; $watch):
                "Close or unlink \($open_names)") else empty end,
       if ready_planned and (blocked | not)
       then gap($t; "ready-planned"; "\($t) has a written plan but is agent:ready, so only an attended session takes it";
-               "Start `cdwr agent attend \($t)`, or set it to agent:needs-input and answer its plan so the scheduler launches it") else empty end,
+               "Start `cdwr agent attend \($t)`. A self-approved plan launches only while `**Agent: plan approved**` is the agent's newest comment and the report asks nothing first") else empty end,
       if $lab == "agent:review" and $open and (($watch // {}) | length) > 0 and ($w.pr // null) == null
       then gap($t; "review-no-pr"; "\($t) is agent:review but no PR is attached";
                "Attach the PR to \($t), or set the label back") else empty end,

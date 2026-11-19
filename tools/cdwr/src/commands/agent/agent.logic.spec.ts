@@ -1111,6 +1111,16 @@ describe('parseQueueView', () => {
     expect(parseQueueView(JSON.stringify(EMPTY_VIEW))).toEqual(EMPTY_VIEW);
   });
 
+  it('reads the merge checks and plan approved reasons', () => {
+    const next = [
+      { ticket: 'COD-5', reason: 'merge checks', detail: '2 left' },
+      { ticket: 'COD-6', reason: 'plan approved', detail: null }
+    ];
+    expect(
+      parseQueueView(JSON.stringify({ ...EMPTY_VIEW, next }))?.next
+    ).toEqual(next);
+  });
+
   it('reads a view from before parked existed', () => {
     const { parked: _parked, ...old } = EMPTY_VIEW;
     expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);

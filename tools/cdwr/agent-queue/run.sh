@@ -1304,6 +1304,79 @@ close_parents() {
   return 0
 }
 
+# Part labels: a split's next part, a sub-issue whose blockers are all closed, gets agent:ready
+# from the scheduler unless its report asks Håkan first; watch.jq `parts_to_label_list` decides.
+read -r -d '' PARTS <<'GQL' || true
+query {
+  issues(first: 100, filter: {
+    team: { key: { eq: "COD" } }
+    parent: { null: false }
+    state: { type: { nin: ["completed", "canceled"] } }
+  }) {
+    nodes {
+      id identifier description
+      team { key }
+      comments(first: 50, orderBy: createdAt) { nodes { body createdAt user { id app } } }
+      parent { identifier state { type } }
+      state { type }
+      labels(first: 20) { nodes { name } }
+      inverseRelations(first: 20) {
+        nodes { type issue { identifier completedAt state { type } labels(first: 20) { nodes { name } } } }
+        pageInfo { hasNextPage }
+      }
+    }
+  }
+  issueLabels(filter: { name: { eq: "agent:ready" } }) { nodes { id team { key } } }
+}
+GQL
+read -r -d '' LABEL_PART <<'GQL' || true
+mutation($id: String!, $label: String!) {
+  issueUpdate(id: $id, input: { addedLabelIds: [$label] }) { success }
+}
+GQL
+
+# label_parts: adds agent:ready to each part, then posts its **Agent: labelled ready** comment. A
+# failed label is a warn and is tried again on the next run; the comment follows only a label
+# Linear took, so it is never posted twice, and a failed one only warns. labelled-parts keeps every
+# part labelled here, one per line, so one Håkan unlabels is not labelled again.
+label_parts() {
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/labelled-parts" resp todo label p id vars labelled
+  resp="$(linear "$PARTS")" || { print -r -- "Linear did not answer"; return 1; }
+  jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
+    { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
+  [[ "$(jq '.data.issues.nodes | length' <<<"$resp")" -lt 100 ]] ||
+    { note "warn: label: 100 open sub-issues, the page limit; later ones are not read"; record warn "" "label: page limit reached"; }
+  labelled='[]'
+  [[ -r "$file" ]] && labelled="$(jq -Rsc 'split("\n") | map(select(length > 0))' "$file")"
+  todo="$(watch -c --argjson labelled "$labelled" 'include "watch"; parts_to_label_list($labelled)' <<<"$resp")" ||
+    { print -r -- "watch.jq failed$(watch_err)"; return 1; }
+  [[ "$(jq 'length' <<<"$todo")" == 0 ]] && return 0
+  label="$(jq -r '[.data.issueLabels.nodes[] | select((.team.key // "COD") == "COD")][0].id // empty' <<<"$resp")"
+  [[ -n "$label" ]] || { print -r -- "no agent:ready label in team COD"; return 1; }
+  for p in ${(f)"$(jq -c '.[]' <<<"$todo")"}; do
+    id="$(jq -r '.identifier' <<<"$p")"
+    vars="$(jq -c --arg l "$label" '{id, label: $l}' <<<"$p")"
+    resp="$(linear "$LABEL_PART" "$vars")"
+    if ! jq -e '.data.issueUpdate.success == true' >/dev/null 2>&1 <<<"$resp"; then
+      note "warn: label: $id failed ($(jq -c '.errors[0].message // "no answer"' <<<"$resp" 2>/dev/null))"
+      record warn "$id" "label: part label failed"
+      continue
+    fi
+    print -r -- "$id" >> "$file"
+    vars="$(jq -c '{id, body: .comment}' <<<"$p")"
+    resp="$(linear "$CLOSE_COMMENT" "$vars")"
+    if ! jq -e '.data.commentCreate.success == true' >/dev/null 2>&1 <<<"$resp"; then
+      note "warn: label: $id labelled, its comment failed ($(jq -c '.errors[0].message // "no answer"' <<<"$resp" 2>/dev/null))"
+      record warn "$id" "label: labelled without its comment"
+    fi
+    note "label: $id labelled agent:ready, every blocker is closed"
+    record labelled "$id" "every blocker is closed"
+    notice info "$id labelled agent:ready: every blocker is closed"
+  done
+  return 0
+}
+
 # The renovate-labelled tickets with their attachments: a PR one carries is tended, never offered
 # again, so closed tickets count too
 read -r -d '' RENOVATE_TICKETS <<'GQL' || true
@@ -1389,6 +1462,7 @@ if ! $check; then
   err="$(watch_renovate)" || { note "warn: renovate watch failed (${err:-unknown})"; record warn "" "renovate watch failed: ${err:-unknown}"; }
   # Same rule: a failure is a warn, never a stop
   err="$(close_parents)" || { note "warn: parent close failed (${err:-unknown})"; record warn "" "parent close failed: ${err:-unknown}"; }
+  err="$(label_parts)" || { note "warn: part label failed (${err:-unknown})"; record warn "" "part label failed: ${err:-unknown}"; }
 fi
 
 # What an attended /work-queue session would do now, from watch.jq's `attended` (the computed
@@ -1666,7 +1740,7 @@ fi
 # Plan-only: an agent:ready ticket for this repo, not blocked by an open ticket, with no plan yet.
 ready="$(watch -r --argjson other "$OTHER_REPOS" 'include "watch";
   .data.issues.nodes[]
-  | select(ready_planned | not)
+  | select((status_rows | length) == 0)
   | select((.labels.nodes | map(.name | IN($other[])) | any) | not)
   | select([.inverseRelations.nodes[] | select(.type == "blocks" and (.issue.state.type | IN("completed","canceled") | not))] | length == 0)
   | .identifier' <<<"$resp")" ||
@@ -2084,23 +2158,30 @@ rc=0
 spent="" outcome=""
 run_outcome "a planning run" "" "$BUDGET_USD" "$log" "$result" "$rc"
 
-# A ticket offered as agent:ready that now waits on needs-input was planned by this run.
+# A ticket offered as agent:ready was planned by this run when it now waits on needs-input (a plan
+# for Håkan to approve), or is still agent:ready with a plan (approved by the run itself): offered
+# tickets had no plan.
 read -r -d '' PLANNED <<'GQL' || true
 query {
-  issues(first: 50, filter: {
+  issues(first: 100, filter: {
     team: { key: { eq: "COD" } }
-    labels: { some: { name: { eq: "agent:needs-input" } } }
-  }) { nodes { identifier } }
+    labels: { some: { name: { in: ["agent:needs-input", "agent:ready"] } } }
+  }) { nodes { identifier description labels(first: 20) { nodes { name } } } }
 }
 GQL
 if after="$(linear "$PLANNED")" && ! jq -e '.errors' >/dev/null <<<"$after"; then
   planned=0
-  for id in $(jq -r --arg ready "$ready" '
+  for row in $(jq -r --arg ready "$ready" '
       ($ready | split("\n")) as $offered
-      | .data.issues.nodes[].identifier | select(IN($offered[]))' <<<"$after" 2>/dev/null); do
-    note "planned: $id"
+      | .data.issues.nodes[] | select(.identifier | IN($offered[]))
+      | if any(.labels.nodes[]; .name == "agent:needs-input") then "\(.identifier):ask"
+        elif (.description // "") | test("(^|\n)##\\s+plan\\s*(\n|$)"; "i") then "\(.identifier):approved"
+        else empty end' <<<"$after" 2>/dev/null); do
+    id="${row%%:*}"
+    note "planned: $id (${row#*:})"
     record planned "$id" "log $log$spent"
-    notify "$id: plan ready, needs your approval"
+    if [[ "${row#*:}" == ask ]]; then notify "$id: plan ready, needs your approval"
+    else notice info "$id: plan approved, an implementing run follows"; fi
     (( ++planned ))
   done
   # A clean exit that planned nothing is a failure all the same, e.g. no Linear tools.

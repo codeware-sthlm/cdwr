@@ -48,6 +48,11 @@ const WHY: ReadonlyMap<string, string> = new Map([
   ['review feedback', 'Its PR has review comments to address.'],
   ['conflicts with main', 'Its PR conflicts with main and needs a rebase.'],
   ['merged comment', 'A comment on its merged ticket waits for a suggestion.'],
+  ['merge checks', 'Its merged PR has checks for the agent to make.'],
+  [
+    'plan approved',
+    'Its plan approved itself; an implementing run takes it next.'
+  ],
   ['renovate', 'This Renovate PR needs a hand.'],
   ['take over', 'Its claim went stale, or it never had one.'],
   ['resume', ''],
@@ -109,13 +114,14 @@ export const whyLine = (m: Model, x: QueueNext): ReactNode => {
 
 /** The row class for why a ticket is queued */
 const reasonState = (x: QueueNext): string =>
-  x.reason === 'ready'
+  x.reason === 'ready' || x.reason === 'plan approved'
     ? 'ready'
     : x.reason === 'answered'
       ? 'answered'
       : x.reason === 'review feedback' ||
           x.reason === 'conflicts with main' ||
-          x.reason === 'merged comment'
+          x.reason === 'merged comment' ||
+          x.reason === 'merge checks'
         ? 'review'
         : 'working';
 
