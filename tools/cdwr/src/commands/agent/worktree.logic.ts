@@ -9,6 +9,14 @@ export const REPO = 'codeware-sthlm/cdwr';
 export const isTicket = (value: string): boolean => TICKET.test(value);
 
 /** The checkout of a ticket: a sibling of the workspace, `codeware-cod-529` */
+/**
+ * The checkout the ticket worktrees are linked to: the one the command runs from, unless
+ * AGENT_QUEUE_WORKTREE_REPO names another. In the container the implement sessions run as a
+ * user that must not write the queue's checkout, so their worktrees hang off a clone of their own.
+ */
+export const worktreeRepo = (env: NodeJS.ProcessEnv, root: string): string =>
+  env['AGENT_QUEUE_WORKTREE_REPO'] || root;
+
 export const worktreePath = (root: string, ticket: string): string =>
   join(dirname(root), `codeware-${ticket.toLowerCase()}`);
 

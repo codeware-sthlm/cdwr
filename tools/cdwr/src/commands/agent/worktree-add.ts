@@ -8,7 +8,7 @@ import { readText, worktreeOf } from '../../services/agent-queue';
 import { CommandError, childEnv, run } from '../../services/shell';
 
 import { envCopiesFor, envWithheldFor } from './agent.logic';
-import { isTicket, worktreePath } from './worktree.logic';
+import { isTicket, worktreePath, worktreeRepo } from './worktree.logic';
 
 /** Where the branch comes from when the checkout is created */
 type Source = 'remote' | 'local' | 'new';
@@ -67,7 +67,8 @@ export default defineCommand({
         'Use the form COD-529'
       );
     }
-    const path = worktreePath(ctx.root, ticket);
+    const repo = worktreeRepo(ctx.env, ctx.root);
+    const path = worktreePath(repo, ticket);
     if (resolve(path) === resolve(worktreeOf(ctx))) {
       throw new CliError(`${path} is the agent worktree`);
     }
@@ -75,7 +76,7 @@ export default defineCommand({
     if (exists && !existsSync(join(path, '.git'))) {
       throw new CliError(`${path} exists and is not a git checkout`);
     }
-    const commonDir = await gitCommonDir(ctx.root);
+    const commonDir = await gitCommonDir(repo);
     // An existing folder gets env files and an install only when it is ours, on this branch
     if (exists) {
       const theirs = await gitCommonDir(path).catch(() => undefined);
@@ -108,10 +109,10 @@ export default defineCommand({
     let source: Source = 'new';
     if (!exists) {
       // ls-remote reads without writing refs, so a dry run changes nothing
-      if (await onOrigin(ctx.root, branch)) {
+      if (await onOrigin(repo, branch)) {
         source = 'remote';
       } else if (
-        await succeeds(ctx.root, [
+        await succeeds(repo, [
           'rev-parse',
           '--verify',
           '-q',
@@ -150,7 +151,7 @@ export default defineCommand({
     ].filter((step) => step !== false);
 
     const data = {
-      root: ctx.root,
+      root: repo,
       envSource,
       path,
       branch,
