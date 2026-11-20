@@ -1,0 +1,10 @@
+[Unit]
+Description=Install what main ships under apps/agent-host/nuc
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cdwr
+ExecStart=/usr/local/sbin/nuc-sync.sh
+TimeoutStartSec=10min
