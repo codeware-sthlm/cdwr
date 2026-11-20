@@ -4,7 +4,13 @@ import { CliError } from '../../cli/errors';
 export const REMOTE_DIR = '/opt/cdwr-agent';
 export const REMOTE_COMPOSE = `${REMOTE_DIR}/compose.yaml`;
 export const REMOTE_IMAGE_ENV = `${REMOTE_DIR}/image.env`;
+/** The files the host's self-deploy rolls back to are kept beside the live ones */
+export const PREVIOUS_SUFFIX = '.previous';
+/** Holds one tag: the newest build a deploy by hand saw; self-deploy waits for a newer one */
+export const REMOTE_HOLD = `${REMOTE_DIR}/hold`;
 export const CONTAINER = 'cdwr-agent';
+/** Inside the container: records a deploy for the desk, reading a JSON object on stdin */
+export const DEPLOY_GATE = '/opt/agent-queue/deploy-gate.sh';
 /** The queue state inside the container */
 export const QUEUE_DIR = '/home/agent/.cdwr/agent-queue';
 export const PAUSED = `${QUEUE_DIR}/paused`;
@@ -82,6 +88,64 @@ export const uploadCompose = (host: string, content: string): Remote => ({
 export const writeTag = (host: string, tag: string): Remote => ({
   ...ssh(host, 'tee', REMOTE_IMAGE_ENV),
   input: `AGENT_IMAGE_TAG=${assertTag(tag)}\n`
+});
+
+/** Prints image.env; exits 1 when it is absent, as before a first deploy */
+export const readImageEnv = (host: string): Remote =>
+  ssh(host, 'cat', REMOTE_IMAGE_ENV);
+
+/** The tag image.env names, undefined when it names none */
+export const parseImageEnv = (text: string): string | undefined => {
+  const tag = /^AGENT_IMAGE_TAG=(\S+)\s*$/m.exec(text)?.[1];
+  return tag && isTag(tag) ? tag : undefined;
+};
+
+/** Copies the live image.env and compose.yaml to `*.previous`, for the host's rollback */
+export const keepPrevious = (host: string): Remote[] =>
+  [REMOTE_IMAGE_ENV, REMOTE_COMPOSE].map((file) =>
+    ssh(host, 'cp', '-f', file, `${file}${PREVIOUS_SUFFIX}`)
+  );
+
+export const writeHold = (host: string, tag: string): Remote => ({
+  ...ssh(host, 'tee', REMOTE_HOLD),
+  input: `${assertTag(tag)}\n`
+});
+
+export const clearHold = (host: string): Remote =>
+  ssh(host, 'rm', '-f', REMOTE_HOLD);
+
+/** What a deploy does with the hold */
+export type HoldPlan =
+  { kind: 'hold'; tag: string } | { kind: 'clear' } | { kind: 'none' };
+
+/**
+ * An older tag is held on the newest build; deploying the newest one (or leaving
+ * `--tag` out) lifts a hold. Nothing is known about the newest build when it
+ * could not be resolved, so the hold stays as it is.
+ */
+export const holdFor = (tag: string, newest: string | null): HoldPlan => {
+  if (newest === null) return { kind: 'none' };
+  return tag === newest ? { kind: 'clear' } : { kind: 'hold', tag: newest };
+};
+
+/** What the desk shows of the last deploy; mirrors deploy-gate.sh record */
+export interface DeployRecord {
+  tag: string;
+  previous: string | null;
+  at: string;
+  by: string;
+  phase: string;
+  reason: string | null;
+  failed: string | null;
+}
+
+/** Exits 0 when the file is executable in the container; older images have no deploy-gate.sh */
+export const isExecutable = (host: string, path: string): Remote =>
+  ssh(host, 'docker', 'exec', CONTAINER, 'test', '-x', path);
+
+export const recordDeploy = (host: string, body: DeployRecord): Remote => ({
+  ...ssh(host, 'docker', 'exec', '-i', CONTAINER, DEPLOY_GATE, 'record'),
+  input: `${JSON.stringify(body)}\n`
 });
 
 /** Prints `true` or `false`; exits 1 when there is no container */

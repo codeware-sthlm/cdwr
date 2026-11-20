@@ -5,12 +5,17 @@ import {
   RUN_LOCK,
   assertHost,
   assertTag,
+  clearHold,
   headShaOf,
+  holdFor,
+  isExecutable,
   isPid,
   isRunning,
+  keepPrevious,
   lockFile,
   lockOld,
   lockPid,
+  parseImageEnv,
   parseReport,
   parseRunning,
   pathExists,
@@ -18,6 +23,8 @@ import {
   pidAlive,
   pidIsWait,
   pull,
+  readImageEnv,
+  recordDeploy,
   report,
   sessionState,
   tagFromSha,
@@ -26,8 +33,65 @@ import {
   up,
   uploadCompose,
   waitPlan,
+  writeHold,
   writeTag
 } from './deploy.logic';
+
+describe('previous files and hold', () => {
+  const run = (r: { args: string[] }) => r.args.slice(3).join(' ');
+
+  it('reads image.env and parses its tag', () => {
+    expect(run(readImageEnv('nuc'))).toBe('cat /opt/cdwr-agent/image.env');
+    expect(parseImageEnv('AGENT_IMAGE_TAG=sha-abcdef0\n')).toBe('sha-abcdef0');
+    expect(parseImageEnv('# x\nAGENT_IMAGE_TAG=main\nOTHER=1\n')).toBe('main');
+    expect(parseImageEnv('AGENT_IMAGE_TAG=latest\n')).toBeUndefined();
+    expect(parseImageEnv('')).toBeUndefined();
+  });
+
+  it('copies both files beside themselves', () => {
+    expect(keepPrevious('nuc').map(run)).toEqual([
+      'cp -f /opt/cdwr-agent/image.env /opt/cdwr-agent/image.env.previous',
+      'cp -f /opt/cdwr-agent/compose.yaml /opt/cdwr-agent/compose.yaml.previous'
+    ]);
+  });
+
+  it('writes and clears the hold', () => {
+    const hold = writeHold('nuc', 'sha-abcdef0');
+    expect(run(hold)).toBe('tee /opt/cdwr-agent/hold');
+    expect(hold.input).toBe('sha-abcdef0\n');
+    expect(() => writeHold('nuc', 'x y')).toThrow();
+    expect(run(clearHold('nuc'))).toBe('rm -f /opt/cdwr-agent/hold');
+  });
+
+  it('holds the newest build only when another tag is deployed', () => {
+    expect(holdFor('sha-1111111', 'sha-2222222')).toEqual({
+      kind: 'hold',
+      tag: 'sha-2222222'
+    });
+    expect(holdFor('sha-2222222', 'sha-2222222')).toEqual({ kind: 'clear' });
+    expect(holdFor('main', null)).toEqual({ kind: 'none' });
+  });
+
+  it('records a deploy as JSON on stdin', () => {
+    const body = {
+      tag: 'sha-2222222',
+      previous: null,
+      at: '2026-01-01T00:00:00Z',
+      by: 'mac',
+      phase: 'ok',
+      reason: null,
+      failed: null
+    };
+    const r = recordDeploy('nuc', body);
+    expect(run(r)).toBe(
+      'docker exec -i cdwr-agent /opt/agent-queue/deploy-gate.sh record'
+    );
+    expect(JSON.parse(r.input ?? '')).toEqual(body);
+    expect(run(isExecutable('nuc', '/opt/agent-queue/deploy-gate.sh'))).toBe(
+      'docker exec cdwr-agent test -x /opt/agent-queue/deploy-gate.sh'
+    );
+  });
+});
 
 const composeArgs = [
   'docker',
