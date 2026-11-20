@@ -843,8 +843,8 @@ a while.
    `git -C <worktree> log -S '<the rule>' --format='%h %s' origin/main -- tools/cdwr/agent-queue/implement.sh`,
    and the running image's with `jq -rn 'env.AGENT_IMAGE_SHA'`.
 4. The gate then asks for no decision: it says the rule merged in `<sha>` and waits. In the
-   container (`host` is `container`) the self-deploy timer brings it about 5 minutes after the
-   image build on main, so ask for `cdwr agent deploy --host agent-host` only when the desk's
+   container (`host` is `container`) the self-deploy timer brings it once the image build on main
+   is green and the queue is quiet, so ask for `cdwr agent deploy --host agent-host` only when the desk's
    Agent health shows the self-deploy stuck or rolled back. On `launchd` it waits for
    `cdwr agent install`. Only a call main denies too is a real question.
 
