@@ -181,8 +181,9 @@ source "${0:A:h}/github-app.sh"
 PLATFORM_VARS=(FLY_API_TOKEN PLATFORM_DATABASE_URL PLATFORM_BACKUP_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID PLATFORM_SENTRY_AUTH_TOKEN PLATFORM_SENTRY_ORG PLATFORM_UMAMI_URL PLATFORM_UMAMI_API_KEY)
 # The write credentials of the desk's restart and gate commands, read the same way and kept apart
 # from the read-only ones above: only desk_cdwr names them, on the command line of the cdwr call
-# that applies a command, so the platform read never holds a credential that writes
-DESK_VARS=(DESK_FLY_TOKEN DESK_INFISICAL_CLIENT_ID DESK_INFISICAL_CLIENT_SECRET DESK_INFISICAL_PROJECT_ID)
+# that applies a command, so the platform read never holds a credential that writes. The apply
+# list's migrations use DESK_SUPABASE_DB_URL, named only by apply_cdwr.
+DESK_VARS=(DESK_FLY_TOKEN DESK_INFISICAL_CLIENT_ID DESK_INFISICAL_CLIENT_SECRET DESK_INFISICAL_PROJECT_ID DESK_SUPABASE_DB_URL)
 unexported_env() {
   local v file line key value common
   local -a names=("$@")
@@ -222,6 +223,7 @@ query($n: Int!) {
       state
       isDraft
       mergedAt
+      mergeCommit { oid }
       mergeable
       mergeStateStatus
       mergeQueueEntry { state }
@@ -1084,7 +1086,7 @@ query($after: String) {
       description
       labels { nodes { id name } }
       attachments { nodes { url createdAt } }
-      comments(first: 50, orderBy: createdAt) { nodes { body createdAt user { id app } } }
+      comments(first: 50, orderBy: createdAt) { nodes { id body createdAt user { id app } } }
     }
   }
 }
@@ -1188,7 +1190,8 @@ watch_prs() {
       --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
       {id: $id, agentLabel: $agentLabel, pr: $pr, now: ($now | pr_state), prev: $state[$id],
-       handoffs: ($node | handoffs), parked: ($node | parked), at: $at} | step')" ||
+       handoffs: ($node | handoffs), parked: ($node | parked), at: $at,
+       apply: ($node | apply_input), left: ($node | checklist_handoffs), mergedAt: ($now.mergedAt // null)} | step')" ||
       { why="$(watch_err)"; note "warn: watch: watch.jq failed on $id$why"; record warn "$id" "watch: watch.jq failed$why"; continue; }
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue
@@ -1220,6 +1223,228 @@ watch_prs() {
   done
 
   print -r -- "$state" > "$file.tmp" && mv "$file.tmp" "$file"
+}
+
+# The apply list (README, "Apply list"): the items of the agent's PR-ready comment that step stored
+# in watch.json at the merge, applied here in order with the desk's write credentials. Each item's
+# arguments must match a closed pattern again here (apply_argv), whatever the session checked: the
+# list is the only thing that crosses from a session to these credentials. Each goes through its
+# command's dry run (apply_verdict), then the real call, and is ticked in the comment with its
+# outcome. The first refusal stops the list. An item waits while the checkout lacks the merge, and
+# an after-deploy one until the production deploy of the merge commit finished, at most
+# APPLY_WAIT_SECS after the merge was seen.
+APPLY_WAIT_SECS=10800
+read -r -d '' COMMENT_READ <<'GQL' || true
+query($id: String!) { comment(id: $id) { body } }
+GQL
+read -r -d '' COMMENT_UPDATE <<'GQL' || true
+mutation($id: String!, $body: String!) { commentUpdate(id: $id, input: { body: $body }) { success } }
+GQL
+
+apply_app() { [[ "$1" == cdwr-cms || "$1" == cdwr-(cms|headless)-[a-z0-9][a-z0-9-]# ]]; }
+
+# apply_argv <item json>: the cdwr arguments, one per line, and nothing for the kinds that run no
+# command. Returns 1 when the kind or an argument breaks the vocabulary.
+apply_argv() {
+  setopt local_options no_err_exit extended_glob
+  local kind n a1 a2
+  kind="$(jq -r '.kind // ""' <<<"$1" 2>/dev/null)"
+  n="$(jq -r '.args | length' <<<"$1" 2>/dev/null)"
+  a1="$(jq -r '.args[0] // ""' <<<"$1" 2>/dev/null)"
+  a2="$(jq -r '.args[1] // ""' <<<"$1" 2>/dev/null)"
+  case "$kind" in
+    restart) [[ "$n" == 1 ]] && apply_app "$a1" && print -rl -- fly restart "$a1" ;;
+    scale) [[ "$n" == 2 && "$a2" == [1-4] ]] && apply_app "$a1" && print -rl -- fly scale "$a1" "$a2" ;;
+    deploy-workflow)
+      [[ "$n" == 2 && "$a2" == production && "$a1" == [a-z0-9][a-z0-9-]# ]] &&
+        jq -e --arg p "$a1" '.release.groups.apps.projects | index($p) != null' "$REPO/nx.json" >/dev/null 2>&1 &&
+        print -rl -- fly deploy "$a1" --environment production ;;
+    supabase-migration)
+      [[ "$n" == 1 && "$a1" == tools/cdwr/agent-queue/supabase/migrations/[0-9](#c14)_[a-z0-9_]##.sql ]] &&
+        print -rl -- agent supabase-migrate "$a1" ;;
+    supabase-function)
+      [[ "$n" == 1 && "$a1" == [a-z0-9][a-z0-9-]# && -d "$REPO/tools/cdwr/agent-queue/supabase/functions/$a1" ]] ;;
+    agent-deploy) [[ "$n" == 0 ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# apply_cdwr <kind> <cdwr args>...: the call with the one credential its kind uses. Restart and
+# scale go through desk_cdwr, as the desk's restart does; the others name every desk credential
+# empty, so dotenv fills none in from tools/cdwr/.env.
+apply_cdwr() {
+  local kind=$1; shift
+  case "$kind" in
+    restart|scale) desk_cdwr "$@" ;;
+    deploy-workflow)
+      ( gh_identity || exit 1
+        cd "$REPO" && FLY_API_TOKEN="" FLY_ACCESS_TOKEN="" INFISICAL_SERVICE_TOKEN="" \
+          node tools/cdwr/bin/cdwr.mjs "$@" --yes --json 2>/dev/null </dev/null ) ;;
+    supabase-migration)
+      ( cd "$REPO" && AGENT_SUPABASE_DB_URL="$DESK_SUPABASE_DB_URL" FLY_API_TOKEN="" FLY_ACCESS_TOKEN="" \
+          INFISICAL_SERVICE_TOKEN="" node tools/cdwr/bin/cdwr.mjs "$@" --yes --json 2>/dev/null </dev/null ) ;;
+    *) return 1 ;;
+  esac
+}
+
+# apply_deploy_state <sha>: `ok`, `wait` or `failed` for the fly-deployment.yml run of the merge
+# commit, read as the app. A run that skipped the app is ok. Run it in a command substitution.
+apply_deploy_state() {
+  setopt local_options no_err_exit
+  local runs
+  gh_identity || { print -r -- wait; return 0; }
+  runs="$(gh api "repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=$1&per_page=5" \
+    --jq '[.workflow_runs[] | {status, conclusion}] | first // {}' 2>/dev/null)" || { print -r -- wait; return 0; }
+  jq -r 'if .status != "completed" then "wait"
+    elif (.conclusion | IN("success", "skipped")) then "ok" else "failed" end' <<<"$runs" 2>/dev/null || print -r -- wait
+}
+
+# apply_self_deploy <sha>: the agent-deploy item from the self-deploy's deploy.json: `ok <tag>`
+# once a healthy deploy runs the merge commit or a newer one, `refused <why>`, or `wait`
+apply_self_deploy() {
+  setopt local_options no_err_exit
+  local phase tag
+  [[ -r "$HOME_DIR/deploy.json" ]] || { print -r -- "refused no self-deploy on this host"; return 0; }
+  phase="$(jq -r '.phase // ""' "$HOME_DIR/deploy.json" 2>/dev/null)"
+  tag="$(jq -r '.tag // ""' "$HOME_DIR/deploy.json" 2>/dev/null)"
+  [[ "$tag" == sha-[0-9a-f](#c7,40) ]] || { print -r -- wait; return 0; }
+  git -C "$REPO" merge-base --is-ancestor "$1" "${tag#sha-}" 2>/dev/null || { print -r -- wait; return 0; }
+  case "$phase" in
+    ok) print -r -- "ok $tag" ;;
+    roll*|stuck|fail*) print -r -- "refused self-deploy of $tag: $phase" ;;
+    *) print -r -- wait ;;
+  esac
+}
+
+# apply_item <entry json> <item json>: one item. Prints `wait`, `applied <outcome>` or
+# `refused <why>`. Run it in a command substitution.
+apply_item() {
+  setopt local_options no_err_exit extended_glob
+  local entry=$1 item=$2 kind sha seen now out ok verdict state
+  local -a cmd
+  kind="$(jq -r '.kind' <<<"$item")"
+  sha="$(jq -r '.apply.sha // ""' <<<"$entry")"
+  [[ "$sha" == [0-9a-f](#c40) ]] || { print -r -- "refused no merge commit"; return 0; }
+  # The merged code runs the item: a scale or a migration may only exist from this merge on
+  git -C "$REPO" merge-base --is-ancestor "$sha" HEAD 2>/dev/null || { print -r -- wait; return 0; }
+  seen="$(jq -r '.apply.at // "" | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601? // 0' <<<"$entry")"
+  now="$(date +%s)"
+  if [[ "$(jq -r '.afterDeploy' <<<"$item")" == true ]]; then
+    state="$(apply_deploy_state "$sha")"
+    [[ "$state" == failed ]] && { print -r -- "refused production deploy failed"; return 0; }
+    if [[ "$state" != ok ]]; then
+      (( now - seen > APPLY_WAIT_SECS )) && { print -r -- "refused no production deploy within 3 hours"; return 0; }
+      print -r -- wait; return 0
+    fi
+  fi
+  case "$kind" in
+    supabase-function) print -r -- "refused not enabled"; return 0 ;;
+    agent-deploy)
+      out="$(apply_self_deploy "$sha")"
+      if [[ "$out" == ok\ * ]]; then print -r -- "applied deployed ${out#ok }"
+      elif [[ "$out" == wait ]] && (( now - seen > APPLY_WAIT_SECS )); then print -r -- "refused no self-deploy within 3 hours"
+      else print -r -- "$out"; fi
+      return 0 ;;
+    restart|scale) desk_platform_on || { print -r -- "refused no DESK_* credentials on $(telemetry_host)"; return 0; } ;;
+    supabase-migration) [[ -n "${DESK_SUPABASE_DB_URL:-}" ]] || { print -r -- "refused no DESK_SUPABASE_DB_URL on $(telemetry_host)"; return 0; } ;;
+    deploy-workflow) ( gh_identity ) || { print -r -- "refused no GitHub app"; return 0; } ;;
+  esac
+  cmd=("${(@f)$(apply_argv "$item")}")
+  [[ -n "${cmd[1]}" ]] || { print -r -- "refused bad args"; return 0; }
+  out="$(apply_cdwr "$kind" "${cmd[@]}" --dry-run)"
+  [[ -n "$out" ]] || { print -r -- "refused the dry run printed nothing"; return 0; }
+  verdict="$(watch -r --argjson item "$item" 'include "watch"; apply_verdict($item)' <<<"$out")" ||
+    verdict="watch.jq failed$(watch_err)"
+  [[ "$verdict" == already\ <-> ]] && { print -r -- "applied $verdict"; return 0; }
+  [[ "$verdict" == ok ]] || { print -r -- "refused ${verdict%%$'\n'*}"; return 0; }
+  # Only .ok, the run url and the error message leave the call, on one line each
+  out="$(apply_cdwr "$kind" "${cmd[@]}" | jq -r '(.ok | tostring),
+    (if .ok == true then (.result | objects | .runUrl | strings) // "" else (.error.message // "cdwr failed") end
+     | gsub("[\\r\\n]+"; " "))' 2>/dev/null)"
+  # $( ) drops an empty second line, so `true` may be the whole of it
+  ok="${out%%$'\n'*}"
+  [[ "$out" == *$'\n'* ]] && out="${out#*$'\n'}" || out=""
+  if [[ "$ok" == true ]]; then
+    print -r -- "applied $(date -u +%Y-%m-%dT%H:%MZ)${out:+, $out}"
+  else
+    out="${out//·/-}"
+    print -r -- "refused ${${out:-cdwr failed}[1,160]}"
+  fi
+}
+
+# apply_tick <comment id> <spec> <outcome> <ticked>: the item's line in the comment, rewritten by
+# apply_mark. True only when Linear took it.
+apply_tick() {
+  local vars resp
+  vars="$(linear "$COMMENT_READ" "$(jq -nc --arg id "$1" '{id: $id}')" |
+    watch -c --arg id "$1" --arg s "$2" --arg o "$3" --argjson t "$4" \
+      'include "watch"; .data.comment.body // error("no comment") | {id: $id, body: apply_mark($s; $o; $t)}')" || return 1
+  resp="$(linear "$COMMENT_UPDATE" "$vars")"
+  jq -e '.data.commentUpdate.success == true' >/dev/null 2>&1 <<<"$resp"
+}
+
+# apply_list <id> <entry json>: works the ticket's list as far as it goes this tick and prints the
+# entry with its apply updated. Sends the summary notice once the list is done.
+apply_list() {
+  setopt local_options no_err_exit
+  local id=$1 entry=$2 pr item spec i n res st outcome bad added summary
+  pr="$(jq -r '.pr' <<<"$entry")"
+  # The whole list is checked once, before anything runs: one item outside the vocabulary, or a
+  # migration the merged PR did not add, and nothing from it is applied
+  if [[ "$(jq -r '.apply.checked // false' <<<"$entry")" != true ]]; then
+    bad=""
+    added="$( ( gh_identity && gh api --paginate "repos/codeware-sthlm/cdwr/pulls/$pr/files" \
+      --jq '.[] | select(.status == "added") | .filename' ) 2>/dev/null )" || added=""
+    for item in ${(f)"$(jq -c '.apply.items[]' <<<"$entry")"}; do
+      spec="$(jq -r '.spec' <<<"$item")"
+      apply_argv "$item" >/dev/null || { bad="$spec: not in the vocabulary"; break; }
+      if [[ "$(jq -r '.kind' <<<"$item")" == supabase-migration ]] &&
+        ! (( ${${(f)added}[(Ie)$(jq -r '.args[0]' <<<"$item")]} )); then
+        bad="$spec: PR $pr did not add it"; break
+      fi
+    done
+    entry="$(jq -c --arg bad "$bad" '.apply.checked = true
+      | if $bad != "" then .apply.invalid = $bad | .apply.done = true else . end' <<<"$entry")"
+  fi
+  n="$(jq '.apply.items | length' <<<"$entry")"
+  for (( i = 0; i < n; i++ )); do
+    [[ "$(jq -r '.apply.done' <<<"$entry")" == true ]] && break
+    st="$(jq -r --argjson i "$i" '.apply.items[$i].status' <<<"$entry")"
+    [[ "$st" == pending ]] || continue
+    item="$(jq -c --argjson i "$i" '.apply.items[$i]' <<<"$entry")"
+    spec="$(jq -r '.spec' <<<"$item")"
+    res="$(apply_item "$entry" "$item")"
+    [[ "$res" == wait || -z "$res" ]] && break
+    if [[ "$res" == applied\ * ]]; then st=applied outcome="${res#applied }"
+    else st=refused outcome="refused: ${res#refused }"; fi
+    note "apply: $id $spec: $outcome"
+    entry="$(jq -c --argjson i "$i" --arg st "$st" --arg o "$outcome" '
+      .apply.items[$i].status = $st | .apply.items[$i].outcome = $o
+      | if $st == "refused" then .apply.done = true else . end' <<<"$entry")"
+    apply_tick "$(jq -r '.apply.commentId' <<<"$entry")" "$spec" "$outcome" "$([[ $st == applied ]] && print true || print false)" ||
+      { note "warn: apply: $id: the comment was not updated for $spec"; record warn "$id" "apply: comment not updated"; }
+  done
+  [[ "$(jq '[.apply.items[] | select(.status == "pending")] | length' <<<"$entry")" == 0 ]] &&
+    entry="$(jq -c '.apply.done = true' <<<"$entry")"
+  if [[ "$(jq -r '.apply.done' <<<"$entry")" == true ]]; then
+    summary="$(watch -r --arg id "$id" 'include "watch"; .apply | apply_summary($id) | "\(.level)\t\(.message)"' <<<"$entry")" &&
+      { note "watch: ${summary/$'\t'/ }"; notice "${summary%%$'\t'*}" "${summary#*$'\t'}"; }
+  fi
+  print -r -- "$entry"
+}
+
+# Every unfinished list in watch.json, each written back as soon as it moved. Nothing while paused.
+apply_lists() {
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/watch.json" id entry
+  [[ -e "$HOME_DIR/paused" || ! -r "$file" ]] && return 0
+  for id in ${(f)"$(jq -r 'to_entries[] | select(.value.apply != null and .value.apply.done != true) | .key' "$file" 2>/dev/null)"}; do
+    [[ "$id" == COD-<-> ]] || continue
+    entry="$(apply_list "$id" "$(jq -c --arg id "$id" '.[$id]' "$file")")"
+    jq -e '.apply' >/dev/null 2>&1 <<<"$entry" || continue
+    jq -c --arg id "$id" --argjson e "$entry" '.[$id] = $e' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+  done
+  return 0
 }
 
 # Parent close: a parent whose agent split finished is closed by the scheduler, since no session
@@ -1473,6 +1698,8 @@ fi
 # Watching sends notices, so --check leaves it out; a failure never stops planning.
 if ! $check; then
   err="$(watch_prs)" || { note "warn: watch failed (${err:-unknown})"; record warn "" "watch failed: ${err:-unknown}"; }
+  # After the watch, which stores each list at its merge
+  apply_lists
   err="$(watch_renovate)" || { note "warn: renovate watch failed (${err:-unknown})"; record warn "" "renovate watch failed: ${err:-unknown}"; }
   # Same rule: a failure is a warn, never a stop
   err="$(close_parents)" || { note "warn: parent close failed (${err:-unknown})"; record warn "" "parent close failed: ${err:-unknown}"; }

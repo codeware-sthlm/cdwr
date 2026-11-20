@@ -211,7 +211,7 @@ launch=(${=AGENT_QUEUE_SESSION_LAUNCH:-sudo -n -u session /opt/agent-host/sessio
     "Bash(tools/cdwr/agent-queue/force-push.sh *)" "Bash(tools/cdwr/agent-queue/review-diff.sh *)" \
     "Bash(pnpm nx *)" "Bash(pnpm -C * nx *)" "Bash(pnpm -C * vitest *)" "Bash(pnpm -C * install*)" \
     "Bash(pnpm -C * add *)" "Bash(pnpm -C * remove *)" \
-    "Bash(pnpm cdwr agent worktree *)" \
+    "Bash(pnpm cdwr agent worktree *)" "Bash(pnpm -C * cdwr agent apply-list check *)" \
     "Bash(pnpm cdwr agent status)" "Bash(pnpm cdwr agent status *)" "Bash(pnpm cdwr agent logs)" "Bash(pnpm cdwr agent logs *)" \
     "WebFetch(domain:cdwr.io)" "WebFetch(domain:*.cdwr.io)" "WebFetch(domain:codeware.se)" "WebFetch(domain:*.codeware.se)" \
     "Bash(jq *)" "Bash(uuidgen*)" "Bash(cut *)" "Bash(date *)" "Bash(wc -c *)" \
