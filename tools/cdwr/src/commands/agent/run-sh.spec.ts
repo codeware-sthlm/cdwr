@@ -304,7 +304,7 @@ describe('run.sh without Linear documents', () => {
     expect(gql('LABEL_PART')).toMatch(/^mutation\(/);
     expect(gql('LABEL_PART')).toContain('addedLabelIds: [$label]');
     expect(code.match(/issueUpdate\b/g)).toHaveLength(6);
-    expect(code.match(/commentCreate\b/g)).toHaveLength(3);
+    expect(code.match(/commentCreate\b/g)).toHaveLength(4);
   });
 
   it.each([
@@ -322,7 +322,7 @@ describe('run.sh without Linear documents', () => {
     for (const owner of ['close_parents', 'label_parts']) {
       expect(fn(owner)).toContain('linear "$CLOSE_COMMENT" "$vars"');
     }
-    expect(code.split('"$CLOSE_COMMENT"')).toHaveLength(3);
+    expect(code.split('"$CLOSE_COMMENT"')).toHaveLength(4);
     expect(
       code.replace(fn('close_parents'), '').replace(fn('label_parts'), '')
     ).not.toContain('$CLOSE_COMMENT');
@@ -1313,7 +1313,11 @@ describe('run.sh label_parts', () => {
     spawnSync('jq', ['--version']).status === 0;
   let root: string;
 
-  const part = (description: string, comments: unknown[] = []) => ({
+  const part = (
+    description: string,
+    comments: unknown[] = [],
+    labels: Array<{ name: string }> = []
+  ) => ({
     data: {
       issues: {
         nodes: [
@@ -1325,7 +1329,7 @@ describe('run.sh label_parts', () => {
             team: { key: 'COD' },
             parent: { identifier: 'COD-100', state: { type: 'started' } },
             state: { type: 'backlog' },
-            labels: { nodes: [] },
+            labels: { nodes: labels },
             inverseRelations: {
               nodes: [
                 {
@@ -1351,11 +1355,12 @@ describe('run.sh label_parts', () => {
   const run = (
     update: unknown,
     description = '## Report\n\nDone.',
-    comments: unknown[] = []
+    comments: unknown[] = [],
+    labels: Array<{ name: string }> = []
   ) => {
     writeFileSync(
       join(root, 'parts.json'),
-      JSON.stringify(part(description, comments))
+      JSON.stringify(part(description, comments, labels))
     );
     writeFileSync(join(root, 'update.json'), JSON.stringify(update));
     const script = [
@@ -1463,6 +1468,38 @@ describe('run.sh label_parts', () => {
       expect(read('labelled-parts')).toBe('');
     }
   );
+
+  it.skipIf(!canRun)(
+    'posts the comment again for a part it labelled whose comment failed',
+    () => {
+      writeFileSync(join(root, 'labelled-parts'), 'COD-102\n');
+      const result = run({}, undefined, [], [{ name: 'agent:ready' }]);
+      expect(result.stdout).toContain('rc=0');
+      expect(read('calls').trim().split('\n')).toEqual([
+        `comment ${JSON.stringify({ id: 'uuid-102', body: '**Agent: labelled ready** every blocker is closed: COD-101 (Done).' })}`
+      ]);
+      expect(read('notes')).toContain('label: COD-102 comment posted on retry');
+      expect(read('records')).toBe('');
+    }
+  );
+
+  it.skipIf(!canRun)('posts nothing more once the comment is there', () => {
+    writeFileSync(join(root, 'labelled-parts'), 'COD-102\n');
+    const result = run(
+      {},
+      undefined,
+      [
+        {
+          body: '**Agent: labelled ready** every blocker is closed: COD-101 (Done).',
+          createdAt: '2026-11-02T00:00:00Z',
+          user: { id: 'bbbb4a33-e052-486e-8e0f-d3abb5c5c841', app: true }
+        }
+      ],
+      [{ name: 'agent:ready' }]
+    );
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls')).toBe('');
+  });
 });
 
 describe('run.sh watch_prs', () => {

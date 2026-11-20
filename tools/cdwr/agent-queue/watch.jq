@@ -618,6 +618,15 @@ def parts_to_label_list($labelled):
     | select(((.team.key // "COD") == "COD") and parts_to_label)
     | { id, identifier, comment: label_comment } ];
 
+# [{ id, identifier, comment }] for each part this host labelled whose comment never landed: it
+# still carries agent:ready but not the queue's comment, which ready_by_app needs to take it
+def parts_to_comment_list($labelled):
+  [ (.data.issues.nodes // [])[]
+    | select(.identifier as $i | ($labelled | index($i)) != null)
+    | select(((.team.key // "COD") == "COD") and is_open and agent_label == "agent:ready"
+             and (labelled_by_queue | not))
+    | { id, identifier, comment: label_comment } ];
+
 # What waits on Håkan after implementation: open reviews count toward the limit; hand-off
 # tickets completed within 14 days are listed but don't count
 def limit_used($now; $limit):
