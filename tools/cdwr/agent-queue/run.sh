@@ -1337,11 +1337,12 @@ GQL
 
 # label_parts: adds agent:ready to each part, then posts its **Agent: labelled ready** comment. A
 # failed label is a warn and is tried again on the next run; the comment follows only a label
-# Linear took, so it is never posted twice, and a failed one only warns. labelled-parts keeps every
+# Linear took. A part labelled here that still lacks its comment gets it first, on every run until
+# it lands: ready_by_app takes the queue's label only with that comment. labelled-parts keeps every
 # part labelled here, one per line, so one Håkan unlabels is not labelled again.
 label_parts() {
   setopt local_options no_err_exit
-  local file="$HOME_DIR/labelled-parts" resp todo label p id vars labelled
+  local file="$HOME_DIR/labelled-parts" resp ans todo retry label p id vars labelled
   resp="$(linear "$PARTS")" || { print -r -- "Linear did not answer"; return 1; }
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
     { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
@@ -1351,6 +1352,19 @@ label_parts() {
   [[ -r "$file" ]] && labelled="$(jq -Rsc 'split("\n") | map(select(length > 0))' "$file")"
   todo="$(watch -c --argjson labelled "$labelled" 'include "watch"; parts_to_label_list($labelled)' <<<"$resp")" ||
     { print -r -- "watch.jq failed$(watch_err)"; return 1; }
+  retry="$(watch -c --argjson labelled "$labelled" 'include "watch"; parts_to_comment_list($labelled)' <<<"$resp")" ||
+    { print -r -- "watch.jq failed$(watch_err)"; return 1; }
+  for p in ${(f)"$(jq -c '.[]' <<<"$retry")"}; do
+    id="$(jq -r '.identifier' <<<"$p")"
+    vars="$(jq -c '{id, body: .comment}' <<<"$p")"
+    ans="$(linear "$CLOSE_COMMENT" "$vars")"
+    if jq -e '.data.commentCreate.success == true' >/dev/null 2>&1 <<<"$ans"; then
+      note "label: $id comment posted on retry"
+    else
+      note "warn: label: $id comment failed again ($(jq -c '.errors[0].message // "no answer"' <<<"$ans" 2>/dev/null))"
+      record warn "$id" "label: labelled without its comment"
+    fi
+  done
   [[ "$(jq 'length' <<<"$todo")" == 0 ]] && return 0
   label="$(jq -r '[.data.issueLabels.nodes[] | select((.team.key // "COD") == "COD")][0].id // empty' <<<"$resp")"
   [[ -n "$label" ]] || { print -r -- "no agent:ready label in team COD"; return 1; }
