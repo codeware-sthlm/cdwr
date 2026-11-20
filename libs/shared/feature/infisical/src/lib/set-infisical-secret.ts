@@ -26,6 +26,13 @@ type Options<TEnv> = Credentials & {
    * Value to write.
    */
   value: string;
+
+  /**
+   * Only create the secret, never update one.
+   *
+   * An existing secret makes Infisical's "already exists" error through.
+   */
+  createOnly?: boolean;
 };
 
 export type SetSecretResult = {
@@ -51,6 +58,7 @@ export const setInfisicalSecret = async <TEnv = Environment>({
   path = '/',
   key,
   value,
+  createOnly = false,
   ...credentials
 }: Options<TEnv>): Promise<SetSecretResult> => {
   const { client, projectId } = await createClient(credentials);
@@ -61,6 +69,13 @@ export const setInfisicalSecret = async <TEnv = Environment>({
     projectId,
     secretPath: path
   };
+
+  if (createOnly) {
+    await client
+      .secrets()
+      .createSecret(key, { ...secretOptions, secretValue: value });
+    return { action: 'created', key, path };
+  }
 
   /**
    * Whether the stored value already matches what we tried to write.
