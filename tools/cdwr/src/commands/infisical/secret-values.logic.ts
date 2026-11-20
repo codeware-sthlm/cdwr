@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import { UsageError, messageOf } from '../../cli/errors';
 
@@ -42,20 +42,24 @@ export function refuse(problem: string | null): void {
   if (problem) throw new UsageError(problem);
 }
 
-/** A short digest of a value read at plan time, to tell a change since; not a value */
-export const digest = (value: string | undefined): string =>
-  value === undefined
-    ? ''
-    : createHash('sha256').update(value).digest('hex').slice(0, 16);
+/** Values the plan read, by token; held in this process only, so an apply cannot outlive its plan */
+const planned = new Map<string, string | undefined>();
+
+/** Keeps the value a plan read and returns a token for it; the token is not a value */
+export function remember(value: string | undefined): string {
+  const token = randomUUID();
+  planned.set(token, value);
+  return token;
+}
 
 /** Refuses an apply when the value is no longer the one the plan read */
 export function refuseChanged(
-  planned: string,
+  token: string,
   value: string | undefined,
   key: string,
   folder: string
 ): void {
-  if (digest(value) !== planned) {
+  if (!planned.has(token) || planned.get(token) !== value) {
     throw new Error(
       `${key} at ${folder} changed since the plan; nothing written`
     );

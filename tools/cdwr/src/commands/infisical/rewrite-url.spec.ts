@@ -3,7 +3,6 @@ import * as infisical from '../../services/infisical';
 
 import command from './rewrite-url';
 import { runSecretCommand } from './secret-commands.testing';
-import { digest } from './secret-values.logic';
 
 vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 vi.mock('../../services/infisical', () => ({
@@ -62,7 +61,7 @@ describe('infisical rewrite-url', () => {
         userChanged: true,
         passwordKept: true
       },
-      read: digest(CURRENT)
+      read: expect.any(String)
     });
     expect(infisical.setInfisicalSecret).not.toHaveBeenCalled();
     expect(leaks(out)).toEqual([]);

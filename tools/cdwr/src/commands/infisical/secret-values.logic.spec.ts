@@ -2,7 +2,13 @@ import { UsageError } from '../../cli/errors';
 
 import { copyState } from './copy-secret.logic';
 import { rewrite } from './rewrite-url.logic';
-import { guard, scrub, scrubError } from './secret-values.logic';
+import {
+  guard,
+  refuseChanged,
+  remember,
+  scrub,
+  scrubError
+} from './secret-values.logic';
 import { setState } from './set-config.logic';
 
 describe('scrub', () => {
@@ -74,5 +80,32 @@ describe('rewrite', () => {
     expect(() =>
       rewrite('postgresql://u@h/app', { port: '1' }, '/apps/cms', 'K')
     ).toThrow('K at /apps/cms is not a url with a password');
+  });
+});
+
+describe('remember and refuseChanged', () => {
+  it('holds a token, not the value, and accepts the same value', () => {
+    const token = remember('s3cret');
+    expect(token).not.toContain('s3cret');
+    expect(() =>
+      refuseChanged(token, 's3cret', 'K', '/apps/cms')
+    ).not.toThrow();
+    const none = remember(undefined);
+    expect(() =>
+      refuseChanged(none, undefined, 'K', '/apps/cms')
+    ).not.toThrow();
+  });
+
+  it('refuses a changed value', () => {
+    const token = remember('a');
+    expect(() => refuseChanged(token, 'b', 'K', '/apps/cms')).toThrow(
+      'K at /apps/cms changed since the plan; nothing written'
+    );
+  });
+
+  it('refuses an unknown token', () => {
+    expect(() => refuseChanged('not-a-token', 'a', 'K', '/apps/cms')).toThrow(
+      'K at /apps/cms changed since the plan; nothing written'
+    );
   });
 });
