@@ -3,7 +3,13 @@ import { IDEA_LABEL, type OpenStatusType } from '../linear';
 
 import { RETRACT, STATES } from './constants';
 import { agentState, ideaVerdict, openIssues } from './model';
-import { byCreated, parseHandoffs, parseIdea, parsePlan } from './parsers';
+import {
+  byCreated,
+  parseApplyList,
+  parseHandoffs,
+  parseIdea,
+  parsePlan
+} from './parsers';
 import type { DeskState } from './state';
 
 const SERVER = 'Linear';
@@ -141,6 +147,7 @@ export const createLoader = ({
           );
           if (stale()) return;
           state.liveHandoffs.set(id, parseHandoffs(r.payload.comments));
+          state.liveApply.set(id, parseApplyList(r.payload.comments));
           state.errors.delete('handoffs:' + id);
         } catch (e) {
           if (stale()) return;
@@ -395,6 +402,7 @@ export const createLoader = ({
     if (stopped) return;
     state.details.clear();
     state.liveHandoffs.clear();
+    state.liveApply.clear();
     state.ideaReasons.clear();
     dropErrors('detail:');
     dropErrors('handoffs:');

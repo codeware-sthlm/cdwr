@@ -3,6 +3,7 @@ import type { SnoozeRow, UsagePayload } from '../../supabase';
 import { LINEAR_ISSUE } from '../constants';
 import { runTime } from '../format';
 import { type Model, type WatchRef, isRealGap, prOf } from '../model';
+import type { ApplyItem } from '../parsers';
 import type { DeskState, Detail } from '../state';
 import type {
   PrRef,
@@ -43,6 +44,8 @@ export type TicketQueue = {
   review: { pr: PrRef | null } | null;
   /** The hand-off items still unticked */
   handoffs: string[];
+  /** The apply list, each item in its state */
+  apply: ApplyItem[];
   /** What waits on Håkan, the kind of its Waiting on you row; the furthest along when several */
   waiting: 'review' | 'hand-offs' | 'question' | 'plan' | null;
 };
@@ -153,6 +156,7 @@ const queueOf = (m: Model, id: string): TicketQueue | null => {
     toLabel: label ? { parent: label.parent } : null,
     review: review ? { pr: review.pr ?? null } : null,
     handoffs: handoffs?.items ?? [],
+    apply: m.apply.get(id) ?? [],
     waiting: review
       ? 'review'
       : handoffs
@@ -171,6 +175,7 @@ const queueOf = (m: Model, id: string): TicketQueue | null => {
     queue.toLabel !== null ||
     queue.review !== null ||
     queue.handoffs.length > 0 ||
+    queue.apply.length > 0 ||
     queue.waiting !== null;
   return applies ? queue : null;
 };

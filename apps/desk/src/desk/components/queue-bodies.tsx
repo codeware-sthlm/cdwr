@@ -3,6 +3,7 @@ import { Fragment, type ReactNode } from 'react';
 import { GH_PR, LIMIT, waitName } from '../constants';
 import { hhmm } from '../format';
 import { type Model, type TicketRef, isRealGap, prOf } from '../model';
+import { type ApplyItem, openApply } from '../parsers';
 import type { DeskState, Detail } from '../state';
 import type { QueueNext, QueueRenovate, SessionState } from '../types';
 import { parkedPlain, prWaitPlain } from '../view/parked';
@@ -397,11 +398,13 @@ export const ReviewBody = ({ m, state, now }: BodyProps) => {
 const HandoffCard = ({
   m,
   details,
-  x
+  x,
+  apply
 }: {
   m: Model;
   details: ReadonlyMap<string, Detail>;
   x: { ticket: string; items?: string[] };
+  apply: readonly ApplyItem[];
 }) => {
   const i: TicketRef = m.get(x.ticket);
   const when = i.completedAt
@@ -440,6 +443,13 @@ const HandoffCard = ({
             </span>
           </li>
         ))}
+        {openApply(apply).map((a, n) => (
+          <li key={'apply' + n} className={CHECK_LI}>
+            <span>
+              apply: <code>{a.spec}</code>
+            </span>
+          </li>
+        ))}
       </ul>
     </article>
   );
@@ -454,7 +464,13 @@ export const HandoffsBody = ({ m, state }: BodyProps) => {
         <div className={GROUP}>
           <h3>{`Merged, hand-offs left · ${m.handoffItems}`}</h3>
           {m.handoffs.map((x) => (
-            <HandoffCard key={x.ticket} m={m} details={details} x={x} />
+            <HandoffCard
+              key={x.ticket}
+              m={m}
+              details={details}
+              x={x}
+              apply={m.apply.get(x.ticket) ?? []}
+            />
           ))}
         </div>
       ) : (

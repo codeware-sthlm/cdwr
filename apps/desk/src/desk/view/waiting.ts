@@ -2,6 +2,7 @@ import type { SnoozeRow } from '../../supabase';
 import { PENDING_MAX_MS, type PrCommandState } from '../commands';
 import { CONFIRM_MS } from '../constants';
 import { type Blocker, type Model, type WatchRef, prOf } from '../model';
+import { openApply } from '../parsers';
 import type { ControlsUi, Detail } from '../state';
 import type { PrRef, QueueParked, WatchEntry } from '../types';
 
@@ -246,7 +247,10 @@ export const waitRows = (
       return why === null ? [] : [row(p.ticket, 'review', { stall: why })];
     }),
     ...m.handoffs.map((x) =>
-      row(x.ticket, 'hand-offs', { count: x.items?.length ?? 0 })
+      row(x.ticket, 'hand-offs', {
+        count:
+          (x.items?.length ?? 0) + openApply(m.apply.get(x.ticket) ?? []).length
+      })
     ),
     ...before('question'),
     ...before('plan'),

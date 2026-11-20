@@ -225,6 +225,69 @@ export function parseHandoffs(
   return items;
 }
 
+/** One line of the "Apply list:" block of the agent's PR-ready comment */
+export type ApplyItem = {
+  /** The item text before its outcome */
+  text: string;
+  spec: string;
+  kind: string;
+  args: string[];
+  afterDeploy: boolean;
+  checked: boolean;
+  dropped: boolean;
+  /** What the NUC wrote after " · "; null while nothing is said */
+  outcome: string | null;
+};
+
+// The newest "**Agent: PR ready**" comment's "Apply list:" block, by the rules of watch.jq and `cdwr agent apply-list`
+export function parseApplyList(
+  comments: readonly (Dated & { body?: string | null })[] | null | undefined
+): ApplyItem[] {
+  const c = (comments || [])
+    .filter((x) => String(x.body || '').startsWith('**Agent: PR ready**'))
+    .sort(byCreated)
+    .pop();
+  if (!c) return [];
+  const lines = String(c.body).split('\n');
+  const at = lines.findIndex(
+    (l) =>
+      l
+        .trim()
+        .replace(/^\*\*|\*\*$/g, '')
+        .toLowerCase() === 'apply list:'
+  );
+  if (at < 0) return [];
+  const items: ApplyItem[] = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^\s*$/.test(l)) continue;
+    const m = l.match(/^\s*[-*] \[( |x|X)\] (.*)$/);
+    if (!m) break;
+    const text = m[2].trim();
+    const checked = m[1] !== ' ';
+    const cut = text.indexOf(' · ');
+    const spec = (cut < 0 ? text : text.slice(0, cut)).trim();
+    const outcome = cut < 0 ? null : text.slice(cut + 3).trim();
+    const tokens = spec.split(/\s+/).filter(Boolean);
+    const afterDeploy = tokens.length > 0 && tokens.at(-1) === 'after-deploy';
+    if (afterDeploy) tokens.pop();
+    items.push({
+      text,
+      spec,
+      kind: tokens[0] ?? '',
+      args: tokens.slice(1),
+      afterDeploy,
+      checked,
+      dropped: !checked && text.startsWith('~~'),
+      outcome
+    });
+  }
+  return items;
+}
+
+/** Items that still wait for someone: not applied, not dropped */
+export const openApply = (items: readonly ApplyItem[]): ApplyItem[] =>
+  items.filter((i) => !i.checked && !i.dropped);
+
 // The queue state and runs: a "Last run:" line, an "Attended:" line, a "Job:" line, then a table of runs that weren't idle, newest first
 // Job: on launchd "every 10 min · install current", "· install out of date (run.sh, interval)" or "· install unknown";
 // in the agent-host container "· image sha-9c7a20d", "· image sha-9c7a20d out of date (run.sh, …)", or "· image" with no

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   byCreated,
+  openApply,
+  parseApplyList,
   parseAttended,
   parseHandoffs,
   parseIdea,
@@ -261,6 +263,131 @@ describe('parseHandoffs', () => {
     ]
   ])('gives nothing for %s', (_name, comments) => {
     expect(parseHandoffs(comments)).toEqual([]);
+  });
+});
+
+describe('parseApplyList', () => {
+  const body = (...lines: string[]) => [
+    { body: ['**Agent: PR ready**', '', ...lines].join('\n'), createdAt: '1' }
+  ];
+
+  it.each([
+    [
+      'a plain item',
+      ['- [ ] restart cdwr-cms'],
+      {
+        spec: 'restart cdwr-cms',
+        kind: 'restart',
+        args: ['cdwr-cms'],
+        afterDeploy: false,
+        checked: false,
+        dropped: false,
+        outcome: null
+      }
+    ],
+    [
+      'after-deploy taken off the args',
+      ['- [ ] scale cdwr-cms 2 after-deploy'],
+      {
+        spec: 'scale cdwr-cms 2 after-deploy',
+        kind: 'scale',
+        args: ['cdwr-cms', '2'],
+        afterDeploy: true,
+        checked: false,
+        dropped: false,
+        outcome: null
+      }
+    ],
+    [
+      'an applied item with its outcome',
+      ['* [X] restart cdwr-cms · applied 2026-11-20T07:12Z'],
+      {
+        spec: 'restart cdwr-cms',
+        kind: 'restart',
+        args: ['cdwr-cms'],
+        afterDeploy: false,
+        checked: true,
+        dropped: false,
+        outcome: 'applied 2026-11-20T07:12Z'
+      }
+    ],
+    [
+      'a refused item',
+      ['- [ ] supabase-migration a.sql · refused: already applied'],
+      {
+        kind: 'supabase-migration',
+        args: ['a.sql'],
+        checked: false,
+        dropped: false,
+        outcome: 'refused: already applied'
+      }
+    ],
+    [
+      'a dropped item',
+      ['- [ ] ~~deploy-workflow cms production~~ dropped by hand'],
+      { checked: false, dropped: true, outcome: null }
+    ],
+    ['an item without arguments', ['- [ ] agent-deploy'], { args: [] }]
+  ])('reads %s', (_name, lines, want) => {
+    expect(parseApplyList(body('Apply list:', ...lines))).toMatchObject([want]);
+  });
+
+  it('reads a bold header, skips blank lines and stops at other text', () => {
+    const items = parseApplyList(
+      body(
+        '**Apply list:**',
+        '',
+        '- [ ] restart cdwr-cms',
+        '',
+        '- [x] agent-deploy',
+        'prose',
+        '- [ ] restart cdwr-headless-x'
+      )
+    );
+    expect(items.map((i) => i.spec)).toEqual([
+      'restart cdwr-cms',
+      'agent-deploy'
+    ]);
+  });
+
+  it('reads only the newest PR-ready comment', () => {
+    const items = parseApplyList([
+      {
+        body: '**Agent: PR ready**\nApply list:\n- [ ] agent-deploy',
+        createdAt: '2'
+      },
+      {
+        body: '**Agent: PR ready**\nApply list:\n- [ ] restart cdwr-cms',
+        createdAt: '1'
+      },
+      { body: 'hello', createdAt: '3' }
+    ]);
+    expect(items.map((i) => i.spec)).toEqual(['agent-deploy']);
+  });
+
+  it('counts only items not applied and not dropped as open', () => {
+    const items = parseApplyList(
+      body(
+        'Apply list:',
+        '- [x] restart cdwr-cms · applied now',
+        '- [ ] ~~agent-deploy~~',
+        '- [ ] scale cdwr-cms 2 · refused: no DESK_FLY_TOKEN on nuc',
+        '- [ ] deploy-workflow cms production'
+      )
+    );
+    expect(openApply(items).map((i) => i.kind)).toEqual([
+      'scale',
+      'deploy-workflow'
+    ]);
+  });
+
+  it.each([
+    ['no comments', []],
+    ['null', null],
+    ['no list', body('Hand-off checklist:', '- [ ] a')],
+    ['an empty list', body('Apply list:', 'prose')]
+  ])('gives nothing for %s', (_name, comments) => {
+    expect(parseApplyList(comments)).toEqual([]);
   });
 });
 

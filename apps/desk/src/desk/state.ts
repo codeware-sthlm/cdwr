@@ -25,6 +25,7 @@ import type {
   ControlKind
 } from './commands';
 import { STATES } from './constants';
+import type { ApplyItem } from './parsers';
 import type { Idea, PlanProgress, ReviewRecord } from './types';
 
 /** What the page keeps of a ticket's description and relations */
@@ -254,6 +255,8 @@ export type DeskState = {
   details: Map<string, Detail>;
   /** Ticket id -> unticked hand-off items read from the ticket's comments, ahead of the queue view */
   liveHandoffs: Map<string, string[]>;
+  /** Ticket id -> the apply list items read from the same comment */
+  liveApply: Map<string, ApplyItem[]>;
   /** Idea id -> the discard word: the cancelled ticket's last comment */
   ideaReasons: Map<string, string>;
   /** Source -> its latest error */
@@ -297,6 +300,7 @@ export const createState = (): DeskState => ({
   },
   details: new Map(),
   liveHandoffs: new Map(),
+  liveApply: new Map(),
   ideaReasons: new Map(),
   errors: new Map(),
   ui: {
