@@ -1490,7 +1490,7 @@ apply_argv() {
         print -rl -- agent supabase-migrate "$a1" ;;
     supabase-function)
       [[ "$n" == 1 && "$a1" == [a-z0-9][a-z0-9-]# && -d "$REPO/tools/cdwr/agent-queue/supabase/functions/$a1" ]] ;;
-    agent-deploy) [[ "$n" == 0 ]] ;;
+    agent-deploy|nuc-install) [[ "$n" == 0 ]] ;;
     secret-copy|secret-rewrite|secret-set)
       local -a sargs
       sargs=("${(@f)$(jq -r '.args[]' <<<"$1" 2>/dev/null)}")
@@ -1553,6 +1553,25 @@ apply_self_deploy() {
   esac
 }
 
+# apply_nuc <sha>: the nuc-install item from nuc-apply.json, which the host's nuc-sync.sh records
+# through deploy-gate.sh: `ok <short sha>` once nuc-apply ran clean on a main that contains the merge
+# commit, `refused <why>`, or `wait`. Its `main` is the head the applied folder commit was read at.
+apply_nuc() {
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/nuc-apply.json" phase sha main
+  [[ -r "$file" ]] || { print -r -- "refused no nuc-apply on this host"; return 0; }
+  phase="$(jq -r '.phase // ""' "$file" 2>/dev/null)"
+  sha="$(jq -r '.sha // ""' "$file" 2>/dev/null)"
+  main="$(jq -r '.main // ""' "$file" 2>/dev/null)"
+  [[ "$sha" == [0-9a-f](#c40) && "$main" == [0-9a-f](#c40) ]] || { print -r -- wait; return 0; }
+  git -C "$REPO" merge-base --is-ancestor "$1" "$main" 2>/dev/null || { print -r -- wait; return 0; }
+  case "$phase" in
+    ok) print -r -- "ok ${sha[1,7]}" ;;
+    failed) print -r -- "refused nuc-apply of ${sha[1,7]}: failed" ;;
+    *) print -r -- wait ;;
+  esac
+}
+
 # apply_item <entry json> <item json>: one item. Prints `wait`, `applied <outcome>` or
 # `refused <why>`. Run it in a command substitution.
 apply_item() {
@@ -1580,6 +1599,12 @@ apply_item() {
       out="$(apply_self_deploy "$sha")"
       if [[ "$out" == ok\ * ]]; then print -r -- "applied deployed ${out#ok }"
       elif [[ "$out" == wait ]] && (( now - seen > APPLY_WAIT_SECS )); then print -r -- "refused no self-deploy within 3 hours"
+      else print -r -- "$out"; fi
+      return 0 ;;
+    nuc-install)
+      out="$(apply_nuc "$sha")"
+      if [[ "$out" == ok\ * ]]; then print -r -- "applied installed ${out#ok }"
+      elif [[ "$out" == wait ]] && (( now - seen > APPLY_WAIT_SECS )); then print -r -- "refused no nuc-apply within 3 hours"
       else print -r -- "$out"; fi
       return 0 ;;
     # Restart and scale read no Infisical, so the Fly token is all they need

@@ -4402,6 +4402,7 @@ describe('run.sh apply list', () => {
     'apply_cdwr',
     'apply_deploy_state',
     'apply_self_deploy',
+    'apply_nuc',
     'apply_item',
     'apply_tick',
     'apply_list',
@@ -4670,7 +4671,8 @@ describe('run.sh apply list', () => {
           '--value',
           'https://example.com/a@b'
         ]
-      ]
+      ],
+      ['nuc-install', [], []]
     ])('prints the argv of %s %j', (kind, args, expected) => {
       const r = argv(kind, args);
       expect(r.rc).toBe('rc=0');
@@ -4780,7 +4782,11 @@ describe('run.sh apply list', () => {
           'https://hooks.example.com/x?token=abc'
         ]
       ],
-      ['secret-set', ['production', '/apps/cms', 'X_LEVEL', 'https://a.b/#k=v']]
+      [
+        'secret-set',
+        ['production', '/apps/cms', 'X_LEVEL', 'https://a.b/#k=v']
+      ],
+      ['nuc-install', ['x']]
     ])('refuses %s %j', (kind, args) => {
       const r = argv(kind, args);
       expect(r.rc).toBe('rc=1');
@@ -5141,6 +5147,49 @@ describe('run.sh apply list', () => {
         const old = new Date(Date.now() - 4 * 3600_000).toISOString();
         expect(apply(deploy, { entry: entry(old) })).toBe(
           'refused no self-deploy within 3 hours'
+        );
+      });
+    });
+
+    describe('nuc-install', () => {
+      const install = item('nuc-install', []);
+      const nuc = (phase: string, main = 'f'.repeat(40)) =>
+        write(
+          'nuc-apply.json',
+          JSON.stringify({ sha: 'e'.repeat(40), main, phase, changed: [] })
+        );
+
+      it('refuses without nuc-apply.json', () => {
+        expect(apply(install)).toBe('refused no nuc-apply on this host');
+      });
+
+      it('applies once a clean run read a main with the merge', () => {
+        nuc('ok');
+        expect(apply(install)).toBe('applied installed eeeeeee');
+      });
+
+      it('waits while its main lacks the merge', () => {
+        nuc('ok');
+        write('git.tag.rc', '1');
+        expect(apply(install)).toBe('wait');
+      });
+
+      it('waits for a main that is not a sha', () => {
+        nuc('ok', 'main');
+        expect(apply(install)).toBe('wait');
+      });
+
+      it('refuses a failed run', () => {
+        nuc('failed');
+        expect(apply(install)).toBe('refused nuc-apply of eeeeeee: failed');
+      });
+
+      it('refuses after the wait limit', () => {
+        nuc('ok');
+        write('git.tag.rc', '1');
+        const old = new Date(Date.now() - 4 * 3600_000).toISOString();
+        expect(apply(install, { entry: entry(old) })).toBe(
+          'refused no nuc-apply within 3 hours'
         );
       });
     });

@@ -282,6 +282,7 @@ export function validateItem(
       );
     }
     case 'agent-deploy':
+    case 'nuc-install':
       return wrongCount(0);
     case 'secret-copy': {
       const [env = '', folder = '', from = '', to = ''] = args;
