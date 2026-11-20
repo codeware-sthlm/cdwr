@@ -1,0 +1,12 @@
+[Unit]
+Description=Deploy the newest cdwr agent image built on main
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cdwr
+ExecStart=/usr/local/sbin/self-deploy.sh
+# The quiet-queue wait is up to 30 minutes, then the pull
+TimeoutStartSec=45min
