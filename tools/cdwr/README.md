@@ -592,8 +592,8 @@ scheduler log or, with `--run`, the latest run, and tails it. It needs no local 
 
 ## The NUC
 
-The agent container runs on a NUC. Everything below is done once; after that `cdwr agent deploy`
-updates it. The machine is named after its hardware (`cdwr-nuc`); everything the queue reaches it by
+The agent container runs on a NUC. Everything below is done once; after that the self-deploy timer
+updates it, and `cdwr agent deploy` does it by hand. The machine is named after its hardware (`cdwr-nuc`); everything the queue reaches it by
 is named after its role, `agent-host`, so moving to another box changes only the machine.
 
 1. Install Ubuntu Server 24.04 LTS.
@@ -658,13 +658,28 @@ is named after its role, `agent-host`, so moving to another box changes only the
    sudo systemctl enable --now cdwr-agent-backup.timer
    ```
 
-9. From the Mac, the first deploy. The image is public, so the NUC pulls without a login:
+9. Install the self-deploy timer (every 5 minutes; the newest green image build on main is
+   deployed once the queue is quiet, and rolled back if its first run is not healthy). The host needs
+   `curl` and `jq`:
 
    ```sh
-   cdwr agent deploy --host agent-host
+   sudo install -m 755 apps/agent-host/nuc/self-deploy.sh /usr/local/sbin/
+   sudo install -m 644 apps/agent-host/nuc/cdwr-agent-deploy.service apps/agent-host/nuc/cdwr-agent-deploy.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now cdwr-agent-deploy.timer
    ```
 
-10. Check it. `cdwr agent logs --host agent-host` lands with COD-592; until then, on the NUC:
+   Its log is `journalctl -u cdwr-agent-deploy`. How it decides and rolls back is in
+   `tools/cdwr/agent-queue/README.md`, "Self-deploy".
+
+10. From the Mac, the first deploy. The image is public, so the NUC pulls without a login. The
+    timer does nothing until this has run once:
+
+    ```sh
+    cdwr agent deploy --host agent-host
+    ```
+
+11. Check it. `cdwr agent logs --host agent-host` lands with COD-592; until then, on the NUC:
 
     ```sh
     docker logs cdwr-agent
