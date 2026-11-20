@@ -20,7 +20,7 @@ import {
 } from './constants';
 import { dayTime, hhmm } from './format';
 import type { Connection } from './state';
-import type { ViewIssue } from './types';
+import type { DeployState, ViewIssue } from './types';
 
 // What the desk derives from the live tables: PR states, sessions per host, the pulse, problems and health.
 
@@ -578,6 +578,7 @@ export type CheckName =
   | 'queue_state parses'
   | 'Snapshot age'
   | `${string} heartbeat`
+  | `${string} deploy`
   | 'github_events last event'
   | 'Linear poll';
 
@@ -622,6 +623,38 @@ export const missedEvent = (
   };
 };
 
+/** A host's self-deploy as a check: it fails while its newest deploy is a rollback, until a later one turns ok */
+export const deployCheck = (
+  host: string,
+  d: DeployState
+): HealthCheck & { name: `${string} deploy` } => {
+  const at = Date.parse(d.at);
+  const base = { name: `${host} deploy` as const, at };
+  if (d.phase === 'rolled-back')
+    return {
+      ...base,
+      ok: false,
+      note: `Rolled back ${d.failed ?? d.previous ?? 'the new tag'} to ${d.tag}${d.reason ? `: ${d.reason}` : ''}`
+    };
+  if (d.phase === 'stuck')
+    return {
+      ...base,
+      ok: false,
+      note: `${d.tag} failed its check with nothing to roll back to${d.reason ? `: ${d.reason}` : ''}`
+    };
+  return {
+    ...base,
+    ok: true,
+    note: [
+      d.tag,
+      d.by ? `by ${d.by === 'mac' ? 'Mac' : 'self'}` : null,
+      d.phase === 'checking' ? 'checking first run' : null
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  };
+};
+
 /** The Agent health view's checks, in the order it lists them */
 export const health = ({
   connection,
@@ -629,6 +662,7 @@ export const health = ({
   staleHours,
   nuc,
   heartbeats,
+  deploys = [],
   events,
   activity,
   storedAt,
@@ -641,6 +675,8 @@ export const health = ({
   nuc: { host: string; at: number; silentMin: number } | null;
   /** Every other host seen in the last 24 hours, so a silent one fails rather than drops out */
   heartbeats: readonly HostHeartbeat[];
+  /** The newest self-deploy of each host that has one */
+  deploys?: readonly { host: string; deploy: DeployState }[];
   events: readonly GithubEventRow[] | null;
   /** The PRs of the tickets whose details have loaded; none before they load, so a cold start reads quiet */
   activity: readonly PrActivity[];
@@ -703,6 +739,7 @@ export const health = ({
       ...heartbeatOk(h),
       at: nowMs - h.ageMin * 6e4
     })),
+    ...deploys.map((d) => deployCheck(d.host, d.deploy)),
     {
       name: 'github_events last event',
       ...(events === null

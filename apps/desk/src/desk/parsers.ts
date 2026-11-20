@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type {
   Attended,
   AttendedVerdict,
+  DeployState,
   Idea,
   Job,
   JobHost,
@@ -660,6 +661,40 @@ export const parseWatch = (json: unknown): Map<string, WatchEntry> => {
     });
   }
   return entries;
+};
+
+const DEPLOY_PHASES: readonly DeployState['phase'][] = [
+  'checking',
+  'ok',
+  'rolled-back',
+  'stuck'
+];
+
+const text = (v: unknown): string | null =>
+  typeof v === 'string' && v !== '' ? v : null;
+
+/**
+ * A host's deploy.json. Anything that is not an object with a tag, a known phase and a time reads
+ * as undefined; a field of the wrong type reads as missing.
+ */
+export const parseDeploy = (json: unknown): DeployState | undefined => {
+  if (typeof json !== 'object' || json === null || Array.isArray(json))
+    return undefined;
+  const e: Record<string, unknown> = { ...json };
+  const tag = text(e.tag);
+  const at = text(e.at);
+  const phase = DEPLOY_PHASES.find((p) => p === e.phase);
+  if (tag === null || at === null || Number.isNaN(Date.parse(at)) || !phase)
+    return undefined;
+  return {
+    tag,
+    previous: text(e.previous),
+    at,
+    by: e.by === 'self' || e.by === 'mac' ? e.by : null,
+    phase,
+    reason: text(e.reason),
+    failed: text(e.failed)
+  };
 };
 
 /** The value at an issue's path; zod 4 issues no longer carry what was received */

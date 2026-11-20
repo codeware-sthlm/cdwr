@@ -533,7 +533,10 @@ describe('run.sh telemetry', () => {
     );
     expect(SCRIPT).toMatch(/\( telemetry_queue_state "\$last" [^)]*\) &!/s);
     expect(SCRIPT).toMatch(
-      /telemetry_queue_state [^)]*"\$watch" "\$renovate" "\$devlog" "\$review" \) &!/s
+      /telemetry_queue_state [^)]*"\$watch" "\$renovate" "\$devlog" "\$review" "\$deploy" \) &!/s
+    );
+    expect(SCRIPT).toContain(
+      'deploy="$(cat "$HOME_DIR/deploy.json" 2>/dev/null)"'
     );
     expect(SCRIPT).toContain(
       'watch="$(cat "$HOME_DIR/watch.json" 2>/dev/null)"'
@@ -2264,6 +2267,7 @@ describe('run.sh job.json', () => {
     'notify.sh',
     'checkin.sh',
     'telemetry.sh',
+    'deploy-gate.sh',
     'linear-tools.txt'
   ];
   let root: string;

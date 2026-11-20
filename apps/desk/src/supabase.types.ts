@@ -173,6 +173,7 @@ export type Database = {
           view: Json | null;
           watch: Json | null;
           review: string | null;
+          deploy: Json | null;
         };
         Insert: {
           host: string;
@@ -185,6 +186,7 @@ export type Database = {
           view?: Json | null;
           watch?: Json | null;
           review?: string | null;
+          deploy?: Json | null;
         };
         Update: {
           host?: string;
@@ -197,6 +199,7 @@ export type Database = {
           view?: Json | null;
           watch?: Json | null;
           review?: string | null;
+          deploy?: Json | null;
         };
         Relationships: [];
       };
