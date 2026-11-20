@@ -396,19 +396,25 @@ to **What to take next**.
    credentials, each as a dry run first, and ticks them in the comment with the outcome. The
    kinds are closed; anything else stays a checklist item:
 
-   | Kind                                   | Arguments                                                                                |
-   | -------------------------------------- | ---------------------------------------------------------------------------------------- |
-   | `restart <app>`                        | `cdwr-cms`, `cdwr-cms-<tenant>` or `cdwr-headless-<tenant>`                              |
-   | `scale <app> <count>`                  | the same apps, count 1–4                                                                 |
-   | `deploy-workflow <project> production` | a project in the `apps` release group of `nx.json`                                       |
-   | `supabase-migration <file>`            | `tools/cdwr/agent-queue/supabase/migrations/<14 digits>_<name>.sql`, added by this PR    |
-   | `supabase-function <name>`             | parses, but the NUC refuses it as `not enabled`: keep a function deploy a checklist item |
-   | `agent-deploy`                         | none; waits for the NUC's self-deploy of the merge commit                                |
+   | Kind                                                       | Arguments                                                                                                                                       |
+   | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `restart <app>`                                            | `cdwr-cms`, `cdwr-cms-<tenant>` or `cdwr-headless-<tenant>`                                                                                     |
+   | `scale <app> <count>`                                      | the same apps, count 1–4                                                                                                                        |
+   | `deploy-workflow <project> production`                     | a project in the `apps` release group of `nx.json`                                                                                              |
+   | `supabase-migration <file>`                                | `tools/cdwr/agent-queue/supabase/migrations/<14 digits>_<name>.sql`, added by this PR                                                           |
+   | `supabase-function <name>`                                 | parses, but the NUC refuses it as `not enabled`: keep a function deploy a checklist item                                                        |
+   | `agent-deploy`                                             | none; waits for the NUC's self-deploy of the merge commit                                                                                       |
+   | `secret-copy <env> <folder> <from> <to>`                   | `production` or `preview`; `/apps/<app>` or `/tenants/<slug>/apps/<app>`; copies a key to a new key in the folder, never over an existing value |
+   | `secret-rewrite <env> <folder> <key> host=… port=… user=…` | the same env and folder rules; changes only the host, port or user of a url secret, never its password                                          |
+   | `secret-set <env> <folder> <key> <value>`                  | the same env and folder rules; a non-secret value the PR states: a whole number, `true`/`false`, or an `https://` url without credentials       |
 
    A trailing `after-deploy` makes an item wait for the production `fly-deployment.yml` run on
    the merge commit, for a step that needs the new code live. The list is read once, at the
    merge, and stops for good at the first refused item, so order the items the way they depend
-   on each other. An item names a file of the PR or a resource, never a value. Before posting,
+   on each other. An item names a file of the PR or a resource, never a secret value: `secret-set`
+   carries only a non-secret value the PR states, and `secret-copy` and `secret-rewrite` derive
+   theirs inside Infisical, so no value passes through Linear. A new credential is Håkan's to
+   create, as a checklist item. Before posting,
    write the comment body to a file and run
    `pnpm -C <worktree> cdwr agent apply-list check --body <file>` until it passes: one invalid
    item makes the scheduler apply nothing.
