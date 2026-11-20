@@ -37,7 +37,7 @@ export default async function AuthLayout({
               cookieName={LANGUAGE_COOKIE}
               label={t(locale, 'language.label')}
             />
-            <ColorSchemeToggle />
+            <ColorSchemeToggle locale={locale} />
           </header>
           <main className="mx-auto flex w-full flex-1 flex-col justify-center p-6 sm:p-8">
             {children}
