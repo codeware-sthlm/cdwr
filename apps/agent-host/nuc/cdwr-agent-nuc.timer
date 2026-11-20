@@ -1,0 +1,9 @@
+[Unit]
+Description=Check main for a change under apps/agent-host/nuc every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+
+[Install]
+WantedBy=timers.target
