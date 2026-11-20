@@ -660,7 +660,7 @@ is named after its role, `agent-host`, so moving to another box changes only the
 
 9. Install the self-deploy timer (every 5 minutes; the newest green image build on main is
    deployed once the queue is quiet, and rolled back if its first run is not healthy). The host needs
-   `curl` and `jq`:
+   `curl`, `jq` and `flock` (util-linux), and `cdwr agent deploy` needs `flock` there too:
 
    ```sh
    sudo install -m 755 apps/agent-host/nuc/self-deploy.sh /usr/local/sbin/

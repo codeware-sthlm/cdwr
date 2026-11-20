@@ -14,11 +14,18 @@ type Call = [string, string[], { input?: string } | undefined];
 
 const run =
   vi.fn<(...args: Call) => Promise<{ stdout: string; stderr: string }>>();
+const release = vi.fn(async () => undefined);
+const hold =
+  vi.fn<
+    (bin: string, args: string[], ready: string) => Promise<() => Promise<void>>
+  >();
 vi.mock('../../services/shell', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/shell')>();
   return {
     ...actual,
     run: (...a: Call) => run(...a),
+    hold: (bin: string, args: string[], ready: string) =>
+      hold(bin, args, ready),
     sleep: async () => undefined
   };
 });
@@ -35,6 +42,9 @@ describe('agent deploy', () => {
 
   beforeEach(() => {
     run.mockReset();
+    release.mockClear();
+    hold.mockReset();
+    hold.mockResolvedValue(release);
     ui = fakeUi([]);
     root = mkdtempSync(join(tmpdir(), 'cdwr-deploy-'));
     mkdirSync(join(root, 'apps/agent-host'), { recursive: true });
@@ -112,6 +122,76 @@ describe('agent deploy', () => {
       (c) => c[1].includes('tee') && c[1].includes('/opt/cdwr-agent/image.env')
     );
     expect(tagCall?.[2]?.input).toBe('AGENT_IMAGE_TAG=sha-abcdef0\n');
+  });
+
+  describe('the host deploy lock', () => {
+    const running = async (_bin: string, args: string[]) => {
+      const cmd = args.slice(3).join(' ');
+      if (cmd.includes('State.Running')) return ok('true\n');
+      if (cmd.includes('test -e')) throw fail(1);
+      if (cmd.includes('State.Status')) return ok('sha256:abc=running\n');
+      return ok();
+    };
+
+    it('is held before the first ssh step and released after the last', async () => {
+      const order: string[] = [];
+      hold.mockImplementation(async () => {
+        order.push('lock');
+        return async () => {
+          order.push('release');
+        };
+      });
+      run.mockImplementation(async (bin, args) => {
+        if (bin === 'ssh') order.push(args.slice(3).join(' '));
+        return running(bin, args);
+      });
+      const exit = await deploy([
+        '--host',
+        'nuc',
+        '--tag',
+        'main',
+        '--wait',
+        '5',
+        '--yes'
+      ]);
+      expect(exit).toBe(EXIT.ok);
+      expect(order[0]).toBe('lock');
+      expect(order.at(-1)).toBe('release');
+      const [bin, args, ready] = hold.mock.calls[0] ?? [];
+      expect(bin).toBe('ssh');
+      expect(ready).toBe('locked');
+      expect(args?.slice(3).join(' ')).toBe(
+        "flock -w 300 -E 75 /opt/cdwr-agent/deploy.lock sh -c 'echo locked && exec cat >/dev/null'"
+      );
+    });
+
+    it('is released when the deploy fails', async () => {
+      run.mockImplementation(async (bin, args) => {
+        if (args.slice(3).join(' ').includes('pull')) throw fail(1);
+        return running(bin, args);
+      });
+      const exit = await deploy(['--host', 'nuc', '--tag', 'main', '--yes']);
+      expect(exit).toBe(EXIT.failed);
+      expect(release).toHaveBeenCalledTimes(1);
+    });
+
+    it('changes nothing while the self-deploy holds it', async () => {
+      hold.mockRejectedValue(new CommandError('ssh', '', '', 75));
+      const exit = await deploy(['--host', 'nuc', '--tag', 'main', '--yes']);
+      expect(exit).toBe(EXIT.failed);
+      expect(calls()).toEqual([]);
+      expect(JSON.stringify(ui.printed)).toContain('self-deploy held');
+    });
+
+    it('changes nothing when the lock cannot be taken at all', async () => {
+      hold.mockRejectedValue(
+        new CommandError('ssh', '', 'flock: not found', 127)
+      );
+      const exit = await deploy(['--host', 'nuc', '--tag', 'main', '--yes']);
+      expect(exit).toBe(EXIT.failed);
+      expect(calls()).toEqual([]);
+      expect(JSON.stringify(ui.printed)).toContain('Could not take');
+    });
   });
 
   it('skips pause and wait when no container runs yet', async () => {

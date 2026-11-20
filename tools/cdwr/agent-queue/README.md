@@ -178,6 +178,8 @@ The NUC deploys the agent image itself, so a merged change to the queue reaches 
 - `record` writes `deploy.json` from the JSON object on stdin, keeping only the known fields
 - `notify <text>` sends an action notice; the script runs it through `/opt/agent-host/secrets.sh`
 
+A tick and `cdwr agent deploy` never run side by side. Both take `flock` on `/opt/cdwr-agent/deploy.lock`. A tick holds it from start to exit, and skips itself when the lock is taken. `cdwr agent deploy` holds it through one open ssh (`flock … cat`) from before the pause to after the record, and waits for it as long as `--wait`. The kernel drops the lock when its holder exits or the ssh connection drops, so no stale lock is left behind.
+
 Each tick does one of two things. While the last deploy waits for its first run (phase `checking`), it checks that run. Otherwise it looks for a newer build.
 
 - The build is the newest green `agent-host-image.yml` run on main, read from GitHub's public API. The tag is `sha-` and the first 7 characters of that commit. The compose file comes from raw.githubusercontent at the same sha, so the image and its compose file always match.
@@ -197,4 +199,4 @@ The state is in `self-deploy.json` in `/opt/cdwr-agent` (`phase`, `tag`, `previo
 
 The script writes each step to the container through `record`, which makes `deploy.json`. The scheduler's telemetry carries it as `queue_state.deploy`, and the desk shows it on the Agent health page (the tag, the one before, the phase and any reason).
 
-The first deploy is by hand, from the Mac: `cdwr agent deploy --host agent-host`. The script does nothing until `image.env` and `compose.yaml` exist, and it needs an image that already has `deploy-gate.sh`. The host needs `curl` and `jq`. Installing the timer is in `tools/cdwr/README.md`, "The NUC". Its log is `journalctl -u cdwr-agent-deploy`.
+The first deploy is by hand, from the Mac: `cdwr agent deploy --host agent-host`. The script does nothing until `image.env` and `compose.yaml` exist, and it needs an image that already has `deploy-gate.sh`. The host needs `curl`, `jq` and `flock`. Installing the timer is in `tools/cdwr/README.md`, "The NUC". Its log is `journalctl -u cdwr-agent-deploy`.

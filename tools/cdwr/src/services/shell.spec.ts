@@ -10,12 +10,16 @@ class FakeChild extends EventEmitter {
 }
 
 let fakeChild: FakeChild;
+/** True where a spec spawns real processes */
+let realSpawn = false;
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return {
     ...actual,
-    spawn: vi.fn(() => fakeChild)
+    spawn: vi.fn((...args: Parameters<typeof actual.spawn>) =>
+      realSpawn ? actual.spawn(...args) : fakeChild
+    )
   };
 });
 
@@ -82,5 +86,42 @@ describe('run', () => {
     expect((error as Error).name).toBe('CommandError');
     expect((error as { stderr: string }).stderr).toContain('nope');
     expect((error as { code: unknown }).code).toBe(1);
+  });
+});
+
+describe('hold', () => {
+  const real = () => vi.importActual<typeof import('./shell')>('./shell');
+
+  beforeEach(() => {
+    realSpawn = true;
+  });
+  afterEach(() => {
+    realSpawn = false;
+  });
+
+  it('resolves on the ready line and lets the child go when released', async () => {
+    const { hold } = await real();
+    // Exits only once its stdin closes, as `cat` does under flock
+    const release = await hold(
+      process.execPath,
+      [
+        '-e',
+        'process.stdout.write("wait\\nlock");setTimeout(()=>process.stdout.write("ed\\n"),50);process.stdin.resume();process.stdin.on("end",()=>process.exit(0))'
+      ],
+      'locked'
+    );
+    await expect(release()).resolves.toBeUndefined();
+  });
+
+  it('rejects with the exit code when the child ends before it is ready', async () => {
+    const { hold } = await real();
+    const error = await hold(
+      process.execPath,
+      ['-e', 'console.error("busy"); process.exit(75)'],
+      'locked'
+    ).catch((e: unknown) => e);
+    expect((error as Error).name).toBe('CommandError');
+    expect((error as { code: unknown }).code).toBe(75);
+    expect((error as { stderr: string }).stderr).toContain('busy');
   });
 });

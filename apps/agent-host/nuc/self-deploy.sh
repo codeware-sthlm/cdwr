@@ -9,7 +9,9 @@
 #   - otherwise: when the newest green agent-host-image.yml build on main is not the running tag,
 #     not a tag that was rolled back and not held by `cdwr agent deploy --tag`, pause the queue,
 #     wait up to 30 minutes for it to be quiet, pull, `up -d agent`, resume, and start checking.
-# Needs bash, curl, jq and docker on the host. SELF_DEPLOY_* replace paths, times and endpoints in specs.
+# A tick holds deploy.lock (flock) throughout, the lock `cdwr agent deploy` holds too, and skips
+# itself while a deploy by hand has it.
+# Needs bash, curl, jq, flock and docker on the host. SELF_DEPLOY_* replace paths, times and endpoints in specs.
 
 set -u -o pipefail
 
@@ -25,6 +27,8 @@ GATE=/opt/agent-queue/deploy-gate.sh
 SECRETS=/opt/agent-host/secrets.sh
 STATE="$DIR/self-deploy.json"
 HOLD="$DIR/hold"
+# `cdwr agent deploy` holds it through one ssh for its whole deploy; a tick holds it from start to exit
+LOCK="$DIR/deploy.lock"
 WAIT_SECONDS="${SELF_DEPLOY_WAIT_SECONDS:-1800}"
 POLL_SECONDS="${SELF_DEPLOY_POLL_SECONDS:-10}"
 CHECK_SECONDS="${SELF_DEPLOY_CHECK_SECONDS:-1200}"
@@ -236,6 +240,11 @@ deploy() {
 main() {
   local out sha tag held
   [[ -f "$DIR/image.env" && -f "$DIR/compose.yaml" ]] || { log "no deploy in $DIR yet: run cdwr agent deploy once"; return 0; }
+  # Read-only, so a lock file the Mac's ssh user created still opens; flock(2) needs no write
+  [[ -e "$LOCK" ]] || : >> "$LOCK"
+  exec 9<"$LOCK" || { log "could not open $LOCK"; return 1; }
+  # Checked, rolled back or deployed under it: a deploy by hand never runs beside any of them
+  if ! flock -n 9; then log "a deploy by hand holds $LOCK: trying on the next tick"; return 0; fi
   if [[ "$(field phase)" == checking ]]; then
     check || return 0
   fi
