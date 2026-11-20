@@ -574,6 +574,11 @@ used in one function. The watch's decisions live in `agent-queue/watch.jq`, inst
 than in a `*.logic.ts`: what runs unattended stays behind `install`, and jq is already a
 dependency of the script. Its spec runs it through `jq`.
 
+The review's daily notice of what the queue did on its own ends with the desk's address when
+`AGENT_DESK_URL` is set, the desk's `https://cdwr-nuc.<tailnet>.ts.net` url (the agent container
+reads it from `/agent-queue` in Infisical, a Mac from the environment or `tools/cdwr/.env`; unset,
+the notice says `See the desk.`).
+
 A run reports to a Sentry cron monitor, `agent-queue`, when `SENTRY_DSN` is set (the agent
 container reads it from `/agent-queue` in Infisical; unset, as on the Mac, nothing is sent).
 `agent-queue/checkin.sh`, sourced by `run.sh`, posts to Sentry's HTTP check-in endpoint with curl:
