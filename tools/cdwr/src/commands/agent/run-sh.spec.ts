@@ -28,11 +28,13 @@ const READS = [
   /^gh api graphql -f query="\$PR_QUERY" /,
   // The apply list's reads: the production deploy of a merge commit, the files a PR added
   /^gh api "repos\/codeware-sthlm\/cdwr\/actions\/workflows\/fly-deployment\.yml\/runs\?head_sha=\$1&per_page=5" /,
-  /^gh api --paginate "repos\/codeware-sthlm\/cdwr\/pulls\/\$pr\/files" /
+  /^gh api --paginate "repos\/codeware-sthlm\/cdwr\/pulls\/\$pr\/files" /,
+  // read_deploy: the Fly Deployment runs of a merge commit, their jobs and annotations
+  /^gh api "repos\/codeware-sthlm\/cdwr\/(actions\/(workflows\/fly-deployment\.yml\/runs\?head_sha=|runs\/\$rid\/jobs)|check-runs\/\$job\/annotations)/
 ];
 
-// The Copilot request and the desk's merge command are run.sh's only GitHub writes, in
-// copilot_request and desk_pr_act
+// The Copilot request and the merge command (the desk's, and the watch's own) are run.sh's only
+// GitHub writes, in copilot_request and desk_pr_act
 const COPILOT_REQUEST =
   SCRIPT.match(/^copilot_request\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
 const DESK_PR_ACT =
@@ -1547,7 +1549,8 @@ describe('run.sh watch_prs', () => {
   const run = (
     headRefName: string,
     pages: ((typeof ticket)[] | null)[] = [[ticket]],
-    more = false
+    more = false,
+    opts: { pr?: Record<string, unknown>; noHolds?: boolean } = {}
   ) => {
     pages.forEach((nodes, i) =>
       writeFileSync(
@@ -1577,11 +1580,18 @@ describe('run.sh watch_prs', () => {
         mergedAt: null,
         mergeable: 'MERGEABLE',
         reviewThreads: { nodes: [] },
-        commits: { nodes: [] }
+        commits: { nodes: [] },
+        ...opts.pr
       })
     );
     const script = [
       `ROOT="${root}"; HOME_DIR="${root}"; OTHER_REPOS='[]'; WATCHED=w; WATCH_LABELS=l; PR_QUERY=q`,
+      // The real hold list, or a directory with none
+      `WATCH_DIR="${opts.noHolds ? root : DIR}"`,
+      // The merge: one line per call; it fails with a reason while act-fail exists
+      'desk_pr_act() { print -r -- "$*" >> "$ROOT/act"; [[ -f "$ROOT/act-fail" ]] || return 0; print -r -- "GitHub said no"; return 1; }',
+      // The deploy read has its own spec; here it prints the deploy in the file, if any
+      'read_deploy() { [[ -f "$ROOT/deploy" ]] && cat "$ROOT/deploy"; return 0; }',
       `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
       `record() { print -r -- "$*" >> "$ROOT/records"; }`,
       `notice() { print -r -- "$*" >> "$ROOT/notices"; }`,
@@ -1737,6 +1747,106 @@ describe('run.sh watch_prs', () => {
     });
   });
 
+  describe('merging on its own', () => {
+    const readyTicket = {
+      ...ticket,
+      labels: { nodes: [{ name: 'agent:review' }] },
+      comments: {
+        nodes: [
+          {
+            body: '**Agent: PR ready**\n\nCode review: clean\nMerge: merging on its own: no hold path',
+            createdAt: '2026-01-02T00:00:00Z'
+          }
+        ]
+      }
+    };
+    const greenPr = (path = 'docs/guide.md') => ({
+      id: 'PR_node',
+      headRefOid: 'abc123',
+      isDraft: false,
+      mergeQueueEntry: null,
+      commits: {
+        nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }]
+      },
+      files: { pageInfo: { hasNextPage: false }, nodes: [{ path }] }
+    });
+    const entry = () => JSON.parse(read('watch.json'))['COD-5'];
+
+    it.skipIf(!canRun)(
+      'enqueues with the node id and head oid it read, and records it',
+      () => {
+        const result = run('feature/cod-5', [[readyTicket]], false, {
+          pr: greenPr()
+        });
+        expect(result.stdout).toContain('rc=0');
+        expect(read('act')).toBe('merge 754 PR_node abc123\n');
+        expect(read('records')).toBe('auto-merge COD-5 PR 754 enqueued\n');
+        expect(read('notices')).toBe('info COD-5: PR 754 merging on its own\n');
+        expect(entry().autoMerge).toMatchObject({ tries: 1, oid: 'abc123' });
+        expect(entry().autoMerge).not.toHaveProperty('failed');
+      }
+    );
+
+    it.skipIf(!canRun)('does not enqueue a PR on a hold path', () => {
+      run('feature/cod-5', [[readyTicket]], false, {
+        pr: greenPr('libs/shared/util/csp/src/index.ts')
+      });
+      expect(read('act')).toBe('');
+      expect(entry()).not.toHaveProperty('autoMerge');
+    });
+
+    it.skipIf(!canRun)('stores the failure and notices it', () => {
+      writeFileSync(join(root, 'act-fail'), '');
+      const result = run('feature/cod-5', [[readyTicket]], false, {
+        pr: greenPr()
+      });
+      expect(result.stdout).toContain('rc=0');
+      expect(read('act')).toBe('merge 754 PR_node abc123\n');
+      expect(read('records')).toBe('');
+      expect(read('notices')).toBe(
+        'action COD-5: PR 754 could not join the merge queue: GitHub said no\n'
+      );
+      expect(entry().autoMerge).toMatchObject({
+        failed: true,
+        oid: 'abc123',
+        // A refused enqueue is no try: the PR never joined the queue
+        tries: 0
+      });
+    });
+
+    it.skipIf(!canRun)('does not try the failed head again', () => {
+      writeFileSync(join(root, 'act-fail'), '');
+      run('feature/cod-5', [[readyTicket]], false, { pr: greenPr() });
+      run('feature/cod-5', [[readyTicket]], false, { pr: greenPr() });
+      expect(read('act').split('\n').filter(Boolean)).toHaveLength(1);
+    });
+
+    it.skipIf(!canRun)('enqueues nothing without a hold list', () => {
+      const result = run('feature/cod-5', [[readyTicket]], false, {
+        pr: greenPr(),
+        noHolds: true
+      });
+      expect(result.stdout).toContain('rc=0');
+      expect(read('act')).toBe('');
+      expect(read('notes')).toContain('hold-paths.txt not read');
+      expect(read('records')).toBe('warn  watch: hold-paths.txt not read\n');
+      expect(entry()).not.toHaveProperty('autoMerge');
+    });
+
+    it.skipIf(!canRun)('stores the deploy the read prints', () => {
+      writeFileSync(
+        join(root, 'deploy'),
+        '{"state":"success","run":"https://github.com/r/1","at":"2026-01-03T00:00:00Z"}'
+      );
+      run('feature/cod-5', [[readyTicket]], false, { pr: greenPr() });
+      expect(entry().deploy).toEqual({
+        state: 'success',
+        run: 'https://github.com/r/1',
+        at: '2026-01-03T00:00:00Z'
+      });
+    });
+  });
+
   it.skipIf(!canRun)(
     'fails on a Linear error past the first page, leaving watch.json as it was',
     () => {
@@ -1748,6 +1858,143 @@ describe('run.sh watch_prs', () => {
       expect(read('watch.json')).toBe(before);
     }
   );
+});
+
+describe('run.sh read_deploy', () => {
+  const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  const source = SCRIPT.slice(
+    SCRIPT.indexOf('read_deploy() {'),
+    SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('read_deploy() {')) + 3
+  );
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  let root: string;
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+  const put = (name: string, value: unknown) =>
+    writeFileSync(join(root, name), JSON.stringify(value));
+
+  const merged = {
+    pr: 754,
+    state: 'merged',
+    mergeCommit: 'cafe123',
+    mergedAt: new Date(Date.now() - 600_000).toISOString(),
+    autoMerge: { tries: 1 }
+  };
+  const run = (entry: unknown, runs: unknown[], notes: unknown[] = []) => {
+    put('runs.json', { workflow_runs: runs });
+    put('jobs.json', { jobs: [{ id: 11 }, { id: 12 }] });
+    put('annotations.json', notes);
+    const script = [
+      `ROOT="${root}"; HOME_DIR="${root}"`,
+      `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
+      `record() { print -r -- "$*" >> "$ROOT/records"; }`,
+      `watch() { jq -L "${DIR}" "$@"; }`,
+      'watch_err() { :; }',
+      // Every read is logged; the answer is by URL, and gh-fail makes the run list fail
+      'gh_read() { print -r -- "$3" >> "$ROOT/calls"; case "$3" in *workflows*) [[ -f "$ROOT/gh-fail" ]] && return 1; cat "$ROOT/runs.json" ;; */jobs) cat "$ROOT/jobs.json" ;; *) cat "$ROOT/annotations.json" ;; esac; }',
+      source,
+      `read_deploy '${JSON.stringify(entry)}' COD-5`
+    ].join('\n');
+    return spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+  };
+  const newest = {
+    id: 99,
+    created_at: '2026-01-03T00:00:00Z',
+    status: 'completed',
+    conclusion: 'success',
+    html_url: 'https://github.com/codeware-sthlm/cdwr/actions/runs/99'
+  };
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'read-deploy-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('asks for push runs of the merge commit', () => {
+    expect(source).toContain(
+      'actions/workflows/fly-deployment.yml/runs?head_sha=$sha&event=push'
+    );
+  });
+
+  it.skipIf(!canRun)(
+    'reads success from a clean deploy of the newest run',
+    () => {
+      const r = run(merged, [
+        {
+          ...newest,
+          id: 98,
+          created_at: '2026-01-01T00:00:00Z',
+          conclusion: 'failure'
+        },
+        newest
+      ]);
+      const deploy = JSON.parse(r.stdout);
+      expect(deploy).toMatchObject({ state: 'success', run: newest.html_url });
+      expect(deploy.at).toMatch(/^\d{4}-\d\d-\d\dT/);
+      expect(read('calls').split('\n').filter(Boolean)).toEqual([
+        'repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=cafe123&event=push',
+        'repos/codeware-sthlm/cdwr/actions/runs/99/jobs',
+        'repos/codeware-sthlm/cdwr/check-runs/11/annotations',
+        'repos/codeware-sthlm/cdwr/check-runs/12/annotations'
+      ]);
+      expect(read('watch-notes.jsonl')).toBe('');
+    }
+  );
+
+  it.skipIf(!canRun)('reads skipped from the deploy guard’s warning', () => {
+    const r = run(
+      merged,
+      [newest],
+      [
+        {
+          annotation_level: 'warning',
+          message: 'The commit is older than the deployed one'
+        }
+      ]
+    );
+    expect(JSON.parse(r.stdout).state).toBe('skipped');
+  });
+
+  it.skipIf(!canRun)('reads failure without reading the jobs', () => {
+    const r = run(merged, [{ ...newest, conclusion: 'failure' }]);
+    expect(JSON.parse(r.stdout).state).toBe('failure');
+    expect(read('calls').split('\n').filter(Boolean)).toHaveLength(1);
+  });
+
+  it.skipIf(!canRun)('reads pending while the run is going or missing', () => {
+    expect(
+      JSON.parse(
+        run(merged, [{ ...newest, status: 'in_progress', conclusion: null }])
+          .stdout
+      ).state
+    ).toBe('pending');
+    expect(JSON.parse(run(merged, []).stdout)).toMatchObject({
+      state: 'pending',
+      run: null
+    });
+  });
+
+  it.skipIf(!canRun)('prints nothing and warns once when a read fails', () => {
+    writeFileSync(join(root, 'gh-fail'), '');
+    const r = run(merged, [newest]);
+    expect(r.stdout).toBe('');
+    expect(read('records')).toBe(
+      'warn COD-5 watch: could not read the deploy\n'
+    );
+  });
+
+  it.skipIf(!canRun).each([
+    ['not merged on its own', { ...merged, autoMerge: undefined }],
+    ['not merged', { ...merged, state: 'open' }],
+    ['no merge commit', { ...merged, mergeCommit: null }],
+    ['already settled', { ...merged, deploy: { state: 'success' } }]
+  ])('reads nothing for an entry %s', (_name, entry) => {
+    const r = run(entry, [newest]);
+    expect(r.stdout).toBe('');
+    expect(read('calls')).toBe('');
+  });
 });
 
 describe('run.sh copilot_request', () => {

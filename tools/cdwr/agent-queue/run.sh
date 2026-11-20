@@ -224,6 +224,7 @@ query($n: Int!) {
       isDraft
       mergedAt
       mergeCommit { oid }
+      files(first: 100) { pageInfo { hasNextPage } nodes { path } }
       mergeable
       mergeStateStatus
       mergeQueueEntry { state }
@@ -1068,9 +1069,11 @@ $check || CHECKIN_ID="$(checkin in_progress)"
 # The decisions live in watch.jq, installed next to this file. It watches every ticket an agent
 # label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write. The
 # scheduler's other write is the parent close after it (CLOSE_PARENT, CLOSE_COMMENT). Its only
-# GitHub writes are the desk's copilot and merge commands (desk_pr_act), and the watch's own Copilot
+# GitHub writes are the desk's copilot and merge commands (desk_pr_act), the watch's own Copilot
 # request for a ticket parked on Copilot (copilot_request), since the ruleset's automatic review
-# skips a PR the app opened. Both go as the app, the Copilot request then as AGENT_COPILOT_TOKEN.
+# skips a PR the app opened, and the watch's own merge enqueue (desk_pr_act merge) for a PR on no
+# hold path (hold-paths.txt, watch.jq merge_verdict). All go as the app, the Copilot request then
+# as AGENT_COPILOT_TOKEN. After such a merge it reads the production deploy (read_deploy).
 # Paged, since done tickets keep agent:review for 14 days and alone fill a page.
 read -r -d '' WATCHED <<'GQL' || true
 query($after: String) {
@@ -1131,12 +1134,50 @@ relabel_merged() {
   note "watch: $id merged outside review, relabelled agent:review"
 }
 
+# read_deploy <entry json> [ticket]: the production deploy of a PR the watch merged on its own (an
+# entry with autoMerge, merged, a merge commit and no settled deploy). Reads the Fly Deployment push
+# runs of the merge commit and, once the newest one succeeded, the annotations of its jobs, and
+# prints { state, run, at } from watch.jq deploy_state. Prints nothing when there is nothing to read
+# or a read failed: the deploy stays as it was, with one warn.
+read_deploy() {
+  setopt local_options no_err_exit
+  local entry="$1" id="${2:-}" sha runs newest rid jobs job notes="$HOME_DIR/watch-notes.jsonl" state
+  jq -e '.autoMerge != null and .state == "merged" and .mergeCommit != null
+    and ((.deploy.state // "pending") == "pending")' >/dev/null 2>&1 <<<"$entry" || return 0
+  sha="$(jq -r '.mergeCommit' <<<"$entry")"
+  runs="$(gh_read gh api "repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=$sha&event=push" 2>/dev/null)" ||
+    { note "warn: watch: could not read the deploy of $sha ($id)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+  newest="$(jq -c '[.workflow_runs[]?] | sort_by(.created_at // "") | last' <<<"$runs" 2>/dev/null)" ||
+    { note "warn: watch: unreadable deploy runs for $sha ($id)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+  : > "$notes"
+  if [[ "$(jq -r '.status == "completed" and .conclusion == "success"' <<<"$newest")" == true ]]; then
+    rid="$(jq -r '.id' <<<"$newest")"
+    jobs="$(gh_read gh api "repos/codeware-sthlm/cdwr/actions/runs/$rid/jobs" 2>/dev/null)" ||
+      { rm -f "$notes"; note "warn: watch: could not read the deploy jobs of $sha ($id)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+    for job in ${(f)"$(jq -r '.jobs[]?.id' <<<"$jobs")"}; do
+      gh_read gh api "repos/codeware-sthlm/cdwr/check-runs/$job/annotations" 2>/dev/null >> "$notes" ||
+        { rm -f "$notes"; note "warn: watch: could not read the deploy annotations of $sha ($id)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+    done
+  fi
+  state="$(watch -rn --argjson runs "$runs" --slurpfile notes "$notes" --arg merged "$(jq -r '.mergedAt // ""' <<<"$entry")" \
+    --argjson now "$(date +%s)" 'include "watch";
+    deploy_state($runs; ($notes | add // []); (if $merged == "" then null else $merged end); $now)')"
+  rm -f "$notes"
+  [[ -n "$state" ]] || { note "warn: watch: deploy_state failed for $sha ($id)$(watch_err)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+  jq -nc --arg s "$state" --argjson r "$newest" --arg at "$(date -u +%FT%TZ)" \
+    '{state: $s, run: ($r.html_url // null), at: $at}'
+}
+
 watch_prs() {
   # One PR failing to read skips that PR, not the rest.
   setopt local_options no_err_exit
   local file="$HOME_DIR/watch.json" pages="$HOME_DIR/watch-pages.jsonl" after=null page
-  local resp nodes state node id label pr now out level msg review why asked ok
+  local resp nodes state node id label pr now out level msg review why asked ok holds nodeid oid deploy
   gh_identity_or_note
+  # The hold list sits beside watch.jq. Unread, no PR merges on its own
+  holds="$(watch -Rsc 'include "watch"; hold_globs' 2>/dev/null < "$WATCH_DIR/hold-paths.txt")" || holds=null
+  [[ -n "$holds" ]] || holds=null
+  [[ "$holds" == null ]] && { note "warn: watch: hold-paths.txt not read, no PR merges on its own"; record warn "" "watch: hold-paths.txt not read"; }
   # Every page up to 5, through a file as in record_activity; only tickets past the cap go unwatched
   : > "$pages"
   for page in {1..5}; do
@@ -1188,11 +1229,12 @@ watch_prs() {
       continue
     fi
     out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
-      --argjson state "$state" --arg at "$(date -u +%FT%TZ)" '
+      --argjson state "$state" --argjson holds "$holds" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
       {id: $id, agentLabel: $agentLabel, pr: $pr, now: ($now | pr_state), prev: $state[$id],
        handoffs: ($node | handoffs), parked: ($node | parked), at: $at,
-       apply: ($node | apply_input), left: ($node | checklist_handoffs), mergedAt: ($now.mergedAt // null)} | step')" ||
+       apply: ($node | apply_input), left: ($node | checklist_handoffs), mergedAt: ($now.mergedAt // null),
+       merge: (if $holds == null then null else ($now | merge_verdict($node; $holds)) end)} | step')" ||
       { why="$(watch_err)"; note "warn: watch: watch.jq failed on $id$why"; record warn "$id" "watch: watch.jq failed$why"; continue; }
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue
@@ -1216,10 +1258,30 @@ watch_prs() {
         notice action "$msg"
       fi
     fi
+    # The merge: step says enqueue only when merge_verdict said ok on this very node, so its node id
+    # and head oid go to GitHub as they were read. A refusal stores autoMergeFailed in place of
+    # autoMerge, so that head is not tried again.
+    if [[ "$(jq -r '.enqueue' <<<"$out")" == true ]]; then
+      nodeid="$(jq -r '.id' <<<"$now")"
+      oid="$(jq -r '.headRefOid' <<<"$now")"
+      if why="$(desk_pr_act merge "$pr" "$nodeid" "$oid")"; then
+        note "watch: $id PR #$pr merging on its own"
+        notice info "$id: PR $pr merging on its own"
+        record auto-merge "$id" "PR $pr enqueued"
+      else
+        out="$(jq -c '.entry.autoMerge = .autoMergeFailed' <<<"$out")"
+        msg="$id: PR $pr could not join the merge queue: ${why:-GitHub refused}"
+        note "watch: action $msg"
+        notice action "$msg"
+      fi
+    fi
     if [[ "$(jq -r '.relabel' <<<"$out")" == true ]]; then
       relabel_merged "$node" "$(jq -r '.mergedAt // empty' <<<"$now")" "$review" &&
         out="$(jq -c '.entry.relabelled = true' <<<"$out")"
     fi
+    # After a self-merge, the production deploy of the merge commit
+    deploy="$(read_deploy "$(jq -c '.entry' <<<"$out")" "$id")"
+    [[ -n "$deploy" ]] && out="$(jq -c --argjson d "$deploy" '.entry.deploy = $d' <<<"$out")"
     state="$(jq -c --arg id "$id" --argjson e "$(jq -c '.entry' <<<"$out")" '.[$id] = $e' <<<"$state")"
   done
 

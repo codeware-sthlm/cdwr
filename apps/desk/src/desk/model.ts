@@ -442,7 +442,7 @@ export const activityMissing = (activity: ActivityPayload): boolean =>
 export const isLimited = (outcome: string): boolean => outcome === 'limited';
 
 export const isProblem = (outcome: string): boolean =>
-  !/^(idle|paused|planned( [A-Z]+-\d+)?|launched|implemented|untried|interrupted|limited|suggested( [A-Z]+-\d+)?|drafted( \S+)?|nothing|skip)$/.test(
+  !/^(idle|paused|planned( [A-Z]+-\d+)?|launched|implemented|untried|interrupted|limited|auto-merge|suggested( [A-Z]+-\d+)?|drafted( \S+)?|nothing|skip)$/.test(
     outcome
   );
 

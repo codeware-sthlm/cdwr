@@ -255,6 +255,7 @@ describe('isProblem', () => {
     ['untried', false],
     ['interrupted', false],
     ['limited', false],
+    ['auto-merge', false],
     ['suggested COD-3', false],
     ['nothing', false],
     ['skip', false],
