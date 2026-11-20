@@ -205,8 +205,10 @@ def pr_state:
       draft: (.isDraft == true),
       mergeable: (.mergeable // null),
       mergeStateStatus: (.mergeStateStatus // null),
-      ci: $ci,
+      oid: (.headRefOid // null),
+      mergedAt: (.mergedAt // null),
       mergeCommit: (.mergeCommit.oid // null),
+      ci: $ci,
       copilot: (
         if any((.reviews.nodes // [])[]; (.author.login // "") | startswith("copilot-pull-request-reviewer")) then "reviewed"
         elif any((.reviewRequests.nodes // [])[];
@@ -242,16 +244,36 @@ def step:
   # Only on the step that sees the merge: a list posted after it is never applied
   | ($now.state == "merged" and $prev.state != "merged" and $prev.apply == null
      and (($in.apply.items // []) | length) > 0) as $snap
-  | (if $review and $now.removedAt != null
-        and ($prev.removedAt == null or $now.removedAt > $prev.removedAt)
-        and ($now.state != "merged" and $now.state != "closed")
-        and (($now.removedReason // "") | ascii_downcase) != "merged"
-     then
-       [ { level: "action",
-           message: "\($id): PR #\($pr) left the merge queue (\(
-             if ($now.removedReason // "") == "" then "no reason given"
-             else $now.removedReason | ascii_downcase | gsub("_"; " ") end))" } ]
-     else [] end) as $removal
+  | ($prev.autoMerge // null) as $am0
+  | ($review and $now.removedAt != null
+     and ($prev.removedAt == null or $now.removedAt > $prev.removedAt)
+     and ($now.state != "merged" and $now.state != "closed")
+     and (($now.removedReason // "") | ascii_downcase) != "merged") as $removed
+  | (if ($now.removedReason // "") == "" then "no reason given"
+     else $now.removedReason | ascii_downcase | gsub("_"; " ") end) as $why
+  # A PR the watch enqueued once gets one retry: a conflict through the conflict pick, failing
+  # checks through the merge-queue pick, both on a new head. A second removal is Håkan's.
+  | ($removed and $am0 != null and ($am0.tries // 0) == 1 and $am0.held == null) as $retry
+  | (if $removed | not then []
+     elif $retry then [ { level: "info", message: "\($id): PR #\($pr) left the merge queue (\($why)), retrying once" } ]
+     elif $am0 != null and ($am0.tries // 0) >= 2 and $am0.held == null
+       then [ { level: "action", message: "\($id): PR #\($pr) left the merge queue again (\($why)), the merge is yours" } ]
+     else [ { level: "action", message: "\($id): PR #\($pr) left the merge queue (\($why))" } ] end) as $removal
+  | (if $am0 == null then null
+     elif $retry then $am0 + { removed: { at: $now.removedAt, reason: $why, oid: ($now.oid // null) } }
+     elif $removed and ($am0.tries // 0) >= 2 then $am0 + { held: "merge queue refused twice" }
+     else $am0 end) as $am
+  # The watch's own merge (merge_verdict, computed by the caller as $in.merge): at most two
+  # enqueues per PR, never twice on one head, never after a hand-over to Håkan
+  | ($in.merge // null) as $mv
+  | ($mv != null and ($mv.verdict // "" | startswith("ok ")) and $review and $now.state == "open"
+     and ($am == null or (($am.tries // 0) < 2 and $am.held == null and $am.oid != $now.oid))) as $enqueue
+  # A PR-ready comment that says it merges on its own, refused for a reason that lasts: told once a head
+  | ($mv != null and $mv.claimed == true and $review and ($enqueue | not)
+     and ($mv.verdict // "" | startswith("ok ") | not) and ($mv.transient != true)
+     and ($am == null or $am.held == null)
+     and ($now.state | IN("merged", "closed") | not)
+     and $prev.mergeHeld != ($now.oid // "")) as $heldNow
   | (if $snap or $now.state == $prev.state then []
      elif $now.state == "failing" then
        (if ($removal | length) > 0 or ($review | not) then [] else [ { level: "action", message: "\($id): PR #\($pr) has failing checks" } ] end)
@@ -263,9 +285,13 @@ def step:
         else [ { level: "info", message: "\($id): PR #\($pr) merged" } ] end)
      elif $now.state == "closed" then [ { level: "info", message: "\($id): PR #\($pr) closed without merging" } ]
      else [] end) as $change
+  | (if $heldNow then [ { level: "action", message: "\($id): PR #\($pr) held: \($mv.verdict)" } ] else [] end) as $held
   | {
-      notices: ($removal + $change),
+      notices: ($removal + $change + $held),
       relabel: ($now.state == "merged" and ($review | not) and ($prev.relabelled != true)),
+      # run.sh enqueues with the node id and head oid of the verdict. On success the entry's
+      # autoMerge stands; on failure run.sh stores autoMergeFailed instead, so that head is not tried again.
+      enqueue: $enqueue,
       # Outside review only a merge or a close is stored, so a check that failed or a removal
       # from the merge queue still notifies once the ticket reaches review. conflicting, ci,
       # copilot and threads are stored whatever the label, so the queue view sees them.
@@ -276,7 +302,9 @@ def step:
                 conflicting: $conflicting,
                 draft: ($now.draft // false), mergeable: ($now.mergeable // null),
                 ci: ($now.ci // null), copilot: ($now.copilot // "none"), threads: ($now.threads // 0),
-                mergeStateStatus: ($now.mergeStateStatus // null), at: $in.at }
+                mergeStateStatus: ($now.mergeStateStatus // null), oid: ($now.oid // null),
+                mergedAt: ($now.mergedAt // $prev.mergedAt // null),
+                mergeCommit: ($now.mergeCommit // $prev.mergeCommit // null), at: $in.at }
               + (if $prev.relabelled == true then { relabelled: true } else {} end)
               + (if $prev.copilotAsked != null then { copilotAsked: $prev.copilotAsked } else {} end)
               + (if $snap then
@@ -284,7 +312,14 @@ def step:
                               sha: ($now.mergeCommit // null), at: $in.at, left: ($in.left // []),
                               items: $in.apply.items, invalid: null, done: false } }
                  elif $prev.apply != null then { apply: $prev.apply }
-                 else {} end))
+                 else {} end)
+              + (if $enqueue then { autoMerge: (($am // {}) + { at: $in.at, tries: (($am.tries // 0) + 1), oid: $now.oid })
+                                                | del(.removed, .failed) }
+                 elif $am != null then { autoMerge: $am } else {} end)
+              + (if $prev.deploy != null then { deploy: $prev.deploy } else {} end)
+              + (if $heldNow then { mergeHeld: ($now.oid // "") }
+                 elif $prev.mergeHeld != null then { mergeHeld: $prev.mergeHeld } else {} end)),
+      autoMergeFailed: (if $enqueue then (($am // { tries: 0 }) + { at: $in.at, oid: $now.oid, failed: true }) else null end)
     }
   # The scheduler asks Copilot once per PR, while the ticket is parked on Copilot for this open PR
   # and nobody has asked yet: GitHub's automatic review skips a PR the app opened
@@ -665,6 +700,124 @@ def review_feedback_detail($watch):
   | if (review_comment | not) and ($w.copilotThreads // 0) > 0 and ($w.copilotThreads // 0) == ($w.unresolved // 0)
     then "Copilot review" else null end;
 
+# --- Auto-merge: the watch merges an agent PR on no hold path itself (run.sh watch_prs) ---
+
+# [{ glob, reason }] from the text of hold-paths.txt: one `<glob>  # <reason>` per line, with
+# blank and `#` lines skipped
+def hold_globs:
+  [ split("\n")[] | trim | select(. != "" and (startswith("#") | not))
+    | capture("^(?<glob>[^\\s#]+)(?:\\s*#\\s*(?<reason>.*))?$")
+    | { glob, reason: ((.reason // "") | trim) } ];
+
+# An anchored regex for a hold glob: `**/` is any run of directories, `**` any path, `*` any run
+# without `/`, `?` one character but `/`; everything else is literal
+def glob_re:
+  "^"
+  + ([ scan("\\*\\*/|\\*\\*|\\*|\\?|[^*?]+")
+       | if . == "**/" then "(?:.*/)?"
+         elif . == "**" then ".*"
+         elif . == "*" then "[^/]*"
+         elif . == "?" then "[^/]"
+         else gsub("(?<c>[.+^$(){}|\\[\\]\\\\])"; "\\\(.c)") end ] | join(""))
+  + "$";
+
+# { path, glob, reason } for each changed path a hold glob matches, in path order
+def hold_matches($files; $holds):
+  [ ($files | unique)[] as $p | $holds[] as $h | select($p | test($h.glob | glob_re))
+    | { path: $p, glob: $h.glob, reason: $h.reason } ];
+
+# The PR-ready comment's Merge line for the matches: the first one named, the rest counted
+def merge_line($m):
+  if ($m | length) == 0 then "Merge: merging on its own: no hold path"
+  else "Merge: held: \($m[0].path) matches \($m[0].glob)"
+       + (if $m[0].reason != "" then " (\($m[0].reason))" else "" end)
+       + (if ($m | length) > 1 then ", +\(($m | length) - 1) more" else "" end)
+  end;
+
+# The session's Merge line from raw lines: hold-paths.txt, then the review diff (review-diff.sh).
+# Lines before the first `diff --git` are the hold list; after it only the headers count, both
+# sides of a rename. A diff with no file in it holds.
+#   jq -nrR -L <wt>/tools/cdwr/agent-queue 'include "watch"; hold_check_lines([inputs])' <hold list> <diff>
+def hold_check_lines($lines):
+  ([ range(0; $lines | length) | select($lines[.] | startswith("diff --git ")) ] | first) as $i
+  | if $i == null then "Merge: held: no changed file in the diff"
+    else
+      ($lines[:$i] | join("\n") | hold_globs) as $holds
+      | [ $lines[$i:][] | capture("^diff --git a/(?<a>.*) b/(?<b>.*)$") | .a, .b ] as $files
+      | merge_line(hold_matches($files; $holds))
+    end;
+
+# True when the report says `**Ask me before merging**` on a line of its own
+def asks_before_merging:
+  any(report[]; trim | test("^\\*\\*ask me before merging\\b"; "i"));
+
+# True for a line of the comment's body that starts with $prefix, bold or not
+def body_line($prefix):
+  (.body // "") | split("\n") | any(.[]; trim | gsub("^\\*\\*"; "") | ascii_downcase | startswith($prefix));
+
+# The watch's own verdict on merging a PR by itself, from the pullRequest node it just read, the
+# ticket and the parsed hold list: { verdict, claimed, transient }. verdict is `ok <node id> <head
+# oid>` or why not. claimed is true when the PR-ready comment says it merges on its own: that is
+# the session's consent, never authority, so every rule is checked again here. transient is true
+# for a reason that settles by itself or has a notice of its own (pending checks, a conflict).
+# Once Håkan comments after the PR-ready comment the merge is his, even after review addressed.
+def merge_verdict($node; $holds):
+  desk_verdict("merge") as $d
+  | ($node | pr_ready_comment) as $c
+  | ([ (.files.nodes // [])[] | .path | select(type == "string") ]) as $files
+  | (($c != null) and ($c | body_line("merge: merging on its own"))) as $claimed
+  | (if ($d | startswith("ok ") | not) then $d
+     elif ($node | agent_label) != "agent:review" then "the ticket is not agent:review"
+     elif $c == null then "no PR-ready comment"
+     elif ($c | body_line("code review:") | not) then "the PR-ready comment has no Code review line"
+     elif ($claimed | not) then "the PR-ready comment does not say it merges on its own"
+     elif any(($node.comments.nodes // [])[]; (is_agent | not) and (.createdAt | epoch) > ($c.createdAt | epoch))
+       then "Håkan commented after the PR-ready comment"
+     elif ($node | asks_before_merging) then "the report says Ask me before merging"
+     elif .files == null then "the PR's files were not read"
+     elif .files.pageInfo.hasNextPage == true then "too many changed files to check them all"
+     elif ($files | length) == 0 then "no changed files read"
+     else (hold_matches($files; $holds) as $m
+           | if ($m | length) > 0 then merge_line($m) | sub("^Merge: held: "; "") else $d end)
+     end) as $v
+  | { verdict: $v, claimed: $claimed,
+      transient: (($v | startswith("ok ") | not)
+                  and ($v | test("^(PR is |checks |GitHub has not checked|already in the merge queue|conflicts with main)"))) };
+
+# The settled outcome of the production deploy after a self-merge, from the Fly Deployment push
+# runs for the merge commit and the annotations of that run's jobs: success, failure, skipped (the
+# deploy guard's "is older than" warning, COD-845), else pending, or unknown 3 hours after the merge
+def deploy_state($runs; $notes; $mergedAt; $now):
+  ([ ($runs.workflow_runs // [])[] ] | sort_by(.created_at // "") | last) as $r
+  | if $r == null or $r.status != "completed" then
+      (if $mergedAt != null and ($now - ($mergedAt | epoch)) > 10800 then "unknown" else "pending" end)
+    elif ($r.conclusion // "") | IN("failure", "cancelled", "timed_out", "startup_failure") then "failure"
+    elif any(($notes // [])[]; (.annotation_level // "") == "warning" and ((.message // "") | test("is older than")))
+      then "skipped"
+    elif $r.conclusion == "success" then "success"
+    else "unknown" end;
+
+def deploy_settled: IN("success", "failure", "skipped", "unknown");
+
+# True while a ticket that merged on its own keeps agent:review for its deploy, so it stays
+# watched: up to 3 hours while the deploy is not read, and until Håkan clears the label once it
+# failed, was skipped or never settled (the self-merge-deploy gap)
+def deploy_hold($now; $watch):
+  (($watch // {})[.identifier] // {}) as $w
+  | ($w.deploy.state // "pending") as $s
+  | $w.autoMerge != null and $w.state == "merged"
+    and (($s | IN("failure", "skipped", "unknown"))
+         or ($s == "pending" and ($w.mergedAt == null or ($now - ($w.mergedAt | epoch)) <= 10800)));
+
+# The merge-queue pick: a PR the watch enqueued once left the queue without a conflict, on the
+# head it left with; a new head (the fix) clears it
+def merge_queue_failed($watch):
+  (($watch // {})[.identifier] // {}) as $w
+  | agent_label == "agent:review" and is_open
+    and $w.autoMerge.removed != null and ($w.autoMerge.tries // 0) == 1 and $w.autoMerge.held == null
+    and $w.conflicting != true and (($w.state // "open") | IN("merged", "closed") | not)
+    and $w.autoMerge.removed.oid != null and $w.autoMerge.removed.oid == $w.oid;
+
 # True for a merged ticket with a comment the agent hasn't answered: Done, the agent's work (a
 # PR-ready comment or agent:review), and the newest comment not the agent's and newer than the
 # merge, so a "merging" note or a gate answer before it is no pick. A first comment, a yes and a
@@ -854,6 +1007,14 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
      | sort_by(queue_order)
      | map({ ticket: .identifier, reason: "conflicts with main",
              detail: ($watch[.identifier].pr | if . == null then null else "PR #\(.)" end) })) as $conf
+  # A PR the watch merged by itself that the merge queue refused without a conflict: a session
+  # fixes it on a new head, and the watch enqueues it the second and last time
+  | ($conf | map(.ticket)) as $confIds
+  | ([ $all[] | select(merge_queue_failed($watch)
+                       and (.identifier | IN($parkIds[] , $fbIds[], $confIds[]) | not)) ]
+     | sort_by(queue_order)
+     | map({ ticket: .identifier, reason: "merge queue failed",
+             detail: $watch[.identifier].autoMerge.removed.reason })) as $mqf
   # Not open review feedback: the PR merged, so the comment gets a suggestion, never a new commit
   | ([ $all[] | select(merged_comment and (.identifier | IN($parkIds[]) | not)) ]
      | sort_by(queue_order)
@@ -886,7 +1047,7 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
       limit: { used: $lu.used, max: $limit },
       session: $session,
       holders: $holders,
-      next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb + $conf + $mc + $mck
+      next: ($resolved + $fresh + $unclaimed + $stale + $ans + $fb + $conf + $mqf + $mc + $mck
              + (if $full then []
                 else ($pa | map({ ticket: ., reason: "plan approved", detail: null })) + $renNext
                      + ($rdy | map({ ticket: ., reason: "ready", detail: null })) end)),
@@ -900,6 +1061,8 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
       },
       blocked: $blocked,
       refused: $refused,
+      # Self-merged tickets that keep agent:review for their deploy: clean-up leaves the label
+      deployHold: [ $all[] | select(deploy_hold($now; $watch)) | .identifier ],
       parked: ($park | map({ ticket: .identifier, wait: .park.wait, pr: .park.pr,
                              since: (.park.since | todateiso8601),
                              resolved: .ws.resolved, outcome: .ws.outcome }
@@ -1086,7 +1249,7 @@ def ticket_gaps($now; $watch):
        (if ($labels | any(.[]; IN("agent:ready", "agent:working", "agent:needs-input")))
         then "is Done but still \($lab)"
         elif $lab == "agent:review" and any((.comments.nodes // [])[]; agent_kind("**Agent: PR ready**"))
-             and (handoffs | length) == 0
+             and (handoffs | length) == 0 and (deploy_hold($now; $watch) | not)
         then "is Done with agent:review and no hand-offs left"
         else null end)
      elif $type == "canceled" and ($labels | length) > 0 then "is Canceled but still \($labels | join(", "))"
@@ -1104,6 +1267,12 @@ def ticket_gaps($now; $watch):
       if $w.state == "merged" and $open and .updatedAt != null and ($now - (.updatedAt | epoch)) > 3600
       then gap($t; "merged-not-done"; "\($t) is still open though its PR merged";
                "Set \($t) Done (the PR body lacked Closes)") else empty end,
+      if $w.autoMerge != null and $w.state == "merged" and (($w.deploy.state // "") | IN("failure", "skipped", "unknown"))
+      then gap($t; "self-merge-deploy";
+               "\($t) merged on its own and its production deploy \({ failure: "failed", skipped: "was skipped by the deploy guard", unknown: "never settled" }[$w.deploy.state])";
+               "Check the Fly Deployment run" + (if ($w.deploy.run // null) != null then " (\($w.deploy.run))" else "" end)
+               + " for \($w.mergeCommit | if . == null then "the merge commit" else .[0:7] end), redeploy or revert, then clear agent:review from \($t)")
+      else empty end,
       if $w.state == "closed" and $lab == "agent:review" and $open
       then gap($t; "closed-pr"; "\($t) is agent:review but its PR was closed without merging";
                "Reopen the PR, or relabel \($t)") else empty end,

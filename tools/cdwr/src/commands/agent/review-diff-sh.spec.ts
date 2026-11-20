@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -16,6 +17,17 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_PATH = fileURLToPath(
   new URL('../../../agent-queue/review-diff.sh', import.meta.url)
 );
+
+const WATCH_JQ_PATH = fileURLToPath(
+  new URL('../../../agent-queue/watch.jq', import.meta.url)
+);
+
+const HOLD_PATHS_PATH = fileURLToPath(
+  new URL('../../../agent-queue/hold-paths.txt', import.meta.url)
+);
+
+// The first line of the script's output: the path of the diff it wrote
+const firstLine = (stdout: string) => stdout.trim().split('\n')[0];
 
 const SETTINGS_PATH = fileURLToPath(
   new URL('../../../../../.claude/settings.json', import.meta.url)
@@ -85,7 +97,7 @@ describe.skipIf(!hasZsh)('review-diff.sh', () => {
     const result = run(wt);
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
-    const out = result.stdout.trim();
+    const out = firstLine(result.stdout);
     expect(out).toBe(join(wt, '.git', 'review.diff'));
     const diff = readFileSync(out, 'utf8');
     // The net change, never the committed intermediate state as its own hunk
@@ -106,10 +118,10 @@ describe.skipIf(!hasZsh)('review-diff.sh', () => {
     writeFileSync(join(linked, 'a.txt'), 'linked\n');
     const result = run(linked);
     expect(result.status).toBe(0);
-    expect(result.stdout.trim()).toBe(
+    expect(firstLine(result.stdout)).toBe(
       join(main, '.git', 'worktrees', 'codeware-cod-706', 'review.diff')
     );
-    expect(readFileSync(result.stdout.trim(), 'utf8')).toContain('+linked');
+    expect(readFileSync(firstLine(result.stdout), 'utf8')).toContain('+linked');
   });
 
   it('still writes the diff when the fetch fails, and says so', () => {
@@ -118,7 +130,9 @@ describe.skipIf(!hasZsh)('review-diff.sh', () => {
     const result = run(wt);
     expect(result.status).toBe(0);
     expect(result.stderr).toContain('fetch failed');
-    expect(readFileSync(result.stdout.trim(), 'utf8')).toContain('+offline');
+    expect(readFileSync(firstLine(result.stdout), 'utf8')).toContain(
+      '+offline'
+    );
   });
 
   it('resolves a relative worktree path', () => {
@@ -127,7 +141,75 @@ describe.skipIf(!hasZsh)('review-diff.sh', () => {
       encoding: 'utf8'
     });
     expect(result.status).toBe(0);
-    expect(result.stdout.trim()).toBe(join(wt, '.git', 'review.diff'));
+    expect(firstLine(result.stdout)).toBe(join(wt, '.git', 'review.diff'));
+  });
+
+  describe('the Merge line', () => {
+    const mergeLine = (stdout: string) => stdout.trim().split('\n').slice(1);
+
+    it('prints the diff path, then one Merge line', () => {
+      writeFileSync(join(wt, 'a.txt'), 'two\n');
+      const result = run(wt);
+      expect(result.stderr).toBe('');
+      expect(result.stdout.trim().split('\n')).toEqual([
+        join(wt, '.git', 'review.diff'),
+        'Merge: merging on its own: no hold path'
+      ]);
+    });
+
+    it('holds a change under a hold path', () => {
+      mkdirSync(join(wt, 'apps/cms/src/migrations'), { recursive: true });
+      writeFileSync(join(wt, 'apps/cms/src/migrations/x.ts'), 'x\n');
+      writeFileSync(join(wt, 'a.txt'), 'two\n');
+      expect(mergeLine(run(wt).stdout)).toEqual([
+        'Merge: held: apps/cms/src/migrations/x.ts matches apps/cms/src/migrations/** (one-way on tenant data)'
+      ]);
+    });
+
+    it('holds a tracked file that is changed under a hold path', () => {
+      mkdirSync(join(wt, 'libs/shared/util/csp'), { recursive: true });
+      writeFileSync(join(wt, 'libs/shared/util/csp/a.ts'), 'one\n');
+      git(wt, 'add', '.');
+      git(wt, 'commit', '-q', '-m', 'csp');
+      expect(mergeLine(run(wt).stdout)).toEqual([
+        'Merge: held: libs/shared/util/csp/a.ts matches libs/shared/util/csp/** (the cms CSP)'
+      ]);
+    });
+
+    it('holds when the worktree changed nothing', () => {
+      expect(mergeLine(run(wt).stdout)).toEqual([
+        'Merge: held: no changed file in the diff'
+      ]);
+    });
+
+    it('holds when there is no hold list beside the script', () => {
+      const bare = join(dir, 'bare');
+      mkdirSync(bare);
+      copyFileSync(SCRIPT_PATH, join(bare, 'review-diff.sh'));
+      copyFileSync(WATCH_JQ_PATH, join(bare, 'watch.jq'));
+      writeFileSync(join(wt, 'a.txt'), 'two\n');
+      const result = spawnSync('zsh', [join(bare, 'review-diff.sh'), wt], {
+        encoding: 'utf8'
+      });
+      expect(result.status).toBe(0);
+      expect(mergeLine(result.stdout)).toEqual([
+        'Merge: held: no hold list beside review-diff.sh'
+      ]);
+    });
+
+    it('holds when watch.jq is missing beside the script', () => {
+      const bare = join(dir, 'bare');
+      mkdirSync(bare);
+      copyFileSync(SCRIPT_PATH, join(bare, 'review-diff.sh'));
+      copyFileSync(HOLD_PATHS_PATH, join(bare, 'hold-paths.txt'));
+      writeFileSync(join(wt, 'a.txt'), 'two\n');
+      const result = spawnSync('zsh', [join(bare, 'review-diff.sh'), wt], {
+        encoding: 'utf8'
+      });
+      expect(mergeLine(result.stdout)).toEqual([
+        'Merge: held: no hold list beside review-diff.sh'
+      ]);
+    });
   });
 
   it('refuses a path that is not a ticket worktree', () => {
