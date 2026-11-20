@@ -87,7 +87,9 @@ describe('agent platform-record', () => {
     collect.readSwitches.mockReset().mockResolvedValue(ok([]));
     collect.readSentry
       .mockReset()
-      .mockResolvedValue(ok({ org: 'cdwr', day: {}, week: {}, tops: {} }));
+      .mockResolvedValue(
+        ok({ org: 'cdwr', day: {}, week: {}, open: {}, tops: {} })
+      );
     collect.readVisitors.mockReset().mockResolvedValue({});
     collect.readDeploy.mockReset().mockResolvedValue(deployed);
     collect.readReleases

@@ -232,7 +232,7 @@ async function sentryGet<T>(
   return parsed.data;
 }
 
-/** Errors per tenant tag (untagged events on the shared key) over 24 hours and 7 days, and the top unresolved issue of every tenant with errors today */
+/** Errors per tenant tag (untagged events on the shared key) over 24 hours and 7 days, the open (unresolved) ones of the 24 hours, and the top unresolved issue of every tenant with open errors */
 export async function readSentry(
   env: NodeJS.ProcessEnv
 ): Promise<Reading<SentryRead>> {
@@ -240,7 +240,7 @@ export async function readSentry(
   if (!token || !org) return failed('not configured');
   try {
     const events = `/organizations/${encodeURIComponent(org)}/events/`;
-    const grouped = (statsPeriod: string) =>
+    const grouped = (statsPeriod: string, query?: string) =>
       sentryGet(
         token,
         events,
@@ -249,11 +249,16 @@ export async function readSentry(
           ['field', 'count()'],
           ['dataset', 'errors'],
           ['statsPeriod', statsPeriod],
-          ['per_page', '100']
+          ['per_page', '100'],
+          ...(query ? [['query', query] satisfies [string, string]] : [])
         ],
         GroupedSchema
       );
-    const [day, week] = await Promise.all([grouped('24h'), grouped('7d')]);
+    const [day, week, open] = await Promise.all([
+      grouped('24h'),
+      grouped('7d'),
+      grouped('24h', 'is:unresolved')
+    ]);
     // Untagged rows come as '' or null, and both fold onto the shared key
     const counts = (g: z.infer<typeof GroupedSchema>) =>
       g.data.reduce<Record<string, number>>((acc, r) => {
@@ -262,10 +267,11 @@ export async function readSentry(
         return acc;
       }, {});
     const dayCounts = counts(day);
+    const openCounts = counts(open);
 
     const tops: SentryRead['tops'] = Object.fromEntries(
       await Promise.all(
-        Object.entries(dayCounts)
+        Object.entries(openCounts)
           .filter(([, count]) => count > 0)
           .map(async ([slug]): Promise<[string, Reading<SentryTop | null>]> => {
             try {
@@ -304,7 +310,13 @@ export async function readSentry(
           })
       )
     );
-    return ok({ org, day: dayCounts, week: counts(week), tops });
+    return ok({
+      org,
+      day: dayCounts,
+      week: counts(week),
+      open: openCounts,
+      tops
+    });
   } catch (error) {
     return failed(error);
   }

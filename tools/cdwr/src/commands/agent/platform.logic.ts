@@ -308,11 +308,12 @@ export type SentryTop = {
   title: string;
 };
 
-/** Errors per tenant slug over 24 hours and 7 days, and the top unresolved issue of each tenant with errors today */
+/** Errors per tenant slug over 24 hours and 7 days, the open (unresolved) ones of the 24 hours, and the top unresolved issue of each tenant with open errors */
 export type SentryRead = {
   org: string;
   day: Record<string, number>;
   week: Record<string, number>;
+  open: Record<string, number>;
   tops: Record<string, Reading<SentryTop | null>>;
 };
 
@@ -332,6 +333,7 @@ export const sentrySignal = (read: SentryRead, slug: string) => {
   return {
     org: plainText(read.org, 80),
     count24h: read.day[slug] ?? 0,
+    open24h: read.open[slug] ?? 0,
     count7d: read.week[slug] ?? 0,
     top: top?.ok && top.value ? sentryTop(top.value) : null
   };
