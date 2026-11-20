@@ -640,7 +640,7 @@ export const deployCheck = (
     return {
       ...base,
       ok: false,
-      note: `${d.tag} failed its check with nothing to roll back to${d.reason ? `: ${d.reason}` : ''}`
+      note: `${d.tag} failed its check and was not rolled back${d.reason ? `: ${d.reason}` : ''}`
     };
   return {
     ...base,
