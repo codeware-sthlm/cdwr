@@ -1053,11 +1053,45 @@ describe('parseReviewRow', () => {
       findings: row.findings,
       stale: row.stale,
       suggestions: row.suggestions,
+      own: null,
       id: 3,
       host: 'nuc',
       at: '2026-11-08T10:00:00Z',
       cost: 0.42,
       model: 'sonnet'
+    });
+  });
+
+  describe('own', () => {
+    const own = {
+      since: '2026-11-07T10:00:00Z',
+      until: '2026-11-08T10:00:00Z',
+      items: [
+        {
+          at: '2026-11-07T12:00:00Z',
+          kind: 'merge',
+          ticket: 'COD-1',
+          pr: 7,
+          title: 'A PR',
+          target: null,
+          result: 'merged',
+          reason: null
+        }
+      ]
+    };
+
+    it('reads the queue own actions', () => {
+      expect(parseReviewRow({ ...row, own })?.own).toEqual(own);
+    });
+
+    it.each([
+      ['null', null],
+      ['undefined', undefined],
+      ['a value that does not parse', { since: 'x', items: 'no' }]
+    ])('reads %s as none and keeps the review', (_name, value) => {
+      const parsed = parseReviewRow({ ...row, own: value });
+      expect(parsed?.own).toBeNull();
+      expect(parsed?.brief).toBe(row.brief);
     });
   });
 

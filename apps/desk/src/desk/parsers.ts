@@ -1,4 +1,7 @@
-import { reviewSchema } from '@codeware/shared/util/agent-review';
+import {
+  reviewOwnSchema,
+  reviewSchema
+} from '@codeware/shared/util/agent-review';
 import { z } from 'zod';
 
 import type {
@@ -29,11 +32,13 @@ type ReviewRowLike = {
   findings: unknown;
   stale: unknown;
   suggestions: unknown;
+  /** Absent before the migration, null when the review did not read the queue's own actions */
+  own?: unknown;
   cost: number | null;
   model: string | null;
 };
 
-/** A `reviews` row with its jsonb parsed by the review schema; null when it does not parse */
+/** A `reviews` row with its jsonb parsed by the review schema; null when it does not parse. A bad `own` only drops `own` */
 export const parseReviewRow = (row: ReviewRowLike): ReviewRecord | null => {
   const parsed = reviewSchema.safeParse({
     brief: row.brief,
@@ -42,9 +47,11 @@ export const parseReviewRow = (row: ReviewRowLike): ReviewRecord | null => {
     stale: row.stale,
     suggestions: row.suggestions
   });
+  const own = reviewOwnSchema.safeParse(row.own);
   return parsed.success
     ? {
         ...parsed.data,
+        own: own.success ? own.data : null,
         id: row.id,
         host: row.host,
         at: row.at,
