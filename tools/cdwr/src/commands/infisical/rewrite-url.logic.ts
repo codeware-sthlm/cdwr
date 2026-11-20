@@ -23,7 +23,7 @@ export interface RewriteData {
   key: string;
   state: RewriteState;
   shape: RewriteShape;
-  /** Digest of the url read at plan time */
+  /** Token for the value the plan read, kept in this process */
   read: string;
 }
 
@@ -73,6 +73,11 @@ export function rewrite(
     throw notUrl;
   }
   if (original.password === '') throw notUrl;
+  if (current.includes('${')) {
+    throw new UsageError(
+      `${key} at ${folder} holds a secret reference; refused`
+    );
+  }
   const secrets = [current, original.password, safeDecode(original.password)];
   // The result is `href`, so a stored value must already be in that form
   if (original.href !== current) {

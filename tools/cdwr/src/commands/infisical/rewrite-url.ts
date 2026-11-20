@@ -13,7 +13,7 @@ import {
   rewriteOutcome,
   shapeLines
 } from './rewrite-url.logic';
-import { digest, guard, refuse, refuseChanged } from './secret-values.logic';
+import { guard, refuse, refuseChanged, remember } from './secret-values.logic';
 
 export default defineCommand({
   summary:
@@ -85,7 +85,7 @@ export default defineCommand({
         key,
         state: result.state,
         shape: result.shape,
-        read: digest(current)
+        read: remember(current)
       };
       if (result.state === 'same') {
         return {

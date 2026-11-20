@@ -1,4 +1,4 @@
-import { UsageError } from '../../cli/errors';
+import { UsageError, messageOf } from '../../cli/errors';
 import type { Deployed } from '../../services/environment';
 
 export type CopyState = 'absent' | 'same' | 'different';
@@ -9,7 +9,7 @@ export interface CopyData {
   from: string;
   to: string;
   state: CopyState;
-  /** Digest of the source read at plan time */
+  /** Token for the value the plan read, kept in this process */
   read: string;
 }
 
@@ -23,6 +23,11 @@ export function copyState(
 ): CopyState {
   if (source === undefined)
     throw new UsageError(`${from} not found at ${folder}`);
+  if (source.includes('${')) {
+    throw new UsageError(
+      `${from} at ${folder} holds a secret reference; copy it in Infisical instead`
+    );
+  }
   if (source === '') {
     throw new UsageError(`${from} at ${folder} is empty; nothing to copy`);
   }
@@ -37,3 +42,7 @@ export function copyState(
 
 export const copyOutcome = (data: CopyData): string =>
   `${data.to} at ${data.folder} (${data.environment}) copied from ${data.from}`;
+
+/** Whether Infisical refused a create because the key exists */
+export const isAlreadyExists = (error: unknown): boolean =>
+  /already exist|\[StatusCode=409\]/i.test(messageOf(error));

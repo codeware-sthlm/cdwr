@@ -2,7 +2,6 @@ import { EXIT } from '../../cli/errors';
 import * as infisical from '../../services/infisical';
 
 import { runSecretCommand } from './secret-commands.testing';
-import { digest } from './secret-values.logic';
 import command from './set-config';
 
 vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
@@ -41,7 +40,7 @@ describe('infisical set-config', () => {
       key: 'DATABASE_POOL_MAX',
       state: 'absent',
       value: '4',
-      read: ''
+      read: expect.any(String)
     });
     expect(infisical.setInfisicalSecret).not.toHaveBeenCalled();
   });
@@ -123,12 +122,13 @@ describe('infisical set-config', () => {
     expect(infisical.setInfisicalSecret).not.toHaveBeenCalled();
   });
 
-  it('holds a digest of the current value, not the value', async () => {
+  it('holds a token for the current value, not the value', async () => {
     vi.mocked(infisical.readOwnSecrets).mockResolvedValue({
       DATABASE_POOL_MAX: OLD
     });
     const { lines, out } = await run('4', '--dry-run', '--json');
-    expect(JSON.parse(lines[0] ?? '{}').plan.json.read).toBe(digest(OLD));
+    const { read } = JSON.parse(lines[0] ?? '{}').plan.json;
+    expect(read).not.toContain(OLD);
     expect(out).not.toContain(OLD);
   });
 

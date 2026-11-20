@@ -3,7 +3,6 @@ import * as infisical from '../../services/infisical';
 
 import command from './copy-secret';
 import { runSecretCommand } from './secret-commands.testing';
-import { digest } from './secret-values.logic';
 
 vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 vi.mock('../../services/infisical', () => ({
@@ -50,7 +49,7 @@ describe('infisical copy-secret', () => {
       from: 'DATABASE_URL',
       to: 'DIRECT_DATABASE_URL',
       state: 'absent',
-      read: digest(SOURCE)
+      read: expect.any(String)
     });
     expect(leaks(out)).toEqual([]);
   });
@@ -63,7 +62,8 @@ describe('infisical copy-secret', () => {
       environment: 'production',
       path: '/apps/cms',
       key: 'DIRECT_DATABASE_URL',
-      value: SOURCE
+      value: SOURCE,
+      createOnly: true
     });
     expect(JSON.parse(lines[0] ?? '{}').result.outcome).toBe(
       'DIRECT_DATABASE_URL at /apps/cms (production) copied from DATABASE_URL'

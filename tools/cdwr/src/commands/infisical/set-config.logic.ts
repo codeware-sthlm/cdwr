@@ -8,7 +8,7 @@ export interface SetData {
   key: string;
   state: SetState;
   value: string;
-  /** Digest of the value read at plan time; empty when there was none */
+  /** Token for the value the plan read, kept in this process */
   read: string;
 }
 
