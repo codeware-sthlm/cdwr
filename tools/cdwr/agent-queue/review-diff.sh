@@ -5,7 +5,10 @@
 # `git diff origin/main...HEAD` and `git diff <path>` denied in practice (the implement-run
 # memory), whatever the `Bash(git *)` rule says, and may not pipe git into a file, so
 # settings.json and implement.sh allow this script instead.
-#   review-diff.sh <worktree>    prints the path of the diff it wrote
+# It also prints the PR-ready comment's Merge line (watch.jq `hold_check_lines`): the diff's
+# files against hold-paths.txt beside this script, which an implement run calls from the checkout
+# on main, the list the watch reads too. The session can't run that jq call itself.
+#   review-diff.sh <worktree>    prints the path of the diff it wrote, then the Merge line
 set -euo pipefail
 setopt extended_glob
 
@@ -35,3 +38,10 @@ trap 'rm -f "$out.$$"' EXIT
 } > "$out.$$"
 mv -f "$out.$$" "$out"
 print -r -- "$out"
+here="${0:A:h}"
+if [[ -r "$here/hold-paths.txt" && -r "$here/watch.jq" ]]; then
+  jq -nrR -L "$here" 'include "watch"; hold_check_lines([inputs])' "$here/hold-paths.txt" "$out" ||
+    print -r -- "Merge: held: the hold list could not be read"
+else
+  print -r -- "Merge: held: no hold list beside review-diff.sh"
+fi

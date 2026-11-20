@@ -1063,6 +1063,9 @@ describe('pr_state', () => {
       draft: false,
       mergeable: null,
       mergeStateStatus: null,
+      oid: null,
+      mergedAt: null,
+      mergeCommit: null,
       ci: null,
       mergeCommit: null,
       copilot: 'none'
@@ -1090,6 +1093,9 @@ describe('pr_state', () => {
       draft: false,
       mergeable: null,
       mergeStateStatus: null,
+      oid: null,
+      mergedAt: null,
+      mergeCommit: null,
       ci: null,
       mergeCommit: null,
       copilot: 'none'
@@ -1803,6 +1809,9 @@ describe('step', () => {
         copilot: 'none',
         threads: 0,
         mergeStateStatus: null,
+        oid: null,
+        mergedAt: null,
+        mergeCommit: null,
         at: '2026-05-01T00:00:00Z'
       });
     });
@@ -1837,6 +1846,9 @@ describe('step', () => {
         copilot: 'none',
         threads: 0,
         mergeStateStatus: null,
+        oid: null,
+        mergedAt: null,
+        mergeCommit: null,
         at: '2026-05-01T00:00:00Z'
       });
     });
@@ -7594,6 +7606,1047 @@ describe('audit and tree', () => {
 
     it('gives the same queue view with or without them', () => {
       expect(pick([...live, ...canceled])).toEqual(pick(live));
+    });
+  });
+});
+
+describe('hold list', () => {
+  const HOLD_TEXT = readFileSync(`${DIR}/hold-paths.txt`, 'utf8');
+  type Hold = { glob: string; reason: string };
+  const holds = run('hold_globs', HOLD_TEXT) as Hold[];
+  // Paths of the files in `files` that `globs` hold, through hold_matches
+  const matches = (files: string[], globs: Hold[]) =>
+    run(
+      `hold_matches(${JSON.stringify(files)}; ${JSON.stringify(globs)})`
+    ) as Array<{ path: string; glob: string; reason: string }>;
+  const held = (path: string, glob: string) =>
+    matches([path], [{ glob, reason: '' }]).length === 1;
+
+  describe('hold_globs', () => {
+    it('parses the real hold-paths.txt into 13 globs with reasons', () => {
+      expect(holds).toHaveLength(13);
+      expect(holds[0]).toEqual({
+        glob: 'apps/cms/src/migrations/**',
+        reason: 'one-way on tenant data'
+      });
+      expect(holds.at(-1)).toEqual({
+        glob: 'tools/cdwr/agent-queue/hold-paths.txt',
+        reason: 'this list'
+      });
+      expect(holds.every((h) => h.reason !== '')).toBe(true);
+    });
+
+    it('skips comments and blank lines, and takes a glob without a reason', () => {
+      expect(
+        run('hold_globs', '# c\n\n  a/**  # why  \n   # indented\nb.txt\n')
+      ).toEqual([
+        { glob: 'a/**', reason: 'why' },
+        { glob: 'b.txt', reason: '' }
+      ]);
+    });
+  });
+
+  describe('hold_matches', () => {
+    it.each(holds.map((h) => [h.glob]))('%s holds a path under it', (glob) => {
+      const sample = glob.endsWith('/**') ? `${glob.slice(0, -2)}a/b.ts` : glob;
+      expect(held(sample, glob)).toBe(true);
+    });
+
+    it.each([
+      'apps/cms/src/migrations.ts',
+      'libs/shared/util/csp-extra/x.ts',
+      'tools/cdwr/agent-queue/implement.sh.bak'
+    ])('%s is held by none of the real globs', (path) => {
+      expect(matches([path], holds)).toEqual([]);
+    });
+
+    it('carries the glob and reason of the match, in path order', () => {
+      expect(
+        matches(
+          ['libs/shared/util/csp/x.ts', 'apps/cms/src/migrations/y.ts'],
+          holds
+        )
+      ).toEqual([
+        {
+          path: 'apps/cms/src/migrations/y.ts',
+          glob: 'apps/cms/src/migrations/**',
+          reason: 'one-way on tenant data'
+        },
+        {
+          path: 'libs/shared/util/csp/x.ts',
+          glob: 'libs/shared/util/csp/**',
+          reason: 'the cms CSP'
+        }
+      ]);
+    });
+
+    it('`*` does not cross a slash', () => {
+      expect(held('a/b.ts', 'a/*.ts')).toBe(true);
+      expect(held('a/b/c.ts', 'a/*.ts')).toBe(false);
+    });
+
+    it('`?` is one character but a slash', () => {
+      expect(held('a/b1.ts', 'a/b?.ts')).toBe(true);
+      expect(held('a/b.ts', 'a/b?.ts')).toBe(false);
+      expect(held('a/b12.ts', 'a/b?.ts')).toBe(false);
+      expect(held('a//.ts', 'a/?.ts')).toBe(false);
+    });
+
+    it('regex characters are literal', () => {
+      expect(held('a.b', 'a.b')).toBe(true);
+      expect(held('axb', 'a.b')).toBe(false);
+      expect(held('a+b', 'a+b')).toBe(true);
+      expect(held('aab', 'a+b')).toBe(false);
+      expect(held('f(1).ts', 'f(1).ts')).toBe(true);
+      expect(held('f1.ts', 'f(1).ts')).toBe(false);
+      expect(held('a[1]', 'a[1]')).toBe(true);
+      expect(held('a1', 'a[1]')).toBe(false);
+    });
+
+    it('`**/` is any run of directories, none included', () => {
+      expect(held('x.ts', '**/x.ts')).toBe(true);
+      expect(held('a/b/x.ts', '**/x.ts')).toBe(true);
+      expect(held('a/bx.ts', '**/x.ts')).toBe(false);
+    });
+
+    it('a glob without a wildcard matches the whole path only', () => {
+      expect(held('tools/x', 'tools/x')).toBe(true);
+      expect(held('tools/x/y', 'tools/x')).toBe(false);
+      expect(held('a/tools/x', 'tools/x')).toBe(false);
+    });
+  });
+
+  describe('hold_check_lines', () => {
+    const holdLines = HOLD_TEXT.split('\n');
+    const header = (a: string, b = a) => [
+      `diff --git a/${a} b/${b}`,
+      'index 1111111..2222222 100644',
+      `--- a/${a}`,
+      `+++ b/${b}`,
+      '@@ -1 +1 @@',
+      '-one',
+      '+two'
+    ];
+    const check = (...diff: string[]) =>
+      run('hold_check_lines(.)', [...holdLines, ...diff]);
+
+    it('merges on its own when no file is on the list', () => {
+      expect(check(...header('tools/cdwr/README.md'))).toBe(
+        'Merge: merging on its own: no hold path'
+      );
+    });
+
+    it('holds a migration, naming the path, glob and reason', () => {
+      expect(check(...header('apps/cms/src/migrations/x.ts'))).toBe(
+        'Merge: held: apps/cms/src/migrations/x.ts matches apps/cms/src/migrations/** (one-way on tenant data)'
+      );
+    });
+
+    it('counts the matches after the first', () => {
+      expect(
+        check(
+          ...header('apps/cms/src/migrations/x.ts'),
+          ...header('libs/shared/util/csp/y.ts')
+        )
+      ).toBe(
+        'Merge: held: apps/cms/src/migrations/x.ts matches apps/cms/src/migrations/** (one-way on tenant data), +1 more'
+      );
+    });
+
+    it('holds a rename whose old side is on the list', () => {
+      expect(
+        check(...header('apps/cms/src/migrations/old.ts', 'tools/cdwr/new.ts'))
+      ).toBe(
+        'Merge: held: apps/cms/src/migrations/old.ts matches apps/cms/src/migrations/** (one-way on tenant data)'
+      );
+    });
+
+    it('holds a rename whose new side is on the list', () => {
+      expect(
+        check(...header('tools/cdwr/old.ts', 'libs/shared/util/csp/new.ts'))
+      ).toBe(
+        'Merge: held: libs/shared/util/csp/new.ts matches libs/shared/util/csp/** (the cms CSP)'
+      );
+    });
+
+    it('holds a diff with no file in it', () => {
+      expect(check()).toBe('Merge: held: no changed file in the diff');
+    });
+
+    it('does not read a content line as a header', () => {
+      expect(
+        check(
+          ...header('tools/cdwr/README.md'),
+          '+diff --git a/apps/cms/src/migrations/x.ts b/apps/cms/src/migrations/x.ts'
+        )
+      ).toBe('Merge: merging on its own: no hold path');
+    });
+
+    it('a hold-list line after the first header is not read as a list', () => {
+      // Only what comes before the first header is the list
+      expect(
+        run('hold_check_lines(.)', [
+          'a/**  # why',
+          'diff --git a/b.ts b/b.ts',
+          'x/**  # other'
+        ])
+      ).toBe('Merge: merging on its own: no hold path');
+    });
+  });
+});
+
+describe('merge_verdict', () => {
+  const NOW_ISO = '2026-10-01T00:00:00Z';
+  const holds = run(
+    'hold_globs',
+    readFileSync(`${DIR}/hold-paths.txt`, 'utf8')
+  ) as unknown[];
+  const READY_BODY = (...lines: string[]) =>
+    [`**Agent: PR ready**: ${PR}/5`, '', ...lines].join('\n');
+  const GOOD_LINES = [
+    'Code review: no findings',
+    'Merge: merging on its own: no hold path'
+  ];
+  const agentComment = (body: string, createdAt = NOW_ISO) => ({
+    body,
+    createdAt,
+    user: { id: APP_ID, app: true }
+  });
+  const ticket = (over: Record<string, unknown> = {}) => ({
+    identifier: 'COD-9',
+    labels: { nodes: [{ name: 'agent:review' }] },
+    description: null as string | null,
+    comments: { nodes: [agentComment(READY_BODY(...GOOD_LINES))] },
+    ...over
+  });
+  const prNode = (over: Record<string, unknown> = {}) => ({
+    id: 'PR_node1',
+    state: 'OPEN',
+    isDraft: false,
+    mergeable: 'MERGEABLE',
+    headRefOid: 'h1',
+    commits: {
+      nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }]
+    },
+    reviewThreads: { pageInfo: { hasNextPage: false }, nodes: [] },
+    files: {
+      pageInfo: { hasNextPage: false },
+      nodes: [{ path: 'tools/cdwr/README.md' }]
+    },
+    ...over
+  });
+  const verdict = (
+    pr: Record<string, unknown> = prNode(),
+    t: Record<string, unknown> = ticket()
+  ) =>
+    run(
+      `merge_verdict(${JSON.stringify(t)}; ${JSON.stringify(holds)})`,
+      pr
+    ) as {
+      verdict: string;
+      claimed: boolean;
+      transient: boolean;
+    };
+  const withComments = (...bodies: string[]) =>
+    ticket({ comments: { nodes: bodies.map((b) => agentComment(b)) } });
+
+  it('is ok for a green open agent:review PR that claims it merges on its own', () => {
+    expect(verdict()).toEqual({
+      verdict: 'ok PR_node1 h1',
+      claimed: true,
+      transient: false
+    });
+  });
+
+  it('holds on a hold path, naming the path and glob', () => {
+    expect(
+      verdict(
+        prNode({
+          files: {
+            pageInfo: { hasNextPage: false },
+            nodes: [
+              { path: 'tools/cdwr/README.md' },
+              { path: 'apps/cms/src/migrations/x.ts' }
+            ]
+          }
+        })
+      )
+    ).toEqual({
+      verdict:
+        'apps/cms/src/migrations/x.ts matches apps/cms/src/migrations/** (one-way on tenant data)',
+      claimed: true,
+      transient: false
+    });
+  });
+
+  it('holds on the Ask me before merging marker above the plan', () => {
+    expect(
+      verdict(
+        prNode(),
+        ticket({
+          description: 'Report\n\n**Ask me before merging**\n\n## Plan\nx'
+        })
+      ).verdict
+    ).toBe('the report says Ask me before merging');
+  });
+
+  it('ignores the marker below the plan heading', () => {
+    expect(
+      verdict(
+        prNode(),
+        ticket({
+          description: 'Report\n\n## Plan\n**Ask me before merging**\n'
+        })
+      ).verdict
+    ).toBe('ok PR_node1 h1');
+  });
+
+  it('holds with an unresolved review thread', () => {
+    expect(
+      verdict(
+        prNode({
+          reviewThreads: {
+            pageInfo: { hasNextPage: false },
+            nodes: [
+              {
+                isResolved: false,
+                comments: {
+                  nodes: [
+                    { body: 'fix', author: { login: 'h', __typename: 'User' } }
+                  ]
+                }
+              }
+            ]
+          }
+        })
+      )
+    ).toEqual({
+      verdict: '1 unresolved thread',
+      claimed: true,
+      transient: false
+    });
+  });
+
+  it('holds without a Code review line', () => {
+    expect(
+      verdict(
+        prNode(),
+        withComments(READY_BODY('Merge: merging on its own: no hold path'))
+      ).verdict
+    ).toBe('the PR-ready comment has no Code review line');
+  });
+
+  it('holds when the comment lacks the Merge line, and is not claimed', () => {
+    expect(
+      verdict(prNode(), withComments(READY_BODY('Code review: no findings')))
+    ).toEqual({
+      verdict: 'the PR-ready comment does not say it merges on its own',
+      claimed: false,
+      transient: false
+    });
+  });
+
+  it('holds when the Merge line says held', () => {
+    expect(
+      verdict(
+        prNode(),
+        withComments(
+          READY_BODY('Code review: no findings', 'Merge: held: x matches y')
+        )
+      ).claimed
+    ).toBe(false);
+  });
+
+  it('holds without a PR-ready comment', () => {
+    expect(verdict(prNode(), ticket({ comments: { nodes: [] } })).verdict).toBe(
+      'no PR-ready comment'
+    );
+  });
+
+  it('holds when a person commented after the PR-ready comment', () => {
+    const t = ticket({
+      comments: {
+        nodes: [
+          agentComment(READY_BODY(...GOOD_LINES)),
+          {
+            body: 'wait',
+            createdAt: '2026-10-02T00:00:00Z',
+            user: { id: PERSON_ID, app: false }
+          }
+        ]
+      }
+    });
+    expect(verdict(prNode(), t).verdict).toBe(
+      'Håkan commented after the PR-ready comment'
+    );
+  });
+
+  it('merges when only the agent commented after the PR-ready comment', () => {
+    const t = ticket({
+      comments: {
+        nodes: [
+          agentComment(READY_BODY(...GOOD_LINES)),
+          agentComment('**Agent: note** later', '2026-10-02T00:00:00Z')
+        ]
+      }
+    });
+    expect(verdict(prNode(), t).verdict).toBe('ok PR_node1 h1');
+  });
+
+  it('holds when the changed files run past the first page', () => {
+    expect(
+      verdict(
+        prNode({
+          files: {
+            pageInfo: { hasNextPage: true },
+            nodes: [{ path: 'tools/cdwr/README.md' }]
+          }
+        })
+      ).verdict
+    ).toBe('too many changed files to check them all');
+  });
+
+  it('holds when the files were not read', () => {
+    const { files: _files, ...rest } = prNode();
+    expect(verdict(rest).verdict).toBe("the PR's files were not read");
+  });
+
+  it('holds with no changed files', () => {
+    expect(
+      verdict(
+        prNode({ files: { pageInfo: { hasNextPage: false }, nodes: [] } })
+      ).verdict
+    ).toBe('no changed files read');
+  });
+
+  it.each(['agent:working', 'agent:ready'])(
+    'holds when the ticket label is %s',
+    (label) => {
+      expect(
+        verdict(prNode(), ticket({ labels: { nodes: [{ name: label }] } }))
+          .verdict
+      ).toBe('the ticket is not agent:review');
+    }
+  );
+
+  it('holds on a PR that is not open', () => {
+    expect(verdict(prNode({ state: 'MERGED' })).verdict).toBe('PR is merged');
+  });
+
+  describe('transient', () => {
+    it('is true for pending checks', () => {
+      expect(
+        verdict(
+          prNode({
+            commits: {
+              nodes: [{ commit: { statusCheckRollup: { state: 'PENDING' } } }]
+            }
+          })
+        )
+      ).toEqual({ verdict: 'checks pending', claimed: true, transient: true });
+    });
+
+    it('is true for a conflict', () => {
+      expect(verdict(prNode({ mergeable: 'CONFLICTING' }))).toEqual({
+        verdict: 'conflicts with main',
+        claimed: true,
+        transient: true
+      });
+    });
+
+    it('is false for a hold path', () => {
+      expect(
+        verdict(
+          prNode({
+            files: {
+              pageInfo: { hasNextPage: false },
+              nodes: [{ path: 'apps/cms/src/migrations/x.ts' }]
+            }
+          })
+        ).transient
+      ).toBe(false);
+    });
+  });
+});
+
+describe('step with merge', () => {
+  const AT = '2026-05-01T00:00:00Z';
+  const OK = { verdict: 'ok PR_node1 h1', claimed: true, transient: false };
+  const HELD = {
+    verdict: 'apps/cms/src/migrations/x.ts matches apps/cms/src/migrations/**',
+    claimed: true,
+    transient: false
+  };
+  type AutoMerge = Record<string, unknown>;
+  type Over = {
+    now?: Record<string, unknown>;
+    prev?: Record<string, unknown> | null;
+    merge?: Record<string, unknown> | null;
+    label?: string;
+  };
+  const step = ({ now = {}, prev = null, merge = OK, label }: Over = {}) =>
+    run('step', {
+      id: 'COD-9',
+      pr: 5,
+      now: {
+        state: 'open',
+        removedAt: null,
+        removedReason: null,
+        oid: 'h1',
+        ...now
+      },
+      prev,
+      handoffs: [],
+      at: AT,
+      merge,
+      agentLabel: label ?? 'agent:review'
+    }) as {
+      notices: Array<{ level: string; message: string }>;
+      enqueue: boolean;
+      autoMergeFailed: AutoMerge | null;
+      entry: Record<string, unknown> & { autoMerge?: AutoMerge };
+    };
+  const prev = (over: Record<string, unknown> = {}) => ({
+    pr: 5,
+    state: 'open',
+    removedAt: null,
+    ...over
+  });
+
+  describe('enqueue', () => {
+    it('enqueues on an ok verdict and counts the first try', () => {
+      const r = step();
+      expect(r.enqueue).toBe(true);
+      expect(r.entry.autoMerge).toEqual({ at: AT, tries: 1, oid: 'h1' });
+      expect(r.autoMergeFailed).toMatchObject({ oid: 'h1', failed: true });
+    });
+
+    it('does not enqueue without a merge verdict', () => {
+      const r = step({ merge: null });
+      expect(r.enqueue).toBe(false);
+      expect(r.entry.autoMerge).toBeUndefined();
+      expect(r.autoMergeFailed).toBeNull();
+    });
+
+    it('does not enqueue outside agent:review', () => {
+      expect(step({ label: 'agent:working' }).enqueue).toBe(false);
+    });
+
+    it('does not enqueue a PR already queued', () => {
+      expect(step({ now: { state: 'queued' } }).enqueue).toBe(false);
+    });
+
+    it('does not enqueue the head it enqueued before', () => {
+      const r = step({
+        prev: prev({ autoMerge: { at: AT, tries: 1, oid: 'h1' } })
+      });
+      expect(r.enqueue).toBe(false);
+      expect(r.entry.autoMerge).toEqual({ at: AT, tries: 1, oid: 'h1' });
+    });
+
+    it('does not enqueue a head whose enqueue failed', () => {
+      expect(
+        step({
+          prev: prev({
+            autoMerge: { at: AT, tries: 1, oid: 'h1', failed: true }
+          })
+        }).enqueue
+      ).toBe(false);
+    });
+
+    it('enqueues a new head a second time, dropping the removal and failure', () => {
+      const r = step({
+        now: { oid: 'h2' },
+        merge: { ...OK, verdict: 'ok PR_node1 h2' },
+        prev: prev({
+          autoMerge: {
+            at: '2026-04-01T00:00:00Z',
+            tries: 1,
+            oid: 'h1',
+            removed: { at: '2026-04-02T00:00:00Z', reason: 'x', oid: 'h1' }
+          }
+        })
+      });
+      expect(r.enqueue).toBe(true);
+      expect(r.entry.autoMerge).toEqual({ at: AT, tries: 2, oid: 'h2' });
+    });
+
+    it('does not enqueue after the second try', () => {
+      expect(
+        step({
+          now: { oid: 'h3' },
+          prev: prev({ autoMerge: { at: AT, tries: 2, oid: 'h2' } })
+        }).enqueue
+      ).toBe(false);
+    });
+
+    it('does not enqueue once the merge is held for Håkan', () => {
+      expect(
+        step({
+          now: { oid: 'h3' },
+          prev: prev({
+            autoMerge: {
+              at: AT,
+              tries: 1,
+              oid: 'h2',
+              held: 'merge queue refused twice'
+            }
+          })
+        }).enqueue
+      ).toBe(false);
+    });
+
+    it('does not enqueue on a refusing verdict', () => {
+      expect(step({ merge: HELD }).enqueue).toBe(false);
+    });
+  });
+
+  describe('removal from the merge queue', () => {
+    const removed = {
+      state: 'open',
+      removedAt: '2026-04-01T00:00:00Z',
+      removedReason: 'CHECKS_FAILED'
+    };
+
+    it('tells once that it retries after the first removal', () => {
+      const r = step({
+        now: removed,
+        merge: null,
+        prev: prev({
+          state: 'queued',
+          autoMerge: { at: AT, tries: 1, oid: 'h1' }
+        })
+      });
+      expect(r.notices).toEqual([
+        {
+          level: 'info',
+          message:
+            'COD-9: PR #5 left the merge queue (checks failed), retrying once'
+        }
+      ]);
+      expect(r.entry.autoMerge).toEqual({
+        at: AT,
+        tries: 1,
+        oid: 'h1',
+        removed: {
+          at: '2026-04-01T00:00:00Z',
+          reason: 'checks failed',
+          oid: 'h1'
+        }
+      });
+    });
+
+    it('hands the merge to Håkan after the second removal', () => {
+      const r = step({
+        now: { ...removed, oid: 'h2' },
+        merge: null,
+        prev: prev({
+          state: 'queued',
+          autoMerge: { at: AT, tries: 2, oid: 'h2' }
+        })
+      });
+      expect(r.notices).toEqual([
+        {
+          level: 'action',
+          message:
+            'COD-9: PR #5 left the merge queue again (checks failed), the merge is yours'
+        }
+      ]);
+      expect(r.entry.autoMerge).toMatchObject({
+        tries: 2,
+        held: 'merge queue refused twice'
+      });
+    });
+
+    it('does not tell the second removal twice', () => {
+      const r = step({
+        now: { ...removed, oid: 'h2' },
+        merge: null,
+        prev: prev({
+          removedAt: '2026-04-01T00:00:00Z',
+          autoMerge: {
+            at: AT,
+            tries: 2,
+            oid: 'h2',
+            held: 'merge queue refused twice'
+          }
+        })
+      });
+      expect(r.notices).toEqual([]);
+    });
+  });
+
+  describe('a refusal that lasts', () => {
+    const heldNotice = {
+      level: 'action',
+      message: `COD-9: PR #5 held: ${HELD.verdict}`
+    };
+
+    it('sends one action notice and stores the head', () => {
+      const r = step({ merge: HELD });
+      expect(r.notices).toEqual([heldNotice]);
+      expect(r.entry['mergeHeld']).toBe('h1');
+    });
+
+    it('is silent on the same head', () => {
+      const r = step({ merge: HELD, prev: prev({ mergeHeld: 'h1' }) });
+      expect(r.notices).toEqual([]);
+      expect(r.entry['mergeHeld']).toBe('h1');
+    });
+
+    it('speaks again on a new head', () => {
+      const r = step({
+        merge: HELD,
+        now: { oid: 'h2' },
+        prev: prev({ mergeHeld: 'h1' })
+      });
+      expect(r.notices).toEqual([heldNotice]);
+      expect(r.entry['mergeHeld']).toBe('h2');
+    });
+
+    it('is silent when the comment never claimed to merge', () => {
+      expect(step({ merge: { ...HELD, claimed: false } }).notices).toEqual([]);
+    });
+
+    it('is silent for a transient refusal', () => {
+      const r = step({
+        merge: { verdict: 'checks pending', claimed: true, transient: true }
+      });
+      expect(r.notices).toEqual([]);
+      expect(r.entry['mergeHeld']).toBeUndefined();
+    });
+
+    it('is silent outside agent:review', () => {
+      expect(step({ merge: HELD, label: 'agent:working' }).notices).toEqual([]);
+    });
+  });
+});
+
+describe('merge queue failed pick', () => {
+  const NOW = Date.parse('2026-10-11T12:00:00Z') / 1000;
+  const node = (id: string, label: string | null, over = {}) => ({
+    identifier: id,
+    priority: 3,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    completedAt: null as string | null,
+    state: { type: 'started' },
+    labels: { nodes: label ? [{ name: label }] : [] },
+    description: null as string | null,
+    comments: { nodes: [] as unknown[] },
+    inverseRelations: { nodes: [] as unknown[] },
+    ...over
+  });
+  const failed = {
+    pr: 8,
+    state: 'open',
+    oid: 'h1',
+    conflicting: false,
+    autoMerge: {
+      tries: 1,
+      oid: 'h1',
+      removed: { oid: 'h1', reason: 'checks failed' }
+    }
+  };
+  const conflict = { pr: 7, state: 'conflicting', conflicting: true };
+  const next = (issues: unknown[], watch: Record<string, unknown>) =>
+    (
+      run(
+        `queue_view(${NOW}; 5; ${JSON.stringify(watch)}; null; {})`,
+        issues
+      ) as {
+        next: Array<{ ticket: string; reason: string; detail: string | null }>;
+      }
+    ).next;
+  const picks = (watch: Record<string, unknown>, label = 'agent:review') =>
+    next([node('COD-7', label)], { 'COD-7': watch }).map((x) => x.reason);
+
+  it('picks a review ticket whose enqueued PR left the queue, with the reason', () => {
+    expect(next([node('COD-7', 'agent:review')], { 'COD-7': failed })).toEqual([
+      { ticket: 'COD-7', reason: 'merge queue failed', detail: 'checks failed' }
+    ]);
+  });
+
+  it('comes after a conflicts with main pick of another ticket', () => {
+    expect(
+      next([node('COD-6', 'agent:review'), node('COD-7', 'agent:review')], {
+        'COD-6': conflict,
+        'COD-7': failed
+      }).map(({ ticket, reason }) => ({ ticket, reason }))
+    ).toEqual([
+      { ticket: 'COD-6', reason: 'conflicts with main' },
+      { ticket: 'COD-7', reason: 'merge queue failed' }
+    ]);
+  });
+
+  it('is cleared by a new head', () => {
+    expect(picks({ ...failed, oid: 'h2' })).toEqual([]);
+  });
+
+  it('is absent while the PR conflicts: that is the conflict pick', () => {
+    expect(
+      picks({ ...failed, conflicting: true, state: 'conflicting' })
+    ).toEqual(['conflicts with main']);
+  });
+
+  it('is absent after the second try', () => {
+    expect(
+      picks({ ...failed, autoMerge: { ...failed.autoMerge, tries: 2 } })
+    ).toEqual([]);
+  });
+
+  it('is absent once held', () => {
+    expect(
+      picks({
+        ...failed,
+        autoMerge: { ...failed.autoMerge, held: 'merge queue refused twice' }
+      })
+    ).toEqual([]);
+  });
+
+  it('is absent without a removal', () => {
+    expect(picks({ ...failed, autoMerge: { tries: 1, oid: 'h1' } })).toEqual(
+      []
+    );
+  });
+
+  it.each(['agent:working', 'agent:ready', 'agent:needs-input'])(
+    'is absent when the label is %s',
+    (label) => {
+      expect(picks(failed, label)).not.toContain('merge queue failed');
+    }
+  );
+
+  it('is absent once the PR merged or closed', () => {
+    expect(picks({ ...failed, state: 'merged' })).toEqual([]);
+    expect(picks({ ...failed, state: 'closed' })).toEqual([]);
+  });
+
+  it('is run now in the attended line', () => {
+    expect(
+      run(
+        `attended(${NOW}; 5; ${JSON.stringify({ 'COD-7': failed })}) | attended_line`,
+        [node('COD-7', 'agent:review')]
+      )
+    ).toBe('run now: COD-7 merge queue failed');
+  });
+});
+
+describe('deploy after a self-merge', () => {
+  const NOW = Date.parse('2026-10-11T12:00:00Z') / 1000;
+  const iso = (secondsAgo: number) =>
+    new Date((NOW - secondsAgo) * 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+  const HOUR = 3600;
+  const DAY = 86400;
+  type RunRow = {
+    status: string;
+    conclusion: string | null;
+    created_at: string;
+  };
+  const completed = (conclusion: string, created_at = iso(HOUR)): RunRow => ({
+    status: 'completed',
+    conclusion,
+    created_at
+  });
+  const state = (runs: RunRow[], notes: unknown[] = [], mergedAt = iso(HOUR)) =>
+    run(
+      `deploy_state(${JSON.stringify({ workflow_runs: runs })}; ${JSON.stringify(notes)}; ${JSON.stringify(mergedAt)}; ${NOW})`
+    );
+  const warning = (message: string) => ({
+    annotation_level: 'warning',
+    message
+  });
+
+  describe('deploy_state', () => {
+    it.each(['failure', 'cancelled', 'timed_out'])(
+      '%s is failure',
+      (conclusion) => {
+        expect(state([completed(conclusion)])).toBe('failure');
+      }
+    );
+
+    it('is skipped for a success carrying the deploy guard warning', () => {
+      expect(
+        state(
+          [completed('success')],
+          [warning('This run is older than the deployed commit, skipped')]
+        )
+      ).toBe('skipped');
+    });
+
+    it('is success without the warning', () => {
+      expect(state([completed('success')])).toBe('success');
+      expect(
+        state([completed('success')], [warning('Node 20 is deprecated')])
+      ).toBe('success');
+      expect(
+        state(
+          [completed('success')],
+          [{ annotation_level: 'notice', message: 'is older than x' }]
+        )
+      ).toBe('success');
+    });
+
+    it('reads the newest run', () => {
+      expect(
+        state([
+          completed('failure', iso(2 * HOUR)),
+          completed('success', iso(HOUR))
+        ])
+      ).toBe('success');
+    });
+
+    it('is pending while a run is in progress within 3 hours', () => {
+      expect(
+        state([
+          { status: 'in_progress', conclusion: null, created_at: iso(HOUR) }
+        ])
+      ).toBe('pending');
+    });
+
+    it('is unknown for a run still in progress after 3 hours', () => {
+      expect(
+        state(
+          [
+            {
+              status: 'in_progress',
+              conclusion: null,
+              created_at: iso(4 * HOUR)
+            }
+          ],
+          [],
+          iso(4 * HOUR)
+        )
+      ).toBe('unknown');
+    });
+
+    it('is pending with no runs within 3 hours, unknown after', () => {
+      expect(state([])).toBe('pending');
+      expect(state([], [], iso(4 * HOUR))).toBe('unknown');
+    });
+  });
+
+  describe('deploy_hold', () => {
+    const hold = (entry: Record<string, unknown> | undefined) =>
+      run(
+        `deploy_hold(${NOW}; ${JSON.stringify(entry === undefined ? {} : { 'COD-1': entry })})`,
+        { identifier: 'COD-1' }
+      );
+    const merged = (over: Record<string, unknown> = {}) => ({
+      pr: 1,
+      state: 'merged',
+      mergedAt: iso(HOUR),
+      autoMerge: { tries: 1, oid: 'h' },
+      ...over
+    });
+
+    it('holds while the deploy is pending within 3 hours', () => {
+      expect(hold(merged())).toBe(true);
+      expect(hold(merged({ deploy: { state: 'pending' } }))).toBe(true);
+    });
+
+    it('stops holding for a deploy still pending after 3 hours', () => {
+      expect(hold(merged({ mergedAt: iso(4 * HOUR) }))).toBe(false);
+    });
+
+    it.each(['failure', 'skipped', 'unknown'])('holds for %s', (s) => {
+      expect(hold(merged({ deploy: { state: s } }))).toBe(true);
+      expect(
+        hold(merged({ mergedAt: iso(9 * HOUR), deploy: { state: s } }))
+      ).toBe(true);
+    });
+
+    it('does not hold for success', () => {
+      expect(hold(merged({ deploy: { state: 'success' } }))).toBe(false);
+    });
+
+    it('does not hold an entry without autoMerge', () => {
+      const { autoMerge: _a, ...rest } = merged({
+        deploy: { state: 'failure' }
+      });
+      expect(hold(rest)).toBe(false);
+    });
+
+    it('does not hold a PR that has not merged, or without an entry', () => {
+      expect(hold(merged({ state: 'open' }))).toBe(false);
+      expect(hold(undefined)).toBe(false);
+    });
+  });
+
+  describe('self-merge-deploy gap', () => {
+    const agentComment = (body: string) => ({
+      body,
+      createdAt: '2026-10-01T00:00:00Z',
+      user: { id: APP_ID, app: true }
+    });
+    const done = {
+      identifier: 'COD-1',
+      title: 'Title COD-1',
+      priority: 3,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: iso(DAY),
+      state: { type: 'completed' },
+      completedAt: iso(DAY),
+      labels: { nodes: [{ name: 'agent:review' }] },
+      description: null as string | null,
+      comments: {
+        nodes: [agentComment(`**Agent: PR ready**: ${PR}/1\n\nDone`)]
+      },
+      inverseRelations: { nodes: [] as unknown[] },
+      parent: null as unknown
+    };
+    const gaps = (entry: Record<string, unknown>) =>
+      run(
+        `audit(${NOW}; ${JSON.stringify({ 'COD-1': { pr: 1, state: 'merged', mergedAt: iso(HOUR), mergeCommit: 'abcdef0123456789', autoMerge: { tries: 1, oid: 'h' }, ...entry } })}; null; [])`,
+        [done]
+      ) as Array<{ id: string; kind: string; what: string; fix: string }>;
+    const kinds = (entry: Record<string, unknown>) =>
+      gaps(entry).map((g) => g.kind);
+
+    it.each([
+      ['failure', 'failed'],
+      ['skipped', 'was skipped by the deploy guard'],
+      ['unknown', 'never settled']
+    ])('flags a %s deploy', (s, words) => {
+      const g = gaps({ deploy: { state: s } });
+      expect(g.map((x) => x.kind)).toEqual(['self-merge-deploy']);
+      expect(g[0].what).toContain(words);
+      expect(g[0].fix).toContain('abcdef0');
+      expect(g[0].fix).toContain('clear agent:review from COD-1');
+    });
+
+    it('names the run when the entry has one', () => {
+      expect(
+        gaps({ deploy: { state: 'failure', run: 'https://x/runs/1' } })[0].fix
+      ).toContain('(https://x/runs/1)');
+    });
+
+    it('is no gap without autoMerge', () => {
+      const e = {
+        pr: 1,
+        state: 'merged',
+        mergedAt: iso(HOUR),
+        deploy: { state: 'failure' }
+      };
+      expect(
+        run(`audit(${NOW}; ${JSON.stringify({ 'COD-1': e })}; null; [])`, [
+          done
+        ])
+      ).toEqual([expect.objectContaining({ kind: 'label-on-closed' })]);
+    });
+
+    it('leaves out the label-on-closed gap while the deploy holds', () => {
+      expect(kinds({})).toEqual([]);
+      expect(kinds({ deploy: { state: 'pending' } })).toEqual([]);
+    });
+
+    it('gives the label-on-closed gap back once the deploy succeeded', () => {
+      expect(kinds({ deploy: { state: 'success' } })).toEqual([
+        'label-on-closed'
+      ]);
+    });
+
+    it('gives the label-on-closed gap back when a pending deploy ran past 3 hours', () => {
+      expect(kinds({ mergedAt: iso(4 * HOUR) })).toEqual(['label-on-closed']);
     });
   });
 });
