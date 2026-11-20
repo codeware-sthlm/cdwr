@@ -69,7 +69,13 @@ import {
   sessionEnded,
   silentAfter
 } from './live';
-import { type ApplyItem, byCreated, openApply, parseWatch } from './parsers';
+import {
+  type ApplyItem,
+  byCreated,
+  openApply,
+  parseDeploy,
+  parseWatch
+} from './parsers';
 import { reconcileView } from './reconcile';
 import type { DeskData, DeskState, Detail } from './state';
 import type {
@@ -1265,6 +1271,10 @@ export const model = (
     staleHours,
     nuc: nucView,
     heartbeats: hostHeartbeats(data.sessions, host?.host ?? null, now),
+    deploys: (runs?.deploys ?? []).flatMap((r) => {
+      const deploy = parseDeploy(r.deploy);
+      return deploy ? [{ host: r.host, deploy }] : [];
+    }),
     events: data.githubEvents,
     activity: prActivity(details),
     storedAt: data.storedAt,

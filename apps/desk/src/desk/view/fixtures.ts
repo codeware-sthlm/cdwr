@@ -117,6 +117,7 @@ export const runs = (qv: QueueView | null): RunsPayload => ({
   host: 'nuc',
   others: [],
   watches: [],
+  deploys: [],
   main: { image: null, desk: null, deskWeb: null },
   rows: [
     {

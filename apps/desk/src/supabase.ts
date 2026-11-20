@@ -99,6 +99,8 @@ export type RunsPayload = {
   others: { host: string; at: string; paused: boolean }[];
   /** The watch.json of every host that wrote a row within QUEUE_WRITER_MIN, as stored; the model parses it */
   watches: { host: string; at: string; watch: unknown }[];
+  /** The deploy.json of every such host, as stored; the model parses it */
+  deploys: { host: string; at: string; deploy: unknown }[];
   main: MainBuilds;
   rows: {
     when: string;
@@ -283,6 +285,9 @@ export const toRuns = (
     watches: queueStates
       .filter((r) => r.watch !== null && publishing(r, now))
       .map((r) => ({ host: r.host, at: r.at, watch: r.watch })),
+    deploys: queueStates
+      .filter((r) => (r.deploy ?? null) !== null && publishing(r, now))
+      .map((r) => ({ host: r.host, at: r.at, deploy: r.deploy })),
     main: toMain(buildRows),
     // Idle adds no row
     rows: runRows

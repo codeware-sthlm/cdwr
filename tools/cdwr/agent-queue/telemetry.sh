@@ -7,11 +7,12 @@
 #   telemetry_on                                             succeeds when both are set
 #   telemetry_run <started_at> <outcome> <ticket> <detail> <attended> <kind> <interval> <limit> <version>
 #                                                            one row in `runs`; empty fields become null
-#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json] [devlog] [review]
+#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json] [devlog] [review] [deploy json]
 #                                                            upserts this host's row in `queue_state`; empty fields become null,
 #                                                            a view that isn't JSON too; a watch and a renovate state, when
 #                                                            given, are each patched on after (empty or invalid: null), then
-#                                                            a devlog line (empty: null), then a review line (same)
+#                                                            a devlog line (empty: null), then a review line (same), then
+#                                                            a deploy state (empty or invalid: null)
 #   telemetry_session <id> <kind> [state] [detail]           upserts the session's heartbeat in `sessions`;
 #                                                            empty fields become null
 #   supabase_delete <table> <query>                          DELETE the rows a PostgREST filter matches
@@ -191,6 +192,10 @@ telemetry_queue_state() {
   (( $# >= 9 )) || return 0
   supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
     "$(jq -nc --arg r "$9" 'def orNull: if . == "" then null else . end; {review: ($r | orNull)}')" >/dev/null || return 0
+  # And the deploy state, in a patch of its own for its own migration; empty or invalid clears it
+  (( $# >= 10 )) || return 0
+  supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
+    "$(jq -nc --rawfile d <(print -rn -- "${10}") '{deploy: ($d | try fromjson catch null)}')" >/dev/null || return 0
 }
 
 # telemetry_session <id> <kind> [state] [detail] [strict]: an empty or missing state or detail is

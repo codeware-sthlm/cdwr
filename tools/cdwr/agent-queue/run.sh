@@ -806,7 +806,7 @@ job_line() {
   elif [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
   if [[ -z "$want" ]]; then print -r -- "$out · $kind unknown"; return 0; fi
-  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh checkin.sh telemetry.sh linear-tools.txt; do
+  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh checkin.sh telemetry.sh deploy-gate.sh linear-tools.txt; do
     theirs="$(git -C "$REPO" show "origin/main:$dir/$f" 2>/dev/null)" ||
       { print -r -- "$out · $kind unknown"; return 0; }
     [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")
@@ -891,7 +891,7 @@ record_queue_state() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local last attended suggested jl view watch renovate devlog review
+  local last attended suggested jl view watch renovate devlog review deploy
   last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
   # attended-published is the cache before attended-line, until a verdict replaces it
   attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
@@ -902,7 +902,8 @@ record_queue_state() {
   renovate="$(cat "$HOME_DIR/renovate.json" 2>/dev/null)"
   devlog="$(cat "$HOME_DIR/devlog-line" 2>/dev/null)"
   review="$(cat "$HOME_DIR/review-line" 2>/dev/null)"
-  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" "$devlog" "$review" ) &!
+  deploy="$(cat "$HOME_DIR/deploy.json" 2>/dev/null)"
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" "$devlog" "$review" "$deploy" ) &!
 }
 
 # A paused tick publishes the last run's Attended line and queue view with a paused job line, so

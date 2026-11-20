@@ -577,6 +577,50 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
       });
     });
 
+    describe('the deploy state', () => {
+      const deploy = '{"tag":"sha-b","phase":"checking","by":"self"}';
+
+      it('patches it in a patch of its own, after the review line', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' '${deploy}'`
+        );
+        expect(hits).toHaveLength(6);
+        const host = (JSON.parse(hits[0]?.body ?? '') as { host: string }).host;
+        expect(hits[5]?.method).toBe('PATCH');
+        expect(hits[5]?.url).toBe(
+          `/rest/v1/queue_state?host=eq.${encodeURIComponent(host)}`
+        );
+        expect(JSON.parse(hits[5]?.body ?? '')).toEqual({
+          deploy: JSON.parse(deploy)
+        });
+      });
+
+      it('patches null when it is empty or not JSON', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' ''`
+        );
+        expect(hits).toHaveLength(6);
+        expect(JSON.parse(hits[5]?.body ?? '')).toEqual({ deploy: null });
+        hits.length = 0;
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' 'nope'`
+        );
+        expect(JSON.parse(hits[5]?.body ?? '')).toEqual({ deploy: null });
+      });
+
+      it('sends no patch for it when absent', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' ''`
+        );
+        expect(hits).toHaveLength(5);
+        expect(hits.every((h) => !h.body.includes('deploy'))).toBe(true);
+      });
+    });
+
     it('sends nothing without the env vars', async () => {
       const out = await zsh({}, `telemetry_queue_state x '' '' '' ''`);
       expect(out.stdout).toBe('rc=0');

@@ -5,6 +5,7 @@ import {
   openApply,
   parseApplyList,
   parseAttended,
+  parseDeploy,
   parseHandoffs,
   parseIdea,
   parseJob,
@@ -1075,6 +1076,57 @@ describe('parseReviewRow', () => {
     ['an empty brief', { brief: '' }]
   ])('reads %s as none', (_name, over) => {
     expect(parseReviewRow({ ...row, ...over })).toBeNull();
+  });
+});
+
+describe('parseDeploy', () => {
+  const full = {
+    tag: 'sha-b',
+    previous: 'sha-a',
+    at: '2026-11-19T10:00:00Z',
+    by: 'self',
+    phase: 'checking',
+    reason: null,
+    failed: null
+  };
+
+  it('keeps the known fields', () => {
+    expect(parseDeploy(full)).toEqual(full);
+  });
+
+  it('reads a rollback with its reason and the failed tag', () => {
+    expect(
+      parseDeploy({
+        ...full,
+        tag: 'sha-a',
+        phase: 'rolled-back',
+        failed: 'sha-b',
+        reason: 'unhealthy'
+      })
+    ).toMatchObject({
+      phase: 'rolled-back',
+      failed: 'sha-b',
+      reason: 'unhealthy'
+    });
+  });
+
+  it('reads a field of the wrong type as missing', () => {
+    expect(parseDeploy({ ...full, by: 'cron', previous: 3 })).toMatchObject({
+      by: null,
+      previous: null
+    });
+  });
+
+  it.each([
+    ['null', null],
+    ['an array', []],
+    ['a string', 'sha-b'],
+    ['no tag', { ...full, tag: undefined }],
+    ['an unknown phase', { ...full, phase: 'rolling' }],
+    ['no time', { ...full, at: undefined }],
+    ['a time that is no date', { ...full, at: 'yesterday' }]
+  ])('reads %s as undefined', (_name, json) => {
+    expect(parseDeploy(json)).toBeUndefined();
   });
 });
 

@@ -39,7 +39,7 @@ import {
   silentAfter
 } from './live';
 import type { Connection } from './state';
-import type { QueueView, SessionState } from './types';
+import type { DeployState, QueueView, SessionState } from './types';
 
 const NOW = new Date('2026-10-29T12:00:00.000Z');
 const MIN = 6e4;
@@ -143,6 +143,7 @@ const runs = (
   host: 'nuc',
   others: [],
   watches: [],
+  deploys: [],
   main: { image: null, desk: null, deskWeb: null },
   rows
 });
@@ -972,6 +973,77 @@ describe('health', () => {
     ]);
   });
 
+  describe('deploy', () => {
+    const deploy = (over: Partial<DeployState> = {}): DeployState => ({
+      tag: 'sha-b',
+      previous: 'sha-a',
+      at: ago(10),
+      by: 'self',
+      phase: 'ok',
+      reason: null,
+      failed: null,
+      ...over
+    });
+    const find = (d: DeployState) =>
+      health({ ...fresh(), deploys: [{ host: 'nuc', deploy: d }] }).find(
+        (c) => c.name === 'nuc deploy'
+      );
+
+    it('lists a host deploy after the heartbeats', () => {
+      const names = health({
+        ...fresh(),
+        deploys: [{ host: 'nuc', deploy: deploy() }]
+      }).map((c) => c.name);
+      expect(names).toEqual([
+        'Realtime',
+        'queue_state parses',
+        'Snapshot age',
+        'nuc heartbeat',
+        'nuc deploy',
+        'github_events last event',
+        'Linear poll'
+      ]);
+    });
+
+    it('is ok with the tag, who deployed and when', () => {
+      expect(find(deploy())).toEqual({
+        name: 'nuc deploy',
+        ok: true,
+        at: Date.parse(ago(10)),
+        note: 'sha-b · by self'
+      });
+      expect(find(deploy({ by: 'mac' }))?.note).toBe('sha-b · by Mac');
+    });
+
+    it('says it is checking the first run', () => {
+      const c = find(deploy({ phase: 'checking' }));
+      expect(c?.ok).toBe(true);
+      expect(c?.note).toBe('sha-b · by self · checking first run');
+    });
+
+    it('fails on a rollback, naming both tags and the reason', () => {
+      const c = find(
+        deploy({
+          phase: 'rolled-back',
+          tag: 'sha-a',
+          previous: 'sha-b',
+          failed: 'sha-b',
+          reason: 'health check failed'
+        })
+      );
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe('Rolled back sha-b to sha-a: health check failed');
+    });
+
+    it('fails when it is stuck with nothing to roll back to', () => {
+      const c = find(deploy({ phase: 'stuck', reason: 'not running' }));
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe(
+        'sha-b failed its check with nothing to roll back to: not running'
+      );
+    });
+  });
+
   it('is ok throughout when everything is fresh, with nothing to note', () => {
     const checks = health({ ...fresh(), heartbeats: [mac(2)] });
     expect(checks.every((c) => c.ok)).toBe(true);
@@ -1230,6 +1302,7 @@ describe('checkProblems', () => {
     'Snapshot age',
     'nuc heartbeat',
     'mac heartbeat',
+    'nuc deploy',
     'github_events last event',
     'Linear poll'
   ];

@@ -520,6 +520,24 @@ describe('toRuns', () => {
     ]);
   });
 
+  it('carries the deploy of every publishing host that has one', () => {
+    const now = new Date('2026-10-28T10:30:00.000Z');
+    const deploy = { tag: 'sha-b', phase: 'ok', at: '2026-10-28T09:00:00Z' };
+    const result = toRuns(
+      [
+        state({ host: 'nuc', at: '2026-10-28T10:00:00.000Z', deploy }),
+        state({ host: 'mbp', at: '2026-10-28T10:20:00.000Z' }),
+        state({ host: 'old', at: '2026-10-28T08:00:00.000Z', deploy })
+      ],
+      [],
+      [],
+      now
+    );
+    expect(result?.deploys).toEqual([
+      { host: 'nuc', at: '2026-10-28T10:00:00.000Z', deploy }
+    ]);
+  });
+
   it('carries the row time as `at`', () => {
     expect(toRuns([state()], [])?.at).toBe('2026-10-28T10:00:00.000Z');
   });

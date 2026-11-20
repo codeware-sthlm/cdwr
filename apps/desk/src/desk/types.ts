@@ -189,6 +189,23 @@ export type WatchEntry = {
   at: string | null;
 };
 
+/**
+ * What a host's deploy.json says of its self-deploy (the `queue_state` row's `deploy`). On a
+ * rollback `tag` is the tag it went back to; `failed` (else `previous`) is the bad one.
+ */
+export type DeployState = {
+  tag: string;
+  previous: string | null;
+  /** When the host recorded it, ISO */
+  at: string;
+  /** Who deployed: the host itself or the Mac; null when it says neither */
+  by: 'self' | 'mac' | null;
+  /** `checking`: the first run on the new tag is still to prove it; `stuck`: it failed with nothing to roll back to */
+  phase: 'checking' | 'ok' | 'rolled-back' | 'stuck';
+  reason: string | null;
+  failed: string | null;
+};
+
 /** The queue view (watch.jq `queue_view`) after the page's defaults are applied */
 export type QueueView = {
   at: string | undefined;
