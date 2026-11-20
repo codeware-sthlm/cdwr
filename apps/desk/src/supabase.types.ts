@@ -492,7 +492,7 @@ export type Database = {
           findings: Json;
           stale: Json;
           suggestions: Json;
-          own: Json;
+          own: Json | null;
           cost: number | null;
           model: string | null;
         };
@@ -505,7 +505,7 @@ export type Database = {
           findings?: Json;
           stale?: Json;
           suggestions?: Json;
-          own?: Json;
+          own?: Json | null;
           cost?: number | null;
           model?: string | null;
         };
@@ -518,7 +518,7 @@ export type Database = {
           findings?: Json;
           stale?: Json;
           suggestions?: Json;
-          own?: Json;
+          own?: Json | null;
           cost?: number | null;
           model?: string | null;
         };
@@ -536,6 +536,7 @@ export type Database = {
           target: string | null;
           result: string;
           reason: string | null;
+          received_at: string;
         };
         Insert: {
           event_id: string;
@@ -548,6 +549,7 @@ export type Database = {
           target?: string | null;
           result: string;
           reason?: string | null;
+          received_at?: string;
         };
         Update: {
           event_id?: string;
@@ -560,6 +562,7 @@ export type Database = {
           target?: string | null;
           result?: string;
           reason?: string | null;
+          received_at?: string;
         };
         Relationships: [];
       };

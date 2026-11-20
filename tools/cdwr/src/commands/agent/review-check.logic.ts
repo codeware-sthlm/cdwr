@@ -1,12 +1,16 @@
 import {
   type Review,
+  type ReviewOwn,
   reviewFileSchema,
+  reviewOwnSchema,
   toReview
 } from '@codeware/shared/util/agent-review';
 
 /** The reviews table row the desk reads; `id` and `at` are the database's */
 export interface ReviewRow extends Review {
   host: string;
+  /** What the queue did on its own since the review before; null when it was not read */
+  own: ReviewOwn | null;
   cost: number | null;
   model: string | null;
 }
@@ -46,10 +50,50 @@ const findSecret = (value: unknown, path: string[] = []): string | null => {
   return null;
 };
 
+/**
+ * Own items name files, tags and commit shas, which are public: the long-run check reads each path
+ * segment with any full sha taken out, so only a real token is withheld
+ */
+const ownLooksSecret = (text: string): boolean =>
+  SECRET_PATTERNS.some((pattern) => pattern.test(text)) ||
+  text
+    .replace(/\b[0-9a-f]{40}\b/g, ' ')
+    .split('/')
+    .some(longRun);
+
+export const WITHHELD = '(withheld: secret-like text)';
+
+/**
+ * The own list from its file's text: null when there is none or it does not parse, since the
+ * review itself still stands. A secret-like field is withheld, never the review.
+ */
+export const toOwn = (text: string | undefined): ReviewOwn | null => {
+  if (text === undefined) return null;
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const parsed = reviewOwnSchema.safeParse(json);
+  if (!parsed.success) return null;
+  const withhold = (value: string | null) =>
+    value !== null && ownLooksSecret(value) ? WITHHELD : value;
+  return {
+    ...parsed.data,
+    items: parsed.data.items.map((item) => ({
+      ...item,
+      title: withhold(item.title),
+      target: withhold(item.target),
+      reason: withhold(item.reason)
+    }))
+  };
+};
+
 /** Parses a review file's text into a row, or says what is wrong in one line */
 export const checkReview = (
   text: string,
-  extra: { host: string; cost?: number; model?: string }
+  extra: { host: string; cost?: number; model?: string; own?: string }
 ): ReviewCheck => {
   let json: unknown;
   try {
@@ -91,6 +135,7 @@ export const checkReview = (
     row: {
       host: extra.host,
       ...toReview(parsed.data),
+      own: toOwn(extra.own),
       cost: extra.cost ?? null,
       model: extra.model ?? null
     }

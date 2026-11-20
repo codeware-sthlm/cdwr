@@ -1,9 +1,76 @@
 import {
   findingId,
   reviewFileSchema,
+  reviewOwnSchema,
   reviewSchema,
   toReview
 } from './review.schema';
+
+const ownItem = () => ({
+  at: '2026-11-20T07:12:00Z',
+  kind: 'merge' as string,
+  ticket: 'COD-1' as string | null,
+  pr: 5 as number | null,
+  title: 'A title' as string | null,
+  target: null as string | null,
+  result: 'merged',
+  reason: null as string | null
+});
+
+describe('reviewOwnSchema', () => {
+  const own = (item = ownItem()) => ({
+    since: '2026-11-19T07:00:00Z',
+    until: '2026-11-20T07:00:00Z',
+    items: [item]
+  });
+
+  it('accepts a valid list, and an empty one', () => {
+    expect(reviewOwnSchema.safeParse(own()).success).toBe(true);
+    expect(reviewOwnSchema.safeParse({ ...own(), items: [] }).success).toBe(
+      true
+    );
+  });
+
+  it.each(['merge', 'deploy', 'apply', 'self-deploy'])(
+    'accepts kind %s',
+    (kind) => {
+      expect(
+        reviewOwnSchema.safeParse(own({ ...ownItem(), kind })).success
+      ).toBe(true);
+    }
+  );
+
+  it('accepts nulls for the optional fields', () => {
+    expect(
+      reviewOwnSchema.safeParse(
+        own({ ...ownItem(), ticket: null, pr: null, title: null })
+      ).success
+    ).toBe(true);
+  });
+
+  it('rejects an unknown kind', () => {
+    expect(
+      reviewOwnSchema.safeParse(own({ ...ownItem(), kind: 'rollback' })).success
+    ).toBe(false);
+  });
+
+  it('rejects an empty result', () => {
+    expect(
+      reviewOwnSchema.safeParse(own({ ...ownItem(), result: '' })).success
+    ).toBe(false);
+  });
+
+  it('rejects a non-integer pr', () => {
+    expect(
+      reviewOwnSchema.safeParse(own({ ...ownItem(), pr: 1.5 })).success
+    ).toBe(false);
+  });
+
+  it('rejects a missing since or until', () => {
+    const { since: _since, ...rest } = own();
+    expect(reviewOwnSchema.safeParse(rest).success).toBe(false);
+  });
+});
 
 const valid = () => ({
   brief: 'Two tickets wait on you.',

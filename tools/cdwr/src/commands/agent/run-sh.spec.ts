@@ -541,6 +541,231 @@ describe('run.sh own events', () => {
   });
 });
 
+// The review lists what the queue did on its own, read by code and passed to review-check
+describe('run.sh review own list', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  const WATCH_DIR = fileURLToPath(
+    new URL('../../../agent-queue', import.meta.url)
+  );
+  let home: string;
+  const file = (name: string) =>
+    existsSync(join(home, name))
+      ? readFileSync(join(home, name), 'utf8')
+      : null;
+
+  // The two reads are stubbed: a file per table holds the answer, a `fail-<table>` file a failed read;
+  // each call's table and query are logged
+  const sh = (body: string[], env: Record<string, string> = {}) =>
+    spawnSync(
+      'zsh',
+      [
+        '-c',
+        [
+          `HOME_DIR="${home}"; WATCH_DIR="${WATCH_DIR}"; LOGS="${home}"`,
+          'supabase_select_checked() {',
+          '  print -r -- "$1 $2" >> "$HOME_DIR/selects"',
+          '  [[ -e "$HOME_DIR/fail-$1" ]] && return 1',
+          '  if [[ -e "$HOME_DIR/rows-$1" ]]; then cat "$HOME_DIR/rows-$1"; else print -r -- "[]"; fi',
+          '}',
+          'note() { print -r -- "$*" >> "$HOME_DIR/notes"; }',
+          'watch() { jq -L "$WATCH_DIR" "$@"; }',
+          'watch_err() { :; }',
+          'notify() { print -r -- "$1" >> "$HOME_DIR/notified"; }',
+          'notice() { print -r -- "$*" >> "$HOME_DIR/noticed"; }',
+          fn('own_read'),
+          fn('review_notice'),
+          ...body
+        ].join('\n')
+      ],
+      {
+        encoding: 'utf8',
+        env: { PATH: process.env['PATH'] ?? '', HOME: home, ...env }
+      }
+    );
+  const put = (name: string, rows: unknown) =>
+    writeFileSync(join(home, name), JSON.stringify(rows));
+  const out = () =>
+    JSON.parse(file('own.json') ?? 'null') as {
+      since: string;
+      until: string;
+      items: Record<string, unknown>[];
+    };
+  const selects = () => (file('selects') ?? '').trim().split('\n');
+  const action = (id: string, at: string, received: string) => ({
+    event_id: id,
+    at,
+    received_at: received,
+    host: 'nuc',
+    kind: 'merge',
+    ticket: 'COD-1',
+    pr: 5,
+    title: 't',
+    target: null,
+    result: 'merged',
+    reason: null
+  });
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'own-read-'));
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  describe('own_read', () => {
+    it.skipIf(!canRun)('starts about 24 hours ago on the first review', () => {
+      const r = sh([`own_read "$HOME_DIR/own.json"`]);
+      expect(r.status).toBe(0);
+      const since = Date.parse(out().since);
+      expect(Math.abs(Date.now() - 86_400_000 - since)).toBeLessThan(120_000);
+      expect(out().until).toBe(out().since);
+      expect(out().items).toEqual([]);
+      expect(selects()[0]).toBe(
+        'reviews own=not.is.null&select=own&order=at.desc&limit=1'
+      );
+    });
+
+    it.skipIf(!canRun)(
+      'starts at the previous own.until, with + encoded in the query',
+      () => {
+        put('rows-reviews', [
+          { own: { since: 'x', until: '2026-11-19T08:00:00.123456+00:00' } }
+        ]);
+        const r = sh([`own_read "$HOME_DIR/own.json"`]);
+        expect(r.status).toBe(0);
+        expect(out().since).toBe('2026-11-19T08:00:00.123456+00:00');
+        expect(selects()[1]).toBe(
+          'own_actions received_at=gt.2026-11-19T08:00:00.123456%2B00:00&order=received_at.asc&limit=1000'
+        );
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'ends at the newest received_at and sorts the items by at',
+      () => {
+        put('rows-reviews', [{ own: { until: '2026-11-19T08:00:00Z' } }]);
+        put('rows-own_actions', [
+          action('b', '2026-11-20T06:00:00Z', '2026-11-20T09:00:00Z'),
+          action('a', '2026-11-19T09:00:00Z', '2026-11-20T10:30:00Z'),
+          action('c', '2026-11-19T12:00:00Z', '2026-11-20T08:00:00Z')
+        ]);
+        sh([`own_read "$HOME_DIR/own.json"`]);
+        const own = out();
+        expect(own.until).toBe('2026-11-20T10:30:00Z');
+        expect(own.items.map((i) => i['at'])).toEqual([
+          '2026-11-19T09:00:00Z',
+          '2026-11-19T12:00:00Z',
+          '2026-11-20T06:00:00Z'
+        ]);
+        // Only what a review lists: no host, event id or received_at
+        expect(Object.keys(own.items[0] ?? {}).sort()).toEqual(
+          [
+            'at',
+            'kind',
+            'pr',
+            'reason',
+            'result',
+            'target',
+            'ticket',
+            'title'
+          ].sort()
+        );
+      }
+    );
+
+    it.skipIf(!canRun)('ends at since when there are no rows', () => {
+      put('rows-reviews', [{ own: { until: '2026-11-19T08:00:00Z' } }]);
+      sh([`own_read "$HOME_DIR/own.json"`]);
+      expect(out()).toEqual({
+        since: '2026-11-19T08:00:00Z',
+        until: '2026-11-19T08:00:00Z',
+        items: []
+      });
+    });
+
+    it.skipIf(!canRun).each(['reviews', 'own_actions'])(
+      'returns 1 and writes no file when the %s read failed',
+      (table) => {
+        writeFileSync(join(home, `fail-${table}`), '');
+        const r = sh([`own_read "$HOME_DIR/own.json"; print -r -- "rc=$?"`]);
+        expect(r.stdout.trim()).toBe('rc=1');
+        expect(file('own.json')).toBeNull();
+      }
+    );
+  });
+
+  describe('review_notice', () => {
+    const row = JSON.stringify({
+      own: {
+        since: '2026-11-19T08:00:00Z',
+        until: '2026-11-20T08:00:00Z',
+        items: []
+      }
+    });
+
+    it.skipIf(!canRun)(
+      'sends the jq message through notify, never notice',
+      () => {
+        sh([`review_notice '${row}'`], {
+          AGENT_DESK_URL: 'https://desk.example.com'
+        });
+        expect(file('notified')?.trim()).toBe(
+          'Nothing on its own since 19 Nov. See https://desk.example.com'
+        );
+        expect(file('noticed')).toBeNull();
+        expect(file('notes')).toContain('review: notice: Nothing on its own');
+      }
+    );
+
+    it.skipIf(!canRun)('says "See the desk." without a desk url', () => {
+      sh([`review_notice '${row}'`]);
+      expect(file('notified')?.trim()).toBe(
+        'Nothing on its own since 19 Nov. See the desk.'
+      );
+    });
+
+    it.skipIf(!canRun)(
+      'notes a warning and sends nothing when jq fails',
+      () => {
+        const r = sh([`review_notice 'not json'; print -r -- "rc=$?"`]);
+        expect(r.stdout.trim()).toBe('rc=0');
+        expect(file('notified')).toBeNull();
+        expect(file('notes')).toContain('warn: review: no daily notice');
+      }
+    );
+  });
+
+  describe('review_run', () => {
+    const body = SCRIPT.slice(SCRIPT.indexOf('review_run() {'));
+    const before = (a: string, b: string) => {
+      expect(body.indexOf(a)).toBeGreaterThan(-1);
+      expect(body.indexOf(b)).toBeGreaterThan(-1);
+      expect(body.indexOf(a)).toBeLessThan(body.indexOf(b));
+    };
+
+    it('reads the own list before the check, and passes --own only when it read one', () => {
+      before('own_read "$own_file"', 'agent review-check');
+      expect(body).toContain('${own_file:+--own "$own_file"}');
+      expect(body).toContain(
+        'own_file=""; note "warn: review: own_actions not read"'
+      );
+    });
+
+    it('sends the notice after the row is stored', () => {
+      before('supabase_insert_checked reviews "$row"', 'review_notice "$row"');
+      before('review_notice "$row"', 'record nothing "" "review: $n action(s)');
+    });
+
+    it('lets AGENT_DESK_URL through unexported, like the desk variables', () => {
+      expect(SCRIPT).toContain('unexported_env AGENT_DESK_URL');
+    });
+  });
+});
+
 // The queue reads its state from the telemetry tables; Linear documents are no longer written
 describe('run.sh without Linear documents', () => {
   const code = SCRIPT.split('\n')

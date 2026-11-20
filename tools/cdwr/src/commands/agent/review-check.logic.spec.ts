@@ -1,4 +1,109 @@
-import { checkReview } from './review-check.logic';
+import { WITHHELD, checkReview, toOwn } from './review-check.logic';
+
+const ownItem = {
+  at: '2026-11-20T07:12:00Z',
+  kind: 'merge',
+  ticket: 'COD-1',
+  pr: 5,
+  title: 'A title',
+  target: null,
+  result: 'merged',
+  reason: null
+};
+const ownFile = (item: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    since: '2026-11-19T07:00:00Z',
+    until: '2026-11-20T07:00:00Z',
+    items: [{ ...ownItem, ...item }]
+  });
+
+describe('toOwn', () => {
+  it('is null without a file, and for text that is not JSON or not the schema', () => {
+    expect(toOwn(undefined)).toBeNull();
+    expect(toOwn('{nope')).toBeNull();
+    expect(toOwn(JSON.stringify({ since: 'a' }))).toBeNull();
+    expect(toOwn(ownFile({ kind: 'rollback' }))).toBeNull();
+  });
+
+  it('keeps a valid list as it is', () => {
+    expect(toOwn(ownFile())).toEqual({
+      since: '2026-11-19T07:00:00Z',
+      until: '2026-11-20T07:00:00Z',
+      items: [ownItem]
+    });
+  });
+
+  it('keeps a migration path and a sha tag', () => {
+    const target =
+      'tools/cdwr/agent-queue/supabase/migrations/20261120220000_own_actions.sql';
+    const sha = `sha-${'a1b2c3d4e5'.repeat(4)}`;
+    const own = toOwn(ownFile({ target, reason: sha, title: `deploy ${sha}` }));
+    expect(own?.items[0]).toMatchObject({
+      target,
+      reason: sha,
+      title: `deploy ${sha}`
+    });
+  });
+
+  it('withholds a GitHub token in the reason, not the item', () => {
+    const own = toOwn(ownFile({ reason: `token ghp_${'aB3d'.repeat(9)}` }));
+    expect(own?.items[0]).toMatchObject({
+      reason: WITHHELD,
+      title: 'A title',
+      result: 'merged'
+    });
+  });
+
+  it('withholds a JWT in the title and an sk- key in the target', () => {
+    const own = toOwn(
+      ownFile({
+        title: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl',
+        target: 'sk-ant-api03-abcdef1234'
+      })
+    );
+    expect(own?.items[0]).toMatchObject({ title: WITHHELD, target: WITHHELD });
+  });
+});
+
+describe('checkReview own', () => {
+  const base = {
+    brief: 'One ticket waits.',
+    actions: [],
+    findings: [],
+    stale: [],
+    suggestions: []
+  };
+
+  it('puts the own list in the row', () => {
+    const result = checkReview(JSON.stringify(base), {
+      host: 'mac',
+      own: ownFile()
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      row: { own: { items: [ownItem] } }
+    });
+  });
+
+  it('puts null in the row without own, or with an unreadable one', () => {
+    for (const own of [undefined, '', '{nope']) {
+      expect(
+        checkReview(JSON.stringify(base), { host: 'mac', own })
+      ).toMatchObject({ ok: true, row: { own: null } });
+    }
+  });
+
+  it('withholds a secret in own without refusing the review', () => {
+    const result = checkReview(JSON.stringify(base), {
+      host: 'mac',
+      own: ownFile({ reason: `ghp_${'aB3d'.repeat(9)}` })
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      row: { own: { items: [{ reason: WITHHELD }] } }
+    });
+  });
+});
 
 const review = {
   brief: 'One ticket waits.',
@@ -115,7 +220,7 @@ describe('checkReview', () => {
     });
     expect(result).toEqual({
       ok: true,
-      row: { host: 'mac', ...review, cost: 0.5, model: null }
+      row: { host: 'mac', ...review, own: null, cost: 0.5, model: null }
     });
   });
 

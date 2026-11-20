@@ -8834,6 +8834,129 @@ describe('deploy after a self-merge', () => {
   });
 });
 
+// The daily notice of what the queue did on its own, from a stored reviews row
+describe('own_notice', () => {
+  const item = (over: Record<string, unknown> = {}) => ({
+    at: '2026-11-20T07:12:00Z',
+    kind: 'merge',
+    ticket: 'COD-1',
+    pr: 5,
+    title: null,
+    target: null,
+    result: 'merged',
+    reason: null,
+    ...over
+  });
+  const row = (items: unknown[], since = '2026-11-05T08:00:00Z') => ({
+    own: { since, until: '2026-11-20T08:00:00Z', items }
+  });
+  const notice = (r: unknown, desk = '') =>
+    run(`own_notice(${JSON.stringify(desk)})`, r) as string;
+
+  it('says the own list was not read', () => {
+    expect(notice({ own: null })).toBe(
+      'Review stored, but what the queue did on its own was not read. See the desk.'
+    );
+  });
+
+  it('says nothing happened, with the day since parsed from a Supabase time', () => {
+    expect(notice(row([], '2026-11-20T08:00:00.123456+00:00'))).toBe(
+      'Nothing on its own since 20 Nov. See the desk.'
+    );
+  });
+
+  it('drops the leading zero of the day', () => {
+    expect(notice(row([], '2026-11-05T08:00:00Z'))).toBe(
+      'Nothing on its own since 5 Nov. See the desk.'
+    );
+  });
+
+  it('falls back to "the review before" for a since that does not parse', () => {
+    expect(notice(row([], 'yesterday'))).toBe(
+      'Nothing on its own since the review before. See the desk.'
+    );
+  });
+
+  it('counts the known results by what they mean and the rest by their result', () => {
+    const items = [
+      item(),
+      item(),
+      item({ kind: 'apply', result: 'applied' }),
+      item({ kind: 'deploy', result: 'success' }),
+      item({ kind: 'self-deploy', result: 'ok' }),
+      item({ kind: 'deploy', result: 'skipped' })
+    ];
+    expect(notice(row(items))).toMatch(
+      /^On its own since 5 Nov: 1 applied, 1 deployed, 2 merged, 1 self-deployed, 1 skipped\. Needs a look: /
+    );
+  });
+
+  it('counts a result outside the known pairs by its own name', () => {
+    // A merge that was held is not "merged", and an apply that failed is not "applied"
+    expect(
+      notice(
+        row([
+          item({ result: 'held' }),
+          item({ kind: 'apply', result: 'failure' })
+        ])
+      )
+    ).toMatch(/: 1 failure, 1 held\. Needs a look: /);
+  });
+
+  it('adds no trouble list when everything went well', () => {
+    expect(
+      notice(row([item(), item({ kind: 'apply', result: 'applied' })]))
+    ).toBe('On its own since 5 Nov: 1 applied, 1 merged. See the desk.');
+  });
+
+  it('names a trouble item by ticket, else target, else the agent, with its reason', () => {
+    expect(
+      notice(
+        row([
+          item({ result: 'held', reason: 'waits on review' }),
+          item({
+            kind: 'self-deploy',
+            ticket: null,
+            target: 'sha-abc',
+            result: 'rolled-back'
+          }),
+          item({ kind: 'deploy', ticket: null, result: 'failure' })
+        ])
+      )
+    ).toBe(
+      'On its own since 5 Nov: 1 failure, 1 held, 1 rolled-back. Needs a look: COD-1 merge held (waits on review); sha-abc self-deploy rolled-back; the agent deploy failure. See the desk.'
+    );
+  });
+
+  it('names at most five and counts the rest', () => {
+    const items = Array.from({ length: 8 }, (_, i) =>
+      item({ ticket: `COD-${i + 1}`, result: 'held' })
+    );
+    const out = notice(row(items));
+    expect(out).toContain('8 held.');
+    expect(out).toContain('COD-5 merge held');
+    expect(out).not.toContain('COD-6 merge held');
+    expect(out).toContain('; 3 more.');
+  });
+
+  it('cuts a reason at 80 characters', () => {
+    const out = notice(
+      row([item({ result: 'held', reason: 'x'.repeat(120) })])
+    );
+    expect(out).toContain(`(${'x'.repeat(80)})`);
+    expect(out).not.toContain('x'.repeat(81));
+  });
+
+  it('points at the desk url when it has one', () => {
+    expect(notice(row([]), 'https://desk.example.com')).toBe(
+      'Nothing on its own since 5 Nov. See https://desk.example.com'
+    );
+    expect(notice({ own: null }, 'https://desk.example.com')).toMatch(
+      / See https:\/\/desk\.example\.com$/
+    );
+  });
+});
+
 // The container's jq is 1.6, which refuses a keyword as a .field or a $variable; CI's jq does not
 describe('watch.jq on jq 1.6', () => {
   const KEYWORDS =
