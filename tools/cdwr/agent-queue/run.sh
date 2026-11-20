@@ -1346,8 +1346,13 @@ apply_item() {
       elif [[ "$out" == wait ]] && (( now - seen > APPLY_WAIT_SECS )); then print -r -- "refused no self-deploy within 3 hours"
       else print -r -- "$out"; fi
       return 0 ;;
-    restart|scale) desk_platform_on || { print -r -- "refused no DESK_* credentials on $(telemetry_host)"; return 0; } ;;
-    supabase-migration) [[ -n "${DESK_SUPABASE_DB_URL:-}" ]] || { print -r -- "refused no DESK_SUPABASE_DB_URL on $(telemetry_host)"; return 0; } ;;
+    # Restart and scale read no Infisical, so the Fly token is all they need
+    restart|scale) [[ -n "${DESK_FLY_TOKEN:-}" ]] || { print -r -- "refused no DESK_FLY_TOKEN on $(telemetry_host)"; return 0; } ;;
+    supabase-migration)
+      [[ -n "${DESK_SUPABASE_DB_URL:-}" ]] || { print -r -- "refused no DESK_SUPABASE_DB_URL on $(telemetry_host)"; return 0; }
+      # The checkout moves on with main: the file must still read as it was merged
+      git -C "$REPO" diff --quiet "$sha" HEAD -- "$(jq -r '.args[0]' <<<"$item")" 2>/dev/null ||
+        { print -r -- "refused the file changed after the merge"; return 0; } ;;
     deploy-workflow) ( gh_identity ) || { print -r -- "refused no GitHub app"; return 0; } ;;
   esac
   cmd=("${(@f)$(apply_argv "$item")}")
@@ -1388,7 +1393,7 @@ apply_tick() {
 # entry with its apply updated. Sends the summary notice once the list is done.
 apply_list() {
   setopt local_options no_err_exit extended_glob
-  local id=$1 entry=$2 pr item spec i n res st outcome bad added summary sha
+  local id=$1 entry=$2 pr item spec i n res st outcome bad added summary sha ticked
   pr="$(jq -r '.pr' <<<"$entry")"
   # The whole list is checked once, before anything runs: one item outside the vocabulary, or a
   # migration the merged PR did not add, and nothing from it is applied. Checked against the merged
@@ -1413,6 +1418,14 @@ apply_list() {
       | if $bad != "" then .apply.invalid = $bad | .apply.done = true else . end' <<<"$entry")"
   fi
   n="$(jq '.apply.items | length' <<<"$entry")"
+  # A tick Linear did not take is tried again, never the item itself
+  for (( i = 0; i < n; i++ )); do
+    item="$(jq -c --argjson i "$i" '.apply.items[$i]' <<<"$entry")"
+    [[ "$(jq -r '.ticked' <<<"$item")" == false ]] || continue
+    apply_tick "$(jq -r '.apply.commentId' <<<"$entry")" "$(jq -r '.spec' <<<"$item")" "$(jq -r '.outcome' <<<"$item")" \
+      "$(jq -r '.status == "applied"' <<<"$item")" &&
+      entry="$(jq -c --argjson i "$i" '.apply.items[$i].ticked = true' <<<"$entry")"
+  done
   for (( i = 0; i < n; i++ )); do
     [[ "$(jq -r '.apply.done' <<<"$entry")" == true ]] && break
     st="$(jq -r --argjson i "$i" '.apply.items[$i].status' <<<"$entry")"
@@ -1427,16 +1440,24 @@ apply_list() {
     entry="$(jq -c --argjson i "$i" --arg st "$st" --arg o "$outcome" '
       .apply.items[$i].status = $st | .apply.items[$i].outcome = $o
       | if $st == "refused" then .apply.done = true else . end' <<<"$entry")"
-    # Saved before the next item runs, so a tick that dies part way never repeats this one
-    apply_save "$id" "$entry"
+    # Saved before the next item runs, so a tick that dies part way never repeats this one; when
+    # it can't be saved, nothing more runs
+    apply_save "$id" "$entry" || {
+      note "warn: apply: $id: watch.json not saved after $spec"; record warn "$id" "apply: watch.json not saved"
+      print -r -- "$entry"; return 1
+    }
+    ticked=true
     apply_tick "$(jq -r '.apply.commentId' <<<"$entry")" "$spec" "$outcome" "$([[ $st == applied ]] && print true || print false)" ||
-      { note "warn: apply: $id: the comment was not updated for $spec"; record warn "$id" "apply: comment not updated"; }
+      { ticked=false; note "warn: apply: $id: the comment was not updated for $spec"; record warn "$id" "apply: comment not updated"; }
+    entry="$(jq -c --argjson i "$i" --argjson t "$ticked" '.apply.items[$i].ticked = $t' <<<"$entry")"
   done
   [[ "$(jq '[.apply.items[] | select(.status == "pending")] | length' <<<"$entry")" == 0 ]] &&
     entry="$(jq -c '.apply.done = true' <<<"$entry")"
-  if [[ "$(jq -r '.apply.done' <<<"$entry")" == true ]]; then
+  # Once only: a done list comes back while a tick is left to retry
+  if [[ "$(jq -r '.apply.done == true and .apply.told != true' <<<"$entry")" == true ]]; then
     summary="$(watch -r --arg id "$id" 'include "watch"; .apply | apply_summary($id) | "\(.level)\t\(.message)"' <<<"$entry")" &&
       { note "watch: ${summary/$'\t'/ }"; notice "${summary%%$'\t'*}" "${summary#*$'\t'}"; }
+    entry="$(jq -c '.apply.told = true' <<<"$entry")"
   fi
   print -r -- "$entry"
 }
@@ -1448,12 +1469,13 @@ apply_save() {
   jq -c --arg id "$1" --argjson e "$2" '.[$id] = $e' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
 }
 
-# Every unfinished list in watch.json, each written back as soon as it moved. Nothing while paused.
+# Every unfinished list in watch.json, or one with a tick left to retry, each written back as soon
+# as it moved. Nothing while paused.
 apply_lists() {
   setopt local_options no_err_exit
   local file="$HOME_DIR/watch.json" id entry
   [[ -e "$HOME_DIR/paused" || ! -r "$file" ]] && return 0
-  for id in ${(f)"$(jq -r 'to_entries[] | select(.value.apply != null and .value.apply.done != true) | .key' "$file" 2>/dev/null)"}; do
+  for id in ${(f)"$(jq -r 'to_entries[] | select(.value.apply != null and (.value.apply.done != true or any(.value.apply.items[]; .ticked == false))) | .key' "$file" 2>/dev/null)"}; do
     [[ "$id" == COD-<-> ]] || continue
     entry="$(apply_list "$id" "$(jq -c --arg id "$id" '.[$id]' "$file")")"
     apply_save "$id" "$entry"

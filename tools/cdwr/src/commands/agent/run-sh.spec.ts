@@ -3646,6 +3646,7 @@ describe('run.sh apply list', () => {
       [
         '#!/bin/sh',
         'case "$*" in',
+        `  *"diff --quiet"*) exit $(cat "${home}/git.diff.rc") ;;`,
         `  *" HEAD") exit $(cat "${home}/git.head.rc") ;;`,
         `  *) exit $(cat "${home}/git.tag.rc") ;;`,
         'esac'
@@ -3657,6 +3658,7 @@ describe('run.sh apply list', () => {
     write('node.rc', '0');
     write('git.head.rc', '0');
     write('git.tag.rc', '0');
+    write('git.diff.rc', '0');
   });
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
@@ -3921,12 +3923,23 @@ describe('run.sh apply list', () => {
       expect(apply(restart)).toBe('refused cdwr failed');
     });
 
-    it.skipIf(!canRun)('refuses without the desk credentials', () => {
+    it.skipIf(!canRun)('refuses without the desk Fly token', () => {
       write('dry.json', JSON.stringify(restartDry));
       expect(apply(restart, { creds: false })).toBe(
-        'refused no DESK_* credentials on nuc'
+        'refused no DESK_FLY_TOKEN on nuc'
       );
       expect(nodeCalls()).toEqual([]);
+    });
+
+    it.skipIf(!canRun)('restarts with the Fly token alone', () => {
+      write('dry.json', JSON.stringify(restartDry));
+      write('real.json', '{"ok":true}');
+      const r = run(
+        ['res="$(apply_item "$ENTRY" "$ITEM")"; print -r -- "$res"'],
+        { ENTRY: entry(), ITEM: JSON.stringify(restart) },
+        ['typeset +x DESK_FLY_TOKEN=fly-desk']
+      );
+      expect(r.stdout.trim()).toMatch(/^applied /);
     });
 
     it.skipIf(!canRun)('refuses a migration without a database url', () => {
@@ -3934,6 +3947,25 @@ describe('run.sh apply list', () => {
         'refused no DESK_SUPABASE_DB_URL on nuc'
       );
     });
+
+    it.skipIf(!canRun)(
+      'refuses a migration whose file changed after the merge',
+      () => {
+        write('git.diff.rc', '1');
+        const r = run(
+          ['res="$(apply_item "$ENTRY" "$ITEM")"; print -r -- "$res"'],
+          {
+            ENTRY: entry(),
+            ITEM: JSON.stringify(item('supabase-migration', [MIGRATION]))
+          },
+          ['typeset +x DESK_SUPABASE_DB_URL=postgres://x']
+        );
+        expect(r.stdout.trim()).toBe(
+          'refused the file changed after the merge'
+        );
+        expect(nodeCalls()).toEqual([]);
+      }
+    );
 
     it.skipIf(!canRun)('refuses supabase-function as not enabled', () => {
       expect(apply(item('supabase-function', ['desk-notify']))).toBe(
@@ -4024,7 +4056,8 @@ describe('run.sh apply list', () => {
     // apply_item answers per spec from RES, apply_tick records its arguments
     const list = (
       items: Record<string, unknown>[],
-      res: Record<string, string>
+      res: Record<string, string>,
+      opts: { tickRc?: number; saveRc?: number; apply?: object } = {}
     ) => {
       const entry = {
         pr: 5,
@@ -4034,15 +4067,19 @@ describe('run.sh apply list', () => {
           items,
           left: [],
           invalid: null,
-          done: false
+          done: false,
+          ...opts.apply
         }
       };
       const r = run(
         ['apply_list COD-9 "$ENTRY"'],
         { ENTRY: JSON.stringify(entry), RES: JSON.stringify(res) },
         [
-          'apply_item() { jq -r --arg s "$(jq -r .spec <<<"$2")" \'.[$s] // ""\' <<<"$RES"; }',
-          `apply_tick() { print -r -- "$*" >> "${home}/tick.calls"; return 0; }`,
+          'apply_item() { print -r -- "$(jq -r .spec <<<"$2")" >> "' +
+            home +
+            '/item.calls"; jq -r --arg s "$(jq -r .spec <<<"$2")" \'.[$s] // ""\' <<<"$RES"; }',
+          `apply_tick() { print -r -- "$*" >> "${home}/tick.calls"; return ${opts.tickRc ?? 0}; }`,
+          `apply_save() { print -r -- "$1" >> "${home}/save.calls"; return ${opts.saveRc ?? 0}; }`,
           // The checkout has the merge, and the PR's files read as none added
           'git() { return 0; }',
           'gh_identity() { return 0; }',
@@ -4056,11 +4093,14 @@ describe('run.sh apply list', () => {
         out: JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as {
           apply: {
             done: boolean;
+            told?: boolean;
             invalid: string | null;
-            items: { status: string; outcome?: string }[];
+            items: { status: string; outcome?: string; ticked?: boolean }[];
           };
         },
         ticks: lines('tick.calls'),
+        items: lines('item.calls'),
+        saves: lines('save.calls'),
         notices: lines('notices')
       };
     };
@@ -4152,6 +4192,47 @@ describe('run.sh apply list', () => {
         expect(r.out.apply.done).toBe(false);
         expect(r.ticks).toEqual([]);
         expect(r.notices).toEqual([]);
+      }
+    );
+
+    it.skipIf(!canRun)('runs nothing more when watch.json is not saved', () => {
+      const r = list(
+        [a, b],
+        { [a.spec]: 'applied x', [b.spec]: 'applied y' },
+        { saveRc: 1 }
+      );
+      expect(r.items).toEqual([a.spec]);
+      expect(r.ticks).toEqual([]);
+      expect(r.out.apply.items.map((i) => i.status)).toEqual([
+        'applied',
+        'pending'
+      ]);
+      expect(r.notices).toEqual([]);
+    });
+
+    it.skipIf(!canRun)(
+      'keeps a tick Linear did not take for the next run, and tells once',
+      () => {
+        const first = list([a], { [a.spec]: 'applied x' }, { tickRc: 1 });
+        expect(first.out.apply.items[0]).toMatchObject({
+          status: 'applied',
+          ticked: false
+        });
+        expect(first.out.apply.told).toBe(true);
+        expect(first.notices).toHaveLength(1);
+
+        for (const name of ['tick.calls', 'item.calls', 'notices']) {
+          rmSync(join(home, name));
+        }
+        const again = list(
+          first.out.apply.items,
+          {},
+          { apply: first.out.apply }
+        );
+        expect(again.items).toEqual([]);
+        expect(again.ticks).toEqual(['c1 restart cdwr-cms x true']);
+        expect(again.out.apply.items[0]?.ticked).toBe(true);
+        expect(again.notices).toEqual([]);
       }
     );
 
