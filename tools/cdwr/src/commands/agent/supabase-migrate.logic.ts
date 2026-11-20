@@ -25,8 +25,11 @@ export const psqlEnv = (url: string): Record<string, string> => ({
 });
 
 /** Top-level `begin;`, `commit;` and `rollback;` lines, which the wrapper's own transaction owns */
+// A psql meta-command (`\!`, `\o |cmd`, `\copy … program`, `\i`) runs on the host and psql reads
+// one anywhere outside a quote, so any backslash is refused, like a statement that ends or
+// replaces the transaction
 const TRANSACTION_STATEMENT =
-  /^[ \t]*(begin|commit|rollback)([ \t]+(transaction|work))?[ \t]*;/im;
+  /\\\S*|^[ \t]*((begin|commit|rollback|abort|end)([ \t]+(transaction|work))?[ \t]*;|(start[ \t]+transaction|begin[ \t]+isolation|commit[ \t]+and)\b[^;\n]*;)/im;
 
 /** The offending statement of a migration that manages its own transaction, or undefined */
 export const transactionStatement = (sql: string): string | undefined =>

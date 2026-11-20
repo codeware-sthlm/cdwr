@@ -1258,7 +1258,7 @@ apply_argv() {
     deploy-workflow)
       [[ "$n" == 2 && "$a2" == production && "$a1" == [a-z0-9][a-z0-9-]# ]] &&
         jq -e --arg p "$a1" '.release.groups.apps.projects | index($p) != null' "$REPO/nx.json" >/dev/null 2>&1 &&
-        print -rl -- fly deploy "$a1" --environment production ;;
+        print -rl -- fly deploy "$a1" --env production ;;
     supabase-migration)
       [[ "$n" == 1 && "$a1" == tools/cdwr/agent-queue/supabase/migrations/[0-9](#c14)_[a-z0-9_]##.sql ]] &&
         print -rl -- agent supabase-migrate "$a1" ;;
@@ -1295,7 +1295,8 @@ apply_deploy_state() {
   gh_identity || { print -r -- wait; return 0; }
   runs="$(gh api "repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=$1&per_page=5" \
     --jq '[.workflow_runs[] | {status, conclusion}] | first // {}' 2>/dev/null)" || { print -r -- wait; return 0; }
-  jq -r 'if .status != "completed" then "wait"
+  # A run cancelled by a newer push waits: the newer deploy carries the merge, within the time limit
+  jq -r 'if .status != "completed" or .conclusion == "cancelled" then "wait"
     elif (.conclusion | IN("success", "skipped")) then "ok" else "failed" end' <<<"$runs" 2>/dev/null || print -r -- wait
 }
 
@@ -1386,15 +1387,20 @@ apply_tick() {
 # apply_list <id> <entry json>: works the ticket's list as far as it goes this tick and prints the
 # entry with its apply updated. Sends the summary notice once the list is done.
 apply_list() {
-  setopt local_options no_err_exit
-  local id=$1 entry=$2 pr item spec i n res st outcome bad added summary
+  setopt local_options no_err_exit extended_glob
+  local id=$1 entry=$2 pr item spec i n res st outcome bad added summary sha
   pr="$(jq -r '.pr' <<<"$entry")"
   # The whole list is checked once, before anything runs: one item outside the vocabulary, or a
-  # migration the merged PR did not add, and nothing from it is applied
-  if [[ "$(jq -r '.apply.checked // false' <<<"$entry")" != true ]]; then
+  # migration the merged PR did not add, and nothing from it is applied. Checked against the merged
+  # checkout, and tried again next tick while that or the PR's files can't be read; without a merge
+  # commit apply_item refuses the first item.
+  sha="$(jq -r '.apply.sha // ""' <<<"$entry")"
+  if [[ "$(jq -r '.apply.checked // false' <<<"$entry")" != true && "$sha" == [0-9a-f](#c40) ]]; then
     bad=""
+    git -C "$REPO" merge-base --is-ancestor "$sha" HEAD 2>/dev/null || { print -r -- "$entry"; return 0; }
     added="$( ( gh_identity && gh api --paginate "repos/codeware-sthlm/cdwr/pulls/$pr/files" \
-      --jq '.[] | select(.status == "added") | .filename' ) 2>/dev/null )" || added=""
+      --jq '.[] | select(.status == "added") | .filename' ) 2>/dev/null )" ||
+      { print -r -- "$entry"; return 0; }
     for item in ${(f)"$(jq -c '.apply.items[]' <<<"$entry")"}; do
       spec="$(jq -r '.spec' <<<"$item")"
       apply_argv "$item" >/dev/null || { bad="$spec: not in the vocabulary"; break; }
@@ -1421,6 +1427,8 @@ apply_list() {
     entry="$(jq -c --argjson i "$i" --arg st "$st" --arg o "$outcome" '
       .apply.items[$i].status = $st | .apply.items[$i].outcome = $o
       | if $st == "refused" then .apply.done = true else . end' <<<"$entry")"
+    # Saved before the next item runs, so a tick that dies part way never repeats this one
+    apply_save "$id" "$entry"
     apply_tick "$(jq -r '.apply.commentId' <<<"$entry")" "$spec" "$outcome" "$([[ $st == applied ]] && print true || print false)" ||
       { note "warn: apply: $id: the comment was not updated for $spec"; record warn "$id" "apply: comment not updated"; }
   done
@@ -1433,6 +1441,13 @@ apply_list() {
   print -r -- "$entry"
 }
 
+# apply_save <id> <entry json>: the ticket's entry written back to watch.json
+apply_save() {
+  local file="$HOME_DIR/watch.json"
+  jq -e '.apply' >/dev/null 2>&1 <<<"$2" || return 0
+  jq -c --arg id "$1" --argjson e "$2" '.[$id] = $e' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+}
+
 # Every unfinished list in watch.json, each written back as soon as it moved. Nothing while paused.
 apply_lists() {
   setopt local_options no_err_exit
@@ -1441,8 +1456,7 @@ apply_lists() {
   for id in ${(f)"$(jq -r 'to_entries[] | select(.value.apply != null and .value.apply.done != true) | .key' "$file" 2>/dev/null)"}; do
     [[ "$id" == COD-<-> ]] || continue
     entry="$(apply_list "$id" "$(jq -c --arg id "$id" '.[$id]' "$file")")"
-    jq -e '.apply' >/dev/null 2>&1 <<<"$entry" || continue
-    jq -c --arg id "$id" --argjson e "$entry" '.[$id] = $e' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    apply_save "$id" "$entry"
   done
   return 0
 }

@@ -239,7 +239,9 @@ def step:
      elif $in.now.conflicting == null then $prev.conflicting == true
      else $in.now.conflicting end) as $conflicting
   | ($in.now + (if $conflicting then { state: "conflicting" } else {} end)) as $now
-  | ($now.state == "merged" and $prev.apply == null and (($in.apply.items // []) | length) > 0) as $snap
+  # Only on the step that sees the merge: a list posted after it is never applied
+  | ($now.state == "merged" and $prev.state != "merged" and $prev.apply == null
+     and (($in.apply.items // []) | length) > 0) as $snap
   | (if $review and $now.removedAt != null
         and ($prev.removedAt == null or $now.removedAt > $prev.removedAt)
         and ($now.state != "merged" and $now.state != "closed")

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { z } from 'zod';
@@ -75,11 +75,14 @@ async function isApplied(conn: Connection, name: string): Promise<boolean> {
 function readMigration(root: string, file: string): string {
   const path = join(root, file);
   if (!existsSync(path)) throw new CliError(`${file} does not exist`);
+  if (lstatSync(path).isSymbolicLink()) {
+    throw new CliError(`${file} is a symlink`);
+  }
   const sql = readFileSync(path, 'utf8');
   const statement = transactionStatement(sql);
   if (statement) {
     throw new CliError(
-      `${file} has its own '${statement}' line; the transaction belongs to the wrapper, so remove it`
+      `${file} has its own '${statement}' line; the wrapper owns the transaction and allows no psql meta-command, so remove it`
     );
   }
   return sql;
