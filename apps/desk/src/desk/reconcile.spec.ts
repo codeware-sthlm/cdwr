@@ -150,7 +150,8 @@ describe('reconcileView', () => {
         { ticket: 'COD-5', reason: 'review feedback' },
         { ticket: 'COD-6', reason: 'ready' },
         { ticket: 'COD-7', reason: 'conflicts with main' },
-        { ticket: 'COD-8', reason: 'merged comment' }
+        { ticket: 'COD-8', reason: 'merged comment' },
+        { ticket: 'COD-9', reason: 'merge queue failed' }
       ]
     });
 
@@ -166,7 +167,8 @@ describe('reconcileView', () => {
             'COD-5': { labels: ['agent:review'], statusType: 'completed' },
             'COD-6': { labels: ['agent:working'] },
             'COD-7': { labels: ['agent:working'] },
-            'COD-8': { labels: ['agent:review'], statusType: 'canceled' }
+            'COD-8': { labels: ['agent:review'], statusType: 'canceled' },
+            'COD-9': { labels: ['agent:working'] }
           },
           { 'COD-3': 'step 4, the render' }
         )
@@ -186,7 +188,8 @@ describe('reconcileView', () => {
             'COD-5': { labels: ['agent:review'] },
             'COD-6': { labels: ['agent:ready'], statusType: 'backlog' },
             'COD-7': { labels: ['agent:review'] },
-            'COD-8': { labels: [], statusType: 'completed' }
+            'COD-8': { labels: [], statusType: 'completed' },
+            'COD-9': { labels: ['agent:review'] }
           },
           { 'COD-3': '`Waiting: CI · PR 9 @ abc · since 2026-10-29T17:00Z`' }
         )
@@ -199,7 +202,8 @@ describe('reconcileView', () => {
         'COD-5',
         'COD-6',
         'COD-7',
-        'COD-8'
+        'COD-8',
+        'COD-9'
       ]);
     });
 

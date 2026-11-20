@@ -350,6 +350,7 @@ describe('showsRow', () => {
     'held',
     'blocked',
     'refused',
+    'deploy hold',
     'parked',
     'renovate',
     'on your table'

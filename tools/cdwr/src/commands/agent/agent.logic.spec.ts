@@ -21,6 +21,7 @@ import {
   envWithheldFor,
   filesDrift,
   formatBlocked,
+  formatDeployHold,
   formatGaps,
   formatHeld,
   formatImplement,
@@ -1037,6 +1038,7 @@ const EMPTY_VIEW: QueueView = {
   held: { tickets: [], free: [] },
   blocked: [],
   refused: [],
+  deployHold: [],
   parked: [],
   renovate: [],
   audit: [],
@@ -1073,6 +1075,7 @@ const FILLED_VIEW: QueueView = {
     { ticket: 'COD-11', reason: 'agent:ready set by the app' },
     { ticket: 'COD-12', reason: 'agent:ready set by the app' }
   ],
+  deployHold: ['COD-13', 'COD-14'],
   parked: [
     {
       ticket: 'COD-6',
@@ -1139,6 +1142,11 @@ describe('parseQueueView', () => {
 
   it('reads a view from before refused existed', () => {
     const { refused: _refused, ...old } = EMPTY_VIEW;
+    expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads a view from before deployHold existed', () => {
+    const { deployHold: _deployHold, ...old } = EMPTY_VIEW;
     expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
   });
 
@@ -1325,6 +1333,16 @@ describe('formatRefused', () => {
 
   it('says nothing when empty', () => {
     expect(formatRefused(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('formatDeployHold', () => {
+  it('names each ticket', () => {
+    expect(formatDeployHold(FILLED_VIEW)).toBe('COD-13, COD-14');
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatDeployHold(EMPTY_VIEW)).toBe('nothing');
   });
 });
 

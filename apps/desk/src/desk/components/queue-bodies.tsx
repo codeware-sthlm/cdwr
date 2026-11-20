@@ -48,6 +48,10 @@ const WHY: ReadonlyMap<string, string> = new Map([
   ['answered', 'Your reply is in.'],
   ['review feedback', 'Its PR has review comments to address.'],
   ['conflicts with main', 'Its PR conflicts with main and needs a rebase.'],
+  [
+    'merge queue failed',
+    'The merge queue refused its PR; the agent fixes the checks.'
+  ],
   ['merged comment', 'A comment on its merged ticket waits for a suggestion.'],
   ['merge checks', 'Its merged PR has checks for the agent to make.'],
   [
@@ -121,6 +125,7 @@ const reasonState = (x: QueueNext): string =>
       ? 'answered'
       : x.reason === 'review feedback' ||
           x.reason === 'conflicts with main' ||
+          x.reason === 'merge queue failed' ||
           x.reason === 'merged comment' ||
           x.reason === 'merge checks'
         ? 'review'
@@ -320,11 +325,12 @@ export const NextBody = ({ m, state }: BodyProps) => {
       <p className={RULE}>
         A session resumes its own work first, then takes over stale claims,
         answered tickets and review feedback, then rebases a review PR that
-        conflicts with main, then answers comments on merged tickets, then takes
-        new <code>agent:ready</code> tickets while the limit has room. A ticket
-        parked on CI or a Copilot review resumes when the wait resolves. With no
-        session alive, the scheduler starts one for anything but a new ready
-        ticket, which it plans itself.
+        conflicts with main or fixes one the merge queue refused, then answers
+        comments on merged tickets, then takes new <code>agent:ready</code>{' '}
+        tickets while the limit has room. A ticket parked on CI or a Copilot
+        review resumes when the wait resolves. With no session alive, the
+        scheduler starts one for anything but a new ready ticket, which it plans
+        itself.
       </p>
     </>
   );

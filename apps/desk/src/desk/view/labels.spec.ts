@@ -18,6 +18,10 @@ describe('labels', () => {
       'conflicts with main',
       'conflict'
     ]);
+    expect(reasonChipData('merge queue failed')).toEqual([
+      'merge queue failed',
+      'conflict'
+    ]);
     expect(reasonChipData('odd')).toEqual(['odd', 'resume']);
     expect(reasonChipData(undefined)).toEqual([undefined, 'resume']);
   });

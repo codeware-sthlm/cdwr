@@ -33,6 +33,7 @@ import {
   byFile,
   filesDrift,
   formatBlocked,
+  formatDeployHold,
   formatGaps,
   formatHeld,
   formatImplement,
@@ -324,6 +325,11 @@ export default defineCommand({
                 report.queueView.refused.length > 0 ? 'warn' : true,
                 'refused',
                 formatRefused(report.queueView)
+              ),
+              row(
+                report.queueView.deployHold.length > 0 ? 'warn' : true,
+                'deploy hold',
+                formatDeployHold(report.queueView)
               ),
               row(true, 'parked', formatParked(report.queueView)),
               row(true, 'renovate', formatRenovate(report.queueView)),
