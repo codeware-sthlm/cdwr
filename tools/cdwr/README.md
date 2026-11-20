@@ -740,29 +740,20 @@ is named after its role, `agent-host`, so moving to another box changes only the
    sudo install -m 600 -o cdwr -g cdwr /dev/null /opt/cdwr-agent/.env
    ```
 
-8. Install the nightly backup of the `agent-home` volume (03:30, the newest 14 tarballs kept in
-   `/var/backups/cdwr-agent`), from `apps/agent-host/nuc` in this repo:
+8. Install the root installer and its sudoers line, once, as in `apps/agent-host/README.md`,
+   "Installing it once". Read its warning first: the sudoers line waits until the hold list holds
+   the queue's own scripts, or until you accept the risk it names. The host needs `curl`, `jq` and `flock` (util-linux), and
+   `cdwr agent deploy` needs `flock` there too. Its first run installs and enables everything in
+   `apps/agent-host/nuc`, and every later merge that changes that folder reaches the host on its own:
+   - the nightly backup of the `agent-home` volume (`cdwr-agent-backup.timer`, 03:30, the newest
+     14 tarballs kept in `/var/backups/cdwr-agent`)
+   - the self-deploy (`cdwr-agent-deploy.timer`, every 5 minutes; the newest green image build on
+     main is deployed once the queue is quiet, and rolled back if its first run is not healthy).
+     How it decides and rolls back is in `tools/cdwr/agent-queue/README.md`, "Self-deploy"
+   - the installer's own trigger (`cdwr-agent-nuc.timer`, every 5 minutes)
 
-   ```sh
-   sudo install -m 755 backup-agent-home.sh /usr/local/sbin/
-   sudo install -m 644 cdwr-agent-backup.service cdwr-agent-backup.timer /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now cdwr-agent-backup.timer
-   ```
-
-9. Install the self-deploy timer (every 5 minutes; the newest green image build on main is
-   deployed once the queue is quiet, and rolled back if its first run is not healthy). The host needs
-   `curl`, `jq` and `flock` (util-linux), and `cdwr agent deploy` needs `flock` there too:
-
-   ```sh
-   sudo install -m 755 apps/agent-host/nuc/self-deploy.sh /usr/local/sbin/
-   sudo install -m 644 apps/agent-host/nuc/cdwr-agent-deploy.service apps/agent-host/nuc/cdwr-agent-deploy.timer /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now cdwr-agent-deploy.timer
-   ```
-
-   Its log is `journalctl -u cdwr-agent-deploy`. How it decides and rolls back is in
-   `tools/cdwr/agent-queue/README.md`, "Self-deploy".
+9. Check the timers: `systemctl list-timers 'cdwr-agent-*'`. The logs are
+   `journalctl -u cdwr-agent-deploy` and `journalctl -u cdwr-agent-nuc`.
 
 10. From the Mac, the first deploy. The image is public, so the NUC pulls without a login. The
     timer does nothing until this has run once:
