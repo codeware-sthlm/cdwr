@@ -2014,7 +2014,7 @@ review_run() {
   # Dismissals hold for 90 days, as the desk reads them. Each goes to the session with the stored
   # finding it names (ticket, kind, key, fix), found in the reviews of the same window; the rows go
   # through files, never arguments.
-  since="$(date -v-90d +%F 2>/dev/null || date -d '90 days ago' +%F 2>/dev/null)"
+  since="$(TZ=UTC date -v-90d +%F 2>/dev/null || TZ=UTC date -d "90 days ago" +%F 2>/dev/null)"
   supabase_select review_dismissals "at=gte.$since&order=at.desc" > "$HOME_DIR/review-dismissals.tmp" ||
     print -r -- '[]' > "$HOME_DIR/review-dismissals.tmp"
   supabase_select reviews "at=gte.$since&select=findings" > "$HOME_DIR/review-findings.tmp" ||
