@@ -41,6 +41,7 @@ case "$1" in
     done
     echo "compose-$1 tag=$(sed -n 's/^AGENT_IMAGE_TAG=//p' "$env")" >> "$d/docker.log"
     if [ "$1" = pull ] && [ -e "$d/pull-fail" ]; then exit 1; fi
+    if [ "$1" = up ] && [ -e "$d/up-fail" ]; then exit 1; fi
     ;;
   exec)
     shift
@@ -281,6 +282,16 @@ describe.skipIf(!hasBash || !hasJq || !hasGnuDate)('self-deploy.sh', () => {
       expect(result.stdout).toContain('paused by hand');
       expect(deployed()).toBe(false);
       expect(gateCalls('unpause')).toEqual([]);
+      expect(read(path('image.env'))).toBe(`AGENT_IMAGE_TAG=${OLD_TAG}\n`);
+      expect(existsSync(path('compose.yaml.next'))).toBe(false);
+    });
+
+    it('does not deploy when the pause fails', () => {
+      runs(NEW);
+      writeFileSync(fakePath('pause-out'), '');
+      const result = tick({ SELF_DEPLOY_NOW: String(at) });
+      expect(result.stdout).toContain('could not pause the queue');
+      expect(deployed()).toBe(false);
       expect(read(path('image.env'))).toBe(`AGENT_IMAGE_TAG=${OLD_TAG}\n`);
       expect(existsSync(path('compose.yaml.next'))).toBe(false);
     });
@@ -555,6 +566,22 @@ describe.skipIf(!hasBash || !hasJq || !hasGnuDate)('self-deploy.sh', () => {
       const result = tick({ SELF_DEPLOY_NOW: String(at + 1400) });
       expect(result.stdout).toContain('was rolled back once');
       expect(dockerLog()).toHaveLength(before);
+    });
+
+    it('goes stuck, not rolled back, when the previous image does not start', () => {
+      checking();
+      writeFileSync(fakePath('up-fail'), '');
+      tick({ SELF_DEPLOY_NOW: String(at + 1300) });
+      expect(selfState()).toMatchObject({
+        phase: 'stuck',
+        tag: OLD_TAG,
+        failed: [OLD_TAG]
+      });
+      expect(records().at(-1)).toMatchObject({ tag: OLD_TAG, phase: 'stuck' });
+      expect(String(records().at(-1)?.['reason'])).toContain(
+        `the rollback to ${PREV_TAG} did not start`
+      );
+      expect(lines(fakePath('notify.log'))[0]).toContain('did not start');
     });
 
     it('goes stuck when there are no previous files to roll back to', () => {

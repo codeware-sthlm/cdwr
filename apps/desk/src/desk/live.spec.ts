@@ -1039,7 +1039,7 @@ describe('health', () => {
       const c = find(deploy({ phase: 'stuck', reason: 'not running' }));
       expect(c?.ok).toBe(false);
       expect(c?.note).toBe(
-        'sha-b failed its check with nothing to roll back to: not running'
+        'sha-b failed its check and was not rolled back: not running'
       );
     });
   });

@@ -77,12 +77,19 @@ rollback() {
   cp -f "$DIR/image.env.previous" "$DIR/image.env" && cp -f "$DIR/compose.yaml.previous" "$DIR/compose.yaml" || {
     log "no previous files to roll back to"
     save "$(jq -nc --arg t "$tag" --arg r "$reason" '{phase: "stuck", tag: $t, reason: $r}')"
-    record "$tag" "$previous" "$(iso "$(now)")" stuck "$reason" "$tag"
+    record "$tag" "$previous" "$(iso "$(now)")" stuck "$reason; there are no previous files" "$tag"
     notice "agent-host: $tag failed its check ($reason) and has no previous files to roll back to. Deploy by hand with cdwr agent deploy --host agent-host --tag <tag>"
     return 1
   }
-  compose up -d "$SERVICE" || log "up -d $SERVICE failed on the rollback"
   failed="$(field failed)"
+  if ! compose up -d "$SERVICE"; then
+    log "up -d $SERVICE failed on the rollback to $previous"
+    save "$(jq -nc --arg t "$tag" --arg r "$reason" --arg f "$failed $tag" \
+      '{phase: "stuck", tag: $t, reason: $r, failed: ($f | split(" ") | map(select(. != "")) | unique)}')"
+    record "$tag" "$previous" "$(iso "$(now)")" stuck "$reason; the rollback to $previous did not start" "$tag"
+    notice "agent-host: $tag failed its check ($reason) and the rollback to $previous did not start. Deploy by hand with cdwr agent deploy --host agent-host --tag <tag>"
+    return 1
+  fi
   at="$(now)"
   save "$(jq -nc --arg t "$previous" --arg p "$tag" --arg at "$at" --arg r "$reason" --arg f "$failed $tag" \
     '{phase: "rolled-back", tag: $t, previous: $p, at: ($at | tonumber), reason: $r,
@@ -177,6 +184,11 @@ deploy() {
   if [[ "$created" == kept ]]; then
     log "the queue is paused by hand: not deploying $tag"
     rm -f "$compose_tmp"; return 0
+  fi
+  # Without its own pause nothing keeps the queue from starting work under the restart
+  if [[ "$created" != created ]]; then
+    log "could not pause the queue: trying $tag on the next tick"
+    rm -f "$compose_tmp"; return 1
   fi
   unpause() { [[ "$created" == created ]] && gate unpause >/dev/null 2>&1; return 0; }
   restore() { cp -f "$DIR/image.env.previous" "$DIR/image.env"; cp -f "$DIR/compose.yaml.previous" "$DIR/compose.yaml"; }
