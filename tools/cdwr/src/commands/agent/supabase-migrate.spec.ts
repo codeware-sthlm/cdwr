@@ -87,6 +87,7 @@ describe('agent supabase-migrate', () => {
     }
     expect(JSON.parse(printed).plan.json).toEqual({
       file: FILE,
+      environment: 'production',
       applied: false,
       dryRun: 'ok'
     });
@@ -99,6 +100,7 @@ describe('agent supabase-migrate', () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(JSON.parse(printed).plan.json).toEqual({
       file: FILE,
+      environment: 'production',
       applied: true,
       dryRun: null
     });

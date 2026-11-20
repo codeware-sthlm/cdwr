@@ -86,7 +86,14 @@ describe('transactionStatement', () => {
     'COMMIT;',
     '  Rollback ;',
     'begin transaction;',
-    'x;\ncommit;\n'
+    'x;\ncommit;\n',
+    'end;',
+    'abort;',
+    'start transaction isolation level serializable;',
+    'commit and chain;',
+    '\\! curl https://example.com',
+    'select 1; \\o |sh',
+    "\\copy t from program 'id'"
   ])('finds %j', (sql) => {
     expect(transactionStatement(sql)).toBeDefined();
   });

@@ -93,7 +93,7 @@ Each line is a kind and its arguments. The patterns are closed, and they are the
 
 The list is a snapshot taken when the merge is first seen: the watch stores it as `apply` in `watch.json`, with the merge commit. Only the agent's own PR-ready comment counts, and later edits to it add nothing. A trailing `after-deploy` makes an item wait for the `fly-deployment.yml` run on the merge commit. A failed run refuses it as `production deploy failed`; 3 hours without a run refuses it too.
 
-The scheduler applies the items in order. Each one goes through `desk_cdwr` as a dry run first, then the real call, as the desk's commands do. It stops at the first failure and sends one `action` notice. An item whose credential is missing is refused as `no <VAR> on <host>`. To retry a refused item, delete its outcome in the comment; the scheduler picks it up again. While a list is open, the merge notice names it in place of the plain hand-off notice.
+The scheduler applies the items in order. Each one goes through `desk_cdwr` as a dry run first, then the real call, as the desk's commands do. It stops at the first failure and sends one `action` notice. An item whose credential is missing is refused as `no <VAR> on <host>`. A refused item stops the list for good: the list is read once, at the merge, so a later edit of the comment (a deleted outcome, an item struck through) changes nothing the scheduler does, and what is left is Håkan's. While a list is open, the merge notice names it in place of the plain hand-off notice.
 
 Before posting the comment, the session runs `cdwr agent apply-list check --body <file>`, which validates the block by the same rules and says which line is wrong.
 

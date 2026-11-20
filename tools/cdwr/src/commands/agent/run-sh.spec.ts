@@ -3727,7 +3727,7 @@ describe('run.sh apply list', () => {
       [
         'deploy-workflow',
         ['cms', 'production'],
-        ['fly', 'deploy', 'cms', '--environment', 'production']
+        ['fly', 'deploy', 'cms', '--env', 'production']
       ],
       [
         'supabase-migration',
@@ -4030,6 +4030,7 @@ describe('run.sh apply list', () => {
         pr: 5,
         apply: {
           commentId: 'c1',
+          sha: SHA,
           items,
           left: [],
           invalid: null,
@@ -4042,7 +4043,10 @@ describe('run.sh apply list', () => {
         [
           'apply_item() { jq -r --arg s "$(jq -r .spec <<<"$2")" \'.[$s] // ""\' <<<"$RES"; }',
           `apply_tick() { print -r -- "$*" >> "${home}/tick.calls"; return 0; }`,
-          'gh_identity() { return 1; }',
+          // The checkout has the merge, and the PR's files read as none added
+          'git() { return 0; }',
+          'gh_identity() { return 0; }',
+          'gh() { return 0; }',
           'note() { :; }',
           'record() { :; }',
           `notice() { print -r -- "$1|$2" >> "${home}/notices"; }`
