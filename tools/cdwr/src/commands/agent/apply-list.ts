@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { defineCommand } from '../../cli/command';
@@ -58,7 +58,10 @@ export default defineCommand({
       why: validateItem(item, {
         apps,
         addedFiles,
-        functionExists: (name) => existsSync(join(ctx.root, FUNCTIONS, name))
+        functionExists: (name) =>
+          statSync(join(ctx.root, FUNCTIONS, name), {
+            throwIfNoEntry: false
+          })?.isDirectory() === true
       })
     }));
     const bad = checked.find((item) => item.why !== null);
