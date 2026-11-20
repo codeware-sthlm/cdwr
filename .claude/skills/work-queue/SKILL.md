@@ -845,8 +845,7 @@ a while.
 4. The gate then asks for no decision: it says the rule merged in `<sha>` and waits. In the
    container (`host` is `container`) the self-deploy timer brings it about 5 minutes after the
    image build on main, so ask for `cdwr agent deploy --host agent-host` only when the desk's
-   Agent health shows the self-deploy stuck or rolled back, or when no deploy has come
-   20 minutes after the build. On `launchd` it waits for
+   Agent health shows the self-deploy stuck or rolled back. On `launchd` it waits for
    `cdwr agent install`. Only a call main denies too is a real question.
 
 What an earlier run hit is in the same directory: `logs/implement_<date>.log` (an implementing
