@@ -394,6 +394,607 @@ describe('handoffs', () => {
   });
 });
 
+describe('apply list', () => {
+  const ready = (body: string, createdAt = '2026-01-01T00:00:00Z') => ({
+    id: 'c-1',
+    body: `**Agent: PR ready**: ${PR}/569\n\n${body}`,
+    createdAt
+  });
+  const items = (...comments: Array<Record<string, unknown>>) =>
+    run('apply_items', {
+      ...issue([], []),
+      comments: { nodes: comments }
+    }) as Array<Record<string, unknown>>;
+  const item = (
+    text: string,
+    over: Record<string, unknown> = {}
+  ): Record<string, unknown> => ({
+    text,
+    spec: text,
+    kind: text.split(' ')[0],
+    args: text.split(' ').slice(1),
+    afterDeploy: false,
+    checked: false,
+    dropped: false,
+    outcome: null,
+    ...over
+  });
+
+  describe('apply_items', () => {
+    it('parses an open item', () => {
+      expect(items(ready('Apply list:\n- [ ] restart cdwr-cms'))).toEqual([
+        item('restart cdwr-cms')
+      ]);
+    });
+
+    it.each([
+      ['a plain header', 'Apply list:'],
+      ['a bold header', '**Apply list:**'],
+      ['any case', 'APPLY LIST:'],
+      ['a padded header', '  **Apply list:**  ']
+    ])('accepts %s', (_name, header) => {
+      expect(items(ready(`${header}\n- [ ] restart cdwr-cms`))).toHaveLength(1);
+    });
+
+    it('splits after-deploy off the args', () => {
+      expect(
+        items(ready('Apply list:\n- [ ] scale cdwr-cms 2 after-deploy'))
+      ).toEqual([
+        item('scale cdwr-cms 2 after-deploy', {
+          kind: 'scale',
+          args: ['cdwr-cms', '2'],
+          afterDeploy: true
+        })
+      ]);
+    });
+
+    it('reads the outcome after the first " · "', () => {
+      expect(
+        items(
+          ready(
+            'Apply list:\n- [x] restart cdwr-cms · applied 2026-11-20T07:12Z\n- [ ] supabase-migration a.sql · refused: x · y'
+          )
+        )
+      ).toEqual([
+        item('restart cdwr-cms · applied 2026-11-20T07:12Z', {
+          spec: 'restart cdwr-cms',
+          args: ['cdwr-cms'],
+          checked: true,
+          outcome: 'applied 2026-11-20T07:12Z'
+        }),
+        item('supabase-migration a.sql · refused: x · y', {
+          spec: 'supabase-migration a.sql',
+          kind: 'supabase-migration',
+          args: ['a.sql'],
+          outcome: 'refused: x · y'
+        })
+      ]);
+    });
+
+    it('reads checked X, dropped and no-arg items', () => {
+      const r = items(
+        ready(
+          'Apply list:\n- [X] restart cdwr-cms\n- [ ] ~~deploy-workflow cms production~~ dropped by hand\n* [ ] agent-deploy'
+        )
+      );
+      expect(r.map((i) => [i['checked'], i['dropped']])).toEqual([
+        [true, false],
+        [false, true],
+        [false, false]
+      ]);
+      expect(r[2]).toEqual(item('agent-deploy', { args: [] }));
+    });
+
+    it('skips blank lines and ends at another line', () => {
+      expect(
+        items(
+          ready(
+            'Hand-off checklist:\n- [ ] prose\n\nApply list:\n\n- [ ] restart cdwr-cms\n\n  - [ ] agent-deploy\nNotes.\n- [ ] not mine'
+          )
+        ).map((i) => i['spec'])
+      ).toEqual(['restart cdwr-cms', 'agent-deploy']);
+    });
+
+    it('the newest PR-ready comment wins', () => {
+      expect(
+        items(
+          ready('Apply list:\n- [ ] agent-deploy', '2026-01-01T00:00:00Z'),
+          ready('Apply list:\n- [ ] restart cdwr-cms', '2026-02-01T00:00:00Z')
+        ).map((i) => i['spec'])
+      ).toEqual(['restart cdwr-cms']);
+    });
+
+    it.each([
+      ['no comment', []],
+      ['no block', [ready('Hand-off checklist:\n- [ ] x')]],
+      [
+        'a block from a plain comment',
+        [{ body: 'Apply list:\n- [ ] agent-deploy', createdAt: '2026-01-01' }]
+      ]
+    ])('%s gives []', (_name, comments) => {
+      expect(items(...comments)).toEqual([]);
+    });
+  });
+
+  describe('apply_input', () => {
+    const input = (body: string) =>
+      run('apply_input', {
+        ...issue([], []),
+        comments: { nodes: [ready(body)] }
+      });
+
+    it('maps the pending items with the comment id', () => {
+      expect(
+        input(
+          'Apply list:\n- [ ] scale cdwr-cms 2 after-deploy\n- [x] restart cdwr-cms · applied\n- [ ] ~~agent-deploy~~\n- [ ] agent-deploy · refused: x'
+        )
+      ).toEqual({
+        commentId: 'c-1',
+        items: [
+          {
+            spec: 'scale cdwr-cms 2 after-deploy',
+            kind: 'scale',
+            args: ['cdwr-cms', '2'],
+            afterDeploy: true,
+            status: 'pending'
+          }
+        ]
+      });
+    });
+
+    it.each([
+      ['no pending item', 'Apply list:\n- [x] agent-deploy'],
+      ['no block', 'Hand-off checklist:\n- [ ] x']
+    ])('is null with %s', (_name, body) => {
+      expect(input(body)).toBeNull();
+    });
+
+    it('is null without a comment', () => {
+      expect(run('apply_input', issue())).toBeNull();
+    });
+  });
+
+  describe('handoffs', () => {
+    const h = (body: string) =>
+      run('handoffs', {
+        ...issue([], []),
+        comments: { nodes: [ready(body)] }
+      });
+
+    it('adds open apply items after the checklist', () => {
+      expect(
+        h(
+          'Hand-off checklist:\n- [ ] prose\n\nApply list:\n- [ ] restart cdwr-cms\n- [ ] agent-deploy · refused: x'
+        )
+      ).toEqual(['prose', 'restart cdwr-cms', 'agent-deploy']);
+    });
+
+    it('leaves out checked and dropped apply items', () => {
+      expect(
+        h(
+          'Apply list:\n- [x] restart cdwr-cms · applied\n- [ ] ~~agent-deploy~~'
+        )
+      ).toEqual([]);
+    });
+
+    it('checklist_handoffs ignores the apply list', () => {
+      expect(
+        run('checklist_handoffs', {
+          ...issue([], []),
+          comments: { nodes: [ready('Apply list:\n- [ ] agent-deploy')] }
+        })
+      ).toEqual([]);
+    });
+  });
+
+  describe('apply_verdict', () => {
+    const env = (json: unknown, over: Record<string, unknown> = {}) => ({
+      ok: true,
+      plan: { json },
+      ...over
+    });
+    const verdict = (
+      kind: string,
+      args: string[],
+      envelope: Record<string, unknown>
+    ) => run(`apply_verdict(${JSON.stringify({ kind, args })})`, envelope);
+    const prod = { environment: 'production' };
+
+    it.each([
+      [
+        'a failed dry run',
+        'restart',
+        ['cdwr-cms'],
+        { ok: false, error: { message: 'boom' } },
+        'the dry run failed: boom'
+      ],
+      [
+        'a failed dry run without a reason',
+        'restart',
+        ['cdwr-cms'],
+        { ok: false },
+        'the dry run failed: no reason'
+      ],
+      [
+        'no state',
+        'restart',
+        ['cdwr-cms'],
+        { ok: true },
+        'the dry run carried no state'
+      ],
+      [
+        'a preview target',
+        'restart',
+        ['cdwr-cms'],
+        env({ app: 'cdwr-cms', environment: 'preview' }),
+        'not a production target'
+      ],
+      [
+        'restart ok',
+        'restart',
+        ['cdwr-cms'],
+        env({ ...prod, app: 'cdwr-cms', machines: [{ id: 'm1' }] }),
+        'ok'
+      ],
+      [
+        'restart of another app',
+        'restart',
+        ['cdwr-cms'],
+        env({ ...prod, app: 'cdwr-x', machines: [{ id: 'm1' }] }),
+        'the dry run read cdwr-x, not cdwr-cms'
+      ],
+      [
+        'restart without machines',
+        'restart',
+        ['cdwr-cms'],
+        env({ ...prod, app: 'cdwr-cms', machines: [] }),
+        'cdwr-cms has no machines'
+      ],
+      [
+        'scale ok',
+        'scale',
+        ['cdwr-cms', '2'],
+        env({ ...prod, app: 'cdwr-cms', count: 1, target: 2 }),
+        'ok'
+      ],
+      [
+        'scale already there',
+        'scale',
+        ['cdwr-cms', '2'],
+        env({ ...prod, app: 'cdwr-cms', count: 2, target: 2 }),
+        'already 2'
+      ],
+      [
+        'scale of another app',
+        'scale',
+        ['cdwr-cms', '2'],
+        env({ ...prod, app: 'cdwr-x', count: 1, target: 2 }),
+        'the dry run read cdwr-x, not cdwr-cms'
+      ],
+      [
+        'deploy-workflow ok',
+        'deploy-workflow',
+        ['cms', 'production'],
+        env({ ...prod, app: 'cms' }),
+        'ok'
+      ],
+      [
+        'deploy-workflow of another app',
+        'deploy-workflow',
+        ['cms', 'production'],
+        env({ ...prod, app: 'headless' }),
+        'the dry run read headless, not cms'
+      ],
+      [
+        'migration ok',
+        'supabase-migration',
+        ['a.sql'],
+        env({ ...prod, file: 'a.sql', applied: false, dryRun: 'ok' }),
+        'ok'
+      ],
+      [
+        'migration of another file',
+        'supabase-migration',
+        ['a.sql'],
+        env({ ...prod, file: 'b.sql', applied: false, dryRun: 'ok' }),
+        'the dry run read b.sql, not a.sql'
+      ],
+      [
+        'migration already applied',
+        'supabase-migration',
+        ['a.sql'],
+        env({ ...prod, file: 'a.sql', applied: true, dryRun: null }),
+        'already applied'
+      ],
+      [
+        'migration dry run not ok',
+        'supabase-migration',
+        ['a.sql'],
+        env({ ...prod, file: 'a.sql', applied: false, dryRun: null }),
+        'the dry run did not pass'
+      ],
+      ['an unknown kind', 'agent-deploy', [], env({ ...prod }), 'unknown kind']
+    ])('%s', (_name, kind, args, envelope, expected) => {
+      expect(verdict(kind, args, envelope)).toBe(expected);
+    });
+  });
+
+  describe('apply_mark', () => {
+    const mark = (
+      body: string,
+      spec: string,
+      outcome = 'applied now',
+      ticked = true
+    ) =>
+      run(
+        `apply_mark(${JSON.stringify(spec)}; ${JSON.stringify(outcome)}; ${ticked})`,
+        body
+      );
+    const body =
+      'Intro  \n- [ ] restart cdwr-cms\n\nApply list:\n- [ ] restart cdwr-cms  \n  * [ ] agent-deploy\n- [ ] restart cdwr-cms\nNotes\n- [ ] agent-deploy';
+
+    it('ticks the first matching line in the block and keeps the rest', () => {
+      expect(mark(body, 'restart cdwr-cms')).toBe(
+        'Intro  \n- [ ] restart cdwr-cms\n\nApply list:\n- [x] restart cdwr-cms · applied now\n  * [ ] agent-deploy\n- [ ] restart cdwr-cms\nNotes\n- [ ] agent-deploy'
+      );
+    });
+
+    it('keeps indent and bullet', () => {
+      expect(mark(body, 'agent-deploy')).toContain(
+        '\n  * [x] agent-deploy · applied now\n'
+      );
+    });
+
+    it('leaves the box open when not ticked', () => {
+      expect(mark(body, 'agent-deploy', 'refused: x', false)).toContain(
+        '\n  * [ ] agent-deploy · refused: x\n'
+      );
+    });
+
+    it('skips lines already checked or with an outcome', () => {
+      const b =
+        'Apply list:\n- [x] restart cdwr-cms · applied\n- [ ] restart cdwr-cms · refused: x\n- [ ] restart cdwr-cms';
+      expect(mark(b, 'restart cdwr-cms')).toBe(
+        'Apply list:\n- [x] restart cdwr-cms · applied\n- [ ] restart cdwr-cms · refused: x\n- [x] restart cdwr-cms · applied now'
+      );
+    });
+
+    it.each([
+      ['an unknown spec', 'scale cdwr-cms 2'],
+      ['a line past the block', 'restart other']
+    ])('is unchanged for %s', (_name, spec) => {
+      expect(mark(body, spec)).toBe(body);
+    });
+
+    it('is unchanged without a block', () => {
+      expect(mark('- [ ] agent-deploy', 'agent-deploy')).toBe(
+        '- [ ] agent-deploy'
+      );
+    });
+  });
+
+  describe('apply_summary', () => {
+    const summary = (apply: Record<string, unknown>) =>
+      run('apply_summary("COD-9")', apply);
+    const applied = (spec: string, outcome: string) => ({
+      spec,
+      status: 'applied',
+      outcome
+    });
+
+    it('invalid', () => {
+      expect(
+        summary({ invalid: 'unknown kind: foo', items: [], left: ['x'] })
+      ).toEqual({
+        level: 'action',
+        message: 'COD-9: apply list not applied: unknown kind: foo'
+      });
+    });
+
+    it('refused, with what was applied and what is left', () => {
+      expect(
+        summary({
+          invalid: null,
+          left: ['run install', 'check logs'],
+          items: [
+            applied('restart cdwr-cms', 'applied 2026-11-20T07:12Z'),
+            applied('scale cdwr-cms 2', 'already 2'),
+            {
+              spec: 'supabase-migration a.sql',
+              status: 'refused',
+              outcome: 'refused: already applied'
+            },
+            { spec: 'agent-deploy', status: 'pending' }
+          ]
+        })
+      ).toEqual({
+        level: 'action',
+        message:
+          'COD-9: apply list stopped at supabase-migration a.sql: already applied; applied restart cdwr-cms, scale cdwr-cms 2 (already 2); left for you: run install; check logs'
+      });
+    });
+
+    it('refused first, nothing applied, nothing left', () => {
+      expect(
+        summary({
+          invalid: null,
+          left: [],
+          items: [
+            { spec: 'agent-deploy', status: 'refused', outcome: 'refused: no' }
+          ]
+        })
+      ).toEqual({
+        level: 'action',
+        message: 'COD-9: apply list stopped at agent-deploy: no'
+      });
+    });
+
+    it('all applied, with something left', () => {
+      expect(
+        summary({
+          invalid: null,
+          left: ['run install'],
+          items: [
+            applied('restart cdwr-cms', 'applied now'),
+            applied('scale cdwr-cms 2', 'already 2')
+          ]
+        })
+      ).toEqual({
+        level: 'action',
+        message:
+          'COD-9 merged: applied restart cdwr-cms, scale cdwr-cms 2 (already 2); left for you: run install'
+      });
+    });
+
+    it('all applied, nothing left', () => {
+      expect(
+        summary({
+          invalid: null,
+          left: [],
+          items: [applied('restart cdwr-cms', 'applied now')]
+        })
+      ).toEqual({
+        level: 'info',
+        message: 'COD-9 merged: applied restart cdwr-cms; nothing left for you'
+      });
+    });
+  });
+});
+
+describe('step apply snapshot', () => {
+  type Out = {
+    notices: Array<{ level: string; message: string }>;
+    entry: Record<string, unknown>;
+  };
+  const apply = {
+    commentId: 'c-1',
+    items: [
+      {
+        spec: 'restart cdwr-cms',
+        kind: 'restart',
+        args: ['cdwr-cms'],
+        afterDeploy: false,
+        status: 'pending'
+      }
+    ]
+  };
+  const merged = {
+    state: 'merged',
+    removedAt: null,
+    removedReason: null,
+    mergeCommit: 'abc123'
+  };
+  const step = (
+    now: Record<string, unknown>,
+    prev: Record<string, unknown> | null,
+    over: Record<string, unknown> = {}
+  ) =>
+    run('step', {
+      id: 'COD-9',
+      pr: 5,
+      now,
+      prev,
+      handoffs: ['x'],
+      left: ['x'],
+      apply,
+      mergedAt: '2026-05-01T00:00:00Z',
+      at: '2026-05-01T00:01:00Z',
+      ...over
+    }) as Out;
+  const open = { pr: 5, state: 'open', removedAt: null };
+  const snapshot = {
+    commentId: 'c-1',
+    mergedAt: '2026-05-01T00:00:00Z',
+    sha: 'abc123',
+    at: '2026-05-01T00:01:00Z',
+    left: ['x'],
+    items: apply.items,
+    invalid: null,
+    done: false
+  };
+
+  it('takes the snapshot once at merge and sends no merge notice', () => {
+    const r = step(merged, open);
+    expect(r.entry['apply']).toEqual(snapshot);
+    expect(r.notices).toEqual([]);
+  });
+
+  it('takes it on first sight of a merged PR too', () => {
+    expect(step(merged, null).entry['apply']).toEqual(snapshot);
+  });
+
+  it('stores a null mergedAt and merge commit as null', () => {
+    const r = step({ ...merged, mergeCommit: undefined }, open, {
+      mergedAt: null
+    });
+    expect(r.entry['apply']).toMatchObject({ mergedAt: null, sha: null });
+  });
+
+  it('keeps the stored apply across steps, whatever the input says', () => {
+    const stored = { ...snapshot, done: true, left: ['kept'] };
+    const r = step(
+      merged,
+      { pr: 5, state: 'merged', removedAt: null, apply: stored },
+      { apply: null, left: [] }
+    );
+    expect(r.entry['apply']).toEqual(stored);
+    expect(r.notices).toEqual([]);
+  });
+
+  it('is not retaken once stored, even with pending items', () => {
+    const stored = { ...snapshot, done: true };
+    const r = step(
+      merged,
+      { pr: 5, state: 'merged', removedAt: null, apply: stored },
+      { left: ['other'] }
+    );
+    expect(r.entry['apply']).toEqual(stored);
+  });
+
+  it('is kept while open too', () => {
+    const r = step(
+      { state: 'open', removedAt: null, removedReason: null },
+      { ...open, apply: snapshot }
+    );
+    expect(r.entry['apply']).toEqual(snapshot);
+  });
+
+  it('is dropped for a different PR', () => {
+    const r = step(
+      { state: 'open', removedAt: null, removedReason: null },
+      { ...open, pr: 4, apply: snapshot }
+    );
+    expect(r.entry).not.toHaveProperty('apply');
+  });
+
+  it.each([
+    ['null apply', { apply: null }],
+    ['empty items', { apply: { commentId: 'c-1', items: [] } }],
+    ['no apply field', { apply: undefined }]
+  ])('takes none with %s and notifies as before', (_name, over) => {
+    const r = step(merged, open, over);
+    expect(r.entry).not.toHaveProperty('apply');
+    expect(r.notices).toEqual([
+      { level: 'action', message: 'COD-9 merged: hand-offs left: x' }
+    ]);
+  });
+
+  it('takes none while the PR is not merged', () => {
+    const r = step(
+      { state: 'open', removedAt: null, removedReason: null },
+      null
+    );
+    expect(r.entry).not.toHaveProperty('apply');
+  });
+
+  it('still notifies a failing PR', () => {
+    expect(
+      step({ state: 'failing', removedAt: null, removedReason: null }, open)
+        .notices
+    ).toHaveLength(1);
+  });
+});
+
 describe('pr_state', () => {
   const pr = (over: Record<string, unknown> = {}, rollup?: string | null) => ({
     state: 'OPEN',
@@ -463,8 +1064,17 @@ describe('pr_state', () => {
       mergeable: null,
       mergeStateStatus: null,
       ci: null,
+      mergeCommit: null,
       copilot: 'none'
     });
+  });
+
+  it('carries the merge commit oid, null without one', () => {
+    const commit = (p: unknown) =>
+      (run('pr_state', p) as { mergeCommit: string | null }).mergeCommit;
+    expect(commit(pr({ mergeCommit: { oid: 'abc123' } }))).toBe('abc123');
+    expect(commit(pr({ mergeCommit: null }))).toBeNull();
+    expect(commit(pr())).toBeNull();
   });
 
   it('has null removal fields without an event', () => {
@@ -481,6 +1091,7 @@ describe('pr_state', () => {
       mergeable: null,
       mergeStateStatus: null,
       ci: null,
+      mergeCommit: null,
       copilot: 'none'
     });
   });
