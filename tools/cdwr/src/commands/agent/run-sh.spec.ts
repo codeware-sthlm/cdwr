@@ -23,7 +23,13 @@ const SCRIPT = readFileSync(
   'utf8'
 );
 
-const READS = [/^gh pr list /, /^gh api graphql -f query="\$PR_QUERY" /];
+const READS = [
+  /^gh pr list /,
+  /^gh api graphql -f query="\$PR_QUERY" /,
+  // The apply list's reads: the production deploy of a merge commit, the files a PR added
+  /^gh api "repos\/codeware-sthlm\/cdwr\/actions\/workflows\/fly-deployment\.yml\/runs\?head_sha=\$1&per_page=5" /,
+  /^gh api --paginate "repos\/codeware-sthlm\/cdwr\/pulls\/\$pr\/files" /
+];
 
 // The Copilot request and the desk's merge command are run.sh's only GitHub writes, in
 // copilot_request and desk_pr_act
@@ -285,11 +291,14 @@ describe('run.sh without Linear documents', () => {
     )?.[1];
 
   // The scheduler's Linear writes: the watch relabels a ticket whose PR merged outside review,
-  // a parent whose agent split finished is closed with a comment, and a split's next part is
-  // labelled agent:ready with a comment. Nothing else. The last mutation is GitHub's, the desk's
-  // merge (ENQUEUE).
-  it('holds exactly four Linear mutations, each in its named query', () => {
-    expect(code.match(/mutation\b/gi)).toHaveLength(5);
+  // a parent whose agent split finished is closed with a comment, a split's next part is labelled
+  // agent:ready with a comment, and the apply list ticks its items in the PR-ready comment. Nothing
+  // else. The last mutation is GitHub's, the desk's merge (ENQUEUE).
+  it('holds exactly five Linear mutations, each in its named query', () => {
+    expect(code.match(/mutation\b/gi)).toHaveLength(6);
+    expect(gql('COMMENT_UPDATE')).toMatch(/^mutation\(/);
+    expect(gql('COMMENT_UPDATE')).toContain('commentUpdate(');
+    expect(code.match(/commentUpdate\b/g)).toHaveLength(2);
     expect(gql('ENQUEUE')).toMatch(/^mutation\([\s\S]*enqueuePullRequest\(/);
     expect(code.match(/"\$ENQUEUE"/g)).toHaveLength(1);
     expect(gql('RELABEL')).toMatch(/^mutation\(/);
@@ -310,7 +319,8 @@ describe('run.sh without Linear documents', () => {
   it.each([
     ['RELABEL', 'relabel_merged'],
     ['CLOSE_PARENT', 'close_parents'],
-    ['LABEL_PART', 'label_parts']
+    ['LABEL_PART', 'label_parts'],
+    ['COMMENT_UPDATE', 'apply_tick']
   ])('uses "$%s" only inside %s', (name, owner) => {
     const body = fn(owner);
     expect(body).toContain(`linear "$${name}" "$vars"`);
@@ -330,7 +340,7 @@ describe('run.sh without Linear documents', () => {
 
   it('closes parents then labels parts after the watches, never on --check', () => {
     expect(code).toMatch(
-      /if ! \$check; then\n {2}err="\$\(watch_prs\)"[^\n]*\n {2}err="\$\(watch_renovate\)"[^\n]*\n {2}err="\$\(close_parents\)"[^\n]*\n {2}err="\$\(label_parts\)" \|\| \{/
+      /if ! \$check; then\n {2}err="\$\(watch_prs\)"[^\n]*\n {2}apply_lists\n {2}err="\$\(watch_renovate\)"[^\n]*\n {2}err="\$\(close_parents\)"[^\n]*\n {2}err="\$\(label_parts\)" \|\| \{/
     );
   });
 
@@ -345,7 +355,8 @@ describe('run.sh without Linear documents', () => {
     expect(watched).toContain('description');
     expect(watched).toContain('labels { nodes { id name } }');
     // is_agent tells the agent's comments by their author
-    expect(watched).toContain('nodes { body createdAt user { id app } }');
+    // and the apply list ticks its items in the comment by id
+    expect(watched).toContain('nodes { id body createdAt user { id app } }');
     expect(watched).toContain('after: $after');
     expect(watched).toContain('pageInfo { hasNextPage endCursor }');
     expect(watched).not.toContain('issueLabels(');
@@ -3555,6 +3566,601 @@ describe('run.sh apply_commands', () => {
         );
       }
     );
+  });
+});
+
+// The apply list: the items of a merged PR's hand-off comment that the scheduler applies itself
+describe('run.sh apply list', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const AQ = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  const SHA = 'a'.repeat(40);
+  const TAG = `sha-${'b'.repeat(40)}`;
+  const MIGRATION =
+    'tools/cdwr/agent-queue/supabase/migrations/20261120120000_applied_migrations.sql';
+  let home: string;
+
+  // apply_app is a one-line function
+  const APPLY_APP = SCRIPT.match(/^apply_app\(\) \{.*\}$/m)?.[0] ?? '';
+  const FNS = [
+    'apply_argv',
+    'apply_cdwr',
+    'apply_deploy_state',
+    'apply_self_deploy',
+    'apply_item',
+    'apply_tick',
+    'apply_list',
+    'desk_cdwr',
+    'desk_platform_on',
+    'watch',
+    'watch_err'
+  ]
+    .map(fn)
+    .concat(APPLY_APP);
+
+  const write = (name: string, content: string, mode?: number) => {
+    mkdirSync(join(home, name, '..'), { recursive: true });
+    writeFileSync(join(home, name), content);
+    if (mode) chmodSync(join(home, name), mode);
+  };
+  const file = (name: string) =>
+    existsSync(join(home, name))
+      ? readFileSync(join(home, name), 'utf8').trim()
+      : null;
+  const lines = (name: string) =>
+    (file(name) ?? '').split('\n').filter(Boolean);
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'apply-list-'));
+    write(
+      'nx.json',
+      JSON.stringify({ release: { groups: { apps: { projects: ['cms'] } } } })
+    );
+    mkdirSync(
+      join(home, 'tools/cdwr/agent-queue/supabase/functions/desk-notify'),
+      { recursive: true }
+    );
+    mkdirSync(join(home, 'tools/cdwr/agent-queue/supabase/functions/_shared'), {
+      recursive: true
+    });
+    // Fakes for cdwr (node) and git; their answers are files in the temp home
+    write(
+      'bin/node',
+      [
+        '#!/bin/sh',
+        `echo "$*" >> "${home}/node.calls"`,
+        'case "$*" in',
+        `  *--dry-run*) cat "${home}/dry.json" ;;`,
+        `  *) cat "${home}/real.json"; exit $(cat "${home}/node.rc") ;;`,
+        'esac'
+      ].join('\n'),
+      0o755
+    );
+    write(
+      'bin/git',
+      [
+        '#!/bin/sh',
+        'case "$*" in',
+        `  *" HEAD") exit $(cat "${home}/git.head.rc") ;;`,
+        `  *) exit $(cat "${home}/git.tag.rc") ;;`,
+        'esac'
+      ].join('\n'),
+      0o755
+    );
+    write('dry.json', '{}');
+    write('real.json', '{}');
+    write('node.rc', '0');
+    write('git.head.rc', '0');
+    write('git.tag.rc', '0');
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  const run = (
+    body: string[],
+    env: Record<string, string> = {},
+    stubs: string[] = []
+  ) =>
+    spawnSync(
+      'zsh',
+      [
+        '-c',
+        [
+          `HOME_DIR="${home}"; REPO="${home}"; LOGS="${home}"; WATCH_DIR="${AQ}"; APPLY_WAIT_SECS=10800`,
+          'telemetry_host() { print -r -- nuc; }',
+          ...FNS,
+          ...stubs,
+          ...body
+        ].join('\n')
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          PATH: `${join(home, 'bin')}:${process.env['PATH'] ?? ''}`,
+          HOME: home,
+          ...env
+        }
+      }
+    );
+
+  const item = (
+    kind: string,
+    args: string[],
+    extra: Record<string, unknown> = {}
+  ) => ({
+    spec: [kind, ...args].join(' '),
+    kind,
+    args,
+    afterDeploy: false,
+    status: 'pending',
+    ...extra
+  });
+
+  describe('apply_argv', () => {
+    const argv = (kind: string, args: (string | number)[]) => {
+      const r = run(
+        ['apply_argv "$ITEM"; print -r -- "rc=$?"'],
+        { ITEM: JSON.stringify({ kind, args }) },
+        []
+      );
+      const out = r.stdout.trimEnd().split('\n');
+      return { rc: out.pop(), out };
+    };
+
+    it.skipIf(!canRun).each([
+      ['restart', ['cdwr-cms'], ['fly', 'restart', 'cdwr-cms']],
+      [
+        'restart',
+        ['cdwr-headless-moon'],
+        ['fly', 'restart', 'cdwr-headless-moon']
+      ],
+      ['restart', ['cdwr-cms-acme'], ['fly', 'restart', 'cdwr-cms-acme']],
+      [
+        'scale',
+        ['cdwr-headless-moon', '2'],
+        ['fly', 'scale', 'cdwr-headless-moon', '2']
+      ],
+      [
+        'deploy-workflow',
+        ['cms', 'production'],
+        ['fly', 'deploy', 'cms', '--environment', 'production']
+      ],
+      [
+        'supabase-migration',
+        [MIGRATION],
+        ['agent', 'supabase-migrate', MIGRATION]
+      ],
+      ['supabase-function', ['desk-notify'], []],
+      ['agent-deploy', [], []]
+    ])('prints the argv of %s %j', (kind, args, expected) => {
+      const r = argv(kind, args);
+      expect(r.rc).toBe('rc=0');
+      expect(r.out).toEqual(expected);
+    });
+
+    it.skipIf(!canRun).each([
+      ['restart', ['cdwr-agent']],
+      ['restart', ['cdwr-builder']],
+      ['restart', ['cdwr-cms;rm']],
+      ['restart', ['-a']],
+      ['restart', []],
+      ['restart', ['cdwr-cms', 'extra']],
+      ['scale', ['cdwr-cms', '0']],
+      ['scale', ['cdwr-cms', '5']],
+      ['scale', ['cdwr-cms']],
+      ['scale', ['cdwr-agent', '2']],
+      ['deploy-workflow', ['web', 'production']],
+      ['deploy-workflow', ['cms', 'preview']],
+      ['deploy-workflow', ['cms']],
+      [
+        'supabase-migration',
+        ['tools/cdwr/agent-queue/other/20261120120000_x.sql']
+      ],
+      [
+        'supabase-migration',
+        ['tools/cdwr/agent-queue/supabase/migrations/../20261120120000_x.sql']
+      ],
+      [
+        'supabase-migration',
+        ['tools/cdwr/agent-queue/supabase/migrations/2026_x.sql']
+      ],
+      ['supabase-migration', []],
+      ['supabase-function', ['_shared']],
+      ['supabase-function', ['missing']],
+      ['supabase-function', []],
+      ['agent-deploy', ['x']],
+      ['frobnicate', []]
+    ])('refuses %s %j', (kind, args) => {
+      const r = argv(kind, args);
+      expect(r.rc).toBe('rc=1');
+      expect(r.out).toEqual([]);
+    });
+  });
+
+  describe('apply_item', () => {
+    const restartDry = {
+      ok: true,
+      plan: {
+        json: {
+          app: 'cdwr-cms',
+          environment: 'production',
+          machines: [{ id: 'm1', state: 'started', sha: 'abc' }]
+        }
+      }
+    };
+    const entry = (at = new Date().toISOString()) =>
+      JSON.stringify({ apply: { sha: SHA, at } });
+    const CREDS =
+      'typeset +x DESK_FLY_TOKEN=fly-desk DESK_INFISICAL_CLIENT_ID=i DESK_INFISICAL_CLIENT_SECRET=s DESK_INFISICAL_PROJECT_ID=p';
+
+    const apply = (
+      it_: Record<string, unknown>,
+      opts: {
+        entry?: string;
+        creds?: boolean;
+        deployState?: string;
+        env?: Record<string, string>;
+      } = {}
+    ) => {
+      const r = run(
+        ['res="$(apply_item "$ENTRY" "$ITEM")"; print -r -- "$res"'],
+        {
+          ENTRY: opts.entry ?? entry(),
+          ITEM: JSON.stringify(it_),
+          ...opts.env
+        },
+        [
+          ...(opts.creds === false ? [] : [CREDS]),
+          ...(opts.deployState
+            ? [`apply_deploy_state() { print -r -- ${opts.deployState}; }`]
+            : [])
+        ]
+      );
+      return r.stdout.trim();
+    };
+    const nodeCalls = () => lines('node.calls');
+    const restart = item('restart', ['cdwr-cms']);
+
+    it.skipIf(!canRun)('waits while the checkout lacks the merge', () => {
+      write('git.head.rc', '1');
+      write('dry.json', JSON.stringify(restartDry));
+      expect(apply(restart)).toBe('wait');
+      expect(nodeCalls()).toEqual([]);
+    });
+
+    it.skipIf(!canRun).each([
+      ['null', JSON.stringify({ apply: { sha: null } })],
+      ['short', JSON.stringify({ apply: { sha: 'abc1234' } })],
+      ['missing', JSON.stringify({ apply: {} })]
+    ])('refuses without a merge commit sha (%s)', (_n, e) => {
+      expect(apply(restart, { entry: e })).toBe('refused no merge commit');
+    });
+
+    it.skipIf(!canRun)('applies a restart after an ok dry run', () => {
+      write('dry.json', JSON.stringify(restartDry));
+      write('real.json', JSON.stringify({ ok: true, result: { app: 'x' } }));
+      expect(apply(restart)).toMatch(/^applied \d{4}-\d\d-\d\dT\d\d:\d\dZ$/);
+      expect(nodeCalls()).toEqual([
+        'tools/cdwr/bin/cdwr.mjs fly restart cdwr-cms --dry-run --yes --json',
+        'tools/cdwr/bin/cdwr.mjs fly restart cdwr-cms --yes --json'
+      ]);
+    });
+
+    it.skipIf(!canRun)('says already when the scale is at its target', () => {
+      write(
+        'dry.json',
+        JSON.stringify({
+          ok: true,
+          plan: {
+            json: {
+              app: 'cdwr-cms',
+              environment: 'production',
+              count: 2,
+              target: 2
+            }
+          }
+        })
+      );
+      expect(apply(item('scale', ['cdwr-cms', '2']))).toBe('applied already 2');
+      expect(nodeCalls()).toHaveLength(1);
+      expect(nodeCalls()[0]).toContain('--dry-run');
+    });
+
+    it.skipIf(!canRun)('scales when the count differs', () => {
+      write(
+        'dry.json',
+        JSON.stringify({
+          ok: true,
+          plan: {
+            json: {
+              app: 'cdwr-cms',
+              environment: 'production',
+              count: 1,
+              target: 2
+            }
+          }
+        })
+      );
+      write('real.json', JSON.stringify({ ok: true, result: { count: 2 } }));
+      expect(apply(item('scale', ['cdwr-cms', '2']))).toMatch(/^applied 20/);
+      expect(nodeCalls()).toHaveLength(2);
+    });
+
+    it.skipIf(!canRun)('refuses on the dry run verdict, no real call', () => {
+      write(
+        'dry.json',
+        JSON.stringify({ ok: false, error: { message: 'no such app' } })
+      );
+      expect(apply(restart)).toBe('refused the dry run failed: no such app');
+      expect(nodeCalls()).toHaveLength(1);
+    });
+
+    it.skipIf(!canRun)('refuses when the dry run prints nothing', () => {
+      write('bin/node', '#!/bin/sh\nexit 1', 0o755);
+      expect(apply(restart)).toBe('refused the dry run printed nothing');
+    });
+
+    it.skipIf(!canRun)('refuses with the message of a failing call', () => {
+      write('dry.json', JSON.stringify(restartDry));
+      write(
+        'real.json',
+        JSON.stringify({ ok: false, error: { message: 'fly · is\ndown' } })
+      );
+      write('node.rc', '1');
+      expect(apply(restart)).toBe('refused fly - is down');
+    });
+
+    it.skipIf(!canRun)('refuses with cdwr failed without a message', () => {
+      write('dry.json', JSON.stringify(restartDry));
+      write('real.json', '{"ok":false}');
+      write('node.rc', '1');
+      expect(apply(restart)).toBe('refused cdwr failed');
+    });
+
+    it.skipIf(!canRun)('refuses without the desk credentials', () => {
+      write('dry.json', JSON.stringify(restartDry));
+      expect(apply(restart, { creds: false })).toBe(
+        'refused no DESK_* credentials on nuc'
+      );
+      expect(nodeCalls()).toEqual([]);
+    });
+
+    it.skipIf(!canRun)('refuses a migration without a database url', () => {
+      expect(apply(item('supabase-migration', [MIGRATION]))).toBe(
+        'refused no DESK_SUPABASE_DB_URL on nuc'
+      );
+    });
+
+    it.skipIf(!canRun)('refuses supabase-function as not enabled', () => {
+      expect(apply(item('supabase-function', ['desk-notify']))).toBe(
+        'refused not enabled'
+      );
+    });
+
+    describe('agent-deploy', () => {
+      const deploy = item('agent-deploy', []);
+
+      it.skipIf(!canRun)('refuses without deploy.json', () => {
+        expect(apply(deploy)).toBe('refused no self-deploy on this host');
+      });
+
+      it.skipIf(!canRun)('applies once the tag contains the merge', () => {
+        write('deploy.json', JSON.stringify({ phase: 'ok', tag: TAG }));
+        expect(apply(deploy)).toBe(`applied deployed ${TAG}`);
+      });
+
+      it.skipIf(!canRun)('waits while the tag lacks the merge', () => {
+        write('deploy.json', JSON.stringify({ phase: 'ok', tag: TAG }));
+        write('git.tag.rc', '1');
+        expect(apply(deploy)).toBe('wait');
+      });
+
+      it.skipIf(!canRun)('waits for a tag that is not a sha', () => {
+        write('deploy.json', JSON.stringify({ phase: 'ok', tag: 'latest' }));
+        expect(apply(deploy)).toBe('wait');
+      });
+
+      it.skipIf(!canRun)('refuses a failed roll-out', () => {
+        write('deploy.json', JSON.stringify({ phase: 'stuck', tag: TAG }));
+        expect(apply(deploy)).toBe(`refused self-deploy of ${TAG}: stuck`);
+      });
+
+      it.skipIf(!canRun)('refuses after the wait limit', () => {
+        write('deploy.json', JSON.stringify({ phase: 'ok', tag: TAG }));
+        write('git.tag.rc', '1');
+        const old = new Date(Date.now() - 4 * 3600_000).toISOString();
+        expect(apply(deploy, { entry: entry(old) })).toBe(
+          'refused no self-deploy within 3 hours'
+        );
+      });
+    });
+
+    describe('after-deploy', () => {
+      const scale = item('scale', ['cdwr-cms', '2'], { afterDeploy: true });
+
+      it.skipIf(!canRun)('waits on wait', () => {
+        expect(apply(scale, { deployState: 'wait' })).toBe('wait');
+        expect(nodeCalls()).toEqual([]);
+      });
+
+      it.skipIf(!canRun)('refuses on failed', () => {
+        expect(apply(scale, { deployState: 'failed' })).toBe(
+          'refused production deploy failed'
+        );
+      });
+
+      it.skipIf(!canRun)('refuses a deploy that never came', () => {
+        const old = new Date(Date.now() - 4 * 3600_000).toISOString();
+        expect(apply(scale, { deployState: 'wait', entry: entry(old) })).toBe(
+          'refused no production deploy within 3 hours'
+        );
+      });
+
+      it.skipIf(!canRun)('goes on once the deploy is ok', () => {
+        write(
+          'dry.json',
+          JSON.stringify({
+            ok: true,
+            plan: {
+              json: {
+                app: 'cdwr-cms',
+                environment: 'production',
+                count: 2,
+                target: 2
+              }
+            }
+          })
+        );
+        expect(apply(scale, { deployState: 'ok' })).toBe('applied already 2');
+      });
+    });
+  });
+
+  describe('apply_list', () => {
+    // apply_item answers per spec from RES, apply_tick records its arguments
+    const list = (
+      items: Record<string, unknown>[],
+      res: Record<string, string>
+    ) => {
+      const entry = {
+        pr: 5,
+        apply: {
+          commentId: 'c1',
+          items,
+          left: [],
+          invalid: null,
+          done: false
+        }
+      };
+      const r = run(
+        ['apply_list COD-9 "$ENTRY"'],
+        { ENTRY: JSON.stringify(entry), RES: JSON.stringify(res) },
+        [
+          'apply_item() { jq -r --arg s "$(jq -r .spec <<<"$2")" \'.[$s] // ""\' <<<"$RES"; }',
+          `apply_tick() { print -r -- "$*" >> "${home}/tick.calls"; return 0; }`,
+          'gh_identity() { return 1; }',
+          'note() { :; }',
+          'record() { :; }',
+          `notice() { print -r -- "$1|$2" >> "${home}/notices"; }`
+        ]
+      );
+      return {
+        out: JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as {
+          apply: {
+            done: boolean;
+            invalid: string | null;
+            items: { status: string; outcome?: string }[];
+          };
+        },
+        ticks: lines('tick.calls'),
+        notices: lines('notices')
+      };
+    };
+    const a = item('restart', ['cdwr-cms']);
+    const b = item('restart', ['cdwr-headless-moon']);
+
+    it.skipIf(!canRun)(
+      'marks a list with an invalid item and applies nothing',
+      () => {
+        const bad = item('restart', ['cdwr-cms;rm']);
+        const r = list([a, bad], {
+          [a.spec]: 'applied x',
+          [bad.spec]: 'applied x'
+        });
+        expect(r.out.apply.invalid).toBe(
+          'restart cdwr-cms;rm: not in the vocabulary'
+        );
+        expect(r.out.apply.done).toBe(true);
+        expect(r.out.apply.items.map((i) => i.status)).toEqual([
+          'pending',
+          'pending'
+        ]);
+        expect(r.ticks).toEqual([]);
+        expect(r.notices).toHaveLength(1);
+        expect(r.notices[0]).toMatch(
+          /^action\|COD-9: apply list not applied: /
+        );
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'marks a migration the PR did not add as invalid',
+      () => {
+        const m = item('supabase-migration', [MIGRATION]);
+        const r = list([m], { [m.spec]: 'applied x' });
+        expect(r.out.apply.invalid).toBe(`${m.spec}: PR 5 did not add it`);
+        expect(r.out.apply.done).toBe(true);
+        expect(r.ticks).toEqual([]);
+      }
+    );
+
+    it.skipIf(!canRun)('stops at the first refusal', () => {
+      const r = list([a, b], {
+        [a.spec]: 'refused nope',
+        [b.spec]: 'applied x'
+      });
+      expect(r.out.apply.items).toEqual([
+        expect.objectContaining({
+          status: 'refused',
+          outcome: 'refused: nope'
+        }),
+        expect.objectContaining({ status: 'pending' })
+      ]);
+      expect(r.out.apply.done).toBe(true);
+      expect(r.ticks).toEqual(['c1 restart cdwr-cms refused: nope false']);
+      expect(r.notices).toHaveLength(1);
+      expect(r.notices[0]).toMatch(
+        /^action\|COD-9: apply list stopped at restart cdwr-cms: nope/
+      );
+    });
+
+    it.skipIf(!canRun)('is done with a summary when all applied', () => {
+      const r = list([a, b], {
+        [a.spec]: 'applied 2026-11-20T07:12Z',
+        [b.spec]: 'applied already 2'
+      });
+      expect(r.out.apply.items.map((i) => i.status)).toEqual([
+        'applied',
+        'applied'
+      ]);
+      expect(r.out.apply.done).toBe(true);
+      expect(r.ticks).toEqual([
+        'c1 restart cdwr-cms 2026-11-20T07:12Z true',
+        'c1 restart cdwr-headless-moon already 2 true'
+      ]);
+      expect(r.notices).toEqual([
+        'info|COD-9 merged: applied restart cdwr-cms, restart cdwr-headless-moon (already 2); nothing left for you'
+      ]);
+    });
+
+    it.skipIf(!canRun)(
+      'leaves a waiting entry pending without a notice',
+      () => {
+        const r = list([a, b], { [a.spec]: 'wait', [b.spec]: 'applied x' });
+        expect(r.out.apply.items.map((i) => i.status)).toEqual([
+          'pending',
+          'pending'
+        ]);
+        expect(r.out.apply.done).toBe(false);
+        expect(r.ticks).toEqual([]);
+        expect(r.notices).toEqual([]);
+      }
+    );
+
+    it.skipIf(!canRun)('keeps what applied before a wait', () => {
+      const r = list([a, b], { [a.spec]: 'applied x', [b.spec]: 'wait' });
+      expect(r.out.apply.items.map((i) => i.status)).toEqual([
+        'applied',
+        'pending'
+      ]);
+      expect(r.out.apply.done).toBe(false);
+      expect(r.ticks).toHaveLength(1);
+      expect(r.notices).toEqual([]);
+    });
   });
 });
 
