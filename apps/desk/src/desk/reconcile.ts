@@ -48,6 +48,7 @@ const NEXT: ReadonlyMap<string, Rule> = new Map([
   ['answered', notAnswered],
   ['review feedback', notReview],
   ['conflicts with main', notReview],
+  ['merge queue failed', notReview],
   // Done is what the entry expects; a cancel or a reopen contradicts it
   ['merged comment', (i) => i.statusType !== 'completed'],
   ['merge checks', (i) => i.statusType !== 'completed'],

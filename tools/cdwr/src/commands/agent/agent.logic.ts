@@ -1271,6 +1271,7 @@ export const queueViewSchema = z.object({
         'answered',
         'review feedback',
         'conflicts with main',
+        'merge queue failed',
         'merged comment',
         'merge checks',
         'plan approved',
@@ -1307,6 +1308,8 @@ export const queueViewSchema = z.object({
   refused: z
     .array(z.object({ ticket: ticketSchema, reason: z.string() }))
     .default([]),
+  // Self-merged tickets that keep agent:review for their deploy; older queue views have none
+  deployHold: z.array(ticketSchema).default([]),
   // Older queue views have no parked
   parked: z
     .array(
@@ -1413,6 +1416,9 @@ export const formatBlocked = (view: QueueView): string =>
 
 export const formatRefused = (view: QueueView): string =>
   view.refused.map((r) => `${r.ticket} (${r.reason})`).join(', ') || 'nothing';
+
+export const formatDeployHold = (view: QueueView): string =>
+  view.deployHold.join(', ') || 'nothing';
 
 export const formatParked = (view: QueueView): string =>
   view.parked

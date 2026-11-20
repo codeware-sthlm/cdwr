@@ -205,6 +205,7 @@ const ATTENDED_ROWS: ReadonlySet<string> = new Set([
   'held',
   'blocked',
   'refused',
+  'deploy hold',
   'parked',
   'renovate',
   'on your table'
