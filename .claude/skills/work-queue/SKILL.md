@@ -45,7 +45,7 @@ on: working (from the start of each turn), waiting on a prompt, stopped, polling
 whether a session is alive, and only then stays quiet about work waiting for one.
 
 The file also names the ticket in hand. Run `tools/cdwr/agent-queue/session.sh ticket COD-123`
-when a ticket is claimed or resumed (**Per ticket** step 1, **What to take next** steps 1–7 and 10),
+when a ticket is claimed or resumed (**Per ticket** step 1, **What to take next** steps 1–8 and 11),
 and `tools/cdwr/agent-queue/session.sh ticket -` before going back to **What to take next**.
 
 Run both markers on their own or chained with commands that succeed: a Bash call that exits
@@ -108,13 +108,16 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
 5. **A review PR that conflicts with main** (`run now: COD-1 conflicts with main`): the PR
    watch read `mergeable` as `CONFLICTING`. Rebase it as in **A PR that conflicts with main**.
    The ticket stays `agent:review`.
-6. **A comment on a merged ticket**: Done, with the agent's work on it (a `**Agent: PR ready**`
+6. **A review PR the merge queue refused** (`run now: COD-1 merge queue failed`): the watch
+   enqueued the PR itself and the merge queue dropped it without a conflict. Fix it as in
+   **A PR the merge queue refused**. The ticket stays `agent:review`.
+7. **A comment on a merged ticket**: Done, with the agent's work on it (a `**Agent: PR ready**`
    comment or `agent:review`), and its newest comment does not start with `**Agent` and is newer
    than the merge (`completedAt`). Canceled tickets never count. See **Merged ticket comments**.
-7. **Checks on a merged ticket** (`run now: COD-1 merge checks`): its PR-ready comment has
+8. **Checks on a merged ticket** (`run now: COD-1 merge checks`): its PR-ready comment has
    unticked items under `After the merge, the agent checks:`, every hand-off is ticked or
    dropped, and the merge is 15 minutes old. The limit never holds it. See **Merge checks**.
-8. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
+9. **Clean up.** `pnpm cdwr agent worktree prune --dry-run`, then without `--dry-run` when it
    removes anything. It only removes ticket worktrees whose PR merged or closed and that
    have nothing uncommitted. Clear `agent:working` or `agent:needs-input` from a Done or
    Canceled ticket (`list_issues` with that label in those states; pass the full label list
@@ -124,20 +127,24 @@ the scheduler run), so start with it; it is what notices a parked wait that reso
    way from a Done ticket whose PR merged, that has a `**Agent: PR ready**` comment, and whose
    hand-offs are all ticked or dropped (none unticked and not struck through, see **Per ticket**
    step 6), so it leaves the Desk. Until then a merged ticket keeps `agent:review` for its
-   hand-offs, the PR watch and the Desk. Leave every other label. Then close each parent ticket whose sub-issues are all Done or Canceled: set it
+   hand-offs, the PR watch and the Desk. A ticket that `pnpm cdwr agent status` lists under
+   `deploy hold` keeps it too: it merged on its own and the watch is still reading its production
+   deploy, or that deploy failed, was skipped or never settled (the `self-merge-deploy` gap in the
+   audit). Clearing the label would drop it from the watch; Håkan clears it once he has looked.
+   Leave every other label. Then close each parent ticket whose sub-issues are all Done or Canceled: set it
    Done and post `**Agent: closed**` naming the sub-issues. Linear's own
    parent auto-close stays off, so nothing else closes it.
-9. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
-   starts: go to **Nothing workable**.
-10. **A plan the agent approved** (`run now: COD-1 plan approved`): an unblocked `agent:ready`
+10. **The limit.** Count the open PRs (below). At or over the limit, no new ticket
+    starts: go to **Nothing workable**.
+11. **A plan the agent approved** (`run now: COD-1 plan approved`): an unblocked `agent:ready`
     ticket whose plan is not started and whose newest agent comment is `**Agent: plan approved**`
     (a plan-only run wrote it). First read the comments newer than the approval: a human one is
     an answer. Record it under **Decisions**; when it stops the plan or asks for a change you
     can't make alone, swap `agent:ready` for `agent:needs-input` and ask as in **How a gate
     asks**. An `**Agent` comment that keeps `agent:ready` leaves a plan nothing takes. Otherwise
     claim as in **Per ticket** step 1 (`agent:working` replaces `agent:ready`) and go on to step 4.
-11. **A broken Renovate PR** (`run now: PR 754 renovate`): see **Renovate PRs**.
-12. **A new `agent:ready` ticket** by the queue rule.
+12. **A broken Renovate PR** (`run now: PR 754 renovate`): see **Renovate PRs**.
+13. **A new `agent:ready` ticket** by the queue rule.
 
 Nothing matched: go to **Nothing workable**.
 
@@ -192,12 +199,12 @@ fits in the 10-minute limit.
 
 ## Labels (group "Agent", one at a time)
 
-| Label               | Meaning                                                | Set by                                                              |
-| ------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
-| `agent:ready`       | eligible                                               | Håkan; the scheduler on a split's next part that asks nothing first |
-| `agent:working`     | a session is on it; status In Progress                 | agent, on claim                                                     |
-| `agent:needs-input` | blocked on Håkan; the question is the latest comment   | agent                                                               |
-| `agent:review`      | PR open, or merged with hand-offs left; In Review/Done | agent                                                               |
+| Label               | Meaning                                                                                                 | Set by                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `agent:ready`       | eligible                                                                                                | Håkan; the scheduler on a split's next part that asks nothing first |
+| `agent:working`     | a session is on it; status In Progress                                                                  | agent, on claim                                                     |
+| `agent:needs-input` | blocked on Håkan; the question is the latest comment                                                    | agent                                                               |
+| `agent:review`      | PR open (the watch may merge it itself), or merged with hand-offs or a deploy hold left; In Review/Done | agent                                                               |
 
 Replacing the label means passing the full label list without the old agent label. Never
 remove the ticket's other labels.
@@ -264,7 +271,7 @@ to **What to take next**.
    One ticket, one PR, so every PR maps to a ticket of its own. Work that needs more than
    one PR becomes sub-issues of the ticket, one per PR, each on its own branch and worked
    as a ticket. The parent holds the overview and opens no PR; the agent closes it once all its
-   sub-issues are done (**What to take next**, step 8).
+   sub-issues are done (**What to take next**, step 9).
 
 3. **Plan approval.** The plan approves itself, attended, unattended or plan-only, with two
    exceptions:
@@ -291,13 +298,16 @@ to **What to take next**.
    folding its fixes into the commits they correct. In an implement-only run the review reads
    a file, since dontAsk denies the diff commands the skill would build: run
    `tools/cdwr/agent-queue/review-diff.sh <worktree>`, which writes the branch against
-   `origin/main` plus the uncommitted changes into the worktree's git dir and prints the path,
-   then `/code-review high <that path>` with the line "read the diff with Read and run no
+   `origin/main` plus the uncommitted changes into the worktree's git dir and prints the path
+   on its first line, then `/code-review high <that path>` with the line "read the diff with Read and run no
    Bash". If the forked skill still reaches for Bash and is denied, review through the `Agent`
    tool instead: a `general-purpose` agent that reads the same file with Read and reports
    findings in the skill's form. When neither could review, open no PR: see **Implement-only
-   runs**, step 10. Push and open the PR (plan summary in the
-   body, ending with `Closes COD-123`). Never `Part of`, `Ref` or another contributing word:
+   runs**, step 10. After the last commit, whichever way the review ran, run
+   `tools/cdwr/agent-queue/review-diff.sh <worktree>` from this checkout once more and keep its
+   second line: the `Merge:` line of the PR-ready comment (step 6). It reads the diff's files
+   against `hold-paths.txt` beside the script, main's list, the one the watch reads too. Push and
+   open the PR (plan summary in the body, ending with `Closes COD-123`). Never `Part of`, `Ref` or another contributing word:
    on merge Linear moves those tickets back to In Progress instead of Done. Notify `info`:
    PR opened. Then park on `copilot` (see **Parking**) and go to **What to take next**.
 6. **Copilot round.** Copilot reviews every PR on its own; handle it before the gate. See
@@ -306,13 +316,33 @@ to **What to take next**.
    Review, and add a comment
    that starts with `**Agent: PR ready**`. It holds the PR link, what the code review found
    under a line `Code review:` (one finding per line, `fixed in <sha>` or `dismissed: <reason>`,
-   or `Code review: no findings` written out, so it never reads as skipped), what the Copilot round
+   or `Code review: no findings` written out, so it never reads as skipped), the `Merge:` line
+   from `review-diff.sh` (step 5): `Merge: merging on its own: no hold path`, or
+   `Merge: held: <path> matches <glob> (<reason>)`. When the report has a line
+   `**Ask me before merging**`, write `Merge: held: Ask me before merging` whatever the script
+   printed. Then what the Copilot round
    fixed and dismissed, what the Fly Deployment run did for the labelled PR (its jobs in
    `gh pr checks <n>`, where every deploy job skipped means no deployable app, and the
    preview urls from the workflow's PR comment in `gh pr view <n> --comments`), what the
    agent checked on the preview, anything left open for Håkan, the checks the agent makes
-   after the merge, the **hand-off checklist** and the **apply list**. Notify `action`: PR
-   ready for review.
+   after the merge, the **hand-off checklist** and the **apply list**. Notify `info` when the
+   Merge line says it merges on its own, else `action`: PR ready for review.
+
+   **The watch merges on its own.** The Merge line is the session's prediction and its consent,
+   never authority: the watch enqueues the merge, as the desk's Merge button does, only when its
+   own reads agree (`merge_verdict` in `watch.jq`; the README has the full account). The PR
+   passes the desk's verdict (open, not a draft, `MERGEABLE`, CI green, no unresolved thread), the
+   ticket is `agent:review`, the PR-ready comment has the `Code review:` line and says it merges
+   on its own, no human comment is newer than that comment, the report has no
+   `**Ask me before merging**` line, no review requested changes, and the PR's complete file list
+   matches no glob in `hold-paths.txt`, read from the installed copy beside `watch.jq`, so a PR
+   never changes the list for itself. A claimed merge refused for a lasting reason gets one
+   `action` notice per head (`held: <why>`), and the PR waits for Håkan as before. A comment by
+   Håkan after the PR-ready comment holds the merge for good, `review addressed` or not: once he
+   engages, the merge is his. When the merge queue drops an enqueued PR, the watch retries once
+   on a new head (**A PR that conflicts with main**, **A PR the merge queue refused**); a second
+   drop is Håkan's. After the merge the watch reads the production deploy of the merge commit,
+   and the ticket keeps `agent:review` meanwhile (**What to take next** step 9).
 
    **A check is never a hand-off.** Whatever the agent can read itself (the desk's tables,
    `pnpm cdwr agent status` and `logs`, a site's pages) it checks:
@@ -446,7 +476,10 @@ Handle it between tickets.
 5. Run the narrow checks for what changed, push, park on `CI` (see **Parking**) and go to
    **What to take next**. A failure on resume is fixed and parked again.
 6. Once CI is green, post `**Agent: review addressed**` with what changed and what stays open. The ticket stays
-   `agent:review`; notify `action`: review addressed.
+   `agent:review`; notify `action`: review addressed. A comment by Håkan after the PR-ready
+   comment holds the watch's own merge for good, so say in the comment that the merge is his.
+   Copilot's threads alone don't: a PR whose only feedback was Copilot's merges on its own once
+   its threads are resolved and CI is green, when its Merge line says so.
 7. Tick each hand-off item this round completed in the PR-ready comment (`- [x]`, edited in
    place). The Desk and the merge notice read that comment, so an item done but left
    unticked shows as still waiting on Håkan.
@@ -458,7 +491,7 @@ Thread replies and resolving use the GraphQL calls in **Copilot review**.
 A merged PR closes its ticket for good. A Done ticket gets no new branch, commit or PR, and a
 merged one no new commit: further work always goes in a new ticket, related to it.
 
-A comment on a merged ticket still gets an answer (**What to take next**, step 6). Nothing
+A comment on a merged ticket still gets an answer (**What to take next**, step 7). Nothing
 here needs the worktree; the answer comes from reading the code on `origin/main`.
 
 1. Read the ticket, its comments and the agent's own newest reply, skipping housekeeping
@@ -506,7 +539,7 @@ first 50 comments of a ticket, so on a longer ticket the newest are not seen.
 
 The checks a PR-ready comment lists under `After the merge, the agent checks:` run once the PR
 merged at least 15 minutes ago and every hand-off is ticked or dropped, so a deploy among them has
-landed (**What to take next**, step 7). Like a merged-ticket comment, this claims nothing and
+landed (**What to take next**, step 8). Like a merged-ticket comment, this claims nothing and
 needs no worktree, and it never adds a commit.
 
 1. Make each check with what the item names: `pnpm cdwr agent status` or
@@ -591,6 +624,33 @@ dropped in the replay and the old commits still conflict.
 
 When the push is denied, post the exact push command as a needs-input gate.
 
+## A PR the merge queue refused
+
+The watch enqueued the PR itself (**Per ticket** step 6) and the merge queue dropped it
+without a conflict: its checks failed on the merge-group ref, with main's newest commits under
+it. The watch retries once, on a new head, so the pick lasts while the PR's head is the one the
+queue refused and clears on the next push. A second drop is Håkan's: the watch sends an `action`
+and never enqueues that PR again.
+
+1. In the ticket's worktree, read the failed run. The merge queue checks a
+   `gh-readonly-queue/main/pr-<n>-<sha>` ref, not the PR head, so `gh pr checks` doesn't show
+   it:
+
+   ```sh
+   gh run list -R codeware-sthlm/cdwr --event merge_group --limit 20 --json databaseId,headBranch,conclusion,url
+   ```
+
+   Take the run whose `headBranch` holds `pr-<n>-` and read its failed steps with
+   `gh run view <run id> --log-failed -R codeware-sthlm/cdwr`, as in **Parking**.
+
+2. Fix it as its own commit on top, run the narrow checks for what changed, push and park on
+   `CI` (**Parking**). A spec that fails only in the merge group, passes alone and touches
+   nothing in the branch is a flake: post the CI-flake gate (needs-input, Håkan reruns), which
+   also drops the pick.
+3. Once CI is green, post a ticket comment starting `**Agent:**` that names the failure and the
+   fix. The watch's verdict is `ok` again and it enqueues the second and last time. A comment by
+   Håkan meanwhile holds the merge for him, as always.
+
 ## Copilot review
 
 1. The ticket comes back from its `copilot` park with the outcome `reviewed`, or `no review`
@@ -628,11 +688,14 @@ gh api graphql -f query='mutation($t:ID!){resolveReviewThread(input:{threadId:$t
 
 Two levels. `action` means Håkan has to do something; `info` is progress.
 
-- `action`: a needs-input gate (a plan ready counts), PR ready for review, review addressed,
-  a merge check that failed, the queue waiting on him, or a run that failed or stalled
-- `info`: ticket claimed, plan written, plan approved, PR opened, merge checks passed, and the
-  Copilot round done (included in the PR-ready notice when it happens at the same time). The
-  scheduler sends its own `info` when it labels a split's next part.
+- `action`: a needs-input gate (a plan ready counts), PR ready for review when its Merge line
+  holds it, review addressed, a merge check that failed, the queue waiting on him, or a run that
+  failed or stalled. The watch sends its own: a claimed merge it held, a PR the merge queue
+  dropped twice, and a self-merged PR whose deploy failed or was skipped.
+- `info`: ticket claimed, plan written, plan approved, PR opened, PR ready when it merges on its
+  own, merge checks passed, and the Copilot round done (included in the PR-ready notice when it
+  happens at the same time). The scheduler sends its own `info` when it labels a split's next
+  part, and when it enqueues a merge.
 
 Read `~/.cdwr/agent-queue/notify-level`: `all` sends both levels, `action` sends only
 `action`. A missing file means `all`. Håkan switches to `action` when the queue runs smoothly.
@@ -684,15 +747,15 @@ A plan approval uses the same numbered options under `**Agent: plan ready**`.
 ## Implement-only runs
 
 The scheduler starts `claude -p "/work-queue implement-only once key=\"<key>\""` when work that only an
-implementing session can do waits (an approved plan, an answer, review feedback, a review PR that conflicts with main, a
-stale claim)
+implementing session can do waits (an approved plan, an answer, review feedback, a review PR that conflicts with main or that
+the merge queue refused, a stale claim)
 and no session is alive. Nobody is at the terminal, and the permissions deny anything not
 listed.
 
 1. Start and claim as usual. In **What to take next**, take only the steps before **The limit**,
    and a Renovate PR whose checks fail (`run now: PR 754 renovate`, the ticket-only path in
    **Renovate PRs**), and a plan the agent approved (`run now: COD-1 plan approved`, **What to
-   take next** step 10): never a new `agent:ready` ticket. A merged-ticket comment and merge
+   take next** step 11): never a new `agent:ready` ticket. A merged-ticket comment and merge
    checks are taken here too; they claim nothing and need no worktree, since they only write
    comments, tickets and the edited checklist. An unanswered `**Agent: plan ready**` stays a gate:
    this mode never approves a plan itself, it implements one a plan-only run approved.
