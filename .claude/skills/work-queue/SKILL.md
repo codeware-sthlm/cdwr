@@ -311,7 +311,8 @@ to **What to take next**.
    `gh pr checks <n>`, where every deploy job skipped means no deployable app, and the
    preview urls from the workflow's PR comment in `gh pr view <n> --comments`), what the
    agent checked on the preview, anything left open for Håkan, the checks the agent makes
-   after the merge, and the **hand-off checklist**. Notify `action`: PR ready for review.
+   after the merge, the **hand-off checklist** and the **apply list**. Notify `action`: PR
+   ready for review.
 
    **A check is never a hand-off.** Whatever the agent can read itself (the desk's tables,
    `pnpm cdwr agent status` and `logs`, a site's pages) it checks:
@@ -351,6 +352,29 @@ to **What to take next**.
    costs Håkan a failed production step. The checklist runs in Håkan's zsh, where `grep`
    is an alias for `rg`: write `rg` with its own flags (`rg -i 'a|b'`, never `grep -iE`),
    and the same for any other tool that an alias would reinterpret.
+
+   **A production step the vocabulary covers goes in the apply list, never in the checklist.**
+   After the hint, a line `Apply list:` followed by one `- [ ] <kind> <args>` per line, nothing
+   else in between. After the merge the scheduler applies the items in order with its own
+   credentials, each as a dry run first, and ticks them in the comment with the outcome. The
+   kinds are closed; anything else stays a checklist item:
+
+   | Kind                                   | Arguments                                                                                |
+   | -------------------------------------- | ---------------------------------------------------------------------------------------- |
+   | `restart <app>`                        | `cdwr-cms`, `cdwr-cms-<tenant>` or `cdwr-headless-<tenant>`                              |
+   | `scale <app> <count>`                  | the same apps, count 1–4                                                                 |
+   | `deploy-workflow <project> production` | a project in the `apps` release group of `nx.json`                                       |
+   | `supabase-migration <file>`            | `tools/cdwr/agent-queue/supabase/migrations/<14 digits>_<name>.sql`, added by this PR    |
+   | `supabase-function <name>`             | parses, but the NUC refuses it as `not enabled`: keep a function deploy a checklist item |
+   | `agent-deploy`                         | none; waits for the NUC's self-deploy of the merge commit                                |
+
+   A trailing `after-deploy` makes an item wait for the production `fly-deployment.yml` run on
+   the merge commit, for a step that needs the new code live. The list is read once, at the
+   merge, and stops for good at the first refused item, so order the items the way they depend
+   on each other. An item names a file of the PR or a resource, never a value. Before posting,
+   write the comment body to a file and run
+   `pnpm -C <worktree> cdwr agent apply-list check --body <file>` until it passes: one invalid
+   item makes the scheduler apply nothing.
 
 7. **Next.** Don't ask. Run `session.sh ticket -`. With `once`, stop. Otherwise go to
    **What to take next**. After a big ticket, say in one line that `/clear` is a good idea
@@ -636,7 +660,7 @@ A gate never asks in the terminal, attended or not. Don't use AskUserQuestion.
   knowledge outside the repo, or when the plan outgrows the ticket (propose sub-issues). Then
   move on to **What to take next**.
 - **Never do it yourself:** a production action, deleting data, spending money. Those go in
-  the hand-off checklist, or become a question when the work can't go on without them.
+  the apply list when its vocabulary covers them, else the hand-off checklist, or become a question when the work can't go on without them.
 
 Hand-offs are **not** gates: `nx verify cms`, `test-migrate`, e2e suites, a dev boot. List them
 in the hand-off checklist and keep going.
