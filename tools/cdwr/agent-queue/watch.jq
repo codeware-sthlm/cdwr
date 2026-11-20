@@ -63,9 +63,65 @@ def status_handoffs:
     | (.what | sub("^hand-offs?:?\\s*"; ""; "i")) as $t
     | if $t == "" then .what else $t end ];
 
-# The newest "PR ready" comment the agent wrote, else null
+# The agent's newest "**Agent: PR ready**" comment of a Linear issue node, else null. The hand-off
+# checklist and the Apply list are both read from it.
 def pr_ready_comment:
-  [ (.comments.nodes // [])[] | select(agent_kind("**Agent: PR ready**")) ] | sort_by(.createdAt) | last;
+  [ (.comments.nodes // [])[] | select(agent_kind("**Agent: PR ready**")) ]
+  | sort_by(.createdAt) | last;
+
+# The indexes of the item lines of the Apply list block in $lines (a comment body split at newlines).
+# The header is the first line that, trimmed and without its leading and trailing `**`, reads
+# `apply list:` in any case. After it blank lines are skipped, a `- [ ]` / `- [x]` line is an item and
+# any other line ends the block. [] without a header.
+def apply_block_indexes($lines):
+  ([ range(0; $lines | length)
+     | select($lines[.] | trim | gsub("^\\*\\*|\\*\\*$"; "") | ascii_downcase == "apply list:") ]
+   | first) as $i
+  | if $i == null then []
+    else
+      reduce range($i + 1; $lines | length) as $n ({ idx: [], stop: false };
+        if .stop then .
+        elif ($lines[$n] | test("^\\s*$")) then .
+        elif ($lines[$n] | test("^\\s*[-*] \\[( |x|X)\\] ")) then .idx += [ $n ]
+        else .stop = true
+        end)
+      | .idx
+    end;
+
+# One Apply list item line as { text, spec, kind, args, afterDeploy, checked, dropped, outcome }.
+# text is what follows the box, trimmed; spec and outcome are its parts around the first " · "
+# (outcome null without one). kind is the first token of spec, args the rest, less a last token
+# `after-deploy` that sets afterDeploy. dropped is an unchecked item struck through with `~~`.
+def apply_parse($line):
+  ($line | capture("^\\s*[-*] \\[(?<b> |x|X)\\] (?<t>.*)$")) as $m
+  | ($m.t | trim) as $text
+  | (($text | capture("^(?<s>.*?) · (?<o>.*)$")) // null) as $parts
+  | (if $parts == null then $text else $parts.s | trim end) as $spec
+  | ([ $spec | scan("\\S+") ]) as $tok
+  | (($tok | last) == "after-deploy") as $after
+  | (if $after then $tok[:-1] else $tok end) as $rest
+  | { text: $text, spec: $spec, kind: $rest[0], args: $rest[1:], afterDeploy: $after,
+      checked: ($m.b != " "),
+      dropped: ($m.b == " " and ($text | startswith("~~"))),
+      outcome: (if $parts == null then null else $parts.o | trim end) };
+
+# The items of the Apply list block in the newest PR-ready comment, [] without a comment or a block
+def apply_items:
+  pr_ready_comment as $c
+  | if $c == null then []
+    else
+      (($c.body // "") | split("\n")) as $lines
+      | [ apply_block_indexes($lines)[] | apply_parse($lines[.]) ]
+    end;
+
+# What run.sh snapshots at merge, from a Linear issue node: { commentId, items } of the Apply list
+# items that are pending (open, so not checked or dropped, and without an outcome), each as
+# { spec, kind, args, afterDeploy, status: "pending" }. null when no item is pending.
+def apply_input:
+  pr_ready_comment as $c
+  | [ apply_items[] | select(.checked or .dropped | not) | select(.outcome == null)
+      | { spec, kind, args, afterDeploy, status: "pending" } ] as $p
+  | if ($p | length) == 0 then null else { commentId: $c.id, items: $p } end;
 
 # Unchecked items of a comment body's checklist block: the line $heading (bold or not, any case),
 # then `- [ ] <item>` lines up to the first line that is not an item. An unchecked item struck
@@ -91,7 +147,7 @@ def checklist($heading):
 
 # Unchecked items of the newest "PR ready" comment's "Hand-off checklist:" block. A ticket that
 # never got one (merged from a gate) falls back to the Status table's hand-off rows.
-def handoffs:
+def checklist_handoffs:
   pr_ready_comment as $c
   | if $c == null then status_handoffs else $c.body // "" | checklist("hand-off checklist:") end;
 
@@ -101,8 +157,14 @@ def merge_checks:
   pr_ready_comment as $c
   | if $c == null then [] else $c.body // "" | checklist("after the merge, the agent checks:") end;
 
+# What waits for a person after the merge: the open hand-off checklist items, plus every open Apply
+# list item whatever its outcome (the NUC applies it, or refused it and left it unchecked)
+def handoffs:
+  checklist_handoffs + [ apply_items[] | select(.checked or .dropped | not) | .spec ];
+
 # Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved,
-# copilotThreads, threads, threadsTruncated, conflicting, draft, mergeable, mergeStateStatus, ci, copilot }.
+# copilotThreads, threads, threadsTruncated, conflicting, draft, mergeable, mergeStateStatus, ci,
+# mergeCommit, copilot }. mergeCommit is the merge commit's oid, null while unmerged.
 # ci is the checks rollup state of the last commit (string or null). copilot is "reviewed" once
 # Copilot has a review on the PR, "requested" while it is a requested reviewer, else "none".
 # threads counts every unresolved review thread, whoever spoke last: main's ruleset needs them all
@@ -144,6 +206,7 @@ def pr_state:
       mergeable: (.mergeable // null),
       mergeStateStatus: (.mergeStateStatus // null),
       ci: $ci,
+      mergeCommit: (.mergeCommit.oid // null),
       copilot: (
         if any((.reviews.nodes // [])[]; (.author.login // "") | startswith("copilot-pull-request-reviewer")) then "reviewed"
         elif any((.reviewRequests.nodes // [])[];
@@ -162,6 +225,11 @@ def pr_state:
 # $in.parked is the ticket's parked wait (parked, or null). askCopilot asks run.sh to request
 # Copilot; run.sh stores the outcome as the entry's copilotAsked { at, ok, why }, which is kept
 # while the PR stays the same, so the request is made once per PR.
+# $in.apply is apply_input (null when no Apply list item is pending), $in.left the checklist
+# hand-offs (checklist_handoffs) and $in.mergedAt when GitHub merged the PR (may be null). The step
+# that first sees the PR merged with pending items snapshots them into entry.apply, with the merge
+# commit, and sends no merge notice: run.sh sends one when the list has run (apply_summary). Once
+# stored, entry.apply is kept while the PR stays the same, as copilotAsked is.
 def step:
   . as $in
   | $in.id as $id | $in.pr as $pr
@@ -171,6 +239,7 @@ def step:
      elif $in.now.conflicting == null then $prev.conflicting == true
      else $in.now.conflicting end) as $conflicting
   | ($in.now + (if $conflicting then { state: "conflicting" } else {} end)) as $now
+  | ($now.state == "merged" and $prev.apply == null and (($in.apply.items // []) | length) > 0) as $snap
   | (if $review and $now.removedAt != null
         and ($prev.removedAt == null or $now.removedAt > $prev.removedAt)
         and ($now.state != "merged" and $now.state != "closed")
@@ -181,7 +250,7 @@ def step:
              if ($now.removedReason // "") == "" then "no reason given"
              else $now.removedReason | ascii_downcase | gsub("_"; " ") end))" } ]
      else [] end) as $removal
-  | (if $now.state == $prev.state then []
+  | (if $snap or $now.state == $prev.state then []
      elif $now.state == "failing" then
        (if ($removal | length) > 0 or ($review | not) then [] else [ { level: "action", message: "\($id): PR #\($pr) has failing checks" } ] end)
      elif $now.state == "conflicting" then
@@ -207,7 +276,13 @@ def step:
                 ci: ($now.ci // null), copilot: ($now.copilot // "none"), threads: ($now.threads // 0),
                 mergeStateStatus: ($now.mergeStateStatus // null), at: $in.at }
               + (if $prev.relabelled == true then { relabelled: true } else {} end)
-              + (if $prev.copilotAsked != null then { copilotAsked: $prev.copilotAsked } else {} end))
+              + (if $prev.copilotAsked != null then { copilotAsked: $prev.copilotAsked } else {} end)
+              + (if $snap then
+                   { apply: { commentId: $in.apply.commentId, mergedAt: ($in.mergedAt // null),
+                              sha: ($now.mergeCommit // null), at: $in.at, left: ($in.left // []),
+                              items: $in.apply.items, invalid: null, done: false } }
+                 elif $prev.apply != null then { apply: $prev.apply }
+                 else {} end))
     }
   # The scheduler asks Copilot once per PR, while the ticket is parked on Copilot for this open PR
   # and nobody has asked yet: GitHub's automatic review skips a PR the app opened
@@ -272,6 +347,73 @@ def platform_verdict($kind; $args):
         elif ($args.action | IN("open", "close") | not) then "unknown action"
         else "ok" end
     else "unknown kind" end;
+
+# The scheduler's verdict on one Apply list item, from the `cdwr --dry-run --json` envelope it just
+# ran for it (run.sh): `ok`, else why not. $item is { kind, args }. The first three checks are
+# platform_verdict's. scale answers `already <n>` when the app runs that many machines: a success
+# run.sh ticks without applying. supabase-migration's `already applied` is a refusal.
+def apply_verdict($item):
+  (.plan.json // null) as $j
+  | ($item.args // []) as $a
+  | if .ok != true then "the dry run failed: \((.error.message // "no reason") | tostring | .[0:120])"
+    elif $j == null then "the dry run carried no state"
+    elif $j.environment != "production" then "not a production target"
+    elif $item.kind == "restart" then
+      if $j.app != $a[0] then "the dry run read \($j.app), not \($a[0])"
+      elif (($j.machines // []) | length) == 0 then "\($a[0]) has no machines"
+      else "ok" end
+    elif $item.kind == "scale" then
+      if $j.app != $a[0] then "the dry run read \($j.app), not \($a[0])"
+      elif $j.count == (($a[1] | tonumber?) // null) then "already \($j.count)"
+      else "ok" end
+    elif $item.kind == "deploy-workflow" then
+      if $j.app != $a[0] then "the dry run read \($j.app), not \($a[0])"
+      else "ok" end
+    elif $item.kind == "supabase-migration" then
+      if $j.file != $a[0] then "the dry run read \($j.file), not \($a[0])"
+      elif $j.applied == true then "already applied"
+      elif $j.dryRun != "ok" then "the dry run did not pass"
+      else "ok" end
+    else "unknown kind" end;
+
+# A PR-ready comment body with the first Apply list item line whose spec is $spec, unchecked and
+# without an outcome rewritten to `<indent and bullet> [x] <spec> · <outcome>` (`[ ]` when $ticked
+# is false). Every other byte stays; unchanged when no line matches.
+def apply_mark($spec; $outcome; $ticked):
+  . as $body
+  | ($body | split("\n")) as $lines
+  | ([ apply_block_indexes($lines)[]
+       | select(apply_parse($lines[.]) | .spec == $spec and (.checked | not) and .outcome == null) ]
+     | first) as $i
+  | if $i == null then $body
+    else
+      ($lines[$i] | capture("^(?<p>\\s*[-*]) \\[ \\] ")) as $m
+      | $lines | .[$i] = "\($m.p) [\(if $ticked then "x" else " " end)] \($spec) · \($outcome)"
+      | join("\n")
+    end;
+
+# The notice for an Apply list that has run, from the watch entry's `apply` ({ items, left, invalid,
+# … }): { level, message }. An invalid list names why nothing ran; a refused item names where it
+# stopped, what was applied before it and what is left for the person; otherwise the applied items
+# are listed, with their outcome when it says `already …`.
+def apply_summary($id):
+  (.items // []) as $items
+  | (.left // []) as $left
+  | ([ $items[] | select(.status == "applied")
+       | .spec + (if (.outcome // "") | startswith("already") then " (\(.outcome))" else "" end) ]) as $applied
+  | ([ $items[] | select(.status == "refused") ] | first) as $r
+  | if .invalid != null then
+      { level: "action", message: "\($id): apply list not applied: \(.invalid)" }
+    elif $r != null then
+      { level: "action",
+        message: ("\($id): apply list stopped at \($r.spec): \(($r.outcome // "") | sub("^refused: "; ""))"
+                  + (if ($applied | length) > 0 then "; applied \($applied | join(", "))" else "" end)
+                  + (if ($left | length) > 0 then "; left for you: \($left | join("; "))" else "" end)) }
+    else
+      { level: (if ($left | length) > 0 then "action" else "info" end),
+        message: ("\($id) merged: applied \($applied | join(", "))"
+                  + (if ($left | length) > 0 then "; left for you: \($left | join("; "))" else "; nothing left for you" end)) }
+    end;
 
 # The description with its first "**Next:** " line saying the PR merged at $when (ISO time) and
 # what is handed off; the line is appended when there is none
